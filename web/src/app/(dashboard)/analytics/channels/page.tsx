@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import {
   CartesianGrid, Tooltip, ResponsiveContainer,
   Area, Line, ComposedChart, XAxis, YAxis,
@@ -14,6 +14,10 @@ import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { CostManagementModal } from "@/components/cost-management-modal"
+import { exportRawRows } from "@/lib/export-excel"
+import { useDbRole } from "@/lib/use-role-guard"
+import { B2BCustomerDetail } from "@/components/channels/b2b-customer-detail"
+import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel ChannelPerformance (deep-dive 1 kênh). Data qua /api/analytics/query
 // (SELECT-only) + /api/channels + endpoint cost sẵn có. Bỏ motion/react (thay tr thường + CSS).
@@ -55,32 +59,32 @@ const Skeleton = ({ className }: { className?: string }) => (
   <div className={cn("animate-pulse bg-slate-200 rounded", className)} />
 )
 
-const MetricCard = ({ title, value, change, icon: Icon, loading, comparisonActive }: MetricCardProps & { comparisonActive?: boolean }) => (
-  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
-    <div className="flex items-center justify-between mb-4">
-      <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-        <Icon className="w-6 h-6" />
+// Màu icon theo Ý NGHĨA số liệu (đợt UI redesign s190+2, đồng bộ BOD/Dashboard) — trước đây cả 6 card
+// dùng chung 1 màu xanh dương, không phân biệt doanh thu/margin/số lượng.
+const METRIC_ACCENT: Record<string, MetricAccent> = {
+  "Total Revenue": "revenue", "Gross Profit": "margin", "Contribution Margin 1": "margin",
+  "Total Orders": "neutral", "Units Sold": "neutral", "Average Order Value": "positive",
+}
+
+const MetricCard = ({ title, value, change, icon: Icon, loading, comparisonActive }: MetricCardProps & { comparisonActive?: boolean }) => {
+  if (loading) {
+    return (
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <Skeleton className="h-9 w-9 rounded-xl" />
+        <div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-8 w-32" /></div>
       </div>
-      {loading ? (
-        <Skeleton className="h-5 w-12 rounded-full" />
-      ) : comparisonActive && (
-        <div className={cn(
-          "flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full",
-          change >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-        )}>
-          {change >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-          {Math.abs(change)}%
-        </div>
-      )}
-    </div>
-    <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-    {loading ? (
-      <Skeleton className="h-8 w-32" />
-    ) : (
-      <h3 className="text-2xl font-bold text-slate-900">{value}</h3>
-    )}
-  </div>
-)
+    )
+  }
+  return (
+    <StatTile
+      icon={<Icon className="w-5 h-5" />}
+      label={title}
+      value={value}
+      accent={METRIC_ACCENT[title] ?? "neutral"}
+      deltas={comparisonActive ? [{ label: "So sánh", value: `${change >= 0 ? "+" : ""}${change}%`, kind: change >= 0 ? "up" : "down" }] : undefined}
+    />
+  )
+}
 
 export default function ChannelPerformancePage() {
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
@@ -88,9 +92,16 @@ export default function ChannelPerformancePage() {
 
   const [channelGroup, setChannelGroup] = useState<"All" | "B2B" | "B2C">("All")
   const [b2bTier, setB2bTier] = useState<"All" | "Strategic" | "Non-Strategic">("All")
+  const [b2bCustomers, setB2bCustomers] = useState<any[]>([])
+  const [b2bTierFilter, setB2bTierFilter] = useState<string>("ALL")
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null)
+  const [loadingB2B, setLoadingB2B] = useState(false)
+  const [countryMap, setCountryMap] = useState<Record<string, string>>({})
 
   const [channels, setChannels] = useState<{ channel_id: string, channel_name: string }[]>([])
   const [selectedChannel, setSelectedChannel] = useState<string>("")
+  const [allChannelsData, setAllChannelsData] = useState<any[]>([])
+  const [loadingAll, setLoadingAll] = useState(false)
   const [vendors, setVendors] = useState<string[]>([])
   const [selectedVendors, setSelectedVendors] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -108,64 +119,51 @@ export default function ChannelPerformancePage() {
   const [showProductTypeDropdown, setShowProductTypeDropdown] = useState(false)
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
   const [showCostModal, setShowCostModal] = useState(false)
+  const dbRole = useDbRole()   // ẩn "Manage Costs" — chỉ creator thấy (tạm thời)
   const [channelCostsMap, setChannelCostsMap] = useState<any>({})
   const [channelSettingsMap, setChannelSettingsMap] = useState<any>({})
   const [showTotalCostBreakdown, setShowTotalCostBreakdown] = useState(false)
 
   const getProjectionInfo = () => {
     if (!metrics || !startDate || !endDate) return null
+    // factor từ BE (channels/kpis trả về projection_factor) — đã xử lý cross-month đúng.
+    const factor = metrics.projection_factor ?? 1
+    if (factor <= 1) return null
 
     const start = new Date(startDate)
-    const end = new Date(endDate)
-    const now = new Date()
-
-    const isCurrentMonth = end.getMonth() === now.getMonth() && end.getFullYear() === now.getFullYear()
-    if (!isCurrentMonth) return null
-
-    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) {
-      return null
-    }
-
-    const daysElapsed = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    const daysElapsed = Math.ceil((new Date(endDate).getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
     const lastDayOfMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
 
-    if (daysElapsed >= lastDayOfMonth || daysElapsed <= 0) {
-      return null
-    }
-
-    const factor = lastDayOfMonth / daysElapsed
-
     const projectedRevenue = (metrics.revenue || 0) * factor
-    const projectedOrders = (metrics.orders || 0) * factor
-    const projectedUnits = (metrics.units || 0) * factor
-    const projectedAOV = projectedOrders > 0 ? projectedRevenue / projectedOrders : 0
+    const projectedOrders  = (metrics.orders  || 0) * factor
+    const projectedUnits   = (metrics.units   || 0) * factor
+    const projectedAOV     = projectedOrders > 0 ? projectedRevenue / projectedOrders : 0
+    // CM1 projected = CM1 actual × factor (BE đã tính CM1 actual đúng pro-rata)
+    const projectedCm1 = (metrics.gpm2 || 0) * factor
 
     const prevRevenue = metrics.prevMonthRevenue || 0
-    const prevOrders = metrics.prevMonthOrders || 0
-    const prevUnits = metrics.prevMonthUnits || 0
-    const prevAOV = prevOrders > 0 ? prevRevenue / prevOrders : 0
-
-    const revenueChange = prevRevenue > 0 ? ((projectedRevenue - prevRevenue) / prevRevenue) * 100 : 0
-    const ordersChange = prevOrders > 0 ? ((projectedOrders - prevOrders) / prevOrders) * 100 : 0
-    const unitsChange = prevUnits > 0 ? ((projectedUnits - prevUnits) / prevUnits) * 100 : 0
-    const aovChange = prevAOV > 0 ? ((projectedAOV - prevAOV) / prevAOV) * 100 : 0
+    const prevOrders  = metrics.prevMonthOrders  || 0
+    const prevUnits   = metrics.prevMonthUnits   || 0
+    const prevAOV     = prevOrders > 0 ? prevRevenue / prevOrders : 0
 
     return {
       factor,
       daysElapsed,
-      totalDays: lastDayOfMonth,
-      revenue: projectedRevenue,
-      orders: projectedOrders,
-      units: projectedUnits,
-      aov: projectedAOV,
-      revenueChange,
-      ordersChange,
-      unitsChange,
-      aovChange,
+      totalDays:     lastDayOfMonth,
+      revenue:       projectedRevenue,
+      orders:        projectedOrders,
+      units:         projectedUnits,
+      aov:           projectedAOV,
+      cm1:           projectedCm1,
+      revenueChange: prevRevenue > 0 ? ((projectedRevenue - prevRevenue) / prevRevenue) * 100 : 0,
+      ordersChange:  prevOrders  > 0 ? ((projectedOrders  - prevOrders)  / prevOrders)  * 100 : 0,
+      unitsChange:   prevUnits   > 0 ? ((projectedUnits   - prevUnits)   / prevUnits)   * 100 : 0,
+      aovChange:     prevAOV     > 0 ? ((projectedAOV     - prevAOV)     / prevAOV)     * 100 : 0,
     }
   }
 
-  const projection = getProjectionInfo()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const projection = useMemo(getProjectionInfo, [metrics, startDate, endDate])
 
   const handleProductSort = (key: string) => {
     setProductSortConfig(prev => ({
@@ -196,36 +194,101 @@ export default function ChannelPerformancePage() {
   const ProductSortIcon = ({ column }: { column: string }) => {
     if (productSortConfig.key !== column) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-30" />
     return productSortConfig.direction === "asc"
-      ? <ChevronUp className="w-3 h-3 ml-1 text-blue-600" />
-      : <ChevronDown className="w-3 h-3 ml-1 text-blue-600" />
+      ? <ChevronUp className="w-3 h-3 ml-1 text-brand-600" />
+      : <ChevronDown className="w-3 h-3 ml-1 text-brand-600" />
   }
 
-  const exportToCSV = (data: any[], filename: string) => {
-    if (!data || data.length === 0) return
+  // Export Performance Breakdown — KHỚP ĐÚNG cột + số của bảng hiển thị (tính lại y hệt JSX).
+  const exportPerformanceBreakdown = () => {
+    if (!performanceData || performanceData.length === 0) return
+    const totalRevenue = metrics?.revenue || 1
+    const totalOpCost = metrics?.totalOpCost || 0
+    const mode = channelSettingsMap[selectedChannel] || "total"
+    const start = new Date(startDate || "2026-03-01")
+    const end = new Date(endDate || "2026-03-31")
+    const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
+    const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / 86400000) + 1
+    const ratio = Math.min(1, diffDays / daysInMonth)
+    const pf = projection ? projection.factor : 0
 
-    const headers = Object.keys(data[0])
-    const csvRows = []
-    csvRows.push(headers.join(","))
+    const rows = performanceData.map((row: any) => {
+      let opCostRow = 0
+      if (mode === "subchannels") {
+        const c = channelCostsMap[`${selectedChannel} - ${row.sub_channel}`]
+        if (c && Object.keys(c).length > 0) {
+          ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
+            if (c[key]) {
+              opCostRow += c[key].type === "amount"
+                ? (parseFloat(c[key].value) || 0) * ratio
+                : (row.revenue * (parseFloat(c[key].value) || 0)) / 100
+            }
+          })
+        }
+      } else {
+        opCostRow = (row.revenue / totalRevenue) * totalOpCost
+      }
+      const rowGpm2 = row.margin - opCostRow
+      const rowGpm2Percent = row.revenue > 0 ? (rowGpm2 / row.revenue) * 100 : 0
+      const contribution = (row.revenue / totalRevenue) * 100
+      const growth = row.prev_revenue > 0 ? ((row.revenue - row.prev_revenue) / row.prev_revenue) * 100 : 0
 
-    for (const row of data) {
-      const values = headers.map(header => {
-        const val = row[header]
-        const escaped = ("" + val).replace(/"/g, '""')
-        return `"${escaped}"`
-      })
-      csvRows.push(values.join(","))
-    }
+      const out: Record<string, unknown> = {
+        "Sub-channel": row.sub_channel,
+        "Orders": row.orders,
+        "Units Sold": row.units,
+        "Revenue": Math.round(row.revenue),
+        "Dự phóng Rev": projection ? Math.round(row.revenue * pf) : "",
+        "Gross Profit 1": Math.round(row.margin || 0),
+        "Dự phóng GP1": projection ? Math.round((row.margin || 0) * pf) : "",
+        "Contribution Margin 1": Math.round(rowGpm2 || 0),
+        "Dự phóng CM1": projection ? Math.round((row.margin || 0) * pf - ((row.margin || 0) - (rowGpm2 || 0))) : "",
+        "CM1 %": Number(rowGpm2Percent.toFixed(1)),
+      }
+      if (comparisonType !== "none") {
+        out[comparisonType === "previous_period" ? "%MoM" : "%YoY"] = Math.round(growth)
+      }
+      out["AOV"] = Math.round(row.revenue / (row.orders || 1))
+      out["Contribution %"] = Number(contribution.toFixed(1))
+      return out
+    })
+    exportRawRows(rows, `performance_breakdown_${selectedChannel}_${startDate}_${endDate}`, "Performance")
+  }
 
-    const csvString = "﻿" + csvRows.join("\n")
-    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `${filename}_${selectedChannel}_${startDate}_${endDate}.csv`)
-    link.style.visibility = "hidden"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+  // Export Daily Details — khớp bảng (Date, Orders, Unit Sold, Revenue, [%MoM/%YoY], AOV), thứ tự mới→cũ như hiển thị.
+  const exportDaily = () => {
+    if (!trendData || trendData.length === 0) return
+    const dateLabel = dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"
+    const rows = trendData.slice().reverse().map((row: any) => {
+      const out: Record<string, unknown> = {
+        [dateLabel]: row.date,
+        "Orders": row.orders,
+        "Unit Sold": row.units,
+        "Revenue": Math.round(row.revenue),
+      }
+      if (comparisonType !== "none") {
+        out[comparisonType === "previous_period" ? "%MoM" : "%YoY"] =
+          row.prevRevenue > 0 ? Math.round(((row.revenue - row.prevRevenue) / row.prevRevenue) * 100) : 100
+      }
+      out["AOV"] = Math.round(row.revenue / (row.orders || 1))
+      return out
+    })
+    exportRawRows(rows, `daily_performance_${selectedChannel}_${startDate}_${endDate}`, "Daily")
+  }
+
+  // Export Top Products — khớp bảng (Product, Orders, Units, Revenue, Gross Profit, Dự phóng Rev, AOV). Full topProducts.
+  const exportTopProductsFull = () => {
+    if (!topProducts || topProducts.length === 0) return
+    const pf = projection ? projection.factor : 0
+    const rows = topProducts.map((p: any) => ({
+      "Product Name": p.product_name,
+      "Orders": p.orders,
+      "Units": p.units,
+      "Revenue": Math.round(p.revenue),
+      "Gross Profit": Math.round(p.margin || 0),
+      "Dự phóng Rev": projection ? Math.round(p.revenue * pf) : "",
+      "AOV": Math.round(p.revenue / (p.orders || 1)),
+    }))
+    exportRawRows(rows, `top_products_${selectedChannel}_${startDate}_${endDate}`, "Top Products")
   }
 
   const [showFilters, setShowFilters] = useState(false)
@@ -253,6 +316,16 @@ export default function ChannelPerformancePage() {
   useEffect(() => {
     fetchVendors()
     fetchProductTypes()
+    fetch("/api/config/country-codes")
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) {
+          const m: Record<string, string> = {}
+          d.forEach((row: { code: string; country: string }) => { m[row.code?.toUpperCase()] = row.country })
+          setCountryMap(m)
+        }
+      })
+      .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -270,11 +343,26 @@ export default function ChannelPerformancePage() {
   }, [selectedChannel])
 
   useEffect(() => {
-    if (selectedChannel) {
-      fetchChannelData()
+    if (selectedChannel) fetchChannelData()
+    else {
+      fetchAllChannels()
+      if (channelGroup === "B2B") fetchB2BCustomers()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChannel, showAllProducts])
+  }, [selectedChannel, showAllProducts, channelGroup, startDate, endDate, dateColumn])
+
+  const fetchB2BCustomers = async () => {
+    setLoadingB2B(true)
+    try {
+      const params = new URLSearchParams({ startDate, endDate, dateColumn })
+      const res = await fetch(`/api/analytics/channels/b2b-customers?${params}`)
+      if (res.ok) {
+        const data = await res.json()
+        setB2bCustomers(data.customers || [])
+      }
+    } catch (e) { console.error("fetchB2BCustomers error:", e) }
+    finally { setLoadingB2B(false) }
+  }
 
   const fetchVendors = async () => {
     try {
@@ -311,9 +399,11 @@ export default function ChannelPerformancePage() {
         const formatted = data.map((name: string) => ({ channel_id: name, channel_name: name }))
         setChannels(formatted)
         if (formatted.length > 0) {
-          if (!formatted.some(c => c.channel_id === selectedChannel)) {
+          // Chỉ auto-select khi đang có channel cụ thể nhưng không còn trong list
+          if (selectedChannel !== "" && !formatted.some(c => c.channel_id === selectedChannel)) {
             setSelectedChannel(formatted[0].channel_id)
           }
+          // Nếu selectedChannel === "" → giữ nguyên (chế độ All Channels)
         } else {
           setSelectedChannel("")
         }
@@ -326,6 +416,19 @@ export default function ChannelPerformancePage() {
       setChannels([])
       setSelectedChannel("")
     }
+  }
+
+  const fetchAllChannels = async () => {
+    setLoadingAll(true)
+    try {
+      const params = new URLSearchParams()
+      if (startDate) params.append("startDate", startDate)
+      if (endDate) params.append("endDate", endDate)
+      params.append("dateColumn", dateColumn)
+      if (channelGroup !== "All") params.append("channelGroup", channelGroup)
+      const res = await fetch(`/api/analytics/channels/performance?${params}`)
+      if (res.ok) setAllChannelsData(await res.json())
+    } catch (e) { console.error("fetchAllChannels error:", e) } finally { setLoadingAll(false) }
   }
 
   const fetchSubChannels = async () => {
@@ -367,9 +470,12 @@ export default function ChannelPerformancePage() {
       const start = new Date(startDate || "2026-03-01")
       const end = new Date(endDate || "2026-03-31")
 
+      // Dùng local date method để format ISO (tránh toISOString UTC shift trong UTC+7)
+      const fmtLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`
+
       if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-        const startStr = start.toISOString().split("T")[0]
-        const endStr = end.toISOString().split("T")[0]
+        const startStr = fmtLocal(start)
+        const endStr = fmtLocal(end)
 
         dateFilter = `AND ${dateColumn}::date >= '${startStr}' AND ${dateColumn}::date <= '${endStr}'`
 
@@ -382,14 +488,14 @@ export default function ChannelPerformancePage() {
           const prevStart = new Date(prevEnd)
           prevStart.setDate(prevStart.getDate() - diffDays + 1)
 
-          prevDateFilter = `AND ${dateColumn}::date >= '${prevStart.toISOString().split("T")[0]}' AND ${dateColumn}::date <= '${prevEnd.toISOString().split("T")[0]}'`
+          prevDateFilter = `AND ${dateColumn}::date >= '${fmtLocal(prevStart)}' AND ${dateColumn}::date <= '${fmtLocal(prevEnd)}'`
         } else if (comparisonType === "previous_year") {
           const prevStart = new Date(start)
           prevStart.setFullYear(prevStart.getFullYear() - 1)
           const prevEnd = new Date(end)
           prevEnd.setFullYear(prevEnd.getFullYear() - 1)
 
-          prevDateFilter = `AND ${dateColumn}::date >= '${prevStart.toISOString().split("T")[0]}' AND ${dateColumn}::date <= '${prevEnd.toISOString().split("T")[0]}'`
+          prevDateFilter = `AND ${dateColumn}::date >= '${fmtLocal(prevStart)}' AND ${dateColumn}::date <= '${fmtLocal(prevEnd)}'`
         }
       } else {
         dateFilter = `AND ${dateColumn}::date >= '2026-03-01' AND ${dateColumn}::date <= '2026-03-31'`
@@ -397,7 +503,7 @@ export default function ChannelPerformancePage() {
 
       const prevMonthStart = new Date(start.getFullYear(), start.getMonth() - 1, 1)
       const prevMonthEnd = new Date(start.getFullYear(), start.getMonth(), 0)
-      const prevMonthFilter = `AND ${dateColumn}::date >= '${prevMonthStart.toISOString().split("T")[0]}' AND ${dateColumn}::date <= '${prevMonthEnd.toISOString().split("T")[0]}'`
+      const prevMonthFilter = `AND ${dateColumn}::date >= '${fmtLocal(prevMonthStart)}' AND ${dateColumn}::date <= '${fmtLocal(prevMonthEnd)}'`
 
       const escapedChannel = (selectedChannel || "").replace(/'/g, "''")
       let channelFilter = `(
@@ -559,20 +665,24 @@ export default function ChannelPerformancePage() {
       setTrendData(combinedTrend)
 
       // 3. Top Products
+      const mt = mainTable  // alias ngắn để dùng trong template
       const productsSql = `
         SELECT
-          sku as product_name,
-          SUM(${revenueCol}) as revenue,
-          SUM(${marginCol}) as margin,
-          COUNT(DISTINCT order_code) as orders,
-          SUM(${quantityCol}) as units
-        FROM ${mainTable}
+          ${mt}.sku as product_name,
+          MAX(sk.category_name) as category,
+          UPPER(SUBSTRING(${mt}.sku, 3, 3)) as destination,
+          SUM(${mt}.${revenueCol}) as revenue,
+          SUM(${mt}.${marginCol}) as margin,
+          COUNT(DISTINCT ${mt}.order_code) as orders,
+          SUM(${mt}.${quantityCol}) as units
+        FROM ${mt}
+        LEFT JOIN dim_sku sk ON TRIM(${mt}.sku) = TRIM(sk.sku)
         WHERE ${channelFilter}
         ${dateFilter}
         ${vendorFilter}
         ${productTypeFilter}
-        GROUP BY 1
-        ORDER BY 2 DESC
+        GROUP BY 1, 3
+        ORDER BY 4 DESC
         ${showAllProducts ? "" : "LIMIT 10"}
       `
       const productsData = await runQuery(productsSql)
@@ -644,135 +754,24 @@ export default function ChannelPerformancePage() {
       })))
 
       if (summaryObj) {
-        // Fetch costs to calculate GPM 2
-        let totalOpCost = 0
-        let prevTotalOpCost = 0
-        const opCostBreakdown = { ads: 0, platformFee: 0, sponsorProducts: 0, media: 0 }
+        // Lấy CM1 (gpm2) + projection_factor từ BE (channels/kpis) — pro-rata đúng mọi date range.
+        // Bỏ FE cost computation (đã chuyển về BE theo Hướng B — s133 pattern).
+        let currentGpm2 = currentMargin
+        let prevGpm2    = prevMargin
+        let projFactor  = 1
         try {
-          const startMonth = start.toISOString().substring(0, 7)
-
-          const [costRes, settingsRes] = await Promise.all([
-            fetch(`/api/channel-costs?month=${startMonth}`),
-            fetch(`/api/channel-cost-settings?month=${startMonth}`),
-          ])
-
-          if (costRes.ok && settingsRes.ok) {
-            const costsMap = await costRes.json()
-            const settingsMap = await settingsRes.json()
-            setChannelCostsMap(costsMap)
-            setChannelSettingsMap(settingsMap)
-            const mode = settingsMap[selectedChannel] || "total"
-
-            const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
-            const diffTime = Math.abs(end.getTime() - start.getTime())
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-            const ratio = Math.min(1, diffDays / daysInMonth)
-
-            if (mode === "subchannels" && breakdownDataArr && breakdownDataArr.length > 0) {
-              const subChannelCosts = Object.values(costsMap).filter((c: any) => c.channel.startsWith(`${selectedChannel} - `))
-              subChannelCosts.forEach((c: any) => {
-                const subName = c.channel.replace(`${selectedChannel} - `, "")
-                const subMetrics = breakdownDataArr.find((r: any) => r.sub_channel === subName)
-                const subRev = subMetrics ? parseFloat(subMetrics.revenue || 0) : 0
-
-                ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-                  if (c[key]) {
-                    let costVal = 0
-                    if (c[key].type === "amount") {
-                      costVal = (parseFloat(c[key].value) || 0) * ratio
-                    } else {
-                      costVal = (subRev * (parseFloat(c[key].value) || 0)) / 100
-                    }
-                    totalOpCost += costVal
-                    ;(opCostBreakdown as any)[key] += costVal
-                  }
-                })
-              })
-            } else {
-              const c = costsMap[selectedChannel]
-              if (c && Object.keys(c).length > 0) {
-                ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-                  if (c[key]) {
-                    let costVal = 0
-                    if (c[key].type === "amount") {
-                      costVal = (parseFloat(c[key].value) || 0) * ratio
-                    } else {
-                      costVal = (currentRev * (parseFloat(c[key].value) || 0)) / 100
-                    }
-                    totalOpCost += costVal
-                    ;(opCostBreakdown as any)[key] += costVal
-                  }
-                })
-              }
-            }
+          const kpisParams = new URLSearchParams()
+          if (startDate) kpisParams.append("startDate", fmtLocal(start))
+          if (endDate)   kpisParams.append("endDate",   fmtLocal(end))
+          kpisParams.append("dateColumn", dateColumn)
+          kpisParams.append("channel", selectedChannel)
+          const kpisRes = await fetch(`/api/analytics/channels/kpis?${kpisParams}`)
+          if (kpisRes.ok) {
+            const kpisData = await kpisRes.json()
+            currentGpm2 = kpisData.gpm2  ?? kpisData.cm1 ?? currentMargin
+            projFactor  = kpisData.projection_factor ?? 1
           }
-
-          // Prev costs
-          if (comparisonType !== "none") {
-            const prevStart = new Date(start)
-            if (comparisonType === "previous_period") {
-              const diffTime = Math.abs(end.getTime() - start.getTime())
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-              prevStart.setDate(prevStart.getDate() - diffDays)
-            } else {
-              prevStart.setFullYear(prevStart.getFullYear() - 1)
-            }
-            const prevStartMonth = prevStart.toISOString().substring(0, 7)
-
-            const [pCostRes, pSettingsRes] = await Promise.all([
-              fetch(`/api/channel-costs?month=${prevStartMonth}`),
-              fetch(`/api/channel-cost-settings?month=${prevStartMonth}`),
-            ])
-
-            if (pCostRes.ok && pSettingsRes.ok) {
-              const pCostsMap = await pCostRes.json()
-              const pSettingsMap = await pSettingsRes.json()
-              const pMode = pSettingsMap[selectedChannel] || "total"
-
-              const daysInMonth = new Date(prevStart.getFullYear(), prevStart.getMonth() + 1, 0).getDate()
-              const diffTime = Math.abs(end.getTime() - start.getTime())
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-              const ratio = Math.min(1, diffDays / daysInMonth)
-
-              if (pMode === "subchannels" && breakdownDataArr && breakdownDataArr.length > 0) {
-                const pSubChannelCosts = Object.values(pCostsMap).filter((c: any) => c.channel.startsWith(`${selectedChannel} - `))
-                pSubChannelCosts.forEach((pc: any) => {
-                  const subName = pc.channel.replace(`${selectedChannel} - `, "")
-                  const pSubMetrics = breakdownDataArr.find((r: any) => r.sub_channel === subName)
-                  const pSubRev = pSubMetrics ? parseFloat(pSubMetrics.prev_revenue || 0) : 0
-
-                  ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-                    if (pc[key]) {
-                      if (pc[key].type === "amount") {
-                        prevTotalOpCost += (parseFloat(pc[key].value) || 0) * ratio
-                      } else {
-                        prevTotalOpCost += (pSubRev * (parseFloat(pc[key].value) || 0)) / 100
-                      }
-                    }
-                  })
-                })
-              } else {
-                const pc = pCostsMap[selectedChannel]
-                if (pc && Object.keys(pc).length > 0) {
-                  ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-                    if (pc[key]) {
-                      if (pc[key].type === "amount") {
-                        prevTotalOpCost += (parseFloat(pc[key].value) || 0) * ratio
-                      } else {
-                        prevTotalOpCost += (prevRev * (parseFloat(pc[key].value) || 0)) / 100
-                      }
-                    }
-                  })
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.error(e)
-        }
-
-        const currentGpm2 = currentMargin - totalOpCost
-        const prevGpm2 = prevMargin - prevTotalOpCost
+        } catch (e) { console.error("channels/kpis fetch error:", e) }
 
         const revChange = prevRev > 0 ? Math.round(((currentRev - prevRev) / prevRev) * 100) : 0
         const marginChange = prevMargin !== 0 ? Math.round(((currentMargin - prevMargin) / Math.abs(prevMargin)) * 100) : 0
@@ -785,23 +784,22 @@ export default function ChannelPerformancePage() {
         const aovChange = prevAov > 0 ? Math.round(((currentAov - prevAov) / prevAov) * 100) : 0
 
         setMetrics({
-          revenue: currentRev,
-          revenueChange: revChange,
-          margin: currentMargin,
-          marginChange: marginChange,
-          gpm2: currentGpm2,
-          gpm2Change: gpm2Change,
-          totalOpCost: totalOpCost,
-          opCostBreakdown: opCostBreakdown,
-          orders: currentOrders,
-          ordersChange: orderChange,
-          units: currentUnits,
-          unitsChange: unitChange,
-          aov: currentAov,
-          aovChange: aovChange,
+          revenue:          currentRev,
+          revenueChange:    revChange,
+          margin:           currentMargin,
+          marginChange:     marginChange,
+          gpm2:             currentGpm2,   // BE-computed CM1 (pro-rata đúng)
+          gpm2Change:       gpm2Change,
+          projection_factor: projFactor,   // BE-provided — dùng bởi getProjectionInfo()
+          orders:           currentOrders,
+          ordersChange:     orderChange,
+          units:            currentUnits,
+          unitsChange:      unitChange,
+          aov:              currentAov,
+          aovChange:        aovChange,
           prevMonthRevenue: parseFloat(summaryObj.lm_revenue || 0),
-          prevMonthOrders: parseInt(summaryObj.lm_orders || 0),
-          prevMonthUnits: parseInt(summaryObj.lm_units || 0),
+          prevMonthOrders:  parseInt(summaryObj.lm_orders || 0),
+          prevMonthUnits:   parseInt(summaryObj.lm_units || 0),
         })
       }
     } catch (err) {
@@ -844,17 +842,15 @@ export default function ChannelPerformancePage() {
             </select>
           </div>
 
-          {channelGroup === "B2B" && (
-            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
-              <select
-                value={b2bTier}
-                onChange={(e) => setB2bTier(e.target.value as any)}
-                className="bg-transparent text-sm font-medium focus:outline-none min-w-[100px]"
-              >
-                <option value="All">All Partners</option>
-                <option value="Strategic">Strategic Partners</option>
-                <option value="Non-Strategic">Non-Strategic Partners</option>
-              </select>
+          {channelGroup === "B2B" && !selectedChannel && (
+            <div className="flex items-center gap-1 bg-white px-2 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+              {(["ALL","Strategic","VIP","Gold","Silver"] as const).map(t => (
+                <button key={t} onClick={() => { setB2bTierFilter(t); setSelectedCustomer(null) }}
+                  className={cn("px-2.5 py-1 text-xs font-bold rounded-lg transition-all",
+                    b2bTierFilter === t ? "bg-brand-600 text-white" : "text-slate-500 hover:bg-slate-50")}>
+                  {t === "ALL" ? "Tất cả" : t}
+                </button>
+              ))}
             </div>
           )}
 
@@ -865,7 +861,7 @@ export default function ChannelPerformancePage() {
               onChange={(e) => setSelectedChannel(e.target.value)}
               className="bg-transparent text-sm font-medium focus:outline-none min-w-[150px]"
             >
-              <option value="" disabled>Select partner...</option>
+              <option value="">All Channels (Overview)</option>
               {channels.map(c => (
                 <option key={c.channel_id} value={c.channel_id}>{c.channel_name}</option>
               ))}
@@ -896,20 +892,13 @@ export default function ChannelPerformancePage() {
             onClick={() => setShowFilters(!showFilters)}
             className={cn(
               "flex items-center gap-2 px-3 py-2 rounded-xl border shadow-sm transition-colors",
-              showFilters ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+              showFilters ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
             )}
           >
             <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />
             <span className="text-sm font-medium">Filters</span>
           </button>
 
-          <button
-            onClick={() => setShowCostModal(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-sm shadow-sm"
-          >
-            <Settings className="w-4 h-4" />
-            <span className="hidden sm:inline">Manage Costs</span>
-          </button>
 
           <button
             onClick={fetchChannelData}
@@ -930,7 +919,7 @@ export default function ChannelPerformancePage() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-all"
               />
             </div>
             <div className="space-y-1.5">
@@ -939,7 +928,7 @@ export default function ChannelPerformancePage() {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-all"
               />
             </div>
 
@@ -963,7 +952,7 @@ export default function ChannelPerformancePage() {
                     <span className="text-xs font-bold text-slate-400 uppercase">Select Vendors</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedVendors([]) }}
-                      className="text-[10px] text-blue-600 font-bold hover:underline"
+                      className="text-[10px] text-brand-600 font-bold hover:underline"
                     >
                       Clear All
                     </button>
@@ -975,7 +964,7 @@ export default function ChannelPerformancePage() {
                         onClick={(e) => { e.stopPropagation(); toggleVendor(vendor) }}
                         className={cn(
                           "flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors",
-                          selectedVendors.includes(vendor) ? "bg-blue-50 text-blue-600" : "hover:bg-slate-50 text-slate-600"
+                          selectedVendors.includes(vendor) ? "bg-brand-50 text-brand-600" : "hover:bg-slate-50 text-slate-600"
                         )}
                       >
                         <span className="text-sm font-medium">{vendor}</span>
@@ -1007,7 +996,7 @@ export default function ChannelPerformancePage() {
                     <span className="text-xs font-bold text-slate-400 uppercase">Select Sub Channels</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedSubChannels([]) }}
-                      className="text-[10px] text-blue-600 font-bold hover:underline"
+                      className="text-[10px] text-brand-600 font-bold hover:underline"
                     >
                       Clear All
                     </button>
@@ -1019,7 +1008,7 @@ export default function ChannelPerformancePage() {
                         onClick={(e) => { e.stopPropagation(); toggleSubChannel(sc) }}
                         className={cn(
                           "flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors",
-                          selectedSubChannels.includes(sc) ? "bg-blue-50 text-blue-600" : "hover:bg-slate-50 text-slate-600"
+                          selectedSubChannels.includes(sc) ? "bg-brand-50 text-brand-600" : "hover:bg-slate-50 text-slate-600"
                         )}
                       >
                         <span className="text-sm font-medium">{sc}</span>
@@ -1051,7 +1040,7 @@ export default function ChannelPerformancePage() {
                     <span className="text-xs font-bold text-slate-400 uppercase">Select Types</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedProductTypes([]) }}
-                      className="text-[10px] text-blue-600 font-bold hover:underline"
+                      className="text-[10px] text-brand-600 font-bold hover:underline"
                     >
                       Clear All
                     </button>
@@ -1063,7 +1052,7 @@ export default function ChannelPerformancePage() {
                         onClick={(e) => { e.stopPropagation(); toggleProductType(type) }}
                         className={cn(
                           "flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors",
-                          selectedProductTypes.includes(type) ? "bg-blue-50 text-blue-600" : "hover:bg-slate-50 text-slate-600"
+                          selectedProductTypes.includes(type) ? "bg-brand-50 text-brand-600" : "hover:bg-slate-50 text-slate-600"
                         )}
                       >
                         <span className="text-sm font-medium">{type}</span>
@@ -1082,7 +1071,7 @@ export default function ChannelPerformancePage() {
                   onClick={() => setDateColumn("fulfiled_date")}
                   className={cn(
                     "flex-1 px-3 py-1.5 text-xs font-bold rounded-md transition-all",
-                    dateColumn === "fulfiled_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    dateColumn === "fulfiled_date" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                   )}
                 >
                   Fulfillment
@@ -1091,7 +1080,7 @@ export default function ChannelPerformancePage() {
                   onClick={() => setDateColumn("created_date")}
                   className={cn(
                     "flex-1 px-3 py-1.5 text-xs font-bold rounded-md transition-all",
-                    dateColumn === "created_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    dateColumn === "created_date" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                   )}
                 >
                   Created
@@ -1124,7 +1113,7 @@ export default function ChannelPerformancePage() {
               </div>
               <button
                 onClick={() => { fetchChannelData(); setShowFilters(false) }}
-                className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+                className="px-6 py-2 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-200"
               >
                 Apply Filters
               </button>
@@ -1133,20 +1122,244 @@ export default function ChannelPerformancePage() {
         </div>
       )}
 
+      {!selectedChannel ? (
+        /* All Channels Overview — B2B shows tier/customer view, others show channel table */
+        channelGroup === "B2B" ? (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              {selectedCustomer ? (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setSelectedCustomer(null)} className="flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:underline">
+                    ← Quay lại
+                  </button>
+                  <span className="text-slate-300">/</span>
+                  <h3 className="text-lg font-bold text-slate-900">{selectedCustomer.customer_name}</h3>
+                  <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
+                    selectedCustomer.tier === "VIP" ? "bg-purple-50 text-purple-600" :
+                    selectedCustomer.tier === "Gold" ? "bg-amber-50 text-amber-600" :
+                    selectedCustomer.tier === "Silver" ? "bg-slate-100 text-slate-500" : "bg-brand-50 text-brand-700")}>
+                    {selectedCustomer.tier}
+                  </span>
+                </div>
+              ) : (
+                <h3 className="text-lg font-bold text-slate-900">B2B Customers — {b2bTierFilter === "ALL" ? "Tất cả tier" : b2bTierFilter}</h3>
+              )}
+              {!selectedCustomer && <p className="text-sm text-slate-500">Click vào tên KH để xem performance theo kênh</p>}
+            </div>
+            <button onClick={fetchB2BCustomers} className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100">
+              <RefreshCw className={cn("w-4 h-4 text-slate-600", loadingB2B && "animate-spin")} />
+            </button>
+          </div>
+
+          {selectedCustomer ? (
+            /* Customer detail: top channels + top products for this customer */
+            <B2BCustomerDetail customer={selectedCustomer} startDate={startDate} endDate={endDate} dateColumn={dateColumn} countryMap={countryMap} />
+          ) : (
+            /* Tier summary cards + customer table */
+            <div>
+              {/* Tier summary cards */}
+              {!loadingB2B && b2bCustomers.length > 0 && (() => {
+                const tiers = ["Strategic", "VIP", "Gold", "Silver"] as const
+                const tierColors: Record<string, string> = {
+                  Strategic: "border-l-brand-500",
+                  VIP: "border-l-purple-500",
+                  Gold: "border-l-amber-500",
+                  Silver: "border-l-slate-400",
+                }
+                return (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-5 border-b border-slate-100">
+                    {tiers.map(tier => {
+                      const custs = b2bCustomers.filter(c => c.tier === tier)
+                      const rev = custs.reduce((s, c) => s + c.revenue, 0)
+                      const gp = custs.reduce((s, c) => s + c.margin, 0)
+                      return (
+                        <button key={tier} onClick={() => setB2bTierFilter(b2bTierFilter === tier ? "ALL" : tier)}
+                          className={cn("text-left p-4 rounded-xl border-l-4 border border-slate-100 hover:border-slate-200 transition-all",
+                            tierColors[tier], b2bTierFilter === tier ? "bg-brand-50/60 border-slate-200" : "bg-slate-50/50")}>
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">{tier}</p>
+                          <p className="text-lg font-black text-slate-900 tabular-nums mt-0.5">
+                            {rev >= 1e9 ? `${(rev/1e9).toFixed(1)} Tỷ` : `${(rev/1e6).toFixed(0)} Tr`}
+                          </p>
+                          <p className="text-xs text-slate-400">{custs.length} KH · GP {gp >= 1e9 ? `${(gp/1e9).toFixed(1)}T` : `${(gp/1e6).toFixed(0)}Tr`}</p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+              {/* Customer table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-brand-600">
+                      <th className="px-5 py-3 text-xs font-bold text-slate-300 uppercase">Khách hàng</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase">Tier</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase">Bảng giá</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase text-right">Revenue</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase text-right">GP</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase text-right">GP%</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase text-right">Orders</th>
+                      <th className="px-4 py-3 text-xs font-bold text-slate-300 uppercase text-right">Units</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {loadingB2B ? (
+                      Array(5).fill(0).map((_, i) => (
+                        <tr key={i}>{Array(8).fill(0).map((_, j) => <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-20 ml-auto" /></td>)}</tr>
+                      ))
+                    ) : (
+                      (b2bTierFilter === "ALL" ? b2bCustomers : b2bCustomers.filter(c => c.tier === b2bTierFilter))
+                        .map((c, i) => {
+                          const tierBadge: Record<string, string> = {
+                            Strategic: "bg-brand-50 text-brand-700",
+                            VIP: "bg-purple-50 text-purple-700",
+                            Gold: "bg-amber-50 text-amber-700",
+                            Silver: "bg-slate-100 text-slate-600",
+                          }
+                          const gpm = c.revenue > 0 ? (c.margin / c.revenue * 100) : 0
+                          return (
+                            <tr key={i} className="hover:bg-brand-50/20 transition-colors cursor-pointer"
+                              onClick={() => setSelectedCustomer(c)}>
+                              <td className="px-5 py-3">
+                                <span className="text-sm font-bold text-slate-900 hover:text-brand-600">{c.customer_name}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full", tierBadge[c.tier] || "bg-slate-100 text-slate-500")}>{c.tier}</span>
+                              </td>
+                              <td className="px-4 py-3 text-xs text-slate-500 font-mono">{c.price_list_name || "—"}</td>
+                              <td className="px-4 py-3 text-sm font-bold text-slate-900 text-right tabular-nums">{formatCurrency(c.revenue)}</td>
+                              <td className="px-4 py-3 text-right"><span className={cn("text-sm font-bold tabular-nums", c.margin >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(c.margin)}</span></td>
+                              <td className="px-4 py-3 text-sm text-slate-500 text-right">{gpm.toFixed(1)}%</td>
+                              <td className="px-4 py-3 text-sm text-slate-600 text-right tabular-nums">{formatNumber(c.orders)}</td>
+                              <td className="px-4 py-3 text-sm text-slate-600 text-right tabular-nums">{formatNumber(c.units)}</td>
+                            </tr>
+                          )
+                        })
+                    )}
+                    {!loadingB2B && b2bCustomers.length === 0 && (
+                      <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-400 italic text-sm">Chọn Apply Filters để tải dữ liệu B2B</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+        ) : (
+        /* Non-B2B: original All Channels table */
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">All Channels Overview</h3>
+              <p className="text-sm text-slate-500">Performance tổng hợp tất cả kênh — click vào kênh để xem chi tiết</p>
+            </div>
+            <button onClick={fetchAllChannels} className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors">
+              <RefreshCw className={cn("w-4 h-4 text-slate-600", loadingAll && "animate-spin")} />
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Channel</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Group</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">GP</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Margin%</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">CM1</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">CM1%</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Orders</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">MoM</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loadingAll ? (
+                  Array(5).fill(0).map((_, i) => (
+                    <tr key={i}>
+                      {Array(10).fill(0).map((_, j) => (
+                        <td key={j} className="px-6 py-4"><Skeleton className="h-4 w-20 ml-auto" /></td>
+                      ))}
+                    </tr>
+                  ))
+                ) : allChannelsData.length > 0 ? (
+                  allChannelsData.map((ch: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => setSelectedChannel(ch.channel)}>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-brand-50 rounded-lg flex items-center justify-center text-brand-600"><Globe className="w-4 h-4" /></div>
+                          <span className="text-sm font-bold text-slate-900 hover:text-brand-600 transition-colors">{ch.channel}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
+                          ch.group_name === "B2B" ? "bg-brand-50 text-brand-600" :
+                          ch.group_name === "B2C" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500")}>
+                          {ch.group_name || "-"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-bold text-slate-900 text-right">{formatCurrency(ch.revenue || 0)}</td>
+                      <td className="px-6 py-4 text-right"><span className={cn("text-sm font-bold", (ch.margin||0)>=0?"text-emerald-600":"text-rose-600")}>{formatCurrency(ch.margin||0)}</span></td>
+                      <td className="px-6 py-4 text-sm text-slate-600 text-right">{(ch.margin_percent||0).toFixed(1)}%</td>
+                      <td className="px-6 py-4 text-right"><span className={cn("text-sm font-bold", (ch.gpm2||0)>=0?"text-emerald-600":"text-rose-600")}>{formatCurrency(ch.gpm2||0)}</span></td>
+                      <td className="px-6 py-4 text-sm text-slate-600 text-right">{(ch.gpm2_percent||0).toFixed(1)}%</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(ch.orders||0)}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(ch.units||0)}</td>
+                      <td className="px-6 py-4 text-right">
+                        <div className={cn("inline-flex items-center gap-1 text-xs font-bold", (ch.mom||0)>=0?"text-emerald-600":"text-rose-600")}>
+                          {(ch.mom||0)>=0?<TrendingUp className="w-3 h-3"/>:<TrendingDown className="w-3 h-3"/>}
+                          {Math.abs(Math.round(ch.mom||0))}%
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-400 italic">Chọn Apply Filters để tải dữ liệu tất cả kênh</td></tr>
+                )}
+                {allChannelsData.length > 0 && (() => {
+                  const tot = allChannelsData.reduce((a: any, ch: any) => ({
+                    revenue: a.revenue + (ch.revenue||0),
+                    margin: a.margin + (ch.margin||0),
+                    gpm2: a.gpm2 + (ch.gpm2||0),
+                    orders: a.orders + (ch.orders||0),
+                    units: a.units + (ch.units||0),
+                  }), { revenue: 0, margin: 0, gpm2: 0, orders: 0, units: 0 })
+                  return (
+                    <tr className="bg-slate-100 font-black border-t-2 border-slate-200">
+                      <td className="px-6 py-4 text-[11px] uppercase tracking-widest text-slate-600" colSpan={2}>TOTAL</td>
+                      <td className="px-6 py-4 text-right text-sm font-black text-slate-900">{formatCurrency(tot.revenue)}</td>
+                      <td className="px-6 py-4 text-right text-sm font-black text-emerald-700">{formatCurrency(tot.margin)}</td>
+                      <td className="px-6 py-4 text-right text-sm text-slate-600">{tot.revenue>0?((tot.margin/tot.revenue)*100).toFixed(1):0}%</td>
+                      <td className="px-6 py-4 text-right text-sm font-black text-emerald-700">{formatCurrency(tot.gpm2)}</td>
+                      <td className="px-6 py-4 text-right text-sm text-slate-600">{tot.revenue>0?((tot.gpm2/tot.revenue)*100).toFixed(1):0}%</td>
+                      <td className="px-6 py-4 text-right text-sm text-slate-600">{formatNumber(tot.orders)}</td>
+                      <td className="px-6 py-4 text-right text-sm text-slate-600">{formatNumber(tot.units)}</td>
+                      <td className="px-6 py-4 text-right text-sm text-slate-400">-</td>
+                    </tr>
+                  )
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        )  /* end non-B2B div */
+      ) : (
+      <>
       {/* Pro-rata Projection */}
       {projection && !loading && (
-        <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6">
+        <div className="bg-brand-50/50 border border-brand-100 rounded-2xl p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
-              <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-brand-800 flex items-center gap-2">
                 <TrendingUp className="w-5 h-5" />
                 Month-End Projection (Pro-rata)
               </h3>
-              <p className="text-sm text-blue-600">
+              <p className="text-sm text-brand-600">
                 Based on <strong>{projection.daysElapsed} days</strong> of performance, projected for <strong>{projection.totalDays} total days</strong>.
               </p>
             </div>
-            <div className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-blue-900/20">
+            <div className="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-brand-800/20">
               {((projection.factor - 1) * 100).toFixed(0)}% Growth Expected
             </div>
           </div>
@@ -1158,10 +1371,10 @@ export default function ChannelPerformancePage() {
               { label: "Projected AOV", value: formatCurrency(projection.aov), change: projection.aovChange },
               { label: "Projected Units", value: Math.round(projection.units).toLocaleString(), change: projection.unitsChange },
             ].map(({ label, value, change }) => (
-              <div key={label} className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
+              <div key={label} className="bg-white p-4 rounded-xl border border-brand-100 shadow-sm">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
                 <div className="flex items-baseline justify-between">
-                  <p className="text-lg font-bold text-blue-600">{value}</p>
+                  <p className="text-lg font-bold text-brand-600">{value}</p>
                   <div className={cn(
                     "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full",
                     change >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
@@ -1179,7 +1392,7 @@ export default function ChannelPerformancePage() {
 
       {/* KPI Cards */}
       <div className="flex items-center gap-2 mb-2">
-        <div className="px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold uppercase tracking-wider rounded border border-blue-100">
+        <div className="px-2 py-1 bg-brand-50 text-brand-600 text-[10px] font-bold uppercase tracking-wider rounded border border-brand-100">
           Viewing by: {dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"}
         </div>
         {dateColumn === "created_date" && (
@@ -1190,7 +1403,7 @@ export default function ChannelPerformancePage() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
         <MetricCard title="Total Revenue" value={formatCurrency(metrics?.revenue || 0)} change={metrics?.revenueChange || 0} icon={DollarSign} loading={loading} comparisonActive={comparisonType !== "none"} />
-        <MetricCard title="Gross Profit 1" value={formatCurrency(metrics?.margin || 0)} change={metrics?.marginChange || 0} icon={TrendingUp} loading={loading} comparisonActive={comparisonType !== "none"} />
+        <MetricCard title="Gross Profit" value={formatCurrency(metrics?.margin || 0)} change={metrics?.marginChange || 0} icon={TrendingUp} loading={loading} comparisonActive={comparisonType !== "none"} />
         <MetricCard title="Contribution Margin 1" value={formatCurrency(metrics?.gpm2 || 0)} change={metrics?.gpm2Change || 0} icon={TrendingUp} loading={loading} comparisonActive={comparisonType !== "none"} />
         <MetricCard title="Total Orders" value={formatNumber(metrics?.orders || 0)} change={metrics?.ordersChange || 0} icon={ShoppingBag} loading={loading} comparisonActive={comparisonType !== "none"} />
         <MetricCard title="Units Sold" value={formatNumber(metrics?.units || 0)} change={metrics?.unitsChange || 0} icon={Package} loading={loading} comparisonActive={comparisonType !== "none"} />
@@ -1206,7 +1419,7 @@ export default function ChannelPerformancePage() {
             {!loading && (
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <div className="w-2 h-2 bg-brand-500 rounded-full"></div>
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Current</span>
                 </div>
                 {comparisonType !== "none" && (
@@ -1226,19 +1439,19 @@ export default function ChannelPerformancePage() {
                 <ComposedChart data={trendData}>
                   <defs>
                     <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      <stop offset="5%" stopColor={CHART_PALETTE[0]} stopOpacity={0.15} />
+                      <stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b", fontWeight: 600 }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b", fontWeight: 600 }} tickFormatter={(val) => formatCompactNumber(val)} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: "#fff", borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
+                    contentStyle={{ ...chartTooltipStyle, padding: "12px" }}
                     formatter={(val: number, name: string) => [formatCurrency(val), name === "revenue" ? "Current" : "Previous"]}
                   />
-                  <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="revenue" />
-                  <Line type="monotone" dataKey="margin" stroke="#10b981" strokeWidth={2} dot={false} name="Gross Profit" />
+                  <Area type="monotone" dataKey="revenue" stroke={CHART_PALETTE[0]} strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="revenue" />
+                  <Line type="monotone" dataKey="margin" stroke={CHART_PALETTE[1]} strokeWidth={2} dot={false} name="Gross Profit" />
                   {comparisonType !== "none" && (
                     <Area type="monotone" dataKey="prevRevenue" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" fill="transparent" name="prevRevenue" />
                   )}
@@ -1256,9 +1469,9 @@ export default function ChannelPerformancePage() {
             <h3 className="text-lg font-bold text-slate-900">Performance Breakdown</h3>
             <p className="text-sm text-slate-500">Breakdown by sub-channel for {selectedChannel} (by {dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"})</p>
           </div>
-          <button onClick={() => exportToCSV(performanceData, "performance_breakdown")} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
+          <button onClick={exportPerformanceBreakdown} className="flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700">
             <Download className="w-4 h-4" />
-            Export CSV
+            Export
           </button>
         </div>
         <div className="overflow-x-auto">
@@ -1269,12 +1482,12 @@ export default function ChannelPerformancePage() {
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Orders</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units Sold</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
-                <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng Rev</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Gross Profit 1</th>
-                <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng GP1</th>
+                <th className="px-6 py-4 text-xs font-bold text-brand-600 uppercase tracking-wider text-right">Dự phóng Rev</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Gross Profit</th>
+                <th className="px-6 py-4 text-xs font-bold text-brand-600 uppercase tracking-wider text-right">Dự phóng GP1</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Contribution Margin 1</th>
-                <th className="px-6 py-4 text-xs font-bold text-blue-600 uppercase tracking-wider text-right">Dự phóng CM1</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">GPM 2 %</th>
+                <th className="px-6 py-4 text-xs font-bold text-brand-600 uppercase tracking-wider text-right">Dự phóng CM1</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">CM1 %</th>
                 {comparisonType !== "none" && (
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
                     {comparisonType === "previous_period" ? "%MoM" : "%YoY"}
@@ -1334,7 +1547,7 @@ export default function ChannelPerformancePage() {
                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
+                          <div className="w-8 h-8 bg-brand-50 rounded-lg flex items-center justify-center text-brand-600">
                             <Globe className="w-4 h-4" />
                           </div>
                           <span className="text-sm font-bold text-slate-900">{row.sub_channel}</span>
@@ -1343,15 +1556,15 @@ export default function ChannelPerformancePage() {
                       <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(row.orders)}</td>
                       <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(row.units)}</td>
                       <td className="px-6 py-4 text-sm font-bold text-slate-900 text-right">{formatCurrency(row.revenue)}</td>
-                      <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">{projection ? formatCurrency(row.revenue * projection.factor) : "-"}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-brand-600 text-right">{projection ? formatCurrency(row.revenue * projection.factor) : "-"}</td>
                       <td className="px-6 py-4 text-right">
                         <span className={cn("text-sm font-bold", row.margin >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(row.margin || 0)}</span>
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">{projection ? formatCurrency((row.margin || 0) * projection.factor) : "-"}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-brand-600 text-right">{projection ? formatCurrency((row.margin || 0) * projection.factor) : "-"}</td>
                       <td className="px-6 py-4 text-right">
                         <span className={cn("text-sm font-bold", rowGpm2 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(rowGpm2 || 0)}</span>
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">{projection ? formatCurrency((rowGpm2 || 0) * projection.factor) : "-"}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-brand-600 text-right">{projection ? formatCurrency((row.margin || 0) * projection.factor - ((row.margin || 0) - (rowGpm2 || 0))) : "-"}</td>
                       <td className="px-6 py-4 text-right">
                         <span className={cn("text-sm font-bold", rowGpm2Percent >= 0 ? "text-emerald-600" : "text-rose-600")}>{rowGpm2Percent.toFixed(1)}%</span>
                       </td>
@@ -1367,7 +1580,7 @@ export default function ChannelPerformancePage() {
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <div className="w-16 bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${contribution}%` }}></div>
+                            <div className="h-full bg-brand-500 rounded-full" style={{ width: `${contribution}%` }}></div>
                           </div>
                           <span className="text-xs font-bold text-slate-500 w-10">{contribution.toFixed(1)}%</span>
                         </div>
@@ -1391,15 +1604,15 @@ export default function ChannelPerformancePage() {
                     <td className="px-6 py-4 text-slate-900 text-right">{formatNumber(metrics?.orders || 0)}</td>
                     <td className="px-6 py-4 text-slate-900 text-right">{formatNumber(metrics?.units || 0)}</td>
                     <td className="px-6 py-4 text-slate-900 text-right">{formatCurrency(metrics?.revenue || 0)}</td>
-                    <td className="px-6 py-4 text-blue-600 font-bold text-right">{projection ? formatCurrency((metrics?.revenue || 0) * projection.factor) : "-"}</td>
+                    <td className="px-6 py-4 text-brand-600 font-bold text-right">{projection ? formatCurrency((metrics?.revenue || 0) * projection.factor) : "-"}</td>
                     <td className="px-6 py-4 text-right">
                       <span className={cn("text-sm font-bold", (metrics?.margin || 0) >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(metrics?.margin || 0)}</span>
                     </td>
-                    <td className="px-6 py-4 text-blue-600 font-bold text-right">{projection ? formatCurrency((metrics?.margin || 0) * projection.factor) : "-"}</td>
+                    <td className="px-6 py-4 text-brand-600 font-bold text-right">{projection ? formatCurrency((metrics?.margin || 0) * projection.factor) : "-"}</td>
                     <td className="px-6 py-4 text-right">
                       <span className={cn("text-sm font-bold", (metrics?.gpm2 || 0) >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(metrics?.gpm2 || 0)}</span>
                     </td>
-                    <td className="px-6 py-4 text-blue-600 font-bold text-right">{projection ? formatCurrency((metrics?.gpm2 || 0) * projection.factor) : "-"}</td>
+                    <td className="px-6 py-4 text-brand-600 font-bold text-right">{projection ? formatCurrency(projection.cm1) : "-"}</td>
                     <td className="px-6 py-4 text-right">
                       <span className={cn("text-sm font-bold", ((metrics?.gpm2 || 0) / (metrics?.revenue || 1) * 100) >= 0 ? "text-emerald-600" : "text-rose-600")}>
                         {((metrics?.gpm2 || 0) / (metrics?.revenue || 1) * 100).toFixed(1)}%
@@ -1466,9 +1679,9 @@ export default function ChannelPerformancePage() {
             <h3 className="text-lg font-bold text-slate-900">Daily Performance Details</h3>
             <p className="text-sm text-slate-500">Daily breakdown (by {dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"})</p>
           </div>
-          <button onClick={() => exportToCSV(trendData, "daily_performance")} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
+          <button onClick={exportDaily} className="flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700">
             <Download className="w-4 h-4" />
-            Export CSV
+            Export
           </button>
         </div>
         <div className="overflow-x-auto">
@@ -1534,9 +1747,9 @@ export default function ChannelPerformancePage() {
             <h3 className="text-lg font-bold text-slate-900">Top Selling Products</h3>
             <p className="text-sm text-slate-500">Highest revenue products (by {dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"})</p>
           </div>
-          <button onClick={() => exportToCSV(topProducts, "top_products")} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700">
+          <button onClick={exportTopProductsFull} className="flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700">
             <Download className="w-4 h-4" />
-            Export CSV
+            Export
           </button>
         </div>
         <div className="overflow-x-auto">
@@ -1544,6 +1757,8 @@ export default function ChannelPerformancePage() {
             <thead>
               <tr className="bg-slate-50">
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Product Name</th>
+                <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Destination</th>
+                <th className="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Category</th>
                 {([
                   { key: "orders", label: "Orders" },
                   { key: "units", label: "Units Sold" },
@@ -1554,7 +1769,7 @@ export default function ChannelPerformancePage() {
                 ] as const).map(col => (
                   <th
                     key={col.key}
-                    className={cn("px-6 py-4 text-xs font-bold uppercase tracking-wider text-right cursor-pointer hover:bg-slate-100 transition-colors", col.key === "projection" ? "text-blue-600" : "text-slate-500")}
+                    className={cn("px-6 py-4 text-xs font-bold uppercase tracking-wider text-right cursor-pointer hover:bg-slate-100 transition-colors", col.key === "projection" ? "text-brand-600" : "text-slate-500")}
                     onClick={() => handleProductSort(col.key)}
                   >
                     <div className="flex items-center justify-end">
@@ -1569,7 +1784,7 @@ export default function ChannelPerformancePage() {
               {loading ? (
                 Array(5).fill(0).map((_, i) => (
                   <tr key={i}>
-                    {Array(7).fill(0).map((_, j) => (
+                    {Array(9).fill(0).map((_, j) => (
                       <td key={j} className="px-6 py-4"><Skeleton className="h-4 w-20 ml-auto" /></td>
                     ))}
                   </tr>
@@ -1582,23 +1797,27 @@ export default function ChannelPerformancePage() {
                         <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400">
                           <Package className="w-4 h-4" />
                         </div>
-                        <span className="text-sm font-bold text-slate-900 truncate max-w-[300px]">{product.product_name}</span>
+                        <span className="text-sm font-bold text-slate-900 truncate max-w-[260px]">{product.product_name}</span>
                       </div>
                     </td>
+                    <td className="px-4 py-4 text-xs font-bold text-slate-700 whitespace-nowrap" title={product.destination || ""}>
+                      {product.destination ? (countryMap[product.destination] || product.destination) : "—"}
+                    </td>
+                    <td className="px-4 py-4 text-xs text-slate-500 whitespace-nowrap max-w-[120px] truncate">{product.category || "—"}</td>
                     <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(product.orders)}</td>
                     <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(product.units)}</td>
                     <td className="px-6 py-4 text-sm font-bold text-slate-900 text-right">{formatCurrency(product.revenue)}</td>
                     <td className="px-6 py-4 text-right">
                       <span className={cn("text-sm font-bold", product.margin >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(product.margin || 0)}</span>
                     </td>
-                    <td className="px-6 py-4 text-sm font-bold text-blue-600 text-right">{projection ? formatCurrency(product.revenue * projection.factor) : "-"}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-brand-600 text-right">{projection ? formatCurrency(product.revenue * projection.factor) : "-"}</td>
                     <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatCurrency(product.revenue / (product.orders || 1))}</td>
                   </tr>
                 ))
               )}
               {topProducts.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400 italic">
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-400 italic">
                     No product data available for this period
                   </td>
                 </tr>
@@ -1608,20 +1827,18 @@ export default function ChannelPerformancePage() {
         </div>
         {!loading && topProducts.length > 0 && (
           <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-center">
-            <button onClick={() => setShowAllProducts(!showAllProducts)} className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors">
+            <button onClick={() => setShowAllProducts(!showAllProducts)} className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-brand-600 transition-colors">
               {showAllProducts ? (<><ChevronUp className="w-4 h-4" />Show Less</>) : (<><ChevronDown className="w-4 h-4" />View All Products</>)}
             </button>
           </div>
         )}
       </div>
 
-      {/* Cost Management Modal */}
-      <CostManagementModal
-        isOpen={showCostModal}
-        onClose={() => setShowCostModal(false)}
-        onSave={() => fetchChannelData()}
-        initialMonth={startDate.slice(0, 7)}
-      />
+      </>
+      )}
     </div>
   )
 }
+
+// ─── B2BCustomerDetail ────────────────────────────────────────────────────────
+// B2BCustomerDetail — tách sang components/channels/b2b-customer-detail.tsx (s183 Phase 5, import ở đầu file).

@@ -9,7 +9,7 @@
 GoHub Intel (Intelligence Hub) là nền tảng quản trị nội bộ hợp nhất toàn diện 3 mảnh ghép chính:
 1. **Product Management (GoHub PM)**: Quản lý toàn bộ vòng đời sản phẩm bao gồm Catalog SIM/eSIM hệ thống (Products, SKUs, Listings, Items), danh mục đối tác/Nhà cung cấp (WorldMove, 3HK, v.v.), nhóm địa lý và Cơ sở tri thức (Knowledge Base).
 2. **Business Intelligence (gohub-intel)**: Phân tích sâu số liệu doanh thu, chi phí, đơn hàng, khách hàng sỉ B2B, bán lẻ B2C trực tiếp từ kho dữ liệu tập trung (`gohub_dw`) với giao diện chuyên nghiệp và trực quan.
-3. **AI Chatbot (Bé Gấu Thông Thái)**: Hệ thống AI đa tác nhân (6 chuyên gia Agents) hỗ trợ tư vấn gói cước, giải đáp nghiệp vụ, phân tích Gap NCC, truy vấn SQL thực thi số liệu trực tiếp và xuất dữ liệu báo cáo sang tệp tin mẫu.
+3. **AI Chatbot (Bé Gấu Thông Thái)**: Hệ thống AI đa tác nhân (7 chuyên gia Agents) hỗ trợ tư vấn gói cước, giải đáp nghiệp vụ, phân tích Gap NCC, truy vấn SQL thực thi số liệu trực tiếp, truy xuất dữ liệu thô toàn hệ thống và xuất dữ liệu báo cáo sang tệp tin mẫu.
 
 ---
 
@@ -44,7 +44,7 @@ HeThong/ (Root)
 │   ├── RULES.md              # Quy tắc quản lý file tri thức
 │   ├── CLAUDE.md             # Quy tắc tư duy lập trình cho AI
 │   ├── FESkill.md            # Chỉ dẫn UX/UI "Anti-Slop" chất lượng cao
-│   └── agents/AGENTS.md      # Tài liệu thiết kế 6 agents chatbot
+│   └── agents/AGENTS.md      # Tài liệu thiết kế 7 agents chatbot
 ├── web/                      # Ứng dụng Next.js (Mã nguồn Web Frontend & Backend API)
 │   ├── src/
 │   │   ├── app/              # App Router Pages & API Routes
@@ -59,23 +59,25 @@ HeThong/ (Root)
 │   │   └── populate_geo_hierarchy.py
 │   ├── migrations/           # PostgreSQL/Supabase Migrations v1 -> v20
 │   └── seeding/              # Các script nạp dữ liệu một lần (Gom từ database/import/)
-├── docs/                     # Toàn bộ tài liệu nghiệp vụ, tri thức nội bộ
-│   ├── wiki/                 # Obsidian Wiki nội bộ của GoHub
+├── docs/                     # ⚠️ CHỈ commit docs/wiki/** — file rời khác là LOCAL-ONLY (gitignore)
+│   ├── wiki/                 # Obsidian Wiki nội bộ (nguồn duy nhất được commit trong docs/)
 │   │   ├── Tab/              # Tài liệu chi tiết kỹ thuật của 28 Tab hệ thống
-│   │   ├── company/
-│   │   ├── pricing/
-│   │   └── ...
-│   ├── session_summary.txt   # Lịch sử các session làm việc của AI
-│   └── MoTaChiTiet.md        # Bối cảnh nghiệp vụ công ty
+│   │   ├── system/           # Kiến trúc: Chatbot-Agents-Guardian, Second-Brain...
+│   │   ├── company/ · pricing/ · products/ · ...
+│   │   └── (đồng bộ Supabase kb_wiki_pages qua script upsert theo title)
+│   ├── session_summary.txt   # (LOCAL-ONLY) Nhật ký session làm việc của AI
+│   └── MoTaChiTiet.md        # (LOCAL-ONLY) Bối cảnh nghiệp vụ công ty
 ├── resources/                # Đã quy hoạch toàn bộ Excel/báo giá nhạy cảm để dọn rác root
 │   ├── reference/            # Gom từ Data/ (countries, support-countries, tỉ giá nội bộ)
 │   ├── company_templates/    # Gom từ TaiLieuCongTy_Chung/ (COGS_Template, Quy trình)
 │   ├── vendor_catalogs/      # Gom từ VENDOR/ (Báo giá 3HK, eSIM apn...)
 │   └── product_templates/    # Gom từ Add_product/ (WM_Taiwan_unlimited...)
-├── Bug.txt                   # Nhật ký ghi nhận và sửa đổi lỗi hệ thống
-├── WORK.md                   # Trạng thái dự án & Kế hoạch Roadmap
+├── Bug.txt                   # (LOCAL-ONLY, gitignore) Nhật ký lỗi hệ thống
+├── WORK.md                   # (LOCAL-ONLY, gitignore) Trạng thái dự án & Roadmap
 └── README.md                 # Tệp giới thiệu & Hướng dẫn khởi chạy hệ thống
 ```
+
+> **Quy tắc commit (s106):** KHÔNG commit `Bug.txt`, `WORK.md`, `new_info.txt`, `test.sql`, hay file `.md/.txt` rời lên GitHub. Trong `docs/` chỉ `docs/wiki/**` được commit — mọi tài liệu làm việc còn lại giữ LOCAL (đã cấu hình `.gitignore`).
 
 ---
 
@@ -132,18 +134,21 @@ Sử dụng GitHub Actions để tự động hóa toàn bộ quá trình:
 
 ---
 
-## VI. AI AGENT SYSTEM (6 AGENTS CHUYÊN BIỆT)
+## VI. AI AGENT SYSTEM (7 AGENTS CHUYÊN BIỆT)
 
-Hệ thống Chatbot tích hợp **6 Agent chuyên gia** (đã E2E tested):
+Hệ thống Chatbot tích hợp **7 Agent chuyên gia** (đã E2E tested + audit LLM-judge s106):
 
 | Tên Agent | ID Tác nhân | Phạm vi / Chức năng | Trigger đặc trưng |
 |---|---|---|---|
-| **Tư Vấn** | `tu-van` | Tư vấn SIM/eSIM theo nước/ngày/GB từ bảng `sku_catalog` | "đi Thái 5 ngày", "gói Japan" |
+| **Tư Vấn** | `tu-van` | Tư vấn SIM/eSIM theo nước/ngày/GB từ `sku_catalog`; hỗ trợ **gói đa quốc gia** (phủ nhiều nước cùng lúc) | "đi Thái 5 ngày", "gói Japan", "cả Malaysia và Singapore" |
 | **Tra Cứu** | `tra-cuu` | Tra cứu chi tiết thông số SKU, Product Code, giá vốn, tỷ giá | Mã SKU (13 ký tự), mã Product, COGS |
-| **Giải Đáp** | `giai-dap` | Giải thích quy trình, thuật ngữ, cấu trúc mã, tìm kiếm Wiki/KB | "KYC là gì", "nghĩa là gì" |
-| **NCC & Gap** | `gap-analysis` | Duyệt catalog đối tác WM/3HK, so sánh và phân tích Gap hệ thống | "so sánh NCC", "Gap NCC" |
-| **BI Analyst** | `bi-analyst` | Tự động sinh SQL truy vấn `gohub_dw` và vẽ biểu đồ Recharts | "doanh thu", "đơn hàng", "leaderboard" |
+| **Giải Đáp** | `giai-dap` | Giải thích quy trình, thuật ngữ, cấu trúc mã, chỉ số kinh doanh (CM1…), tìm kiếm Wiki/KB | "KYC là gì", "CM1 khác gì Gross Profit" |
+| **NCC & Gap** | `gap-analysis` | Duyệt catalog đối tác WM/3HK, so sánh và phân tích Gap hệ thống | "so sánh NCC", "WM có gói nào chưa tạo" |
+| **BI Analyst** | `bi-analyst` | Tự động sinh SQL truy vấn `gohub_dw` (doanh thu/kho/nhân viên/CM1) + biểu đồ; **rào PII** (chỉ trả mã KH) | "doanh thu", "báo cáo 3HK trong kho Hà Nội", "khách mua nhiều nhất" |
+| **Kho Dữ Liệu** | `data-explorer` | Truy xuất DỮ LIỆU THÔ toàn hệ thống: `executeSQL` (gohub_dw) + `querySupabase` (38 bảng catalog/config) | "có bao nhiêu SKU active", "liệt kê wiki", "đếm sản phẩm theo vendor" |
 | **Tạo Template** | `tao-template` | Xuất Excel template sản phẩm từ NCC cho Admin/Manager | "tạo template WM", "template 3hk" |
+
+> **Kiểm thử agent (s106)**: bộ E2E `web/src/__e2e__/agent-audit` (đối chiếu prompt vs DB thật) + `agent-grade` (LLM-judge chấm chất lượng câu trả lời) — chạy qua `vitest.audit.config.ts`. Regression routing: `chatbot-routing.test.ts`. Chi tiết: `docs/wiki/system/Chatbot-Agents-Guardian.md`.
 
 ---
 

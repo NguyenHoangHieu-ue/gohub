@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useMemo } from "react"
 import { Gift, Search } from "lucide-react"
+import { SkeletonTable } from "@/components/skeleton"
+import { EmptyState } from "@/components/empty-state"
+import { useUrlStates } from "@/hooks/use-url-state"
+import { DataTable } from "@/components/dashboard-kit"
 
 interface Promotion {
   product_code:        string
@@ -60,9 +64,10 @@ function fmtDate(d: string | null) {
 export default function PromotionsPage() {
   const [items,   setItems]   = useState<Promotion[]>([])
   const [loading, setLoading] = useState(true)
-  const [search,  setSearch]  = useState("")
-  const [vendor,  setVendor]  = useState("")
-  const [simType, setSimType] = useState("")
+  const [filters, setFilters] = useUrlStates({ q: "", vendor: "", sim: "" })
+  const search  = filters.q
+  const vendor  = filters.vendor
+  const simType = filters.sim
 
   useEffect(() => {
     fetch("/api/promotions")
@@ -94,8 +99,8 @@ export default function PromotionsPage() {
   return (
     <div className="p-6 space-y-5">
       <div className="flex items-baseline gap-2">
-        <Gift size={20} className="text-brand-600 mt-0.5" />
-        <h1 className="text-xl font-bold text-gray-900">Khuyến Mãi</h1>
+        <Gift size={20} className="text-brand-600 dark:text-brand-400 mt-0.5" />
+        <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">Khuyến Mãi</h1>
         {!loading && <span className="text-sm text-gray-400 ml-1">{filtered.length}/{items.length} sản phẩm</span>}
       </div>
 
@@ -105,82 +110,55 @@ export default function PromotionsPage() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => setFilters({ q: e.target.value })}
             placeholder="Tìm mã SP, nội dung, nước..."
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
-        <select value={vendor} onChange={e => setVendor(e.target.value)}
-          className="px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
+        <select value={vendor} onChange={e => setFilters({ vendor: e.target.value })}
+          className="px-3 py-2 text-sm border border-gray-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white dark:bg-slate-800 dark:text-slate-100">
           <option value="">Tất cả Vendor</option>
           {vendors.map(v => <option key={v} value={v}>{v}</option>)}
         </select>
-        <select value={simType} onChange={e => setSimType(e.target.value)}
-          className="px-3 py-2 text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white">
+        <select value={simType} onChange={e => setFilters({ sim: e.target.value })}
+          className="px-3 py-2 text-sm border border-gray-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white dark:bg-slate-800 dark:text-slate-100">
           <option value="">Tất cả SIM</option>
           {simTypes.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         {(vendor || simType || search) && (
-          <button onClick={() => { setVendor(""); setSimType(""); setSearch("") }}
-            className="px-3 py-2 text-sm text-gray-500 hover:text-red-600 border border-gray-200 rounded-xl hover:border-red-200 transition-colors">
+          <button onClick={() => setFilters({ q: "", vendor: "", sim: "" })}
+            className="px-3 py-2 text-sm text-gray-500 dark:text-slate-400 hover:text-red-600 border border-gray-200 dark:border-slate-700 rounded-xl hover:border-red-200 transition-colors">
             Xóa filter
           </button>
         )}
       </div>
 
       {loading ? (
-        <div className="space-y-2">
-          {[...Array(6)].map((_, i) => <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse" />)}
-        </div>
+        <SkeletonTable rows={8} cols={6} />
       ) : filtered.length === 0 ? (
-        <div className="py-16 text-center text-gray-400">
-          {search || vendor || simType ? "Không tìm thấy kết quả" : "Chưa có sản phẩm nào có khuyến mãi"}
-        </div>
+        <EmptyState
+          title={search || vendor || simType ? "Không tìm thấy kết quả" : "Chưa có sản phẩm nào có khuyến mãi"}
+          description={search || vendor || simType ? "Thử bỏ bộ lọc hoặc đổi từ khoá" : undefined}
+        />
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-gray-500 bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 font-medium">Mã SP</th>
-                <th className="px-4 py-3 font-medium">Vendor</th>
-                <th className="px-4 py-3 font-medium">Loại</th>
-                <th className="px-4 py-3 font-medium">Thời gian KM</th>
-                <th className="px-4 py-3 font-medium">Nội dung</th>
-                <th className="px-4 py-3 font-medium">Tên gói (VN)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map(p => (
-                <tr key={p.product_code} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-brand-700 whitespace-nowrap">{p.product_code}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {vendorBadge(p.vendor_code)}
-                      {simBadge(p.type_of_sim)}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
-                    {p.tenant && <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">{p.tenant}</span>}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap space-y-1">
-                    {(p.telco_perks_start || p.telco_perks_end) ? (
-                      <>
-                        <div>{fmtDate(p.telco_perks_start) ?? "—"} → {fmtDate(p.telco_perks_end) ?? "—"}</div>
-                        {dateBadge(p.telco_perks_start, p.telco_perks_end)}
-                      </>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-800 max-w-[200px] whitespace-pre-wrap leading-relaxed text-xs">{p.telco_perks}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px]">
-                    {p.listing_name_vn ?? <span className="text-gray-300">—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          rowKey={p => p.product_code}
+          rows={filtered}
+          pageSize={20}
+          columns={[
+            { key: "code", label: "Mã SP", render: p => <span className="font-mono text-brand-700 dark:text-brand-300 whitespace-nowrap">{p.product_code}</span> },
+            { key: "vendor", label: "Vendor", render: p => <div className="flex flex-wrap gap-1">{vendorBadge(p.vendor_code)}{simBadge(p.type_of_sim)}</div> },
+            { key: "tenant", label: "Loại", render: p => p.tenant ? <span className="bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-gray-500 dark:text-slate-300">{p.tenant}</span> : null },
+            { key: "period", label: "Thời gian KM", render: p => (p.telco_perks_start || p.telco_perks_end) ? (
+                <div className="space-y-1 whitespace-nowrap">
+                  <div>{fmtDate(p.telco_perks_start) ?? "—"} → {fmtDate(p.telco_perks_end) ?? "—"}</div>
+                  {dateBadge(p.telco_perks_start, p.telco_perks_end)}
+                </div>
+              ) : <span className="text-gray-400">-</span> },
+            { key: "perks", label: "Nội dung", render: p => <span className="text-gray-800 dark:text-slate-200 max-w-[280px] block whitespace-pre-wrap leading-relaxed">{p.telco_perks}</span> },
+            { key: "listing", label: "Tên gói (VN)", render: p => p.listing_name_vn ?? <span className="text-gray-300 dark:text-slate-600">—</span> },
+          ]}
+        />
       )}
     </div>
   )

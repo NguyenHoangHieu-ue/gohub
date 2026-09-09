@@ -11,9 +11,14 @@ export async function GET(req: NextRequest) {
   const channelGroup = req.nextUrl.searchParams.get("channelGroup") || ""
   const tier = req.nextUrl.searchParams.get("tier") || ""
 
+  // withDetails=true: trả {code, name, sub_group_name} thay vì mảng tên (dùng cho Settings + B2B grouping)
+  const withDetails = req.nextUrl.searchParams.get("withDetails") === "1"
+
   try {
     const params: string[] = []
-    let sql = "SELECT DISTINCT TRIM(channel_name) as name FROM dim_order_source WHERE channel_name IS NOT NULL"
+    let sql = withDetails
+      ? "SELECT DISTINCT TRIM(code) as code, TRIM(channel_name) as name, TRIM(COALESCE(sub_group_name,'')) as sub_group FROM dim_order_source WHERE channel_name IS NOT NULL AND TRIM(channel_name) != ''"
+      : "SELECT DISTINCT TRIM(channel_name) as name FROM dim_order_source WHERE channel_name IS NOT NULL"
 
     if (channelGroup && channelGroup !== "All") {
       const targetGroup = ["WS", "WHOLESALES", "OD", "ON-DEMAND", "B2B"].includes(channelGroup.toUpperCase())
@@ -23,6 +28,12 @@ export async function GET(req: NextRequest) {
     }
 
     sql += " ORDER BY name"
+
+    if (withDetails) {
+      const rows = await queryAnalytics<{ code: string; name: string; sub_group: string }>(sql, params)
+      return NextResponse.json(rows.filter(r => r.name))
+    }
+
     const rows = await queryAnalytics<{ name: string }>(sql, params)
     let channels = rows.map(r => r.name).filter(Boolean)
 

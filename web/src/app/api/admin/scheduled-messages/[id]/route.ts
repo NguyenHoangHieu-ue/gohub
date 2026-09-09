@@ -6,8 +6,10 @@ import { runScheduledMessage } from "@/lib/scheduled-runner"
 import { getDbRole } from "@/lib/db-role"
 
 // Nút "Test ngay" (POST) chạy đồng bộ runScheduledMessage (gọi Gemini) → cần thời gian > default Vercel.
-// Trước đây thiếu maxDuration → Daily (report nặng nhất) bị timeout. Set 60s như cron route.
-export const maxDuration = 60
+// Daily (report nặng nhất — ~6 batch query gohub_dw tuần tự + Gemini format + gửi Lark) từng bị timeout ở
+// 60s (s160: cron-job.org báo timeout, tin không tới Lark vì atomic claim ghi last_run_at TRƯỚC khi build
+// report xong → slot bị đánh dấu "đã chạy" dù chưa gửi). Nâng lên 180s khớp cron route.
+export const maxDuration = 180
 
 // Dùng DB role (getDbRole) thay JWT role — tránh JWT cũ khiến admin vừa được assign vẫn bị 403.
 const WRITABLE_TABS_KEY = "permissions.writable_tabs"
@@ -15,7 +17,7 @@ const WRITABLE_TABS_KEY = "permissions.writable_tabs"
 async function canWriteScheduled(username: string): Promise<boolean> {
   const dbRole = await getDbRole(username)
   if (["admin", "creator"].includes(dbRole)) return true
-  const { data } = await supabaseAdmin.from("app_config").select("value").eq("key", WRITABLE_TABS_KEY).maybeSingle()
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", WRITABLE_TABS_KEY).maybeSingle()
   if (!data?.value) return false
   try {
     const cfg = JSON.parse(data.value) as Record<string, string[]>
@@ -26,7 +28,10 @@ async function canWriteScheduled(username: string): Promise<boolean> {
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!(await canWriteScheduled(session.user?.username as string))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  const _sessionRole = (session.user as any).role ?? session.user.role ?? ""
+  const _allowed = ["admin", "creator"].includes(_sessionRole)
+    || (await canWriteScheduled((session.user as any).username ?? ""))
+  if (!_allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const body = await req.json()
   const { name, prompt, cron_expression, lark_webhook_url, lark_keyword, is_active } = body
@@ -53,7 +58,10 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!(await canWriteScheduled(session.user?.username as string))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  const _sessionRole = (session.user as any).role ?? session.user.role ?? ""
+  const _allowed = ["admin", "creator"].includes(_sessionRole)
+    || (await canWriteScheduled((session.user as any).username ?? ""))
+  if (!_allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { error } = await supabaseAdmin
     .from("lark_scheduled_messages")
@@ -68,7 +76,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!(await canWriteScheduled(session.user?.username as string))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+  // Fast-path: dùng session.user.role trước (tránh username undefined → DB miss → 403 nhầm)
+  const sessionRole = (session.user as any).role ?? session.user.role ?? ""
+  const allowed = ["admin", "creator"].includes(sessionRole)
+    || (await canWriteScheduled((session.user as any).username ?? ""))
+  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { data: msg, error } = await supabaseAdmin
     .from("lark_scheduled_messages")
@@ -79,7 +92,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (error || !msg) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   try {
-    const finalText = await runScheduledMessage(msg)
+    // noUpdateLastRun: test run không ảnh hưởng lịch tự động (last_run_at giữ nguyên)
+    const finalText = await runScheduledMessage(msg, { noUpdateLastRun: true })
     return NextResponse.json({ ok: true, message: "Đã gửi", preview: finalText.slice(0, 200) })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })

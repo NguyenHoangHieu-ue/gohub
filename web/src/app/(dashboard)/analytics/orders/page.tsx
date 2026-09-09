@@ -1,655 +1,640 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef, useMemo } from "react"
+import {
+  ClipboardList, Download, Search, X, ChevronLeft, ChevronRight,
+  Calendar, RefreshCw,
+} from "lucide-react"
+import { exportToExcel }      from "@/lib/export-excel"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
-import { DatePresets } from "@/components/date-presets"
-import { Search, Filter, Download, ChevronLeft, ChevronRight, Calendar, ShoppingBag, Globe, Package, RefreshCw, User } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { SourceBadge } from "@/components/dashboard-kit"
 
-interface Order {
-  order_code: string
-  fulfiled_date: string
-  channel_name: string
-  order_source: string
-  sku: string
-  fulfilled_quantity: number
-  fulfilled_revenue_amount_vnd: number
-  unit_price_after_discount_vnd?: number
-  staff_name: string
-  customer_name: string
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface OrderRow {
+  order_date:      string
+  staff_name:      string
+  customer_name:   string
+  order_code:      string
+  company_code:    string | null   // VN | US | SG | HK
+  order_name:      string
+  sim_type:        string
+  channel_name:    string
+  quantity:        number
+  unit_price:      number
+  total_revenue:   number
+  gross_profit:    number
+  price_list_name: string | null
 }
 
-export default function OrderManagementPage() {
-  const [orders, setOrders] = useState<Order[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isExporting, setIsExporting] = useState(false)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
-  const [endDate, setEndDate] = useState<string>(() => getDefaultDateRange().endDate)
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
-  const [summary, setSummary] = useState({ totalRevenue: 0, totalQuantity: 0 })
-  const [showFilters, setShowFilters] = useState(false)
-  const [channels, setChannels] = useState<string[]>([])
-  const [selectedChannel, setSelectedChannel] = useState("")
-  const [selectedChannelGroup, setSelectedChannelGroup] = useState("")
-  const [selectedCustomerTier, setSelectedCustomerTier] = useState("")
-  const [staffList, setStaffList] = useState<{ code: string; name: string }[]>([])
-  const [selectedStaff, setSelectedStaff] = useState("")
-  const [orderSources, setOrderSources] = useState<{ code: string; name: string }[]>([])
-  const [selectedOrderSource, setSelectedOrderSource] = useState("")
-  const [viewMode, setViewMode] = useState<"fulfilled" | "created">("fulfilled")
-  const pageSize = 20
+const COMPANY_CFG: Record<string, { label: string; flag: string; bg: string; text: string }> = {
+  VN: { label: "VN", flag: "🇻🇳", bg: "bg-red-50",    text: "text-red-700"    },
+  US: { label: "US", flag: "🇺🇸", bg: "bg-blue-50",   text: "text-blue-700"  },
+  SG: { label: "SG", flag: "🇸🇬", bg: "bg-rose-50",   text: "text-rose-700"  },
+  HK: { label: "HK", flag: "🇭🇰", bg: "bg-red-50",    text: "text-red-800"   },
+}
 
+function CompanyBadge({ code }: { code: string | null }) {
+  if (!code) return null
+  const cfg = COMPANY_CFG[code.toUpperCase()]
+  if (!cfg) return <span className="text-[9px] font-bold text-slate-400">{code}</span>
+  return (
+    <span className={cn("text-[9px] font-black px-1 py-0.5 rounded uppercase tracking-wider", cfg.bg, cfg.text)}>
+      {cfg.flag} {cfg.label}
+    </span>
+  )
+}
+
+// ─── Tier config ──────────────────────────────────────────────────────────────
+const TIER_CFG: Record<string, { bg: string; text: string }> = {
+  Strategic: { bg: "bg-indigo-100",  text: "text-indigo-700"  },
+  VIP:       { bg: "bg-purple-100",  text: "text-purple-700"  },
+  Gold:      { bg: "bg-amber-100",   text: "text-amber-700"   },
+  Silver:    { bg: "bg-slate-100",   text: "text-slate-600"   },
+  B2C:       { bg: "bg-emerald-100", text: "text-emerald-700" },
+}
+
+function classifyTier(pln: string | null, kws: Record<string, string[]>): string {
+  if (!pln) return "B2C"
+  const up = pln.toUpperCase()
+  for (const [t, ks] of Object.entries(kws)) {
+    if (ks.some(k => up.includes(k.toUpperCase()))) return t
+  }
+  return "Strategic"
+}
+
+function TierBadge({ pln, kws }: { pln: string | null; kws: Record<string, string[]> }) {
+  const tier = classifyTier(pln, kws)
+  const c = TIER_CFG[tier]
+  if (!c) return null
+  return (
+    <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider", c.bg, c.text)}>
+      {tier}
+    </span>
+  )
+}
+
+function fmtDate(d: string | null | undefined): string {
+  if (!d || typeof d !== "string") return "—"
+  // Handle ISO timestamp: "2026-07-29T00:00:00.000Z" → take first 10 chars
+  const s = d.slice(0, 10)
+  const parts = s.split("-")
+  if (parts.length !== 3) return d
+  return `${parts[2]}/${parts[1]}/${parts[0].slice(2)}`
+}
+
+function fmtNum(n: number | null | undefined): string {
+  if (n == null || isNaN(n)) return "—"
+  return new Intl.NumberFormat("vi-VN").format(Math.round(n))
+}
+
+const PAGE_SIZE = 50
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+export default function OrdersPage() {
+  // Date state — empty until client sets it (avoid SSR hydration mismatch)
+  // Default: range mode (đầu tháng → hôm qua) để đồng bộ với Staff tab
+  const [singleDate,   setSingleDate]   = useState("")
+  const [startDate,    setStartDate]    = useState("")
+  const [endDate,      setEndDate]      = useState("")
+  const [dateMode,     setDateMode]     = useState<"day" | "range">("range")
+  const [dataSource,   setDataSource]   = useState("fulfilled")
+
+  // Filter state
+  const [companyCode,  setCompanyCode]  = useState("")          // "" = ALL, "VN", "US", "SG", "HK"
+  const [includeShip,        setIncludeShip]        = useState(false)  // No (default) = loại shipping fee
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)  // No (default) = loại internal ops
+  const [staffCode,    setStaffCode]    = useState("")
+  const [channelGroup, setChannelGroup] = useState("")
+  const [channel,      setChannel]      = useState("")
+  const [orderSource,  setOrderSource]  = useState("")
+  const [search,       setSearch]       = useState("")
+  const [page,         setPage]         = useState(1)
+
+  // Data state
+  const [rows,    setRows]    = useState<OrderRow[]>([])
+  const [total,   setTotal]   = useState(0)
+  const [sumRevenue, setSumRevenue] = useState(0)   // tổng toàn kỳ (từ API, không phải page)
+  const [sumGp,      setSumGp]      = useState(0)
+  const [sumQty,     setSumQty]     = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  // Reference data
+  const [tierKws,      setTierKws]      = useState<Record<string, string[]>>({})
+  const [staffList,    setStaffList]    = useState<{ code: string; name: string }[]>([])
+  const [channelList,  setChannelList]  = useState<string[]>([])
+  const [orderSrcList, setOrderSrcList] = useState<string[]>([])
+
+  // Track if dates have been initialised (client-only)
+  const datesReady = useRef(false)
+
+  // ── Init dates on client ─────────────────────────────────────────────────
+  // Dùng getDefaultDateRange() để đồng bộ với Staff tab (đầu tháng → hôm qua)
   useEffect(() => {
-    fetchChannels()
+    const { startDate: s, endDate: e } = getDefaultDateRange()
+    const today = new Date().toISOString().split("T")[0]
+    setSingleDate(today)
+    setStartDate(s)
+    setEndDate(e)
+    datesReady.current = true
   }, [])
 
+  // ── Load reference data ──────────────────────────────────────────────────
   useEffect(() => {
-    fetchChannels(selectedChannelGroup, selectedCustomerTier)
-    setSelectedChannel("")
-    fetchStaff(undefined, selectedChannelGroup)
-    fetchOrderSources(undefined, selectedChannelGroup)
-  }, [selectedChannelGroup, selectedCustomerTier])
-
-  useEffect(() => {
-    fetchStaff(selectedChannel, selectedChannelGroup)
-    setSelectedStaff("")
-    fetchOrderSources(selectedChannel, selectedChannelGroup)
-    setSelectedOrderSource("")
-  }, [selectedChannel])
-
-  useEffect(() => {
-    fetchOrders()
-  }, [page, startDate, endDate, selectedChannel, selectedStaff, selectedOrderSource, viewMode, selectedCustomerTier, selectedChannelGroup])
-
-  const fetchChannels = async (channelGroup?: string, tier?: string) => {
-    try {
-      const params = new URLSearchParams()
-      if (channelGroup) params.append("channelGroup", channelGroup)
-      if (tier && channelGroup === "B2B") params.append("tier", tier)
-      const url = `/api/channels${params.toString() ? `?${params.toString()}` : ""}`
-      const response = await fetch(url)
-      if (response.ok) {
-        setChannels(await response.json())
-      }
-    } catch (err) {
-      console.error("Error fetching channels:", err)
-    }
-  }
-
-  const fetchStaff = async (channel?: string, channelGroup?: string) => {
-    try {
-      const params = new URLSearchParams()
-      if (channel) params.append("channel", channel)
-      if (channelGroup) params.append("channelGroup", channelGroup)
-
-      const url = `/api/staff?${params.toString()}`
-      const response = await fetch(url)
-      if (response.ok) {
-        setStaffList(await response.json())
-      }
-    } catch (err) {
-      console.error("Error fetching staff:", err)
-    }
-  }
-
-  const fetchOrderSources = async (channel?: string, channelGroup?: string) => {
-    try {
-      const params = new URLSearchParams()
-      if (channel) params.append("channel", channel)
-      if (channelGroup) params.append("channelGroup", channelGroup)
-
-      const url = `/api/order-sources?${params.toString()}`
-      const response = await fetch(url)
-      if (response.ok) {
-        setOrderSources(await response.json())
-      }
-    } catch (err) {
-      console.error("Error fetching order sources:", err)
-    }
-  }
-
-  const fetchOrders = async () => {
-    setIsLoading(true)
-    try {
-      const params = new URLSearchParams({
-        startDate,
-        endDate,
-        page: page.toString(),
-        pageSize: pageSize.toString(),
-        search: searchTerm,
-        channelGroup: selectedChannelGroup,
-        customerTier: selectedChannelGroup === "B2B" ? selectedCustomerTier : "",
-        channel: selectedChannel,
-        staff: selectedStaff,
-        orderSource: selectedOrderSource,
-        dataSource: viewMode,
+    fetch("/api/analytics/quarterly-settings")
+      .then(r => r.json())
+      .then(d => { if (d?.tierKeywords) setTierKws(d.tierKeywords) })
+      .catch(() => {})
+    fetch("/api/staff")
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setStaffList(d) })
+      .catch(() => {})
+    fetch("/api/channels")
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) setChannelList(
+          d.map((x: any) => typeof x === "string" ? x : String(x?.name || x?.channel_name || "")).filter(Boolean)
+        )
       })
-      const response = await fetch(`/api/orders?${params}`)
-      if (response.ok) {
-        const data = await response.json()
-        setOrders(data.orders)
-        setTotal(data.total)
-        setSummary(data.summary || { totalRevenue: 0, totalQuantity: 0 })
-      }
-    } catch (err) {
-      console.error("Error fetching orders:", err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    setPage(1)
-    fetchOrders()
-  }
-
-  const handleReset = () => {
-    setSearchTerm("")
-    setSelectedChannelGroup("")
-    setSelectedCustomerTier("")
-    setSelectedChannel("")
-    setSelectedStaff("")
-    setSelectedOrderSource("")
-    setViewMode("fulfilled")
-    setStartDate(new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split("T")[0])
-    setEndDate(new Date().toISOString().split("T")[0])
-    setPage(1)
-  }
-
-  const handleExport = async () => {
-    setIsExporting(true)
-    try {
-      const params = new URLSearchParams({
-        startDate,
-        endDate,
-        search: searchTerm,
-        channelGroup: selectedChannelGroup,
-        customerTier: selectedChannelGroup === "B2B" ? selectedCustomerTier : "",
-        channel: selectedChannel,
-        staff: selectedStaff,
-        orderSource: selectedOrderSource,
-        dataSource: viewMode,
+      .catch(() => {})
+    fetch("/api/order-sources")
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) setOrderSrcList(
+          d.map((x: any) => typeof x === "string" ? x : String(x?.name || x?.code || "")).filter(Boolean)
+        )
       })
-      const response = await fetch(`/api/orders/export?${params}`)
-      if (response.ok) {
-        const data = await response.json()
+      .catch(() => {})
+  }, [])
 
-        if (data.length === 0) {
-          alert("No data to export for the selected filters.")
-          return
-        }
+  // ── Fetch helper ─────────────────────────────────────────────────────────
+  async function doFetch(pg: number) {
+    if (!datesReady.current) return
+    const effectiveDate = dateMode === "day" ? singleDate : null
+    const effectiveStart = dateMode === "range" ? startDate : null
+    const effectiveEnd   = dateMode === "range" ? endDate   : null
+    if (!effectiveDate && (!effectiveStart || !effectiveEnd)) return
 
-        const headers = ["Order ID", viewMode === "created" ? "Created Date" : "Fulfilled Date", "Customer", "Staff", "Channel", "Order Source", "Product Name", "SKU", "Quantity", "Unit Price", "Revenue (VND)", "Location"]
-        const csvRows = [headers.join(",")]
-
-        data.forEach((item: any) => {
-          const dateStr = item.date ? (
-            viewMode === "created"
-              ? new Date(item.date).toLocaleString("en-GB").replace(",", "")
-              : new Date(item.date).toLocaleDateString()
-          ) : ""
-
-          const row = [
-            `"${item.order_id || ""}"`,
-            `"${dateStr}"`,
-            `"${item.customer || ""}"`,
-            `"${item.staff || ""}"`,
-            `"${item.channel || ""}"`,
-            `"${item.order_source || ""}"`,
-            `"${item.product_name?.replace(/"/g, '""') || ""}"`,
-            `"${item.sku || ""}"`,
-            item.fulfilled_quantity || 0,
-            item.unit_price_after_discount_vnd || 0,
-            item.revenue || 0,
-            `"${item.location || ""}"`,
-          ]
-          csvRows.push(row.join(","))
-        })
-
-        const csvContent = "﻿" + csvRows.join("\n")
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement("a")
-        link.setAttribute("href", url)
-        link.setAttribute("download", `Orders_${viewMode}_Export_${startDate}_to_${endDate}.csv`)
-        link.style.visibility = "hidden"
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
+    setLoading(true)
+    try {
+      const qs = new URLSearchParams({ dataSource, page: String(pg), limit: String(PAGE_SIZE) })
+      if (effectiveDate) {
+        qs.set("date", effectiveDate)
       } else {
-        console.error("Export failed")
+        qs.set("startDate", effectiveStart!)
+        qs.set("endDate", effectiveEnd!)
       }
-    } catch (err) {
-      console.error("Error exporting orders:", err)
+      if (companyCode)        qs.set("companyCode", companyCode)
+      if (includeShip)        qs.set("includeShip", "1")
+      if (includeInternalOps) qs.set("includeInternalOps", "1")
+      if (staffCode)    qs.set("staffCode", staffCode)
+      if (channelGroup) qs.set("channelGroup", channelGroup)
+      if (channel)      qs.set("channel", channel)
+      if (orderSource)  qs.set("orderSource", orderSource)
+
+      const res  = await fetch(`/api/analytics/order-report?${qs}`)
+      if (!res.ok) { setRows([]); setTotal(0); setSumRevenue(0); setSumGp(0); setSumQty(0); return }
+      const json = await res.json()
+      setRows(Array.isArray(json.rows) ? json.rows : [])
+      setTotal(typeof json.total === "number" ? json.total : 0)
+      setSumRevenue(Number(json.totalRevenue) || 0)
+      setSumGp(Number(json.totalGp) || 0)
+      setSumQty(Number(json.totalQty) || 0)
+      setPage(pg)
+    } catch {
+      setRows([])
+      setTotal(0)
+      setSumRevenue(0); setSumGp(0); setSumQty(0)
     } finally {
-      setIsExporting(false)
+      setLoading(false)
     }
   }
 
+  // ── Trigger fetch when dates ready hoặc toggle phí ship đổi ───────────────
+  useEffect(() => {
+    if (startDate && endDate) doFetch(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate, endDate, includeShip, includeInternalOps])
+
+  // ── Client-side search filter ─────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    if (!search.trim()) return rows
+    const q = search.toLowerCase()
+    return rows.filter(r =>
+      (r.order_code  || "").toLowerCase().includes(q) ||
+      (r.customer_name || "").toLowerCase().includes(q) ||
+      (r.staff_name  || "").toLowerCase().includes(q) ||
+      (r.order_name  || "").toLowerCase().includes(q)
+    )
+  }, [rows, search])
+
+  // KPI = tổng TOÀN KỲ (từ API aggregate), KHÔNG phải chỉ page hiện tại.
+  // Khi đang search (client-side, chỉ lọc page hiện tại) → hiển thị tổng của rows đang hiện.
+  const isSearching = search.trim().length > 0
+  const kpiRevenue = isSearching ? filtered.reduce((s, r) => s + (r.total_revenue || 0), 0) : sumRevenue
+  const kpiGp      = isSearching ? filtered.reduce((s, r) => s + (r.gross_profit  || 0), 0) : sumGp
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+
+  // ── Export ────────────────────────────────────────────────────────────────
+  async function handleExport() {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const EXPORT_PAGE = 5000  // khớp cap server-side/page
+
+      const buildQs = (pg: number) => {
+        const qs = new URLSearchParams({ dataSource, export: "1", page: String(pg), limit: String(EXPORT_PAGE) })
+        if (dateMode === "day" && singleDate) {
+          qs.set("date", singleDate)
+        } else if (startDate && endDate) {
+          qs.set("startDate", startDate)
+          qs.set("endDate", endDate)
+        }
+        if (companyCode)        qs.set("companyCode", companyCode)
+        if (includeShip)        qs.set("includeShip", "1")
+        if (includeInternalOps) qs.set("includeInternalOps", "1")
+        if (staffCode)    qs.set("staffCode", staffCode)
+        if (channelGroup) qs.set("channelGroup", channelGroup)
+        if (channel)      qs.set("channel", channel)
+        if (orderSource)  qs.set("orderSource", orderSource)
+        return qs
+      }
+
+      // Loop lấy TẤT CẢ đơn (không chỉ 1 page): fetch page 1 → biết total → fetch tiếp cho hết
+      const first = await fetch(`/api/analytics/order-report?${buildQs(1)}`)
+      if (!first.ok) return
+      const firstJson = await first.json()
+      const allRows: OrderRow[] = Array.isArray(firstJson.rows) ? firstJson.rows : []
+      const grandTotal = Number(firstJson.total) || allRows.length
+
+      const totalPages = Math.ceil(grandTotal / EXPORT_PAGE)
+      for (let pg = 2; pg <= totalPages; pg++) {
+        const r = await fetch(`/api/analytics/order-report?${buildQs(pg)}`)
+        if (!r.ok) break
+        const j = await r.json()
+        if (Array.isArray(j.rows) && j.rows.length) allRows.push(...j.rows)
+        else break
+      }
+
+      if (!allRows.length) return
+
+      const cols = [
+        { label: "Date",          key: "order_date"    },
+        { label: "Entity",        key: "company_code"  },
+        { label: "PIC",           key: "staff_name"    },
+        { label: "Order Name",    key: "order_name"    },
+        { label: "Customer",      key: "customer_name" },
+        { label: "Order ID",      key: "order_code"    },
+        { label: "Type",          key: "sim_type"      },
+        { label: "Channel",       key: "channel_name"  },
+        { label: "Qty",           key: "quantity"      },
+        { label: "Unit Price",    key: "unit_price"    },
+        { label: "Revenue (VND)", key: "total_revenue" },
+        { label: "GP (VND)",      key: "gross_profit"  },
+        { label: "Tier",          key: "_tier"         },
+      ]
+      const exportRows = allRows.map((r: OrderRow) => ({
+        ...r,
+        order_date: fmtDate(r.order_date),
+        _tier: classifyTier(r.price_list_name, tierKws),
+      }))
+      const label = dateMode === "day" ? singleDate : `${startDate}_${endDate}`
+      await exportToExcel(exportRows as Record<string, unknown>[], cols, `Orders_${label}`, "Orders")
+    } catch {
+      // silently ignore
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="p-4 lg:p-8 space-y-6 bg-slate-50 min-h-screen">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 lg:w-12 lg:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl lg:text-2xl shrink-0">O</div>
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-brand-600/10">
+            <ClipboardList className="h-5 w-5 text-brand-600" />
+          </div>
           <div>
-            <h1 className="text-xl lg:text-2xl font-bold text-slate-800">Order Management</h1>
-            <div className="flex items-center gap-2">
-              <p className="text-xs lg:text-sm text-slate-500">View and manage all {viewMode === "fulfilled" ? "fulfillment" : "sales"} orders</p>
-              <SourceBadge source="admin" />
-            </div>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Orders</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Order detail · PIC · Customer · Channel</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          {/* Data Source Toggle */}
-          <div className="flex bg-slate-200 p-1 rounded-xl shadow-inner mr-2">
-            <button
-              onClick={() => { setViewMode("fulfilled"); setPage(1) }}
-              className={cn(
-                "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
-                viewMode === "fulfilled" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              Fulfilled
-            </button>
-            <button
-              onClick={() => { setViewMode("created"); setPage(1) }}
-              className={cn(
-                "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
-                viewMode === "created" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              Created
-            </button>
-          </div>
-
-          <div className="flex-1 md:flex-none flex items-center gap-2 bg-white px-3 lg:px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
-            <Calendar className="w-4 h-4 text-slate-400" />
-            <span className="text-xs lg:text-sm font-medium whitespace-nowrap">
-              {startDate && endDate ? `${startDate} - ${endDate}` : "Select Date Range"}
-            </span>
-          </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={cn(
-              "flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg border shadow-sm transition-colors",
-              showFilters ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
-            )}
-          >
-            <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />
-            <span className="text-xs lg:text-sm font-medium">Filters</span>
-          </button>
-          <button
-            onClick={handleExport}
-            disabled={isExporting}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isExporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            <span className="hidden sm:inline">{isExporting ? "Exporting..." : "Export CSV"}</span>
-          </button>
-        </div>
+        <button onClick={handleExport} disabled={exporting || rows.length === 0}
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-brand-600 border border-brand-600/30 rounded-lg hover:bg-brand-600/5 disabled:opacity-40 disabled:cursor-not-allowed transition">
+          {exporting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          {exporting ? "Exporting..." : "Export Excel"}
+        </button>
       </div>
 
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
-              <ShoppingBag className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Total {viewMode === "created" ? "Created" : "Fulfilled"} Orders</p>
-              <h3 className="text-2xl font-bold text-slate-900">{total.toLocaleString()}</h3>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
-              <RefreshCw className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Total {viewMode === "created" ? "Quantity" : "Fulfilled Qty"}</p>
-              <h3 className="text-2xl font-bold text-slate-900">{summary.totalQuantity.toLocaleString()}</h3>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
-              <Package className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Total {viewMode === "created" ? "Sales Value" : "Fulfilled Revenue"}</p>
-              <h3 className="text-2xl font-bold text-slate-900">
-                {new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(summary.totalRevenue)}
-              </h3>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filters Panel */}
-      {showFilters && (
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-          <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-4 items-end">
-            <div className="md:col-span-2 lg:col-span-2 space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Search</label>
-              <div className="relative flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search by Order Code, SKU..."
-                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-all shadow-sm"
-                >
-                  Search
+      {/* Filters */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 mb-5 shadow-sm space-y-3">
+        {/* Row 1: Entity + date */}
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Entity pills — đầu dòng */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Entity</label>
+            <div className="flex gap-1">
+              {[
+                { code: "",   label: "All" },
+                { code: "VN", label: "🇻🇳 VN" },
+                { code: "US", label: "🇺🇸 US" },
+              ].map(({ code, label }) => (
+                <button key={code} onClick={() => setCompanyCode(code)}
+                  className={cn(
+                    "px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-colors",
+                    companyCode === code
+                      ? "bg-brand-600 text-white border-brand-600"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-brand-600 hover:text-brand-600"
+                  )}>
+                  {label}
                 </button>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Channel Group</label>
-              <div className="relative">
-                <Package className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <select
-                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none"
-                  value={selectedChannelGroup}
-                  onChange={(e) => {
-                    setSelectedChannelGroup(e.target.value)
-                    setPage(1)
-                  }}
-                >
-                  <option value="">All Groups</option>
-                  <option value="B2B">B2B</option>
-                  <option value="B2C">B2C</option>
-                </select>
-              </div>
-            </div>
-            {selectedChannelGroup === "B2B" && (
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Customer Tier</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <select
-                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none"
-                    value={selectedCustomerTier}
-                    onChange={(e) => {
-                      setSelectedCustomerTier(e.target.value)
-                      setPage(1)
-                    }}
-                  >
-                    <option value="">All Tiers</option>
-                    <option value="Strategic">Strategic</option>
-                    <option value="Non-strategic">Non-strategic</option>
-                  </select>
-                </div>
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                {selectedChannelGroup === "B2B" ? "Customer Name" : "Channel"}
-              </label>
-              <div className="relative">
-                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <select
-                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none"
-                  value={selectedChannel}
-                  onChange={(e) => {
-                    setSelectedChannel(e.target.value)
-                    setPage(1)
-                  }}
-                >
-                  <option value="">All Channels</option>
-                  {channels.map(channel => (
-                    <option key={channel} value={channel}>{channel}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Staff</label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <select
-                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none"
-                  value={selectedStaff}
-                  onChange={(e) => {
-                    setSelectedStaff(e.target.value)
-                    setPage(1)
-                  }}
-                >
-                  <option value="">All Staff</option>
-                  {staffList.map(staff => (
-                    <option key={staff.code} value={staff.code}>{staff.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Order Source</label>
-              <div className="relative">
-                <ShoppingBag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <select
-                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none"
-                  value={selectedOrderSource}
-                  onChange={(e) => {
-                    setSelectedOrderSource(e.target.value)
-                    setPage(1)
-                  }}
-                >
-                  <option value="">All Sources</option>
-                  {orderSources.map(source => (
-                    <option key={source.code} value={source.code}>{source.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="date"
-                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="date"
-                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                />
-              </div>
-            </div>
-            <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="self-end pb-0.5" />
-          </form>
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-            <button
-              onClick={handleReset}
-              className="text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
-            >
-              Reset Filters
-            </button>
-            <div className="flex items-center gap-2 text-xs text-slate-400 italic">
-              <RefreshCw className={cn("w-3 h-3", isLoading && "animate-spin")} />
-              {isLoading ? "Updating..." : "Updated"}
+              ))}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Orders Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 self-end mb-0.5" />
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date mode</label>
+            <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
+              {(["day", "range"] as const).map(m => (
+                <button key={m} onClick={() => setDateMode(m)}
+                  className={cn("px-3 py-1 text-xs font-semibold rounded-md transition",
+                    dateMode === m ? "bg-white dark:bg-slate-700 text-brand-600 shadow-sm" : "text-slate-500 dark:text-slate-400")}>
+                  {m === "day" ? "Single day" : "Date range"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {dateMode === "day" ? (
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1">
+                <Calendar className="h-3 w-3" /> Date
+              </label>
+              <input type="date" value={singleDate}
+                onChange={e => setSingleDate(e.target.value)}
+                className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+              />
+            </div>
+          ) : (
+            <div className="flex items-end gap-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">From</label>
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                  className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
+              </div>
+              <span className="text-slate-400 dark:text-slate-500 pb-1.5">→</span>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">To</label>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                  className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">By date</label>
+            <select value={dataSource} onChange={e => setDataSource(e.target.value)}
+              className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+              <option value="fulfilled">Fulfilled</option>
+              <option value="created">Created</option>
+            </select>
+          </div>
+
+          <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 self-end mb-0.5" />
+
+          {/* Include ShippingFee: Yes/No — default No (loại phí ship) */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm phí ship vào doanh thu">Include ShippingFee</label>
+            <select value={includeShip ? "yes" : "no"} onChange={e => setIncludeShip(e.target.value === "yes")}
+              className={cn("text-xs border rounded-lg px-2.5 py-1.5 font-semibold",
+                includeShip ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                            : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600")}>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          {/* Include Internal Ops: Yes/No — default No (loại đơn nội bộ) */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm đơn chuyển nội bộ (INTERNAL-TRANSACTION, revenue=0)">Include Internal Ops</label>
+            <select value={includeInternalOps ? "yes" : "no"} onChange={e => setIncludeInternalOps(e.target.value === "yes")}
+              className={cn("text-xs border rounded-lg px-2.5 py-1.5 font-semibold",
+                includeInternalOps ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
+                                   : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600")}>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Row 2: other filters + Apply */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Group</label>
+            <select value={channelGroup} onChange={e => { setChannelGroup(e.target.value); setChannel("") }}
+              className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+              <option value="">All groups</option>
+              <option value="B2B">B2B</option>
+              <option value="B2C">B2C</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Channel</label>
+            <select value={channel} onChange={e => setChannel(e.target.value)}
+              className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[120px]">
+              <option value="">All channels</option>
+              {channelList.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">PIC</label>
+            <select value={staffCode} onChange={e => setStaffCode(e.target.value)}
+              className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[130px]">
+              <option value="">All PIC</option>
+              {staffList.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Source</label>
+            <select value={orderSource} onChange={e => setOrderSource(e.target.value)}
+              className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[120px]">
+              <option value="">All sources</option>
+              {orderSrcList.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <button onClick={() => doFetch(1)}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-brand-600 text-white text-xs font-semibold rounded-lg hover:bg-brand-700 transition self-end">
+            Apply
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="relative max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <input type="text" placeholder="Search order ID, customer, PIC..."
+            value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full pl-8 pr-8 py-1.5 text-xs border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* KPI Cards — tổng TOÀN KỲ (từ API), không phải chỉ trang hiện tại */}
+      {(() => {
+        const shipNote = (includeShip && includeInternalOps)
+          ? "gồm ship + internal ops (khớp báo cáo gốc)"
+          : `${includeShip ? "gồm ship" : "loại ship"} · ${includeInternalOps ? "gồm internal" : "loại internal"}`
+        return (
+      <div className="grid grid-cols-3 gap-4 mb-5">
+        {[
+          { label: "Total Orders",  value: (isSearching ? filtered.length : total).toLocaleString("vi-VN"),   sub: isSearching ? "trong kết quả search" : "orders (toàn kỳ)" },
+          { label: "Total Revenue", value: fmtNum(kpiRevenue),               sub: isSearching ? "trong kết quả search" : `VND · ${shipNote}` },
+          { label: "Gross Profit",  value: fmtNum(kpiGp),                    sub: isSearching ? "trong kết quả search" : `VND · ${shipNote}` },
+        ].map(k => (
+          <div key={k.label} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{k.label}</p>
+            <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{k.value}</p>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{k.sub}</p>
+          </div>
+        ))}
+      </div>
+        )
+      })()}
+
+      {/* Table */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-left">
-                  {viewMode === "created" ? "Order Info (Created)" : "Order Info (Fulfilled)"}
-                </th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-left">Customer</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-left">
-                  {selectedChannelGroup === "B2B" ? "Customer Name" : "Channel"}
-                </th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-left">Staff</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-left">Order Source</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-left">Product / SKU</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Qty</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Unit Price</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
+              <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                {["Date","PIC","Order Name","Customer","Order ID","Type","Channel","Qty","Unit Price","Revenue","GP","Entity","Tier"].map(h => (
+                  <th key={h} className="px-3 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    <td className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-24 mb-2"></div><div className="h-3 bg-slate-50 rounded w-16"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-24"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-20"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-20"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-20"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-32"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-8 ml-auto"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-16 ml-auto"></div></td>
-                    <td className="px-6 py-4"><div className="h-4 bg-slate-100 rounded w-16 ml-auto"></div></td>
-                  </tr>
-                ))
-              ) : orders.length > 0 ? (
-                orders.map((order, idx) => (
-                  <tr key={`${order.order_code}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">{order.order_code}</span>
-                        </div>
-                        <span className="text-xs text-slate-500">
-                          {order.fulfiled_date ? (
-                            viewMode === "created"
-                              ? new Date(order.fulfiled_date).toLocaleString("en-GB", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : new Date(order.fulfiled_date).toLocaleDateString()
-                          ) : "N/A"}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-slate-600 font-medium">{order.customer_name || "Unknown"}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Globe className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-sm text-slate-600">{order.channel_name || "N/A"}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <User className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-sm text-slate-600 whitespace-nowrap">{order.staff_name || "Unknown"}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <ShoppingBag className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-sm text-slate-600 font-medium whitespace-nowrap">{order.order_source || "N/A"}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Package className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-sm text-slate-600 font-medium">{order.sku}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="text-sm font-bold text-slate-900">{order.fulfilled_quantity}</span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="text-sm font-medium text-slate-600">
-                        {order.unit_price_after_discount_vnd ? new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(order.unit_price_after_discount_vnd) : "-"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="text-sm font-bold text-blue-600">
-                        {new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(order.fulfilled_revenue_amount_vnd)}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              ) : (
+            <tbody>
+              {loading && (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center gap-2 text-slate-400">
-                      <ShoppingBag className="w-12 h-12 opacity-20" />
-                      <p className="text-sm font-medium">No orders found for the selected period</p>
+                  <td colSpan={13} className="py-10 text-center text-slate-400">
+                    <div className="flex justify-center">
+                      <div className="animate-spin h-5 w-5 border-2 border-brand-600 border-t-transparent rounded-full" />
                     </div>
                   </td>
                 </tr>
               )}
+              {!loading && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={13} className="py-10 text-center text-slate-400 dark:text-slate-500">
+                    No orders found.
+                  </td>
+                </tr>
+              )}
+              {!loading && filtered.map((r, i) => (
+                <tr key={`${r.order_code || i}-${i}`}
+                  className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <td className="px-3 py-2 whitespace-nowrap font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                    {fmtDate(r.order_date)}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap font-medium text-slate-800 dark:text-slate-200">
+                    {r.staff_name || "—"}
+                  </td>
+                  <td className="px-3 py-2 max-w-[180px]">
+                    <span className="text-slate-500 dark:text-slate-400 truncate block" title={r.order_name || ""}>
+                      {r.order_name || "—"}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap font-medium text-slate-800 dark:text-slate-200">
+                    {r.customer_name || "—"}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">{r.order_code || "—"}</span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {r.sim_type ? (
+                      <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded",
+                        r.sim_type.toLowerCase().includes("esim")
+                          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                          : "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
+                      )}>
+                        {r.sim_type}
+                      </span>
+                    ) : "—"}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-400">
+                    {r.channel_name || "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right font-medium text-slate-700 dark:text-slate-300">
+                    {r.quantity != null ? r.quantity.toLocaleString("vi-VN") : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right text-slate-500 dark:text-slate-400">
+                    {r.unit_price ? fmtNum(r.unit_price) : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                    {fmtNum(r.total_revenue)}
+                  </td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <span className={cn("font-semibold",
+                      (r.gross_profit || 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500")}>
+                      {fmtNum(r.gross_profit)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <CompanyBadge code={r.company_code} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <TierBadge pln={r.price_list_name} kws={tierKws} />
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-          <p className="text-sm text-slate-500 font-medium">
-            Showing <span className="text-slate-900">{(page - 1) * pageSize + 1}</span> to <span className="text-slate-900">{Math.min(page * pageSize, total)}</span> of <span className="text-slate-900">{total}</span> orders
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1 || isLoading}
-              className="p-2 border border-slate-200 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
+        {!loading && totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Page {page} / {totalPages} · {total.toLocaleString("vi-VN")} orders
+            </span>
             <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(5, Math.ceil(total / pageSize)) }).map((_, i) => {
-                const pageNum = i + 1
+              <button onClick={() => doFetch(page - 1)} disabled={page <= 1}
+                className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 transition">
+                <ChevronLeft className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+              </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const start = Math.max(1, Math.min(page - 2, totalPages - 4))
+                const pg = start + i
                 return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setPage(pageNum)}
-                    className={cn(
-                      "w-8 h-8 rounded-lg text-sm font-medium transition-all",
-                      page === pageNum ? "bg-blue-600 text-white shadow-md shadow-blue-200" : "hover:bg-white text-slate-600"
-                    )}
-                  >
-                    {pageNum}
+                  <button key={pg} onClick={() => doFetch(pg)}
+                    className={cn("w-7 h-7 text-xs rounded font-medium transition",
+                      pg === page
+                        ? "bg-brand-600 text-white"
+                        : "hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300")}>
+                    {pg}
                   </button>
                 )
               })}
+              <button onClick={() => doFetch(page + 1)} disabled={page >= totalPages}
+                className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 transition">
+                <ChevronRight className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+              </button>
             </div>
-            <button
-              onClick={() => setPage(p => p + 1)}
-              disabled={page * pageSize >= total || isLoading}
-              className="p-2 border border-slate-200 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
           </div>
-        </div>
+        )}
       </div>
+
+      <p className="mt-3 text-[10px] text-slate-400 dark:text-slate-500 text-center">
+        GP = Gross Profit (Revenue − COGS). Source:{" "}
+        {dataSource === "created" ? "fact_sales_revenue · created_date" : "fact_fulfillment_revenue · fulfiled_date"}
+      </p>
     </div>
   )
 }

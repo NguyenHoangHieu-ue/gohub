@@ -1,649 +1,1112 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react"
+import { useSession } from "next-auth/react"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
+import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
-import { Users, Calendar, Filter, Download, Search, ChevronLeft, ChevronRight, ShoppingBag, Package, TrendingUp, RefreshCw } from "lucide-react"
+import {
+  Users, Calendar, Filter, Download, Search,
+  ChevronDown, ChevronRight, RefreshCw, X, Play,
+  Pencil, Save, XCircle, AlertTriangle,
+  DollarSign, TrendingUp, Zap, Target, UserCheck,
+} from "lucide-react"
+import { exportRawRows } from "@/lib/export-excel"
 import { cn } from "@/lib/utils"
-import { SourceBadge } from "@/components/dashboard-kit"
-import { Pager, PAGE_ROWS } from "@/components/pager"
+import { StatTile, type MetricAccent, SourceBadge, CHART_GRID_COLOR } from "@/components/dashboard-kit"
+import { useUrlStates } from "@/hooks/use-url-state"
+import {
+  LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend, Cell,
+} from "recharts"
 
-interface StaffMetric {
-  staff_name: string
-  staff_code: string
-  total_orders: string
-  total_units: string
-  total_revenue: string
+// ─── Types ───────────────────────────────────────────────────────────────────
+interface StaffTarget {
+  cm1_strategic:     number
+  cm1_non_strategic: number
+  hk3_strategic:     number
+  hk3_non_strategic: number
+  hk3_rev:           number   // legacy
+  updated_at?:       string
+  updated_by_email?: string
+  updated_by_name?:  string
 }
 
-interface Order {
-  order_code: string
-  company_code: string
-  fulfiled_date: string
-  product_name: string
-  sku: string
-  fulfilled_quantity: number
-  fulfilled_revenue_amount_vnd: number
-  channel_name: string
-  staff_name: string
-  customer_name: string
-  order_source: string
+type TargetValues = Pick<StaffTarget, "cm1_strategic" | "cm1_non_strategic" | "hk3_strategic" | "hk3_non_strategic">
+
+interface MonthlyItem { month: string; revenue: number; hk3_revenue: number; gross_profit: number }
+
+interface StaffRow {
+  staff_name:     string
+  staff_code:     string
+  total_revenue:  number
+  hk3_revenue:    number
+  gross_profit:   number
+  cm1:            number
+  cm1_pct:        number
+  customer_count: number
+  total_orders:   number
+  monthly:        MonthlyItem[]
 }
 
-export default function StaffPerformancePage() {
-  const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
-  const [endDate, setEndDate] = useState<string>(() => getDefaultDateRange().endDate)
-  const [channelGroup, setChannelGroup] = useState<"All" | "B2B" | "B2C">("All")
-  const [selectedChannel, setSelectedChannel] = useState("")
-  const [companyCode, setCompanyCode] = useState<string>("ALL")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [staffSearchTerm, setStaffSearchTerm] = useState("")
-  const [selectedStaff, setSelectedStaff] = useState<string[]>([])
-  const [staffList, setStaffList] = useState<{ code: string; name: string }[]>([])
-  const [staffMetrics, setStaffMetrics] = useState<StaffMetric[]>([])
-  const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(true)
-  const [channels, setChannels] = useState<string[]>([])
-  const [viewMode, setViewMode] = useState<"fulfilled" | "created">("fulfilled")
-  const [page, setPage] = useState(1)
-  const [totalOrdersCount, setTotalOrdersCount] = useState(0)
-  const [leaderPage, setLeaderPage] = useState(1)
-  useEffect(() => { setLeaderPage(1) }, [staffMetrics])
+interface CustomerRow {
+  customer_code:   string
+  customer_name:   string
+  price_list_name: string | null
+  tier:            string  // BE-computed: "B2C" | "Strategic" | "VIP" | "Gold" | "Silver"
+  revenue:         number
+  hk3_revenue:     number
+  gross_profit:    number
+  ch_cost:         number
+  cm1:             number
+  cm1_pct:         number
+  order_count:     number
+  monthly:         MonthlyItem[]
+}
 
-  useEffect(() => {
-    fetchChannels()
-    fetchStaffList()
-    fetchPerformance()
-    fetchRecentOrders()
-  }, [viewMode, page])
+// ─── Constants ───────────────────────────────────────────────────────────────
+const STAFF_COLORS = [
+  "#0f4c81","#E04E1B","#10b981","#8b5cf6","#f59e0b",
+  "#ef4444","#06b6d4","#84cc16","#ec4899","#6366f1",
+]
+const HK3_COLOR  = "#F97316"
+const RANK_STYLE = [
+  "bg-amber-100 text-amber-700 border border-amber-200",
+  "bg-slate-100 text-slate-600 border border-slate-200",
+  "bg-orange-50 text-orange-600 border border-orange-100",
+]
+const TIER_CONFIG: Record<string, { bg: string; text: string }> = {
+  Strategic: { bg: "bg-indigo-100",  text: "text-indigo-700" },
+  VIP:       { bg: "bg-purple-100",  text: "text-purple-700" },
+  Gold:      { bg: "bg-amber-100",   text: "text-amber-700"  },
+  Silver:    { bg: "bg-slate-100",   text: "text-slate-600"  },
+  B2C:       { bg: "bg-emerald-100", text: "text-emerald-700" },
+}
 
-  const fetchStaffList = async () => {
-    try {
-      const params = new URLSearchParams({
-        channelGroup: channelGroup === "All" ? "" : channelGroup,
-        channel: selectedChannel,
-        companyCode,
-        dataSource: viewMode,
-      })
-      const response = await fetch(`/api/staff-list?${params}`)
-      if (response.ok) {
-        setStaffList(await response.json())
-      }
-    } catch (err) {
-      console.error("Error fetching staff list:", err)
-    }
-  }
+function fck(n: number) { return formatCompactNumber(n) }
+function pct(n: number) { return n.toFixed(1) + "%" }
 
-  const fetchChannels = async () => {
-    try {
-      const params = new URLSearchParams({
-        channelGroup: channelGroup === "All" ? "" : channelGroup,
-      })
-      const response = await fetch(`/api/channels?${params}`)
-      if (response.ok) {
-        const channels = await response.json()
-        setChannels(channels)
-      }
-    } catch (err) {
-      console.error("Error fetching channels:", err)
-    }
-  }
+// tier từ BE (staff-report/customers trả về, dùng makeClassifyTier giống Quarter Report)
+function TierBadge({ tier }: { tier: string }) {
+  const c = TIER_CONFIG[tier]
+  if (!c) return null
+  return (
+    <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider mr-1.5 shrink-0", c.bg, c.text)}>
+      {tier}
+    </span>
+  )
+}
 
-  const fetchPerformance = async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({
-        startDate,
-        endDate,
-        channelGroup: channelGroup === "All" ? "" : channelGroup,
-        channel: selectedChannel,
-        companyCode,
-        staff: selectedStaff.length > 0 ? selectedStaff.join(",") : "",
-        search: selectedStaff.length === 0 ? searchTerm : "",
-        dataSource: viewMode,
-      })
-      const response = await fetch(`/api/staff-performance?${params}`)
-      if (response.ok) {
-        setStaffMetrics(await response.json())
-      }
-    } catch (err) {
-      console.error("Error fetching staff performance:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchRecentOrders = async () => {
-    try {
-      const params = new URLSearchParams({
-        startDate,
-        endDate,
-        channelGroup: channelGroup === "All" ? "" : channelGroup,
-        channel: selectedChannel,
-        companyCode,
-        staff: selectedStaff.length > 0 ? selectedStaff.join(",") : "",
-        search: selectedStaff.length === 0 ? searchTerm : "",
-        dataSource: viewMode,
-        page: page.toString(),
-        pageSize: "10",
-      })
-      const response = await fetch(`/api/orders?${params}`)
-      if (response.ok) {
-        const data = await response.json()
-        setOrders(data.orders)
-        setTotalOrdersCount(data.total)
-      }
-    } catch (err) {
-      console.error("Error fetching recent orders:", err)
-    }
-  }
-
-  const handleExportTransactions = async () => {
-    try {
-      const params = new URLSearchParams({
-        startDate,
-        endDate,
-        channelGroup: channelGroup === "All" ? "" : channelGroup,
-        channel: selectedChannel,
-        companyCode,
-        staff: selectedStaff.length > 0 ? selectedStaff.join(",") : "",
-        search: selectedStaff.length === 0 ? searchTerm : "",
-        dataSource: viewMode,
-      })
-      const response = await fetch(`/api/orders/export?${params}`)
-      if (response.ok) {
-        const data = await response.json()
-        const headers = ["Order ID", "Company", "Date", "Staff", "Customer", "Channel", "Order Source", "Product", "SKU", "Qty", "Revenue"]
-        const csvRows = [headers.join(",")]
-        data.forEach((item: any) => {
-          csvRows.push([
-            `"${item.order_id}"`,
-            `"${item.company_code}"`,
-            `"${item.date?.split("T")[0]}"`,
-            `"${item.staff}"`,
-            `"${item.customer_name?.replace(/"/g, '""')}"`,
-            `"${item.channel}"`,
-            `"${item.order_source?.replace(/"/g, '""')}"`,
-            `"${item.product_name?.replace(/"/g, '""')}"`,
-            `"${item.sku}"`,
-            item.fulfilled_quantity,
-            item.revenue,
-          ].join(","))
-        })
-        const blob = new Blob([csvRows.join("\n")], { type: "text/csv" })
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement("a")
-        link.href = url
-        link.download = `Recent_Transactions_${startDate}_to_${endDate}.csv`
-        link.click()
-      }
-    } catch (err) {
-      console.error("Export failed:", err)
-    }
-  }
-
-  const handleExportSummary = () => {
-    try {
-      const totalRevenue = staffMetrics.reduce((sum, item) => sum + parseFloat(item.total_revenue), 0)
-      const headers = ["Rank", "Staff Code", "Staff Name", "Orders", "Units", "Revenue (VND)", "Avg Order Value", "Contribution %"]
-      const csvRows = [headers.join(",")]
-
-      staffMetrics.forEach((staff, idx) => {
-        const revValue = parseFloat(staff.total_revenue)
-        const ordValue = parseInt(staff.total_orders)
-        const contribution = totalRevenue > 0 ? ((revValue / totalRevenue) * 100).toFixed(2) : "0.00"
-        const aov = ordValue > 0 ? (revValue / ordValue).toFixed(2) : "0.00"
-
-        csvRows.push([
-          idx + 1,
-          `"${staff.staff_code}"`,
-          `"${staff.staff_name}"`,
-          ordValue,
-          staff.total_units,
-          revValue,
-          aov,
-          contribution,
-        ].join(","))
-      })
-
-      const blob = new Blob([csvRows.join("\n")], { type: "text/csv" })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = `Staff_Performance_Summary_${startDate}_to_${endDate}.csv`
-      link.click()
-    } catch (err) {
-      console.error("Export summary failed:", err)
-    }
-  }
-
-  const totalRevenue = staffMetrics.reduce((sum, item) => sum + parseFloat(item.total_revenue), 0)
-  const totalUnits = staffMetrics.reduce((sum, item) => sum + parseInt(item.total_units), 0)
-  const totalOrders = staffMetrics.reduce((sum, item) => sum + parseInt(item.total_orders), 0)
+// ─── TargetCell — module-level để tránh React remount khi re-render ──────────
+// Bug cũ: định nghĩa trong map() → component type mới mỗi render → mất focus sau mỗi phím
+function TargetCell({
+  editMode, draftVal, displayVal, bgClass, tooltip, onChange,
+}: {
+  editMode:   boolean
+  draftVal:   number
+  displayVal: number
+  bgClass:    string
+  tooltip?:   string
+  onChange:   (val: number) => void
+}) {
+  // str là chuỗi đang nhập; dùng key prop bên ngoài để reset khi enterEdit
+  const [str, setStr] = useState(draftVal ? String(draftVal) : "")
+  const num    = str === "" ? 0 : parseFloat(str)
+  const isNeg  = str !== "" && !isNaN(num) && num < 0
+  const isInv  = str !== "" && isNaN(num)
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 lg:space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto pb-24 lg:pb-8">
-      {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div className="flex items-center gap-4 lg:gap-6">
-          <div className="w-12 h-12 lg:w-16 lg:h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200 rotate-3 transform group-hover:rotate-0 transition-transform">
-            <Users className="w-6 h-6 lg:w-8 lg:h-8" />
+    <td className={cn("px-2 py-3 text-right", bgClass)} onClick={e => e.stopPropagation()}>
+      {editMode ? (
+        <div className="flex flex-col items-end">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={str}
+            onChange={e => {
+              setStr(e.target.value)
+              const n = parseFloat(e.target.value)
+              onChange(isNaN(n) ? 0 : n)
+            }}
+            className={cn(
+              "w-24 text-right text-xs font-bold bg-white border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1",
+              isNeg || isInv ? "border-red-400 focus:ring-red-400" : "border-brand-300 focus:ring-brand-500",
+            )}
+            placeholder="0"
+          />
+          {isNeg && <span className="text-[9px] text-red-500 mt-0.5">Không âm</span>}
+          {isInv && <span className="text-[9px] text-red-500 mt-0.5">Không hợp lệ</span>}
+        </div>
+      ) : (
+        <span className={cn("text-xs font-bold tabular-nums", displayVal ? "text-slate-700" : "text-slate-300")} title={tooltip}>
+          {displayVal ? fck(displayVal) : "—"}
+        </span>
+      )}
+    </td>
+  )
+}
+
+function MiniSparkline({ data }: { data: MonthlyItem[] }) {
+  if (!data.length) return <span className="text-slate-300 text-xs">–</span>
+  const max = Math.max(...data.map(d => d.revenue), 1)
+  return (
+    <div className="flex items-end gap-[2px] h-6">
+      {data.map(d => (
+        <div key={d.month} className="w-2 rounded-sm bg-brand-400 opacity-80"
+          style={{ height: `${Math.max(2, (d.revenue / max) * 20)}px` }}
+          title={`${d.month}: ${fck(d.revenue)}`} />
+      ))}
+    </div>
+  )
+}
+
+const ChartTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-3 text-xs min-w-[160px]">
+      <p className="font-black text-slate-700 mb-1.5">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.name} style={{ color: p.color }} className="font-bold flex justify-between gap-4">
+          <span className="truncate max-w-[120px]">{p.name}</span>
+          <span>{fck(p.value)}</span>
+        </p>
+      ))}
+    </div>
+  )
+}
+
+// Role được phép sửa target mặc định (không cần grant thêm)
+const WRITE_ROLES = ["admin", "creator", "manager", "bod"]
+
+// ─── Main component ───────────────────────────────────────────────────────────
+function StaffPageInner() {
+  const { data: session, status } = useSession()
+  const role = (session?.user as { role?: string })?.role ?? ""
+  const username = (session?.user as { username?: string })?.username ?? ""
+
+  // Tính ngay từ role (synchronous) — không cần async state, không bị delay
+  const roleCanWrite = WRITE_ROLES.includes(role)
+  // Explicit grant cho các role khác (e.g. staff được creator cấp thêm)
+  const [grantedWrite, setGrantedWrite] = useState(false)
+  const canWrite = status === "authenticated" && (roleCanWrite || grantedWrite)
+
+  useEffect(() => {
+    // Chỉ check explicit grant khi role không đủ quyền mặc định
+    if (!role || roleCanWrite) return
+    fetch("/api/permissions", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d?.perms) return
+        try {
+          const cfg = JSON.parse(d.perms["permissions.writable_tabs"] ?? "{}") as Record<string, string[]>
+          setGrantedWrite((cfg[username] ?? []).includes("staff"))
+        } catch {}
+      })
+      .catch(() => {})
+  }, [role, username, roleCanWrite])
+
+  const def = getDefaultDateRange()
+  const [urlState, setUrlState] = useUrlStates({
+    startDate: def.startDate, endDate: def.endDate,
+    channelGroup: "All", channel: "", companyCode: "ALL", viewMode: "fulfilled",
+  }, 0)
+
+  const [draft,   setDraft]   = useState({ ...urlState })
+  const [applied, setApplied] = useState({ ...urlState })
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(applied)
+
+  const applyFilters = () => { setApplied(draft); setUrlState(draft) }
+
+  const [includeShip,        setIncludeShip]        = useState(false)
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)
+  const [channels,     setChannels]     = useState<string[]>([])
+  const [staffData,    setStaffData]    = useState<StaffRow[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [staffSearch,   setStaffSearch]   = useState("")
+  const [selectedCodes, setSelectedCodes] = useState<string[]>([])
+  const [staffDropOpen, setStaffDropOpen] = useState(false)
+  const [expandedStaff, setExpandedStaff] = useState<string | null>(null)
+  const [customers,     setCustomers]     = useState<CustomerRow[]>([])
+  const [custLoading,   setCustLoading]   = useState(false)
+
+  // Targets: targets[staffCode][month]
+  const [targets,      setTargets]      = useState<Record<string, Record<string, StaffTarget>>>({})
+  const [editMode,     setEditMode]     = useState(false)
+  const [draftTargets, setDraftTargets] = useState<Record<string, TargetValues>>({})
+  const [saving,       setSaving]       = useState(false)
+  const [saveError,    setSaveError]    = useState("")
+
+  const fetchChannels = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/channels?${new URLSearchParams({ channelGroup: applied.channelGroup === "All" ? "" : applied.channelGroup })}`)
+      if (r.ok) setChannels(await r.json())
+    } catch {}
+  }, [applied.channelGroup])
+
+  const fetchStaff = useCallback(async () => {
+    setLoading(true)
+    try {
+      const staffParams = new URLSearchParams({
+        startDate: applied.startDate, endDate: applied.endDate,
+        dataSource: applied.viewMode,
+        channelGroup: applied.channelGroup === "All" ? "" : applied.channelGroup,
+        channel: applied.channel, companyCode: applied.companyCode,
+      })
+      if (includeShip)        staffParams.set("includeShip", "1")
+      if (includeInternalOps) staffParams.set("includeInternalOps", "1")
+      const r = await fetch(`/api/analytics/staff-report?${staffParams}`)
+      if (r.ok) setStaffData(await r.json())
+    } catch {} finally { setLoading(false) }
+  }, [applied, includeShip, includeInternalOps])
+
+  const fetchTargets = useCallback(async () => {
+    // Tính months từ applied dates
+    const s = new Date(applied.startDate), e = new Date(applied.endDate)
+    const months: string[] = []
+    const cur = new Date(s.getFullYear(), s.getMonth(), 1)
+    const last = new Date(e.getFullYear(), e.getMonth(), 1)
+    while (cur <= last) {
+      months.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}`)
+      cur.setMonth(cur.getMonth() + 1)
+    }
+    try {
+      const r = await fetch(`/api/analytics/staff-targets?months=${months.join(",")}`)
+      if (r.ok) setTargets(await r.json())
+    } catch {}
+  }, [applied.startDate, applied.endDate])
+
+  // enterEdit chỉ dùng cho single-month; month = applied.startDate tháng
+  const enterEdit = useCallback(() => {
+    const month = applied.startDate.slice(0, 7)
+    const disp  = selectedCodes.length > 0
+      ? staffData.filter(s => selectedCodes.includes(s.staff_code))
+      : staffData
+    const draft: Record<string, TargetValues> = {}
+    for (const s of disp) {
+      const t = targets[s.staff_code]?.[month] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_strategic: 0, hk3_non_strategic: 0 }
+      draft[s.staff_code] = {
+        cm1_strategic:     t.cm1_strategic,
+        cm1_non_strategic: t.cm1_non_strategic,
+        hk3_strategic:     t.hk3_strategic,
+        hk3_non_strategic: t.hk3_non_strategic,
+      }
+    }
+    setDraftTargets(draft)
+    setSaveError("")
+    setEditMode(true)
+  }, [staffData, selectedCodes, targets, applied.startDate])
+
+  const cancelEdit = useCallback(() => {
+    setEditMode(false)
+    setDraftTargets({})
+  }, [])
+
+  const hasChanges = useMemo(() => {
+    if (!editMode) return false
+    const month = applied.startDate.slice(0, 7)
+    return Object.entries(draftTargets).some(([code, d]) => {
+      const t = targets[code]?.[month] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_strategic: 0, hk3_non_strategic: 0 }
+      return d.cm1_strategic !== t.cm1_strategic || d.cm1_non_strategic !== t.cm1_non_strategic ||
+             d.hk3_strategic !== t.hk3_strategic || d.hk3_non_strategic !== t.hk3_non_strategic
+    })
+  }, [editMode, draftTargets, targets, applied.startDate])
+
+  const saveTargets = useCallback(async () => {
+    if (!hasChanges || saving) return
+    setSaving(true)
+    setSaveError("")
+    const month   = applied.startDate.slice(0, 7)
+    const updates = Object.entries(draftTargets)
+      .filter(([code, d]) => {
+        const t = targets[code]?.[month] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_strategic: 0, hk3_non_strategic: 0 }
+        return d.cm1_strategic !== t.cm1_strategic || d.cm1_non_strategic !== t.cm1_non_strategic ||
+               d.hk3_strategic !== t.hk3_strategic || d.hk3_non_strategic !== t.hk3_non_strategic
+      })
+      .map(([staffCode, d]) => ({ staffCode, month, ...d }))
+    try {
+      const r = await fetch("/api/analytics/staff-targets", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates }),
+      })
+      if (r.ok) {
+        await fetchTargets()
+        setEditMode(false)
+        setDraftTargets({})
+      } else if (r.status === 401 || r.status === 403) {
+        setSaveError("Không có quyền lưu target")
+      } else {
+        setSaveError("Lỗi server, vui lòng thử lại")
+      }
+    } catch { setSaveError("Lỗi kết nối") } finally { setSaving(false) }
+  }, [hasChanges, saving, draftTargets, targets, applied.startDate, fetchTargets])
+
+  const setDraftField = useCallback((code: string, field: keyof TargetValues, val: number) => {
+    setDraftTargets(prev => ({
+      ...prev,
+      [code]: { ...(prev[code] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_strategic: 0, hk3_non_strategic: 0 }), [field]: val },
+    }))
+  }, [])
+
+  useEffect(() => { fetchChannels() }, [fetchChannels])
+  useEffect(() => { fetchStaff() },   [fetchStaff])
+  useEffect(() => { fetchTargets() }, [fetchTargets])
+
+  const toggleExpand = async (code: string) => {
+    if (expandedStaff === code) { setExpandedStaff(null); setCustomers([]); return }
+    setExpandedStaff(code); setCustomers([]); setCustLoading(true)
+    try {
+      const custParams = new URLSearchParams({
+        staffCode: code,
+        startDate: applied.startDate, endDate: applied.endDate,
+        dataSource: applied.viewMode,
+        channelGroup: applied.channelGroup === "All" ? "" : applied.channelGroup,
+        channel: applied.channel, companyCode: applied.companyCode,
+      })
+      if (includeShip)        custParams.set("includeShip", "1")
+      if (includeInternalOps) custParams.set("includeInternalOps", "1")
+      const r = await fetch(`/api/analytics/staff-report/customers?${custParams}`)
+      if (r.ok) setCustomers(await r.json())
+    } catch {} finally { setCustLoading(false) }
+  }
+
+  const displayed = selectedCodes.length > 0
+    ? staffData.filter(s => selectedCodes.includes(s.staff_code))
+    : staffData
+  const staffOptions = staffData.filter(s =>
+    !staffSearch || s.staff_name.toLowerCase().includes(staffSearch.toLowerCase()) ||
+    s.staff_code.toLowerCase().includes(staffSearch.toLowerCase()))
+
+  const totRev  = displayed.reduce((a, r) => a + r.total_revenue, 0)
+  const totHk3  = displayed.reduce((a, r) => a + r.hk3_revenue, 0)
+  const totGP   = displayed.reduce((a, r) => a + r.gross_profit, 0)
+  const totCM1  = displayed.reduce((a, r) => a + r.cm1, 0)
+  const totOrds = displayed.reduce((a, r) => a + r.total_orders, 0)
+  const totCust = displayed.reduce((a, r) => a + r.customer_count, 0)
+
+  // ─── Months in range ────────────────────────────────────────────────────
+  const monthsInRange = useMemo(() => {
+    const s = new Date(applied.startDate), e = new Date(applied.endDate)
+    const list: string[] = []
+    const cur = new Date(s.getFullYear(), s.getMonth(), 1)
+    const last = new Date(e.getFullYear(), e.getMonth(), 1)
+    while (cur <= last) {
+      list.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}`)
+      cur.setMonth(cur.getMonth() + 1)
+    }
+    return list
+  }, [applied.startDate, applied.endDate])
+
+  const isMultiMonth = monthsInRange.length > 1
+
+  // ─── Monthly line chart: mỗi sales = 1 đường qua các tháng ──────────────
+  const staffLineKeys = useMemo(() =>
+    displayed.slice(0, 8).map(s =>
+      s.staff_name.length > 20 ? s.staff_name.slice(0, 20) + "…" : s.staff_name
+    ), [displayed])
+
+  const staffMonthlyChart = useMemo(() => {
+    if (!isMultiMonth || !displayed.length) return []
+    const top = displayed.slice(0, 8)
+    return monthsInRange.map(month => {
+      const row: Record<string, any> = { month: `T${month.slice(5)}/${month.slice(2,4)}` }
+      top.forEach((s, i) => {
+        const m = s.monthly.find(x => x.month === month)
+        row[staffLineKeys[i]] = m?.revenue || 0
+      })
+      return row
+    })
+  }, [isMultiMonth, displayed, monthsInRange, staffLineKeys])
+
+  // ─── Customer monthly chart (khi có expanded) ───────────────────────────
+  const custLineKeys = useMemo(() =>
+    customers.slice(0, 8).map(c => {
+      const name = c.customer_name || c.customer_code
+      return name.length > 22 ? name.slice(0, 22) + "…" : name
+    }), [customers])
+
+  const custMonthlyChart = useMemo(() => {
+    if (!isMultiMonth || !customers.length) return []
+    const top = customers.slice(0, 8)
+    return monthsInRange.map(month => {
+      const row: Record<string, any> = { month: `T${month.slice(5)}/${month.slice(2,4)}` }
+      top.forEach((c, i) => {
+        const m = c.monthly.find(x => x.month === month)
+        row[custLineKeys[i]] = m?.revenue || 0
+      })
+      return row
+    })
+  }, [isMultiMonth, customers, monthsInRange, custLineKeys])
+
+  // ─── Export ─────────────────────────────────────────────────────────────
+  const exportStaff = () => {
+    // tgt(code, month) — lấy target của 1 staff 1 tháng cụ thể
+    const tgt = (code: string, month: string) =>
+      targets[code]?.[month] ?? { cm1_strategic: 0, cm1_non_strategic: 0, hk3_rev: 0 }
+    // sumTgt(code, months[]) — tổng target qua nhiều tháng
+    const sumTgt = (code: string, field: keyof TargetValues) =>
+      monthsInRange.reduce((a, m) => a + (targets[code]?.[m]?.[field] || 0), 0)
+
+    if (isMultiMonth) {
+      const rows: Record<string, any>[] = []
+      displayed.forEach((s, i) => {
+        monthsInRange.forEach(month => {
+          const m  = s.monthly.find(x => x.month === month)
+          const mt = tgt(s.staff_code, month)
+          rows.push({
+            "Rank":               i + 1,
+            "Staff Code":         s.staff_code,
+            "Staff Name":         s.staff_name,
+            "Tháng":              month,
+            "Revenue":            m?.revenue || 0,
+            "3HK Revenue":        m?.hk3_revenue || 0,
+            "3HK %":              (m?.revenue || 0) > 0 ? +((m!.hk3_revenue / m!.revenue)*100).toFixed(1) : 0,
+            "GP":                 m?.gross_profit || 0,
+            "CM1":                "",
+            "CM1 %":              "",
+            "CM1 Target (Strategic)":         mt.cm1_strategic,
+            "CM1 Target (Non-Strategic)":     mt.cm1_non_strategic,
+            "3HK Rev Target (Strategic)":     mt.hk3_strategic,
+            "3HK Rev Target (Non-Strategic)": mt.hk3_non_strategic,
+            "KH":                 "",
+            "Đơn":                "",
+          })
+        })
+        rows.push({
+          "Rank":               i + 1,
+          "Staff Code":         s.staff_code,
+          "Staff Name":         s.staff_name,
+          "Tháng":              "TỔNG",
+          "Revenue":            s.total_revenue,
+          "3HK Revenue":        s.hk3_revenue,
+          "3HK %":              s.total_revenue > 0 ? +((s.hk3_revenue / s.total_revenue)*100).toFixed(1) : 0,
+          "GP":                 s.gross_profit,
+          "CM1":                +s.cm1.toFixed(0),
+          "CM1 %":              +s.cm1_pct.toFixed(1),
+          "CM1 Target (Strategic)":         sumTgt(s.staff_code, "cm1_strategic"),
+          "CM1 Target (Non-Strategic)":     sumTgt(s.staff_code, "cm1_non_strategic"),
+          "3HK Rev Target (Strategic)":     sumTgt(s.staff_code, "hk3_strategic"),
+          "3HK Rev Target (Non-Strategic)": sumTgt(s.staff_code, "hk3_non_strategic"),
+          "KH":                 s.customer_count,
+          "Đơn":                s.total_orders,
+        })
+        rows.push({})
+      })
+      rows.push({
+        "Rank": "", "Staff Code": "", "Staff Name": "GRAND TOTAL", "Tháng": "",
+        "Revenue": totRev, "3HK Revenue": totHk3,
+        "3HK %": totRev > 0 ? +((totHk3/totRev)*100).toFixed(1) : 0,
+        "GP": totGP, "CM1": +totCM1.toFixed(0),
+        "CM1 %": totRev > 0 ? +((totCM1/totRev)*100).toFixed(1) : 0,
+        "CM1 Target (Strategic)":         displayed.reduce((a, s) => a + sumTgt(s.staff_code, "cm1_strategic"), 0),
+        "CM1 Target (Non-Strategic)":     displayed.reduce((a, s) => a + sumTgt(s.staff_code, "cm1_non_strategic"), 0),
+        "3HK Rev Target (Strategic)":     displayed.reduce((a, s) => a + sumTgt(s.staff_code, "hk3_strategic"), 0),
+        "3HK Rev Target (Non-Strategic)": displayed.reduce((a, s) => a + sumTgt(s.staff_code, "hk3_non_strategic"), 0),
+        "KH": totCust, "Đơn": totOrds,
+      })
+      exportRawRows(rows, `Staff_Report_${applied.startDate}_${applied.endDate}`, "Staff")
+    } else {
+      const month = monthsInRange[0] ?? applied.startDate.slice(0, 7)
+      const rows = displayed.map((s, i) => {
+        const t = tgt(s.staff_code, month)
+        return {
+          "Rank": i + 1, "Staff Code": s.staff_code, "Staff Name": s.staff_name,
+          "Revenue": s.total_revenue, "3HK Revenue": s.hk3_revenue,
+          "3HK %": s.total_revenue > 0 ? +((s.hk3_revenue / s.total_revenue)*100).toFixed(1) : 0,
+          "GP": s.gross_profit, "CM1": +s.cm1.toFixed(0), "CM1 %": +s.cm1_pct.toFixed(1),
+          "CM1 Target (Strategic)":         t.cm1_strategic,
+          "CM1 Target (Non-Strategic)":     t.cm1_non_strategic,
+          "3HK Rev Target (Strategic)":     t.hk3_strategic,
+          "3HK Rev Target (Non-Strategic)": t.hk3_non_strategic,
+          "KH": s.customer_count, "Đơn": s.total_orders,
+        }
+      })
+      exportRawRows(rows, `Staff_Report_${applied.startDate}_${applied.endDate}`, "Staff")
+    }
+  }
+
+  const exportCustomers = (staffName: string) => {
+    if (!customers.length) return
+    const rows = customers.map((c, i) => ({
+      Rank: i + 1, "Customer Code": c.customer_code, "Customer Name": c.customer_name,
+      "Tier": c.tier,
+      "Revenue": c.revenue, "3HK Revenue": c.hk3_revenue,
+      "3HK %": c.revenue > 0 ? +((c.hk3_revenue/c.revenue)*100).toFixed(1) : 0,
+      "Gross Profit": c.gross_profit,
+      "CH.Cost": +c.ch_cost.toFixed(0),
+      "CM1": +c.cm1.toFixed(0),
+      "CM1 %": +c.cm1_pct.toFixed(1),
+      "Orders": c.order_count,
+    }))
+    exportRawRows(rows, `Staff_${staffName}_Customers_${applied.startDate}_${applied.endDate}`, "Customers")
+  }
+
+  // ─── Render ──────────────────────────────────────────────────────────────
+  return (
+    <div className="p-4 lg:p-8 space-y-6 max-w-[1600px] mx-auto pb-24 lg:pb-8">
+
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-brand-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-brand-200 rotate-3">
+            <Users className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-2xl lg:text-4xl font-black text-slate-900 tracking-tight">Staff Performance</h1>
+            <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">Staff Performance</h1>
             <div className="flex items-center gap-2">
-              <p className="text-sm lg:text-lg text-slate-500 font-medium italic">Ranking and tracking our sales team's execution</p>
+              <p className="text-sm text-slate-500 font-medium italic">Doanh thu, GP & CM1 theo từng sales</p>
               <SourceBadge source="admin" />
             </div>
           </div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner border border-slate-200">
-            <button
-              onClick={() => setViewMode("fulfilled")}
-              className={cn(
-                "px-4 py-2 text-xs font-bold rounded-lg transition-all",
-                viewMode === "fulfilled" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              Fulfilled
-            </button>
-            <button
-              onClick={() => setViewMode("created")}
-              className={cn(
-                "px-4 py-2 text-xs font-bold rounded-lg transition-all",
-                viewMode === "created" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              Created
-            </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+            {(["fulfilled","created"] as const).map(m => (
+              <button key={m} onClick={() => setDraft(d => ({ ...d, viewMode: m }))}
+                className={cn("px-3 py-1.5 text-xs font-bold rounded-lg transition-all",
+                  draft.viewMode === m ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                {m === "fulfilled" ? "Fulfilled" : "Created"}
+              </button>
+            ))}
           </div>
-
-          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
             <Calendar className="w-4 h-4 text-slate-400" />
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0"
-            />
-            <span className="text-slate-300 font-bold">→</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0"
-            />
+            <input type="date" value={draft.startDate}
+              onChange={e => setDraft(d => ({ ...d, startDate: e.target.value }))}
+              className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0" />
+            <span className="text-slate-300">→</span>
+            <input type="date" value={draft.endDate}
+              onChange={e => setDraft(d => ({ ...d, endDate: e.target.value }))}
+              className="text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 p-0" />
           </div>
-          <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
-          <button
-            onClick={() => {
-              fetchChannels()
-              fetchStaffList()
-              fetchPerformance()
-              fetchRecentOrders()
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-sm"
-          >
-            Apply Filters
-          </button>
+          <DatePresets onSelect={(s, e) => setDraft(d => ({ ...d, startDate: s, endDate: e }))} />
         </div>
       </div>
 
-      {/* Filters Summary */}
-      <div className="flex flex-wrap items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-2 pr-4 border-r border-slate-100">
-          <Filter className="w-4 h-4 text-slate-400" />
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Quick Filters:</span>
-        </div>
-
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <Filter className="w-4 h-4 text-slate-400 shrink-0" />
         <div className="flex gap-2">
-          {["All", "B2B", "B2C"].map((group) => (
-            <button
-              key={group}
-              onClick={() => { setChannelGroup(group as any); setSelectedChannel("") }}
-              className={cn(
-                "px-4 py-1.5 rounded-full text-xs font-bold transition-all border",
-                channelGroup === group
-                  ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-100"
-                  : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white hover:border-slate-300"
-              )}
-            >
-              {group}
+          {(["All","B2B","B2C"] as const).map(g => (
+            <button key={g} onClick={() => setDraft(d => ({ ...d, channelGroup: g, channel: "" }))}
+              className={cn("px-3 py-1 rounded-full text-xs font-bold border transition-all",
+                draft.channelGroup === g ? "bg-brand-600 border-brand-600 text-white shadow-sm" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white")}>
+              {g}
             </button>
           ))}
         </div>
-
-        <select
-          value={selectedChannel}
-          onChange={(e) => setSelectedChannel(e.target.value)}
-          className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-4 py-1.5 focus:ring-blue-500 focus:border-blue-500"
-        >
+        <select value={draft.channel} onChange={e => setDraft(d => ({ ...d, channel: e.target.value }))}
+          className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-3 py-1">
           <option value="">All Channels</option>
           {channels.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-
-        <select
-          value={companyCode}
-          onChange={(e) => setCompanyCode(e.target.value)}
-          className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-4 py-1.5 focus:ring-blue-500 focus:border-blue-500"
-        >
+        <select value={draft.companyCode} onChange={e => setDraft(d => ({ ...d, companyCode: e.target.value }))}
+          className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-3 py-1">
           <option value="ALL">All Companies</option>
-          <option value="VN">VN</option>
-          <option value="US">US</option>
+          <option value="VN">VN</option><option value="US">US</option>
         </select>
-
+        {/* Staff filter */}
         <div className="relative">
-          <button
-            onClick={() => {
-              const el = document.getElementById("staff-dropdown")
-              if (el) el.classList.toggle("hidden")
-            }}
-            className="flex items-center justify-between w-48 bg-slate-50 border border-slate-200 rounded-full text-xs font-bold text-slate-600 px-4 py-1.5 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <span>
-              {selectedStaff.length === 0 ? "All Staff" :
-               selectedStaff.length === 1 ? staffList.find(s => s.code === selectedStaff[0])?.name || selectedStaff[0] :
-               `${selectedStaff.length} Staff Selected`}
-            </span>
-            <Filter className="w-3 h-3 ml-2 text-slate-400" />
+          <button onClick={() => setStaffDropOpen(v => !v)}
+            className={cn("flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border transition-all",
+              selectedCodes.length > 0 ? "bg-brand-600 border-brand-600 text-white" : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-white")}>
+            <Users className="w-3 h-3" />
+            {selectedCodes.length === 0 ? "All Sales" :
+             selectedCodes.length === 1 ? (staffData.find(s => s.staff_code === selectedCodes[0])?.staff_name || selectedCodes[0]) :
+             `${selectedCodes.length} Sales`}
+            {selectedCodes.length > 0 && (
+              <span onClick={e => { e.stopPropagation(); setSelectedCodes([]) }} className="ml-1 hover:opacity-70">
+                <X className="w-3 h-3" />
+              </span>
+            )}
           </button>
-
-          <div id="staff-dropdown" className="hidden absolute top-full left-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-80 overflow-auto p-2">
-            <div className="sticky top-0 bg-white pb-2 border-b border-slate-50 mb-2 space-y-2 z-10">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search staff..."
-                  value={staffSearchTerm}
-                  onChange={(e) => setStaffSearchTerm(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-600 focus:ring-blue-500 focus:border-blue-500"
-                />
+          {staffDropOpen && (
+            <div className="absolute top-full left-0 mt-2 w-60 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 max-h-72 overflow-auto p-2">
+              <div className="sticky top-0 bg-white pb-2 border-b border-slate-100 mb-2 z-10">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input type="text" placeholder="Tìm sales..." value={staffSearch}
+                    onChange={e => setStaffSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600" />
+                </div>
               </div>
-              <button
-                onClick={() => setSelectedStaff([])}
-                className="w-full text-left px-3 py-1.5 text-[10px] font-black text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              >
-                Clear Selection
-              </button>
-            </div>
-            <div className="space-y-1">
-              {staffList
-                .filter(s =>
-                  (s.name || "").toLowerCase().includes((staffSearchTerm || "").toLowerCase()) ||
-                  (s.code || "").toLowerCase().includes((staffSearchTerm || "").toLowerCase())
-                )
-                .map(s => (
-                  <label key={s.code} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors group">
-                  <input
-                    type="checkbox"
-                    checked={selectedStaff.includes(s.code)}
-                    onChange={() => {
-                      if (selectedStaff.includes(s.code)) {
-                        setSelectedStaff(selectedStaff.filter(code => code !== s.code))
-                      } else {
-                        setSelectedStaff([...selectedStaff, s.code])
-                      }
-                    }}
-                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-slate-700 group-hover:text-slate-900">{s.name}</span>
-                    <span className="text-[9px] font-medium text-slate-400">{s.code}</span>
+              {staffOptions.map(s => (
+                <label key={s.staff_code} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 rounded-lg cursor-pointer">
+                  <input type="checkbox" checked={selectedCodes.includes(s.staff_code)}
+                    onChange={() => setSelectedCodes(prev =>
+                      prev.includes(s.staff_code) ? prev.filter(c => c !== s.staff_code) : [...prev, s.staff_code])}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-brand-600" />
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-700">{s.staff_name}</p>
+                    <p className="text-[9px] text-slate-400">{s.staff_code}</p>
                   </div>
                 </label>
               ))}
             </div>
-          </div>
+          )}
         </div>
+        {staffDropOpen && <div className="fixed inset-0 z-40" onClick={() => setStaffDropOpen(false)} />}
 
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search by Order, Staff Name / Code..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-1.5 bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 focus:ring-blue-500 focus:border-blue-500"
-          />
+        {/* Ship / Internal Ops toggles */}
+        {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+          <label key={label} className="flex items-center gap-1 cursor-pointer">
+            <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3 h-3 accent-amber-500" />
+            <span className={cn("text-[10px] font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
+          </label>
+        ))}
+        <button onClick={applyFilters}
+          className={cn("flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-black transition-all shadow-sm bg-brand-600 text-white hover:bg-brand-700",
+            isDirty && "animate-pulse")}>
+          <Play className="w-3 h-3 fill-white" /> Apply Filters
+        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center gap-1 text-xs font-bold text-slate-400">
+            <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
+            {loading ? "Loading…" : `${staffData.length} sales`}
+          </div>
+          <button onClick={exportStaff}
+            className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
+            <Download className="w-3.5 h-3.5" /> Export All
+          </button>
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 lg:gap-6">
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-110" />
-          <div className="relative">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 mb-4">
-              <ShoppingBag className="w-6 h-6" />
-            </div>
-            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Total Orders</p>
-            <h3 className="text-3xl font-black text-slate-900">{totalOrders.toLocaleString()}</h3>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-12 -mt-12 transition-transform group-hover:scale-110" />
-          <div className="relative">
-            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 mb-4">
-              <Package className="w-6 h-6" />
-            </div>
-            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Units Sold</p>
-            <h3 className="text-3xl font-black text-slate-900">{totalUnits.toLocaleString()}</h3>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group md:col-span-2">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-amber-50 rounded-full -mr-24 -mt-24 transition-transform group-hover:scale-110" />
-          <div className="relative">
-            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 mb-4">
-              <TrendingUp className="w-6 h-6" />
-            </div>
-            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Gross Revenue (VND)</p>
-            <h3 className="text-3xl lg:text-4xl font-black text-slate-900">
-              {new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(totalRevenue)}
-            </h3>
-          </div>
-        </div>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        {([
+          { label: "Tổng Revenue", value: fck(totRev), icon: DollarSign, accent: "revenue" },
+          { label: "3HK Revenue",  value: fck(totHk3), icon: Zap,        accent: "cost"    },
+          { label: "Gross Profit", value: fck(totGP),  icon: TrendingUp, accent: "margin"  },
+          { label: "CM1",          value: fck(totCM1), icon: Target,     accent: "margin"  },
+          { label: "Sales",        value: displayed.length.toLocaleString(), icon: Users,     accent: "neutral" },
+          { label: "Khách hàng",   value: totCust.toLocaleString(),          icon: UserCheck, accent: "positive" },
+        ] as { label: string; value: string; icon: React.ElementType; accent: MetricAccent }[]).map(card => (
+          <StatTile key={card.label} icon={<card.icon className="w-5 h-5" />} label={card.label} value={card.value} accent={card.accent} />
+        ))}
       </div>
 
-      {/* Main Tables */}
-      <div className="grid grid-cols-1 gap-8">
-        {/* Performance Leaderboard */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+      {/* Single-month: bar chart so sánh sales */}
+      {!isMultiMonth && !loading && displayed.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-black text-slate-900">Staff Performance Summary</h3>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Key metrics by team member</p>
+              <h3 className="text-sm font-black text-slate-900">So sánh doanh thu Sales</h3>
+              <p className="text-xs text-slate-500 mt-0.5">{applied.startDate} → {applied.endDate}</p>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
-                {loading ? "Refreshing..." : "Live Data"}
-              </div>
-              <button
-                onClick={handleExportSummary}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                title="Export this table to CSV"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Export
-              </button>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-brand-600 inline-block"/> Tổng Rev</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-500 inline-block"/> 3HK Rev</span>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Rank</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Staff Name</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Orders</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue (VND)</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Avg Order Value</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Contr. %</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {staffMetrics.slice((leaderPage - 1) * PAGE_ROWS, leaderPage * PAGE_ROWS).map((staff, i) => {
-                  const idx = (leaderPage - 1) * PAGE_ROWS + i
-                  const revValue = parseFloat(staff.total_revenue)
-                  const ordValue = parseInt(staff.total_orders)
-                  const contribution = (revValue / totalRevenue) * 100
-                  const aov = ordValue > 0 ? revValue / ordValue : 0
+          <div className="p-4" style={{ height: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={displayed.slice(0, 12).map(s => ({
+                  name: s.staff_name.length > 14 ? s.staff_name.slice(0, 14) + "…" : s.staff_name,
+                  "Tổng Rev": s.total_revenue,
+                  "3HK Rev":  s.hk3_revenue,
+                }))}
+                margin={{ top: 4, right: 16, left: 0, bottom: 32 }}
+                barGap={2}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false}
+                  angle={-25} textAnchor="end" height={52} interval={0} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+                  tickFormatter={v => fck(v)} width={64} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="Tổng Rev" radius={[4,4,0,0]} maxBarSize={40}>
+                  {displayed.slice(0,12).map((_, i) => <Cell key={i} fill={STAFF_COLORS[i % STAFF_COLORS.length]} />)}
+                </Bar>
+                <Bar dataKey="3HK Rev" fill="#F97316" radius={[4,4,0,0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
-                  return (
-                    <tr key={staff.staff_code} className="hover:bg-slate-50 transition-colors group">
-                      <td className="px-6 py-4">
-                        <span className={cn(
-                          "w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs",
-                          idx === 0 ? "bg-amber-100 text-amber-700 shadow-sm border border-amber-200" :
-                          idx === 1 ? "bg-slate-100 text-slate-700 border border-slate-200" :
-                          idx === 2 ? "bg-orange-50 text-orange-700 border border-orange-100" :
-                          "text-slate-400"
-                        )}>
-                          {idx + 1}
-                        </span>
+      {/* Single-month: bar chart so sánh KH của sales đang expand */}
+      {!isMultiMonth && expandedStaff && !custLoading && customers.length > 0 && (
+        <div className="bg-brand-50/50 rounded-2xl border border-brand-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-brand-100">
+            <h3 className="text-sm font-black text-brand-800">
+              So sánh KH — {staffData.find(s => s.staff_code === expandedStaff)?.staff_name}
+            </h3>
+            <p className="text-xs text-brand-600 mt-0.5">{applied.startDate} → {applied.endDate} · Top {Math.min(customers.length, 12)} KH</p>
+          </div>
+          <div className="p-4" style={{ height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={customers.slice(0, 12).map((c, i) => {
+                  const name = c.customer_name || c.customer_code
+                  return {
+                    name: name.length > 14 ? name.slice(0, 14) + "…" : name,
+                    "Revenue": c.revenue,
+                    "3HK Rev": c.hk3_revenue,
+                  }
+                })}
+                margin={{ top: 4, right: 16, left: 0, bottom: 32 }}
+                barGap={2}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#4338ca" }} axisLine={false} tickLine={false}
+                  angle={-25} textAnchor="end" height={52} interval={0} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
+                  tickFormatter={v => fck(v)} width={64} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="Revenue" radius={[4,4,0,0]} maxBarSize={40}>
+                  {customers.slice(0,12).map((_, i) => <Cell key={i} fill={STAFF_COLORS[i % STAFF_COLORS.length]} />)}
+                </Bar>
+                <Bar dataKey="3HK Rev" fill="#F97316" radius={[4,4,0,0]} maxBarSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-month line chart — mỗi sales = 1 đường */}
+      {isMultiMonth && staffMonthlyChart.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">So sánh Revenue từng Sales theo tháng</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {applied.startDate.slice(0,7)} → {applied.endDate.slice(0,7)} · {monthsInRange.length} tháng
+                {displayed.length > 8 && <span className="ml-1 text-amber-600">(Top 8 sales)</span>}
+              </p>
+            </div>
+          </div>
+          <div className="p-4" style={{ height: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={staffMonthlyChart} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b", fontWeight: 700 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => fck(v)} width={64} />
+                <Tooltip content={<ChartTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                {staffLineKeys.map((key, i) => (
+                  <Line key={key} type="monotone" dataKey={key}
+                    stroke={STAFF_COLORS[i % STAFF_COLORS.length]} strokeWidth={2.5}
+                    dot={{ r: 4, fill: STAFF_COLORS[i % STAFF_COLORS.length], strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={{ r: 6, strokeWidth: 0 }} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Customer monthly line chart */}
+      {isMultiMonth && expandedStaff && custMonthlyChart.length > 0 && (
+        <div className="bg-brand-50/50 rounded-2xl border border-brand-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-brand-100">
+            <h3 className="text-sm font-black text-brand-800">
+              So sánh Revenue KH theo tháng — {staffData.find(s => s.staff_code === expandedStaff)?.staff_name}
+            </h3>
+            <p className="text-xs text-brand-600 mt-0.5">
+              {monthsInRange.length} tháng{customers.length > 8 && " · Top 8 KH"}
+            </p>
+          </div>
+          <div className="p-4" style={{ height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={custMonthlyChart} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#4338ca", fontWeight: 700 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => fck(v)} width={64} />
+                <Tooltip content={<ChartTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                {custLineKeys.map((key, i) => (
+                  <Line key={key} type="monotone" dataKey={key}
+                    stroke={STAFF_COLORS[i % STAFF_COLORS.length]} strokeWidth={2.5}
+                    dot={{ r: 4, fill: STAFF_COLORS[i % STAFF_COLORS.length], strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={{ r: 6, strokeWidth: 0 }} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Leaderboard table */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-black text-slate-900">Chi tiết từng Sales</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Click hàng để xem breakdown KH · CM1 = GP − CH.Cost từng KH (Turso) − chi phí nhóm B2B/B2C</p>
+          </div>
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <div className="flex items-center gap-2">
+              {editMode ? (
+                <>
+                  <button onClick={cancelEdit}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                    <XCircle className="w-3.5 h-3.5" /> Hủy
+                  </button>
+                  <button
+                    onClick={saveTargets}
+                    disabled={!hasChanges || saving}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors",
+                      hasChanges && !saving
+                        ? "bg-brand-600 text-white hover:bg-brand-700 shadow-sm"
+                        : "bg-slate-100 text-slate-400 cursor-not-allowed",
+                    )}>
+                    <Save className="w-3.5 h-3.5" />
+                    {saving ? "Đang lưu…" : "Lưu"}
+                  </button>
+                </>
+              ) : canWrite ? (
+                <button
+                  onClick={enterEdit}
+                  disabled={isMultiMonth}
+                  title={isMultiMonth ? "Chọn 1 tháng để chỉnh sửa target" : undefined}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors",
+                    isMultiMonth
+                      ? "bg-slate-50 text-slate-300 cursor-not-allowed"
+                      : "bg-slate-100 text-slate-600 hover:bg-brand-50 hover:text-brand-700",
+                  )}>
+                  <Pencil className="w-3.5 h-3.5" />
+                  Sửa Target {isMultiMonth ? "(chọn 1 tháng)" : `tháng ${applied.startDate.slice(0,7)}`}
+                </button>
+              ) : null}
+            </div>
+            {saveError && (
+              <div className="flex items-center gap-1 text-xs text-red-600 font-bold">
+                <AlertTriangle className="w-3 h-3" /> {saveError}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              {/* Row 1: group headers */}
+              <tr className="bg-slate-50 border-b border-slate-100">
+                <th colSpan={8} />
+                <th colSpan={2} className="px-4 py-1.5 text-[10px] font-black text-rose-600 uppercase tracking-wider text-center border-l border-rose-200 bg-rose-50/60">
+                  CM1 Target
+                </th>
+                <th colSpan={2} className="px-4 py-1.5 text-[10px] font-black text-orange-600 uppercase tracking-wider text-center border-l border-orange-200 bg-orange-50/60">
+                  3HK Rev Target
+                </th>
+                <th colSpan={4} />
+              </tr>
+              {/* Row 2: column headers */}
+              <tr className="bg-slate-50 border-b border-slate-200">
+                {["#","Sales","Tổng Rev","3HK Rev","3HK%","GP","CM1","CM1%"].map((h,i) => (
+                  <th key={h} className={cn("px-4 py-2.5 text-xs font-bold text-slate-500 uppercase tracking-wider", i>1 && "text-right")}>{h}</th>
+                ))}
+                <th className="px-4 py-2.5 text-xs font-bold text-rose-500 uppercase tracking-wider text-right border-l border-rose-100 bg-rose-50/40 whitespace-nowrap">Strategic</th>
+                <th className="px-4 py-2.5 text-xs font-bold text-rose-400 uppercase tracking-wider text-right bg-rose-50/40 whitespace-nowrap">Non-strat.</th>
+                <th className="px-4 py-2.5 text-xs font-bold text-orange-500 uppercase tracking-wider text-right border-l border-orange-100 bg-orange-50/40 whitespace-nowrap">Strategic</th>
+                <th className="px-4 py-2.5 text-xs font-bold text-orange-400 uppercase tracking-wider text-right bg-orange-50/40 whitespace-nowrap">Non-strat.</th>
+                {["KH","Đơn","Trend","Contr%"].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {displayed.length === 0 && !loading && (
+                <tr><td colSpan={16} className="px-6 py-8 text-center text-sm text-slate-400">Không có dữ liệu</td></tr>
+              )}
+              {displayed.map((s, i) => {
+                const hk3p  = s.total_revenue > 0 ? (s.hk3_revenue / s.total_revenue) * 100 : 0
+                const contp = totRev > 0 ? (s.total_revenue / totRev) * 100 : 0
+                const isExp = expandedStaff === s.staff_code
+                const activeMonth = monthsInRange[0] ?? applied.startDate.slice(0, 7)
+                // single-month: target của tháng đó; multi-month: tổng tất cả tháng
+                const tgtVal = (field: keyof TargetValues): number =>
+                  isMultiMonth
+                    ? monthsInRange.reduce((sum, m) => sum + (targets[s.staff_code]?.[m]?.[field] || 0), 0)
+                    : (targets[s.staff_code]?.[activeMonth]?.[field] || 0)
+                const tMeta  = targets[s.staff_code]?.[activeMonth]
+                const d      = draftTargets[s.staff_code] ?? {
+                  cm1_strategic: tgtVal("cm1_strategic"), cm1_non_strategic: tgtVal("cm1_non_strategic"),
+                  hk3_strategic: tgtVal("hk3_strategic"), hk3_non_strategic: tgtVal("hk3_non_strategic"),
+                }
+                const tooltip = !editMode && tMeta?.updated_by_name ? `Sửa bởi ${tMeta.updated_by_name}` : undefined
+
+                return (
+                  <React.Fragment key={s.staff_code}>
+                    <tr onClick={() => !editMode && toggleExpand(s.staff_code)}
+                      className={cn("transition-colors group", !editMode && "cursor-pointer", isExp ? "bg-brand-50 border-l-2 border-l-brand-600" : "hover:bg-slate-50")}>
+                      <td className="px-4 py-3">
+                        <span className={cn("w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs",
+                          i < 3 ? RANK_STYLE[i] : "text-slate-400 text-[11px]")}>{i + 1}</span>
                       </td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="flex flex-col">
-                          <span className="font-black text-slate-900 group-hover:text-blue-600 transition-colors">{staff.staff_name}</span>
-                          <span className="text-xs text-slate-500 font-bold">{staff.staff_code}</span>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {isExp ? <ChevronDown className="w-4 h-4 text-brand-600 shrink-0" />
+                                 : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 group-hover:text-brand-500" />}
+                          <div>
+                            <p className={cn("text-sm font-black", isExp ? "text-brand-700" : "text-slate-900")}>{s.staff_name}</p>
+                            <p className="text-[10px] text-slate-400 font-bold">{s.staff_code}</p>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-sm font-bold text-slate-600">{ordValue.toLocaleString()}</span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-sm font-bold text-slate-600">{parseInt(staff.total_units).toLocaleString()}</span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-sm font-black text-slate-900">
-                          {new Intl.NumberFormat("vi-VN").format(revValue)}
+                      <td className="px-4 py-3 text-right text-sm font-black text-slate-900">{fck(s.total_revenue)}</td>
+                      <td className="px-4 py-3 text-right text-sm font-bold text-orange-600">{fck(s.hk3_revenue)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={cn("text-xs font-black px-2 py-0.5 rounded-full",
+                          hk3p >= 50 ? "bg-orange-100 text-orange-700" : hk3p >= 20 ? "bg-amber-50 text-amber-700" : "text-slate-500")}>
+                          {pct(hk3p)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-xs font-bold text-slate-500">
-                          {new Intl.NumberFormat("vi-VN").format(Math.round(aov))}
+                      <td className="px-4 py-3 text-right text-sm font-bold text-emerald-600">{fck(s.gross_profit)}</td>
+                      <td className="px-4 py-3 text-right text-sm font-bold text-indigo-600">{fck(s.cm1)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={cn("text-xs font-black px-2 py-0.5 rounded-full",
+                          s.cm1_pct >= 15 ? "bg-indigo-100 text-indigo-700" : s.cm1_pct > 0 ? "text-indigo-600" : "text-rose-600")}>
+                          {pct(s.cm1_pct)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-3">
-                          <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-blue-500 rounded-full"
-                              style={{ width: `${contribution}%` }}
-                            />
+                      <TargetCell key={`${s.staff_code}-cm1s-${editMode}`}
+                        editMode={editMode} draftVal={d.cm1_strategic} displayVal={tgtVal("cm1_strategic")}
+                        bgClass="border-l border-rose-100 bg-rose-50/30" tooltip={tooltip}
+                        onChange={v => setDraftField(s.staff_code, "cm1_strategic", v)} />
+                      <TargetCell key={`${s.staff_code}-cm1n-${editMode}`}
+                        editMode={editMode} draftVal={d.cm1_non_strategic} displayVal={tgtVal("cm1_non_strategic")}
+                        bgClass="bg-rose-50/20" tooltip={tooltip}
+                        onChange={v => setDraftField(s.staff_code, "cm1_non_strategic", v)} />
+                      <TargetCell key={`${s.staff_code}-hk3s-${editMode}`}
+                        editMode={editMode} draftVal={d.hk3_strategic} displayVal={tgtVal("hk3_strategic")}
+                        bgClass="border-l border-orange-100 bg-orange-50/30" tooltip={tooltip}
+                        onChange={v => setDraftField(s.staff_code, "hk3_strategic", v)} />
+                      <TargetCell key={`${s.staff_code}-hk3n-${editMode}`}
+                        editMode={editMode} draftVal={d.hk3_non_strategic} displayVal={tgtVal("hk3_non_strategic")}
+                        bgClass="bg-orange-50/20" tooltip={tooltip}
+                        onChange={v => setDraftField(s.staff_code, "hk3_non_strategic", v)} />
+                      <td className="px-4 py-3 text-right text-sm font-bold text-slate-600">{s.customer_count}</td>
+                      <td className="px-4 py-3 text-right text-sm font-bold text-slate-500">{s.total_orders.toLocaleString()}</td>
+                      <td className="px-4 py-3"><MiniSparkline data={s.monthly} /></td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-14 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-brand-500 rounded-full" style={{ width: `${contp}%` }} />
                           </div>
-                          <span className="text-xs font-black text-blue-600 w-10 text-right">{contribution.toFixed(1)}%</span>
+                          <span className="text-xs font-black text-brand-600 w-9 text-right">{pct(contp)}</span>
                         </div>
                       </td>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          <Pager page={leaderPage} total={staffMetrics.length} onPage={setLeaderPage} label="nhân viên" />
-        </div>
 
-        {/* Transaction Detail Table */}
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-black text-slate-900">Recent Transactions</h3>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Detailed log of sales activity</p>
-            </div>
+                    {/* Customer expand */}
+                    {isExp && (
+                      <tr><td colSpan={16} className="px-0 py-0">
+                        <div className="bg-brand-50/60 border-b border-brand-100 px-6 py-4">
+                          {custLoading ? (
+                            <div className="text-xs text-slate-400 py-4 text-center">Đang tải KH…</div>
+                          ) : customers.length === 0 ? (
+                            <div className="text-xs text-slate-400 py-4 text-center">Không có dữ liệu KH</div>
+                          ) : (
+                            <>
+                              <div className="flex items-center justify-between mb-3">
+                                <p className="text-xs font-black text-brand-700 uppercase tracking-wider">
+                                  Breakdown {customers.length} KH — {s.staff_name}
+                                </p>
+                                <button onClick={() => exportCustomers(s.staff_name)}
+                                  className="flex items-center gap-1.5 bg-white border border-brand-200 text-brand-700 px-3 py-1 rounded-lg text-xs font-bold hover:bg-brand-50 transition-colors">
+                                  <Download className="w-3 h-3" /> Export KH
+                                </button>
+                              </div>
+                              <div className="overflow-x-auto rounded-xl border border-brand-100 bg-white">
+                                <table className="w-full text-left border-collapse">
+                                  <thead>
+                                    <tr className="bg-brand-50 border-b border-brand-100">
+                                      {["#","Khách hàng","Revenue","3HK Rev","3HK%","GP","CM1","CM1%","% of Sales"].map(h => (
+                                        <th key={h} className={cn("px-4 py-2 text-[10px] font-bold text-brand-600 uppercase tracking-wider",
+                                          h !== "#" && h !== "Khách hàng" && "text-right")}>{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-brand-50">
+                                    {customers.map((c, ci) => {
+                                      const h3p = c.revenue > 0 ? (c.hk3_revenue / c.revenue) * 100 : 0
+                                      const ofS = s.total_revenue > 0 ? (c.revenue / s.total_revenue) * 100 : 0
+                                      return (
+                                        <tr key={c.customer_code} className="hover:bg-brand-50/40 transition-colors">
+                                          <td className="px-4 py-2 text-[10px] font-bold text-slate-400">{ci + 1}</td>
+                                          <td className="px-4 py-2">
+                                            <div className="flex items-center gap-1">
+                                              <TierBadge tier={c.tier} />
+                                              <div>
+                                                <p className="text-xs font-bold text-slate-800">{c.customer_name}</p>
+                                                <p className="text-[9px] text-slate-400">{c.customer_code}</p>
+                                              </div>
+                                            </div>
+                                          </td>
+                                          <td className="px-4 py-2 text-right text-xs font-black text-slate-900">{fck(c.revenue)}</td>
+                                          <td className="px-4 py-2 text-right text-xs font-bold text-orange-600">{fck(c.hk3_revenue)}</td>
+                                          <td className="px-4 py-2 text-right">
+                                            <span className={cn("text-[10px] font-black", h3p >= 50 ? "text-orange-600" : "text-slate-400")}>{pct(h3p)}</span>
+                                          </td>
+                                          <td className="px-4 py-2 text-right text-xs font-bold text-emerald-600">{fck(c.gross_profit)}</td>
+                                          <td className="px-4 py-2 text-right text-xs font-bold text-indigo-600">{fck(c.cm1)}</td>
+                                          <td className="px-4 py-2 text-right">
+                                            <span className={cn("text-[10px] font-black",
+                                              c.cm1_pct >= 10 ? "text-indigo-600" : c.cm1_pct > 0 ? "text-slate-500" : "text-rose-500")}>
+                                              {pct(c.cm1_pct)}
+                                            </span>
+                                          </td>
+                                          <td className="px-4 py-2 text-right">
+                                            <div className="flex items-center justify-end gap-1.5">
+                                              <div className="w-12 h-1 bg-brand-100 rounded-full overflow-hidden">
+                                                <div className="h-full bg-brand-400 rounded-full" style={{ width: `${ofS}%` }} />
+                                              </div>
+                                              <span className="text-[10px] font-black text-brand-600">{pct(ofS)}</span>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </td></tr>
+                    )}
+                  </React.Fragment>
+                )
+              })}
 
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleExportTransactions}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                title="Export detailed transactions to CSV"
-              >
-                <Download className="w-3.5 h-3.5" />
-                Export
-              </button>
-              <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-                <span className="text-xs font-bold text-slate-500">Page {page}</span>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setPage(prev => Math.max(1, prev - 1))}
-                    disabled={page === 1}
-                    className="p-1 hover:bg-white rounded-md disabled:opacity-30 transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setPage(prev => prev + 1)}
-                    disabled={orders.length < 10}
-                    className="p-1 hover:bg-white rounded-md disabled:opacity-30 transition-colors"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Order ID</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Company</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Staff</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Customer</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Product</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Source</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
+              {/* Total row */}
+              {displayed.length > 0 && (
+                <tr className="bg-slate-50 border-t-2 border-slate-200 font-black">
+                  <td colSpan={2} className="px-4 py-3 text-xs uppercase tracking-wider text-slate-700">Tổng cộng</td>
+                  <td className="px-4 py-3 text-right text-sm text-slate-900">{fck(totRev)}</td>
+                  <td className="px-4 py-3 text-right text-sm text-orange-600">{fck(totHk3)}</td>
+                  <td className="px-4 py-3 text-right text-xs text-orange-600">{totRev>0?pct((totHk3/totRev)*100):"0%"}</td>
+                  <td className="px-4 py-3 text-right text-sm text-emerald-700">{fck(totGP)}</td>
+                  <td className="px-4 py-3 text-right text-sm text-indigo-700">{fck(totCM1)}</td>
+                  <td className="px-4 py-3 text-right text-xs text-indigo-700">{totRev>0?pct((totCM1/totRev)*100):"0%"}</td>
+                  <td className="px-4 py-3 text-right text-xs text-rose-600 border-l border-rose-100 bg-rose-50/30">
+                    {fck(displayed.reduce((a,s) => a + monthsInRange.reduce((sum,m) => sum+(targets[s.staff_code]?.[m]?.cm1_strategic||0),0),0))}
+                  </td>
+                  <td className="px-4 py-3 text-right text-xs text-rose-600 bg-rose-50/20">
+                    {fck(displayed.reduce((a,s) => a + monthsInRange.reduce((sum,m) => sum+(targets[s.staff_code]?.[m]?.cm1_non_strategic||0),0),0))}
+                  </td>
+                  <td className="px-4 py-3 text-right text-xs text-orange-600 border-l border-orange-100 bg-orange-50/30">
+                    {fck(displayed.reduce((a,s) => a + monthsInRange.reduce((sum,m) => sum+(targets[s.staff_code]?.[m]?.hk3_strategic||0),0),0))}
+                  </td>
+                  <td className="px-4 py-3 text-right text-xs text-orange-600 bg-orange-50/20">
+                    {fck(displayed.reduce((a,s) => a + monthsInRange.reduce((sum,m) => sum+(targets[s.staff_code]?.[m]?.hk3_non_strategic||0),0),0))}
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm text-slate-600">{totCust}</td>
+                  <td className="px-4 py-3 text-right text-sm text-slate-500">{totOrds.toLocaleString()}</td>
+                  <td colSpan={2} />
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {orders.map((order, idx) => (
-                  <tr key={`${order.order_code}-${idx}`} className="hover:bg-slate-50 transition-colors group">
-                    <td className="px-6 py-4 text-xs font-bold text-slate-500">
-                      {new Date(order.fulfiled_date).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-black text-slate-900">
-                      {order.order_code}
-                    </td>
-                    <td className="px-6 py-4 text-xs font-bold text-slate-600">
-                      {order.company_code}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-bold text-slate-600">
-                      {order.staff_name}
-                    </td>
-                    <td className="px-6 py-4 text-xs font-medium text-slate-600">
-                      {order.customer_name}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-slate-700">{order.product_name}</span>
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{order.sku}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-xs font-bold text-slate-500">
-                      {order.order_source}
-                    </td>
-                    <td className="px-6 py-4 text-right text-sm font-bold text-slate-600">
-                      {order.fulfilled_quantity}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className="text-sm font-black text-blue-600">
-                        {new Intl.NumberFormat("vi-VN").format(order.fulfilled_revenue_amount_vnd)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   )
+}
+
+export default function StaffPerformancePage() {
+  return <Suspense><StaffPageInner /></Suspense>
 }

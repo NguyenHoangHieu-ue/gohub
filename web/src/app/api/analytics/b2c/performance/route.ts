@@ -2,37 +2,48 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { supabaseAdmin } from "@/lib/supabase"
 import {
   getAnalyticsSource, getDateFilter, getSkuDestinationRule, getDestinationSQL,
-  getCountryMappings, getBODFilters, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard,
+  getCountryMappings, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode,
+  getDaysInMonth, getDaysInRange,
+  CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
+import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
+import { fetchCosts, matchChannelCost } from "@/lib/bod-data"
 
-// Port intel /api/analytics/b2c/performance (fetchB2CPerformanceData). GroupBy: channel/sku/vendor/destination/
-// staff/customer. gpm2 = margin − op-cost (chỉ khi groupBy channel, từ analytics_channel_costs prorate ngày).
-// projected_* khi end ∈ tháng hiện tại. prev_revenue khi comparisonType != none.
+// Cùng logic CM1 với quarterly-report: fetchCosts + matchChannelCost (source_code + sub-channel + exact name).
+// Group cost KHÔNG phân bổ per-channel — FE trừ ở total row từ groupCosts state.
 
-function getDaysInMonth(month: string) {
-  const d = new Date(`${month}-01`)
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+const COST_KEYS_CH = ["ads", "platformFee", "sponsorProducts", "media"] as const
+
+function computeChCost(
+  channelCosts: any[], channel: string, month: string,
+  revenue: number, startDate: string, endDate: string,
+  sourceCode?: string, projected = false,
+): number {
+  let amtCost = 0, pctCost = 0
+  const dim = getDaysInMonth(month)
+  const ratio = projected ? 1 : (dim > 0 ? getDaysInRange(startDate, endDate, month) / dim : 0)
+  matchChannelCost(channelCosts, channel, month, sourceCode).forEach((c: any) => {
+    COST_KEYS_CH.forEach(key => {
+      const v = c[key]; if (!v) return
+      if (v.type === "amount") amtCost += (v.value || 0) * ratio
+      else pctCost += revenue * (v.value || 0) / 100
+    })
+  })
+  return amtCost + pctCost
 }
-function getDaysInRange(startDate: string, endDate: string, month: string) {
-  const rangeStart = new Date(startDate); const rangeEnd = new Date(endDate)
-  const mStart = new Date(`${month}-01`); const mEnd = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 0)
-  const iStart = rangeStart > mStart ? rangeStart : mStart
-  const iEnd = rangeEnd < mEnd ? rangeEnd : mEnd
-  return iStart <= iEnd ? Math.ceil((iEnd.getTime() - iStart.getTime()) / 86400000) + 1 : 0
-}
-const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 
-async function fetchB2CPerformanceData(startDate: string, endDate: string, groupBy: string, advancedFilter: string, dateColumn: string) {
+async function fetchB2CPerformanceData(startDate: string, endDate: string, groupBy: string, advancedFilter: string, dateColumn: string, sfx = "") {
   const source = getAnalyticsSource(dateColumn)
   const filter = getDateFilter(startDate, endDate, source.dateCol)
+  const isChannelGroup = groupBy === "channel" || !groupBy
 
   let selectClause = "data.channel_name as name"
   let joinClause = ""
   if (groupBy === "vendor") {
-    selectClause = "v.vendor as name"; joinClause = "LEFT JOIN dim_sku v ON data.sku = v.sku"
+    selectClause = "v.vendor as name"; joinClause = "LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON data.sku = v.sku"
   } else if (groupBy === "destination") {
     const rule = await getSkuDestinationRule()
     selectClause = `${getDestinationSQL(rule).replace(/f\./g, "data.")} as name`
@@ -46,30 +57,39 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
     joinClause = "LEFT JOIN dim_customer c ON TRIM(data.customer_code) = TRIM(c.code)"
   }
 
+  const withMarket = groupBy === "customer"
+  const marketSelect = withMarket ? ", COALESCE(data.company_code, 'NA') as market" : ""
+  const groupByCols  = withMarket ? "1, 2, 3" : "1, 2"
   const rows = await queryAnalytics<Record<string, string>>(
     `WITH b2c_data AS (
        SELECT f.*, TRIM(s.channel_name) as channel_name
        FROM ${source.mainTable} f
        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-       WHERE UPPER(s.group_name) = 'B2C' AND ${filter} ${advancedFilter}
+       WHERE UPPER(s.group_name) = 'B2C' AND ${filter} ${advancedFilter} ${sfx}
      )
-     SELECT ${selectClause},
+     SELECT ${selectClause}${marketSelect},
        TO_CHAR(data.${source.dateCol}::DATE, 'YYYY-MM') as month,
+       ${isChannelGroup ? "MIN(data.order_source_code) as source_code," : ""}
        SUM(data.${source.revenueCol}) as revenue,
        SUM(data.${source.marginCol}) as margin,
        SUM(data.${source.quantityCol}) as units
      FROM b2c_data data ${joinClause}
-     GROUP BY 1, 2`
+     GROUP BY ${groupByCols}`
   )
 
   const aggregated = new Map<string, any>()
   rows.forEach(r => {
     const key = r.name
-    if (!aggregated.has(key)) aggregated.set(key, { name: key, revenue: 0, margin: 0, units: 0, monthly_data: [] })
+    if (!aggregated.has(key)) aggregated.set(key, { name: key, revenue: 0, margin: 0, units: 0, revenueVn: 0, revenueUs: 0, monthly_data: [] })
     const item = aggregated.get(key)
-    item.revenue += parseFloat(r.revenue || "0")
+    const rev = parseFloat(r.revenue || "0")
+    item.revenue += rev
     item.margin += parseFloat(r.margin || "0")
     item.units += parseFloat(r.units || "0")
+    if (withMarket) {
+      if (r.market === "VN") item.revenueVn += rev
+      else if (r.market === "US") item.revenueUs += rev
+    }
     item.monthly_data.push(r)
   })
 
@@ -80,56 +100,43 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
     finalRows = finalRows.map(r => ({ ...r, name: mappings[r.name] || r.name }))
   }
 
+  // Dùng fetchCosts + matchChannelCost từ bod-data.ts (cùng logic với quarterly-report).
+  // source_code trong monthly_data giúp matchChannelCost tìm đúng cost kể cả khi channel đổi tên.
   let channelCosts: any[] = []
-  const isChannelGroup = groupBy === "channel" || !groupBy
   if (isChannelGroup) {
     const start = new Date(startDate); const end = new Date(endDate)
     const months: string[] = []; let curr = new Date(start.getFullYear(), start.getMonth(), 1)
     while (curr <= end) { months.push(curr.toISOString().slice(0, 7)); curr.setMonth(curr.getMonth() + 1) }
     if (months.length > 0) {
-      const { data } = await supabaseAdmin.from("analytics_channel_costs").select("channel, month, ads, platform_fee, sponsor_products, media").in("month", months)
-      channelCosts = (data || []).map((r: any) => ({
-        channel: r.channel, month: r.month,
-        ads: parseJson(r.ads), platformFee: parseJson(r.platform_fee), sponsorProducts: parseJson(r.sponsor_products), media: parseJson(r.media),
-      }))
+      const fetched = await fetchCosts(months)
+      channelCosts = fetched.channelCosts
     }
   }
 
-  return finalRows.map(r => {
+  const channelRows = finalRows.map(r => {
     const revenue = r.revenue; const margin = r.margin
     let gpm2 = margin
     if (isChannelGroup) {
       r.monthly_data.forEach((monthRow: any) => {
         const mRev = parseFloat(monthRow.revenue || "0")
-        const ratio = getDaysInMonth(monthRow.month) > 0 ? getDaysInRange(startDate, endDate, monthRow.month) / getDaysInMonth(monthRow.month) : 0
-        channelCosts.filter(c => c.channel === r.name && c.month === monthRow.month).forEach(c => {
-          ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-            const v = c[key]; if (v) gpm2 -= v.type === "amount" ? (v.value || 0) * ratio : (mRev * (v.value || 0)) / 100
-          })
-        })
+        const cc = computeChCost(channelCosts, r.name, monthRow.month, mRev, startDate, endDate, monthRow.source_code)
+        gpm2 -= cc
       })
     }
 
     let projected_revenue = revenue; let projected_margin = margin; let projected_gpm2 = gpm2
-    const end = new Date(endDate); const now = new Date()
-    const isCurrentMonth = end.getFullYear() === now.getFullYear() && end.getMonth() === now.getMonth()
-    if (isCurrentMonth) {
-      const totalDaysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-      const daysElapsed = end.getDate()
-      const projectionRatio = daysElapsed > 0 ? totalDaysInMonth / daysElapsed : 1
-      projected_revenue = revenue * projectionRatio
-      projected_margin = margin * projectionRatio
+    const projFactor = getProjectionFactor(startDate, endDate)
+    if (projFactor > 1) {
+      projected_revenue = revenue * projFactor
+      projected_margin = margin * projFactor
       if (isChannelGroup) {
         projected_gpm2 = projected_margin
         r.monthly_data.forEach((monthRow: any) => {
-          channelCosts.filter(c => c.channel === r.name && c.month === monthRow.month).forEach(c => {
-            ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-              const v = c[key]; if (v) projected_gpm2 -= v.type === "amount" ? (v.value || 0) : (projected_revenue * (v.value || 0)) / 100
-            })
-          })
+          // projected: amount type không nhân ratio (full month budget)
+          const cc = computeChCost(channelCosts, r.name, monthRow.month, projected_revenue, startDate, endDate, monthRow.source_code, true)
+          projected_gpm2 -= cc
         })
       } else {
-        // Intel pattern: op_cost là fixed, chỉ scale margin → projected_gpm2 = projected_margin - opCostFixed
         const opCostFixed = margin - gpm2
         projected_gpm2 = projected_margin - opCostFixed
       }
@@ -139,8 +146,11 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
       name: r.name, revenue, projected_revenue, margin, projected_margin, units: r.units,
       margin_percent: revenue > 0 ? (margin / revenue) * 100 : 0,
       gpm2, projected_gpm2, gpm2_percent: revenue > 0 ? (gpm2 / revenue) * 100 : 0,
+      ...(withMarket ? { revenueVn: r.revenueVn || 0, revenueUs: r.revenueUs || 0 } : {}),
     }
   })
+
+  return channelRows
 }
 
 export async function GET(req: NextRequest) {
@@ -153,15 +163,21 @@ export async function GET(req: NextRequest) {
   const dateColumn     = searchParams.get("dateColumn") || "fulfiled_date"
   const groupBy        = searchParams.get("groupBy") || "channel"
   const comparisonType = searchParams.get("comparisonType") || "none"
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
+  const includeOpsCustomers = searchParams.get("includeOpsCustomers") === "1"
   if (!startDate || !endDate) return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
 
   const advancedFilter = getBODFilters(searchParams)
 
   try {
-    const key = `b2c-perf:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}`
+    const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
+    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
+    const key = `b2c-perf:v3:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
-      const current = await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn)
-      if (comparisonType === "none") return current
+      if (comparisonType === "none") {
+        return await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx)
+      }
 
       const start = new Date(startDate); const end = new Date(endDate)
       let prevStart: Date, prevEnd: Date
@@ -173,9 +189,12 @@ export async function GET(req: NextRequest) {
         prevStart = new Date(start.getFullYear() - 1, start.getMonth(), start.getDate())
         prevEnd = new Date(end.getFullYear() - 1, end.getMonth(), end.getDate())
       }
-      const previous = await fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn)
-      return current.map(curr => ({ ...curr, prev_revenue: previous.find(p => p.name === curr.name)?.revenue || 0 }))
-    }, QUERY_TTL_MIN)
+      const [current, previous] = await Promise.all([
+        fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx),
+        fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn, sfx),
+      ])
+      return current.map((curr: any) => ({ ...curr, prev_revenue: previous.find((p: any) => p.name === curr.name)?.revenue || 0 }))
+    }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

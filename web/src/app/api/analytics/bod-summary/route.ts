@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache, getStrategicSettingsHash } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginData } from "@/lib/bod-data"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 
 // Port intel bod-summary: summary (rev/margin/gpm2 + %) lấy từ fetchBODGroupMarginData (gồm op-cost);
 // total_units/total_cogs từ raw query; total_target_revenue prorate; previous_period + previous_year.
@@ -16,6 +17,8 @@ export async function GET(req: NextRequest) {
   const endDate    = searchParams.get("endDate")
   const dateColumn = searchParams.get("dateColumn") || "fulfiled_date"
   const extraFilters = getBODFilters(searchParams)
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
@@ -25,7 +28,7 @@ export async function GET(req: NextRequest) {
     const source = getAnalyticsSource(dateColumn)
     const fetch3hkRev = async (sd: string, ed: string) => {
       const rows = await queryAnalytics<{ r: string }>(
-        `SELECT SUM(CASE WHEN TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) ILIKE '3HKDATAPOOL') THEN f.${source.revenueCol} ELSE 0 END) as r
+        `SELECT SUM(CASE WHEN TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL') THEN f.${source.revenueCol} ELSE 0 END) as r
          FROM ${source.mainTable} f WHERE ${getDateFilter(sd, ed, source.dateCol)} ${extraFilters}`
       )
       return parseFloat(rows[0]?.r || "0")
@@ -42,18 +45,19 @@ export async function GET(req: NextRequest) {
 
     // Cache 12h (data gohub_dw đổi 1 lần/ngày). Trước: ~20 query, nhiều cái await TUẦN TỰ → 25-50s.
     // Nay gom HẾT query độc lập vào 1 Promise.all (giảm critical path) + cache toàn bộ payload.
-    const key = `bod-summary:${dateColumn}:${startDate}:${endDate}:${extraFilters}`
+    const stratHash = await getStrategicSettingsHash()
+    const key = `bod-summary2:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
       const [groupResult, rawRows, cur3hk, targetData, prev, prevYear, prev3hk, ly3hk] = await Promise.all([
-        fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters),
+        fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps),
         queryAnalytics<Record<string, string>>(
           `SELECT SUM(f.${source.cogsCol}) as total_cogs, SUM(f.${source.quantityCol}) as total_units
            FROM ${source.mainTable} f WHERE ${getDateFilter(startDate, endDate, source.dateCol)} ${extraFilters}`
         ),
         fetch3hkRev(startDate, endDate),
         getTargetSummary(startDate, endDate),
-        fetchBODGroupMarginData(iso(prevStart), iso(prevEnd), dateColumn, extraFilters),
-        fetchBODGroupMarginData(iso(lyStart), iso(lyEnd), dateColumn, extraFilters),
+        fetchBODGroupMarginData(iso(prevStart), iso(prevEnd), dateColumn, extraFilters, includeShip, includeInternalOps),
+        fetchBODGroupMarginData(iso(lyStart), iso(lyEnd), dateColumn, extraFilters, includeShip, includeInternalOps),
         fetch3hkRev(iso(prevStart), iso(prevEnd)),
         fetch3hkRev(iso(lyStart), iso(lyEnd)),
       ])
@@ -67,8 +71,13 @@ export async function GET(req: NextRequest) {
       ;(prev.summary as any).total_3hk_contribution = prev.summary.total_revenue > 0 ? (prev3hk / prev.summary.total_revenue) * 100 : 0
       ;(prevYear.summary as any).total_3hk_contribution = prevYear.summary.total_revenue > 0 ? (ly3hk / prevYear.summary.total_revenue) * 100 : 0
 
-      return { ...current, previous_period: prev.summary, previous_year: prevYear.summary }
-    }, QUERY_TTL_MIN)
+      return {
+        ...current,
+        projection_factor: getProjectionFactor(startDate, endDate),
+        previous_period: prev.summary,
+        previous_year: prevYear.summary,
+      }
+    }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

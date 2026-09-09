@@ -10,7 +10,7 @@ const ANALYTICS_ROLES = new Set(["admin", "creator", "manager", "bod", "staff", 
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !ANALYTICS_ROLES.has(session.user?.role as string)) {
+  if (!session || !ANALYTICS_ROLES.has(session.user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -24,9 +24,10 @@ export async function GET(req: NextRequest) {
   const metrics    = metricsRaw.split(",").map(s => s.trim()).filter(Boolean)
   const limitRaw   = sp.get("limit")
   const limit      = limitRaw ? parseInt(limitRaw) : undefined
+  const platform   = (sp.get("platform") || undefined) as "web" | "app" | undefined
 
   try {
-    const report = await runGA4Report({ siteId, startDate, endDate, dimensions, metrics, limit })
+    const report = await runGA4Report({ siteId, startDate, endDate, dimensions, metrics, limit, platform })
     return NextResponse.json(report)
   } catch (err: any) {
     console.error("[analytics/ga4]", err.message)

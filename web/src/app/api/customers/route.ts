@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { getDimCustomerCols } from "@/lib/dim-schema"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -10,14 +11,18 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q") || ""
 
   try {
+    // Dùng column name thực tế để chống lỗi khi dim_customer đổi cấu trúc
+    const { nameCol } = await getDimCustomerCols()
+
     let sql: string
     const params: unknown[] = []
 
+    // Chỉ hiện B2B customers (có price_list_name) — B2C cá nhân (354k rows, CUZN...) loại ra
     if (!q) {
-      sql = "SELECT name FROM dim_customer WHERE name IS NOT NULL AND name != '' LIMIT 50"
+      sql = `SELECT ${nameCol} AS name FROM dim_customer WHERE ${nameCol} IS NOT NULL AND ${nameCol} != '' AND price_list_name IS NOT NULL ORDER BY ${nameCol} LIMIT 50`
     } else {
       params.push(`%${q}%`)
-      sql = "SELECT name FROM dim_customer WHERE name IS NOT NULL AND name != '' AND name ILIKE $1 LIMIT 100"
+      sql = `SELECT ${nameCol} AS name FROM dim_customer WHERE ${nameCol} IS NOT NULL AND ${nameCol} != '' AND price_list_name IS NOT NULL AND ${nameCol} ILIKE $1 ORDER BY ${nameCol} LIMIT 100`
     }
 
     const rows = await queryAnalytics<{ name: string }>(sql, params)

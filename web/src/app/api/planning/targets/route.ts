@@ -3,6 +3,10 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
+import { flushAnalyticsCache } from "@/lib/analytics-helpers"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 // ── Quarter helpers ─────────────────────────────────────────────────────────
 function getQuarterMonths(quarter: string): string[] {
@@ -43,10 +47,10 @@ export async function GET(req: NextRequest) {
          TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') as month,
          SUM(f.fulfilled_revenue_amount_vnd) as revenue,
          SUM(f.gross_profit_vnd) as margin,
-         SUM(CASE WHEN v.vendor ILIKE '3HKDATAPOOL' THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as revenue_3hk
+         SUM(CASE WHEN REPLACE(UPPER(TRIM(v.vendor)),' ','') = '3HKDATAPOOL' THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as revenue_3hk
        FROM fact_fulfillment_revenue f
        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-       LEFT JOIN dim_sku v ON f.sku = v.sku
+       LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku
        WHERE TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') IN ('${prevMonths.join("','")}')
        GROUP BY 1, 2, 3`
     )
@@ -147,7 +151,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!["admin", "creator"].includes(session.user?.role as string)) {
+  if (!(await canWrite(session, "targets", WRITE_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -175,6 +179,8 @@ export async function POST(req: NextRequest) {
       .upsert(rows, { onConflict: "month,channel", ignoreDuplicates: false })
 
     if (error) throw new Error(error.message)
+    // Target thay đổi → xoá cache analytics (targets-summary + KPI cache 12h).
+    await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ ok: true })
   } catch (err: any) {
     console.error("[planning/targets POST]", err.message)

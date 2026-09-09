@@ -2,11 +2,13 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useSession, signOut }                        from "next-auth/react"
-import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen, FileSpreadsheet } from "lucide-react"
+import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen, FileSpreadsheet, Paperclip, FileText, Image as ImageIcon } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
 import ChatChart from "@/components/chat-chart"
+import { useToast } from "@/components/toast"
+import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
 
 // sessionStorage keys
 const SS_CONV_ID      = "gohub_conv_id"
@@ -23,6 +25,24 @@ interface Conversation {
 
 interface StoredMessage extends Message {
   agent?: { id: string; name: string }
+  fileName?: string  // tên file đính kèm (hiển thị chip trên bong bóng user), không lưu DB
+}
+
+// ─── Đính kèm ảnh/file (s190+3) ────────────────────────────────────────────────
+const ATTACH_ACCEPT = ".pdf,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.webp,.gif,.xlsx,.xls,.csv,.json,.txt,.md,.ts,.tsx,.js,.jsx,.py,.sql,.yaml,.yml,.toml,.xml,.html,.sh"
+const ATTACH_MAX_MB    = 20
+const ATTACH_MAX_FILES = 5
+
+function isImageFile(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() || ""
+  return ["png","jpg","jpeg","webp","gif","bmp"].includes(ext)
+}
+
+function attachFileIcon(name: string) {
+  if (isImageFile(name)) return <ImageIcon size={13} />
+  const ext = name.split(".").pop()?.toLowerCase() || ""
+  if (["xlsx","xls","csv"].includes(ext)) return <FileSpreadsheet size={13} />
+  return <FileText size={13} />
 }
 
 const AGENT_COLORS: Record<string, string> = {
@@ -33,6 +53,7 @@ const AGENT_COLORS: Record<string, string> = {
   "gap-analysis":  "bg-purple-100 text-purple-700",
   "tao-template":  "bg-emerald-100 text-emerald-700",
   "bi-analyst":    "bg-indigo-100 text-indigo-700",
+  "data-explorer": "bg-slate-200 text-slate-700",
 }
 
 // ─── Chart helpers ────────────────────────────────────────────────────────────
@@ -62,6 +83,7 @@ function extractTemplateAction(text: string): Record<string, any> | null {
 }
 
 function TemplateDownloadButton({ action }: { action: Record<string, any> }) {
+  const toast = useToast()
   const [loading, setLoading] = useState(false)
   const [done,    setDone]    = useState(false)
 
@@ -126,7 +148,7 @@ function TemplateDownloadButton({ action }: { action: Record<string, any> }) {
       const res = await fetch("/api/admin/template", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       })
-      if (!res.ok) { alert("Hiếu đang fix, vui lòng đợi"); return }
+      if (!res.ok) { toast.error("Hiếu đang fix, vui lòng đợi"); return }
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement("a")
@@ -136,7 +158,7 @@ function TemplateDownloadButton({ action }: { action: Record<string, any> }) {
       URL.revokeObjectURL(url)
       setDone(true)
     } catch {
-      alert("Hiếu đang fix, vui lòng đợi")
+      toast.error("Hiếu đang fix, vui lòng đợi")
     } finally {
       setLoading(false)
     }
@@ -154,6 +176,82 @@ function TemplateDownloadButton({ action }: { action: Record<string, any> }) {
       <FileSpreadsheet size={15} />
       {loading ? "Đang tạo file..." : done ? "Đã tải xuống" : "Tải file template Excel"}
     </button>
+  )
+}
+
+// ─── Markdown renderer (dùng chung, hoisted để BeGauMsgContent dùng được) ───────────────────────────
+function renderMarkdown(text: string) {
+  return (
+    <div className="markdown-body">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+        p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+        strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-slate-100">{children}</strong>,
+        em:     ({ children }) => <em className="italic">{children}</em>,
+        ul:     ({ children }) => <ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
+        ol:     ({ children }) => <ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
+        li:     ({ children }) => <li className="text-gray-700">{children}</li>,
+        h1:     ({ children }) => <p className="font-bold text-base mb-1">{children}</p>,
+        h2:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
+        h3:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
+        hr:     () => <hr className="my-2 border-gray-300 dark:border-slate-600" />,
+        code:   ({ children }) => <code className="bg-gray-200 dark:bg-slate-700 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
+        table:  ({ children }) => <div className="overflow-x-auto mb-3 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm"><table className="text-xs border-collapse w-full">{children}</table></div>,
+        thead:  ({ children }) => <thead className="bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">{children}</thead>,
+        tbody:  ({ children }) => <tbody className="divide-y divide-gray-100">{children}</tbody>,
+        tr:     ({ children }) => <tr className="hover:bg-gray-50 transition-colors">{children}</tr>,
+        th:     ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-gray-700 dark:text-slate-200">{children}</th>,
+        td:     ({ children }) => <td className="px-3 py-2 text-gray-600 dark:text-slate-300">{children}</td>,
+      }}>
+        {text}
+      </ReactMarkdown>
+    </div>
+  )
+}
+
+// ─── Nội dung 1 message assistant — tách component để có contentRef riêng (cần cho xuất PDF) ────────
+function BeGauMsgContent({ msg, streaming, isLast }: { msg: StoredMessage; streaming: boolean; isLast: boolean }) {
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // Chưa có nội dung (agent bi-analyst/data-explorer đang chạy function-calling 10-30s)
+  // → hiện hiệu ứng "đang trả lời" thay vì bong bóng rỗng (tránh cảm giác đơ).
+  if (!msg.content) {
+    if (streaming && isLast) {
+      return (
+        <div className="flex items-center gap-2 py-0.5">
+          <div className="flex gap-1">
+            {[0, 1, 2].map(k => (
+              <span key={k} className="w-1.5 h-1.5 bg-brand-400 rounded-full animate-bounce"
+                style={{ animationDelay: `${k * 0.15}s`, animationDuration: "0.8s" }} />
+            ))}
+          </div>
+          <span className="text-xs text-gray-400">{(msg.agent?.name || "Bé Gấu")} đang trả lời…</span>
+        </div>
+      )
+    }
+    return <span className="text-xs text-gray-400 italic">Không có nội dung trả lời.</span>
+  }
+
+  const display = stripExportHelperBlocks(msg.content)
+  const chartResult = (msg.agent?.id === "bi-analyst" || msg.agent?.id === "data-explorer")
+    ? extractChartData(display) : null
+
+  return (
+    <div>
+      <div ref={contentRef}>
+        {chartResult ? (
+          <>
+            {chartResult.before && renderMarkdown(chartResult.before)}
+            <ChatChart data={chartResult.chart} />
+            {chartResult.after && renderMarkdown(chartResult.after)}
+          </>
+        ) : renderMarkdown(display)}
+        {streaming && isLast && (
+          <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
+        )}
+      </div>
+      {/* Ẩn nút xuất khi CHÍNH message này đang stream dở (marker có thể chưa đóng \`\`\` xong) */}
+      {!(streaming && isLast) && <ExportBar content={msg.content} contentRef={contentRef} apiEndpoint="/api/chat/export" />}
+    </div>
   )
 }
 
@@ -203,7 +301,7 @@ function groupConversations(convs: Conversation[]) {
 export default function ChatbotPage() {
   const { data: session } = useSession()
   const userName = session?.user?.name || ""
-  const userRole = (session?.user as any)?.role || "staff"
+  const userRole = session?.user?.role || "staff"
 
   const [conversations,  setConversations] = useState<Conversation[]>([])
   const [activeConvId,   setActiveConvId]  = useState<string | null>(null)
@@ -216,9 +314,57 @@ export default function ChatbotPage() {
   const [mobileDrawer,   setMobileDrawer]  = useState(false)
   const [chatSidebar,    setChatSidebar]   = useState(true)   // desktop: show/hide conv list
 
+  // Đính kèm ảnh/file (s190+3)
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([])
+  const [fileError,     setFileError]     = useState("")
+  const [imgPreviews,   setImgPreviews]   = useState<Map<string, string>>(new Map())
+  const [dragging,      setDragging]      = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const bottomRef   = useRef<HTMLDivElement>(null)
   const initialized = useRef(false)
   const msgCountRef = useRef(0)  // track message count for isFirst detection
+
+  const addFiles = useCallback((incoming: FileList | File[]) => {
+    const newFiles  = Array.from(incoming)
+    const oversized = newFiles.filter(f => f.size > ATTACH_MAX_MB * 1024 * 1024)
+    const valid     = newFiles.filter(f => f.size <= ATTACH_MAX_MB * 1024 * 1024)
+
+    setFileError(oversized.length ? `File quá lớn (>${ATTACH_MAX_MB}MB): ${oversized.map(f => f.name).join(", ")}` : "")
+    if (!valid.length) return
+
+    setAttachedFiles(prev => [...prev, ...valid].slice(-ATTACH_MAX_FILES))
+    valid.filter(f => isImageFile(f.name)).forEach(f => {
+      const url = URL.createObjectURL(f)
+      setImgPreviews(prev => new Map(prev).set(f.name, url))
+    })
+  }, [])
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) addFiles(e.target.files)
+    e.target.value = ""
+  }, [addFiles])
+
+  const removeAttachedFile = useCallback((name: string) => {
+    setAttachedFiles(prev => prev.filter(f => f.name !== name))
+    setImgPreviews(prev => { const m = new Map(prev); m.delete(name); return m })
+  }, [])
+
+  // Paste ảnh từ clipboard (Ctrl+V)
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files || []).filter(f => f.type.startsWith("image/"))
+      if (files.length) { e.preventDefault(); addFiles(files) }
+    }
+    window.addEventListener("paste", onPaste)
+    return () => window.removeEventListener("paste", onPaste)
+  }, [addFiles])
+
+  // Giải phóng object URL khi rời trang
+  useEffect(() => () => {
+    imgPreviews.forEach(url => URL.revokeObjectURL(url))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const busy = loading || streaming
 
@@ -263,12 +409,14 @@ export default function ChatbotPage() {
     } catch { return null }
   }, [])
 
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (): Promise<Conversation[]> => {
     try {
       const res  = await fetch("/api/chat/conversations")
       const data = await res.json()
-      setConversations(Array.isArray(data) ? data : [])
-    } catch {}
+      const convs = Array.isArray(data) ? data : []
+      setConversations(convs)
+      return convs
+    } catch { return [] }
   }, [])
 
   const loadMessages = useCallback(async (convId: string) => {
@@ -293,29 +441,33 @@ export default function ChatbotPage() {
     if (!userName || initialized.current) return
     initialized.current = true
 
-    try {
-      setChatSidebar(localStorage.getItem(LS_CHAT_SIDEBAR) !== "0")
-    } catch {}
+    try { setChatSidebar(localStorage.getItem(LS_CHAT_SIDEBAR) !== "0") } catch {}
 
-    loadConversations()
+    void (async () => {
+      // 1. Restore sessionStorage (same tab/session — fastest path)
+      try {
+        const ssUser = sessionStorage.getItem(SS_CONV_USER)
+        const ssId   = sessionStorage.getItem(SS_CONV_ID)
+        const ssMsgs = sessionStorage.getItem(SS_MESSAGES)
+        if (ssUser === userName && ssId && ssMsgs) {
+          const msgs = JSON.parse(ssMsgs) as StoredMessage[]
+          setMessages(msgs)
+          setActiveConvId(ssId)
+          msgCountRef.current = msgs.length
+          loadConversations()  // load list for sidebar in background
+          return
+        }
+      } catch {}
 
-    // Restore session if same user
-    try {
-      const ssUser = sessionStorage.getItem(SS_CONV_USER)
-      const ssId   = sessionStorage.getItem(SS_CONV_ID)
-      const ssMsgs = sessionStorage.getItem(SS_MESSAGES)
-
-      if (ssUser === userName && ssId && ssMsgs) {
-        const msgs = JSON.parse(ssMsgs) as StoredMessage[]
-        setMessages(msgs)
-        setActiveConvId(ssId)
-        msgCountRef.current = msgs.length
-        return
+      // 2. No sessionStorage → load from Supabase + auto-select last conversation
+      const convs = await loadConversations()
+      if (convs.length > 0) {
+        setActiveConvId(convs[0].id)
+        await loadMessages(convs[0].id)
       }
-    } catch {}
-
-    // No valid session — start fresh (don't auto-create until first message)
-  }, [userName, loadConversations])
+      // else: start fresh (don't auto-create until first message)
+    })()
+  }, [userName, loadConversations, loadMessages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -360,7 +512,8 @@ export default function ChatbotPage() {
   // ─── Send ─────────────────────────────────────────────────────────────────
 
   const send = async (content: string) => {
-    if (!content.trim() || busy) return
+    const text = content.trim()
+    if ((!text && attachedFiles.length === 0) || busy) return
 
     // Ensure conversation exists
     let convId = activeConvId
@@ -371,11 +524,20 @@ export default function ChatbotPage() {
     }
 
     const isFirstMsg = msgCountRef.current === 0
+    const fileNames  = attachedFiles.map(f => f.name).join(", ")
 
-    const userMsg: StoredMessage = { role: "user", content }
+    const userMsg: StoredMessage = {
+      role:     "user",
+      content:  text || `[Gửi ${attachedFiles.length} file: ${fileNames}]`,
+      fileName: fileNames || undefined,
+    }
     const next = [...messages, userMsg]
     setMessages(next)
     setInput("")
+    const filesToSend = [...attachedFiles]
+    setAttachedFiles([])
+    setImgPreviews(new Map())
+    setFileError("")
     setLoading(true)
     setAgentName(null)
     msgCountRef.current = next.length
@@ -387,11 +549,21 @@ export default function ChatbotPage() {
     let currentAgent: { id: string; name: string } | undefined
 
     try {
-      const res = await fetch("/api/chat", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ messages: next.map(m => ({ role: m.role, content: m.content })), userName }),
-      })
+      const serializedMsgs = next.map(m => ({ role: m.role, content: m.content }))
+      let res: Response
+      if (filesToSend.length > 0) {
+        const form = new FormData()
+        form.append("messages", JSON.stringify(serializedMsgs))
+        form.append("userName", userName)
+        filesToSend.forEach((f, i) => form.append(`file_${i}`, f))
+        res = await fetch("/api/chat", { method: "POST", body: form })
+      } else {
+        res = await fetch("/api/chat", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ messages: serializedMsgs, userName }),
+        })
+      }
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Lỗi không xác định" }))
@@ -450,7 +622,7 @@ export default function ChatbotPage() {
 
       // Update conversation title in list if first message
       if (isFirstMsg) {
-        const title = content.slice(0, 50) + (content.length > 50 ? "…" : "")
+        const title = userMsg.content.slice(0, 50) + (userMsg.content.length > 50 ? "…" : "")
         setConversations(prev => prev.map(c =>
           c.id === convId ? { ...c, title, updated_at: new Date().toISOString() } : c
         ))
@@ -464,7 +636,7 @@ export default function ChatbotPage() {
       }
 
     } catch (e: any) {
-      const errMsg = userRole === "admin" ? `Lỗi: ${e.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
+      const errMsg = (userRole === "admin" || userRole === "creator") ? `Lỗi: ${e.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
       if (streamStarted) {
         setMessages(prev => {
           const u = [...prev]
@@ -490,7 +662,7 @@ export default function ChatbotPage() {
       <div className="p-3 border-b border-gray-200">
         <button
           onClick={() => { startNew(); onSelect?.() }}
-          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-700 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 transition-colors"
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-800/30 border border-brand-200 dark:border-brand-800 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-800/50 transition-colors"
         >
           <Plus size={15} />
           Cuộc trò chuyện mới
@@ -511,8 +683,8 @@ export default function ChatbotPage() {
                   onClick={() => { switchConversation(conv); onSelect?.() }}
                   className={`group flex items-start gap-1 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
                     conv.id === activeConvId
-                      ? "bg-brand-100 text-brand-800"
-                      : "hover:bg-gray-100 text-gray-700"
+                      ? "bg-brand-100 dark:bg-brand-800/40 text-brand-800 dark:text-brand-200"
+                      : "hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-300"
                   }`}
                 >
                   <MessageSquare size={13} className="flex-shrink-0 mt-0.5 text-gray-400" />
@@ -547,14 +719,14 @@ export default function ChatbotPage() {
       {/* ── Conversation list — desktop sidebar / mobile drawer ── */}
       <div className={`
         fixed md:relative inset-y-0 left-0 z-40
-        w-64 bg-gray-50 border-r border-gray-200
+        w-64 bg-gray-50 dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800
         flex flex-col flex-shrink-0
         transform transition-all duration-200 ease-in-out
         ${mobileDrawer ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         ${!chatSidebar ? "md:w-0 md:border-0 md:overflow-hidden" : "md:w-56"}
       `}>
         {/* Mobile drawer header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 md:hidden">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-slate-800 md:hidden">
           <span className="text-sm font-semibold text-gray-700">Lịch sử trò chuyện</span>
           <button onClick={() => setMobileDrawer(false)} className="p-1 text-gray-400 hover:text-gray-600">
             <X size={18} />
@@ -581,9 +753,9 @@ export default function ChatbotPage() {
               onClick={toggleChatSidebar}
               title={chatSidebar ? "Thu gọn lịch sử" : "Mở lịch sử trò chuyện"}
               className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5
-                text-xs font-medium text-gray-500
-                bg-white border border-gray-200 rounded-lg shadow-sm
-                hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50
+                text-xs font-medium text-gray-500 dark:text-slate-400
+                bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm
+                hover:text-brand-600 dark:hover:text-brand-300 hover:border-brand-300 hover:bg-brand-50 dark:hover:bg-slate-700
                 transition-all duration-150"
             >
               {chatSidebar
@@ -592,19 +764,37 @@ export default function ChatbotPage() {
               }
             </button>
             <Sparkles size={20} className="text-brand-600" />
-            <h1 className="text-lg md:text-xl font-bold text-gray-900">Bé Gấu</h1>
+            <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-slate-100">Bé Gấu</h1>
           </div>
           <div className="flex items-center gap-2">
-            {agentName && (
-              <span className="text-xs text-gray-400 animate-pulse hidden sm:block">
-                {agentName} đang xử lý...
+            {busy && (
+              <span className="flex items-center gap-1.5 text-xs text-brand-500">
+                <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-pulse" />
+                {agentName ? `${agentName} đang trả lời…` : "Đang xử lý…"}
               </span>
             )}
           </div>
         </div>
 
         {/* Chat container */}
-        <div className="flex-1 bg-gray-50/80 border border-gray-200 rounded-2xl flex flex-col overflow-hidden min-h-0 shadow-sm">
+        <div
+          className="relative flex-1 bg-gray-50/80 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 rounded-2xl flex flex-col overflow-hidden min-h-0 shadow-sm"
+          onDragOver={e => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false) }}
+          onDrop={e => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}
+        >
+          {/* Drag overlay */}
+          {dragging && (
+            <div className="absolute inset-0 z-20 bg-brand-600/10 dark:bg-brand-400/10 border-4 border-dashed border-brand-400 rounded-2xl flex items-center justify-center pointer-events-none">
+              <div className="text-brand-600 dark:text-brand-300 text-lg font-bold flex flex-col items-center gap-2">
+                <Paperclip size={32} />
+                Thả file vào đây
+              </div>
+            </div>
+          )}
+          {/* Hidden file input */}
+          <input ref={fileInputRef} type="file" accept={ATTACH_ACCEPT} multiple className="hidden" onChange={handleFileSelect} />
+
           <div className="flex-1 overflow-y-auto p-3 md:p-5 space-y-4">
 
             {/* Empty state */}
@@ -613,7 +803,7 @@ export default function ChatbotPage() {
                 <div className="w-12 h-12 bg-brand-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-brand-600/25">
                   <Sparkles size={22} className="text-white" />
                 </div>
-                <p className="font-semibold text-gray-900 text-base mb-1">Bé Gấu</p>
+                <p className="font-semibold text-gray-900 dark:text-slate-100 text-base mb-1">Bé Gấu</p>
                 <p className="text-sm text-gray-500 mb-7 max-w-sm leading-relaxed">
                   Tìm sản phẩm, tra cứu SKU & giá, xem catalog NCC, và phân tích doanh thu/đơn hàng.
                 </p>
@@ -624,7 +814,7 @@ export default function ChatbotPage() {
                       <div className="grid grid-cols-2 gap-2">
                         {group.prompts.map(q => (
                           <button key={q} onClick={() => send(q)}
-                            className="text-left px-3.5 py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-brand-300 hover:text-brand-700 hover:bg-brand-50/50 transition-all shadow-sm">
+                            className="text-left px-3.5 py-2.5 text-sm text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl hover:border-brand-300 hover:text-brand-700 dark:hover:text-brand-300 hover:bg-brand-50/50 dark:hover:bg-slate-700/50 transition-all shadow-sm">
                             {q}
                           </button>
                         ))}
@@ -649,59 +839,22 @@ export default function ChatbotPage() {
                       {msg.agent.name}
                     </span>
                   )}
+                  {msg.role === "user" && msg.fileName && (
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] text-brand-100 bg-brand-700/60 rounded-lg self-end">
+                      {attachFileIcon(msg.fileName)}
+                      {msg.fileName}
+                    </span>
+                  )}
                   <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                     msg.role === "user"
                       ? "bg-brand-600 text-white rounded-tr-sm shadow-sm"
-                      : "bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm"
+                      : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-slate-100 rounded-tl-sm shadow-sm"
                   }`}>
                     {msg.role === "user" ? (
                       <span className="whitespace-pre-wrap">{msg.content}</span>
-                    ) : (() => {
-                      // Extract chart block from bi-analyst messages
-                      const chartResult = msg.agent?.id === "bi-analyst"
-                        ? extractChartData(msg.content) : null
-
-                      const renderMarkdown = (text: string) => (
-                        <div className="markdown-body">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-                            p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                            strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
-                            em:     ({ children }) => <em className="italic">{children}</em>,
-                            ul:     ({ children }) => <ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
-                            ol:     ({ children }) => <ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
-                            li:     ({ children }) => <li className="text-gray-700">{children}</li>,
-                            h1:     ({ children }) => <p className="font-bold text-base mb-1">{children}</p>,
-                            h2:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
-                            h3:     ({ children }) => <p className="font-semibold mb-1">{children}</p>,
-                            hr:     () => <hr className="my-2 border-gray-300" />,
-                            code:   ({ children }) => <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
-                            table:  ({ children }) => <div className="overflow-x-auto mb-3 rounded-lg border border-gray-200 shadow-sm"><table className="text-xs border-collapse w-full">{children}</table></div>,
-                            thead:  ({ children }) => <thead className="bg-gray-100 text-gray-600">{children}</thead>,
-                            tbody:  ({ children }) => <tbody className="divide-y divide-gray-100">{children}</tbody>,
-                            tr:     ({ children }) => <tr className="hover:bg-gray-50 transition-colors">{children}</tr>,
-                            th:     ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-gray-700">{children}</th>,
-                            td:     ({ children }) => <td className="px-3 py-2 text-gray-600">{children}</td>,
-                          }}>
-                            {text}
-                          </ReactMarkdown>
-                        </div>
-                      )
-
-                      return (
-                        <div>
-                          {chartResult ? (
-                            <>
-                              {chartResult.before && renderMarkdown(chartResult.before)}
-                              <ChatChart data={chartResult.chart} />
-                              {chartResult.after && renderMarkdown(chartResult.after)}
-                            </>
-                          ) : renderMarkdown(msg.content)}
-                          {streaming && i === messages.length - 1 && (
-                            <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
-                          )}
-                        </div>
-                      )
-                    })()}
+                    ) : (
+                      <BeGauMsgContent msg={msg} streaming={streaming} isLast={i === messages.length - 1} />
+                    )}
                     {/* Template download button for tao-template agent */}
                     {msg.role === "assistant" && msg.agent?.id === "tao-template" && !streaming && (() => {
                       const action = extractTemplateAction(msg.content)
@@ -723,7 +876,7 @@ export default function ChatbotPage() {
                 <div className="w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-600/20">
                   <Bot size={14} className="text-white" />
                 </div>
-                <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
                   <div className="flex gap-1.5 items-center">
                     {[0, 1, 2].map(i => (
                       <span key={i} className="w-1.5 h-1.5 bg-brand-300 rounded-full animate-bounce"
@@ -737,15 +890,54 @@ export default function ChatbotPage() {
           </div>
 
           {/* Input */}
-          <div className="border-t border-gray-200 bg-white p-3 flex-shrink-0 rounded-b-2xl">
+          <div className="border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 flex-shrink-0 rounded-b-2xl">
+            {/* Chip file đã đính kèm */}
+            {attachedFiles.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {attachedFiles.map(f => {
+                  const preview = imgPreviews.get(f.name)
+                  return (
+                    <div key={f.name} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-50 dark:bg-brand-800/20 border border-brand-200 dark:border-brand-800 rounded-xl max-w-[220px]">
+                      {preview
+                        ? <img src={preview} alt={f.name} className="w-6 h-6 rounded object-cover shrink-0" />
+                        : <span className="text-brand-600 dark:text-brand-400 shrink-0">{attachFileIcon(f.name)}</span>
+                      }
+                      <span className="text-xs text-brand-700 dark:text-brand-300 truncate flex-1">{f.name}</span>
+                      <button type="button" onClick={() => removeAttachedFile(f.name)} className="text-brand-300 hover:text-red-500 transition-colors shrink-0">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )
+                })}
+                {attachedFiles.length >= ATTACH_MAX_FILES && (
+                  <span className="text-[10px] text-amber-500 self-center ml-1">Tối đa {ATTACH_MAX_FILES} file</span>
+                )}
+              </div>
+            )}
+            {fileError && <p className="text-xs text-red-500 mb-2 px-1">{fileError}</p>}
+
             <form onSubmit={e => { e.preventDefault(); send(input) }} className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={busy || attachedFiles.length >= ATTACH_MAX_FILES}
+                title={`Đính kèm ảnh/file (tối đa ${ATTACH_MAX_FILES}) · Hoặc kéo thả / paste ảnh`}
+                className="flex-shrink-0 w-10 h-10 flex items-center justify-center text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-800/20 border border-gray-200 dark:border-slate-700 rounded-xl transition-colors disabled:opacity-40 relative"
+              >
+                <Paperclip size={16} />
+                {attachedFiles.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                    {attachedFiles.length}
+                  </span>
+                )}
+              </button>
               <input
                 type="text" value={input} onChange={e => setInput(e.target.value)}
-                placeholder="Hỏi về sản phẩm, SKU, giá, catalog NCC, doanh thu/đơn..."
+                placeholder={attachedFiles.length > 0 ? `Hỏi gì về ${attachedFiles.length} file này?` : "Hỏi về sản phẩm, SKU, giá, catalog NCC, doanh thu/đơn..."}
                 disabled={busy}
-                className="flex-1 px-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-300 focus:bg-white disabled:opacity-60 transition"
+                className="flex-1 px-4 py-2.5 text-sm bg-gray-50 dark:bg-slate-800 dark:text-slate-100 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-300 focus:bg-white dark:focus:bg-slate-800 disabled:opacity-60 transition"
               />
-              <button type="submit" disabled={!input.trim() || busy}
+              <button type="submit" disabled={(!input.trim() && attachedFiles.length === 0) || busy}
                 className="px-4 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm">
                 <Send size={15} />
               </button>

@@ -55,7 +55,7 @@ function groupFromLetter(sku: string): { group: string; source: string } | null 
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!ANALYTICS_ROLES.has((session.user as any).role))
+  if (!ANALYTICS_ROLES.has(session.user.role))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   try {

@@ -1,7 +1,87 @@
 // Lark Bot API helpers
 import * as XLSX from "xlsx"
+import { supabaseAdmin } from "@/lib/supabase"
 
 const LARK_API = "https://open.larksuite.com/open-apis"
+
+// ─── OAuth user_access_token (cho phép đọc task cá nhân của creator) ─────────────
+const OAUTH_KEY = "lark_oauth_creator"
+
+interface LarkOAuthStore {
+  open_id?:            string
+  access_token:        string
+  refresh_token:       string
+  access_expires_at:   number   // ms
+  refresh_expires_at:  number   // ms
+}
+
+// Đổi authorization_code → token (OAuth v2)
+export async function exchangeLarkCode(code: string, redirectUri: string): Promise<any> {
+  const res = await fetch(`${LARK_API}/authen/v2/oauth/token`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify({
+      grant_type:    "authorization_code",
+      client_id:     process.env.LARK_APP_ID,
+      client_secret: process.env.LARK_APP_SECRET,
+      code,
+      redirect_uri:  redirectUri,
+    }),
+  })
+  return res.json()
+}
+
+// Lưu token vào app_settings (tính sẵn thời điểm hết hạn, trừ hao 60s)
+export async function saveLarkUserToken(tok: any, openId?: string): Promise<void> {
+  const now = Date.now()
+  const store: LarkOAuthStore = {
+    open_id:            openId,
+    access_token:       tok.access_token,
+    refresh_token:      tok.refresh_token,
+    access_expires_at:  now + ((tok.expires_in || 7200) - 60) * 1000,
+    refresh_expires_at: now + ((tok.refresh_token_expires_in || 2592000) - 60) * 1000,
+  }
+  await supabaseAdmin.from("app_settings").upsert(
+    { key: OAUTH_KEY, value: JSON.stringify(store), category: "lark_oauth" },
+    { onConflict: "key" }
+  )
+}
+
+// Trả access_token còn hạn (tự refresh nếu cần); null nếu chưa kết nối / refresh hết hạn.
+export async function getLarkUserToken(): Promise<string | null> {
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", OAUTH_KEY).maybeSingle()
+  if (!data?.value) return null
+  let store: LarkOAuthStore
+  try { store = JSON.parse(data.value) } catch { return null }
+
+  if (Date.now() < store.access_expires_at) return store.access_token
+  // Access hết hạn → refresh nếu refresh còn hạn
+  if (Date.now() >= store.refresh_expires_at || !store.refresh_token) return null
+  try {
+    const res = await fetch(`${LARK_API}/authen/v2/oauth/token`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        grant_type:    "refresh_token",
+        client_id:     process.env.LARK_APP_ID,
+        client_secret: process.env.LARK_APP_SECRET,
+        refresh_token: store.refresh_token,
+      }),
+    })
+    const tok = await res.json()
+    if (tok.code && tok.code !== 0) return null
+    if (!tok.access_token) return null
+    await saveLarkUserToken(tok, store.open_id)
+    return tok.access_token
+  } catch { return null }
+}
+
+// open_id của creator đã kết nối Lark cá nhân (để gán task assignee mà không cần env).
+export async function getLarkUserOpenId(): Promise<string | null> {
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", OAUTH_KEY).maybeSingle()
+  if (!data?.value) return null
+  try { return (JSON.parse(data.value) as LarkOAuthStore).open_id ?? null } catch { return null }
+}
 
 // Cache app_access_token (expires in ~2h, refresh 10 min before)
 let _token: string | null   = null
@@ -57,6 +137,14 @@ export async function replyLarkMessage(messageId: string, text: string) {
       content:  JSON.stringify({ text }),
     }),
   })
+}
+
+// DM trực tiếp đến 1 user Lark bằng open_id (LARK_CREATOR_USER_ID = open_id).
+// LƯU Ý: phải dùng receive_id_type=open_id (không phải user_id) vì ta truyền open_id.
+export async function sendLarkDM(openId: string, text: string): Promise<void> {
+  try {
+    await sendLarkMessage(openId, "open_id", text)
+  } catch { /* fire-and-forget — không block */ }
 }
 
 // Reply with Lark Interactive Card (có bảng) + đính kèm xlsx
@@ -168,6 +256,22 @@ export function splitTextAndTable(text: string): { preText: string; tableText: s
   const match = text.match(/([\s\S]*?)(\|.+\|[\s\S]+)/)
   if (!match) return null
   return { preText: match[1].trim(), tableText: match[2].trim() }
+}
+
+// Tự tra open_id của CHÍNH người vừa OAuth (dùng user_access_token, KHÔNG phải app token).
+// Lark OAuth v2 token exchange KHÔNG trả open_id trong response (khác giả định cũ) — phải gọi riêng
+// endpoint này mới có. Bug thật: oauth/callback trước đọc thẳng `tok.open_id` (luôn undefined) →
+// open_id KHÔNG BAO GIỜ được lưu vào lark_oauth_creator → mọi tính năng dựa vào getLarkUserOpenId()
+// (My Metrics real-time capture, gán task assignee...) coi như chưa kết nối dù đã OAuth xong.
+export async function getLarkSelfOpenId(userAccessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${LARK_API}/authen/v1/user_info`, {
+      headers: { "Authorization": `Bearer ${userAccessToken}` },
+    })
+    const data = await res.json()
+    if (data.code !== 0) return null
+    return data.data?.open_id ?? null
+  } catch { return null }
 }
 
 // Get user info by open_id (to get name)

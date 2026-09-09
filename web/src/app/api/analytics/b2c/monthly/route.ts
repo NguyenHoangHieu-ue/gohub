@@ -3,13 +3,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS, isCronReq, isLocalPreviewReq } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, isCronReq, isLocalPreviewReq, noCache } from "@/lib/analytics-helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 import { chatwootLeadsBreakdown, chatwootConfigured } from "@/lib/chatwoot"
 import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
 import { readB2CMonthlySnapshots, snapshotsToMonthlyResponse } from "@/lib/b2c-report-snapshot"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
-import { getB2CChannelBudgetByMonth } from "@/lib/b2c-channel-budget"
+import { B2C_CHANNELS, getB2CChannelBudgetByMonth } from "@/lib/b2c-channel-budget"
 
 // YTD B2C dashboard data (Section 1 + 2 của gohub_b2c spec)
 // Trả dữ liệu từ tháng 1 đến tháng hiện tại MTD:
@@ -84,6 +84,7 @@ export async function GET(req: NextRequest) {
   if (!session && !localPreviewAllowed(req) && !isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   // YTD theo dữ liệu đã chốt T-1, để prorata không lấy nhầm ngày hôm nay.
+  const forceRefresh = noCache(req)
   const reportAsOf = getReportAsOfDate()
   const dataAsOf = isoDateLocal(reportAsOf)
   const months: string[] = []
@@ -131,7 +132,7 @@ export async function GET(req: NextRequest) {
 
   try {
     try {
-      const snapshots = await readB2CMonthlySnapshots(months)
+      const snapshots = forceRefresh ? [] : await readB2CMonthlySnapshots(months)
       const hasCurrentBreakdowns = snapshots.every(s => (s.payload as any)?.marketChannels && (s.payload as any)?.customerChannels)
       if (snapshots.length === months.length && hasCurrentBreakdowns && snapshots.every(s => s.payload.revenueAsOf === dataAsOf)) {
         const snapshotData = snapshotsToMonthlyResponse(snapshots, months)
@@ -432,6 +433,7 @@ export async function GET(req: NextRequest) {
           .from("analytics_channel_costs")
           .select("channel, month, ads, platform_fee, sponsor_products, media")
           .in("month", months)
+          .in("channel", B2C_CHANNELS)
         if (error) throw new Error(error.message)
 
         for (const row of costRows ?? []) {
@@ -456,25 +458,36 @@ export async function GET(req: NextRequest) {
       }
 
       return { markets, customers, customerChannels, channels, marketChannels, profitByChannel, customerSource, customerBreakdown, customerError }
-    })
+    }, undefined, forceRefresh)
 
-    // KPI targets: nhập ở KPI / Target. Budget: lấy từ Manage Costs → B2C Channels.
+    // KPI targets + Budget: đều nhập trong tab KPI/Target.
+    // budget = ngân sách marketing B2C kế hoạch (app_settings key b2c_budget, nhập ở B2CMarketingBudgetSection).
     let targets: Record<string, { vn: number; us: number; total: number }> = {}
+    let budget = Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>
+    const budgetByMarket = Object.fromEntries(months.map(m => [m, { vn: 0, us: 0, total: 0 }])) as Record<string, { vn: number; us: number; total: number }>
     try {
       const { data: rows } = await supabaseAdmin
-        .from("app_settings").select("key, value").eq("key", "b2c_kpi_targets")
+        .from("app_settings").select("key, value").in("key", ["b2c_kpi_targets", "b2c_budget"])
       for (const r of rows ?? []) {
         if (r.key === "b2c_kpi_targets" && r.value) targets = JSON.parse(r.value)
+        if (r.key === "b2c_budget" && r.value) {
+          // model mới { [month]: {vn, us} }; backward-compat format cũ { [month]: number } → gán hết vào VN.
+          const saved: Record<string, unknown> = JSON.parse(r.value)
+          for (const m of months) {
+            const cell = saved[m]
+            let vn = 0, us = 0
+            if (typeof cell === "number") vn = cell
+            else if (cell && typeof cell === "object") { vn = Number((cell as any).vn) || 0; us = Number((cell as any).us) || 0 }
+            budget[m] = vn + us
+            budgetByMarket[m] = { vn, us, total: vn + us }
+          }
+        }
       }
-    } catch {}
-    let budget = Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>
-    try {
-      budget = await getB2CChannelBudgetByMonth(months)
-    } catch (e) { console.error("[b2c/monthly] budget (b2c channel costs)", (e as Error).message) }
+    } catch (e) { console.error("[b2c/monthly] targets/budget (app_settings)", (e as Error).message) }
 
-    // Chi phí marketing B2C theo tháng (Supabase analytics_channel_group_costs)
-    const spend: Record<string, number> = {}
-    for (const m of months) spend[m] = 0
+    // Chi phí nhóm B2C (analytics_channel_group_costs) — dùng PHÂN BỔ vào CM1 (profitByChannelFinal).
+    const groupSpend: Record<string, number> = {}
+    for (const m of months) groupSpend[m] = 0
     try {
       const { data: costRows } = await supabaseAdmin
         .from("analytics_channel_group_costs")
@@ -482,40 +495,58 @@ export async function GET(req: NextRequest) {
         .eq("group_name", "B2C")
         .gte("month", months[0])
       for (const r of costRows ?? []) {
-        if (spend[r.month] !== undefined) spend[r.month] += Number(r.amount) || 0
+        if (groupSpend[r.month] !== undefined) groupSpend[r.month] += Number(r.amount) || 0
       }
-    } catch (e) { console.error("[b2c/monthly] spend (supabase)", (e as Error).message) }
-    // Manual temporary B2C costs from Cost Management screenshots.
-    // Remove this once these B2C group costs are entered in the source table.
-    const manualSpendOverrides: Record<string, number> = {
-      "2026-05": 86_633_334 + 20_099_340 + 26_188_452,
-      "2026-06": 93_239_567 + 2_989_734,
-      "2026-07": 128_000_000,
-    }
-    for (const [month, amount] of Object.entries(manualSpendOverrides)) {
-      if (spend[month] !== undefined) spend[month] = amount
-    }
+    } catch (e) { console.error("[b2c/monthly] group spend (supabase)", (e as Error).message) }
+
+    // Chi phí kênh B2C (analytics_channel_costs: Ads/Platform/Sponsor/Media amount) — nhập ở Manage Cost.
+    // (Fix s131): "Chi phí MKT" hiển thị = group cost + chi phí kênh. Trước đây chỉ tính group cost nên cost
+    // nhập theo kênh KHÔNG hiện trong Advanced (Acquisition/Spend/ROAS/CAC). Phần % vẫn chỉ vào CM1, không phải spend cố định.
+    let channelSpend: Record<string, number> = {}
+    try { channelSpend = await getB2CChannelBudgetByMonth(months) } catch (e) { console.error("[b2c/monthly] channel spend", (e as Error).message) }
+
+    // spend HIỂN THỊ (Section Spend/ROAS/CAC/Acquisition) = group + kênh.
+    const spend: Record<string, number> = {}
+    for (const m of months) spend[m] = (groupSpend[m] || 0) + (channelSpend[m] || 0)
 
     // Leads marketing theo tháng + breakdown kênh. Ưu tiên Turso chat center, fallback Omni/Chatwoot.
     const { leads, leadsByChannel } = skipLeads
       ? { leads: Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>, leadsByChannel: [] as { label: string; byMonth: Record<string, number> }[] }
       : await loadLeads()
 
+    // BUG1 FIX: Phân bổ Group Cost B2C vào CM1 theo revenue-share per channel.
+    // CHỈ dùng groupSpend (chi phí kênh Ads/... đã nằm trong profitByChannel.opCost rồi → tránh đếm 2 lần).
+    const profitByChannelFinal: typeof data.profitByChannel = {}
+    for (const month of months) {
+      const gc = groupSpend[month] || 0
+      const channelData = data.profitByChannel?.[month] || {}
+      if (!gc) { profitByChannelFinal[month] = channelData; continue }
+      const ratio = month === currentMonth ? elapsedDays / totalDays : 1
+      const gcThisMonth = gc * ratio
+      const totalRev = Object.values(channelData).reduce((s, c) => s + (c as any).revenue, 0)
+      profitByChannelFinal[month] = {}
+      for (const [ch, cell] of Object.entries(channelData)) {
+        const c = cell as any
+        const share = totalRev > 0 ? c.revenue / totalRev : 0
+        const gcShare = gcThisMonth * share
+        profitByChannelFinal[month][ch] = {
+          ...c,
+          opCost: c.opCost + gcShare,
+          cm1: c.grossProfit - (c.opCost + gcShare),
+        }
+      }
+    }
+
     return NextResponse.json(
       {
-        months,
-        currentMonth,
+        months, currentMonth, elapsedDays, totalDays,
+        targets, budget, budgetByMarket, spend, leads, leadsByChannel,
         dataAsOf,
-        elapsedDays,
-        totalDays,
-        targets,
-        budget,
-        spend,
-        leads,
-        leadsByChannel,
-        refreshTimestamp: new Date().toISOString(),
         revenueComparison: await loadRevenueComparison(),
+        isLive: forceRefresh,
+        refreshTimestamp: new Date().toISOString(),
         ...data,
+        profitByChannel: profitByChannelFinal,
       },
       { headers: CACHE_HEADERS }
     )

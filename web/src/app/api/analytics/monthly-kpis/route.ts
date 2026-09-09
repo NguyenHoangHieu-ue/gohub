@@ -1,0 +1,212 @@
+import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { queryAnalytics } from "@/lib/analytics-db"
+import { analyticsGuard, getAnalyticsSource, getStrategicPartnersList, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, excludeOpsByCode, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
+import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { supabaseAdmin } from "@/lib/supabase"
+
+function getMonthStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`
+}
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  const guard = analyticsGuard(req, session); if (guard) return guard
+
+  const companyCode = req.nextUrl.searchParams.get("companyCode") || "ALL"
+  const dateColumn  = req.nextUrl.searchParams.get("dateColumn")  || "fulfiled_date"
+  const source = getAnalyticsSource(dateColumn)
+
+  const today = new Date()
+  const startDateParam = req.nextUrl.searchParams.get("startDate")
+  const endDateParam   = req.nextUrl.searchParams.get("endDate")
+
+  // Nếu có filter từ Dashboard, dùng đúng khoảng ngày đó; không thì mặc định 3 tháng gần nhất
+  let months: string[]
+  let startDate: string
+  let endDate: string
+
+  if (startDateParam && endDateParam) {
+    startDate = startDateParam
+    endDate   = endDateParam
+    // Liệt kê các tháng (YYYY-MM) trong khoảng filter
+    months = []
+    const cur = new Date(startDateParam + "T00:00:00")
+    cur.setDate(1) // đầu tháng
+    const last = new Date(endDateParam + "T00:00:00")
+    while (cur <= last) {
+      months.push(getMonthStr(cur))
+      cur.setMonth(cur.getMonth() + 1)
+    }
+    if (months.length === 0) months = [getMonthStr(new Date(startDateParam + "T00:00:00"))]
+  } else {
+    months = [-2, -1, 0].map(off => {
+      const d = new Date(today.getFullYear(), today.getMonth() + off, 1)
+      return getMonthStr(d)
+    })
+    startDate = months[0] + "-01"
+    endDate   = today.toISOString().split("T")[0]
+  }
+  const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
+
+  const cacheKey = `monthly-kpis:${companyCode}:${dateColumn}:${startDate}:${endDate}`
+
+  try {
+    const data = await cachedQuery(cacheKey, async () => {
+      // Query 1: Revenue, GP, 3HK revenue per month
+      const rows = await queryAnalytics<{ month: string; revenue: string; gp: string; hk3: string }>(`
+        SELECT
+          TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
+          SUM(f.${source.revenueCol}) as revenue,
+          SUM(f.${source.marginCol}) as gp,
+          SUM(CASE WHEN TRIM(f.sku) IN (
+                SELECT DISTINCT TRIM(sku) FROM dim_sku
+                WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
+              ) THEN f.${source.revenueCol} ELSE 0 END) as hk3
+        FROM ${source.mainTable} f
+        WHERE f.${source.dateCol}::date >= '${startDate}'
+          AND f.${source.dateCol}::date <= '${endDate}'
+          ${companyFilter}
+        GROUP BY 1 ORDER BY 1
+      `)
+
+      // Query 2: Strategic channel revenue per month
+      const strategicList = await getStrategicPartnersList()
+      let chanRows: any[] = []
+      if (strategicList !== "''") {
+        chanRows = await queryAnalytics(`
+          SELECT
+            TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
+            TRIM(s.channel_name) as channel,
+            SUM(f.${source.revenueCol}) as revenue
+          FROM ${source.mainTable} f
+          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          WHERE f.${source.dateCol}::date >= '${startDate}'
+            AND f.${source.dateCol}::date <= '${endDate}'
+            AND s.channel_name ILIKE ANY(ARRAY[${strategicList}]::text[])
+            ${companyFilter}
+          GROUP BY 1, 2 ORDER BY 1, 3 DESC
+        `)
+      }
+
+      // Supabase: group costs per month (B2B + B2C — full month budget)
+      const { data: gcData } = await supabaseAdmin
+        .from("analytics_channel_group_costs")
+        .select("group_name, month, amount")
+        .in("month", months)
+      const groupCosts = (gcData || []) as { group_name: string; month: string; amount: string }[]
+
+      // B2B per-customer cost (Turso b2b_customer_cost_monthly) — khớp Quarter Report/b2b-kpis,
+      // KHÔNG dùng analytics_channel_costs cho B2B (tránh double-count với Turso).
+      const { excludedCustomers } = await fetchQuarterlySettings()
+      const b2bSfx = `${shipFilter(false)} ${internalOpsFilter(false)} ${excludeOpsByCode(excludedCustomers)}`
+      const [custRevRows, customerCostMap] = await Promise.all([
+        queryAnalytics<{ customer_code: string; month: string; revenue: string }>(`
+          SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
+                 SUM(f.${source.revenueCol}) as revenue
+          FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          WHERE f.${source.dateCol}::date >= '${startDate}' AND f.${source.dateCol}::date <= '${endDate}'
+            AND UPPER(COALESCE(s.group_name,'')) = 'B2B' ${companyFilter} ${b2bSfx}
+          GROUP BY 1, 2
+        `),
+        fetchCustomerCosts(months),
+      ])
+      const custRevMap = new Map<string, number>()
+      custRevRows.forEach(r => custRevMap.set(`${r.month}_${r.customer_code}`, parseFloat(r.revenue || "0")))
+      const b2bCustCostByMonth = (m: string, dayRatio: number): number => {
+        let tot = 0
+        customerCostMap.forEach((rec, key) => {
+          if (key.slice(0, 7) !== m) return
+          const custRev = custRevMap.get(`${m}_${key.slice(8)}`) || 0
+          if (custRev === 0) return
+          tot += calcChCostForPeriod(rec, custRev, dayRatio)
+        })
+        return tot
+      }
+
+      // Build summary per month
+      const todayStr = today.toISOString().split("T")[0]
+      const summary = months.map(m => {
+        const row = rows.find(r => r.month === m)
+        const revenue = parseFloat(row?.revenue || "0")
+        const gp      = parseFloat(row?.gp      || "0")
+        const hk3     = parseFloat(row?.hk3     || "0")
+
+        // Op cost = group costs (full monthly budget) + B2B per-customer cost (Turso)
+        const groupCostBudget = groupCosts
+          .filter(c => c.month === m)
+          .reduce((s, c) => s + parseFloat(c.amount || "0"), 0)
+
+        // Projection for current month (shared logic from analytics-engine/projection)
+        const monthStart = `${m}-01`
+        const factor = getProjectionFactor(monthStart, todayStr)
+        const isProjected = factor > 1
+        const dayRatio = isProjected ? getDaysInRange(monthStart, todayStr, m) / getDaysInMonth(m) : 1
+        const b2bCCAct = b2bCustCostByMonth(m, dayRatio)
+
+        // Actual CM1 (op cost prorated for partial month; percent-cost dùng revenue thực tới hôm nay)
+        const actualOpCost = (isProjected ? groupCostBudget * dayRatio : groupCostBudget) + b2bCCAct
+        // Projected/display cost — scale TOÀN BỘ actual cost (amount + percent) theo factor, khớp cách
+        // Quarter Report chiếu (elapsedRatio × factor = full month cho amount; custRev × factor ≈ revenue projected).
+        const totalOpCost = groupCostBudget + (isProjected ? b2bCCAct * factor : b2bCCAct)
+        const cm1 = gp - actualOpCost
+
+        // Projected (current month only)
+        const projRevenue = Math.round(revenue * factor)
+        const projGp      = Math.round(gp * factor)
+        const projCm1     = isProjected ? Math.round(projGp - totalOpCost) : Math.round(cm1)
+        const projHk3     = Math.round(hk3 * factor)
+
+        const [y, mo] = m.split("-")
+        return {
+          month: m,
+          label: `T${parseInt(mo)}`,
+          year:  parseInt(y),
+          isProjected,
+          factor: isProjected ? Math.round(factor * 100) / 100 : 1,
+          // Display values (projected for current month, actual for past)
+          revenue:    isProjected ? projRevenue : Math.round(revenue),
+          grossMargin:isProjected ? projGp      : Math.round(gp),
+          cm1:        projCm1,
+          cm1Pct:     projRevenue > 0 ? Math.round(projCm1 / projRevenue * 1000) / 10 : 0,
+          hk3Revenue: isProjected ? projHk3     : Math.round(hk3),
+          hk3Pct:     projRevenue > 0 ? Math.round(projHk3 / projRevenue * 1000) / 10 : 0,
+          // Actual values (for tooltip)
+          actualRevenue:    Math.round(revenue),
+          actualGrossMargin:Math.round(gp),
+          actualCm1:        Math.round(cm1),
+          actualHk3:        Math.round(hk3),
+        }
+      })
+
+      // Build channel data (top strategic channels by total revenue)
+      const channelNames = [...new Set(chanRows.map((r: any) => r.channel))]
+      const channels = channelNames.map(ch => {
+        const monthData = months.map(m => {
+          const r = chanRows.find((row: any) => row.channel === ch && row.month === m)
+          const rev = parseFloat(r?.revenue || "0")
+          // Apply projection for current month
+          const sum = summary.find(s => s.month === m)
+          const projected = sum?.isProjected ? Math.round(rev * (sum?.factor ?? 1)) : Math.round(rev)
+          return { month: m, revenue: projected, actualRevenue: Math.round(rev) }
+        })
+        const total = monthData.reduce((s, m) => s + m.revenue, 0)
+        return { name: ch, months: monthData, totalRevenue: total }
+      })
+        .filter(c => c.totalRevenue > 0)
+        .sort((a, b) => b.totalRevenue - a.totalRevenue)
+        .slice(0, 12)
+
+      return { summary, channels }
+    }, QUERY_TTL_MIN, undefined, ["b2b-cost"])
+
+    return NextResponse.json(data, { headers: CACHE_HEADERS })
+  } catch (err: any) {
+    console.error("[analytics/monthly-kpis]", err.message)
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}

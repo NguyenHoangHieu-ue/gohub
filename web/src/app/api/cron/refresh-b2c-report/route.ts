@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { flushAnalyticsCacheByPrefixes } from "@/lib/analytics-helpers"
 import { monthsYtd, refreshB2CMonthlySnapshots } from "@/lib/b2c-report-snapshot"
+import { alertCronFailure } from "@/lib/cron-alert"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 function cronAuthorized(req: NextRequest): boolean {
-  if (!process.env.CRON_SECRET) return true
-  return req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`
+  const secret = process.env.CRON_SECRET
+  if (!secret) return false  // CRON_SECRET bắt buộc phải set
+  return req.headers.get("authorization") === `Bearer ${secret}`
 }
 
 function warmPath(path: string): string {
@@ -62,7 +64,7 @@ export async function GET(req: NextRequest) {
     })
   } catch (err) {
     const message = (err as Error)?.message || "Refresh B2C report failed"
-    console.error("[cron/refresh-b2c-report]", message)
+    await alertCronFailure("refresh-b2c-report", err)
     return NextResponse.json({
       ok: false,
       refreshedAt: new Date().toISOString(),

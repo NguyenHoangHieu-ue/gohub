@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
 } from "recharts"
@@ -12,6 +12,8 @@ import {
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
+import { exportAOA } from "@/lib/export-excel"
+import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel VendorPerformance. Data qua /api/analytics/query (SELECT-only) +
 // /api/config/partner-tiers + /api/analytics/b2b/strategic-performance. Inline getDefaultDateRange/formatDateToISO.
@@ -66,21 +68,23 @@ export default function VendorPerformancePage() {
   const [comparisonType, setComparisonType] = useState<"none" | "previous_period" | "previous_year">("none")
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
 
-  const filteredProducts = productPerformance
-    .filter(p => (p.sku || "").toLowerCase().includes((searchTerm || "").toLowerCase()))
-    .sort((a, b) => {
-      const aVal = sortConfig.key === "marginPercent"
-        ? (parseFloat(a.revenue) > 0 ? parseFloat(a.margin) / parseFloat(a.revenue) : 0)
-        : parseFloat(a[sortConfig.key] || 0)
-      const bVal = sortConfig.key === "marginPercent"
-        ? (parseFloat(b.revenue) > 0 ? parseFloat(b.margin) / parseFloat(b.revenue) : 0)
-        : parseFloat(b[sortConfig.key] || 0)
-
-      if (sortConfig.key === "sku") {
-        return sortConfig.direction === "asc" ? a.sku.localeCompare(b.sku) : b.sku.localeCompare(a.sku)
-      }
-      return sortConfig.direction === "asc" ? aVal - bVal : bVal - aVal
-    })
+  const filteredProducts = useMemo(() =>
+    productPerformance
+      .filter(p => (p.sku || "").toLowerCase().includes((searchTerm || "").toLowerCase()))
+      .sort((a, b) => {
+        const aVal = sortConfig.key === "marginPercent"
+          ? (parseFloat(a.revenue) > 0 ? parseFloat(a.margin) / parseFloat(a.revenue) : 0)
+          : parseFloat(a[sortConfig.key] || 0)
+        const bVal = sortConfig.key === "marginPercent"
+          ? (parseFloat(b.revenue) > 0 ? parseFloat(b.margin) / parseFloat(b.revenue) : 0)
+          : parseFloat(b[sortConfig.key] || 0)
+        if (sortConfig.key === "sku") {
+          return sortConfig.direction === "asc" ? a.sku.localeCompare(b.sku) : b.sku.localeCompare(a.sku)
+        }
+        return sortConfig.direction === "asc" ? aVal - bVal : bVal - aVal
+      }),
+    [productPerformance, searchTerm, sortConfig]
+  )
 
   const handleSort = (key: string) => {
     setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === "desc" ? "asc" : "desc" }))
@@ -89,8 +93,8 @@ export default function VendorPerformancePage() {
   const SortIcon = ({ column }: { column: string }) => {
     if (sortConfig.key !== column) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-30" />
     return sortConfig.direction === "asc"
-      ? <ChevronUp className="w-3 h-3 ml-1 text-blue-600" />
-      : <ChevronDown className="w-3 h-3 ml-1 text-blue-600" />
+      ? <ChevronUp className="w-3 h-3 ml-1 text-brand-600" />
+      : <ChevronDown className="w-3 h-3 ml-1 text-brand-600" />
   }
 
   useEffect(() => { setProductPage(1) }, [searchTerm, sortConfig])
@@ -114,7 +118,9 @@ export default function VendorPerformancePage() {
           const list = data.map((d: any) => d.vendor)
           setVendors(list)
           if (list.length > 0 && selectedVendors.length === 0) {
-            const defaultVendor = list.includes("3HKDATAPOOL") ? "3HKDATAPOOL" : list[0]
+            // DB lưu "3HK DATAPOOL" (CÓ dấu cách) — so khớp bỏ dấu cách/hoa-thường, đúng chuẩn
+            // REPLACE(UPPER(vendor),' ','') dùng xuyên suốt repo (xem analytics-data-model.md gotcha #9).
+            const defaultVendor = list.find(v => v.replace(/\s+/g, "").toUpperCase() === "3HKDATAPOOL") || list[0]
             setSelectedVendors([defaultVendor])
           }
         } else {
@@ -198,7 +204,8 @@ export default function VendorPerformancePage() {
     }
   }
 
-  const projection = getProjectionInfo()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const projection = useMemo(getProjectionInfo, [metrics, startDate, endDate, prevMonthMetrics])
 
   // Initial load: fetchData chỉ chạy 1 lần khi vendors được load lần đầu
   const initialLoadDone = React.useRef(false)
@@ -232,31 +239,19 @@ export default function VendorPerformancePage() {
 
       let prevDateFilter = ""
       let fPrevDateFilter = ""
-
       if (comparisonType === "previous_period") {
-        const start = new Date(startDate)
-        const end = new Date(endDate)
-        const diffTime = Math.abs(end.getTime() - start.getTime())
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-
-        const prevStart = new Date(start); prevStart.setDate(prevStart.getDate() - diffDays)
-        const prevEnd = new Date(end); prevEnd.setDate(prevEnd.getDate() - diffDays)
-
-        const prevStartDateStr = prevStart.toISOString().split("T")[0]
-        const prevEndDateStr = prevEnd.toISOString().split("T")[0]
-        prevDateFilter = `${dateCol}::date >= '${prevStartDateStr}' AND ${dateCol}::date <= '${prevEndDateStr}'`
-        fPrevDateFilter = `f.${dateCol}::date >= '${prevStartDateStr}' AND f.${dateCol}::date <= '${prevEndDateStr}'`
+        const start = new Date(startDate), end = new Date(endDate)
+        const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+        const ps = new Date(start); ps.setDate(ps.getDate() - diffDays)
+        const pe = new Date(end); pe.setDate(pe.getDate() - diffDays)
+        prevDateFilter = `${dateCol}::date >= '${ps.toISOString().split("T")[0]}' AND ${dateCol}::date <= '${pe.toISOString().split("T")[0]}'`
+        fPrevDateFilter = `f.${dateCol}::date >= '${ps.toISOString().split("T")[0]}' AND f.${dateCol}::date <= '${pe.toISOString().split("T")[0]}'`
       } else if (comparisonType === "previous_year") {
-        const start = new Date(startDate)
-        const end = new Date(endDate)
-
-        const prevStart = new Date(start); prevStart.setFullYear(prevStart.getFullYear() - 1)
-        const prevEnd = new Date(end); prevEnd.setFullYear(prevEnd.getFullYear() - 1)
-
-        const prevStartDateStr = prevStart.toISOString().split("T")[0]
-        const prevEndDateStr = prevEnd.toISOString().split("T")[0]
-        prevDateFilter = `${dateCol}::date >= '${prevStartDateStr}' AND ${dateCol}::date <= '${prevEndDateStr}'`
-        fPrevDateFilter = `f.${dateCol}::date >= '${prevStartDateStr}' AND f.${dateCol}::date <= '${prevEndDateStr}'`
+        const start = new Date(startDate), end = new Date(endDate)
+        const ps = new Date(start); ps.setFullYear(ps.getFullYear() - 1)
+        const pe = new Date(end); pe.setFullYear(pe.getFullYear() - 1)
+        prevDateFilter = `${dateCol}::date >= '${ps.toISOString().split("T")[0]}' AND ${dateCol}::date <= '${pe.toISOString().split("T")[0]}'`
+        fPrevDateFilter = `f.${dateCol}::date >= '${ps.toISOString().split("T")[0]}' AND f.${dateCol}::date <= '${pe.toISOString().split("T")[0]}'`
       }
 
       let channelFilter = selectedChannel !== "All Channels"
@@ -265,86 +260,115 @@ export default function VendorPerformancePage() {
       let fChannelFilter = selectedChannel !== "All Channels"
         ? `AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE channel_name = '${selectedChannel.replace(/'/g, "''")}')`
         : ""
-
       if (selectedChannelGroup !== "All Groups") {
-        const groupCond = `AND order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${selectedChannelGroup}')`
-        const fGroupCond = `AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${selectedChannelGroup}')`
-        channelFilter += ` ${groupCond}`
-        fChannelFilter += ` ${fGroupCond}`
+        channelFilter += ` AND order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${selectedChannelGroup}')`
+        fChannelFilter += ` AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${selectedChannelGroup}')`
       }
 
       const vendorList = selectedVendors.map(v => `'${v.replace(/'/g, "''")}'`).join(",")
       const vendorFilter = `TRIM(sku) IN (SELECT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) IN (${vendorList}))`
       const fVendorFilter = `TRIM(f.sku) IN (SELECT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) IN (${vendorList}))`
 
-      // 0. Total Revenue for ALL vendors (contribution)
+      // prev-month range for projection
+      const pmDate = new Date(startDate)
+      const pmStart = formatDateToISO(new Date(pmDate.getFullYear(), pmDate.getMonth() - 1, 1))
+      const pmEnd   = formatDateToISO(new Date(pmDate.getFullYear(), pmDate.getMonth(), 0))
+
+      // Build ALL SQL strings upfront
       const allVendorsSql = `SELECT SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${dateFilter} ${channelFilter}`
-      const allVendorsRes = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: allVendorsSql }) })
+      const summarySql    = `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter}`
+      const prevSummarySql = comparisonType !== "none"
+        ? `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter}`
+        : null
+      const pmSql = `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateCol}::date >= '${pmStart}' AND ${dateCol}::date <= '${pmEnd}' ${channelFilter}`
+      const trendSql = `SELECT TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter} GROUP BY ${dateCol}::date ORDER BY ${dateCol}::date`
+      const prevTrendSql = comparisonType !== "none"
+        ? `SELECT TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} GROUP BY ${dateCol}::date ORDER BY ${dateCol}::date`
+        : null
+      const productsSql = `SELECT TRIM(sku) as sku, SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter} GROUP BY TRIM(sku) ORDER BY revenue DESC`
+      const prevProductsSql = comparisonType !== "none"
+        ? `SELECT TRIM(sku) as sku, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} GROUP BY TRIM(sku)`
+        : null
+      const prevChannelSql = comparisonType !== "none"
+        ? `SELECT s.channel_name, SUM(f.${revCol}) as revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fVendorFilter} AND ${fPrevDateFilter} ${fChannelFilter} GROUP BY s.channel_name`
+        : null
+
+      const vendorParams = selectedVendors.map(v => `vendorCodes=${encodeURIComponent(v)}`).join("&")
+      const strategicUrl = `/api/analytics/b2b/strategic-performance?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&${vendorParams}`
+
+      // Helper: POST query or resolve null for optional prev-period queries
+      const q = (sql: string) => fetch("/api/analytics/query", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql }),
+      })
+      const qOpt = (sql: string | null): Promise<Response | null> => sql ? q(sql) : Promise.resolve(null)
+
+      // Phân loại B2B-Strategic/Non-Strategic THEO KHÁCH (price_list_name) — CÙNG 1 định nghĩa dùng chung
+      // với Quarter Report/Dashboard/BOD/All-Time (xem buildGroupCaseByCustomerSql trong
+      // lib/analytics-helpers.ts). Trước đây trang này tự phân loại theo channel_name khớp danh sách
+      // "partner_tiers" (Supabase, phải tay thêm từng kênh) → kênh Strategic mới/chưa kịp thêm bị rơi
+      // nhầm Non-Strategic (báo cáo 2026-09-08). quarterly-settings mặc định MỌI KH B2B là Strategic TRỪ
+      // KHI price_list_name khớp keyword VIP/Gold/Silver → không cần duy trì 2 danh sách song song nữa.
+      const qSettingsRaw = await fetch("/api/analytics/quarterly-settings")
+      const qSettings: { tierKeywords: Record<string, string[]>; excludedCustomers: string[] } =
+        qSettingsRaw.ok ? await qSettingsRaw.json() : { tierKeywords: {}, excludedCustomers: [] }
+      setPartnerTiers(Object.keys(qSettings.tierKeywords || {}).length ? qSettings.tierKeywords : { Strategic: [] })
+      const nonStratKws = Object.entries(qSettings.tierKeywords || {})
+        .filter(([tier]) => tier !== "Strategic")
+        .flatMap(([, kws]) => kws)
+        .map((kw: string) => kw.toUpperCase().replace(/'/g, "''"))
+      // KHÔNG áp exclusion list (quarterly_excluded_customers) ở đây — khác Quarter Report, trang này
+      // không loại trừ KH nào khỏi KPI summary/Revenue Trend/Products phía trên, nếu Channel Distribution
+      // tự loại riêng sẽ làm tổng bảng lệch khỏi KPI card cùng trang. Chỉ mượn phần phân loại
+      // Strategic/Non-Strategic, không mượn phần exclude.
+      const isStrategicSql = nonStratKws.length === 0
+        ? "(TRUE)"
+        : `(c.price_list_name IS NULL OR (${nonStratKws.map(kw => `UPPER(c.price_list_name) NOT LIKE '%${kw}%'`).join(" AND ")}))`
+      const bizGroupSQL = `CASE WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${isStrategicSql} THEN 'B2B-Strategic' WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' THEN 'B2B-Non-Strategic' WHEN UPPER(COALESCE(s.group_name,'')) = 'B2C' THEN 'B2C' ELSE 'B2C' END`
+
+      // business_group phụ thuộc c.price_list_name (không aggregate được) → phân loại từng dòng trong CTE
+      // "classified" TRƯỚC, rồi mới GROUP BY (channel_name, business_group) ở outer query. Project cột
+      // tường minh (không f.*) — marginCol có thể là literal "0" (chế độ Created, bảng sales không có
+      // margin), f.0 sẽ không hợp lệ nếu lỡ prefix bằng alias.
+      const marginExpr = marginCol === "0" ? "0" : `f.${marginCol}`
+      const channelSql = `WITH channel_totals AS (SELECT s.channel_name, SUM(f.${revCol}) as total_revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fDateFilter} ${fChannelFilter} GROUP BY s.channel_name), classified AS (SELECT f.order_code as order_code, f.${revCol} as rev, f.${qtyCol} as qty, ${marginExpr} as mgn, s.channel_name as channel_name, ${bizGroupSQL} as business_group FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code) WHERE ${fVendorFilter} AND ${fDateFilter} ${fChannelFilter}) SELECT cl.channel_name, SUM(cl.rev) as revenue, COUNT(DISTINCT cl.order_code) as orders, SUM(cl.qty) as units_sold, SUM(cl.mgn) as margin, MAX(t.total_revenue) as total_channel_revenue, cl.business_group FROM classified cl LEFT JOIN channel_totals t ON COALESCE(cl.channel_name, '') = COALESCE(t.channel_name, '') GROUP BY cl.channel_name, cl.business_group ORDER BY revenue DESC`
+
+      // Tất cả query độc lập → bắn song song, thời gian = query chậm nhất
+      const [
+        allVendorsRes, summaryRes, prevSummaryRes, pmRes,
+        trendRes, prevTrendRes, productsRes, prevProductsRes,
+        chanRes, strategicPerfRes, prevChanRes,
+      ] = await Promise.all([
+        q(allVendorsSql), q(summarySql), qOpt(prevSummarySql), q(pmSql),
+        q(trendSql), qOpt(prevTrendSql), q(productsSql), qOpt(prevProductsSql),
+        q(channelSql), fetch(strategicUrl), qOpt(prevChannelSql),
+      ])
+
+      // Process: allVendors
       if (allVendorsRes.ok) {
-        const allVendorsData = await allVendorsRes.json()
-        setAllVendorsTotalRevenue(parseFloat(allVendorsData[0]?.revenue || 0))
+        const d = await allVendorsRes.json()
+        setAllVendorsTotalRevenue(parseFloat(d[0]?.revenue || 0))
       }
 
-      // 1. Summary Metrics
-      const summarySql = `
-        SELECT
-          SUM(${revCol}) as revenue,
-          COUNT(DISTINCT order_code) as orders,
-          SUM(${qtyCol}) as units,
-          SUM(${marginCol}) as margin
-        FROM ${mainTable}
-        WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter}
-      `
-
-      let currData: any = null
-      let prevData: any = null
-
-      if (comparisonType !== "none") {
-        const prevSummarySql = `
-          SELECT
-            SUM(${revCol}) as revenue,
-            COUNT(DISTINCT order_code) as orders,
-            SUM(${qtyCol}) as units,
-            SUM(${marginCol}) as margin
-          FROM ${mainTable}
-          WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter}
-        `
-
-        const [currRes, prevRes] = await Promise.all([
-          fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: summarySql }) }),
-          fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: prevSummarySql }) }),
-        ])
-
-        if (!currRes.ok || !prevRes.ok) throw new Error("Failed to fetch summary metrics")
-        currData = (await currRes.json())[0]
-        prevData = (await prevRes.json())[0]
-      } else {
-        const currRes = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: summarySql }) })
-        if (!currRes.ok) throw new Error("Failed to fetch summary metrics")
-        currData = (await currRes.json())[0]
-      }
-
+      // Process: summary metrics
+      if (!summaryRes.ok) throw new Error("Failed to fetch summary metrics")
+      const currData = (await summaryRes.json())[0]
+      const prevData = prevSummaryRes ? (await (prevSummaryRes as Response).json())[0] : null
       if (currData) {
         const currentRev = parseFloat(currData.revenue || 0)
-        const prevRev = parseFloat(prevData?.revenue || 0)
-        const revChange = (comparisonType !== "none" && prevRev > 0) ? Math.round(((currentRev - prevRev) / prevRev) * 100) : 0
-
+        const prevRev    = parseFloat(prevData?.revenue || 0)
+        const revChange  = (comparisonType !== "none" && prevRev > 0) ? Math.round(((currentRev - prevRev) / prevRev) * 100) : 0
         const currentOrders = parseInt(currData.orders || 0)
-        const prevOrders = parseInt(prevData?.orders || 0)
-        const orderChange = (comparisonType !== "none" && prevOrders > 0) ? Math.round(((currentOrders - prevOrders) / prevOrders) * 100) : 0
-
+        const prevOrders    = parseInt(prevData?.orders || 0)
+        const orderChange   = (comparisonType !== "none" && prevOrders > 0) ? Math.round(((currentOrders - prevOrders) / prevOrders) * 100) : 0
         const currentAov = currentOrders > 0 ? currentRev / currentOrders : 0
-        const prevAov = prevOrders > 0 ? prevRev / prevOrders : 0
-        const aovChange = (comparisonType !== "none" && prevAov > 0) ? Math.round(((currentAov - prevAov) / prevAov) * 100) : 0
-
+        const prevAov    = prevOrders > 0 ? prevRev / prevOrders : 0
+        const aovChange  = (comparisonType !== "none" && prevAov > 0) ? Math.round(((currentAov - prevAov) / prevAov) * 100) : 0
         const currentMargin = parseFloat(currData.margin || 0)
-        const prevMargin = parseFloat(prevData?.margin || 0)
-        const marginChange = (comparisonType !== "none" && prevMargin > 0) ? Math.round(((currentMargin - prevMargin) / prevMargin) * 100) : 0
-
+        const prevMargin    = parseFloat(prevData?.margin || 0)
+        const marginChange  = (comparisonType !== "none" && prevMargin > 0) ? Math.round(((currentMargin - prevMargin) / prevMargin) * 100) : 0
         const currentUnits = parseInt(currData.units || 0)
-        const prevUnits = parseInt(prevData?.units || 0)
-        const unitChange = (comparisonType !== "none" && prevUnits > 0) ? Math.round(((currentUnits - prevUnits) / prevUnits) * 100) : 0
-
+        const prevUnits    = parseInt(prevData?.units || 0)
+        const unitChange   = (comparisonType !== "none" && prevUnits > 0) ? Math.round(((currentUnits - prevUnits) / prevUnits) * 100) : 0
         setMetrics({
           revenue: currentRev, revenueChange: revChange,
           orders: currentOrders, ordersChange: orderChange,
@@ -354,193 +378,59 @@ export default function VendorPerformancePage() {
         })
       }
 
-      // Full previous month metrics for projection
+      // Process: prevMonth (soft fail)
       try {
-        const date = new Date(startDate)
-        const prevMonthLastDay = new Date(date.getFullYear(), date.getMonth(), 0)
-        const prevMonthFirstDay = new Date(date.getFullYear(), date.getMonth() - 1, 1)
-        const pmStart = formatDateToISO(prevMonthFirstDay)
-        const pmEnd = formatDateToISO(prevMonthLastDay)
-
-        const pmSql = `
-          SELECT
-            SUM(${revCol}) as revenue,
-            COUNT(DISTINCT order_code) as orders,
-            SUM(${qtyCol}) as units,
-            SUM(${marginCol}) as margin
-          FROM ${mainTable}
-          WHERE ${vendorFilter} AND ${dateCol}::date >= '${pmStart}' AND ${dateCol}::date <= '${pmEnd}' ${channelFilter}
-        `
-        const pmRes = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: pmSql }) })
         if (pmRes.ok) {
           const pmData = await pmRes.json()
           setPrevMonthMetrics({
             revenue: parseFloat(pmData[0]?.revenue || 0),
-            orders: parseInt(pmData[0]?.orders || 0),
-            units: parseInt(pmData[0]?.units || 0),
-            margin: parseFloat(pmData[0]?.margin || 0),
+            orders:  parseInt(pmData[0]?.orders || 0),
+            units:   parseInt(pmData[0]?.units || 0),
+            margin:  parseFloat(pmData[0]?.margin || 0),
           })
         }
-      } catch (e) {
-        console.error("Error fetching prev month metrics:", e)
-      }
+      } catch (e) { console.error("Error fetching prev month metrics:", e) }
 
-      // 2. Trend Data
-      const trendSql = `
-        SELECT
-          TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date,
-          SUM(${revCol}) as revenue
-        FROM ${mainTable}
-        WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter}
-        GROUP BY ${dateCol}::date
-        ORDER BY ${dateCol}::date
-      `
-
-      if (comparisonType !== "none") {
-        const prevTrendSql = `
-          SELECT
-            TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date,
-            SUM(${revCol}) as revenue
-          FROM ${mainTable}
-          WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter}
-          GROUP BY ${dateCol}::date
-          ORDER BY ${dateCol}::date
-        `
-
-        const [trendRes, prevTrendRes] = await Promise.all([
-          fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: trendSql }) }),
-          fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: prevTrendSql }) }),
-        ])
-
-        if (!trendRes.ok || !prevTrendRes.ok) throw new Error("Failed to fetch trend data")
-
-        const currTrend = await trendRes.json()
-        const prevTrend = await prevTrendRes.json()
-
-        const maxLength = Math.max(currTrend.length, prevTrend.length)
-        const combinedTrend = []
-        for (let i = 0; i < maxLength; i++) {
-          combinedTrend.push({
-            date: currTrend[i]?.date.split("-").slice(1).reverse().join("/") || prevTrend[i]?.date.split("-").slice(1).reverse().join("/"),
+      // Process: trend
+      if (!trendRes.ok) throw new Error("Failed to fetch trend data")
+      const currTrend = await trendRes.json()
+      if (prevTrendRes) {
+        const prevTrend = await (prevTrendRes as Response).json()
+        const maxLen = Math.max(currTrend.length, prevTrend.length)
+        const combined = []
+        for (let i = 0; i < maxLen; i++) {
+          combined.push({
+            date: (currTrend[i]?.date || prevTrend[i]?.date).split("-").slice(1).reverse().join("/"),
             revenue: parseFloat(currTrend[i]?.revenue || 0),
             prevRevenue: parseFloat(prevTrend[i]?.revenue || 0),
           })
         }
-        setTrendData(combinedTrend)
+        setTrendData(combined)
       } else {
-        const trendRes = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: trendSql }) })
-        if (!trendRes.ok) throw new Error("Failed to fetch trend data")
-        const trendDataRaw = await trendRes.json()
-        setTrendData(trendDataRaw.map((d: any) => ({
+        setTrendData(currTrend.map((d: any) => ({
           date: d.date.split("-").slice(1).reverse().join("/"),
           revenue: parseFloat(d.revenue || 0),
         })))
       }
 
-      // 3. Product Performance
-      const productsSql = `
-        SELECT
-          TRIM(sku) as sku,
-          SUM(${revCol}) as revenue,
-          COUNT(DISTINCT order_code) as orders,
-          SUM(${marginCol}) as margin
-        FROM ${mainTable}
-        WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter}
-        GROUP BY TRIM(sku)
-        ORDER BY revenue DESC
-      `
-
-      if (comparisonType !== "none") {
-        const prevProductsSql = `
-          SELECT
-            TRIM(sku) as sku,
-            SUM(${revCol}) as revenue
-          FROM ${mainTable}
-          WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter}
-          GROUP BY TRIM(sku)
-        `
-
-        const [prodRes, prevProdRes] = await Promise.all([
-          fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: productsSql }) }),
-          fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: prevProductsSql }) }),
-        ])
-
-        if (!prodRes.ok || !prevProdRes.ok) throw new Error("Failed to fetch product performance")
-
-        const currProds = await prodRes.json()
-        const prevProds = await prevProdRes.json()
-
+      // Process: products
+      if (!productsRes.ok) throw new Error("Failed to fetch product performance")
+      const currProds = await productsRes.json()
+      if (prevProductsRes) {
+        const prevProds = await (prevProductsRes as Response).json()
         const prevProdMap = prevProds.reduce((acc: any, p: any) => { acc[p.sku] = parseFloat(p.revenue || 0); return acc }, {})
-
         setProductPerformance(currProds.map((p: any) => ({ ...p, prevRevenue: prevProdMap[p.sku] || 0 })))
       } else {
-        const productsRes = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: productsSql }) })
-        if (!productsRes.ok) throw new Error("Failed to fetch product performance")
-        setProductPerformance(await productsRes.json())
+        setProductPerformance(currProds)
       }
 
-      // 4. Channel Distribution
-      const channelSql = `
-        WITH channel_totals AS (
-          SELECT
-            s.channel_name,
-            SUM(f.${revCol}) as total_revenue
-          FROM ${mainTable} f
-          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          WHERE ${fDateFilter} ${fChannelFilter}
-          GROUP BY s.channel_name
-        )
-        SELECT
-          s.channel_name,
-          SUM(f.${revCol}) as revenue,
-          COUNT(DISTINCT f.order_code) as orders,
-          SUM(f.${qtyCol}) as units_sold,
-          SUM(f.${marginCol}) as margin,
-          MAX(t.total_revenue) as total_channel_revenue,
-          CASE
-            WHEN s.channel_name IN ('Traveloka', 'Klook', 'Fayfay', 'Momo', 'Gohub Web (Partner)', 'Lazada', 'Shopee', 'Tiktok Shop') THEN 'B2B-Strategic'
-            WHEN s.channel_name IN ('VN-Wholesales', 'VN-B2B Portal', 'Global-Wholesales', 'Global-B2B Portal') THEN 'B2B-Non-Strategic'
-            ELSE 'B2C'
-          END as business_group
-        FROM ${mainTable} f
-        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-        LEFT JOIN channel_totals t ON COALESCE(s.channel_name, '') = COALESCE(t.channel_name, '')
-        WHERE ${fVendorFilter} AND ${fDateFilter} ${fChannelFilter}
-        GROUP BY s.channel_name
-        ORDER BY revenue DESC
-      `
-
-      const vendorParams = selectedVendors.map(v => `vendorCodes=${encodeURIComponent(v)}`).join("&")
-      const queryParamsForB2B = `?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&${vendorParams}`
-      const [chanRes, tiersRes, strategicPerfRes] = await Promise.all([
-        fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: channelSql }) }),
-        fetch(`/api/config/partner-tiers`),
-        fetch(`/api/analytics/b2b/strategic-performance${queryParamsForB2B}`),
-      ])
-
+      // Process: channels + strategic (partner_tiers đã set từ pre-fetch)
       if (!chanRes.ok) throw new Error("Failed to fetch channel distribution")
       const currChans = await chanRes.json()
-
-      if (tiersRes.ok) setPartnerTiers(await tiersRes.json())
       if (strategicPerfRes.ok) setStrategicPerformance(await strategicPerfRes.json())
-
-      if (comparisonType !== "none") {
-        const prevChannelSql = `
-          SELECT
-            s.channel_name,
-            SUM(f.${revCol}) as revenue
-          FROM ${mainTable} f
-          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          WHERE ${fVendorFilter} AND ${fPrevDateFilter} ${fChannelFilter}
-          GROUP BY s.channel_name
-        `
-
-        const prevChanRes = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql: prevChannelSql }) })
-        if (!prevChanRes.ok) throw new Error("Failed to fetch previous channel distribution")
-
-        const prevChans = await prevChanRes.json()
+      if (prevChanRes) {
+        const prevChans = await (prevChanRes as Response).json()
         const prevChanMap = prevChans.reduce((acc: any, c: any) => { acc[c.channel_name] = parseFloat(c.revenue || 0); return acc }, {})
-
         setChannelDistribution(currChans.map((c: any) => ({ ...c, prevRevenue: prevChanMap[c.channel_name] || 0 })))
       } else {
         setChannelDistribution(currChans)
@@ -554,7 +444,7 @@ export default function VendorPerformancePage() {
 
   const exportChannelCSV = () => {
     const headers = ["Business Group", "Channel", "Total Order", "Unit Sold", "Gross Revenue", "Projected Revenue", "Total Channel Rev (All Vendors)", "%Contrib (vs Others)", "%MoM"]
-    const rows: string[] = []
+    const rows: (string | number)[][] = []
 
     const claimedByChannel: Record<string, { revenue: number, orders: number, units: number, prevRevenue: number }> = {}
     strategicPerformance.forEach((s: any) => {
@@ -661,11 +551,11 @@ export default function VendorPerformancePage() {
           groupPrevRevenue += (channel.prevRevenue || 0)
 
           rows.push([
-            groupName, `"${channel.channel_name || "Unknown"}"`, channel.orders, channel.units_sold,
-            rev.toFixed(0), projection ? (rev * projection.factor).toFixed(0) : "-",
-            parseFloat(channel.total_channel_revenue || 0).toFixed(0),
+            groupName, channel.channel_name || "Unknown", channel.orders, channel.units_sold,
+            Number(rev.toFixed(0)), projection ? Number((rev * projection.factor).toFixed(0)) : "-",
+            Number(parseFloat(channel.total_channel_revenue || 0).toFixed(0)),
             contribution ? contribution.toFixed(2) + "%" : "-", mom ? mom.toFixed(2) + "%" : "0%",
-          ].join(","))
+          ])
         })
 
         const correctGroupAllVendorsChannelRevenue = Array.from(uniqueChannelNamesInGroup).reduce((acc, name) => {
@@ -677,11 +567,11 @@ export default function VendorPerformancePage() {
         const groupContrib = correctGroupAllVendorsChannelRevenue > 0 ? (groupRevenue / correctGroupAllVendorsChannelRevenue * 100) : 0
 
         rows.push([
-          `Total ${groupName}`, "", groupOrders, groupUnits, groupRevenue.toFixed(0),
-          projection ? (groupRevenue * projection.factor).toFixed(0) : "-",
-          correctGroupAllVendorsChannelRevenue.toFixed(0), groupContrib.toFixed(2) + "%",
+          `Total ${groupName}`, "", groupOrders, groupUnits, Number(groupRevenue.toFixed(0)),
+          projection ? Number((groupRevenue * projection.factor).toFixed(0)) : "-",
+          Number(correctGroupAllVendorsChannelRevenue.toFixed(0)), groupContrib.toFixed(2) + "%",
           groupMom ? groupMom.toFixed(2) + "%" : "0%",
-        ].join(","))
+        ])
 
         grandTotalRevenue += groupRevenue
         grandTotalOrders += groupOrders
@@ -696,20 +586,14 @@ export default function VendorPerformancePage() {
     }, 0)
 
     rows.push([
-      "GRAND TOTAL", "", grandTotalOrders, grandTotalUnits, grandTotalRevenue.toFixed(0),
-      projection ? (grandTotalRevenue * projection.factor).toFixed(0) : "-",
-      finalGrandTotalAllVendorsChannelRevenue.toFixed(0),
+      "GRAND TOTAL", "", grandTotalOrders, grandTotalUnits, Number(grandTotalRevenue.toFixed(0)),
+      projection ? Number((grandTotalRevenue * projection.factor).toFixed(0)) : "-",
+      Number(finalGrandTotalAllVendorsChannelRevenue.toFixed(0)),
       finalGrandTotalAllVendorsChannelRevenue > 0 ? (grandTotalRevenue / finalGrandTotalAllVendorsChannelRevenue * 100).toFixed(2) + "%" : "-",
       grandTotalPrevRevenue > 0 ? ((grandTotalRevenue - grandTotalPrevRevenue) / grandTotalPrevRevenue * 100).toFixed(2) + "%" : "0%",
-    ].join(","))
+    ])
 
-    const csvContent = "﻿" + [headers.join(","), ...rows].join("\n")
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `Channel_Distribution_${startDate}_to_${endDate}.csv`)
-    link.click()
+    exportAOA(headers, rows, `Channel_Distribution_${startDate}_to_${endDate}`, "Channels")
   }
 
   const Skeleton = ({ className }: { className?: string }) => (
@@ -736,7 +620,7 @@ export default function VendorPerformancePage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Truck className="w-7 h-7 text-blue-600" />
+            <Truck className="w-7 h-7 text-brand-600" />
             Vendor Performance
           </h1>
           <p className="text-slate-500 text-sm mt-1">Phân tích hiệu quả kinh doanh theo nhà cung cấp (Database Data)</p>
@@ -746,12 +630,12 @@ export default function VendorPerformancePage() {
           <div className="flex bg-white rounded-xl border border-slate-200 p-1 shadow-sm shrink-0 items-center h-[42px]">
             <button onClick={() => setDateColumn("fulfiled_date")}
               className={cn("px-3 py-1.5 text-xs font-medium rounded-lg transition-all h-full flex items-center",
-                dateColumn === "fulfiled_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
+                dateColumn === "fulfiled_date" ? "bg-brand-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
               Fulfillment
             </button>
             <button onClick={() => setDateColumn("created_date")}
               className={cn("px-3 py-1.5 text-xs font-medium rounded-lg transition-all h-full flex items-center",
-                dateColumn === "created_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
+                dateColumn === "created_date" ? "bg-brand-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
               Created
             </button>
           </div>
@@ -771,14 +655,14 @@ export default function VendorPerformancePage() {
                 <div className="flex items-center justify-between p-2 mb-2 border-b border-slate-100 sticky top-0 bg-white z-10">
                   <span className="text-xs font-bold text-slate-400 uppercase">Select Vendors</span>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setSelectedVendors(vendors)} className="text-[10px] text-blue-600 font-bold hover:underline">All</button>
+                    <button onClick={() => setSelectedVendors(vendors)} className="text-[10px] text-brand-600 font-bold hover:underline">All</button>
                     <button onClick={() => setSelectedVendors([])} className="text-[10px] text-rose-600 font-bold hover:underline">Clear</button>
                   </div>
                 </div>
                 {vendors.map(v => (
                   <div key={v} onClick={() => toggleVendor(v)}
                     className={cn("flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors",
-                      selectedVendors.includes(v) ? "bg-blue-50 text-blue-600" : "hover:bg-slate-50 text-slate-700")}>
+                      selectedVendors.includes(v) ? "bg-brand-50 text-brand-600" : "hover:bg-slate-50 text-slate-700")}>
                     <span className="text-sm font-medium">{v}</span>
                     {selectedVendors.includes(v) && <Check className="w-4 h-4" />}
                   </div>
@@ -802,9 +686,9 @@ export default function VendorPerformancePage() {
           )}
 
           {comparisonType !== "none" && (
-            <div className="flex items-center gap-2 bg-blue-50 px-3 py-2 rounded-xl border border-blue-100 shadow-sm">
-              <ArrowUpRight className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-700 whitespace-nowrap">
+            <div className="flex items-center gap-2 bg-brand-50 px-3 py-2 rounded-xl border border-brand-100 shadow-sm">
+              <ArrowUpRight className="w-4 h-4 text-brand-600" />
+              <span className="text-sm font-medium text-brand-700 whitespace-nowrap">
                 vs {comparisonType === "previous_period" ? "Prev Period" : "Prev Year"}
               </span>
             </div>
@@ -812,7 +696,7 @@ export default function VendorPerformancePage() {
 
           <button onClick={() => setShowFilters(!showFilters)}
             className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border shadow-sm transition-colors",
-              showFilters ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50")}>
+              showFilters ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50")}>
             <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />
             <span className="text-sm font-medium">Filters</span>
           </button>
@@ -825,19 +709,19 @@ export default function VendorPerformancePage() {
 
       {/* Projection Card */}
       {projection && (
-        <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl shadow-lg shadow-blue-900/20 text-white">
+        <div className="bg-gradient-to-br from-brand-600 to-brand-700 p-6 rounded-2xl shadow-lg shadow-brand-800/25 text-white">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <TrendingUp className="w-5 h-5" />
                 Month-End Projection (Pro-rata)
               </h3>
-              <p className="text-blue-100 text-xs mt-1">
+              <p className="text-brand-100 text-xs mt-1">
                 Based on performance from {startDate} to {endDate} ({projection.daysElapsed}/{projection.totalDays} days)
               </p>
             </div>
             <div className="bg-white/10 px-4 py-2 rounded-xl backdrop-blur-md border border-white/10">
-              <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">Projection Factor</p>
+              <p className="text-[10px] font-bold text-brand-100 uppercase tracking-wider">Projection Factor</p>
               <p className="text-xl font-bold">x{projection.factor.toFixed(2)}</p>
             </div>
           </div>
@@ -850,7 +734,7 @@ export default function VendorPerformancePage() {
               { label: "Projected Units", value: Math.round(projection.units).toLocaleString(), change: projection.unitsChange },
             ].map(({ label, value, change }) => (
               <div key={label} className="bg-white/10 p-4 rounded-xl border border-white/10 backdrop-blur-md">
-                <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider mb-1">{label}</p>
+                <p className="text-[10px] font-bold text-brand-100 uppercase tracking-wider mb-1">{label}</p>
                 <div className="flex items-baseline justify-between">
                   <p className="text-lg font-bold">{value}</p>
                   <div className={cn("flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full",
@@ -859,7 +743,7 @@ export default function VendorPerformancePage() {
                     {Math.abs(change).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[9px] text-blue-200 mt-1">vs Last Month Actual</p>
+                <p className="text-[9px] text-brand-200 mt-1">vs Last Month Actual</p>
               </div>
             ))}
           </div>
@@ -871,7 +755,7 @@ export default function VendorPerformancePage() {
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Channel Group</label>
             <select value={selectedChannelGroup} onChange={(e) => setSelectedChannelGroup(e.target.value)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
               <option value="All Groups">All Groups</option>
               <option value="B2B">B2B</option>
               <option value="B2C">B2C</option>
@@ -880,25 +764,25 @@ export default function VendorPerformancePage() {
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Channel</label>
             <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
               {channels.map(c => (<option key={c} value={c}>{c}</option>))}
             </select>
           </div>
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all" />
           </div>
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
+              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all" />
           </div>
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="self-end" />
           <div className="flex-1 space-y-1.5">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Comparison</label>
             <select value={comparisonType} onChange={(e) => setComparisonType(e.target.value as any)}
-              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+              className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
               <option value="none">No Comparison</option>
               <option value="previous_period">Previous Period</option>
               <option value="previous_year">Previous Year</option>
@@ -911,7 +795,7 @@ export default function VendorPerformancePage() {
                 Reset
               </button>
               <button onClick={() => { fetchData(); setShowFilters(false) }}
-                className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 whitespace-nowrap shrink-0">
+                className="px-6 py-2 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-200 whitespace-nowrap shrink-0">
                 Apply Filters
               </button>
             </div>
@@ -921,37 +805,28 @@ export default function VendorPerformancePage() {
 
       {/* Summary Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {[
-          { label: "Revenue (VND)", value: metrics.revenue, change: metrics.revenueChange, icon: DollarSign, color: "blue" },
-          { label: "Orders", value: metrics.orders, change: metrics.ordersChange, icon: ShoppingCart, color: "indigo" },
-          { label: "Units Sold", value: metrics.units, change: metrics.unitsChange, icon: Package, color: "purple" },
-          { label: "AOV (VND)", value: metrics.aov, change: metrics.aovChange, icon: TrendingUp, color: "emerald" },
-          { label: "Gross Margin", value: metrics.margin, change: metrics.marginChange, icon: LayoutDashboard, color: "amber" },
-        ].map((item, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
-            <div className="flex justify-between items-start mb-4">
-              <div className={cn("p-3 rounded-xl",
-                item.color === "blue" ? "bg-blue-50 text-blue-600" :
-                item.color === "indigo" ? "bg-indigo-50 text-indigo-600" :
-                item.color === "emerald" ? "bg-emerald-50 text-emerald-600" :
-                item.color === "purple" ? "bg-purple-50 text-purple-600" : "bg-amber-50 text-amber-600")}>
-                <item.icon className="w-6 h-6" />
-              </div>
-              {loading ? <Skeleton className="h-4 w-12" /> : comparisonType !== "none" && (
-                <div className={cn("flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full",
-                  item.change >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
-                  {item.change >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {Math.abs(item.change)}%
-                </div>
-              )}
+        {([
+          { label: "Revenue (VND)", value: metrics.revenue, change: metrics.revenueChange, icon: DollarSign,      accent: "revenue" },
+          { label: "Orders",        value: metrics.orders,  change: metrics.ordersChange,  icon: ShoppingCart,    accent: "neutral" },
+          { label: "Units Sold",    value: metrics.units,   change: metrics.unitsChange,   icon: Package,         accent: "neutral" },
+          { label: "AOV (VND)",     value: metrics.aov,      change: metrics.aovChange,     icon: TrendingUp,      accent: "positive" },
+          { label: "Gross Margin",  value: metrics.margin,  change: metrics.marginChange,  icon: LayoutDashboard, accent: "margin"  },
+        ] as { label: string; value: number; change: number; icon: React.ElementType; accent: MetricAccent }[]).map((item, idx) => (
+          loading ? (
+            <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <Skeleton className="h-9 w-9 rounded-xl" />
+              <div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-8 w-32" /></div>
             </div>
-            <p className="text-slate-500 text-sm font-medium">{item.label}</p>
-            {loading ? <Skeleton className="h-8 w-32 mt-2" /> : (
-              <h3 className="text-2xl font-bold text-slate-900 mt-1">
-                {item.label.includes("VND") ? formatCompactNumber(item.value) : formatNumber(item.value)}
-              </h3>
-            )}
-          </div>
+          ) : (
+            <StatTile
+              key={idx}
+              icon={<item.icon className="w-5 h-5" />}
+              label={item.label}
+              value={item.label.includes("VND") ? formatCompactNumber(item.value) : formatNumber(item.value)}
+              accent={item.accent}
+              deltas={comparisonType !== "none" ? [{ label: "So sánh", value: `${item.change >= 0 ? "+" : ""}${item.change}%`, kind: item.change >= 0 ? "up" : "down" }] : undefined}
+            />
+          )
         ))}
       </div>
 
@@ -962,7 +837,7 @@ export default function VendorPerformancePage() {
             <h2 className="text-lg font-bold text-slate-900">Revenue Trend</h2>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-xs font-medium text-slate-500 bg-slate-50 px-3 py-1 rounded-full">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <div className="w-2 h-2 rounded-full" style={{ background: CHART_PALETTE[0] }}></div>
                 Current Period
               </div>
               {comparisonType !== "none" && (
@@ -979,16 +854,16 @@ export default function VendorPerformancePage() {
                 <AreaChart data={trendData}>
                   <defs>
                     <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      <stop offset="5%" stopColor={CHART_PALETTE[0]} stopOpacity={0.15} />
+                      <stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(val) => formatCompactNumber(val)} />
-                  <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }}
+                  <Tooltip contentStyle={chartTooltipStyle}
                     formatter={(val: number, name: string) => [formatCurrency(val), name === "revenue" ? "Current Revenue" : "Previous Revenue"]} />
-                  <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="revenue" />
+                  <Area type="monotone" dataKey="revenue" stroke={CHART_PALETTE[0]} strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="revenue" />
                   {comparisonType !== "none" && (
                     <Area type="monotone" dataKey="prevRevenue" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" fill="transparent" name="prevRevenue" />
                   )}
@@ -1003,9 +878,9 @@ export default function VendorPerformancePage() {
           <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h2 className="text-lg font-bold text-slate-900">Channel Distribution</h2>
             <button onClick={exportChannelCSV}
-              className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 h-[38px] px-3 bg-blue-50/50 hover:bg-blue-50 rounded-lg transition-all">
+              className="flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700 h-[38px] px-3 bg-brand-50/50 hover:bg-brand-50 rounded-lg transition-all">
               <Download className="w-4 h-4" />
-              Export CSV
+              Export
             </button>
           </div>
           <div className="overflow-x-auto">
@@ -1166,13 +1041,13 @@ export default function VendorPerformancePage() {
 
                             return (
                               <tr key={idx} className="hover:bg-slate-50 transition-colors group text-xs">
-                                <td className="px-4 py-3 font-medium text-slate-700 border-l-2 border-transparent group-hover:border-blue-400">
+                                <td className="px-4 py-3 font-medium text-slate-700 border-l-2 border-transparent group-hover:border-brand-400">
                                   {channel.channel_name || "Unknown"}
                                 </td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatNumber(channel.orders)}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatNumber(channel.units_sold)}</td>
                                 <td className="px-4 py-3 text-right text-slate-600 font-medium">{formatCurrency(rev)}</td>
-                                <td className="px-4 py-3 text-right text-blue-600 font-medium">{projection ? formatCurrency(rev * projection.factor) : "-"}</td>
+                                <td className="px-4 py-3 text-right text-brand-600 font-medium">{projection ? formatCurrency(rev * projection.factor) : "-"}</td>
                                 <td className="px-4 py-3 text-right text-slate-500 italic">{formatCurrency(channel.total_channel_revenue)}</td>
                                 <td className="px-4 py-3 text-right">
                                   {contribution !== null ? (
@@ -1190,7 +1065,7 @@ export default function VendorPerformancePage() {
                             <td className="px-4 py-2 text-right">{formatNumber(groupOrders)}</td>
                             <td className="px-4 py-2 text-right">{formatNumber(groupUnits)}</td>
                             <td className="px-4 py-2 text-right">{formatCurrency(groupRevenue)}</td>
-                            <td className="px-4 py-2 text-right text-blue-600">{projection ? formatCurrency(groupRevenue * projection.factor) : "-"}</td>
+                            <td className="px-4 py-2 text-right text-brand-600">{projection ? formatCurrency(groupRevenue * projection.factor) : "-"}</td>
                             <td className="px-4 py-2 text-right text-slate-500 italic">{formatCurrency(groupAllVendorsChannelRevenue)}</td>
                             <td className="px-4 py-2 text-right">
                               {groupAllVendorsChannelRevenue > 0 ? (
@@ -1203,16 +1078,16 @@ export default function VendorPerformancePage() {
                             </td>
                           </tr>
                           {groupName === "B2B-Non-Strategic" && (
-                            <tr className="bg-blue-50 font-bold text-xs border-y-2 border-blue-100">
-                              <td className="px-4 py-3 text-blue-900 bg-blue-100/50">Total B2B (Combined)</td>
+                            <tr className="bg-brand-50 font-bold text-xs border-y-2 border-brand-100">
+                              <td className="px-4 py-3 text-brand-800 bg-brand-100/50">Total B2B (Combined)</td>
                               <td className="px-4 py-3 text-right">{formatNumber(b2bTotalOrders)}</td>
                               <td className="px-4 py-3 text-right">{formatNumber(b2bTotalUnits)}</td>
                               <td className="px-4 py-3 text-right">{formatCurrency(b2bTotalRevenue)}</td>
-                              <td className="px-4 py-3 text-right text-blue-600">{projection ? formatCurrency(b2bTotalRevenue * projection.factor) : "-"}</td>
-                              <td className="px-4 py-3 text-right text-slate-500 italic border-l border-blue-100">{formatCurrency(b2bTotalAllVendorsChannelRevenue)}</td>
+                              <td className="px-4 py-3 text-right text-brand-600">{projection ? formatCurrency(b2bTotalRevenue * projection.factor) : "-"}</td>
+                              <td className="px-4 py-3 text-right text-slate-500 italic border-l border-brand-100">{formatCurrency(b2bTotalAllVendorsChannelRevenue)}</td>
                               <td className="px-4 py-3 text-right">
                                 {b2bTotalAllVendorsChannelRevenue > 0 ? (
-                                  <span className="font-bold text-blue-700">{(b2bTotalRevenue / b2bTotalAllVendorsChannelRevenue * 100).toFixed(1)}%</span>
+                                  <span className="font-bold text-brand-700">{(b2bTotalRevenue / b2bTotalAllVendorsChannelRevenue * 100).toFixed(1)}%</span>
                                 ) : "-"}
                               </td>
                               <td className={cn("px-4 py-3 text-right font-black",
@@ -1235,7 +1110,7 @@ export default function VendorPerformancePage() {
                           <td className="px-4 py-4 text-right">{formatNumber(grandTotalOrders)}</td>
                           <td className="px-4 py-4 text-right">{formatNumber(grandTotalUnits)}</td>
                           <td className="px-4 py-4 text-right overflow-hidden truncate">{formatCurrency(grandTotalRevenue)}</td>
-                          <td className="px-4 py-4 text-right text-blue-700">{projection ? formatCurrency(grandTotalRevenue * projection.factor) : "-"}</td>
+                          <td className="px-4 py-4 text-right text-brand-700">{projection ? formatCurrency(grandTotalRevenue * projection.factor) : "-"}</td>
                           <td className="px-4 py-4 text-right text-slate-500 italic">{formatCurrency(finalGrandTotalAllVendorsChannelRevenue)}</td>
                           <td className="px-4 py-4 text-right text-slate-900">
                             {finalGrandTotalAllVendorsChannelRevenue > 0 ? (
@@ -1270,7 +1145,7 @@ export default function VendorPerformancePage() {
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input type="text" placeholder="Search SKU..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-64" />
+                className="pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full md:w-64" />
             </div>
           </div>
         </div>
@@ -1367,7 +1242,7 @@ export default function VendorPerformancePage() {
                   return (
                     <button key={pageNum} onClick={() => setProductPage(pageNum)}
                       className={cn("w-8 h-8 text-xs font-bold rounded-lg transition-all",
-                        productPage === pageNum ? "bg-blue-600 text-white shadow-md shadow-blue-200" : "text-slate-600 hover:bg-white hover:border-slate-200 border border-transparent")}>
+                        productPage === pageNum ? "bg-brand-600 text-white shadow-md shadow-brand-200" : "text-slate-600 hover:bg-white hover:border-slate-200 border border-transparent")}>
                       {pageNum}
                     </button>
                   )

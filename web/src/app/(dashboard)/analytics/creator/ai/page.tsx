@@ -1,0 +1,914 @@
+"use client"
+
+import { useState, useRef, useEffect, useCallback } from "react"
+import { useSession }                                from "next-auth/react"
+import { useRouter }                                 from "next/navigation"
+import {
+  Send, Cpu, User, Plus, Trash2, ExternalLink, Loader2,
+  Database, Globe, BarChart2, Code2, Lightbulb,
+  Paperclip, X, FileText, Image as ImageIcon, FileSpreadsheet,
+  FileJson, FileType, Package, Mic,
+} from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm     from "remark-gfm"
+import ChatChart      from "@/components/chat-chart"
+import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface WebSource { title: string; url: string }
+
+interface Message {
+  role:    "user" | "assistant"
+  content: string
+  sources?: WebSource[]
+  fileName?: string  // attached file name shown in user bubble
+  summarized?: boolean  // server nén lịch sử cũ cho lượt này
+}
+
+// ─── LaTeX → Unicode converter ───────────────────────────────────────────────
+// Gemini sometimes outputs LaTeX math ($\approx$, \times, etc.) which ReactMarkdown
+// cannot render. Convert to plain Unicode symbols before display.
+
+const LATEX_UNICODE: [RegExp, string][] = [
+  // Wrappers — extract inner text
+  [/\\frac\{([^}]+)\}\{([^}]+)\}/g, "($1)/($2)"],
+  [/\\(?:text|mathbf|mathit|mathrm|boldsymbol|operatorname)\{([^}]+)\}/g, "$1"],
+  [/\\sqrt\{([^}]+)\}/g, "√($1)"],
+  // Math operators
+  [/\\approx/g, "≈"], [/\\sim(?!eq)/g, "~"], [/\\simeq/g, "≃"],
+  [/\\times/g, "×"], [/\\div/g, "÷"], [/\\cdot/g, "·"],
+  [/\\pm/g, "±"], [/\\mp/g, "∓"],
+  [/\\leq?/g, "≤"], [/\\geq?/g, "≥"],
+  [/\\neq?/g, "≠"], [/\\equiv/g, "≡"],
+  [/\\not=/g, "≠"],
+  // Arrows
+  [/\\Rightarrow/g, "⇒"], [/\\Leftarrow/g, "⇐"],
+  [/\\rightarrow/g, "→"], [/\\leftarrow/g, "←"], [/\\to(?=\s|$|[^a-z])/g, "→"],
+  [/\\leftrightarrow/g, "↔"], [/\\Leftrightarrow/g, "⇔"],
+  // Greek uppercase
+  [/\\Gamma/g, "Γ"], [/\\Delta/g, "Δ"], [/\\Theta/g, "Θ"], [/\\Lambda/g, "Λ"],
+  [/\\Pi(?=[^a-z])/g, "Π"], [/\\Sigma/g, "Σ"], [/\\Phi/g, "Φ"], [/\\Psi/g, "Ψ"], [/\\Omega/g, "Ω"],
+  // Greek lowercase
+  [/\\alpha/g, "α"], [/\\beta/g, "β"], [/\\gamma/g, "γ"], [/\\delta/g, "δ"],
+  [/\\epsilon/g, "ε"], [/\\zeta/g, "ζ"], [/\\eta/g, "η"], [/\\theta/g, "θ"],
+  [/\\lambda/g, "λ"], [/\\mu/g, "μ"], [/\\nu/g, "ν"], [/\\xi/g, "ξ"],
+  [/\\pi(?=[^a-z])/g, "π"], [/\\rho/g, "ρ"], [/\\sigma/g, "σ"], [/\\tau/g, "τ"],
+  [/\\phi/g, "φ"], [/\\chi/g, "χ"], [/\\psi/g, "ψ"], [/\\omega/g, "ω"],
+  // Set / logic
+  [/\\sum/g, "∑"], [/\\prod/g, "∏"], [/\\int/g, "∫"],
+  [/\\infty/g, "∞"], [/\\partial/g, "∂"], [/\\nabla/g, "∇"],
+  [/\\forall/g, "∀"], [/\\exists/g, "∃"],
+  [/\\in(?=[^f])/g, "∈"], [/\\notin/g, "∉"],
+  [/\\subset/g, "⊂"], [/\\supset/g, "⊃"],
+  [/\\cup/g, "∪"], [/\\cap/g, "∩"],
+  [/\\sqrt/g, "√"],
+  // Misc
+  [/\\ldots/g, "…"], [/\\cdots/g, "…"], [/\\vdots/g, "⋮"], [/\\ddots/g, "⋱"],
+  [/\\%/g, "%"], [/\\\$/g, "$"], [/\\&/g, "&"],
+  // Strip display math delimiters $$...$$ then inline $...$
+  [/\$\$([\s\S]*?)\$\$/g, "$1"],
+  [/\$([^$\n]{1,120})\$/g, "$1"],
+  // Clean up leftover backslash-commands that weren't matched
+  [/\\[a-zA-Z]+\*/g, ""], [/\\\\/g, "↵"],
+]
+
+function stripLatex(text: string): string {
+  // Skip code blocks — only process non-code segments
+  const parts = text.split(/(```[\s\S]*?```|`[^`]+`)/g)
+  return parts.map((part, i) =>
+    i % 2 === 1   // odd index = code block → leave as-is
+      ? part
+      : LATEX_UNICODE.reduce((t, [re, rep]) => t.replace(re, rep), part)
+  ).join("")
+}
+
+// Export helpers (parseExportMarker/extractCSVBlock/extractJSONArray/extractMarkdownTable/ExportBar)
+// dùng chung với Bé Gấu — xem @/components/chat-export.tsx.
+
+// ─── File chip ────────────────────────────────────────────────────────────────
+
+const ACCEPT = ".pdf,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.webp,.gif,.xlsx,.xls,.csv,.json,.txt,.md,.ts,.tsx,.js,.jsx,.py,.sql,.yaml,.yml,.toml,.xml,.html,.sh"
+const MAX_MB  = 20
+const MAX_FILES = 5
+
+function fileIcon(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() || ""
+  if (["png","jpg","jpeg","webp","gif","bmp","svg"].includes(ext)) return <ImageIcon size={13} />
+  if (["xlsx","xls","csv"].includes(ext))                          return <FileSpreadsheet size={13} />
+  if (["docx","doc"].includes(ext))                                return <FileType size={13} />
+  if (["pptx","ppt"].includes(ext))                                return <Package size={13} />
+  if (ext === "json")                                              return <FileJson size={13} />
+  return <FileText size={13} />
+}
+
+function isImage(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() || ""
+  return ["png","jpg","jpeg","webp","gif","bmp"].includes(ext)
+}
+
+// ─── Chart helpers ────────────────────────────────────────────────────────────
+
+function extractChartData(text: string): { chart: any; before: string; after: string } | null {
+  const m = text.match(/```chart\s*([\s\S]*?)\s*```/)
+  if (!m) return null
+  try {
+    const chart = JSON.parse(m[1])
+    if (!chart.chart_type || !chart.data) return null
+    const idx = text.indexOf("```chart")
+    const end = text.indexOf("```", idx + 7) + 3
+    return { chart, before: text.slice(0, idx).trim(), after: text.slice(end).trim() }
+  } catch { return null }
+}
+
+// ─── Markdown renderer ────────────────────────────────────────────────────────
+
+function renderMarkdown(raw: string) {
+  const text = stripLatex(raw)
+  return (
+    <div className="markdown-body">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+        p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+        strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-slate-100">{children}</strong>,
+        em:     ({ children }) => <em className="italic">{children}</em>,
+        ul:     ({ children }) => <ul className="list-disc list-inside space-y-0.5 mb-2">{children}</ul>,
+        ol:     ({ children }) => <ol className="list-decimal list-inside space-y-0.5 mb-2">{children}</ol>,
+        li:     ({ children }) => <li className="text-gray-700 dark:text-slate-300">{children}</li>,
+        h1:     ({ children }) => <p className="font-bold text-base mb-1 text-gray-900 dark:text-slate-100">{children}</p>,
+        h2:     ({ children }) => <p className="font-semibold text-sm mb-1 text-gray-800 dark:text-slate-200">{children}</p>,
+        h3:     ({ children }) => <p className="font-semibold text-sm mb-1 text-gray-700 dark:text-slate-300">{children}</p>,
+        hr:     () => <hr className="my-3 border-gray-200 dark:border-slate-600" />,
+        code:   ({ children }) => <code className="bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
+        pre:    ({ children }) => <pre className="bg-gray-900 dark:bg-slate-950 text-gray-100 rounded-xl p-4 overflow-x-auto text-xs font-mono mb-3 [&_code]:bg-transparent [&_code]:p-0 [&_code]:rounded-none">{children}</pre>,
+        table:  ({ children }) => (
+          <div className="overflow-x-auto mb-3 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm">
+            <table className="text-xs border-collapse w-full">{children}</table>
+          </div>
+        ),
+        thead:  ({ children }) => <thead className="bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">{children}</thead>,
+        tbody:  ({ children }) => <tbody className="divide-y divide-gray-100 dark:divide-slate-700">{children}</tbody>,
+        tr:     ({ children }) => <tr className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">{children}</tr>,
+        th:     ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">{children}</th>,
+        td:     ({ children }) => <td className="px-3 py-2 text-gray-600 dark:text-slate-300">{children}</td>,
+        a:      ({ href, children }) => (
+          <a href={href} target="_blank" rel="noopener noreferrer"
+            className="text-violet-600 dark:text-violet-400 underline underline-offset-2 hover:text-violet-700">
+            {children}
+          </a>
+        ),
+      }}>
+        {text}
+      </ReactMarkdown>
+    </div>
+  )
+}
+
+// ─── Web source citations ─────────────────────────────────────────────────────
+
+function SourceCitations({ sources }: { sources: WebSource[] }) {
+  if (!sources.length) return null
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
+      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Nguồn tham khảo</p>
+      <div className="space-y-1">
+        {sources.map((s, i) => (
+          <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+            className="flex items-start gap-1.5 text-xs text-violet-600 dark:text-violet-400 hover:text-violet-700 group">
+            <ExternalLink size={11} className="flex-shrink-0 mt-0.5" />
+            <span className="line-clamp-1 group-hover:underline">{s.title || s.url}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Parse ```followup block → array các gợi ý (tối đa 3). Trả [] nếu không có.
+function extractFollowupChips(text: string): string[] {
+  const m = text.match(/```followup\s*([\s\S]*?)```/)
+  if (!m) return []
+  try {
+    const arr = JSON.parse(m[1].trim())
+    if (Array.isArray(arr)) return arr.filter(s => typeof s === "string" && s.trim()).slice(0, 3)
+  } catch {}
+  return []
+}
+
+// ─── MsgContent — assistant message with PDF ref ─────────────────────────────
+
+function MsgContent({ msg, onFollowup }: { msg: { content: string; sources?: WebSource[] }; onFollowup?: (q: string) => void }) {
+  const contentRef = useRef<HTMLDivElement>(null)
+  const chips = extractFollowupChips(msg.content)
+  // Hide export/followup helper blocks from the visible answer (they drive buttons, not display)
+  const display = stripExportHelperBlocks(msg.content).replace(/```followup[\s\S]*?```/g, "").trim()
+  const chartResult = extractChartData(display)
+  return (
+    <div>
+      <div ref={contentRef}>
+        {chartResult ? (
+          <>
+            {chartResult.before && renderMarkdown(chartResult.before)}
+            <ChatChart data={chartResult.chart} />
+            {chartResult.after && renderMarkdown(chartResult.after)}
+          </>
+        ) : renderMarkdown(display)}
+      </div>
+      <ExportBar content={msg.content} contentRef={contentRef} apiEndpoint="/api/creator-ai/export" />
+      {msg.sources && msg.sources.length > 0 && <SourceCitations sources={msg.sources} />}
+      {chips.length > 0 && onFollowup && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          {chips.map((c, i) => (
+            <button key={i} onClick={() => onFollowup(c)}
+              className="px-3 py-1.5 text-xs font-medium text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-full hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors">
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Quick prompts ────────────────────────────────────────────────────────────
+
+const QUICK_GROUPS = [
+  {
+    label: "Data & Analytics",
+    icon:  Database,
+    prompts: [
+      "Doanh thu tháng này vs tháng trước: B2B, B2C, tổng, GP, CM1 — bảng + chart",
+      "Top 10 khách B2B theo doanh thu 3 tháng gần nhất, kèm tier và GP%",
+    ],
+  },
+  {
+    label: "Web Search",
+    icon:  Globe,
+    prompts: [
+      "Xu hướng AI agent framework mới nhất 2025 — so sánh LangGraph, CrewAI, AutoGen",
+      "Best practices for Next.js 15 App Router performance optimization",
+    ],
+  },
+  {
+    label: "BI & Chart",
+    icon:  BarChart2,
+    prompts: [
+      "Vẽ bar chart doanh thu 6 tháng gần nhất theo tháng (B2B + B2C)",
+      "Top 5 kênh doanh thu tháng này — pie chart",
+    ],
+  },
+  {
+    label: "Sản phẩm & Onboarding",
+    icon:  Package,
+    prompts: [
+      "Tìm gói eSIM Đài Loan trên WorldMove chưa có trong hệ thống, tạo template onboard để review",
+      "So sánh giá vendor cho eSIM Nhật, chọn option rẻ nhất và draft SKU",
+    ],
+  },
+  {
+    label: "Code & System",
+    icon:  Code2,
+    prompts: [
+      "Cấu trúc chatbot hiện tại: agents, routing, tools — ưu nhược điểm và hướng cải thiện",
+      "Đề xuất cách optimize query gohub_dw để giảm latency",
+    ],
+  },
+]
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function CreatorAIPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+
+  const [messages,      setMessages]      = useState<Message[]>([])
+  const [input,         setInput]         = useState("")
+  const [loading,       setLoading]       = useState(false)
+  const [elapsed,       setElapsed]       = useState(0)
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([])
+  const [fileError,     setFileError]     = useState("")
+  const [dragging,      setDragging]      = useState(false)
+  const [gpAllowed,     setGpAllowed]     = useState<boolean | null>(null) // null = loading
+  const [imgPreviews,   setImgPreviews]   = useState<Map<string, string>>(new Map())
+  const [listening,     setListening]     = useState(false)
+  const [voiceSupported, setVoiceSupported] = useState(false)
+  const [statusText,    setStatusText]    = useState("")
+  const [larkConnected, setLarkConnected] = useState<boolean | null>(null)
+  const [convId,        setConvId]        = useState<string | null>(null)
+  const [pastConvs,     setPastConvs]     = useState<{ id: string; title: string; updated_at: string }[]>([])
+  const [showConvList,  setShowConvList]  = useState(false)
+  const isCreatorRole = session?.user?.role === "creator"
+
+  const bottomRef    = useRef<HTMLDivElement>(null)
+  const recognitionRef = useRef<any>(null)
+  const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null)
+  const inputRef     = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const LS_KEY       = "gp_conv"
+
+  // Access guard: creator → always allowed. Others → check gp_enabled from /api/user/me
+  useEffect(() => {
+    if (status === "loading") return
+    if (!session?.user) { router.replace("/analytics"); return }
+    if (session.user.role === "creator") { setGpAllowed(true); return }
+    fetch("/api/user/me").then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.gp_enabled) setGpAllowed(true)
+      else router.replace("/analytics")
+    }).catch(() => router.replace("/analytics"))
+  }, [session, status, router])
+
+  // Restore conversation: localStorage first (instant), then Supabase (persistent across devices)
+  useEffect(() => {
+    let loaded = false
+    try {
+      const saved = localStorage.getItem(LS_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved) as Message[]
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed)
+          const savedConvId = localStorage.getItem(LS_KEY + "_id")
+          if (savedConvId) setConvId(savedConvId)
+          loaded = true
+        }
+      }
+    } catch {}
+    // Load past conversations list + last conversation if nothing in localStorage
+    fetch("/api/creator-ai/conversations")
+      .then(r => r.ok ? r.json() : [])
+      .then((list: { id: string; title: string; updated_at: string }[]) => {
+        if (!Array.isArray(list)) return
+        setPastConvs(list)
+        if (!loaded && list.length > 0) loadConversation(list[0].id)
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist conversation + convId to localStorage on every change
+  useEffect(() => {
+    try {
+      if (messages.length > 0) {
+        localStorage.setItem(LS_KEY, JSON.stringify(messages))
+        if (convId) localStorage.setItem(LS_KEY + "_id", convId)
+      } else {
+        localStorage.removeItem(LS_KEY)
+        localStorage.removeItem(LS_KEY + "_id")
+      }
+    } catch {}
+  }, [messages, convId, LS_KEY])
+
+  // Setup Web Speech API (voice input) — feature-detect, ẩn nút nếu browser không hỗ trợ
+  useEffect(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SR) return
+    const rec = new SR()
+    rec.lang = "vi-VN"
+    rec.interimResults = false
+    rec.maxAlternatives = 1
+    rec.onresult = (e: any) => {
+      const transcript = e.results?.[0]?.[0]?.transcript || ""
+      if (transcript) setInput(prev => (prev ? prev + " " : "") + transcript)
+    }
+    rec.onend = () => setListening(false)
+    rec.onerror = () => setListening(false)
+    recognitionRef.current = rec
+    setVoiceSupported(true)
+    return () => { try { rec.abort() } catch {} }
+  }, [])
+
+  // Lark OAuth: đọc trạng thái kết nối + xử lý ?lark=connected|error khi quay về
+  useEffect(() => {
+    if (!isCreatorRole) return
+    const params = new URLSearchParams(window.location.search)
+    const lark = params.get("lark")
+    if (lark) {
+      // dọn query param khỏi URL
+      window.history.replaceState({}, "", window.location.pathname)
+    }
+    fetch("/api/lark/oauth/status").then(r => r.ok ? r.json() : null).then(d => {
+      setLarkConnected(!!d?.connected)
+    }).catch(() => setLarkConnected(false))
+  }, [isCreatorRole])
+
+  const toggleVoice = useCallback(() => {
+    const rec = recognitionRef.current
+    if (!rec) return
+    if (listening) { try { rec.stop() } catch {}; setListening(false) }
+    else { try { rec.start(); setListening(true) } catch { setListening(false) } }
+  }, [listening])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages, loading])
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    if (loading) {
+      setElapsed(0)
+      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [loading])
+
+  const loadConversation = useCallback(async (id: string) => {
+    try {
+      const r = await fetch(`/api/chat/conversations/${id}`)
+      if (!r.ok) return
+      const msgs = await r.json() as { role: string; content: string }[]
+      if (!Array.isArray(msgs) || msgs.length === 0) return
+      const converted: Message[] = msgs.map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
+      setMessages(converted)
+      setConvId(id)
+      setShowConvList(false)
+      try { localStorage.setItem(LS_KEY, JSON.stringify(converted)) } catch {}
+    } catch {}
+  }, [LS_KEY])
+
+  const clearConversation = useCallback(() => {
+    setMessages([])
+    setInput("")
+    setAttachedFiles([])
+    setFileError("")
+    setConvId(null)
+    setImgPreviews(new Map())
+    try { localStorage.removeItem(LS_KEY) } catch {}
+    inputRef.current?.focus()
+  }, [])
+
+  const addFiles = useCallback((incoming: FileList | File[]) => {
+    const newFiles = Array.from(incoming)
+    const oversized = newFiles.filter(f => f.size > MAX_MB * 1024 * 1024)
+    const valid     = newFiles.filter(f => f.size <= MAX_MB * 1024 * 1024)
+
+    if (oversized.length) setFileError(`File quá lớn (>${MAX_MB}MB): ${oversized.map(f => f.name).join(", ")}`)
+    else setFileError("")
+
+    if (!valid.length) return
+    setAttachedFiles(prev => {
+      const merged = [...prev, ...valid]
+      return merged.slice(-MAX_FILES) // keep last MAX_FILES
+    })
+    // Build image previews
+    valid.filter(f => isImage(f.name)).forEach(f => {
+      const url = URL.createObjectURL(f)
+      setImgPreviews(prev => new Map(prev).set(f.name, url))
+    })
+  }, [])
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) addFiles(e.target.files)
+    e.target.value = ""
+  }, [addFiles])
+
+  const removeFile = useCallback((name: string) => {
+    setAttachedFiles(prev => prev.filter(f => f.name !== name))
+    setImgPreviews(prev => { const m = new Map(prev); m.delete(name); return m })
+  }, [])
+
+  // Paste clipboard images (Ctrl+V)
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files || []).filter(f => f.type.startsWith("image/"))
+      if (files.length) { e.preventDefault(); addFiles(files) }
+    }
+    window.addEventListener("paste", onPaste)
+    return () => window.removeEventListener("paste", onPaste)
+  }, [addFiles])
+
+  // Revoke object URLs on unmount to avoid memory leaks
+  useEffect(() => () => {
+    imgPreviews.forEach(url => URL.revokeObjectURL(url))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const send = useCallback(async (content: string) => {
+    const text = content.trim()
+    if ((!text && attachedFiles.length === 0) || loading) return
+
+    const fileNames = attachedFiles.map(f => f.name).join(", ")
+    const userMsg: Message = {
+      role:     "user",
+      content:  text || `[Gửi ${attachedFiles.length} file: ${fileNames}]`,
+      fileName: fileNames || undefined,
+    }
+    const next = [...messages, userMsg]
+    setMessages(next)
+    setInput("")
+    const filesToSend = [...attachedFiles]
+    setAttachedFiles([])
+    setImgPreviews(new Map())
+    setLoading(true)
+
+    try {
+      const serializedMsgs = next.map(m => ({ role: m.role, content: m.content }))
+      let res: Response
+      if (filesToSend.length > 0) {
+        const form = new FormData()
+        form.append("messages", JSON.stringify(serializedMsgs))
+        if (convId) form.append("conversation_id", convId)
+        filesToSend.forEach((f, i) => form.append(`file_${i}`, f))
+        res = await fetch("/api/creator-ai/chat", { method: "POST", body: form })
+      } else {
+        res = await fetch("/api/creator-ai/chat", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: serializedMsgs, conversation_id: convId }),
+        })
+      }
+
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        throw new Error(err.error || `HTTP ${res.status}`)
+      }
+
+      // SSE stream reader
+      const reader  = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ""
+      let assistantContent = ""
+      let finalSources:   WebSource[]  = []
+      let finalSummarized = false
+      let newConvId:      string | null = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const parts = buf.split("\n\n")
+        buf = parts.pop() ?? ""
+        for (const part of parts) {
+          if (!part.startsWith("data: ")) continue
+          try {
+            const ev = JSON.parse(part.slice(6))
+            if      (ev.type === "status") setStatusText(ev.text)
+            else if (ev.type === "text")   assistantContent = ev.content
+            else if (ev.type === "done") {
+              newConvId       = ev.conversationId
+              finalSources    = Array.isArray(ev.sources) ? ev.sources : []
+              finalSummarized = ev.summarized === true
+            } else if (ev.type === "error") throw new Error(ev.message)
+          } catch (parseErr: any) {
+            if (parseErr.message && !parseErr.message.includes("JSON")) throw parseErr
+          }
+        }
+      }
+
+      setStatusText("")
+      setMessages([...next, {
+        role: "assistant",
+        content: assistantContent || "Không có nội dung trả về.",
+        sources: finalSources,
+        summarized: finalSummarized,
+      }])
+      if (newConvId && !convId) {
+        setConvId(newConvId)
+        fetch("/api/creator-ai/conversations")
+          .then(r => r.ok ? r.json() : [])
+          .then((list: { id: string; title: string; updated_at: string }[]) => { if (Array.isArray(list)) setPastConvs(list) })
+          .catch(() => {})
+      }
+    } catch (e: any) {
+      setStatusText("")
+      setMessages([...next, { role: "assistant", content: `Lỗi: ${e.message}` }])
+    } finally {
+      setLoading(false)
+      setTimeout(() => inputRef.current?.focus(), 100)
+    }
+  }, [messages, loading, attachedFiles, addFiles, imgPreviews])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      send(input)
+    }
+  }, [send, input])
+
+  if (status === "loading" || !session?.user || gpAllowed === null) return null
+  if (!gpAllowed) return null
+
+  const thinkingMsg = elapsed > 0 ? ` (${elapsed}s)` : ""
+
+  return (
+    <div
+      className="flex flex-col h-screen bg-gray-50 dark:bg-slate-950 relative"
+      onDragOver={e => { e.preventDefault(); setDragging(true) }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false) }}
+      onDrop={e => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files) }}
+    >
+      {/* Drag overlay */}
+      {dragging && (
+        <div className="absolute inset-0 z-50 bg-violet-600/10 dark:bg-violet-400/10 border-4 border-dashed border-violet-400 rounded-none flex items-center justify-center pointer-events-none">
+          <div className="text-violet-600 dark:text-violet-300 text-xl font-bold flex flex-col items-center gap-2">
+            <Paperclip size={40} />
+            Thả file vào đây
+          </div>
+        </div>
+      )}
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ACCEPT}
+        multiple
+        className="hidden"
+        onChange={handleFileSelect}
+      />
+
+      {/* Header */}
+      <div className="flex-shrink-0 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center shadow-sm shadow-violet-600/20">
+            <Cpu size={16} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold text-gray-900 dark:text-slate-100">Gấu Pro</h1>
+            <p className="text-[11px] text-gray-400">Private AI · Creator only · Full access</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {isCreatorRole && larkConnected !== null && (
+            larkConnected ? (
+              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg" title="Gấu Pro xem được task Lark của bạn">
+                🔗 Đã kết nối Lark
+              </span>
+            ) : (
+              <a href="/api/lark/oauth/start"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors"
+                title="Cấp quyền để Gấu Pro xem task/task list Lark của bạn">
+                🔗 Kết nối Lark
+              </a>
+            )
+          )}
+          {loading && (
+            <span className="flex items-center gap-1.5 text-xs text-violet-500 max-w-[240px] truncate">
+              <Loader2 size={13} className="animate-spin flex-shrink-0" />
+              {statusText || `Đang xử lý${thinkingMsg}…`}
+            </span>
+          )}
+          {messages.length > 0 && !loading && (
+            <button
+              onClick={clearConversation}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:hover:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg transition-colors"
+            >
+              <Plus size={13} />
+              Cuộc trò chuyện mới
+            </button>
+          )}
+          {pastConvs.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowConvList(v => !v)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
+                title="Lịch sử hội thoại"
+              >
+                <Database size={13} />
+                Lịch sử
+              </button>
+              {showConvList && (
+                <div className="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden">
+                  <div className="p-2 border-b border-gray-100 dark:border-slate-800 text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-3">
+                    Hội thoại gần đây
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {pastConvs.map(c => (
+                      <button key={c.id} onClick={() => loadConversation(c.id)}
+                        className={`w-full text-left px-3 py-2 text-xs hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors ${convId === c.id ? "bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300" : "text-gray-700 dark:text-slate-300"}`}
+                      >
+                        <div className="truncate font-medium">{c.title || "Cuộc trò chuyện"}</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">{new Date(c.updated_at).toLocaleDateString("vi-VN")}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Chat area */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5">
+        {/* Empty state */}
+        {messages.length === 0 && (
+          <div className="max-w-3xl mx-auto pt-6">
+            <div className="text-center mb-8">
+              <div className="w-14 h-14 bg-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-violet-600/25">
+                <Cpu size={26} className="text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-1">Gấu Pro</h2>
+              <p className="text-sm text-gray-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                AI riêng của Hiếu. Truy xuất toàn bộ database, tìm kiếm web, phân tích dữ liệu, đọc file, xuất CSV/Excel.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {QUICK_GROUPS.map(group => {
+                const Icon = group.icon
+                return (
+                  <div key={group.label}>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Icon size={13} className="text-violet-500" />
+                      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">{group.label}</p>
+                    </div>
+                    <div className="space-y-2">
+                      {group.prompts.map(q => (
+                        <button key={q} onClick={() => send(q)}
+                          className="w-full text-left px-4 py-3 text-sm text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl hover:border-violet-300 hover:text-violet-700 dark:hover:text-violet-300 hover:bg-violet-50/50 dark:hover:bg-violet-900/10 transition-all shadow-sm leading-snug">
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="mt-6 flex items-start gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+              <Lightbulb size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+                <strong>Tips:</strong> Đính kèm file PDF/Excel/CSV/ảnh bằng nút paperclip ·
+                Yêu cầu "xuất CSV" hoặc "download Excel" để tải dữ liệu ·
+                Shift+Enter để xuống dòng
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div className="max-w-3xl mx-auto space-y-5">
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              {msg.role === "assistant" && (
+                <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm shadow-violet-600/20">
+                  <Cpu size={14} className="text-white" />
+                </div>
+              )}
+              <div className={`flex flex-col gap-1 ${msg.role === "user" ? "max-w-[80%]" : "max-w-[92%]"}`}>
+                {/* File chip on user messages */}
+                {msg.role === "user" && msg.fileName && (
+                  <div className="flex justify-end">
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] text-violet-300 bg-violet-700/60 rounded-lg">
+                      {fileIcon(msg.fileName)}
+                      {msg.fileName}
+                    </span>
+                  </div>
+                )}
+                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                  msg.role === "user"
+                    ? "bg-violet-600 text-white rounded-tr-sm shadow-sm"
+                    : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-slate-100 rounded-tl-sm shadow-sm"
+                }`}>
+                  {msg.role === "user" ? (
+                    <span className="whitespace-pre-wrap">{msg.content}</span>
+                  ) : (
+                    <>
+                      {msg.summarized && (
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500 mb-1.5 italic">🗜️ Lịch sử cũ đã được tóm tắt để tối ưu</div>
+                      )}
+                      <MsgContent msg={msg} onFollowup={q => send(q)} />
+                    </>
+                  )}
+                </div>
+              </div>
+              {msg.role === "user" && (
+                <div className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <User size={14} className="text-gray-500 dark:text-slate-400" />
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Loading */}
+          {loading && (
+            <div className="flex gap-3 justify-start">
+              <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-violet-600/20">
+                <Cpu size={14} className="text-white" />
+              </div>
+              <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex gap-1">
+                    {[0, 1, 2].map(k => (
+                      <span key={k} className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"
+                        style={{ animationDelay: `${k * 0.15}s`, animationDuration: "0.8s" }} />
+                    ))}
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {statusText
+                      ? statusText
+                      : <>
+                          {`Đang phân tích${thinkingMsg}`}
+                          {elapsed > 10 && " — đang query database / web…"}
+                          {elapsed > 30 && " — phức tạp, chờ xíu…"}
+                        </>
+                    }
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      {/* Input area */}
+      <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+        <div className="max-w-3xl mx-auto">
+
+          {/* Attached file chips */}
+          {attachedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {attachedFiles.map(f => {
+                const preview = imgPreviews.get(f.name)
+                return (
+                  <div key={f.name} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl max-w-[220px]">
+                    {preview
+                      ? <img src={preview} alt={f.name} className="w-6 h-6 rounded object-cover shrink-0" />
+                      : <span className="text-violet-600 dark:text-violet-400 shrink-0">{fileIcon(f.name)}</span>
+                    }
+                    <span className="text-xs text-violet-700 dark:text-violet-300 truncate flex-1">{f.name}</span>
+                    <span className="text-[10px] text-violet-400 shrink-0">{(f.size / 1024).toFixed(0)}KB</span>
+                    <button onClick={() => removeFile(f.name)} className="text-violet-300 hover:text-red-500 transition-colors shrink-0">
+                      <X size={12} />
+                    </button>
+                  </div>
+                )
+              })}
+              {attachedFiles.length >= MAX_FILES && (
+                <span className="text-[10px] text-amber-500 self-center ml-1">Tối đa {MAX_FILES} file</span>
+              )}
+            </div>
+          )}
+
+          {/* File error */}
+          {fileError && (
+            <p className="text-xs text-red-500 mb-2 px-1">{fileError}</p>
+          )}
+
+          <div className="flex gap-2 items-end">
+            {/* Attach file button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading || attachedFiles.length >= MAX_FILES}
+              title={`Đính kèm file (tối đa ${MAX_FILES}): PDF, DOCX, PPTX, Excel, CSV, ảnh, code... · Hoặc kéo thả / paste ảnh`}
+              className="flex-shrink-0 w-10 h-10 flex items-center justify-center text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 border border-gray-200 dark:border-slate-700 rounded-xl transition-colors disabled:opacity-40 relative"
+            >
+              <Paperclip size={16} />
+              {attachedFiles.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-violet-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  {attachedFiles.length}
+                </span>
+              )}
+            </button>
+
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={attachedFiles.length > 0 ? `Hỏi gì về ${attachedFiles.length} file này? (Enter gửi)` : "Hỏi về dữ liệu, code, business, web search... (Enter gửi · Shift+Enter xuống dòng · Kéo thả file)"}
+              disabled={loading}
+              rows={1}
+              style={{ resize: "none" }}
+              className="flex-1 px-4 py-2.5 text-sm bg-gray-50 dark:bg-slate-800 dark:text-slate-100 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-400 focus:border-violet-300 focus:bg-white dark:focus:bg-slate-800 disabled:opacity-60 transition min-h-[40px] max-h-[140px]"
+              onInput={e => {
+                const t = e.currentTarget
+                t.style.height = "auto"
+                t.style.height = Math.min(t.scrollHeight, 140) + "px"
+              }}
+            />
+            {voiceSupported && (
+              <button
+                onClick={toggleVoice}
+                disabled={loading}
+                title={listening ? "Đang nghe... (bấm để dừng)" : "Nhập bằng giọng nói (tiếng Việt)"}
+                className={`flex-shrink-0 w-10 h-10 flex items-center justify-center border rounded-xl transition-colors disabled:opacity-40 ${
+                  listening
+                    ? "bg-red-500 text-white border-red-500 animate-pulse"
+                    : "text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 border-gray-200 dark:border-slate-700"
+                }`}
+              >
+                <Mic size={16} />
+              </button>
+            )}
+            <button
+              onClick={() => send(input)}
+              disabled={(!input.trim() && attachedFiles.length === 0) || loading}
+              className="flex-shrink-0 w-10 h-10 bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
+            >
+              {loading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+            </button>
+          </div>
+
+          <p className="text-[10px] text-gray-400 mt-1.5 text-center">
+            Gấu Pro · Full access · Upload tối đa {MAX_FILES} file (PDF/DOCX/PPTX/Excel/CSV/ảnh/code) · Kéo thả hoặc paste ảnh · Xuất PDF/Word/Excel
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}

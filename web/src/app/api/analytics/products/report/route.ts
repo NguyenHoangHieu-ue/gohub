@@ -25,14 +25,12 @@ export async function POST(req: NextRequest) {
     const source = getAnalyticsSource(dateColumn)
     const rule = await getSkuDestinationRule()
 
-    // SKU destination expression
-    const sw = rule.prefix || "E"
-    const cl = rule.codeLength || 3
-    const regionExpr = `TRIM(CASE
-      WHEN SUBSTRING(f.sku, 1, 1) BETWEEN '1' AND '6' THEN SUBSTRING(f.sku, 4, 3)
-      WHEN SUBSTRING(f.sku, 1, 1) BETWEEN 'A' AND 'E' THEN SUBSTRING(f.sku, 4, 3)
-      WHEN f.sku LIKE '${sw}%' THEN SUBSTRING(f.sku, ${sw.length + 1}, ${cl})
-      ELSE SUBSTRING(f.sku, 1, ${cl})
+    // Canonical regionExpr — khớp getDestinationSQL trong analytics-helpers.ts
+    const regionExpr = `UPPER(CASE
+      WHEN f.sku ~ '^[1-6]'            THEN SUBSTRING(f.sku, 3, 3)
+      WHEN f.sku ~ '^E'               THEN SUBSTRING(f.sku, 2, 3)
+      WHEN f.sku ~ '^[A-DF-Z]{3}[0-9]' THEN SUBSTRING(f.sku, 1, 3)
+      ELSE SUBSTRING(f.sku, 1, 3)
     END)`
 
     // Build WHERE clause
@@ -106,7 +104,7 @@ export async function POST(req: NextRequest) {
                   SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.quantityCol}) as units,
                   COUNT(DISTINCT f.order_code) as orders, SUM(f.${source.marginCol}) as margin
            FROM ${source.mainTable} f
-           LEFT JOIN dim_sku v ON f.sku = v.sku
+           LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku
            WHERE ${where} GROUP BY 1, 2, 3, 4 ORDER BY revenue DESC LIMIT 50`
         ),
         getCountryMappings(),

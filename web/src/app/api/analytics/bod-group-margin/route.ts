@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, getStrategicSettingsHash } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginData } from "@/lib/bod-data"
 
 // Port intel bod-group-margin: nhóm B2B-Strategic/B2B-Non-Strategic/B2C/Other + CM1 (margin − op-cost).
@@ -15,16 +15,20 @@ export async function GET(req: NextRequest) {
   const dateColumn     = searchParams.get("dateColumn")     || "fulfiled_date"
   const comparisonType = searchParams.get("comparisonType") || "none"
   const extraFilters   = getBODFilters(searchParams)
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
   }
 
   try {
-    const key = `bod-group-margin:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}`
+    const stratHash = await getStrategicSettingsHash()
+    const key = `bod-group-margin2:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
-      const current = (await fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters)).groups
-      if (comparisonType === "none") return current
+      if (comparisonType === "none") {
+        return (await fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps)).groups
+      }
 
       const s = new Date(startDate); const e = new Date(endDate)
       let prevStart: Date, prevEnd: Date
@@ -35,14 +39,18 @@ export async function GET(req: NextRequest) {
         prevStart = new Date(s.getFullYear() - 1, s.getMonth(), s.getDate())
         prevEnd = new Date(e.getFullYear() - 1, e.getMonth(), e.getDate())
       }
-      const previous = (await fetchBODGroupMarginData(
-        prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], dateColumn, extraFilters
-      )).groups
+      // Kỳ hiện tại + kỳ trước độc lập → fetch song song
+      const [currentRes, previousRes] = await Promise.all([
+        fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps),
+        fetchBODGroupMarginData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], dateColumn, extraFilters, includeShip, includeInternalOps),
+      ])
+      const current = currentRes.groups
+      const previous = previousRes.groups
       return current.map(curr => {
         const prev = previous.find(p => p.group === curr.group)
         return { ...curr, prev_revenue: prev?.revenue || 0, prev_margin: prev?.margin || 0 }
       })
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, undefined, ["b2b-cost"])
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

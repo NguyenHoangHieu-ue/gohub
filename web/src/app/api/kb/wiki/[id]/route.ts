@@ -24,7 +24,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       .eq("page_id", params.id)
       .order("version", { ascending: false })
       .limit(20),
-    getDbRole((session.user as any).username, (session.user as any).role),
+    getDbRole(session.user.username, session.user.role),
   ])
 
   if (!pageRes.data) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -39,7 +39,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const username = session.user.name!
-  const role     = await getDbRole((session.user as any).username, (session.user as any).role)
+  const role     = await getDbRole(session.user.username, session.user.role)
 
   const body = await req.json()
   const { title, content, page_type, department, tags, is_hidden } = body
@@ -118,7 +118,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const username = session.user.name!
-  const role     = await getDbRole((session.user as any).username, (session.user as any).role)
+  const role     = await getDbRole(session.user.username, session.user.role)
 
   const { data: page } = await supabaseAdmin
     .from("kb_wiki_pages")

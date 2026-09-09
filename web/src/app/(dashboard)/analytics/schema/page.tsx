@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRoleGuard } from "@/lib/use-role-guard"
 import { Plus, Trash2, Database, Save, RefreshCw, CheckCircle2, AlertCircle, Sparkles, Table as TableIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -15,16 +15,11 @@ interface TableSchema { id: string; name: string; description: string; fields: F
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
 
 export default function SchemaConfigPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
+  const { data: session } = useSession()
+  const { ready } = useRoleGuard(["admin", "creator"])   // role tươi từ DB (không dùng JWT stale)
+  if (!ready) return null
 
-  useEffect(() => {
-    if (status === "authenticated" && !["admin","creator"].includes(session?.user?.role as string)) router.push("/chatbot")
-  }, [status, session, router])
-
-  if (status !== "authenticated" || !["admin","creator"].includes(session?.user?.role as string)) return null
-
-  return <SchemaConfig email={session.user?.email || ""} />
+  return <SchemaConfig email={session?.user?.email || ""} />
 }
 
 function SchemaConfig({ email }: { email: string }) {
@@ -34,6 +29,9 @@ function SchemaConfig({ email }: { email: string }) {
   const [isGeneratingAI, setIsGeneratingAI] = useState<Record<string, boolean>>({})
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [savedSnap, setSavedSnap] = useState("")   // snapshot đã lưu → nút Lưu chỉ sáng khi khác snapshot
+
+  const dirty = JSON.stringify(tables) !== savedSnap
 
   useEffect(() => { loadSavedSchema() }, [])
 
@@ -41,7 +39,11 @@ function SchemaConfig({ email }: { email: string }) {
     setIsLoading(true)
     try {
       const res = await fetch("/api/config/schema")
-      if (res.ok) setTables((await res.json()).tables || [])
+      if (res.ok) {
+        const loaded = (await res.json()).tables || []
+        setTables(loaded)
+        setSavedSnap(JSON.stringify(loaded))
+      }
     } catch {
       setError("Không tải được cấu hình đã lưu.")
     } finally {
@@ -58,6 +60,7 @@ function SchemaConfig({ email }: { email: string }) {
         body: JSON.stringify({ schema: { tables }, updatedBy: email }),
       })
       if (!res.ok) throw new Error("Lưu thất bại")
+      setSavedSnap(JSON.stringify(tables))
       setSuccessMessage("Đã lưu cấu hình schema!")
       setTimeout(() => setSuccessMessage(null), 3000)
     } catch (err: any) {
@@ -159,9 +162,9 @@ function SchemaConfig({ email }: { email: string }) {
             <RefreshCw className={cn("w-4 h-4 text-slate-400", isLoading && "animate-spin")} />
             <span className="text-sm font-medium">{isLoading ? "Đang sync..." : "Sync Schema"}</span>
           </button>
-          <button onClick={saveConfiguration} disabled={isSaving}
-            className={cn("flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-blue-700 transition-colors",
-              isSaving && "opacity-50 cursor-not-allowed")}>
+          <button onClick={saveConfiguration} disabled={isSaving || !dirty}
+            className={cn("flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-brand-700 transition-colors",
+              (isSaving || !dirty) && "opacity-50 cursor-not-allowed")}>
             {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             <span className="text-sm font-medium">{isSaving ? "Đang lưu..." : "Lưu cấu hình"}</span>
           </button>
@@ -182,7 +185,7 @@ function SchemaConfig({ email }: { email: string }) {
       {/* Overview */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50">
-          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+          <div className="w-8 h-8 bg-brand-100 rounded-lg flex items-center justify-center text-brand-600">
             <Database className="w-4 h-4" />
           </div>
           <h3 className="font-bold text-slate-800">Tổng quan ({tables.length} bảng)</h3>
@@ -190,9 +193,9 @@ function SchemaConfig({ email }: { email: string }) {
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {tables.length > 0 ? tables.map(table => (
-              <div key={table.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all group">
+              <div key={table.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100 hover:border-brand-200 hover:bg-brand-50/30 transition-all group">
                 <div className="flex justify-between items-start mb-2">
-                  <div className="p-2 bg-white rounded-lg shadow-sm group-hover:text-blue-600 transition-colors">
+                  <div className="p-2 bg-white rounded-lg shadow-sm group-hover:text-brand-600 transition-colors">
                     <TableIcon className="w-4 h-4" />
                   </div>
                   <span className="text-[10px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-100">
@@ -216,15 +219,15 @@ function SchemaConfig({ email }: { email: string }) {
           <div key={table.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <Database className="w-5 h-5 text-blue-500" />
-                <input className="bg-transparent font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-1"
+                <Database className="w-5 h-5 text-brand-500" />
+                <input className="bg-transparent font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 rounded px-1"
                   value={table.name}
                   onChange={e => setTables(tables.map(t => t.id === table.id ? { ...t, name: e.target.value } : t))} />
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => generateAIDescriptions(table.id)} disabled={isGeneratingAI[table.id]}
                   className={cn("flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all",
-                    isGeneratingAI[table.id] ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-blue-50 text-blue-600 hover:bg-blue-100")}>
+                    isGeneratingAI[table.id] ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-brand-50 text-brand-600 hover:bg-brand-100")}>
                   <Sparkles className={cn("w-3.5 h-3.5", isGeneratingAI[table.id] && "animate-pulse")} />
                   {isGeneratingAI[table.id] ? "Đang tạo..." : "AI Suggest"}
                 </button>
@@ -234,7 +237,7 @@ function SchemaConfig({ email }: { email: string }) {
               </div>
             </div>
             <div className="p-4">
-              <textarea className="w-full text-sm text-slate-600 bg-slate-50 border border-slate-100 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+              <textarea className="w-full text-sm text-slate-600 bg-slate-50 border border-slate-100 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-brand-500 mb-4"
                 placeholder="Mô tả bảng..." value={table.description}
                 onChange={e => setTables(tables.map(t => t.id === table.id ? { ...t, description: e.target.value } : t))} />
               <div className="space-y-2">
@@ -247,12 +250,12 @@ function SchemaConfig({ email }: { email: string }) {
                 {table.fields.map(field => (
                   <div key={field.id} className="grid grid-cols-12 gap-4 items-center bg-slate-50 p-2 rounded-lg group">
                     <div className="col-span-4">
-                      <input className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      <input className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                         value={field.name}
                         onChange={e => setTables(tables.map(t => t.id === table.id ? { ...t, fields: t.fields.map(f => f.id === field.id ? { ...f, name: e.target.value } : f) } : t))} />
                     </div>
                     <div className="col-span-3">
-                      <select className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      <select className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                         value={field.type}
                         onChange={e => setTables(tables.map(t => t.id === table.id ? { ...t, fields: t.fields.map(f => f.id === field.id ? { ...f, type: e.target.value as FieldSchema["type"] } : f) } : t))}>
                         <option value="string">String</option>
@@ -263,7 +266,7 @@ function SchemaConfig({ email }: { email: string }) {
                       </select>
                     </div>
                     <div className="col-span-4">
-                      <input className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      <input className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                         placeholder="Mô tả..." value={field.description}
                         onChange={e => setTables(tables.map(t => t.id === table.id ? { ...t, fields: t.fields.map(f => f.id === field.id ? { ...f, description: e.target.value } : f) } : t))} />
                     </div>
@@ -276,7 +279,7 @@ function SchemaConfig({ email }: { email: string }) {
                   </div>
                 ))}
                 <button onClick={() => addField(table.id)}
-                  className="w-full mt-2 flex items-center justify-center gap-2 py-2 border-2 border-dashed border-slate-200 rounded-lg text-slate-400 hover:text-blue-500 hover:border-blue-200 hover:bg-blue-50 transition-all text-sm font-medium">
+                  className="w-full mt-2 flex items-center justify-center gap-2 py-2 border-2 border-dashed border-slate-200 rounded-lg text-slate-400 hover:text-brand-500 hover:border-brand-200 hover:bg-brand-50 transition-all text-sm font-medium">
                   <Plus className="w-4 h-4" /> Thêm cột
                 </button>
               </div>
@@ -284,7 +287,7 @@ function SchemaConfig({ email }: { email: string }) {
           </div>
         ))}
         <button onClick={addTable}
-          className="flex items-center justify-center gap-2 py-8 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:text-blue-500 hover:border-blue-200 hover:bg-blue-50 transition-all font-bold">
+          className="flex items-center justify-center gap-2 py-8 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 hover:text-brand-500 hover:border-brand-200 hover:bg-brand-50 transition-all font-bold">
           <Plus className="w-6 h-6" /> Thêm bảng mới
         </button>
       </div>

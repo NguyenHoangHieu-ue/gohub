@@ -1,0 +1,6 @@
+Blank SIM top up is under TopupRecharge and UK Network eSIMS are under NetworkESIM.
+
+TEST CLIENT ID: ac7c1ffb-4528-46c9-9a58-62b15460519e
+TEST CLIENT SECRET: BzTGooMS0QXhgQmz9iWkJ4dpUrdbQx
+
+Api is in SANDBOX/TEST mode so nothing will be charged

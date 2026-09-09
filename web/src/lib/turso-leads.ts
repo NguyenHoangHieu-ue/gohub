@@ -1,4 +1,13 @@
-import { tursoConfigured, tursoQuery } from "@/lib/turso"
+import { tursoQueryOn } from "@/lib/turso"
+
+// Leads sống ở Turso CHAT-CENTER (bảng messages/identities/channels...), KHÁC với Turso config
+// intel (country_codes) dùng bởi TURSO_URL. Vì vậy leads dùng cặp env RIÊNG để không nhầm DB.
+function leadsCreds(): { url: string; token: string } {
+  return {
+    url: process.env.TURSO_LEADS_URL || "",
+    token: process.env.TURSO_LEADS_AUTH_TOKEN || "",
+  }
+}
 
 export interface TursoLeadsBreakdown {
   total: Record<string, number>
@@ -18,7 +27,8 @@ const INCLUDED_STATUSES = [
 const TRACKED_CHANNELS = ["Live Chat", "Whatsapp", "Zalo", "Facebook", "Instagram"]
 
 export function tursoLeadsConfigured(): boolean {
-  return tursoConfigured()
+  const { url, token } = leadsCreds()
+  return !!(url && token)
 }
 
 export async function tursoLeadsBreakdown(months: string[]): Promise<TursoLeadsBreakdown> {
@@ -27,12 +37,15 @@ export async function tursoLeadsBreakdown(months: string[]): Promise<TursoLeadsB
     TRACKED_CHANNELS.map(label => [label, Object.fromEntries(months.map(month => [month, 0])) as Record<string, number>]),
   ) as Record<string, Record<string, number>>
 
-  if (!tursoConfigured() || months.length === 0) return { total, channels: [] }
+  const { url, token } = leadsCreds()
+  if (!url || !token || months.length === 0) return { total, channels: [] }
 
   const startAt = `${months[0]}-01T00:00:00.000Z`
   const placeholders = INCLUDED_STATUSES.map(() => "?").join(", ")
 
-  const rows = await tursoQuery<{ month: string; channel: string; leads: number | string }>(
+  const rows = await tursoQueryOn<{ month: string; channel: string; leads: number | string }>(
+    url,
+    token,
     `WITH first_inbound AS (
        SELECT identity_id, MIN(timestamp) AS first_message_at
        FROM messages

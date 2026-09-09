@@ -13,21 +13,27 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DatePresets } from "@/components/date-presets"
-import { CostManagementModal } from "./cost-management-modal"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 
 // Port "y hệt" gohub-intel B2CPerformance. Data qua /api/analytics/b2c/{kpis,trend,performance,loss-skus}
-// + /api/analytics/query (filter options) + /api/channel-costs|channel-group-costs. Bỏ motion/react (dùng div thường),
-// bỏ animate-in dropdown (như các port khác). Inline getDefaultDateRange/formatDateToISO. CostManagementModal đã port.
+// + /api/analytics/query (filter options) + /api/channel-costs|channel-group-costs (CHỈ đọc để hiển thị CM1).
+// Nhập cost B2C nay ở tab "Manage Costs" (/analytics/targets). Bỏ motion/react (dùng div thường),
+// bỏ animate-in dropdown (như các port khác). Inline getDefaultDateRange/formatDateToISO.
 
 function getDefaultDateRange() {
   const today = new Date()
-  const fmt = (dt: Date) => dt.toISOString().split("T")[0]
-  // T-1: data ngày hiện tại chưa đủ, dùng hôm qua làm endDate (nhất quán các tab khác)
+  // Dùng local date method (KHÔNG dùng toISOString - sẽ bị shift timezone UTC+7 → ngày lùi 1)
+  const fmt = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`
+  if (today.getDate() <= 7) {
+    const start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+    const end   = new Date(today.getFullYear(), today.getMonth(), 0)
+    return { startDate: fmt(start), endDate: fmt(end) }
+  }
   const start = new Date(today.getFullYear(), today.getMonth(), 1)
   const end   = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
   return { startDate: fmt(start), endDate: fmt(end) }
 }
-const formatDateToISO = (d: Date) => d.toISOString().split("T")[0]
+const formatDateToISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`
 
 interface KPI {
   label: string
@@ -48,6 +54,8 @@ interface TrendData {
 interface PerformanceData {
   name: string
   revenue: number
+  revenueVn?: number   // groupBy=customer: doanh thu thị trường VN
+  revenueUs?: number   // groupBy=customer: doanh thu thị trường US
   projected_revenue?: number
   margin: number
   projected_margin?: number
@@ -98,6 +106,9 @@ export function B2CPerformance() {
   const [comparisonType, setComparisonType] = useState<"none" | "previous_period" | "previous_year">("none")
   const [showAllPerformance, setShowAllPerformance] = useState(false)
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
+  const [includeShip,        setIncludeShip]        = useState(true)
+  const [includeInternalOps, setIncludeInternalOps] = useState(true)
+  const [includeOpsCustomers, setIncludeOpsCustomers] = useState(true)
 
   const toggleVendor = (vendor: string) => {
     setSelectedVendors(prev =>
@@ -175,9 +186,7 @@ export function B2CPerformance() {
     key: "revenue",
     direction: "desc",
   })
-
-  // Cost Management State
-  const [showCostModal, setShowCostModal] = useState(false)
+  // Cost data — CHỈ đọc để hiển thị breakdown + tính group cost tại total row.
   const [monthlyCosts, setMonthlyCosts] = useState<Record<string, ChannelCost>>({})
   const [groupCosts, setGroupCosts] = useState<any[]>([])
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
@@ -185,34 +194,25 @@ export function B2CPerformance() {
   const getProjectionInfo = () => {
     if (kpis.length < 7 || !startDate || !endDate) return null
 
+    // Dùng shared lib — đồng bộ với BE route + B2B/Channels/BOD
+    const factor = getProjectionFactor(startDate, endDate)
+    if (factor <= 1) return null
+
     const start = new Date(startDate)
-    const end = new Date(endDate)
-
-    // Only project if same month and year
-    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) {
-      return null
-    }
-
-    const daysElapsed = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    const end   = new Date(endDate)
+    const daysElapsed    = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
     const lastDayOfMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
 
-    if (daysElapsed >= lastDayOfMonth || daysElapsed <= 0) {
-      return null
-    }
-
-    const factor = lastDayOfMonth / daysElapsed
-
-    // kpis[0]: Revenue, kpis[1]: Units, kpis[2]: Gross Profit, kpis[5]: CM1
+    // kpis[0]: Revenue, kpis[1]: Units, kpis[2]: Gross Profit, kpis[5]: CM1 (từ BE, đã pro-rata đúng)
     const revenue = kpis[0]?.value || 0
-    const units = kpis[1]?.value || 0
-    const margin = kpis[2]?.value || 0
-    const gpm2 = kpis[5]?.value || 0
+    const units   = kpis[1]?.value || 0
+    const margin  = kpis[2]?.value || 0
+    const gpm2    = kpis[5]?.value || 0  // CM1 actual từ BE
 
-    const fullMonthOpCost = margin - gpm2
     const projectedRevenue = revenue * factor
-    const projectedMargin = margin * factor
-    const projectedGpm2 = projectedMargin - fullMonthOpCost
-    const projectedUnits = units * factor
+    const projectedMargin  = margin  * factor
+    const projectedGpm2    = gpm2    * factor  // CM1 actual × factor (không dùng fixed op cost)
+    const projectedUnits   = units   * factor
 
     // MoM Comparisons (vs Full Previous Month)
     const prevRevenue = prevMonthKpis.length > 0 ? (prevMonthKpis[0]?.value || 0) : 0
@@ -243,24 +243,38 @@ export function B2CPerformance() {
 
   const projection = getProjectionInfo()
 
-  const fetchCosts = async (month: string) => {
+  const fetchCosts = async (startDate: string, endDate: string) => {
     try {
-      const res = await fetch(`/api/channel-costs?month=${month}`)
-      if (res.ok) {
-        const data = await res.json()
-        setMonthlyCosts(data)
+      // Tính đủ tháng trong range để groupCosts phản ánh đúng tổng kỳ (không chỉ tháng đầu)
+      const months: string[] = []
+      const cur = new Date(startDate.slice(0, 7) + "-01")
+      const last = new Date(endDate.slice(0, 7) + "-01")
+      while (cur <= last) {
+        months.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`)
+        cur.setMonth(cur.getMonth() + 1)
       }
+      if (months.length === 0) return
 
-      const groupRes = await fetch(`/api/channel-group-costs?month=${month}&group=B2C`)
-      if (groupRes.ok) {
-        setGroupCosts(await groupRes.json())
+      const [chanRes, ...groupReses] = await Promise.all([
+        fetch(`/api/channel-costs?month=${months[0]}`),
+        ...months.map(m => fetch(`/api/channel-group-costs?month=${m}&group=B2C`)),
+      ])
+      if (chanRes.ok) setMonthlyCosts(await chanRes.json())
+      // Sum group costs across all months in range
+      const allGroupCosts: any[] = []
+      for (const r of groupReses) {
+        if (r.ok) allGroupCosts.push(...(await r.json()))
       }
+      setGroupCosts(allGroupCosts)
     } catch (err) {
       console.error("Error fetching costs:", err)
     }
   }
 
-  const fetchData = async () => {
+  // fresh=false mặc định: DÙNG cache để tránh cạn kết nối gohub_dw (always-nocache = 5 query/lần load →
+  // góp phần lỗi 500 "remaining connection slots" ở tab nặng như Quarter Report). Chi phí VẪN phản ánh:
+  // Cost POST đã flush cache server + chi phí kênh (monthlyCosts) fetch trực tiếp Supabase (tươi).
+  const fetchData = async (fresh = false) => {
     setLoading(true)
     setError(null)
     try {
@@ -268,6 +282,10 @@ export function B2CPerformance() {
       if (startDate) queryParams.append("startDate", startDate)
       if (endDate) queryParams.append("endDate", endDate)
       queryParams.append("dateColumn", dateColumn)
+      if (includeShip)         queryParams.append("includeShip", "1")
+      if (includeInternalOps)  queryParams.append("includeInternalOps", "1")
+      if (includeOpsCustomers) queryParams.append("includeOpsCustomers", "1")
+      if (fresh) queryParams.append("nocache", "1")
 
       // Add advanced filters
       selectedVendors.forEach(v => queryParams.append("vendors", v))
@@ -284,42 +302,40 @@ export function B2CPerformance() {
         return res.json()
       }
 
-      const kpiData = await fetchJson(`/api/analytics/b2c/kpis?${queryParams.toString()}`)
-      const trendDataRes = await fetchJson(`/api/analytics/b2c/trend?${queryParams.toString()}&period=${period}`)
-      const perfData = await fetchJson(`/api/analytics/b2c/performance?${queryParams.toString()}&groupBy=${groupBy}`)
-      const lossData = await fetchJson(`/api/analytics/b2c/loss-skus?${queryParams.toString()}`)
+      // Build prevMonth params trước (chỉ tính ngày, không await)
+      const pmDate = new Date(startDate)
+      const prevQueryParams = new URLSearchParams()
+      prevQueryParams.append("startDate", formatDateToISO(new Date(pmDate.getFullYear(), pmDate.getMonth() - 1, 1)))
+      prevQueryParams.append("endDate", formatDateToISO(new Date(pmDate.getFullYear(), pmDate.getMonth(), 0)))
+      prevQueryParams.append("comparisonType", "none")
+      prevQueryParams.append("dateColumn", dateColumn)
+      selectedVendors.forEach(v => prevQueryParams.append("vendors", v))
+      selectedSubChannels.forEach(s => prevQueryParams.append("subChannels", s))
+      selectedProductTypes.forEach(t => prevQueryParams.append("productTypes", t))
 
-      setKpis(kpiData)
-      setTrendData(trendDataRes)
-      setPerformanceData(perfData)
-      setLossSkus(lossData)
+      // 5 query độc lập → allSettled: 1 endpoint lỗi KHÔNG làm rỗng toàn bộ (trước dùng Promise.all →
+      // chỉ cần trend/loss lỗi là cả bảng Performance + KPI biến mất). Mỗi phần set độc lập.
+      const [kpiR, trendR, perfR, lossR, prevKpiR] = await Promise.allSettled([
+        fetchJson(`/api/analytics/b2c/kpis?${queryParams.toString()}`),
+        fetchJson(`/api/analytics/b2c/trend?${queryParams.toString()}&period=${period}`),
+        fetchJson(`/api/analytics/b2c/performance?${queryParams.toString()}&groupBy=${groupBy}`),
+        fetchJson(`/api/analytics/b2c/loss-skus?${queryParams.toString()}`),
+        fetch(`/api/analytics/b2c/kpis?${prevQueryParams.toString()}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      ])
 
-      // Fetch full previous month KPIs for projection comparison
-      try {
-        const date = new Date(startDate)
-        const prevMonthLastDay = new Date(date.getFullYear(), date.getMonth(), 0)
-        const prevMonthFirstDay = new Date(date.getFullYear(), date.getMonth() - 1, 1)
+      const pick = <T,>(r: PromiseSettledResult<T>, fallback: T): T => r.status === "fulfilled" && r.value != null ? r.value : fallback
+      setKpis(pick(kpiR, []))
+      setTrendData(pick(trendR, []))
+      setPerformanceData(pick(perfR, []))
+      setLossSkus(pick(lossR, []))
+      setPrevMonthKpis(pick(prevKpiR, []))
 
-        const prevQueryParams = new URLSearchParams()
-        prevQueryParams.append("startDate", formatDateToISO(prevMonthFirstDay))
-        prevQueryParams.append("endDate", formatDateToISO(prevMonthLastDay))
-        prevQueryParams.append("comparisonType", "none")
-        prevQueryParams.append("dateColumn", dateColumn)
-        selectedVendors.forEach(v => prevQueryParams.append("vendors", v))
-        selectedSubChannels.forEach(s => prevQueryParams.append("subChannels", s))
-        selectedProductTypes.forEach(t => prevQueryParams.append("productTypes", t))
+      // báo lỗi CHỈ khi phần quan trọng (performance/kpis) fail — không chặn phần còn lại
+      const failed = [kpiR, perfR].filter(r => r.status === "rejected").length
+      if (failed > 0) setError("Một phần dữ liệu B2C tải chưa xong, thử lại sau giây lát")
 
-        const prevKpiRes = await fetch(`/api/analytics/b2c/kpis?${prevQueryParams.toString()}`)
-        if (prevKpiRes.ok) {
-          setPrevMonthKpis(await prevKpiRes.json())
-        }
-      } catch (e) {
-        console.error("Error fetching prev month KPIs:", e)
-      }
-
-      // Fetch costs for the current month to show in breakdown
-      const startMonth = startDate.slice(0, 7)
-      fetchCosts(startMonth)
+      // Fetch costs for all months in range (groupCosts dùng để patch totals.gpm2)
+      fetchCosts(startDate, endDate)
     } catch (err: any) {
       console.error("Error fetching B2C data:", err)
       setError(err.message)
@@ -331,7 +347,7 @@ export function B2CPerformance() {
   useEffect(() => {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period, groupBy, dateColumn])
+  }, [period, groupBy, dateColumn, includeShip, includeInternalOps, includeOpsCustomers])
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(value)
@@ -363,26 +379,48 @@ export function B2CPerformance() {
     )
   }
 
-  const sortedPerformanceData = [...performanceData].sort((a, b) => {
+  const sortedPerformanceData = React.useMemo(() => [...performanceData].sort((a, b) => {
     const aValue = a[sortConfig.key]
     const bValue = b[sortConfig.key]
-
     if (typeof aValue === "string" && typeof bValue === "string") {
-      return sortConfig.direction === "asc"
-        ? aValue.localeCompare(bValue)
-        : bValue.localeCompare(aValue)
+      return sortConfig.direction === "asc" ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue)
     }
-
     if (typeof aValue === "number" && typeof bValue === "number") {
       return sortConfig.direction === "asc" ? aValue - bValue : bValue - aValue
     }
-
     return 0
-  })
+  }), [performanceData, sortConfig])
+
+  // Tính group cost pro-rata từ groupCosts state (đã fetch từ Supabase), áp vào TOTAL ROW.
+  // Group cost KHÔNG phân bổ per-channel → kênh near-zero margin không bị âm.
+  const groupCostProrated = React.useMemo(() => {
+    if (groupBy !== "channel" || !startDate || !endDate) return 0
+    return groupCosts.reduce((sum, gc) => {
+      const month = String(gc.month || "")
+      if (!month) return sum
+      const [y, m] = month.split("-").map(Number)
+      if (!y || !m) return sum
+      const daysInMonth = new Date(y, m, 0).getDate()
+      const mStart = new Date(y, m - 1, 1); const mEnd = new Date(y, m, 0)
+      const rStart = new Date(startDate);   const rEnd = new Date(endDate)
+      const oStart = rStart > mStart ? rStart : mStart
+      const oEnd   = rEnd   < mEnd   ? rEnd   : mEnd
+      if (oEnd < oStart) return sum
+      const daysInRange = Math.round((oEnd.getTime() - oStart.getTime()) / 86400000) + 1
+      return sum + (Number(gc.amount) || 0) * daysInRange / daysInMonth
+    }, 0)
+  }, [groupCosts, startDate, endDate, groupBy])
+
+  const groupCostFullMonth = React.useMemo(() => {
+    if (groupBy !== "channel") return 0
+    return groupCosts.reduce((sum, gc) => sum + (Number(gc.amount) || 0), 0)
+  }, [groupCosts, groupBy])
 
   const totals = React.useMemo(() => {
     const sum = performanceData.reduce((acc, curr) => {
       acc.revenue += curr.revenue
+      acc.revenueVn += curr.revenueVn || 0
+      acc.revenueUs += curr.revenueUs || 0
       acc.projected_revenue += curr.projected_revenue || curr.revenue
       acc.prev_revenue += curr.prev_revenue || 0
       acc.units += curr.units
@@ -391,16 +429,15 @@ export function B2CPerformance() {
       acc.gpm2 += curr.gpm2 || 0
       acc.projected_gpm2 += curr.projected_gpm2 || curr.gpm2 || 0
       return acc
-    }, { revenue: 0, projected_revenue: 0, prev_revenue: 0, units: 0, margin: 0, projected_margin: 0, gpm2: 0, projected_gpm2: 0 })
+    }, { revenue: 0, revenueVn: 0, revenueUs: 0, projected_revenue: 0, prev_revenue: 0, units: 0, margin: 0, projected_margin: 0, gpm2: 0, projected_gpm2: 0 })
 
-    const totalGroupCosts = groupCosts.reduce((acc, gc) => acc + (gc.amount || 0), 0)
-    // Since group costs might not have projection equivalent implemented locally, we just subtract them from both.
+    // Group cost trừ tại TOTAL ROW (không phân bổ per-channel).
     if (groupBy === "channel") {
-      sum.gpm2 -= totalGroupCosts
-      sum.projected_gpm2 -= totalGroupCosts
+      sum.gpm2 -= groupCostProrated
+      sum.projected_gpm2 -= groupCostFullMonth
     }
     return sum
-  }, [performanceData, groupCosts, groupBy])
+  }, [performanceData, groupBy, groupCostProrated, groupCostFullMonth])
   const totalMarginPercent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
   const totalGpm2Percent = totals.revenue > 0 ? (totals.gpm2 / totals.revenue) * 100 : 0
 
@@ -427,6 +464,12 @@ export function B2CPerformance() {
     })
     return summedCosts
   }, [performanceData, monthlyCosts, groupBy])
+
+  // Dữ liệu Pie "Channel Contribution" — memo hoá để không tạo mảng mới + ép Recharts vẽ lại mỗi render/hover
+  const channelContributionData = React.useMemo(
+    () => performanceData.filter(d => d.revenue > 0).slice(0, 8),
+    [performanceData]
+  )
 
   const displayedPerformanceData = showAllPerformance
     ? sortedPerformanceData
@@ -525,13 +568,6 @@ export function B2CPerformance() {
               )}
             </button>
             <button
-              onClick={() => setShowCostModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-sm"
-            >
-              <Settings className="w-4 h-4" />
-              Manage Costs
-            </button>
-            <button
               onClick={handleExport}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-bold text-sm shadow-lg shadow-blue-900/20"
             >
@@ -576,6 +612,19 @@ export function B2CPerformance() {
                   <option value="previous_period">Previous Period</option>
                   <option value="previous_year">Previous Year</option>
                 </select>
+              </div>
+
+              {/* Include filters: Phí ship / Đơn nội bộ / KH Ops */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Include</label>
+                <div className="flex flex-col gap-1.5">
+                  {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps], ["KH Ops", includeOpsCustomers, setIncludeOpsCustomers]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+                    <label key={label} className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3.5 h-3.5 accent-amber-500" />
+                      <span className={cn("text-xs font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -971,7 +1020,6 @@ export function B2CPerformance() {
                   <Legend />
                   <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                   <Bar yAxisId="left" dataKey="margin" name="Gross Profit" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Line yAxisId="left" type="monotone" dataKey="gpm2" name="CM1" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4 }} />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
@@ -988,7 +1036,7 @@ export function B2CPerformance() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={performanceData.filter(d => d.revenue > 0).slice(0, 8)}
+                    data={channelContributionData}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -1076,10 +1124,16 @@ export function B2CPerformance() {
                     onClick={() => handleSort("revenue")}
                   >
                     <div className="flex items-center justify-end">
-                      Revenue
+                      {groupBy === "customer" ? "Revenue (All)" : "Revenue"}
                       <SortIcon column="revenue" />
                     </div>
                   </th>
+                  {groupBy === "customer" && (
+                    <>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">VN</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">US</th>
+                    </>
+                  )}
                   <th
                     className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right cursor-pointer hover:bg-slate-100 transition-colors"
                     onClick={() => handleSort("units")}
@@ -1172,6 +1226,12 @@ export function B2CPerformance() {
                             </div>
                           )}
                         </td>
+                        {groupBy === "customer" && (
+                          <>
+                            <td className="px-6 py-4 text-right text-sm font-medium text-slate-600">{formatCurrency(item.revenueVn || 0)}</td>
+                            <td className="px-6 py-4 text-right text-sm font-medium text-slate-600">{formatCurrency(item.revenueUs || 0)}</td>
+                          </>
+                        )}
                         <td className="px-6 py-4 text-right text-sm font-medium text-slate-600">{item.units.toLocaleString()}</td>
                         <td className="px-6 py-4 text-right">
                           <div className={cn(
@@ -1303,6 +1363,12 @@ export function B2CPerformance() {
                           </div>
                         )}
                       </td>
+                      {groupBy === "customer" && (
+                        <>
+                          <td className="px-6 py-4 text-right text-sm font-bold text-slate-700">{formatCurrency(totals.revenueVn)}</td>
+                          <td className="px-6 py-4 text-right text-sm font-bold text-slate-700">{formatCurrency(totals.revenueUs)}</td>
+                        </>
+                      )}
                       <td className="px-6 py-4 text-right text-sm font-bold text-slate-700">{totals.units.toLocaleString()}</td>
                       <td className="px-6 py-4 text-right">
                         <div className={cn(
@@ -1395,7 +1461,7 @@ export function B2CPerformance() {
 
                 {sortedPerformanceData.length === 0 && (
                   <tr>
-                    <td colSpan={groupBy === "channel" ? 6 : 5} className="px-6 py-12 text-center text-slate-400 italic">
+                    <td colSpan={groupBy === "channel" ? 6 : groupBy === "customer" ? 7 : 5} className="px-6 py-12 text-center text-slate-400 italic">
                       No performance data found for this period.
                     </td>
                   </tr>
@@ -1454,13 +1520,6 @@ export function B2CPerformance() {
         )}
       </div>
 
-      {/* Operational Cost Modal */}
-      <CostManagementModal
-        isOpen={showCostModal}
-        onClose={() => setShowCostModal(false)}
-        onSave={() => fetchData()}
-        initialMonth={startDate.slice(0, 7)}
-      />
     </div>
   )
 }

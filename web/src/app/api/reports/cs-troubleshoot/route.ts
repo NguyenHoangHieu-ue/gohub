@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       ),
       queryAnalytics<{ vendor: string; units: string }>(
         `SELECT TRIM(s.vendor) as vendor, SUM(f.fulfilled_quantity) as units
-         FROM fact_fulfillment_revenue f LEFT JOIN dim_sku s ON f.sku = s.sku
+         FROM fact_fulfillment_revenue f LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) s ON f.sku = s.sku
          WHERE f.fulfiled_date::date BETWEEN $1 AND $2${groupFilter} GROUP BY TRIM(s.vendor)`, [startDate, endDate]
       ),
       queryAnalytics<{ source: string; units: string }>(

@@ -7,7 +7,14 @@ import { buildReportData, inferPeriod } from "@/lib/scheduled-report-data"
 // Chạy 1 scheduled message: số liệu TÍNH SẴN trong code (scheduled-report-data) → BI Analyst chỉ FORMAT,
 // render thành Lark interactive card (header + bảng) rồi gửi (webhook hoặc bot API) → cập nhật last_run_at.
 // Dùng chung cho nút Test (admin/scheduled-messages/[id] POST) và cron runner (/api/cron/scheduled-messages).
-export async function runScheduledMessage(msg: any): Promise<string> {
+// slotMs: shifted ICT epoch của slot đã khớp (từ getMatchedSlotMs). Nếu truyền vào,
+//   last_run_at được ghi là slot time (không phải execution time) → chặn double-fire.
+// noUpdateLastRun: true khi gọi từ Test button — không cập nhật last_run_at để không
+//   can thiệp vào lịch tự động.
+export async function runScheduledMessage(
+  msg: any,
+  options?: { slotMs?: number; noUpdateLastRun?: boolean },
+): Promise<string> {
   const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10)
 
   // Số liệu được TÍNH SẴN trong code (SQL cố định, đúng định nghĩa Dashboard, tách thị trường VN/US/Tổng).
@@ -23,13 +30,15 @@ export async function runScheduledMessage(msg: any): Promise<string> {
   const directive = `
 
 ━━━ CHẾ ĐỘ BÁO CÁO TỰ ĐỘNG (BẮT BUỘC TUÂN THỦ) ━━━
-Hôm nay: ${today} (giờ VN). "Tháng trước" = tháng dương lịch liền TRƯỚC tháng hiện tại.
-1. ⚠️ MỌI SỐ LIỆU ĐÃ ĐƯỢC TÍNH SẴN trong khối "DỮ LIỆU ĐÃ TÍNH SẴN" bên dưới. Nhiệm vụ của bạn CHỈ là TRÌNH BÀY/định dạng đúng các số đó theo bố cục prompt yêu cầu. TUYỆT ĐỐI KHÔNG tự gọi executeSQL, KHÔNG tự tính lại, KHÔNG bịa, KHÔNG đổi số. Số nào không có trong khối → ghi "Chưa có dữ liệu".
+Hôm nay: ${today} (giờ VN). Loại báo cáo: ${period.toUpperCase()}. "Tháng trước" = tháng dương lịch liền TRƯỚC tháng hiện tại.
+1. ⚠️ MỌI SỐ LIỆU ĐÃ ĐƯỢC TÍNH SẴN trong khối "DỮ LIỆU ĐÃ TÍNH SẴN" bên dưới. Nhiệm vụ của bạn CHỈ là TRÌNH BÀY/định dạng đúng các số đó theo bố cục prompt yêu cầu. TUYỆT ĐỐI KHÔNG gọi bất kỳ tool nào (executeSQL/GA4/GSC/product), KHÔNG tự tính lại, KHÔNG bịa, KHÔNG đổi số. Số nào không có trong khối → ghi "Chưa có dữ liệu".
 2. VÀO THẲNG báo cáo — KHÔNG lời chào, KHÔNG giới thiệu bản thân (cấm "Chào bạn", "Gấu Bi-Ai...", "Dưới đây là..."). Bắt đầu bằng tiêu đề báo cáo.
 3. ⚠️ TÁCH THỊ TRƯỜNG: mọi mục doanh thu PHẢI trình bày theo 3 cột VN | US | Tổng (đúng như khối dữ liệu cung cấp). Dùng BẢNG markdown chuẩn (| Cột | ... | + dòng |---|). Trong ô bảng chỉ ghi giá trị thuần, KHÔNG bọc **đậm**/\`code\`.
-4. Giá trị thiếu NHẤT QUÁN: thực sự bằng 0 → "0 VND"; không có dữ liệu/target → "Chưa có dữ liệu"/"Chưa có target". KHÔNG dùng lẫn "-", "N/A".
+4. Giá trị thiếu NHẤT QUÁN: thực sự bằng 0 → "0 VND"; chưa nhập target → ghi ĐÚNG "Chưa nhập target tháng này". KHÔNG dùng lẫn "-", "N/A".
 5. Tiền: phân cách hàng nghìn + " VND" (số trong khối đã đúng định dạng — giữ nguyên). Phần trăm 1 chữ số.
 6. KHÔNG dùng khối \`\`\`chart (Lark không render được). Tiếng Việt, chuyên nghiệp, nhận xét NGẮN mỗi mục (1-2 câu, chỉ dựa trên số trong khối).
+7. ⚠️ BẮT BUỘC IN ĐỦ MỌI MỤC 【1】→【5】 (và 【6】→【8】 nếu là báo cáo ngày) có trong khối dữ liệu — KHÔNG được bỏ mục nào, KỂ CẢ khi prompt không nhắc tới. Đặc biệt: mục 【3】 (MTD/thực tế, dự phóng pro-rata, target cả tháng, target theo kênh, % đạt target), Target CM1% ở 【4】, Target 3HK% ở 【5】 PHẢI luôn xuất hiện. Nếu giá trị là "Chưa nhập target tháng này" → GHI ĐÚNG NGUYÊN VĂN câu đó thành 1 dòng, TUYỆT ĐỐI KHÔNG ẩn/bỏ dòng target.
+8. Kỳ MONTHLY = tháng đã đóng → dùng số THỰC TẾ so target (khối đã bỏ pro-rata, đừng tự dựng lại). Kỳ DAILY = 1 ngày (hôm qua) so ngày liền trước; WEEKLY = 7 ngày gần nhất. DAILY/WEEKLY đang trong tháng → vẫn có MTD + dự phóng pro-rata cả tháng ở 【3】. Kỳ QUARTERLY = QTD từ đầu quý đến hôm qua, so QoQ; in đủ 【1】→【6】.
 
 ${dataBlock}`
 
@@ -54,36 +63,17 @@ ${dataBlock}`
     await sendLarkCardToChat(data.value, card)
   }
 
-  await supabaseAdmin.from("lark_scheduled_messages").update({ last_run_at: new Date().toISOString() }).eq("id", msg.id)
+  if (!options?.noUpdateLastRun) {
+    // Ghi slot time (không phải execution time) để dedup chính xác cho lần quét tiếp theo.
+    const slotMs = options?.slotMs
+    const lastRunIso = slotMs != null
+      ? new Date(slotMs - 7 * 3600_000).toISOString()  // convert ICT-shifted → UTC
+      : new Date().toISOString()
+    await supabaseAdmin.from("lark_scheduled_messages").update({ last_run_at: lastRunIso }).eq("id", msg.id)
+  }
   return report
 }
 
-// Khớp 1 biểu thức cron 5 trường với thời điểm `d`. Hỗ trợ *, danh sách (a,b), khoảng (a-b), step (*/n hoặc a-b/n).
-// `d` nên là thời gian theo MÚI GIỜ MUỐN KHỚP (đọc qua getUTC* — caller tự shift sang ICT nếu cần).
-export function isCronDue(expr: string, d: Date): boolean {
-  const parts = (expr || "").trim().split(/\s+/)
-  if (parts.length !== 5) return false
-  const [min, hr, dom, mon, dow] = parts
-
-  const matchField = (field: string, val: number, lo0: number, hi0: number): boolean =>
-    field.split(",").some(part => {
-      if (part === "*") return true
-      if (part.includes("/")) {
-        const [range, stepStr] = part.split("/")
-        const step = parseInt(stepStr, 10) || 1
-        const [lo, hi] = range === "*" ? [lo0, hi0] : range.split("-").map(Number)
-        if (val < lo || val > (hi ?? lo)) return false
-        return (val - lo) % step === 0
-      }
-      if (part.includes("-")) { const [lo, hi] = part.split("-").map(Number); return val >= lo && val <= hi }
-      return parseInt(part, 10) === val
-    })
-
-  return (
-    matchField(min, d.getUTCMinutes(), 0, 59) &&
-    matchField(hr,  d.getUTCHours(),   0, 23) &&
-    matchField(dom, d.getUTCDate(),    1, 31) &&
-    matchField(mon, d.getUTCMonth() + 1, 1, 12) &&
-    matchField(dow, d.getUTCDay(),     0, 6)
-  )
-}
+// Khớp lịch cron (isCronDue) + đến-hạn-kể-từ-last_run (isDueSince) tách ở scheduled-cron.ts (leaf, thuần).
+// Re-export để các importer cũ (route cron) vẫn lấy được từ đây.
+export { isCronDue, isDueSince, getMatchedSlotMs } from "./scheduled-cron"

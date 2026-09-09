@@ -3,7 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getLarkToken } from "@/lib/lark"
+import { canWrite } from "@/lib/writable-tabs"
 
+const WRITE_ROLES = ["admin", "creator"]
 const LARK_API = "https://open.larksuite.com/open-apis"
 
 function getLarkString(val: unknown): string {
@@ -32,12 +34,15 @@ export async function POST(_req: NextRequest) {
   if (!session && !isCronAuthed) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  if (session && !["admin", "creator"].includes(session.user?.role as string)) {
+  if (session && !(await canWrite(session, "cs-troubleshoot", WRITE_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  const appToken   = process.env.LARK_BASE_ID   || ""
-  const tableId    = process.env.LARK_TABLE_ID   || ""
+  // Cắt phần dư nếu user paste cả URL fragment (vd "tbl27...&view=vew..." → chỉ lấy "tbl27...").
+  // Tránh lỗi 1254041 TableIdNotFound khi env vô tình kèm "&view=" / "?" / khoảng trắng.
+  const clean = (v: string) => v.split(/[&?\s]/)[0].trim()
+  const appToken   = clean(process.env.LARK_BASE_ID  || "")
+  const tableId    = clean(process.env.LARK_TABLE_ID || "")
 
   if (!appToken || !tableId) {
     return NextResponse.json({
@@ -52,7 +57,7 @@ export async function POST(_req: NextRequest) {
 
     do {
       const url = new URL(`${LARK_API}/bitable/v1/apps/${appToken}/tables/${tableId}/records`)
-      url.searchParams.set("page_size", "100")
+      url.searchParams.set("page_size", "500")   // max Lark bitable — giảm số vòng (18k records ~37 trang thay vì 181)
       if (pageToken) url.searchParams.set("page_token", pageToken)
 
       const res = await fetch(url.toString(), {
@@ -97,7 +102,7 @@ export async function POST(_req: NextRequest) {
             source:           getLarkString(f["Source"]),
             channel:          getLarkString(f["Channel"]),
             vendor:           getLarkString(f["Vendor"]),
-            handler:          getLarkString(f["Handler"]),
+            handler:          getLarkString(f["Ticket Handler"] ?? f["PIC (CS-OPs)"] ?? f["Handler"]),
             product_action:   getLarkString(f["Product Action"]),
             money_action:     getLarkString(f["Money Action"]),
             creation_date,
@@ -145,9 +150,21 @@ export async function GET(_req: NextRequest) {
     .limit(1)
     .single()
 
+  // Trả trạng thái chi tiết để debug: từng env var có được đọc không.
+  const hasBaseId    = !!process.env.LARK_BASE_ID
+  const hasTableId   = !!process.env.LARK_TABLE_ID
+  const hasAppId     = !!process.env.LARK_APP_ID
+  const hasAppSecret = !!process.env.LARK_APP_SECRET
+
   return NextResponse.json({
     count: count ?? 0,
     lastSync: latest?.updated_at ?? null,
-    configured: !!(process.env.LARK_BASE_ID && process.env.LARK_TABLE_ID),
+    configured: hasBaseId && hasTableId,
+    envCheck: {
+      LARK_BASE_ID:    hasBaseId    ? "✅ set" : "❌ missing",
+      LARK_TABLE_ID:   hasTableId   ? "✅ set" : "❌ missing",
+      LARK_APP_ID:     hasAppId     ? "✅ set" : "❌ missing (cần để xác thực bot)",
+      LARK_APP_SECRET: hasAppSecret ? "✅ set" : "❌ missing (cần để xác thực bot)",
+    },
   })
 }

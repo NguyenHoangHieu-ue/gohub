@@ -24,9 +24,10 @@ interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCos
 interface GA4CategoryRow { category: string; traffic: number; purchases: number; cr: number; prevTraffic: number; trafficDelta: number | null }
 interface GA4CategorySite { siteId: string; name: string; siteUrl?: string; error?: string; rows: GA4CategoryRow[] }
 interface MonthlyData {
+  dataAsOf?: string       // T-1 date khi live (YYYY-MM-DD)
+  isLive?: boolean
   months:       string[]
   currentMonth: string
-  dataAsOf?:    string
   elapsedDays:  number
   totalDays:    number
   markets:      Record<string, MarketCell>
@@ -271,15 +272,32 @@ const APPLE_CARD = "rounded-lg border border-black/[0.09] overflow-hidden"
 const APPLE_CARD_STYLE = { background: "rgba(255,255,255,0.82)", backdropFilter: "blur(18px)", boxShadow: "0 18px 48px rgba(0,0,0,0.07)" }
 const APPLE_BG_STYLE = { background: "radial-gradient(circle at 16% 8%,rgba(0,113,227,0.08),transparent 28%),radial-gradient(circle at 86% 16%,rgba(0,166,166,0.09),transparent 26%),linear-gradient(180deg,#fbfbfd 0%,#f5f5f7 50%,#eef1f5 100%)" }
 
-// Section shell — Apple glass card
-const Section = ({ icon, title, desc, children, action, source }: {
+// Bảng màu "kênh/thị trường" — y hệt màu dùng ở hero card (meter bars VN/US/Web/App/Khác) — dùng lại
+// xuyên suốt trang (icon section, dot ở bảng) để màu mang Ý NGHĨA nhất quán, không phải trang trí rời rạc.
+const MARKET_DOT: Record<string, string> = {
+  VN: "#0071e3", US: "#6366f1", WEB: "#00a6a6", APP: "#2f9d55", KHÁC: "#b7791f",
+  NEW: "#2f9d55", "MỚI": "#2f9d55", RETURNING: "#6366f1", "QUAY LẠI": "#6366f1",
+}
+// Chấm màu trước tên dòng trong RollingTable/SimpleRollTable — nhận diện qua từ khoá đầu nhãn (label
+// luôn bắt đầu bằng tên thị trường/kênh, vd "VN B2C", "US Sales B2C", "New (All)") — KHÔNG áp cho bảng
+// khác (ProfitTrendTable/AcquisitionTable) vì nhãn ở đó là tên sản phẩm/kênh MKT, dễ nhận nhầm.
+const marketDot = (label: string): string | undefined => {
+  const first = label.trim().toUpperCase().split(/[\s(]/)[0]
+  return MARKET_DOT[first]
+}
+const Dot = ({ color }: { color?: string }) =>
+  color ? <span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle flex-shrink-0" style={{ background: color }} /> : null
+
+// Section shell — Apple glass card. iconColor mặc định Apple blue #0071e3; mỗi section truyền màu riêng
+// theo Ý NGHĨA nội dung (revenue/growth/customers/cost...) thay vì mọi section cùng 1 màu như trước.
+const Section = ({ icon, title, desc, children, action, source, iconColor = "#0071e3" }: {
   icon: React.ReactNode; title: string; desc?: string; children: React.ReactNode; action?: React.ReactNode
-  accent?: string; source?: SourceKind; note?: React.ReactNode
+  iconColor?: string; source?: SourceKind; note?: React.ReactNode
 }) => (
   <section className={APPLE_CARD} style={APPLE_CARD_STYLE}>
     <div className="px-6 py-5 border-b border-black/[0.06] flex items-start justify-between gap-4">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center flex-shrink-0">{icon}</div>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${iconColor}1a`, color: iconColor }}>{icon}</div>
         <div>
           <h2 className="text-[15px] font-[650] text-[#1d1d1f]">{title}</h2>
           {desc && <p className="text-[12px] text-[#6e6e73] mt-0.5">{desc}</p>}
@@ -396,6 +414,27 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     error?: string
   } | null>(null)
 
+  const loadData = async () => {
+    if (demoMode) return
+    setLoading(true); setError(null)
+    try {
+      const params = new URLSearchParams()
+      if (localPreview) params.set("localPreview", "1")
+      params.set("skipLeads", "1")
+      params.set("nocache", "1")   // luôn live, không đọc snapshot
+      const res = await fetch(`/api/analytics/b2c/monthly?${params.toString()}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error || `${res.status}`)
+      }
+      setData(await res.json())
+    } catch (err) {
+      console.error(err); setError((err as Error).message || "Hiếu đang fix, vui lòng đợi")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (demoMode) {
       setData(DEMO_DATA)
@@ -403,25 +442,8 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
       setError(null)
       return
     }
-    (async () => {
-      setLoading(true); setError(null)
-      try {
-        const params = new URLSearchParams()
-        if (localPreview) params.set("localPreview", "1")
-        params.set("skipLeads", "1")
-        const res = await fetch(`/api/analytics/b2c/monthly?${params.toString()}`)
-        if (!res.ok) {
-          const body = await res.json().catch(() => null)
-          throw new Error(body?.error || `${res.status}`)
-        }
-        setData(await res.json())
-      } catch (err) {
-        console.error(err); setError((err as Error).message || "Hiếu đang fix, vui lòng đợi")
-      } finally {
-        setLoading(false)
-      }
-    })()
-  }, [demoMode, localPreview])
+    loadData()
+  }, [demoMode, localPreview]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (demoMode || !data?.months?.length) return
@@ -459,19 +481,20 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
         const sd = await (await fetch(`/api/config/ga4${qs}`)).json()
         const sites: { id: string; name: string }[] = sd.sites ?? []
         if (!sites.length) { setGa4([]); return }
-        const out: { name: string; cr: number; kpis: { activeUsers: number; sessions: number; purchases: number; revenue: number; cr: number }; series: { date: string; sessions: number; cr: number; purchases: number; revenue: number; users: number }[] }[] = []
-        for (const s of sites) {
-          const r = await fetch(`/api/analytics/website?siteId=${encodeURIComponent(s.id)}&days=180${localPreview ? "&localPreview=1" : ""}`)
-          if (!r.ok) continue
-          const d = await r.json()
-          const series = monthlyRollup((d.series ?? []).map((row: any) => ({ date: row.date, sessions: row.sessions ?? 0, cr: row.cr ?? 0, purchases: row.purchases ?? 0, revenue: row.revenue ?? 0, users: row.users ?? 0 })))
-          out.push({
-            name:   s.name,
-            cr:     d.kpis?.cr ?? 0,
-            kpis:   { activeUsers: d.kpis?.activeUsers ?? 0, sessions: d.kpis?.sessions ?? 0, purchases: d.kpis?.purchases ?? 0, revenue: d.kpis?.revenue ?? 0, cr: d.kpis?.cr ?? 0 },
-            series,
+        // GA4 properties độc lập → fetch song song thay vì tuần tự
+        const out = (await Promise.all(
+          sites.map(async (s) => {
+            const r = await fetch(`/api/analytics/website?siteId=${encodeURIComponent(s.id)}&days=180${localPreview ? "&localPreview=1" : ""}`)
+            if (!r.ok) return null
+            const d = await r.json()
+            const series = monthlyRollup((d.series ?? []).map((row: any) => ({ date: row.date, sessions: row.sessions ?? 0, cr: row.cr ?? 0, purchases: row.purchases ?? 0, revenue: row.revenue ?? 0, users: row.users ?? 0 })))
+            return {
+              name: s.name, cr: d.kpis?.cr ?? 0,
+              kpis: { activeUsers: d.kpis?.activeUsers ?? 0, sessions: d.kpis?.sessions ?? 0, purchases: d.kpis?.purchases ?? 0, revenue: d.kpis?.revenue ?? 0, cr: d.kpis?.cr ?? 0 },
+              series,
+            }
           })
-        }
+        )).filter((r): r is NonNullable<typeof r> => r !== null)
         setGa4(out)
       } catch { setGa4([]) }
     })()
@@ -1372,6 +1395,48 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               )}
             </Section>
 
+            <Section
+              icon={<DollarSign className="w-5 h-5" />}
+              iconColor="#0071e3"
+              title="B2C MKT Profit Report"
+              desc="Total chi phí MKT = Meta + Google · Revenue/COGS/GP lấy từ fulfillment B2C"
+              source="admin"
+            >
+              {mktReportMonths.length > 0 ? (
+                <MktProfitReportTable />
+              ) : (
+                <AwaitingData note="Chưa có đủ dữ liệu tháng để render bảng report MKT." />
+              )}
+            </Section>
+
+            <Section
+              icon={<TrendingUp className="w-5 h-5" />}
+              iconColor="#2f9d55"
+              title="Revenue & Gross Profit Trend"
+              action={
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wide text-[#0071e3]">Chọn tháng</span>
+                  <select
+                    value={selectedProfitMonth}
+                    onChange={e => setProfitMonth(e.target.value)}
+                    className="h-9 rounded-lg border-2 border-[#0071e3] bg-[#0071e3]/[0.06] px-3 text-[13px] font-bold text-[#0071e3] shadow-sm cursor-pointer outline-none focus:ring-2 focus:ring-[#0071e3]/30 hover:bg-[#0071e3]/[0.1] transition-colors"
+                  >
+                    {(data.months ?? []).map(month => {
+                      const label = monthLabel(month)
+                      return <option key={month} value={month}>{label.top} {label.sub}</option>
+                    })}
+                  </select>
+                </div>
+              }
+              source="admin"
+            >
+              {hasProfitTrend ? (
+                <ProfitTrendTable />
+              ) : (
+                <AwaitingData note="Chưa có dữ liệu Revenue/COGS/Gross Profit theo kênh từ Admin/Warehouse cho period này." />
+              )}
+            </Section>
+
             {/* Charts row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Revenue by market */}
@@ -1387,7 +1452,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={revSeries}>
                       <defs>
-                        <linearGradient id="gvn" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={0.35} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0.02} /></linearGradient>
+                        <linearGradient id="gvn" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0071e3" stopOpacity={0.35} /><stop offset="100%" stopColor="#0071e3" stopOpacity={0.02} /></linearGradient>
                         <linearGradient id="gus" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} /><stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} /></linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -1395,7 +1460,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={v => formatCompactNumber(v)} />
                       <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }} formatter={(v: number) => formatCurrency(v)} />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-                      <Area type="monotone" dataKey="VN B2C" stackId="1" stroke="#2563eb" strokeWidth={2} fill="url(#gvn)" />
+                      <Area type="monotone" dataKey="VN B2C" stackId="1" stroke="#0071e3" strokeWidth={2} fill="url(#gvn)" />
                       <Area type="monotone" dataKey="US B2C" stackId="1" stroke="#6366f1" strokeWidth={2} fill="url(#gus)" />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -1405,7 +1470,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               {/* Customers new vs returning */}
               <div className={`${APPLE_CARD} p-5`} style={APPLE_CARD_STYLE}>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center"><Users className="w-4 h-4" /></div>
+                  <div className="w-8 h-8 rounded-lg bg-[#7c5cbf]/10 text-[#7c5cbf] flex items-center justify-center"><Users className="w-4 h-4" /></div>
                   <div>
                     <h3 className="text-[14px] font-[650] text-[#1d1d1f]">Khách mới vs quay lại</h3>
                     <p className="text-[12px] text-[#6e6e73]">Doanh thu theo nhóm khách · rolling 6 tháng</p>
@@ -1430,6 +1495,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             {/* Section 1 — Revenue + Breakdown */}
             <Section
               icon={<DollarSign className="w-5 h-5" />}
+              iconColor="#0891b2"
               title="Doanh thu B2C & Breakdown"
               desc="Theo thị trường, rolling 6 tháng"
               source="admin"
@@ -1446,7 +1512,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             </Section>
 
             {/* Section 2 — Revenue by Customers */}
-            <Section icon={<Users className="w-5 h-5" />} accent="indigo" title="Doanh thu theo Customers" desc="New vs Returning · theo kênh"
+            <Section icon={<Users className="w-5 h-5" />} iconColor="#6366f1" title="Doanh thu theo Customers" desc="New vs Returning · theo kênh"
               source="admin"
 >
               {data.customerError && (

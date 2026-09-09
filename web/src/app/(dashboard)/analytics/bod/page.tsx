@@ -1,10 +1,7 @@
 ﻿"use client"
 
-import React, { useState, useEffect } from "react"
-import {
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  LineChart, Line, ComposedChart, Area,
-} from "recharts"
+import React, { useState, useEffect, useMemo } from "react"
+import dynamic from "next/dynamic"
 import {
   TrendingUp, TrendingDown, DollarSign, PieChart,
   ArrowUpRight, ArrowDownRight, Calendar, Filter, Download,
@@ -13,6 +10,13 @@ import {
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
+import { exportAOA } from "@/lib/export-excel"
+import { StatTile, type MetricAccent, type DeltaKind } from "@/components/dashboard-kit"
+
+// Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu, chỉ tải phía client.
+const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
+const RevenueCompositeChart = dynamic(() => import("./bod-charts").then(m => m.RevenueCompositeChart), { ssr: false, loading: chartLoading })
+const MarginTrendChart      = dynamic(() => import("./bod-charts").then(m => m.MarginTrendChart),      { ssr: false, loading: chartLoading })
 
 // Port "y hệt" gohub-intel BODReport. Backend: bod-summary/bod-report/bod-group-margin/bod-channel-performance
 // (CM1 = margin − op-cost, lib/bod-data) + b2b/strategic-performance + config/partner-tiers.
@@ -36,7 +40,8 @@ interface BODSummary {
   total_revenue: number; total_cogs: number; total_margin: number; total_units: number
   avg_margin_percent: number; total_gpm2: number; avg_gpm2_percent: number
   total_3hk_revenue?: number; total_3hk_contribution?: number
-  total_target_revenue?: number; previous_period?: BODSummary; previous_year?: BODSummary
+  total_target_revenue?: number; projection_factor?: number
+  previous_period?: BODSummary; previous_year?: BODSummary
 }
 interface BODDataPoint {
   date: string; revenue: number; cogs: number; margin: number; margin_percent: number
@@ -68,6 +73,8 @@ export default function BODReport() {
   const [showFilters, setShowFilters] = useState(false)
   const [comparisonType, setComparisonType] = useState<"none" | "previous_period" | "previous_year">("none")
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
+  const [includeShip,        setIncludeShip]        = useState(false)
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)
 
   const [vendors, setVendors] = useState<string[]>([])
   const [selectedVendors, setSelectedVendors] = useState<string[]>([])
@@ -119,61 +126,68 @@ export default function BODReport() {
 
   const getProjectionInfo = () => {
     if (!summary || !dateRange.start || !dateRange.end) return null
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const start = new Date(dateRange.start); const end = new Date(dateRange.end)
-    const daysElapsed = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-    const isCurrentMonth = end.getMonth() === today.getMonth() && end.getFullYear() === today.getFullYear()
-    const targetDays = isCurrentMonth ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() : daysElapsed
-    const factor = targetDays / daysElapsed
+    // Factor từ BE (bod-summary trả projection_factor) — đã xử lý cross-month đúng.
+    const factor = summary.projection_factor ?? 1
     if (factor <= 1) return null
 
-    const fullMonthOpCost = (summary.total_margin || 0) - (summary.total_gpm2 || 0)
+    // CM1 projected = CM1 actual × factor (backend đã tính total_gpm2 pro-rata đúng).
     const projectedRevenue = (summary.total_revenue || 0) * factor
-    const projectedMargin = (summary.total_margin || 0) * factor
-    const projectedGpm2 = projectedMargin - fullMonthOpCost
-    const projectedUnits = (summary.total_units || 0) * factor
+    const projectedMargin  = (summary.total_margin  || 0) * factor
+    const projectedGpm2    = (summary.total_gpm2    || 0) * factor
+    const projectedUnits   = (summary.total_units   || 0) * factor
 
     const prevRevenue = prevMonthSummary?.total_revenue || 0
-    const prevUnits = prevMonthSummary?.total_units || 0
-    const prevMargin = prevMonthSummary?.total_margin || 0
-    const prevGpm2 = prevMonthSummary?.total_gpm2 || 0
+    const prevUnits   = prevMonthSummary?.total_units   || 0
+    const prevMargin  = prevMonthSummary?.total_margin  || 0
+    const prevGpm2    = prevMonthSummary?.total_gpm2    || 0
 
-    const revenueChange = prevRevenue > 0 ? ((projectedRevenue - prevRevenue) / prevRevenue) * 100 : 0
-    const unitsChange = prevUnits > 0 ? ((projectedUnits - prevUnits) / prevUnits) * 100 : 0
-    const marginChange = prevMargin > 0 ? ((projectedMargin - prevMargin) / prevMargin) * 100 : 0
-    const gpm2Change = prevGpm2 > 0 ? ((projectedGpm2 - prevGpm2) / prevGpm2) * 100 : 0
+    const start = new Date(dateRange.start)
+    const daysElapsed = Math.max(1, Math.ceil((new Date(dateRange.end).getTime() - start.getTime()) / 86400000) + 1)
 
     return {
-      factor, daysElapsed, totalDays: targetDays,
+      factor,
+      daysElapsed,
+      totalDays: new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate(),
       revenue: projectedRevenue, units: projectedUnits, margin: projectedMargin, gpm2: projectedGpm2,
       gpm2Percent: projectedRevenue > 0 ? (projectedGpm2 / projectedRevenue) * 100 : 0,
-      revenueChange, unitsChange, marginChange, gpm2Change,
+      revenueChange: prevRevenue > 0 ? ((projectedRevenue - prevRevenue) / prevRevenue) * 100 : 0,
+      unitsChange:   prevUnits   > 0 ? ((projectedUnits   - prevUnits)   / prevUnits)   * 100 : 0,
+      marginChange:  prevMargin  > 0 ? ((projectedMargin  - prevMargin)  / prevMargin)  * 100 : 0,
+      gpm2Change:    prevGpm2    > 0 ? ((projectedGpm2    - prevGpm2)    / prevGpm2)    * 100 : 0,
     }
   }
 
   const projection = getProjectionInfo()
 
-  useEffect(() => { fetchData() }, [dateColumn]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchData() }, [dateColumn, includeShip, includeInternalOps]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const exportChannelPerformanceCSV = () => {
     if (!channelPerformance.length) return
     const headers = ["Group", "Channel", "Units", "Revenue", "COGS", "Margin", "Margin %", "CM1", "CM1 %"]
     if (projection) headers.splice(4, 0, "Projected Revenue")
-    const rows = channelPerformance.map(row => {
-      const d = [
-        `"${row.group}"`, `"${row.channel}"`, row.units, row.revenue, row.cogs, row.margin,
-        `"${(row.margin_percent || 0).toFixed(2)}%"`, row.gpm2, `"${(row.gpm2_percent || 0).toFixed(2)}%"`,
+    const rows: (string | number)[][] = channelPerformance.map(row => {
+      const d: (string | number)[] = [
+        row.group, row.channel, row.units, row.revenue, row.cogs, row.margin,
+        `${(row.margin_percent || 0).toFixed(2)}%`, row.gpm2, `${(row.gpm2_percent || 0).toFixed(2)}%`,
       ]
-      if (projection) d.splice(4, 0, (row.revenue * projection.factor).toFixed(0))
-      return d.join(",")
+      if (projection) d.splice(4, 0, Number((row.revenue * projection.factor).toFixed(0)))
+      return d
     })
-    const csvString = [headers.join(","), ...rows].join("\n")
-    const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `channel_performance_${dateRange.start}_${dateRange.end}.csv`)
-    document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url)
+    exportAOA(headers, rows, `channel_performance_${dateRange.start}_${dateRange.end}`, "Channel Perf")
+  }
+
+  const exportRevenueCogsCSV = () => {
+    if (!data.length) return
+    const headers = ["Date", "Revenue", "COGS", "CM1"]
+    const rows: (string | number)[][] = data.map(r => [r.date, r.revenue, r.cogs, r.gpm2])
+    exportAOA(headers, rows, `revenue_vs_cogs_${dateRange.start}_${dateRange.end}`, "Revenue vs COGS")
+  }
+
+  const exportMarginAnalysisCSV = () => {
+    if (!data.length) return
+    const headers = ["Date", "Margin %", "CM1 %"]
+    const rows: (string | number)[][] = data.map(r => [r.date, `${(r.margin_percent || 0).toFixed(2)}%`, `${(r.gpm2_percent || 0).toFixed(2)}%`])
+    exportAOA(headers, rows, `margin_analysis_${dateRange.start}_${dateRange.end}`, "Margin Analysis")
   }
 
   const fetchData = async () => {
@@ -183,6 +197,8 @@ export default function BODReport() {
         startDate: dateRange.start, endDate: dateRange.end, comparisonType,
         vendors: selectedVendors.join(","), subChannels: selectedSubChannels.join(","),
         channelGroups: selectedChannelGroups.join(","), productTypes: selectedProductTypes.join(","), dateColumn,
+        ...(includeShip ? { includeShip: "1" } : {}),
+        ...(includeInternalOps ? { includeInternalOps: "1" } : {}),
       })
       const fetchJson = async (url: string, name: string) => {
         const res = await fetch(url)
@@ -228,7 +244,7 @@ export default function BODReport() {
     <div className={cn("animate-pulse bg-slate-200 rounded", className)} />
   )
 
-  const processedGroupMargins = (() => {
+  const processedGroupMargins = useMemo(() => {
     const businessGroups = ["B2B", "B2C", "Other"]
     const b2bRows = groupMargins.filter(r => r.group?.startsWith("B2B"))
     const b2bTotalSourceOfTruth = b2bRows.length > 0
@@ -270,7 +286,7 @@ export default function BODReport() {
       if (!row) return null
       return { ...row, subRows: [] as any[] }
     }).filter(Boolean) as any[]
-  })()
+  }, [groupMargins, strategicPerformance])
 
   const ComparisonBadge = ({ current, previous, label }: { current: number, previous?: number, label: string }) => {
     if (previous === undefined || previous === 0) return null
@@ -287,36 +303,34 @@ export default function BODReport() {
     )
   }
 
+  // Màu icon theo Ý NGHĨA số liệu (đợt UI redesign s190+2) — trước đây mỗi metric 1 màu tự chọn không
+  // theo hệ thống nào (blue/slate/orange/purple/indigo/pink/teal). Nay dùng chung StatTile (dashboard-kit).
+  const ACCENT_MAP: Record<string, MetricAccent> = {
+    blue: "revenue", slate: "neutral", orange: "cost", emerald: "margin",
+    purple: "margin", indigo: "margin", pink: "margin", teal: "positive",
+  }
+  const pctDiff = (current: number, previous?: number): number | null =>
+    previous === undefined || previous === 0 ? null : ((current - previous) / previous) * 100
+
   const SummaryCard = ({ title, value, icon: Icon, color, prevPeriod, prevYear, target, format = "currency" }: {
     title: string, value: number, icon: any, color: string, prevPeriod?: number, prevYear?: number, target?: number, format?: "currency" | "number" | "percent"
   }) => {
     const formattedValue = format === "currency" ? formatCurrency(value) : format === "percent" ? `${value.toFixed(2)}%` : formatCompactNumber(value)
-    const colorClasses: Record<string, string> = {
-      blue: "bg-blue-50 text-blue-600", emerald: "bg-emerald-50 text-emerald-600", orange: "bg-orange-50 text-orange-600",
-      purple: "bg-purple-50 text-purple-600", indigo: "bg-indigo-50 text-indigo-600", pink: "bg-pink-50 text-pink-600", slate: "bg-slate-50 text-slate-600", teal: "bg-teal-50 text-teal-600",
-    }
+    const deltas: { label: string; value: React.ReactNode; kind: DeltaKind }[] = []
+    if (target !== undefined && target > 0) deltas.push({ label: "Goal", value: formatCurrency(target), kind: "flat" })
+    const pDiff = pctDiff(value, prevPeriod)
+    if (pDiff !== null) deltas.push({ label: "vs Prev Period", value: `${pDiff >= 0 ? "+" : ""}${pDiff.toFixed(1)}%`, kind: pDiff >= 0 ? "up" : "down" })
+    const yDiff = pctDiff(value, prevYear)
+    if (yDiff !== null) deltas.push({ label: "vs Prev Year", value: `${yDiff >= 0 ? "+" : ""}${yDiff.toFixed(1)}%`, kind: yDiff >= 0 ? "up" : "down" })
     return (
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-        <div className="flex justify-between items-start mb-4">
-          <div className={cn("p-2.5 rounded-xl", colorClasses[color] || colorClasses.slate)}><Icon className="w-5 h-5" /></div>
-          {target !== undefined && target > 0 && (
-            <div className={cn("px-2 py-1 rounded-lg text-[10px] font-bold", (value / target) >= 1 ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600")}>
-              {((value / target) * 100).toFixed(1)}% of Target
-            </div>
-          )}
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</p>
-          <h3 className="text-2xl font-black text-slate-900 mt-1 tracking-tight">{formattedValue}</h3>
-          {target !== undefined && target > 0 && (
-            <p className="text-[10px] text-slate-400 mt-1 font-medium">Goal: <span className="text-slate-600">{formatCurrency(target)}</span></p>
-          )}
-        </div>
-        <div className="mt-4 pt-4 border-t border-slate-50 space-y-2">
-          <ComparisonBadge current={value} previous={prevPeriod} label="vs Prev Period" />
-          <ComparisonBadge current={value} previous={prevYear} label="vs Prev Year" />
-        </div>
-      </div>
+      <StatTile
+        icon={<Icon className="w-5 h-5" />}
+        label={title}
+        value={formattedValue}
+        accent={ACCENT_MAP[color] || "neutral"}
+        goalLabel={target !== undefined && target > 0 ? `${((value / target) * 100).toFixed(1)}% of Target` : undefined}
+        deltas={deltas}
+      />
     )
   }
 
@@ -434,7 +448,15 @@ export default function BODReport() {
               )}
             </div>
           </div>
-          <div className="flex justify-end pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+            <div className="flex items-center gap-4">
+              {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+                <label key={label} className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3.5 h-3.5 accent-amber-500" />
+                  <span className={cn("text-xs font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
+                </label>
+              ))}
+            </div>
             <button onClick={fetchData} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">Apply Filters</button>
           </div>
         </div>
@@ -506,22 +528,11 @@ export default function BODReport() {
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm lg:col-span-3">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-slate-800">Revenue vs COGS</h3>
-            <button className="text-slate-400 hover:text-slate-600"><Download className="w-4 h-4" /></button>
+            <button onClick={exportRevenueCogsCSV} className="text-slate-400 hover:text-slate-600"><Download className="w-4 h-4" /></button>
           </div>
           <div className="h-[300px]">
             {loading ? <Skeleton className="w-full h-full" /> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(val) => val.split("-").slice(1).join("/")} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={formatCompactNumber} />
-                  <Tooltip contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} formatter={(val: number) => [formatCurrency(val), ""]} />
-                  <Legend iconType="circle" />
-                  <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} />
-                  <Line type="monotone" dataKey="cogs" name="COGS" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} />
-                  <Line type="monotone" dataKey="gpm2" name="CM1" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3, fill: "#8b5cf6" }} />
-                </ComposedChart>
-              </ResponsiveContainer>
+              <RevenueCompositeChart data={data} />
             )}
           </div>
         </div>
@@ -535,7 +546,7 @@ export default function BODReport() {
             <p className="text-sm text-slate-500">Revenue, Orders, Units and Margin analysis by business unit</p>
           </div>
           <button onClick={exportChannelPerformanceCSV} className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-            <Download className="w-3.5 h-3.5" />Export CSV
+            <Download className="w-3.5 h-3.5" />Export
           </button>
         </div>
         <div className="overflow-x-auto">
@@ -614,21 +625,11 @@ export default function BODReport() {
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm lg:col-span-3">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-slate-800">Margin Analysis (%)</h3>
-            <button className="text-slate-400 hover:text-slate-600"><Download className="w-4 h-4" /></button>
+            <button onClick={exportMarginAnalysisCSV} className="text-slate-400 hover:text-slate-600"><Download className="w-4 h-4" /></button>
           </div>
           <div className="h-[300px]">
             {loading ? <Skeleton className="w-full h-full" /> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(val) => val.split("-").slice(1).join("/")} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(val) => `${val}%`} />
-                  <Tooltip contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} formatter={(val: number) => [`${(val || 0).toFixed(2)}%`, "Margin %"]} />
-                  <Legend iconType="circle" />
-                  <Line type="monotone" dataKey="margin_percent" name="Margin %" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4, fill: "#8b5cf6", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} />
-                  <Line type="monotone" dataKey="gpm2_percent" name="CM1 %" stroke="#ec4899" strokeWidth={3} dot={{ r: 4, fill: "#ec4899", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} />
-                </LineChart>
-              </ResponsiveContainer>
+              <MarginTrendChart data={data} />
             )}
           </div>
         </div>
@@ -688,7 +689,7 @@ export default function BODReport() {
             <p className="text-sm text-slate-500">Detailed metrics by channel grouped by business unit</p>
           </div>
           <button onClick={exportChannelPerformanceCSV} className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-            <Download className="w-3.5 h-3.5" />Export CSV
+            <Download className="w-3.5 h-3.5" />Export
           </button>
         </div>
         <div className="overflow-x-auto">
@@ -773,9 +774,9 @@ export default function BODReport() {
                           <td className="px-4 py-3 text-right font-bold text-emerald-600">{formatCurrency(row.margin)}</td>
                           <td className="px-4 py-3 text-right"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.margin_percent > 20 ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600"}`}>{(row.margin_percent || 0).toFixed(1)}%</span></td>
                           <td className="px-4 py-3 text-right font-bold text-indigo-600">{formatCurrency(row.gpm2)}</td>
-                          {projection && <td className="px-4 py-3 text-right font-bold text-blue-600 bg-blue-50/30">{formatCurrency(row.gpm2 * projection.factor)}</td>}
+                          {projection && <td className="px-4 py-3 text-right font-bold text-blue-600 bg-blue-50/30">{formatCurrency(row.margin * projection.factor - (row.margin - row.gpm2))}</td>}
                           <td className="px-4 py-3 text-right"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.gpm2_percent > 15 ? "bg-indigo-50 text-indigo-600" : "bg-pink-50 text-pink-600"}`}>{(row.gpm2_percent || 0).toFixed(1)}%</span></td>
-                          {projection && <td className="px-4 py-3 text-right"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600">{(row.gpm2_percent || 0).toFixed(1)}%</span></td>}
+                          {projection && <td className="px-4 py-3 text-right"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600">{(row.revenue * projection.factor) > 0 ? ((row.margin * projection.factor - (row.margin - row.gpm2)) / (row.revenue * projection.factor) * 100).toFixed(1) : (row.gpm2_percent || 0).toFixed(1)}%</span></td>}
                         </tr>
                       ))}
                     </React.Fragment>

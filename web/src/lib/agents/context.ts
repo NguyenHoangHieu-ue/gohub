@@ -2,7 +2,7 @@ import { supabaseAdmin }            from "@/lib/supabase"
 import { getRefCache }              from "@/lib/agents/cache"
 import type { ExtractedParams }     from "@/lib/agents/router"
 import {
-  searchSkus, searchSkusSemantic, searchSkusForRegion, searchSkusByGroupCode,
+  searchSkus, searchSkusForRegion, searchSkusByGroupCode, searchSkusMultiCountry,
   REGION_DISPLAY,
   getProductDetail, getProductByCode, decodeSkuCode,
   getCountryInfo, getVendorInfo,
@@ -12,6 +12,7 @@ import {
   searchNccWm, searchNcc3hk,
   getChannelPrices, getChannelTypes,
 } from "@/lib/agents/tools"
+import { getPartnerTiers } from "@/lib/analytics-helpers"
 
 export function convertCogs(cogs: number, currency: string, fx: Record<string, number>): { usd: number; vnd: number } {
   const usdVnd = fx["fx.usd_vnd"] ?? 26000
@@ -105,6 +106,33 @@ export async function buildToolContext(
       }
     }
 
+    // ── Case 2b: Multi-country — gói dùng ĐỒNG THỜI nhiều nước ("cả Malaysia VÀ Singapore") ──
+    else if (params.countries && params.countries.length >= 2) {
+      const { skus, note, matched, missing } = await searchSkusMultiCountry({
+        countries:    params.countries,
+        days:         params.days,
+        data_gb:      params.dataGB,
+        is_unlimited: params.isUnlimited,
+        vendor:       params.vendor,
+        sim_type:     params.simType,
+      }, ref)
+      const rows = skus.map((s: any) => {
+        const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999 ? "Unlimited"
+          : s.data_amount != null ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}` : null
+        return [s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`, s.country_group,
+                s.note ? `[note:${s.note}]` : null].filter(Boolean).join("|")
+      })
+      sections.push(
+        `=== SẢN PHẨM GOHUB ĐA QUỐC GIA (phủ CẢ ${params.countries.join(" + ")}): ${skus.length} SKU ===`,
+        note ? `Lưu ý: ${note}` : "",
+        skus.length ? `sku_code|tenant|sim|data|days|nhóm_nước|[note nếu có]` : "",
+        ...rows,
+        skus.length
+          ? `Đây là gói ĐA QUỐC GIA dùng được cho tất cả các nước trên trong 1 SIM. Nếu user chỉ đi 1 nước, có thể có gói riêng rẻ hơn.`
+          : `KHÔNG có gói đơn nào phủ đồng thời ${params.countries.join(", ")}. Gợi ý user: (1) mua gói riêng từng nước, hoặc (2) xem gói khu vực (vd Đông Nam Á) nếu các nước cùng khu vực.${missing.length ? ` (Chưa nhận diện: ${missing.join(", ")}.)` : ""}`
+      )
+    }
+
     // ── Case 3: Single-country query (CHỈ sản phẩm GoHub — NCC do agent Gap Analysis phụ trách) ──
     else if (params.country) {
       const { skus: rawSkus, note } = await searchSkus({
@@ -173,42 +201,6 @@ export async function buildToolContext(
         }
       }
 
-      // Semantic fallback: standard search trả về 0 → thử vector search
-      if (skus.length === 0) {
-        const semQuery = [params.country, params.days ? `${params.days} ngày` : "",
-          params.isUnlimited ? "unlimited" : "", params.dataGB ? `${params.dataGB}GB` : "",
-          params.simType || ""].filter(Boolean).join(" ")
-        const semCodes = await searchSkusSemantic(semQuery, 10)
-        if (semCodes.length) {
-          const { data: semSkus } = await supabaseAdmin
-            .from("sku_catalog")
-            .select("sku_code,tenant,sim_esim,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,throttle_speed,call,kyc_needed,operator_code,latest_cogs,latest_cogs_currency,note")
-            .eq("status", "Active").in("sku_code", semCodes)
-          if (semSkus?.length) {
-            const semRows = semSkus.map((s: any) => {
-              const dataStr = s.is_unlimited || (s.data_amount ?? 0) >= 9999 ? "Unlimited"
-                : s.data_amount != null ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}` : null
-              let cogsVnd: string | null = null, cogsUsd: string | null = null
-              if (isCost && s.latest_cogs != null) {
-                const { usd, vnd } = convertCogs(s.latest_cogs, s.latest_cogs_currency, fx)
-                cogsVnd = vnd.toLocaleString("en-US"); cogsUsd = `$${usd}`
-              }
-              return [s.sku_code, s.tenant, s.sim_esim ?? null, dataStr, `${s.day_amount}d`,
-                s.throttle_speed ? `throttle:${s.throttle_speed}` : null,
-                s.operator_code  ? `operator:${s.operator_code}`  : null,
-                s.kyc_needed     ? `kyc:${s.kyc_needed}`           : null,
-                s.call           ? `call:${s.call}`                : null,
-                cogsVnd, cogsUsd, s.note ? `[note:${s.note}]` : null,
-              ].filter(Boolean).join("|")
-            })
-            sections.push(
-              `=== SEMANTIC SEARCH: ${semSkus.length} SKU tương tự (gợi ý, xác nhận với team) ===`,
-              `[Không có gói chính xác cho ${params.country} — kết quả tìm kiếm ngữ nghĩa]`,
-              ...semRows
-            )
-          }
-        }
-      }
     }
 
     // ── Case 3: Thiếu nước + khu vực → cần làm rõ ────────────────────────────
@@ -390,6 +382,24 @@ export async function buildToolContext(
       vendors.map((v: any) => `${v.vendor_code} = ${v.name}`).join("\n")
     )
 
+    // Đối tác/kênh theo TIER (partner_tiers) — config nghiệp vụ (chỉ tên kênh + tier, không nhạy cảm).
+    // Inject khi câu hỏi nhắc đối tác chiến lược/tier/kênh để giai-dáp trả lời được "ai là strategic".
+    if (userMsg && /partner|strategic|chien luoc|chiến lược|doi tac|đối tác|\btier\b|kenh chien luoc|kênh chiến lược/i.test(userMsg)) {
+      try {
+        const tiers = await getPartnerTiers()
+        const lines = Object.entries(tiers)
+          .filter(([, names]) => Array.isArray(names) && names.length)
+          .map(([tier, names]) => `${tier} (${(names as string[]).length}): ${(names as string[]).join(", ")}`)
+        if (lines.length) {
+          sections.push(
+            `=== ĐỐI TÁC / KÊNH THEO TIER (partner tiers — cấu hình từ tab Settings) ===`,
+            `"Strategic" = đối tác/kênh chiến lược (B2B-Strategic). Đây là danh sách kênh phân loại theo tier, dùng để đọc báo cáo B2B.`,
+            ...lines,
+          )
+        }
+      } catch { /* config lỗi → bỏ qua, không chặn câu trả lời */ }
+    }
+
     // Inject ref_categories để bot hiểu mã nhóm hiển thị (CHM, STA, ASI...)
     const allCats = Object.values(ref.categoriesMap as Record<string, any>)
     if (allCats.length) {
@@ -400,14 +410,15 @@ export async function buildToolContext(
       )
     }
 
-    // Inject TOÀN BỘ ref_support_countries — để bot biết mọi mã nhóm nước (AP2, EU1, RUS...)
+    // Compact: chỉ inject CODE=Tên — bỏ ISO list (giảm ~70% token).
+    // Khi params.groupCode trỏ mã cụ thể → section detail bên dưới handle đầy đủ.
     if ((ref.supportCountries as any[]).length) {
+      const compact = (ref.supportCountries as any[])
+        .map((s: any) => `${s.code}=${s.support_country ?? ""}`)
+        .join(" | ")
       sections.push(
-        `=== MÃ NHÓM NƯỚC HỖ TRỢ (${(ref.supportCountries as any[]).length}) — dùng làm country_group trong SKU ===`,
-        `Định dạng: MÃ = Tên nhóm | ISO codes`,
-        ...(ref.supportCountries as any[]).map((s: any) =>
-          `${s.code} = ${s.support_country ?? ""}${s.country_codes ? ` | ${s.country_codes}` : ""}`
-        )
+        `=== MÃ NHÓM NƯỚC HỖ TRỢ (${(ref.supportCountries as any[]).length}) — country_group trong SKU ===`,
+        compact
       )
     }
 

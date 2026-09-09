@@ -15,8 +15,8 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   const session = await getServerSession(authOptions)
   if (!session) redirect("/login")
 
-  const role     = (session.user as any).role     as string
-  const username = (session.user as any).username as string
+  const role     = session.user.role     as string
+  const username = session.user.username
 
   // admin/creator: toàn quyền — không cần truy DB (kiểm JWT trước cho nhanh)
   if (role === "admin" || role === "creator") return <>{children}</>
@@ -37,9 +37,10 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   let roleMatrix: Record<string, string[]> = DEFAULT_ROLE_PERMISSIONS
   try { if (rp?.value) roleMatrix = JSON.parse(rp.value) } catch {}
 
-  // Treat empty array [] same as "not configured" → fall back to code defaults
-  const dbPerms = roleMatrix[dbRole]
-  const baseline = (dbPerms && dbPerms.length > 0) ? dbPerms : (DEFAULT_ROLE_PERMISSIONS[dbRole] ?? [])
+  // Union code defaults + DB: DB có thể thêm tab, nhưng code defaults luôn được giữ
+  // (tránh tình trạng DB cũ không có tab mới → bị block dù code đã thêm vào defaults).
+  const dbPerms = roleMatrix[dbRole] ?? []
+  const baseline = [...new Set([...(DEFAULT_ROLE_PERMISSIONS[dbRole] ?? []), ...dbPerms])]
   const extra    = profile?.allowed_analytics
     ? profile.allowed_analytics.split(",").map((s: string) => s.trim()).filter(Boolean)
     : []
@@ -51,7 +52,27 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   // Chặn truy cập thẳng URL trang chưa được cấp
   const pathname = headers().get("x-pathname") || ""
   const id = pathToAnalyticsId(pathname)
-  if (!granted.has(id)) redirect("/chatbot")
+
+  // Tổ Gấu KHÔNG phải trang analytics — mở cho mọi role (chỉ gate theo group-membership ở API +
+  // hiddenTabs của creator, xem sidebar.tsx/nav.ts), không nằm trong role_permissions/allowed_analytics
+  // nên sẽ luôn bị granted.has() trả false → redirect nhầm về /chatbot cho MỌI role không phải
+  // admin/creator dù đã là member group thật (bug phát hiện s194+8).
+  if (id === "to-gau") return <>{children}</>
+
+  if (!granted.has(id)) {
+    // Ngoại lệ: /analytics/creator/* — user được cấp GP access trong gp_allowed_users
+    if (id === "creator") {
+      const { data: gpRow } = await supabaseAdmin
+        .from("app_settings").select("value").eq("key", "gp_allowed_users").maybeSingle()
+      if (gpRow?.value) {
+        try {
+          const gpAllowed = JSON.parse(gpRow.value) as string[]
+          if (gpAllowed.includes(username)) return <>{children}</>
+        } catch {}
+      }
+    }
+    redirect("/chatbot")
+  }
 
   return <>{children}</>
 }

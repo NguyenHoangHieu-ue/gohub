@@ -2,34 +2,37 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, analyticsGuard, shipFilter, internalOpsFilterByCode } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const guard = analyticsGuard(req, session); if (guard) return guard
 
   const startDate = req.nextUrl.searchParams.get("startDate") || ""
   const endDate   = req.nextUrl.searchParams.get("endDate") || ""
+  const includeShip        = req.nextUrl.searchParams.get("includeShip")        === "1"
+  const includeInternalOps = req.nextUrl.searchParams.get("includeInternalOps") === "1"
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate are required" }, { status: 400 })
   }
 
-  const cacheKey = `fulfillment-report:${startDate}:${endDate}`
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)}`
+  const cacheKey = `fulfillment-report:v2:${startDate}:${endDate}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
       const params = [startDate, endDate]
 
-      const [monthlyRows, catLocRows, locRows, overallLocRows] = await Promise.all([
+      const [monthlyRows, catLocRows, locRows, overallLocRows, channelRows] = await Promise.all([
         queryAnalytics<{
           month: string; gross_orders: string; revenue: string; items_delivery: string
-        }>(`SELECT TO_CHAR(fulfiled_date::date, 'YYYY-MM') as month,
-                   COUNT(DISTINCT order_code) as gross_orders,
-                   SUM(fulfilled_revenue_amount_vnd) as revenue,
-                   SUM(fulfilled_quantity) as items_delivery
-            FROM fact_fulfillment_revenue
-            WHERE fulfiled_date::date BETWEEN $1 AND $2
+        }>(`SELECT TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') as month,
+                   COUNT(DISTINCT f.order_code) as gross_orders,
+                   SUM(f.fulfilled_revenue_amount_vnd) as revenue,
+                   SUM(f.fulfilled_quantity) as items_delivery
+            FROM fact_fulfillment_revenue f
+            WHERE f.fulfiled_date::date BETWEEN $1 AND $2 ${sfx}
             GROUP BY 1 ORDER BY 1 DESC`, params),
 
         queryAnalytics<{
@@ -42,9 +45,9 @@ export async function GET(req: NextRequest) {
                    SUM(fulfilled_quantity) as units,
                    SUM(fulfilled_revenue_amount_vnd) as revenue
             FROM fact_fulfillment_revenue f
-            LEFT JOIN dim_sku v ON f.sku = v.sku
+            LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku
             LEFT JOIN dim_location l ON f.location_id = l.location_id
-            WHERE fulfiled_date::date BETWEEN $1 AND $2
+            WHERE f.fulfiled_date::date BETWEEN $1 AND $2 ${sfx}
             GROUP BY 1, 2, 3`, params),
 
         queryAnalytics<{
@@ -56,24 +59,33 @@ export async function GET(req: NextRequest) {
                    SUM(f.fulfilled_revenue_amount_vnd) as revenue
             FROM fact_fulfillment_revenue f
             LEFT JOIN dim_location l ON f.location_id = l.location_id
-            WHERE f.fulfiled_date::date BETWEEN $1 AND $2
+            WHERE f.fulfiled_date::date BETWEEN $1 AND $2 ${sfx}
             GROUP BY 1, 2`, params),
 
-        queryAnalytics<{ location: string; orders: string; units: string }>(
+        queryAnalytics<{ location: string; orders: string; units: string; revenue: string }>(
           `SELECT l.location_name as location,
                   COUNT(DISTINCT f.order_code) as orders,
-                  SUM(f.fulfilled_quantity) as units
+                  SUM(f.fulfilled_quantity) as units,
+                  SUM(f.fulfilled_revenue_amount_vnd) as revenue
            FROM fact_fulfillment_revenue f
            LEFT JOIN dim_location l ON f.location_id = l.location_id
-           WHERE f.fulfiled_date::date BETWEEN $1 AND $2
+           WHERE f.fulfiled_date::date BETWEEN $1 AND $2 ${sfx}
            GROUP BY 1 ORDER BY orders DESC LIMIT 10`, params),
+
+        // B2B/B2C split per month
+        queryAnalytics<{ month: string; group_name: string; orders: string; revenue: string }>(
+          `SELECT TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') as month,
+                  UPPER(COALESCE(s.group_name, 'B2C')) as group_name,
+                  COUNT(DISTINCT f.order_code) as orders,
+                  SUM(f.fulfilled_revenue_amount_vnd) as revenue
+           FROM fact_fulfillment_revenue f
+           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+           WHERE f.fulfiled_date::date BETWEEN $1 AND $2 ${sfx}
+           GROUP BY 1, 2`, params),
       ])
 
       const monthly = monthlyRows.map(r => {
         const grossOrders = parseInt(r.gross_orders || "0")
-        const cancel      = Math.round(grossOrders * 0.03)
-        const returns     = Math.round(grossOrders * 0.015)
-        const netOrders   = grossOrders - cancel - returns
 
         const categories: Record<string, {
           units: number; orders: number; revenue: number
@@ -95,16 +107,18 @@ export async function GET(req: NextRequest) {
           }
         })
 
+        const b2bRow = channelRows.find(x => x.month === r.month && x.group_name === "B2B")
+        const b2cRow = channelRows.find(x => x.month === r.month && x.group_name === "B2C")
+
         return {
           month: r.month,
           gross_orders: grossOrders,
-          cancel,
-          returns,
-          net_orders: netOrders,
           revenue: parseFloat(r.revenue || "0"),
           items_delivery: parseInt(r.items_delivery || "0"),
-          orders_delivery: Math.round(netOrders * 0.98),
-          orders_return: Math.round(netOrders * 0.012),
+          b2b_orders: parseInt(b2bRow?.orders || "0"),
+          b2b_revenue: parseFloat(b2bRow?.revenue || "0"),
+          b2c_orders: parseInt(b2cRow?.orders || "0"),
+          b2c_revenue: parseFloat(b2cRow?.revenue || "0"),
           categories,
           locations: locRows
             .filter(l => l.month === r.month)
@@ -120,9 +134,10 @@ export async function GET(req: NextRequest) {
       return {
         monthly,
         overall_locations: overallLocRows.map(r => ({
-          name:   r.location,
-          orders: parseInt(r.orders || "0"),
-          units:  parseInt(r.units || "0"),
+          name:    r.location,
+          orders:  parseInt(r.orders || "0"),
+          units:   parseInt(r.units || "0"),
+          revenue: parseFloat(r.revenue || "0"),
         })),
       }
     })

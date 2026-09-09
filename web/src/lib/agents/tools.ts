@@ -1,6 +1,4 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { runQuery }      from "@/lib/neo4j-client"
-import { GoogleGenerativeAI } from "@google/generative-ai"
 import type { RefCache } from "./cache"
 
 const FULL_TYPES = new Set(["C", "E", "1", "2"])
@@ -278,7 +276,7 @@ export async function searchSkus(params: {
     if (!codes.length) return []
     const { data, error } = await supabaseAdmin
       .from("sku_catalog")
-      .select("sku_code,product_code,tenant,status,sim_esim,product_type,country_group,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,expirations,throttle_speed,call,call_sms_details,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
+      .select("sku_code,product_code,tenant,status,sim_esim,product_type,country_group,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,expirations,throttle_speed,call,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
       .eq("status", "Active")
       .in("country_group", codes)
     if (error) console.error("[searchSkus]", error.message)
@@ -387,6 +385,73 @@ export async function searchSkus(params: {
 
   if (result.length > 40) note += ` | ⚠ Hiển thị 40/${result.length} SKU (có nhiều hơn — thông báo với user)`
   return { skus: result.slice(0, 40), note }
+}
+
+// ─── Tool: search_skus_multi_country ─────────────────────────────────────────
+// Tìm gói ĐA QUỐC GIA phủ ĐỒNG THỜI tất cả nước user hỏi (vd "gói dùng được ở CẢ Malaysia VÀ Singapore").
+// Cách làm: mỗi nước có tập nhóm 'all' (mã nhóm chứa nước đó); GIAO các tập → nhóm phủ mọi nước.
+export async function searchSkusMultiCountry(params: {
+  countries: string[]
+  days?: number
+  data_gb?: number
+  is_unlimited?: boolean
+  vendor?: string
+  sim_type?: string
+}, ref: RefCache): Promise<{ skus: any[]; note: string; matched: string[]; missing: string[] }> {
+  const uniq = [...new Set(params.countries.map(c => c.trim()).filter(Boolean))]
+  const perCountry = uniq.map(c => ({ name: c, ...getCountryCodes(c, ref) }))
+  const missing = perCountry.filter(p => !p.all.length).map(p => p.name)
+
+  // Giao tập mã nhóm phủ TẤT CẢ nước (chỉ tính nước nhận diện được)
+  const recognized = perCountry.filter(p => p.all.length)
+  let intersection: string[] = recognized.length ? [...new Set(recognized[0].all)] : []
+  for (const p of recognized.slice(1)) intersection = intersection.filter(code => p.all.includes(code))
+
+  if (!intersection.length) {
+    return {
+      skus: [], matched: [], missing,
+      note: `GoHub chưa có gói ĐƠN nào phủ đồng thời ${uniq.join(" + ")}${missing.length ? ` (chưa nhận diện: ${missing.join(", ")})` : ""}. Gợi ý: mua gói riêng cho từng nước.`,
+    }
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("sku_catalog")
+    .select("sku_code,product_code,tenant,status,sim_esim,product_type,country_group,data_amount,data_amount_unit,is_unlimited,is_daily,day_amount,expirations,throttle_speed,call,hotspot,kyc_needed,operator_code,network_type,vendor_sku,latest_cogs,latest_cogs_currency,note")
+    .eq("status", "Active")
+    .in("country_group", intersection)
+  if (error) console.error("[searchSkusMultiCountry]", error.message)
+
+  let result = [...(data ?? [])].sort((a: any, b: any) => (a.tenant === "VN" ? -1 : b.tenant === "VN" ? 1 : 0))
+  let note = `Gói ĐA QUỐC GIA phủ cả ${uniq.join(" + ")} (${intersection.length} nhóm: ${intersection.slice(0, 8).join(", ")}).`
+
+  // Áp filter tuỳ chọn (giống searchSkus)
+  if (params.vendor) {
+    const v = result.filter((s: any) => (s.sku_code as string).slice(5, 7).toUpperCase() === params.vendor!.toUpperCase())
+    if (v.length) result = v
+  }
+  if (params.sim_type) {
+    const v = result.filter((s: any) => s.sim_esim?.toLowerCase() === params.sim_type!.toLowerCase())
+    if (v.length) result = v
+  }
+  if (params.is_unlimited) {
+    const v = result.filter((s: any) => s.is_unlimited || (s.data_amount ?? 0) >= 9999)
+    if (v.length) result = v; else note += ` | Không có gói unlimited`
+  } else if (params.data_gb != null) {
+    const exact = result.filter((s: any) => s.data_amount === params.data_gb)
+    if (exact.length) result = exact
+  }
+  if (params.days != null) {
+    const exact = result.filter((s: any) => s.day_amount === params.days)
+    if (exact.length) result = exact
+    else {
+      const avail = [...new Set(result.map((s: any) => s.day_amount as number))].sort((a, b) => a - b)
+      note += ` | Không có gói ${params.days}d, có: ${avail.slice(0, 6).join("/")}d`
+    }
+  }
+  if (missing.length) note += ` | ⚠ Chưa nhận diện: ${missing.join(", ")} — kết quả chỉ chắc cho ${recognized.map(p => p.name).join(", ")}`
+  if (result.length > 40) note += ` | ⚠ Hiển thị 40/${result.length} SKU`
+
+  return { skus: result.slice(0, 40), matched: recognized.map(p => p.name), missing, note }
 }
 
 // ─── Tool: search_skus_for_region ────────────────────────────────────────────
@@ -690,33 +755,30 @@ export async function identifyCode(code: string): Promise<any> {
 // ─── Tool: get_product_detail ─────────────────────────────────────────────────
 
 // Chỉ đọc cột VN (bỏ _en), bỏ date_created/last_modified_date
-const LISTING_COLS = [
-  "listing_code","reference_product_code","tenant","status","listing_type",
-  "listing_name_vn",
-  "type_of_sim","product_type","network_operator",
-  "supported_countries",
-  "data_type_vn",
-  "category_code",
-  "daily_reset_time_vn",
-  "activation_time_vn",
-  "network_type",
-  "hotspot_vn",
-  "kyc_needed_vn",
-  "kyc_links_vn",
-  "expirations_vn",
-  "top_up_options_vn",
-  "activation_vn",
-  "activation_links_vn",
-  "special_activation_required_vn",
-  "unsupported_apps_vn",
-  "telco_perks_vn",
-  "note_vn",
-  "call_sms_details_vn",
-  "local_phone_number_vn","local_phone_number_country",
-  "call_vn",
-  "apn",
-  "synced_at",
-].join(",")
+// Item 4: field mô tả listings đã chuyển vào JSONB `metadata`. Select core (cột) + metadata.
+const LISTING_COLS = "listing_code,reference_product_code,tenant,status,listing_type,listing_name_vn,type_of_sim,product_type,category_code,metadata"
+
+// Ghép core (cột) + field mô tả (từ metadata) — GIỮ shape gọn cũ (chỉ _vn, bỏ _en/date) để context agent không phình.
+function pickListing(r: any) {
+  const m = r?.metadata ?? {}
+  return {
+    listing_code: r.listing_code, reference_product_code: r.reference_product_code,
+    tenant: r.tenant, status: r.status, listing_type: r.listing_type,
+    listing_name_vn: r.listing_name_vn, type_of_sim: r.type_of_sim, product_type: r.product_type,
+    category_code: r.category_code,
+    network_operator: m.network_operator, supported_countries: m.supported_countries,
+    data_type_vn: m.data_type_vn, daily_reset_time_vn: m.daily_reset_time_vn,
+    activation_time_vn: m.activation_time_vn, network_type: m.network_type,
+    hotspot_vn: m.hotspot_vn, kyc_needed_vn: m.kyc_needed_vn, kyc_links_vn: m.kyc_links_vn,
+    expirations_vn: m.expirations_vn, top_up_options_vn: m.top_up_options_vn,
+    activation_vn: m.activation_vn, activation_links_vn: m.activation_links_vn,
+    special_activation_required_vn: m.special_activation_required_vn,
+    unsupported_apps_vn: m.unsupported_apps_vn, telco_perks_vn: m.telco_perks_vn,
+    note_vn: m.note_vn, call_sms_details_vn: m.call_sms_details_vn,
+    local_phone_number_vn: m.local_phone_number_vn, local_phone_number_country: m.local_phone_number_country,
+    call_vn: m.call_vn, apn: m.apn,
+  }
+}
 
 // Chỉ đọc cột VN, bỏ _en và date fields
 const ITEM_COLS = [
@@ -771,7 +833,7 @@ export async function getProductDetail(sku_code: string): Promise<any> {
       .limit(10),
   ])
 
-  return { sku, product: product ?? {}, listings: listings ?? [], items: items ?? [] }
+  return { sku, product: product ?? {}, listings: (listings ?? []).map(pickListing), items: items ?? [] }
 }
 
 // ─── Tool: get_product_by_code ───────────────────────────────────────────────
@@ -813,7 +875,7 @@ export async function searchListings(params: { product_code?: string; name?: str
     q = q.or(`listing_name_vn.ilike.%${params.name}%,listing_name_en.ilike.%${params.name}%`)
   }
   const { data } = await q.limit(5)
-  return data ?? []
+  return (data ?? []).map(pickListing)
 }
 
 // ─── Tool: decode_sku_code ────────────────────────────────────────────────────
@@ -1009,31 +1071,6 @@ export function findGaps(params: {
   return result
 }
 
-// ─── Tool: semantic_search ───────────────────────────────────────────────────
-// Fallback khi 4-step Supabase search trả về 0 kết quả.
-// Embed query → Neo4j vector index 'sku_embedding' → trả SKU codes.
-
-export async function searchSkusSemantic(query: string, topK = 10): Promise<string[]> {
-  try {
-    const genAI    = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model    = genAI.getGenerativeModel({ model: "gemini-embedding-001" })
-    const result   = await model.embedContent(query.slice(0, 500))
-    const embedding = result.embedding.values
-
-    const records = await runQuery<{ sku_code: string; score: number }>(
-      `CALL db.index.vector.queryNodes('sku_embedding', $topK, $embedding)
-       YIELD node AS sku, score
-       WHERE score > 0.65
-       RETURN sku.sku_code AS sku_code, score
-       ORDER BY score DESC`,
-      { topK, embedding }
-    )
-    return records.map(r => r.sku_code).filter(Boolean)
-  } catch (err: any) {
-    console.error("[searchSkusSemantic]", err?.message?.slice(0, 80))
-    return []
-  }
-}
 
 // ─── KB Search ───────────────────────────────────────────────────────────────
 

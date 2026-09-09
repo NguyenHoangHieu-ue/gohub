@@ -2,13 +2,16 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { canWrite } from "@/lib/writable-tabs"
+
+const WRITE_ROLES = ["admin", "creator"]
 
 // AI suggest mô tả bảng/cột (port intel generateAIDescriptions) — chạy server-side với GEMINI_KEY.
 // Body: { tableName, fields: [{ name, type }] } → { tableDescription, fields: { [name]: description } }.
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
-  if (!session || !["admin", "creator"].includes(session.user?.role as string)) {
+  if (!session || !(await canWrite(session, "schema", WRITE_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
   try {
@@ -20,7 +23,7 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY)
     const model = genAI.getGenerativeModel({
-      model: "gemini-3.5-flash",
+      model: "gemini-3.6-flash",
       generationConfig: { responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } } as any,
     })
     const prompt = `Dựa trên tên bảng SQL "${tableName}" và các trường: ${fields.map((f: any) => `${f.name} (${f.type})`).join(", ")}, hãy tạo mô tả ngắn gọn hữu ích cho bảng và từng trường bằng tiếng Việt. Trả về JSON dạng {"tableDescription": string, "fields": { "<tên trường>": string }}.`

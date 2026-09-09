@@ -9,10 +9,12 @@ import {
   ShoppingCart, LayoutDashboard, ChevronDown, Check, MapPin, FileText,
 } from "lucide-react"
 import { domToCanvas } from "modern-screenshot"
-import { jsPDF } from "jspdf"
 import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber, formatTruncatedString } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
+import { useToast } from "@/components/toast"
+import { exportToExcel, exportRawRows } from "@/lib/export-excel"
+import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel ProductPerformance. Data qua /api/analytics/query + /api/channels +
 // /api/config/sku-destination-rule + /api/config/country-codes + /api/analytics/b2b/strategic-performance +
@@ -45,6 +47,7 @@ interface RegionData { region: string; revenue: number; units: number }
 interface SKUPerformance { sku: string; category: string; vendor: string; region: string; revenue: number; units: number; orders: number; margin: number }
 
 export default function ProductPerformancePage() {
+  const toast = useToast()
   const [loading, setLoading] = useState(true)
   const [metrics, setMetrics] = useState<ProductMetrics>({
     revenue: 0, revenueChange: 0, orders: 0, ordersChange: 0, units: 0, unitsChange: 0, aov: 0, aovChange: 0, margin: 0, marginChange: 0,
@@ -55,6 +58,10 @@ export default function ProductPerformancePage() {
   const [skuPerformance, setSkuPerformance] = useState<SKUPerformance[]>([])
   const reportRef = React.useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
+  const skuFullQueryRef = React.useRef<string>("")   // query SKU không LIMIT → export FULL
+  const [exportingSku, setExportingSku] = useState(false)
+  const skuDropdownRef = React.useRef<HTMLDivElement>(null)
+  const vendorDropdownRef = React.useRef<HTMLDivElement>(null)
 
   // Filters
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
@@ -84,6 +91,26 @@ export default function ProductPerformancePage() {
   const [skuRule, setSkuRule] = useState({ startsWith: "E", codeLength: 3, useGohubVietnamRule: true, useGohubIncRule: true })
   const [countryMappings, setCountryMappings] = useState<Record<string, string>>({})
   const [selectedDestination, setSelectedDestination] = useState<string>("all")
+  const [availableDestinations, setAvailableDestinations] = useState<{ code: string; name: string }[]>([])
+
+  // Win Rate Tab
+  const [activeTab, setActiveTab] = useState<"performance" | "winrate">("performance")
+  const [wrData,    setWrData]    = useState<any>(null)
+  const [wrLoading, setWrLoading] = useState(false)
+  const [wrDays,    setWrDays]    = useState(90)
+  const [wrThresh,  setWrThresh]  = useState(5)
+  const [wrWinDays, setWrWinDays] = useState(14)
+  const [wrVendor,  setWrVendor]  = useState("")
+
+  // Đóng custom dropdown khi click ra ngoài — ngăn Vendor/SKU dropdown che Destination select
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (skuDropdownRef.current && !skuDropdownRef.current.contains(e.target as Node)) setShowSkuDropdown(false)
+      if (vendorDropdownRef.current && !vendorDropdownRef.current.contains(e.target as Node)) setShowVendorDropdown(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
 
   const runQuery = async (sql: string) => {
     const res = await fetch("/api/analytics/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql }) })
@@ -92,23 +119,36 @@ export default function ProductPerformancePage() {
   }
 
   const exportToCSV = (data: any[], filename: string, columns: { label: string; key: string }[]) => {
-    const csvRows = [
-      columns.map(c => c.label).join(","),
-      ...data.map(row => columns.map(c => {
-        const val = row[c.key] ?? 0
-        return typeof val === "string" ? `"${val.replace(/"/g, '""')}"` : val
-      }).join(",")),
-    ]
-    const csvContent = csvRows.join("\n")
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `${filename}_${startDate}_to_${endDate}.csv`)
-    link.style.visibility = "hidden"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    exportToExcel(data as Record<string, unknown>[], columns, `${filename}_${startDate}_to_${endDate}`)
+  }
+
+  // Export SKU Breakdown FULL (chạy lại query KHÔNG LIMIT) — cột khớp đúng bảng hiển thị.
+  const exportSkuBreakdownFull = async () => {
+    if (!skuFullQueryRef.current || exportingSku) return
+    setExportingSku(true)
+    try {
+      const skus = await runQuery(skuFullQueryRef.current)
+      const rows = (Array.isArray(skus) ? skus : []).map((s: any) => {
+        const revenue = parseFloat(s.revenue || 0)
+        const margin = parseFloat(s.margin || 0)
+        return {
+          "SKU": s.sku || "",
+          "Country Code": s.region || "",
+          "Country": countryMappings[s.region] || "",
+          "Category": s.category || "",
+          "Vendor": s.vendor || "",
+          "Revenue": revenue,
+          "Units": parseInt(s.units || 0),
+          "Orders": parseInt(s.orders || 0),
+          "Margin %": revenue > 0 ? Number(((margin / revenue) * 100).toFixed(1)) : 0,
+        }
+      })
+      exportRawRows(rows, `SKU_Breakdown_${startDate}_to_${endDate}`, "SKU Breakdown")
+    } catch (err) {
+      console.error("Export SKU breakdown failed:", err)
+    } finally {
+      setExportingSku(false)
+    }
   }
 
   const exportToPDF = async () => {
@@ -117,6 +157,7 @@ export default function ProductPerformancePage() {
     try {
       const canvas = await domToCanvas(reportRef.current, { scale: 2, backgroundColor: "#f8fafc" })
       const imgData = canvas.toDataURL("image/png")
+      const { jsPDF } = await import("jspdf")   // nạp động: chỉ tải jspdf khi user xuất PDF
       const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [canvas.width / 2, canvas.height / 2] })
       pdf.addImage(imgData, "PNG", 0, 0, canvas.width / 2, canvas.height / 2)
       pdf.save(`Product_Performance_Report_${startDate}_to_${endDate}.pdf`)
@@ -146,6 +187,11 @@ export default function ProductPerformancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChannelGroup])
 
+  useEffect(() => {
+    if (activeTab === "winrate" && !wrData) fetchWinRate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
+
   const fetchFilteredChannels = async () => {
     try {
       const resp = await fetch(`/api/channels?channelGroup=${selectedChannelGroup}`)
@@ -155,8 +201,18 @@ export default function ProductPerformancePage() {
     }
   }
 
+  // Canonical regionExpr — khớp 100% với getDestinationSQL trong analytics-helpers.ts.
+  // Dùng UPPER() để nhất quán với country_codes.code (uppercase).
+  const REGION_EXPR = `UPPER(CASE
+    WHEN f.sku ~ '^[1-6]'            THEN SUBSTRING(f.sku, 3, 3)
+    WHEN f.sku ~ '^E'               THEN SUBSTRING(f.sku, 2, 3)
+    WHEN f.sku ~ '^[A-DF-Z]{3}[0-9]' THEN SUBSTRING(f.sku, 1, 3)
+    ELSE SUBSTRING(f.sku, 1, 3)
+  END)`
+
   const fetchInitialData = async () => {
     try {
+      // 5 fetch chính — nếu fail thì catch bên ngoài xử lý
       const [skus, cats, vends, rule, countries] = await Promise.all([
         runQuery("SELECT DISTINCT sku FROM dim_sku ORDER BY sku"),
         runQuery("SELECT DISTINCT category_name FROM dim_sku WHERE category_name IS NOT NULL ORDER BY category_name"),
@@ -168,12 +224,38 @@ export default function ProductPerformancePage() {
       setAvailableSkus(skus.map((s: any) => s.sku))
       setCategories(cats.map((c: any) => c.category_name))
       setVendors(vends.map((v: any) => v.vendor))
-      // Web rule = {prefix, codeLength, offset}; map prefix→startsWith
-      setSkuRule(prev => ({ ...prev, ...rule, startsWith: rule.prefix ?? prev.startsWith, codeLength: rule.codeLength ?? prev.codeLength }))
+      const firstRule = rule?.rules?.[0]
+      if (firstRule) setSkuRule(prev => ({ ...prev, startsWith: firstRule.startsWith ?? prev.startsWith, codeLength: firstRule.codeLength ?? prev.codeLength }))
 
       const mapping: Record<string, string> = {}
-      if (Array.isArray(countries)) countries.forEach((c: any) => mapping[c.code] = c.country)
+      if (Array.isArray(countries)) countries.forEach((c: any) => { if (c.code) mapping[String(c.code).toUpperCase()] = c.country })
       setCountryMappings(mapping)
+
+      // Destination query RIÊNG — failure không break main init
+      try {
+        const destRows = await runQuery(
+          `SELECT DISTINCT UPPER(CASE
+            WHEN sku ~ '^[1-6]'            THEN SUBSTRING(sku, 3, 3)
+            WHEN sku ~ '^E'               THEN SUBSTRING(sku, 2, 3)
+            WHEN sku ~ '^[A-DF-Z]{3}[0-9]' THEN SUBSTRING(sku, 1, 3)
+            ELSE SUBSTRING(sku, 1, 3)
+          END) as code FROM dim_sku WHERE sku IS NOT NULL AND LENGTH(sku) >= 3 ORDER BY 1`
+        )
+        const dests: { code: string; name: string }[] = []
+        if (Array.isArray(destRows)) {
+          destRows.forEach((d: any) => {
+            const code = String(d.code || "").toUpperCase()
+            if (code.length === 3) dests.push({ code, name: mapping[code] || code })
+          })
+        }
+        setAvailableDestinations(dests.sort((a, b) => a.name.localeCompare(b.name)))
+      } catch {
+        // Fallback: dùng toàn bộ country mappings nếu dim_sku query fail
+        const allDests = Object.entries(mapping)
+          .map(([code, name]) => ({ code, name }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+        setAvailableDestinations(allDests)
+      }
     } catch (err) {
       console.error("Error fetching initial data:", err)
     }
@@ -191,24 +273,14 @@ export default function ProductPerformancePage() {
 
       let filterSQL = `f.${dateCol}::date BETWEEN '${startDate}' AND '${endDate}'`
       if (selectedSkus.length > 0) filterSQL += ` AND f.sku IN (${selectedSkus.map(s => `'${s}'`).join(",")})`
-      if (selectedCategory !== "all") filterSQL += ` AND f.sku IN (SELECT sku FROM dim_sku WHERE category_name = '${selectedCategory}')`
+      if (selectedCategory !== "all") filterSQL += ` AND f.sku IN (SELECT sku FROM dim_sku WHERE category_name = '${selectedCategory.replace(/'/g, "''")}')`
       if (selectedVendors.length > 0) {
         const vendorList = selectedVendors.map(v => `'${v.replace(/'/g, "''")}'`).join(",")
         filterSQL += ` AND f.sku IN (SELECT sku FROM dim_sku WHERE vendor IN (${vendorList}))`
       }
 
-      const ruleToUse = {
-        startsWith: skuRule.startsWith || "E",
-        codeLength: skuRule.codeLength || 3,
-        useGohubVietnamRule: skuRule.useGohubVietnamRule !== false,
-        useGohubIncRule: skuRule.useGohubIncRule !== false,
-      }
-      const regionExpr = `TRIM(CASE
-        ${ruleToUse.useGohubVietnamRule ? "WHEN SUBSTRING(f.sku, 1, 1) BETWEEN '1' AND '6' THEN SUBSTRING(f.sku FROM 3 FOR 3)" : ""}
-        ${ruleToUse.useGohubIncRule ? "WHEN SUBSTRING(f.sku, 1, 1) BETWEEN 'A' AND 'E' THEN SUBSTRING(f.sku FROM 3 FOR 3)" : ""}
-        WHEN f.sku LIKE '${ruleToUse.startsWith}%' THEN SUBSTRING(f.sku FROM ${ruleToUse.startsWith.length + 1} FOR ${ruleToUse.codeLength})
-        ELSE SUBSTRING(f.sku FROM 1 FOR ${ruleToUse.codeLength})
-      END)`
+      // Dùng canonical REGION_EXPR (khai báo trong component, khớp getDestinationSQL)
+      const regionExpr = REGION_EXPR
       if (selectedDestination !== "all") filterSQL += ` AND ${regionExpr} = '${selectedDestination}'`
 
       if (selectedChannel !== "all") {
@@ -264,11 +336,14 @@ export default function ProductPerformancePage() {
 
       const regionQuery = `SELECT ${regionExpr} as region_code, SUM(${revCol}) as revenue, SUM(${qtyCol}) as units FROM ${mainTable} f WHERE ${filterSQL} GROUP BY 1 ORDER BY revenue DESC LIMIT 10`
 
-      const skuBreakdownQuery = `
+      // Base query (KHÔNG LIMIT) — lưu để export FULL; bảng chỉ hiển thị top 50.
+      const skuBreakdownBase = `
         SELECT f.sku, v.category_name as category, v.vendor, ${regionExpr} as region,
           SUM(f.${revCol}) as revenue, SUM(f.${qtyCol}) as units, COUNT(DISTINCT f.order_code) as orders, SUM(f.${marginCol}) as margin
         FROM ${mainTable} f LEFT JOIN dim_sku v ON f.sku = v.sku
-        WHERE ${filterSQL} GROUP BY 1, 2, 3, 4 ORDER BY revenue DESC LIMIT 50`
+        WHERE ${filterSQL} GROUP BY 1, 2, 3, 4 ORDER BY revenue DESC`
+      skuFullQueryRef.current = skuBreakdownBase
+      const skuBreakdownQuery = `${skuBreakdownBase} LIMIT 50`
 
       const [mRecords, pmRecords, trends, channels, regions, skus, strategicRes] = await Promise.all([
         runQuery(metricsQuery),
@@ -347,6 +422,20 @@ export default function ProductPerformancePage() {
     }
   }
 
+  const fetchWinRate = async () => {
+    setWrLoading(true)
+    try {
+      const params = new URLSearchParams({ days: String(wrDays), win_threshold: String(wrThresh), win_days: String(wrWinDays) })
+      if (wrVendor) params.set("vendor", wrVendor)
+      const res = await fetch(`/api/analytics/win-rate?${params}`)
+      setWrData(await res.json())
+    } catch (err) {
+      console.error("Win rate fetch error:", err)
+    } finally {
+      setWrLoading(false)
+    }
+  }
+
   const groupedChannelData = useMemo(() => {
     const groups = { b2c: [] as ChannelData[], b2bStrategic: [] as ChannelData[], b2bNonStrategic: [] as ChannelData[] }
     channelData.forEach(channel => {
@@ -371,6 +460,8 @@ export default function ProductPerformancePage() {
     const start = new Date(startDate)
     const end = new Date(endDate)
     const now = new Date()
+    // Cross-month range → snapshot lịch sử, không project
+    if (start.getMonth() !== end.getMonth() || start.getFullYear() !== end.getFullYear()) return null
     const isCurrentMonth = end.getMonth() === now.getMonth() && end.getFullYear() === now.getFullYear()
     if (!isCurrentMonth) return null
     const daysElapsed = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
@@ -397,37 +488,25 @@ export default function ProductPerformancePage() {
       const response = await fetch(`/api/orders/export?${params}`)
       if (response.ok) {
         const data = await response.json()
-        const headers = ["Order ID", "Date", "Staff", "Customer", "Channel", "Order Source", "Product", "SKU", "Qty", "Revenue"]
-        let csvContent = "﻿" + headers.join(",") + "\n"
-        data.forEach((item: any) => {
-          csvContent += [
-            `"${item.order_id || ""}"`,
-            `"${item.date ? (typeof item.date === "string" ? item.date.split("T")[0] : new Date(item.date).toISOString().split("T")[0]) : ""}"`,
-            `"${(item.staff || "").replace(/"/g, '""')}"`,
-            `"${(item.customer || item.customer_name || "").replace(/"/g, '""')}"`,
-            `"${(item.channel || "").replace(/"/g, '""')}"`,
-            `"${(item.order_source || "").replace(/"/g, '""')}"`,
-            `"${(item.product_name || "").replace(/"/g, '""')}"`,
-            `"${(item.sku || "").replace(/"/g, '""')}"`,
-            item.fulfilled_quantity || 0,
-            item.revenue || 0,
-          ].join(",") + "\n"
-        })
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.setAttribute("hidden", "")
-        a.setAttribute("href", url)
-        a.setAttribute("download", `Product_Performance_${startDate}_to_${endDate}.csv`)
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
+        const rows = data.map((item: any) => ({
+          "Order ID": item.order_id || "",
+          "Date": item.date ? (typeof item.date === "string" ? item.date.split("T")[0] : new Date(item.date).toISOString().split("T")[0]) : "",
+          "Staff": item.staff || "",
+          "Customer": item.customer || item.customer_name || "",
+          "Channel": item.channel || "",
+          "Order Source": item.order_source || "",
+          "Product": item.product_name || "",
+          "SKU": item.sku || "",
+          "Qty": item.fulfilled_quantity || 0,
+          "Revenue": item.revenue || 0,
+        }))
+        exportRawRows(rows, `Product_Performance_${startDate}_to_${endDate}`, "Products")
       } else {
-        alert("Failed to export data")
+        toast.error("Failed to export data")
       }
     } catch (err) {
       console.error("Export error:", err)
-      alert("Error exporting data")
+      toast.error("Error exporting data")
     }
   }
 
@@ -461,15 +540,26 @@ export default function ProductPerformancePage() {
             <button onClick={handleExport} disabled={loading}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50">
               <Download className="w-4 h-4" />
-              Export Orders CSV
+              Export Orders
             </button>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        {/* ── Tab bar ── */}
+        <div className="flex bg-white rounded-xl border border-slate-200 shadow-sm p-1 self-start">
+          {(["performance", "winrate"] as const).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={cn("px-4 py-1.5 text-sm font-semibold rounded-lg transition-all",
+                activeTab === tab ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>
+              {tab === "performance" ? "Performance" : "Win Rate"}
+            </button>
+          ))}
+        </div>
+
+        <div className={cn("bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4", activeTab !== "performance" && "hidden")}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* SKU Multi-select */}
-            <div className="space-y-1.5 relative">
+            <div className="space-y-1.5 relative" ref={skuDropdownRef}>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select SKUs</label>
               <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-all" onClick={() => setShowSkuDropdown(!showSkuDropdown)}>
                 <div className="flex items-center gap-2 overflow-hidden">
@@ -490,13 +580,13 @@ export default function ProductPerformancePage() {
                   <div className="max-h-60 overflow-y-auto p-1">
                     {selectedSkus.length > 0 && (
                       <div className="p-2 border-b border-slate-50 mb-1">
-                        <button onClick={(e) => { e.stopPropagation(); setSelectedSkus([]) }} className="text-xs font-bold text-blue-600 hover:text-blue-700">Clear Selection</button>
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedSkus([]) }} className="text-xs font-bold text-brand-600 hover:text-brand-700">Clear Selection</button>
                       </div>
                     )}
                     {filteredSkus.map(sku => (
                       <div key={sku} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer group" onClick={(e) => { e.stopPropagation(); toggleSku(sku) }}>
                         <span className="text-sm text-slate-700">{sku}</span>
-                        {selectedSkus.includes(sku) && <Check className="w-4 h-4 text-blue-600" />}
+                        {selectedSkus.includes(sku) && <Check className="w-4 h-4 text-brand-600" />}
                       </div>
                     ))}
                   </div>
@@ -508,14 +598,14 @@ export default function ProductPerformancePage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Category</label>
               <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="all">All Categories</option>
                 {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
               </select>
             </div>
 
             {/* Vendor Filter */}
-            <div className="space-y-1.5 relative">
+            <div className="space-y-1.5 relative" ref={vendorDropdownRef}>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Vendor</label>
               <div className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all font-medium h-[38px]" onClick={() => setShowVendorDropdown(!showVendorDropdown)}>
                 <span className="truncate max-w-[150px]">{selectedVendors.length === 0 ? "All Vendors" : selectedVendors.length === 1 ? selectedVendors[0] : `${selectedVendors.length} Vendors`}</span>
@@ -525,11 +615,11 @@ export default function ProductPerformancePage() {
                 <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl max-h-64 overflow-y-auto p-2 min-w-[200px]">
                   <div className="flex items-center justify-between p-2 mb-2 border-b border-slate-100 sticky top-0 bg-white z-10">
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Select Vendors</span>
-                    <button onClick={() => setSelectedVendors([])} className="text-[10px] text-blue-600 font-bold hover:underline">Clear</button>
+                    <button onClick={() => setSelectedVendors([])} className="text-[10px] text-brand-600 font-bold hover:underline">Clear</button>
                   </div>
                   {vendors.map(v => (
                     <div key={v} onClick={() => toggleItem(v, selectedVendors, setSelectedVendors)}
-                      className={cn("flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors", selectedVendors.includes(v) ? "bg-blue-50 text-blue-600" : "hover:bg-slate-50")}>
+                      className={cn("flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors", selectedVendors.includes(v) ? "bg-brand-50 text-brand-600" : "hover:bg-slate-50")}>
                       <span className="text-sm font-medium">{v}</span>
                       {selectedVendors.includes(v) && <Check className="w-4 h-4" />}
                     </div>
@@ -542,9 +632,9 @@ export default function ProductPerformancePage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date Range</label>
               <div className="flex items-center gap-2">
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
                 <span className="text-slate-400">-</span>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
               <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="pt-1" />
             </div>
@@ -553,7 +643,7 @@ export default function ProductPerformancePage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Channel Group</label>
               <select value={selectedChannelGroup} onChange={(e) => { setSelectedChannelGroup(e.target.value); setSelectedChannel("all") }}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="all">All Groups</option>
                 <option value="B2C">B2C</option>
                 <option value="B2B">B2B</option>
@@ -564,7 +654,7 @@ export default function ProductPerformancePage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Channel</label>
               <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="all">All Channels</option>
                 {filteredChannels.map(channel => <option key={channel} value={channel}>{channel}</option>)}
               </select>
@@ -572,11 +662,13 @@ export default function ProductPerformancePage() {
 
             {/* Destination Filter */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Destination</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Destination{availableDestinations.length > 0 && <span className="ml-1 text-slate-400 font-normal normal-case">({availableDestinations.length})</span>}
+              </label>
               <select value={selectedDestination} onChange={(e) => setSelectedDestination(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="all">All Destinations</option>
-                {Object.entries(countryMappings).sort((a, b) => a[1].localeCompare(b[1])).map(([code, name]) => (
+                {availableDestinations.map(({ code, name }) => (
                   <option key={code} value={code}>{name} ({code})</option>
                 ))}
               </select>
@@ -586,7 +678,7 @@ export default function ProductPerformancePage() {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Compare To</label>
               <select value={comparisonType} onChange={(e) => setComparisonType(e.target.value as any)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="none">No Comparison</option>
                 <option value="previous_period">Previous Period</option>
                 <option value="previous_year">Previous Year</option>
@@ -594,65 +686,59 @@ export default function ProductPerformancePage() {
             </div>
           </div>
           <div className="flex justify-end pt-4 border-t border-slate-100 mt-4">
-            <button onClick={fetchPerformanceData} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">
+            <button onClick={fetchPerformanceData} className="px-6 py-2 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-200">
               Apply Filters
             </button>
           </div>
         </div>
       </div>
 
-      <div ref={reportRef} className="space-y-6">
+      <div ref={reportRef} className={cn("space-y-6", activeTab !== "performance" && "hidden")}>
         {/* Summary Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {[
-            { label: "Revenue (VND)", value: metrics.revenue, change: metrics.revenueChange, icon: DollarSign, color: "blue" },
-            { label: "Units Sold", value: metrics.units, change: metrics.unitsChange, icon: Package, color: "purple" },
-            { label: "Orders", value: metrics.orders, change: metrics.ordersChange, icon: ShoppingCart, color: "indigo" },
-            { label: "ASP (VND)", value: metrics.aov, change: metrics.aovChange, icon: TrendingUp, color: "emerald" },
-            { label: "Gross Margin", value: metrics.margin, change: metrics.marginChange, icon: LayoutDashboard, color: "amber" },
-          ].map((item, idx) => (
-            <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
-              <div className="flex justify-between items-start mb-4">
-                <div className={cn("p-3 rounded-xl",
-                  item.color === "blue" ? "bg-blue-50 text-blue-600" :
-                  item.color === "purple" ? "bg-purple-50 text-purple-600" :
-                  item.color === "indigo" ? "bg-indigo-50 text-indigo-600" :
-                  item.color === "emerald" ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600")}>
-                  <item.icon className="w-6 h-6" />
-                </div>
-                {loading ? <Skeleton className="h-4 w-12" /> : (comparisonType !== "none" && (
-                  <div className={cn("flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full", item.change >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
-                    {item.change >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                    {Math.abs(item.change)}%
-                  </div>
-                ))}
+          {([
+            { label: "Revenue (VND)", value: metrics.revenue, change: metrics.revenueChange, icon: DollarSign,      accent: "revenue" },
+            { label: "Units Sold",    value: metrics.units,   change: metrics.unitsChange,   icon: Package,         accent: "neutral" },
+            { label: "Orders",        value: metrics.orders,  change: metrics.ordersChange,  icon: ShoppingCart,    accent: "neutral" },
+            { label: "ASP (VND)",     value: metrics.aov,     change: metrics.aovChange,     icon: TrendingUp,      accent: "positive" },
+            { label: "Gross Margin",  value: metrics.margin,  change: metrics.marginChange,  icon: LayoutDashboard, accent: "margin"  },
+          ] as { label: string; value: number; change: number; icon: React.ElementType; accent: MetricAccent }[]).map((item, idx) => (
+            loading ? (
+              <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <Skeleton className="h-9 w-9 rounded-xl" />
+                <div className="space-y-2"><Skeleton className="h-4 w-24" /><Skeleton className="h-8 w-32" /></div>
               </div>
-              <p className="text-slate-500 text-sm font-medium">{item.label}</p>
-              {loading ? <Skeleton className="h-8 w-32 mt-2" /> : (
-                <h3 className="text-2xl font-bold text-slate-900 mt-1">{item.label.includes("VND") ? formatCompactNumber(item.value) : formatNumber(item.value)}</h3>
-              )}
-            </div>
+            ) : (
+              <StatTile
+                key={idx}
+                icon={<item.icon className="w-5 h-5" />}
+                label={item.label}
+                value={item.label.includes("VND") ? formatCompactNumber(item.value) : formatNumber(item.value)}
+                accent={item.accent}
+                deltas={comparisonType !== "none" ? [{ label: "So sánh", value: `${item.change >= 0 ? "+" : ""}${item.change}%`, kind: item.change >= 0 ? "up" : "down" }] : undefined}
+              />
+            )
           ))}
         </div>
 
         {/* Projection */}
         {projection && !loading && (
-          <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6">
+          <div className="bg-brand-50/50 border border-brand-100 rounded-2xl p-6">
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white"><TrendingUp className="w-6 h-6" /></div>
+              <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center text-white"><TrendingUp className="w-6 h-6" /></div>
               <div>
-                <h3 className="text-lg font-bold text-blue-900">Month-End Projection</h3>
-                <p className="text-sm text-blue-600">Based on {projection.daysElapsed} days of performance</p>
+                <h3 className="text-lg font-bold text-brand-800">Month-End Projection</h3>
+                <p className="text-sm text-brand-600">Based on {projection.daysElapsed} days of performance</p>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
+              <div className="bg-white p-4 rounded-xl border border-brand-100 shadow-sm">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Projected Revenue</p>
-                <p className="text-2xl font-bold text-blue-600">{formatCurrency(projection.revenue)}</p>
+                <p className="text-2xl font-bold text-brand-600">{formatCurrency(projection.revenue)}</p>
               </div>
-              <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
+              <div className="bg-white p-4 rounded-xl border border-brand-100 shadow-sm">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Projected Units</p>
-                <p className="text-2xl font-bold text-blue-600">{formatNumber(Math.round(projection.units))}</p>
+                <p className="text-2xl font-bold text-brand-600">{formatNumber(Math.round(projection.units))}</p>
               </div>
             </div>
           </div>
@@ -664,8 +750,8 @@ export default function ProductPerformancePage() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-bold text-slate-900">Sales &amp; Units Trend</h2>
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 text-xs font-medium text-slate-500"><div className="w-3 h-3 bg-blue-500 rounded-full"></div> Revenue</div>
-                <div className="flex items-center gap-2 text-xs font-medium text-slate-500"><div className="w-3 h-3 bg-emerald-500 rounded-full"></div> Units</div>
+                <div className="flex items-center gap-2 text-xs font-medium text-slate-500"><div className="w-3 h-3 rounded-full" style={{ background: CHART_PALETTE[0] }}></div> Revenue</div>
+                <div className="flex items-center gap-2 text-xs font-medium text-slate-500"><div className="w-3 h-3 rounded-full" style={{ background: CHART_PALETTE[1] }}></div> Units</div>
               </div>
             </div>
             <div className="h-[350px] w-full">
@@ -674,16 +760,16 @@ export default function ProductPerformancePage() {
                   <AreaChart data={trendData}>
                     <defs>
                       <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} /><stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                        <stop offset="5%" stopColor={CHART_PALETTE[0]} stopOpacity={0.15} /><stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                     <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} dy={10} />
                     <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(val) => formatCompactNumber(val)} />
-                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "#10b981", fontSize: 12 }} />
-                    <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
-                    <Area yAxisId="left" type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
-                    <Line yAxisId="right" type="monotone" dataKey="units" stroke="#10b981" strokeWidth={2} dot={false} name="Units" />
+                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fill: CHART_PALETTE[1], fontSize: 12 }} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Area yAxisId="left" type="monotone" dataKey="revenue" stroke={CHART_PALETTE[0]} strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
+                    <Line yAxisId="right" type="monotone" dataKey="units" stroke={CHART_PALETTE[1]} strokeWidth={2} dot={false} name="Units" />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
@@ -693,18 +779,18 @@ export default function ProductPerformancePage() {
           {/* Top Regions */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="flex items-center gap-2 mb-6">
-              <MapPin className="w-5 h-5 text-blue-600" />
+              <MapPin className="w-5 h-5 text-brand-600" />
               <h2 className="text-lg font-bold text-slate-900">Top Regions</h2>
             </div>
             <div className="h-[500px] w-full">
               {loading ? <Skeleton className="h-full w-full" /> : (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={regionData} layout="vertical" margin={{ left: 30, right: 40, top: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={CHART_GRID_COLOR} />
                     <XAxis type="number" hide />
                     <YAxis dataKey="region" type="category" axisLine={false} tickLine={false} tick={{ fill: "#475569", fontSize: 11, fontWeight: 600 }} width={180} interval={0} tickFormatter={(value) => formatTruncatedString(value, 20)} />
-                    <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} formatter={(val: number) => [formatCompactNumber(val), "Revenue"]} />
-                    <Bar dataKey="revenue" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={32} />
+                    <Tooltip contentStyle={chartTooltipStyle} formatter={(val: number) => [formatCompactNumber(val), "Revenue"]} />
+                    <Bar dataKey="revenue" fill={CHART_PALETTE[0]} radius={[0, 4, 4, 0]} barSize={32} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -722,7 +808,7 @@ export default function ProductPerformancePage() {
             <div key={group.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={cn("p-2 rounded-lg", group.color === "indigo" ? "bg-indigo-50 text-indigo-600" : group.color === "blue" ? "bg-blue-50 text-blue-600" : "bg-slate-50 text-slate-600")}>
+                  <div className={cn("p-2 rounded-lg", group.color === "indigo" ? "bg-indigo-50 text-indigo-600" : group.color === "blue" ? "bg-brand-50 text-brand-600" : "bg-slate-50 text-slate-600")}>
                     <LayoutDashboard className="w-5 h-5" />
                   </div>
                   <h2 className="text-lg font-bold text-slate-900">{group.title}</h2>
@@ -730,7 +816,7 @@ export default function ProductPerformancePage() {
                 <button onClick={() => exportToCSV(group.data, group.id.replace(/-/g, "_"), [
                   { label: "Channel", key: "channel_name" }, { label: "Revenue", key: "revenue" }, { label: "Units Sold", key: "units_sold" }, { label: "Orders", key: "orders" }, { label: "Gross Margin", key: "margin" },
                 ])} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
-                  <Download className="w-3 h-3" /> CSV
+                  <Download className="w-3 h-3" /> Export
                 </button>
               </div>
               <div className="overflow-x-auto">
@@ -779,12 +865,10 @@ export default function ProductPerformancePage() {
           <div className="p-6 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-900">SKU Breakdown</h2>
-              <span className="text-xs text-slate-500">Showing top 50 products by revenue</span>
+              <span className="text-xs text-slate-500">Bảng hiển thị top 50 theo doanh thu · Export xuất TẤT CẢ SKU</span>
             </div>
-            <button onClick={() => exportToCSV(skuPerformance, "SKU_Performance", [
-              { label: "SKU", key: "sku" }, { label: "Category", key: "category" }, { label: "Vendor", key: "vendor" }, { label: "Revenue", key: "revenue" }, { label: "Units", key: "units" }, { label: "Orders", key: "orders" }, { label: "Margin", key: "margin" },
-            ])} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
-              <Download className="w-3 h-3" /> CSV
+            <button onClick={exportSkuBreakdownFull} disabled={exportingSku} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px] disabled:opacity-50">
+              <Download className="w-3 h-3" /> {exportingSku ? "Exporting..." : "Export"}
             </button>
           </div>
           <div className="overflow-x-auto">
@@ -832,6 +916,140 @@ export default function ProductPerformancePage() {
             </table>
           </div>
         </div>
+
+        {/* ── Win Rate tab ── */}
+        {activeTab === "winrate" && (
+          <div className="space-y-4">
+            {/* Config */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">SKU created trong (ngày)</label>
+                  <input type="number" min={7} max={365} value={wrDays}
+                    onChange={e => setWrDays(parseInt(e.target.value) || 90)}
+                    className="w-24 px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:ring-1 focus:ring-indigo-300 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Ngưỡng WIN (đơn)</label>
+                  <input type="number" min={1} max={100} value={wrThresh}
+                    onChange={e => setWrThresh(parseInt(e.target.value) || 5)}
+                    className="w-20 px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:ring-1 focus:ring-indigo-300 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Cửa sổ tính (ngày)</label>
+                  <input type="number" min={1} max={90} value={wrWinDays}
+                    onChange={e => setWrWinDays(parseInt(e.target.value) || 14)}
+                    className="w-20 px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:ring-1 focus:ring-indigo-300 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Vendor (tùy chọn)</label>
+                  <select value={wrVendor} onChange={e => setWrVendor(e.target.value)}
+                    className="w-44 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-indigo-300 focus:outline-none bg-white">
+                    <option value="">Tất cả vendor</option>
+                    {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+                <button onClick={fetchWinRate} disabled={wrLoading}
+                  className="px-5 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-2">
+                  {wrLoading ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <TrendingUp className="w-4 h-4" />}
+                  Tính Win Rate
+                </button>
+              </div>
+            </div>
+
+            {/* Summary */}
+            {wrData?.summary && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: "SKU mới",    value: wrData.summary.total, color: "text-slate-800", bg: "bg-slate-50 border-slate-200" },
+                  { label: "WIN",        value: wrData.summary.win, color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200",
+                    sub: `${wrData.summary.win_rate_pct}% win rate` },
+                  { label: "PENDING",    value: wrData.summary.pending, color: "text-amber-700", bg: "bg-amber-50 border-amber-200",
+                    sub: "đang tracking" },
+                  { label: "FAILED",     value: wrData.summary.failed, color: "text-red-700", bg: "bg-red-50 border-red-200",
+                    sub: `ngưỡng: ${wrData.config?.win_threshold ?? 5} đơn / ${wrData.config?.win_days ?? 14} ngày` },
+                ].map(c => (
+                  <div key={c.label} className={cn("rounded-xl border p-5 shadow-sm", c.bg)}>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{c.label}</p>
+                    <p className={cn("text-3xl font-extrabold tabular-nums", c.color)}>{c.value}</p>
+                    {c.sub && <p className="text-xs text-slate-500 mt-1">{c.sub}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* SKU table */}
+            {wrData?.skus?.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                  <h2 className="text-base font-bold text-slate-900">Danh sách SKU mới — {wrData.config?.lookback_days ?? wrDays} ngày gần nhất</h2>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400">{wrData.skus.length} SKU</span>
+                    <button onClick={() => exportRawRows(wrData.skus.map((s: any) => ({
+                      "SKU": s.sku_code,
+                      "Vendor": s.vendor || "",
+                      "Ngày tạo": s.created_at,
+                      "Deadline Win": s.win_deadline,
+                      "Tuổi (ngày)": s.age_days,
+                      "Trạng thái": s.status,
+                      [`Đơn ${wrData.config?.win_days ?? 14}d đầu`]: s.orders_14d,
+                      "Win%": s.win_pct,
+                      "Tổng đơn": s.total_orders,
+                    })), `win_rate_${wrDays}d`, "Win Rate")}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                      <Download className="w-3.5 h-3.5" /> Export
+                    </button>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-indigo-600">
+                        {["SKU", "Vendor", "Ngày tạo", "Deadline Win", "Tuổi (ngày)", "Trạng thái", `Đơn ${wrData.config?.win_days ?? 14}d đầu`, "Win%", "Tổng đơn"].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-[10px] font-semibold text-slate-200 uppercase tracking-wider whitespace-nowrap first:pl-5">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {wrData.skus.map((s: any, i: number) => {
+                        const statusCls = s.status === "WIN" ? "bg-emerald-100 text-emerald-700" : s.status === "PENDING" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-600"
+                        return (
+                          <tr key={s.sku_code} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                            <td className="px-5 py-3 font-mono font-semibold text-slate-800">{s.sku_code}</td>
+                            <td className="px-4 py-3 text-slate-500 text-[11px]">{s.vendor || "—"}</td>
+                            <td className="px-4 py-3 text-slate-500">{s.created_at}</td>
+                            <td className="px-4 py-3 text-slate-500">{s.win_deadline}</td>
+                            <td className="px-4 py-3 text-slate-600 tabular-nums">{s.age_days}</td>
+                            <td className="px-4 py-3">
+                              <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-bold", statusCls)}>{s.status}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-800">{s.orders_14d}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className={cn("h-full rounded-full", s.win_pct >= 100 ? "bg-emerald-500" : "bg-indigo-400")}
+                                    style={{ width: `${Math.min(s.win_pct, 100)}%` }} />
+                                </div>
+                                <span className="text-[11px] text-slate-600 tabular-nums">{s.win_pct}%</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-600">{s.total_orders}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {wrData && !wrData.skus?.length && !wrLoading && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center text-slate-400">
+                Không có SKU mới trong {wrDays} ngày qua.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

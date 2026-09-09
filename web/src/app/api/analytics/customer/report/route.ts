@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getMonthsInRange } from "@/lib/analytics-helpers"
+import { getDimCustomerCols } from "@/lib/dim-schema"
+import { fetchCustomerCosts, calcRecordCost } from "@/lib/b2b-customer-cost"
+import { fetchQuarterlySettings, makeClassifyTier } from "@/lib/quarterly-settings"
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -18,25 +21,12 @@ export async function POST(req: NextRequest) {
   try {
     const source = getAnalyticsSource(dateColumn)
 
-    // Resolve customer names → codes
+    // Probe dim_customer schema để dùng đúng tên cột
+    const { codeCol: custCodeCol, nameCol: custNameCol } = await getDimCustomerCols()
+
+    // Customer names list (sanitised) — dùng cho WHERE COALESCE(c.name, f.customer_code) IN (...)
+    // Giống cách quarterly-b2b-customers JOIN dim_customer, đảm bảo khớp với mọi format customer_code.
     const customerNames = customers.map((c: string) => `'${String(c).trim().replace(/'/g, "''")}'`).join(",")
-    const codeRows = await queryAnalytics<{ code: string; name: string }>(
-      `SELECT TRIM(code) as code, TRIM(name) as name FROM dim_customer WHERE TRIM(name) IN (${customerNames})`
-    )
-
-    const codeToName = new Map<string, string>()
-    codeRows.forEach(r => { if (r.code) codeToName.set(r.code, r.name) })
-
-    const allCodes = Array.from(new Set([
-      ...codeRows.map(r => r.code),
-      ...customers.map((c: string) => String(c).trim()),
-    ])).filter(Boolean)
-
-    if (!allCodes.length) {
-      return NextResponse.json({ kpis: [], trend: [], performance: [], products: [], channelDistribution: [], orders: [] })
-    }
-
-    const codesList = allCodes.map(c => `'${c.replace(/'/g, "''")}'`).join(",")
 
     // Date range for prev period comparison
     const currentStart = new Date(startDate)
@@ -45,38 +35,50 @@ export async function POST(req: NextRequest) {
     const prevStart = new Date(currentStart.getTime() - days * 86400000)
     const prevEnd = new Date(currentStart.getTime() - 1)
 
-    // Single query covering both periods
-    const rows = await queryAnalytics<{
-      code: string; date: string; order_code: string; sku: string
-      revenue: string; margin: string; quantity: string
-      channel_name: string; product_name: string
-    }>(
-      `SELECT
-         TRIM(f.customer_code) as code,
-         f.${source.dateCol} as date,
-         f.order_code,
-         f.sku,
-         f.${source.revenueCol} as revenue,
-         f.${source.marginCol} as margin,
-         f.${source.quantityCol} as quantity,
-         TRIM(s.channel_name) as channel_name,
-         v.type_of_sim as product_name
-       FROM ${source.mainTable} f
-       LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-       LEFT JOIN dim_sku v ON f.sku = v.sku
-       WHERE TRIM(f.customer_code) IN (${codesList})
-         AND f.${source.dateCol} >= $1 AND f.${source.dateCol} <= $2`,
-      [prevStart.toISOString().split("T")[0], currentEnd.toISOString().split("T")[0]]
-    )
+    const months = getMonthsInRange(startDate, endDate)
+    const [{ tierKeywords }, costMap, rows] = await Promise.all([
+      fetchQuarterlySettings(),
+      fetchCustomerCosts(months),
+      // Dùng LEFT JOIN dim_customer (giống quarterly-b2b-customers) thay vì WHERE IN (codes).
+      // COALESCE(c.name, f.customer_code) đảm bảo filter đúng dù format customer_code thay đổi.
+      queryAnalytics<{
+        code: string; customer_name: string; price_list_name: string | null
+        date: string; order_code: string; sku: string
+        revenue: string; margin: string; quantity: string
+        channel_name: string; product_name: string; is_3hk: string
+      }>(
+        `SELECT
+           TRIM(f.customer_code) as code,
+           COALESCE(TRIM(c.${custNameCol}::text), TRIM(f.customer_code)) as customer_name,
+           c.price_list_name,
+           f.${source.dateCol} as date,
+           f.order_code,
+           f.sku,
+           f.${source.revenueCol} as revenue,
+           f.${source.marginCol} as margin,
+           f.${source.quantityCol} as quantity,
+           TRIM(s.channel_name) as channel_name,
+           v.type_of_sim as product_name,
+           CASE WHEN REPLACE(UPPER(TRIM(v.vendor)),' ','') = '3HKDATAPOOL' THEN '1' ELSE '0' END as is_3hk
+         FROM ${source.mainTable} f
+         LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+         LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku
+         LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.${custCodeCol}::text)
+         WHERE TRIM(COALESCE(c.${custNameCol}::text, f.customer_code)) IN (${customerNames})
+           AND f.${source.dateCol}::date >= $1 AND f.${source.dateCol}::date <= $2`,
+        [prevStart.toISOString().split("T")[0], currentEnd.toISOString().split("T")[0]]
+      ),
+    ])
+    const classifyTier = makeClassifyTier(tierKeywords)
 
-    // Aggregation in JS (mirrors intel logic)
+    // Aggregation in JS
     let currRev = 0, currMar = 0, prevRev = 0, prevMar = 0
     let currUnits = 0, prevUnits = 0
     const currOrders = new Set<string>()
     const prevOrders = new Set<string>()
 
     const trendMap = new Map<string, { name: string; revenue: number; prev_revenue: number; margin: number; active_customers: Set<string> }>()
-    const perfMap = new Map<string, { name: string; revenue: number; margin: number; orders: Set<string>; units: number; last_order: Date }>()
+    const perfMap = new Map<string, { code: string; name: string; priceListName: string | null; revenue: number; margin: number; hk3Rev: number; orders: Set<string>; units: number; last_order: Date }>()
     const productsMap = new Map<string, { sku: string; product_name: string; revenue: number; quantity: number; orders: Set<string> }>()
     const channelsMap = new Map<string, number>()
     const orderMap = new Map<string, { order_code: string; customer_name: string; product_name: string; order_date: Date; revenue: number; items: number }>()
@@ -103,10 +105,11 @@ export async function POST(req: NextRequest) {
       const isPrev = rowDate >= prevStart && rowDate <= prevEnd
       if (!isCurrent && !isPrev) return
 
-      const customerName = codeToName.get(row.code) || (row.code === "NaN" || !row.code ? "Chưa xác định" : row.code)
+      const customerName = row.customer_name || (row.code === "NaN" || !row.code ? "Chưa xác định" : row.code)
       const rev = parseFloat(row.revenue || "0")
       const mar = parseFloat(row.margin || "0")
       const qty = parseFloat(row.quantity || "0")
+      const hk3 = row.is_3hk === "1" ? rev : 0
 
       if (isCurrent) {
         currRev += rev; currMar += mar; currUnits += qty
@@ -117,9 +120,9 @@ export async function POST(req: NextRequest) {
         const t = trendMap.get(tk)!
         t.revenue += rev; t.margin += mar; t.active_customers.add(customerName)
 
-        if (!perfMap.has(customerName)) perfMap.set(customerName, { name: customerName, revenue: 0, margin: 0, orders: new Set(), units: 0, last_order: rowDate })
+        if (!perfMap.has(customerName)) perfMap.set(customerName, { code: row.code, name: customerName, priceListName: row.price_list_name ?? null, revenue: 0, margin: 0, hk3Rev: 0, orders: new Set(), units: 0, last_order: rowDate })
         const p = perfMap.get(customerName)!
-        p.revenue += rev; p.margin += mar; p.units += qty; p.orders.add(row.order_code)
+        p.revenue += rev; p.margin += mar; p.hk3Rev += hk3; p.units += qty; p.orders.add(row.order_code)
         if (rowDate > p.last_order) p.last_order = rowDate
 
         if (row.sku) {
@@ -165,8 +168,26 @@ export async function POST(req: NextRequest) {
       .map(t => ({ name: t.name, active_customers: t.active_customers.size, revenue: t.revenue, prev_revenue: t.prev_revenue, margin: t.margin }))
       .sort((a, b) => a.name.localeCompare(b.name))
 
+    // Tính CM1 per-customer: GP - CH.Cost từ Turso
     const performance = Array.from(perfMap.values())
-      .map(p => ({ name: p.name, revenue: p.revenue, margin: p.margin, margin_percent: p.revenue > 0 ? (p.margin / p.revenue) * 100 : 0, orders: p.orders.size, units: p.units, last_order: p.last_order }))
+      .map(p => {
+        let custCost = 0
+        months.forEach(m => {
+          const rec = costMap.get(`${m}_${p.code}`)
+          if (rec) custCost += calcRecordCost(rec, p.revenue / Math.max(months.length, 1))
+        })
+        const cm1 = p.margin - custCost
+        const tier = classifyTier(p.priceListName)
+        return {
+          name: p.name, code: p.code, tier,
+          revenue: p.revenue, margin: p.margin,
+          cm1, cm1_pct: p.revenue > 0 ? cm1 / p.revenue * 100 : 0,
+          channel_cost: custCost,
+          margin_percent: p.revenue > 0 ? p.margin / p.revenue * 100 : 0,
+          hk3_rev: p.hk3Rev, hk3_pct: p.revenue > 0 ? p.hk3Rev / p.revenue * 100 : 0,
+          orders: p.orders.size, units: p.units, last_order: p.last_order,
+        }
+      })
       .sort((a, b) => b.revenue - a.revenue)
 
     const products = Array.from(productsMap.values())

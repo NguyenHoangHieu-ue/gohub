@@ -8,7 +8,7 @@
       "maxDuration": 60
     },
     "src/app/api/cron/scheduled-messages/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 180
     },
     "src/app/api/admin/sync-lark-tickets/route.ts": {
       "maxDuration": 60
@@ -18,24 +18,68 @@
     },
     "src/app/api/cron/refresh-b2c-report/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/cron/refresh-monthly-kpis/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analytics/quarterly-report/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analytics/quarterly-b2b-customers/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/refresh-trends/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/bc-sync/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/ca-thread-remind/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/cron/my-metrics-lark-scan/route.ts": {
+      "maxDuration": 90
+    },
+    "src/app/api/analytics/my-metrics/lark-config/scan-now/route.ts": {
+      "maxDuration": 90
     }
   },
   "crons": [
     {
       "path": "/api/cron/scheduled-messages",
-      "schedule": "0 0 * * *"
+      "schedule": "0 1 * * *"
     },
     {
       "path": "/api/admin/sync-lark-tickets",
       "schedule": "0 2 * * *"
     },
     {
+      "path": "/api/cron/refresh-monthly-kpis",
+      "schedule": "30 1 * * *"
+    },
+    {
       "path": "/api/cron/prewarm-analytics",
-      "schedule": "30 23 * * *"
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/api/cron/refresh-b2c-report",
-      "schedule": "0 17 * * *"
+      "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-trends",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/bc-sync",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/ca-thread-remind",
+      "schedule": "0 3 * * 1"
+    },
+    {
+      "path": "/api/cron/my-metrics-lark-scan",
+      "schedule": "0 10 * * *"
     }
   ]
 }

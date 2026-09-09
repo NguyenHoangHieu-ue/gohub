@@ -10,6 +10,8 @@ import {
 import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { cn } from "@/lib/utils"
+import { exportRawRows } from "@/lib/export-excel"
+import { CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel AllTimeReport. Backend /api/analytics/all-time-performance (CM1 = margin − op-cost,
 // đã align) + /api/channels. Adapt: "use client"; bỏ motion; inline getDefaultDateRange.
@@ -46,6 +48,8 @@ export default function AllTimeReport() {
   const [selectedChannelGroup, setSelectedChannelGroup] = useState("")
   const [selectedCustomerTier, setSelectedCustomerTier] = useState("")
   const [showFilters, setShowFilters] = useState(false)
+  const [includeShip,        setIncludeShip]        = useState(false)
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)
 
   useEffect(() => { fetchChannels() }, [])
   useEffect(() => {
@@ -74,6 +78,8 @@ export default function AllTimeReport() {
         ...(selectedChannelGroup && { channelGroup: selectedChannelGroup }),
         ...(selectedCustomerTier && { customerTier: selectedCustomerTier }),
         ...(selectedChannel && { channel: selectedChannel }),
+        ...(includeShip ? { includeShip: "1" } : {}),
+        ...(includeInternalOps ? { includeInternalOps: "1" } : {}),
       })
       const response = await fetch(`/api/analytics/all-time-performance?${params}`)
       const result = await response.json()
@@ -87,7 +93,7 @@ export default function AllTimeReport() {
     }
   }
 
-  useEffect(() => { fetchData() }, [selectedChannelGroup, selectedCustomerTier, selectedChannel]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchData() }, [selectedChannelGroup, selectedCustomerTier, selectedChannel, includeShip, includeInternalOps]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const processChartData = (perfData: PerformanceData[]) => {
     if (!perfData) return []
@@ -127,36 +133,33 @@ export default function AllTimeReport() {
   const handleExport = () => {
     if (!data) return
     const periods = Array.from(new Set(data[activeView].map(d => d.period))).sort()
-    const headers = [
-      "Period", "B2B Strategic Revenue", "B2B Strategic GPM%", "B2B Strategic CM1%",
-      "B2B Non-Strategic Revenue", "B2B Non-Strategic GPM%", "B2B Non-Strategic CM1%",
-      "B2C Revenue", "B2C GPM%", "B2C CM1%", "Total Revenue",
-    ]
-    const csvRows = [headers.join(","), ...periods.map(period => {
+    const rows = periods.map(period => {
       const b2bS = data[activeView].find(d => d.period === period && d.group_name === "B2B-Strategic")
       const b2bN = data[activeView].find(d => d.period === period && d.group_name === "B2B-Non-Strategic")
       const b2c = data[activeView].find(d => d.period === period && d.group_name === "B2C")
       const totalRev = (Number(b2bS?.revenue) || 0) + (Number(b2bN?.revenue) || 0) + (Number(b2c?.revenue) || 0)
-      return [
-        period, b2bS?.revenue || 0, (b2bS?.gpm || 0).toFixed(2), (b2bS?.gpm2 || 0).toFixed(2),
-        b2bN?.revenue || 0, (b2bN?.gpm || 0).toFixed(2), (b2bN?.gpm2 || 0).toFixed(2),
-        b2c?.revenue || 0, (b2c?.gpm || 0).toFixed(2), (b2c?.gpm2 || 0).toFixed(2), totalRev,
-      ].join(",")
-    })]
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `All_Time_Performance_${activeView}_${startDate}_to_${endDate}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
+      return {
+        "Period": period,
+        "B2B Strategic Revenue": b2bS?.revenue || 0,
+        "B2B Strategic GPM%": Number((b2bS?.gpm || 0).toFixed(2)),
+        "B2B Strategic CM1%": Number((b2bS?.gpm2 || 0).toFixed(2)),
+        "B2B Non-Strategic Revenue": b2bN?.revenue || 0,
+        "B2B Non-Strategic GPM%": Number((b2bN?.gpm || 0).toFixed(2)),
+        "B2B Non-Strategic CM1%": Number((b2bN?.gpm2 || 0).toFixed(2)),
+        "B2C Revenue": b2c?.revenue || 0,
+        "B2C GPM%": Number((b2c?.gpm || 0).toFixed(2)),
+        "B2C CM1%": Number((b2c?.gpm2 || 0).toFixed(2)),
+        "Total Revenue": totalRev,
+      }
+    })
+    exportRawRows(rows, `All_Time_Performance_${activeView}_${startDate}_to_${endDate}`, "All-Time")
   }
 
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" />
+          <div className="w-12 h-12 border-4 border-brand-600/20 border-t-brand-600 rounded-full animate-spin" />
           <p className="text-slate-500 font-medium animate-pulse">Loading all-time data...</p>
         </div>
       </div>
@@ -194,11 +197,11 @@ export default function AllTimeReport() {
             <button onClick={() => setActiveView("monthly")} className={cn("px-4 py-1.5 rounded-lg text-sm font-bold transition-all", activeView === "monthly" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50")}>Monthly</button>
             <button onClick={() => setActiveView("quarterly")} className={cn("px-4 py-1.5 rounded-lg text-sm font-bold transition-all", activeView === "quarterly" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50")}>Quarterly</button>
           </div>
-          <button onClick={() => setShowFilters(!showFilters)} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl border shadow-sm transition-colors text-sm font-bold", showFilters ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50")}>
+          <button onClick={() => setShowFilters(!showFilters)} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl border shadow-sm transition-colors text-sm font-bold", showFilters ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50")}>
             <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />Filters
           </button>
           <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm active:scale-95">
-            <Download className="w-4 h-4" />Export CSV
+            <Download className="w-4 h-4" />Export
           </button>
         </div>
       </div>
@@ -212,21 +215,21 @@ export default function AllTimeReport() {
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input type="date" className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                <input type="date" className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all" value={startDate} onChange={e => setStartDate(e.target.value)} />
               </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input type="date" className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                <input type="date" className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all" value={endDate} onChange={e => setEndDate(e.target.value)} />
               </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Channel Group</label>
               <div className="relative">
                 <Package className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <select className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none" value={selectedChannelGroup} onChange={e => setSelectedChannelGroup(e.target.value)}>
+                <select className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all appearance-none" value={selectedChannelGroup} onChange={e => setSelectedChannelGroup(e.target.value)}>
                   <option value="">All Groups</option>
                   <option value="B2B">B2B</option>
                   <option value="B2C">B2C</option>
@@ -238,7 +241,7 @@ export default function AllTimeReport() {
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Customer Tier</label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <select className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none" value={selectedCustomerTier} onChange={e => setSelectedCustomerTier(e.target.value)}>
+                  <select className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all appearance-none" value={selectedCustomerTier} onChange={e => setSelectedCustomerTier(e.target.value)}>
                     <option value="">All Tiers</option>
                     <option value="Strategic">Strategic</option>
                     <option value="Non-strategic">Non-strategic</option>
@@ -250,7 +253,7 @@ export default function AllTimeReport() {
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{selectedChannelGroup === "B2B" ? "Customer Name" : "Channel"}</label>
               <div className="relative">
                 <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <select className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all appearance-none" value={selectedChannel} onChange={e => setSelectedChannel(e.target.value)}>
+                <select className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all appearance-none" value={selectedChannel} onChange={e => setSelectedChannel(e.target.value)}>
                   <option value="">All Channels</option>
                   {channels.map(channel => <option key={channel} value={channel}>{channel}</option>)}
                 </select>
@@ -258,19 +261,27 @@ export default function AllTimeReport() {
             </div>
           </div>
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-            <button onClick={() => { setSelectedChannelGroup(""); setSelectedCustomerTier(""); setSelectedChannel(""); setStartDate(getDefaultDateRange().startDate); setEndDate(getDefaultDateRange().endDate) }} className="text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors">Reset Filters</button>
-            <button onClick={() => { fetchData(); setShowFilters(false) }} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">Apply Filters</button>
+            <div className="flex items-center gap-4">
+              <button onClick={() => { setSelectedChannelGroup(""); setSelectedCustomerTier(""); setSelectedChannel(""); setStartDate(getDefaultDateRange().startDate); setEndDate(getDefaultDateRange().endDate) }} className="text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors">Reset Filters</button>
+              {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+                <label key={label} className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3.5 h-3.5 accent-amber-500" />
+                  <span className={val ? "text-xs font-semibold text-amber-600" : "text-xs font-semibold text-slate-500"}>{label}</span>
+                </label>
+              ))}
+            </div>
+            <button onClick={() => { fetchData(); setShowFilters(false) }} className="px-6 py-2 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-200">Apply Filters</button>
           </div>
         </div>
       )}
 
       {/* Metric Selector */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <button onClick={() => setMetricView("revenue")} className={cn("p-4 rounded-2xl border transition-all text-left", metricView === "revenue" ? "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200" : "bg-white border-slate-200 text-slate-600 hover:border-blue-300")}>
+        <button onClick={() => setMetricView("revenue")} className={cn("p-4 rounded-2xl border transition-all text-left", metricView === "revenue" ? "bg-brand-600 border-brand-600 text-white shadow-lg shadow-brand-200" : "bg-white border-slate-200 text-slate-600 hover:border-brand-300")}>
           <div className="flex items-center justify-between mb-2">
-            <div className={cn("p-2 rounded-xl", metricView === "revenue" ? "bg-blue-500" : "bg-blue-50")}><DollarSign className={cn("w-5 h-5", metricView === "revenue" ? "text-white" : "text-blue-600")} /></div>
+            <div className={cn("p-2 rounded-xl", metricView === "revenue" ? "bg-brand-500" : "bg-brand-50")}><DollarSign className={cn("w-5 h-5", metricView === "revenue" ? "text-white" : "text-brand-600")} /></div>
           </div>
-          <p className={cn("text-sm font-medium", metricView === "revenue" ? "text-blue-100" : "text-slate-500")}>Total Revenue</p>
+          <p className={cn("text-sm font-medium", metricView === "revenue" ? "text-brand-100" : "text-slate-500")}>Total Revenue</p>
           <p className="text-xl font-bold">{formatCurrency(totalSum)}</p>
         </button>
         <button onClick={() => setMetricView("gpm")} className={cn("p-4 rounded-2xl border transition-all text-left", metricView === "gpm" ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300")}>
@@ -297,26 +308,26 @@ export default function AllTimeReport() {
             <p className="text-sm text-slate-500 capitalize">{activeView} {metricView} comparison</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-600"></div><span className="text-xs font-bold text-slate-600">B2B Strat</span></div>
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-300"></div><span className="text-xs font-bold text-slate-600">B2B Non-Strat</span></div>
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-indigo-800"></div><span className="text-xs font-bold text-slate-600">B2C</span></div>
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-brand-600"></div><span className="text-xs font-bold text-slate-600">B2B Strat</span></div>
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-brand-300"></div><span className="text-xs font-bold text-slate-600">B2B Non-Strat</span></div>
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-600"></div><span className="text-xs font-bold text-slate-600">B2C</span></div>
           </div>
         </div>
         <div className="h-[400px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
               <defs>
-                <linearGradient id="colorB2BStrat" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} /><stop offset="95%" stopColor="#2563eb" stopOpacity={0} /></linearGradient>
-                <linearGradient id="colorB2BNonStrat" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#93c5fd" stopOpacity={0.1} /><stop offset="95%" stopColor="#93c5fd" stopOpacity={0} /></linearGradient>
-                <linearGradient id="colorB2C" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#312e81" stopOpacity={0.1} /><stop offset="95%" stopColor="#312e81" stopOpacity={0} /></linearGradient>
+                <linearGradient id="colorB2BStrat" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0f4c81" stopOpacity={0.15} /><stop offset="95%" stopColor="#0f4c81" stopOpacity={0} /></linearGradient>
+                <linearGradient id="colorB2BNonStrat" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#5f9de3" stopOpacity={0.15} /><stop offset="95%" stopColor="#5f9de3" stopOpacity={0} /></linearGradient>
+                <linearGradient id="colorB2C" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2f9d55" stopOpacity={0.15} /><stop offset="95%" stopColor="#2f9d55" stopOpacity={0} /></linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }} tickFormatter={(val) => metricView === "revenue" ? formatCompactNumber(val) : `${val.toFixed(1)}%`} />
-              <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} formatter={(value: number) => [metricView === "revenue" ? formatCurrency(value) : `${value.toFixed(2)}%`, ""]} />
-              <Area type="monotone" dataKey="b2bStrategic" stroke="#2563eb" strokeWidth={3} fillOpacity={1} fill="url(#colorB2BStrat)" />
-              <Area type="monotone" dataKey="b2bNonStrategic" stroke="#93c5fd" strokeWidth={3} fillOpacity={1} fill="url(#colorB2BNonStrat)" />
-              <Area type="monotone" dataKey="b2c" stroke="#312e81" strokeWidth={3} fillOpacity={1} fill="url(#colorB2C)" />
+              <Tooltip contentStyle={chartTooltipStyle} formatter={(value: number) => [metricView === "revenue" ? formatCurrency(value) : `${value.toFixed(2)}%`, ""]} />
+              <Area type="monotone" dataKey="b2bStrategic" stroke="#0f4c81" strokeWidth={3} fillOpacity={1} fill="url(#colorB2BStrat)" />
+              <Area type="monotone" dataKey="b2bNonStrategic" stroke="#5f9de3" strokeWidth={3} fillOpacity={1} fill="url(#colorB2BNonStrat)" />
+              <Area type="monotone" dataKey="b2c" stroke="#2f9d55" strokeWidth={3} fillOpacity={1} fill="url(#colorB2C)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -342,7 +353,7 @@ export default function AllTimeReport() {
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right" rowSpan={2}>Total Revenue</th>
               </tr>
               <tr className="bg-slate-50/30">
-                {["bg-blue-50/30", "bg-sky-50/30", "bg-indigo-50/30"].flatMap(bg => ["Rev", "GPM", "CM1"].map((h, i) => (
+                {["bg-brand-50/40", "bg-brand-50/20", "bg-emerald-50/40"].flatMap(bg => ["Rev", "GPM", "CM1"].map((h, i) => (
                   <th key={`${bg}-${i}`} className={cn("px-2 py-2 text-[10px] font-bold text-slate-400 uppercase text-right border-b border-slate-100", bg)}>{h}</th>
                 )))}
               </tr>
@@ -356,13 +367,13 @@ export default function AllTimeReport() {
                 return (
                   <tr key={row.name} className="hover:bg-slate-50 transition-colors group">
                     <td className="px-6 py-4 border-b border-slate-100 font-bold text-slate-800">{row.name}</td>
-                    <td className="px-2 py-4 border-b border-slate-100 text-right text-blue-600 font-medium whitespace-nowrap">{formatCompactNumber(b2bS?.revenue || 0)}</td>
+                    <td className="px-2 py-4 border-b border-slate-100 text-right text-brand-600 font-medium whitespace-nowrap">{formatCompactNumber(b2bS?.revenue || 0)}</td>
                     <td className="px-2 py-4 border-b border-slate-100 text-right text-slate-600">{(b2bS?.gpm || 0).toFixed(1)}%</td>
                     <td className="px-2 py-4 border-b border-slate-100 text-right text-slate-600">{(b2bS?.gpm2 || 0).toFixed(1)}%</td>
-                    <td className="px-2 py-4 border-b border-slate-100 text-right text-sky-700 font-medium whitespace-nowrap">{formatCompactNumber(b2bN?.revenue || 0)}</td>
+                    <td className="px-2 py-4 border-b border-slate-100 text-right text-brand-400 font-medium whitespace-nowrap">{formatCompactNumber(b2bN?.revenue || 0)}</td>
                     <td className="px-2 py-4 border-b border-slate-100 text-right text-slate-600">{(b2bN?.gpm || 0).toFixed(1)}%</td>
                     <td className="px-2 py-4 border-b border-slate-100 text-right text-slate-600">{(b2bN?.gpm2 || 0).toFixed(1)}%</td>
-                    <td className="px-2 py-4 border-b border-slate-100 text-right text-indigo-800 font-medium whitespace-nowrap">{formatCompactNumber(b2c?.revenue || 0)}</td>
+                    <td className="px-2 py-4 border-b border-slate-100 text-right text-emerald-700 font-medium whitespace-nowrap">{formatCompactNumber(b2c?.revenue || 0)}</td>
                     <td className="px-2 py-4 border-b border-slate-100 text-right text-slate-600">{(b2c?.gpm || 0).toFixed(1)}%</td>
                     <td className="px-2 py-4 border-b border-slate-100 text-right text-slate-600">{(b2c?.gpm2 || 0).toFixed(1)}%</td>
                     <td className="px-6 py-4 border-b border-slate-100 text-right font-bold text-slate-900 whitespace-nowrap">{formatCurrency(totalRev)}</td>

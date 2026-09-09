@@ -1,20 +1,16 @@
 import { NextRequest, NextResponse }  from "next/server"
 import { createDecipheriv, createHash } from "crypto"
 import { supabaseAdmin }             from "@/lib/supabase"
-import { getRefCache }               from "@/lib/agents/cache"
-import { AGENTS }                    from "@/lib/agents/agents"
-import { route }                     from "@/lib/agents/router"
-import { GoogleGenerativeAI }        from "@google/generative-ai"
-import { buildToolContext }          from "@/lib/agents/context"
-import { runBIAnalyst }              from "@/lib/agents/bi-analyst"
 import { guardCheck, canViewCogs }   from "@/lib/agents/guardian"
 import { getChannelFromRole }        from "@/lib/agents/tools"
+import { runBeGau }                  from "@/lib/agents/be-gau"
 import {
   sendLarkMessage, replyLarkMessage, replyLarkTable,
   parseMarkdownTable, splitTextAndTable,
   getLarkUserInfo, stripMarkdown,
 } from "@/lib/lark"
 import type { Message, UserRole }    from "@/lib/agents/types"
+import { captureForOkrLog }           from "@/lib/okr-lark-capture"
 
 // Max history to pull per Lark user
 const HISTORY_LIMIT = 10
@@ -94,6 +90,22 @@ export async function GET() {
   return NextResponse.json({ ok: true, service: "lark-bot" })
 }
 
+// Verify X-Lark-Signature khi app có Encrypt Key.
+// Signature = SHA256(timestamp + nonce + encrypt_key + rawBody) — đúng spec Lark Event Subscription
+// (KHÔNG phải Verification Token — bug cũ dùng nhầm Verification Token làm key ký → mismatch 100%,
+// mọi request thật bị reject, phát hiện qua Vercel runtime log s176: "signature mismatch" mọi request).
+// Không có Encrypt Key thì bỏ qua (payload lúc đó cũng không mã hoá, không có gì để đối chiếu).
+function verifyLarkSignature(req: NextRequest, rawBody: string): boolean {
+  const key = process.env.LARK_ENCRYPT_KEY
+  if (!key) return true
+  const timestamp = req.headers.get("x-lark-request-timestamp") ?? ""
+  const nonce     = req.headers.get("x-lark-request-nonce")     ?? ""
+  const expected  = createHash("sha256")
+    .update(timestamp + nonce + key + rawBody)
+    .digest("hex")
+  return req.headers.get("x-lark-signature") === expected
+}
+
 function decryptLark(encrypted: string): any {
   const encryptKey = process.env.LARK_ENCRYPT_KEY!
   const key = createHash("sha256").update(encryptKey).digest()
@@ -109,6 +121,13 @@ export async function POST(req: NextRequest) {
   let body: any
   try {
     const raw = await req.text()
+
+    // Verify signature trước khi parse (nếu LARK_VERIFICATION_TOKEN đã set)
+    if (!verifyLarkSignature(req, raw)) {
+      console.warn("[Lark] signature mismatch — request rejected")
+      return NextResponse.json({ ok: true })  // trả 200 để Lark không retry
+    }
+
     const parsed = raw ? JSON.parse(raw) : {}
 
     // Decrypt if encrypted
@@ -231,6 +250,18 @@ export async function POST(req: NextRequest) {
 
   console.log("[Lark] parsed | userText:", JSON.stringify(userText), "| postMentions:", postMentions.length, "| topMentions:", (msg?.mentions ?? []).length)
 
+  // My Metrics SLA/Vendor Speed — capture real-time (không liên quan việc Bé Gấu có trả lời hay
+  // không, nên đặt TRƯỚC mọi filter "phải @mention BOT"). Fire-and-forget, lỗi ở đây không được
+  // làm hỏng luồng trả lời chính. Xem lib/okr-lark-capture.ts.
+  void captureForOkrLog({
+    messageId, rootId, parentId: msg?.parent_id, chatId, chatType, msgType,
+    senderOpenId: openId, content: userText, createTime: msg.create_time,
+    mentionOpenIds: [
+      ...((msg?.mentions ?? []) as any[]).map(m => m?.id?.open_id).filter(Boolean),
+      ...postMentions.map((m: any) => m?.id?.open_id).filter(Boolean),
+    ],
+  })
+
   // Nếu user chỉ gõ "@BotName" không kèm text → userText rỗng
   // Với p2p: bỏ qua (blank message)
   // Với group/post có at-mention: dùng fallback "xin chào" thay vì bỏ qua
@@ -318,17 +349,22 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     const history = await getLarkHistory(openId, threadId)
     const messages: Message[] = [...history, { role: "user", content: userText }]
 
-    // Route + refCache + guardian + isCost in parallel
-    const [refCache, routed, guard, isCost] = await Promise.all([
-      getRefCache(),
-      route(userText, history, role),
-      // Lark group: KHÔNG phân biệt được role → chặn nội bộ hệ thống + PII khách hàng cho mọi người.
-      // (system_internal: code/prompt/schema; customer_pii: tên/SĐT/email khách cụ thể)
+    // Guardian (Lark group: KHÔNG phân biệt role → chặn nội bộ hệ thống + PII khách hàng cho mọi người)
+    // + quyền xem COGS — chạy song song.
+    const [guard, isCost] = await Promise.all([
       guardCheck(userText, role, undefined, { onlyCategories: ["system_internal", "customer_pii"], ignoreRole: true }),
       canViewCogs(role),
     ])
-    const { agentId, params, needsClarification, clarificationQuestion } = routed
-    const agent    = AGENTS[agentId]
+
+    // Log chat event for Usage Analytics (fire-and-forget, không block response)
+    void supabaseAdmin.from("app_usage_events").insert({
+      event_type:   "chat",
+      user_email:   `lark:${openId}`,
+      user_name:    name || openId,
+      user_role:    role,
+      agent_id:     "be-gau",
+      user_message: userText.slice(0, 500),
+    })
 
     // Guardian: câu hỏi về nội bộ hệ thống → từ chối lịch sự ("hỏi Hiếu"), không gọi agent
     if (!guard.allowed) {
@@ -339,46 +375,26 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       return
     }
 
-    // Bước HỎI LẠI (additive): câu hỏi quá mơ hồ (thiếu nước/khu vực/mã) → hỏi lại ngay, không gọi Gemini
-    if (needsClarification && clarificationQuestion) {
-      await replyLarkMessage(messageId, stripMarkdown(clarificationQuestion))
-      responseSent = true
-      saveLarkMessage(openId, threadId, "user",      userText)
-      saveLarkMessage(openId, threadId, "assistant", clarificationQuestion)
-      return
-    }
-
     const channel  = getChannelFromRole(role)
-    const toolCtx  = await buildToolContext(agentId, params, refCache, isCost, userText, channel)
-
-    // Quy tắc tạm thời 28/6–8/7/2026: Hiếu vắng
-    const _now = new Date()
-    const _tempRule = (_now >= new Date("2026-06-28") && _now < new Date("2026-07-09"))
-      ? `\n\n⚠️ QUY TẮC TẠM THỜI (chỉ áp dụng 28/6–8/7/2026): Nếu không biết câu trả lời hoặc không chắc chắn → PHẢI trả lời: "Hãy hỏi anh Bảo hoặc đợi Hiếu về trả lời nha 😊" — không được tự suy đoán.`
+    const priceDirective = channel
+      ? `\n\n(Nội bộ) Người dùng thuộc kênh ${channel}. Khi hỏi GIÁ BÁN, chỉ hiển thị giá kênh ${channel}.`
       : ""
 
-    const systemInstruction = [
-      agent.systemPrompt,
-      toolCtx ? `\n\n=== DỮ LIỆU TỪ HỆ THỐNG ===\n${toolCtx}` : "",
-      `\nNgười dùng: ${name || openId} (vai trò: ${role}, kênh: Lark)`,
-      _tempRule,
-    ].join("")
-
-    const geminiHistory = history.map(m => ({
+    const larkHistory = history.map(m => ({
       role:  m.role === "user" ? "user" as const : "model" as const,
       parts: [{ text: m.content }],
     }))
 
-    // bi-analyst: dùng function calling (executeSQL trên gohub_dw) — giống web chatbot
-    let response: string
-    if (agentId === "bi-analyst") {
-      response = await runBIAnalyst(systemInstruction, geminiHistory, userText, role)
-    } else {
-      // Call Gemini (non-streaming for Lark)
-      const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-      const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash", systemInstruction })
-      const result = await model.startChat({ history: geminiHistory }).sendMessage(userText)
-      response = result.response.text()
+    // Bé Gấu: 1 agent function-calling (giống web) — Lark không render chart nên bỏ khối chart.
+    const beGau = await runBeGau({
+      geminiHistory: larkHistory, lastMsg: userText, role, name: name || openId,
+      userId: openId, isCost,
+      extraDirective: priceDirective + "\n\n(Nội bộ) Kênh trả lời: Lark — KHÔNG dùng khối \`\`\`chart (Lark không render được).",
+    })
+    let response = beGau.text.replace(/```chart[\s\S]*?```/g, "").trim()
+    if (beGau.sources.length) {
+      const uniq = Array.from(new Map(beGau.sources.map(s => [s.url, s])).values()).slice(0, 5)
+      response += "\n\nNguồn: " + uniq.map(s => `${s.title} (${s.url})`).join(" · ")
     }
 
     // Nếu response có bảng → gửi card + xlsx, còn lại strip markdown

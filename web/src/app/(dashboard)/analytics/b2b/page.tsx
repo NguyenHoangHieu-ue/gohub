@@ -1,20 +1,21 @@
 ﻿"use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useMemo } from "react"
 import {
   Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart,
 } from "recharts"
 import {
   TrendingUp, DollarSign, PieChart as PieChartIcon,
   AlertCircle, ArrowUpRight, ArrowDownRight, Filter,
-  Calendar, Download, ChevronDown, Globe,
-  ArrowUpDown, ShoppingBag, Settings, Check, Zap, Building2, Shield, FileText,
+  Calendar, Download, ChevronDown, Globe, Search, X,
+  ArrowUpDown, ShoppingBag, Check, Zap, Building2, Shield, FileText,
 } from "lucide-react"
 import { domToCanvas } from "modern-screenshot"
-import { jsPDF } from "jspdf"
 import { cn } from "@/lib/utils"
-import { CostManagementModal } from "@/components/cost-management-modal"
 import { DatePresets } from "@/components/date-presets"
+import { exportToExcel } from "@/lib/export-excel"
+import { getProjectionFactor } from "@/lib/analytics-engine/projection"
+import { StatTile, MetricAccent, DeltaKind, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel B2BPerformance. Backend (đã có op-cost CM1): b2b/kpis|trend|performance|
 // strategic-performance + channels-with-platform-fee + channel-costs + config/partner-tiers.
@@ -40,9 +41,16 @@ interface KPI {
   label: string; value: number; actualValue?: number; lastPeriod: number; change: number
   isPositive: boolean; isCurrency?: boolean; icon?: React.ReactNode
 }
+// Màu icon StatTile theo Ý NGHĨA số liệu — khớp thứ tự combinedKpis: Revenue, Gross Profit, CM1, Margin %, CM1 %.
+const KPI_ACCENTS: MetricAccent[] = ["revenue", "margin", "positive", "margin", "positive"]
 interface PerformanceData {
-  name: string; channel?: string; revenue: number; margin: number; margin_percent: number
+  name: string; channel?: string; sub_group_name?: string; source_code?: string
+  customer_code?: string; price_list_name?: string; currency_code?: string
+  revenue: number; margin: number; margin_percent: number
   gpm2: number; gpm2_percent: number; units: number; prev_revenue?: number
+  // Backend-computed (groupBy=customer): CH.Cost pro-rata đúng, cm1 = gpm2 - ch_cost
+  ch_cost?: number; cm1?: number; cm1_percent?: number
+  cost_lines?: Array<{ label?: string; type: string; value: number }> // từ Turso, để hiển thị expand
   sub_channels?: PerformanceData[]; cost_breakdown?: Record<string, number>
 }
 
@@ -54,9 +62,10 @@ export default function B2BPerformance() {
   const [error, setError] = useState<string | null>(null)
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
   const [granularity, setGranularity] = useState<"day" | "week" | "month">("week")
+  const [includeShip,        setIncludeShip]        = useState(false)
+  const [includeInternalOps, setIncludeInternalOps] = useState(false)
+  const [includeOpsCustomers, setIncludeOpsCustomers] = useState(false)
 
-  const [showCostModal, setShowCostModal] = useState(false)
-  const [monthlyCosts, setMonthlyCosts] = useState<Record<string, any>>({})
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
   const [combinedKpis, setCombinedKpis] = useState<KPI[]>([])
@@ -67,47 +76,30 @@ export default function B2BPerformance() {
   const [channelsWithPlatformFee, setChannelsWithPlatformFee] = useState<string[]>([])
 
   const [wholesaleSort, setWholesaleSort] = useState<{ key: keyof PerformanceData; direction: "asc" | "desc" }>({ key: "revenue", direction: "desc" })
+  const [tierSearch, setTierSearch] = useState("")
+  // Tier keywords từ quarterly-settings (giống Q.Report) — mặc định Strategic/VIP/Gold/Silver
+  const [tierKeywords, setTierKeywords] = useState<Record<string, string[]>>({
+    Strategic: ["STRATEGIC"], VIP: ["VIP"], Gold: ["GOLD"], Silver: ["SILVER"],
+  })
+  // Collapse/expand per tier — mặc định mở hết
+  const [collapsedTiers, setCollapsedTiers] = useState<Set<string>>(new Set())
+  const toggleTier = (tier: string) => setCollapsedTiers(prev => {
+    const next = new Set(prev)
+    if (next.has(tier)) next.delete(tier); else next.add(tier)
+    return next
+  })
 
   const reportRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
 
-  const getProjectionFactor = () => {
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const start = new Date(startDate); const end = new Date(endDate)
-    const daysElapsed = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
-    const isCurrentMonth = end.getMonth() === today.getMonth() && end.getFullYear() === today.getFullYear()
-    const targetDays = isCurrentMonth ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() : daysElapsed
-    const factor = targetDays / daysElapsed
-    return Math.min(10, Math.max(1, factor))
-  }
-
-  const projectionFactor = getProjectionFactor()
+  // s183 Phase 2: dùng hàm dùng chung (lib/analytics-engine/projection.ts) thay bản viết tay tại đây —
+  // công thức y hệt (đã verify), đóng đúng cái TODO "OOP refactor" người trước để lại.
+  const projectionFactor = getProjectionFactor(startDate, endDate)
   const isProjectable = projectionFactor > 1
 
-  const fetchCosts = async (month: string) => {
-    try {
-      const res = await fetch(`/api/channel-costs?month=${month}`)
-      if (res.ok) setMonthlyCosts(await res.json())
-    } catch (err) {
-      console.error("Error fetching costs:", err)
-    }
-  }
-
   const exportToCSV = (data: any[], filename: string, columns: { label: string; key: keyof PerformanceData | string }[]) => {
-    const csvRows = [
-      columns.map(c => c.label).join(","),
-      ...data.map(row => columns.map(c => {
-        const val = row[c.key as keyof PerformanceData] ?? 0
-        return typeof val === "string" ? `"${val.replace(/"/g, '""')}"` : val
-      }).join(",")),
-    ]
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `${filename}_${startDate}_to_${endDate}.csv`)
-    link.style.visibility = "hidden"
-    document.body.appendChild(link); link.click(); document.body.removeChild(link)
+    exportToExcel(data as Record<string, unknown>[], columns.map(c => ({ label: c.label, key: String(c.key) })),
+      `${filename}_${startDate}_to_${endDate}`)
   }
 
   const exportToPDF = async () => {
@@ -116,6 +108,7 @@ export default function B2BPerformance() {
     try {
       const canvas = await domToCanvas(reportRef.current, { scale: 2, backgroundColor: "#f8fafc" })
       const imgData = canvas.toDataURL("image/png")
+      const { jsPDF } = await import("jspdf")   // nạp động: chỉ tải jspdf khi user xuất PDF
       const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [canvas.width / 2, canvas.height / 2] })
       pdf.addImage(imgData, "PNG", 0, 0, canvas.width / 2, canvas.height / 2)
       pdf.save(`B2B_Performance_Report_${startDate}_to_${endDate}.pdf`)
@@ -126,7 +119,7 @@ export default function B2BPerformance() {
     }
   }
 
-  const fetchData = async () => {
+  const fetchData = async (fresh = false) => {
     setLoading(true); setError(null)
     try {
       const queryParams = new URLSearchParams()
@@ -134,14 +127,23 @@ export default function B2BPerformance() {
       if (endDate) queryParams.append("endDate", endDate)
       queryParams.append("dateColumn", dateColumn)
       queryParams.append("comparisonType", "previous_period")
+      if (includeShip)        queryParams.append("includeShip", "1")
+      if (includeInternalOps) queryParams.append("includeInternalOps", "1")
+      if (includeOpsCustomers) queryParams.append("includeOpsCustomers", "1")
+      // fresh=true (sau khi lưu Cost/Target) → bỏ qua cache server, lấy số tươi ngay.
+      if (fresh) queryParams.append("nocache", "1")
+      const nc = fresh ? "&nocache=1" : ""
 
-      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData] = await Promise.all([
+      // cost_lines hiển thị trong expand panel nay do backend b2b/performance trả trực tiếp.
+      // Không cần fetch b2b-customer-costs riêng nữa.
+      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData, quarterlySettings] = await Promise.all([
         fetch(`/api/analytics/b2b/kpis?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/performance?${queryParams.toString()}&groupBy=customer`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/strategic-performance?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/analytics/b2b/trend?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&granularity=${granularity}${includeShip ? "&includeShip=1" : ""}${includeInternalOps ? "&includeInternalOps=1" : ""}${includeOpsCustomers ? "&includeOpsCustomers=1" : ""}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: ["Traveloka", "Momo"] }).catch(() => ({ Strategic: ["Traveloka", "Momo"] })),
+        fetch(`/api/analytics/quarterly-settings`).then(r => r.ok ? r.json() : null).catch(() => null),
       ])
 
       const safeB2BKpis = Array.isArray(b2bKpis) ? b2bKpis : []
@@ -151,31 +153,37 @@ export default function B2BPerformance() {
       const safeFeeChannels = Array.isArray(feeChannels) ? feeChannels : []
 
       setPartnerTiers(tiersData)
+      if (quarterlySettings?.tierKeywords) setTierKeywords(quarterlySettings.tierKeywords)
       setWholesaleCustomers(safeB2BPerfCustomer)
       setStrategicPerformance(safeStrategicPerf)
       setTrendData(safeTrend)
       setChannelsWithPlatformFee(safeFeeChannels)
 
-      fetchCosts(startDate.slice(0, 7))
-
       const findKPI = (kpis: any[], label: string) => kpis.find(k => k.label === label)
+      // Revenue + Orders: vẫn từ b2b/kpis (có kỳ trước để so sánh)
       const b2bRev = findKPI(safeB2BKpis, "Total Revenue")?.value || 0
       const b2bPrevRev = findKPI(safeB2BKpis, "Total Revenue")?.lastPeriod || 0
-      const b2bGP = findKPI(safeB2BKpis, "Gross Profit")?.value || 0
       const b2bPrevGP = findKPI(safeB2BKpis, "Gross Profit")?.lastPeriod || 0
-      const b2bGpm2 = findKPI(safeB2BKpis, "CM1")?.value || 0
       const b2bPrevGpm2 = findKPI(safeB2BKpis, "CM1")?.lastPeriod || 0
+
+      // ── KPI tổng — dùng backend values (pro-rata đúng, kể cả cross-month range) ─
+      // Loại customer revenue ≤ 0 (internal ops có revenue=0, GP âm → làm lệch tổng)
+      const perfWithRevenue = safeB2BPerfCustomer.filter((c: any) => (c.revenue || 0) > 0)
+      const totalGPActual   = perfWithRevenue.reduce((s: number, c: any) => s + (c.margin || 0), 0)
+      // CM1 actual = sum backend cm1 (backend đã trừ ch_cost pro-rata đúng từng tháng)
+      const totalGpm2Actual = perfWithRevenue.reduce((s: number, c: any) => s + (c.cm1 ?? c.gpm2 ?? 0), 0)
+      // CH.Cost display (tổng) — cho KPI info
+      const totalChCostActual = perfWithRevenue.reduce((s: number, c: any) => s + (c.ch_cost || 0), 0)
 
       const calculateChange = (curr: number, prev: number) => (!prev || prev === 0) ? 0 : ((curr - prev) / prev) * 100
 
-      const totalRevActual = b2bRev
-      const totalRevProjected = totalRevActual * (isProjectable ? projectionFactor : 1)
-      const prevTotalRev = b2bPrevRev
-      const totalGPActual = b2bGP
-      const totalGPProjected = totalGPActual * (isProjectable ? projectionFactor : 1)
-      const prevTotalGP = b2bPrevGP
-      const totalGpm2Actual = b2bGpm2
-      const totalGpm2Projected = totalGpm2Actual * (isProjectable ? projectionFactor : 1)
+      const totalRevActual    = b2bRev
+      const totalRevProjected = totalRevActual  * (isProjectable ? projectionFactor : 1)
+      const prevTotalRev      = b2bPrevRev
+      const totalGPProjected  = totalGPActual   * (isProjectable ? projectionFactor : 1)
+      const prevTotalGP       = b2bPrevGP
+      // CM1 projected = CM1 actual × factor (vì CM1 = GP - CH.Cost, cả 2 scale theo factor)
+      const totalGpm2Projected = isProjectable ? totalGpm2Actual * projectionFactor : totalGpm2Actual
       const prevTotalGpm2 = b2bPrevGpm2
 
       const kpis: any[] = [
@@ -194,14 +202,14 @@ export default function B2BPerformance() {
     }
   }
 
-  useEffect(() => { fetchData() }, [dateColumn, granularity]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchData() }, [dateColumn, granularity, includeShip, includeInternalOps, includeOpsCustomers]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatCurrency = (value: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(value)
   const formatNumber = (value: number) => new Intl.NumberFormat("vi-VN").format(value)
 
   const SortIcon = ({ sort, column }: { sort: any, column: string }) => {
     if (sort.key !== column) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-30" />
-    return sort.direction === "asc" ? <ArrowUpRight className="w-3 h-3 ml-1 text-blue-600" /> : <ArrowDownRight className="w-3 h-3 ml-1 text-blue-600" />
+    return sort.direction === "asc" ? <ArrowUpRight className="w-3 h-3 ml-1 text-brand-600" /> : <ArrowDownRight className="w-3 h-3 ml-1 text-brand-600" />
   }
 
   const sortData = (data: PerformanceData[], config: any) => [...data].sort((a: any, b: any) => {
@@ -232,8 +240,12 @@ export default function B2BPerformance() {
         const rev = filteredSubs.reduce((a, b) => a + b.revenue, 0)
         const mar = filteredSubs.reduce((a, b) => a + b.margin, 0)
         const uni = filteredSubs.reduce((a, b) => a + (b.units || 0), 0)
+        // sub.gpm2 (từ backend, sau fix s168b) đã là CM1 đúng của từng sub-channel (đã trừ chCost/group
+        // cost phân bổ theo tỷ trọng) → cộng lại ra CM1 đúng cho phần sub-channel còn giữ.
         const gp2 = filteredSubs.reduce((a, b) => a + (b.gpm2 || 0), 0)
-        return { ...p, revenue: rev, margin: mar, units: uni, gpm2: gp2, sub_channels: filteredSubs }
+        // Đồng bộ field `cm1` (bảng B2B Tier Performance đọc `row.cm1 ?? row.gpm2`) — trước đây chỉ đổi
+        // gpm2, cm1 vẫn giữ giá trị CŨ (chưa lọc sub-channel) → 2 field lệch nhau trên cùng 1 row.
+        return { ...p, revenue: rev, margin: mar, units: uni, gpm2: gp2, cm1: gp2, sub_channels: filteredSubs }
       }
       return p
     }).filter(p => {
@@ -254,6 +266,13 @@ export default function B2BPerformance() {
       const existing = nonStrategicMap.get(key)
       if (existing) {
         existing.revenue += (p.revenue || 0); existing.margin += (p.margin || 0); existing.units += (p.units || 0); existing.gpm2 += (p.gpm2 || 0)
+        // 2 backend row cùng TÊN hiển thị nhưng customer_code khác nhau (vd nhiều mã trống/hỏng đều gộp
+        // hiện "Chưa xác định") bị merge ở đây theo `name` — trước chỉ cộng gpm2, KHÔNG cộng cm1/ch_cost
+        // → cm1 chỉ giữ giá trị của row ĐẦU TIÊN, thiếu phần đóng góp của các row bị merge sau, trong khi
+        // bảng đọc ưu tiên `row.cm1 ?? row.gpm2` (cm1 tồn tại nên gpm2 đã-cộng-đủ bị bỏ qua) → CM1 hiển
+        // thị thấp hơn thực tế cho đúng những dòng bị merge (dòng "Chưa xác định" hay gặp nhất).
+        existing.cm1 = (existing.cm1 || 0) + (p.cm1 ?? p.gpm2 ?? 0)
+        existing.ch_cost = (existing.ch_cost || 0) + (p.ch_cost || 0)
         if (p.sub_channels && p.sub_channels.length > 0) {
           if (!existing.sub_channels) existing.sub_channels = []
           p.sub_channels.forEach(sub => {
@@ -282,6 +301,10 @@ export default function B2BPerformance() {
     }))
   }
 
+  // nonStrategicMemo sau getFilteredOtherTiers (tránh temporal dead zone với const)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const nonStrategicMemo = useMemo(() => getFilteredOtherTiers(), [wholesaleCustomers, strategicPerformance, partnerTiers])
+
   return (
     <div className="flex-1 overflow-auto bg-slate-50 p-4 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-8" ref={reportRef}>
@@ -301,13 +324,19 @@ export default function B2BPerformance() {
             <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} variant="dropdown" />
             <div className="h-4 w-px bg-slate-200 mx-2"></div>
             <div className="flex bg-slate-100 p-1 rounded-lg">
-              <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "fulfiled_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Fulfillment</button>
-              <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "created_date" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Created</button>
+              <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "fulfiled_date" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Fulfillment</button>
+              <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-bold rounded-md transition-all", dateColumn === "created_date" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>Created</button>
             </div>
-            <button onClick={() => setShowCostModal(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-xs">
-              <Settings className="w-3.5 h-3.5" />Manage Costs
-            </button>
-            <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-sm active:scale-95">
+            {/* Filter: Include Ship / Internal Ops / Ops Customers */}
+            <div className="flex items-center gap-2">
+              {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps], ["KH Ops", includeOpsCustomers, setIncludeOpsCustomers]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+                <label key={label} className="flex items-center gap-1 cursor-pointer select-none">
+                  <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3 h-3 accent-amber-500" />
+                  <span className={cn("text-[10px] font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
+                </label>
+              ))}
+            </div>
+            <button onClick={() => fetchData()} className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 transition-all shadow-sm active:scale-95">
               <Filter className="w-3.5 h-3.5" />Apply Filters
             </button>
             <button onClick={exportToPDF} disabled={exporting} className={cn("flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-sm active:scale-95 disabled:opacity-50", exporting && "animate-pulse")}>
@@ -325,7 +354,7 @@ export default function B2BPerformance() {
         {loading ? (
           <div className="flex-1 flex items-center justify-center py-32 rounded-3xl bg-white border border-slate-200">
             <div className="flex flex-col items-center gap-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
               <p className="text-slate-500 font-medium animate-pulse">Loading data...</p>
             </div>
           </div>
@@ -341,50 +370,42 @@ export default function B2BPerformance() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 {combinedKpis.map((kpi, idx) => (
-                  <div key={`actual-${idx}`} className="bg-white p-4 lg:p-5 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className={cn("p-2 rounded-xl", idx === 0 ? "bg-blue-50 text-blue-600" : idx === 1 ? "bg-emerald-50 text-emerald-600" : idx === 2 ? "bg-purple-50 text-purple-600" : idx === 3 ? "bg-orange-50 text-orange-600" : "bg-indigo-50 text-indigo-600")}>{kpi.icon}</div>
-                    </div>
-                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1 truncate">{kpi.label}</p>
-                    <div className="flex items-baseline gap-1 overflow-hidden">
-                      <span className="text-base lg:text-lg font-black text-slate-900 tracking-tighter truncate">
-                        {kpi.isCurrency ? Math.round(kpi.actualValue || 0).toLocaleString("vi-VN") : (kpi.actualValue || 0).toLocaleString() + (kpi.label.includes("%") ? "%" : "")}
-                      </span>
-                      {kpi.isCurrency && <span className="text-[9px] font-bold text-slate-400">VND</span>}
-                    </div>
-                  </div>
+                  <StatTile
+                    key={`actual-${idx}`}
+                    icon={kpi.icon}
+                    label={kpi.label}
+                    accent={KPI_ACCENTS[idx] || "neutral"}
+                    value={kpi.isCurrency ? Math.round(kpi.actualValue || 0).toLocaleString("vi-VN") : (kpi.actualValue || 0).toLocaleString() + (kpi.label.includes("%") ? "%" : "")}
+                    unit={kpi.isCurrency ? "VND" : undefined}
+                  />
                 ))}
               </div>
 
               {isProjectable && (
                 <>
                   <div className="flex items-center justify-between px-2 pt-4 border-t border-slate-200">
-                    <h3 className="text-xs font-black text-blue-700 uppercase tracking-[0.2em] flex items-center gap-2">
-                      <Zap className="w-3.5 h-3.5 fill-blue-500 text-blue-500" />Full Period Forecast (Projected)
+                    <h3 className="text-xs font-black text-brand-700 uppercase tracking-[0.2em] flex items-center gap-2">
+                      <Zap className="w-3.5 h-3.5 fill-brand-500 text-brand-500" />Full Period Forecast (Projected)
                     </h3>
-                    <span className="text-[10px] font-bold text-blue-500/60 italic">Projection Factor: {projectionFactor.toFixed(2)}x</span>
+                    <span className="text-[10px] font-bold text-brand-500/60 italic">Projection Factor: {projectionFactor.toFixed(2)}x</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    {combinedKpis.map((kpi, idx) => (
-                      <div key={`projected-${idx}`} className="bg-blue-50/50 p-4 lg:p-5 rounded-2xl shadow-sm border border-blue-100 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity"><Zap className="w-12 h-12 text-blue-600" /></div>
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="p-2 rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-200/50">{kpi.icon}</div>
-                          {kpi.change !== 0 && (
-                            <div className={cn("flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded-lg shadow-sm bg-white", kpi.isPositive ? "text-emerald-600" : "text-rose-600")}>
-                              {kpi.isPositive ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}{Math.abs(kpi.change).toFixed(1)}%
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mb-1 truncate">Proj. {kpi.label}</p>
-                        <div className="flex items-baseline gap-1 overflow-hidden">
-                          <span className="text-base lg:text-lg font-black text-blue-800 tracking-tighter truncate">
-                            {kpi.isCurrency ? Math.round(kpi.value).toLocaleString("vi-VN") : kpi.value.toLocaleString() + (kpi.label.includes("%") ? "%" : "")}
-                          </span>
-                          {kpi.isCurrency && <span className="text-[9px] font-bold text-blue-400">VND</span>}
-                        </div>
-                      </div>
-                    ))}
+                    {combinedKpis.map((kpi, idx) => {
+                      const deltas: { label: string; value: React.ReactNode; kind: DeltaKind }[] = []
+                      if (kpi.change !== 0) deltas.push({ label: "vs Prev Period", value: `${kpi.isPositive ? "+" : "-"}${Math.abs(kpi.change).toFixed(1)}%`, kind: kpi.isPositive ? "up" : "down" })
+                      return (
+                        <StatTile
+                          key={`projected-${idx}`}
+                          icon={kpi.icon}
+                          label={`Proj. ${kpi.label}`}
+                          accent={KPI_ACCENTS[idx] || "neutral"}
+                          value={kpi.isCurrency ? Math.round(kpi.value).toLocaleString("vi-VN") : kpi.value.toLocaleString() + (kpi.label.includes("%") ? "%" : "")}
+                          unit={kpi.isCurrency ? "VND" : undefined}
+                          deltas={deltas}
+                          className="bg-brand-50/50 border-brand-100"
+                        />
+                      )
+                    })}
                   </div>
                 </>
               )}
@@ -399,24 +420,24 @@ export default function B2BPerformance() {
                     <p className="text-xs text-slate-500 font-medium tracking-tight">Performance tracking across B2B channels</p>
                     <div className="flex items-center gap-1 mt-4 p-1 bg-slate-100 rounded-xl w-fit">
                       {(["day", "week", "month"] as const).map(g => (
-                        <button key={g} onClick={() => setGranularity(g)} className={cn("px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all", granularity === g ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>{g}</button>
+                        <button key={g} onClick={() => setGranularity(g)} className={cn("px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all", granularity === g ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}>{g}</button>
                       ))}
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2"><div className="w-3 h-1.5 rounded-full bg-blue-600"></div><span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Revenue (Bar)</span></div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-1.5 rounded-full bg-brand-600"></div><span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Revenue (Bar)</span></div>
                     <div className="flex items-center gap-2"><div className="w-4 h-0.5 bg-indigo-600"></div><span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">CM1 (Line)</span></div>
                   </div>
                 </div>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={trendData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }} dy={10} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }} tickFormatter={(value) => `${(value / 1000000).toFixed(0)}M`} />
-                      <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ borderRadius: "16px", border: "none", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)", padding: "12px" }} formatter={(value: any) => [formatCurrency(value).replace("₫", "VND"), ""]} />
-                      <Bar dataKey="revenue" fill="#2563eb" radius={[4, 4, 0, 0]} name="Revenue" barSize={trendData.length > 20 ? 12 : 24} opacity={0.8} />
-                      <Line type="monotone" dataKey="gpm2" stroke="#4f46e5" strokeWidth={3} dot={{ fill: "#4f46e5", r: 4, strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} name="CM1" />
+                      <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ ...chartTooltipStyle, padding: "12px" }} formatter={(value: any) => [formatCurrency(value).replace("₫", "VND"), ""]} />
+                      <Bar dataKey="revenue" fill={CHART_PALETTE[0]} radius={[4, 4, 0, 0]} name="Revenue" barSize={trendData.length > 20 ? 12 : 24} opacity={0.8} />
+                      <Line type="monotone" dataKey="gpm2" stroke={CHART_PALETTE[1]} strokeWidth={3} dot={{ fill: CHART_PALETTE[1], r: 4, strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6, strokeWidth: 0 }} name="CM1" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -439,10 +460,10 @@ export default function B2BPerformance() {
                       const columns: { label: string; key: string }[] = [{ label: "Partner", key: "name" }, { label: "Tier", key: "tier" }, { label: "Revenue", key: "revenue" }]
                       if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected CM1", key: "projected_gpm2" }) }
                       columns.push({ label: "Units", key: "units" }, { label: "GP", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "CM1", key: "gpm2" }, { label: "CM1 %", key: "gpm2_percent" })
-                      const exportData = strategicPerformance.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.gpm2 * projectionFactor) }))
+                      const exportData = strategicPerformance.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.margin * projectionFactor - (d.margin - d.gpm2)) }))
                       exportToCSV(exportData, "Strategic_Partners_Performance", columns)
                     }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-all font-bold text-[10px]">
-                      <Download className="w-3 h-3" />CSV
+                      <Download className="w-3 h-3" />Export
                     </button>
                     <div className="flex items-center gap-2 px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold"><Zap className="w-3 h-3" />PRIORITY TRACKING</div>
                   </div>
@@ -490,7 +511,7 @@ export default function B2BPerformance() {
                                           <td className="px-8 py-4 text-right">
                                             <div className="flex flex-col items-end">
                                               <span className="text-sm font-bold text-slate-800 tracking-tight">{formatCurrency(row.revenue).replace("₫", "VND")}</span>
-                                              {isProjectable && <span className="text-[10px] font-bold text-blue-500 mt-0.5">Est. {formatCurrency(row.revenue * projectionFactor).replace("₫", "")}</span>}
+                                              {isProjectable && <span className="text-[10px] font-bold text-brand-500 mt-0.5">Est. {formatCurrency(row.revenue * projectionFactor).replace("₫", "")}</span>}
                                             </div>
                                           </td>
                                           <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600 tracking-tight">{formatNumber(row.units)}</span></td>
@@ -574,7 +595,7 @@ export default function B2BPerformance() {
                                   <td className="px-8 py-4 text-right">
                                     <div className="flex flex-col items-end">
                                       <span className="text-sm font-black text-slate-900">{formatCurrency(Math.round(totals.revenue)).replace("₫", "VND")}</span>
-                                      {isProjectable && <span className="text-[10px] font-bold text-blue-600 mt-0.5">Est. {formatCurrency(Math.round(totals.revenue * projectionFactor)).replace("₫", "")}</span>}
+                                      {isProjectable && <span className="text-[10px] font-bold text-brand-600 mt-0.5">Est. {formatCurrency(Math.round(totals.revenue * projectionFactor)).replace("₫", "")}</span>}
                                     </div>
                                   </td>
                                   <td className="px-8 py-4 text-right text-sm text-slate-800">{formatNumber(Math.round(totals.units))}</td>
@@ -612,59 +633,183 @@ export default function B2BPerformance() {
               <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-blue-600 rounded-xl"><Building2 className="w-5 h-5 text-white" /></div>
+                    <div className="p-2.5 bg-brand-600 rounded-xl"><Building2 className="w-5 h-5 text-white" /></div>
                     <div>
-                      <h2 className="text-lg font-bold text-slate-900 font-sans tracking-tight">Other Tiers Customers</h2>
-                      <p className="text-xs text-slate-500 font-medium">Performance by individual non-strategic customers.</p>
+                      <h2 className="text-lg font-bold text-slate-900 font-sans tracking-tight">B2B Tier Performance</h2>
+                      <p className="text-xs text-slate-500 font-medium">Phân tier theo bảng giá: Strategic · VIP · Gold · Silver</p>
                     </div>
                   </div>
-                  <button onClick={() => {
-                    const nonStrategic = getFilteredOtherTiers()
-                    const columns: { label: string; key: string }[] = [{ label: "Customer Name", key: "name" }, { label: "Revenue", key: "revenue" }]
-                    if (isProjectable) { columns.push({ label: "Projected Revenue", key: "projected_revenue" }, { label: "Projected GP", key: "projected_margin" }, { label: "Projected CM1", key: "projected_gpm2" }) }
-                    columns.push({ label: "Units Sold", key: "units" }, { label: "Gross Profit", key: "margin" }, { label: "Margin %", key: "margin_percent" }, { label: "CM1", key: "gpm2" }, { label: "CM1 %", key: "gpm2_percent" })
-                    const exportData = nonStrategic.map(d => ({ ...d, projected_revenue: Math.round(d.revenue * projectionFactor), projected_margin: Math.round(d.margin * projectionFactor), projected_gpm2: Math.round(d.gpm2 * projectionFactor) }))
-                    exportToCSV(exportData, "Other_Tiers_Customers", columns)
-                  }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
-                    <Download className="w-3 h-3" />CSV
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Tìm khách hàng..."
+                        value={tierSearch}
+                        onChange={e => setTierSearch(e.target.value)}
+                        className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 focus:ring-brand-500 focus:border-brand-500 w-48"
+                      />
+                      {tierSearch && (
+                        <button onClick={() => setTierSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    <button onClick={() => {
+                      const nonStrategic = getFilteredOtherTiers()
+                      const classifyTierForExport = (pln?: string | null): string => {
+                        if (!pln) return "Strategic"
+                        const p = pln.toUpperCase()
+                        for (const [tier, keywords] of Object.entries(tierKeywords)) {
+                          if ((keywords as string[]).some(kw => p.includes(kw.toUpperCase()))) return tier
+                        }
+                        return "Strategic"
+                      }
+                      const allRows = [
+                        ...strategicPerformance.map(d => ({
+                          tier: d.tier,
+                          name: d.name,
+                          revenue: d.revenue,
+                          projected_revenue: Math.round(d.revenue * projectionFactor),
+                          projected_margin: Math.round(d.margin * projectionFactor),
+                          projected_gpm2: Math.round(d.gpm2 * projectionFactor),
+                          units: d.units,
+                          margin: d.margin,
+                          margin_percent: Math.round(d.margin_percent * 10) / 10,
+                          gpm2: d.gpm2,
+                          gpm2_percent: Math.round(d.gpm2_percent * 10) / 10,
+                        })),
+                        ...nonStrategic.map(d => ({
+                          tier: classifyTierForExport(d.price_list_name),
+                          name: d.name,
+                          revenue: d.revenue,
+                          projected_revenue: Math.round(d.revenue * projectionFactor),
+                          projected_margin: Math.round(d.margin * projectionFactor),
+                          projected_gpm2: Math.round((d.gpm2 ?? 0) * projectionFactor),
+                          units: d.units,
+                          margin: d.margin,
+                          margin_percent: Math.round(d.margin_percent * 10) / 10,
+                          gpm2: d.gpm2,
+                          gpm2_percent: Math.round(d.gpm2_percent * 10) / 10,
+                        })),
+                      ]
+                      const columns: { label: string; key: string }[] = [
+                        { label: "Tier", key: "tier" },
+                        { label: "Customer Name", key: "name" },
+                        { label: "Revenue", key: "revenue" },
+                      ]
+                      if (isProjectable) {
+                        columns.push(
+                          { label: "Projected Revenue", key: "projected_revenue" },
+                          { label: "Projected GP", key: "projected_margin" },
+                          { label: "Projected CM1", key: "projected_gpm2" },
+                        )
+                      }
+                      columns.push(
+                        { label: "Units Sold", key: "units" },
+                        { label: "Gross Profit", key: "margin" },
+                        { label: "Margin %", key: "margin_percent" },
+                        { label: "CM1", key: "gpm2" },
+                        { label: "CM1 %", key: "gpm2_percent" },
+                      )
+                      exportToExcel(allRows, columns, `B2B_Tier_Performance_${startDate}_to_${endDate}`)
+                    }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
+                      <Download className="w-3 h-3" />Excel
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50/50">
-                        {([["name", "Customer Name"], ["revenue", "Revenue"], ["units", "Units Sold"], ["margin", "Gross Profit"], ["margin_percent", "Margin %"], ["gpm2", "CM1"], ["gpm2_percent", "CM1 %"]] as [keyof PerformanceData, string][]).map(([key, label], i) => (
-                          <th key={key} className={cn("px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors", i > 0 && "text-right")} onClick={() => setWholesaleSort({ key, direction: wholesaleSort.key === key && wholesaleSort.direction === "desc" ? "asc" : "desc" })}>
-                            <div className={cn("flex items-center", i > 0 && "justify-end")}>{label}<SortIcon sort={wholesaleSort} column={key} /></div>
+                        {([["name", "Customer Name"], ["revenue", "Revenue"], ["units", "Units Sold"], ["margin", "Gross Profit"], ["margin_percent", "Margin %"], ["__ch_cost__", "CH.Cost"], ["gpm2", "CM1"], ["gpm2_percent", "CM1 %"]] as [string, string][]).map(([key, label], i) => (
+                          <th key={key} className={cn("px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer hover:bg-slate-100 transition-colors", i > 0 && "text-right")} onClick={() => key !== "__ch_cost__" && setWholesaleSort({ key: key as keyof PerformanceData, direction: wholesaleSort.key === key && wholesaleSort.direction === "desc" ? "asc" : "desc" })}>
+                            <div className={cn("flex items-center", i > 0 && "justify-end")}>{label}{key !== "__ch_cost__" && <SortIcon sort={wholesaleSort} column={key} />}</div>
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {(() => {
-                        const nonStrategic = getFilteredOtherTiers()
-                        const sorted = sortData(nonStrategic, wholesaleSort)
+                        const nonStrategic = nonStrategicMemo
+                        const searchLow = tierSearch.toLowerCase().trim()
+                        const sorted = sortData(
+                          searchLow ? nonStrategic.filter(r =>
+                            r.name.toLowerCase().includes(searchLow) ||
+                            (r.price_list_name || "").toLowerCase().includes(searchLow)
+                          ) : nonStrategic,
+                          wholesaleSort
+                        )
+                        // Tổng chỉ tính những row đang hiển thị (filtered by search)
                         const totals = sorted.reduce((acc, curr) => ({ revenue: acc.revenue + curr.revenue, units: acc.units + curr.units, margin: acc.margin + curr.margin, gpm2: acc.gpm2 + curr.gpm2 }), { revenue: 0, units: 0, margin: 0, gpm2: 0 })
                         const margin_percent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
-                        const gpm2_percent = totals.revenue > 0 ? (totals.gpm2 / totals.revenue) * 100 : 0
-                        return (
-                          <>
-                            {sorted.map((row, idx) => {
+                        // Total CM1: dùng backend cm1 (pro-rata đúng) rồi × factor nếu cần project
+                        const totalProjRev = isProjectable ? totals.revenue * projectionFactor : totals.revenue
+                        const totalProjMar = isProjectable ? totals.margin  * projectionFactor : totals.margin
+                        const totalCm1Actual = sorted.reduce((acc, curr) => acc + (curr.cm1 ?? curr.gpm2 ?? 0), 0)
+                        const totalChCost    = sorted.reduce((acc, curr) => {
+                          const cm1a = curr.cm1 ?? curr.gpm2 ?? 0
+                          const ca   = curr.margin - cm1a  // total cost = margin - cm1
+                          return acc + (isProjectable ? ca * projectionFactor : ca)
+                        }, 0)
+                        const totalCm1    = isProjectable ? totalCm1Actual * projectionFactor : totalCm1Actual
+                        const totalCm1Pct = totalProjRev > 0 ? (totalCm1 / totalProjRev) * 100 : 0
+
+                        // Group by price_list_name tier — dùng tierKeywords từ quarterly-settings (giống makeClassifyTier trong Quarter Report)
+                        const classifyTier = (pln?: string): string => {
+                          if (!pln) return "Strategic"
+                          const p = pln.toUpperCase()
+                          for (const [tier, keywords] of Object.entries(tierKeywords)) {
+                            if ((keywords as string[]).some(kw => p.includes(kw.toUpperCase()))) return tier
+                          }
+                          return "Strategic"   // default như Quarter Report
+                        }
+                        const TIER_ORDER = Object.keys(tierKeywords).length > 0
+                          ? Object.keys(tierKeywords)
+                          : ["Strategic", "VIP", "Gold", "Silver"]
+                        const hasTierInfo = sorted.some(r => r.price_list_name)
+                        const groups = new Map<string, PerformanceData[]>()
+                        sorted.forEach(row => {
+                          const grp = hasTierInfo
+                            ? classifyTier(row.price_list_name)
+                            : (row.sub_group_name || "__flat__")
+                          if (!groups.has(grp)) groups.set(grp, [])
+                          groups.get(grp)!.push(row)
+                        })
+                        // Sort tiers theo thứ tự chuẩn
+                        const sortedGroups = new Map<string, PerformanceData[]>()
+                        const tierKeys = hasTierInfo
+                          ? [...TIER_ORDER.filter(t => groups.has(t)), ...Array.from(groups.keys()).filter(k => !TIER_ORDER.includes(k))]
+                          : Array.from(groups.keys())
+                        tierKeys.forEach(k => { if (groups.has(k)) sortedGroups.set(k, groups.get(k)!) })
+
+                        const renderRow = (row: PerformanceData, idx: number) => {
                               const isExpanded = expandedRow === row.name
-                              const costs = monthlyCosts[row.name]
+                              // CH.Cost = tổng chi phí trừ khỏi GP để ra CM1 (channel+group+customer).
+                              // = margin − cm1 (backend đã tính đúng pro-rata mọi loại cost).
+                              const cm1Actual    = row.cm1 ?? row.gpm2
+                              const chCostActual = row.margin - cm1Actual  // total cost deduction
+                              // Projected: cả GP và CM1 đều × factor (linear)
+                              const projRev = isProjectable ? row.revenue * projectionFactor : row.revenue
+                              const projMar = isProjectable ? row.margin  * projectionFactor : row.margin
+                              const chCost  = isProjectable ? chCostActual * projectionFactor : chCostActual
+                              const cm1     = isProjectable ? cm1Actual    * projectionFactor : cm1Actual
+                              const cm1Pct  = projRev > 0 ? (cm1 / projRev) * 100 : 0
+                              // cost_lines từ backend (Turso) — hiển thị breakdown customer CH.Cost
+                              const costLines = row.cost_lines || []
                               return (
                                 <React.Fragment key={idx}>
-                                  <tr className={cn("hover:bg-slate-50/50 transition-colors group cursor-pointer", isExpanded && "bg-blue-50/30")} onClick={() => setExpandedRow(isExpanded ? null : row.name)}>
+                                  <tr className={cn("hover:bg-slate-50/50 transition-colors group cursor-pointer", isExpanded && "bg-brand-50/30")} onClick={() => setExpandedRow(isExpanded ? null : row.name)}>
                                     <td className="px-8 py-4">
                                       <div className="flex flex-col">
-                                        <span className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{row.name}</span>
-                                        <span className="text-[9px] text-blue-500 font-bold flex items-center gap-0.5">{isExpanded ? "Hide details" : "View details"}<ChevronDown className={cn("w-2.5 h-2.5 transition-transform", isExpanded && "rotate-180")} /></span>
+                                        <span className="text-sm font-bold text-slate-900 group-hover:text-brand-600 transition-colors">{row.name}</span>
+                                        <span className="text-[9px] text-brand-500 font-bold flex items-center gap-0.5">{isExpanded ? "Hide details" : "View details"}<ChevronDown className={cn("w-2.5 h-2.5 transition-transform", isExpanded && "rotate-180")} /></span>
                                       </div>
                                     </td>
                                     <td className="px-8 py-4 text-right">
                                       <div className="flex flex-col items-end">
                                         <span className="text-sm font-bold text-slate-800 tracking-tight">{formatCurrency(row.revenue).replace("₫", "VND")}</span>
-                                        {isProjectable && <span className="text-[10px] font-bold text-blue-500 mt-0.5">Est. {formatCurrency(row.revenue * projectionFactor).replace("₫", "")}</span>}
+                                        {isProjectable && <span className="text-[10px] font-bold text-brand-500 mt-0.5">Est. {formatCurrency(row.revenue * projectionFactor).replace("₫", "")}</span>}
                                       </div>
                                     </td>
                                     <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600 tracking-tight">{formatNumber(row.units)}</span></td>
@@ -676,16 +821,18 @@ export default function B2BPerformance() {
                                     </td>
                                     <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600">{row.margin_percent.toFixed(1)}%</span></td>
                                     <td className="px-8 py-4 text-right">
-                                      <div className="flex flex-col items-end">
-                                        <span className={cn("text-sm font-bold tracking-tight", row.gpm2 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(row.gpm2).replace("₫", "VND")}</span>
-                                        {isProjectable && <span className="text-[10px] font-bold text-emerald-600/70 mt-0.5">Est. {formatCurrency(row.gpm2 * projectionFactor).replace("₫", "")}</span>}
-                                      </div>
+                                      <span className={cn("text-sm font-bold tracking-tight", chCost >= 0 ? "text-amber-600" : "text-rose-500")}>
+                                        {formatCurrency(Math.round(chCost)).replace("₫","VND")}
+                                      </span>
                                     </td>
-                                    <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600">{row.gpm2_percent.toFixed(1)}%</span></td>
+                                    <td className="px-8 py-4 text-right">
+                                      <span className={cn("text-sm font-bold tracking-tight", cm1 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(Math.round(cm1)).replace("₫", "VND")}</span>
+                                    </td>
+                                    <td className="px-8 py-4 text-right"><span className="text-sm font-bold text-slate-600">{cm1Pct.toFixed(1)}%</span></td>
                                   </tr>
                                   {isExpanded && (
                                     <tr className="bg-slate-50/80">
-                                      <td colSpan={7} className="px-8 py-3">
+                                      <td colSpan={8} className="px-8 py-3">
                                         <div className="space-y-4">
                                           {row.sub_channels && row.sub_channels.length > 0 && (
                                             <div className="bg-white/60 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -709,38 +856,72 @@ export default function B2BPerformance() {
                                                       <td className="px-3 py-1.5 text-right font-medium text-slate-600">{formatNumber(sc.units)}</td>
                                                       <td className="px-3 py-1.5 text-right font-bold text-emerald-600">{formatNumber(Math.round(sc.margin))}</td>
                                                       <td className="px-3 py-1.5 text-right font-medium text-slate-600">{sc.margin_percent.toFixed(1)}%</td>
-                                                      <td className="px-3 py-1.5 text-right font-bold text-blue-600">{formatNumber(Math.round(sc.gpm2))}</td>
-                                                      <td className="px-3 py-1.5 text-right font-medium text-blue-500 font-bold">{sc.gpm2_percent.toFixed(1)}%</td>
+                                                      <td className="px-3 py-1.5 text-right font-bold text-brand-600">{formatNumber(Math.round(sc.gpm2))}</td>
+                                                      <td className="px-3 py-1.5 text-right font-medium text-brand-500 font-bold">{sc.gpm2_percent.toFixed(1)}%</td>
                                                     </tr>
                                                   ))}
                                                 </tbody>
                                               </table>
                                             </div>
                                           )}
-                                          <div className="grid grid-cols-4 gap-4">
-                                            {(["ads", "platformFee", "sponsorProducts", "media"] as const).map(category => {
-                                              const amount = row.cost_breakdown?.[category] || costs?.[category] || 0
-                                              return (
-                                                <div key={category} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
-                                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{category.replace(/([A-Z])/g, " $1")}</p>
-                                                  <div className="flex items-baseline justify-between"><p className="text-xs font-bold text-slate-700">{formatNumber(Math.round(amount))}</p></div>
+                                          {costLines.length > 0 ? (
+                                            <div className={`grid grid-cols-${Math.min(costLines.length, 4)} gap-4`}>
+                                              {costLines.map((line, li) => (
+                                                <div key={li} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+                                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{line.label || "Chi phí"}</p>
+                                                  <p className="text-xs font-bold text-slate-700">
+                                                    {line.type === "percent"
+                                                      ? `${line.value}%`
+                                                      : formatNumber(Math.round(line.value))}
+                                                  </p>
                                                 </div>
-                                              )
-                                            })}
-                                          </div>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <p className="text-xs text-slate-400 italic">Chưa có dữ liệu chi phí cho khách hàng này</p>
+                                          )}
                                         </div>
                                       </td>
                                     </tr>
                                   )}
                                 </React.Fragment>
                               )
+                        }
+
+                        return (
+                          <>
+                            {Array.from(sortedGroups.entries()).map(([grpName, grpRows]) => {
+                              if (grpName === "__flat__") {
+                                // No sub_group_name data — render flat (backward compat)
+                                return grpRows.map((row, idx) => renderRow(row, idx))
+                              }
+                              return (
+                                <React.Fragment key={grpName}>
+                                  {/* Tier header — click để collapse/expand */}
+                                  <tr
+                                    className="bg-brand-600 border-y border-brand-700 cursor-pointer select-none hover:bg-brand-700 transition-colors"
+                                    onClick={() => toggleTier(grpName)}
+                                  >
+                                    <td colSpan={8} className="px-8 py-3 text-[11px] font-black uppercase tracking-[0.2em] text-white">
+                                      <div className="flex items-center gap-2">
+                                        <ChevronDown className={cn("w-3.5 h-3.5 transition-transform shrink-0", collapsedTiers.has(grpName) && "-rotate-90")} />
+                                        {grpName}
+                                        <span className="ml-2 bg-white/20 px-2 py-0.5 rounded text-[10px]">{grpRows.length} KH</span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  {/* Customer rows — ẩn khi collapsed */}
+                                  {!collapsedTiers.has(grpName) && grpRows.map((row, idx) => renderRow(row, idx))}
+                                </React.Fragment>
+                              )
                             })}
-                            <tr className="bg-slate-100/80 font-black border-t-2 border-slate-200 italic">
+                            {/* TOTAL OTHERS — tổng tất cả KH sau filter/search */}
+                            <tr className="bg-slate-100/80 font-black border-t-2 border-slate-200">
                               <td className="px-8 py-4 text-[11px] uppercase tracking-[0.2em] text-slate-700 font-bold">TOTAL OTHERS</td>
                               <td className="px-8 py-4 text-right">
                                 <div className="flex flex-col items-end">
                                   <span className="text-sm font-black text-slate-900">{formatCurrency(Math.round(totals.revenue)).replace("₫", "VND")}</span>
-                                  {isProjectable && <span className="text-[10px] font-bold text-blue-600 mt-0.5">Est. {formatCurrency(Math.round(totals.revenue * projectionFactor)).replace("₫", "")}</span>}
+                                  {isProjectable && <span className="text-[10px] font-bold text-brand-600 mt-0.5">Est. {formatCurrency(Math.round(totals.revenue * projectionFactor)).replace("₫", "")}</span>}
                                 </div>
                               </td>
                               <td className="px-8 py-4 text-right text-sm text-slate-800">{formatNumber(Math.round(totals.units))}</td>
@@ -751,13 +932,15 @@ export default function B2BPerformance() {
                                 </div>
                               </td>
                               <td className="px-8 py-4 text-right text-sm text-slate-700">{margin_percent.toFixed(1)}%</td>
+                              <td className="px-8 py-4 text-right text-sm font-black text-amber-600">
+                                {formatCurrency(Math.round(totalChCost)).replace("₫","VND")}
+                              </td>
                               <td className="px-8 py-4 text-right">
                                 <div className="flex flex-col items-end">
-                                  <span className="text-sm font-black text-indigo-700">{formatCurrency(Math.round(totals.gpm2)).replace("₫", "VND")}</span>
-                                  {isProjectable && <span className="text-[10px] font-bold text-indigo-600/90 mt-0.5">Est. {formatCurrency(Math.round(totals.gpm2 * projectionFactor)).replace("₫", "")}</span>}
+                                  <span className="text-sm font-black text-indigo-700">{formatCurrency(Math.round(totalCm1)).replace("₫", "VND")}</span>
                                 </div>
                               </td>
-                              <td className="px-8 py-4 text-right text-sm text-slate-700">{gpm2_percent.toFixed(1)}%</td>
+                              <td className="px-8 py-4 text-right text-sm text-slate-700">{totalCm1Pct.toFixed(1)}%</td>
                             </tr>
                           </>
                         )
@@ -770,7 +953,6 @@ export default function B2BPerformance() {
           </>
         )}
       </div>
-      <CostManagementModal isOpen={showCostModal} onClose={() => setShowCostModal(false)} onSave={() => fetchData()} initialMonth={startDate.slice(0, 7)} />
     </div>
   )
 }

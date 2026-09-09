@@ -9,10 +9,11 @@ import {
   Check, ShoppingBag, UserPlus, RefreshCw, Activity, Sparkles, Search, Filter, Calendar, Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { SourceBadge } from "@/components/dashboard-kit"
+import { SourceBadge, CHART_GRID_COLOR } from "@/components/dashboard-kit"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { Pager, PAGE_ROWS } from "@/components/pager"
+import { exportRawRows } from "@/lib/export-excel"
 
 interface KPI {
   label: string
@@ -37,9 +38,16 @@ interface DistributionData {
 
 interface CustomerRow {
   name: string
+  code: string
+  tier: string
   revenue: number
   margin: number
   margin_percent: number
+  cm1: number
+  cm1_pct: number
+  channel_cost: number
+  hk3_rev: number
+  hk3_pct: number
   orders: number
   units: number
   last_order: string
@@ -78,11 +86,14 @@ export default function CustomerPerformancePage() {
     try {
       const reqBody = { startDate, endDate, dateColumn, period, customers: selectedCustomers }
 
-      const res = await fetch(`/api/analytics/customer/report`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reqBody),
-      })
+      const [res, tiersRes] = await Promise.all([
+        fetch(`/api/analytics/customer/report`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(reqBody),
+        }),
+        fetch(`/api/config/partner-tiers`).catch(() => null),
+      ])
 
       if (!res.ok) throw new Error("Failed to fetch data")
 
@@ -96,13 +107,7 @@ export default function CustomerPerformancePage() {
       setProductData(data.products || [])
       setOrderData(data.orders || [])
 
-      try {
-        const configRes = await fetch(`/api/config/partner-tiers`)
-        if (configRes.ok) {
-          const tiers = await configRes.json()
-          setPartnerTiers(tiers)
-        }
-      } catch (err) {}
+      if (tiersRes?.ok) setPartnerTiers(await tiersRes.json())
     } catch (err: any) {
       console.error(err)
       setError("Hiếu đang fix, vui lòng đợi")
@@ -312,7 +317,7 @@ export default function CustomerPerformancePage() {
                   <div className="relative z-10">
                     <div className={cn(
                       "w-10 h-10 rounded-2xl flex items-center justify-center mb-4 shadow-sm",
-                      kpi.label.includes("Active") ? "bg-blue-600 text-white" :
+                      kpi.label.includes("Active") ? "bg-brand-600 text-white" :
                       kpi.label.includes("New") ? "bg-emerald-600 text-white" :
                       kpi.label.includes("Revenue") ? "bg-amber-600 text-white" :
                       kpi.label.includes("ARPU") ? "bg-indigo-600 text-white" :
@@ -366,7 +371,7 @@ export default function CustomerPerformancePage() {
                 <div className="h-[350px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={trendData}>
-                      <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f1f5f9" />
+                      <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={CHART_GRID_COLOR} />
                       <XAxis
                         dataKey="name"
                         axisLine={false}
@@ -576,7 +581,21 @@ export default function CustomerPerformancePage() {
                   <h3 className="text-xl font-black text-slate-900 italic uppercase">All Customers Breakdown</h3>
                   <p className="text-sm text-slate-400 font-medium italic">Comprehensive performance metrics per client.</p>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all">
+                <button
+                  onClick={() => {
+                    // Xuất TẤT CẢ khách (bỏ strategic partners, không giới hạn phân trang)
+                    const all = performanceData.filter(p => !Object.values(partnerTiers).flat().includes(p.name))
+                    const rows = all.map(r => ({
+                      "Customer": r.name,
+                      "Revenue": r.revenue,
+                      "GP": r.margin,
+                      "Units": r.units,
+                      "Orders": r.orders,
+                      "AOV": r.orders > 0 ? Math.round(r.revenue / r.orders) : 0,
+                    }))
+                    exportRawRows(rows, `Customers_Breakdown_${startDate}_to_${endDate}`, "Customers")
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all">
                   <Download className="w-4 h-4" />
                   Export
                 </button>
@@ -585,18 +604,21 @@ export default function CustomerPerformancePage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-white border-b border-slate-100">
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Revenue</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">GP</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Units</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Orders</th>
-                      <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">AOV</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tier</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Revenue</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">GP</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">GM%</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">CM1</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">CM1%</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">3HK%</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Orders</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {performanceData.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-8 py-20 text-center">
+                        <td colSpan={9} className="px-8 py-20 text-center">
                           <div className="flex flex-col items-center gap-2">
                             <Users className="w-8 h-8 text-slate-200" />
                             <p className="text-sm font-bold text-slate-400">No customer data found for this period</p>
@@ -608,45 +630,39 @@ export default function CustomerPerformancePage() {
                       .slice((custPage - 1) * PAGE_ROWS, custPage * PAGE_ROWS)
                       .map((row, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
-                        <td className="px-8 py-5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 font-black text-[10px]">
-                              {row.name.charAt(0)}
-                            </div>
-                            <span className="text-sm font-bold text-slate-700 truncate max-w-[200px]">{row.name}</span>
-                          </div>
+                        <td className="px-6 py-4">
+                          <span className="text-sm font-bold text-slate-700 truncate max-w-[180px] block">{row.name}</span>
                         </td>
-                        <td className="px-8 py-5 text-right">
+                        <td className="px-6 py-4">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand-50 text-brand-600">{row.tier ?? "—"}</span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
                           <span className="text-sm font-bold text-slate-900 tabular-nums">{formatCurrency(row.revenue)}</span>
                         </td>
-                        <td className="px-8 py-5 text-right">
-                          <span className={cn(
-                            "text-sm font-bold tabular-nums",
-                            row.margin >= 0 ? "text-emerald-600" : "text-rose-600"
-                          )}>{formatCurrency(row.margin)}</span>
+                        <td className="px-6 py-4 text-right">
+                          <span className={cn("text-sm font-bold tabular-nums", row.margin >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(row.margin)}</span>
                         </td>
-                        <td className="px-8 py-5 text-right text-sm font-bold text-slate-400 tabular-nums">
-                          {row.units}
+                        <td className="px-6 py-4 text-right text-xs font-bold text-slate-400">
+                          {row.margin_percent.toFixed(1)}%
                         </td>
-                        <td className="px-8 py-5 text-right text-sm font-bold text-slate-600 tabular-nums">
+                        <td className="px-6 py-4 text-right">
+                          <span className={cn("text-sm font-bold tabular-nums", row.cm1 >= 0 ? "text-brand-700" : "text-rose-600")}>{formatCurrency(row.cm1)}</span>
+                        </td>
+                        <td className="px-6 py-4 text-right text-xs font-bold">
+                          <span className={cn(row.cm1_pct >= 0 ? "text-brand-600" : "text-rose-500")}>{row.cm1_pct.toFixed(1)}%</span>
+                        </td>
+                        <td className="px-6 py-4 text-right text-xs font-bold text-slate-500">
+                          {row.hk3_pct.toFixed(1)}%
+                        </td>
+                        <td className="px-6 py-4 text-right text-sm font-bold text-slate-600 tabular-nums">
                           {row.orders}
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                          <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded-md">
-                            {formatCompact(row.revenue / row.orders).replace("₫", "VND")}
-                          </span>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <Pager
-                page={custPage}
-                total={performanceData.filter(p => !Object.values(partnerTiers).flat().includes(p.name)).length}
-                onPage={setCustPage}
-                label="khách"
-              />
+              <Pager page={custPage} total={performanceData.filter(p => !Object.values(partnerTiers).flat().includes(p.name)).length} onPage={setCustPage} label="khách" />
             </div>
           </div>
         )}

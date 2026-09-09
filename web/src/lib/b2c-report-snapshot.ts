@@ -5,7 +5,7 @@ import { chatwootConfigured, chatwootLeadsBreakdown } from "@/lib/chatwoot"
 import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
 import { adminGohubConfigured, adminGohubCustomerChannelRows, adminGohubCustomerMonthSnapshot } from "@/lib/admin-gohub"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
-import { getB2CChannelBudgetByMonth } from "@/lib/b2c-channel-budget"
+import { B2C_CHANNELS, getB2CChannelBudgetByMonth } from "@/lib/b2c-channel-budget"
 
 export interface MarketCell { vn: number; us: number; total: number }
 export interface CustCell { revenue: number; count: number }
@@ -286,6 +286,7 @@ async function loadRevenue(months: string[], reportAsOf: Date) {
       .from("analytics_channel_costs")
       .select("channel, month, ads, platform_fee, sponsor_products, media")
       .in("month", months)
+      .in("channel", B2C_CHANNELS)
     if (error) throw new Error(error.message)
     for (const row of costRows ?? []) {
       const month = String(row.month)
@@ -334,8 +335,18 @@ async function loadCustomerChannels(months: string[]) {
 }
 
 async function loadMarketing(months: string[]) {
-  const spend: Record<string, number> = Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>
-  const budget = await getB2CChannelBudgetByMonth(months)
+  const spend:  Record<string, number> = Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>
+  const budget: Record<string, number> = Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>
+
+  // Budget = ngân sách kế hoạch nhập trong KPI/Target (app_settings b2c_budget)
+  try {
+    const { data: row } = await supabaseAdmin
+      .from("app_settings").select("value").eq("key", "b2c_budget").maybeSingle()
+    if (row?.value) {
+      const saved: Record<string, number> = JSON.parse(row.value)
+      for (const m of months) if (saved[m]) budget[m] = saved[m]
+    }
+  } catch {}
 
   const { data: costRows } = await supabaseAdmin
     .from("analytics_channel_group_costs")

@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { Info, Search } from "lucide-react"
+import { SkeletonTable } from "@/components/skeleton"
+import { useUrlStates } from "@/hooks/use-url-state"
+import { DataTable } from "@/components/dashboard-kit"
 
 interface Country      { code: string; name: string; name_vn: string | null }
 interface SupportCountry {
@@ -21,7 +24,7 @@ function SearchInput({ value, onChange, placeholder }: {
       <input
         value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-brand-400 w-56"
+        className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 rounded-lg focus:outline-none focus:border-brand-400 w-56"
       />
     </div>
   )
@@ -35,11 +38,13 @@ export default function InfoPage() {
   const [vendors, setVendors]                   = useState<Vendor[]>([])
   const [categories, setCategories]             = useState<Category[]>([])
   const [loading, setLoading]                   = useState(true)
-  const [activeTab, setActiveTab]               = useState<Tab>("countries")
-  const [searchC, setSearchC]   = useState("")
-  const [searchSC, setSearchSC] = useState("")
-  const [searchV, setSearchV]   = useState("")
-  const [searchCat, setSearchCat] = useState("")
+  const [f, setF] = useUrlStates({ tab: "countries", qc: "", qs: "", qv: "", qcat: "" })
+  const activeTab = f.tab as Tab
+  const setActiveTab = (t: Tab) => setF({ tab: t })
+  const searchC   = f.qc;   const setSearchC   = (v: string) => setF({ qc:   v })
+  const searchSC  = f.qs;   const setSearchSC  = (v: string) => setF({ qs:   v })
+  const searchV   = f.qv;   const setSearchV   = (v: string) => setF({ qv:   v })
+  const searchCat = f.qcat; const setSearchCat = (v: string) => setF({ qcat: v })
 
   useEffect(() => {
     fetch("/api/countries")
@@ -101,16 +106,16 @@ export default function InfoPage() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center gap-2">
-        <Info size={20} className="text-brand-600" />
-        <h1 className="text-xl font-bold text-gray-900">Thông tin</h1>
+        <Info size={20} className="text-brand-600 dark:text-brand-400" />
+        <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">Thông tin</h1>
       </div>
 
       {/* Sub-tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+      <div className="flex gap-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-lg w-fit">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
             className={`px-4 py-1.5 text-sm rounded-md font-medium transition-colors ${
-              activeTab === t.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              activeTab === t.key ? "bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 shadow-sm" : "text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200"
             }`}
           >
             {t.label}
@@ -120,36 +125,24 @@ export default function InfoPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-16 text-gray-400">Đang tải...</div>
+        <SkeletonTable rows={10} cols={3} />
       ) : activeTab === "countries" ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-gray-400">{filteredC.length} / {countries.length} nước</p>
             <SearchInput value={searchC} onChange={setSearchC} placeholder="Tìm code, tên nước..." />
           </div>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-20">Code</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Tên (EN)</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Tên (VN)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredC.length === 0
-                  ? <tr><td colSpan={3} className="text-center py-8 text-gray-400">Không tìm thấy</td></tr>
-                  : filteredC.map(c => (
-                    <tr key={c.code} className="border-b border-gray-50 hover:bg-gray-50/50">
-                      <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700">{c.code}</td>
-                      <td className="px-4 py-2 text-gray-800">{c.name}</td>
-                      <td className="px-4 py-2 text-gray-500">{c.name_vn ?? <span className="text-gray-300">—</span>}</td>
-                    </tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rowKey={c => c.code}
+            rows={filteredC}
+            pageSize={20}
+            emptyLabel="Không tìm thấy — thử từ khoá khác"
+            columns={[
+              { key: "code", label: "Code", render: c => <span className="font-mono font-semibold text-brand-700">{c.code}</span> },
+              { key: "name", label: "Tên (EN)", render: c => <span className="text-gray-800 dark:text-slate-200">{c.name}</span> },
+              { key: "name_vn", label: "Tên (VN)", render: c => c.name_vn ?? <span className="text-gray-300 dark:text-slate-600">—</span> },
+            ]}
+          />
         </div>
       ) : activeTab === "support" ? (
         <div className="space-y-3">
@@ -157,29 +150,17 @@ export default function InfoPage() {
             <p className="text-xs text-gray-400">{filteredSC.length} / {supportCountries.length} nhóm</p>
             <SearchInput value={searchSC} onChange={setSearchSC} placeholder="Tìm mã, tên nước..." />
           </div>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-20">Mã</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Nước hỗ trợ</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-56">Country Codes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSC.length === 0
-                  ? <tr><td colSpan={3} className="text-center py-8 text-gray-400">Không tìm thấy</td></tr>
-                  : filteredSC.map(sc => (
-                    <tr key={sc.code} className="border-b border-gray-50 hover:bg-gray-50/50">
-                      <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700 whitespace-nowrap">{sc.code}</td>
-                      <td className="px-4 py-2 text-gray-700 text-xs leading-relaxed">{sc.support_country ?? <span className="text-gray-300">—</span>}</td>
-                      <td className="px-4 py-2 text-gray-400 text-xs font-mono leading-relaxed">{sc.country_codes ?? <span className="text-gray-300">—</span>}</td>
-                    </tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rowKey={sc => sc.code}
+            rows={filteredSC}
+            pageSize={20}
+            emptyLabel="Không tìm thấy — thử từ khoá khác"
+            columns={[
+              { key: "code", label: "Mã", render: sc => <span className="font-mono font-semibold text-brand-700 whitespace-nowrap">{sc.code}</span> },
+              { key: "support_country", label: "Nước hỗ trợ", render: sc => <span className="leading-relaxed">{sc.support_country ?? <span className="text-gray-300 dark:text-slate-600">—</span>}</span> },
+              { key: "country_codes", label: "Country Codes", render: sc => <span className="text-gray-400 font-mono leading-relaxed">{sc.country_codes ?? <span className="text-gray-300 dark:text-slate-600">—</span>}</span> },
+            ]}
+          />
         </div>
       ) : activeTab === "categories" ? (
         /* ── Category ── */
@@ -188,38 +169,21 @@ export default function InfoPage() {
             <p className="text-xs text-gray-400">{filteredCat.length} / {categories.length} category</p>
             <SearchInput value={searchCat} onChange={setSearchCat} placeholder="Tìm mã, tên..." />
           </div>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-24">Mã</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Tên (EN)</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Tên (VN)</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-32">ISO Code</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-28">Loại</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCat.length === 0
-                  ? <tr><td colSpan={5} className="text-center py-8 text-gray-400">Không tìm thấy</td></tr>
-                  : filteredCat.map(c => (
-                    <tr key={c.category_code} className="border-b border-gray-50 hover:bg-gray-50/50">
-                      <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700">{c.category_code}</td>
-                      <td className="px-4 py-2 text-gray-800">{c.name_en}</td>
-                      <td className="px-4 py-2 text-gray-500">{c.name_vn ?? <span className="text-gray-300">—</span>}</td>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-400">{c.iso_code ?? <span className="text-gray-300">—</span>}</td>
-                      <td className="px-4 py-2 text-xs">
-                        {c.region_type === "Multi-Country"
-                          ? <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[11px] font-medium">Đa quốc gia</span>
-                          : <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[11px]">Đơn</span>
-                        }
-                      </td>
-                    </tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rowKey={c => c.category_code}
+            rows={filteredCat}
+            pageSize={20}
+            emptyLabel="Không tìm thấy — thử từ khoá khác"
+            columns={[
+              { key: "code", label: "Mã", render: c => <span className="font-mono font-semibold text-brand-700">{c.category_code}</span> },
+              { key: "name_en", label: "Tên (EN)", render: c => <span className="text-gray-800 dark:text-slate-200">{c.name_en}</span> },
+              { key: "name_vn", label: "Tên (VN)", render: c => c.name_vn ?? <span className="text-gray-300 dark:text-slate-600">—</span> },
+              { key: "iso_code", label: "ISO Code", render: c => <span className="font-mono text-gray-400">{c.iso_code ?? <span className="text-gray-300 dark:text-slate-600">—</span>}</span> },
+              { key: "region_type", label: "Loại", render: c => c.region_type === "Multi-Country"
+                  ? <span className="bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full text-[11px] font-medium">Đa quốc gia</span>
+                  : <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[11px]">Đơn</span> },
+            ]}
+          />
         </div>
       ) : (
         /* ── Mã Vendor ── */
@@ -228,29 +192,17 @@ export default function InfoPage() {
             <p className="text-xs text-gray-400">{filteredV.length} / {vendors.length} vendor</p>
             <SearchInput value={searchV} onChange={setSearchV} placeholder="Tìm mã, tên vendor..." />
           </div>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-20">Mã</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-48">Tên vendor</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Ghi chú</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredV.length === 0
-                  ? <tr><td colSpan={3} className="text-center py-8 text-gray-400">Không tìm thấy</td></tr>
-                  : filteredV.map(v => (
-                    <tr key={v.vendor_code} className="border-b border-gray-50 hover:bg-gray-50/50">
-                      <td className="px-4 py-2 font-mono text-xs font-semibold text-brand-700">{v.vendor_code}</td>
-                      <td className="px-4 py-2 text-gray-800 font-medium">{v.name}</td>
-                      <td className="px-4 py-2 text-gray-400 text-xs">{v.description ?? <span className="text-gray-300">—</span>}</td>
-                    </tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rowKey={v => v.vendor_code}
+            rows={filteredV}
+            pageSize={20}
+            emptyLabel="Không tìm thấy — thử từ khoá khác"
+            columns={[
+              { key: "code", label: "Mã", render: v => <span className="font-mono font-semibold text-brand-700">{v.vendor_code}</span> },
+              { key: "name", label: "Tên vendor", render: v => <span className="text-gray-800 font-medium">{v.name}</span> },
+              { key: "description", label: "Ghi chú", render: v => v.description ?? <span className="text-gray-300 dark:text-slate-600">—</span> },
+            ]}
+          />
         </div>
       )}
     </div>

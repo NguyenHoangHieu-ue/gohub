@@ -1,4 +1,4 @@
-export type AgentId = 'tu-van' | 'tra-cuu' | 'giai-dap' | 'gap-analysis' | 'tao-template' | 'bi-analyst'
+export type AgentId = 'tu-van' | 'tra-cuu' | 'giai-dap' | 'gap-analysis' | 'tao-template' | 'bi-analyst' | 'data-explorer'
 
 // Vai trò người dùng — đầy đủ theo gohub-intel (admin = toàn quyền; còn lại gate theo ma trận quyền).
 export type UserRole =

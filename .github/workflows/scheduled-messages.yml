@@ -1,0 +1,31 @@
+name: Fire Scheduled Lark Messages
+
+# GitHub Actions chạy lệnh này mỗi 15 phút để trigger endpoint scheduled-messages.
+# ⚠️ LƯU Ý: GitHub Actions KHÔNG đảm bảo chạy đúng */15 phút — thực tế ~15-60 phút/lần,
+# đặc biệt giờ thấp điểm. Code endpoint đã có catch-up window 24h để không bỏ sót message.
+# Vercel cron (vercel.json) chạy 1 lần/ngày làm backstop thêm.
+
+on:
+  # Đã chuyển sang cron-job.org (external HTTP scheduler, chính xác hơn GitHub Actions).
+  # Giữ workflow_dispatch để trigger thủ công khi cần.
+  workflow_dispatch:
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Hit scheduled-messages cron endpoint
+        run: |
+          RESP=$(curl -s -w "\n%{http_code}" \
+            https://gohub-intel.vercel.app/api/cron/scheduled-messages \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          BODY=$(echo "$RESP" | head -n -1)
+          CODE=$(echo "$RESP" | tail -n 1)
+          echo "HTTP $CODE"
+          echo "$BODY"
+          if [ "$CODE" != "200" ]; then
+            echo "::warning::Endpoint trả $CODE — kiểm tra Vercel logs"
+            exit 1
+          fi

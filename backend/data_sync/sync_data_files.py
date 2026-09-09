@@ -56,17 +56,22 @@ def upsert_batch(sb, table: str, rows: list, pk: str):
 
 
 def load_xlsx_rows(path: Path, min_row: int = 2):
-    wb = openpyxl.load_workbook(path, data_only=True)
-    ws = wb.active
-    headers = [str(c.value).strip() if c.value else f"col{i}"
-               for i, c in enumerate(next(ws.iter_rows(min_row=1, max_row=1)))]
-    rows = []
-    for row in ws.iter_rows(min_row=min_row, values_only=True):
-        if not any(v for v in row):
-            continue
-        rows.append({headers[i]: (str(v).strip() if v is not None else None)
-                     for i, v in enumerate(row)})
-    return rows
+    # read_only=True: đọc streaming từng dòng, KHÔNG dựng cả cây DOM trong RAM
+    # → giảm mạnh RAM với file lớn, tránh OOM trên container/GitHub Actions runner.
+    wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    try:
+        ws = wb.active
+        headers = [str(c.value).strip() if c.value else f"col{i}"
+                   for i, c in enumerate(next(ws.iter_rows(min_row=1, max_row=1)))]
+        rows = []
+        for row in ws.iter_rows(min_row=min_row, values_only=True):
+            if not any(v for v in row):
+                continue
+            rows.append({headers[i]: (str(v).strip() if v is not None else None)
+                         for i, v in enumerate(row)})
+        return rows
+    finally:
+        wb.close()   # read_only giữ file handle mở → phải đóng để giải phóng
 
 
 # ─── Import functions (one per data type) ────────────────────────────────────

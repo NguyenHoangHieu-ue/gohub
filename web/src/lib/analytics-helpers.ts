@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { tursoQuery } from "@/lib/turso"
+import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
+import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
 
 export function isLocalPreviewReq(req: NextRequest): boolean {
   const host = req.nextUrl.hostname
@@ -18,16 +20,35 @@ export function isLocalPreviewReq(req: NextRequest): boolean {
 // L2: Supabase analytics_query_cache (shared, sống qua cold start, TTL 10 phút)
 // → Dữ liệu luôn tươi (max TTL_L2 cũ), cold start không cần re-query gohub_dw.
 
-const _cache = new Map<string, { data: unknown; exp: number }>()
-const _inflight = new Map<string, Promise<unknown>>()
+const _cache = new Map<string, { data: unknown; exp: number; deps: string[] }>()
 const TTL_L1 = 5  * 60_000  // 5 phút in-memory
 const TTL_L2 = 10            // 10 phút trong Supabase (minutes)
 
+/**
+ * `deps` (s190+2 — thay cơ chế prefix-list viết tay, đã gây ≥3 sự cố lịch sử: thiếu flush s168b, prefix
+ * lệch version thành no-op s169, flush toàn bộ gây chậm app s169(c)): mỗi route cache tự khai NÓ phụ thuộc
+ * "chủ đề" dữ liệu nào (vd `["b2b-cost"]`) NGAY tại chỗ gọi `cachedQuery` — không còn danh sách rời rạc
+ * (`B2B_COST_CACHE_PREFIXES` cũ) nào có thể lệch khỏi thực tế khi thêm route mới hoặc đổi cache-key.
+ * Route ghi dữ liệu gọi `flushByDeps(["b2b-cost"])` — không cần biết route nào đang cache nó.
+ */
 export async function cachedQuery<T>(
   key: string,
   fn:  () => Promise<T>,
   ttlMinutes = TTL_L2,
+  bypass = false,   // true → bỏ qua ĐỌC cache (L1+L2), tính lại tươi; VẪN ghi cache mới (re-warm).
+  deps: string[] = [],
 ): Promise<T> {
+  if (bypass) {
+    const data = await fn()
+    _cache.set(key, { data, exp: Date.now() + TTL_L1, deps })
+    try {
+      await supabaseAdmin
+        .from("analytics_query_cache")
+        .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString(), deps })
+    } catch { /* Supabase lỗi → vẫn trả data */ }
+    return data
+  }
+
   // L1 hit
   const hit = _cache.get(key)
   if (hit && Date.now() < hit.exp) return hit.data as T
@@ -43,47 +64,35 @@ export async function cachedQuery<T>(
       const ageMs = Date.now() - new Date(row.cached_at).getTime()
       if (ageMs < ttlMinutes * 60_000) {
         const result = row.data as T
-        _cache.set(key, { data: result, exp: Date.now() + TTL_L1 })
+        _cache.set(key, { data: result, exp: Date.now() + TTL_L1, deps })
         return result
       }
     }
   } catch { /* Supabase unavailable → fall through to gohub_dw */ }
 
-  const pending = _inflight.get(key)
-  if (pending) return pending as Promise<T>
-
   // Cache miss: query gohub_dw
-  const pendingQuery = (async () => {
-    const data = await fn()
+  const data = await fn()
 
-    // Warm L1
-    _cache.set(key, { data, exp: Date.now() + TTL_L1 })
-    if (_cache.size > 200) {
-      const now = Date.now()
-      for (const [k, v] of _cache) { if (v.exp < now) _cache.delete(k) }
-    }
-
-    // Warm L2 — PHẢI await: supabase-js builder lazy, `void ...upsert()` KHÔNG gửi request (chỉ chạy khi
-    // .then()/await) → trước đây L2 chưa từng persist, chỉ có L1 in-memory (mất khi cold start). Await ~100ms
-    // trên nhánh cache-MISS (vốn đã chậm vì query) → đổi lại L2 dùng chung mọi instance + sống qua cold start.
-    try {
-      await supabaseAdmin
-        .from("analytics_query_cache")
-        .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString() })
-    } catch { /* Supabase lỗi → vẫn trả data, chỉ mất L2 */ }
-
-    return data
-  })()
-
-  _inflight.set(key, pendingQuery)
-  try {
-    return await pendingQuery
-  } finally {
-    _inflight.delete(key)
+  // Warm L1
+  _cache.set(key, { data, exp: Date.now() + TTL_L1, deps })
+  if (_cache.size > 200) {
+    const now = Date.now()
+    for (const [k, v] of _cache) { if (v.exp < now) _cache.delete(k) }
   }
+
+  // Warm L2 — PHẢI await: supabase-js builder lazy, `void ...upsert()` KHÔNG gửi request (chỉ chạy khi
+  // .then()/await) → trước đây L2 chưa từng persist, chỉ có L1 in-memory (mất khi cold start). Await ~100ms
+  // trên nhánh cache-MISS (vốn đã chậm vì query) → đổi lại L2 dùng chung mọi instance + sống qua cold start.
+  try {
+    await supabaseAdmin
+      .from("analytics_query_cache")
+      .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString(), deps })
+  } catch { /* Supabase lỗi → vẫn trả data, chỉ mất L2 */ }
+
+  return data
 }
 
-// Xoá toàn bộ L2 cache (admin — gọi từ Settings)
+// Xoá toàn bộ L2 cache (admin — gọi từ Settings, nút "Tải lại mới" toàn hệ thống)
 export async function flushAnalyticsCache(): Promise<{ deleted: number }> {
   _cache.clear()
   const { count } = await supabaseAdmin
@@ -93,6 +102,30 @@ export async function flushAnalyticsCache(): Promise<{ deleted: number }> {
   return { deleted: count ?? 0 }
 }
 
+/**
+ * Xoá MỌI cache-entry đã tự khai phụ thuộc 1 trong các `deps` này (xem comment `cachedQuery` ở trên).
+ * Gọi từ route ghi dữ liệu — không cần biết/nhớ route nào đang cache nó, khác cơ chế prefix cũ.
+ */
+export async function flushByDeps(deps: string[]): Promise<{ deleted: number }> {
+  const clean = deps.filter(Boolean)
+  if (clean.length === 0) return { deleted: 0 }
+
+  for (const [k, v] of _cache) {
+    if (v.deps?.some(d => clean.includes(d))) _cache.delete(k)
+  }
+
+  const { count } = await supabaseAdmin
+    .from("analytics_query_cache")
+    .delete({ count: "exact" })
+    .overlaps("deps", clean)
+  return { deleted: count ?? 0 }
+}
+
+// Xoá cache theo prefix cache-key literal — vẫn hợp lệ cho các route CHƯA khai `deps` (vd b2c-monthly/
+// b2c-leads, quarterly-report/quarterly-b2b-customers) hoặc khi cần gộp nhiều prefix biết chắc còn đúng
+// version tại chỗ gọi (import prefix TRỰC TIẾP từ module sinh ra key, không hardcode chuỗi rời rạc — xem
+// `quarterly-cache-flush/route.ts`). Cache B2B cost (trước là `B2B_COST_CACHE_PREFIXES`) đã chuyển hẳn
+// sang `flushByDeps(["b2b-cost"])` ở trên — không dùng prefix cứng cho nhóm đó nữa.
 export async function flushAnalyticsCacheByPrefixes(prefixes: string[]): Promise<{ deleted: number }> {
   const clean = prefixes.filter(Boolean)
   if (clean.length === 0) return { deleted: 0 }
@@ -168,7 +201,7 @@ export async function prewarmAnalyticsCache(limit = 40): Promise<{ prewarmed: nu
     try {
       const data = await queryAnalytics(r.sql)
       const dataKey = r.key.replace("sqlreg:", "q:")
-      _cache.set(dataKey, { data, exp: Date.now() + TTL_L1 })
+      _cache.set(dataKey, { data, exp: Date.now() + TTL_L1, deps: [] })
       await supabaseAdmin
         .from("analytics_query_cache")
         .upsert({ cache_key: dataKey, data: data as object, cached_at: new Date().toISOString() })
@@ -187,6 +220,12 @@ const _urlReg = new Set<string>()
 export function isCronReq(req: NextRequest): boolean {
   if (!process.env.CRON_SECRET) return false
   return req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`
+}
+
+// FE thêm ?nocache=1 (sau khi lưu cost/target) → route bỏ qua đọc cache, tính lại tươi + re-warm.
+// Dùng: cachedQuery(key, fn, ttl, noCache(req)).
+export function noCache(req: NextRequest): boolean {
+  return req.nextUrl.searchParams.get("nocache") === "1"
 }
 
 // Gọi đầu mỗi GET endpoint analytics cacheable. Cho cron (Bearer) bypass session + ghi URL để prewarm.
@@ -266,9 +305,10 @@ export function getDateFilter(
 ): string {
   const sd = safeDate(startDate)
   const ed = safeDate(endDate)
+  // Clamp endDate tới CURRENT_DATE - 1: gohub_dw ETL chạy 08h mỗi ngày, hôm nay chưa đủ data.
   let filter = sd && ed
-    ? `f.${dateColumn}::date BETWEEN '${sd}' AND '${ed}'`
-    : `f.${dateColumn}::date >= NOW()::date - INTERVAL '${defaultInterval}'`
+    ? `f.${dateColumn}::date BETWEEN '${sd}' AND LEAST('${ed}'::date, CURRENT_DATE - 1)`
+    : `f.${dateColumn}::date >= NOW()::date - INTERVAL '${defaultInterval}' AND f.${dateColumn}::date <= CURRENT_DATE - 1`
   const cc = safeCompanyCode(companyCode)
   if (cc !== "ALL") {
     filter += ` AND f.company_code = '${cc}'`
@@ -335,9 +375,10 @@ export async function getPartnerTiers(): Promise<Record<string, string[]>> {
 
 export async function getStrategicPartnersList(): Promise<string> {
   const tiers = await getPartnerTiers()
-  const strategic: string[] = (tiers["Strategic"] || Object.values(tiers).flat()) as string[]
-  return strategic.length > 0
-    ? strategic.map((c: string) => `'%${c.replace(/'/g, "''").trim()}%'`).join(",")
+  // Dùng TẤT CẢ partners từ mọi tier (nhất quán với Dashboard và b2b/strategic-performance)
+  const all: string[] = Object.values(tiers).flat() as string[]
+  return all.length > 0
+    ? all.map((c: string) => `'%${c.replace(/'/g, "''").trim()}%'`).join(",")
     : "''"
 }
 
@@ -350,6 +391,56 @@ export function getGroupCaseSQL(strategicList: string): string {
     WHEN UPPER(s.group_name) = 'B2C' THEN 'B2C'
     ELSE 'Other'
   END`
+}
+
+// ── Phân loại B2B-Strategic/Non theo KHÁCH (price_list_name) — 1 ĐỊNH NGHĨA DÙNG CHUNG ───────────────────
+// Nguồn: quarterly-settings (tierKeywords + excludedCustomers) — CÙNG cấu hình với Quarter Report (chỉnh 1 chỗ,
+// mọi tab theo: Dashboard chart, BOD group-margin, All-Time). Mirror makeClassifyTier: Strategic ⇔ price_list_name
+// NULL hoặc KHÔNG khớp keyword của tier NON-Strategic nào. Query PHẢI JOIN dim_order_source s + dim_customer c + có f.customer_code.
+export function buildIsStrategicSql(tierKeywords: Record<string, string[]>): string {
+  const nonStrat = Object.entries(tierKeywords)
+    .filter(([tier]) => tier !== "Strategic")
+    .flatMap(([, kws]) => kws)
+    .map(kw => kw.toUpperCase().replace(/'/g, "''"))
+  if (nonStrat.length === 0) return "(TRUE)"   // không có tier non-Strategic → mọi KH B2B đều Strategic
+  const conds = nonStrat.map(kw => `UPPER(c.price_list_name) NOT LIKE '%${kw}%'`).join(" AND ")
+  return `(c.price_list_name IS NULL OR (${conds}))`
+}
+export function buildCustomerExcludeSql(excludedCustomers: string[]): string {
+  return excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
+}
+// Row bị loại (ops/B2C-in-B2B) → 'Excluded' (caller lọc khỏi groupNames).
+export function buildGroupCaseByCustomerSql(tierKeywords: Record<string, string[]>, excludedCustomers: string[]): string {
+  const isStrat = buildIsStrategicSql(tierKeywords)
+  const excl = buildCustomerExcludeSql(excludedCustomers)
+  const exclLine = excl ? `WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND COALESCE(c.name, TRIM(f.customer_code)) IN (${excl}) THEN 'Excluded'` : ""
+  return `CASE
+    ${exclLine}
+    WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${isStrat} THEN 'B2B-Strategic'
+    WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' THEN 'B2B-Non-Strategic'
+    WHEN UPPER(COALESCE(s.group_name,'')) = 'B2C' THEN 'B2C'
+    ELSE 'Other'
+  END`
+}
+
+// Fetch settings 1 lần → trả các mảnh SQL + hash (để nhét vào cache key, auto-invalidate khi đổi tier/exclude).
+export async function getCustomerStrategicSql(): Promise<{ isStrategicSql: string; excludeSql: string; groupCaseSql: string; hash: string }> {
+  const { tierKeywords, excludedCustomers } = await fetchQuarterlySettings()
+  return {
+    isStrategicSql: buildIsStrategicSql(tierKeywords),
+    excludeSql: buildCustomerExcludeSql(excludedCustomers),
+    groupCaseSql: buildGroupCaseByCustomerSql(tierKeywords, excludedCustomers),
+    hash: strategicSettingsHash(tierKeywords, excludedCustomers),
+  }
+}
+function strategicSettingsHash(tierKeywords: Record<string, string[]>, excludedCustomers: string[]): string {
+  const tierStr = Object.entries(tierKeywords).map(([t, k]) => `${t}=${[...k].sort().join("|")}`).sort().join(";")
+  return createHash("sha1").update(`${tierStr}::${exclHash(excludedCustomers)}`).digest("hex").slice(0, 10)
+}
+// Chỉ lấy hash (cho route chỉ cần cache key, không build SQL — vd bod-group-margin/bod-summary).
+export async function getStrategicSettingsHash(): Promise<string> {
+  const { tierKeywords, excludedCustomers } = await fetchQuarterlySettings()
+  return strategicSettingsHash(tierKeywords, excludedCustomers)
 }
 
 // Bộ lọc thực thể cho BOD (port từ gohub-intel getBODFilters): vendors / subChannels / channelGroups /
@@ -387,6 +478,48 @@ export function getBODFilters(searchParams: URLSearchParams): string {
   }
 
   return filter
+}
+
+// ── Filter fragments chuẩn (dùng chung mọi route) ────────────────────────────
+// Đồng bộ theo chuẩn order-report: include=false (default) = loại khỏi doanh thu SP thuần.
+// Khi bật CẢ 2 + includeOpsCustomers=true → khớp số liệu gohub_dw raw.
+
+/** Loại SHIPPINGFEE0 (phí ship). Alias fact table = f. */
+export function shipFilter(include: boolean): string {
+  return include ? "" : "AND f.sku != 'SHIPPINGFEE0'"
+}
+
+/** Loại nhóm INTERNAL-TRANSACTION (đơn SIM nội bộ: revenue=0, GP âm). Alias dim_order_source = s. */
+export function internalOpsFilter(include: boolean): string {
+  return include ? "" : "AND UPPER(COALESCE(s.group_name, '')) != 'INTERNAL-TRANSACTION'"
+}
+
+/**
+ * Loại INTERNAL-TRANSACTION bằng subquery (dùng khi dim_order_source chưa JOIN, chỉ có f.order_source_code).
+ * Alias fact table = f.
+ */
+export function internalOpsFilterByCode(include: boolean): string {
+  return include ? "" : "AND f.order_source_code NOT IN (SELECT code FROM dim_order_source WHERE UPPER(COALESCE(group_name,'')) = 'INTERNAL-TRANSACTION')"
+}
+
+/**
+ * Loại khách ops theo customer_code (không cần JOIN dim_customer với alias cụ thể).
+ * Dùng khi query không sẵn alias dim_customer = c (ví dụ trong CTE b2b_raw).
+ */
+export function excludeOpsByCode(excludedCustomers: string[]): string {
+  if (excludedCustomers.length === 0) return ""
+  const esc = excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(", ")
+  return `AND COALESCE(TRIM(f.customer_code), '') NOT IN (SELECT TRIM(code) FROM dim_customer WHERE name IN (${esc}))`
+}
+
+/**
+ * Loại KH có price_list_name chứa "INACTIVE" (vd "[INACTIVE] Sponsor") — CÙNG định nghĩa với
+ * Quarter Report (`quarterly-report`/`quarterly-b2b-customers`). Trước đây b2b/kpis, b2b/performance,
+ * b2b/trend KHÔNG lọc điều này → revenue/CM1 B2B Performance cao hơn Quarter Report có hệ thống
+ * bất cứ khi nào 1 KH INACTIVE có phát sinh trong kỳ. Self-contained subquery, không cần JOIN dim_customer.
+ */
+export function excludeInactiveCustomers(): string {
+  return `AND NOT EXISTS (SELECT 1 FROM dim_customer ic WHERE TRIM(ic.code::text) = TRIM(f.customer_code) AND UPPER(COALESCE(ic.price_list_name,'')) LIKE '%INACTIVE%')`
 }
 
 // ── SKU destination (for region chart) ───────────────────────────────────────
@@ -438,23 +571,9 @@ export async function getCountryMappings(): Promise<Record<string, string>> {
 }
 
 // ── Day-range helpers (for target/cost pro-rata) ──────────────────────────────
-
-export function getDaysInMonth(monthStr: string): number {
-  const [year, month] = monthStr.split("-").map(Number)
-  return new Date(year, month, 0).getDate()
-}
-
-export function getDaysInRange(startDate: string, endDate: string, monthStr: string): number {
-  const [y, m] = monthStr.split("-").map(Number)
-  const monthStart = new Date(y, m - 1, 1)
-  const monthEnd   = new Date(y, m, 0)
-  const start      = new Date(startDate)
-  const end        = new Date(endDate)
-  const rangeStart = start > monthStart ? start : monthStart
-  const rangeEnd   = end   < monthEnd   ? end   : monthEnd
-  if (rangeEnd < rangeStart) return 0
-  return Math.round((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1
-}
+// Nguồn thật: analytics-engine/date-math.ts (pure, client-safe, không lệch theo timezone máy chạy).
+// Re-export giữ tên cũ để ~10 file đang import getDaysInMonth/getDaysInRange từ đây không phải sửa (s183 Phase 2).
+export { getDaysInMonth, getDaysInRange }
 
 // ── Channel costs (from Supabase, replaces Turso channel_costs) ───────────────
 

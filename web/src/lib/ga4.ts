@@ -3,7 +3,8 @@
 import { google } from "googleapis"
 import { supabaseAdmin } from "./supabase"
 
-export interface GA4Site { id: string; name: string; propertyId: string; siteUrl?: string; currency?: string }
+// kind="app" → property riêng cho GoHub App (Firebase, không có hostName) — FE lọc site theo tab Web/App.
+export interface GA4Site { id: string; name: string; propertyId: string; siteUrl?: string; currency?: string; kind?: "web" | "app" }
 interface GA4Config extends GA4Site { credentials: string }
 
 interface ReportRow { dimensionValues: { value: string }[]; metricValues: { value: string }[] }
@@ -18,7 +19,7 @@ async function loadConfigs(): Promise<GA4Config[]> {
 
 // Danh sách site (KHÔNG kèm credentials) — cho selector.
 export async function ga4Sites(): Promise<GA4Site[]> {
-  return (await loadConfigs()).map(({ id, name, propertyId, siteUrl, currency }) => ({ id, name, propertyId, siteUrl, currency }))
+  return (await loadConfigs()).map(({ id, name, propertyId, siteUrl, currency, kind }) => ({ id, name, propertyId, siteUrl, currency, kind }))
 }
 
 export async function ga4Configured(): Promise<boolean> {
@@ -33,6 +34,8 @@ interface RunOpts {
   metrics: string[]
   eventNameFilter?: string
   limit?: number
+  // "app" → filter by platform=ios|android instead of hostName (for Firebase/GA4 cross-platform properties)
+  platform?: "web" | "app"
 }
 
 function hostNamesForSite(cfg: GA4Config): string[] {
@@ -52,13 +55,17 @@ function exactStringFilter(fieldName: string, value: string) {
   return { filter: { fieldName, stringFilter: { matchType: "EXACT", value } } }
 }
 
-function buildDimensionFilter(cfg: GA4Config, eventNameFilter?: string) {
-  const expressions = [
-    ...hostNamesForSite(cfg).map(host => exactStringFilter("hostName", host)),
-  ]
-  const hostFilter = expressions.length === 1 ? expressions[0] : expressions.length > 1 ? { orGroup: { expressions } } : null
+function buildDimensionFilter(cfg: GA4Config, eventNameFilter?: string, platform?: "web" | "app") {
+  let mainFilter: object | null = null
+  if (platform === "app") {
+    mainFilter = { orGroup: { expressions: [exactStringFilter("platform", "ios"), exactStringFilter("platform", "android")] } }
+  } else {
+    const expressions = hostNamesForSite(cfg).map(host => exactStringFilter("hostName", host))
+    if (expressions.length === 1) mainFilter = expressions[0]
+    else if (expressions.length > 1) mainFilter = { orGroup: { expressions } }
+  }
   const eventFilter = eventNameFilter ? exactStringFilter("eventName", eventNameFilter) : null
-  const filters = [hostFilter, eventFilter].filter(Boolean)
+  const filters = [mainFilter, eventFilter].filter(Boolean)
   if (filters.length === 0) return undefined
   if (filters.length === 1) return filters[0]
   return { andGroup: { expressions: filters } }
@@ -84,7 +91,7 @@ export async function runGA4Report(opts: RunOpts): Promise<GA4Report> {
     metrics: opts.metrics.map(name => ({ name })),
   }
   if (opts.limit) requestBody.limit = opts.limit
-  const dimensionFilter = buildDimensionFilter(cfg, opts.eventNameFilter)
+  const dimensionFilter = buildDimensionFilter(cfg, opts.eventNameFilter, opts.platform)
   if (dimensionFilter) requestBody.dimensionFilter = dimensionFilter
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

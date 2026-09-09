@@ -22,20 +22,21 @@ export async function GET(req: NextRequest) {
 
   // Fetch listing perks for these products
   const codes = products.map(p => p.product_code)
+  // Item 4: telco_perks đã vào JSONB metadata.
   const { data: listings } = await supabaseAdmin
     .from("listings")
-    .select("reference_product_code, listing_name_vn, telco_perks_en, telco_perks_vn")
+    .select("reference_product_code, listing_name_vn, metadata")
     .in("reference_product_code", codes)
-    .or("telco_perks_en.not.is.null,telco_perks_vn.not.is.null")
+    .or("metadata->>telco_perks_en.not.is.null,metadata->>telco_perks_vn.not.is.null")
 
   // Map: product_code → first listing with perks
   const listingMap: Record<string, { listing_name_vn: string | null; telco_perks_en: string | null; telco_perks_vn: string | null }> = {}
-  for (const l of listings ?? []) {
+  for (const l of (listings ?? []) as any[]) {
     if (!listingMap[l.reference_product_code]) {
       listingMap[l.reference_product_code] = {
         listing_name_vn: l.listing_name_vn,
-        telco_perks_en:  l.telco_perks_en,
-        telco_perks_vn:  l.telco_perks_vn,
+        telco_perks_en:  l.metadata?.telco_perks_en ?? null,
+        telco_perks_vn:  l.metadata?.telco_perks_vn ?? null,
       }
     }
   }

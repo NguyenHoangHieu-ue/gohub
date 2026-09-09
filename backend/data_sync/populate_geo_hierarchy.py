@@ -313,27 +313,35 @@ def main():
     # Fetch tất cả ref_countries
     all_rows, page = [], 0
     while True:
-        res = sb.table("ref_countries").select("code").range(page, page + 999).execute()
+        res = sb.table("ref_countries").select("code,name").range(page, page + 999).execute()
         batch = res.data or []
         all_rows.extend(batch)
         if len(batch) < 1000:
             break
         page += 1000
 
-    updated, skipped = 0, 0
+    # Gom mọi thay đổi vào 1 bulk upsert (on_conflict=code) thay vì update từng dòng
+    # → 212 HTTP request tuần tự (~20-40s) rút còn 1 request (<1s).
+    upsert_data = []
+    skipped = 0
     for row in all_rows:
         code = row["code"].upper().strip()
         if code not in GEO:
             skipped += 1
             continue
         continent, sub_region = GEO[code]
-        sb.table("ref_countries").update({
+        # Kèm "name" (NOT NULL) để phần INSERT của upsert hợp lệ; ON CONFLICT chỉ ghi lại giá trị cũ.
+        upsert_data.append({
+            "code":       code,
+            "name":       row.get("name") or code,
             "continent":  continent,
             "sub_region": sub_region,
-        }).eq("code", code).execute()
-        updated += 1
+        })
 
-    print(f"Done — updated: {updated}, no mapping: {skipped}")
+    if upsert_data:
+        sb.table("ref_countries").upsert(upsert_data, on_conflict="code").execute()
+
+    print(f"Done — updated: {len(upsert_data)}, no mapping: {skipped}")
     print(f"(Missing codes will keep NULL continent/sub_region)")
 
 

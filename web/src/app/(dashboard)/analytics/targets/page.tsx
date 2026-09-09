@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback } from "react"
 import {
   Target, Save, Calendar, AlertCircle, CheckCircle2,
-  TrendingUp, Sparkles, Zap, Lock,
+  TrendingUp, Sparkles, Zap, Lock, Wallet,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCurrency } from "@/lib/analytics-formatters"
 import { SourceBadge } from "@/components/dashboard-kit"
 import { useSession } from "next-auth/react"
+import { CostManagementModal } from "@/components/cost-management-modal"
 
 interface PlanningData {
   channel: string
@@ -69,8 +70,8 @@ function PlanningTable({ title, metricType, targets, prevActuals, onChange, data
                 </th>
               ))}
               {data?.currentMonths?.map(m => (
-                <th key={m} className="px-5 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-widest text-right bg-blue-50/50">
-                  {m}<br /><span className="text-blue-400">Target</span>
+                <th key={m} className="px-5 py-3 text-[10px] font-bold text-brand-600 uppercase tracking-widest text-right bg-brand-50/50">
+                  {m}<br /><span className="text-brand-400">Target</span>
                 </th>
               ))}
               <th className="px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">
@@ -83,13 +84,13 @@ function PlanningTable({ title, metricType, targets, prevActuals, onChange, data
               <tr>
                 <td colSpan={8} className="px-5 py-12 text-center">
                   <div className="flex flex-col items-center gap-2">
-                    <div className="w-6 h-6 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+                    <div className="w-6 h-6 border-4 border-brand-100 border-t-brand-600 rounded-full animate-spin" />
                     <p className="text-sm text-slate-500">Đang tải dữ liệu...</p>
                   </div>
                 </td>
               </tr>
             ) : (
-              ["B2C", "B2B"].map(group => {
+              ["B2C"].map(group => {   // B2B quản ở Quarter Report (cost per-KH) → chỉ giữ B2C ở đây
                 const item = data?.data?.find(d => d.group === group)
                 if (!item) return null
 
@@ -109,14 +110,14 @@ function PlanningTable({ title, metricType, targets, prevActuals, onChange, data
                       </td>
                     ))}
                     {(data?.currentMonths || []).map(m => (
-                      <td key={m} className="px-5 py-4 text-right bg-blue-50/20">
+                      <td key={m} className="px-5 py-4 text-right bg-brand-50/20">
                         <div className="flex justify-end">
                           {canEdit ? (
                             <input type="number"
                               value={targets[`${item.channel}_${m}`] || ""}
                               onChange={e => onChange(`${item.channel}_${m}`, parseFloat(e.target.value) || 0)}
                               placeholder="0"
-                              className="w-32 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+                              className="w-32 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none" />
                           ) : (
                             <span className="text-sm font-bold text-slate-700">
                               {formatVal(targets[`${item.channel}_${m}`] || 0)}
@@ -153,11 +154,13 @@ function last6Months(): string[] {
 }
 const monthLabel = (m: string) => { const [y, mo] = m.split("-"); return `Thg ${parseInt(mo)}/${y}` }
 
-function SaveBtn({ onClick, saving, disabled }: { onClick: () => void; saving: boolean; disabled?: boolean }) {
+function SaveBtn({ onClick, saving, disabled, dirty = true }: { onClick: () => void; saving: boolean; disabled?: boolean; dirty?: boolean }) {
+  const idle = !dirty && !disabled   // chưa đổi (và không phải View Only) → mờ + khoá
   return (
-    <button onClick={onClick} disabled={saving || disabled}
+    <button onClick={onClick} disabled={saving || disabled || !dirty}
       className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm",
-        disabled ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-300")}>
+        disabled ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-brand-600 hover:bg-brand-700 text-white disabled:bg-brand-300",
+        idle && "opacity-50 cursor-not-allowed")}>
       {saving ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
         : disabled ? <Lock className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
       {disabled ? "View Only" : "Lưu"}
@@ -170,11 +173,14 @@ function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify
   type Cell = { vn: number; us: number; total: number }
   const months = last6Months()
   const [targets, setTargets] = useState<Record<string, Cell>>({})
+  const [savedSnap, setSavedSnap] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  const dirty = JSON.stringify(targets) !== savedSnap
+
   useEffect(() => {
-    fetch("/api/config/b2c-kpi-targets").then(r => r.json()).then(d => { setTargets(d || {}); setLoading(false) }).catch(() => setLoading(false))
+    fetch("/api/config/b2c-kpi-targets").then(r => r.json()).then(d => { setTargets(d || {}); setSavedSnap(JSON.stringify(d || {})); setLoading(false) }).catch(() => setLoading(false))
   }, [])
 
   const cell = (m: string): Cell => targets[m] ?? { vn: 0, us: 0, total: 0 }
@@ -185,6 +191,7 @@ function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify
     const cleaned: Record<string, Cell> = {}
     for (const [m, c] of Object.entries(targets)) if ((c?.vn || 0) + (c?.us || 0) + (c?.total || 0) > 0) cleaned[m] = c
     const res = await fetch("/api/config/b2c-kpi-targets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cleaned) })
+    if (res.ok) setSavedSnap(JSON.stringify(targets))
     setSaving(false)
     onNotify(res.ok, res.ok ? "Đã lưu KPI target B2C" : "Hiếu đang fix, vui lòng đợi")
   }
@@ -196,7 +203,7 @@ function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify
           <h2 className="font-bold text-slate-900 text-sm">KPI Target B2C (theo thị trường)</h2>
           <p className="text-xs text-slate-400 mt-0.5">Target doanh thu B2C theo tháng × thị trường (VND) — hiển thị ở tab KPI của /analytics/b2c.</p>
         </div>
-        {canEdit && <SaveBtn onClick={save} saving={saving} />}
+        {canEdit && <SaveBtn onClick={save} saving={saving} dirty={dirty} />}
       </div>
       {loading ? <div className="h-32 m-5 bg-slate-50 rounded-lg animate-pulse" /> : (
         <div className="overflow-x-auto">
@@ -206,7 +213,7 @@ function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify
                 <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tháng</th>
                 <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">VN</th>
                 <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">US</th>
-                <th className="px-5 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-widest text-right bg-blue-50/50">Total</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-brand-600 uppercase tracking-widest text-right bg-brand-50/50">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -216,11 +223,11 @@ function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify
                   <tr key={m} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                     <td className="px-5 py-3 text-sm font-bold text-slate-900 bg-slate-50/50 border-r border-slate-100">{monthLabel(m)}</td>
                     {(["vn", "us", "total"] as const).map(k => (
-                      <td key={k} className={cn("px-5 py-3 text-right", k === "total" && "bg-blue-50/20")}>
+                      <td key={k} className={cn("px-5 py-3 text-right", k === "total" && "bg-brand-50/20")}>
                         {canEdit ? (
                           <div className="flex justify-end">
                             <input type="number" min={0} step="any" value={c[k] || ""} onChange={e => setField(m, k, parseFloat(e.target.value) || 0)} placeholder="0"
-                              className="w-32 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+                              className="w-32 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none" />
                           </div>
                         ) : <span className="text-sm font-bold text-slate-700">{formatCurrency(c[k] || 0)}</span>}
                       </td>
@@ -236,63 +243,83 @@ function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify
   )
 }
 
-// Ngân sách Marketing B2C theo tháng (VND) — app_settings b2c_budget; dùng tính spend pace.
+// B2C Marketing budget per month × market (VN / US / Total) — app_settings b2c_budget = {month:{vn,us}}.
+// Total = VN + US (auto). Dùng tính spend pace ở Section 5 /analytics/b2c.
+type BudgetCell = { vn: number; us: number }
 function B2CMarketingBudgetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify: (ok: boolean, text: string) => void }) {
   const months = last6Months()
-  const [budget, setBudget] = useState<Record<string, number>>({})
+  const [budget, setBudget] = useState<Record<string, BudgetCell>>({})
+  const [savedSnap, setSavedSnap] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  const dirty = JSON.stringify(budget) !== savedSnap
+  const cellOf = (m: string): BudgetCell => budget[m] || { vn: 0, us: 0 }
+  const setCell = (m: string, patch: Partial<BudgetCell>) =>
+    setBudget(b => ({ ...b, [m]: { ...cellOf(m), ...patch } }))
+
   useEffect(() => {
-    fetch("/api/config/b2c-budget").then(r => r.json()).then(d => { setBudget(d || {}); setLoading(false) }).catch(() => setLoading(false))
+    fetch("/api/config/b2c-budget").then(r => r.json()).then(d => { setBudget(d || {}); setSavedSnap(JSON.stringify(d || {})); setLoading(false) }).catch(() => setLoading(false))
   }, [])
 
   const save = async () => {
     setSaving(true)
-    const cleaned: Record<string, number> = {}
-    for (const [m, v] of Object.entries(budget)) if (v > 0) cleaned[m] = v
+    const cleaned: Record<string, BudgetCell> = {}
+    for (const [m, v] of Object.entries(budget)) if ((v?.vn || 0) > 0 || (v?.us || 0) > 0) cleaned[m] = { vn: v.vn || 0, us: v.us || 0 }
     const res = await fetch("/api/config/b2c-budget", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cleaned) })
+    if (res.ok) setSavedSnap(JSON.stringify(budget))
     setSaving(false)
-    onNotify(res.ok, res.ok ? "Đã lưu ngân sách Marketing B2C" : "Hiếu đang fix, vui lòng đợi")
+    onNotify(res.ok, res.ok ? "B2C marketing budget saved" : "Hiếu đang fix, vui lòng đợi")
   }
 
-  const total = months.reduce((s, m) => s + (budget[m] || 0), 0)
+  const totVn = months.reduce((s, m) => s + (cellOf(m).vn || 0), 0)
+  const totUs = months.reduce((s, m) => s + (cellOf(m).us || 0), 0)
+
+  const numInput = (m: string, mk: "vn" | "us") => (
+    <div className="flex justify-end">
+      <input type="number" min={0} step="any" value={cellOf(m)[mk] || ""} placeholder="0"
+        onChange={e => setCell(m, { [mk]: parseFloat(e.target.value) || 0 })}
+        className="w-36 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none" />
+    </div>
+  )
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
         <div>
-          <h2 className="font-bold text-slate-900 text-sm">Ngân sách Marketing B2C</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Ngân sách kế hoạch theo tháng (VND) — Section 5 /analytics/b2c tính spend pace = chi phí thực tế ÷ ngân sách.</p>
+          <h2 className="font-bold text-slate-900 text-sm">B2C Marketing Budget</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Planned budget per month × market (VND). Total = VN + US (auto). Used for spend pace in /analytics/b2c.</p>
         </div>
-        {canEdit && <SaveBtn onClick={save} saving={saving} />}
+        {canEdit && <SaveBtn onClick={save} saving={saving} dirty={dirty} />}
       </div>
       {loading ? <div className="h-32 m-5 bg-slate-50 rounded-lg animate-pulse" /> : (
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tháng</th>
-                <th className="px-5 py-3 text-[10px] font-bold text-blue-600 uppercase tracking-widest text-right bg-blue-50/50">Ngân sách (VND)</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Month</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-brand-600 uppercase tracking-widest text-right bg-brand-50/50">🇻🇳 VN (VND)</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-brand-600 uppercase tracking-widest text-right bg-brand-50/50">🇺🇸 US (VND)</th>
+                <th className="px-5 py-3 text-[10px] font-bold text-slate-700 uppercase tracking-widest text-right bg-slate-100">Total (VND)</th>
               </tr>
             </thead>
             <tbody>
-              {months.map(m => (
-                <tr key={m} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-3 text-sm font-bold text-slate-900 bg-slate-50/50 border-r border-slate-100">{monthLabel(m)}</td>
-                  <td className="px-5 py-3 text-right bg-blue-50/20">
-                    {canEdit ? (
-                      <div className="flex justify-end">
-                        <input type="number" min={0} step="any" value={budget[m] || ""} onChange={e => setBudget(b => ({ ...b, [m]: parseFloat(e.target.value) || 0 }))} placeholder="0"
-                          className="w-40 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
-                      </div>
-                    ) : <span className="text-sm font-bold text-slate-700">{formatCurrency(budget[m] || 0)}</span>}
-                  </td>
-                </tr>
-              ))}
+              {months.map(m => {
+                const c = cellOf(m)
+                return (
+                  <tr key={m} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                    <td className="px-5 py-3 text-sm font-bold text-slate-900 bg-slate-50/50 border-r border-slate-100">{monthLabel(m)}</td>
+                    <td className="px-5 py-3 text-right bg-brand-50/20">{canEdit ? numInput(m, "vn") : <span className="text-sm font-bold text-slate-700">{formatCurrency(c.vn || 0)}</span>}</td>
+                    <td className="px-5 py-3 text-right bg-brand-50/20">{canEdit ? numInput(m, "us") : <span className="text-sm font-bold text-slate-700">{formatCurrency(c.us || 0)}</span>}</td>
+                    <td className="px-5 py-3 text-right bg-slate-50 text-sm font-bold text-slate-800">{formatCurrency((c.vn || 0) + (c.us || 0))}</td>
+                  </tr>
+                )
+              })}
               <tr className="border-t-2 border-slate-200 bg-slate-50/50">
-                <td className="px-5 py-3 text-sm font-bold text-slate-900">Tổng 6 tháng</td>
-                <td className="px-5 py-3 text-right text-sm font-bold text-blue-700">{formatCurrency(total)}</td>
+                <td className="px-5 py-3 text-sm font-bold text-slate-900">6-month total</td>
+                <td className="px-5 py-3 text-right text-sm font-bold text-brand-700">{formatCurrency(totVn)}</td>
+                <td className="px-5 py-3 text-right text-sm font-bold text-brand-700">{formatCurrency(totUs)}</td>
+                <td className="px-5 py-3 text-right text-sm font-bold text-slate-900 bg-slate-100">{formatCurrency(totVn + totUs)}</td>
               </tr>
             </tbody>
           </table>
@@ -313,17 +340,21 @@ export default function TargetsPage() {
       const tabs: string[] = d.writable_tabs ?? []
       setCanEdit(["admin", "creator"].includes(role) || tabs.includes("targets"))
     }).catch(() => {
-      setCanEdit(["admin", "creator"].includes(session?.user?.role as string))
+      setCanEdit(["admin", "creator"].includes(session?.user?.role ?? ""))
     })
   }, [status, session?.user?.username])
 
   const [quarter, setQuarter] = useState(getDefaultQuarter)
+  const [showCostModal, setShowCostModal] = useState(false)   // nhập chi phí B2C (Ads/Platform/Sponsor/Media theo kênh + B2C group cost)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [data, setData] = useState<PlanningResponse | null>(null)
   const [targets, setTargets] = useState<Record<string, number>>({})
   const [targets3hk, setTargets3hk] = useState<Record<string, number>>({})
   const [targetsGpm2, setTargetsGpm2] = useState<Record<string, number>>({})
+  const [savedSnap, setSavedSnap] = useState("")
+
+  const dirty = JSON.stringify([targets, targets3hk, targetsGpm2]) !== savedSnap
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
   const notify = (ok: boolean, text: string) => { setMessage({ type: ok ? "success" : "error", text }); setTimeout(() => setMessage(null), 3000) }
@@ -344,6 +375,7 @@ export default function TargetsPage() {
         Object.entries(item.monthlyGpm2Targets || {}).forEach(([m, v]) => { tg[`${item.channel}_${m}`] = v as number })
       })
       setTargets(t); setTargets3hk(t3); setTargetsGpm2(tg)
+      setSavedSnap(JSON.stringify([t, t3, tg]))
     } catch (err: any) {
       console.error(err)
       setMessage({ type: "error", text: "Hiếu đang fix, vui lòng đợi" })
@@ -377,6 +409,7 @@ export default function TargetsPage() {
       })
 
       if (res.ok) {
+        setSavedSnap(JSON.stringify([targets, targets3hk, targetsGpm2]))
         setMessage({ type: "success", text: "Targets đã lưu thành công!" })
         setTimeout(() => setMessage(null), 3000)
       } else {
@@ -398,16 +431,23 @@ export default function TargetsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Target className="w-5 h-5 text-blue-600" />
-            Target Planning
+            <Target className="w-5 h-5 text-brand-600" />
+            Manage Costs
           </h1>
           <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-slate-500 text-sm">Đặt target doanh thu theo quý theo nhóm kênh</p>
+            <p className="text-slate-500 text-sm">Target &amp; chi phí B2C (B2B quản ở Quarter Report)</p>
             <SourceBadge source="admin" />
           </div>
         </div>
 
         <div className="flex items-center gap-3">
+          {canEdit && (
+            <button onClick={() => setShowCostModal(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+              <Wallet className="w-4 h-4 text-brand-600" />
+              Chi phí B2C
+            </button>
+          )}
           <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
             <Calendar className="w-4 h-4 text-slate-400" />
             <select value={quarter} onChange={e => setQuarter(e.target.value)}
@@ -416,10 +456,11 @@ export default function TargetsPage() {
             </select>
           </div>
 
-          <button onClick={handleSave} disabled={saving || loading || !canEdit}
+          <button onClick={handleSave} disabled={saving || loading || !canEdit || !dirty}
             className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all shadow-sm",
               !canEdit ? "bg-slate-200 text-slate-400 cursor-not-allowed" :
-              "bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-300 shadow-blue-200")}>
+              "bg-brand-600 hover:bg-brand-700 text-white disabled:bg-brand-300 shadow-brand-200",
+              canEdit && !dirty && "opacity-50 cursor-not-allowed")}>
             {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> :
              !canEdit ? <Lock className="w-4 h-4" /> : <Save className="w-4 h-4" />}
             {!canEdit ? "View Only" : "Lưu Plan"}
@@ -488,7 +529,7 @@ export default function TargetsPage() {
         ].map((tip, i) => (
           <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center mb-3",
-              tip.color === "blue" ? "bg-blue-50 text-blue-600" :
+              tip.color === "blue" ? "bg-brand-50 text-brand-600" :
               tip.color === "amber" ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600")}>
               <tip.icon className="w-4 h-4" />
             </div>
@@ -497,6 +538,14 @@ export default function TargetsPage() {
           </div>
         ))}
       </div>
+
+      {/* Nhập chi phí B2C (Ads/Platform/Sponsor/Media theo kênh + B2C group cost) — gộp từ tab B2C cũ */}
+      <CostManagementModal
+        isOpen={showCostModal}
+        onClose={() => setShowCostModal(false)}
+        onSave={() => {}}
+        scope="b2c"
+      />
     </div>
   )
 }

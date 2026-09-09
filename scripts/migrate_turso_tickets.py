@@ -15,7 +15,8 @@ Chạy:
   C:/Users/hieuh/AppData/Local/Programs/Python/Python311/python.exe scripts/migrate_turso_tickets.py
 """
 
-import json, os, urllib.request, urllib.error, ssl
+import json, os
+import requests
 from pathlib import Path
 
 # ── Load env from .env.local nếu có ──────────────────────────────────────────
@@ -41,15 +42,20 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 TURSO_HTTP = TURSO_URL.replace("libsql://", "https://").replace("http://", "https://")
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
-ctx = ssl.create_default_context()
-ctx.check_hostname = False
-ctx.verify_mode = ssl.CERT_NONE
+# 1 Session dùng chung → HTTP Keep-Alive, tái sử dụng kết nối TLS cho mọi batch
+# (120+ batch cho 24k+ dòng) thay vì bắt tay TLS mới mỗi request như urllib.
+session = requests.Session()
+session.verify = False   # giữ nguyên hành vi bản cũ (ssl.CERT_NONE)
+try:
+    from urllib3.exceptions import InsecureRequestWarning
+    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+except Exception:
+    pass
 
 def http_post(url, headers, body_dict):
-    data = json.dumps(body_dict).encode("utf-8")
-    req  = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    with urllib.request.urlopen(req, context=ctx) as res:
-        return json.loads(res.read().decode("utf-8"))
+    res = session.post(url, json=body_dict, headers=headers)
+    res.raise_for_status()
+    return res.json()
 
 def turso_query(sql):
     body = {"requests": [{"type": "execute", "stmt": {"sql": sql}}, {"type": "close"}]}
@@ -70,13 +76,10 @@ def supabase_upsert(rows):
         "Authorization": f"Bearer {SUPABASE_KEY}",
         "Prefer":        "resolution=merge-duplicates",
     }
-    data = json.dumps(rows).encode("utf-8")
-    req  = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    try:
-        with urllib.request.urlopen(req, context=ctx) as res:
-            return res.getcode()
-    except urllib.error.HTTPError as e:
-        raise Exception(f"Supabase error {e.code}: {e.read().decode()}")
+    res = session.post(url, json=rows, headers=headers)
+    if res.status_code >= 400:
+        raise Exception(f"Supabase error {res.status_code}: {res.text}")
+    return res.status_code
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
