@@ -92,7 +92,17 @@ Lark dùng trong group → không phân biệt được role (mọi người có
 ## Lưu ý kỹ thuật
 - **Guardian không còn gọi Gemini** (s108) — phân loại nhạy cảm bằng regex. Routing classifier (`classifier.ts`) vẫn dùng Gemini nhưng chỉ là **phiếu tier-1** trong graph (không quyết một mình).
 - Model `gemini-3.5-flash` là **thinking model**: khi còn dùng cho classifier, phải set `generationConfig.thinkingConfig.thinkingBudget = 0` mới trả JSON ổn định (nếu không, token bị tiêu vào "thinking" → output cụt → JSON.parse lỗi).
-- **Lark bot trên Vercel/Netlify**: KHÔNG dùng `waitUntil` (không hỗ trợ trên Next 14 App Router). Xử lý **đồng bộ** (await rồi mới trả 200). Chống Lark retry: dedup `event_id` qua `app_settings.larkevt:<id>`. Câu hỏi BI dài (>10s) có thể bị Vercel Free timeout.
+- **Lark bot trên Vercel/Netlify**: KHÔNG dùng `waitUntil` (không hỗ trợ trên Next 14 App Router). Xử lý **đồng bộ** (await rồi mới trả 200). Chống Lark retry: dedup `event_id` qua `app_settings.larkevt:<id>`.
+- **s195+14 (2026-09-09) — fix timeout thật, không phải bug code**: Hiếu báo Bé Gấu trả lời quá lâu thì
+  không có câu trả lời gì cả. Verify qua Vercel Runtime Errors log: `Vercel Runtime Timeout Error: Task
+  timed out after 60 seconds` — đúng route `/api/chat`, lần gần nhất đúng lúc Hiếu vừa gặp. `runBeGau()`
+  await xong TOÀN BỘ (kể cả nhiều vòng tool-call BI) mới `controller.enqueue()` 1 lần — không stream token
+  thật dù bọc `ReadableStream` — nên câu hỏi phức tạp/nhiều tool-call dễ vượt 60s, Vercel giết function giữa
+  chừng TRƯỚC KHI catch-block kịp trả message lỗi thân thiện → user thấy im lặng hoàn toàn. `maxDuration`
+  vốn đã set đúng 60 = trần cứng Hobby plan (không phải quên set). Fix: nâng `maxDuration` 60→300 (`web/vercel.json`
+  + `api/chat/route.ts`) — Hobby + Fluid Compute cho phép tới 300s không cần nâng gói. Cùng fix cho
+  `/api/lark/events` (cũng gọi `runBeGau()` đồng bộ y hệt, cùng lớp rủi ro). Đã kiểm tra không có
+  AbortController/timeout nội bộ nào khác (be-gau.ts, FE fetch) cần nâng theo.
 - Liên quan: [[kien-truc-he-thong|Second Brain Architecture]] · [[../business/vendor-worldmove|WorldMove]] · [[../business/vendor-3hk|3HK]]
 
 ---
