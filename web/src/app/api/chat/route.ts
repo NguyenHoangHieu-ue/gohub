@@ -9,7 +9,11 @@ import { supabaseAdmin }                       from "@/lib/supabase"
 import { checkRateLimit }                      from "@/lib/rate-limit"
 import { parseUploadedFile, type FileContext } from "@/lib/agents/file-parser"
 
-export const maxDuration = 60
+// Hobby plan trần cứng 60s (Vercel Runtime Timeout Error thật, xem log s195+14) — nâng lên 300s (Hobby +
+// Fluid Compute cho phép tới 5 phút, không cần nâng gói). runBeGau() await xong hết mới enqueue 1 lần
+// (không stream token thật dù dùng ReadableStream) nên câu hỏi nhiều tool-call/BI phức tạp cần thời gian
+// dài hơn 60s dễ bị Vercel giết giữa chừng → user không thấy gì (không phải lỗi code, catch không kịp chạy).
+export const maxDuration = 300
 
 // Bé Gấu (s131): mô phỏng cơ chế Gấu Pro — 1 agent function-calling lặp, tự chọn công cụ —
 // NHƯNG giữ guardian pre-flight (chặn code/hệ thống/nội bộ) + lọc dữ liệu theo role + KHÔNG lộ
