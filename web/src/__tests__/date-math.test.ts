@@ -6,7 +6,7 @@
 // timezone offset âm (vd US Eastern). Test dưới đây CHỦ Ý set TZ khác UTC để chứng minh vẫn đúng.
 
 import { describe, test, expect, afterEach } from "vitest"
-import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
+import { getDaysInMonth, getDaysInRange, vnToday, getSafeReportDate } from "@/lib/analytics-engine/date-math"
 
 const ORIGINAL_TZ = process.env.TZ
 
@@ -54,4 +54,29 @@ describe("Bất biến theo timezone máy chạy (fix bug lớp bod-data.ts/anal
       expect(getDaysInMonth("2026-02")).toBe(28)
     })
   }
+})
+
+describe("vnToday / getSafeReportDate (fix bug cutoff báo cáo B2C — thiếu chặn ngày chưa kết thúc)", () => {
+  test("vnToday đọc đúng ngày VN dù server chạy UTC, kể cả lúc còn 'hôm qua' theo UTC", () => {
+    // 2026-07-15 00:30 giờ VN = 2026-07-14 17:30 UTC (server Vercel chạy UTC).
+    const instant = new Date(Date.UTC(2026, 6, 14, 17, 30))
+    expect(vnToday(instant)).toEqual({ y: 2026, m: 7, d: 15 })
+  })
+
+  test("getSafeReportDate mặc định trả hôm qua (giờ VN), kể cả khi qua mốc UTC nửa đêm", () => {
+    const instant = new Date(Date.UTC(2026, 6, 14, 17, 30)) // = 2026-07-15 00:30 ICT
+    expect(getSafeReportDate(1, instant)).toBe("2026-07-14")
+  })
+
+  test("getSafeReportDate xử lý đúng qua ranh giới tháng/năm", () => {
+    const endOfMonth = new Date(Date.UTC(2026, 6, 31, 17, 10)) // = 2026-08-01 00:10 ICT
+    expect(getSafeReportDate(1, endOfMonth)).toBe("2026-07-31")
+    const endOfYear = new Date(Date.UTC(2026, 11, 31, 17, 10)) // = 2027-01-01 00:10 ICT
+    expect(getSafeReportDate(1, endOfYear)).toBe("2026-12-31")
+  })
+
+  test("daysAgo=0 trả đúng hôm nay giờ VN", () => {
+    const instant = new Date(Date.UTC(2026, 6, 14, 17, 30)) // = 2026-07-15 00:30 ICT
+    expect(getSafeReportDate(0, instant)).toBe("2026-07-15")
+  })
 })

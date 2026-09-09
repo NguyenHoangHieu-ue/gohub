@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { cachedQuery, CACHE_HEADERS, isCronReq, noCache, flushAnalyticsCacheByPrefixes, getDaysInMonth, getDaysInRange } from "@/lib/analytics-helpers"
 import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
+import { getSafeReportDate } from "@/lib/analytics-engine/date-math"
 import { supabaseAdmin } from "@/lib/supabase"
 import { chatwootLeadsBreakdown, chatwootConfigured } from "@/lib/chatwoot"
 import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
@@ -58,26 +59,21 @@ export async function GET(req: NextRequest) {
   if (!session && !localPreviewAllowed(req) && !isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   // YTD: từ tháng 1 đến tháng hiện tại
-  const now = new Date()
   const forceRefresh = noCache(req)
 
-  // Ngày tham chiếu: T-1 (hôm qua) khi forceRefresh (Advanced live mode), hôm nay khi cron/snapshot.
-  // Advanced tab luôn dùng T-1 để số liệu đầy đủ (data hôm nay chưa close hết).
-  const refDate = forceRefresh
-    ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
-    : now
-  const fmtDate = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-  const windowEnd = fmtDate(refDate)   // T-1 khi live, hôm nay khi cron
+  // Cutoff LUÔN là T-1 giờ VN (getSafeReportDate) — dữ liệu hôm nay trong fact_fulfillment_revenue
+  // chưa chắc đầy đủ (ETL/ngày chưa kết thúc). Trước đây khi KHÔNG forceRefresh thì dùng "hôm nay" (now,
+  // theo giờ server UTC) làm windowEnd → bug thật: cộng dư doanh thu của ngày chưa xong vào snapshot/live
+  // fallback. Xem docs/wiki/system/tabs/analytics-b2c.md.
+  const windowEnd = getSafeReportDate(1)
+  const [cutoffY, cutoffM, cutoffD] = windowEnd.split("-").map(Number)
 
   const months: string[] = []
-  for (let i = 0; i <= refDate.getMonth(); i++) {
-    months.push(`${refDate.getFullYear()}-${String(i + 1).padStart(2, "0")}`)
-  }
+  for (let i = 1; i <= cutoffM; i++) months.push(`${cutoffY}-${String(i).padStart(2, "0")}`)
   const windowStart = `${months[0]}-01`
   const currentMonth = months[months.length - 1]
-  const elapsedDays = refDate.getDate()   // ngày của refDate (T-1 khi live)
-  const totalDays = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0).getDate()
+  const elapsedDays = cutoffD
+  const totalDays = new Date(Date.UTC(cutoffY, cutoffM, 0)).getUTCDate()
   const skipLeads = req.nextUrl.searchParams.get("skipLeads") === "1"
   const onlyLeads = req.nextUrl.searchParams.get("onlyLeads") === "1"
 

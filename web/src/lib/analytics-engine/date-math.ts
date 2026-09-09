@@ -44,3 +44,31 @@ export function getDaysInRange(startDate: string, endDate: string, monthStr: str
   const rangeEndOrd = Math.min(endOrd, monthEndOrd)
   return rangeEndOrd < rangeStartOrd ? 0 : rangeEndOrd - rangeStartOrd + 1
 }
+
+/**
+ * "Hôm nay" theo giờ Việt Nam (Asia/Ho_Chi_Minh) — dùng `Intl.DateTimeFormat` nên ĐÚNG bất kể server
+ * chạy ở timezone nào (Vercel = UTC). Cần thiết vì `now.getDate()`/`getFullYear()` thuần chỉ đọc đúng
+ * ngày khi server timezone = VN — sai lệch quanh mốc 00:00-07:00 ICT (giờ đó vẫn là "hôm qua" theo UTC).
+ */
+export function vnToday(now: Date = new Date()): { y: number; m: number; d: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now)
+  const y = Number(parts.find(p => p.type === "year")!.value)
+  const m = Number(parts.find(p => p.type === "month")!.value)
+  const d = Number(parts.find(p => p.type === "day")!.value)
+  return { y, m, d }
+}
+
+/**
+ * Ngày cutoff AN TOÀN cho báo cáo — "hôm nay giờ VN" trừ `daysAgo` ngày (mặc định 1 = hôm qua, phòng dữ
+ * liệu hôm nay chưa đầy đủ/ETL chưa chạy xong). Trả chuỗi `YYYY-MM-DD`. Bug lớp này (thiếu cutoff, hoặc
+ * cutoff tính bằng `new Date()` không quy đổi giờ VN) từng làm báo cáo B2C cộng dư doanh thu của ngày
+ * CHƯA kết thúc — dùng hàm này làm mốc DUY NHẤT cho mọi query/ratio liên quan "hôm nay"/"đã trôi qua".
+ */
+export function getSafeReportDate(daysAgo = 1, now: Date = new Date()): string {
+  const { y, m, d } = vnToday(now)
+  const ord = ymdToOrdinal(y, m, d) - daysAgo
+  const dt = new Date(ord * 86400000)
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`
+}

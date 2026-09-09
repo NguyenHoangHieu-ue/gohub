@@ -5,6 +5,7 @@ import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
 import { adminGohubConfigured, adminGohubCustomerMonthSnapshot } from "@/lib/admin-gohub"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
 import { B2C_CHANNELS } from "@/lib/b2c-channel-budget"
+import { getSafeReportDate, vnToday } from "@/lib/analytics-engine/date-math"
 
 export interface MarketCell { vn: number; us: number; total: number }
 export interface CustCell { revenue: number; count: number }
@@ -69,10 +70,9 @@ function emptyPayload(): B2CMonthPayload {
 }
 
 export function monthsYtd(now = new Date()): string[] {
+  const { y, m } = vnToday(now)
   const months: string[] = []
-  for (let i = 0; i <= now.getMonth(); i++) {
-    months.push(`${now.getFullYear()}-${String(i + 1).padStart(2, "0")}`)
-  }
+  for (let i = 1; i <= m; i++) months.push(`${y}-${String(i).padStart(2, "0")}`)
   return months
 }
 
@@ -142,10 +142,14 @@ export function snapshotsToMonthlyResponse(snapshots: B2CSnapshotRow[], months: 
 
 async function loadRevenue(months: string[]) {
   const windowStart = `${months[0]}-01`
-  const now = new Date()
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-  const elapsedDays = now.getDate()
-  const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  // Cutoff AN TOÀN = hôm qua giờ VN (getSafeReportDate) — trước đây 4 query dưới KHÔNG có chặn ngày trên
+  // nào cả (chỉ >= windowStart), nên nếu fact_fulfillment_revenue đã có dữ liệu (dù chỉ 1 phần) của ngày
+  // CHƯA kết thúc thì bị cộng dư vào doanh thu tháng — bug thật, xem docs/wiki/system/tabs/analytics-b2c.md.
+  const cutoff = getSafeReportDate(1)
+  const [cy, cm, cd] = cutoff.split("-").map(Number)
+  const currentMonth = `${cy}-${String(cm).padStart(2, "0")}`
+  const elapsedDays = cd
+  const totalDays = new Date(Date.UTC(cy, cm, 0)).getUTCDate()
   const [marketRows, channelRows, marketChannelRows, profitRows] = await Promise.all([
     queryAnalytics<{ month: string; market: string; revenue: string }>(
       `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -154,9 +158,9 @@ async function loadRevenue(months: string[]) {
        FROM fact_fulfillment_revenue f
        JOIN dim_order_source s ON f.order_source_code = s.code
        WHERE UPPER(s.group_name) = 'B2C'
-         AND f.fulfiled_date::date >= $1
+         AND f.fulfiled_date::date >= $1 AND f.fulfiled_date::date <= $2
        GROUP BY 1, 2`,
-      [windowStart],
+      [windowStart, cutoff],
     ),
     queryAnalytics<{ month: string; ctype: string; revenue: string }>(
       `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -167,9 +171,9 @@ async function loadRevenue(months: string[]) {
        FROM fact_fulfillment_revenue f
        JOIN dim_order_source s ON f.order_source_code = s.code
        WHERE UPPER(s.group_name) = 'B2C'
-         AND f.fulfiled_date::date >= $1
+         AND f.fulfiled_date::date >= $1 AND f.fulfiled_date::date <= $2
        GROUP BY 1, 2`,
-      [windowStart],
+      [windowStart, cutoff],
     ),
     // Nested market × loại kênh (VN/US × Sales/Web/App) — cùng grain fact_fulfillment_revenue.
     queryAnalytics<{ month: string; market: string; ctype: string; revenue: string }>(
@@ -182,9 +186,9 @@ async function loadRevenue(months: string[]) {
        FROM fact_fulfillment_revenue f
        JOIN dim_order_source s ON f.order_source_code = s.code
        WHERE UPPER(s.group_name) = 'B2C'
-         AND f.fulfiled_date::date >= $1
+         AND f.fulfiled_date::date >= $1 AND f.fulfiled_date::date <= $2
        GROUP BY 1, 2, 3`,
-      [windowStart],
+      [windowStart, cutoff],
     ),
     queryAnalytics<{ month: string; channel: string; revenue: string; cogs: string; gross_profit: string }>(
       `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM')          AS month,
@@ -195,9 +199,9 @@ async function loadRevenue(months: string[]) {
        FROM fact_fulfillment_revenue f
        JOIN dim_order_source s ON f.order_source_code = s.code
        WHERE UPPER(s.group_name) = 'B2C'
-         AND f.fulfiled_date::date >= $1
+         AND f.fulfiled_date::date >= $1 AND f.fulfiled_date::date <= $2
        GROUP BY 1, 2`,
-      [windowStart],
+      [windowStart, cutoff],
     ),
   ])
 
