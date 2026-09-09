@@ -6,9 +6,31 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-08, s195+10)
+## Trạng thái hiện tại (2026-09-09, s195+11)
 
 | | |
+|---|---|
+| ✅ **s195+11 (2026-09-09) — Inventory: feedback team OPS (sub-tab Tồn kho), đã tự QA Chrome** | Hiếu
+  đưa feedback OPS cho tab Inventory (theo lô/HSD/ngày nhập, export ICCID, tách VN/US, tách SIM/eSIM, công
+  thức tốc độ bán/DOI/cảnh báo/số bán dự kiến). Trước khi code, tự query trực tiếp gohub_dw qua SQL Query
+  (Dev Tools) trên staging để verify schema thật — không đoán: xác nhận `fact_inventory.batch` có cột
+  nhưng 0/451 dòng có data (ETL Sapo chưa sync lot-tracking), không có cột "ngày nhập kho của lô" nào, và
+  ICCID không tồn tại trong `fact_inventory`/`dim_warehouse` (chỉ có ở `fact_data_usage`/`data_usage_log`,
+  usage 3HK, khác hẳn tồn kho vật lý) — 3 mục này **chưa làm được**, cần Hiếu hỏi Sapo/ETL bổ sung nguồn.
+  Đồng thời xác nhận tất cả 7 kho `dim_warehouse` đều ở VN (không có kho US) → tách VN/US **theo SKU**
+  (JOIN `fact_fulfillment_revenue.company_code`, lấy company xuất hiện nhiều nhất — KHÔNG đoán qua ký tự
+  đầu SKU, verify 1 SKU cùng prefix `E` có thể thuộc cả 2 company). Đã làm: tách VN/US + SIM/eSIM (filter
+  toggle, `dim_sku.type_of_sim`, kèm fix bug field này trước bị gán nhầm hiển thị làm tên sản phẩm), thêm
+  cột "Bán tuần trước", đổi cảnh báo sang 4 mức (An toàn/Bình thường/Cần chú ý/Nguy hiểm) theo ngưỡng DOI
+  **OPS tự cấu hình** qua `/analytics/settings` (card mới "Ngưỡng cảnh báo tồn kho", `app_settings` key
+  `inventory_alert_thresholds`, không hardcode — theo yêu cầu rõ của Hiếu khi hỏi lại khoảng 60-90 ngày),
+  mặc định 90/60/30. Thêm Export Excel. Chuẩn bị sẵn group theo lô trong breakdown kho (tự hiện khi ETL bổ
+  sung batch, không cần sửa lại). Không cần migration DB nào (dùng lại `app_settings` key-value có sẵn).
+  tsc + lint (0 lỗi mới) + vitest (212/212) PASS. **Đã tự QA qua Chrome trên staging**: filter VN/eSIM lọc
+  đúng (30→9 SKU), expand row hiện đúng "Mã lô: —" + ghi chú chờ ETL, đổi ngưỡng An toàn 90→120 ở Settings
+  → Inventory phản ánh ngay (1 SKU 96 ngày đổi từ "An toàn" sang "Bình thường"), đã trả lại 90 sau test.
+  Wiki `docs/wiki/system/tabs/analytics-fulfillment.md` đã cập nhật đủ. Không cần Hiếu làm gì thêm để dùng
+  ngay — 3 mục blocked (lô/ngày nhập/ICCID) cần Hiếu tự liên hệ Sapo/ETL khi rảnh, không gấp.
 |---|---|
 | ⏳ **s195+8/+9/+10 (2026-09-08) — Fix 3 bug thật tab Vendors, chờ Hiếu QA staging** | Hiếu báo liên tiếp
   3 lỗi khi dùng tab Vendors, mỗi lỗi fix xong lộ ra lỗi tiếp theo phía sau (đúng thứ tự user thấy khi test
@@ -177,6 +199,13 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+11 — Inventory: hỏi Sapo/ETL bổ sung 3 nguồn dữ liệu (không gấp, khi rảnh)** — đã verify thật
+  trên staging là hệ thống KHÔNG có: (1) "ngày nhập kho của lô" trong `fact_inventory` (chỉ có `date`
+  snapshot + `expired_date`), (2) `fact_inventory.batch` (cột có nhưng ETL Sapo chưa sync, luôn NULL),
+  (3) ICCID theo tồn kho vật lý (chỉ có ICCID trong `fact_data_usage`/`data_usage_log`, dùng cho usage
+  3HK, khác hẳn). 3 mục OPS xin (lô/ngày nhập/export ICCID) cần Sapo/ETL bổ sung nguồn trước — không tự
+  code thêm được (Hiếu không có DDL trên gohub_dw). Còn lại (VN/US, SIM/eSIM, cảnh báo, số bán tuần trước,
+  ngưỡng tự cấu hình, Export Excel) đã xong, đã tự QA — không cần Hiếu làm gì để dùng ngay.
 - [ ] **s195+8/+9/+10 — QA tab Vendors trên staging** — sau khi Vercel deploy xong 3 commit fix (default
   vendor 0 số liệu / Channel Distribution trống / Strategic phân loại sai): mở `/analytics/vendors`, xem
   (a) load lần đầu tự chọn đúng vendor 3HK DATAPOOL có số liệu thật; (b) bảng Channel Distribution có dữ
