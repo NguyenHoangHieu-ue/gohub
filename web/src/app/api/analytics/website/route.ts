@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, isLocalPreviewReq } from "@/lib/analytics-helpers"
 import { ga4WebsiteSummary, ga4Configured } from "@/lib/ga4"
 
 // Tổng hợp GA4 cho 1 site: KPIs + chuỗi ngày + top countries/sources.
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  const localPreview = process.env.NODE_ENV === "development" && req.nextUrl.searchParams.get("localPreview") === "1"
+  const localPreview = isLocalPreviewReq(req)
   if (!session && !localPreview) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const sp = req.nextUrl.searchParams

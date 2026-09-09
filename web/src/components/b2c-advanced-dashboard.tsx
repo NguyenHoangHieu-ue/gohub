@@ -18,10 +18,13 @@ interface CustCell { revenue: number; count: number }
 interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
 interface ChannelCell { web: number; app: number; other: number }
 interface MarketChannelCell { vnSales: number; vnWeb: number; usSales: number; usApp: number; usWeb: number }
+interface CustomerChannelCell { vnB2c: CustRow; vnWeb: CustRow; usB2c: CustRow; usWeb: CustRow; usApp: CustRow }
 interface KpiTarget { vn: number; us: number; total: number }
 interface UserCell { vnNew: number; vnReturning: number; usNew: number; usReturning: number; total: number }
 interface MarketBudgetCell { vn: number; us: number; total: number }
 interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCost: number; cm1: number }
+interface GA4CategoryRow { category: string; traffic: number; purchases: number; cr: number; prevTraffic: number; trafficDelta: number | null }
+interface GA4CategorySite { siteId: string; name: string; siteUrl?: string; error?: string; rows: GA4CategoryRow[] }
 interface MonthlyData {
   dataAsOf?: string       // T-1 date khi live (YYYY-MM-DD)
   isLive?: boolean
@@ -34,9 +37,11 @@ interface MonthlyData {
   customerSource?: "admin-gohub" | "admin-gohub-snapshot" | "analytics-db"
   customerBreakdown?: "new-returning" | "total-only"
   customerError?: string
+  customerChannels?: Record<string, CustomerChannelCell>
   channels:     Record<string, ChannelCell>
   marketChannels?: Record<string, MarketChannelCell>
   profitByChannel?: Record<string, Record<string, ProfitCell>>
+  revenueComparison?: { previousSamePeriod: number; previousFullMonth: number; compareThrough: string }
   targets:      Record<string, KpiTarget>
   spend:        Record<string, number>
   budget:       Record<string, number>
@@ -53,6 +58,12 @@ const DEMO_MONTHS = ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "202
 const demoMonthLabel = (m: string) => {
   const [y, mo] = m.split("-")
   return { top: `Thg ${parseInt(mo)}`, sub: `'${y.slice(2)}` }
+}
+const formatDateLabel = (isoDate?: string) => {
+  if (!isoDate) return null
+  const [year, month, day] = isoDate.split("-")
+  if (!year || !month || !day) return null
+  return `${day}/${month}/${year}`
 }
 const blankCust = (revenue = 0, count = 0): CustCell => ({ revenue, count })
 const byMonth = <T,>(values: T[]) => Object.fromEntries(DEMO_MONTHS.map((m, i) => [m, values[i]])) as Record<string, T>
@@ -78,6 +89,57 @@ const DEMO_DATA: MonthlyData = {
     "2026-05": { new: blankCust(1_120_000_000, 1980), returning: blankCust(440_000_000, 520), total: blankCust(1_560_000_000, 2500) },
     "2026-06": { new: blankCust(1_210_000_000, 2248), returning: blankCust(675_000_000, 916), total: blankCust(1_885_000_000, 3164) },
     "2026-07": { new: blankCust(460_000_000, 1260), returning: blankCust(256_330_420, 420), total: blankCust(716_330_420, 1680) },
+  },
+  customerChannels: {
+    "2026-01": {
+      vnB2c: { new: blankCust(330_000_000, 520), returning: blankCust(70_000_000, 120), total: blankCust(400_000_000, 640) },
+      vnWeb: { new: blankCust(330_000_000, 520), returning: blankCust(70_000_000, 120), total: blankCust(400_000_000, 640) },
+      usB2c: { new: blankCust(160_000_000, 290), returning: blankCust(40_000_000, 80), total: blankCust(200_000_000, 370) },
+      usWeb: { new: blankCust(50_000_000, 90), returning: blankCust(10_000_000, 20), total: blankCust(60_000_000, 110) },
+      usApp: { new: blankCust(110_000_000, 200), returning: blankCust(30_000_000, 60), total: blankCust(140_000_000, 260) },
+    },
+    "2026-02": {
+      vnB2c: { new: blankCust(360_000_000, 560), returning: blankCust(90_000_000, 140), total: blankCust(450_000_000, 700) },
+      vnWeb: { new: blankCust(360_000_000, 560), returning: blankCust(90_000_000, 140), total: blankCust(450_000_000, 700) },
+      usB2c: { new: blankCust(180_000_000, 320), returning: blankCust(50_000_000, 90), total: blankCust(230_000_000, 410) },
+      usWeb: { new: blankCust(60_000_000, 100), returning: blankCust(15_000_000, 25), total: blankCust(75_000_000, 125) },
+      usApp: { new: blankCust(120_000_000, 220), returning: blankCust(35_000_000, 65), total: blankCust(155_000_000, 285) },
+    },
+    "2026-03": {
+      vnB2c: { new: blankCust(470_000_000, 720), returning: blankCust(120_000_000, 180), total: blankCust(590_000_000, 900) },
+      vnWeb: { new: blankCust(470_000_000, 720), returning: blankCust(120_000_000, 180), total: blankCust(590_000_000, 900) },
+      usB2c: { new: blankCust(220_000_000, 390), returning: blankCust(80_000_000, 130), total: blankCust(300_000_000, 520) },
+      usWeb: { new: blankCust(75_000_000, 130), returning: blankCust(25_000_000, 40), total: blankCust(100_000_000, 170) },
+      usApp: { new: blankCust(145_000_000, 260), returning: blankCust(55_000_000, 90), total: blankCust(200_000_000, 350) },
+    },
+    "2026-04": {
+      vnB2c: { new: blankCust(760_000_000, 1080), returning: blankCust(290_000_000, 300), total: blankCust(1_050_000_000, 1380) },
+      vnWeb: { new: blankCust(760_000_000, 1080), returning: blankCust(290_000_000, 300), total: blankCust(1_050_000_000, 1380) },
+      usB2c: { new: blankCust(290_000_000, 520), returning: blankCust(140_000_000, 180), total: blankCust(430_000_000, 700) },
+      usWeb: { new: blankCust(70_000_000, 130), returning: blankCust(20_000_000, 30), total: blankCust(90_000_000, 160) },
+      usApp: { new: blankCust(220_000_000, 390), returning: blankCust(120_000_000, 150), total: blankCust(340_000_000, 540) },
+    },
+    "2026-05": {
+      vnB2c: { new: blankCust(560_000_000, 820), returning: blankCust(200_000_000, 240), total: blankCust(760_000_000, 1060) },
+      vnWeb: { new: blankCust(560_000_000, 820), returning: blankCust(200_000_000, 240), total: blankCust(760_000_000, 1060) },
+      usB2c: { new: blankCust(190_000_000, 340), returning: blankCust(90_000_000, 120), total: blankCust(280_000_000, 460) },
+      usWeb: { new: blankCust(45_000_000, 90), returning: blankCust(25_000_000, 30), total: blankCust(70_000_000, 120) },
+      usApp: { new: blankCust(145_000_000, 250), returning: blankCust(65_000_000, 90), total: blankCust(210_000_000, 340) },
+    },
+    "2026-06": {
+      vnB2c: { new: blankCust(650_000_000, 920), returning: blankCust(250_000_000, 270), total: blankCust(900_000_000, 1190) },
+      vnWeb: { new: blankCust(650_000_000, 920), returning: blankCust(250_000_000, 270), total: blankCust(900_000_000, 1190) },
+      usB2c: { new: blankCust(250_000_000, 440), returning: blankCust(120_000_000, 150), total: blankCust(370_000_000, 590) },
+      usWeb: { new: blankCust(55_000_000, 95), returning: blankCust(25_000_000, 35), total: blankCust(80_000_000, 130) },
+      usApp: { new: blankCust(195_000_000, 345), returning: blankCust(95_000_000, 115), total: blankCust(290_000_000, 460) },
+    },
+    "2026-07": {
+      vnB2c: { new: blankCust(330_000_000, 620), returning: blankCust(100_000_000, 130), total: blankCust(430_000_000, 750) },
+      vnWeb: { new: blankCust(330_000_000, 620), returning: blankCust(100_000_000, 130), total: blankCust(430_000_000, 750) },
+      usB2c: { new: blankCust(55_000_000, 120), returning: blankCust(20_000_000, 35), total: blankCust(75_000_000, 155) },
+      usWeb: { new: blankCust(8_000_000, 20), returning: blankCust(4_000_000, 10), total: blankCust(12_000_000, 30) },
+      usApp: { new: blankCust(47_000_000, 100), returning: blankCust(16_000_000, 25), total: blankCust(63_000_000, 125) },
+    },
   },
   channels: {
     "2026-01": { web: 240_000_000, app: 180_000_000, other: 380_000_000 },
@@ -252,8 +314,8 @@ const Section = ({ icon, title, desc, children, action, source, iconColor = "#00
   </section>
 )
 
-// KPI metric card — Apple .metric style từ mockup, nay thêm icon chip màu theo Ý NGHĨA chỉ số (funnel
-// stage: traffic/hiệu suất/khách hàng/chi phí) thay vì chỉ text đen trên nền trắng như trước.
+// KPI metric card — Apple .metric style, icon chip màu theo Ý NGHĨA chỉ số (funnel stage: traffic/hiệu
+// suất/khách hàng/chi phí) thay vì chỉ text đen trên nền trắng.
 const KpiCard = ({ label, value, sub, delta, source: src, icon, color = "#0071e3" }: {
   label: string; value: string; sub?: string; delta?: number | null; source?: string; color?: string; icon?: React.ReactNode
 }) => (
@@ -283,6 +345,49 @@ const KpiCard = ({ label, value, sub, delta, source: src, icon, color = "#0071e3
     </div>
   </div>
 )
+
+const RevenueCompareCard = ({ icon, label, value, caption, referenceLabel, referenceValue, metricLabel, metricValue, mode = "delta" }: {
+  icon: React.ReactNode
+  label: string
+  value: string
+  caption: string
+  referenceLabel: string
+  referenceValue: string
+  metricLabel: string
+  metricValue: number | null
+  mode?: "delta" | "attainment"
+}) => {
+  const positive = metricValue !== null && (mode === "attainment" ? metricValue >= 100 : metricValue >= 0)
+  const metricText = metricValue === null
+    ? "—"
+    : mode === "attainment"
+      ? `${metricValue.toFixed(1)}%`
+      : `${metricValue >= 0 ? "↑" : "↓"} ${Math.abs(metricValue).toFixed(1)}%`
+
+  return (
+    <div className="min-w-0 rounded-lg border border-black/[0.09] bg-white/85 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.055)] backdrop-blur">
+      <div className="flex items-center gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#eaf4ff] text-[#0071e3]">{icon}</span>
+        <span className="text-[11px] font-[650] uppercase text-[#6e6e73]">{label}</span>
+      </div>
+      <div className="mt-4 min-w-0 text-[clamp(22px,2.2vw,32px)] font-[650] leading-none text-[#1d1d1f] tabular-nums break-words">{value}</div>
+      <div className="mt-2 text-[11px] leading-snug text-[#86868b]">{caption}</div>
+      <div className="my-4 h-px bg-black/[0.06]" />
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
+        <div className="min-w-0">
+          <div className="text-[10px] font-[560] uppercase text-[#9a9aa0]">{referenceLabel}</div>
+          <div className="mt-1 truncate text-[12px] font-[650] text-[#5f6368] tabular-nums" title={referenceValue}>{referenceValue}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] font-[560] uppercase text-[#9a9aa0]">{metricLabel}</div>
+          <span className={`mt-1 inline-flex min-w-[64px] justify-center rounded-full px-2 py-1 text-[11px] font-[700] ${metricValue === null ? "bg-[#eef1f5] text-[#6e6e73]" : positive ? "bg-[#eaf6ee] text-[#2f9d55]" : "bg-[#fdecea] text-[#d93025]"}`}>
+            {metricText}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Placeholder cho section chờ nguồn dữ liệu
 const AwaitingData = ({ note }: { note: string }) => (
@@ -334,8 +439,15 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     kpis:   { activeUsers: number; sessions: number; purchases: number; revenue: number; cr: number }
     series: { date: string; sessions: number; cr: number; purchases: number; revenue: number; users: number }[]
   }[] | null>(null)
+  const [ga4Categories, setGa4Categories] = useState<{
+    month: string
+    elapsedDays: number
+    prevMonth: string
+    web: GA4CategorySite[]
+    app: GA4CategorySite[]
+    error?: string
+  } | null>(null)
 
-  // Luôn query live (nocache=1) để bypass snapshot → số liệu real-time đến T-1.
   const loadData = async () => {
     if (demoMode) return
     setLoading(true); setError(null)
@@ -422,6 +534,41 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     })()
   }, [demoMode, localPreview])
 
+  useEffect(() => {
+    if (demoMode) {
+      setGa4Categories({
+        month: DEMO_DATA.currentMonth,
+        elapsedDays: DEMO_DATA.elapsedDays,
+        prevMonth: "2026-06",
+        web: [],
+        app: [],
+        error: "Demo mode chưa có GA4 category",
+      })
+      return
+    }
+    if (!data?.currentMonth) return
+    (async () => {
+      try {
+        const params = new URLSearchParams()
+        if (localPreview) params.set("localPreview", "1")
+        params.set("month", data.currentMonth)
+        params.set("elapsedDays", String(data.elapsedDays))
+        const res = await fetch(`/api/analytics/b2c/ga4-categories?${params.toString()}`)
+        if (!res.ok) throw new Error(`${res.status}`)
+        setGa4Categories(await res.json())
+      } catch {
+        setGa4Categories({
+          month: data.currentMonth,
+          elapsedDays: data.elapsedDays,
+          prevMonth: "",
+          web: [],
+          app: [],
+          error: "GA4 category chưa có dữ liệu",
+        })
+      }
+    })()
+  }, [demoMode, localPreview, data?.currentMonth, data?.elapsedDays])
+
   const quarterKey = (m: string) => {
     const [y, mo] = m.split("-")
     return `${y}-Q${Math.ceil(parseInt(mo) / 3)}`
@@ -493,7 +640,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
   const periodSuffix = viewMode === "quarter" ? "QTD" : "MTD"
   const periodTitle = viewMode === "quarter" ? "Quarterly B2C report" : "Monthly B2C report"
   const periodProgressLabel = current ? `${periodElapsedDays(current)}/${periodTotalDays(current)} ngày` : "—"
-  const prorataLabel = viewMode === "quarter" ? "Prorata quarter-end" : "Prorata month-end"
+  const dataAsOfLabel = formatDateLabel(data?.dataAsOf)
 
   // ── KPI values (MTD tháng hiện tại) ─────────────────────────────────────────
   const marketOf = (key: string): MarketCell => ({
@@ -501,23 +648,47 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     us: sumActualFor(key, m => data?.markets[m]?.us ?? 0),
     total: sumActualFor(key, m => data?.markets[m]?.total ?? 0),
   })
-  const channelOf = (key: string): ChannelCell => ({
-    web: sumActualFor(key, m => data?.channels[m]?.web ?? 0),
-    app: sumActualFor(key, m => data?.channels[m]?.app ?? 0),
-    other: sumActualFor(key, m => data?.channels[m]?.other ?? 0),
-  })
   const marketChannelOf = (key: string): MarketChannelCell => ({
     vnSales: sumActualFor(key, m => data?.marketChannels?.[m]?.vnSales ?? 0),
-    vnWeb:   sumActualFor(key, m => data?.marketChannels?.[m]?.vnWeb ?? 0),
+    vnWeb: sumActualFor(key, m => data?.marketChannels?.[m]?.vnWeb ?? 0),
     usSales: sumActualFor(key, m => data?.marketChannels?.[m]?.usSales ?? 0),
-    usApp:   sumActualFor(key, m => data?.marketChannels?.[m]?.usApp ?? 0),
-    usWeb:   sumActualFor(key, m => data?.marketChannels?.[m]?.usWeb ?? 0),
+    usApp: sumActualFor(key, m => data?.marketChannels?.[m]?.usApp ?? 0),
+    usWeb: sumActualFor(key, m => data?.marketChannels?.[m]?.usWeb ?? 0),
   })
   const customerOf = (key: string): CustRow => ({
     new: { revenue: sumActualFor(key, m => data?.customers[m]?.new.revenue ?? 0), count: sumActualFor(key, m => data?.customers[m]?.new.count ?? 0) },
     returning: { revenue: sumActualFor(key, m => data?.customers[m]?.returning.revenue ?? 0), count: sumActualFor(key, m => data?.customers[m]?.returning.count ?? 0) },
     total: { revenue: sumActualFor(key, m => data?.customers[m]?.total.revenue ?? 0), count: sumActualFor(key, m => data?.customers[m]?.total.count ?? 0) },
   })
+  const blankCustomerRow = (): CustRow => ({
+    new: { revenue: 0, count: 0 },
+    returning: { revenue: 0, count: 0 },
+    total: { revenue: 0, count: 0 },
+  })
+  const customerChannelOf = (key: string): CustomerChannelCell => {
+    const out: CustomerChannelCell = {
+      vnB2c: blankCustomerRow(),
+      vnWeb: blankCustomerRow(),
+      usB2c: blankCustomerRow(),
+      usWeb: blankCustomerRow(),
+      usApp: blankCustomerRow(),
+    }
+    for (const month of actualMonthsForPeriod(key)) {
+      const cell = data?.customerChannels?.[month]
+      if (!cell) continue
+      for (const bucket of ["vnB2c", "vnWeb", "usB2c", "usWeb", "usApp"] as const) {
+        out[bucket].new.revenue += cell[bucket]?.new.revenue ?? 0
+        out[bucket].new.count += cell[bucket]?.new.count ?? 0
+        out[bucket].returning.revenue += cell[bucket]?.returning.revenue ?? 0
+        out[bucket].returning.count += cell[bucket]?.returning.count ?? 0
+        out[bucket].total.revenue += cell[bucket]?.total.revenue ?? 0
+        out[bucket].total.count += cell[bucket]?.total.count ?? 0
+      }
+    }
+    return out
+  }
+  const customerSplitSub = (row: CustRow) =>
+    `${formatNumber(row.new.count)} mới · ${formatNumber(row.returning.count)} quay lại · ${formatNumber(row.total.count)} khách`
   const targetOf = (key: string): KpiTarget => ({
     vn: sumPlanningFor(key, m => data?.targets[m]?.vn ?? 0),
     us: sumPlanningFor(key, m => data?.targets[m]?.us ?? 0),
@@ -532,6 +703,15 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
   })
   const mtdTotal   = marketOf(current).total
   const prevTotal  = marketOf(prevFull).total
+  const previousSamePeriod = viewMode === "month"
+    ? data?.revenueComparison?.previousSamePeriod ?? comparablePrevPeriodValue(m => data?.markets[m]?.total ?? 0)
+    : comparablePrevPeriodValue(m => data?.markets[m]?.total ?? 0)
+  const previousFullRevenue = viewMode === "month"
+    ? data?.revenueComparison?.previousFullMonth ?? prevTotal
+    : prevTotal
+  const projectedRevenue = proj(mtdTotal)
+  const currentRevenueTarget = targetOf(current).total
+  const targetAttainment = currentRevenueTarget > 0 ? (mtdTotal / currentRevenueTarget) * 100 : null
   const cust       = customerOf(current)
   const newRev     = cust.new.revenue
   const retRev     = cust.returning.revenue
@@ -549,24 +729,20 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     "Khách mới": customerOf(m).new.revenue,
     "Quay lại":  customerOf(m).returning.revenue,
   }))
-  // Tách doanh thu New/Returning theo thị trường VN/US = doanh thu × tỷ trọng thị trường của kỳ
-  // (nhất quán cách xấp xỉ newVnOf ở bảng Acquisition; VN+US = phần VN+US của tổng, chênh nhỏ = thị trường khác NA/TN).
-  const mktRatio = (m: string, which: "vn" | "us") => {
-    const mk = marketOf(m)
-    return mk.total > 0 ? mk[which] / mk.total : 0
-  }
 
   // generic rolling-table renderer
-  const RollingTable = ({ rows, mtdCompare = false }: {
+  const RollingTable = ({ rows, mtdCompare = false, startMonth }: {
     rows: { key?: string; label: string; highlight?: boolean; breakdown?: boolean; get: (m: string) => number; sub?: (m: string) => string | null }[]
     mtdCompare?: boolean
-  }) => (
-    <div className="overflow-x-auto">
+    startMonth?: string
+  }) => {
+    const visibleCompleted = startMonth && viewMode === "month" ? completed.filter(m => m >= startMonth) : completed
+    return <div className="overflow-x-auto">
       <table className="min-w-max w-full text-sm">
         <thead>
           <tr className="text-slate-400 border-b border-slate-100 bg-slate-50/50">
             <th className="sticky left-0 z-10 bg-white/95 text-left font-semibold px-6 py-3 text-xs uppercase tracking-wider min-w-[180px]">Line</th>
-            {completed.map(m => {
+            {visibleCompleted.map(m => {
               const l = displayLabel(m)
               return <th key={m} className="text-right font-semibold px-4 py-3 text-xs min-w-[170px]">{l.top} <span className="text-slate-300">{l.sub}</span></th>
             })}
@@ -587,9 +763,9 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 <td className={`sticky left-0 z-10 bg-white/95 px-6 py-4 text-left min-w-[180px] ${row.highlight ? "font-bold text-slate-900" : row.breakdown ? "font-medium text-slate-500 pl-9" : "font-semibold text-slate-700"}`}>
                   <Dot color={marketDot(row.label)} />{row.breakdown && <span className="text-slate-300 mr-1">›</span>}{row.label}
                 </td>
-                {completed.map((m, i) => {
+                {visibleCompleted.map((m, i) => {
                   const v = row.get(m)
-                  const prev = i > 0 ? row.get(completed[i - 1]) : null
+                  const prev = i > 0 ? row.get(visibleCompleted[i - 1]) : null
                   return (
                     <td key={m} className="px-4 py-4 text-right tabular-nums min-w-[170px]">
                       <div className="text-slate-800 font-semibold">{formatCompactNumber(v)}</div>
@@ -615,7 +791,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
         </tbody>
       </table>
     </div>
-  )
+  }
 
   // KPI tab — actual vs target (theo tháng × VN/US/Total). Target nhập ở Settings → b2c_kpi_targets.
   const KpiTable = () => {
@@ -821,8 +997,6 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
   const hasLeads = data ? data.months.some(m => leadsOf(m) > 0) : false
   const hasUsers = data ? data.months.some(m => (data.users?.[m]?.total ?? 0) > 0) : false
   const hasProfitTrend = profitRows.length > 0
-
-  // ── B2C MKT Profit Report (spend Meta/Google nhập tay, port từ prod s153) ──
   const manualMktSpend: Record<string, { meta: number; google: number }> = {
     "2026-01": { meta: 27_072_086, google: 63_028_659 },
     "2026-02": { meta: 52_489_693, google: 69_445_647 },
@@ -842,6 +1016,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
       grossProfit: acc.grossProfit + (cell.grossProfit ?? 0),
     }), { revenue: 0, cogs: 0, grossProfit: 0 })
   }
+  const pctText = (value: number, total: number) => total > 0 ? `${((value / total) * 100).toFixed(1)}%` : "—"
   const mktMetric = (month: string, metric: "meta" | "google" | "totalMkt" | "revenue" | "mktRate" | "grossProfit" | "gpRate" | "cm1" | "cm1Rate") => {
     const spend = manualMktSpend[month]
     if (!spend) return 0
@@ -873,6 +1048,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
       </div>
     )
   }
+
   const MktProfitReportTable = () => (
     <div className="overflow-x-auto px-0 pb-2">
       <table className="min-w-max w-full text-sm">
@@ -919,6 +1095,66 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     </div>
   )
 
+  const TrafficDelta = ({ value }: { value: number | null }) => {
+    if (value === null) return <span className="text-slate-300">—</span>
+    const up = value >= 0
+    return (
+      <span className={`inline-flex items-center justify-end gap-1 font-semibold ${up ? "text-emerald-600" : "text-rose-500"}`}>
+        {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+        {Math.abs(value).toFixed(1)}%
+      </span>
+    )
+  }
+
+  const GA4CategoryTable = ({ groups, emptyNote }: { groups: GA4CategorySite[]; emptyNote: string }) => {
+    const visibleGroups = groups.filter(site => site.rows.length > 0 || site.error)
+    if (!visibleGroups.length) return <AwaitingData note={emptyNote} />
+
+    return (
+      <div className="space-y-3 px-5 pb-5 pt-3">
+        {visibleGroups.map(site => (
+          <div key={site.siteId} className="overflow-hidden rounded-lg border border-black/[0.06] bg-white/75">
+            <div className="flex items-center justify-between border-b border-black/[0.05] px-4 py-3">
+              <div>
+                <h4 className="text-[14px] font-[700] text-slate-800">{site.name}</h4>
+                {site.siteUrl && <p className="text-[11px] text-slate-400">{site.siteUrl}</p>}
+              </div>
+              <span className="text-[11px] font-[650] text-slate-400">MTD vs prev MTD</span>
+            </div>
+            {site.error ? (
+              <div className="px-4 py-4 text-[12px] text-rose-500">{site.error}</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-[680px] w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/60 text-[11px] uppercase tracking-wider text-slate-400">
+                      <th className="px-4 py-2.5 text-left font-semibold">Category</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Traffic</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">CR</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Purchases</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Traffic tăng/giảm</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {site.rows.map(row => (
+                      <tr key={`${site.siteId}-${row.category}`} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-semibold text-slate-700">{row.category}</td>
+                        <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-900">{formatNumber(Math.round(row.traffic))}</td>
+                        <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-900">{row.cr.toFixed(2)}%</td>
+                        <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-700">{formatNumber(Math.round(row.purchases))}</td>
+                        <td className="px-4 py-3 text-right tabular-nums"><TrafficDelta value={row.trafficDelta} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   type AcquisitionRow = {
     label: string
     highlight?: boolean
@@ -930,6 +1166,15 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     const row = customerOf(m)
     return row.new.count > 0 ? row.new.count : row.total.count
   }
+  // GA4 totals cho KPI cards (Section trên cùng)
+  const ga4Total  = ga4?.reduce((s, site) => s + (site.cr ?? 0), 0) ?? 0
+  const ga4Users  = ga4?.reduce((s, site) => s + (site.kpis.activeUsers ?? 0), 0) ?? 0
+  const spendCur  = spendOf(current)
+  const roasCur   = spendCur > 0 ? mtdTotal / spendCur : 0
+  const leadsCur  = leadsOf(current)
+  const customersForCac = acquisitionCustomerOf(current)
+  const cacCur    = spendCur > 0 && customersForCac > 0 ? spendCur / customersForCac : 0
+  const cplCur    = spendCur > 0 && leadsCur > 0 ? spendCur / leadsCur : 0
   const acquisitionRows: AcquisitionRow[] = data ? [
     { label: "Chi phí MKT", fmt: formatCompactNumber, get: spendOf },
     { label: "Leads", fmt: fmtInt0, highlight: true, get: leadsOf },
@@ -1082,16 +1327,6 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     )
   }
 
-  // GA4 totals cho KPI cards (Section trên cùng)
-  const ga4Total  = ga4?.reduce((s, site) => s + (site.cr ?? 0), 0) ?? 0
-  const ga4Users  = ga4?.reduce((s, site) => s + (site.kpis.activeUsers ?? 0), 0) ?? 0
-  const spendCur  = spendOf(current)
-  const roasCur   = spendCur > 0 ? mtdTotal / spendCur : 0
-  const leadsCur  = leadsOf(current)
-  const customersForCac = acquisitionCustomerOf(current)
-  const cacCur    = spendCur > 0 && customersForCac > 0 ? spendCur / customersForCac : 0
-  const cplCur     = spendCur > 0 && leadsCur > 0 ? spendCur / leadsCur : 0
-
   return (
     <div className="min-h-screen p-4 lg:p-6" style={APPLE_BG_STYLE}>
       <div className="max-w-[1400px] mx-auto space-y-5">
@@ -1132,40 +1367,38 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
 
         {data && !loading && (
           <>
-            {/* Hero card — big number MTD + mini meter bars (từ mockup) */}
-            <div className={APPLE_CARD} style={{ ...APPLE_CARD_STYLE, borderRadius: 10 }}>
-              <div className="p-8 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10 items-center">
-                <div>
-	                  <span className="inline-flex items-center gap-1.5 text-[11px] font-[650] text-[#34a853] bg-[#e6f4ea] px-2.5 py-1 rounded-full">
-                    Live · T-1{data?.dataAsOf ? ` (đến ${data.dataAsOf})` : ""}
-                  </span>
-	                  <div className="mt-4 text-[56px] font-[560] text-[#1d1d1f] leading-none">
-	                    {formatCurrency(mtdTotal)} <span className="text-[22px] font-[500] text-[#6e6e73]">{periodSuffix} B2C</span>
-	                  </div>
-	                  <div className="mt-3 text-[14px] text-[#6e6e73] leading-relaxed max-w-lg">
-	                    {prorataLabel}: <strong className="text-[#1d1d1f]">{formatCurrency(proj(mtdTotal))}</strong>
-	                    {periodTotalDays(current) > 0 && <> · {periodSuffix} {((periodElapsedDays(current) / periodTotalDays(current)) * 100).toFixed(0)}%</>}
-                    {prevTotal > 0 && <> · MoM <span className={pct(mtdTotal, prevTotal)! >= 0 ? "text-[#2f9d55]" : "text-[#d93025]"}>{pct(mtdTotal, prevTotal)! >= 0 ? "↑" : "↓"}{Math.abs(pct(mtdTotal, prevTotal)!).toFixed(1)}%</span></>}
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  {[
-                    { label: "VN B2C", val: marketOf(current).vn, total: mtdTotal, proj: proj(marketOf(current).vn), color: "#0071e3" },
-                    { label: "US B2C", val: marketOf(current).us, total: mtdTotal, proj: proj(marketOf(current).us), color: "#6366f1" },
-                    { label: "Web",    val: channelOf(current).web, total: mtdTotal, proj: proj(channelOf(current).web), color: "#00a6a6" },
-                    { label: "App",    val: channelOf(current).app, total: mtdTotal, proj: proj(channelOf(current).app), color: "#2f9d55" },
-                    { label: "Khác",   val: channelOf(current).other, total: mtdTotal, proj: proj(channelOf(current).other), color: "#b7791f" },
-                  ].map(({ label, val, total, proj: p, color }) => (
-                    <div key={label} className="grid grid-cols-[90px_1fr_140px] items-center gap-3">
-                      <span className="text-[13px] font-[600] text-[#1d1d1f]">{label}</span>
-                      <div className="h-[10px] rounded-full bg-[#e8ecf1] overflow-hidden">
-                        <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, total > 0 ? (val / total) * 100 : 0)}%`, background: color }} />
-                      </div>
-                      <span className="text-[13px] font-[560] text-[#1d1d1f] text-right">{formatCurrency(val)} <span className="text-[#6e6e73]">/ {formatCurrency(p)}</span></span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <RevenueCompareCard
+                icon={<DollarSign className="h-4 w-4" />}
+                label={`Doanh thu B2C so với cùng kỳ ${viewMode === "month" ? "tháng" : "quý"} trước`}
+                value={formatCurrency(mtdTotal)}
+                caption={`Từ đầu ${viewMode === "month" ? "tháng" : "quý"} đến hết ngày hôm qua${dataAsOfLabel ? ` (${dataAsOfLabel})` : ""}`}
+                referenceLabel={viewMode === "month" ? "Cùng kỳ tháng trước" : "Cùng kỳ quý trước"}
+                referenceValue={previousSamePeriod > 0 ? formatCurrency(previousSamePeriod) : "Chưa có dữ liệu"}
+                metricLabel="Tăng / giảm"
+                metricValue={pct(mtdTotal, previousSamePeriod)}
+              />
+              <RevenueCompareCard
+                icon={<TrendingUp className="h-4 w-4" />}
+                label={viewMode === "month" ? "Prorata tháng" : "Prorata quý"}
+                value={formatCurrency(projectedRevenue)}
+                caption={`${periodProgressLabel} · dự phóng cuối ${viewMode === "month" ? "tháng" : "quý"}`}
+                referenceLabel={viewMode === "month" ? "Doanh thu tháng trước" : "Doanh thu quý trước"}
+                referenceValue={previousFullRevenue > 0 ? formatCurrency(previousFullRevenue) : "Chưa có dữ liệu"}
+                metricLabel="Tăng / giảm"
+                metricValue={pct(projectedRevenue, previousFullRevenue)}
+              />
+              <RevenueCompareCard
+                icon={<Target className="h-4 w-4" />}
+                label={`Tiến độ doanh thu B2C so với mục tiêu ${viewMode === "month" ? "tháng" : "quý"}`}
+                value={formatCurrency(mtdTotal)}
+                caption={targetAttainment !== null ? `Đã đạt ${targetAttainment.toFixed(1)}% mục tiêu ${viewMode === "month" ? "tháng" : "quý"}` : "Chưa nhập mục tiêu doanh thu"}
+                referenceLabel={viewMode === "month" ? "Mục tiêu tháng này" : "Mục tiêu quý này"}
+                referenceValue={currentRevenueTarget > 0 ? formatCurrency(currentRevenueTarget) : "Chưa nhập mục tiêu"}
+                metricLabel="Đã đạt"
+                metricValue={targetAttainment}
+                mode="attainment"
+              />
             </div>
 
             {/* 6 KPI cards — y chang mockup: Users, Customers, Budget, ROAS, CAC, Leads */}
@@ -1294,7 +1527,6 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 { key: "vn-sales", label: "VN Sales B2C", get: m => marketChannelOf(m).vnSales, breakdown: true },
                 { key: "vn-web",   label: "Web",          get: m => marketChannelOf(m).vnWeb,   breakdown: true },
                 { label: "US B2C",        get: m => marketOf(m).us },
-                { key: "us-sales", label: "US Sales B2C", get: m => marketChannelOf(m).usSales, breakdown: true },
                 { key: "us-app",   label: "App",          get: m => marketChannelOf(m).usApp,   breakdown: true },
                 { key: "us-web",   label: "Web",          get: m => marketChannelOf(m).usWeb,   breakdown: true },
                 { label: "Total B2C",     get: m => marketOf(m).total, highlight: true },
@@ -1302,12 +1534,12 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             </Section>
 
             {/* Section 2 — Revenue by Customers */}
-            <Section icon={<Users className="w-5 h-5" />} iconColor="#7c5cbf" title="Doanh thu theo Customers" desc="New vs Returning × All/VN/US · revenue + số khách"
+            <Section icon={<Users className="w-5 h-5" />} iconColor="#6366f1" title="Doanh thu theo Customers" desc="New vs Returning · theo kênh"
               source="admin"
 >
               {data.customerError && (
                 <div className="mx-6 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
-                  Customer Admin API lỗi: {data.customerError}.
+                  {data.customerError}.
                 </div>
               )}
               {data.customerBreakdown === "total-only" && !data.customerError && (
@@ -1315,24 +1547,49 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                   Admin API summary hiện có Total Customers/Revenue; New vs Returning cần snapshot item-level hoặc API summary breakdown riêng.
                 </div>
               )}
-	              <RollingTable rows={data.customerBreakdown === "total-only" ? [
-	                { label: "Total (All)", get: m => customerOf(m).total.revenue, sub: m => `${formatNumber(customerOf(m).total.count)} khách`, highlight: true },
-	                { label: "Total · VN",  breakdown: true, get: m => customerOf(m).total.revenue * mktRatio(m, "vn") },
-	                { label: "Total · US",  breakdown: true, get: m => customerOf(m).total.revenue * mktRatio(m, "us") },
-	              ] : [
-	                { label: "New (All)",       get: m => customerOf(m).new.revenue,       sub: m => `${formatNumber(customerOf(m).new.count)} khách` },
-	                { label: "New · VN",        breakdown: true, get: m => customerOf(m).new.revenue * mktRatio(m, "vn") },
-	                { label: "New · US",        breakdown: true, get: m => customerOf(m).new.revenue * mktRatio(m, "us") },
-	                { label: "Returning (All)", get: m => customerOf(m).returning.revenue, sub: m => `${formatNumber(customerOf(m).returning.count)} khách` },
-	                { label: "Returning · VN",  breakdown: true, get: m => customerOf(m).returning.revenue * mktRatio(m, "vn") },
-	                { label: "Returning · US",  breakdown: true, get: m => customerOf(m).returning.revenue * mktRatio(m, "us") },
-	                { label: "Total (All)",     get: m => customerOf(m).total.revenue,     sub: m => `${formatNumber(customerOf(m).total.count)} khách`, highlight: true },
-	              ]} />
+              <RollingTable startMonth="2026-05" rows={[
+                {
+                  label: "VN B2C",
+                  get: m => customerChannelOf(m).vnB2c.total.revenue,
+                  sub: m => customerSplitSub(customerChannelOf(m).vnB2c),
+                },
+                {
+                  key: "customer-vn-web",
+                  label: "Web VN",
+                  get: m => customerChannelOf(m).vnWeb.total.revenue,
+                  sub: m => customerSplitSub(customerChannelOf(m).vnWeb),
+                  breakdown: true,
+                },
+                {
+                  label: "US B2C",
+                  get: m => customerChannelOf(m).usB2c.total.revenue,
+                  sub: m => customerSplitSub(customerChannelOf(m).usB2c),
+                },
+                {
+                  key: "customer-us-web",
+                  label: "Web",
+                  get: m => customerChannelOf(m).usWeb.total.revenue,
+                  sub: m => customerSplitSub(customerChannelOf(m).usWeb),
+                  breakdown: true,
+                },
+                {
+                  key: "customer-us-app",
+                  label: "App",
+                  get: m => customerChannelOf(m).usApp.total.revenue,
+                  sub: m => customerSplitSub(customerChannelOf(m).usApp),
+                  breakdown: true,
+                },
+                {
+                  label: "Total",
+                  get: m => customerOf(m).total.revenue,
+                  sub: m => `${formatNumber(customerOf(m).new.count)} mới · ${formatNumber(customerOf(m).returning.count)} quay lại · ${formatNumber(customerOf(m).total.count)} khách`,
+                  highlight: true,
+                },
+              ]} />
             </Section>
 
             <Section
               icon={<UserPlus className="w-5 h-5" />}
-              iconColor="#b7791f"
               title="Acquisition Performance"
               desc="Chi phí MKT · Leads theo kênh · Khách mới · CAC/CPL · tỷ lệ chốt"
               source="admin"
@@ -1351,12 +1608,88 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               )}
             </Section>
 
-            {/* Section 4 (GA4 Conversion Rate Charts) — ĐÃ BỎ theo yêu cầu (2026-08-05). GA4 chi tiết ở tab Website. */}
+            <Section
+              icon={<Globe className="w-5 h-5" />}
+              title="GA4 Web Category Performance"
+              desc="gohub.com + gohub.vn · Category theo session default channel group · CR = Purchases / Traffic"
+              source="ga4"
+            >
+              {ga4Categories === null ? (
+                <div className="px-6 pb-6 pt-3 text-[13px] text-[#6e6e73]">Đang tải GA4 category…</div>
+              ) : (
+                <GA4CategoryTable
+                  groups={ga4Categories.web}
+                  emptyNote={ga4Categories.error || "Chưa có dữ liệu category từ GA4 web. Kiểm tra cấu hình GA4 cho gohub.com và gohub.vn."}
+                />
+              )}
+            </Section>
+
+            <Section
+              icon={<TrendingUp className="w-5 h-5" />}
+              title="GA4 App Category Performance"
+              desc="gohub app · Category theo session default channel group · CR = Purchases / Traffic"
+              source="ga4"
+            >
+              {ga4Categories === null ? (
+                <div className="px-6 pb-6 pt-3 text-[13px] text-[#6e6e73]">Đang tải GA4 app category…</div>
+              ) : (
+                <GA4CategoryTable
+                  groups={ga4Categories.app}
+                  emptyNote={ga4Categories.error || "Chưa có dữ liệu category từ GA4 app. Kiểm tra cấu hình GA4 app trong Admin settings."}
+                />
+              )}
+            </Section>
+
+            {/* Section 4 — GA4 Charts: Purchase + Revenue + CR% + Traffic (theo spec) */}
+            <Section icon={<TrendingUp className="w-5 h-5" />} title="GA4 Conversion Rate Charts" desc="Purchase · Revenue · CR% · Traffic · monthly trend" source="ga4"
+              action={<a href="/analytics/website" className="text-[12px] font-[600] text-[#0071e3] hover:underline">Xem chi tiết →</a>}>
+              {ga4 === null ? (
+                <div className="px-6 pb-6 pt-3 text-[13px] text-[#6e6e73]">Đang tải GA4…</div>
+              ) : ga4.length === 0 ? (
+                <AwaitingData note="GA4 chưa cấu hình hoặc không có dữ liệu. Vào Admin → Cài đặt để kết nối GA4." />
+              ) : (
+                <div className="space-y-1 px-5 pb-5 pt-3">
+                  {ga4.map(s => (
+                    <div key={s.name} className="rounded-lg border border-black/[0.06] overflow-hidden" style={{ background: "rgba(255,255,255,0.72)" }}>
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-black/[0.05]">
+                        <h4 className="text-[14px] font-[650] text-[#6e6e73]">{s.name}</h4>
+                        <div className="flex items-center gap-3 text-[11px]">
+                          <span className="text-[#6e6e73]">Sessions</span>
+                          <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#d93025] inline-block" />Revenue</span>
+                          <span className="font-[650] text-[#2f9d55]">CR {s.cr.toFixed(2)}%</span>
+                        </div>
+                      </div>
+                      <div className="h-[280px] px-2 pt-2 pb-1">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={s.series} margin={{ top: 18, right: 8, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.06)" />
+                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} interval="preserveStartEnd" />
+                            <YAxis yAxisId="traffic" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} tickFormatter={v => formatCompactNumber(v)} width={44} />
+                            <YAxis yAxisId="rev" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "#6e6e73", fontSize: 10 }} tickFormatter={v => formatCompactNumber(v)} width={44} />
+                            <YAxis yAxisId="cr" orientation="right" axisLine={false} tickLine={false} tick={{ fill: "#2f9d55", fontSize: 10 }} tickFormatter={v => `${v.toFixed(1)}%`} width={36} hide />
+                            <Tooltip
+                              contentStyle={{ borderRadius: "8px", border: "1px solid rgba(0,0,0,0.09)", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.07)", fontSize: 12 }}
+                              formatter={(v: number, n: string) => n === "CR%" ? `${v.toFixed(2)}%` : n === "Revenue" ? formatCurrency(v) : formatNumber(Math.round(v))}
+                            />
+                            <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+                            <Bar yAxisId="rev" dataKey="revenue" name="Revenue" fill="#d93025" fillOpacity={0.18} radius={[2, 2, 0, 0]} barSize={12} />
+                            <Line yAxisId="traffic" type="monotone" dataKey="sessions" name="Traffic" stroke="#0071e3" strokeWidth={1.8} dot={false} />
+                            <Line yAxisId="traffic" type="monotone" dataKey="purchases" name="Purchase" stroke="#00a6a6" strokeWidth={1.8} dot={false} strokeDasharray="4 2" />
+                            <Line yAxisId="cr" type="monotone" dataKey="cr" name="CR%" stroke="#2f9d55" strokeWidth={2.2} dot={{ r: 2 }}>
+                              <LabelList dataKey="cr" position="top" formatter={(v: number) => `${v.toFixed(1)}%`} style={{ fill: "#2f9d55", fontSize: 10, fontWeight: 600 }} />
+                            </Line>
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
 
             {/* Section 5 — Spend & ROAS (Budget · Spend MTD · Spend Pace · Spend Prorata · ROAS) */}
             <Section
               icon={<PieChartIcon className="w-5 h-5" />}
-              iconColor="#00a6a6"
               title="Budget Management"
               desc={`Budget từ Manage Costs/B2C Channels · Spend · Spend Pace · Prorata · ROAS${data.refreshTimestamp ? ` · refresh ${new Date(data.refreshTimestamp).toLocaleString("vi-VN")}` : ""}`}
               source="admin"

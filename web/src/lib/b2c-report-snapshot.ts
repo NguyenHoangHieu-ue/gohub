@@ -2,7 +2,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { chatwootConfigured, chatwootLeadsBreakdown } from "@/lib/chatwoot"
 import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
-import { adminGohubConfigured, adminGohubCustomerMonthSnapshot } from "@/lib/admin-gohub"
+import { adminGohubConfigured, adminGohubCustomerChannelRows, adminGohubCustomerMonthSnapshot } from "@/lib/admin-gohub"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
 import { B2C_CHANNELS } from "@/lib/b2c-channel-budget"
 import { getSafeReportDate, vnToday } from "@/lib/analytics-engine/date-math"
@@ -12,10 +12,13 @@ export interface CustCell { revenue: number; count: number }
 export interface CustRow { new: CustCell; returning: CustCell; total: CustCell }
 export interface ChannelCell { web: number; app: number; other: number }
 export interface MarketChannelCell { vnSales: number; vnWeb: number; usSales: number; usApp: number; usWeb: number }
+export interface CustomerChannelCell { vnB2c: CustRow; vnWeb: CustRow; usB2c: CustRow; usWeb: CustRow; usApp: CustRow }
 export interface ProfitCell { revenue: number; cogs: number; grossProfit: number; opCost: number; cm1: number }
 export interface B2CMonthPayload {
+  revenueAsOf?: string
   market: MarketCell
   customers: CustRow
+  customerChannels?: CustomerChannelCell
   channels: ChannelCell
   marketChannels?: MarketChannelCell
   profitByChannel?: Record<string, ProfitCell>
@@ -51,6 +54,28 @@ function costAmount(value: CostValue, revenue: number, ratio: number): number {
   return value?.type === "percent" ? revenue * n / 100 : n * ratio
 }
 
+function emptyCustCell(): CustCell {
+  return { revenue: 0, count: 0 }
+}
+
+function emptyCustRow(): CustRow {
+  return {
+    new: emptyCustCell(),
+    returning: emptyCustCell(),
+    total: emptyCustCell(),
+  }
+}
+
+function emptyCustomerChannelCell(): CustomerChannelCell {
+  return {
+    vnB2c: emptyCustRow(),
+    vnWeb: emptyCustRow(),
+    usB2c: emptyCustRow(),
+    usWeb: emptyCustRow(),
+    usApp: emptyCustRow(),
+  }
+}
+
 function emptyPayload(): B2CMonthPayload {
   return {
     market: { vn: 0, us: 0, total: 0 },
@@ -59,6 +84,7 @@ function emptyPayload(): B2CMonthPayload {
       returning: { revenue: 0, count: 0 },
       total: { revenue: 0, count: 0 },
     },
+    customerChannels: emptyCustomerChannelCell(),
     channels: { web: 0, app: 0, other: 0 },
     marketChannels: { vnSales: 0, vnWeb: 0, usSales: 0, usApp: 0, usWeb: 0 },
     profitByChannel: {},
@@ -91,6 +117,7 @@ export function snapshotsToMonthlyResponse(snapshots: B2CSnapshotRow[], months: 
   const byMonth = new Map(snapshots.map(row => [row.month, row]))
   const markets: Record<string, MarketCell> = {}
   const customers: Record<string, CustRow> = {}
+  const customerChannels: Record<string, CustomerChannelCell> = {}
   const channels: Record<string, ChannelCell> = {}
   const marketChannels: Record<string, MarketChannelCell> = {}
   const profitByChannel: Record<string, Record<string, ProfitCell>> = {}
@@ -103,6 +130,7 @@ export function snapshotsToMonthlyResponse(snapshots: B2CSnapshotRow[], months: 
     const payload = byMonth.get(month)?.payload ?? emptyPayload()
     markets[month] = payload.market
     customers[month] = payload.customers
+    customerChannels[month] = payload.customerChannels ?? emptyCustomerChannelCell()
     channels[month] = payload.channels
     marketChannels[month] = payload.marketChannels ?? { vnSales: 0, vnWeb: 0, usSales: 0, usApp: 0, usWeb: 0 }
     profitByChannel[month] = payload.profitByChannel ?? {}
@@ -123,6 +151,7 @@ export function snapshotsToMonthlyResponse(snapshots: B2CSnapshotRow[], months: 
   return {
     markets,
     customers,
+    customerChannels,
     channels,
     marketChannels,
     profitByChannel,
@@ -140,13 +169,13 @@ export function snapshotsToMonthlyResponse(snapshots: B2CSnapshotRow[], months: 
   }
 }
 
-async function loadRevenue(months: string[]) {
+async function loadRevenue(months: string[], reportAsOf: string) {
   const windowStart = `${months[0]}-01`
   // Cutoff AN TOÀN = hôm qua giờ VN (getSafeReportDate) — trước đây 4 query dưới KHÔNG có chặn ngày trên
   // nào cả (chỉ >= windowStart), nên nếu fact_fulfillment_revenue đã có dữ liệu (dù chỉ 1 phần) của ngày
   // CHƯA kết thúc thì bị cộng dư vào doanh thu tháng — bug thật, xem docs/wiki/system/tabs/analytics-b2c.md.
-  const cutoff = getSafeReportDate(1)
-  const [cy, cm, cd] = cutoff.split("-").map(Number)
+  const dataAsOf = reportAsOf
+  const [cy, cm, cd] = reportAsOf.split("-").map(Number)
   const currentMonth = `${cy}-${String(cm).padStart(2, "0")}`
   const elapsedDays = cd
   const totalDays = new Date(Date.UTC(cy, cm, 0)).getUTCDate()
@@ -158,9 +187,9 @@ async function loadRevenue(months: string[]) {
        FROM fact_fulfillment_revenue f
        JOIN dim_order_source s ON f.order_source_code = s.code
        WHERE UPPER(s.group_name) = 'B2C'
-         AND f.fulfiled_date::date >= $1 AND f.fulfiled_date::date <= $2
+         AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
        GROUP BY 1, 2`,
-      [windowStart, cutoff],
+      [windowStart, dataAsOf],
     ),
     queryAnalytics<{ month: string; ctype: string; revenue: string }>(
       `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -171,11 +200,10 @@ async function loadRevenue(months: string[]) {
        FROM fact_fulfillment_revenue f
        JOIN dim_order_source s ON f.order_source_code = s.code
        WHERE UPPER(s.group_name) = 'B2C'
-         AND f.fulfiled_date::date >= $1 AND f.fulfiled_date::date <= $2
+         AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
        GROUP BY 1, 2`,
-      [windowStart, cutoff],
+      [windowStart, dataAsOf],
     ),
-    // Nested market × loại kênh (VN/US × Sales/Web/App) — cùng grain fact_fulfillment_revenue.
     queryAnalytics<{ month: string; market: string; ctype: string; revenue: string }>(
       `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
               COALESCE(f.company_code, 'NA')            AS market,
@@ -186,9 +214,9 @@ async function loadRevenue(months: string[]) {
        FROM fact_fulfillment_revenue f
        JOIN dim_order_source s ON f.order_source_code = s.code
        WHERE UPPER(s.group_name) = 'B2C'
-         AND f.fulfiled_date::date >= $1 AND f.fulfiled_date::date <= $2
+         AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
        GROUP BY 1, 2, 3`,
-      [windowStart, cutoff],
+      [windowStart, dataAsOf],
     ),
     queryAnalytics<{ month: string; channel: string; revenue: string; cogs: string; gross_profit: string }>(
       `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM')          AS month,
@@ -199,9 +227,9 @@ async function loadRevenue(months: string[]) {
        FROM fact_fulfillment_revenue f
        JOIN dim_order_source s ON f.order_source_code = s.code
        WHERE UPPER(s.group_name) = 'B2C'
-         AND f.fulfiled_date::date >= $1 AND f.fulfiled_date::date <= $2
+         AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
        GROUP BY 1, 2`,
-      [windowStart, cutoff],
+      [windowStart, dataAsOf],
     ),
   ])
 
@@ -256,7 +284,7 @@ async function loadRevenue(months: string[]) {
       .from("analytics_channel_costs")
       .select("channel, month, ads, platform_fee, sponsor_products, media")
       .in("month", months)
-      .in("channel", B2C_CHANNELS)   // chỉ kênh B2C — loại chi phí kênh B2B/ecom khỏi profit trend
+      .in("channel", B2C_CHANNELS)
     if (error) throw new Error(error.message)
     for (const row of costRows ?? []) {
       const month = String(row.month)
@@ -279,6 +307,28 @@ async function loadRevenue(months: string[]) {
     console.error("[b2c/snapshot] profit channel costs", (e as Error).message)
   }
 
+  return payloads
+}
+
+async function loadCustomerChannels(months: string[]) {
+  const startMonth = process.env.ADMIN_GOHUB_CUSTOMER_CHANNEL_START_MONTH || "2026-05"
+  const rows = adminGohubConfigured() ? await adminGohubCustomerChannelRows(months.filter(month => month >= startMonth)) : []
+
+  const payloads: Record<string, CustomerChannelCell> = {}
+  for (const month of months) payloads[month] = emptyCustomerChannelCell()
+  for (const r of rows) {
+    const monthCell = payloads[r.month]
+    if (!monthCell) continue
+    const bucket = monthCell[r.bucket]
+    if (!bucket) continue
+    const target = r.type === "new" ? bucket.new : bucket.returning
+    const revenue = parseFloat(r.revenue || "0")
+    const count = parseInt(r.count || "0")
+    target.revenue += revenue
+    target.count += count
+    bucket.total.revenue += revenue
+    bucket.total.count += count
+  }
   return payloads
 }
 
@@ -317,9 +367,15 @@ async function loadLeads(months: string[]) {
 
 export async function refreshB2CMonthlySnapshots(months: string[]) {
   if (months.length === 0) return { refreshed: 0, months: [] as string[] }
+  const reportAsOf = getSafeReportDate(1)
   const refreshedAt = new Date().toISOString()
-  const [revenue, marketing, leads] = await Promise.all([
-    loadRevenue(months),
+  const existingSnapshots = await readB2CMonthlySnapshots(months).catch(() => [] as B2CSnapshotRow[])
+  const existingByMonth = new Map(existingSnapshots.map(row => [row.month, row]))
+  const [revenue, customerChannelResult, marketing, leads] = await Promise.all([
+    loadRevenue(months, reportAsOf),
+    loadCustomerChannels(months)
+      .then(data => ({ data, error: null as string | null }))
+      .catch(err => ({ data: {} as Record<string, CustomerChannelCell>, error: (err as Error).message })),
     loadMarketing(months),
     loadLeads(months),
   ])
@@ -327,6 +383,7 @@ export async function refreshB2CMonthlySnapshots(months: string[]) {
   const rows = []
   for (const month of months) {
     const payload = emptyPayload()
+    const existingPayload = existingByMonth.get(month)?.payload
     const leadSource = tursoLeadsConfigured() ? "turso" : omniConfigured() ? "omni" : chatwootConfigured() ? "chatwoot" : "none"
     const sourceStatus: SourceStatus = {
       analytics_db: { status: "success", refreshed_at: refreshedAt },
@@ -337,7 +394,11 @@ export async function refreshB2CMonthlySnapshots(months: string[]) {
     let refreshStatus = "success"
     let errorMessage: string | null = null
 
+    payload.revenueAsOf = reportAsOf
     payload.market = revenue[month]?.market ?? payload.market
+    payload.customerChannels = customerChannelResult.error
+      ? existingPayload?.customerChannels ?? payload.customerChannels
+      : customerChannelResult.data[month] ?? payload.customerChannels
     payload.channels = revenue[month]?.channels ?? payload.channels
     payload.marketChannels = revenue[month]?.marketChannels ?? payload.marketChannels
     payload.profitByChannel = revenue[month]?.profitByChannel ?? payload.profitByChannel
@@ -345,6 +406,12 @@ export async function refreshB2CMonthlySnapshots(months: string[]) {
     payload.budget = marketing.budget[month] ?? 0
     payload.leads = leads.total[month] ?? 0
     payload.leadsByChannel = leads.channels.map(c => ({ label: c.label, value: c.byMonth[month] ?? 0 }))
+
+    if (customerChannelResult.error) {
+      refreshStatus = "partial"
+      errorMessage = `Customer channels: ${customerChannelResult.error}`
+      sourceStatus.admin_gohub = { status: "error", refreshed_at: refreshedAt, error: customerChannelResult.error, stale_snapshot_used: !!existingPayload?.customerChannels }
+    }
 
     if (adminGohubConfigured()) {
       try {
@@ -366,8 +433,10 @@ export async function refreshB2CMonthlySnapshots(months: string[]) {
         }
       } catch (err) {
         refreshStatus = "partial"
-        errorMessage = (err as Error).message
-        sourceStatus.admin_gohub = { status: "error", refreshed_at: refreshedAt, error: errorMessage }
+        const customerError = (err as Error).message
+        errorMessage = errorMessage ? `${errorMessage}; Customer total: ${customerError}` : `Customer total: ${customerError}`
+        payload.customers = existingPayload?.customers ?? payload.customers
+        sourceStatus.admin_gohub = { status: "error", refreshed_at: refreshedAt, error: customerError, stale_snapshot_used: !!existingPayload?.customers }
       }
     }
 
