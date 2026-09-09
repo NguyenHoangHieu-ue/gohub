@@ -1327,9 +1327,9 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <RevenueCompareCard
                 icon={<DollarSign className="h-4 w-4" />}
-                label={`${periodSuffix} B2C · Cùng kỳ`}
+                label={`Doanh thu B2C so với cùng kỳ ${viewMode === "month" ? "tháng" : "quý"} trước`}
                 value={formatCurrency(mtdTotal)}
-                caption={dataAsOfLabel ? `Dữ liệu T-1 đến ${dataAsOfLabel}` : periodProgressLabel}
+                caption={`Từ đầu ${viewMode === "month" ? "tháng" : "quý"} đến hết ngày hôm qua${dataAsOfLabel ? ` (${dataAsOfLabel})` : ""}`}
                 referenceLabel={viewMode === "month" ? "Cùng kỳ tháng trước" : "Cùng kỳ quý trước"}
                 referenceValue={previousSamePeriod > 0 ? formatCurrency(previousSamePeriod) : "Chưa có dữ liệu"}
                 metricLabel="Tăng / giảm"
@@ -1347,11 +1347,11 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               />
               <RevenueCompareCard
                 icon={<Target className="h-4 w-4" />}
-                label={`${periodSuffix} B2C · Target`}
+                label={`Tiến độ doanh thu B2C so với mục tiêu ${viewMode === "month" ? "tháng" : "quý"}`}
                 value={formatCurrency(mtdTotal)}
-                caption="Target từ KPI Target B2C · Total"
-                referenceLabel={viewMode === "month" ? "Target tháng này" : "Target quý này"}
-                referenceValue={currentRevenueTarget > 0 ? formatCurrency(currentRevenueTarget) : "Chưa nhập target"}
+                caption={targetAttainment !== null ? `Đã đạt ${targetAttainment.toFixed(1)}% mục tiêu ${viewMode === "month" ? "tháng" : "quý"}` : "Chưa nhập mục tiêu doanh thu"}
+                referenceLabel={viewMode === "month" ? "Mục tiêu tháng này" : "Mục tiêu quý này"}
+                referenceValue={currentRevenueTarget > 0 ? formatCurrency(currentRevenueTarget) : "Chưa nhập mục tiêu"}
                 metricLabel="Đã đạt"
                 metricValue={targetAttainment}
                 mode="attainment"
