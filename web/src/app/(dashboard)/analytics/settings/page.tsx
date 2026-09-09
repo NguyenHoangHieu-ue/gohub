@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders, ChevronDown, Database, MapPin, Tag } from "lucide-react"
+import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders, ChevronDown, Database, MapPin, Tag, Boxes } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 import { useRoleGuard } from "@/lib/use-role-guard"
@@ -52,6 +52,9 @@ function AnalyticsSettings() {
   const [allItemTypes, setAllItemTypes] = useState<string[]>([])
   const dirtyItemChannelTypes = JSON.stringify(itemChannelTypes) !== savedItemChannelTypes
   const [newChannelPrefix, setNewChannelPrefix] = useState<Record<string, string>>({})
+  const [invThresholds, setInvThresholds] = useState({ safeDays: 90, normalDays: 60, warningDays: 30 })
+  const [savedInvThresholds, setSavedInvThresholds] = useState<string>("{}")
+  const dirtyInvThresholds = JSON.stringify(invThresholds) !== savedInvThresholds
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
 
@@ -105,7 +108,7 @@ function AnalyticsSettings() {
     setLoading(true)
     fetchB2BCacheInfo()  // parallel, non-blocking
     try {
-      const [t, f, ch, skuRule, cc, ict, crRes] = await Promise.all([
+      const [t, f, ch, skuRule, cc, ict, crRes, invT] = await Promise.all([
         fetch("/api/config/partner-tiers").then(r => r.ok ? r.json() : {}),
         fetch("/api/config/role-filters").then(r => r.ok ? r.json() : {}),
         fetch("/api/channels?channelGroup=B2B").then(r => r.ok ? r.json() : []),
@@ -113,6 +116,7 @@ function AnalyticsSettings() {
         fetch("/api/config/country-codes").then(r => r.ok ? r.json() : []),
         fetch("/api/config/item-channel-types").then(r => r.ok ? r.json() : { config: {}, allTypes: [] }).catch(() => ({ config: {}, allTypes: [] })),
         fetch("/api/config/chatbot-rules").then(r => r.ok ? r.json() : { rules: "" }).catch(() => ({ rules: "" })),
+        fetch("/api/config/inventory-alert-thresholds").then(r => r.ok ? r.json() : { safeDays: 90, normalDays: 60, warningDays: 30 }).catch(() => ({ safeDays: 90, normalDays: 60, warningDays: 30 })),
       ])
       const parsedSkuRules = skuRule?.rules || []
       setSkuRules(parsedSkuRules)
@@ -131,6 +135,9 @@ function AnalyticsSettings() {
       setAvailablePartners(Array.isArray(ch) ? ch.filter((c: any) => typeof c === "string") : [])
       const cr = crRes?.rules ?? ""
       setCustomRules(cr); setSavedCustomRules(cr)
+      const parsedInvT = { safeDays: invT?.safeDays ?? 90, normalDays: invT?.normalDays ?? 60, warningDays: invT?.warningDays ?? 30 }
+      setInvThresholds(parsedInvT)
+      setSavedInvThresholds(JSON.stringify(parsedInvT))
     } finally {
       setLoading(false)
     }
@@ -149,6 +156,20 @@ function AnalyticsSettings() {
         if (key === "item-channel")  setSavedItemChannelTypes(JSON.stringify(body))
       }
       notify(res.ok, res.ok ? "Đã lưu" : "Lưu thất bại")
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const saveInvThresholds = async () => {
+    setSaving("inv-thresholds")
+    try {
+      const res = await fetch("/api/config/inventory-alert-thresholds", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(invThresholds),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (res.ok) setSavedInvThresholds(JSON.stringify(invThresholds))
+      notify(res.ok, res.ok ? "Đã lưu" : (j.error || "Lưu thất bại"))
     } finally {
       setSaving(null)
     }
@@ -405,6 +426,37 @@ function AnalyticsSettings() {
             <p className="text-[11px] text-slate-400 mt-1.5">Text này được inject vào system prompt của chatbot BI — viết bằng ngôn ngữ tự nhiên, chatbot sẽ hiểu và áp dụng.</p>
           </div>
         </div>
+      </div>
+
+      {/* Inventory Alert Thresholds — OPS tự set ngưỡng cảnh báo hết hàng tab Inventory */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Boxes className="w-5 h-5 text-brand-600" />
+            <div>
+              <h2 className="font-bold text-slate-800">Ngưỡng cảnh báo tồn kho (Inventory)</h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">Áp cho tab Inventory → sub-tab Tồn kho. Dựa trên số ngày còn hàng ước tính (tồn hiện tại ÷ tốc độ bán/ngày).</p>
+            </div>
+          </div>
+          <button onClick={saveInvThresholds} disabled={saving === "inv-thresholds" || !dirtyInvThresholds} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyInvThresholds ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
+            {saving === "inv-thresholds" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
+          </button>
+        </div>
+        <div className="p-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {([
+            ["safeDays", "An toàn — từ (ngày)", "emerald"],
+            ["normalDays", "Bình thường — từ (ngày)", "sky"],
+            ["warningDays", "Cần chú ý — từ (ngày), dưới mức này = Nguy hiểm", "amber"],
+          ] as const).map(([key, label]) => (
+            <div key={key}>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</label>
+              <input type="number" min={1} value={invThresholds[key]}
+                onChange={e => setInvThresholds(prev => ({ ...prev, [key]: Number(e.target.value) || 0 }))}
+                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-brand-500" />
+            </div>
+          ))}
+        </div>
+        <p className="px-6 pb-5 text-xs text-slate-400">Phải theo thứ tự An toàn &gt; Bình thường &gt; Cần chú ý. Mặc định 90/60/30 ngày.</p>
       </div>
 
       {/* Role Filters */}
