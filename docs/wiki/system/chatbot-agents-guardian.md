@@ -90,6 +90,20 @@ Lark dùng trong group → không phân biệt được role (mọi người có
 ---
 
 ## Lưu ý kỹ thuật
+- **s195+16 (2026-09-10) — Bé Gấu đổi model `gemini-3.6-flash` → `gemini-3.8-flash`.** Theo yêu cầu Hiếu
+  đánh giá toàn diện + nâng cấp. Verify qua WebSearch trước khi đổi (không đoán): model có thật, GA, nhưng
+  **mặc định thinking level = medium nếu không set** (billable, thêm latency ẩn) — đúng lớp rủi ro repo đã
+  từng dính (gemini-3.5-flash thinking model cần `thinkingBudget=0` mới ổn định JSON — xem mục dưới; và
+  gemini-2.0-flash bị khai tử im lặng 6 ngày s194+7). Set tường minh `generationConfig.thinkingConfig.thinkingLevel`
+  (SDK `@google/generative-ai` v0.21.0 pin cứng chưa có type field này, ra đời sau SDK → `as any`):
+  `"low"` cho model chính (vòng lặp function-calling, cân bằng lợi ích tool-orchestration của 3.8 vs latency
+  budget vừa mới nâng — s195+14, maxDuration 60→300) · `"minimal"` cho call JSON 1-shot của
+  `detectAndLogLearning` (không cần suy luận sâu, cần nhanh + JSON ổn định). **CHỈ đổi `be-gau.ts`** — các
+  agent khác (Gấu Pro `creator-ai.ts`, pipeline cũ `bi-analyst.ts`/`data-explorer.ts`/`orchestrator.ts`/
+  `classifier.ts`/`answer.ts`, Tổ Gấu AI, usage-stats classify/evaluate) VẪN `gemini-3.6-flash` — ngoài scope
+  yêu cầu lần này, đổi sau nếu Hiếu muốn. tsc + lint (0 lỗi mới) + vitest (216/216) PASS. **Cần Hiếu**: QA
+  1 câu hỏi BI phức tạp (nhiều tool-call) trên staging — xác nhận vẫn trả lời đúng, không chậm hơn rõ rệt,
+  không lỗi JSON/im lặng; theo dõi Gemini API cost vài ngày đầu (thinking tokens tính phí).
 - **Guardian không còn gọi Gemini** (s108) — phân loại nhạy cảm bằng regex. Routing classifier (`classifier.ts`) vẫn dùng Gemini nhưng chỉ là **phiếu tier-1** trong graph (không quyết một mình).
 - Model `gemini-3.5-flash` là **thinking model**: khi còn dùng cho classifier, phải set `generationConfig.thinkingConfig.thinkingBudget = 0` mới trả JSON ổn định (nếu không, token bị tiêu vào "thinking" → output cụt → JSON.parse lỗi).
 - **Lark bot trên Vercel/Netlify**: KHÔNG dùng `waitUntil` (không hỗ trợ trên Next 14 App Router). Xử lý **đồng bộ** (await rồi mới trả 200). Chống Lark retry: dedup `event_id` qua `app_settings.larkevt:<id>`.

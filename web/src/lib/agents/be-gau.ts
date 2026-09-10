@@ -369,7 +369,14 @@ async function detectAndLogLearning(opts: {
 
     // 1-shot LLM classify
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash", generationConfig: { temperature: 0 } })
+    // thinkingLevel "minimal": gemini-3.8-flash mặc định thinking=medium (tiêu hao token/latency ẩn) —
+    // call này chỉ cần JSON 1-shot xác định, không cần suy luận sâu. SDK v0.21.0 pin cứng chưa có type
+    // cho field này (ra đời sau SDK) → "as any". Xem chatbot-agents-guardian.md (bài học gemini-3.5-flash
+    // thinking model cần thinkingBudget=0 mới ổn định JSON — né lặp lại đúng lớp sự cố).
+    const model = genAI.getGenerativeModel({
+      model: "gemini-3.8-flash",
+      generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "minimal" } } as any,
+    })
     const prompt = `Phân tích xem câu sau của user có chứa THÔNG TIN THỰC TẾ có thể học không (không phải câu hỏi).
 
 User (role=${role}): "${userMsg.slice(0, 500)}"
@@ -500,11 +507,15 @@ export async function runBeGau(opts: {
   ]
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
+  // thinkingLevel "low": cân bằng — 3.8-flash cải thiện tool-orchestration/reasoning nhiều bước (đúng lợi
+  // ích cho vòng lặp function-calling BI), nhưng KHÔNG để mặc định "medium" (billable, thêm latency ẩn
+  // mỗi vòng × tối đa 12 vòng) đội lại đúng bug timeout vừa fix (s195+14, maxDuration 60→300). SDK v0.21.0
+  // chưa có type cho thinkingConfig (ra đời sau SDK) → "as any".
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.6-flash",
+    model: "gemini-3.8-flash",
     systemInstruction,
     tools: [{ functionDeclarations }],
-    generationConfig: { temperature: 0 },
+    generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
   })
 
   // File/ảnh đính kèm (s190+3) — mirror cách runCreatorAI build parts (text + inlineData), rút gọn.

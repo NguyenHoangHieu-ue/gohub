@@ -6,11 +6,24 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-10, s195+15)
+## Trạng thái hiện tại (2026-09-10, s195+16)
 
 | | |
 |---|---|
-| ⏳ **s195+15 (2026-09-10) — Fix root cause query timeout tab B2C (Advanced), chờ Hiếu QA staging** | Hiếu
+| ⏳ **s195+16 (2026-09-10) — Bé Gấu: đánh giá toàn diện + đổi model gemini-3.6-flash → gemini-3.8-flash, chờ Hiếu QA** | Hiếu yêu cầu đánh giá ưu/nhược Bé Gấu +
+  hướng nâng cấp + đổi model. Ưu điểm: 1 agent function-calling gọn (thay 7-agent pipeline cũ), tool-set
+  rộng phân quyền tách bạch (`GP_TOOLS_OPEN`/`GP_TOOLS_ADMIN_ONLY`), `execSQL` tự cảnh báo auto-retry/row-
+  multiplication/3HK rule. Nhược điểm: fake streaming (`api/chat/route.ts` await xong hết mới enqueue 1
+  lần — mới vá triệu chứng bằng maxDuration s195+14, chưa fix gốc), vòng lặp tool-call không có cap thời
+  gian giữa chừng. Trước khi đổi model: verify qua WebSearch (không đoán) — `gemini-3.8-flash` có thật/GA
+  nhưng **mặc định thinking=medium nếu không set** (billable, latency ẩn) — đúng lớp rủi ro repo từng dính
+  (gemini-3.5-flash cần `thinkingBudget=0`; gemini-2.0-flash khai tử im lặng 6 ngày s194+7). Fix: set tường
+  minh `thinkingConfig.thinkingLevel` = `"low"` (model chính) / `"minimal"` (learning-detect JSON 1-shot),
+  `as any` vì SDK v0.21.0 pin cứng chưa có type field này. **CHỈ đổi `be-gau.ts`** — Gấu Pro/pipeline cũ/Tổ
+  Gấu AI vẫn `gemini-3.6-flash`, ngoài scope. tsc + lint (0 lỗi mới) + vitest (216/216) PASS. Wiki
+  `docs/wiki/system/chatbot-agents-guardian.md` đã cập nhật. **Cần Hiếu**: QA 1 câu BI phức tạp trên
+  staging (đúng/không chậm/không lỗi JSON), theo dõi Gemini API cost vài ngày đầu.
+| ✅ **s195+15 (2026-09-10) — Fix root cause query timeout tab B2C (Advanced) — đã merge main, chờ Hiếu QA** | Hiếu
   báo tab B2C bị timeout. Root cause xác nhận qua đọc code (không đoán): `b2c-advanced-dashboard.tsx` set
   `nocache=1` MỌI lượt load trang → route `b2c/monthly` bỏ qua cache hoàn toàn, tính lại tươi mỗi lần —
   trong đó 2 query phân loại khách New/Returning có CTE `first_order` **không giới hạn ngày dưới**, quét
@@ -20,9 +33,10 @@
   cần tươi tới giây vì cutoff dữ liệu vốn T-1) + ưu tiên đọc **Admin GoHub API** (nhẹ, cùng nguồn cron
   snapshot) trước khi rơi về CTE nặng (giờ chỉ là fallback thật). Khối revenue giữ nguyên "luôn live". Chạy
   tuần tự (không gộp Promise.all) giảm tải pool. Không đổi công thức/số liệu/UI. tsc + lint (0 lỗi mới) +
-  vitest (216/216) PASS. Wiki `docs/wiki/system/tabs/analytics-b2c.md` đã cập nhật. **Cần Hiếu**: QA tab
-  B2C Advanced trên staging sau khi Vercel deploy xong — load nhanh hơn/hết timeout, số liệu Customers
-  không đổi so với bản trước.
+  vitest (216/216) PASS. Wiki `docs/wiki/system/tabs/analytics-b2c.md` đã cập nhật. Đã merge staging→main
+  (`f56b4692`) theo yêu cầu Hiếu, production đang tự deploy. **Cần Hiếu**: QA tab B2C Advanced trên
+  production/staging sau khi Vercel deploy xong — load nhanh hơn/hết timeout, số liệu Customers không đổi
+  so với bản trước.
 | ✅ **s195+14 (2026-09-09) — Fix Bé Gấu trả lời quá lâu → im lặng không có câu trả lời (đúng bug thật, đã verify qua log)** | Hiếu báo trả lời lâu thì không ra
   gì cả, hỏi có phải do time không. Verify qua Vercel Runtime Errors: `Task timed out after 60 seconds`
   đúng route `/api/chat`, lần gần nhất khớp đúng lúc Hiếu vừa gặp — xác nhận đúng nguyên nhân, không đoán.
@@ -271,6 +285,10 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+16 — QA Bé Gấu sau khi đổi model gemini-3.8-flash** — sau khi Vercel deploy staging: hỏi Bé
+  Gấu 1 câu BI nhiều bước (vd "so sánh doanh thu B2B các tháng gần đây theo tier") — xác nhận trả lời đúng,
+  không chậm hơn rõ rệt, không im lặng/lỗi JSON. Theo dõi Gemini API cost vài ngày đầu (model mới có
+  thinking tokens tính phí dù đã set thinkingLevel thấp).
 - [ ] **s195+15 — QA tab B2C Advanced trên staging (fix query timeout)** — sau khi Vercel deploy: mở
   `/analytics/b2c` (sub-tab Advanced, mặc định), xác nhận (a) trang load nhanh/không còn timeout, (b) số
   Customers New/Returning khớp bản trước (nếu badge "Admin API lỗi" hiện — báo lại, nghĩa là đang fallback
