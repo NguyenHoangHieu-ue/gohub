@@ -10,6 +10,7 @@ export type { FileContext }  from "./file-parser"
 // ─── Phase 2: import từ creator/ modules ─────────────────────────────────────
 import { ALL_TOOL_DECLARATIONS } from "./creator/declarations"
 import { dispatchTool }          from "./creator/tools/dispatch"
+import { genWithRetryStream }    from "./gemini-stream"
 
 // ─── Creator AI ───────────────────────────────────────────────────────────────
 // Private AI exclusively for Hiếu (creator role).
@@ -20,7 +21,8 @@ import { dispatchTool }          from "./creator/tools/dispatch"
 
 export type GPEvent =
   | { type: "status"; text: string }
-  | { type: "text"; content: string }
+  | { type: "delta"; content: string }   // s195+18: 1 đoạn text vừa stream ra (nối dần ở FE)
+  | { type: "text"; content: string }    // full text CUỐI CÙNG (giữ nguyên — nguồn sự thật lưu DB/backward-compat)
   | { type: "done"; conversationId: string | null; sources: WebSource[]; summarized: boolean }
   | { type: "error"; message: string }
 
@@ -589,23 +591,7 @@ export async function runReadKnowledgeBase(category?: string): Promise<any> {
 }
 
 // ─── Main runner ──────────────────────────────────────────────────────────────
-
-// Gọi Gemini có retry cho lỗi TẠM THỜI (429 rate-limit / 5xx / overload / network) → tăng ổn định.
-// Lỗi thật (prompt/schema) ném ngay, không retry vô ích.
-async function genWithRetry(model: any, request: any, attempts = 3): Promise<any> {
-  let lastErr: any
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await model.generateContent(request)
-    } catch (e: any) {
-      lastErr = e
-      const transient = /429|rate|quota|resource.?exhausted|500|503|overload|unavailable|deadline|timeout|ECONNRESET|ETIMEDOUT|fetch failed|network/i.test(String(e?.message || ""))
-      if (!transient || i === attempts - 1) throw e
-      await new Promise(r => setTimeout(r, 800 * (i + 1)))  // backoff 0.8s → 1.6s
-    }
-  }
-  throw lastErr
-}
+// s195+18: genWithRetryStream (streaming thật, dùng chung với Bé Gấu) — xem lib/agents/gemini-stream.ts
 
 // Ngày tháng theo giờ VN (ICT) → inject vào system prompt để Gấu tự hiểu "tháng này"/"hôm nay".
 function buildDateContext(): string {
@@ -722,7 +708,8 @@ export async function runCreatorAI(
     { role: "user", parts: userParts },
   ]
 
-  let genResult = await genWithRetry(model, { contents })
+  const onChunk = (delta: string) => onEvent?.({ type: "delta", content: delta })
+  let genResult = await genWithRetryStream(model, { contents }, onChunk)
   const collectedSources: WebSource[] = []
 
   function appendModelContent() {
@@ -749,7 +736,7 @@ export async function runCreatorAI(
 
     // Send function responses as role "user" — required by this Gemini SDK's content format
     contents.push({ role: "user", parts: fnParts })
-    genResult = await genWithRetry(model, { contents })
+    genResult = await genWithRetryStream(model, { contents }, onChunk)
     appendModelContent()
   }
 
@@ -758,7 +745,7 @@ export async function runCreatorAI(
   if (!text.trim()) {
     try {
       contents.push({ role: "user", parts: [{ text: "Based on the data retrieved above, write a complete, detailed answer in Vietnamese. Include a markdown table or chart if the data is tabular. DO NOT call any more tools." }] })
-      genResult = await genWithRetry(model, { contents })
+      genResult = await genWithRetryStream(model, { contents }, onChunk)
       text = genResult.response.text()
     } catch { /* keep empty */ }
   }

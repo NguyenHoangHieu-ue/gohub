@@ -6,10 +6,23 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-10, s195+17)
+## Trạng thái hiện tại (2026-09-10, s195+18)
 
 | | |
 |---|---|
+| ⏳ **s195+18 (2026-09-10) — Stream token THẬT cho Bé Gấu + Gấu Pro (fix gốc), chờ Hiếu QA** | Làm nốt mục
+  "chưa làm" nêu ở s195+17. Trước đây cả 2 agent await xong TOÀN BỘ vòng tool-call mới trả 1 cục text —
+  màn hình trắng suốt lúc chờ (root cause s195+14, lúc đó chỉ vá bằng nâng maxDuration). Đổi cả 2 agent
+  dùng `model.generateContentStream()` (SDK đã hỗ trợ sẵn) thay `generateContent()` ở MỌI vòng gọi model —
+  helper dùng chung `genWithRetryStream()` tách file mới `lib/agents/gemini-stream.ts` (tránh lặp code y
+  hệt s195+17 vừa fix). Bé Gấu: FE `chatbot/page.tsx` KHÔNG cần sửa (code đọc stream sẵn đã đúng). Gấu Pro:
+  thêm event `delta` vào `GPEvent`, FE `analytics/creator/ai/page.tsx` thêm bubble placeholder + nối dần
+  theo delta (trước chỉ update UI 1 lần dù đã có SSE), lỗi giữa chừng giờ nối thêm vào phần đã stream thay
+  vì xoá trắng. Mock Gemini SDK trong test (`be-gau.test.ts`/`be-gau-runner.test.ts`) cập nhật thêm
+  `generateContentStream` (delegate qua `generateContent` mock cũ, giữ nguyên mọi chuỗi test có sẵn). tsc +
+  lint (0 lỗi mới) + vitest (216/216) PASS. Wiki `docs/wiki/system/chatbot-agents-guardian.md` đã cập nhật.
+  **Cần Hiếu**: QA cả 2 agent trên staging — chữ chạy dần thay vì bung 1 cục, không lặp/mất nội dung,
+  sources/export marker vẫn đúng.
 | ⏳ **s195+17 (2026-09-10) — Đổi model TOÀN BỘ AI Intel sang gemini-3.8-flash + đánh giá/nâng cấp Gấu Pro, chờ Hiếu QA** | Mở rộng s195+16 (khi đó chỉ đổi Bé Gấu) sang toàn bộ 17 file dùng Gemini (pipeline
   cũ bi-analyst/data-explorer/orchestrator/classifier/answer, Gấu Pro `creator-ai.ts`, mrp.ts, okr-lark-
   classify.ts — giữ nguyên safety net `maxOutputTokens=4000` cũ, web-search.ts, weekly-report/narrative.ts,
@@ -302,6 +315,11 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+18 — QA stream token thật Bé Gấu + Gấu Pro trên staging** — mở cả 2 chat, hỏi 1 câu cần vài
+  giây (BI/phân tích), xác nhận: (a) chữ CHẠY DẦN theo thời gian thực thay vì im lặng rồi bung nguyên cục
+  như trước; (b) nội dung không lặp/không thiếu đoạn nào so với trước; (c) Gấu Pro: status "đang tìm
+  kiếm/đang query..." vẫn hiện đúng lúc tool đang chạy, biến mất đúng lúc câu trả lời bắt đầu chảy chữ; (d)
+  nguồn tham khảo (Bé Gấu) + nút export/followup (Gấu Pro) vẫn hiện đúng ở cuối như trước.
 - [ ] **s195+17 — QA toàn bộ AI sau khi đổi model gemini-3.8-flash (mọi agent, không chỉ Bé Gấu)** — sau
   khi Vercel deploy staging: (a) Bé Gấu + Gấu Pro — hỏi 1 câu BI nhiều bước mỗi bên, xác nhận đúng/không
   chậm/không lỗi JSON; (b) nếu tiện, thử nhanh usage-stats classify/evaluate, Tổ Gấu AI (group chat),

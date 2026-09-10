@@ -502,6 +502,7 @@ export default function CreatorAIPage() {
     setAttachedFiles([])
     setImgPreviews(new Map())
     setLoading(true)
+    let placeholderAdded = false
 
     try {
       const serializedMsgs = next.map(m => ({ role: m.role, content: m.content }))
@@ -524,7 +525,8 @@ export default function CreatorAIPage() {
         throw new Error(err.error || `HTTP ${res.status}`)
       }
 
-      // SSE stream reader
+      // SSE stream reader — s195+18: "delta" event stream token thật, nối dần vào bubble assistant
+      // (trước đây chỉ 1 event "text" duy nhất ở cuối → màn hình trắng suốt lúc chờ, giờ chữ chạy dần).
       const reader  = res.body.getReader()
       const decoder = new TextDecoder()
       let buf = ""
@@ -532,6 +534,17 @@ export default function CreatorAIPage() {
       let finalSources:   WebSource[]  = []
       let finalSummarized = false
       let newConvId:      string | null = null
+
+      const updateBubble = (content: string, extra?: Partial<Message>) => {
+        setMessages(prev => {
+          const u = [...prev]
+          u[u.length - 1] = { role: "assistant", content, ...extra }
+          return u
+        })
+      }
+
+      setMessages(prev => [...prev, { role: "assistant", content: "" }])
+      placeholderAdded = true
 
       while (true) {
         const { done, value } = await reader.read()
@@ -543,7 +556,12 @@ export default function CreatorAIPage() {
           if (!part.startsWith("data: ")) continue
           try {
             const ev = JSON.parse(part.slice(6))
-            if      (ev.type === "status") setStatusText(ev.text)
+            if (ev.type === "status") setStatusText(ev.text)
+            else if (ev.type === "delta") {
+              assistantContent += ev.content
+              setStatusText("")
+              updateBubble(assistantContent)
+            }
             else if (ev.type === "text")   assistantContent = ev.content
             else if (ev.type === "done") {
               newConvId       = ev.conversationId
@@ -557,12 +575,7 @@ export default function CreatorAIPage() {
       }
 
       setStatusText("")
-      setMessages([...next, {
-        role: "assistant",
-        content: assistantContent || "Không có nội dung trả về.",
-        sources: finalSources,
-        summarized: finalSummarized,
-      }])
+      updateBubble(assistantContent || "Không có nội dung trả về.", { sources: finalSources, summarized: finalSummarized })
       if (newConvId && !convId) {
         setConvId(newConvId)
         fetch("/api/creator-ai/conversations")
@@ -572,7 +585,17 @@ export default function CreatorAIPage() {
       }
     } catch (e: any) {
       setStatusText("")
-      setMessages([...next, { role: "assistant", content: `Lỗi: ${e.message}` }])
+      // Nếu đã stream được phần nào trước khi lỗi → giữ lại, nối thêm lỗi thay vì xoá trắng thay thế.
+      if (placeholderAdded) {
+        setMessages(prev => {
+          const u = [...prev]
+          const prevContent = u[u.length - 1]?.content || ""
+          u[u.length - 1] = { role: "assistant", content: prevContent ? `${prevContent}\n\n⚠️ Lỗi: ${e.message}` : `Lỗi: ${e.message}` }
+          return u
+        })
+      } else {
+        setMessages([...next, { role: "assistant", content: `Lỗi: ${e.message}` }])
+      }
     } finally {
       setLoading(false)
       setTimeout(() => inputRef.current?.focus(), 100)

@@ -10,9 +10,9 @@ import { checkRateLimit }                      from "@/lib/rate-limit"
 import { parseUploadedFile, type FileContext } from "@/lib/agents/file-parser"
 
 // Hobby plan trần cứng 60s (Vercel Runtime Timeout Error thật, xem log s195+14) — nâng lên 300s (Hobby +
-// Fluid Compute cho phép tới 5 phút, không cần nâng gói). runBeGau() await xong hết mới enqueue 1 lần
-// (không stream token thật dù dùng ReadableStream) nên câu hỏi nhiều tool-call/BI phức tạp cần thời gian
-// dài hơn 60s dễ bị Vercel giết giữa chừng → user không thấy gì (không phải lỗi code, catch không kịp chạy).
+// Fluid Compute cho phép tới 5 phút, không cần nâng gói). Giữ nguyên dù s195+18 đã thêm stream token thật
+// (onChunk) — câu hỏi nhiều tool-call/BI phức tạp vẫn cần tổng thời gian dài, chỉ là user giờ THẤY chữ
+// chạy dần thay vì màn hình trắng trong lúc chờ.
 export const maxDuration = 300
 
 // Bé Gấu (s131): mô phỏng cơ chế Gấu Pro — 1 agent function-calling lặp, tự chọn công cụ —
@@ -129,10 +129,12 @@ export async function POST(req: NextRequest) {
             sessionId: (session as any)?.sessionId || undefined,
             isCost, extraDirective: priceDirective,
             fileContexts: fileContexts.length > 0 ? fileContexts : undefined,
+            // s195+18: text đã được stream ra controller theo từng đoạn ngay trong lúc runBeGau() chạy —
+            // KHÔNG enqueue lại `text` đầy đủ bên dưới nữa (sẽ bị lặp đôi nội dung).
+            onChunk: (delta) => { try { controller.enqueue(encoder.encode(delta)) } catch {} },
           })
           // Log cả câu hỏi + câu trả lời sau khi có đủ (fire-and-forget)
           logChat(identity, name, role, lastMsg, text).catch(() => {})
-          controller.enqueue(encoder.encode(text))
           // Trích nguồn web (nếu có) — nối cuối, không lộ cơ chế.
           if (sources.length) {
             const uniq = Array.from(new Map(sources.map(s => [s.url, s])).values()).slice(0, 5)

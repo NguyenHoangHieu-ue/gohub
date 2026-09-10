@@ -6,12 +6,18 @@ import { vi, describe, test, expect, beforeEach } from "vitest"
 
 // ─── Hoisted mock để thay đổi Gemini response từng test ──────────────────────
 const mockGenerateContent = vi.hoisted(() => vi.fn())
+// s195+18: code thật gọi generateContentStream() (streaming) thay vì generateContent() — mock stream
+// delegate vào mockGenerateContent (giữ nguyên mọi mockResolvedValueOnce nhiều vòng viết sẵn per-test).
+const mockGenerateContentStream = vi.hoisted(() => vi.fn(async (...args: any[]) => {
+  const { response } = await mockGenerateContent(...args)
+  return { stream: (async function* () { yield response })(), response: Promise.resolve(response) }
+}))
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 vi.mock("@google/generative-ai", () => ({
   // regular function (not arrow) — arrow functions cannot be used with `new`
   GoogleGenerativeAI: vi.fn(function() {
-    return { getGenerativeModel: vi.fn().mockReturnValue({ generateContent: mockGenerateContent }) }
+    return { getGenerativeModel: vi.fn().mockReturnValue({ generateContent: mockGenerateContent, generateContentStream: mockGenerateContentStream }) }
   }),
   SchemaType: { OBJECT: "object", STRING: "string", ARRAY: "array", NUMBER: "number", BOOLEAN: "boolean" },
 }))

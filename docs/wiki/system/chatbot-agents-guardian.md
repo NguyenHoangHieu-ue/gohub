@@ -90,6 +90,37 @@ Lark dùng trong group → không phân biệt được role (mọi người có
 ---
 
 ## Lưu ý kỹ thuật
+- **s195+18 (2026-09-10) — Stream token THẬT cho cả Bé Gấu lẫn Gấu Pro (fix gốc, không còn vá triệu chứng).**
+  Tiếp mục "chưa làm" nêu ở s195+17. Trước đây CẢ 2 agent `await` xong TOÀN BỘ vòng lặp function-calling
+  (tới 12/20 iteration) mới trả 1 cục text duy nhất cho user — dù bọc `ReadableStream`/SSE, user vẫn thấy
+  màn hình trắng suốt thời gian chờ (root cause thật của s195+14, lúc đó chỉ vá triệu chứng bằng nâng
+  `maxDuration` 60→300, chưa fix gốc). Đổi cả 2 agent dùng `model.generateContentStream()` (SDK
+  `@google/generative-ai` v0.21.0 hỗ trợ sẵn, có sẵn field `.stream` async-generator + `.response` promise
+  tổng hợp) THAY VÌ `generateContent()` ở MỌI vòng gọi model (kể cả vòng có tool-call — vòng đó thường
+  KHÔNG có text vì system prompt cấm model narrate bước kỹ thuật, nên forward chunk không lộ gì; vòng trả
+  lời cuối thì text chảy thẳng ra user theo từng đoạn model sinh ra thật). Helper dùng chung
+  `genWithRetryStream()` tách ra `lib/agents/gemini-stream.ts` (dùng cho cả `be-gau.ts` VÀ `creator-ai.ts`
+  — tránh lặp lại đúng kiểu duplicate code vừa fix ở s195+17) — giữ nguyên shape `{ response }` như
+  `generateContent()` cũ nên toàn bộ code downstream (`.text()`/`.functionCalls()`/`.candidates`) KHÔNG
+  đổi gì; retry transient error (429/5xx/timeout...) chỉ áp dụng khi CHƯA emit chunk nào ra user trong vòng
+  đó — tránh lặp lại text đã hiện nếu phải retry.
+  **Bé Gấu** (`be-gau.ts` + `api/chat/route.ts`): thêm `onChunk` callback, route enqueue từng delta ngay
+  khi runBeGau() sinh ra — bỏ hẳn `controller.enqueue(encoder.encode(text))` cũ (tránh lặp đôi nội dung).
+  FE (`chatbot/page.tsx`) **KHÔNG cần sửa gì** — code đọc stream sẵn có kiểu `while(true){reader.read()}`
+  append từng chunk vào state, đã đúng ngay khi backend gửi nhiều chunk nhỏ thay vì 1 chunk to.
+  **Gấu Pro** (`creator-ai.ts` + `api/creator-ai/chat/route.ts` + FE `analytics/creator/ai/page.tsx`): thêm
+  event `{type:"delta", content}` mới vào union `GPEvent` (giữ nguyên event `"text"` cũ — vẫn gửi 1 lần ở
+  CUỐI mang full text, làm nguồn sự thật lưu DB/backward-compat). FE thêm bubble placeholder rỗng ngay khi
+  bắt đầu gửi, nối dần theo từng `delta` event (`setMessages` progressive, giống pattern Bé Gấu) — TRƯỚC
+  ĐÓ Gấu Pro chỉ update UI 1 lần y hệt Bé Gấu dù ĐÃ có hạ tầng SSE + status event real-time (status thì có,
+  nội dung câu trả lời thì không). Catch lỗi giữa chừng giờ NỐI THÊM lỗi vào phần đã stream thay vì xoá
+  trắng thay thế (tránh "flicker" nội dung đã hiện rồi biến mất).
+  **Test**: mock Gemini SDK ở `be-gau.test.ts`/`be-gau-runner.test.ts` phải thêm `generateContentStream`
+  (trước chỉ mock `generateContent`) — implement bằng cách delegate gọi lại `generateContent` mock rồi bọc
+  thành `{stream: async-generator 1 chunk, response: Promise}`, giữ nguyên mọi chuỗi `mockResolvedValueOnce`
+  nhiều vòng đã viết sẵn cho từng test (không phải viết lại). tsc + lint (0 lỗi mới) + vitest (216/216)
+  PASS. **Cần Hiếu**: QA cả 2 agent trên staging — xác nhận chữ CHẠY DẦN thay vì bung 1 cục, không lặp/mất
+  nội dung, sources/export marker vẫn hoạt động đúng ở cuối câu trả lời.
 - **s195+17 (2026-09-10) — Đổi model TOÀN BỘ AI trong Intel sang `gemini-3.8-flash` + đánh giá/nâng cấp
   Gấu Pro.** Tiếp s195+16 (khi đó chỉ đổi `be-gau.ts`, các agent khác giữ nguyên). Hiếu yêu cầu mở rộng ra
   toàn bộ + đánh giá riêng Gấu Pro. Đã đổi model ở 17 file: `bi-analyst.ts`/`data-explorer.ts`/

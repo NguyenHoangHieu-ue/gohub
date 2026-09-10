@@ -9,6 +9,7 @@ import { getCustomRules }                from "./guardian"
 import { runWebSearch, runReadKnowledgeBase, type WebSource, type FileContext } from "./creator-ai"
 import { sendLarkDM }                    from "@/lib/lark"
 import { compressHistory }              from "./creator/compress"
+import { genWithRetryStream }            from "./gemini-stream"
 
 // ─── s190: gộp Gấu Pro vào Bé Gấu ──────────────────────────────────────────────
 // Theo yêu cầu Hiếu: Bé Gấu nay có TẤT CẢ công cụ Gấu Pro (declarations/executor dùng CHUNG qua
@@ -77,19 +78,7 @@ function isAggregateQuery(sql: string): boolean {
   return /\b(sum|count|avg|min|max)\s*\(/.test(s) && /\bgroup\s+by\b/.test(s)
 }
 
-// Fix #4: Gemini retry cho lỗi tạm thời (429/503/overload)
-async function genWithRetry(model: any, request: any, attempts = 3): Promise<any> {
-  let lastErr: any
-  for (let i = 0; i < attempts; i++) {
-    try { return await model.generateContent(request) } catch (e: any) {
-      lastErr = e
-      const transient = /429|rate|quota|resource.?exhausted|500|503|overload|unavailable|deadline|timeout|ECONNRESET|ETIMEDOUT|fetch failed|network/i.test(String(e?.message || ""))
-      if (!transient || i === attempts - 1) throw e
-      await new Promise(r => setTimeout(r, 800 * (i + 1)))
-    }
-  }
-  throw lastErr
-}
+// s195+18: genWithRetryStream (streaming thật) — dùng chung với Gấu Pro, xem lib/agents/gemini-stream.ts
 
 // Fix #5: rate-limit learning detection — 1 lần/user/5 phút
 const _learningRL = new Map<string, number>()
@@ -453,8 +442,9 @@ export async function runBeGau(opts: {
   isCost?: boolean          // canViewCogs
   extraDirective?: string   // vd quy tắc tạm thời
   fileContexts?: FileContext[]  // ảnh/PDF/file người dùng đính kèm (s190+3)
+  onChunk?: (text: string) => void  // s195+18: stream token thật ra route — gọi mỗi khi Gemini sinh thêm đoạn text
 }): Promise<{ text: string; sources: WebSource[] }> {
-  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts } = opts
+  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, onChunk } = opts
   const isPriv = priv(role)
   const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
 
@@ -545,8 +535,8 @@ export async function runBeGau(opts: {
 
   // Fix #8: dùng history đã nén
   const contents: any[] = [...compressedHistory, { role: "user", parts: userParts }]
-  // Fix #4: genWithRetry thay vì generateContent trực tiếp
-  let genResult = await genWithRetry(model, { contents })
+  // s195+18: genWithRetryStream — stream token thật, thay genWithRetry (generateContent chờ hết mới trả)
+  let genResult = await genWithRetryStream(model, { contents }, onChunk)
   const sources: WebSource[] = []
   const appendModel = () => { const c = genResult.response.candidates?.[0]?.content; if (c) contents.push(c) }
   appendModel()
@@ -626,7 +616,7 @@ export async function runBeGau(opts: {
     }))
 
     contents.push({ role: "user", parts: fnParts })
-    genResult = await genWithRetry(model, { contents })  // Fix #4
+    genResult = await genWithRetryStream(model, { contents }, onChunk)  // s195+18
     appendModel()
   }
 
@@ -634,7 +624,7 @@ export async function runBeGau(opts: {
   if (!text.trim()) {
     try {
       contents.push({ role: "user", parts: [{ text: "Dựa trên dữ liệu ở trên, viết câu trả lời hoàn chỉnh bằng tiếng Việt cho người dùng (kèm bảng/chart nếu hợp lý). KHÔNG gọi thêm công cụ, KHÔNG lộ SQL/tên bảng." }] })
-      genResult = await model.generateContent({ contents })
+      genResult = await genWithRetryStream(model, { contents }, onChunk)
       text = genResult.response.text()
     } catch { /* keep */ }
   }
