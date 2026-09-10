@@ -10,6 +10,7 @@ import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
 import { readB2CMonthlySnapshots, snapshotsToMonthlyResponse } from "@/lib/b2c-report-snapshot"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
 import { B2C_CHANNELS, getB2CChannelBudgetByMonth } from "@/lib/b2c-channel-budget"
+import { adminGohubConfigured, adminGohubCustomerRows, adminGohubCustomerChannelRows } from "@/lib/admin-gohub"
 
 // YTD B2C dashboard data (Section 1 + 2 của gohub_b2c spec)
 // Trả dữ liệu từ tháng 1 đến tháng hiện tại MTD:
@@ -227,11 +228,6 @@ export async function GET(req: NextRequest) {
         [windowStart, dataAsOf]
       )
 
-    // Opening the dashboard must never call Admin GoHub directly. The daily cron owns
-    // that API and writes snapshots; this warehouse query is the resilient fallback.
-    const customerSource = "analytics-db" as const
-    let customerBreakdown: "new-returning" | "total-only" = "new-returning"
-    const customerError = "Snapshot Admin chưa sẵn sàng; đang dùng dữ liệu khách từ Analytics DB"
     const customerChannelRowsFromDb = () =>
       queryAnalytics<CustomerChannelRow>(
         `WITH first_order AS (
@@ -273,8 +269,86 @@ export async function GET(req: NextRequest) {
         [windowStart, dataAsOf]
       )
 
-    const data = await cachedQuery(`b2c-monthly:v14:${windowStart}:${dataAsOf}:snapshot-first`, async () => {
-      const [marketRows, custRows, customerChannelRows, channelRows, marketChannelRows, profitRows] = await Promise.all([
+    // Customer New/Returning không cần live-theo-giây (cutoff dữ liệu vốn đã T-1) — tách cache riêng
+    // TTL 60' (thay vì bypass mỗi lượt xem trang theo forceRefresh) + ưu tiên Admin GoHub API (page 1
+    // summary, nhẹ — đã dùng cho snapshot cron) trước khi rơi về CTE quét toàn bộ lịch sử
+    // fact_fulfillment_revenue (không index được, ngày càng chậm theo thời gian — nguyên nhân query
+    // timeout khi Advanced tab từng bắt buộc chạy lại 2 CTE này ở MỌI lượt xem trang).
+    const loadCustomerBreakdown = () => cachedQuery(
+      `b2c-customer-breakdown:v1:${windowStart}:${dataAsOf}`,
+      async () => {
+        let customerSource: "admin-gohub" | "analytics-db" = "analytics-db"
+        let custRowsRaw: { month: string; type: string; revenue: string; count: string }[]
+        let channelRowsRaw: CustomerChannelRow[]
+        if (adminGohubConfigured()) {
+          try {
+            const [adminCust, adminChannel] = await Promise.all([
+              adminGohubCustomerRows(months),
+              adminGohubCustomerChannelRows(months),
+            ])
+            custRowsRaw = adminCust
+            // Admin API trả cả bucket cha (vnB2c/usB2c) đã cộng sẵn — bỏ, để reducer dưới tự cộng lại
+            // từ con (vnWeb/usWeb/usApp) giống hệt cách CTE DB làm, tránh đếm 2 lần.
+            channelRowsRaw = adminChannel.filter(
+              (r): r is CustomerChannelRow => r.bucket === "vnWeb" || r.bucket === "usWeb" || r.bucket === "usApp"
+            )
+            customerSource = "admin-gohub"
+          } catch (e) {
+            console.error("[b2c/monthly] admin gohub customer -> fallback analytics-db", (e as Error).message)
+            ;[custRowsRaw, channelRowsRaw] = await Promise.all([customerRowsFromDb(), customerChannelRowsFromDb()])
+          }
+        } else {
+          [custRowsRaw, channelRowsRaw] = await Promise.all([customerRowsFromDb(), customerChannelRowsFromDb()])
+        }
+
+        let customerBreakdown: "new-returning" | "total-only" = "new-returning"
+        const customers: Record<string, CustRow> = {}
+        for (const m of months) customers[m] = emptyCustRow()
+        for (const r of custRowsRaw) {
+          const row = customers[r.month]
+          if (!row) continue
+          const rev = parseFloat(r.revenue || "0")
+          const cnt = parseInt(r.count || "0")
+          if (r.type === "total") {
+            customerBreakdown = "total-only"
+            row.total.revenue += rev
+            row.total.count += cnt
+            continue
+          }
+          const bucket = r.type === "new" ? row.new : row.returning
+          bucket.revenue += rev
+          bucket.count += cnt
+          row.total.revenue += rev
+          row.total.count += cnt
+        }
+
+        const customerChannels: Record<string, CustomerChannelCell> = {}
+        for (const m of months) customerChannels[m] = emptyCustomerChannelCell()
+        for (const r of channelRowsRaw) {
+          const monthCell = customerChannels[r.month]
+          if (!monthCell) continue
+          const revenue = parseFloat(r.revenue || "0")
+          const count = parseInt(r.count || "0")
+          const addToBucket = (bucket: CustRow) => {
+            const target = r.type === "new" ? bucket.new : bucket.returning
+            target.revenue += revenue
+            target.count += count
+            bucket.total.revenue += revenue
+            bucket.total.count += count
+          }
+          addToBucket(monthCell[r.bucket])
+          addToBucket(r.bucket === "vnWeb" ? monthCell.vnB2c : monthCell.usB2c)
+        }
+
+        return { customers, customerChannels, customerSource, customerBreakdown }
+      },
+      60,
+      false,
+      ["b2c-customer"],
+    )
+
+    const data = await cachedQuery(`b2c-monthly:v15:${windowStart}:${dataAsOf}:revenue-only`, async () => {
+      const [marketRows, channelRows, marketChannelRows, profitRows] = await Promise.all([
         queryAnalytics<{ month: string; market: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
                   COALESCE(f.company_code, 'NA')           AS market,
@@ -286,8 +360,6 @@ export async function GET(req: NextRequest) {
           GROUP BY 1, 2`,
           [windowStart, dataAsOf]
         ),
-        customerRowsFromDb(),
-        customerChannelRowsFromDb(),
         // Channel-type breakdown: Web (Websites) / App (Mobile-App) / Khác (còn lại)
         queryAnalytics<{ month: string; ctype: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -341,52 +413,6 @@ export async function GET(req: NextRequest) {
         if (r.market === "VN") cell.vn += rev
         else if (r.market === "US") cell.us += rev
         cell.total += rev
-      }
-
-      // ── Customers: New / Returning / Total per month ──
-      const customers: Record<string, CustRow> = {}
-      for (const m of months) {
-        customers[m] = {
-          new:       { revenue: 0, count: 0 },
-          returning: { revenue: 0, count: 0 },
-          total:     { revenue: 0, count: 0 },
-        }
-      }
-      for (const r of custRows) {
-        const row = customers[r.month]
-        if (!row) continue
-        const rev = parseFloat(r.revenue || "0")
-        const cnt = parseInt(r.count || "0")
-        if (r.type === "total") {
-          customerBreakdown = "total-only"
-          row.total.revenue += rev
-          row.total.count += cnt
-          continue
-        }
-        const bucket = r.type === "new" ? row.new : row.returning
-        bucket.revenue += rev
-        bucket.count += cnt
-        row.total.revenue += rev
-        row.total.count += cnt
-      }
-
-      // ── Customers by requested B2C channel: VN Web, US Web, US App ──
-      const customerChannels: Record<string, CustomerChannelCell> = {}
-      for (const m of months) customerChannels[m] = emptyCustomerChannelCell()
-      for (const r of customerChannelRows) {
-        const monthCell = customerChannels[r.month]
-        if (!monthCell) continue
-        const revenue = parseFloat(r.revenue || "0")
-        const count = parseInt(r.count || "0")
-        const addToBucket = (bucket: CustRow) => {
-          const target = r.type === "new" ? bucket.new : bucket.returning
-          target.revenue += revenue
-          target.count += count
-          bucket.total.revenue += revenue
-          bucket.total.count += count
-        }
-        addToBucket(monthCell[r.bucket])
-        addToBucket(r.bucket === "vnWeb" ? monthCell.vnB2c : monthCell.usB2c)
       }
 
       // ── Channels: Web / App / Khác per month ──
@@ -460,8 +486,12 @@ export async function GET(req: NextRequest) {
         console.error("[b2c/monthly] profit channel costs", (e as Error).message)
       }
 
-      return { markets, customers, customerChannels, channels, marketChannels, profitByChannel, customerSource, customerBreakdown, customerError }
+      return { markets, channels, marketChannels, profitByChannel }
     }, undefined, forceRefresh)
+
+    // Chạy SAU khối revenue ở trên (không gộp Promise.all) — tránh dồn quá nhiều query cùng lúc vào
+    // pool gohub_dw max=3 khi loadCustomerBreakdown() phải rơi về nhánh CTE nặng (Admin API lỗi/chưa cấu hình).
+    const customerData = await loadCustomerBreakdown()
 
     // KPI targets + Budget: đều nhập trong tab KPI/Target.
     // budget = ngân sách marketing B2C kế hoạch (app_settings key b2c_budget, nhập ở B2CMarketingBudgetSection).
@@ -549,6 +579,13 @@ export async function GET(req: NextRequest) {
         isLive: forceRefresh,
         refreshTimestamp: new Date().toISOString(),
         ...data,
+        customers: customerData.customers,
+        customerChannels: customerData.customerChannels,
+        customerSource: customerData.customerSource,
+        customerBreakdown: customerData.customerBreakdown,
+        customerError: customerData.customerSource === "analytics-db"
+          ? "Admin GoHub API không khả dụng — đang dùng dữ liệu khách từ Analytics DB"
+          : undefined,
         profitByChannel: profitByChannelFinal,
       },
       { headers: CACHE_HEADERS }
