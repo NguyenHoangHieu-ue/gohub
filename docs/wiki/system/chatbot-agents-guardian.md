@@ -90,6 +90,34 @@ Lark dùng trong group → không phân biệt được role (mọi người có
 ---
 
 ## Lưu ý kỹ thuật
+- **s195+17 (2026-09-10) — Đổi model TOÀN BỘ AI trong Intel sang `gemini-3.8-flash` + đánh giá/nâng cấp
+  Gấu Pro.** Tiếp s195+16 (khi đó chỉ đổi `be-gau.ts`, các agent khác giữ nguyên). Hiếu yêu cầu mở rộng ra
+  toàn bộ + đánh giá riêng Gấu Pro. Đã đổi model ở 17 file: `bi-analyst.ts`/`data-explorer.ts`/
+  `orchestrator.ts`/`classifier.ts`/`answer.ts` (pipeline cũ), `creator-ai.ts` (Gấu Pro), `mrp.ts`,
+  `okr-lark-classify.ts` (giữ nguyên `maxOutputTokens=4000` — safety net cũ không phụ thuộc field
+  thinking, không đụng), `web-search.ts`, `weekly-report/narrative.ts`, `creator/tools/portal.ts`,
+  `creator/compress.ts`, usage-stats classify/evaluate, Tổ Gấu AI route, `config/schema/ai-suggest`
+  (đổi field cũ `thinkingBudget:0` → `thinkingLevel:"minimal"` — field mới đúng cho 3.8-flash, field cũ có
+  nguy cơ 400 trên model mới, xem gotcha `okr-lark-classify.ts` bên dưới). `creator-ai.ts` (model chính Gấu
+  Pro) thêm `thinkingConfig.thinkingLevel:"low"` cùng lý do đã áp cho `be-gau.ts` (s195+16).
+  **Đánh giá Gấu Pro** (đọc trực tiếp `creator-ai.ts` 754 dòng + `api/creator-ai/chat/route.ts` +
+  `dispatch.ts`): ưu điểm — SSE thật với status event real-time mỗi tool call (`onEvent`/`emit`, UX tốt
+  hơn Bé Gấu hẳn lúc chờ), 20+ tool phong phú, system prompt cá nhân hoá sâu (OKR Q3 Hiếu, expert persona
+  theo domain, pipeline product-onboarding 7-bước), `maxDuration=300` đúng từ đầu (không dính bug timeout
+  như Bé Gấu s195+14). Nhược điểm/bug thật phát hiện khi đọc — **đã fix ngay**: (1) `api/creator-ai/chat/
+  route.ts` có `compressHistory`/`stripBase64Images` COPY Y HỆT từ `creator/compress.ts` (dùng chung đúng
+  cách ở `be-gau.ts` nhưng route Gấu Pro thì không) — xoá bản trùng, route giờ import từ module dùng chung
+  (chỉ còn 1 chỗ cần đổi model khi cần sau này). (2) Hàm `combineFileContexts` định nghĩa trong route
+  nhưng KHÔNG được gọi ở đâu — dead code, đã xoá. (3) Vòng lặp tool-call (`runCreatorAI` + `be-gau.ts`
+  cùng lỗi) — `Promise.all(calls.map(dispatchTool))` KHÔNG bọc try/catch riêng từng tool: 1 tool lỗi
+  (network timeout portal/video API...) làm reject CẢ round, sập toàn bộ câu trả lời dù tool khác đã chạy
+  xong. Đã bọc try/catch quanh từng tool call (cả `creator-ai.ts` lẫn `be-gau.ts`) — tool lỗi giờ chỉ trả
+  `functionResponse` báo lỗi cho đúng tool đó, phần còn lại tiếp tục bình thường. **Chưa làm (đề xuất, cần
+  bàn thêm trước khi làm — thay đổi kiến trúc lớn hơn)**: text trả lời cuối vẫn "await hết rồi enqueue 1
+  lần" ở CẢ 2 agent (status event thì real-time, nhưng nội dung câu trả lời thật thì không stream token) —
+  fix đúng gốc cần đổi cách Gemini SDK stream + FE parse, rủi ro cao hơn, để riêng nếu Hiếu muốn làm tiếp.
+  tsc + lint (0 lỗi mới) + vitest (216/216) PASS. **Cần Hiếu**: QA cả Bé Gấu lẫn Gấu Pro trên staging (1
+  câu BI nhiều bước mỗi bên) — đúng/không chậm/không lỗi JSON; theo dõi Gemini API cost.
 - **s195+16 (2026-09-10) — Bé Gấu đổi model `gemini-3.6-flash` → `gemini-3.8-flash`.** Theo yêu cầu Hiếu
   đánh giá toàn diện + nâng cấp. Verify qua WebSearch trước khi đổi (không đoán): model có thật, GA, nhưng
   **mặc định thinking level = medium nếu không set** (billable, thêm latency ẩn) — đúng lớp rủi ro repo đã

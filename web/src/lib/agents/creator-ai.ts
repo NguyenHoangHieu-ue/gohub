@@ -677,11 +677,15 @@ export async function runCreatorAI(
   const dateContext = buildDateContext()
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
+  // thinkingLevel "low": cân bằng lợi ích tool-orchestration/reasoning nhiều bước của 3.8-flash (đúng lợi
+  // ích cho pipeline product-onboarding/BI nhiều bước) với latency budget — vòng lặp tới 20 iteration,
+  // KHÔNG để mặc định "medium" (billable, latency ẩn mỗi vòng). "as any": SDK v0.21.0 chưa có type field
+  // này (ra đời sau SDK).
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.6-flash",
+    model: "gemini-3.8-flash",
     systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
     tools: [{ functionDeclarations: buildFunctionDeclarations(isCreator) }],
-    generationConfig: { temperature: 0 },
+    generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
   })
 
   // Build user message parts — support multiple files (text + binary)
@@ -732,9 +736,18 @@ export async function runCreatorAI(
     const calls = genResult.response.functionCalls()
     if (!calls || calls.length === 0) break
 
-    const fnParts = await Promise.all(calls.map((call: any) => dispatchTool(call, onEvent, collectedSources, { username })))
+    // Mỗi tool bọc try/catch RIÊNG — 1 tool lỗi (network timeout portal/video API/...) trước đây làm
+    // Promise.all reject cả round, sập TOÀN BỘ câu trả lời dù các tool khác đã chạy xong. Nay tool lỗi chỉ
+    // trả functionResponse báo lỗi cho MỘT tool đó, các tool còn lại + phần trả lời vẫn tiếp tục bình thường.
+    const fnParts = await Promise.all(calls.map(async (call: any) => {
+      try {
+        return await dispatchTool(call, onEvent, collectedSources, { username })
+      } catch (e: any) {
+        return { functionResponse: { name: call.name, response: { error: e?.message || "Tool execution failed" } } }
+      }
+    }))
 
-    // Send function responses as role "user" — required by gemini-3.6-flash
+    // Send function responses as role "user" — required by this Gemini SDK's content format
     contents.push({ role: "user", parts: fnParts })
     genResult = await genWithRetry(model, { contents })
     appendModelContent()

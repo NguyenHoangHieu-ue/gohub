@@ -48,11 +48,11 @@ export async function classifyLarkThread(thread: LarkThread): Promise<LarkClassi
   }
   try {
     const model = getAI().getGenerativeModel({
-      model: "gemini-3.6-flash",
+      model: "gemini-3.8-flash",
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: {
         temperature: 0,
-        // gemini-3.6-flash mặc định "thinking" — token ẩn đó TÍNH VÀO maxOutputTokens, ăn hết ngân sách
+        // gemini-3.8-flash mặc định "thinking" — token ẩn đó TÍNH VÀO maxOutputTokens, ăn hết ngân sách
         // trước khi tới JSON thật → response.text() bị cắt cụt giữa chừng (root cause thật của
         // "Gemini không trả JSON", xác nhận qua raw text log s177: JSON đúng cấu trúc nhưng đứt giữa
         // field). Từng thử thinkingConfig:{thinkingBudget:0} (đúng pattern api/config/schema/

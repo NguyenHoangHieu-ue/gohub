@@ -556,9 +556,13 @@ export async function runBeGau(opts: {
     if (!calls || calls.length === 0) break
 
     // Fix #1: parallel tool execution (Promise.all)
+    // Toàn bộ nhánh bọc try/catch NGOÀI CÙNG — 1 tool lỗi (network/DB timeout) trước đây làm Promise.all
+    // reject cả round, sập TOÀN BỘ câu trả lời dù tool khác đã chạy xong. Nay tool lỗi chỉ trả
+    // functionResponse báo lỗi cho MỘT tool đó, model tự quyết định retry/báo user thay vì mất trắng.
     const fnParts = await Promise.all(calls.map(async (call: any) => {
       const a = call.args as any
       const wrap = (resp: any) => ({ functionResponse: { name: call.name, response: resp } })
+      try {
 
       if (call.name === "listSupabaseTables")
         return wrap({ tables: visibleTables })
@@ -616,6 +620,9 @@ export async function runBeGau(opts: {
       }
 
       return wrap({ error: "Unknown tool" })
+      } catch (e: any) {
+        return wrap({ error: e?.message || "Tool execution failed" })
+      }
     }))
 
     contents.push({ role: "user", parts: fnParts })

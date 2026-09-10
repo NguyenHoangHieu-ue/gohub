@@ -218,13 +218,13 @@ export async function runDataExplorer(
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.6-flash",
+    model: "gemini-3.8-flash",
     systemInstruction: finalInstruction,
     tools: [{ functionDeclarations: [executeSQLDecl, querySupabaseDecl, listTablesDecl] }],
     generationConfig: { temperature: 0 },
   })
 
-  // Build contents manually — send function responses as role "user" (gemini-3.6-flash format)
+  // Build contents manually — send function responses as role "user" (gemini-3.8-flash format)
   const contents: any[] = [
     ...geminiHistory,
     { role: "user", parts: [{ text: lastMsg }] },
@@ -292,7 +292,7 @@ export async function runDataExplorer(
       fnParts.push({ functionResponse: { name: call.name, response: { error: "Unknown tool" } } })
     }
 
-    // Send function responses as role "user" — required by gemini-3.6-flash
+    // Send function responses as role "user" — required by gemini-3.8-flash
     contents.push({ role: "user", parts: fnParts })
     genResult = await model.generateContent({ contents })
     appendModelContent()

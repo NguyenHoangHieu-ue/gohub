@@ -6,10 +6,27 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-10, s195+16)
+## Trạng thái hiện tại (2026-09-10, s195+17)
 
 | | |
 |---|---|
+| ⏳ **s195+17 (2026-09-10) — Đổi model TOÀN BỘ AI Intel sang gemini-3.8-flash + đánh giá/nâng cấp Gấu Pro, chờ Hiếu QA** | Mở rộng s195+16 (khi đó chỉ đổi Bé Gấu) sang toàn bộ 17 file dùng Gemini (pipeline
+  cũ bi-analyst/data-explorer/orchestrator/classifier/answer, Gấu Pro `creator-ai.ts`, mrp.ts, okr-lark-
+  classify.ts — giữ nguyên safety net `maxOutputTokens=4000` cũ, web-search.ts, weekly-report/narrative.ts,
+  portal.ts, creator/compress.ts, usage-stats classify/evaluate, Tổ Gấu AI, config/schema/ai-suggest — đổi
+  field cũ `thinkingBudget:0`→`thinkingLevel:"minimal"` đúng chuẩn 3.8-flash). `creator-ai.ts` (model chính
+  Gấu Pro) thêm `thinkingConfig.thinkingLevel:"low"` như đã làm cho Bé Gấu. **Đánh giá Gấu Pro** (đọc trực
+  tiếp `creator-ai.ts` 754 dòng + route + dispatch.ts): ưu — SSE thật với status real-time mỗi tool call
+  (UX hơn Bé Gấu), 20+ tool, system prompt cá nhân hoá sâu, maxDuration=300 đúng từ đầu. **3 bug/dead-code
+  thật phát hiện, đã fix ngay**: (1) `api/creator-ai/chat/route.ts` có `compressHistory`/`stripBase64Images`
+  COPY Y HỆT `creator/compress.ts` (không dùng chung dù be-gau.ts đã làm đúng) — xoá bản trùng, import từ
+  module chung. (2) `combineFileContexts` trong route — dead code, không ai gọi — xoá. (3) Vòng lặp
+  tool-call (cả Gấu Pro lẫn Bé Gấu) — `Promise.all` không bọc try/catch riêng từng tool → 1 tool lỗi sập
+  CẢ round, mất trắng câu trả lời dù tool khác đã xong — đã bọc try/catch riêng từng tool ở cả 2 agent.
+  **Chưa làm (đề xuất, kiến trúc lớn hơn, cần bàn thêm)**: text trả lời cuối vẫn "await hết rồi enqueue 1
+  lần" ở cả 2 agent (chỉ status event là real-time, nội dung câu trả lời thật không stream token). tsc +
+  lint (0 lỗi mới) + vitest (216/216) PASS. Wiki `docs/wiki/system/chatbot-agents-guardian.md` đã cập nhật.
+  **Cần Hiếu**: QA cả Bé Gấu lẫn Gấu Pro trên staging (1 câu BI nhiều bước mỗi bên), theo dõi Gemini cost.
 | ⏳ **s195+16 (2026-09-10) — Bé Gấu: đánh giá toàn diện + đổi model gemini-3.6-flash → gemini-3.8-flash, chờ Hiếu QA** | Hiếu yêu cầu đánh giá ưu/nhược Bé Gấu +
   hướng nâng cấp + đổi model. Ưu điểm: 1 agent function-calling gọn (thay 7-agent pipeline cũ), tool-set
   rộng phân quyền tách bạch (`GP_TOOLS_OPEN`/`GP_TOOLS_ADMIN_ONLY`), `execSQL` tự cảnh báo auto-retry/row-
@@ -285,10 +302,12 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
-- [ ] **s195+16 — QA Bé Gấu sau khi đổi model gemini-3.8-flash** — sau khi Vercel deploy staging: hỏi Bé
-  Gấu 1 câu BI nhiều bước (vd "so sánh doanh thu B2B các tháng gần đây theo tier") — xác nhận trả lời đúng,
-  không chậm hơn rõ rệt, không im lặng/lỗi JSON. Theo dõi Gemini API cost vài ngày đầu (model mới có
-  thinking tokens tính phí dù đã set thinkingLevel thấp).
+- [ ] **s195+17 — QA toàn bộ AI sau khi đổi model gemini-3.8-flash (mọi agent, không chỉ Bé Gấu)** — sau
+  khi Vercel deploy staging: (a) Bé Gấu + Gấu Pro — hỏi 1 câu BI nhiều bước mỗi bên, xác nhận đúng/không
+  chậm/không lỗi JSON; (b) nếu tiện, thử nhanh usage-stats classify/evaluate, Tổ Gấu AI (group chat),
+  config/schema AI-suggest (nút gợi ý mô tả bảng ở Dev Tools) — các đường ít traffic hơn nên rủi ro thấp
+  hơn nhưng chưa ai verify. Theo dõi Gemini API cost vài ngày đầu (model mới có thinking tokens tính phí
+  dù đã set thinkingLevel thấp ở các agent chính).
 - [ ] **s195+15 — QA tab B2C Advanced trên staging (fix query timeout)** — sau khi Vercel deploy: mở
   `/analytics/b2c` (sub-tab Advanced, mặc định), xác nhận (a) trang load nhanh/không còn timeout, (b) số
   Customers New/Returning khớp bản trước (nếu badge "Admin API lỗi" hiện — báo lại, nghĩa là đang fallback

@@ -120,14 +120,14 @@ export async function runBIAnalyst(
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.6-flash",
+    model: "gemini-3.8-flash",
     systemInstruction: finalInstruction + ga4SiteList + partnerTierInfo,
     tools: [{ functionDeclarations: [executeSQLDecl, queryGA4Decl, queryGSCDecl, queryProductDecl] }],
     generationConfig: { temperature: 0 },
   })
 
   // Build conversation contents manually — bypass SDK chat API which sends role "function"
-  // (not supported by gemini-3.6-flash). We send function responses as role "user" instead.
+  // (not supported by gemini-3.8-flash). We send function responses as role "user" instead.
   const contents: any[] = [
     ...geminiHistory,
     { role: "user", parts: [{ text: lastMsg }] },
@@ -250,7 +250,7 @@ export async function runBIAnalyst(
         }
       }
 
-      // Send function responses as role "user" — required by gemini-3.6-flash (not "function")
+      // Send function responses as role "user" — required by gemini-3.8-flash (not "function")
       contents.push({ role: "user", parts: fnParts })
       genResult = await model.generateContent({ contents })
       appendModelContent()

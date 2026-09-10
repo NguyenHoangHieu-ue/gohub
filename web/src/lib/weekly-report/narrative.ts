@@ -31,7 +31,7 @@ export async function generateChannelNarratives(channels: ChannelMoM[]): Promise
 
   try {
     const model = getAI().getGenerativeModel({
-      model: "gemini-3.6-flash",
+      model: "gemini-3.8-flash",
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: { temperature: 0.3, maxOutputTokens: 4000, responseMimeType: "application/json" },
     })

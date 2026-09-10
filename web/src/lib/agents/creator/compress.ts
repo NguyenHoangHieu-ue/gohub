@@ -17,7 +17,13 @@ export async function compressHistory(
 
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash", generationConfig: { temperature: 0 } })
+    // thinkingLevel "minimal": tóm tắt hội thoại là tác vụ nén văn bản thẳng, không cần suy luận sâu —
+    // né mặc định "medium" của gemini-3.8-flash (billable, thêm latency ẩn). "as any": SDK v0.21.0 pin
+    // cứng chưa có type cho field này (ra đời sau SDK).
+    const model = genAI.getGenerativeModel({
+      model: "gemini-3.8-flash",
+      generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "minimal" } } as any,
+    })
     const convText = toSummarize.map(m => `[${m.role}] ${m.parts[0]?.text || ""}`).join("\n").slice(0, 40000)
     const res = await model.generateContent(
       `Tóm tắt cuộc hội thoại sau trong < 500 từ tiếng Việt. GIỮ LẠI: facts, số liệu, mã SKU/sản phẩm, quyết định, và ngữ cảnh cần cho câu hỏi tiếp theo. Bỏ chi tiết vụn.\n\n${convText}`
