@@ -13,6 +13,35 @@ status: active
 
 Báo cáo bán lẻ B2C bố cục 5 section (Apple-style, giảm tải nhận thức): doanh thu rolling, khách hàng, CAC/Leads, tỷ lệ chuyển đổi website, và chi phí marketing/ROAS. Tích hợp nhiều nguồn ngoài (Chatwoot, GA4, Turso).
 
+> ⚠️ **s195+15 (2026-09-10) — Fix root cause query timeout tab B2C (Advanced).** Hiếu báo tab B2C bị
+> timeout, điều tra bằng cách đọc trực tiếp code (không đoán): `b2c-advanced-dashboard.tsx` set
+> `nocache=1` **MỌI lượt load trang** (không chỉ khi bấm refresh) → `api/analytics/b2c/monthly/route.ts`
+> chạy `cachedQuery(..., bypass=true)` → bỏ qua đọc cache hoàn toàn, tính lại tươi mỗi lần. Trong khối đó,
+> `customerRowsFromDb()`/`customerChannelRowsFromDb()` (phân loại khách New/Returning) có CTE `first_order`
+> `MIN(fulfiled_date) GROUP BY customer_code` **không giới hạn ngày dưới** — quét TOÀN BỘ lịch sử
+> `fact_fulfillment_revenue` (bảng cộng dồn mỗi ngày, không index được — gohub_dw không có quyền DDL). Cả
+> 2 CTE nặng này nằm chung `Promise.all` với 4 query nhẹ khác, đập vào pool `max=3`/`statement_timeout=25s`
+> — đúng pattern timeout đã từng gặp ở Daily Report (`NOT IN subquery` + cache cold + nhiều query đồng thời
+> → `query_timeout` 25s), nhưng ở đây xảy ra ở **MỌI lượt xem trang** (do bypass cache toàn phần), không
+> chỉ 1 lần/ngày lúc cache cold.
+>
+> **Fix** (`api/analytics/b2c/monthly/route.ts`): tách phần phân loại khách (`customers`/`customerChannels`)
+> ra khỏi khối "luôn live" — cho qua `cachedQuery` riêng (`b2c-customer-breakdown:v1:...`) TTL **60 phút**,
+> tag `deps: ["b2c-customer"]` — vì cutoff dữ liệu vốn đã T-1, không cần tươi tới mức mỗi lượt xem. Đồng
+> thời ưu tiên đọc từ **Admin GoHub API** (`adminGohubCustomerRows`/`adminGohubCustomerChannelRows`, page 1
+> summary — nhẹ, cùng nguồn cron snapshot đã dùng) trước khi rơi về CTE nặng; CTE DB giờ chỉ còn là
+> fallback thật khi Admin API lỗi/chưa cấu hình (đúng comment ý đồ cũ trong code, trước đây bị bỏ qua vì
+> không có nơi nào gọi tới). Bucket cha `vnB2c`/`usB2c` từ Admin API bị lọc bỏ, để reducer tự cộng lại từ
+> con (`vnWeb`/`usWeb`/`usApp`) — tránh đếm 2 lần, giữ đúng công thức cũ. Khối revenue (`marketRows`/
+> `channelRows`/`marketChannelRows`/`profitRows`) giữ nguyên hành vi "luôn live" theo `nocache=1` (cache
+> key bump `v14`→`v15` vì đổi shape trả về, tránh đọc nhầm cache cũ từ Supabase L2). Thêm: `loadCustomerBreakdown()`
+> chạy TUẦN TỰ sau khối revenue (không gộp `Promise.all`) — giảm số query đồng thời chạm pool tại 1 thời
+> điểm, phòng hờ khi phải rơi về nhánh CTE nặng. Không đổi công thức/số liệu hiển thị, không đổi UI. tsc +
+> lint (0 lỗi mới) + vitest (216/216) PASS.
+>
+> **Chưa merge main** — chờ Hiếu tự QA tab B2C Advanced trên staging (load nhanh hơn, không còn timeout;
+> số liệu Customers/New-Returning khớp bản trước).
+
 > ⚠️ **s195+12 (2026-09-09) — fix bug cutoff doanh thu + thêm route GA4 category.** Phát hiện khi so sánh
 > với branch song song của Minh (`codex/b2c-dashboard-preview`, PR #2 — branch tách từ commit rất cũ nên
 > KHÔNG merge trực tiếp, chỉ port có chọn lọc sau khi audit kỹ, xem `docs/session_summary.txt`). Bug thật

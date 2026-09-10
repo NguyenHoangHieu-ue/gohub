@@ -6,10 +6,23 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-09, s195+14)
+## Trạng thái hiện tại (2026-09-10, s195+15)
 
 | | |
 |---|---|
+| ⏳ **s195+15 (2026-09-10) — Fix root cause query timeout tab B2C (Advanced), chờ Hiếu QA staging** | Hiếu
+  báo tab B2C bị timeout. Root cause xác nhận qua đọc code (không đoán): `b2c-advanced-dashboard.tsx` set
+  `nocache=1` MỌI lượt load trang → route `b2c/monthly` bỏ qua cache hoàn toàn, tính lại tươi mỗi lần —
+  trong đó 2 query phân loại khách New/Returning có CTE `first_order` **không giới hạn ngày dưới**, quét
+  TOÀN BỘ lịch sử `fact_fulfillment_revenue` (không index được), chạy chung `Promise.all` với pool
+  `max=3`/`statement_timeout=25s` → đúng pattern timeout đã gặp ở Daily Report (s157) nhưng xảy ra ở MỌI
+  lượt xem trang thay vì 1 lần/ngày. Fix: tách phân loại khách ra `cachedQuery` riêng TTL 60 phút (không
+  cần tươi tới giây vì cutoff dữ liệu vốn T-1) + ưu tiên đọc **Admin GoHub API** (nhẹ, cùng nguồn cron
+  snapshot) trước khi rơi về CTE nặng (giờ chỉ là fallback thật). Khối revenue giữ nguyên "luôn live". Chạy
+  tuần tự (không gộp Promise.all) giảm tải pool. Không đổi công thức/số liệu/UI. tsc + lint (0 lỗi mới) +
+  vitest (216/216) PASS. Wiki `docs/wiki/system/tabs/analytics-b2c.md` đã cập nhật. **Cần Hiếu**: QA tab
+  B2C Advanced trên staging sau khi Vercel deploy xong — load nhanh hơn/hết timeout, số liệu Customers
+  không đổi so với bản trước.
 | ✅ **s195+14 (2026-09-09) — Fix Bé Gấu trả lời quá lâu → im lặng không có câu trả lời (đúng bug thật, đã verify qua log)** | Hiếu báo trả lời lâu thì không ra
   gì cả, hỏi có phải do time không. Verify qua Vercel Runtime Errors: `Task timed out after 60 seconds`
   đúng route `/api/chat`, lần gần nhất khớp đúng lúc Hiếu vừa gặp — xác nhận đúng nguyên nhân, không đoán.
@@ -258,6 +271,10 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+15 — QA tab B2C Advanced trên staging (fix query timeout)** — sau khi Vercel deploy: mở
+  `/analytics/b2c` (sub-tab Advanced, mặc định), xác nhận (a) trang load nhanh/không còn timeout, (b) số
+  Customers New/Returning khớp bản trước (nếu badge "Admin API lỗi" hiện — báo lại, nghĩa là đang fallback
+  DB, vẫn đúng số nhưng nên biết để check `ADMIN_GOHUB_*` env).
 - [ ] **s195+13 — GA4 Category Performance (3 section mới của Minh) không render — cần debug tiếp** —
   code có trong `b2c-advanced-dashboard.tsx`, build sạch, không lỗi console/network, nhưng chỉ 6/9 Section
   hiện ra trên trang B2C Advanced (thiếu "GA4 Web Category Performance"/"GA4 App Category Performance"/
