@@ -6,10 +6,9 @@ import {
 } from "recharts"
 import {
   ArrowUpRight, ArrowDownRight, Lock, DollarSign, TrendingUp, UserPlus, Users, PieChart as PieChartIcon, Globe,
-  Target, Percent, Zap,
+  Target,
 } from "lucide-react"
 import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
-import { cn } from "@/lib/utils"
 import { SourceBadge, LogicNote, type SourceKind } from "@/components/dashboard-kit"
 
 // ── types ───────────────────────────────────────────────────────────────────
@@ -312,38 +311,6 @@ const Section = ({ icon, title, desc, children, action, source, iconColor = "#00
     </div>
     {children}
   </section>
-)
-
-// KPI metric card — Apple .metric style, icon chip màu theo Ý NGHĨA chỉ số (funnel stage: traffic/hiệu
-// suất/khách hàng/chi phí) thay vì chỉ text đen trên nền trắng.
-const KpiCard = ({ label, value, sub, delta, source: src, icon, color = "#0071e3" }: {
-  label: string; value: string; sub?: string; delta?: number | null; source?: string; color?: string; icon?: React.ReactNode
-}) => (
-  <div className="rounded-lg border border-black/[0.09] p-4 flex flex-col justify-between min-h-[120px]" style={{ ...APPLE_CARD_STYLE, borderLeft: `3px solid ${color}` }}>
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex items-center gap-2 min-w-0">
-        {icon && (
-          <span className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: `${color}1a`, color }}>
-            {icon}
-          </span>
-        )}
-        <span className="text-[11px] font-[560] text-[#6e6e73] leading-tight truncate">{label}</span>
-      </div>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        {src && <span className="text-[9px] font-[650] px-1.5 py-0.5 rounded-full bg-[#eaf4ff] text-[#0071e3] uppercase tracking-wide">{src}</span>}
-        {delta !== undefined && delta !== null && (
-          <span className={cn("text-[10px] font-[620] px-1.5 py-0.5 rounded-full whitespace-nowrap",
-            delta >= 0 ? "bg-[#eaf6ee] text-[#2f9d55]" : "bg-[#fdecea] text-[#d93025]")}>
-            {delta >= 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)}%
-          </span>
-        )}
-      </div>
-    </div>
-    <div>
-      <div className="text-[24px] font-[560] text-[#1d1d1f] leading-none mt-2">{value}</div>
-      {sub && <div className="text-[11px] text-[#6e6e73] mt-1.5 leading-tight">{sub}</div>}
-    </div>
-  </div>
 )
 
 const RevenueCompareCard = ({ icon, label, value, caption, referenceLabel, referenceValue, metricLabel, metricValue, mode = "delta" }: {
@@ -1166,15 +1133,6 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     const row = customerOf(m)
     return row.new.count > 0 ? row.new.count : row.total.count
   }
-  // GA4 totals cho KPI cards (Section trên cùng)
-  const ga4Total  = ga4?.reduce((s, site) => s + (site.cr ?? 0), 0) ?? 0
-  const ga4Users  = ga4?.reduce((s, site) => s + (site.kpis.activeUsers ?? 0), 0) ?? 0
-  const spendCur  = spendOf(current)
-  const roasCur   = spendCur > 0 ? mtdTotal / spendCur : 0
-  const leadsCur  = leadsOf(current)
-  const customersForCac = acquisitionCustomerOf(current)
-  const cacCur    = spendCur > 0 && customersForCac > 0 ? spendCur / customersForCac : 0
-  const cplCur    = spendCur > 0 && leadsCur > 0 ? spendCur / leadsCur : 0
   const acquisitionRows: AcquisitionRow[] = data ? [
     { label: "Chi phí MKT", fmt: formatCompactNumber, get: spendOf },
     { label: "Leads", fmt: fmtInt0, highlight: true, get: leadsOf },
@@ -1399,22 +1357,6 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 metricValue={targetAttainment}
                 mode="attainment"
               />
-            </div>
-
-            {/* 6 KPI cards — y chang mockup: Users, Customers, Budget, ROAS, CAC, Leads */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <KpiCard label="Users" value={ga4Users > 0 ? formatNumber(ga4Users) : "—"} icon={<Users className="w-3.5 h-3.5" />} color="#0071e3"
-                sub={ga4 && ga4.length > 0 ? `CR ${(ga4Total / ga4.length).toFixed(1)}%` : "GA4 chưa kết nối"} source="GA4" />
-              <KpiCard label="ROAS" value={roasCur > 0 ? `${roasCur.toFixed(2)}×` : "—"} icon={<Zap className="w-3.5 h-3.5" />} color="#7c5cbf"
-                sub="Paid media blended" source="Chat" />
-              <KpiCard label="Customers" value={formatNumber(cust?.total.count ?? 0)} icon={<UserPlus className="w-3.5 h-3.5" />} color="#2f9d55"
-                sub={data.customerError ? "Admin API lỗi" : data.customerBreakdown === "total-only" ? "Total từ Admin API" : `Mới ${formatNumber(cust?.new.count ?? 0)} · QL ${formatNumber(cust?.returning.count ?? 0)}`} source="Admin" />
-              <KpiCard label="CAC" value={cacCur > 0 ? formatCurrency(cacCur) : "—"} icon={<DollarSign className="w-3.5 h-3.5" />} color="#b7791f"
-                sub="Spend ÷ khách mới" source="Chat" />
-              <KpiCard label="Leads" value={leadsCur > 0 ? formatNumber(leadsCur) : "—"} icon={<Target className="w-3.5 h-3.5" />} color="#6366f1"
-                sub="Chatwoot all channels" source="Chat" />
-              <KpiCard label="CPL" value={cplCur > 0 ? formatCurrency(cplCur) : "—"} icon={<Percent className="w-3.5 h-3.5" />} color="#b7791f"
-                sub="Spend ÷ Leads" source="Chat" />
             </div>
 
             <Section

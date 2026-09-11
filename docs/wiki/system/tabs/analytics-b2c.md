@@ -47,6 +47,12 @@ status: active
 > tsc + lint (0 lỗi mới) + vitest (220/220) PASS cả 3 fix. **Cần Hiếu**: nhờ 1 tài khoản role BOD (đã có
 > trong `writable_tabs`, vd tài khoản Lark liên kết) tự thử lưu lại KPI Target B2C/Marketing Budget trên
 > staging xác nhận lưu được.
+>
+> **Đồng thời (theo yêu cầu Hiếu)**: bỏ dải 6 KPI card "Users/ROAS/Customers/CAC/Leads/CPL" đầu subtab
+> Advance (`b2c-advanced-dashboard.tsx`) — số liệu tương đương vẫn còn đủ ở section "CAC & Leads" +
+> "Spend & ROAS" bên dưới nên không mất thông tin, chỉ gọn phần đầu trang. Xoá kèm code chỉ phục vụ dải
+> này mà giờ chết hẳn: component `KpiCard`, biến `ga4Total/ga4Users/spendCur/roasCur/leadsCur/
+> customersForCac/cacCur/cplCur`, import `Zap`/`Percent`/`cn` không còn dùng.
 
 Báo cáo bán lẻ B2C bố cục 5 section (Apple-style, giảm tải nhận thức): doanh thu rolling, khách hàng, CAC/Leads, tỷ lệ chuyển đổi website, và chi phí marketing/ROAS. Tích hợp nhiều nguồn ngoài (Chatwoot, GA4, Turso).
 
