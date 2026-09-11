@@ -9423,3 +9423,109 @@ Metrics — chỉ còn theo dõi vài ngày để số "Tasks via Bé Gấu" tí
 dự kiến, không phải bug). Khuyến nghị thêm cho Hiếu (chưa làm, ngoài yêu cầu lần này): tự thử Gấu Pro qua
 UI thật 1 lần cho chắc (session này chỉ verify được Bé Gấu qua gọi API trực tiếp, do thao tác chuột trên
 giao diện chat/streaming không ổn định để tự động hoá qua Claude in Chrome). Commit 2c8e9f21 (docs).
+
+=== s195+19 (2026-09-11) — Mã nước SKU sai + redesign UI My Metrics + audit sâu B2C Performance ===
+
+Tiếp ngay sau s195+18-C trong cùng ngày. Hai yêu cầu ban đầu của Hiếu, sau đó phát sinh thêm khi Hiếu tự
+QA từng bước (đúng pattern "fix xong lộ ra lỗi tiếp theo" đã quen thuộc trong repo).
+
+1) MÃ NƯỚC SKU SAI (Hiếu yêu cầu: "check lại cách lấy mã nước trong tab My Metrics, hiện đang lấy sai
+nhiều loại"). Đọc code decodeSkuDestinationCode()/getDestinationSQL() (analytics-helpers.ts): branch
+theo KÝ TỰ ĐẦU sku (digit 1-6 / chữ E / còn lại) — nhưng đọc business/ma-sku.md xác nhận ký tự pháp nhân
+LUÔN CHỈ 1 KÝ TỰ bất kể số hay chữ, nên nước luôn ở vị trí 3-5 bất kể ký tự đầu là gì. Verify bằng SQL
+Query trực tiếp TOÀN BỘ lịch sử fact_fulfillment_revenue (không đoán): SKU pháp nhân dạng chữ (US: A-E,
+13 ký tự) bị code cũ đọc lệch 1-2 ký tự — vd mã SKU bắt đầu bằng E ra sai kết quả nước. Nghiêm trọng hơn:
+có trường hợp lệch RA ĐÚNG 1 mã nước thật khác (ANZ ra thành CAN = Canada!), nghĩa là doanh thu bị cộng
+nhầm sang nước khác chứ không chỉ hiện N/A. Đồng thời phát hiện qua full-history query: có 3 họ độ dài
+SKU thật (13/14/15 ký tự) mỗi họ vị trí nước khác nhau (13 ký tự nước ở vị trí 3-5, 14 ký tự legacy nước
+ở vị trí 1-3, 15 ký tự legacy Datapool nước ở vị trí 2-4) — sửa decodeSkuDestinationCode/getDestinationSQL
+branch theo ĐỘ DÀI thay vì ký tự đầu, verify từng công thức bằng sample thật lấy trực tiếp từ DB (không
+suy đoán). Vì đây là helper DÙNG CHUNG, fix tự động lan sang mọi nơi gọi nó: My Metrics (SKU GM/Datapool
+hierarchy), Products report, Region Chart, B2B/B2C performance groupBy=destination — không chỉ My Metrics
+như yêu cầu ban đầu. Dọn kèm 1 bug phụ phát hiện lúc audit: products/report/route.ts có bản CASE SQL tự
+chép tay y hệt logic cũ (comment ghi khớp getDestinationSQL nhưng là copy độc lập) — đã lệch khỏi bản
+gốc, xoá duplicate, gọi thẳng hàm dùng chung để tránh tái phát bug tương tự về sau. Thêm test
+decodeSkuDestinationCode cho case 13-ký-tự-chữ (case thật sự bị bug trước đây — 3 test cũ chỉ cover đúng
+những case code cũ vốn đã đúng tình cờ, không cover được case sai). Bump cache okr_sku_scan/
+okr_datapool_detail sang v3.
+
+2) REDESIGN UI MY METRICS (Hiếu yêu cầu: đề xuất giao diện mới cho My Metrics, không bị kéo dài trang,
+đẹp chi tiết, rõ ràng). Trước khi code: dùng skill artifact-design, đọc token màu/font thật của app
+(tailwind.config.ts brand scale, dashboard-kit.tsx CHART_PALETTE, font Outfit) để mockup bám ĐÚNG hệ
+nhận diện có sẵn thay vì phát minh màu mới. Build mockup tương tác (HTML/CSS/JS thuần, không React) —
+Artifact riêng, xem trước 1 lần qua Chrome (bắt được 1 bug nhỏ tự viết: sót cú pháp JSX lẫn vào HTML
+thường), sửa rồi publish. Hiếu duyệt hướng (giao diện đề xuất ok á). Code thật vào
+analytics/my-metrics/page.tsx: 3 khối 1 OPERATIONAL EXCELLENCE / 2 PRODUCT PERFORMANCE / 3 BI & AI
+AUTOMATION (numbered badge — nhận ra qua skill frontend-design đây là AI-slop tell vì 3 nhóm này KHÔNG
+phải 1 sequence, chỉ là 3 category song song có trọng số riêng) thay bằng component CategoryNav mới —
+bộ chọn tab, chỉ hiện đúng 1 nhóm/lần qua class hidden (component vẫn mount, không mất data đã fetch/
+không gọi lại API khi đổi tab), chấm màu mỗi tab = trạng thái chỉ số YẾU NHẤT trong nhóm. Hero score + 5
+chip KPI (SLA/Vendor Speed/SKU GM/%3HK/Bé Gấu) đổi thành button bấm được, nhảy thẳng sang tab tương ứng,
+có ring highlight khi đang ở tab đó. Không đổi logic/API/công thức nào bên trong từng section. tsc + lint
+(0 lỗi mới) + vitest 220/220 PASS. Tự QA qua Chrome trên staging: cả 3 tab chuyển tức thì, số liệu thật
+đúng.
+
+3) AUDIT SÂU B2C PERFORMANCE (Hiếu yêu cầu: vào tab B2C performance đọc toàn diện và tìm vấn đề đi). Đọc
+hết b2c-performance.tsx (1525 dòng) + api/analytics/b2c/{performance,kpis,trend,loss-skus}. 2 phát hiện
+ban đầu, verify bằng SQL Query thật trên staging trước khi báo cáo (không đoán):
+  - performance/route.ts cắt cứng top 50 dòng THEO DOANH THU trước khi trả về CHO MỌI groupBy — FE SUM
+    thẳng mảng đã cắt cho Tổng cộng + xuất CSV, không cảnh báo gì. Query thật: B2C tháng 8/2026 có 1.047
+    SKU phát sinh, top-50 chỉ chiếm 743,8tr trên tổng thật 1.872tr — THIẾU 60,27% DOANH THU mỗi khi ai đó
+    xem theo SKU. groupBy=channel (11 kênh)/vendor (15) an toàn (dưới ngưỡng); groupBy=destination sát
+    ngưỡng (44 nước/nhóm chỉ trong 1 tháng — range dài hơn quý/năm chắc chắn tràn). Route anh em
+    b2b/performance cũng cắt nhưng ở mức 500 (cao gấp 10) và ít nhất có comment cảnh báo hạn chế, bản B2C
+    không có gì.
+  - kpis/route.ts so khớp chi phí kênh bằng so chuỗi CHÍNH XÁC thay vì matchChannelCost() dùng chung
+    (sub-channel prefix/source_code/case-insensitive — cùng hàm quarterly-report/b2b dùng để sống sót
+    qua đổi tên kênh) như performance/route.ts (bảng breakdown CÙNG TRANG). Latent — verify hiện tại chỉ
+    có đúng 1 cost B2C (VN-Web SIM) khớp tên chính xác cả 2 cách nên chưa lệch số thật, nhưng sẽ lệch
+    ngay khi đổi tên kênh hoặc nhập cost theo sub-channel.
+Hiếu duyệt fix đi + thêm 2 yêu cầu mới: bỏ dải 6 KPI card Users/ROAS/Customers/CAC/Leads/CPL đầu subtab
+Advance (dùng AskUserQuestion làm rõ bỏ cái này mơ hồ ban đầu), và kiểm tra bug nhập KPI Target B2C trong
+Manage Costs lúc lưu bị lỗi.
+
+Fix top-50: đổi response performance/route.ts sang {rows, total, totalGroups} — total tính từ TOÀN BỘ
+nhóm (không cap) trước khi cắt còn MAX_DETAIL_ROWS=1000 cho bảng/CSV hiển thị; FE ưu tiên dùng total từ
+BE thay vì tự SUM rows, thêm dòng cảnh báo "Đang hiện N/M dòng..." khi bị cắt. Bump cache v3 sang v4 (đổi
+shape response, tránh bug y hệt s195+18-C ăn phải cache cũ). Fix kpis: đổi sang gọi matchChannelCost(),
+thêm MIN(f.order_source_code) as source_code vào query để có tham số tier-2.
+
+Điều tra bug lưu KPI Target B2C lỗi: test tay bằng acc creator (Hiếu) lúc đầu KHÔNG tái hiện được (save
+200 OK, đọc lại đúng) — vì creator bypass thẳng qua baseRoles trong canWrite(). Hỏi lại Hiếu qua
+AskUserQuestion, xác định đúng: một user role BOD chỉnh sửa và lưu lại nhưng nó không được lưu. Đọc lại
+targets/page.tsx: canEdit (gate DUY NHẤT cho toàn trang Manage Costs, bao gồm 2 section B2C) tính từ
+writable_tabs.includes("targets") — NHƯNG api/config/b2c-kpi-targets + api/config/b2c-budget lại đòi
+quyền ghi tab "b2c" (sai key, không khớp FE, không khớp route anh em /api/planning/targets vốn đúng
+"targets"). Verify bằng GET /api/config/writable-tabs THẬT trên staging (không đoán): 10 user được cấp
+quyền ghi thêm (toàn bộ Lark OU liên kết + Hiếu) — KHÔNG MỘT AI có "b2c" trong danh sách, tất cả chỉ có
+"targets" — xác nhận chắc chắn route cũ 403 câm lặng cho MỌI role không phải admin/creator, không riêng
+1 case của Hiếu. Đổi cả 2 route sang đòi đúng "targets".
+
+Hiếu tự QA fix 403 xong (tab Manage Cost nhập xong đã lưu rồi), lập tức phát hiện bug MỚI: tab B2C chỗ
+Tiến độ doanh thu B2C so với mục tiêu tháng vẫn báo chưa nhập dù đã lưu KPI Target B2C thành công. Verify:
+gọi thẳng GET /api/config/b2c-kpi-targets xác nhận DB đã có target đúng số Hiếu nhập; đọc lại readTargets()
+trong api/analytics/b2c/monthly/route.ts xác nhận đọc thẳng Supabase mỗi request, KHÔNG qua cache
+app-level nào — vậy DB và phép tính bên trong route luôn tươi. Root cause thật nằm ở TẦNG KHÁC: nhánh
+live (chạy khi FE gửi nocache=1 — Advance dashboard LUÔN gửi cờ này mọi lượt tải) vẫn gắn cứng
+CACHE_HEADERS (s-maxage=300, stale-while-revalidate=600) vào response bất kể forceRefresh hay không —
+Vercel Edge CDN cache NGUYÊN response live theo đúng URL+query trong 5-15 phút — user lưu target xong
+reload trong khung đó vẫn ăn bản CDN cache cũ, ĐỘC LẬP HOÀN TOÀN với flushAnalyticsCache() gọi trong 2
+route save (hàm đó chỉ xoá cache tầng app — bảng Supabase analytics_query_cache — không đụng được CDN
+cache dựa trên response header, khác tầng hoàn toàn). Fix: đổi header thành Cache-Control no-store khi
+forceRefresh=true, giữ nguyên cache 5 phút cho nhánh snapshot (không forceRefresh, cập nhật 1 lần/ngày
+qua cron, cache hợp lý ở đó). Verify TRỰC TIẾP trên staging (không chỉ tin code sạch): đổi target qua API
+thành giá trị test riêng biệt (1.665đ) — reload trang ngay lập tức — card cập nhật đúng số mới tức thì,
+không cần chờ. Dọn lại toàn bộ target test sau khi verify xong (không để lẫn số giả vào KPI thật).
+
+Bỏ dải 6 KPI card: xoá khối JSX + dọn kèm code chết phát sinh trực tiếp từ việc xoá (component KpiCard
+không còn ai gọi, 8 biến tính toán chỉ phục vụ dải này, import Zap/Percent/cn không còn dùng) — riêng
+import LogicNote (đã dead từ trước, không liên quan gì fix lần này) CHỦ ĐỘNG không đụng, ngoài phạm vi.
+
+tsc + lint (0 lỗi mới mỗi lần) + vitest (220/220, +1 test) PASS ở MỌI fix trong toàn bộ session. 6 commit
+push thẳng staging: df329ff3 (mã nước), 4c2a8ea7 (redesign UI My Metrics), f8b271d0 (Tổng cộng/CSV + CM1
+matchChannelCost), 1bec0b59 (403 targets/b2c permission key), c9239d21 (bỏ KPI card), 54bee462 (CDN cache
+no-store). Wiki cập nhật đủ: analytics-data-model.md mục 9 (gotcha mã nước dùng chung), analytics-my-
+metrics.md, analytics-b2c.md (4 bug B2C đánh số 1-4 + phần Đồng thời cho việc bỏ KPI card). CLAUDE.md cập
+nhật trạng thái + checklist. Hiếu hẹn mai tôi test — checklist QA đầy đủ đã ghi trong CLAUDE.md mục Việc
+Hiếu cần làm s195+19, chưa có QA nào từ Hiếu qua UI thật cho đợt B2C này (mọi verify trong session đều
+qua gọi API/SQL trực tiếp, chưa qua click chuột thật trên giao diện).

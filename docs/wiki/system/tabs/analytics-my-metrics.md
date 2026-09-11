@@ -13,6 +13,29 @@ status: active
 
 # My Metrics — OKR Tracking
 
+## s195+19 (2026-09-11) — mã nước SKU sai + redesign UI tab phân đoạn
+
+Tiếp sau s195+18-C. 2 việc:
+
+1. **Fix mã nước SKU sai** (`decodeSkuDestinationCode`/`getDestinationSQL`, `lib/analytics-helpers.ts`) —
+   ảnh hưởng hierarchy Vendor→Nước→Product Code→SKU của SKU GM/%Datapool. Bug branch theo ký tự đầu SKU
+   thay vì độ dài → sai vị trí ký tự nước cho ~25% SKU 13 ký tự pháp nhân dạng chữ (US: A-E). Verify bằng
+   SQL trực tiếp toàn bộ lịch sử `fact_fulfillment_revenue`. Chi tiết đầy đủ + công thức đúng theo độ dài
+   xem `docs/wiki/system/analytics-data-model.md` mục 9. Bump cache `sku-scan`/`datapool-detail` sang
+   `v3` để thấy ngay không chờ 12h TTL.
+2. **Redesign UI — tab phân đoạn thay 3 khối xếp chồng** (Hiếu duyệt qua mockup Artifact trước khi code):
+   3 khối "1 OPERATIONAL EXCELLENCE / 2 PRODUCT PERFORMANCE / 3 BI & AI AUTOMATION" (numbered badge —
+   sai ngữ nghĩa vì 3 nhóm này KHÔNG phải sequence, chỉ là 3 category song song có trọng số riêng) đổi
+   thành `CategoryNav` — bộ chọn tab, chỉ hiện đúng 1 nhóm/lần (đỡ trang dài ~2/3), chấm màu theo chỉ số
+   yếu nhất trong nhóm. Hero score + 5 chip KPI (SLA/Vendor Speed/SKU GM/%3HK/Bé Gấu) luôn hiện, bấm chip
+   nhảy thẳng tab tương ứng. Ẩn/hiện qua `display:none` (class `hidden`) — component vẫn mount nên
+   chuyển tab không mất data đã fetch, không gọi lại API. Không đổi logic/API/công thức nào bên trong
+   từng section.
+
+tsc + lint (0 lỗi mới) + vitest (220/220, +1 test `decodeSkuDestinationCode`) PASS. Đã tự QA qua Chrome
+trên staging: cả 3 tab chuyển đúng tức thì, số liệu thật hiện đúng (SLA 4.1h, SKU GM +2.57%, Bé Gấu
+1/450...). Không cần Hiếu QA thêm.
+
 ## s195+18-C (2026-09-11) — QA nhóm A+B trên staging: 4 bug thật, 1 là P0 ngoài phạm vi My Metrics
 
 Tự QA qua browser (Claude in Chrome) + gọi API trực tiếp sau khi Hiếu chạy migration v53/v54. 4 bug thật

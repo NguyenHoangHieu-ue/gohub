@@ -6,10 +6,52 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-11, s195+18-C)
+## Trạng thái hiện tại (2026-09-11, s195+19)
 
 | | |
 |---|---|
+| ✅ **s195+19 (2026-09-11) — Mã nước SKU sai (fix rộng) + redesign UI My Metrics + audit B2C Performance: 4 bug thật, 1 UI theo yêu cầu** |
+  Tiếp sau s195+18-C, 2 việc theo yêu cầu Hiếu cùng ngày.
+  **(1) Fix mã nước SKU** (`decodeSkuDestinationCode`/`getDestinationSQL`, `analytics-helpers.ts`) —
+  branch theo ký tự đầu SKU (digit/'E'/khác) thay vì ĐỘ DÀI → sai vị trí cho MỌI SKU 13 ký tự pháp nhân
+  dạng chữ (US: A-E), lệch 1-2 ký tự (vd `ECJPN3DBUNL01` ra "CJP" thay vì "JPN", có ca lẫn hẳn sang nước
+  thật khác vd ANZ→"CAN"=Canada). Verify SQL trực tiếp TOÀN BỘ lịch sử `fact_fulfillment_revenue`
+  (không đoán): ~25% SKU 13 ký tự (nhóm E/A/D) sai nước. Đổi sang branch theo độ dài (13→ký tự 3-5,
+  14/15→legacy, mỗi công thức verify riêng bằng data thật). Bug nằm ở helper DÙNG CHUNG nên tự động sửa
+  luôn cho My Metrics + Products + Region Chart + B2B/B2C performance, không chỉ 1 tab. Dọn kèm 1 bản
+  duplicate CASE lệch ở `products/report/route.ts` (tự chép SQL thay vì gọi hàm chung).
+  **(2) Redesign UI My Metrics** — Hiếu duyệt qua mockup Artifact trước khi code: 3 khối "1/2/3" xếp
+  chồng (numbered badge sai ngữ nghĩa — không phải sequence) đổi thành `CategoryNav` tab phân đoạn, chỉ
+  hiện 1 nhóm/lần (đỡ trang dài ~2/3), hero score + 5 chip KPI luôn hiện + bấm nhảy tab. Ẩn/hiện qua
+  `display:none` — không mất data đã fetch khi chuyển tab.
+  **(3) Audit sâu tab B2C Performance theo yêu cầu Hiếu — 4 bug thật, đã fix hết**:
+  - 🔴 **"Tổng cộng"/CSV câm lặng thiếu doanh thu khi groupBy=SKU** — `b2c/performance/route.ts` cắt
+    cứng top 50 dòng THEO DOANH THU trước khi tính tổng. Verify SQL: tháng 8/2026 B2C có 1.047 SKU, top-50
+    chỉ chiếm 743,8tr/1.872tr tổng thật → **thiếu 60,27% doanh thu**, không cảnh báo gì. Fix: đổi response
+    sang `{rows,total,totalGroups}` — `total` tính từ TOÀN BỘ nhóm trước khi cap còn 1000 dòng hiển thị;
+    FE thêm cảnh báo khi bị cắt. Bump cache `v3`→`v4` (đổi shape).
+  - 🟡 **CM1 card đầu trang lệch cách khớp cost với bảng breakdown** (latent, chưa có số sai thật) —
+    `b2c/kpis/route.ts` so chuỗi CHÍNH XÁC thay vì `matchChannelCost()` dùng chung (sub-channel/
+    source_code/case-insensitive) như `b2c/performance` cùng trang. Đã đổi nhất quán.
+  - 🔴 **KPI Target B2C/Marketing Budget 403 câm lặng cho MỌI role không phải admin/creator** (Hiếu báo
+    "role BOD lưu không được") — `canWrite(session, "b2c", ...)` sai tabKey, FE tính quyền edit từ
+    `"targets"` (giống route anh em `/api/planning/targets`). Verify qua `GET /api/config/writable-tabs`
+    thật: 10 user có quyền ghi thêm, **0 người có "b2c"** → xác nhận chắc chắn bug ảnh hưởng MỌI user
+    ngoài admin/creator, không riêng Hiếu. Đổi cả 2 route sang đòi đúng `"targets"`.
+  - 🔴 **Card "Tiến độ doanh thu B2C so với mục tiêu tháng" báo "chưa nhập" dù đã lưu target** (Hiếu báo
+    ngay sau khi tự QA bug 403 ở trên) — `api/analytics/b2c/monthly` nhánh live (FE Advance LUÔN gửi
+    `nocache=1`) vẫn gắn `CACHE_HEADERS` (`s-maxage=300, stale-while-revalidate=600`) → Vercel Edge CDN
+    cache nguyên response 5-15 phút, ĐỘC LẬP với `flushAnalyticsCache()` (khác tầng cache — app cache vs
+    CDN cache theo response header). Fix: `Cache-Control: no-store` khi forceRefresh. **Verify trực tiếp
+    trên staging**: đổi target qua API → reload ngay → card cập nhật tức thì, không cần chờ.
+  **(4) Bỏ dải 6 KPI card "Users/ROAS/Customers/CAC/Leads/CPL"** đầu subtab Advance theo yêu cầu Hiếu —
+  số liệu tương đương vẫn còn ở section CAC&Leads/Spend&ROAS bên dưới. Dọn kèm code chết (`KpiCard`,
+  6 biến tính toán, import `Zap`/`Percent`/`cn` không còn dùng).
+  tsc + lint (0 lỗi mới) + vitest (220/220, +1 test) PASS mọi fix. 6 commit đã push thẳng staging
+  (`df329ff3` mã nước, `4c2a8ea7` redesign UI, `f8b271d0` Tổng cộng+CM1, `1bec0b59` 403 targets,
+  `c9239d21` bỏ KPI card, `54bee462` CDN cache). **Không còn việc mở nào chặn** — mọi fix đã tự verify
+  bằng data/API thật trên staging (không chỉ tin code sạch). Wiki cập nhật đủ: `analytics-data-model.md`
+  mục 9, `analytics-my-metrics.md`, `analytics-b2c.md`.
 | ✅ **s195+18-C (2026-09-11) — QA My Metrics nhóm A+B trên staging: 4 bug thật phát hiện + fix, 1 là P0** |
   Tự QA (browser + gọi API trực tiếp) sau khi Hiếu chạy migration v53/v54. **4 bug thật, đã fix + deploy +
   verify lại đều PASS**:
@@ -382,6 +424,15 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+19 — Test lại toàn bộ B2C Performance + My Metrics (Hiếu hẹn "mai tôi test")** — mọi fix đã
+  tự verify bằng data/API thật trên staging, nhưng chưa ai xem lại bằng mắt qua UI thật 1 lượt đầy đủ.
+  Checklist gợi ý: (a) tab B2C sub-tab Performance — đổi groupBy=SKU, kiểm tra "Tổng cộng" + xuất CSV có
+  dòng cảnh báo "Đang hiện N/M dòng" khi >1000 SKU; (b) Manage Costs → nhập lại KPI Target B2C/Marketing
+  Budget bằng 1 acc KHÔNG phải admin/creator (vd acc Lark liên kết role BOD) → xác nhận lưu được; (c)
+  ngay sau khi lưu, mở tab B2C Advance → card "Tiến độ doanh thu B2C so với mục tiêu tháng" phải cập
+  nhật NGAY, không cần chờ; (d) xác nhận dải 6 KPI card Users/ROAS/Customers/CAC/Leads/CPL đã biến mất
+  khỏi đầu subtab Advance; (e) My Metrics — tab phân đoạn 3 nhóm chuyển mượt, hierarchy SKU GM/%Datapool
+  hiện đúng tên nước (không còn mã lạ như "CJP"/"CAN" sai).
 - [x] **s195+18-A/B/C — My Metrics nhóm A+B + QA — XONG (2026-09-11), tự QA qua browser + API trực
   tiếp trên staging, đã fix 4 bug (1 P0)** — migration v53+v54 Hiếu đã chạy. Hierarchy SKU GM/%Datapool
   drill 4 cấp + prorata + AI giải thích + AI phân loại chủ đề: đều xác nhận hoạt động đúng sau fix.
