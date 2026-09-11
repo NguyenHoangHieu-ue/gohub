@@ -25,7 +25,20 @@ import {
   getDaysInMonth, getDaysInRange, getMonthsInRange,
   cachedQuery, flushByDeps, isCronReq, analyticsGuard,
   excludeInactiveCustomers, buildIsStrategicSql, shipFilter, internalOpsFilter,
+  decodeSkuDestinationCode,
 } from "@/lib/analytics-helpers"
+
+describe("decodeSkuDestinationCode (JS mirror của getDestinationSQL)", () => {
+  test("digit-prefix (old catalog) → chars 3-5", () => {
+    expect(decodeSkuDestinationCode("2CTHACBF05010")).toBe("THA")
+  })
+  test("E-prefix (eSIM/SIM) → chars 2-4", () => {
+    expect(decodeSkuDestinationCode("EJPNBCPY500M30D")).toBe("JPN")
+  })
+  test("3-letter legacy prefix → chars 1-3", () => {
+    expect(decodeSkuDestinationCode("CHN3D07GBFY05D")).toBe("CHN")
+  })
+})
 
 describe("SQL input sanitization (chống injection)", () => {
   test("safeDate: chỉ nhận YYYY-MM-DD, còn lại → null", () => {

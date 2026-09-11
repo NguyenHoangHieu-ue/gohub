@@ -6,6 +6,7 @@ import dynamic from "next/dynamic"
 import { Zap, ShieldCheck, Search, Check, X, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ProgressBar, SourceBox, DataTable } from "@/components/my-metrics/shared-ui"
+import { GmHierarchySection } from "@/components/my-metrics/gm-hierarchy"
 import { fck, pct } from "@/lib/my-metrics-format"
 import { OKR_GM_BASELINE_DISPLAY } from "@/lib/my-metrics-types"
 import type { SkuScanData, SkuScanItem, SkuNote } from "@/lib/my-metrics-types"
@@ -197,6 +198,22 @@ export function SkuScanSection({ quarter, targetDelta, onSummary }: { quarter: s
         <SourceBox type="auto" table="gohub_dw · fact_fulfillment_revenue (toàn bộ SKU, quý này vs quý trước)"
           filter={`GM% = SUM(gross_profit_vnd)/SUM(fulfilled_revenue_amount_vnd) · trọng điểm = top ${data?.key_threshold_pct ?? 80}% doanh thu tích luỹ · mới = so baseline ${OKR_GM_BASELINE_DISPLAY}%`} />
       </div>
+
+      {data && (
+        <div className="px-5 pb-5">
+          <GmHierarchySection
+            scope="sku_gm"
+            title="Vì sao GM% đổi? — Vendor → Nước → Product Code → SKU"
+            leaves={items.map(it => ({
+              sku: it.sku, vendor: it.vendor, country: it.country, product_code: it.product_code,
+              rev_cur: it.rev_cur, gp_cur: it.gp_cur, rev_prev: it.rev_prev, gp_prev: it.gp_prev,
+            }))}
+            monthly={data.monthly}
+            quarterLabel={quarter} prevQuarterLabel={data.prevQuarter}
+            curStart={data.curStart} curEnd={data.curEnd}
+          />
+        </div>
+      )}
     </div>
   )
 }

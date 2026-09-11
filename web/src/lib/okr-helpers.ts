@@ -51,3 +51,12 @@ export function currentQuarterLabel(): string {
 // SKU MỚI (không có giai đoạn "trước" cùng SKU để so sánh nội bộ).
 export const OKR_GM_BASELINE = 36.7
 export const OKR_HK3_BASELINE = 67.5
+
+// "Tasks via Bé Gấu" (s195+18-B) — chỉ tính task ĐÃ THẬT SỰ xuất dữ liệu từ DB (không phải chào hỏi/
+// trả lời chay). Danh sách tool "đọc dữ liệu bảng thật" — loại webSearch (web ngoài, không phải DB nội
+// bộ) và readKnowledgeBase/searchKnowledgeBase (semantic search KB, không phải query bảng dữ liệu có
+// cấu trúc) và các tool Gấu Pro khác (MRP/browser/gen ảnh — không liên quan "task tính KPI").
+export const DB_TASK_TOOLS = ["executeSQL", "querySupabase", "queryProduct", "listSupabaseTables"] as const
+export function usedDbTaskTool(tools: string[] | null | undefined): boolean {
+  return !!tools && tools.some(t => (DB_TASK_TOOLS as readonly string[]).includes(t))
+}

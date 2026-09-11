@@ -198,9 +198,9 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
       id: "begau", title: "Tasks via Bé Gấu — cách tính",
       body: (
         <>
-          <p>Đếm hội thoại chat có phản hồi AI dài ≥15 ký tự (loại chào hỏi/lỗi cụt), company-wide, trong quý.</p>
-          {auto && auto.begau.excluded_short > 0 && <p>Đã loại {auto.begau.excluded_short} tin nhắn quá ngắn khỏi kỳ này.</p>}
-          <p>Không có structured "success flag" — độ dài phản hồi là proxy, không phải thước đo chuẩn xác tuyệt đối.</p>
+          <p>Chỉ tính hội thoại mà Bé Gấu ĐÃ THẬT SỰ gọi tool xuất dữ liệu từ DB (executeSQL/querySupabase/queryProduct/liệt kê bảng Supabase) — trả lời chay/chào hỏi/dùng KB thuần không tính, dù phản hồi có dài. Company-wide, trong quý.</p>
+          {auto && auto.begau.excluded_short > 0 && <p>Đã loại {auto.begau.excluded_short} tin nhắn không đủ điều kiện (không dùng DB tool hoặc phản hồi quá ngắn &lt;15 ký tự) khỏi kỳ này.</p>}
+          <p>Danh sách "Xem hội thoại được tính" bên dưới hiện đúng tool nào đã dùng cho từng case — đối chiếu được, không phải hộp đen.</p>
         </>
       ),
     },
@@ -530,7 +530,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
               </div>
             )}
             <SourceBox type="auto" table="Supabase · app_usage_events"
-              filter="event_type='chat' AND ai_response IS NOT NULL AND length(trim(ai_response)) >= 15 · Lark: user_email LIKE 'lark:%'" />
+              filter="event_type='chat' AND used_db_tool=true AND length(trim(ai_response)) >= 15 · Lark: user_email LIKE 'lark:%'" />
 
             <BegauInsightsSection quarter={qLabel} />
 
@@ -557,6 +557,9 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                               {c.channel}
                             </span>
                             <span className="text-[10px] text-slate-400">{c.user}</span>
+                            {c.tools_used.map(t => (
+                              <span key={t} className="text-[8px] font-black px-1 py-0.5 rounded bg-brand-50 text-brand-600 uppercase">{t}</span>
+                            ))}
                             <span className="text-[10px] text-slate-400 ml-auto">{hhmm(c.created_at)}</span>
                           </div>
                           <p className="text-xs font-bold text-slate-800 truncate">{c.user_message}</p>

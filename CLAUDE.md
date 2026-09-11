@@ -6,10 +6,30 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-11, s195+18-A)
+## Trạng thái hiện tại (2026-09-11, s195+18-B)
 
 | | |
 |---|---|
+| ⏳ **s195+18-B (2026-09-11) — My Metrics nhóm B: SKU GM/%Datapool hierarchy+prorata+AI, Bé Gấu chỉ tính task query DB, chờ Hiếu QA** |
+  Nhóm B (sau nhóm A). **SKU Gross Margin + %Datapool Rev**: component dùng chung mới
+  `GmHierarchySection` — hierarchy Vendor→Nước→Product Code→SKU (rollup client-side), toggle Tháng/Quý
+  (tháng = MoM 2 tháng gần nhất có data), prorata kỳ hiện tại qua `getProjectionFactor()` có sẵn, chart
+  Rev kỳ trước vs kỳ này + biến động GM%, bảng "Giải thích bằng AI" on-demand (nút bấm, cache 12h, luôn
+  ghi "có thể do"). `datapool-detail` route trước chỉ có quý hiện tại (không so sánh được) — thêm quý
+  trước + GM%. **Tasks via Bé Gấu**: đổi định nghĩa "task tính KPI" — phải THẬT SỰ gọi tool đọc DB
+  (executeSQL/querySupabase/queryProduct/listSupabaseTables), không còn chỉ dựa độ dài response.
+  `be-gau.ts` track tool gọi mỗi vòng (`toolsUsed`), migration `v54` thêm cột `app_usage_events.
+  tools_used`/`used_db_tool`. **Fix phát hiện khi sửa**: route Lark log `app_usage_events` TRƯỚC KHI
+  gọi `runBeGau()` → `ai_response` LUÔN NULL cho MỌI chat Lark → task Lark chưa BAO GIỜ được tính vào
+  KPI dù wiki cũ mô tả có breakdown Web/Lark — đã sửa log SAU khi có response thật. 3 route (my-metrics
+  chính/begau-insights/conversations) đồng bộ filter `used_db_tool=true`; conversations + insights trả
+  thêm `tools_used` → FE hiện badge tool per case. Thêm phân loại chủ đề bằng AI on-demand (giống Usage
+  Analytics `usage-stats/classify`, scope đúng tập task đã lọc). tsc + lint (0 lỗi mới) + vitest
+  (219/219) PASS. ⚠️ **Gotcha quan trọng**: số "Tasks via Bé Gấu" quý Q3-2026 hiện tại sẽ TỤT MẠNH về
+  gần 0 ngay sau deploy — task CŨ (trước lúc deploy) không có `used_db_tool` (không backfill được, dữ
+  liệu tool nào gọi chưa từng ghi lại trước đây) → bị loại hết theo định nghĩa mới. Đây là đánh đổi 1
+  lần bắt buộc, KHÔNG phải bug. **Cần Hiếu**: chạy migration v54, QA staging theo checklist trong wiki
+  mục "s195+18-B" (analytics-my-metrics.md), theo dõi vài ngày để số Bé Gấu tích luỹ lại từ 0.
 | ⏳ **s195+18-A (2026-09-11) — My Metrics nhóm A: SLA/Vendor Speed chỉ tính request người khác + note + chart tháng, chờ Hiếu QA** |
   Hiếu yêu cầu rebuild lớn "My Metrics v2" (5 mục), chia 2 nhóm theo yêu cầu Hiếu — nhóm A xong trước.
   (1) Chỉ tính SLA/Vendor Selection Speed cho thread NGƯỜI KHÁC đăng rồi mention Hiếu — thread Hiếu tự
@@ -329,6 +349,13 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+18-B — My Metrics nhóm B (SKU GM/%Datapool/Bé Gấu): chạy migration v54 + QA trên staging**
+  — (1) `web/db/migrations/v54_app_usage_events_db_tool.sql`. (2) SKU GM/%Datapool: toggle Tháng/Quý,
+  click drill Vendor→Nước→Product Code→SKU, bấm "Giải thích bằng AI". (3) Hỏi Bé Gấu 1 câu BI thật cả
+  web lẫn Lark → xác nhận task mới hiện đúng trong "Xem hội thoại được tính" kèm badge tool đúng. (4)
+  Bấm "Phân loại chủ đề bằng AI" trong Bé Gấu Insights. (5) **Lưu ý**: số "Tasks via Bé Gấu" quý này sẽ
+  về gần 0 ngay sau deploy (task cũ trước deploy không backfill được `used_db_tool`) — KHÔNG phải bug,
+  theo dõi vài ngày để số tích luỹ lại đúng theo định nghĩa mới.
 - [ ] **s195+18-A — My Metrics nhóm A (SLA/Vendor Speed): chạy migration v53 + QA trên staging** —
   (1) `web/db/migrations/v53_okr_lark_events_selfpost_note.sql`. (2) Thử tự đăng 1 thread tự mention
   chính mình → phải rơi vào khối "tự đăng — không tính" (không phải hàng chờ duyệt bình thường), bấm

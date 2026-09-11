@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { BarChart3, Search } from "lucide-react"
 import { DataTable, SourceBox } from "@/components/my-metrics/shared-ui"
+import { GmHierarchySection } from "@/components/my-metrics/gm-hierarchy"
 import { fck } from "@/lib/my-metrics-format"
 import type { DatapoolDetailData, DatapoolDetailItem } from "@/lib/my-metrics-types"
 
@@ -73,6 +74,22 @@ export function DatapoolDetailTable({ quarter }: { quarter: string }) {
         <SourceBox type="auto" table="gohub_dw · fact_fulfillment_revenue (GROUP BY sku, vendor)"
           filter="REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')" />
       </div>
+
+      {data && (
+        <div className="px-5 pb-5">
+          <GmHierarchySection
+            scope="datapool"
+            title="Vì sao GM%/Rev Datapool đổi? — Vendor → Nước → Product Code → SKU"
+            leaves={items.map(it => ({
+              sku: it.sku, vendor: it.vendor, country: it.country, product_code: it.product_code,
+              rev_cur: it.rev, gp_cur: it.gp, rev_prev: it.rev_prev, gp_prev: it.gp_prev,
+            }))}
+            monthly={data.monthly}
+            quarterLabel={data.quarter} prevQuarterLabel={data.prevQuarter}
+            curStart={data.start} curEnd={data.end}
+          />
+        </div>
+      )}
     </div>
   )
 }

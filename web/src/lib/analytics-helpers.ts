@@ -553,6 +553,17 @@ export function getDestinationSQL(_rule?: DestRule): string {
   END`
 }
 
+// JS mirror of getDestinationSQL() — dùng khi đã có SKU sẵn trong JS (vd sau khi query đã trả về hàng
+// loạt SKU và cần group theo nước phía TypeScript, như My Metrics SKU GM/Datapool hierarchy) thay vì
+// phải thêm CASE vào SQL. PHẢI giữ ĐÚNG 3 nhánh regex y hệt getDestinationSQL — sửa 1 bên thì sửa cả 2.
+export function decodeSkuDestinationCode(sku: string): string {
+  const s = sku.toUpperCase()
+  if (/^[1-6]/.test(s))            return s.slice(2, 5)
+  if (/^E/.test(s))                return s.slice(1, 4)
+  if (/^[A-DF-Z]{3}[0-9]/.test(s)) return s.slice(0, 3)
+  return s.slice(0, 3)
+}
+
 // ── Country code → name mapping (from Turso country_codes, 332 rows, accurate) ──
 // NOTE: dim_location is NOT a destination dimension — it stores branch/pickup
 // locations ("Tân Sơn Nhất - HCM", "ESIM Only"...), so destination codes parsed

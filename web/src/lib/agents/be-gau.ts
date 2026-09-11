@@ -443,7 +443,7 @@ export async function runBeGau(opts: {
   extraDirective?: string   // vd quy tắc tạm thời
   fileContexts?: FileContext[]  // ảnh/PDF/file người dùng đính kèm (s190+3)
   onChunk?: (text: string) => void  // s195+18: stream token thật ra route — gọi mỗi khi Gemini sinh thêm đoạn text
-}): Promise<{ text: string; sources: WebSource[] }> {
+}): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[] }> {
   const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, onChunk } = opts
   const isPriv = priv(role)
   const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
@@ -538,6 +538,11 @@ export async function runBeGau(opts: {
   // s195+18: genWithRetryStream — stream token thật, thay genWithRetry (generateContent chờ hết mới trả)
   let genResult = await genWithRetryStream(model, { contents }, onChunk)
   const sources: WebSource[] = []
+  // Track tool nào được gọi trong cả vòng lặp — dùng để phân biệt "task tính KPI Bé Gấu" (đã thật sự
+  // xuất dữ liệu từ DB) khỏi trả lời chay/chào hỏi (My Metrics my-metrics/route.ts, s195+18-B). Định
+  // nghĩa "DB tool nào tính KPI" nằm ở lib/okr-helpers.ts (DB_TASK_TOOLS), không phải ở đây — be-gau.ts
+  // chỉ ghi lại SỰ THẬT đã gọi tool gì, không tự quyết định ý nghĩa nghiệp vụ của việc đó.
+  const toolsUsed = new Set<string>()
   const appendModel = () => { const c = genResult.response.candidates?.[0]?.content; if (c) contents.push(c) }
   appendModel()
 
@@ -551,6 +556,7 @@ export async function runBeGau(opts: {
     // functionResponse báo lỗi cho MỘT tool đó, model tự quyết định retry/báo user thay vì mất trắng.
     const fnParts = await Promise.all(calls.map(async (call: any) => {
       const a = call.args as any
+      toolsUsed.add(call.name)
       const wrap = (resp: any) => ({ functionResponse: { name: call.name, response: resp } })
       try {
 
@@ -638,5 +644,5 @@ export async function runBeGau(opts: {
     })
   }
 
-  return { text: finalText, sources }
+  return { text: finalText, sources, toolsUsed: Array.from(toolsUsed) }
 }
