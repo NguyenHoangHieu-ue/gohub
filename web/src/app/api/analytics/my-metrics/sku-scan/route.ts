@@ -36,10 +36,10 @@ export async function GET(req: NextRequest) {
   const prevLabel = prevQuarterLabel(quarter)
   const { start: prevStart, end: prevEnd } = parseQuarterLabel(prevLabel)
 
-  // v2: bump key sau s195+18-B (thêm country/product_code/monthly vào response) — cache cũ 12h TTL
-  // với shape cũ nếu không đổi key sẽ tiếp tục phục vụ FE mới → crash (.monthly undefined). Luôn bump
-  // suffix này khi đổi SHAPE response, không chỉ khi đổi công thức tính.
-  const cacheKey = `okr_sku_scan:v2:${quarter}`
+  // v3 (s195+19): fix decodeSkuDestinationCode (nước sai cho SKU pháp nhân chữ A-E) — bump key để
+  // cache 12h cũ (nước sai) không tiếp tục phục vụ ngay sau deploy. v2: bump key sau s195+18-B (thêm
+  // country/product_code/monthly vào response) — luôn bump suffix khi đổi SHAPE hoặc GIÁ TRỊ response.
+  const cacheKey = `okr_sku_scan:v3:${quarter}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {

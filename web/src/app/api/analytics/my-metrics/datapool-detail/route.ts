@@ -25,9 +25,10 @@ export async function GET(req: NextRequest) {
   const prevLabel = prevQuarterLabel(quarter)
   const { start: prevStart, end: prevEnd } = parseQuarterLabel(prevLabel)
 
-  // v2: bump key sau s195+18-B (thêm prev quý/gp/gm_pct/country/product_code/monthly — shape khác hẳn
-  // bản cũ) — cùng lý do bump ở sku-scan/route.ts, xem comment ở đó.
-  const cacheKey = `okr_datapool_detail:v2:${quarter}`
+  // v3 (s195+19): fix decodeSkuDestinationCode (nước sai cho SKU pháp nhân chữ A-E), cùng lý do bump
+  // ở sku-scan/route.ts. v2: bump key sau s195+18-B (thêm prev quý/gp/gm_pct/country/product_code/
+  // monthly — shape khác hẳn bản cũ).
+  const cacheKey = `okr_datapool_detail:v3:${quarter}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {

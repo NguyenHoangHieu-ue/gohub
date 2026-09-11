@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS, getAnalyticsSource, getSkuDestinationRule, getCountryMappings } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, getAnalyticsSource, getSkuDestinationRule, getCountryMappings, getDestinationSQL } from "@/lib/analytics-helpers"
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -25,13 +25,10 @@ export async function POST(req: NextRequest) {
     const source = getAnalyticsSource(dateColumn)
     const rule = await getSkuDestinationRule()
 
-    // Canonical regionExpr — khớp getDestinationSQL trong analytics-helpers.ts
-    const regionExpr = `UPPER(CASE
-      WHEN f.sku ~ '^[1-6]'            THEN SUBSTRING(f.sku, 3, 3)
-      WHEN f.sku ~ '^E'               THEN SUBSTRING(f.sku, 2, 3)
-      WHEN f.sku ~ '^[A-DF-Z]{3}[0-9]' THEN SUBSTRING(f.sku, 1, 3)
-      ELSE SUBSTRING(f.sku, 1, 3)
-    END)`
+    // Dùng CHUNG getDestinationSQL (analytics-helpers.ts) — trước đây file này tự chép lại CASE
+    // (comment "khớp getDestinationSQL" nhưng là bản copy độc lập) → lệch khỏi bản gốc khi bản gốc
+    // được sửa (s195+19), tự chép lại đúng lỗi cũ. Xoá duplicate, gọi thẳng hàm dùng chung.
+    const regionExpr = getDestinationSQL(rule)
 
     // Build WHERE clause
     function buildWhere(sd: string, ed: string) {
