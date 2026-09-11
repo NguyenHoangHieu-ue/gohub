@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode, getMonthsInRange, getDaysInRange, getDaysInMonth, getChannelCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
+import { matchChannelCost } from "@/lib/bod-data"
 
 // Port intel /api/analytics/b2c/kpis: 7 KPI [Revenue, Units, Gross Profit, Margin %, Total Orders, CM1, CM1 %].
 // CM1 = margin − operational cost (channel_costs ads/platform/sponsor/media + group_costs B2C), prorate theo ngày.
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest) {
       ),
       // Revenue theo channel (current/prev) cho phân bổ cost theo %
       queryAnalytics<Record<string, string>>(
-        `SELECT TRIM(s.channel_name) as channel,
+        `SELECT TRIM(s.channel_name) as channel, MIN(f.order_source_code) as source_code,
                 SUM(CASE WHEN ${filter} THEN f.${source.revenueCol} ELSE 0 END) as current_revenue,
                 SUM(CASE WHEN ${prevFilter} THEN f.${source.revenueCol} ELSE 0 END) as prev_revenue
          FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
@@ -87,15 +88,21 @@ export async function GET(req: NextRequest) {
         supabaseAdmin.from("analytics_channel_group_costs").select("month, amount").eq("group_name", "B2C").in("month", allMonths),
       ])
 
+      // s195+19: dùng matchChannelCost() dùng chung (sub-channel prefix / source_code / exact / không
+      // phân biệt hoa-thường) thay vì so chuỗi CHÍNH XÁC — trước đây khác logic với b2c/performance
+      // (bảng breakdown CÙNG TRANG) và quarterly-report, nên nếu 1 kênh đổi tên hoặc cost nhập theo
+      // sub-channel, card CM1 đầu trang sẽ lệch âm thầm so với bảng chi tiết bên dưới.
       channelRows.forEach(row => {
         const apply = (months: string[], rangeStart: string, rangeEnd: string, rev: number, add: (v: number) => void) => {
-          channelCosts.filter((c: any) => c.channel === row.channel && months.includes(String(c.month))).forEach((c: any) => {
-            const ratio = getDaysInMonth(String(c.month)) > 0 ? getDaysInRange(rangeStart, rangeEnd, String(c.month)) / getDaysInMonth(String(c.month)) : 0
-            COST_KEYS.forEach(key => {
-              const v = c[key]
-              // amount: pro-rata theo số ngày trong kỳ (× ratio). percent: áp thẳng trên revenue của kỳ (rev đã
-              // là doanh thu range) — KHÔNG × ratio (nhất quán bod-data.ts; B2C-1 s126: trước nhân dư → under-count kỳ lẻ tháng).
-              if (v) add(v.type === "amount" ? (v.value || 0) * ratio : (rev * (v.value || 0)) / 100)
+          months.forEach(month => {
+            matchChannelCost(channelCosts, row.channel, month, row.source_code).forEach((c: any) => {
+              const ratio = getDaysInMonth(month) > 0 ? getDaysInRange(rangeStart, rangeEnd, month) / getDaysInMonth(month) : 0
+              COST_KEYS.forEach(key => {
+                const v = c[key]
+                // amount: pro-rata theo số ngày trong kỳ (× ratio). percent: áp thẳng trên revenue của kỳ (rev đã
+                // là doanh thu range) — KHÔNG × ratio (nhất quán bod-data.ts; B2C-1 s126: trước nhân dư → under-count kỳ lẻ tháng).
+                if (v) add(v.type === "amount" ? (v.value || 0) * ratio : (rev * (v.value || 0)) / 100)
+              })
             })
           })
         }

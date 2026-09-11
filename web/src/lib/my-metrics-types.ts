@@ -21,10 +21,14 @@ export interface EvidenceRecord {
   duration_value: number | null; created_by: string | null; created_at: string
   updated_by?: string | null; updated_at?: string | null
   source?: "manual" | "lark_auto"
+  hieu_note?: string | null
 }
+export interface EvidenceMonthPoint { month: string; avg: number; count: number }
 export interface EvidenceData {
   records: EvidenceRecord[]; avg: number | null; count: number; completed: number; verified: number
   locked: boolean; sources?: { manual: number; lark_auto: number }
+  monthly: EvidenceMonthPoint[]
+  prev_quarter: { label: string; avg: number | null; count: number }
 }
 export interface LarkEvent {
   id: string; quarter: string; metric: string; message_id: string
@@ -32,11 +36,13 @@ export interface LarkEvent {
   request_time: string; request_snippet: string | null; request_sender: string | null
   completion_time: string | null; completion_snippet: string | null; completion_sender: string | null
   duration_value: number | null; ai_reason: string | null
-  status: "pending_review" | "confirmed" | "rejected"
+  status: "pending_review" | "confirmed" | "rejected" | "not_matched"
+  is_self_initiated?: boolean; hieu_note?: string | null
 }
 export interface Conversation {
   id: number; user_message: string; ai_response: string
   channel: string; user: string; created_at: string
+  tools_used: string[]
 }
 export interface ManualMetrics {
   target_sla_hours: number; target_sla_pct: number; target_vendor_speed: number
@@ -45,25 +51,43 @@ export interface ManualMetrics {
 }
 export interface SkuScanItem {
   sku: string; category: string | null; vendor: string | null
+  country: string | null; country_code: string; product_code: string
   rev_cur: number; gp_cur: number; gm_pct_cur: number; orders_cur: number
   rev_prev: number; gp_prev: number; gm_pct_prev: number; orders_prev: number
   delta: number | null; delta_basis: string
   is_key: boolean; is_new: boolean; cum_rev_pct: number
 }
+// Chi tiết theo THÁNG cho hierarchy Vendor→Nước→Product Code→SKU (SKU GM + %Datapool, s195+18-B) —
+// spans cả quý hiện tại lẫn quý trước trong 1 mảng duy nhất, FE tự lọc theo tháng cần xem.
+export interface HierarchyMonthlyRow { sku: string; month: string; rev: number; gp: number }
 export interface SkuScanData {
-  quarter: string; prevQuarter: string; key_threshold_pct: number
+  quarter: string; curStart: string; curEnd: string
+  prevQuarter: string; prevStart: string; prevEnd: string
+  key_threshold_pct: number
   items: SkuScanItem[]; weighted_delta: number | null
   key_count: number; new_count: number; scored_count: number; total_rev_cur: number
+  monthly: HierarchyMonthlyRow[]
 }
 export interface SkuNote { id: string; sku_code: string; note: string | null; created_by: string }
-export interface DatapoolDetailItem { sku: string; vendor: string; category: string | null; rev: number; units: number; orders: number }
-export interface DatapoolDetailData { items: DatapoolDetailItem[]; total_rev: number; total_orders: number; total_units: number }
+export interface DatapoolDetailItem {
+  sku: string; vendor: string; category: string | null
+  country: string | null; country_code: string; product_code: string
+  rev: number; units: number; orders: number; gp: number; gm_pct: number
+  rev_prev: number; gp_prev: number; gm_pct_prev: number
+}
+export interface DatapoolDetailData {
+  items: DatapoolDetailItem[]; total_rev: number; total_orders: number; total_units: number
+  total_rev_prev: number; quarter: string; start: string; end: string
+  prevQuarter: string; prevStart: string; prevEnd: string
+  monthly: HierarchyMonthlyRow[]
+}
 export interface TopUserRow  { user: string; count: number }
 export interface TopicRow    { phrase: string; count: number }
 export interface QualityItem {
   id: number; user: string; created_at: string
   user_message: string; ai_response_preview: string
   score: number; bucket: "high" | "medium" | "low"; flags: string[]
+  tools_used: string[]
 }
 export interface BegauInsightsData {
   total_tasks: number
@@ -73,7 +97,7 @@ export interface BegauInsightsData {
 }
 export interface LarkScanResult {
   scanned: number; classified: number; inserted: number; not_matched: number; classify_errors: number
-  backlog_remaining: number; skipped?: string
+  backlog_remaining: number; skipped?: string; self_initiated: number
   groups: { chat_id: string; chat_name: string; thread_count: number }[]
 }
 

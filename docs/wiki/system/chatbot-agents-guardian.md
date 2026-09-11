@@ -90,6 +90,98 @@ Lark dùng trong group → không phân biệt được role (mọi người có
 ---
 
 ## Lưu ý kỹ thuật
+- 🔴 **s195+18-C (2026-09-11) — P0 phát hiện qua QA My Metrics: tool-calling CHẾT HOÀN TOÀN từ lúc s195+18
+  đổi sang streaming, đã fix.** Mọi câu hỏi cần tool (executeSQL/querySupabase/...) — cả Bé Gấu lẫn Gấu Pro
+  — lỗi thẳng `400 Function call is missing a thought_signature` ngay từ vòng lặp tool-call đầu tiên. Root
+  cause đọc trực tiếp source `@google/generative-ai@0.21.0` (`dist/index.js` hàm `aggregateResponses()`):
+  khi gộp nhiều chunk stream thành 1 response, hàm này CHỈ copy đúng 4 field cố định mỗi part
+  (text/functionCall/executableCode/codeExecutionResult) — làm rớt field `thoughtSignature` (field MỚI,
+  ra đời sau SDK, model "thinking" dùng tool như gemini-3.8-flash bắt buộc phải có). Gemini API yêu cầu
+  echo lại NGUYÊN VẸN thoughtSignature khi gửi lại chính functionCall đó ở lượt sau (đẩy vào `contents`
+  cho vòng lặp tiếp theo) — thiếu thì model reject thẳng. Fix (`lib/agents/gemini-stream.ts`
+  `genWithRetryStream()`): tự gom `parts` từ RAW chunk (spread giữ nguyên mọi field, không lọc như SDK)
+  rồi ghi đè vào `content.parts` của response đã aggregate trước khi trả về — `.text()`/`.functionCalls()`
+  (helper của SDK) đọc thẳng `candidates[0].content.parts` mỗi lần gọi (không cache tại thời điểm gắn
+  helper) nên ghi đè sau vẫn hoạt động đúng, không cần sửa gì ở `be-gau.ts`/`creator-ai.ts`.
+  **Bug đi kèm cùng đợt QA, cùng gốc "fire-and-forget trên serverless"**: `logChat()`
+  (`api/chat/route.ts`) và 2 chỗ insert `app_usage_events` mới ở `api/lark/events/route.ts` (s195+18-B)
+  không `await` — verify được 2 lần liên tiếp MẤT HẲN dòng log dù trả lời đúng (Vercel đóng execution
+  context trước khi Supabase insert kịp gửi đi, cùng lớp rủi ro wiki đã ghi cho Lark ở mục dưới nhưng lúc
+  đó chưa áp dụng triệt để). Đã đổi cả 3 chỗ sang `await`. Production (`main`) KHÔNG dính bug P0 này —
+  chưa merge tới `425b862a` (commit stream token gốc) tính tới lúc phát hiện.
+- **s195+18 (2026-09-10) — Stream token THẬT cho cả Bé Gấu lẫn Gấu Pro (fix gốc, không còn vá triệu chứng).**
+  Tiếp mục "chưa làm" nêu ở s195+17. Trước đây CẢ 2 agent `await` xong TOÀN BỘ vòng lặp function-calling
+  (tới 12/20 iteration) mới trả 1 cục text duy nhất cho user — dù bọc `ReadableStream`/SSE, user vẫn thấy
+  màn hình trắng suốt thời gian chờ (root cause thật của s195+14, lúc đó chỉ vá triệu chứng bằng nâng
+  `maxDuration` 60→300, chưa fix gốc). Đổi cả 2 agent dùng `model.generateContentStream()` (SDK
+  `@google/generative-ai` v0.21.0 hỗ trợ sẵn, có sẵn field `.stream` async-generator + `.response` promise
+  tổng hợp) THAY VÌ `generateContent()` ở MỌI vòng gọi model (kể cả vòng có tool-call — vòng đó thường
+  KHÔNG có text vì system prompt cấm model narrate bước kỹ thuật, nên forward chunk không lộ gì; vòng trả
+  lời cuối thì text chảy thẳng ra user theo từng đoạn model sinh ra thật). Helper dùng chung
+  `genWithRetryStream()` tách ra `lib/agents/gemini-stream.ts` (dùng cho cả `be-gau.ts` VÀ `creator-ai.ts`
+  — tránh lặp lại đúng kiểu duplicate code vừa fix ở s195+17) — giữ nguyên shape `{ response }` như
+  `generateContent()` cũ nên toàn bộ code downstream (`.text()`/`.functionCalls()`/`.candidates`) KHÔNG
+  đổi gì; retry transient error (429/5xx/timeout...) chỉ áp dụng khi CHƯA emit chunk nào ra user trong vòng
+  đó — tránh lặp lại text đã hiện nếu phải retry.
+  **Bé Gấu** (`be-gau.ts` + `api/chat/route.ts`): thêm `onChunk` callback, route enqueue từng delta ngay
+  khi runBeGau() sinh ra — bỏ hẳn `controller.enqueue(encoder.encode(text))` cũ (tránh lặp đôi nội dung).
+  FE (`chatbot/page.tsx`) **KHÔNG cần sửa gì** — code đọc stream sẵn có kiểu `while(true){reader.read()}`
+  append từng chunk vào state, đã đúng ngay khi backend gửi nhiều chunk nhỏ thay vì 1 chunk to.
+  **Gấu Pro** (`creator-ai.ts` + `api/creator-ai/chat/route.ts` + FE `analytics/creator/ai/page.tsx`): thêm
+  event `{type:"delta", content}` mới vào union `GPEvent` (giữ nguyên event `"text"` cũ — vẫn gửi 1 lần ở
+  CUỐI mang full text, làm nguồn sự thật lưu DB/backward-compat). FE thêm bubble placeholder rỗng ngay khi
+  bắt đầu gửi, nối dần theo từng `delta` event (`setMessages` progressive, giống pattern Bé Gấu) — TRƯỚC
+  ĐÓ Gấu Pro chỉ update UI 1 lần y hệt Bé Gấu dù ĐÃ có hạ tầng SSE + status event real-time (status thì có,
+  nội dung câu trả lời thì không). Catch lỗi giữa chừng giờ NỐI THÊM lỗi vào phần đã stream thay vì xoá
+  trắng thay thế (tránh "flicker" nội dung đã hiện rồi biến mất).
+  **Test**: mock Gemini SDK ở `be-gau.test.ts`/`be-gau-runner.test.ts` phải thêm `generateContentStream`
+  (trước chỉ mock `generateContent`) — implement bằng cách delegate gọi lại `generateContent` mock rồi bọc
+  thành `{stream: async-generator 1 chunk, response: Promise}`, giữ nguyên mọi chuỗi `mockResolvedValueOnce`
+  nhiều vòng đã viết sẵn cho từng test (không phải viết lại). tsc + lint (0 lỗi mới) + vitest (216/216)
+  PASS. **Cần Hiếu**: QA cả 2 agent trên staging — xác nhận chữ CHẠY DẦN thay vì bung 1 cục, không lặp/mất
+  nội dung, sources/export marker vẫn hoạt động đúng ở cuối câu trả lời.
+- **s195+17 (2026-09-10) — Đổi model TOÀN BỘ AI trong Intel sang `gemini-3.8-flash` + đánh giá/nâng cấp
+  Gấu Pro.** Tiếp s195+16 (khi đó chỉ đổi `be-gau.ts`, các agent khác giữ nguyên). Hiếu yêu cầu mở rộng ra
+  toàn bộ + đánh giá riêng Gấu Pro. Đã đổi model ở 17 file: `bi-analyst.ts`/`data-explorer.ts`/
+  `orchestrator.ts`/`classifier.ts`/`answer.ts` (pipeline cũ), `creator-ai.ts` (Gấu Pro), `mrp.ts`,
+  `okr-lark-classify.ts` (giữ nguyên `maxOutputTokens=4000` — safety net cũ không phụ thuộc field
+  thinking, không đụng), `web-search.ts`, `weekly-report/narrative.ts`, `creator/tools/portal.ts`,
+  `creator/compress.ts`, usage-stats classify/evaluate, Tổ Gấu AI route, `config/schema/ai-suggest`
+  (đổi field cũ `thinkingBudget:0` → `thinkingLevel:"minimal"` — field mới đúng cho 3.8-flash, field cũ có
+  nguy cơ 400 trên model mới, xem gotcha `okr-lark-classify.ts` bên dưới). `creator-ai.ts` (model chính Gấu
+  Pro) thêm `thinkingConfig.thinkingLevel:"low"` cùng lý do đã áp cho `be-gau.ts` (s195+16).
+  **Đánh giá Gấu Pro** (đọc trực tiếp `creator-ai.ts` 754 dòng + `api/creator-ai/chat/route.ts` +
+  `dispatch.ts`): ưu điểm — SSE thật với status event real-time mỗi tool call (`onEvent`/`emit`, UX tốt
+  hơn Bé Gấu hẳn lúc chờ), 20+ tool phong phú, system prompt cá nhân hoá sâu (OKR Q3 Hiếu, expert persona
+  theo domain, pipeline product-onboarding 7-bước), `maxDuration=300` đúng từ đầu (không dính bug timeout
+  như Bé Gấu s195+14). Nhược điểm/bug thật phát hiện khi đọc — **đã fix ngay**: (1) `api/creator-ai/chat/
+  route.ts` có `compressHistory`/`stripBase64Images` COPY Y HỆT từ `creator/compress.ts` (dùng chung đúng
+  cách ở `be-gau.ts` nhưng route Gấu Pro thì không) — xoá bản trùng, route giờ import từ module dùng chung
+  (chỉ còn 1 chỗ cần đổi model khi cần sau này). (2) Hàm `combineFileContexts` định nghĩa trong route
+  nhưng KHÔNG được gọi ở đâu — dead code, đã xoá. (3) Vòng lặp tool-call (`runCreatorAI` + `be-gau.ts`
+  cùng lỗi) — `Promise.all(calls.map(dispatchTool))` KHÔNG bọc try/catch riêng từng tool: 1 tool lỗi
+  (network timeout portal/video API...) làm reject CẢ round, sập toàn bộ câu trả lời dù tool khác đã chạy
+  xong. Đã bọc try/catch quanh từng tool call (cả `creator-ai.ts` lẫn `be-gau.ts`) — tool lỗi giờ chỉ trả
+  `functionResponse` báo lỗi cho đúng tool đó, phần còn lại tiếp tục bình thường. **Chưa làm (đề xuất, cần
+  bàn thêm trước khi làm — thay đổi kiến trúc lớn hơn)**: text trả lời cuối vẫn "await hết rồi enqueue 1
+  lần" ở CẢ 2 agent (status event thì real-time, nhưng nội dung câu trả lời thật thì không stream token) —
+  fix đúng gốc cần đổi cách Gemini SDK stream + FE parse, rủi ro cao hơn, để riêng nếu Hiếu muốn làm tiếp.
+  tsc + lint (0 lỗi mới) + vitest (216/216) PASS. **Cần Hiếu**: QA cả Bé Gấu lẫn Gấu Pro trên staging (1
+  câu BI nhiều bước mỗi bên) — đúng/không chậm/không lỗi JSON; theo dõi Gemini API cost.
+- **s195+16 (2026-09-10) — Bé Gấu đổi model `gemini-3.6-flash` → `gemini-3.8-flash`.** Theo yêu cầu Hiếu
+  đánh giá toàn diện + nâng cấp. Verify qua WebSearch trước khi đổi (không đoán): model có thật, GA, nhưng
+  **mặc định thinking level = medium nếu không set** (billable, thêm latency ẩn) — đúng lớp rủi ro repo đã
+  từng dính (gemini-3.5-flash thinking model cần `thinkingBudget=0` mới ổn định JSON — xem mục dưới; và
+  gemini-2.0-flash bị khai tử im lặng 6 ngày s194+7). Set tường minh `generationConfig.thinkingConfig.thinkingLevel`
+  (SDK `@google/generative-ai` v0.21.0 pin cứng chưa có type field này, ra đời sau SDK → `as any`):
+  `"low"` cho model chính (vòng lặp function-calling, cân bằng lợi ích tool-orchestration của 3.8 vs latency
+  budget vừa mới nâng — s195+14, maxDuration 60→300) · `"minimal"` cho call JSON 1-shot của
+  `detectAndLogLearning` (không cần suy luận sâu, cần nhanh + JSON ổn định). **CHỈ đổi `be-gau.ts`** — các
+  agent khác (Gấu Pro `creator-ai.ts`, pipeline cũ `bi-analyst.ts`/`data-explorer.ts`/`orchestrator.ts`/
+  `classifier.ts`/`answer.ts`, Tổ Gấu AI, usage-stats classify/evaluate) VẪN `gemini-3.6-flash` — ngoài scope
+  yêu cầu lần này, đổi sau nếu Hiếu muốn. tsc + lint (0 lỗi mới) + vitest (216/216) PASS. **Cần Hiếu**: QA
+  1 câu hỏi BI phức tạp (nhiều tool-call) trên staging — xác nhận vẫn trả lời đúng, không chậm hơn rõ rệt,
+  không lỗi JSON/im lặng; theo dõi Gemini API cost vài ngày đầu (thinking tokens tính phí).
 - **Guardian không còn gọi Gemini** (s108) — phân loại nhạy cảm bằng regex. Routing classifier (`classifier.ts`) vẫn dùng Gemini nhưng chỉ là **phiếu tier-1** trong graph (không quyết một mình).
 - Model `gemini-3.5-flash` là **thinking model**: khi còn dùng cho classifier, phải set `generationConfig.thinkingConfig.thinkingBudget = 0` mới trả JSON ổn định (nếu không, token bị tiêu vào "thinking" → output cụt → JSON.parse lỗi).
 - **Lark bot trên Vercel/Netlify**: KHÔNG dùng `waitUntil` (không hỗ trợ trên Next 14 App Router). Xử lý **đồng bộ** (await rồi mới trả 200). Chống Lark retry: dedup `event_id` qua `app_settings.larkevt:<id>`.

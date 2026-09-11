@@ -25,7 +25,25 @@ import {
   getDaysInMonth, getDaysInRange, getMonthsInRange,
   cachedQuery, flushByDeps, isCronReq, analyticsGuard,
   excludeInactiveCustomers, buildIsStrategicSql, shipFilter, internalOpsFilter,
+  decodeSkuDestinationCode,
 } from "@/lib/analytics-helpers"
+
+describe("decodeSkuDestinationCode (JS mirror của getDestinationSQL)", () => {
+  test("13 ký tự, pháp nhân digit (VN, 1-6) → ký tự 3-5", () => {
+    expect(decodeSkuDestinationCode("2CTHACBF05010")).toBe("THA")
+  })
+  test("13 ký tự, pháp nhân CHỮ (US, A-E) → ký tự 3-5, KHÔNG PHẢI 2-4 (bug s195+19: code cũ đọc " +
+    "sai lệch 1 ký tự cho mọi SKU pháp nhân chữ, verify bằng SQL trên toàn bộ lịch sử thật)", () => {
+    expect(decodeSkuDestinationCode("ECJPN3DBUNL01")).toBe("JPN")
+    expect(decodeSkuDestinationCode("DCANZBCF00103")).toBe("ANZ")
+  })
+  test("15 ký tự legacy Datapool (E + nước liền, không có ký tự product-type) → ký tự 2-4", () => {
+    expect(decodeSkuDestinationCode("EJPNBCPY500M30D")).toBe("JPN")
+  })
+  test("14 ký tự legacy (nước ngay đầu, không có ký tự pháp nhân) → ký tự 1-3", () => {
+    expect(decodeSkuDestinationCode("CHN3D07GBFY05D")).toBe("CHN")
+  })
+})
 
 describe("SQL input sanitization (chống injection)", () => {
   test("safeDate: chỉ nhận YYYY-MM-DD, còn lại → null", () => {

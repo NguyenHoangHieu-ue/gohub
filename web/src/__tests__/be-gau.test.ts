@@ -17,7 +17,14 @@ const _mockGenerateContent = vi.fn().mockResolvedValue({
     functionCalls: () => [],
   },
 })
-const _mockGetModel = vi.fn().mockReturnValue({ generateContent: _mockGenerateContent })
+// s195+18: code thật giờ gọi generateContentStream() (streaming) thay vì generateContent(). Mock stream
+// bằng cách delegate vào _mockGenerateContent (giữ nguyên mọi chuỗi mockResolvedValueOnce nhiều vòng đã
+// viết sẵn trong các test) — 1 chunk duy nhất mang nguyên response, không cần mô phỏng delta thật.
+const _mockGenerateContentStream = vi.fn().mockImplementation(async (...args: any[]) => {
+  const { response } = await _mockGenerateContent(...args)
+  return { stream: (async function* () { yield response })(), response: Promise.resolve(response) }
+})
+const _mockGetModel = vi.fn().mockReturnValue({ generateContent: _mockGenerateContent, generateContentStream: _mockGenerateContentStream })
 
 vi.mock("@google/generative-ai", () => ({
   GoogleGenerativeAI: vi.fn().mockImplementation(function() {
@@ -25,6 +32,18 @@ vi.mock("@google/generative-ai", () => ({
   }),
   SchemaType: { OBJECT: "object", STRING: "string", ARRAY: "array", NUMBER: "number", BOOLEAN: "boolean" },
 }))
+
+// Helper cho các test tự override _mockGetModel.mockImplementationOnce — cần cả generateContent lẫn
+// generateContentStream (s195+18) trỏ cùng 1 response, tránh lặp lại boilerplate mock stream mỗi chỗ.
+function streamableModel(genContentResult: { response: any }) {
+  return {
+    generateContent: vi.fn().mockResolvedValue(genContentResult),
+    generateContentStream: vi.fn().mockResolvedValue({
+      stream: (async function* () { yield genContentResult.response })(),
+      response: Promise.resolve(genContentResult.response),
+    }),
+  }
+}
 
 import { classifySensitivity } from "../lib/agents/guardian-classify"
 
@@ -150,7 +169,7 @@ describe("be-gau: tool declarations & role filter", () => {
     let capturedArgs: any
     _mockGetModel.mockImplementationOnce((args: any) => {
       capturedArgs = args
-      return { generateContent: vi.fn().mockResolvedValue({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } }) }
+      return streamableModel({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } })
     })
 
     await runBeGau({ geminiHistory: [], lastMsg: "test", role: "staff" })
@@ -176,7 +195,7 @@ describe("be-gau: tool declarations & role filter", () => {
       let capturedArgs: any
       _mockGetModel.mockImplementationOnce((args: any) => {
         capturedArgs = args
-        return { generateContent: vi.fn().mockResolvedValue({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } }) }
+        return streamableModel({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } })
       })
       await runBeGau({ geminiHistory: [], lastMsg: "test", role })
       const decls: any[] = capturedArgs?.tools?.[0]?.functionDeclarations ?? []
@@ -192,7 +211,7 @@ describe("be-gau: tool declarations & role filter", () => {
     let capturedSI = ""
     _mockGetModel.mockImplementationOnce((args: any) => {
       capturedSI = args.systemInstruction || ""
-      return { generateContent: vi.fn().mockResolvedValue({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } }) }
+      return streamableModel({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } })
     })
 
     await runBeGau({ geminiHistory: [], lastMsg: "giá vốn?", role: "staff", isCost: false })
@@ -203,7 +222,7 @@ describe("be-gau: tool declarations & role filter", () => {
     let capturedSI = ""
     _mockGetModel.mockImplementationOnce((args: any) => {
       capturedSI = args.systemInstruction || ""
-      return { generateContent: vi.fn().mockResolvedValue({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } }) }
+      return streamableModel({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } })
     })
 
     await runBeGau({ geminiHistory: [], lastMsg: "giá vốn?", role: "admin", isCost: true })

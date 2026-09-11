@@ -11,6 +11,69 @@ status: active
 
 # B2C Performance (Hiệu Suất Bán Lẻ B2C)
 
+> ⚠️ **s195+19 (2026-09-11) — audit sâu subtab Performance: 2 bug thật, đã fix + verify SQL.**
+> 1. **🔴 "Tổng cộng"/CSV câm lặng thiếu doanh thu khi groupBy=SKU (hoặc destination range dài)** —
+>    `api/analytics/b2c/performance/route.ts` cắt cứng top 50 dòng THEO DOANH THU trước khi trả về, và
+>    FE (`b2c-performance.tsx`) SUM thẳng từ mảng đã cắt cho "Tổng cộng" + xuất CSV — không có cảnh báo
+>    nào. Verify SQL trên `fact_fulfillment_revenue` (B2C, tháng 8/2026): 1.047 SKU phát sinh thật, top-50
+>    chỉ chiếm 743,8tr / tổng thật 1.872tr → **thiếu 60,27% doanh thu**. groupBy=channel(11)/vendor(15)
+>    an toàn; groupBy=destination sát ngưỡng (44 nước/nhóm chỉ trong 1 tháng — range dài hơn dễ tràn).
+>    Fix: route đổi shape trả về `{rows, total, totalGroups}` — `total` tính từ TOÀN BỘ nhóm (không cap)
+>    TRƯỚC khi cắt còn `MAX_DETAIL_ROWS=1000` cho bảng/CSV hiển thị; FE dùng `total` cho "Tổng cộng" thay
+>    vì tự SUM `rows`, thêm dòng cảnh báo "Đang hiện N/M dòng..." khi bị cắt. Bump cache key `v3`→`v4`
+>    (đổi shape response).
+> 2. **🟡 CM1 card đầu trang và bảng breakdown dùng 2 cách khớp chi phí kênh khác nhau (latent, chưa có
+>    số liệu sai thật vì hiện chỉ 1 cost B2C "VN-Web SIM" khớp tên chính xác cả 2 cách)** —
+>    `b2c/kpis/route.ts` so chuỗi CHÍNH XÁC `c.channel === row.channel`; `b2c/performance/route.ts` (bảng
+>    cùng trang) dùng `matchChannelCost()` dùng chung (4 tầng: sub-channel prefix/source_code/exact/không
+>    phân biệt hoa-thường — cùng hàm quarterly-report/b2b dùng để sống sót qua đổi tên kênh). Fix: `kpis`
+>    đổi sang gọi `matchChannelCost()`, thêm `MIN(f.order_source_code) as source_code` vào query channel
+>    breakdown để có tham số tier-2.
+>
+> 3. **🔴 Bug thật thứ 3 — role không phải admin/creator (vd BOD) KHÔNG BAO GIỜ lưu được "KPI Target
+>    B2C"/"B2C Marketing Budget" trong Manage Costs, dù FE hiện ô nhập + nút Lưu ĐANG BẬT.** Hiếu báo
+>    "role BOD chỉnh sửa và lưu lại nhưng không được lưu" — test tay bằng acc creator lúc đầu KHÔNG
+>    tái hiện được (save 200 OK bình thường), vì creator bypass thẳng qua `baseRoles`. Đọc lại
+>    `targets/page.tsx`: `canEdit` (gate DUY NHẤT cho toàn trang, bao gồm 2 section B2C) tính từ
+>    `writable_tabs.includes("targets")` — NHƯNG `api/config/b2c-kpi-targets/route.ts` VÀ
+>    `api/config/b2c-budget/route.ts` lại đòi quyền ghi tab `"b2c"` (sai key, không khớp FE và không
+>    khớp route anh em `api/planning/targets` — route đó đúng, đòi `"targets"`). Verify bằng
+>    `GET /api/config/writable-tabs` thật trên staging: **10 user được cấp quyền ghi thêm (toàn bộ Lark
+>    OU + Hiếu) — KHÔNG một ai có `"b2c"` trong danh sách, tất cả chỉ có `"targets"`** → xác nhận chắc
+>    chắn route cũ 403 câm lặng (FE chỉ hiện "Hiếu đang fix, vui lòng đợi") cho MỌI user ngoài admin/
+>    creator, không riêng gì 1 case của Hiếu. Fix: đổi `canWrite(session, "b2c", ...)` →
+>    `canWrite(session, "targets", ...)` ở cả 2 route, khớp đúng cổng FE đã dùng.
+>
+> tsc + lint (0 lỗi mới) + vitest (220/220) PASS cả 3 fix. **Cần Hiếu**: nhờ 1 tài khoản role BOD (đã có
+> trong `writable_tabs`, vd tài khoản Lark liên kết) tự thử lưu lại KPI Target B2C/Marketing Budget trên
+> staging xác nhận lưu được.
+>
+> **Đồng thời (theo yêu cầu Hiếu)**: bỏ dải 6 KPI card "Users/ROAS/Customers/CAC/Leads/CPL" đầu subtab
+> Advance (`b2c-advanced-dashboard.tsx`) — số liệu tương đương vẫn còn đủ ở section "CAC & Leads" +
+> "Spend & ROAS" bên dưới nên không mất thông tin, chỉ gọn phần đầu trang. Xoá kèm code chỉ phục vụ dải
+> này mà giờ chết hẳn: component `KpiCard`, biến `ga4Total/ga4Users/spendCur/roasCur/leadsCur/
+> customersForCac/cacCur/cplCur`, import `Zap`/`Percent`/`cn` không còn dùng.
+>
+> 4. **🔴 Bug thật thứ 4, phát hiện ngay sau khi Hiếu tự QA fix #3 — card "Tiến độ doanh thu B2C so với
+>    mục tiêu tháng" báo "Chưa nhập mục tiêu" dù đã lưu KPI Target B2C thành công.** Verify: gọi thẳng
+>    `/api/config/b2c-kpi-targets` xác nhận DB đã có target tháng hiện tại đúng số Hiếu nhập;
+>    `readTargets()` trong `api/analytics/b2c/monthly/route.ts` đọc thẳng Supabase mỗi request, KHÔNG
+>    qua cache app-level nào — vậy DB/tính toán luôn tươi. Root cause thật nằm ở tầng KHÁC: nhánh "live"
+>    (chạy khi FE gửi `nocache=1` — Advance dashboard LUÔN gửi cờ này) vẫn gắn cứng `CACHE_HEADERS`
+>    (`s-maxage=300, stale-while-revalidate=600`) vào response → Vercel Edge CDN cache NGUYÊN response
+>    "live" theo đúng URL+query trong 5-15 phút, bất kể bên trong route có tính lại tươi hay không. User
+>    lưu target xong reload lại trang trong khung 5-15 phút đó vẫn ăn bản CDN cache cũ. **Độc lập hoàn
+>    toàn với `flushAnalyticsCache()`** gọi trong 2 route save (`b2c-kpi-targets`/`b2c-budget`) — hàm đó
+>    chỉ xoá cache tầng app (bảng Supabase `analytics_query_cache`), không đụng được CDN cache dựa trên
+>    response header. Fix: response header đổi thành `Cache-Control: no-store` khi `forceRefresh` (tức
+>    `nocache=1`) thay vì `CACHE_HEADERS` — giữ nguyên cache 5 phút cho nhánh snapshot (không forceRefresh,
+>    cập nhật 1 lần/ngày qua cron, cache hợp lý). Nhánh `onlyLeads` (leads riêng, không liên quan target)
+>    giữ nguyên `CACHE_HEADERS`, ngoài phạm vi bug này.
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS bug #4. **Cần Hiếu**: sau deploy, xoá test target
+`2026-09: {vn:11111, us:22222, total:33333}` đã tự nhập lúc test (nếu muốn), rồi nhập số thật và xác
+nhận card "Tiến độ doanh thu B2C so với mục tiêu tháng" cập nhật ngay sau khi lưu, không cần đợi.
+
 Báo cáo bán lẻ B2C bố cục 5 section (Apple-style, giảm tải nhận thức): doanh thu rolling, khách hàng, CAC/Leads, tỷ lệ chuyển đổi website, và chi phí marketing/ROAS. Tích hợp nhiều nguồn ngoài (Chatwoot, GA4, Turso).
 
 > ⚠️ **s195+15 (2026-09-10) — Fix root cause query timeout tab B2C (Advanced).** Hiếu báo tab B2C bị

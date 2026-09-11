@@ -3,11 +3,13 @@
 // Tách từ my-metrics/page.tsx (s183 Phase 5 tiếp — tách cơ học, giữ nguyên y hệt bản gốc).
 import { useState, useEffect, useCallback } from "react"
 import dynamic from "next/dynamic"
-import { Award, Users, Tag } from "lucide-react"
+import { Award, Users, Tag, Sparkles, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DataTable } from "@/components/my-metrics/shared-ui"
 import { hhmm } from "@/lib/my-metrics-format"
 import type { BegauInsightsData, QualityItem } from "@/lib/my-metrics-types"
+
+interface AiTopic { name: string; description: string; count: number; icon: string }
 
 const chartLoading = () => <div className="w-full h-full animate-pulse bg-white/10 rounded-xl" />
 const TopUsersChart = dynamic(
@@ -20,6 +22,9 @@ export function BegauInsightsSection({ quarter }: { quarter: string }) {
   const [data, setData] = useState<BegauInsightsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [bucketFilter, setBucketFilter] = useState<"all" | "high" | "medium" | "low">("all")
+  const [aiTopics, setAiTopics] = useState<AiTopic[] | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiErr, setAiErr] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -29,6 +34,18 @@ export function BegauInsightsSection({ quarter }: { quarter: string }) {
   }, [quarter])
 
   useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { setAiTopics(null); setAiErr(null) }, [quarter])
+
+  const runAiTopics = async () => {
+    setAiLoading(true); setAiErr(null)
+    try {
+      const r = await fetch(`/api/analytics/my-metrics/begau-insights/topics-ai?quarter=${quarter}`)
+      if (!r.ok) { const j = await r.json(); throw new Error(j.error ?? "Lỗi gọi AI") }
+      const j = await r.json()
+      setAiTopics(j.categories ?? [])
+    } catch (e: any) { setAiErr(e.message) }
+    finally { setAiLoading(false) }
+  }
 
   const items = data?.quality.items ?? []
   const filteredItems = bucketFilter === "all" ? items : items.filter(i => i.bucket === bucketFilter)
@@ -78,6 +95,26 @@ export function BegauInsightsSection({ quarter }: { quarter: string }) {
                   })}
                 </div>
               ) : <p className="text-[11px] text-slate-300 text-center py-4">Chưa có dữ liệu.</p>}
+
+              <button onClick={runAiTopics} disabled={aiLoading}
+                className="flex items-center gap-1.5 mt-2 text-[11px] font-bold text-brand-600 hover:text-brand-700 disabled:opacity-40">
+                {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {aiTopics ? "Phân loại lại bằng AI" : "Phân loại chủ đề bằng AI"}
+              </button>
+              {aiErr && <p className="text-[10px] text-red-600 font-bold mt-1">{aiErr}</p>}
+              {aiTopics && (
+                aiTopics.length > 0 ? (
+                  <div className="mt-2 space-y-1">
+                    {aiTopics.sort((a, b) => b.count - a.count).map(t => (
+                      <div key={t.name} className="flex items-center gap-1.5 text-[11px]">
+                        <span>{t.icon}</span>
+                        <span className="font-black text-slate-700">{t.name}</span>
+                        <span className="text-slate-400">({t.count}) — {t.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="text-[11px] text-slate-300 mt-2">Chưa đủ dữ liệu để AI phân loại.</p>
+              )}
             </div>
           </div>
 
@@ -104,6 +141,13 @@ export function BegauInsightsSection({ quarter }: { quarter: string }) {
                 { key: "time", label: "Thời gian", render: r => hhmm(r.created_at) },
                 { key: "q", label: "Câu hỏi", render: r => <p className="text-slate-500 truncate max-w-[220px]">{r.user_message}</p> },
                 { key: "a", label: "Trích trả lời", render: r => <p className="text-slate-500 truncate max-w-[220px]">{r.ai_response_preview}</p> },
+                { key: "tools", label: "Tool", render: r => (
+                  <div className="flex flex-wrap gap-1">
+                    {r.tools_used.map(t => (
+                      <span key={t} className="text-[8px] font-black px-1 py-0.5 rounded bg-brand-50 text-brand-600 uppercase">{t}</span>
+                    ))}
+                  </div>
+                ) },
                 { key: "score", label: "Điểm", align: "right", render: r => <span className="font-black tabular-nums">{r.score}</span> },
                 { key: "bucket", label: "Đánh giá", align: "center", render: r => bucketBadge(r.bucket) },
               ]}

@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
   const { data: allEvents, error } = await supabaseAdmin
     .from("app_usage_events")
-    .select("id, user_email, user_name, user_role, created_at, user_message, ai_response")
+    .select("id, user_email, user_name, user_role, created_at, user_message, ai_response, used_db_tool, tools_used")
     .eq("event_type", "chat")
     .not("ai_response", "is", null)
     .gte("created_at", startISO)
@@ -32,8 +32,9 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Cùng định nghĩa "task" với api/analytics/my-metrics (response đủ dài, không phải chào hỏi/lỗi cụt).
-  const tasks = (allEvents ?? []).filter(t => ((t.ai_response as string) ?? "").trim().length >= MIN_TASK_RESPONSE_LEN)
+  // Cùng định nghĩa "task" với api/analytics/my-metrics (s195+18-B: phải dùng DB tool, không chỉ dựa
+  // độ dài response) — Insights CHỈ phân tích trên đúng tập task được tính KPI, không lẫn trả lời chay.
+  const tasks = (allEvents ?? []).filter(t => t.used_db_tool && ((t.ai_response as string) ?? "").trim().length >= MIN_TASK_RESPONSE_LEN)
 
   // ── Top người dùng ──
   const userCount = new Map<string, number>()
@@ -59,6 +60,7 @@ export async function GET(req: NextRequest) {
       user_message: ((t.user_message as string) ?? "").slice(0, 200),
       ai_response_preview: ((t.ai_response as string) ?? "").slice(0, 200),
       score: q.score, bucket: q.bucket, flags: q.flags,
+      tools_used: (t.tools_used as string[] | null) ?? [],
     }
   })
   const high = scored.filter(s => s.bucket === "high").length

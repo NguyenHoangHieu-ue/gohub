@@ -23,3 +23,22 @@ export function getProjectionFactor(startDate: string, endDate: string): number 
 
 export const isProjectable = (startDate: string, endDate: string): boolean =>
   getProjectionFactor(startDate, endDate) > 1
+
+/**
+ * Tổng quát hoá getProjectionFactor cho khoảng NGÀY BẤT KỲ (không giới hạn trong 1 tháng — vd cả quý,
+ * 3 tháng) — dùng khi cần chiếu 1 kỳ dài hơn 1 tháng đang CHẠY DỞ (ví dụ My Metrics GmHierarchySection,
+ * s195+18-B). getProjectionFactor gốc CỐ Ý trả 1 cho range cross-month (đúng hợp đồng đã dùng ở B2B/BOD/
+ * Channels/monthly-kpis — KHÔNG đổi hàm đó, nhiều nơi đang phụ thuộc "cross-month = actual, không chiếu"
+ * ở mức THÁNG). Hàm mới này dùng elapsed/total NGÀY thô trên chính khoảng [startDate,endDate] — kỳ đã
+ * kết thúc (endDate < hôm nay) hoặc chưa bắt đầu → factor=1 (actual/không áp dụng), kỳ đang chạy dở →
+ * factor = tổng ngày / số ngày đã qua.
+ */
+export function getRangeProjectionFactor(startDate: string, endDate: string): number {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const start = new Date(startDate)
+  const end   = new Date(endDate)
+  if (end < today || start > today) return 1
+  const totalDays   = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1)
+  const elapsedDays = Math.max(1, Math.round((today.getTime() - start.getTime()) / 86400000) + 1)
+  return elapsedDays < totalDays ? totalDays / elapsedDays : 1
+}

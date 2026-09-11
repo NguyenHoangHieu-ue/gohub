@@ -588,7 +588,14 @@ export async function GET(req: NextRequest) {
           : undefined,
         profitByChannel: profitByChannelFinal,
       },
-      { headers: CACHE_HEADERS }
+      // s195+19: nhánh này chạy khi forceRefresh=true (FE Advance dashboard LUÔN gửi nocache=1) — trước
+      // vẫn gắn CACHE_HEADERS (s-maxage=300, stale-while-revalidate=600) nên Vercel Edge CDN cache
+      // NGUYÊN response "live" này 5-15 phút theo đúng URL+query — user vừa lưu KPI Target B2C/Budget ở
+      // Manage Costs xong reload lại trang B2C vẫn thấy "Chưa nhập mục tiêu" vì CDN trả bản cache cũ, dù
+      // DB đã có target mới và bản thân tính toán trong route này luôn chạy tươi. Bug này ĐỘC LẬP với
+      // `flushAnalyticsCache()` gọi trong 2 route save — hàm đó chỉ xoá cache tầng app (Supabase
+      // `analytics_query_cache`), không đụng được tới CDN cache dựa trên response header như thế này.
+      { headers: forceRefresh ? { "Cache-Control": "no-store" } : CACHE_HEADERS }
     )
   } catch (err: any) {
     console.error("[analytics/b2c/monthly]", err.message)

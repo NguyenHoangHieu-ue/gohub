@@ -21,7 +21,11 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
-  if (!session || !(await canWrite(session, "b2c", WRITE_ROLES))) {
+  // s195+19: tabKey PHẢI khớp "targets" — FE (targets/page.tsx) tính canEdit từ quyền ghi tab "targets"
+  // (giống nút "Lưu Plan" chính, route /api/planning/targets cũng check "targets"), không phải "b2c".
+  // Bug thật: role được cấp quyền ghi riêng tab "targets" (vd BOD) thấy ô nhập/nút Lưu ĐANG BẬT ở FE
+  // nhưng BE ở đây từng đòi quyền "b2c" (không ai cấp) → 403 câm lặng, tưởng "lưu không được".
+  if (!session || !(await canWrite(session, "targets", WRITE_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
   const body = await req.json()

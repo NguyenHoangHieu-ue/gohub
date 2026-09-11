@@ -5,46 +5,11 @@ import { supabaseAdmin }              from "@/lib/supabase"
 import { checkRateLimit }             from "@/lib/rate-limit"
 import { runCreatorAI, FileContext, type GPEvent } from "@/lib/agents/creator-ai"
 import { classifySensitivity }        from "@/lib/agents/guardian-classify"
-import { GoogleGenerativeAI }         from "@google/generative-ai"
 import { parseUploadedFile }          from "@/lib/agents/file-parser"
 import { loadGpAllowed }              from "@/lib/gp-access"
+import { compressHistory, stripBase64Images } from "@/lib/agents/creator/compress"
 
 export const maxDuration = 300
-
-// Nén lịch sử dài: tóm tắt N turns cũ nhất thành 1 message → tiết kiệm token + giảm latency.
-// Trả { history, summarized }. Giữ nguyên khi ngắn.
-async function compressHistory(
-  history: { role: string; parts: { text: string }[] }[]
-): Promise<{ history: typeof history; summarized: boolean }> {
-  const totalChars = history.reduce((s, m) => s + (m.parts[0]?.text?.length || 0), 0)
-  if (history.length <= 20 && totalChars <= 30000) return { history, summarized: false }
-
-  const keepRecent = 10
-  const toSummarize = history.slice(0, history.length - keepRecent)
-  const recent      = history.slice(history.length - keepRecent)
-  if (toSummarize.length === 0) return { history, summarized: false }
-
-  try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash", generationConfig: { temperature: 0 } })
-    const convText = toSummarize.map(m => `[${m.role}] ${m.parts[0]?.text || ""}`).join("\n").slice(0, 40000)
-    const res = await model.generateContent(
-      `Tóm tắt cuộc hội thoại sau trong < 500 từ tiếng Việt. GIỮ LẠI: facts, số liệu, mã SKU/sản phẩm, quyết định, và ngữ cảnh cần cho câu hỏi tiếp theo. Bỏ chi tiết vụn.\n\n${convText}`
-    )
-    const summary = res.response.text().trim()
-    if (!summary) return { history, summarized: false }
-    const summaryMsg = { role: "user", parts: [{ text: `[TÓM TẮT HỘI THOẠI TRƯỚC ĐÓ]\n${summary}` }] }
-    return { history: [summaryMsg, ...recent], summarized: true }
-  } catch {
-    return { history, summarized: false }  // lỗi tóm tắt → dùng full history
-  }
-}
-
-// Strip base64 image data URLs from message text trước khi đưa vào lịch sử Gemini.
-// Ảnh base64 có thể ~1-3MB mỗi cái → bỏ vào history sẽ làm context bùng nổ.
-function stripBase64Images(text: string): string {
-  return text.replace(/!\[([^\]]*)\]\(data:image\/[^)]{20,}\)/g, "[📸 Ảnh Gấu Pro đã tạo — xem ở trên]")
-}
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 // parseUploadedFile/FileContext nay dùng chung với Bé Gấu — xem @/lib/agents/file-parser.ts
@@ -198,36 +163,4 @@ export async function POST(req: NextRequest) {
       "Connection":    "keep-alive",
     },
   })
-}
-
-// Combine multiple FileContexts into one for Gemini.
-// Binary files (PDF/image) take priority; text files are concatenated.
-function combineFileContexts(contexts: FileContext[]): FileContext {
-  // Separate binary vs text
-  const binary = contexts.filter(c => c.type !== "text")
-  const texts  = contexts.filter(c => c.type === "text")
-
-  if (binary.length === 1 && texts.length === 0) return binary[0]
-
-  // If binary exists alongside text, include binary first with text appended
-  const textContent = texts.map(c => `=== FILE: ${c.name} ===\n${c.content}`).join("\n\n---\n\n")
-
-  if (binary.length >= 1) {
-    // Return first binary with extra text files injected into the message text
-    // by modifying the content description
-    return {
-      ...binary[0],
-      name:    `${binary[0].name} + ${contexts.length - 1} file(s)`,
-      content: binary[0].content,
-      // extra text will be injected via the message text in runCreatorAI
-      extraText: textContent || undefined,
-    } as FileContext
-  }
-
-  // All text: combine
-  return {
-    name:    contexts.map(c => c.name).join(", "),
-    type:    "text",
-    content: textContent,
-  }
 }

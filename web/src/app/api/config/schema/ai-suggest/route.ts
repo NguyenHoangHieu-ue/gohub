@@ -22,9 +22,12 @@ export async function POST(req: Request) {
     if (!process.env.GEMINI_KEY) return NextResponse.json({ error: "GEMINI_KEY chưa cấu hình" }, { status: 500 })
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY)
+    // gemini-3.8-flash dùng thinkingConfig.thinkingLevel (enum), không còn thinkingBudget (số nguyên,
+    // model cũ) — field cũ có thể bị 400 "invalid argument" trên model mới (xem lib/okr-lark-classify.ts
+    // — cùng lớp lỗi từng gặp: không phải model nào cũng nhận field thinking giống nhau).
     const model = genAI.getGenerativeModel({
-      model: "gemini-3.6-flash",
-      generationConfig: { responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } } as any,
+      model: "gemini-3.8-flash",
+      generationConfig: { responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "minimal" } } as any,
     })
     const prompt = `Dựa trên tên bảng SQL "${tableName}" và các trường: ${fields.map((f: any) => `${f.name} (${f.type})`).join(", ")}, hãy tạo mô tả ngắn gọn hữu ích cho bảng và từng trường bằng tiếng Việt. Trả về JSON dạng {"tableDescription": string, "fields": { "<tên trường>": string }}.`
 

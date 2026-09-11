@@ -104,15 +104,18 @@ export async function GET(req: NextRequest) {
 
   const { data: allEvents } = await supabaseAdmin
     .from("app_usage_events")
-    .select("id, user_email, user_role, created_at, ai_response")
+    .select("id, user_email, user_role, created_at, ai_response, used_db_tool")
     .eq("event_type", "chat")
     .not("ai_response", "is", null)
     .gte("created_at", startISO)
     .lte("created_at", endISO)
 
   const events    = allEvents ?? []
-  // Task "tính KPI" = có response thật sự (đủ dài) — loại chào hỏi/lỗi cụt.
-  const tasks     = events.filter(t => ((t.ai_response as string) ?? "").trim().length >= MIN_TASK_RESPONSE_LEN)
+  // Task "tính KPI" (s195+18-B, đổi định nghĩa) = ĐÃ THẬT SỰ gọi tool đọc dữ liệu DB (executeSQL/
+  // querySupabase/queryProduct/listSupabaseTables — xem DB_TASK_TOOLS trong okr-helpers.ts), KHÔNG
+  // còn chỉ dựa vào độ dài response (trước đây trả lời chay/chào hỏi dài cũng bị tính nhầm là task).
+  // Giữ thêm điều kiện độ dài làm lưới an toàn phụ (loại nốt trường hợp lỗi cụt hiếm gặp).
+  const tasks     = events.filter(t => t.used_db_tool && ((t.ai_response as string) ?? "").trim().length >= MIN_TASK_RESPONSE_LEN)
   const taskTotal = tasks.length
   const taskLark  = tasks.filter(t => (t.user_email ?? "").startsWith("lark:")).length
   const taskWeb   = taskTotal - taskLark

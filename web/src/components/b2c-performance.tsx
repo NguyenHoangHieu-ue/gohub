@@ -67,6 +67,14 @@ interface PerformanceData {
   prev_revenue?: number
 }
 
+interface PerformanceTotal {
+  revenue: number; revenueVn: number; revenueUs: number
+  projected_revenue: number; prev_revenue?: number
+  margin: number; projected_margin: number
+  gpm2: number; projected_gpm2: number
+  units: number
+}
+
 interface ChannelCost {
   channel: string
   month: string
@@ -181,6 +189,9 @@ export function B2CPerformance() {
   const [prevMonthKpis, setPrevMonthKpis] = useState<KPI[]>([])
   const [trendData, setTrendData] = useState<TrendData[]>([])
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([])
+  // Tổng THẬT từ BE (tính trên TOÀN BỘ nhóm, không cap) — s195+19, xem ghi chú ở `totals` useMemo.
+  const [performanceTotal, setPerformanceTotal] = useState<PerformanceTotal | null>(null)
+  const [performanceTotalGroups, setPerformanceTotalGroups] = useState(0)
   const [lossSkus, setLossSkus] = useState<LossSKU[]>([])
   const [sortConfig, setSortConfig] = useState<{ key: keyof PerformanceData; direction: "asc" | "desc" }>({
     key: "revenue",
@@ -326,7 +337,13 @@ export function B2CPerformance() {
       const pick = <T,>(r: PromiseSettledResult<T>, fallback: T): T => r.status === "fulfilled" && r.value != null ? r.value : fallback
       setKpis(pick(kpiR, []))
       setTrendData(pick(trendR, []))
-      setPerformanceData(pick(perfR, []))
+      // s195+19: /performance nay trả {rows,total,totalGroups} thay vì mảng thẳng (fix Tổng cộng thiếu
+      // doanh thu khi groupBy có >50 nhóm — vd SKU). `total` là số ĐÚNG tính trên toàn bộ nhóm, không
+      // phụ thuộc bao nhiêu dòng `rows` được cap để hiện bảng/CSV.
+      const perfPayload = pick(perfR, { rows: [] as PerformanceData[], total: null as PerformanceTotal | null, totalGroups: 0 })
+      setPerformanceData(perfPayload.rows)
+      setPerformanceTotal(perfPayload.total)
+      setPerformanceTotalGroups(perfPayload.totalGroups)
       setLossSkus(pick(lossR, []))
       setPrevMonthKpis(pick(prevKpiR, []))
 
@@ -417,19 +434,24 @@ export function B2CPerformance() {
   }, [groupCosts, groupBy])
 
   const totals = React.useMemo(() => {
-    const sum = performanceData.reduce((acc, curr) => {
-      acc.revenue += curr.revenue
-      acc.revenueVn += curr.revenueVn || 0
-      acc.revenueUs += curr.revenueUs || 0
-      acc.projected_revenue += curr.projected_revenue || curr.revenue
-      acc.prev_revenue += curr.prev_revenue || 0
-      acc.units += curr.units
-      acc.margin += curr.margin
-      acc.projected_margin += curr.projected_margin || curr.margin
-      acc.gpm2 += curr.gpm2 || 0
-      acc.projected_gpm2 += curr.projected_gpm2 || curr.gpm2 || 0
-      return acc
-    }, { revenue: 0, revenueVn: 0, revenueUs: 0, projected_revenue: 0, prev_revenue: 0, units: 0, margin: 0, projected_margin: 0, gpm2: 0, projected_gpm2: 0 })
+    // Ưu tiên `performanceTotal` từ BE — tính trên TOÀN BỘ nhóm (không cap), luôn đúng kể cả khi
+    // `performanceData` (bảng/CSV) chỉ hiện tối đa MAX_DETAIL_ROWS dòng theo doanh thu (s195+19: trước
+    // đây SUM thẳng từ `performanceData` đã cap 50 → groupBy=sku thiếu tới ~60% doanh thu ở "Tổng cộng").
+    const sum: PerformanceTotal = performanceTotal
+      ? { ...performanceTotal, prev_revenue: performanceTotal.prev_revenue ?? 0 }
+      : performanceData.reduce((acc, curr) => {
+          acc.revenue += curr.revenue
+          acc.revenueVn += curr.revenueVn || 0
+          acc.revenueUs += curr.revenueUs || 0
+          acc.projected_revenue += curr.projected_revenue || curr.revenue
+          acc.prev_revenue = (acc.prev_revenue || 0) + (curr.prev_revenue || 0)
+          acc.units += curr.units
+          acc.margin += curr.margin
+          acc.projected_margin += curr.projected_margin || curr.margin
+          acc.gpm2 += curr.gpm2 || 0
+          acc.projected_gpm2 += curr.projected_gpm2 || curr.gpm2 || 0
+          return acc
+        }, { revenue: 0, revenueVn: 0, revenueUs: 0, projected_revenue: 0, prev_revenue: 0, units: 0, margin: 0, projected_margin: 0, gpm2: 0, projected_gpm2: 0 })
 
     // Group cost trừ tại TOTAL ROW (không phân bổ per-channel).
     if (groupBy === "channel") {
@@ -437,7 +459,7 @@ export function B2CPerformance() {
       sum.projected_gpm2 -= groupCostFullMonth
     }
     return sum
-  }, [performanceData, groupBy, groupCostProrated, groupCostFullMonth])
+  }, [performanceData, performanceTotal, groupBy, groupCostProrated, groupCostFullMonth])
   const totalMarginPercent = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0
   const totalGpm2Percent = totals.revenue > 0 ? (totals.gpm2 / totals.revenue) * 100 : 0
 
@@ -1066,6 +1088,11 @@ export function B2CPerformance() {
             <div>
               <h3 className="text-lg font-bold text-slate-900">Performance Breakdown</h3>
               <p className="text-sm text-slate-500">Detailed analysis by {groupBy}</p>
+              {performanceTotalGroups > performanceData.length && (
+                <p className="text-[11px] text-amber-600 font-semibold mt-0.5">
+                  Đang hiện {performanceData.length}/{performanceTotalGroups} dòng theo doanh thu — Tổng cộng &amp; % vẫn tính đủ 100%, chỉ bảng/CSV bị giới hạn dòng.
+                </p>
+              )}
             </div>
             <div className="flex bg-slate-100 p-1 rounded-xl overflow-x-auto no-scrollbar scrollbar-hide">
               <button
@@ -1353,7 +1380,7 @@ export function B2CPerformance() {
                             DP: {formatCurrency(totals.projected_revenue)}
                           </div>
                         )}
-                        {totals.prev_revenue > 0 && (
+                        {(totals.prev_revenue || 0) > 0 && (
                           <div className="flex justify-end mt-1">
                             <ComparisonBadge
                               current={totals.revenue}

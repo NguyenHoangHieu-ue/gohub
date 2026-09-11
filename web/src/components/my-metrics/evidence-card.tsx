@@ -2,12 +2,19 @@
 
 // Tách từ my-metrics/page.tsx (s183 Phase 5 tiếp — tách cơ học, giữ nguyên y hệt bản gốc).
 import { useState, useEffect, useCallback, useRef } from "react"
-import { Clock, Lock, Plus, RefreshCw, Upload, Pencil, Trash2, ShieldCheck } from "lucide-react"
+import dynamic from "next/dynamic"
+import { Clock, Lock, Plus, RefreshCw, Upload, Pencil, Trash2, ShieldCheck, Check, X, StickyNote } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ProgressBar, SourceBox, DataTable } from "@/components/my-metrics/shared-ui"
 import { LarkReviewPanel } from "@/components/my-metrics/lark-review-panel"
 import { hhmm, uploadImage } from "@/lib/my-metrics-format"
 import type { EvidenceData, EvidenceRecord } from "@/lib/my-metrics-types"
+
+const chartLoading = () => <div className="w-full h-full animate-pulse bg-white/10 rounded-xl" />
+const EvidenceTrendChart = dynamic(
+  () => import("@/app/(dashboard)/analytics/my-metrics/my-metrics-charts").then(m => m.EvidenceTrendChart),
+  { ssr: false, loading: chartLoading },
+)
 
 // ─── Evidence Section (SLA / Vendor Speed) — manual + Lark auto merged ────────
 export function EvidenceCard({
@@ -31,6 +38,7 @@ export function EvidenceCard({
     completion_time:"", completion_note:"", completion_image_url:"" }
   const [form, setForm] = useState(emptyForm)
   const setF = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
+  const [noteEditing, setNoteEditing] = useState<Record<string, string>>({})
 
   const q = `${quarter}`
 
@@ -92,6 +100,16 @@ export function EvidenceCard({
     fetchData()
   }
 
+  const saveNote = async (id: string) => {
+    const r = await fetch(`/api/analytics/my-metrics/lark-events/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hieu_note: noteEditing[id] ?? "" }),
+    })
+    if (!r.ok) { const j = await r.json(); alert(j.error ?? "Lỗi lưu ghi chú"); return }
+    setNoteEditing(p => { const n = { ...p }; delete n[id]; return n })
+    fetchData()
+  }
+
   const avg     = data?.avg ?? null
   const actual  = avg ?? 0
   const progress = targetValue > 0 && avg !== null ? Math.max(0, 100 - ((actual - targetValue) / targetValue * 100)) : 0
@@ -128,6 +146,15 @@ export function EvidenceCard({
         <ProgressBar actual={progressCapped} target={100} />
 
         <LarkReviewPanel metric={metric} quarter={quarter} unit={unit} onReviewed={fetchData} />
+
+        {data && data.monthly.length > 1 && (
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">TB theo tháng trong quý</p>
+            <div className="h-40">
+              <EvidenceTrendChart data={data.monthly} target={targetValue} prevQuarterAvg={data.prev_quarter.avg} unit={unit} />
+            </div>
+          </div>
+        )}
 
         {locked && (
           <div className="text-[11px] text-slate-500 bg-slate-50 rounded-lg px-3 py-2 flex items-center gap-1.5">
@@ -234,6 +261,25 @@ export function EvidenceCard({
               return isVerified
                 ? <span className="flex items-center justify-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 uppercase w-fit mx-auto"><ShieldCheck className="w-2.5 h-2.5" />Verified</span>
                 : <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 uppercase">Thiếu ảnh</span>
+            } },
+            { key: "note", label: "Ghi chú", render: r => {
+              if (r.source !== "lark_auto") return <span className="text-slate-300">—</span>
+              const isEditing = noteEditing[r.id] !== undefined
+              if (isEditing) return (
+                <div className="flex items-center gap-1">
+                  <input autoFocus value={noteEditing[r.id]} onChange={e => setNoteEditing(p => ({ ...p, [r.id]: e.target.value }))}
+                    onKeyDown={e => e.key === "Enter" && saveNote(r.id)}
+                    className="border border-slate-200 rounded px-1.5 py-0.5 text-[10px] w-32" />
+                  <button onClick={() => saveNote(r.id)} className="text-emerald-600"><Check className="w-3 h-3" /></button>
+                  <button onClick={() => setNoteEditing(p => { const n = { ...p }; delete n[r.id]; return n })} className="text-slate-400"><X className="w-3 h-3" /></button>
+                </div>
+              )
+              return (
+                <button onClick={() => setNoteEditing(p => ({ ...p, [r.id]: r.hieu_note ?? "" }))}
+                  className={cn("flex items-center gap-1 hover:text-brand-600 truncate max-w-[140px] text-left", r.hieu_note ? "text-slate-600" : "text-slate-300 italic")}>
+                  <StickyNote className="w-2.5 h-2.5 shrink-0" /> {r.hieu_note || "+ ghi chú"}
+                </button>
+              )
             } },
             { key: "act", label: "", align: "right", render: r => {
               if (locked) return null

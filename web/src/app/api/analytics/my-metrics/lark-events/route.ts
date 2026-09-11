@@ -18,10 +18,16 @@ export async function GET(req: NextRequest) {
   const quarter = req.nextUrl.searchParams.get("quarter") ?? "Q3-2026"
   const status  = req.nextUrl.searchParams.get("status")
   const metric  = req.nextUrl.searchParams.get("metric")
+  const selfInitiatedParam = req.nextUrl.searchParams.get("self_initiated")
 
   let q = supabaseAdmin.from("okr_lark_events").select("*").eq("quarter", quarter)
   if (status) q = q.eq("status", status)
   if (metric) q = q.eq("metric", metric)
+  // "not_matched" gộp 2 loại khác hẳn nhau: Gemini audit thật (đọc thread thấy không phải SLA/Vendor
+  // Speed) vs marker "tự đăng — không tính" (loại TRƯỚC khi gọi Gemini). FE tách 2 khối UI riêng qua
+  // tham số này thay vì gộp chung 1 danh sách dài khó phân biệt.
+  if (selfInitiatedParam === "true") q = q.eq("is_self_initiated", true)
+  else if (selfInitiatedParam === "false") q = q.eq("is_self_initiated", false)
   const { data, error } = await q.order("request_time", { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

@@ -82,3 +82,8 @@ Hầu hết tab có toggle **"Fulfillment" vs "Created"** (nút ở đầu trang
 - **Vendor 3HK** trong `dim_sku` lưu là `'3HK DATAPOOL'` (CÓ dấu cách) → lọc `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'`.
 - **Env Vercel**: `ANALYTICS_DB_*` phải tick scope **Preview** (thiếu → query trả `[]` âm thầm).
 - **Created mode** không có margin → mọi chỉ số margin/CM1 sẽ = 0; đừng nhầm là "lỗi".
+- **Mã nước từ SKU (`decodeSkuDestinationCode`/`getDestinationSQL`, s195+19, 2026-09-11)**: vị trí ký tự
+  nước phụ thuộc ĐỘ DÀI sku, không phụ thuộc ký tự đầu — 13 ký tự (chuẩn hiện tại, digit 1-6 hay chữ A-E
+  đều 1 ký tự) → nước ở ký tự 3-5; 14 ký tự (legacy) → ký tự 1-3; 15 ký tự (legacy Datapool) → ký tự
+  2-4. Bug cũ branch theo ký tự đầu làm sai nước cho ~25% SKU 13 ký tự pháp nhân chữ (US A-E) — đã fix,
+  xem comment trong `analytics-helpers.ts`. Dùng ở My Metrics/Products/Region Chart/B2B/B2C performance.

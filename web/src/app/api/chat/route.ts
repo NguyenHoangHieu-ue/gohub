@@ -8,11 +8,12 @@ import type { Message, UserRole }              from "@/lib/agents/types"
 import { supabaseAdmin }                       from "@/lib/supabase"
 import { checkRateLimit }                      from "@/lib/rate-limit"
 import { parseUploadedFile, type FileContext } from "@/lib/agents/file-parser"
+import { usedDbTaskTool }                      from "@/lib/okr-helpers"
 
 // Hobby plan trần cứng 60s (Vercel Runtime Timeout Error thật, xem log s195+14) — nâng lên 300s (Hobby +
-// Fluid Compute cho phép tới 5 phút, không cần nâng gói). runBeGau() await xong hết mới enqueue 1 lần
-// (không stream token thật dù dùng ReadableStream) nên câu hỏi nhiều tool-call/BI phức tạp cần thời gian
-// dài hơn 60s dễ bị Vercel giết giữa chừng → user không thấy gì (không phải lỗi code, catch không kịp chạy).
+// Fluid Compute cho phép tới 5 phút, không cần nâng gói). Giữ nguyên dù s195+18 đã thêm stream token thật
+// (onChunk) — câu hỏi nhiều tool-call/BI phức tạp vẫn cần tổng thời gian dài, chỉ là user giờ THẤY chữ
+// chạy dần thay vì màn hình trắng trong lúc chờ.
 export const maxDuration = 300
 
 // Bé Gấu (s131): mô phỏng cơ chế Gấu Pro — 1 agent function-calling lặp, tự chọn công cụ —
@@ -26,12 +27,15 @@ async function logChat(
   role: string,
   msg: string,
   aiResponse?: string | null,
+  toolsUsed?: string[],
 ) {
   try {
     await supabaseAdmin.from("app_usage_events").insert({
       event_type: "chat", user_email: identity || null, user_name: name || null, user_role: role,
       agent_id: "be-gau", user_message: msg.slice(0, 500),
       ai_response: aiResponse ? aiResponse.slice(0, 3000) : null,
+      tools_used: toolsUsed && toolsUsed.length > 0 ? toolsUsed : null,
+      used_db_tool: usedDbTaskTool(toolsUsed),
     })
   } catch { /* tracking không được làm vỡ chat */ }
 }
@@ -123,16 +127,22 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           controller.enqueue(encoder.encode(`__AGENT__:be-gau:Bé Gấu\n`))
-          const { text, sources } = await runBeGau({
+          const { text, sources, toolsUsed } = await runBeGau({
             geminiHistory, lastMsg, role, name,
             userId: identity || session.user.email || undefined,
             sessionId: (session as any)?.sessionId || undefined,
             isCost, extraDirective: priceDirective,
             fileContexts: fileContexts.length > 0 ? fileContexts : undefined,
+            // s195+18: text đã được stream ra controller theo từng đoạn ngay trong lúc runBeGau() chạy —
+            // KHÔNG enqueue lại `text` đầy đủ bên dưới nữa (sẽ bị lặp đôi nội dung).
+            onChunk: (delta) => { try { controller.enqueue(encoder.encode(delta)) } catch {} },
           })
-          // Log cả câu hỏi + câu trả lời sau khi có đủ (fire-and-forget)
-          logChat(identity, name, role, lastMsg, text).catch(() => {})
-          controller.enqueue(encoder.encode(text))
+          // Log cả câu hỏi + câu trả lời sau khi có đủ. PHẢI await (không fire-and-forget) — phát hiện
+          // qua QA My Metrics s195+18-B: gọi KHÔNG await rồi controller.close() ngay sau khiến Vercel
+          // đóng băng/kết thúc execution context TRƯỚC KHI insert Supabase kịp gửi đi — task KHÔNG BAO
+          // GIỜ được ghi log dù trả lời đúng, verify được 2 lần liên tiếp qua gọi API trực tiếp + check
+          // lại app_usage_events. logChat() tự có try/catch nội bộ nên await ở đây an toàn (không throw).
+          await logChat(identity, name, role, lastMsg, text, toolsUsed)
           // Trích nguồn web (nếu có) — nối cuối, không lộ cơ chế.
           if (sources.length) {
             const uniq = Array.from(new Map(sources.map(s => [s.url, s])).values()).slice(0, 5)
@@ -141,7 +151,7 @@ export async function POST(req: NextRequest) {
           controller.close()
         } catch (err: any) {
           const msg = (role === "admin" || role === "creator") ? `Lỗi: ${err.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
-          logChat(identity, name, role, lastMsg, null).catch(() => {})
+          await logChat(identity, name, role, lastMsg, null)
           controller.enqueue(encoder.encode(msg))
           controller.close()
         }

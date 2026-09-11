@@ -538,19 +538,34 @@ export async function getSkuDestinationRule(): Promise<DestRule> {
   return { prefix: "E", codeLength: 3, offset: 3 }
 }
 
-// The destination country code is embedded in the SKU but at different positions
-// per SKU family (verified against real fact_fulfillment_revenue data):
-//   digit-prefix (old catalog)  2CTHACBF05010   → country = chars 3-5 (THA)
-//   E-prefix (eSIM/SIM)         EJPNBCPY500M30D → country = chars 2-4 (JPN)
-//   3-letter legacy (e.g. 3HK)  CHN3D07GBFY05D  → country = chars 1-3 (CHN)
+// The destination country code is embedded in the SKU — vị trí phụ thuộc ĐỘ DÀI sku, không phải
+// ký tự đầu (bug s195+19: code cũ branch theo ký tự đầu (digit/'E'/khác) — SAI cho mọi SKU 13 ký
+// tự pháp nhân dạng CHỮ (US: A-E), vì ký tự 1 luôn CHỈ 1 ký tự bất kể số hay chữ (xem
+// business/ma-sku.md) nên nước LUÔN ở vị trí 3-5, không lệch theo digit/chữ. Verify bằng SQL Query
+// trực tiếp trên TOÀN BỘ lịch sử fact_fulfillment_revenue (không đoán):
+//   13 ký tự (chuẩn hiện tại — digit 1-6 HOẶC chữ A-E đều 1 ký tự) → nước = ký tự 3-5
+//     vd digit: 2CTHACBF05010 → THA. vd chữ (trước đây SAI): ECJPN3DBUNL01 → JPN (code cũ ra "CJP")
+//   14 ký tự (legacy, không có ký tự pháp nhân riêng) CHN3D07GBFY05D → nước = ký tự 1-3 (CHN)
+//   15 ký tự (legacy Datapool) EJPN3DFY05GB15D → nước = ký tự 2-4 (JPN)
+//   Độ dài khác (9-12/18...) = mã phí/thủ công (HOATOC/BUUDIEN/SHIPPINGFEE...), không mang thông
+//     tin nước → fallback ký tự 3-5 (không tệ hơn trước, các mã này vốn không có nước thật)
 // Resulting codes are mapped to country names via getCountryMappings (Turso country_codes).
 export function getDestinationSQL(_rule?: DestRule): string {
   return `CASE
-    WHEN f.sku ~ '^[1-6]'            THEN UPPER(SUBSTRING(f.sku, 3, 3))
-    WHEN f.sku ~ '^E'               THEN UPPER(SUBSTRING(f.sku, 2, 3))
-    WHEN f.sku ~ '^[A-DF-Z]{3}[0-9]' THEN UPPER(SUBSTRING(f.sku, 1, 3))
-    ELSE UPPER(SUBSTRING(f.sku, 1, 3))
+    WHEN LENGTH(f.sku) = 14 THEN UPPER(SUBSTRING(f.sku, 1, 3))
+    WHEN LENGTH(f.sku) = 15 THEN UPPER(SUBSTRING(f.sku, 2, 3))
+    ELSE UPPER(SUBSTRING(f.sku, 3, 3))
   END`
+}
+
+// JS mirror của getDestinationSQL() — dùng khi đã có SKU sẵn trong JS (vd sau khi query đã trả về
+// hàng loạt SKU và cần group theo nước phía TypeScript, như My Metrics SKU GM/Datapool hierarchy)
+// thay vì phải thêm CASE vào SQL. PHẢI giữ ĐÚNG logic y hệt getDestinationSQL — sửa 1 bên thì sửa cả 2.
+export function decodeSkuDestinationCode(sku: string): string {
+  const s = sku.toUpperCase()
+  if (s.length === 14) return s.slice(0, 3)
+  if (s.length === 15) return s.slice(1, 4)
+  return s.slice(2, 5)
 }
 
 // ── Country code → name mapping (from Turso country_codes, 332 rows, accurate) ──

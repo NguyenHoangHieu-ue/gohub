@@ -10,6 +10,7 @@ export type { FileContext }  from "./file-parser"
 // ─── Phase 2: import từ creator/ modules ─────────────────────────────────────
 import { ALL_TOOL_DECLARATIONS } from "./creator/declarations"
 import { dispatchTool }          from "./creator/tools/dispatch"
+import { genWithRetryStream }    from "./gemini-stream"
 
 // ─── Creator AI ───────────────────────────────────────────────────────────────
 // Private AI exclusively for Hiếu (creator role).
@@ -20,7 +21,8 @@ import { dispatchTool }          from "./creator/tools/dispatch"
 
 export type GPEvent =
   | { type: "status"; text: string }
-  | { type: "text"; content: string }
+  | { type: "delta"; content: string }   // s195+18: 1 đoạn text vừa stream ra (nối dần ở FE)
+  | { type: "text"; content: string }    // full text CUỐI CÙNG (giữ nguyên — nguồn sự thật lưu DB/backward-compat)
   | { type: "done"; conversationId: string | null; sources: WebSource[]; summarized: boolean }
   | { type: "error"; message: string }
 
@@ -589,23 +591,7 @@ export async function runReadKnowledgeBase(category?: string): Promise<any> {
 }
 
 // ─── Main runner ──────────────────────────────────────────────────────────────
-
-// Gọi Gemini có retry cho lỗi TẠM THỜI (429 rate-limit / 5xx / overload / network) → tăng ổn định.
-// Lỗi thật (prompt/schema) ném ngay, không retry vô ích.
-async function genWithRetry(model: any, request: any, attempts = 3): Promise<any> {
-  let lastErr: any
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await model.generateContent(request)
-    } catch (e: any) {
-      lastErr = e
-      const transient = /429|rate|quota|resource.?exhausted|500|503|overload|unavailable|deadline|timeout|ECONNRESET|ETIMEDOUT|fetch failed|network/i.test(String(e?.message || ""))
-      if (!transient || i === attempts - 1) throw e
-      await new Promise(r => setTimeout(r, 800 * (i + 1)))  // backoff 0.8s → 1.6s
-    }
-  }
-  throw lastErr
-}
+// s195+18: genWithRetryStream (streaming thật, dùng chung với Bé Gấu) — xem lib/agents/gemini-stream.ts
 
 // Ngày tháng theo giờ VN (ICT) → inject vào system prompt để Gấu tự hiểu "tháng này"/"hôm nay".
 function buildDateContext(): string {
@@ -677,11 +663,15 @@ export async function runCreatorAI(
   const dateContext = buildDateContext()
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
+  // thinkingLevel "low": cân bằng lợi ích tool-orchestration/reasoning nhiều bước của 3.8-flash (đúng lợi
+  // ích cho pipeline product-onboarding/BI nhiều bước) với latency budget — vòng lặp tới 20 iteration,
+  // KHÔNG để mặc định "medium" (billable, latency ẩn mỗi vòng). "as any": SDK v0.21.0 chưa có type field
+  // này (ra đời sau SDK).
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.6-flash",
+    model: "gemini-3.8-flash",
     systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
     tools: [{ functionDeclarations: buildFunctionDeclarations(isCreator) }],
-    generationConfig: { temperature: 0 },
+    generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
   })
 
   // Build user message parts — support multiple files (text + binary)
@@ -718,7 +708,8 @@ export async function runCreatorAI(
     { role: "user", parts: userParts },
   ]
 
-  let genResult = await genWithRetry(model, { contents })
+  const onChunk = (delta: string) => onEvent?.({ type: "delta", content: delta })
+  let genResult = await genWithRetryStream(model, { contents }, onChunk)
   const collectedSources: WebSource[] = []
 
   function appendModelContent() {
@@ -732,11 +723,20 @@ export async function runCreatorAI(
     const calls = genResult.response.functionCalls()
     if (!calls || calls.length === 0) break
 
-    const fnParts = await Promise.all(calls.map((call: any) => dispatchTool(call, onEvent, collectedSources, { username })))
+    // Mỗi tool bọc try/catch RIÊNG — 1 tool lỗi (network timeout portal/video API/...) trước đây làm
+    // Promise.all reject cả round, sập TOÀN BỘ câu trả lời dù các tool khác đã chạy xong. Nay tool lỗi chỉ
+    // trả functionResponse báo lỗi cho MỘT tool đó, các tool còn lại + phần trả lời vẫn tiếp tục bình thường.
+    const fnParts = await Promise.all(calls.map(async (call: any) => {
+      try {
+        return await dispatchTool(call, onEvent, collectedSources, { username })
+      } catch (e: any) {
+        return { functionResponse: { name: call.name, response: { error: e?.message || "Tool execution failed" } } }
+      }
+    }))
 
-    // Send function responses as role "user" — required by gemini-3.6-flash
+    // Send function responses as role "user" — required by this Gemini SDK's content format
     contents.push({ role: "user", parts: fnParts })
-    genResult = await genWithRetry(model, { contents })
+    genResult = await genWithRetryStream(model, { contents }, onChunk)
     appendModelContent()
   }
 
@@ -745,7 +745,7 @@ export async function runCreatorAI(
   if (!text.trim()) {
     try {
       contents.push({ role: "user", parts: [{ text: "Based on the data retrieved above, write a complete, detailed answer in Vietnamese. Include a markdown table or chart if the data is tabular. DO NOT call any more tools." }] })
-      genResult = await genWithRetry(model, { contents })
+      genResult = await genWithRetryStream(model, { contents }, onChunk)
       text = genResult.response.text()
     } catch { /* keep empty */ }
   }

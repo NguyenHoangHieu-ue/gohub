@@ -6,11 +6,163 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-10, s195+15)
+## Trạng thái hiện tại (2026-09-11, s195+19)
 
 | | |
 |---|---|
-| ⏳ **s195+15 (2026-09-10) — Fix root cause query timeout tab B2C (Advanced), chờ Hiếu QA staging** | Hiếu
+| ✅ **s195+19 (2026-09-11) — Mã nước SKU sai (fix rộng) + redesign UI My Metrics + audit B2C Performance: 4 bug thật, 1 UI theo yêu cầu** |
+  Tiếp sau s195+18-C, 2 việc theo yêu cầu Hiếu cùng ngày.
+  **(1) Fix mã nước SKU** (`decodeSkuDestinationCode`/`getDestinationSQL`, `analytics-helpers.ts`) —
+  branch theo ký tự đầu SKU (digit/'E'/khác) thay vì ĐỘ DÀI → sai vị trí cho MỌI SKU 13 ký tự pháp nhân
+  dạng chữ (US: A-E), lệch 1-2 ký tự (vd `ECJPN3DBUNL01` ra "CJP" thay vì "JPN", có ca lẫn hẳn sang nước
+  thật khác vd ANZ→"CAN"=Canada). Verify SQL trực tiếp TOÀN BỘ lịch sử `fact_fulfillment_revenue`
+  (không đoán): ~25% SKU 13 ký tự (nhóm E/A/D) sai nước. Đổi sang branch theo độ dài (13→ký tự 3-5,
+  14/15→legacy, mỗi công thức verify riêng bằng data thật). Bug nằm ở helper DÙNG CHUNG nên tự động sửa
+  luôn cho My Metrics + Products + Region Chart + B2B/B2C performance, không chỉ 1 tab. Dọn kèm 1 bản
+  duplicate CASE lệch ở `products/report/route.ts` (tự chép SQL thay vì gọi hàm chung).
+  **(2) Redesign UI My Metrics** — Hiếu duyệt qua mockup Artifact trước khi code: 3 khối "1/2/3" xếp
+  chồng (numbered badge sai ngữ nghĩa — không phải sequence) đổi thành `CategoryNav` tab phân đoạn, chỉ
+  hiện 1 nhóm/lần (đỡ trang dài ~2/3), hero score + 5 chip KPI luôn hiện + bấm nhảy tab. Ẩn/hiện qua
+  `display:none` — không mất data đã fetch khi chuyển tab.
+  **(3) Audit sâu tab B2C Performance theo yêu cầu Hiếu — 4 bug thật, đã fix hết**:
+  - 🔴 **"Tổng cộng"/CSV câm lặng thiếu doanh thu khi groupBy=SKU** — `b2c/performance/route.ts` cắt
+    cứng top 50 dòng THEO DOANH THU trước khi tính tổng. Verify SQL: tháng 8/2026 B2C có 1.047 SKU, top-50
+    chỉ chiếm 743,8tr/1.872tr tổng thật → **thiếu 60,27% doanh thu**, không cảnh báo gì. Fix: đổi response
+    sang `{rows,total,totalGroups}` — `total` tính từ TOÀN BỘ nhóm trước khi cap còn 1000 dòng hiển thị;
+    FE thêm cảnh báo khi bị cắt. Bump cache `v3`→`v4` (đổi shape).
+  - 🟡 **CM1 card đầu trang lệch cách khớp cost với bảng breakdown** (latent, chưa có số sai thật) —
+    `b2c/kpis/route.ts` so chuỗi CHÍNH XÁC thay vì `matchChannelCost()` dùng chung (sub-channel/
+    source_code/case-insensitive) như `b2c/performance` cùng trang. Đã đổi nhất quán.
+  - 🔴 **KPI Target B2C/Marketing Budget 403 câm lặng cho MỌI role không phải admin/creator** (Hiếu báo
+    "role BOD lưu không được") — `canWrite(session, "b2c", ...)` sai tabKey, FE tính quyền edit từ
+    `"targets"` (giống route anh em `/api/planning/targets`). Verify qua `GET /api/config/writable-tabs`
+    thật: 10 user có quyền ghi thêm, **0 người có "b2c"** → xác nhận chắc chắn bug ảnh hưởng MỌI user
+    ngoài admin/creator, không riêng Hiếu. Đổi cả 2 route sang đòi đúng `"targets"`.
+  - 🔴 **Card "Tiến độ doanh thu B2C so với mục tiêu tháng" báo "chưa nhập" dù đã lưu target** (Hiếu báo
+    ngay sau khi tự QA bug 403 ở trên) — `api/analytics/b2c/monthly` nhánh live (FE Advance LUÔN gửi
+    `nocache=1`) vẫn gắn `CACHE_HEADERS` (`s-maxage=300, stale-while-revalidate=600`) → Vercel Edge CDN
+    cache nguyên response 5-15 phút, ĐỘC LẬP với `flushAnalyticsCache()` (khác tầng cache — app cache vs
+    CDN cache theo response header). Fix: `Cache-Control: no-store` khi forceRefresh. **Verify trực tiếp
+    trên staging**: đổi target qua API → reload ngay → card cập nhật tức thì, không cần chờ.
+  **(4) Bỏ dải 6 KPI card "Users/ROAS/Customers/CAC/Leads/CPL"** đầu subtab Advance theo yêu cầu Hiếu —
+  số liệu tương đương vẫn còn ở section CAC&Leads/Spend&ROAS bên dưới. Dọn kèm code chết (`KpiCard`,
+  6 biến tính toán, import `Zap`/`Percent`/`cn` không còn dùng).
+  tsc + lint (0 lỗi mới) + vitest (220/220, +1 test) PASS mọi fix. 6 commit đã push thẳng staging
+  (`df329ff3` mã nước, `4c2a8ea7` redesign UI, `f8b271d0` Tổng cộng+CM1, `1bec0b59` 403 targets,
+  `c9239d21` bỏ KPI card, `54bee462` CDN cache). **Không còn việc mở nào chặn** — mọi fix đã tự verify
+  bằng data/API thật trên staging (không chỉ tin code sạch). Wiki cập nhật đủ: `analytics-data-model.md`
+  mục 9, `analytics-my-metrics.md`, `analytics-b2c.md`.
+| ✅ **s195+18-C (2026-09-11) — QA My Metrics nhóm A+B trên staging: 4 bug thật phát hiện + fix, 1 là P0** |
+  Tự QA (browser + gọi API trực tiếp) sau khi Hiếu chạy migration v53/v54. **4 bug thật, đã fix + deploy +
+  verify lại đều PASS**:
+  1. **Trang My Metrics crash trắng ngay sau deploy** — cache 12h cũ (`okr_sku_scan`/`okr_datapool_detail`)
+     phục vụ response SHAPE CŨ (thiếu `monthly`/`country`/`product_code`) cho FE MỚI đọc `data.monthly` →
+     `TypeError`. Fix: bump cache key sang `v2`.
+  2. **Prorata hierarchy SKU GM/%Datapool không hoạt động** (luôn factor=1) — gọi
+     `getProjectionFactor(start, hết-tháng/hết-quý)` sai tham số (hàm này tính elapsed=(end-start), cần
+     `(hôm nay-start)`). Fix: thêm `getRangeProjectionFactor()` mới (`analytics-engine/projection.ts`),
+     không đổi hàm gốc (nhiều route khác phụ thuộc đúng hành vi cross-month=1 của nó).
+  3. 🔴 **P0 — Bé Gấu + Gấu Pro KHÔNG gọi được tool nào** (mọi câu hỏi BI/executeSQL lỗi 400 "Function
+     call is missing a thought_signature") kể từ lúc đổi sang streaming (s195+18, không liên quan gì My
+     Metrics — chỉ tình cờ phát hiện qua QA). Root cause đọc thẳng source SDK
+     `@google/generative-ai@0.21.0`: hàm gộp chunk stream `aggregateResponses()` chỉ copy 4 field cố định
+     mỗi part, làm rớt `thoughtSignature` (field mới, SDK ra đời trước) — Gemini bắt buộc echo lại đúng
+     field này ở lượt sau khi replay functionCall, thiếu thì reject thẳng. Fix: `gemini-stream.ts` tự gom
+     `parts` từ raw chunk (giữ nguyên mọi field) ghi đè vào response đã aggregate.
+  4. **Task Bé Gấu chưa bao giờ được log** (fire-and-forget `logChat()`/insert `app_usage_events` không
+     await → Vercel có thể đóng execution context trước khi Supabase insert kịp gửi đi) — verify được 2
+     lần liên tiếp mất hẳn dù trả lời đúng. Fix: await cả 3 chỗ (`api/chat` 2 nhánh + `api/lark/events` 2
+     nhánh) — cùng bài học wiki đã ghi cho Lark nhưng chưa áp cho các chỗ này.
+  **Đã verify lại toàn bộ sau fix (không chỉ tin code sạch)**: gọi `/api/chat` trực tiếp 2 lần → cả 2 lần
+  trả lời đúng SỐ THẬT (executeSQL) + `app_usage_events` có dòng mới `tools_used:["executeSQL"]`,
+  `used_db_tool=true` → card "Tasks Completed via Bé Gấu" lên đúng 1/450. Hierarchy SKU GM: drill đủ 4 cấp
+  Vendor→Nước→Product Code→SKU đúng số, toggle Tháng/Quý đổi đúng nhãn "(PRORATA)", nút "Giải thích bằng
+  AI" trả câu suy luận hợp lý (luôn "có thể do"). Nút "Phân loại chủ đề bằng AI" Bé Gấu Insights trả đúng
+  nhóm. Panel SLA/Vendor Speed: case tự đăng cũ (trước deploy) vẫn còn trong hàng chờ duyệt bình thường
+  (đúng thiết kế — filter chỉ áp cho thread MỚI phát hiện từ nay); quét lại 1 lần ra đúng 1 case "tự đăng
+  — không tính" mới + nút "Vẫn tính case này" test qua API hoạt động đúng (dọn lại sau test).
+  tsc + lint (0 lỗi mới) + vitest (219/219) PASS mọi lần. **Không còn việc mở nào chặn** — 5 commit đã
+  push thẳng staging trong lúc QA (`d3560c1a` crash fix, `7ef39026` prorata fix, `768a6294` thought_
+  signature P0, `8f09ae7c` logChat await). Production (`main`) VẪN đang chạy code CŨ (trước s195+18) nên
+  KHÔNG bị ảnh hưởng bởi bug P0 #3 — chỉ staging dính, không cần rollback khẩn production.
+| ⏳ **s195+18-B (2026-09-11) — My Metrics nhóm B: SKU GM/%Datapool hierarchy+prorata+AI, Bé Gấu chỉ tính task query DB, chờ Hiếu QA** |
+  Nhóm B (sau nhóm A). **SKU Gross Margin + %Datapool Rev**: component dùng chung mới
+  `GmHierarchySection` — hierarchy Vendor→Nước→Product Code→SKU (rollup client-side), toggle Tháng/Quý
+  (tháng = MoM 2 tháng gần nhất có data), prorata kỳ hiện tại qua `getProjectionFactor()` có sẵn, chart
+  Rev kỳ trước vs kỳ này + biến động GM%, bảng "Giải thích bằng AI" on-demand (nút bấm, cache 12h, luôn
+  ghi "có thể do"). `datapool-detail` route trước chỉ có quý hiện tại (không so sánh được) — thêm quý
+  trước + GM%. **Tasks via Bé Gấu**: đổi định nghĩa "task tính KPI" — phải THẬT SỰ gọi tool đọc DB
+  (executeSQL/querySupabase/queryProduct/listSupabaseTables), không còn chỉ dựa độ dài response.
+  `be-gau.ts` track tool gọi mỗi vòng (`toolsUsed`), migration `v54` thêm cột `app_usage_events.
+  tools_used`/`used_db_tool`. **Fix phát hiện khi sửa**: route Lark log `app_usage_events` TRƯỚC KHI
+  gọi `runBeGau()` → `ai_response` LUÔN NULL cho MỌI chat Lark → task Lark chưa BAO GIỜ được tính vào
+  KPI dù wiki cũ mô tả có breakdown Web/Lark — đã sửa log SAU khi có response thật. 3 route (my-metrics
+  chính/begau-insights/conversations) đồng bộ filter `used_db_tool=true`; conversations + insights trả
+  thêm `tools_used` → FE hiện badge tool per case. Thêm phân loại chủ đề bằng AI on-demand (giống Usage
+  Analytics `usage-stats/classify`, scope đúng tập task đã lọc). tsc + lint (0 lỗi mới) + vitest
+  (219/219) PASS. ⚠️ **Gotcha quan trọng**: số "Tasks via Bé Gấu" quý Q3-2026 hiện tại sẽ TỤT MẠNH về
+  gần 0 ngay sau deploy — task CŨ (trước lúc deploy) không có `used_db_tool` (không backfill được, dữ
+  liệu tool nào gọi chưa từng ghi lại trước đây) → bị loại hết theo định nghĩa mới. Đây là đánh đổi 1
+  lần bắt buộc, KHÔNG phải bug. **Cần Hiếu**: chạy migration v54, QA staging theo checklist trong wiki
+  mục "s195+18-B" (analytics-my-metrics.md), theo dõi vài ngày để số Bé Gấu tích luỹ lại từ 0.
+| ⏳ **s195+18-A (2026-09-11) — My Metrics nhóm A: SLA/Vendor Speed chỉ tính request người khác + note + chart tháng, chờ Hiếu QA** |
+  Hiếu yêu cầu rebuild lớn "My Metrics v2" (5 mục), chia 2 nhóm theo yêu cầu Hiếu — nhóm A xong trước.
+  (1) Chỉ tính SLA/Vendor Selection Speed cho thread NGƯỜI KHÁC đăng rồi mention Hiếu — thread Hiếu tự
+  đăng (dù có ai mention lại) bị loại TRƯỚC khi gọi Gemini (`lark-scan-runner.ts`, cả real-time lẫn quét
+  lịch sử), ghi marker `is_self_initiated=true` (không tốn phí Gemini), có nút "Vẫn tính case này"
+  (route mới `/lark-events/[id]/override`) cho ngoại lệ thật. (2) Ghi chú tự do mọi trạng thái, không bị
+  quarter-lock (cột `hieu_note`, route PATCH gộp vào `[id]/route.ts`). (3) Chart TB theo tháng trong quý
+  + so quý trước (`EvidenceTrendChart`, route `/evidence` thêm `monthly`+`prev_quarter`). (4) Link thẳng
+  tới thread — ĐÃ RESEARCH kỹ, Lark không có API server-side sinh link đó, **giữ nguyên link mở group**
+  (tự đoán token sẽ ra link lỗi, tệ hơn không làm). Migration `v53_okr_lark_events_selfpost_note.sql`
+  (2 cột `is_self_initiated`, `hieu_note`). tsc + lint (0 lỗi mới) + vitest (216/216) PASS. **Cần Hiếu**:
+  chạy migration v53, QA staging (self-post rơi đúng khối riêng + override work, note lưu được, chart
+  hiện khi ≥2 tháng data). Nhóm B (SKU Gross Margin/%Datapool/Bé Gấu tasks — hierarchy vendor→country→
+  product→SKU, prorata, AI giải thích on-demand) **chưa làm**, làm sau khi nhóm A qua QA.
+| ⏳ **s195+18 (2026-09-10) — Stream token THẬT cho Bé Gấu + Gấu Pro (fix gốc), chờ Hiếu QA** | Làm nốt mục
+  "chưa làm" nêu ở s195+17. Trước đây cả 2 agent await xong TOÀN BỘ vòng tool-call mới trả 1 cục text —
+  màn hình trắng suốt lúc chờ (root cause s195+14, lúc đó chỉ vá bằng nâng maxDuration). Đổi cả 2 agent
+  dùng `model.generateContentStream()` (SDK đã hỗ trợ sẵn) thay `generateContent()` ở MỌI vòng gọi model —
+  helper dùng chung `genWithRetryStream()` tách file mới `lib/agents/gemini-stream.ts` (tránh lặp code y
+  hệt s195+17 vừa fix). Bé Gấu: FE `chatbot/page.tsx` KHÔNG cần sửa (code đọc stream sẵn đã đúng). Gấu Pro:
+  thêm event `delta` vào `GPEvent`, FE `analytics/creator/ai/page.tsx` thêm bubble placeholder + nối dần
+  theo delta (trước chỉ update UI 1 lần dù đã có SSE), lỗi giữa chừng giờ nối thêm vào phần đã stream thay
+  vì xoá trắng. Mock Gemini SDK trong test (`be-gau.test.ts`/`be-gau-runner.test.ts`) cập nhật thêm
+  `generateContentStream` (delegate qua `generateContent` mock cũ, giữ nguyên mọi chuỗi test có sẵn). tsc +
+  lint (0 lỗi mới) + vitest (216/216) PASS. Wiki `docs/wiki/system/chatbot-agents-guardian.md` đã cập nhật.
+  **Cần Hiếu**: QA cả 2 agent trên staging — chữ chạy dần thay vì bung 1 cục, không lặp/mất nội dung,
+  sources/export marker vẫn đúng.
+| ⏳ **s195+17 (2026-09-10) — Đổi model TOÀN BỘ AI Intel sang gemini-3.8-flash + đánh giá/nâng cấp Gấu Pro, chờ Hiếu QA** | Mở rộng s195+16 (khi đó chỉ đổi Bé Gấu) sang toàn bộ 17 file dùng Gemini (pipeline
+  cũ bi-analyst/data-explorer/orchestrator/classifier/answer, Gấu Pro `creator-ai.ts`, mrp.ts, okr-lark-
+  classify.ts — giữ nguyên safety net `maxOutputTokens=4000` cũ, web-search.ts, weekly-report/narrative.ts,
+  portal.ts, creator/compress.ts, usage-stats classify/evaluate, Tổ Gấu AI, config/schema/ai-suggest — đổi
+  field cũ `thinkingBudget:0`→`thinkingLevel:"minimal"` đúng chuẩn 3.8-flash). `creator-ai.ts` (model chính
+  Gấu Pro) thêm `thinkingConfig.thinkingLevel:"low"` như đã làm cho Bé Gấu. **Đánh giá Gấu Pro** (đọc trực
+  tiếp `creator-ai.ts` 754 dòng + route + dispatch.ts): ưu — SSE thật với status real-time mỗi tool call
+  (UX hơn Bé Gấu), 20+ tool, system prompt cá nhân hoá sâu, maxDuration=300 đúng từ đầu. **3 bug/dead-code
+  thật phát hiện, đã fix ngay**: (1) `api/creator-ai/chat/route.ts` có `compressHistory`/`stripBase64Images`
+  COPY Y HỆT `creator/compress.ts` (không dùng chung dù be-gau.ts đã làm đúng) — xoá bản trùng, import từ
+  module chung. (2) `combineFileContexts` trong route — dead code, không ai gọi — xoá. (3) Vòng lặp
+  tool-call (cả Gấu Pro lẫn Bé Gấu) — `Promise.all` không bọc try/catch riêng từng tool → 1 tool lỗi sập
+  CẢ round, mất trắng câu trả lời dù tool khác đã xong — đã bọc try/catch riêng từng tool ở cả 2 agent.
+  **Chưa làm (đề xuất, kiến trúc lớn hơn, cần bàn thêm)**: text trả lời cuối vẫn "await hết rồi enqueue 1
+  lần" ở cả 2 agent (chỉ status event là real-time, nội dung câu trả lời thật không stream token). tsc +
+  lint (0 lỗi mới) + vitest (216/216) PASS. Wiki `docs/wiki/system/chatbot-agents-guardian.md` đã cập nhật.
+  **Cần Hiếu**: QA cả Bé Gấu lẫn Gấu Pro trên staging (1 câu BI nhiều bước mỗi bên), theo dõi Gemini cost.
+| ⏳ **s195+16 (2026-09-10) — Bé Gấu: đánh giá toàn diện + đổi model gemini-3.6-flash → gemini-3.8-flash, chờ Hiếu QA** | Hiếu yêu cầu đánh giá ưu/nhược Bé Gấu +
+  hướng nâng cấp + đổi model. Ưu điểm: 1 agent function-calling gọn (thay 7-agent pipeline cũ), tool-set
+  rộng phân quyền tách bạch (`GP_TOOLS_OPEN`/`GP_TOOLS_ADMIN_ONLY`), `execSQL` tự cảnh báo auto-retry/row-
+  multiplication/3HK rule. Nhược điểm: fake streaming (`api/chat/route.ts` await xong hết mới enqueue 1
+  lần — mới vá triệu chứng bằng maxDuration s195+14, chưa fix gốc), vòng lặp tool-call không có cap thời
+  gian giữa chừng. Trước khi đổi model: verify qua WebSearch (không đoán) — `gemini-3.8-flash` có thật/GA
+  nhưng **mặc định thinking=medium nếu không set** (billable, latency ẩn) — đúng lớp rủi ro repo từng dính
+  (gemini-3.5-flash cần `thinkingBudget=0`; gemini-2.0-flash khai tử im lặng 6 ngày s194+7). Fix: set tường
+  minh `thinkingConfig.thinkingLevel` = `"low"` (model chính) / `"minimal"` (learning-detect JSON 1-shot),
+  `as any` vì SDK v0.21.0 pin cứng chưa có type field này. **CHỈ đổi `be-gau.ts`** — Gấu Pro/pipeline cũ/Tổ
+  Gấu AI vẫn `gemini-3.6-flash`, ngoài scope. tsc + lint (0 lỗi mới) + vitest (216/216) PASS. Wiki
+  `docs/wiki/system/chatbot-agents-guardian.md` đã cập nhật. **Cần Hiếu**: QA 1 câu BI phức tạp trên
+  staging (đúng/không chậm/không lỗi JSON), theo dõi Gemini API cost vài ngày đầu.
+| ✅ **s195+15 (2026-09-10) — Fix root cause query timeout tab B2C (Advanced) — đã merge main, chờ Hiếu QA** | Hiếu
   báo tab B2C bị timeout. Root cause xác nhận qua đọc code (không đoán): `b2c-advanced-dashboard.tsx` set
   `nocache=1` MỌI lượt load trang → route `b2c/monthly` bỏ qua cache hoàn toàn, tính lại tươi mỗi lần —
   trong đó 2 query phân loại khách New/Returning có CTE `first_order` **không giới hạn ngày dưới**, quét
@@ -20,9 +172,10 @@
   cần tươi tới giây vì cutoff dữ liệu vốn T-1) + ưu tiên đọc **Admin GoHub API** (nhẹ, cùng nguồn cron
   snapshot) trước khi rơi về CTE nặng (giờ chỉ là fallback thật). Khối revenue giữ nguyên "luôn live". Chạy
   tuần tự (không gộp Promise.all) giảm tải pool. Không đổi công thức/số liệu/UI. tsc + lint (0 lỗi mới) +
-  vitest (216/216) PASS. Wiki `docs/wiki/system/tabs/analytics-b2c.md` đã cập nhật. **Cần Hiếu**: QA tab
-  B2C Advanced trên staging sau khi Vercel deploy xong — load nhanh hơn/hết timeout, số liệu Customers
-  không đổi so với bản trước.
+  vitest (216/216) PASS. Wiki `docs/wiki/system/tabs/analytics-b2c.md` đã cập nhật. Đã merge staging→main
+  (`f56b4692`) theo yêu cầu Hiếu, production đang tự deploy. **Cần Hiếu**: QA tab B2C Advanced trên
+  production/staging sau khi Vercel deploy xong — load nhanh hơn/hết timeout, số liệu Customers không đổi
+  so với bản trước.
 | ✅ **s195+14 (2026-09-09) — Fix Bé Gấu trả lời quá lâu → im lặng không có câu trả lời (đúng bug thật, đã verify qua log)** | Hiếu báo trả lời lâu thì không ra
   gì cả, hỏi có phải do time không. Verify qua Vercel Runtime Errors: `Task timed out after 60 seconds`
   đúng route `/api/chat`, lần gần nhất khớp đúng lúc Hiếu vừa gặp — xác nhận đúng nguyên nhân, không đoán.
@@ -271,6 +424,35 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+19 — Test lại toàn bộ B2C Performance + My Metrics (Hiếu hẹn "mai tôi test")** — mọi fix đã
+  tự verify bằng data/API thật trên staging, nhưng chưa ai xem lại bằng mắt qua UI thật 1 lượt đầy đủ.
+  Checklist gợi ý: (a) tab B2C sub-tab Performance — đổi groupBy=SKU, kiểm tra "Tổng cộng" + xuất CSV có
+  dòng cảnh báo "Đang hiện N/M dòng" khi >1000 SKU; (b) Manage Costs → nhập lại KPI Target B2C/Marketing
+  Budget bằng 1 acc KHÔNG phải admin/creator (vd acc Lark liên kết role BOD) → xác nhận lưu được; (c)
+  ngay sau khi lưu, mở tab B2C Advance → card "Tiến độ doanh thu B2C so với mục tiêu tháng" phải cập
+  nhật NGAY, không cần chờ; (d) xác nhận dải 6 KPI card Users/ROAS/Customers/CAC/Leads/CPL đã biến mất
+  khỏi đầu subtab Advance; (e) My Metrics — tab phân đoạn 3 nhóm chuyển mượt, hierarchy SKU GM/%Datapool
+  hiện đúng tên nước (không còn mã lạ như "CJP"/"CAN" sai).
+- [x] **s195+18-A/B/C — My Metrics nhóm A+B + QA — XONG (2026-09-11), tự QA qua browser + API trực
+  tiếp trên staging, đã fix 4 bug (1 P0)** — migration v53+v54 Hiếu đã chạy. Hierarchy SKU GM/%Datapool
+  drill 4 cấp + prorata + AI giải thích + AI phân loại chủ đề: đều xác nhận hoạt động đúng sau fix.
+  **Không cần Hiếu QA lại** — đã tự verify kỹ (xem s195+18-C ở bảng trạng thái để biết chi tiết 4 bug đã
+  fix). Duy nhất còn: theo dõi vài ngày để số "Tasks via Bé Gấu" tích luỹ lại từ 0 (đúng thiết kế, task
+  cũ trước deploy không backfill được `used_db_tool`).
+- [ ] **s195+18 — QA stream token thật Bé Gấu + Gấu Pro trên staging** — mở cả 2 chat, hỏi 1 câu cần vài
+  giây (BI/phân tích), xác nhận: (a) chữ CHẠY DẦN theo thời gian thực thay vì im lặng rồi bung nguyên cục
+  như trước; (b) nội dung không lặp/không thiếu đoạn nào so với trước; (c) Gấu Pro: status "đang tìm
+  kiếm/đang query..." vẫn hiện đúng lúc tool đang chạy, biến mất đúng lúc câu trả lời bắt đầu chảy chữ; (d)
+  nguồn tham khảo (Bé Gấu) + nút export/followup (Gấu Pro) vẫn hiện đúng ở cuối như trước.
+  ⚠️ **Cập nhật s195+18-C**: câu hỏi cần tool (executeSQL...) trước đó LUÔN LỖI 400 thought_signature —
+  bug đã fix (xem bảng trạng thái), đã tự verify `/api/chat` trả lời đúng qua tool. Vẫn cần Hiếu tự thử
+  qua UI web/Lark thật 1 lần cho chắc (đặc biệt Gấu Pro — session này chỉ verify được Bé Gấu qua API).
+- [ ] **s195+17 — QA toàn bộ AI sau khi đổi model gemini-3.8-flash (mọi agent, không chỉ Bé Gấu)** — sau
+  khi Vercel deploy staging: (a) Bé Gấu + Gấu Pro — hỏi 1 câu BI nhiều bước mỗi bên, xác nhận đúng/không
+  chậm/không lỗi JSON; (b) nếu tiện, thử nhanh usage-stats classify/evaluate, Tổ Gấu AI (group chat),
+  config/schema AI-suggest (nút gợi ý mô tả bảng ở Dev Tools) — các đường ít traffic hơn nên rủi ro thấp
+  hơn nhưng chưa ai verify. Theo dõi Gemini API cost vài ngày đầu (model mới có thinking tokens tính phí
+  dù đã set thinkingLevel thấp ở các agent chính).
 - [ ] **s195+15 — QA tab B2C Advanced trên staging (fix query timeout)** — sau khi Vercel deploy: mở
   `/analytics/b2c` (sub-tab Advanced, mặc định), xác nhận (a) trang load nhanh/không còn timeout, (b) số
   Customers New/Returning khớp bản trước (nếu badge "Admin API lỗi" hiện — báo lại, nghĩa là đang fallback

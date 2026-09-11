@@ -9,6 +9,7 @@ import { getCustomRules }                from "./guardian"
 import { runWebSearch, runReadKnowledgeBase, type WebSource, type FileContext } from "./creator-ai"
 import { sendLarkDM }                    from "@/lib/lark"
 import { compressHistory }              from "./creator/compress"
+import { genWithRetryStream }            from "./gemini-stream"
 
 // ─── s190: gộp Gấu Pro vào Bé Gấu ──────────────────────────────────────────────
 // Theo yêu cầu Hiếu: Bé Gấu nay có TẤT CẢ công cụ Gấu Pro (declarations/executor dùng CHUNG qua
@@ -77,19 +78,7 @@ function isAggregateQuery(sql: string): boolean {
   return /\b(sum|count|avg|min|max)\s*\(/.test(s) && /\bgroup\s+by\b/.test(s)
 }
 
-// Fix #4: Gemini retry cho lỗi tạm thời (429/503/overload)
-async function genWithRetry(model: any, request: any, attempts = 3): Promise<any> {
-  let lastErr: any
-  for (let i = 0; i < attempts; i++) {
-    try { return await model.generateContent(request) } catch (e: any) {
-      lastErr = e
-      const transient = /429|rate|quota|resource.?exhausted|500|503|overload|unavailable|deadline|timeout|ECONNRESET|ETIMEDOUT|fetch failed|network/i.test(String(e?.message || ""))
-      if (!transient || i === attempts - 1) throw e
-      await new Promise(r => setTimeout(r, 800 * (i + 1)))
-    }
-  }
-  throw lastErr
-}
+// s195+18: genWithRetryStream (streaming thật) — dùng chung với Gấu Pro, xem lib/agents/gemini-stream.ts
 
 // Fix #5: rate-limit learning detection — 1 lần/user/5 phút
 const _learningRL = new Map<string, number>()
@@ -369,7 +358,14 @@ async function detectAndLogLearning(opts: {
 
     // 1-shot LLM classify
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash", generationConfig: { temperature: 0 } })
+    // thinkingLevel "minimal": gemini-3.8-flash mặc định thinking=medium (tiêu hao token/latency ẩn) —
+    // call này chỉ cần JSON 1-shot xác định, không cần suy luận sâu. SDK v0.21.0 pin cứng chưa có type
+    // cho field này (ra đời sau SDK) → "as any". Xem chatbot-agents-guardian.md (bài học gemini-3.5-flash
+    // thinking model cần thinkingBudget=0 mới ổn định JSON — né lặp lại đúng lớp sự cố).
+    const model = genAI.getGenerativeModel({
+      model: "gemini-3.8-flash",
+      generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "minimal" } } as any,
+    })
     const prompt = `Phân tích xem câu sau của user có chứa THÔNG TIN THỰC TẾ có thể học không (không phải câu hỏi).
 
 User (role=${role}): "${userMsg.slice(0, 500)}"
@@ -446,8 +442,9 @@ export async function runBeGau(opts: {
   isCost?: boolean          // canViewCogs
   extraDirective?: string   // vd quy tắc tạm thời
   fileContexts?: FileContext[]  // ảnh/PDF/file người dùng đính kèm (s190+3)
-}): Promise<{ text: string; sources: WebSource[] }> {
-  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts } = opts
+  onChunk?: (text: string) => void  // s195+18: stream token thật ra route — gọi mỗi khi Gemini sinh thêm đoạn text
+}): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[] }> {
+  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, onChunk } = opts
   const isPriv = priv(role)
   const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
 
@@ -500,11 +497,15 @@ export async function runBeGau(opts: {
   ]
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
+  // thinkingLevel "low": cân bằng — 3.8-flash cải thiện tool-orchestration/reasoning nhiều bước (đúng lợi
+  // ích cho vòng lặp function-calling BI), nhưng KHÔNG để mặc định "medium" (billable, thêm latency ẩn
+  // mỗi vòng × tối đa 12 vòng) đội lại đúng bug timeout vừa fix (s195+14, maxDuration 60→300). SDK v0.21.0
+  // chưa có type cho thinkingConfig (ra đời sau SDK) → "as any".
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.6-flash",
+    model: "gemini-3.8-flash",
     systemInstruction,
     tools: [{ functionDeclarations }],
-    generationConfig: { temperature: 0 },
+    generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
   })
 
   // File/ảnh đính kèm (s190+3) — mirror cách runCreatorAI build parts (text + inlineData), rút gọn.
@@ -534,9 +535,14 @@ export async function runBeGau(opts: {
 
   // Fix #8: dùng history đã nén
   const contents: any[] = [...compressedHistory, { role: "user", parts: userParts }]
-  // Fix #4: genWithRetry thay vì generateContent trực tiếp
-  let genResult = await genWithRetry(model, { contents })
+  // s195+18: genWithRetryStream — stream token thật, thay genWithRetry (generateContent chờ hết mới trả)
+  let genResult = await genWithRetryStream(model, { contents }, onChunk)
   const sources: WebSource[] = []
+  // Track tool nào được gọi trong cả vòng lặp — dùng để phân biệt "task tính KPI Bé Gấu" (đã thật sự
+  // xuất dữ liệu từ DB) khỏi trả lời chay/chào hỏi (My Metrics my-metrics/route.ts, s195+18-B). Định
+  // nghĩa "DB tool nào tính KPI" nằm ở lib/okr-helpers.ts (DB_TASK_TOOLS), không phải ở đây — be-gau.ts
+  // chỉ ghi lại SỰ THẬT đã gọi tool gì, không tự quyết định ý nghĩa nghiệp vụ của việc đó.
+  const toolsUsed = new Set<string>()
   const appendModel = () => { const c = genResult.response.candidates?.[0]?.content; if (c) contents.push(c) }
   appendModel()
 
@@ -545,9 +551,14 @@ export async function runBeGau(opts: {
     if (!calls || calls.length === 0) break
 
     // Fix #1: parallel tool execution (Promise.all)
+    // Toàn bộ nhánh bọc try/catch NGOÀI CÙNG — 1 tool lỗi (network/DB timeout) trước đây làm Promise.all
+    // reject cả round, sập TOÀN BỘ câu trả lời dù tool khác đã chạy xong. Nay tool lỗi chỉ trả
+    // functionResponse báo lỗi cho MỘT tool đó, model tự quyết định retry/báo user thay vì mất trắng.
     const fnParts = await Promise.all(calls.map(async (call: any) => {
       const a = call.args as any
+      toolsUsed.add(call.name)
       const wrap = (resp: any) => ({ functionResponse: { name: call.name, response: resp } })
+      try {
 
       if (call.name === "listSupabaseTables")
         return wrap({ tables: visibleTables })
@@ -605,10 +616,13 @@ export async function runBeGau(opts: {
       }
 
       return wrap({ error: "Unknown tool" })
+      } catch (e: any) {
+        return wrap({ error: e?.message || "Tool execution failed" })
+      }
     }))
 
     contents.push({ role: "user", parts: fnParts })
-    genResult = await genWithRetry(model, { contents })  // Fix #4
+    genResult = await genWithRetryStream(model, { contents }, onChunk)  // s195+18
     appendModel()
   }
 
@@ -616,7 +630,7 @@ export async function runBeGau(opts: {
   if (!text.trim()) {
     try {
       contents.push({ role: "user", parts: [{ text: "Dựa trên dữ liệu ở trên, viết câu trả lời hoàn chỉnh bằng tiếng Việt cho người dùng (kèm bảng/chart nếu hợp lý). KHÔNG gọi thêm công cụ, KHÔNG lộ SQL/tên bảng." }] })
-      genResult = await model.generateContent({ contents })
+      genResult = await genWithRetryStream(model, { contents }, onChunk)
       text = genResult.response.text()
     } catch { /* keep */ }
   }
@@ -630,5 +644,5 @@ export async function runBeGau(opts: {
     })
   }
 
-  return { text: finalText, sources }
+  return { text: finalText, sources, toolsUsed: Array.from(toolsUsed) }
 }

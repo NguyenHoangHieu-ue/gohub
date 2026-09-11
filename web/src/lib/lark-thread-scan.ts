@@ -164,6 +164,15 @@ async function fetchMessageById(messageId: string, appToken: string): Promise<an
   return data.data?.items?.[0] ?? null
 }
 
+// Hydrate lại đúng 1 thread theo message_id gốc — dùng cho nút "Vẫn tính case này" (override case tự
+// đăng bị loại tự động): cần phân loại lại 1 thread cụ thể ngoài luồng quét hàng loạt.
+export async function fetchThreadByMessageId(messageId: string): Promise<LarkThread | null> {
+  const appToken = await getLarkToken()
+  const rootMsg = await fetchMessageById(messageId, appToken)
+  if (!rootMsg) return null
+  return hydrateThread(rootMsg, appToken, {})
+}
+
 // Tên hiển thị 1 group Lark theo chat_id — dùng để hiện "đã quét group nào" cho Hiếu đối chiếu, KHÔNG
 // dùng để lọc/quyết định gì (source of truth phát hiện thread vẫn là capture log, xem hàm trên).
 export async function getChatName(chatId: string, appToken: string): Promise<string> {

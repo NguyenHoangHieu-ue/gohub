@@ -2,7 +2,7 @@
 
 // Tách từ my-metrics/page.tsx (s183 Phase 5 tiếp — tách cơ học, giữ nguyên y hệt bản gốc).
 import { useState, useEffect, useCallback } from "react"
-import { Sparkles, ChevronUp, ChevronDown, Check, Pencil, X, ExternalLink } from "lucide-react"
+import { Sparkles, ChevronUp, ChevronDown, Check, Pencil, X, ExternalLink, StickyNote, Undo2 } from "lucide-react"
 import { hhmm } from "@/lib/my-metrics-format"
 import type { LarkEvent } from "@/lib/my-metrics-types"
 
@@ -13,22 +13,27 @@ export function LarkReviewPanel({ metric, quarter, unit, onReviewed }: {
   const [pending,    setPending]    = useState<LarkEvent[]>([])
   const [rejected,   setRejected]   = useState<LarkEvent[]>([])
   const [notMatched, setNotMatched] = useState<LarkEvent[]>([])
+  const [selfInit,   setSelfInit]   = useState<LarkEvent[]>([])
   const [loaded, setLoaded] = useState(false)
   const [open, setOpen] = useState(true)
   const [rejOpen, setRejOpen] = useState(false)
   const [nmOpen, setNmOpen] = useState(false)
+  const [selfOpen, setSelfOpen] = useState(false)
   const [editing, setEditing] = useState<Record<string, { request_time: string; completion_time: string }>>({})
+  const [noteEditing, setNoteEditing] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
-    const [p, r, nm] = await Promise.all([
+    const [p, r, nm, self] = await Promise.all([
       fetch(`/api/analytics/my-metrics/lark-events?quarter=${quarter}&metric=${metric}&status=pending_review`),
       fetch(`/api/analytics/my-metrics/lark-events?quarter=${quarter}&metric=${metric}&status=rejected`),
-      fetch(`/api/analytics/my-metrics/lark-events?quarter=${quarter}&metric=${metric}&status=not_matched`),
+      fetch(`/api/analytics/my-metrics/lark-events?quarter=${quarter}&metric=${metric}&status=not_matched&self_initiated=false`),
+      fetch(`/api/analytics/my-metrics/lark-events?quarter=${quarter}&status=not_matched&self_initiated=true`),
     ])
     if (p.ok) { const j = await p.json(); setPending(j.items ?? []) }
     if (r.ok) { const j = await r.json(); setRejected(j.items ?? []) }
     if (nm.ok) { const j = await nm.json(); setNotMatched(j.items ?? []) }
+    if (self.ok) { const j = await self.json(); setSelfInit(j.items ?? []) }
     setLoaded(true)
   }, [quarter, metric])
 
@@ -51,8 +56,51 @@ export function LarkReviewPanel({ metric, quarter, unit, onReviewed }: {
     onReviewed?.()
   }
 
+  const saveNote = async (id: string) => {
+    setBusy(id)
+    const r = await fetch(`/api/analytics/my-metrics/lark-events/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hieu_note: noteEditing[id] ?? "" }),
+    })
+    setBusy(null)
+    if (!r.ok) { const j = await r.json(); alert(j.error ?? "Lỗi lưu ghi chú"); return }
+    setNoteEditing(p => { const n = { ...p }; delete n[id]; return n })
+    fetchData()
+  }
+
+  const override = async (id: string) => {
+    if (!confirm("Vẫn tính case này dù Hiếu tự đăng? Sẽ gọi AI phân loại lại thread ngay bây giờ.")) return
+    setBusy(id)
+    const r = await fetch(`/api/analytics/my-metrics/lark-events/${id}/override`, { method: "POST" })
+    setBusy(null)
+    if (!r.ok) { const j = await r.json(); alert(j.error ?? "Lỗi override"); return }
+    fetchData()
+    onReviewed?.()
+  }
+
+  // Ô ghi chú tự do — dùng chung cho pending/rejected/self-initiated (mọi trạng thái đều audit được).
+  const NoteEditor = ({ ev }: { ev: LarkEvent }) => {
+    const isEditing = noteEditing[ev.id] !== undefined
+    if (!isEditing) return (
+      <button onClick={() => setNoteEditing(p => ({ ...p, [ev.id]: ev.hieu_note ?? "" }))}
+        className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-brand-600 mt-1">
+        <StickyNote className="w-2.5 h-2.5" /> {ev.hieu_note ? <span className="text-slate-500 italic truncate max-w-[220px]">{ev.hieu_note}</span> : "+ ghi chú"}
+      </button>
+    )
+    return (
+      <div className="flex items-center gap-1 mt-1">
+        <input autoFocus value={noteEditing[ev.id]} onChange={e => setNoteEditing(p => ({ ...p, [ev.id]: e.target.value }))}
+          onKeyDown={e => e.key === "Enter" && saveNote(ev.id)}
+          placeholder="Ghi chú để đối chiếu sau…"
+          className="border border-slate-200 rounded px-1.5 py-0.5 text-[10px] w-48" />
+        <button disabled={busy === ev.id} onClick={() => saveNote(ev.id)} className="text-emerald-600"><Check className="w-3 h-3" /></button>
+        <button onClick={() => setNoteEditing(p => { const n = { ...p }; delete n[ev.id]; return n })} className="text-slate-400"><X className="w-3 h-3" /></button>
+      </div>
+    )
+  }
+
   if (!loaded) return null
-  const totalSeen = pending.length + rejected.length + notMatched.length
+  const totalSeen = pending.length + rejected.length + notMatched.length + selfInit.length
   if (totalSeen === 0) return null
 
   return (
@@ -95,6 +143,7 @@ export function LarkReviewPanel({ metric, quarter, unit, onReviewed }: {
                   </div>
                 )}
                 {ev.duration_value != null && !isEditing && <p className="mt-1 font-black text-slate-700">⏱ {ev.duration_value.toFixed(2)} {unit}</p>}
+                {!isEditing && <NoteEditor ev={ev} />}
                 <div className="flex gap-1.5 mt-2">
                   {!isEditing ? (
                     <>
@@ -153,6 +202,28 @@ export function LarkReviewPanel({ metric, quarter, unit, onReviewed }: {
                   {notMatched.map(ev => (
                     <div key={ev.id} className="text-[10px] text-slate-400 bg-white/60 rounded px-2 py-1">
                       {hhmm(ev.request_time)} · {(ev.request_snippet ?? "").slice(0, 80)} — <em>{ev.ai_reason || "(không có lý do)"}</em>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {selfInit.length > 0 && (
+            <div className="pt-1">
+              <button onClick={() => setSelfOpen(v => !v)} className="text-[10px] font-bold text-slate-400 hover:text-slate-600">
+                {selfOpen ? "Ẩn" : "Xem"} {selfInit.length} thread Hiếu tự đăng — không tính tự động (chung cho SLA + Vendor Speed)
+              </button>
+              {selfOpen && (
+                <div className="mt-1.5 space-y-1.5 max-h-64 overflow-y-auto">
+                  {selfInit.map(ev => (
+                    <div key={ev.id} className="text-[10px] bg-white/60 rounded-lg px-2 py-1.5">
+                      <div className="text-slate-400">{hhmm(ev.request_time)} <span className="text-slate-500">({ev.request_sender ?? "?"})</span></div>
+                      <p className="text-slate-600 whitespace-pre-wrap break-words">{ev.request_snippet}</p>
+                      <NoteEditor ev={ev} />
+                      <button disabled={busy === ev.id} onClick={() => override(ev.id)}
+                        className="flex items-center gap-1 mt-1.5 px-2 py-1 rounded-lg text-[10px] font-bold bg-brand-50 text-brand-700 hover:bg-brand-100 disabled:opacity-50">
+                        <Undo2 className="w-3 h-3" /> Vẫn tính case này
+                      </button>
                     </div>
                   ))}
                 </div>

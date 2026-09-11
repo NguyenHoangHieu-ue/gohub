@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, decodeSkuDestinationCode, getCountryMappings } from "@/lib/analytics-helpers"
 import { canWriteTab } from "@/lib/writable-tabs"
 import { parseQuarterLabel, prevQuarterLabel, OKR_GM_BASELINE } from "@/lib/okr-helpers"
+import type { HierarchyMonthlyRow } from "@/lib/my-metrics-types"
 
 const READ_ROLES = ["admin", "creator", "bod"]
 
@@ -15,6 +16,7 @@ const KEY_SKU_CUM_PCT = 80
 
 interface ScanRow {
   sku: string; category: string | null; vendor: string | null
+  country: string | null; country_code: string; product_code: string
   rev_cur: number; gp_cur: number; gm_pct_cur: number; orders_cur: number
   rev_prev: number; gp_prev: number; gm_pct_prev: number; orders_prev: number
   delta: number | null; delta_basis: string
@@ -34,7 +36,10 @@ export async function GET(req: NextRequest) {
   const prevLabel = prevQuarterLabel(quarter)
   const { start: prevStart, end: prevEnd } = parseQuarterLabel(prevLabel)
 
-  const cacheKey = `okr_sku_scan:${quarter}`
+  // v3 (s195+19): fix decodeSkuDestinationCode (nước sai cho SKU pháp nhân chữ A-E) — bump key để
+  // cache 12h cũ (nước sai) không tiếp tục phục vụ ngay sau deploy. v2: bump key sau s195+18-B (thêm
+  // country/product_code/monthly vào response) — luôn bump suffix khi đổi SHAPE hoặc GIÁ TRỊ response.
+  const cacheKey = `okr_sku_scan:v3:${quarter}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -77,6 +82,28 @@ export async function GET(req: NextRequest) {
         [curStart, curEnd, prevStart, prevEnd]
       )
 
+      // Chi tiết theo tháng (cả 2 quý, 1 query duy nhất — prevStart..curEnd liền kề nhau vì
+      // prevQuarterLabel luôn trả quý NGAY TRƯỚC) — dùng cho hierarchy drill-down + chart tháng
+      // (vendor→nước→product code→SKU), tách biệt khỏi số KPI chính thức (weighted_delta ở trên,
+      // vẫn tính theo QUÝ, không đổi).
+      const monthlyRows = await queryAnalytics<{ sku: string; month: string; rev: string | null; gp: string | null }>(
+        `SELECT TRIM(sku) AS sku, TO_CHAR(fulfiled_date::date, 'YYYY-MM') AS month,
+                SUM(fulfilled_revenue_amount_vnd)::bigint AS rev,
+                SUM(gross_profit_vnd)::bigint             AS gp
+         FROM fact_fulfillment_revenue
+         WHERE fulfiled_date IS NOT NULL AND TRIM(sku) != 'SHIPPINGFEE0'
+           AND fulfiled_date::date BETWEEN $1::date AND $2::date
+           AND fulfiled_date::date <= CURRENT_DATE - 1
+         GROUP BY 1, 2
+         ORDER BY 1, 2`,
+        [prevStart, curEnd]
+      )
+      const monthly: HierarchyMonthlyRow[] = monthlyRows.map(r => ({
+        sku: r.sku, month: r.month, rev: Number(r.rev) || 0, gp: Number(r.gp) || 0,
+      }))
+
+      const countryMap = await getCountryMappings()
+
       const items: ScanRow[] = rows.map(r => {
         const rev_cur  = Number(r.rev_cur)  || 0
         const gp_cur   = Number(r.gp_cur)   || 0
@@ -101,8 +128,11 @@ export async function GET(req: NextRequest) {
           delta_basis = "So GM% quý này vs quý trước, cùng SKU"
         }
 
+        const country_code = decodeSkuDestinationCode(r.sku)
         return {
           sku: r.sku, category: r.category, vendor: r.vendor,
+          country: countryMap[country_code] ?? country_code, country_code,
+          product_code: r.sku.slice(0, 8),
           rev_cur, gp_cur, gm_pct_cur, orders_cur,
           rev_prev, gp_prev, gm_pct_prev, orders_prev,
           delta, delta_basis, is_key: false, is_new,
@@ -135,6 +165,7 @@ export async function GET(req: NextRequest) {
         new_count: sorted.filter(r => r.is_new).length,
         scored_count: scored.length,
         total_rev_cur: totalRevCur,
+        monthly,
       }
     }, 720)
 
