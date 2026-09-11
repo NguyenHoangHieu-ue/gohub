@@ -11,6 +11,31 @@ status: active
 
 # B2C Performance (Hiệu Suất Bán Lẻ B2C)
 
+> ⚠️ **s195+19 (2026-09-11) — audit sâu subtab Performance: 2 bug thật, đã fix + verify SQL.**
+> 1. **🔴 "Tổng cộng"/CSV câm lặng thiếu doanh thu khi groupBy=SKU (hoặc destination range dài)** —
+>    `api/analytics/b2c/performance/route.ts` cắt cứng top 50 dòng THEO DOANH THU trước khi trả về, và
+>    FE (`b2c-performance.tsx`) SUM thẳng từ mảng đã cắt cho "Tổng cộng" + xuất CSV — không có cảnh báo
+>    nào. Verify SQL trên `fact_fulfillment_revenue` (B2C, tháng 8/2026): 1.047 SKU phát sinh thật, top-50
+>    chỉ chiếm 743,8tr / tổng thật 1.872tr → **thiếu 60,27% doanh thu**. groupBy=channel(11)/vendor(15)
+>    an toàn; groupBy=destination sát ngưỡng (44 nước/nhóm chỉ trong 1 tháng — range dài hơn dễ tràn).
+>    Fix: route đổi shape trả về `{rows, total, totalGroups}` — `total` tính từ TOÀN BỘ nhóm (không cap)
+>    TRƯỚC khi cắt còn `MAX_DETAIL_ROWS=1000` cho bảng/CSV hiển thị; FE dùng `total` cho "Tổng cộng" thay
+>    vì tự SUM `rows`, thêm dòng cảnh báo "Đang hiện N/M dòng..." khi bị cắt. Bump cache key `v3`→`v4`
+>    (đổi shape response).
+> 2. **🟡 CM1 card đầu trang và bảng breakdown dùng 2 cách khớp chi phí kênh khác nhau (latent, chưa có
+>    số liệu sai thật vì hiện chỉ 1 cost B2C "VN-Web SIM" khớp tên chính xác cả 2 cách)** —
+>    `b2c/kpis/route.ts` so chuỗi CHÍNH XÁC `c.channel === row.channel`; `b2c/performance/route.ts` (bảng
+>    cùng trang) dùng `matchChannelCost()` dùng chung (4 tầng: sub-channel prefix/source_code/exact/không
+>    phân biệt hoa-thường — cùng hàm quarterly-report/b2b dùng để sống sót qua đổi tên kênh). Fix: `kpis`
+>    đổi sang gọi `matchChannelCost()`, thêm `MIN(f.order_source_code) as source_code` vào query channel
+>    breakdown để có tham số tier-2.
+>
+> tsc + lint (0 lỗi mới) + vitest (220/220) PASS. **Đã tự kiểm tra riêng "KPI Target B2C (theo thị
+> trường)" trong Manage Costs theo yêu cầu Hiếu ("lưu bị lỗi")** — test trực tiếp qua fetch (bypass UI vì
+> click toạ độ bị lệch do display scaling máy dev, không phải bug app): nhập/lưu/đọc lại `/api/config/
+> b2c-kpi-targets` PASS 100% (200 OK, data persist đúng, không lỗi). **Chưa tìm ra lỗi thật** — cần Hiếu
+> mô tả cụ thể hơn (thông báo lỗi gì, tháng/số nào, mọi lần hay thỉnh thoảng) để điều tra tiếp.
+
 Báo cáo bán lẻ B2C bố cục 5 section (Apple-style, giảm tải nhận thức): doanh thu rolling, khách hàng, CAC/Leads, tỷ lệ chuyển đổi website, và chi phí marketing/ROAS. Tích hợp nhiều nguồn ngoài (Chatwoot, GA4, Turso).
 
 > ⚠️ **s195+15 (2026-09-10) — Fix root cause query timeout tab B2C (Advanced).** Hiếu báo tab B2C bị

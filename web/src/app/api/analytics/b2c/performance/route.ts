@@ -12,6 +12,12 @@ import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { fetchCosts, matchChannelCost } from "@/lib/bod-data"
 
+// s195+19: số dòng detail trả về (bảng/CSV) — KHÔNG dùng để tính "Tổng cộng" (xem `total` riêng, luôn
+// tính từ TOÀN BỘ nhóm, không cap). Trước đây cap 50 áp luôn vào phép SUM tổng → groupBy=sku (thường
+// >1000 SKU/tháng) làm "Tổng cộng"/CSV thiếu tới ~60% doanh thu mà không báo gì. Xem
+// docs/wiki/system/tabs/analytics-b2c.md mục "s195+19".
+const MAX_DETAIL_ROWS = 1000
+
 // Cùng logic CM1 với quarterly-report: fetchCosts + matchChannelCost (source_code + sub-channel + exact name).
 // Group cost KHÔNG phân bổ per-channel — FE trừ ở total row từ groupCosts state.
 
@@ -93,7 +99,10 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
     item.monthly_data.push(r)
   })
 
-  let finalRows = Array.from(aggregated.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 50)
+  // KHÔNG cap ở đây — cap sau khi tính xong `total` (xem cuối hàm), để "Tổng cộng" luôn đúng 100% dù
+  // FE chỉ hiện/CSV top MAX_DETAIL_ROWS dòng theo doanh thu.
+  let finalRows = Array.from(aggregated.values()).sort((a, b) => b.revenue - a.revenue)
+  const totalGroups = finalRows.length
 
   if (groupBy === "destination") {
     const mappings = await getCountryMappings()
@@ -150,7 +159,18 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
     }
   })
 
-  return channelRows
+  // `total` tính từ channelRows ĐẦY ĐỦ (chưa cap) — đây là số "Tổng cộng" đúng, FE dùng thay vì tự
+  // SUM lại `rows` (rows có thể bị cap dưới đây).
+  const total = channelRows.reduce((acc, r) => {
+    acc.revenue += r.revenue; acc.projected_revenue += r.projected_revenue
+    acc.margin += r.margin; acc.projected_margin += r.projected_margin
+    acc.gpm2 += r.gpm2; acc.projected_gpm2 += r.projected_gpm2
+    acc.units += r.units
+    acc.revenueVn += r.revenueVn || 0; acc.revenueUs += r.revenueUs || 0
+    return acc
+  }, { revenue: 0, projected_revenue: 0, margin: 0, projected_margin: 0, gpm2: 0, projected_gpm2: 0, units: 0, revenueVn: 0, revenueUs: 0 })
+
+  return { rows: channelRows.slice(0, MAX_DETAIL_ROWS), total, totalGroups }
 }
 
 export async function GET(req: NextRequest) {
@@ -173,7 +193,9 @@ export async function GET(req: NextRequest) {
   try {
     const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
-    const key = `b2c-perf:v3:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
+    // v4 (s195+19): đổi shape response array→{rows,total,totalGroups} (fix Tổng cộng thiếu doanh thu
+    // khi groupBy=sku/destination có >50 nhóm) — bump key để cache 12h cũ (shape cũ) không phục vụ nhầm.
+    const key = `b2c-perf:v4:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
       if (comparisonType === "none") {
         return await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx)
@@ -193,7 +215,9 @@ export async function GET(req: NextRequest) {
         fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx),
         fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn, sfx),
       ])
-      return current.map((curr: any) => ({ ...curr, prev_revenue: previous.find((p: any) => p.name === curr.name)?.revenue || 0 }))
+      const prevByName = new Map(previous.rows.map((p: any) => [p.name, p.revenue]))
+      const rows = current.rows.map((curr: any) => ({ ...curr, prev_revenue: prevByName.get(curr.name) || 0 }))
+      return { rows, total: { ...current.total, prev_revenue: previous.total.revenue }, totalGroups: current.totalGroups }
     }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
