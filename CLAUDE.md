@@ -6,10 +6,24 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-10, s195+18)
+## Trạng thái hiện tại (2026-09-11, s195+18-A)
 
 | | |
 |---|---|
+| ⏳ **s195+18-A (2026-09-11) — My Metrics nhóm A: SLA/Vendor Speed chỉ tính request người khác + note + chart tháng, chờ Hiếu QA** |
+  Hiếu yêu cầu rebuild lớn "My Metrics v2" (5 mục), chia 2 nhóm theo yêu cầu Hiếu — nhóm A xong trước.
+  (1) Chỉ tính SLA/Vendor Selection Speed cho thread NGƯỜI KHÁC đăng rồi mention Hiếu — thread Hiếu tự
+  đăng (dù có ai mention lại) bị loại TRƯỚC khi gọi Gemini (`lark-scan-runner.ts`, cả real-time lẫn quét
+  lịch sử), ghi marker `is_self_initiated=true` (không tốn phí Gemini), có nút "Vẫn tính case này"
+  (route mới `/lark-events/[id]/override`) cho ngoại lệ thật. (2) Ghi chú tự do mọi trạng thái, không bị
+  quarter-lock (cột `hieu_note`, route PATCH gộp vào `[id]/route.ts`). (3) Chart TB theo tháng trong quý
+  + so quý trước (`EvidenceTrendChart`, route `/evidence` thêm `monthly`+`prev_quarter`). (4) Link thẳng
+  tới thread — ĐÃ RESEARCH kỹ, Lark không có API server-side sinh link đó, **giữ nguyên link mở group**
+  (tự đoán token sẽ ra link lỗi, tệ hơn không làm). Migration `v53_okr_lark_events_selfpost_note.sql`
+  (2 cột `is_self_initiated`, `hieu_note`). tsc + lint (0 lỗi mới) + vitest (216/216) PASS. **Cần Hiếu**:
+  chạy migration v53, QA staging (self-post rơi đúng khối riêng + override work, note lưu được, chart
+  hiện khi ≥2 tháng data). Nhóm B (SKU Gross Margin/%Datapool/Bé Gấu tasks — hierarchy vendor→country→
+  product→SKU, prorata, AI giải thích on-demand) **chưa làm**, làm sau khi nhóm A qua QA.
 | ⏳ **s195+18 (2026-09-10) — Stream token THẬT cho Bé Gấu + Gấu Pro (fix gốc), chờ Hiếu QA** | Làm nốt mục
   "chưa làm" nêu ở s195+17. Trước đây cả 2 agent await xong TOÀN BỘ vòng tool-call mới trả 1 cục text —
   màn hình trắng suốt lúc chờ (root cause s195+14, lúc đó chỉ vá bằng nâng maxDuration). Đổi cả 2 agent
@@ -315,6 +329,12 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s195+18-A — My Metrics nhóm A (SLA/Vendor Speed): chạy migration v53 + QA trên staging** —
+  (1) `web/db/migrations/v53_okr_lark_events_selfpost_note.sql`. (2) Thử tự đăng 1 thread tự mention
+  chính mình → phải rơi vào khối "tự đăng — không tính" (không phải hàng chờ duyệt bình thường), bấm
+  "Vẫn tính case này" xác nhận vẫn work. (3) Thread người khác hỏi + mention Hiếu → vẫn vào hàng chờ
+  duyệt như cũ. (4) Thêm ghi chú 1 case, F5 kiểm tra còn nguyên. (5) Chart TB theo tháng hiện đúng khi
+  có ≥2 tháng data verified.
 - [ ] **s195+18 — QA stream token thật Bé Gấu + Gấu Pro trên staging** — mở cả 2 chat, hỏi 1 câu cần vài
   giây (BI/phân tích), xác nhận: (a) chữ CHẠY DẦN theo thời gian thực thay vì im lặng rồi bung nguyên cục
   như trước; (b) nội dung không lặp/không thiếu đoạn nào so với trước; (c) Gấu Pro: status "đang tìm

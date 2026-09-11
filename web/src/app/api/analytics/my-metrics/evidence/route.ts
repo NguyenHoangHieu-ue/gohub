@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWriteTab } from "@/lib/writable-tabs"
-import { isQuarterLocked } from "@/lib/okr-helpers"
+import { isQuarterLocked, prevQuarterLabel } from "@/lib/okr-helpers"
 
 const READ_ROLES  = ["admin", "creator", "bod"]
 const WRITE_ROLES = ["admin", "creator"]
@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
     completion_time: r.completion_time, completion_note: r.completion_snippet, completion_image_url: null,
     duration_value: r.duration_value, created_by: r.request_sender, created_at: r.created_at,
     updated_by: r.reviewed_by, updated_at: r.reviewed_at, source: "lark_auto" as const,
+    hieu_note: r.hieu_note ?? null,
   })).filter(r => r.duration_value != null)
 
   const allVerified = [...manualVerified, ...larkConfirmed]
@@ -51,6 +52,34 @@ export async function GET(req: NextRequest) {
   const merged = [...records, ...larkConfirmed].sort((a, b) =>
     new Date(b.request_time).getTime() - new Date(a.request_time).getTime())
 
+  // TB theo tháng trong quý (chỉ case verified) — cho chart theo dõi biến động giữa các tháng.
+  const monthlyMap = new Map<string, { sum: number; count: number }>()
+  for (const r of allVerified) {
+    const month = String(r.request_time).slice(0, 7)
+    const cur = monthlyMap.get(month) ?? { sum: 0, count: 0 }
+    cur.sum += Number(r.duration_value); cur.count++
+    monthlyMap.set(month, cur)
+  }
+  const monthly = Array.from(monthlyMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, v]) => ({ month, avg: +(v.sum / v.count).toFixed(2), count: v.count }))
+
+  // TB quý TRƯỚC (cùng metric, cùng tiêu chí verified) — mốc tham chiếu so sánh quý này với quý trước.
+  const prevQuarter = prevQuarterLabel(quarter)
+  const [{ data: prevManual }, { data: prevLark }] = await Promise.all([
+    supabaseAdmin.from("okr_evidence_records").select("duration_value, request_image_url, completion_image_url")
+      .eq("quarter", prevQuarter).eq("metric", metric),
+    supabaseAdmin.from("okr_lark_events").select("duration_value")
+      .eq("quarter", prevQuarter).eq("metric", metric).eq("status", "confirmed"),
+  ])
+  const prevVerified = [
+    ...(prevManual ?? []).filter(r => r.duration_value != null && r.request_image_url && r.completion_image_url),
+    ...(prevLark ?? []).filter(r => r.duration_value != null),
+  ]
+  const prevQuarterAvg = prevVerified.length > 0
+    ? +(prevVerified.reduce((a, r) => a + Number(r.duration_value), 0) / prevVerified.length).toFixed(2)
+    : null
+
   return NextResponse.json({
     records: merged,
     avg,
@@ -59,6 +88,8 @@ export async function GET(req: NextRequest) {
     verified: allVerified.length,
     sources: { manual: manualVerified.length, lark_auto: larkConfirmed.length },
     locked: isQuarterLocked(quarter),
+    monthly,
+    prev_quarter: { label: prevQuarter, avg: prevQuarterAvg, count: prevVerified.length },
   })
 }
 

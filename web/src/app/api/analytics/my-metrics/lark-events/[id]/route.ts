@@ -26,3 +26,18 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
+
+// PATCH { hieu_note } — ghi chú tự do đối chiếu 1 case (mọi trạng thái). Metadata thuần, KHÔNG ảnh
+// hưởng số KPI nên sửa được kể cả sau khi quý đã khoá (khác DELETE/review vốn khoá theo quarter).
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const ok = await canWriteTab(session.user.username, "my-metrics", WRITE_ROLES)
+  if (!ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+  const { hieu_note } = await req.json() as { hieu_note?: string }
+  const { error } = await supabaseAdmin
+    .from("okr_lark_events").update({ hieu_note: hieu_note?.trim() || null }).eq("id", params.id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}

@@ -19,7 +19,7 @@ export function ScanResultBox({ result }: { result: LarkScanResult }) {
       )}
       <div>Đã quét <strong className="tabular-nums">{result.scanned}</strong> thread có reply, liên quan Hiếu.</div>
       <div>Phân loại lần này: <strong className="tabular-nums">{result.classified}</strong> thread mới.</div>
-      <div>→ <strong className="text-emerald-600 tabular-nums">{result.inserted}</strong> case mới vào hàng chờ duyệt · <strong className="tabular-nums">{result.not_matched}</strong> không khớp.</div>
+      <div>→ <strong className="text-emerald-600 tabular-nums">{result.inserted}</strong> case mới vào hàng chờ duyệt · <strong className="tabular-nums">{result.not_matched}</strong> không khớp{result.self_initiated > 0 && <> · <strong className="tabular-nums">{result.self_initiated}</strong> tự đăng (không tính)</>}.</div>
       {result.classify_errors > 0 && (
         <div className="text-red-600">⚠ <strong className="tabular-nums">{result.classify_errors}</strong> thread lỗi khi AI phân loại (không tính vào metrics) — xem Vercel log <code>[Lark classify]</code> để biết lý do.</div>
       )}

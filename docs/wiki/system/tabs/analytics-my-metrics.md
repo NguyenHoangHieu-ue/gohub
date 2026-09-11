@@ -7,11 +7,60 @@ visibility: admin-only
 is_hidden: true
 tags: [my-metrics, okr, analytics, sla, sku, gm, begau, lark-bot]
 created: 2026-08-27
-updated: 2026-08-27
+updated: 2026-09-11
 status: active
 ---
 
 # My Metrics — OKR Tracking
+
+## s195+18-A (2026-09-11) — SLA + Vendor Speed: chỉ tính request từ người khác, note, chart tháng, ghi chú
+
+Yêu cầu Hiếu (nhóm A trong 2 nhóm rebuild lớn "My Metrics v2"): (1) chỉ tính SLA/Vendor Selection Speed
+cho thread **NGƯỜI KHÁC đăng rồi mention Hiếu** — thread Hiếu tự đăng (dù có ai mention lại) không được
+tính tự động; (2) thêm ô ghi chú cho từng case để đối chiếu case ngoài ý muốn; (3) chart theo tháng
+trong quý + so với quý trước; (4) link thẳng tới thread thay vì chỉ mở group.
+
+**(1) Self-post filter**: `lark-scan-runner.ts` — cả `runLarkScan` (real-time) lẫn `runLarkHistoryScan`
+(lịch sử) giờ tách thread mới phát hiện thành 2 nhóm theo `t.sender_open_id === myOpenId` TRƯỚC khi gọi
+Gemini. Thread do Hiếu tự đăng → `insertSelfInitiatedMarkers()` ghi thẳng `status='not_matched'`,
+`metric='none'`, `is_self_initiated=true` (cột mới, migration `v53_okr_lark_events_selfpost_note.sql`)
+— **không tốn 1 lượt gọi Gemini nào** (tiết kiệm chi phí, khác `not_matched` do Gemini chấm không khớp).
+Panel review (`LarkReviewPanel`) thêm khối gấp riêng "N thread Hiếu tự đăng — không tính tự động" (dùng
+chung cho cả card SLA lẫn Vendor Speed vì chưa phân loại được metric) — mỗi case có nút **"Vẫn tính case
+này"** gọi route mới `POST /lark-events/[id]/override`: hydrate lại thread qua `fetchThreadByMessageId()`
+(hàm mới, `lark-thread-scan.ts`), gọi `classifyLarkThread()` thật, nếu match thì ghi case
+`pending_review` bình thường (metric thật) rồi xoá marker cũ — chấp nhận tốn 1 lượt Gemini ở đây vì là
+thao tác hiếm/thủ công, không phải vòng quét hàng loạt.
+
+**(2) Ghi chú**: cột mới `hieu_note TEXT` trên `okr_lark_events` — sửa được ở MỌI trạng thái, KHÔNG bị
+khoá bởi quarter-lock (chỉ là metadata, không đổi số KPI). Route `PATCH /lark-events/[id]` (gộp vào file
+`[id]/route.ts` sẵn có cạnh DELETE). UI: `NoteEditor` inline trong `LarkReviewPanel` (pending/rejected-
+audit/self-initiated) + cột "Ghi chú" mới trong bảng evidence đã confirm (`evidence-card.tsx`, chỉ áp
+cho dòng nguồn `lark_auto` — record `manual` đã có `request_note`/`completion_note` riêng).
+
+**(3) Chart tháng + so quý trước**: `/evidence` route thêm `monthly: {month,avg,count}[]` (group case
+verified theo tháng) + `prev_quarter: {label, avg, count}` (TB quý liền trước, cùng metric, cùng tiêu
+chí verified — reuse `prevQuarterLabel()`). Chart mới `EvidenceTrendChart` (`my-metrics-charts.tsx`) —
+bar theo tháng + 2 `ReferenceLine` (target, TB quý trước), màu bar theo đúng 3 tier đã dùng ở
+`EvidenceCard` (emerald ≤target / brand ≤2×target / amber ngoài).
+
+**(4) Link thẳng tới thread — KHÔNG làm được đúng nghĩa, giữ nguyên link mở group.** Đã research kỹ
+(WebSearch) trước khi code: Lark KHÔNG có API server-side chính thức trả link nhảy thẳng tới 1 message.
+Format `applink.larksuite.com/client/message/link/open?token=...` có tồn tại thật (thấy qua tính năng
+"Copy link" thủ công trong app) nhưng `token` không phải suy ra được từ `message_id`/`chat_id` qua công
+thức công khai nào — tự đoán 1 token sai sẽ tạo link BỊ LỖI (tệ hơn hiện trạng, không phải cải thiện). Vì
+vậy giữ nguyên link mở group hiện có, không thêm gì giả — nếu sau này tìm ra API/endpoint thật (Lark có
+thể bổ sung), quay lại làm tiếp.
+
+tsc + lint (0 lỗi mới) + vitest (216/216) PASS. **Cần Hiếu**: chạy migration v53, QA trên staging — (a)
+đăng 1 thread tự hỏi chính mình (self-mention) → xác nhận rơi vào khối "tự đăng — không tính", bấm "Vẫn
+tính case này" ra đúng case thật; (b) thread người khác hỏi + mention Hiếu → vẫn vào hàng chờ duyệt bình
+thường như trước; (c) thêm ghi chú 1 case, F5 lại còn nguyên; (d) chart tháng hiện đúng khi có ≥2 tháng
+dữ liệu verified.
+
+Nhóm B (SKU Gross Margin / %Datapool Rev / Tasks via Bé Gấu — hierarchy vendor→country→product→SKU,
+prorata, AI giải thích/phân loại chủ đề on-demand) — **chưa làm**, làm sau khi nhóm A qua QA.
+
 
 > Route `/analytics/my-metrics` (id `"my-metrics"`), gate qua `my_metrics_enabled` (`/api/user/me`) + `access_audit_log`.
 > Đối tượng: cá nhân Hiếu, dùng để báo cáo OKR Q3/Q4 2026 cho manager (Bảo). Nguồn KPI chính thức: offer letter

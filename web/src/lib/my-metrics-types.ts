@@ -21,10 +21,14 @@ export interface EvidenceRecord {
   duration_value: number | null; created_by: string | null; created_at: string
   updated_by?: string | null; updated_at?: string | null
   source?: "manual" | "lark_auto"
+  hieu_note?: string | null
 }
+export interface EvidenceMonthPoint { month: string; avg: number; count: number }
 export interface EvidenceData {
   records: EvidenceRecord[]; avg: number | null; count: number; completed: number; verified: number
   locked: boolean; sources?: { manual: number; lark_auto: number }
+  monthly: EvidenceMonthPoint[]
+  prev_quarter: { label: string; avg: number | null; count: number }
 }
 export interface LarkEvent {
   id: string; quarter: string; metric: string; message_id: string
@@ -32,7 +36,8 @@ export interface LarkEvent {
   request_time: string; request_snippet: string | null; request_sender: string | null
   completion_time: string | null; completion_snippet: string | null; completion_sender: string | null
   duration_value: number | null; ai_reason: string | null
-  status: "pending_review" | "confirmed" | "rejected"
+  status: "pending_review" | "confirmed" | "rejected" | "not_matched"
+  is_self_initiated?: boolean; hieu_note?: string | null
 }
 export interface Conversation {
   id: number; user_message: string; ai_response: string
@@ -73,7 +78,7 @@ export interface BegauInsightsData {
 }
 export interface LarkScanResult {
   scanned: number; classified: number; inserted: number; not_matched: number; classify_errors: number
-  backlog_remaining: number; skipped?: string
+  backlog_remaining: number; skipped?: string; self_initiated: number
   groups: { chat_id: string; chat_name: string; thread_count: number }[]
 }
 

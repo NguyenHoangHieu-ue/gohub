@@ -99,6 +99,34 @@ export const TopUsersChart = React.memo(function TopUsersChart({ data }: { data:
   )
 })
 
+// ── 4b. SLA/Vendor Speed — TB theo tháng trong quý, so target + quý trước ───
+export interface EvidenceMonthPoint { month: string; avg: number; count: number }
+export const EvidenceTrendChart = React.memo(function EvidenceTrendChart({
+  data, target, prevQuarterAvg, unit,
+}: { data: EvidenceMonthPoint[]; target: number; prevQuarterAvg: number | null; unit: string }) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={v => v.slice(5)} />
+        <YAxis axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} width={32} />
+        <Tooltip contentStyle={tooltipStyle}
+          formatter={(val: number, _name: string, item: any) => [`${val.toFixed(2)} ${unit} (${item.payload.count} case)`, "TB"]}
+          labelFormatter={l => `Tháng ${String(l).slice(5)}`} />
+        {target > 0 && <ReferenceLine y={target} stroke={AMBER} strokeDasharray="4 4" strokeWidth={1.5}
+          label={{ value: `Target ${target}${unit}`, position: "insideTopRight", fill: AMBER, fontSize: 10, fontWeight: 700 }} />}
+        {prevQuarterAvg !== null && <ReferenceLine y={prevQuarterAvg} stroke="#94a3b8" strokeDasharray="2 4" strokeWidth={1.5}
+          label={{ value: `Quý trước ${prevQuarterAvg}${unit}`, position: "insideBottomRight", fill: "#94a3b8", fontSize: 10, fontWeight: 700 }} />}
+        <Bar dataKey="avg" radius={[4, 4, 0, 0]} maxBarSize={48}>
+          {data.map((d, i) => (
+            <Cell key={i} fill={target <= 0 ? BRAND : d.avg <= target ? EMERALD : d.avg <= target * 2 ? BRAND : AMBER} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+})
+
 // ── 5. SKU GM movers — top tăng/giảm delta (diverging, chỉ SKU key/new) ──────
 export interface SkuMoverPoint { sku: string; delta: number }
 // SKU dài quá cột tên (VD hàng chục ký tự) vẫn tràn vào vùng bar nếu ước lượng width theo px/ký tự —
