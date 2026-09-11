@@ -53,6 +53,26 @@ status: active
 > "Spend & ROAS" bên dưới nên không mất thông tin, chỉ gọn phần đầu trang. Xoá kèm code chỉ phục vụ dải
 > này mà giờ chết hẳn: component `KpiCard`, biến `ga4Total/ga4Users/spendCur/roasCur/leadsCur/
 > customersForCac/cacCur/cplCur`, import `Zap`/`Percent`/`cn` không còn dùng.
+>
+> 4. **🔴 Bug thật thứ 4, phát hiện ngay sau khi Hiếu tự QA fix #3 — card "Tiến độ doanh thu B2C so với
+>    mục tiêu tháng" báo "Chưa nhập mục tiêu" dù đã lưu KPI Target B2C thành công.** Verify: gọi thẳng
+>    `/api/config/b2c-kpi-targets` xác nhận DB đã có target tháng hiện tại đúng số Hiếu nhập;
+>    `readTargets()` trong `api/analytics/b2c/monthly/route.ts` đọc thẳng Supabase mỗi request, KHÔNG
+>    qua cache app-level nào — vậy DB/tính toán luôn tươi. Root cause thật nằm ở tầng KHÁC: nhánh "live"
+>    (chạy khi FE gửi `nocache=1` — Advance dashboard LUÔN gửi cờ này) vẫn gắn cứng `CACHE_HEADERS`
+>    (`s-maxage=300, stale-while-revalidate=600`) vào response → Vercel Edge CDN cache NGUYÊN response
+>    "live" theo đúng URL+query trong 5-15 phút, bất kể bên trong route có tính lại tươi hay không. User
+>    lưu target xong reload lại trang trong khung 5-15 phút đó vẫn ăn bản CDN cache cũ. **Độc lập hoàn
+>    toàn với `flushAnalyticsCache()`** gọi trong 2 route save (`b2c-kpi-targets`/`b2c-budget`) — hàm đó
+>    chỉ xoá cache tầng app (bảng Supabase `analytics_query_cache`), không đụng được CDN cache dựa trên
+>    response header. Fix: response header đổi thành `Cache-Control: no-store` khi `forceRefresh` (tức
+>    `nocache=1`) thay vì `CACHE_HEADERS` — giữ nguyên cache 5 phút cho nhánh snapshot (không forceRefresh,
+>    cập nhật 1 lần/ngày qua cron, cache hợp lý). Nhánh `onlyLeads` (leads riêng, không liên quan target)
+>    giữ nguyên `CACHE_HEADERS`, ngoài phạm vi bug này.
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS bug #4. **Cần Hiếu**: sau deploy, xoá test target
+`2026-09: {vn:11111, us:22222, total:33333}` đã tự nhập lúc test (nếu muốn), rồi nhập số thật và xác
+nhận card "Tiến độ doanh thu B2C so với mục tiêu tháng" cập nhật ngay sau khi lưu, không cần đợi.
 
 Báo cáo bán lẻ B2C bố cục 5 section (Apple-style, giảm tải nhận thức): doanh thu rolling, khách hàng, CAC/Leads, tỷ lệ chuyển đổi website, và chi phí marketing/ROAS. Tích hợp nhiều nguồn ngoài (Chatwoot, GA4, Turso).
 
