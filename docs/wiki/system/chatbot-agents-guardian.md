@@ -90,6 +90,25 @@ Lark dùng trong group → không phân biệt được role (mọi người có
 ---
 
 ## Lưu ý kỹ thuật
+- 🔴 **s195+18-C (2026-09-11) — P0 phát hiện qua QA My Metrics: tool-calling CHẾT HOÀN TOÀN từ lúc s195+18
+  đổi sang streaming, đã fix.** Mọi câu hỏi cần tool (executeSQL/querySupabase/...) — cả Bé Gấu lẫn Gấu Pro
+  — lỗi thẳng `400 Function call is missing a thought_signature` ngay từ vòng lặp tool-call đầu tiên. Root
+  cause đọc trực tiếp source `@google/generative-ai@0.21.0` (`dist/index.js` hàm `aggregateResponses()`):
+  khi gộp nhiều chunk stream thành 1 response, hàm này CHỈ copy đúng 4 field cố định mỗi part
+  (text/functionCall/executableCode/codeExecutionResult) — làm rớt field `thoughtSignature` (field MỚI,
+  ra đời sau SDK, model "thinking" dùng tool như gemini-3.8-flash bắt buộc phải có). Gemini API yêu cầu
+  echo lại NGUYÊN VẸN thoughtSignature khi gửi lại chính functionCall đó ở lượt sau (đẩy vào `contents`
+  cho vòng lặp tiếp theo) — thiếu thì model reject thẳng. Fix (`lib/agents/gemini-stream.ts`
+  `genWithRetryStream()`): tự gom `parts` từ RAW chunk (spread giữ nguyên mọi field, không lọc như SDK)
+  rồi ghi đè vào `content.parts` của response đã aggregate trước khi trả về — `.text()`/`.functionCalls()`
+  (helper của SDK) đọc thẳng `candidates[0].content.parts` mỗi lần gọi (không cache tại thời điểm gắn
+  helper) nên ghi đè sau vẫn hoạt động đúng, không cần sửa gì ở `be-gau.ts`/`creator-ai.ts`.
+  **Bug đi kèm cùng đợt QA, cùng gốc "fire-and-forget trên serverless"**: `logChat()`
+  (`api/chat/route.ts`) và 2 chỗ insert `app_usage_events` mới ở `api/lark/events/route.ts` (s195+18-B)
+  không `await` — verify được 2 lần liên tiếp MẤT HẲN dòng log dù trả lời đúng (Vercel đóng execution
+  context trước khi Supabase insert kịp gửi đi, cùng lớp rủi ro wiki đã ghi cho Lark ở mục dưới nhưng lúc
+  đó chưa áp dụng triệt để). Đã đổi cả 3 chỗ sang `await`. Production (`main`) KHÔNG dính bug P0 này —
+  chưa merge tới `425b862a` (commit stream token gốc) tính tới lúc phát hiện.
 - **s195+18 (2026-09-10) — Stream token THẬT cho cả Bé Gấu lẫn Gấu Pro (fix gốc, không còn vá triệu chứng).**
   Tiếp mục "chưa làm" nêu ở s195+17. Trước đây CẢ 2 agent `await` xong TOÀN BỘ vòng lặp function-calling
   (tới 12/20 iteration) mới trả 1 cục text duy nhất cho user — dù bọc `ReadableStream`/SSE, user vẫn thấy

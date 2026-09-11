@@ -6,10 +6,43 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-11, s195+18-B)
+## Trạng thái hiện tại (2026-09-11, s195+18-C)
 
 | | |
 |---|---|
+| ✅ **s195+18-C (2026-09-11) — QA My Metrics nhóm A+B trên staging: 4 bug thật phát hiện + fix, 1 là P0** |
+  Tự QA (browser + gọi API trực tiếp) sau khi Hiếu chạy migration v53/v54. **4 bug thật, đã fix + deploy +
+  verify lại đều PASS**:
+  1. **Trang My Metrics crash trắng ngay sau deploy** — cache 12h cũ (`okr_sku_scan`/`okr_datapool_detail`)
+     phục vụ response SHAPE CŨ (thiếu `monthly`/`country`/`product_code`) cho FE MỚI đọc `data.monthly` →
+     `TypeError`. Fix: bump cache key sang `v2`.
+  2. **Prorata hierarchy SKU GM/%Datapool không hoạt động** (luôn factor=1) — gọi
+     `getProjectionFactor(start, hết-tháng/hết-quý)` sai tham số (hàm này tính elapsed=(end-start), cần
+     `(hôm nay-start)`). Fix: thêm `getRangeProjectionFactor()` mới (`analytics-engine/projection.ts`),
+     không đổi hàm gốc (nhiều route khác phụ thuộc đúng hành vi cross-month=1 của nó).
+  3. 🔴 **P0 — Bé Gấu + Gấu Pro KHÔNG gọi được tool nào** (mọi câu hỏi BI/executeSQL lỗi 400 "Function
+     call is missing a thought_signature") kể từ lúc đổi sang streaming (s195+18, không liên quan gì My
+     Metrics — chỉ tình cờ phát hiện qua QA). Root cause đọc thẳng source SDK
+     `@google/generative-ai@0.21.0`: hàm gộp chunk stream `aggregateResponses()` chỉ copy 4 field cố định
+     mỗi part, làm rớt `thoughtSignature` (field mới, SDK ra đời trước) — Gemini bắt buộc echo lại đúng
+     field này ở lượt sau khi replay functionCall, thiếu thì reject thẳng. Fix: `gemini-stream.ts` tự gom
+     `parts` từ raw chunk (giữ nguyên mọi field) ghi đè vào response đã aggregate.
+  4. **Task Bé Gấu chưa bao giờ được log** (fire-and-forget `logChat()`/insert `app_usage_events` không
+     await → Vercel có thể đóng execution context trước khi Supabase insert kịp gửi đi) — verify được 2
+     lần liên tiếp mất hẳn dù trả lời đúng. Fix: await cả 3 chỗ (`api/chat` 2 nhánh + `api/lark/events` 2
+     nhánh) — cùng bài học wiki đã ghi cho Lark nhưng chưa áp cho các chỗ này.
+  **Đã verify lại toàn bộ sau fix (không chỉ tin code sạch)**: gọi `/api/chat` trực tiếp 2 lần → cả 2 lần
+  trả lời đúng SỐ THẬT (executeSQL) + `app_usage_events` có dòng mới `tools_used:["executeSQL"]`,
+  `used_db_tool=true` → card "Tasks Completed via Bé Gấu" lên đúng 1/450. Hierarchy SKU GM: drill đủ 4 cấp
+  Vendor→Nước→Product Code→SKU đúng số, toggle Tháng/Quý đổi đúng nhãn "(PRORATA)", nút "Giải thích bằng
+  AI" trả câu suy luận hợp lý (luôn "có thể do"). Nút "Phân loại chủ đề bằng AI" Bé Gấu Insights trả đúng
+  nhóm. Panel SLA/Vendor Speed: case tự đăng cũ (trước deploy) vẫn còn trong hàng chờ duyệt bình thường
+  (đúng thiết kế — filter chỉ áp cho thread MỚI phát hiện từ nay); quét lại 1 lần ra đúng 1 case "tự đăng
+  — không tính" mới + nút "Vẫn tính case này" test qua API hoạt động đúng (dọn lại sau test).
+  tsc + lint (0 lỗi mới) + vitest (219/219) PASS mọi lần. **Không còn việc mở nào chặn** — 5 commit đã
+  push thẳng staging trong lúc QA (`d3560c1a` crash fix, `7ef39026` prorata fix, `768a6294` thought_
+  signature P0, `8f09ae7c` logChat await). Production (`main`) VẪN đang chạy code CŨ (trước s195+18) nên
+  KHÔNG bị ảnh hưởng bởi bug P0 #3 — chỉ staging dính, không cần rollback khẩn production.
 | ⏳ **s195+18-B (2026-09-11) — My Metrics nhóm B: SKU GM/%Datapool hierarchy+prorata+AI, Bé Gấu chỉ tính task query DB, chờ Hiếu QA** |
   Nhóm B (sau nhóm A). **SKU Gross Margin + %Datapool Rev**: component dùng chung mới
   `GmHierarchySection` — hierarchy Vendor→Nước→Product Code→SKU (rollup client-side), toggle Tháng/Quý
@@ -349,24 +382,20 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
-- [ ] **s195+18-B — My Metrics nhóm B (SKU GM/%Datapool/Bé Gấu): chạy migration v54 + QA trên staging**
-  — (1) `web/db/migrations/v54_app_usage_events_db_tool.sql`. (2) SKU GM/%Datapool: toggle Tháng/Quý,
-  click drill Vendor→Nước→Product Code→SKU, bấm "Giải thích bằng AI". (3) Hỏi Bé Gấu 1 câu BI thật cả
-  web lẫn Lark → xác nhận task mới hiện đúng trong "Xem hội thoại được tính" kèm badge tool đúng. (4)
-  Bấm "Phân loại chủ đề bằng AI" trong Bé Gấu Insights. (5) **Lưu ý**: số "Tasks via Bé Gấu" quý này sẽ
-  về gần 0 ngay sau deploy (task cũ trước deploy không backfill được `used_db_tool`) — KHÔNG phải bug,
-  theo dõi vài ngày để số tích luỹ lại đúng theo định nghĩa mới.
-- [ ] **s195+18-A — My Metrics nhóm A (SLA/Vendor Speed): chạy migration v53 + QA trên staging** —
-  (1) `web/db/migrations/v53_okr_lark_events_selfpost_note.sql`. (2) Thử tự đăng 1 thread tự mention
-  chính mình → phải rơi vào khối "tự đăng — không tính" (không phải hàng chờ duyệt bình thường), bấm
-  "Vẫn tính case này" xác nhận vẫn work. (3) Thread người khác hỏi + mention Hiếu → vẫn vào hàng chờ
-  duyệt như cũ. (4) Thêm ghi chú 1 case, F5 kiểm tra còn nguyên. (5) Chart TB theo tháng hiện đúng khi
-  có ≥2 tháng data verified.
+- [x] **s195+18-A/B/C — My Metrics nhóm A+B + QA — XONG (2026-09-11), tự QA qua browser + API trực
+  tiếp trên staging, đã fix 4 bug (1 P0)** — migration v53+v54 Hiếu đã chạy. Hierarchy SKU GM/%Datapool
+  drill 4 cấp + prorata + AI giải thích + AI phân loại chủ đề: đều xác nhận hoạt động đúng sau fix.
+  **Không cần Hiếu QA lại** — đã tự verify kỹ (xem s195+18-C ở bảng trạng thái để biết chi tiết 4 bug đã
+  fix). Duy nhất còn: theo dõi vài ngày để số "Tasks via Bé Gấu" tích luỹ lại từ 0 (đúng thiết kế, task
+  cũ trước deploy không backfill được `used_db_tool`).
 - [ ] **s195+18 — QA stream token thật Bé Gấu + Gấu Pro trên staging** — mở cả 2 chat, hỏi 1 câu cần vài
   giây (BI/phân tích), xác nhận: (a) chữ CHẠY DẦN theo thời gian thực thay vì im lặng rồi bung nguyên cục
   như trước; (b) nội dung không lặp/không thiếu đoạn nào so với trước; (c) Gấu Pro: status "đang tìm
   kiếm/đang query..." vẫn hiện đúng lúc tool đang chạy, biến mất đúng lúc câu trả lời bắt đầu chảy chữ; (d)
   nguồn tham khảo (Bé Gấu) + nút export/followup (Gấu Pro) vẫn hiện đúng ở cuối như trước.
+  ⚠️ **Cập nhật s195+18-C**: câu hỏi cần tool (executeSQL...) trước đó LUÔN LỖI 400 thought_signature —
+  bug đã fix (xem bảng trạng thái), đã tự verify `/api/chat` trả lời đúng qua tool. Vẫn cần Hiếu tự thử
+  qua UI web/Lark thật 1 lần cho chắc (đặc biệt Gấu Pro — session này chỉ verify được Bé Gấu qua API).
 - [ ] **s195+17 — QA toàn bộ AI sau khi đổi model gemini-3.8-flash (mọi agent, không chỉ Bé Gấu)** — sau
   khi Vercel deploy staging: (a) Bé Gấu + Gấu Pro — hỏi 1 câu BI nhiều bước mỗi bên, xác nhận đúng/không
   chậm/không lỗi JSON; (b) nếu tiện, thử nhanh usage-stats classify/evaluate, Tổ Gấu AI (group chat),

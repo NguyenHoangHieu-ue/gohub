@@ -13,6 +13,35 @@ status: active
 
 # My Metrics — OKR Tracking
 
+## s195+18-C (2026-09-11) — QA nhóm A+B trên staging: 4 bug thật, 1 là P0 ngoài phạm vi My Metrics
+
+Tự QA qua browser (Claude in Chrome) + gọi API trực tiếp sau khi Hiếu chạy migration v53/v54. 4 bug thật
+phát hiện, đã fix + deploy + verify lại PASS:
+
+1. **Trang crash trắng ngay sau deploy** — cache 12h cũ (`okr_sku_scan`/`okr_datapool_detail`) phục vụ
+   response shape CŨ cho FE MỚI → `data.monthly undefined`. Fix: bump cache key `v2`.
+2. **Prorata hierarchy không hoạt động** (factor luôn=1) — gọi `getProjectionFactor()` sai tham số (cần
+   elapsed=hôm nay-start, không phải end-start). Fix: `getRangeProjectionFactor()` mới trong
+   `analytics-engine/projection.ts`, không đổi hàm gốc.
+3. 🔴 **P0, ngoài phạm vi My Metrics** — Bé Gấu/Gấu Pro không gọi được tool nào (lỗi 400
+   thought_signature) từ lúc s195+18 đổi sang streaming. Xem chi tiết root cause + fix ở
+   `system/chatbot-agents-guardian.md` mục "s195+18-C".
+4. **Task Bé Gấu chưa bao giờ được log** — `logChat()`/insert `app_usage_events` fire-and-forget không
+   await, Vercel đóng execution context trước khi Supabase insert kịp gửi. Đã đổi await cả 3 chỗ.
+
+**Verify lại toàn bộ sau fix** (gọi `/api/chat` trực tiếp, không qua UI vì click chuột trên chatbot proved
+không ổn định): 2 lần liên tiếp trả lời đúng số thật (executeSQL) + `app_usage_events` ghi đúng dòng mới
+`tools_used:["executeSQL"]`, `used_db_tool=true` → card "Tasks Completed via Bé Gấu" lên đúng 1/450.
+Hierarchy SKU GM drill đủ 4 cấp Vendor→Nước→Product Code→SKU đúng số; toggle Tháng/Quý đổi đúng nhãn
+"(PRORATA)"; nút "Giải thích bằng AI" (cả SKU GM lẫn %Datapool) trả câu suy luận hợp lý; nút "Phân loại
+chủ đề bằng AI" Bé Gấu Insights trả đúng nhóm. Panel SLA/Vendor Speed: case tự đăng CŨ (trước deploy) vẫn
+còn trong hàng chờ duyệt bình thường (đúng thiết kế — filter chỉ áp cho thread MỚI); quét lại ra đúng 1
+case "tự đăng — không tính" mới + nút "Vẫn tính case này" test qua API hoạt động đúng (đã xoá case test).
+
+tsc + lint (0 lỗi mới) + vitest (219/219) PASS mọi lần fix. **Không còn việc mở nào chặn** trên My
+Metrics — chỉ còn theo dõi vài ngày để số "Tasks via Bé Gấu" tích luỹ lại từ 0 (task cũ trước deploy
+không backfill được `used_db_tool`, đã cảnh báo từ s195+18-B, đúng như dự kiến).
+
 ## s195+18-B (2026-09-11) — SKU GM/%Datapool: hierarchy + prorata + AI giải thích · Bé Gấu: chỉ tính task query DB
 
 Nhóm B (sau nhóm A — SLA/Vendor Speed). Yêu cầu Hiếu:
