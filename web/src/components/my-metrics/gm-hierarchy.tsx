@@ -63,10 +63,10 @@ function groupBy(leaves: HierarchyLeaf[], level: Level): HierarchyRow[] {
 }
 
 export function GmHierarchySection({
-  scope, title, leaves, monthly, quarterLabel, prevQuarterLabel, curStart, curEnd,
+  scope, title, leaves = [], monthly = [], quarterLabel, prevQuarterLabel, curStart, curEnd,
 }: {
   scope: "sku_gm" | "datapool"; title: string
-  leaves: HierarchyLeaf[]; monthly: HierarchyMonthlyRow[]
+  leaves?: HierarchyLeaf[]; monthly?: HierarchyMonthlyRow[]
   quarterLabel: string; prevQuarterLabel: string; curStart: string; curEnd: string
 }) {
   const [mode, setMode] = useState<"quarter" | "month">("quarter")
