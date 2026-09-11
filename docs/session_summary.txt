@@ -9253,3 +9253,173 @@ phải khớp nhau.
 tsc + lint (0 lỗi mới) + vitest (212/212) PASS cả 3 sub-session s195+8→+10. Wiki
 `docs/wiki/system/tabs/analytics-vendors.md` cập nhật đủ 3 mục Gotchas. CLAUDE.md cập nhật trạng thái +
 checklist QA. Commit `92327791`. Chưa có kết quả QA của Hiếu trên staging.
+
+### s195+18-A (2026-09-11) — My Metrics nhóm A: SLA/Vendor Speed chỉ tính request người khác + note + chart tháng
+
+Hiếu yêu cầu rebuild lớn "My Metrics v2" cho 5 mục (SLA/Vendor Speed/SKU GM/%Datapool/Bé Gấu tasks). Trước
+khi code, viết lại toàn bộ yêu cầu thành spec kỹ thuật (rewrite prompt) để xác nhận hiểu đúng, chia làm 2
+nhóm theo lựa chọn của Hiếu qua AskUserQuestion: nhóm A (SLA/Vendor Speed, nhỏ hơn) làm trước, nhóm B (SKU
+GM/%Datapool/Bé Gấu, lớn hơn nhiều) làm sau khi nhóm A qua QA.
+
+Nhóm A — 4 việc:
+1. Chỉ tính SLA/Vendor Selection Speed cho thread NGƯỜI KHÁC đăng rồi mention Hiếu — thread Hiếu tự đăng
+   (dù có ai mention lại sau đó) bị loại TRƯỚC khi gọi Gemini phân loại (`lark-scan-runner.ts`, áp cho cả
+   `runLarkScan` real-time lẫn `runLarkHistoryScan` quét lịch sử) — tiết kiệm luôn chi phí Gemini cho case
+   này. Marker `is_self_initiated=true` (cột mới) ghi thẳng `status='not_matched'`, `metric='none'`, không
+   tốn 1 lượt gọi Gemini nào. Panel review thêm khối riêng "N thread tự đăng — không tính" (dùng chung cho
+   cả 2 card SLA/Vendor Speed vì chưa phân loại được metric) + nút "Vẫn tính case này" (route mới
+   `POST /lark-events/[id]/override` — hydrate lại thread, gọi Gemini phân loại thật, ghi case
+   pending_review bình thường rồi xoá marker cũ) cho ngoại lệ thật.
+2. Ghi chú tự do mọi trạng thái (pending/rejected/self-đăng/confirmed), không bị khoá bởi quarter-lock
+   (chỉ là metadata, không đổi số KPI) — cột mới `hieu_note`, route PATCH gộp vào `[id]/route.ts` sẵn có.
+3. Chart TB theo tháng trong quý + so quý trước — route `/evidence` thêm `monthly` (group case verified
+   theo tháng) + `prev_quarter` (TB quý liền trước, cùng metric/tiêu chí verified). Chart mới
+   `EvidenceTrendChart` (bar theo tháng + 2 ReferenceLine target/quý trước, màu theo đúng 3 tier đã dùng).
+4. Link thẳng tới thread — research kỹ (WebSearch) trước khi code: Lark KHÔNG có API server-side chính
+   thức sinh link nhảy thẳng 1 message (format `applink.larksuite.com/client/message/link/open?token=...`
+   có thật nhưng chỉ sinh được qua thao tác "Copy link" thủ công trong app, không tra được công thức token
+   từ message_id/chat_id) — tự đoán token sẽ ra link LỖI (tệ hơn hiện trạng). Quyết định giữ nguyên link mở
+   group hiện có, không làm giả.
+
+Migration `v53_okr_lark_events_selfpost_note.sql` (2 cột `is_self_initiated`, `hieu_note`). tsc + lint (0
+lỗi mới) + vitest (219/219, +3 test `decodeSkuDestinationCode` thêm sẵn cho nhóm B) PASS. Wiki
+`analytics-my-metrics.md` cập nhật. Commit `eeca1d27`.
+
+### s195+18-B (2026-09-11) — My Metrics nhóm B: SKU GM/%Datapool hierarchy+prorata+AI, Bé Gấu chỉ tính task query DB
+
+Nhóm B, theo đúng spec đã chốt với Hiếu.
+
+SKU Gross Margin + %Datapool Rev — cùng playbook (Hiếu yêu cầu "%Datapool làm y như SKU GM"), dùng chung 1
+component mới `GmHierarchySection` (`components/my-metrics/gm-hierarchy.tsx`), gắn dưới bảng flat sẵn có
+của mỗi mục (KPI chính thức `weighted_delta` KHÔNG đổi công thức):
+- Hierarchy Vendor → Nước → Product Code → SKU: route `sku-scan`/`datapool-detail` thêm `country` (hàm JS
+  mới `decodeSkuDestinationCode()` trong `analytics-helpers.ts`, mirror đúng 3 nhánh regex của
+  `getDestinationSQL()` — có unit test riêng đối chiếu với ví dụ thật trong comment gốc) + `product_code`
+  (= `sku.slice(0,8)`, đúng business/ma-sku.md). Rollup mỗi cấp = SUM con, tính hoàn toàn CLIENT-SIDE.
+- Toggle Tháng/Quý: route thêm `monthly` (span cả quý hiện tại lẫn quý trước, 1 query). Tháng so 2 tháng
+  GẦN NHẤT có data (MoM, không nhất thiết cùng quý). Prorata: kỳ hiện tại (tháng/quý CHƯA hết) nhân hệ số
+  dùng `getProjectionFactor()` — BUG THẬT phát hiện khi QA (xem s195+18-C bên dưới), đã fix.
+- `datapool-detail` trước CHỈ có quý hiện tại (không so sánh được) — thêm quý trước + `gp`/`gm_pct`.
+- Chart `RevCompareChart` (Rev kỳ trước actual vs kỳ này prorata, top 8 dòng cấp đang xem) + tái dùng
+  `SkuMoversChart` sẵn có cho "biến động GM% lớn nhất".
+- Bảng AI giải thích biến động (mới, on-demand — Hiếu chọn qua AskUserQuestion: nút bấm + cache 12h,
+  KHÔNG tự chạy mỗi lần tải trang): route `POST /explain-nodes` (dùng chung scope `sku_gm`/`datapool`) —
+  Gemini suy luận NGẮN 1 câu/node từ đúng số liệu client gửi lên, LUÔN "có thể do" (không khẳng định chắc
+  — không có dữ liệu nguyên nhân thật để đối chiếu). Cache 12h theo (scope, quarter, mode, level, path).
+
+Tasks via Bé Gấu — đổi định nghĩa "task tính KPI": trước chỉ lọc response dài ≥15 ký tự (trả lời chay/chào
+hỏi dài vẫn tính nhầm). Nay THÊM điều kiện bắt buộc: đã gọi ≥1 tool đọc DB thật (`executeSQL`/
+`querySupabase`/`queryProduct`/`listSupabaseTables` — hằng số `DB_TASK_TOOLS` trong `okr-helpers.ts`, loại
+`webSearch`/`readKnowledgeBase` vì không phải query bảng dữ liệu có cấu trúc). `be-gau.ts` `runBeGau()`
+track tên tool gọi mỗi vòng lặp (Set `toolsUsed`), trả về thêm field này. Migration
+`v54_app_usage_events_db_tool.sql` thêm cột `tools_used`/`used_db_tool`. Fix nhân tiện phát hiện khi sửa
+Lark path: route Lark ghi `app_usage_events` TRƯỚC KHI gọi `runBeGau()` — `ai_response` LUÔN NULL cho MỌI
+chat Lark (route my-metrics lọc `.not("ai_response","is",null)`) → task Lark CHƯA BAO GIỜ được tính vào
+"Tasks via Bé Gấu" dù wiki cũ mô tả có breakdown Web/Lark — đã sửa log SAU khi có response thật. 3 route
+(`my-metrics` chính/`begau-insights`/`conversations`) đồng bộ filter `used_db_tool=true`; `conversations`/
+`begau-insights` trả thêm `tools_used` → FE hiện badge tool per case. Thêm phân loại chủ đề bằng AI
+on-demand (route `GET /begau-insights/topics-ai`, giống Usage Analytics `usage-stats/classify` nhưng scope
+đúng tập task đã lọc, cache 12h/quý).
+
+Gotcha đã cảnh báo trước (đúng như dự kiến khi QA): số "Tasks via Bé Gấu" quý hiện tại TỤT VỀ 0 ngay sau
+deploy — task cũ trước deploy không có `used_db_tool` (không backfill được, dữ liệu tool nào gọi chưa từng
+ghi lại trước đây).
+
+tsc + lint (0 lỗi mới) + vitest (219/219) PASS. Wiki cập nhật. Commit `62c2ae29`.
+
+### s195+18-C (2026-09-11) — QA My Metrics nhóm A+B trên staging: 4 bug thật, 1 là P0 ngoài phạm vi My Metrics
+
+Hiếu chạy migration v53/v54 xong, yêu cầu QA. Tự QA qua Claude in Chrome (browser thật, đăng nhập bằng acc
+Hiếu role creator) + gọi API trực tiếp khi thao tác chuột trên UI phức tạp (tọa độ hay trật, chatbot
+streaming làm CDP screenshot timeout) không đáng tin cậy. 4 bug thật phát hiện, mỗi bug: fix → tsc/lint/
+vitest PASS → commit → push staging → đợi Vercel deploy (poll qua Vercel MCP get_deployment) → verify lại
+bằng browser/API thật, không chỉ tin code sạch:
+
+1. Trang My Metrics crash trắng ("Application error") ngay sau khi Hiếu chạy migration + load trang.
+   Console lộ TypeError: Cannot read properties of undefined (reading 'map') trong useMemo của
+   GmHierarchySection. Điều tra qua gọi trực tiếp /api/analytics/my-metrics/sku-scan từ console: response
+   thật KHÔNG có field monthly/country/product_code dù code route đã trả đủ — root cause: cachedQuery key
+   okr_sku_scan:${quarter}/okr_datapool_detail:${quarter} KHÔNG đổi dù s195+18-B vừa đổi hẳn SHAPE
+   response, cache 12h TTL cũ (từ trước deploy) tiếp tục phục vụ blob CŨ cho code FE MỚI. Fix: bump cache
+   key sang :v2: (miss cache cũ, tính lại đúng shape mới) + thêm default param an toàn (leaves = [],
+   monthly = []) ở GmHierarchySection phòng lặp lại lớp bug này. Commit d3560c1a.
+
+2. Prorata hierarchy SKU GM/%Datapool không bao giờ áp dụng (factor luôn = 1 dù tháng/quý đang chạy dở mới
+   qua ~10 ngày) — phát hiện qua QA thị giác: tháng 09 (chưa hết) hiện số RẤT THẤP so tháng 08 (đầy đủ) dù
+   nhãn chart đáng lẽ phải ghi "(PRORATA)". Đọc lại code: gọi getProjectionFactor(curStart, curEnd) (quý) /
+   getProjectionFactor(monthStart, monthEnd) (tháng) — nhưng hàm này tính elapsed = (endDate - startDate),
+   ĐÒI HỎI endDate phải là mốc dữ liệu THẬT (hôm nay/hôm qua), không phải ngày cuối tháng/quý theo lịch.
+   Truyền calendar end → elapsed luôn = total → factor luôn = 1. Xác nhận bằng cách grep các chỗ dùng đúng
+   convention khác trong repo (monthly-kpis/route.ts dùng getProjectionFactor(monthStart, todayStr)) và
+   đọc quarter-projection.ts (engine quý riêng, không tái dùng được trực tiếp vì được thiết kế cho từng
+   tháng trong quý, không phải cả quý). Fix: thêm hàm mới getRangeProjectionFactor() trong
+   analytics-engine/projection.ts — tổng quát cho khoảng ngày bất kỳ kể cả cross-month (quý), dùng đúng
+   hôm nay làm mốc elapsed — KHÔNG đổi hàm getProjectionFactor() gốc (nhiều route BOD/B2B/Channels/
+   monthly-kpis đang phụ thuộc đúng hành vi "cross-month = 1" của nó ở mức tháng, sửa hàm gốc sẽ vỡ những
+   chỗ đó). Verify lại: nhãn chart đổi đúng thành "(PRORATA)" khi factor > 1. Commit 7ef39026.
+
+3. P0, NGOÀI PHẠM VI My Metrics, phát hiện tình cờ khi thử gọi /api/chat để tạo task test cho mục "Tasks
+   via Bé Gấu": MỌI câu hỏi cần tool (executeSQL/querySupabase/...) — cả Bé Gấu lẫn Gấu Pro — lỗi thẳng
+   400 Function call is missing a thought_signature ngay từ vòng lặp tool-call đầu tiên. Verify
+   reproducible 2 lần liên tiếp qua gọi /api/chat trực tiếp. Root cause đọc THẲNG source code SDK
+   @google/generative-ai@0.21.0 (node_modules/.../dist/index.js, hàm aggregateResponses()): khi gộp nhiều
+   chunk stream thành 1 response hoàn chỉnh, hàm này CHỈ copy đúng 4 field cố định mỗi part
+   (text/functionCall/executableCode/codeExecutionResult) — làm RỚT field thoughtSignature (field MỚI của
+   model "thinking" như gemini-3.8-flash, SDK này ra đời trước field đó nên không biết tới). Gemini API
+   BẮT BUỘC phải echo lại NGUYÊN VẸN thoughtSignature khi gửi lại chính functionCall đó ở lượt sau (đẩy vào
+   contents cho vòng lặp tool-calling tiếp theo, xem appendModel() trong be-gau.ts) — thiếu thì model
+   reject thẳng 400, sập TOÀN BỘ vòng lặp tool-calling của cả Bé Gấu lẫn Gấu Pro (dùng chung
+   genWithRetryStream()). Bug có từ lúc merge s195+18 (đổi sang generateContentStream(), session trước,
+   không liên quan gì My Metrics) — không ai phát hiện vì lỗi nằm trong luồng SSE nội bộ, không hiện rõ
+   như lỗi HTTP thông thường, và session s195+18 gốc chỉ verify được UX "chữ chạy dần" chứ chưa thử câu
+   hỏi cần tool thật.
+   Fix (lib/agents/gemini-stream.ts genWithRetryStream()): tự gom parts từ RAW chunk (spread giữ NGUYÊN
+   mọi field, không lọc như SDK) trong lúc consume result.stream, rồi ghi đè vào content.parts của response
+   đã aggregate (result.response) TRƯỚC KHI trả về — .text()/.functionCalls() (helper gắn bởi SDK) đọc
+   THẲNG candidates[0].content.parts MỖI LẦN GỌI (không cache tại thời điểm gắn helper, đã đọc trực tiếp
+   source để xác nhận), nên ghi đè sau constructor vẫn hoạt động đúng — không cần sửa gì ở be-gau.ts/
+   creator-ai.ts. Verify lại: gọi /api/chat với câu hỏi doanh thu thật → trả lời đúng số liệu
+   (8.266.809.109 VND, 2.226.248.587 VND...) khớp dữ liệu gohub_dw thật. Kiểm tra mock test
+   (be-gau-runner.test.ts) không bị ảnh hưởng — .text()/.functionCalls() trong mock là hàm độc lập không
+   đọc candidates[0].content.parts, tsc + vitest (219/219) PASS không cần sửa test. Production (main)
+   KHÔNG dính bug này — đối chiếu timestamp deploy, lần merge main gần nhất xảy ra TRƯỚC khi commit gốc
+   s195+18 (425b862a) được push lên staging, nên main chưa từng có code streaming này. Commit 768a6294.
+
+4. Task Bé Gấu KHÔNG BAO GIỜ được ghi log dù trả lời đúng — phát hiện ngay sau khi fix bug #3: gọi lại
+   /api/chat (thành công, trả lời đúng) rồi check app_usage_events/my-metrics → verify 2 LẦN LIÊN TIẾP đều
+   KHÔNG có dòng mới nào (kể cả không đúng used_db_tool, tức là hàng KHÔNG được tạo ra chứ không phải tạo
+   ra sai giá trị field). Root cause: logChat() (api/chat/route.ts) gọi theo kiểu fire-and-forget
+   (logChat(...).catch(()=>{}), KHÔNG await) rồi NGAY SAU ĐÓ gọi controller.close() — Vercel serverless
+   (Node.js runtime) có thể đóng execution context của function TRƯỚC KHI Supabase insert (network I/O bất
+   đồng bộ) kịp gửi đi, làm mất hẳn record dù response đã trả về đúng cho user. Đúng lớp rủi ro đã ghi sẵn
+   trong wiki cho route Lark ("KHÔNG dùng waitUntil trên Next 14 App Router — xử lý đồng bộ, await rồi mới
+   trả 200") nhưng route /api/chat chưa từng áp dụng quy tắc này, và 2 chỗ insert app_usage_events mới
+   thêm vào route Lark ở s195+18-B (để track used_db_tool cho task Lark) cũng viết fire-and-forget y hệt
+   (void supabaseAdmin.from(...).insert(...)), dính cùng bug dù mới thêm. Fix: đổi cả 3 chỗ (api/chat/
+   route.ts 2 nhánh success/catch, api/lark/events/route.ts 2 nhánh guard-denied/success) sang await (bọc
+   thêm try/catch ở 2 chỗ Lark để lỗi log không làm vỡ luồng trả lời — pattern này vốn logChat() đã có sẵn
+   từ trước). Verify lại: gọi /api/chat → app_usage_events có dòng mới ĐÚNG tools_used:["executeSQL"],
+   used_db_tool:true → card "Tasks Completed via Bé Gấu" lên đúng 1/450, breakdown theo tháng đúng
+   2026-09: 1 (web:1, lark:0). Commit 8f09ae7c.
+
+Sau 4 fix, verify lại toàn bộ pipeline nhóm B còn lại (không chỉ 4 bug trên): hierarchy SKU GM drill đủ 4
+cấp Vendor→Nước→Product Code→SKU (test qua "3HK DATAPOOL" → "Japan" → "3CJPN3DF" → SKU lá), số Rev/GM%/Δ
+hợp lý ở mọi cấp kể cả case biên ("Mới" khi rev_prev=0, "-100.0%" khi rev_cur=0); nút "Giải thích bằng AI"
+(cả SKU GM lẫn %Datapool, 2 scope khác nhau nhưng chung 1 route /explain-nodes) trả về 200 + nội dung
+tiếng Việt hợp lý, LUÔN dùng "có thể do"/"khả năng do" đúng disclaimer yêu cầu; nút "Phân loại chủ đề bằng
+AI" trong Bé Gấu Insights (route riêng /begau-insights/topics-ai) trả 200 + phân loại đúng nhóm nghiệp vụ.
+Panel SLA/Vendor Speed (nhóm A, deploy trước đó vài giờ): case tự đăng CŨ (tạo trước lúc deploy nhóm A,
+request_time 09-07/09-09) vẫn còn hiện trong hàng chờ duyệt bình thường — xác nhận đây là ĐÚNG THIẾT KẾ
+(filter chỉ áp cho thread MỚI phát hiện từ lúc deploy trở đi, không hồi tố các case đã có sẵn trong DB),
+không phải bug; bấm "Quét ngay" tạo 1 case tự đăng MỚI, xác nhận rơi đúng khối "tự đăng — không tính", test
+"+ ghi chú" (lưu/đọc lại đúng) và "Vẫn tính case này" (gọi qua API do nút có confirm() dialog native sẽ
+treo browser automation — route override hoạt động đúng: phân loại lại thật, ghi case pending_review với
+is_self_initiated=true giữ nguyên, xoá marker cũ) đều đúng — đã dọn lại case test này sau khi verify xong
+(xoá qua route DELETE, không để lẫn vào KPI thật của Hiếu).
+
+tsc + lint (0 lỗi mới) + vitest (219/219) PASS ở MỌI lần fix (không chỉ lần cuối). CLAUDE.md + wiki
+(analytics-my-metrics.md, chatbot-agents-guardian.md) cập nhật đầy đủ. Không còn việc mở nào chặn trên My
+Metrics — chỉ còn theo dõi vài ngày để số "Tasks via Bé Gấu" tích luỹ lại từ 0 (đã cảnh báo từ trước, đúng
+dự kiến, không phải bug). Khuyến nghị thêm cho Hiếu (chưa làm, ngoài yêu cầu lần này): tự thử Gấu Pro qua
+UI thật 1 lần cho chắc (session này chỉ verify được Bé Gấu qua gọi API trực tiếp, do thao tác chuột trên
+giao diện chat/streaming không ổn định để tự động hoá qua Claude in Chrome). Commit 2c8e9f21 (docs).
