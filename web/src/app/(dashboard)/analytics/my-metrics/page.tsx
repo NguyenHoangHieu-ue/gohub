@@ -47,6 +47,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
   const [loading, setLoading] = useState(true)
   const [showLarkConfig, setShowLarkConfig] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
+  const [cat, setCat] = useState<"ops" | "product" | "ai">("ops")
 
   const [convs,      setConvs]      = useState<Conversation[]>([])
   const [convTotal,  setConvTotal]  = useState(0)
@@ -284,22 +285,26 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
             </div>
             <div className="flex flex-wrap gap-2.5">
               {[
-                ["SLA", achSla, WEIGHTS.sla],
-                ["Vendor Speed", achVendor, WEIGHTS.vendor_speed],
-                ["SKU GM", achSku, WEIGHTS.sku_gm],
-                ["%3HK", achHk3, WEIGHTS.hk3],
-                ["Bé Gấu", achBegau, WEIGHTS.begau],
-              ].map(([label, ach, w]) => {
+                ["SLA", achSla, WEIGHTS.sla, "ops"],
+                ["Vendor Speed", achVendor, WEIGHTS.vendor_speed, "ops"],
+                ["SKU GM", achSku, WEIGHTS.sku_gm, "product"],
+                ["%3HK", achHk3, WEIGHTS.hk3, "product"],
+                ["Bé Gấu", achBegau, WEIGHTS.begau, "ai"],
+              ].map(([label, ach, w, chipCat]) => {
                 const achNum = ach as number
                 const tier = achNum >= 100 ? "bg-emerald-400" : achNum >= 75 ? "bg-white/60" : "bg-amber-400"
                 return (
-                  <div key={label as string} className="bg-white/10 rounded-xl px-3 py-2 min-w-[76px] overflow-hidden relative"
+                  <button key={label as string} onClick={() => setCat(chipCat as "ops" | "product" | "ai")}
+                    className={cn(
+                      "text-left bg-white/10 rounded-xl px-3 py-2 min-w-[76px] overflow-hidden relative transition-colors hover:bg-white/[0.18]",
+                      cat === chipCat && "bg-white/[0.22] ring-1 ring-white/30",
+                    )}
                     style={{ flexGrow: w as number, flexBasis: `${(w as number) * 2}px` }}>
                     <p className="text-[9px] font-bold text-white/50 uppercase truncate">{label}</p>
                     <p className="text-lg font-black tabular-nums">{achNum.toFixed(0)}%</p>
                     <p className="text-[9px] text-white/40">w={w}%</p>
                     <div className={cn("absolute bottom-0 left-0 h-[3px]", tier)} style={{ width: `${Math.min(achNum, 100)}%` }} />
-                  </div>
+                  </button>
                 )
               })}
             </div>
@@ -315,6 +320,14 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
         <span>📌 <strong className="text-slate-600">Baseline T8/2026:</strong> SLA {BASELINE_NOTE.sla} · Vendor Speed {BASELINE_NOTE.vendor_speed} · SKU GM {OKR_GM_BASELINE_DISPLAY}% · Datapool {auto?.hk3.baseline ?? "…"}%</span>
         {auto && <span className="text-slate-400">🕐 {auto.data_cutoff} · tải lúc {new Date(auto.generated_at).toLocaleString("vi-VN")}</span>}
       </div>
+
+      {/* Tab phân đoạn — thay 3 khối xếp chồng bằng 1 bộ chọn, chỉ hiện đúng 1 nhóm/lần (đỡ trang dài) */}
+      <CategoryNav
+        cat={cat} setCat={setCat}
+        tierOps={Math.min(achSla, achVendor)}
+        tierProduct={Math.min(achSku, achHk3)}
+        tierAi={achBegau}
+      />
 
       {/* Target edit modal */}
       {editTarget && (
@@ -364,9 +377,8 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
         </div>
       )}
 
-      {/* ── 1. Operational Excellence ── */}
-      <div>
-        <SectionHeader n={1} label="Operational Excellence" note={`w=${WEIGHTS.sla + WEIGHTS.vendor_speed}%`} />
+      {/* ── Operational Excellence ── */}
+      <div className={cn(cat !== "ops" && "hidden")}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <EvidenceCard
             metric="sla" quarter={qLabel} unit="giờ"
@@ -387,9 +399,8 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
         </div>
       </div>
 
-      {/* ── 2. Product Performance ── */}
-      <div>
-        <SectionHeader n={2} label="Product Performance" note={`w=${WEIGHTS.sku_gm + WEIGHTS.hk3}%`} />
+      {/* ── Product Performance ── */}
+      <div className={cn(cat !== "product" && "hidden")}>
         <div className="space-y-4">
           <SkuScanSection quarter={qLabel} targetDelta={targets.gm_delta} onSummary={setSkuDelta} />
 
@@ -463,9 +474,8 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
         </div>
       </div>
 
-      {/* ── 3. BI & AI Automation ── */}
-      <div>
-        <SectionHeader n={3} label="BI & AI Automation" note={`w=${WEIGHTS.begau}%`} />
+      {/* ── BI & AI Automation ── */}
+      <div className={cn(cat !== "ai" && "hidden")}>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-5">
             <div className="flex items-start justify-between gap-4">
@@ -603,12 +613,33 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
   )
 }
 
-function SectionHeader({ n, label, note }: { n: number; label: string; note?: string }) {
+// Tab phân đoạn 3 nhóm KPI (Operational Excellence / Product Performance / BI & AI Automation) — thay
+// numbered badge "1/2/3" cũ (sai ngữ nghĩa: 3 nhóm này KHÔNG phải 1 sequence, chỉ là 3 category song
+// song có trọng số riêng). Chấm màu = trạng thái chỉ số YẾU NHẤT trong nhóm, giúp thấy ngay nhóm nào
+// cần chú ý mà không cần mở tab.
+function CategoryNav({ cat, setCat, tierOps, tierProduct, tierAi }: {
+  cat: "ops" | "product" | "ai"
+  setCat: (c: "ops" | "product" | "ai") => void
+  tierOps: number; tierProduct: number; tierAi: number
+}) {
+  const items: [("ops" | "product" | "ai"), string, string, number][] = [
+    ["ops",     "Operational Excellence", `w=${WEIGHTS.sla + WEIGHTS.vendor_speed}%`, tierOps],
+    ["product", "Product Performance",    `w=${WEIGHTS.sku_gm + WEIGHTS.hk3}%`,       tierProduct],
+    ["ai",      "BI & AI Automation",     `w=${WEIGHTS.begau}%`,                      tierAi],
+  ]
   return (
-    <div className="flex items-center gap-2 mb-3">
-      <span className="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center text-[10px] font-black">{n}</span>
-      <h2 className="text-sm font-black text-slate-700 uppercase tracking-wider">{label}</h2>
-      {note && <span className="text-slate-400 font-normal normal-case text-xs">{note}</span>}
+    <div className="flex gap-1.5 bg-slate-100 border border-slate-200 rounded-2xl p-1.5">
+      {items.map(([id, label, note, tier]) => (
+        <button key={id} onClick={() => setCat(id)}
+          className={cn(
+            "flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-colors",
+            cat === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700",
+          )}>
+          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", tier >= 100 ? "bg-emerald-500" : "bg-amber-500")} />
+          {label}
+          <span className="text-[10.5px] font-semibold text-slate-400">{note}</span>
+        </button>
+      ))}
     </div>
   )
 }
