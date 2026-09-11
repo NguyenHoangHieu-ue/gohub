@@ -137,8 +137,12 @@ export async function POST(req: NextRequest) {
             // KHÔNG enqueue lại `text` đầy đủ bên dưới nữa (sẽ bị lặp đôi nội dung).
             onChunk: (delta) => { try { controller.enqueue(encoder.encode(delta)) } catch {} },
           })
-          // Log cả câu hỏi + câu trả lời sau khi có đủ (fire-and-forget)
-          logChat(identity, name, role, lastMsg, text, toolsUsed).catch(() => {})
+          // Log cả câu hỏi + câu trả lời sau khi có đủ. PHẢI await (không fire-and-forget) — phát hiện
+          // qua QA My Metrics s195+18-B: gọi KHÔNG await rồi controller.close() ngay sau khiến Vercel
+          // đóng băng/kết thúc execution context TRƯỚC KHI insert Supabase kịp gửi đi — task KHÔNG BAO
+          // GIỜ được ghi log dù trả lời đúng, verify được 2 lần liên tiếp qua gọi API trực tiếp + check
+          // lại app_usage_events. logChat() tự có try/catch nội bộ nên await ở đây an toàn (không throw).
+          await logChat(identity, name, role, lastMsg, text, toolsUsed)
           // Trích nguồn web (nếu có) — nối cuối, không lộ cơ chế.
           if (sources.length) {
             const uniq = Array.from(new Map(sources.map(s => [s.url, s])).values()).slice(0, 5)
@@ -147,7 +151,7 @@ export async function POST(req: NextRequest) {
           controller.close()
         } catch (err: any) {
           const msg = (role === "admin" || role === "creator") ? `Lỗi: ${err.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
-          logChat(identity, name, role, lastMsg, null).catch(() => {})
+          await logChat(identity, name, role, lastMsg, null)
           controller.enqueue(encoder.encode(msg))
           controller.close()
         }

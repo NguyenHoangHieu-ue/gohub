@@ -366,10 +366,14 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       // Log SAU khi có câu trả lời thật (trước đây log TRƯỚC runBeGau, ai_response luôn NULL →
       // task Lark không bao giờ đủ điều kiện tính KPI "Tasks via Bé Gấu" — my-metrics/route.ts lọc
       // .not("ai_response","is",null). Fix cùng lúc thêm used_db_tool/tools_used, s195+18-B).
-      void supabaseAdmin.from("app_usage_events").insert({
-        event_type: "chat", user_email: `lark:${openId}`, user_name: name || openId, user_role: role,
-        agent_id: "be-gau", user_message: userText.slice(0, 500), ai_response: guard.reason.slice(0, 3000),
-      })
+      // PHẢI await (không fire-and-forget) — cùng lý do fix ở api/chat/route.ts (s195+18-B): hàm xử lý
+      // Lark kết thúc ngay sau đây, Vercel có thể đóng execution context trước khi insert kịp gửi đi.
+      try {
+        await supabaseAdmin.from("app_usage_events").insert({
+          event_type: "chat", user_email: `lark:${openId}`, user_name: name || openId, user_role: role,
+          agent_id: "be-gau", user_message: userText.slice(0, 500), ai_response: guard.reason.slice(0, 3000),
+        })
+      } catch { /* tracking không được làm vỡ luồng trả lời */ }
       return
     }
 
@@ -413,12 +417,16 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     saveLarkMessage(openId, threadId, "user",      userText)
     saveLarkMessage(openId, threadId, "assistant", response)
 
-    void supabaseAdmin.from("app_usage_events").insert({
-      event_type: "chat", user_email: `lark:${openId}`, user_name: name || openId, user_role: role,
-      agent_id: "be-gau", user_message: userText.slice(0, 500), ai_response: beGau.text.slice(0, 3000),
-      tools_used: beGau.toolsUsed.length > 0 ? beGau.toolsUsed : null,
-      used_db_tool: usedDbTaskTool(beGau.toolsUsed),
-    })
+    // PHẢI await — xem comment ở nhánh guard-denied phía trên (cùng lý do, đây còn là câu lệnh CUỐI
+    // trong try block nên rủi ro bị cắt ngang trước khi insert xong càng cao).
+    try {
+      await supabaseAdmin.from("app_usage_events").insert({
+        event_type: "chat", user_email: `lark:${openId}`, user_name: name || openId, user_role: role,
+        agent_id: "be-gau", user_message: userText.slice(0, 500), ai_response: beGau.text.slice(0, 3000),
+        tools_used: beGau.toolsUsed.length > 0 ? beGau.toolsUsed : null,
+        used_db_tool: usedDbTaskTool(beGau.toolsUsed),
+      })
+    } catch { /* tracking không được làm vỡ luồng trả lời */ }
 
   } catch (err: any) {
     console.error("[Lark bot] ERROR:", err?.message ?? err)
