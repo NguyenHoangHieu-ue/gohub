@@ -30,11 +30,23 @@ status: active
 >    đổi sang gọi `matchChannelCost()`, thêm `MIN(f.order_source_code) as source_code` vào query channel
 >    breakdown để có tham số tier-2.
 >
-> tsc + lint (0 lỗi mới) + vitest (220/220) PASS. **Đã tự kiểm tra riêng "KPI Target B2C (theo thị
-> trường)" trong Manage Costs theo yêu cầu Hiếu ("lưu bị lỗi")** — test trực tiếp qua fetch (bypass UI vì
-> click toạ độ bị lệch do display scaling máy dev, không phải bug app): nhập/lưu/đọc lại `/api/config/
-> b2c-kpi-targets` PASS 100% (200 OK, data persist đúng, không lỗi). **Chưa tìm ra lỗi thật** — cần Hiếu
-> mô tả cụ thể hơn (thông báo lỗi gì, tháng/số nào, mọi lần hay thỉnh thoảng) để điều tra tiếp.
+> 3. **🔴 Bug thật thứ 3 — role không phải admin/creator (vd BOD) KHÔNG BAO GIỜ lưu được "KPI Target
+>    B2C"/"B2C Marketing Budget" trong Manage Costs, dù FE hiện ô nhập + nút Lưu ĐANG BẬT.** Hiếu báo
+>    "role BOD chỉnh sửa và lưu lại nhưng không được lưu" — test tay bằng acc creator lúc đầu KHÔNG
+>    tái hiện được (save 200 OK bình thường), vì creator bypass thẳng qua `baseRoles`. Đọc lại
+>    `targets/page.tsx`: `canEdit` (gate DUY NHẤT cho toàn trang, bao gồm 2 section B2C) tính từ
+>    `writable_tabs.includes("targets")` — NHƯNG `api/config/b2c-kpi-targets/route.ts` VÀ
+>    `api/config/b2c-budget/route.ts` lại đòi quyền ghi tab `"b2c"` (sai key, không khớp FE và không
+>    khớp route anh em `api/planning/targets` — route đó đúng, đòi `"targets"`). Verify bằng
+>    `GET /api/config/writable-tabs` thật trên staging: **10 user được cấp quyền ghi thêm (toàn bộ Lark
+>    OU + Hiếu) — KHÔNG một ai có `"b2c"` trong danh sách, tất cả chỉ có `"targets"`** → xác nhận chắc
+>    chắn route cũ 403 câm lặng (FE chỉ hiện "Hiếu đang fix, vui lòng đợi") cho MỌI user ngoài admin/
+>    creator, không riêng gì 1 case của Hiếu. Fix: đổi `canWrite(session, "b2c", ...)` →
+>    `canWrite(session, "targets", ...)` ở cả 2 route, khớp đúng cổng FE đã dùng.
+>
+> tsc + lint (0 lỗi mới) + vitest (220/220) PASS cả 3 fix. **Cần Hiếu**: nhờ 1 tài khoản role BOD (đã có
+> trong `writable_tabs`, vd tài khoản Lark liên kết) tự thử lưu lại KPI Target B2C/Marketing Budget trên
+> staging xác nhận lưu được.
 
 Báo cáo bán lẻ B2C bố cục 5 section (Apple-style, giảm tải nhận thức): doanh thu rolling, khách hàng, CAC/Leads, tỷ lệ chuyển đổi website, và chi phí marketing/ROAS. Tích hợp nhiều nguồn ngoài (Chatwoot, GA4, Turso).
 

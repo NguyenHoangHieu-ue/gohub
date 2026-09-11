@@ -39,7 +39,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
-  if (!session || !(await canWrite(session, "b2c", WRITE_ROLES))) {
+  // s195+19: tabKey PHẢI khớp "targets" (xem comment cùng bug ở api/config/b2c-kpi-targets/route.ts).
+  if (!session || !(await canWrite(session, "targets", WRITE_ROLES))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
   const body = await req.json()
