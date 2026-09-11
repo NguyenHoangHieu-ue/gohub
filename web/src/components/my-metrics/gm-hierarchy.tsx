@@ -9,7 +9,7 @@ import { ChevronRight, Home, Sparkles, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DataTable } from "@/components/my-metrics/shared-ui"
 import { fck, pct } from "@/lib/my-metrics-format"
-import { getProjectionFactor } from "@/lib/analytics-engine/projection"
+import { getRangeProjectionFactor } from "@/lib/analytics-engine/projection"
 import type { HierarchyMonthlyRow } from "@/lib/my-metrics-types"
 
 const chartLoading = () => <div className="w-full h-full animate-pulse bg-white/10 rounded-xl" />
@@ -93,8 +93,8 @@ export function GmHierarchySection({
   }, [mode, leaves, monthly, curMonth, prevMonth])
 
   const factor = mode === "quarter"
-    ? getProjectionFactor(curStart, curEnd)
-    : curMonth ? getProjectionFactor(`${curMonth}-01`, monthEndOf(curMonth)) : 1
+    ? getRangeProjectionFactor(curStart, curEnd)
+    : curMonth ? getRangeProjectionFactor(`${curMonth}-01`, monthEndOf(curMonth)) : 1
 
   const level: Level = LEVELS[Math.min(path.length, LEVELS.length - 1)]
   const filteredLeaves = normalizedLeaves.filter(l => path.every((val, i) => (l[LEVELS[i]] ?? "(không rõ)") === val))
