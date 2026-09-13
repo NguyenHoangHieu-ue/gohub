@@ -449,7 +449,10 @@ Output: summary table trong answer + \`\`\`export marker (formats: excel) + \`\`
 - B2C: price_list_name IS NULL
 
 ## Supabase Tables
-You can access all tables in both SUPABASE_TABLES and SENSITIVE_TABLES (you have full admin access).
+Creator (Hiếu) can access all tables in both SUPABASE_TABLES and SENSITIVE_TABLES. Other allowed users
+(gp_allowed_users, không phải creator) CANNOT read SENSITIVE_TABLES (users/app_settings/conversations/
+chat_messages/lark_chat_history/lark_cs_tickets/notifications/user_notes/analytics_conversations/
+analytics_messages) — querySupabase sẽ trả lỗi rõ ràng cho những bảng này, đừng hỏi lại nhiều lần.
 Key tables for analytics/config:
 - analytics_monthly_kpis: monthly KPI snapshots (revenue, cm1, gp, 3hk_revenue per YYYY-MM)
 - analytics_channel_costs: op cost per channel (source_code field for matching)
@@ -728,7 +731,7 @@ export async function runCreatorAI(
     // trả functionResponse báo lỗi cho MỘT tool đó, các tool còn lại + phần trả lời vẫn tiếp tục bình thường.
     const fnParts = await Promise.all(calls.map(async (call: any) => {
       try {
-        return await dispatchTool(call, onEvent, collectedSources, { username })
+        return await dispatchTool(call, onEvent, collectedSources, { username, isCreator })
       } catch (e: any) {
         return { functionResponse: { name: call.name, response: { error: e?.message || "Tool execution failed" } } }
       }

@@ -425,6 +425,30 @@ Test `browser-tool.test.ts` mở rộng đủ 3 mode (urls[] thành công + 1 UR
 sớm khi hết nút Next, infinite_scroll dừng khi hết nội dung mới). tsc + lint (0 lỗi mới) + vitest
 (212/212) PASS.
 
+## § Gấu Pro s196+5 (2026-09-13) — fix lỗ hổng bảo mật: querySupabase không gate bảng nhạy cảm theo quyền
+
+Phát hiện qua audit toàn diện Gấu Pro (đọc trực tiếp code, không đoán). `creator/tools/supabase.ts →
+runQuerySupabase()` cho MỌI user Gấu Pro (kể cả `gp_allowed_users` non-creator, multi-tenant từ s195+3)
+quyền query bất kỳ bảng nào trong `ALL_TABLES = SUPABASE_TABLES + SENSITIVE_TABLES` — **không có bước
+kiểm tra role nào**, khác hẳn `data-explorer.ts` (dùng cho Bé Gấu) vốn đã có sẵn gate đúng vấn đề này
+(`isPrivileged(role)`). Hậu quả thật: bất kỳ nhân viên nào được cấp Gấu Pro có thể hỏi thẳng
+`querySupabase(table:"app_settings", filters:[{column:"key",op:"eq",value:"lark_oauth_creator"}])` và đọc
+được token Lark cá nhân của Hiếu, hoặc đọc `conversations`/`chat_messages` của người khác (kể cả hội
+thoại riêng của Hiếu với Gấu Pro).
+
+**Fix**: `dispatchTool()` (`creator/tools/dispatch.ts`) nhận thêm `ctx.isCreator` (thread cùng cách
+`username` đã được thread ở s195+3) → `runQuerySupabase(args, isCreator)` và `listSupabaseTables` chỉ
+cho thấy/truy vấn `SENSITIVE_TABLES` khi `isCreator===true`; non-creator hỏi bảng nhạy cảm nhận lỗi rõ
+ràng thay vì im lặng trả data. `runCreatorAI()` truyền `isCreator` vào ctx (đã có sẵn biến, trước chỉ
+dùng cho `buildFunctionDeclarations`). System prompt sửa câu "you have full admin access" (sai với
+non-creator) thành mô tả đúng 2 trường hợp. Bé Gấu (`data-explorer.ts`) không đổi gì — vốn đã đúng từ
+trước, dùng làm tham chiếu khi fix.
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS. Không cần Hiếu chạy migration nào (không đổi schema).
+**Cần Hiếu**: nếu đã từng cấp Gấu Pro cho ai qua `gp_allowed_users` trước s196+5, cân nhắc tự kiểm tra lại
+xem họ có từng hỏi những câu dạng "liệt kê app_settings"/"đọc conversations của..." hay không (log cũ nằm
+trong lịch sử hội thoại Supabase `conversations`/`chat_messages`, agent_id=`gau_pro`).
+
 ### Bé Gấu (chatbot team) — s131
 
 Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, không còn pipeline 6-agent):

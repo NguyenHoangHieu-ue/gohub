@@ -5,9 +5,24 @@ const ALLOWED_OPS  = new Set(["eq","neq","gt","gte","lt","lte","like","ilike","i
 const HEAVY_COL_RE = /embedding|vector/i
 export const ALL_TABLES = { ...SUPABASE_TABLES, ...SENSITIVE_TABLES }
 
-export async function runQuerySupabase(args: any): Promise<any> {
+// Bảng nhạy cảm (users/app_settings/conversations/...) CHỈ creator được đọc qua Gấu Pro.
+// Gấu Pro đã multi-tenant (s195+3): non-creator được cấp gp_allowed_users vẫn dùng chung
+// querySupabase — không gate ở đây thì đọc được token Lark cá nhân (app_settings) hoặc hội
+// thoại của người khác (conversations/chat_messages). data-explorer.ts (Bé Gấu) đã tự gate
+// SENSITIVE_TABLES qua isPrivileged(role); Gấu Pro trước đây KHÔNG áp lại pattern này.
+export function visibleTables(isCreator: boolean) {
+  return isCreator ? ALL_TABLES : SUPABASE_TABLES
+}
+
+export async function runQuerySupabase(args: any, isCreator: boolean): Promise<any> {
   const table: string = String(args?.table || "").trim()
-  if (!ALL_TABLES[table]) return { error: `Table "${table}" not found. Call listSupabaseTables for valid names.` }
+  const allowed = visibleTables(isCreator)
+  if (!allowed[table]) {
+    if (!isCreator && SENSITIVE_TABLES[table]) {
+      return { error: `Table "${table}" chứa dữ liệu nhạy cảm — chỉ creator mới được đọc qua Gấu Pro.` }
+    }
+    return { error: `Table "${table}" not found. Call listSupabaseTables for valid names.` }
+  }
 
   const columns   = (args?.columns && String(args.columns).trim()) || "*"
   const limit     = Math.min(Math.max(parseInt(args?.limit) || 50, 1), 200)

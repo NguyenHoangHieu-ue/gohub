@@ -1,6 +1,6 @@
 import type { GPEvent, WebSource } from "../types"
 import { TOOL_STATUS }             from "../types"
-import { ALL_TABLES }              from "./supabase"
+import { visibleTables }           from "./supabase"
 
 import { runReadKnowledgeBase, runWriteKnowledgeBase, runSearchKnowledgeBase, runReviewPendingLearning, runApproveLearning, runRejectLearning } from "./knowledge"
 import { runExecuteSQL }           from "./sql"
@@ -21,8 +21,9 @@ export async function dispatchTool(
   call: { name: string; args: any },
   onEvent: ((e: GPEvent) => void) | undefined,
   collectedSources: WebSource[],
-  ctx?: { username?: string },
+  ctx?: { username?: string; isCreator?: boolean },
 ): Promise<{ functionResponse: { name: string; response: any } }> {
+  const isCreator = ctx?.isCreator === true
   // Emit status event
   const statusMsg = call.name === "webSearch"
     ? `🌐 Đang tìm kiếm: "${(call.args?.query || "").slice(0, 60)}"`
@@ -138,10 +139,10 @@ export async function dispatchTool(
     return wrap(await runWebSearchTool(call.args?.query || "", collectedSources))
 
   if (call.name === "listSupabaseTables")
-    return wrap({ tables: ALL_TABLES })
+    return wrap({ tables: visibleTables(isCreator) })
 
   if (call.name === "querySupabase")
-    return wrap(await runQuerySupabase(call.args))
+    return wrap(await runQuerySupabase(call.args, isCreator))
 
   if (call.name === "queryGA4")
     return wrap(await runQueryGA4(call.args))
