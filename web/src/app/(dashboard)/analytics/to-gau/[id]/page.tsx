@@ -29,6 +29,9 @@ const supabaseRealtime = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 )
 
+// s196+2: giới hạn số file đính kèm/lần — cùng con số với Bé Gấu (chatbot/page.tsx) để nhất quán UX
+const ATTACH_MAX_FILES = 5
+
 // s183 Phase 5 (tiếp): Avatar/SettingsModal/DocsPanel/NotesPanel/WikiPanel/FilePreviewItem/
 // AttachmentDisplay/ConfirmModal+useConfirm đã tách sang components/to-gau/*.tsx; types (Attachment/
 // ChatMessage/Member/GroupInfo/DocItem/NoteItem/WikiPage/WikiVersion/GroupOption) sang lib/to-gau-types.ts;
@@ -297,16 +300,32 @@ export default function ToGauRoomPage() {
     return () => { clearInterval(pollTimer); supabaseRealtime.removeChannel(channel) }
   }, [groupId, reconcileMessages, loadPinned])
 
-  // Handle file selection
+  // Thêm file (dùng chung cho paperclip + paste ảnh) — giới hạn ATTACH_MAX_FILES, file thừa bị cắt bớt
+  const addFiles = useCallback((incoming: FileList | File[]) => {
+    const files = Array.from(incoming)
+    if (!files.length) return
+    setSelectedFiles(prev => [...prev, ...files].slice(0, ATTACH_MAX_FILES))
+  }, [])
+
+  // Handle file selection (paperclip)
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
-    setSelectedFiles(prev => [...prev, ...files])
+    addFiles(e.target.files ?? [])
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   function removeSelectedFile(idx: number) {
     setSelectedFiles(prev => prev.filter((_, i) => i !== idx))
   }
+
+  // Paste ảnh từ clipboard (Ctrl+V) — trước đây KHÔNG có, chỉ đính kèm được qua nút paperclip
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files || []).filter(f => f.type.startsWith("image/"))
+      if (files.length) { e.preventDefault(); addFiles(files) }
+    }
+    window.addEventListener("paste", onPaste)
+    return () => window.removeEventListener("paste", onPaste)
+  }, [addFiles])
 
   // @mention: parse textarea input
   function handleContentChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -472,6 +491,24 @@ export default function ToGauRoomPage() {
     }
   }
 
+  // Upload file lên Supabase Storage (dùng chung cho gửi tin thường + hỏi AI kèm ảnh)
+  async function uploadFilesToGroup(files: File[]): Promise<Attachment[]> {
+    return Promise.all(
+      files.map(async (file) => {
+        const fd = new FormData()
+        fd.append("file", file)
+        fd.append("group_id", groupId)
+        const res = await fetch("/api/to-gau/upload", { method: "POST", body: fd })
+        if (!res.ok) {
+          const j = await res.json()
+          throw new Error(j.error ?? "Upload lỗi")
+        }
+        const { url, name, size, type } = await res.json()
+        return { url, name, size, type } as Attachment
+      })
+    )
+  }
+
   async function sendMessage() {
     const text = content.trim()
     if ((!text && selectedFiles.length === 0) || sending || uploading) return
@@ -487,20 +524,7 @@ export default function ToGauRoomPage() {
     if (filesToSend.length > 0) {
       setUploading(true)
       try {
-        uploadedAttachments = await Promise.all(
-          filesToSend.map(async (file) => {
-            const fd = new FormData()
-            fd.append("file", file)
-            fd.append("group_id", groupId)
-            const res = await fetch("/api/to-gau/upload", { method: "POST", body: fd })
-            if (!res.ok) {
-              const j = await res.json()
-              throw new Error(j.error ?? "Upload lỗi")
-            }
-            const { url, name, size, type } = await res.json()
-            return { url, name, size, type } as Attachment
-          })
-        )
+        uploadedAttachments = await uploadFilesToGroup(filesToSend)
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : "Upload thất bại")
         setSending(false)
@@ -557,18 +581,44 @@ export default function ToGauRoomPage() {
 
   async function askAI() {
     const question = content.trim()
-    if (!question || askingAI) return
+    if ((!question && selectedFiles.length === 0) || askingAI || uploading) return
 
     setAskingAI(true)
     setContent("")
+    const filesToSend = [...selectedFiles]
+    setSelectedFiles([])
+
+    // Upload ảnh/file trước (nếu có) — s196+2: trước đây "Hỏi AI" hoàn toàn không nhận ảnh/file đính
+    // kèm, bot chỉ "nghe" được chữ gõ. Ảnh upload lên Storage TRƯỚC, gửi kèm URL cho backend — backend
+    // tự fetch lại để build phần multimodal (inlineData) cho Gemini.
+    let uploadedAttachments: Attachment[] = []
+    if (filesToSend.length > 0) {
+      setUploading(true)
+      try {
+        uploadedAttachments = await uploadFilesToGroup(filesToSend)
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Upload thất bại")
+        setAskingAI(false)
+        setUploading(false)
+        setContent(question)
+        setSelectedFiles(filesToSend)
+        return
+      } finally {
+        setUploading(false)
+      }
+    }
 
     // Optimistic: hiện câu hỏi ngay — trước đây câu hỏi KHÔNG được lưu/hiện gì cả (chỉ dùng làm prompt
     // gửi Gemini), nên chỉ câu trả lời AI hiện ra đột ngột không ai biết đã hỏi gì.
     const tempId = `temp-ai-${Date.now()}`
     const optimisticQuestion: ChatMessage = {
       id: tempId, group_id: groupId, sender_email: myEmail,
-      sender_name: myName || myEmail, content: question, msg_type: "text",
+      sender_name: myName || myEmail, content: question,
+      msg_type: uploadedAttachments.length > 0 && !question
+        ? (uploadedAttachments[0].type.startsWith("image/") ? "image" : "file")
+        : "text",
       created_at: new Date().toISOString(),
+      attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
     }
     setMessages(prev => [...prev, optimisticQuestion])
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
@@ -578,7 +628,10 @@ export default function ToGauRoomPage() {
       const res  = await fetch(`/api/to-gau/groups/${groupId}/ai`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({
+          question,
+          attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+        }),
       })
       const json = await res.json()
       // Backend luôn lưu câu hỏi TRƯỚC khi gọi Gemini — có thể thành công dù answer lỗi
@@ -595,6 +648,7 @@ export default function ToGauRoomPage() {
       if (!questionSaved) {
         setMessages(prev => prev.filter(m => m.id !== tempId))
         setContent(question)
+        setSelectedFiles(filesToSend)
       }
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
     } finally {
@@ -1175,8 +1229,8 @@ export default function ToGauRoomPage() {
                     <button
                       type="button"
                       onClick={askAI}
-                      disabled={!content.trim() || askingAI || sending}
-                      title="Hỏi AI Gấu Tổ"
+                      disabled={(!content.trim() && selectedFiles.length === 0) || askingAI || sending || uploading}
+                      title="Hỏi AI Gấu Tổ (gõ chữ hoặc đính kèm ảnh để bot xem)"
                       className="flex-shrink-0 w-9 h-9 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       {askingAI ? (

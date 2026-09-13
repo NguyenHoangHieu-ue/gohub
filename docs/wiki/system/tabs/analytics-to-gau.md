@@ -7,6 +7,36 @@
 
 ---
 
+## ⚠️ s196+2 (2026-09-13) — Chat với AI giờ nhận ảnh/file đính kèm (paste + upload), bot "nhìn" được
+
+Hiếu báo: đoạn chat Tổ Gấu không cho gửi ảnh, cũng không paste ảnh vào tin nhắn để bot xem. Đọc code xác
+nhận: đính kèm ảnh cho tin nhắn THƯỜNG đã hoạt động từ trước (nút paperclip, `accept="image/*,..."`),
+nhưng **2 gap thật**:
+1. **Không có paste ảnh (Ctrl+V)** — chỉ đính kèm được qua bấm nút paperclip mở file picker.
+2. **"Hỏi AI" hoàn toàn bỏ qua file đính kèm** — nút AI `disabled` khi không có chữ gõ (bất kể có ảnh
+   hay không), và `askAI()` chỉ gửi `question` dạng text cho Gemini — dù người dùng có đính kèm ảnh, bot
+   không bao giờ nhận được pixel nào để "nhìn".
+
+**Fix**:
+- Thêm `addFiles()` dùng chung (paperclip + paste) + listener `window.addEventListener("paste", ...)`
+  lọc `image/*` — mirror đúng pattern Bé Gấu đã có (`chatbot/page.tsx`), giới hạn `ATTACH_MAX_FILES=5`
+  khớp Bé Gấu.
+- `askAI()` giờ cho phép bấm khi CHỈ có file (không cần chữ), upload ảnh/file lên Storage trước (dùng
+  chung `uploadFilesToGroup()` tách ra từ `sendMessage()`) rồi gửi `{question, attachments}` cho backend.
+- `ai/route.ts`: câu hỏi lưu kèm `attachments` (hiện đúng trong bubble như tin nhắn thường). Với mỗi
+  attachment là ảnh (`image/*`) hoặc PDF, server tự `fetch()` lại URL public từ Storage → base64 →
+  `inlineData` part cho Gemini (SDK `chat.sendMessage()` nhận `string | Array<Part>`, không cần đổi sang
+  `generateContent()`) — bot thật sự "nhìn" được ảnh, không chỉ đọc tên file. Không hỗ trợ multimodal cho
+  docx/xlsx/txt lần này (ngoài phạm vi yêu cầu — chỉ ảnh/PDF, đúng nhóm Gemini vision xử lý trực tiếp
+  được qua inlineData không cần parse riêng).
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS. Chưa test tay qua browser thật (không có Gemini/Supabase
+Storage thật trên máy dev). **Cần Hiếu QA staging**: (1) paste 1 ảnh (Ctrl+V) vào ô nhập, gửi tin thường
+— ảnh phải hiện trong bubble; (2) đính kèm 1 ảnh (chụp màn hình sản phẩm/hoá đơn...) rồi bấm nút AI (🤖)
+KHÔNG gõ chữ gì — bot phải trả lời dựa trên nội dung ảnh thật, không phải đoán mò từ tên file.
+
+---
+
 ## ⚠️ s196+1 (2026-09-13) — Fix 5 nhược điểm phát hiện qua audit + 1 bug mới Hiếu báo (câu hỏi AI không hiện)
 
 Tiếp s196. Hiếu duyệt audit, yêu cầu bắt đầu fix + báo thêm 1 bug: hỏi AI Gấu Tổ xong bấm gửi thì KHÔNG

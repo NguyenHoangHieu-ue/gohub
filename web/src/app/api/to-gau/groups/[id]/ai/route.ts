@@ -112,7 +112,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const body = await req.json()
   const question = (body.question ?? "").trim()
-  if (!question) return NextResponse.json({ error: "question required" }, { status: 400 })
+  const attachments: { url: string; name: string; size: number; type: string }[] =
+    Array.isArray(body.attachments) ? body.attachments : []
+  if (!question && attachments.length === 0) {
+    return NextResponse.json({ error: "question or attachments required" }, { status: 400 })
+  }
 
   // Fetch group config
   const { data: group, error: groupErr } = await supabaseAdmin
@@ -144,12 +148,33 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // insert vào chat_messages → không ai (kể cả người hỏi) thấy câu hỏi trong lịch sử chat, chỉ câu trả
   // lời AI hiện ra đột ngột không rõ ngữ cảnh. Lưu TRƯỚC khi gọi Gemini để câu hỏi luôn hiện ngay cả khi
   // Gemini lỗi.
+  const questionMsgType = attachments.length > 0 && !question
+    ? (attachments[0].type.startsWith("image/") ? "image" : "file")
+    : "text"
   const { data: questionMsg, error: qErr } = await supabaseAdmin
     .from("chat_messages")
-    .insert({ group_id: id, sender_email: username, sender_name: name, content: question, msg_type: "text" })
+    .insert({
+      group_id: id, sender_email: username, sender_name: name, content: question,
+      msg_type: questionMsgType, attachments: attachments.length > 0 ? attachments : [],
+    })
     .select()
     .single()
   if (qErr || !questionMsg) return NextResponse.json({ error: qErr?.message ?? "Không lưu được câu hỏi" }, { status: 500 })
+
+  // Ảnh/PDF đính kèm → tải lại từ Storage (bucket public, xem api/to-gau/upload) rồi build inlineData
+  // cho Gemini "nhìn" được — trước đây "Hỏi AI" hoàn toàn bỏ qua file đính kèm, chỉ đọc chữ gõ.
+  const imageParts: { inlineData: { mimeType: string; data: string } }[] = []
+  for (const att of attachments) {
+    if (!att.type.startsWith("image/") && att.type !== "application/pdf") continue
+    try {
+      const fileRes = await fetch(att.url)
+      if (!fileRes.ok) continue
+      const buf = Buffer.from(await fileRes.arrayBuffer())
+      imageParts.push({ inlineData: { mimeType: att.type, data: buf.toString("base64") } })
+    } catch (e) {
+      console.error("[to-gau/ai] Không tải được attachment:", att.url, e)
+    }
+  }
 
   // Build system prompt
   const basePrompt = `Bạn là Gấu Tổ — trợ lý AI nội bộ GoHub trong nhóm chat. Trả lời ngắn gọn, chính xác, thân thiện bằng tiếng Việt.
@@ -192,10 +217,14 @@ Khi trả lời:
     systemInstruction,
   })
 
+  const effectiveQuestion = question || (imageParts.length > 0 ? "Phân tích ảnh/file đính kèm" : "(không có nội dung)")
+
   let aiText: string
   try {
     const chat   = model.startChat({ history: chatHistory })
-    const result = await chat.sendMessage(`${name}: ${question}`)
+    const result = imageParts.length > 0
+      ? await chat.sendMessage([{ text: `${name}: ${effectiveQuestion}` }, ...imageParts])
+      : await chat.sendMessage(`${name}: ${effectiveQuestion}`)
     aiText = result.response.text().trim()
   } catch (e: any) {
     console.error("[to-gau/ai] Gemini error:", e.message)
