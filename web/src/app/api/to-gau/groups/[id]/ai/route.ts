@@ -8,9 +8,7 @@ import { detectAndLogLearning }       from "@/lib/agents/learning"
 import { genWithRetryStream }         from "@/lib/agents/gemini-stream"
 import { guardCheck }                 from "@/lib/agents/guardian"
 import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
-
-const AI_EMAIL = "ai@to-gau"
-const AI_NAME  = "Gấu Tổ"
+import { AI_EMAIL, AI_NAME, buildChatHistory, isSummaryRequest, searchKB } from "@/lib/to-gau-ai-helpers"
 
 function isPrivileged(role: string) {
   return role === "creator" || role === "admin"
@@ -25,70 +23,6 @@ async function isMember(groupId: string, username: string): Promise<boolean> {
     .eq("user_email", username)
     .maybeSingle()
   return !!data
-}
-
-// Tìm tài liệu liên quan đến câu hỏi — gộp Wiki (toàn hệ thống) + Docs/Notes của CHÍNH group này
-// (trước đây chỉ tìm Wiki, nên nội dung lưu vào Docs/Notes của nhóm không có tác dụng gì với AI —
-// đây là gap s194+6 yêu cầu vá: lưu tài liệu mới → AI dùng được ngay, không cần bước re-index riêng
-// vì search chạy trực tiếp trên bảng sống mỗi lần hỏi).
-async function searchKB(question: string, privileged: boolean, groupId: string): Promise<string> {
-  const keywords = question.slice(0, 200).replace(/[^a-zA-Z0-9À-ỹ ]/g, " ")
-  const words = keywords.trim().split(/\s+/).filter(w => w.length > 2).slice(0, 4)
-
-  let wikiQuery = supabaseAdmin
-    .from("kb_wiki_pages")
-    .select("title, content, page_type, is_hidden")
-    .eq("status", "active")
-    .limit(4)
-
-  // User thường không thấy system/tab_guide docs
-  if (!privileged) {
-    wikiQuery = wikiQuery.eq("is_hidden", false).neq("page_type", "tab_guide")
-  }
-  if (words.length > 0) {
-    wikiQuery = wikiQuery.or(words.map(w => `title.ilike.%${w}%,content.ilike.%${w}%`).join(","))
-  }
-
-  let docsQuery = supabaseAdmin
-    .from("chat_docs")
-    .select("title, description")
-    .eq("group_id", groupId)
-    .limit(4)
-  if (words.length > 0) {
-    docsQuery = docsQuery.or(words.map(w => `title.ilike.%${w}%,description.ilike.%${w}%`).join(","))
-  }
-
-  let notesQuery = supabaseAdmin
-    .from("chat_notes")
-    .select("content, creator_name, created_at")
-    .eq("group_id", groupId)
-    .limit(4)
-  if (words.length > 0) {
-    notesQuery = notesQuery.or(words.map(w => `content.ilike.%${w}%`).join(","))
-  }
-
-  const [{ data: wikiRows }, { data: docRows }, { data: noteRows }] = await Promise.all([
-    words.length > 0 ? wikiQuery : Promise.resolve({ data: [] as { title: string; content: string }[] }),
-    words.length > 0 ? docsQuery : Promise.resolve({ data: [] as { title: string; description: string | null }[] }),
-    words.length > 0 ? notesQuery : Promise.resolve({ data: [] as { content: string; creator_name: string | null; created_at: string }[] }),
-  ])
-
-  const sections: string[] = []
-  if (wikiRows?.length) {
-    sections.push(...wikiRows.map(p => {
-      const body = (p.content || "").replace(/^---[\s\S]*?---\n?/, "").slice(0, 600)
-      return `### [Wiki] ${p.title}\n${body}`
-    }))
-  }
-  if (docRows?.length) {
-    sections.push(...docRows.map(d => `### [Tài liệu nhóm] ${d.title}\n${d.description || "(không có mô tả)"}`))
-  }
-  if (noteRows?.length) {
-    sections.push(...noteRows.map(n => `### [Ghi chú nhóm — ${n.creator_name || "?"}]\n${n.content.slice(0, 600)}`))
-  }
-
-  if (!sections.length) return ""
-  return `\n\n---\n**TÀI LIỆU THAM KHẢO NỘI BỘ (trích nguồn khi trả lời để người hỏi kiểm chứng lại):**\n${sections.join("\n\n")}\n---`
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -147,8 +81,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         const guard = await guardCheck(question, role, undefined, { onlyCategories: ["system_internal"] })
 
         // Tóm tắt thảo luận theo yêu cầu (s196+15, ý tưởng #3) — nới giới hạn lịch sử khi phát hiện ý định.
-        const isSummaryRequest = /tóm tắt|tóm lược|summar/i.test(question)
-        const historyLimit = isSummaryRequest ? 60 : 20
+        const summaryRequested = isSummaryRequest(question)
+        const historyLimit = summaryRequested ? 60 : 20
 
         // Fetch last N messages (for history) + search KB — chạy song song. CHỈ cần khi guard cho qua.
         // PHẢI chạy TRƯỚC khi insert câu hỏi bên dưới, nếu không câu hỏi vừa lưu sẽ lẫn vào chính history.
@@ -224,13 +158,14 @@ Khi trả lời:
             ? `\nGIỚI HẠN PHẠM VI: ${group.ai_scope}. Câu hỏi ngoài phạm vi → lịch sự từ chối và hướng dẫn hỏi trực tiếp.`
             : ""
           const appendPrompt = group.ai_system_prompt_append ? `\n${group.ai_system_prompt_append}` : ""
-          const summaryDirective = isSummaryRequest
+          const summaryDirective = summaryRequested
             ? "\n\nĐây là yêu cầu TÓM TẮT cuộc trò chuyện — dựa vào LỊCH SỬ CHAT ở trên (không phải tài liệu tham khảo), viết tóm tắt ngắn gọn: các chủ đề chính đã bàn, ai nói gì quan trọng, quyết định/việc cần làm nếu có. Không cần trích nguồn Wiki/Docs trừ khi thực sự liên quan."
             : ""
           const systemInstruction = basePrompt + scopePrompt + appendPrompt + summaryDirective + kbContext
 
           // Build Gemini chat history — prepend TÊN người nói (group nhiều người, Gemini chỉ có role
-          // user/model nên không tự phân biệt được ai nói gì nếu để trần nội dung).
+          // user/model nên không tự phân biệt được ai nói gì nếu để trần nội dung). buildChatHistory()
+          // (lib/to-gau-ai-helpers.ts, s196+18) lo merge turn liên tiếp cùng role + cắt turn "model" đầu.
           const rawHistory: { role: "user" | "model"; text: string }[] = []
           for (const msg of history) {
             if (!msg.content) continue
@@ -240,15 +175,7 @@ Khi trả lời:
               text: isAI ? msg.content : `${msg.sender_name || "?"}: ${msg.content}`,
             })
           }
-          // Gemini bắt buộc: (1) turn đầu tiên phải "user"; (2) role phải luân phiên — merge turn liên
-          // tiếp cùng role rồi cắt bỏ turn "model" đứng đầu.
-          const chatHistory: { role: "user" | "model"; parts: { text: string }[] }[] = []
-          for (const turn of rawHistory) {
-            const last = chatHistory[chatHistory.length - 1]
-            if (last && last.role === turn.role) last.parts[0].text += `\n${turn.text}`
-            else chatHistory.push({ role: turn.role, parts: [{ text: turn.text }] })
-          }
-          while (chatHistory.length && chatHistory[0].role === "model") chatHistory.shift()
+          const chatHistory = buildChatHistory(rawHistory)
 
           // thinkingLevel "low" (s196+14) — gemini-3.8-flash mặc định thinking=medium nếu không set.
           const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)

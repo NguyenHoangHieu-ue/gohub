@@ -607,3 +607,24 @@ thêm tài liệu/ghi chú/câu hỏi phải chờ tới 20s mới thấy (chat 
 tsc + lint (0 lỗi mới) + vitest (230/230) PASS. **Cần Hiếu**: chạy migration v60. QA thủ công: mở cùng 1
 group bằng 2 tài khoản/2 tab, thêm 1 Doc/Note/Câu hỏi ở tab A → xác nhận tab B thấy gần như ngay lập tức
 (không cần đợi 20s hay F5).
+
+## s196+18 (2026-09-13) — Eval harness cho Gấu Tổ AI
+
+Đề xuất F (P2) roadmap audit Tổ Gấu s196+5 — trước hoàn toàn không có test nào (khác Bé Gấu/Gấu Pro đã có
+`agent-grade.test.ts`/`gau-pro-grade.test.ts`, LLM-judge). Port THẲNG pattern đó không khả thi mà không
+refactor lớn — logic agent nằm nguyên trong `ai/route.ts` (streaming SSE), không có hàm thuần kiểu
+`runBeGau()`/`runCreatorAI()` để gọi trực tiếp trong test.
+
+- Tách 2 phần THUẦN nhạy cảm nhất sang `lib/to-gau-ai-helpers.ts` (không đổi hành vi, chỉ đổi vị trí):
+  `buildChatHistory()` (merge turn liên tiếp cùng role + cắt turn "model" đứng đầu — đúng lỗi thật đã gặp
+  trên staging "First content should be with role 'user', got model"), `isSummaryRequest()`, và
+  `searchKB()` (group-scoping Docs/Notes — cùng LỚP rủi ro vừa fix P0 cho Gấu Pro s196+5: quên gate theo
+  phạm vi sẽ leak dữ liệu group khác).
+- `web/src/__tests__/to-gau-ai-helpers.test.ts` (13 case, chạy trong suite thường — KHÔNG cần Gemini/DB
+  thật, mock `supabaseAdmin`): `buildChatHistory` (merge/cắt/rỗng/luân phiên đúng), `isSummaryRequest`
+  (nhận diện đúng/không nhầm), `searchKB` (group A và group B lọc ĐÚNG `group_id` tương ứng, không lẫn
+  nhau; wiki lọc `is_hidden`/`page_type` đúng theo `privileged`).
+
+`ai/route.ts` không đổi hành vi — chỉ import thay vì định nghĩa local. tsc + lint (0 lỗi mới) + vitest
+(243/243, +13 test) PASS. **Cần Hiếu**: không cần làm gì — chạy tự động mỗi lần `npx vitest run` từ nay,
+không cần chạy tay/tốn Gemini call như 2 harness live-DB kia.
