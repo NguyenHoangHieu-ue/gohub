@@ -633,9 +633,14 @@ export default function ToGauRoomPage() {
     setMessages(prev => [...prev, optimisticQuestion])
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
 
+    // s196+16: stream token thật (SSE) — trước chờ trọn vẹn response mới hiện, giờ chữ chạy dần giống
+    // Bé Gấu/Gấu Pro. tempAiId = bong bóng AI tạm, nối dần theo từng "delta" rồi thay bằng bản ghi thật
+    // ở event "done" (khớp real-time dedup như trước).
     let questionSaved = false
+    const tempAiId = `temp-ai-answer-${Date.now()}`
+    let aiBubbleAdded = false
     try {
-      const res  = await fetch(`/api/to-gau/groups/${groupId}/ai`, {
+      const res = await fetch(`/api/to-gau/groups/${groupId}/ai`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -643,16 +648,49 @@ export default function ToGauRoomPage() {
           attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
         }),
       })
-      const json = await res.json()
-      // Backend luôn lưu câu hỏi TRƯỚC khi gọi Gemini — có thể thành công dù answer lỗi
-      if (json.data?.question) {
-        questionSaved = true
-        setMessages(prev => prev.map(m => m.id === tempId ? json.data.question : m))
+      if (!res.ok || !res.body) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? "Hiếu đang fix, vui lòng đợi")
       }
-      if (!res.ok) throw new Error(json.error ?? "Hiếu đang fix, vui lòng đợi")
-      // Add AI message immediately; dedup check handles if realtime also fires
-      if (json.data?.answer) {
-        setMessages(prev => prev.some(m => m.id === json.data.answer.id) ? prev : [...prev, json.data.answer])
+
+      const reader  = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split("\n\n")
+        buffer = parts.pop() || ""
+        for (const part of parts) {
+          if (!part.startsWith("data: ")) continue
+          const evt = JSON.parse(part.slice(6))
+          if (evt.type === "question") {
+            questionSaved = true
+            setMessages(prev => prev.map(m => m.id === tempId ? evt.data : m))
+          } else if (evt.type === "delta") {
+            if (!aiBubbleAdded) {
+              aiBubbleAdded = true
+              setMessages(prev => [...prev, {
+                id: tempAiId, group_id: groupId, sender_email: "ai@to-gau", sender_name: "Gấu Tổ",
+                content: evt.content, msg_type: "ai", created_at: new Date().toISOString(),
+              }])
+              requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
+            } else {
+              setMessages(prev => prev.map(m => m.id === tempAiId ? { ...m, content: m.content + evt.content } : m))
+            }
+          } else if (evt.type === "done") {
+            if (evt.data?.answer) {
+              setMessages(prev => {
+                const withoutTemp = prev.filter(m => m.id !== tempAiId)
+                return withoutTemp.some(m => m.id === evt.data.answer.id) ? withoutTemp : [...withoutTemp, evt.data.answer]
+              })
+            }
+            if (evt.error) toast.error(evt.error)
+          } else if (evt.type === "error") {
+            throw new Error(evt.message)
+          }
+        }
       }
     } catch (err: unknown) {
       if (!questionSaved) {
@@ -660,6 +698,7 @@ export default function ToGauRoomPage() {
         setContent(question)
         setSelectedFiles(filesToSend)
       }
+      if (aiBubbleAdded) setMessages(prev => prev.filter(m => m.id !== tempAiId))
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
     } finally {
       setAskingAI(false)

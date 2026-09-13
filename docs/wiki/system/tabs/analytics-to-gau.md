@@ -566,3 +566,23 @@ sẵn). QA thủ công: (a) hỏi 1 câu dạng "hệ thống này code bằng g
 thay vì trả lời thật; (b) gõ "tóm tắt hộ cuộc trò chuyện" sau vài chục tin → xem tóm tắt có hợp lý không;
 (c) bấm "Trả lời" 1 tin, gửi tin mới → xác nhận preview + trích dẫn hiện đúng, bấm trích dẫn cuộn đúng
 tin gốc.
+
+## s196+16 (2026-09-13) — Gấu Tổ AI: stream token thật (SSE)
+
+Đề xuất C (P2) roadmap audit Tổ Gấu s196+5 — trước đây `ai/route.ts` trả 1 cục JSON sau khi chờ TRỌN VẸN
+response (khác Bé Gấu/Gấu Pro đã stream từ s195+18), cảm giác chậm hơn hẳn 2 agent kia.
+
+- Backend: mọi bước từ sau khi validate xong (rate-limit/body/group/ai_enabled — các lỗi này vẫn trả JSON
+  thường vì xảy ra TRƯỚC khi bắt đầu stream) nay chạy TRONG 1 `ReadableStream` phát SSE (`data:
+  {...}\n\n`). 4 loại event: `question` (câu hỏi vừa lưu, id thật — FE thay ngay optimistic), `delta`
+  (từng đoạn text Gemini sinh ra, qua `onChunk` của `genWithRetryStream` — trước gọi KHÔNG truyền
+  `onChunk`, giờ truyền), `done` (bản ghi câu trả lời đã lưu DB, kèm `error` nếu lưu lỗi), `error` (lỗi
+  chung, vd không lưu được câu hỏi).
+- FE (`[id]/page.tsx` `askAI()`): đọc `res.body.getReader()`, parse từng khối `data: {...}\n\n` — bong
+  bóng AI tạm (`tempAiId`) hiện NGAY khi có `delta` đầu tiên, nối dần theo từng đoạn, rồi thay bằng bản
+  ghi thật ở event `done` (khớp dedup Realtime như cũ, không đổi cơ chế reconcile).
+- Không đổi logic guardian/tóm tắt/cost-tracking/self-learning (s196+15) — chỉ đổi CÁCH trả kết quả.
+
+tsc + lint (0 lỗi mới) + vitest (230/230) PASS. **Cần Hiếu QA thủ công**: hỏi AI 1 câu trong group, xác
+nhận chữ CHẠY DẦN thay vì hiện 1 cục sau khi chờ, không lặp/mất nội dung, câu hỏi/trả lời vẫn lưu đúng
+lịch sử sau khi F5.
