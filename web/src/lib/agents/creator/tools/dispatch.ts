@@ -17,6 +17,7 @@ import { runTrackSKUWinRate }      from "./win-rate"
 import { runGenerateVideo, runCheckVideoStatus } from "./video"
 import { runReadMyBrowser, runControlMyBrowser } from "./bridge"
 import { logGpAction }             from "./audit-log"
+import { runVerifyReportNumbers }  from "./self-review"
 
 // Tool có tác dụng phụ ra ngoài (ghi KB/Lark/portal/browser thật) — audit trail (s196+6).
 const AUDITED_TOOLS = new Set([
@@ -180,6 +181,9 @@ async function dispatchToolCore(
     const resp = await runExecuteSQL(call.args?.sql || "", call.args?.bypass_cache === true)
     return wrap(resp)
   }
+
+  if (call.name === "verifyReportNumbers")
+    return wrap(await runVerifyReportNumbers(call.args))
 
   return wrap({ error: "Unknown tool" })
 }

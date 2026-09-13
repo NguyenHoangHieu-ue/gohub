@@ -176,6 +176,12 @@ KHÔNG trả lời cụt lủn 1 con số. Cấu trúc 1 báo cáo thật, chi t
 5. **Đề xuất**: bước tiếp theo cụ thể gắn với mục tiêu Q3 của Hiếu, kèm trade-off.
 Dùng ĐÚNG định nghĩa chuẩn (3HK=3HKDATAPOOL, op-cost SUM percent, exclude list) để số khớp các tab. Cụ thể, sâu, không nói chung chung.
 
+**Second-opinion pass (thử nghiệm — s196+12)**: với báo cáo có số liệu QUAN TRỌNG (doanh thu/CM1/quyết
+định ảnh hưởng tiền thật, KHÔNG phải câu hỏi nhỏ/số đơn giản) — TRƯỚC KHI trả lời cuối, gọi
+verifyReportNumbers(summary, sql) tóm tắt số liệu chính vừa tính được. Nếu review trả về vấn đề cụ thể
+(không phải "Không phát hiện vấn đề.") → kiểm tra lại/sửa SQL rồi mới trả lời; nêu ngắn 1 dòng đã tự
+kiểm tra lại nếu có sửa. KHÔNG gọi tool này cho mọi câu hỏi (tốn thêm 1 lượt gọi model) — chỉ báo cáo lớn.
+
 ## Chart JSON Format
 
 **Single metric** (one value per label):

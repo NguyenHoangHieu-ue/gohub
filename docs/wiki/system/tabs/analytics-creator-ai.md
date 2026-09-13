@@ -581,6 +581,44 @@ xác nhận baseline hiện tại (không có credentials trên máy dev nên ch
 `npx vitest run --config vitest.audit.config.ts src/__e2e__/gau-pro-grade.test.ts --disableConsoleIntercept`.
 Chạy lại mỗi khi sửa `SYSTEM_PROMPT`/thêm tool lớn để bắt regression sớm — đúng mục đích đề xuất C.
 
+## § Gấu Pro s196+12 (2026-09-13) — Second-opinion pass + Quét vendor quote định kỳ + quyết định #9
+
+Làm nốt 3 ý "thử nghiệm giới hạn" còn lại trong roadmap audit s196+5.
+
+### #7 — Second-opinion pass cho báo cáo quan trọng
+Tool mới `verifyReportNumbers(summary, sql?)` (`creator/tools/self-review.ts`) — 1 lượt Gemini ĐỘC LẬP
+(không thấy lịch sử hội thoại/tool-call, chỉ thấy summary+SQL đưa vào) phản biện tìm rủi ro cụ thể (JOIN
+nhân dòng, thiếu cutoff, nhầm đơn vị, số phi thực tế, quên exclude tài khoản nội bộ...). System prompt
+(mục "Report depth") hướng dẫn gọi tool này TRƯỚC KHI trả lời cuối cho báo cáo có số liệu QUAN TRỌNG —
+không gọi cho câu hỏi nhỏ (thêm 1 lượt Gemini = thêm cost/latency, đúng cảnh báo trong roadmap). 33 tool
+declarations (từ 32).
+
+### #8 — Quét vendor quote định kỳ
+Cron mới `/api/cron/vendor-quote-scan` (`15 3 * * *` = 10:15 ICT). **Quyết định kỹ thuật quan trọng**:
+KHÔNG tự viết parser JSON cho từng vendor (không có quyền truy cập/test schema thật của SunSpeedy/
+UHUIBAO lúc code — đoán schema rồi so giá tự động là đúng rủi ro roadmap đã cảnh báo "dễ lỗi âm thầm,
+không được báo 'không có chênh lệch' giả"). Thay vào đó giao HẲN cho Gấu Pro tự làm qua tool sẵn có
+(`managePortalCredentials` list → `browsePortal` đọc → `querySupabase` so COGS), với rào chắn RÕ trong
+prompt: chỉ so sánh khi nhận diện được cấu trúc giá THẬT RÕ RÀNG, ngược lại phải nói thẳng "không đọc
+được cấu trúc giá" — KHÔNG bịa số. Chỉ nhắm 1 portal ổn định nhất (SunSpeedy/UHUIBAO/cardweb, đã tự động
+hoá login CAPTCHA tốt) — nếu Hiếu chưa cấu hình portal đó trên môi trường đang chạy, cron tự bỏ qua êm
+(không DM), không báo lỗi giả. Chỉ DM Lark khi có kết quả thật (skip cả trường hợp "bỏ qua"/"không đọc
+được" để tránh spam Lark mỗi ngày).
+
+### #9 — Bridge đọc màn hình mở rộng có kiểm soát: KHÔNG đổi code
+Đánh giá lại theo đúng kết luận đã ghi trong roadmap: giữ NGUYÊN mô hình "đọc khi được hỏi" hiện tại
+(`readMyBrowser`/`controlMyBrowser`, s195+1/+3) — KHÔNG chuyển sang polling/ambient nền liên tục (rủi ro
+riêng tư tăng mạnh, chưa có nhu cầu cụ thể nào đòi hỏi). Đây là quyết định "không code" chủ đích, không
+phải bỏ sót.
+
+tsc + lint (0 lỗi mới) + vitest (230/230, +2 test cho verifyReportNumbers) PASS. **Cần Hiếu**:
+(1) QA thủ công #7 — hỏi 1 báo cáo số liệu lớn, xem Gấu Pro có tự gọi verifyReportNumbers không (status
+"🔍 Đang kiểm tra lại số liệu..." sẽ hiện). (2) #8 cần đã cấu hình portal SunSpeedy/UHUIBAO qua
+`managePortalCredentials` từ trước — nếu chưa, cron sẽ tự báo "bỏ qua" mỗi ngày (không DM), không lỗi gì
+cần fix; nếu ĐÃ cấu hình, theo dõi vài ngày xem nội dung DM có đúng/hữu ích không, đặc biệt để ý câu
+"không đọc được cấu trúc giá" — nếu LUÔN ra câu đó, nghĩa là path `/sim/simmanage/page` không phải nơi có
+giá gói thật, cần Hiếu cho biết path đúng (F12 Network khi xem giá trên portal) để sửa prompt.
+
 ### Bé Gấu (chatbot team) — s131
 
 Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, không còn pipeline 6-agent):

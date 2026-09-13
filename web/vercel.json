@@ -45,6 +45,9 @@
     },
     "src/app/api/cron/gau-pro-digest/route.ts": {
       "maxDuration": 120
+    },
+    "src/app/api/cron/vendor-quote-scan/route.ts": {
+      "maxDuration": 120
     }
   },
   "crons": [
@@ -87,6 +90,10 @@
     {
       "path": "/api/cron/gau-pro-digest",
       "schedule": "45 2 * * *"
+    },
+    {
+      "path": "/api/cron/vendor-quote-scan",
+      "schedule": "15 3 * * *"
     }
   ]
 }
