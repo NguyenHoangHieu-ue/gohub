@@ -537,6 +537,24 @@ SYSTEM_PROMPT khác của Gấu Pro). tsc + lint (0 lỗi mới) + vitest (220/2
 thành Y" mà KHÔNG nói "nhớ giúp tôi" — xác nhận Gấu Pro có tự đề xuất lưu ở cuối câu trả lời không, và
 KHÔNG đề xuất khi chỉ hỏi câu bình thường (tránh làm phiền mỗi tin nhắn).
 
+## § Gấu Pro s196+10 (2026-09-13) — Text-to-speech đọc câu trả lời
+
+Ý tưởng #6 trong roadmap audit s196+5 — "bước đệm rẻ" về phía voice 2 chiều thật (idea #10 trong cùng
+roadmap bị đánh giá "chưa nên" vì effort cao/ROI thấp lúc này). Đối xứng với mic input 1 chiều đã có
+(Web Speech API `SpeechRecognition`), dùng `SpeechSynthesisUtterance` (Web Speech API, cùng họ, không
+cần thư viện/hạ tầng mới).
+
+- Nút loa 🔊 cạnh `ExportBar` mỗi tin nhắn trợ lý — bấm đọc to, bấm lại dừng (chỉ 1 tin đọc cùng lúc,
+  bắt đầu tin mới tự `speechSynthesis.cancel()` tin đang đọc dở).
+- `stripForSpeech()` (page.tsx) — bỏ code block/bảng markdown/ảnh/ký hiệu `#*_~` trước khi đọc (đọc
+  nguyên markdown ra sẽ đọc cả ký hiệu, vô nghĩa).
+- Feature-detect qua `useEffect` (giống `voiceSupported`) — ẩn nút hoàn toàn nếu browser không hỗ trợ.
+- Cancel khi unmount trang (tránh giọng đọc tiếp tục chạy sau khi rời trang).
+
+Chỉ Gấu Pro (chưa merge Bé Gấu — theo đúng phạm vi đề xuất, có thể làm sau nếu Hiếu muốn). tsc + lint
+(0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu QA thủ công trên staging**: bấm nút loa 1 tin nhắn dài,
+xác nhận đọc đúng tiếng Việt + bấm lại dừng được + không đọc lẫn ký hiệu markdown.
+
 ### Bé Gấu (chatbot team) — s131
 
 Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, không còn pipeline 6-agent):
