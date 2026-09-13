@@ -515,3 +515,23 @@ Trang tạo TỪ trong 1 group Tổ Gấu → mặc định `visibility_mode='gr
   chứ KHÔNG phải `role_permissions`/`allowed_analytics`. `app/(dashboard)/analytics/layout.tsx` phải
   bypass sớm cho `id === "to-gau"` (xem s194+8) — nếu ai đó sau này refactor layout này, PHẢI giữ bypass
   này, nếu không mọi role không phải admin/creator sẽ lại bị redirect ngược `/chatbot` im lặng.
+
+## s196+14 (2026-09-13) — Gấu Tổ AI: thinkingLevel + retry
+
+Theo roadmap audit toàn diện Tổ Gấu (s196+5, xem artifact riêng) — 2 phát hiện nghiêm trọng nhất, cả 2
+cùng nằm ở `groups/[id]/ai/route.ts`, nay đã fix (P0):
+
+- **thinkingLevel** — Gấu Tổ AI là nơi DUY NHẤT trong 3 agent (Bé Gấu/Gấu Pro/Gấu Tổ) dùng
+  `gemini-3.8-flash` mà KHÔNG set `generationConfig.thinkingConfig.thinkingLevel` — mặc định rơi về
+  `"medium"` (billable, latency ẩn mỗi câu hỏi, ở MỌI group cùng lúc). Nay set `"low"` giống `be-gau.ts`/
+  `creator-ai.ts`.
+- **Retry lỗi tạm thời** — trước dùng thẳng `model.startChat().sendMessage()`, KHÔNG retry gì → bất kỳ
+  lỗi 429/503/timeout nào rơi thẳng "Hiếu đang fix, vui lòng đợi". Đổi sang `genWithRetryStream()` (dùng
+  chung Bé Gấu/Gấu Pro, retry 3× backoff) — gọi KHÔNG truyền `onChunk` nên vẫn trả 1 cục JSON như cũ,
+  KHÔNG đổi sang streaming (đề xuất C, để riêng đợt sau). Chuyển từ `startChat/sendMessage` sang build
+  `contents` thủ công (history + turn mới) để dùng chung được helper — cùng pattern `be-gau.ts`.
+
+Không đổi `temperature`/logic khác (ngoài phạm vi P0 lần này). tsc + lint (0 lỗi mới) + vitest (230/230)
+PASS — không có unit test riêng cho route này (đúng finding #7 trong audit: chưa có eval harness cho Gấu
+Tổ AI, để làm sau). **Cần Hiếu QA thủ công**: hỏi AI trong 1 group, xác nhận vẫn trả lời đúng/không chậm
+hơn rõ rệt; không cần chạy migration nào.

@@ -5,6 +5,7 @@ import { supabaseAdmin }              from "@/lib/supabase"
 import { GoogleGenerativeAI }         from "@google/generative-ai"
 import { checkRateLimit }             from "@/lib/rate-limit"
 import { detectAndLogLearning }       from "@/lib/agents/learning"
+import { genWithRetryStream }         from "@/lib/agents/gemini-stream"
 
 const AI_EMAIL = "ai@to-gau"
 const AI_NAME  = "Gấu Tổ"
@@ -229,21 +230,30 @@ Khi trả lời:
   while (chatHistory.length && chatHistory[0].role === "model") chatHistory.shift()
 
   // Call Gemini
+  // thinkingLevel "low" (s196+14, đề xuất A roadmap audit Tổ Gấu s196+5) — gemini-3.8-flash mặc định
+  // thinking=medium nếu không set (billable, latency ẩn); Gấu Tổ là nơi DUY NHẤT trong 3 agent từng bỏ
+  // sót field này (đã set đúng cho be-gau.ts/creator-ai.ts từ trước).
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
     model: "gemini-3.8-flash",
     systemInstruction,
+    generationConfig: { thinkingConfig: { thinkingLevel: "low" } } as any,
   })
 
   const effectiveQuestion = question || (imageParts.length > 0 ? "Phân tích ảnh/file đính kèm" : "(không có nội dung)")
+  const userParts = imageParts.length > 0
+    ? [{ text: `${name}: ${effectiveQuestion}` }, ...imageParts]
+    : [{ text: `${name}: ${effectiveQuestion}` }]
 
   let aiText: string
   try {
-    const chat   = model.startChat({ history: chatHistory })
-    const result = imageParts.length > 0
-      ? await chat.sendMessage([{ text: `${name}: ${effectiveQuestion}` }, ...imageParts])
-      : await chat.sendMessage(`${name}: ${effectiveQuestion}`)
-    aiText = result.response.text().trim()
+    // s196+14, đề xuất B — genWithRetryStream (retry 3× backoff cho lỗi tạm thời 429/5xx/timeout, dùng
+    // chung Bé Gấu/Gấu Pro) thay model.startChat().sendMessage() KHÔNG retry gì trước đây — bất kỳ lỗi
+    // tạm thời nào cũng rơi thẳng "Hiếu đang fix". Không truyền onChunk → vẫn trả 1 cục JSON như cũ,
+    // KHÔNG đổi sang streaming (ngoài phạm vi đợt này).
+    const contents = [...chatHistory, { role: "user" as const, parts: userParts }]
+    const genResult = await genWithRetryStream(model, { contents })
+    aiText = genResult.response.text().trim()
   } catch (e: any) {
     console.error("[to-gau/ai] Gemini error:", e.message)
     // Lưu câu hỏi vẫn đã thành công ở trên — trả lỗi NGAY DƯỚI DẠNG 1 tin nhắn AI thay vì 500 câm, để
