@@ -513,6 +513,30 @@ tsc + lint (0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu**: không c�
 `CRON_SECRET` đã có) — chờ 09:45 ICT ngày mai xem tin nhắn Lark DM đầu tiên, hoặc tự trigger tay:
 `curl -H "Authorization: Bearer $CRON_SECRET" https://stg-intel-v2.gohub.cloud/api/cron/gau-pro-digest`.
 
+## § Gấu Pro s196+9 (2026-09-13) — Tự phát hiện học liệu từ chính Hiếu
+
+Đề xuất "5" trong roadmap audit s196+5 — nghịch lý phát hiện lúc audit: `lib/agents/learning.ts` (self-
+learning tự động) đã có sẵn cho Bé Gấu + Gấu Tổ nhưng LOẠI TRỪ đúng creator (`role==="creator") return`
+sớm) — người dùng chính Gấu Pro lại là người bot "không tự học từ", phải tự gõ "nhớ giúp tôi X" mới có
+tác dụng.
+
+**Quyết định thiết kế (lệch nhẹ so cách phác thảo ban đầu trong roadmap)**: KHÔNG tái dùng hàng đợi
+`chatbot_learning_log`/`reviewPendingLearning`/`approveLearning` — hàng đợi đó thiết kế cho lời NGƯỜI
+KHÁC (staff/CS...) cần Hiếu duyệt lại trước khi tin. Lời của chính Hiếu vốn đã là nguồn xác thực (creator
+= authoritative), bắt Hiếu "duyệt lại lời của chính mình" là vòng lặp thừa. Thay vào đó tận dụng đúng
+workflow confirm-first CÓ SẴN (`writeKnowledgeBase`, PROPOSE→WAIT confirm→execute) — chỉ thêm 1 đoạn
+prompt mới trong `SYSTEM_PROMPT` (`creator-ai.ts`, mục "Proactive learning detection"): model tự đánh giá
+NGAY TRONG câu trả lời — nếu Hiếu vừa nhắc thông tin mới có giá trị lâu dài mà không yêu cầu lưu rõ ràng,
+thêm 1 dòng cuối đề xuất "muốn mình lưu vào KB không?"; Hiếu xác nhận ở lượt sau → coi như bước 1 của
+workflow cũ, chạy tiếp bình thường. Không cần LLM call thứ 2 (model chính đã đọc toàn bộ ngữ cảnh hội
+thoại, đánh giá rẻ hơn và có bối cảnh tốt hơn 1 classifier tách biệt), không cần bảng/route mới.
+
+Đây là thay đổi PROMPT-ONLY — không có test tự động khả thi cho hành vi LLM (giống mọi thay đổi
+SYSTEM_PROMPT khác của Gấu Pro). tsc + lint (0 lỗi mới) + vitest (220/220) PASS (không đổi code logic).
+**Cần Hiếu QA thủ công**: trong 1 hội thoại Gấu Pro, nhắc 1 thông tin mới kiểu "à, giá NCC X giờ đổi
+thành Y" mà KHÔNG nói "nhớ giúp tôi" — xác nhận Gấu Pro có tự đề xuất lưu ở cuối câu trả lời không, và
+KHÔNG đề xuất khi chỉ hỏi câu bình thường (tránh làm phiền mỗi tin nhắn).
+
 ### Bé Gấu (chatbot team) — s131
 
 Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, không còn pipeline 6-agent):
