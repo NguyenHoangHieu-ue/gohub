@@ -555,6 +555,32 @@ Chỉ Gấu Pro (chưa merge Bé Gấu — theo đúng phạm vi đề xuất, c
 (0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu QA thủ công trên staging**: bấm nút loa 1 tin nhắn dài,
 xác nhận đọc đúng tiếng Việt + bấm lại dừng được + không đọc lẫn ký hiệu markdown.
 
+## § Gấu Pro s196+11 (2026-09-13) — Eval harness (đề xuất C, roadmap audit s196+5)
+
+Gấu Pro trước đây KHÔNG có bộ eval nào — dù prompt 754 dòng + 32 tool phức tạp hơn Bé Gấu nhiều, mọi thay
+đổi prompt/tool chỉ xác nhận bằng tsc + cảm nhận cá nhân, dễ regress âm thầm. 2 lớp bổ sung:
+
+**(1) Unit test deterministic** (chạy trong suite bình thường, không cần .env.local) —
+`src/__tests__/gau-pro-security.test.ts` (8 case) — regression guard riêng cho fix P0 s196+5
+(`querySupabase` không gate bảng nhạy cảm): mock `supabaseAdmin` + `data-explorer` table lists, xác nhận
+`visibleTables`/`runQuerySupabase`/`dispatchTool` chặn đúng non-creator đọc `app_settings`/`conversations`
+và vẫn cho creator đọc bình thường. Đây là lưới an toàn RẺ NHẤT, chạy mỗi lần `npx vitest run` — nếu ai
+lỡ sửa lại logic gate này, test đỏ ngay lập tức (khác LLM-judge dưới, vốn cần chạy tay + tốn Gemini call).
+
+**(2) LLM-judge live-DB harness** (port thẳng pattern `agent-grade.test.ts` của Bé Gấu, cần GEMINI_KEY +
+SUPABASE_* + ANALYTICS_DB_* thật — máy dev không chạy được) — `src/__e2e__/gau-pro-banks.ts` (10 case,
+tái dùng type `BankCase` từ `agent-banks.ts` — không có `expectAgent`/routing vì Gấu Pro chỉ 1 agent) +
+`src/__e2e__/gau-pro-grade.test.ts` (gọi thẳng `runCreatorAI()`, không qua router/guardian vì Gấu Pro
+không có 2 lớp đó). Bank phủ: SQL/BI, Supabase, KB, export marker, business-rule self-validation
+(Internal-Transaction), VÀ 2 case bảo mật P0 (role `staff` hỏi bảng nhạy cảm phải bị từ chối — cùng bug
+vừa fix ở (1) nhưng qua đường LLM thật thay vì gọi thẳng hàm, bắt được cả trường hợp model "quên" tuân
+system prompt dù code đã chặn đúng). Wired vào `vitest.audit.config.ts`.
+
+tsc + lint (0 lỗi mới) + vitest thường (228/228, +8 so trước) PASS. **Cần Hiếu**: chạy layer (2) 1 lần để
+xác nhận baseline hiện tại (không có credentials trên máy dev nên chưa tự chạy được):
+`npx vitest run --config vitest.audit.config.ts src/__e2e__/gau-pro-grade.test.ts --disableConsoleIntercept`.
+Chạy lại mỗi khi sửa `SYSTEM_PROMPT`/thêm tool lớn để bắt regression sớm — đúng mục đích đề xuất C.
+
 ### Bé Gấu (chatbot team) — s131
 
 Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, không còn pipeline 6-agent):
