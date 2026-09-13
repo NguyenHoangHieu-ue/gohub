@@ -39,8 +39,8 @@ export function QuestionsPanel({
   const [posting, setPosting]       = useState(false)
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({})
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const res  = await fetch(`/api/to-gau/groups/${groupId}/questions`)
       if (!res.ok) return
@@ -49,11 +49,19 @@ export function QuestionsPanel({
     } catch {
       // ignore
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [groupId])
 
   useEffect(() => { load() }, [load])
+
+  // Không có Realtime cho chat_questions — member khác đặt/trả lời câu hỏi chỉ hiện sau khi tự chuyển
+  // tab/refresh (đúng bug đã fix cho chat, panel này chưa có). Poll nhẹ 20s/lần (silent) làm lưới an
+  // toàn, cùng hướng đã áp cho chat_messages.
+  useEffect(() => {
+    const t = setInterval(() => load(true), 20000)
+    return () => clearInterval(t)
+  }, [load])
 
   async function handleAsk(e: React.FormEvent) {
     e.preventDefault()

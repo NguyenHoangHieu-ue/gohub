@@ -562,20 +562,40 @@ export default function ToGauRoomPage() {
     setAskingAI(true)
     setContent("")
 
+    // Optimistic: hiện câu hỏi ngay — trước đây câu hỏi KHÔNG được lưu/hiện gì cả (chỉ dùng làm prompt
+    // gửi Gemini), nên chỉ câu trả lời AI hiện ra đột ngột không ai biết đã hỏi gì.
+    const tempId = `temp-ai-${Date.now()}`
+    const optimisticQuestion: ChatMessage = {
+      id: tempId, group_id: groupId, sender_email: myEmail,
+      sender_name: myName || myEmail, content: question, msg_type: "text",
+      created_at: new Date().toISOString(),
+    }
+    setMessages(prev => [...prev, optimisticQuestion])
+    requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
+
+    let questionSaved = false
     try {
-      const res = await fetch(`/api/to-gau/groups/${groupId}/ai`, {
+      const res  = await fetch(`/api/to-gau/groups/${groupId}/ai`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
+      // Backend luôn lưu câu hỏi TRƯỚC khi gọi Gemini — có thể thành công dù answer lỗi
+      if (json.data?.question) {
+        questionSaved = true
+        setMessages(prev => prev.map(m => m.id === tempId ? json.data.question : m))
+      }
+      if (!res.ok) throw new Error(json.error ?? "Hiếu đang fix, vui lòng đợi")
       // Add AI message immediately; dedup check handles if realtime also fires
-      if (json.data) {
-        setMessages(prev => prev.some(m => m.id === json.data.id) ? prev : [...prev, json.data])
+      if (json.data?.answer) {
+        setMessages(prev => prev.some(m => m.id === json.data.answer.id) ? prev : [...prev, json.data.answer])
       }
     } catch (err: unknown) {
-      setContent(question)
+      if (!questionSaved) {
+        setMessages(prev => prev.filter(m => m.id !== tempId))
+        setContent(question)
+      }
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
     } finally {
       setAskingAI(false)

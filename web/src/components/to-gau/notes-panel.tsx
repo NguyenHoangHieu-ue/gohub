@@ -24,8 +24,8 @@ export function NotesPanel({
   const [editingNote, setEditingNote] = useState<string | null>(null)
   const [editContent, setEditContent] = useState("")
 
-  const loadNotes = useCallback(async () => {
-    setNotesLoading(true)
+  const loadNotes = useCallback(async (silent = false) => {
+    if (!silent) setNotesLoading(true)
     try {
       const res  = await fetch(`/api/to-gau/groups/${groupId}/notes`)
       if (!res.ok) return
@@ -34,11 +34,18 @@ export function NotesPanel({
     } catch {
       // ignore
     } finally {
-      setNotesLoading(false)
+      if (!silent) setNotesLoading(false)
     }
   }, [groupId])
 
   useEffect(() => { loadNotes() }, [loadNotes])
+
+  // Không có Realtime cho chat_notes — member khác thêm/sửa ghi chú chỉ hiện sau khi tự chuyển tab/
+  // refresh. Poll nhẹ 20s/lần (silent) làm lưới an toàn, cùng hướng đã áp cho chat_messages.
+  useEffect(() => {
+    const t = setInterval(() => loadNotes(true), 20000)
+    return () => clearInterval(t)
+  }, [loadNotes])
 
   async function handleAddNote(e: React.FormEvent) {
     e.preventDefault()

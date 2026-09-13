@@ -31,8 +31,8 @@ export function DocsPanel({
   const [uploading, setUploading]   = useState(false)
   const docFileRef                  = useRef<HTMLInputElement>(null)
 
-  const loadDocs = useCallback(async () => {
-    setDocsLoading(true)
+  const loadDocs = useCallback(async (silent = false) => {
+    if (!silent) setDocsLoading(true)
     try {
       const res  = await fetch(`/api/to-gau/groups/${groupId}/docs`)
       if (!res.ok) return
@@ -41,11 +41,18 @@ export function DocsPanel({
     } catch {
       // ignore
     } finally {
-      setDocsLoading(false)
+      if (!silent) setDocsLoading(false)
     }
   }, [groupId])
 
   useEffect(() => { loadDocs() }, [loadDocs])
+
+  // Không có Realtime cho chat_docs — member khác thêm tài liệu chỉ hiện sau khi tự chuyển tab/refresh.
+  // Poll nhẹ 20s/lần (silent, không bật skeleton) làm lưới an toàn, cùng hướng đã áp cho chat_messages.
+  useEffect(() => {
+    const t = setInterval(() => loadDocs(true), 20000)
+    return () => clearInterval(t)
+  }, [loadDocs])
 
   function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter" || e.key === ",") {

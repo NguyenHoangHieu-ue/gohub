@@ -7,6 +7,49 @@
 
 ---
 
+## ⚠️ s196+1 (2026-09-13) — Fix 5 nhược điểm phát hiện qua audit + 1 bug mới Hiếu báo (câu hỏi AI không hiện)
+
+Tiếp s196. Hiếu duyệt audit, yêu cầu bắt đầu fix + báo thêm 1 bug: hỏi AI Gấu Tổ xong bấm gửi thì KHÔNG
+thấy câu hỏi của mình hiện ra trong chat, chỉ có câu trả lời AI xuất hiện đột ngột.
+
+**1. Bug câu hỏi AI không hiện (đúng như Hiếu báo)** — `askAI()`/`ai/route.ts` trước đây dùng nội dung
+gõ CHỈ để làm prompt gửi Gemini, KHÔNG BAO GIỜ insert vào `chat_messages` → không ai (kể cả người hỏi)
+thấy câu hỏi trong lịch sử, chỉ câu trả lời AI hiện ra không rõ ngữ cảnh (đọc code xác nhận, không đoán —
+đúng những gì Hiếu mô tả). Fix: `ai/route.ts` fetch history TRƯỚC, rồi insert câu hỏi thành 1
+`chat_messages` THẬT (sender = người hỏi thật) TRƯỚC KHI gọi Gemini (câu hỏi luôn hiện dù Gemini lỗi hay
+không) → response đổi shape `{data: {question, answer}}` (trước là `{data: <chỉ answer>}`). Lỗi Gemini
+giờ KHÔNG trả 500 câm nữa mà lưu "Hiếu đang fix, vui lòng đợi 😔" làm chính nội dung câu trả lời AI (câu
+hỏi vẫn đã lưu) — bỏ hẳn 1 nhánh lỗi riêng ở FE, luôn cùng 1 luồng thành công. FE `askAI()` thêm optimistic
+append câu hỏi (giống `sendMessage()`) trước khi gọi API, khớp `tempId` với `question` thật trả về; nếu
+lỗi TRƯỚC KHI câu hỏi kịp lưu thì mới khôi phục nội dung vào ô nhập (tránh gửi trùng nếu câu hỏi đã lưu
+nhưng answer lỗi). Nhân tiện: chat history gửi Gemini giờ prepend TÊN người nói (`"{tên}: {nội dung}"`) —
+trước đó Gemini chỉ có role `user`/`model` trần, không phân biệt được AI ai nói gì trong nhóm nhiều người.
+
+**2. `notifyLarkMembers()` fire-and-forget không `await`** (`messages/route.ts`) — cùng lớp bug đã fix cho
+`logChat()`/`app_usage_events` (s195+18-C, Vercel có thể đóng execution context giữa chừng) nhưng chưa áp
+dụng ở route này. Đổi sang `await`.
+
+**3. Docs/Notes/Câu hỏi không có Realtime** — mỗi panel chỉ fetch 1 lần lúc mount, member khác thêm/sửa
+không tự hiện (đúng bệnh với bug s196 nhưng ở 3 panel này chưa từng làm cả Realtime lẫn poll). Thêm poll
+silent 20s/lần (`loadDocs(true)`/`loadNotes(true)`/`load(true)` — tham số `silent` mới, không bật lại
+skeleton loading) cho `docs-panel.tsx`/`notes-panel.tsx`/`questions-panel.tsx`. Không dùng Realtime
+riêng (tốn thêm channel, ít traffic hơn chat nên poll 20s là đủ).
+
+**4. Không rate-limit `/messages` (POST) và `/ai` (POST)** — thêm `checkRateLimit()` (module dùng chung,
+đã dùng ở `/api/chat`): 30 tin/phút/user cho gửi tin (nội bộ nên nới hơn `/api/chat`), 10 câu/phút/user
+cho hỏi AI (mỗi câu tốn 1 lần gọi Gemini — chặn spam trước khi chạm cost).
+
+**Chưa làm (để riêng theo yêu cầu Hiếu lúc audit)**: unread badge ở list page — cần thêm cột
+`last_read_at` per member, việc lớn hơn, làm sau nếu Hiếu muốn.
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS. Chưa test tay qua browser thật (không tái hiện được
+Gemini/Supabase thật trên máy dev). **Cần Hiếu QA staging**: (1) hỏi AI Gấu Tổ 1 câu — câu hỏi phải hiện
+ngay trong chat trước cả khi có câu trả lời; (2) mở 2 acc, acc A thêm Doc/Note/Câu hỏi mới, acc B (không
+chuyển tab) phải thấy trong ≤20s; (3) gửi tin liên tục >30 tin/phút thử xem có bị chặn 429 đúng thông báo
+không (không bắt buộc, chỉ cần biết không chặn nhầm lúc dùng bình thường).
+
+---
+
 ## ⚠️ s196 (2026-09-13) — Fix bug: tin nhắn người khác không tự hiện, phải F5 mới thấy
 
 Hiếu báo đúng triệu chứng: mình nhắn thì thấy ngay, tin của người khác không tự hiện — phải refresh.

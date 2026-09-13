@@ -3,6 +3,7 @@ import { getServerSession }           from "next-auth"
 import { authOptions }                from "@/lib/auth"
 import { supabaseAdmin }              from "@/lib/supabase"
 import { GoogleGenerativeAI }         from "@google/generative-ai"
+import { checkRateLimit }             from "@/lib/rate-limit"
 
 const AI_EMAIL = "ai@to-gau"
 const AI_NAME  = "Gấu Tổ"
@@ -91,12 +92,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const username   = session.user.username || ""
+  const name       = session.user.name     || username
   const role       = session.user.role     || ""
   const privileged = isPrivileged(role)
   const { id }     = params
 
   if (!privileged && !(await isMember(id, username))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  // Rate limit: 10 câu/phút/user (mỗi câu tốn 1 lần gọi Gemini — chặn spam trước khi chạm API cost)
+  const rl = await checkRateLimit(`to-gau-ai:${username}`, 10, 60_000)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Bạn hỏi AI quá nhanh. Vui lòng chờ ${Math.ceil(rl.resetMs / 1000)}s rồi thử lại.` },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(rl.resetMs / 1000)) } }
+    )
   }
 
   const body = await req.json()
@@ -113,11 +124,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (groupErr || !group) return NextResponse.json({ error: "Không tìm thấy nhóm" }, { status: 404 })
   if (!group.ai_enabled)  return NextResponse.json({ error: "AI đã tắt trong nhóm này" }, { status: 403 })
 
-  // Fetch last 20 messages (for history) + search KB — chạy song song
+  // Fetch last 20 messages (for history) + search KB — chạy song song. PHẢI chạy TRƯỚC khi insert câu
+  // hỏi bên dưới, nếu không câu hỏi vừa lưu sẽ lẫn vào chính history (trùng với sendMessage(question)
+  // gửi riêng cho Gemini ngay sau đó).
   const [{ data: recentMsgs }, kbContext] = await Promise.all([
     supabaseAdmin
       .from("chat_messages")
-      .select("sender_email, content, msg_type")
+      .select("sender_email, sender_name, content, msg_type")
       .eq("group_id", id)
       .order("created_at", { ascending: false })
       .limit(20),
@@ -126,6 +139,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Reverse to chronological order
   const history = (recentMsgs ?? []).reverse()
+
+  // Lưu câu hỏi thành 1 tin nhắn THẬT — trước đây câu hỏi chỉ dùng làm prompt gửi Gemini, KHÔNG bao giờ
+  // insert vào chat_messages → không ai (kể cả người hỏi) thấy câu hỏi trong lịch sử chat, chỉ câu trả
+  // lời AI hiện ra đột ngột không rõ ngữ cảnh. Lưu TRƯỚC khi gọi Gemini để câu hỏi luôn hiện ngay cả khi
+  // Gemini lỗi.
+  const { data: questionMsg, error: qErr } = await supabaseAdmin
+    .from("chat_messages")
+    .insert({ group_id: id, sender_email: username, sender_name: name, content: question, msg_type: "text" })
+    .select()
+    .single()
+  if (qErr || !questionMsg) return NextResponse.json({ error: qErr?.message ?? "Không lưu được câu hỏi" }, { status: 500 })
 
   // Build system prompt
   const basePrompt = `Bạn là Gấu Tổ — trợ lý AI nội bộ GoHub trong nhóm chat. Trả lời ngắn gọn, chính xác, thân thiện bằng tiếng Việt.
@@ -148,14 +172,16 @@ Khi trả lời:
 
   const systemInstruction = basePrompt + scopePrompt + appendPrompt + kbContext
 
-  // Build Gemini chat history
+  // Build Gemini chat history — prepend TÊN người nói (group nhiều người, Gemini chỉ có role user/model
+  // nên không tự phân biệt được ai nói gì nếu để trần nội dung — dễ lẫn ngữ cảnh khi nhiều người hỏi
+  // liên tiếp trong cùng nhóm).
   const chatHistory: { role: "user" | "model"; parts: { text: string }[] }[] = []
   for (const msg of history) {
     if (!msg.content) continue
     const isAI = msg.sender_email === AI_EMAIL
     chatHistory.push({
       role:  isAI ? "model" : "user",
-      parts: [{ text: msg.content }],
+      parts: [{ text: isAI ? msg.content : `${msg.sender_name || "?"}: ${msg.content}` }],
     })
   }
 
@@ -169,11 +195,13 @@ Khi trả lời:
   let aiText: string
   try {
     const chat   = model.startChat({ history: chatHistory })
-    const result = await chat.sendMessage(question)
+    const result = await chat.sendMessage(`${name}: ${question}`)
     aiText = result.response.text().trim()
   } catch (e: any) {
     console.error("[to-gau/ai] Gemini error:", e.message)
-    return NextResponse.json({ error: "Hiếu đang fix, vui lòng đợi" }, { status: 500 })
+    // Lưu câu hỏi vẫn đã thành công ở trên — trả lỗi NGAY DƯỚI DẠNG 1 tin nhắn AI thay vì 500 câm, để
+    // FE không cần xử lý riêng 1 nhánh lỗi khác hẳn luồng thành công (giữ nguyên rule "Hiếu đang fix").
+    aiText = "Hiếu đang fix, vui lòng đợi 😔"
   }
 
   // Save AI response to chat_messages
@@ -186,10 +214,12 @@ Khi trả lời:
       content:      aiText,
       msg_type:     "ai",
       attachments:  [],
+      reply_to:     questionMsg.id,
     })
     .select()
     .single()
 
-  if (saveErr) return NextResponse.json({ error: saveErr.message }, { status: 500 })
-  return NextResponse.json({ data: saved })
+  // saveErr: câu hỏi đã lưu thành công ở trên dù lưu câu trả lời lỗi — vẫn trả question để FE hiện được
+  if (saveErr) return NextResponse.json({ data: { question: questionMsg, answer: null }, error: saveErr.message }, { status: 500 })
+  return NextResponse.json({ data: { question: questionMsg, answer: saved } })
 }
