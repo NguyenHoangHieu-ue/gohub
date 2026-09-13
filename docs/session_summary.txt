@@ -9529,3 +9529,110 @@ metrics.md, analytics-b2c.md (4 bug B2C đánh số 1-4 + phần Đồng thời 
 nhật trạng thái + checklist. Hiếu hẹn mai tôi test — checklist QA đầy đủ đã ghi trong CLAUDE.md mục Việc
 Hiếu cần làm s195+19, chưa có QA nào từ Hiếu qua UI thật cho đợt B2C này (mọi verify trong session đều
 qua gọi API/SQL trực tiếp, chưa qua click chuột thật trên giao diện).
+
+### s196 (2026-09-13) — Tổ Gấu: fix tin nhắn người khác không tự hiện, phải F5 mới thấy
+
+Hiếu báo đúng triệu chứng: mình nhắn thấy ngay, tin người khác không tự hiện. Đọc code xác nhận không
+đoán: `sendMessage()` append tin của MÌNH kiểu optimistic (không phụ thuộc Realtime). Tin NGƯỜI KHÁC phụ
+thuộc hoàn toàn `postgres_changes` subscription — nhưng bảng `chat_messages` CHƯA TỪNG được thêm vào
+publication `supabase_realtime` (migration v34 tạo bảng, thiếu bước `ALTER PUBLICATION ... ADD TABLE`).
+Thiếu bước này Postgres không phát WAL change ra Realtime server; `subscribe()` KHÔNG báo lỗi gì (channel
+vẫn `SUBSCRIBED` bình thường) — giải thích đúng vì sao không ai từng thấy lỗi/exception nào. Fix 2 lớp:
+(1) `v55_to_gau_realtime.sql` — `ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages` (idempotent,
+check `pg_publication_tables` trước). (2) `reconcileMessages()` — poll REST `GET messages?limit=50` mỗi
+12s, MERGE (không replace) theo id nên không mất optimistic message đang gửi dở, không giật scroll — lưới
+an toàn độc lập với trạng thái publication/WebSocket, chạy song song `loadPinned()` cùng nhịp (pin cũng
+chỉ sync qua Realtime UPDATE, cùng rủi ro). tsc + lint (0 lỗi mới) + vitest (220/220) PASS. Push staging
+`9b4cca00`. Chưa test tay qua browser thật (máy dev không có Supabase project thật) — nhờ Hiếu QA 2 acc.
+
+Nhân dịp cũng đánh giá toàn diện Tổ Gấu (vai Senior Full-stack Engineer + Product reviewer) — báo cáo
+trong chat (không publish Artifact theo lựa chọn Hiếu): fire-and-forget `notifyLarkMembers()` không await
+(cùng lớp bug s195+18-C), Docs/Notes/Câu hỏi không có Realtime lẫn poll, Gemini history không phân biệt
+người nói trong group, list page không có unread badge, `/messages`+`/ai` không rate-limit. Hiếu yêu cầu
+"bắt đầu fix các nhược điểm đi" → làm tiếp s196+1.
+
+### s196+1 (2026-09-13) — Tổ Gấu: fix câu hỏi AI không hiện + 4 nhược điểm audit s196
+
+Hiếu duyệt audit, báo thêm bug mới: hỏi AI ("sản phẩm nhật 3 ngày") rồi bấm bot thì KHÔNG thấy câu hỏi
+của mình hiện ra. Đọc code xác nhận đúng: `askAI()`/`ai/route.ts` trước đây dùng nội dung gõ CHỈ để làm
+prompt gửi Gemini, KHÔNG BAO GIỜ insert vào `chat_messages` — không ai (kể cả người hỏi) thấy câu hỏi
+trong lịch sử, chỉ câu trả lời AI hiện ra đột ngột không rõ ngữ cảnh. Fix: `ai/route.ts` fetch history
+TRƯỚC, rồi insert câu hỏi thành 1 `chat_messages` THẬT (sender = người hỏi thật) TRƯỚC KHI gọi Gemini —
+câu hỏi luôn hiện dù Gemini lỗi hay không. Response đổi shape `{data:{question,answer}}`. Lỗi Gemini giờ
+KHÔNG trả 500 câm mà lưu thẳng "Hiếu đang fix, vui lòng đợi 😔" làm nội dung câu trả lời AI — bỏ hẳn 1
+nhánh lỗi riêng ở FE. FE `askAI()` thêm optimistic append câu hỏi (giống `sendMessage()`), chỉ khôi phục
+nội dung vào ô nhập nếu câu hỏi CHƯA kịp lưu (tránh gửi trùng). Chat history gửi Gemini giờ prepend TÊN
+người nói (`"{tên}: {nội dung}"`) — trước Gemini chỉ có role user/model trần, không phân biệt được ai nói
+gì trong nhóm nhiều người.
+
+Fix kèm 4 nhược điểm từ audit s196: (2) `notifyLarkMembers()` đổi `await` thay vì fire-and-forget (cùng
+lớp bug s195+18-C — Vercel đóng execution context giữa chừng). (3) Docs/Notes/Câu hỏi thêm poll silent
+20s (tham số `silent` mới, không bật lại skeleton loading) — trước hoàn toàn không Realtime lẫn poll. (4)
+Rate-limit `checkRateLimit()`: `/messages` 30/phút/user, `/ai` 10/phút/user (mỗi câu tốn 1 lần gọi
+Gemini). Chưa làm: unread badge list page (cần cột `last_read_at`, việc lớn hơn, để riêng theo yêu cầu
+Hiếu). tsc + lint (0 lỗi mới) + vitest (220/220) PASS. Push staging `3ec7409b`.
+
+### s196+2 (2026-09-13) — Tổ Gấu: paste ảnh + "Hỏi AI" nhận ảnh/file đính kèm (bot nhìn được)
+
+Hiếu báo: chat Tổ Gấu không cho gửi ảnh, không paste ảnh vào tin nhắn để bot xem. Đọc code xác nhận: đính
+kèm ảnh cho tin nhắn THƯỜNG đã hoạt động từ trước (nút paperclip), nhưng 2 gap thật: (1) không có paste
+ảnh (Ctrl+V) — chỉ đính kèm qua bấm nút mở file picker; (2) "Hỏi AI" hoàn toàn bỏ qua file đính kèm — nút
+AI `disabled` khi không có chữ gõ (bất kể có ảnh), `askAI()` chỉ gửi text cho Gemini, bot không bao giờ
+nhận pixel nào để "nhìn". Fix: thêm `addFiles()` dùng chung (paperclip + paste) + listener
+`window.addEventListener("paste",...)` lọc `image/*`, mirror đúng pattern Bé Gấu (`chatbot/page.tsx`),
+giới hạn `ATTACH_MAX_FILES=5` khớp Bé Gấu. `askAI()` cho phép bấm khi CHỈ có file, upload lên Storage
+trước (`uploadFilesToGroup()` tách từ `sendMessage()`) rồi gửi `{question,attachments}` cho backend.
+`ai/route.ts`: câu hỏi lưu kèm `attachments` (hiện đúng trong bubble); với ảnh/PDF, server `fetch()` lại
+URL public từ Storage → base64 → `inlineData` part cho Gemini (`chat.sendMessage()` nhận
+`string|Array<Part>`, không cần đổi sang `generateContent()`). Không hỗ trợ multimodal cho docx/xlsx/txt
+lần này (ngoài phạm vi yêu cầu — chỉ ảnh/PDF). tsc + lint (0 lỗi mới) + vitest (220/220) PASS. Push
+staging `b4645d83`.
+
+### s196+3 (2026-09-13) — Tổ Gấu: fix bug thật hỏi AI kèm ảnh lỗi "Hiếu đang fix" + badge phân biệt AI
+
+Hiếu báo: đưa ảnh policy vendor + hỏi tóm tắt → luôn báo "Hiếu đang fix, vui lòng đợi 😔". Xác nhận qua
+Vercel Runtime Errors (`get_runtime_errors`, KHÔNG đoán): `GoogleGenerativeAI Error: First content should
+be with role 'user', got model`. Root cause: `model.startChat({history:chatHistory})` — Gemini bắt buộc
+turn ĐẦU TIÊN của history phải là `user`, role phải luân phiên user/model. `chatHistory` build thẳng từ 20
+tin gần nhất không lọc/gộp gì — 2 vấn đề: (a) tin cũ nhất trong cửa sổ 20 tin có thể tình cờ là câu trả
+lời AI (role model) → vi phạm điều kiện (1); (b) nhiều người nói liên tiếp không xen AI → nhiều turn user
+liên tiếp không tự alternate. Bug có sẵn từ trước (không phải do tính năng ảnh mới), ảnh chỉ dễ trúng đúng
+lúc lịch sử gần nhất rơi vào 1 trong 2 case này hơn. Fix: build `rawHistory` (role+text thô) → merge các
+turn LIÊN TIẾP CÙNG role thành 1 (nối `\n`) → cắt bỏ turn "model" đứng đầu nếu còn sót.
+
+Đồng thời làm việc thứ 2 Hiếu yêu cầu: badge "🤖 Hỏi AI" — cột mới `chat_messages.is_ai_question`
+(migration v56), `ai/route.ts` set `true` khi insert câu hỏi, FE hiện badge nhỏ phía trên bubble (không
+đổi màu bubble) phân biệt tin "đã gửi cho AI" với chat người-với-người bình thường. Fix kèm phát hiện lúc
+sửa: `GET .../messages` (dùng chung 1 `select()` cho load/load-more/search/pinned) thiếu hẳn cột
+`is_recalled`/`edited_at` — sau F5 tin đã thu hồi/đã sửa mất style hiển thị (thu hồi thì content đã bị
+ghi đè "Tin nhắn đã được thu hồi" ngay lúc PATCH nên KHÔNG lộ nội dung gốc — chỉ cosmetic, không phải lỗ
+hổng dữ liệu). Thêm cả 3 cột vào cùng 1 `select()`. tsc + lint (0 lỗi mới) + vitest (220/220) PASS. Push
+staging `447342e2`.
+
+### s196+4 (2026-09-13) — Tổ Gấu: thêm self-learning như Bé Gấu
+
+Hiếu hỏi Gấu Tổ có tự học/cập nhật thông tin như Bé Gấu/Gấu Pro không. Đọc code trả lời: KHÔNG — chỉ Bé
+Gấu có `detectAndLogLearning()` (1-shot Gemini phân loại NEW/CONFLICT/CONFIRM khi user thường nói 1 câu
+chứa thông tin thật, log `chatbot_learning_log`, DM Hiếu qua Lark, duyệt qua Gấu Pro "review pending
+learning"); Gấu Pro không tự học từ chat thường (không có hàm này) nhưng có tool ghi/sửa Wiki trực tiếp +
+là nơi duyệt learning queue; Gấu Tổ hoàn toàn không có gì — chỉ ILIKE-search sống Wiki/Docs/Notes mỗi lần
+hỏi (đọc dữ liệu tươi, không phải "tự học"). Hiếu yêu cầu thêm cho Gấu Tổ luôn.
+
+Tách `detectAndLogLearning()` từ `be-gau.ts` sang module dùng chung mới `lib/agents/learning.ts` (tránh
+chép logic — đúng bài học duplicate code s195+17), thêm tham số `sourceLabel` (mặc định "Bé Gấu", Gấu Tổ
+truyền "Tổ Gấu (<tên nhóm>)" để Hiếu biết nguồn khi nhận DM Lark). `ai/route.ts` gọi hàm này SAU khi trả
+lời AI xong, `sessionId:"togau:<groupId>"` (dùng lọc/nhận diện nguồn khi query DB, không cần schema mới).
+Cùng gate y hệt Bé Gấu: bỏ qua creator/câu quá ngắn/câu hỏi/cooldown 5 phút — DÙNG CHUNG rate-limit map
+với Bé Gấu (1 user spam cả 2 nơi vẫn chỉ tính 1 lần/5 phút). Approve vẫn ghi `creator_kb` GLOBAL (không
+tách theo group) — 1 thông tin phát hiện trong group Tổ Gấu, sau khi Hiếu duyệt, thành kiến thức dùng
+chung cho cả Bé Gấu/Gấu Pro luôn — hợp lý vì mục đích cuối là kiến thức công ty. `runReviewPendingLearning`
+thêm `session_id` vào kết quả để phân biệt nguồn khi review. Quyết định scope: chỉ áp dụng nội dung gửi
+qua "Hỏi AI", KHÔNG quét mọi tin nhắn chat thường (đúng phép so sánh — mọi tin gửi Bé Gấu = đang nói
+chuyện với bot, còn Tổ Gấu group chat chỉ lúc bấm "Hỏi AI" mới tương đương; quét toàn bộ chat thường sẽ
+tốn Gemini 24/7 không cần thiết + đụng privacy hội thoại nội bộ nhiều hơn mức cần).
+
+tsc + lint (0 lỗi mới) + vitest (220/220 — bao gồm bộ test learning detection cũ của Bé Gấu vẫn PASS
+nguyên sau khi tách module) PASS. Push staging `704276e6`. **Hiếu đã tự test toàn bộ chuỗi s196→s196+4 và
+xác nhận OK** — không còn việc mở nào chặn ở luồng Tổ Gấu. Wiki cập nhật đủ: `analytics-to-gau.md` (5 mục
+s196 tới s196+4) + `chatbot-agents-guardian.md` (ghi nhận tách `learning.ts`). CLAUDE.md cập nhật trạng
+thái + checklist + bảng migrations (v55/v56 Hiếu đã chạy).

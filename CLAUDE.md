@@ -6,10 +6,42 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-11, s195+19)
+## Trạng thái hiện tại (2026-09-13, s196+4)
 
 | | |
 |---|---|
+| ✅ **s196–s196+4 (2026-09-13) — Tổ Gấu: audit toàn diện + fix Realtime/AI-question/ảnh/history-role + self-learning — Hiếu đã QA OK** |
+  Audit toàn diện tab Tổ Gấu theo yêu cầu Hiếu + chuỗi fix liên tiếp, **Hiếu đã tự test xác nhận OK**.
+  **s196**: fix bug tin nhắn NGƯỜI KHÁC không tự hiện, phải F5 mới thấy — root cause `chat_messages` chưa
+  từng thêm vào publication `supabase_realtime` (migration v34 thiếu bước này) → `subscribe()` không báo
+  lỗi gì, chỉ đơn giản không bao giờ nhận event (tin CHÍNH MÌNH luôn thấy ngay vì optimistic-append cục
+  bộ, không qua Realtime). Fix: `v55_to_gau_realtime.sql` (`ALTER PUBLICATION ... ADD TABLE
+  chat_messages`, Hiếu đã chạy) + lưới an toàn `reconcileMessages()` poll REST merge 12s (độc lập trạng
+  thái publication/WebSocket).
+  **s196+1**: fix 4 nhược điểm phát hiện qua audit + 1 bug Hiếu báo (câu hỏi hỏi AI không hiện trong
+  chat — trước chỉ dùng làm prompt, không bao giờ insert `chat_messages`). Đổi `ai/route.ts` lưu câu hỏi
+  THẬT trước khi gọi Gemini (hiện dù Gemini lỗi), response đổi shape `{question,answer}`. Kèm:
+  `notifyLarkMembers()` await thay vì fire-and-forget; Docs/Notes/Câu hỏi thêm poll silent 20s (trước
+  không Realtime lẫn poll); rate-limit `/messages` (30/phút) + `/ai` (10/phút).
+  **s196+2**: paste ảnh (Ctrl+V, mirror Bé Gấu) + "Hỏi AI" giờ nhận ảnh/PDF đính kèm — upload Storage
+  trước, backend fetch lại + base64 thành `inlineData` cho Gemini multimodal (trước nút AI bị disable khi
+  không gõ chữ, hoàn toàn bỏ qua file dù có đính kèm).
+  **s196+3**: fix bug thật hỏi AI kèm ảnh luôn báo "Hiếu đang fix" — xác nhận qua Vercel Runtime Errors
+  (`get_runtime_errors`, không đoán): `GoogleGenerativeAI Error: First content should be with role
+  'user', got model`. History 20 tin gần nhất gửi Gemini không đảm bảo turn đầu là `user` cũng không
+  alternate user/model (group chat nhiều người nói liên tiếp) — merge turn liên tiếp cùng role + cắt turn
+  `model` đứng đầu trước `startChat()`. Thêm badge "🤖 Hỏi AI" (cột `is_ai_question`, migration v56, Hiếu
+  đã chạy) phân biệt tin gửi bot với chat thường. Kèm fix nhỏ: `GET /messages` thiếu `is_recalled`/
+  `edited_at` trong select (cosmetic, không lộ dữ liệu).
+  **s196+4**: Hiếu hỏi Gấu Tổ có self-learning như Bé Gấu không — KHÔNG, đã thêm. Tách
+  `detectAndLogLearning()` từ `be-gau.ts` sang module dùng chung `lib/agents/learning.ts` (tránh chép
+  logic), `ai/route.ts` gọi sau mỗi câu "Hỏi AI" — cùng gate Bé Gấu (bỏ qua creator/câu hỏi/tin ngắn/
+  cooldown 5 phút dùng CHUNG rate map), DM Lark ghi rõ nguồn `"Tổ Gấu (<tên nhóm>)"`, duyệt vẫn qua Gấu
+  Pro ("review pending learning", nay trả thêm `session_id` phân biệt nguồn). Chỉ áp dụng nội dung gửi
+  qua "Hỏi AI", không quét chat thường (đúng phép so sánh — mọi tin gửi Bé Gấu = đang nói chuyện với bot).
+  tsc + lint (0 lỗi mới) + vitest (220/220 mọi lần, bao gồm bộ test learning cũ của Bé Gấu vẫn PASS
+  nguyên sau khi tách module) PASS suốt cả chuỗi. 5 commit đã push staging (`9b4cca00`, `3ec7409b`,
+  `b4645d83`, `447342e2`, `704276e6`). **Hiếu đã tự QA xác nhận OK** — không còn việc mở nào chặn.
 | ✅ **s195+19 (2026-09-11) — Mã nước SKU sai (fix rộng) + redesign UI My Metrics + audit B2C Performance: 4 bug thật, 1 UI theo yêu cầu** |
   Tiếp sau s195+18-C, 2 việc theo yêu cầu Hiếu cùng ngày.
   **(1) Fix mã nước SKU** (`decodeSkuDestinationCode`/`getDestinationSQL`, `analytics-helpers.ts`) —
@@ -424,6 +456,9 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [x] **s196–s196+4 — Tổ Gấu: Realtime/AI-question/ảnh/history-role/self-learning — XONG (2026-09-13),
+  Hiếu đã tự test xác nhận OK** — migration v55 (`ALTER PUBLICATION` Realtime) + v56 (`is_ai_question`)
+  đã chạy. Không còn việc mở nào ở luồng này.
 - [ ] **s195+19 — Test lại toàn bộ B2C Performance + My Metrics (Hiếu hẹn "mai tôi test")** — mọi fix đã
   tự verify bằng data/API thật trên staging, nhưng chưa ai xem lại bằng mắt qua UI thật 1 lượt đầy đủ.
   Checklist gợi ý: (a) tab B2C sub-tab Performance — đổi groupBy=SKU, kiểm tra "Tổng cộng" + xuất CSV có
@@ -584,7 +619,10 @@ CHƯA đổi hành vi — Hiếu đã chạy 2026-09-07) · **v50** `browser_bri
 Hiếu đã chạy, đã QA xong bridge hoạt động 2026-09-07) · **v51** `browser_bridge_pairings` + `owner_username`
 (bridge multi-tenant — Hiếu đã chạy + đã reload PostgREST schema cache, đã QA xong với acc khác 2026-09-07) ·
 **v52** `external_api_keys` (API sản phẩm cho manager — ⚠️ Hiếu CẦN CHẠY, chưa xác nhận — nhớ Reload schema
-Supabase sau khi chạy).
+Supabase sau khi chạy) · **v53** `okr_lark_events` thêm `is_self_initiated`/`hieu_note` · **v54**
+`app_usage_events.tools_used`/`used_db_tool` — v53-v54 Hiếu đã chạy, đã QA xong 2026-09-11 · **v55**
+`ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages` (fix tin nhắn Tổ Gấu không tự hiện) · **v56**
+`chat_messages.is_ai_question` (badge phân biệt câu hỏi AI) — v55-v56 Hiếu đã chạy, đã QA xong 2026-09-13.
 
 ---
 
