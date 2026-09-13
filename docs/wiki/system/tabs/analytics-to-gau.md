@@ -641,7 +641,12 @@ dropdown, paperclip/textarea/nút AI/nút gửi) sang `components/to-gau/message
 extension) — xác nhận baseline hoạt động đúng trên commit trước G: hỏi AI Gấu Tổ trong group "Test"
 trả lời đúng + stream chữ chạy dần (s196+16), câu hỏi/trả lời lưu đúng lịch sử; bấm nút "Trả lời" 1 tin
 → preview bar hiện đúng ("Trả lời Nguyễn Hoàng Hiếu: ...") → gửi tin mới → trích dẫn tin gốc hiện đúng
-trên bubble (khớp `POST /messages` trả 201, xác nhận qua Network tab). Sẽ verify LẠI sau khi Vercel
-deploy xong commit tách này để đảm bảo không hỏng gì (ghi bổ sung ngay dưới sau khi xong).
+trên bubble (khớp `POST /messages` trả 201, xác nhận qua Network tab).
 
-tsc + lint (0 lỗi mới) + vitest (243/243) PASS.
+**Đã verify LẠI sau khi Vercel deploy xong commit tách** (tab mới, hard reload) — hỏi AI 1 câu khác
+("post-refactor check") trả lời đúng + stream chữ chạy dần y hệt trước tách; bấm "Trả lời" tin đó →
+preview bar hiện đúng nội dung/tên người gửi. `MessageComposer` (paperclip/textarea/mention dropdown/
+nút AI/nút gửi/reply preview/file preview) hoạt động giống hệt bản gốc, không phát hiện gì hỏng.
+
+tsc + lint (0 lỗi mới) + vitest (243/243) PASS. Không cần Hiếu làm gì thêm — đã verify trực tiếp trên
+staging cả trước lẫn sau khi tách, không chỉ tin code sạch.
