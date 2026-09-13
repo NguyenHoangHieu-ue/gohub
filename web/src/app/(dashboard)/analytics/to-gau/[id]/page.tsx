@@ -619,6 +619,7 @@ export default function ToGauRoomPage() {
         : "text",
       created_at: new Date().toISOString(),
       attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+      is_ai_question: true,
     }
     setMessages(prev => [...prev, optimisticQuestion])
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
@@ -1016,6 +1017,12 @@ export default function ToGauRoomPage() {
                         <div className={cn("max-w-[72%] min-w-0 relative", isMe ? "items-end" : "items-start", "flex flex-col")}>
                           {showAvatar && !isMe && (
                             <p className="text-[11px] text-slate-400 mb-0.5 px-1">{msg.sender_name}</p>
+                          )}
+                          {/* Badge phân biệt câu hỏi gửi AI với chat thường (s196+3) */}
+                          {msg.is_ai_question && !msg.is_recalled && (
+                            <span className="flex items-center gap-1 mb-0.5 px-1 text-[10px] font-medium text-indigo-500">
+                              <Bot size={10} /> Hỏi AI
+                            </span>
                           )}
                           {/* Inline edit form (#4) */}
                           {editingMsgId === msg.id ? (

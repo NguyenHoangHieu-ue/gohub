@@ -107,7 +107,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   let query = supabaseAdmin
     .from("chat_messages")
-    .select("id, group_id, sender_email, sender_name, content, msg_type, attachments, reply_to, is_pinned, created_at")
+    .select("id, group_id, sender_email, sender_name, content, msg_type, attachments, reply_to, is_pinned, created_at, is_recalled, edited_at, is_ai_question")
     .eq("group_id", id)
 
   if (pinnedOnly) {

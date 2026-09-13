@@ -7,6 +7,41 @@
 
 ---
 
+## ⚠️ s196+3 (2026-09-13) — Fix bug thật hỏi AI kèm ảnh bị "Hiếu đang fix" + badge phân biệt câu hỏi AI
+
+Hiếu báo 2 việc sau khi QA s196+2: (1) đưa ảnh policy vendor + hỏi tóm tắt → luôn báo "Hiếu đang fix,
+vui lòng đợi 😔"; (2) cần phân biệt tin nào là hỏi bot với chat thường.
+
+**1. Bug ảnh lỗi — xác nhận qua Vercel Runtime Errors (`get_runtime_errors`), không đoán**:
+```
+[to-gau/ai] Gemini error: [GoogleGenerativeAI Error]: First content should be with role 'user', got model
+```
+Root cause: `model.startChat({ history: chatHistory })` — Gemini **bắt buộc turn đầu tiên của history
+phải là `user`**, và role phải luân phiên user/model. `chatHistory` build thẳng từ 20 tin nhắn gần nhất
+KHÔNG lọc/gộp gì — 2 vấn đề thật trong group chat: (a) tin cũ nhất trong cửa sổ 20 tin có thể tình cờ là
+1 câu trả lời AI (role "model") → vi phạm luôn điều kiện (1); (b) nhiều người nói liên tiếp không xen AI
+→ nhiều turn "user" liên tiếp, không tự alternate. Bug **có sẵn từ trước** (không phải do tính năng ảnh
+mới), nhưng câu hỏi kèm ảnh dễ trúng đúng lúc lịch sử gần nhất rơi vào 1 trong 2 trường hợp này hơn (dùng
+để hỏi giữa buổi làm việc, sau khi đã hỏi AI vài câu trước đó → tin cũ nhất trong 20 tin dễ là answer AI).
+Fix: build `rawHistory` (role+text thô) → merge các turn LIÊN TIẾP CÙNG role thành 1 (nối bằng `\n`) → cắt
+bỏ turn "model" đứng đầu nếu còn sót — đảm bảo luôn thoả cả 2 điều kiện của Gemini.
+
+**2. Badge "🤖 Hỏi AI"** — cột mới `chat_messages.is_ai_question` (migration v56, boolean default false).
+`ai/route.ts` set `true` khi insert câu hỏi; FE hiện badge nhỏ phía trên bubble (không đổi màu bubble,
+chỉ thêm tag) để phân biệt tin "đã gửi cho AI xử lý" với tin chat người-với-người bình thường.
+
+**Fix kèm phát hiện lúc sửa**: `GET .../messages` (load lần đầu/load more/search/pinned — dùng chung 1
+`select()`) thiếu hẳn cột `is_recalled`/`edited_at` — sau F5, tin đã thu hồi/đã sửa mất trạng thái hiển
+thị (thu hồi thì content đã bị ghi đè "Tin nhắn đã được thu hồi" ngay từ lúc PATCH nên KHÔNG lộ nội dung
+gốc — chỉ mất style italic/dashed; sửa thì mất dòng "(đã chỉnh sửa)" — cả 2 chỉ là cosmetic, không phải
+lỗ hổng dữ liệu). Thêm 3 cột `is_recalled, edited_at, is_ai_question` vào cùng 1 `select()` luôn.
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu**: (1) chạy migration v56; (2) QA lại đúng case
+đã lỗi — đính kèm ảnh policy vendor, hỏi tóm tắt, xác nhận có trả lời thật; (3) xác nhận tin hỏi AI có
+badge "🤖 Hỏi AI" nhỏ phía trên, tin chat thường thì không có.
+
+---
+
 ## ⚠️ s196+2 (2026-09-13) — Chat với AI giờ nhận ảnh/file đính kèm (paste + upload), bot "nhìn" được
 
 Hiếu báo: đoạn chat Tổ Gấu không cho gửi ảnh, cũng không paste ảnh vào tin nhắn để bot xem. Đọc code xác

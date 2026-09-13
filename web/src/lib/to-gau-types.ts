@@ -19,6 +19,7 @@ export interface ChatMessage {
   edited_at?:   string | null
   is_recalled?: boolean
   attachments?: Attachment[]
+  is_ai_question?: boolean  // true = tin này đã gửi cho Gấu Tổ AI xử lý (s196+3, phân biệt với chat thường)
 }
 
 export interface Member {

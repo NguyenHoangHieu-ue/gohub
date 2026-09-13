@@ -156,6 +156,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .insert({
       group_id: id, sender_email: username, sender_name: name, content: question,
       msg_type: questionMsgType, attachments: attachments.length > 0 ? attachments : [],
+      is_ai_question: true, // s196+3: đánh dấu để FE phân biệt với chat thường (badge "Hỏi AI")
     })
     .select()
     .single()
@@ -200,15 +201,31 @@ Khi trả lời:
   // Build Gemini chat history — prepend TÊN người nói (group nhiều người, Gemini chỉ có role user/model
   // nên không tự phân biệt được ai nói gì nếu để trần nội dung — dễ lẫn ngữ cảnh khi nhiều người hỏi
   // liên tiếp trong cùng nhóm).
-  const chatHistory: { role: "user" | "model"; parts: { text: string }[] }[] = []
+  const rawHistory: { role: "user" | "model"; text: string }[] = []
   for (const msg of history) {
     if (!msg.content) continue
     const isAI = msg.sender_email === AI_EMAIL
-    chatHistory.push({
-      role:  isAI ? "model" : "user",
-      parts: [{ text: isAI ? msg.content : `${msg.sender_name || "?"}: ${msg.content}` }],
+    rawHistory.push({
+      role: isAI ? "model" : "user",
+      text: isAI ? msg.content : `${msg.sender_name || "?"}: ${msg.content}`,
     })
   }
+
+  // Gemini bắt buộc: (1) turn ĐẦU TIÊN của history phải là "user" — lỗi thật đã gặp trên staging
+  // ("First content should be with role 'user', got model") khi tin nhắn cũ nhất trong 20 tin gần nhất
+  // tình cờ là câu trả lời AI; (2) role phải luân phiên user/model — group chat thật có N người nói liền
+  // nhau cùng role "user" không xen AI ở giữa, không tự alternate. Merge các turn liên tiếp CÙNG role
+  // thành 1 rồi cắt bỏ turn "model" đứng đầu để luôn thoả cả 2 điều kiện.
+  const chatHistory: { role: "user" | "model"; parts: { text: string }[] }[] = []
+  for (const turn of rawHistory) {
+    const last = chatHistory[chatHistory.length - 1]
+    if (last && last.role === turn.role) {
+      last.parts[0].text += `\n${turn.text}`
+    } else {
+      chatHistory.push({ role: turn.role, parts: [{ text: turn.text }] })
+    }
+  }
+  while (chatHistory.length && chatHistory[0].role === "model") chatHistory.shift()
 
   // Call Gemini
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
