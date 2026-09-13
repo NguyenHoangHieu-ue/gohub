@@ -586,3 +586,24 @@ response (khác Bé Gấu/Gấu Pro đã stream từ s195+18), cảm giác chậ
 tsc + lint (0 lỗi mới) + vitest (230/230) PASS. **Cần Hiếu QA thủ công**: hỏi AI 1 câu trong group, xác
 nhận chữ CHẠY DẦN thay vì hiện 1 cục sau khi chờ, không lặp/mất nội dung, câu hỏi/trả lời vẫn lưu đúng
 lịch sử sau khi F5.
+
+## s196+17 (2026-09-13) — Realtime cho Docs/Notes/Questions
+
+Đề xuất E (P2) roadmap audit Tổ Gấu s196+5 — 3 panel "Của nhóm" trước chỉ poll 20s (s196+1), member khác
+thêm tài liệu/ghi chú/câu hỏi phải chờ tới 20s mới thấy (chat đã Realtime từ v55).
+
+- Migration `v60_to_gau_docs_notes_questions_realtime.sql` — thêm `chat_docs`/`chat_notes`/
+  `chat_questions` vào publication `supabase_realtime` (đúng bước từng thiếu cho `chat_messages`, gây bug
+  v55).
+- `lib/to-gau-realtime.ts` — client Supabase Realtime dùng CHUNG cho cả phòng chat lẫn 3 panel (trước
+  `[id]/page.tsx` tự tạo client riêng bằng `createClient()` module-level; nếu mỗi panel cũng tự tạo sẽ mở
+  thêm kết nối WebSocket không cần thiết cho cùng 1 trang — tách ra 1 chỗ dùng chung).
+- Mỗi panel (`docs-panel.tsx`/`notes-panel.tsx`/`questions-panel.tsx`) thêm 1 subscription
+  `postgres_changes` (`event:"*"` — INSERT/UPDATE/DELETE, filter đúng `group_id`) → reload silent khi có
+  thay đổi. Đơn giản hơn cách merge từng loại event của `chat_messages` (số dòng thay đổi/lần nhỏ, không
+  cần tối ưu) — vẫn giữ nguyên poll 20s làm lưới an toàn (đúng tiền lệ: publication thiếu không throw lỗi
+  gì, chỉ im lặng không nhận event).
+
+tsc + lint (0 lỗi mới) + vitest (230/230) PASS. **Cần Hiếu**: chạy migration v60. QA thủ công: mở cùng 1
+group bằng 2 tài khoản/2 tab, thêm 1 Doc/Note/Câu hỏi ở tab A → xác nhận tab B thấy gần như ngay lập tức
+(không cần đợi 20s hay F5).

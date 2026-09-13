@@ -8,7 +8,6 @@ import {
   Pin, Upload, Edit2, Search, ChevronDown, ChevronUp, AlertTriangle, Reply,
 } from "lucide-react"
 import Link from "next/link"
-import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/toast"
 import { useDbRole } from "@/lib/use-role-guard"
@@ -22,12 +21,7 @@ import { FilePreviewItem, AttachmentDisplay } from "@/components/to-gau/file-pre
 import { useConfirm } from "@/components/to-gau/confirm-modal"
 import { renderContent, fmtTime } from "@/lib/to-gau-format"
 import type { Attachment, ChatMessage, Member, GroupInfo } from "@/lib/to-gau-types"
-
-// Supabase realtime client (anon key đủ để subscribe)
-const supabaseRealtime = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-)
+import { supabaseRealtime } from "@/lib/to-gau-realtime"
 
 // s196+2: giới hạn số file đính kèm/lần — cùng con số với Bé Gấu (chatbot/page.tsx) để nhất quán UX
 const ATTACH_MAX_FILES = 5

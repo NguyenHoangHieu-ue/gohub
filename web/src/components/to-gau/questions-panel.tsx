@@ -9,6 +9,7 @@ import { useConfirm } from "@/components/to-gau/confirm-modal"
 import { cn } from "@/lib/utils"
 import { fmtTime } from "@/lib/to-gau-format"
 import type { QuestionItem } from "@/lib/to-gau-types"
+import { supabaseRealtime } from "@/lib/to-gau-realtime"
 
 const STATUS_META: Record<QuestionItem["status"], { label: string; badge: string; icon: React.ReactNode }> = {
   chua:    { label: "Chưa xử lý",  badge: "bg-rose-50 text-rose-600 border-rose-200",       icon: <Clock size={11} /> },
@@ -55,13 +56,17 @@ export function QuestionsPanel({
 
   useEffect(() => { load() }, [load])
 
-  // Không có Realtime cho chat_questions — member khác đặt/trả lời câu hỏi chỉ hiện sau khi tự chuyển
-  // tab/refresh (đúng bug đã fix cho chat, panel này chưa có). Poll nhẹ 20s/lần (silent) làm lưới an
-  // toàn, cùng hướng đã áp cho chat_messages.
+  // Realtime (s196+17, đề xuất E) — trước chỉ poll. Giữ nguyên poll 20s làm lưới an toàn (đúng tiền lệ
+  // v55 — publication thiếu không throw lỗi, chỉ im lặng không nhận event).
   useEffect(() => {
     const t = setInterval(() => load(true), 20000)
-    return () => clearInterval(t)
-  }, [load])
+    const channel = supabaseRealtime
+      .channel(`chat_questions:${groupId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_questions", filter: `group_id=eq.${groupId}` },
+        () => load(true))
+      .subscribe()
+    return () => { clearInterval(t); supabaseRealtime.removeChannel(channel) }
+  }, [groupId, load])
 
   async function handleAsk(e: React.FormEvent) {
     e.preventDefault()
