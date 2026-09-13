@@ -7,6 +7,37 @@
 
 ---
 
+## ⚠️ s196 (2026-09-13) — Fix bug: tin nhắn người khác không tự hiện, phải F5 mới thấy
+
+Hiếu báo đúng triệu chứng: mình nhắn thì thấy ngay, tin của người khác không tự hiện — phải refresh.
+**Root cause nghi vấn cao nhất** (đọc trực tiếp code + migration, không đoán): `sendMessage()` ở
+`[id]/page.tsx` append tin nhắn của MÌNH ngay lập tức kiểu optimistic (trước khi server trả về) +ghi đè
+lại bằng response REST — không phụ thuộc Realtime chút nào. Tin của NGƯỜI KHÁC hoàn toàn phụ thuộc
+`postgres_changes` subscription (Supabase Realtime) — đúng logic, nhưng bảng `chat_messages` **CHƯA
+TỪNG được thêm vào publication `supabase_realtime`** (migration v34 tạo bảng, không có bước
+`ALTER PUBLICATION ... ADD TABLE`, cũng không thấy log nào cho thấy Hiếu tự bật qua Dashboard →
+Database → Replication). Thiếu bước này thì Postgres không phát WAL change ra Realtime server —
+**`subscribe()` KHÔNG báo lỗi gì** (channel vẫn báo `SUBSCRIBED` bình thường), chỉ đơn giản không bao
+giờ nhận event nào — giải thích đúng vì sao không có exception/console error nào từng lộ ra.
+
+**Fix 2 lớp**:
+1. `db/migrations/v55_to_gau_realtime.sql` — `ALTER PUBLICATION supabase_realtime ADD TABLE
+   chat_messages;` (idempotent, check `pg_publication_tables` trước). **Cần Hiếu chạy trên Supabase.**
+2. **Lưới an toàn ở code** (không phụ thuộc publication/trạng thái kết nối WebSocket đúng hay không):
+   thêm `reconcileMessages()` — poll REST `GET .../messages?limit=50` mỗi 12 giây, MERGE (không replace)
+   vào state theo `id` nên không mất optimistic message đang gửi dở, không giật scroll khi không có gì
+   đổi. Chạy song song `loadPinned()` cùng nhịp (pin cũng chỉ sync qua Realtime UPDATE event, cùng rủi
+   ro). Đây là "belt and suspenders" — kể cả nếu sau này Realtime lại âm thầm gãy vì lý do khác (mất kết
+   nối WebSocket giữa phiên dài, proxy công ty chặn WS...), tin nhắn vẫn tự đồng bộ trong tối đa 12s thay
+   vì kẹt vô thời hạn tới khi user tự F5.
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS. Chưa test tay qua browser thật (không tái hiện được
+Realtime miss trên máy dev — không có `.env.local`/Supabase project thật). **Cần Hiếu**: (1) chạy
+migration v55, (2) QA lại 2 tab/2 acc khác nhau — acc A gửi tin, acc B (không F5) phải thấy tin hiện ra
+trong ≤12s (lý tưởng là gần như ngay lập tức nếu publication fix đúng nguyên nhân).
+
+---
+
 ## ⚠️ s194+12 (2026-09-06) — UI redesign: hex navy sai `#003B95` (màu chủ đạo toàn tab) → brand
 
 Toàn bộ To-Gau (list page + room page + 6 component con: docs-panel/notes-panel/questions-panel/

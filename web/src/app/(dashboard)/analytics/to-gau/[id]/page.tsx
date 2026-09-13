@@ -221,9 +221,43 @@ export default function ToGauRoomPage() {
     setNewMsgCount(0)
   }
 
+  // Đối chiếu lại tin nhắn mới nhất qua REST — merge (không replace) để không mất optimistic message
+  // đang gửi dở/không giật scroll. Dùng làm lưới an toàn cho Realtime (xem effect dưới).
+  const reconcileMessages = useCallback(async () => {
+    if (!groupId) return
+    try {
+      const res = await fetch(`/api/to-gau/groups/${groupId}/messages?limit=50`)
+      if (!res.ok) return
+      const json = await res.json()
+      const fresh: ChatMessage[] = json.data ?? []
+      setMessages(prev => {
+        const merged = new Map(prev.map(m => [m.id, m]))
+        let changed = false
+        for (const m of fresh) {
+          const existing = merged.get(m.id)
+          if (!existing || existing.content !== m.content || existing.is_pinned !== m.is_pinned) {
+            merged.set(m.id, m)
+            changed = true
+          }
+        }
+        if (!changed) return prev
+        return Array.from(merged.values()).sort((a, b) => a.created_at.localeCompare(b.created_at))
+      })
+    } catch {
+      // ignore
+    }
+  }, [groupId])
+
   // Supabase Realtime subscription
+  // ⚠️ Realtime "postgres_changes" chỉ hoạt động nếu bảng đã được thêm vào publication
+  // `supabase_realtime` (Supabase Dashboard/migration v55) — thiếu bước đó, subscribe() KHÔNG throw lỗi
+  // gì (channel vẫn báo SUBSCRIBED), chỉ đơn giản không bao giờ nhận event → tin người khác kẹt lại tới
+  // khi tự F5 (tin CHÍNH MÌNH luôn thấy ngay vì sendMessage() append optimistic cục bộ, không phụ thuộc
+  // Realtime — đây là lý do bug chỉ lộ ra 1 chiều). Poll REST định kỳ bên dưới là lưới an toàn, không phụ
+  // thuộc trạng thái publication/kết nối WebSocket.
   useEffect(() => {
     if (!groupId) return
+    const pollTimer = setInterval(() => { reconcileMessages(); loadPinned() }, 12000)
     const channel = supabaseRealtime
       .channel(`chat_messages:${groupId}`)
       .on(
@@ -260,8 +294,8 @@ export default function ToGauRoomPage() {
       )
       .subscribe()
 
-    return () => { supabaseRealtime.removeChannel(channel) }
-  }, [groupId])
+    return () => { clearInterval(pollTimer); supabaseRealtime.removeChannel(channel) }
+  }, [groupId, reconcileMessages, loadPinned])
 
   // Handle file selection
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
