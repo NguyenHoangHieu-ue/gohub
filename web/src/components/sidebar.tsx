@@ -85,7 +85,6 @@ const MANAGEMENT_GROUP = {
   label: "Management",
   items: [
     { href: "/analytics/users",      label: "Users",              icon: Users     },
-    { href: "/analytics/schema",     label: "Schema Config",      icon: Database  },
     { href: "/analytics/settings",   label: "Settings",           icon: Settings  },
     { href: "/admin",                label: "Admin (Product)",    icon: Package   },
   ],

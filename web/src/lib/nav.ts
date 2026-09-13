@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react"
 import {
   Users, Gift, Package, Truck, Globe, Sparkles, LayoutDashboard, PieChart, Globe2, Building2,
   ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, Terminal, Activity, TrendingUp,
-  Database, Clock, Settings, Crown, Cpu, BookOpen, BarChart2, MessageCircle, Plug,
+  Clock, Settings, Crown, Cpu, BookOpen, BarChart2, MessageCircle, Plug,
 } from "lucide-react"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 
@@ -58,7 +58,6 @@ export const ANALYTICS_GROUPS: NavGroup[] = [
 
 export const MANAGEMENT_GROUP: NavGroup = { label: "Management", items: [
   { href: "/analytics/users",    label: "Users",           icon: Users    },
-  { href: "/analytics/schema",   label: "Schema Config",   icon: Database },
   { href: "/analytics/settings", label: "Settings",        icon: Settings },
   { href: "/admin",              label: "Admin (Product)", icon: Package  },
 ]}
