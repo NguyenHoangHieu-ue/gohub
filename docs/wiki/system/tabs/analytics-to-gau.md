@@ -535,3 +535,34 @@ Không đổi `temperature`/logic khác (ngoài phạm vi P0 lần này). tsc + 
 PASS — không có unit test riêng cho route này (đúng finding #7 trong audit: chưa có eval harness cho Gấu
 Tổ AI, để làm sau). **Cần Hiếu QA thủ công**: hỏi AI trong 1 group, xác nhận vẫn trả lời đúng/không chậm
 hơn rõ rệt; không cần chạy migration nào.
+
+## s196+15 (2026-09-13) — Guardian nhẹ + cost tracking + tóm tắt on-demand + reply/thread
+
+Tiếp roadmap audit Tổ Gấu s196+5, nhóm P1 (4 việc, đều trong `groups/[id]/ai/route.ts` trừ mục cuối):
+
+- **Guardian nhẹ** (đề xuất #1) — trước hoàn toàn dựa vào prompt tự nhắc "không tiết lộ COGS/margin",
+  không có lớp code chặn nào. Tái dùng `guardCheck()` có sẵn (`lib/agents/guardian.ts`), chỉ kiểm
+  `system_internal` — mọi category dữ liệu khác vẫn "ai cũng như nhau". KHÔNG dùng `ignoreRole:true` như
+  Lark (web session đã xác thực role thật, admin/creator vẫn hỏi được nếu cần). Chặn TRƯỚC khi tốn tiền
+  gọi Gemini/tải attachment — bọc toàn bộ phần build prompt + gọi model vào nhánh `guard.allowed`.
+- **Cost/token tracking theo group** (đề xuất D) — trước hoàn toàn không observable dù là hoạt động của
+  MỌI group cùng lúc. Ghi `app_usage_events` (`agent_id:"to-gau"`, `page_path:"/analytics/to-gau/<id>"` —
+  mượn field có sẵn thay vì migration cột `group_id` mới, lọc theo group qua `page_path` khi cần) kèm
+  `tokens_in/out/est_cost_usd` (tính từ `usageMetadata`, dùng chung `gemini-pricing.ts`). Ghi cả khi bị
+  guardian chặn (tokens=0, cost=0 — đúng vì không gọi Gemini).
+- **Tóm tắt thảo luận theo yêu cầu** (ý tưởng #3) — phát hiện câu hỏi chứa "tóm tắt"/"tóm lược"/"summar"
+  → nới giới hạn lịch sử từ 20 lên 60 tin + thêm 1 directive prompt đổi khung nhìn "lịch sử chat = nội
+  dung chính cần tóm tắt" (không ép trích nguồn Wiki/Docs như chế độ hỏi-đáp thường). Không cần tool/
+  route mới, tái dùng nguyên hạ tầng.
+- **Reply/thread cho tin nhắn thường** (ý tưởng #5) — cột `reply_to` đã tồn tại (trước chỉ AI dùng khi
+  trả lời câu hỏi). `messages/route.ts` POST nhận thêm `replyTo` (rescope theo `group_id` trước khi lưu,
+  tránh trỏ sang tin nhắn nhóm khác). FE (`[id]/page.tsx`): nút "Trả lời" trong hàng action hover mỗi tin
+  nhắn → set preview bar trên input (huỷ được) → gửi kèm `replyTo`; tin nhắn có `reply_to` hiện 1 khối
+  trích dẫn nhỏ phía trên bubble (bấm vào cuộn tới tin gốc qua `id="msg-<id>"` đã có sẵn từ trước).
+
+tsc + lint (0 lỗi mới) + vitest (230/230) PASS — vẫn chưa có eval harness riêng cho Gấu Tổ AI (finding #7,
+để làm sau nếu cần). **Cần Hiếu**: không cần migration nào (page_path là field có sẵn, reply_to là cột có
+sẵn). QA thủ công: (a) hỏi 1 câu dạng "hệ thống này code bằng gì" trong group → phải bị từ chối lịch sự
+thay vì trả lời thật; (b) gõ "tóm tắt hộ cuộc trò chuyện" sau vài chục tin → xem tóm tắt có hợp lý không;
+(c) bấm "Trả lời" 1 tin, gửi tin mới → xác nhận preview + trích dẫn hiện đúng, bấm trích dẫn cuộn đúng
+tin gốc.

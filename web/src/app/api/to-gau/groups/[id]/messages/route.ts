@@ -186,6 +186,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "content or attachments required" }, { status: 400 })
   }
 
+  // Reply/thread (s196+15, ý tưởng #5 roadmap audit Tổ Gấu) — cột reply_to đã có sẵn (trước chỉ AI
+  // dùng khi trả lời câu hỏi). Rescope theo group_id để tránh trỏ sang tin nhắn nhóm khác (IDOR).
+  let replyTo: string | null = null
+  if (typeof body.replyTo === "string" && body.replyTo) {
+    const { data: target } = await supabaseAdmin
+      .from("chat_messages")
+      .select("id")
+      .eq("id", body.replyTo)
+      .eq("group_id", id)
+      .maybeSingle()
+    if (target) replyTo = target.id
+  }
+
   // Determine msg_type
   let msgType = "text"
   if (attachments.length > 0 && !content) {
@@ -201,6 +214,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       content:      content || "",
       msg_type:     msgType,
       attachments:  attachments.length > 0 ? attachments : [],
+      reply_to:     replyTo,
     })
     .select()
     .single()

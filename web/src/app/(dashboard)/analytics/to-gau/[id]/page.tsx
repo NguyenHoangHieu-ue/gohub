@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
 import {
   ArrowLeft, Send, Settings, X, Trash2, Crown, Paperclip, Bot,
-  Pin, Upload, Edit2, Search, ChevronDown, ChevronUp, AlertTriangle,
+  Pin, Upload, Edit2, Search, ChevronDown, ChevronUp, AlertTriangle, Reply,
 } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@supabase/supabase-js"
@@ -103,6 +103,9 @@ export default function ToGauRoomPage() {
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
   const [editContent, setEditContent]   = useState("")
   const [savingEdit, setSavingEdit]     = useState(false)
+
+  // Reply/thread (s196+15) — tin nhắn đang được trả lời, hiện preview trên input
+  const [replyTarget, setReplyTarget]   = useState<ChatMessage | null>(null)
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
@@ -518,6 +521,9 @@ export default function ToGauRoomPage() {
     setShowMentionDropdown(false)
     const filesToSend = [...selectedFiles]
     setSelectedFiles([])
+    const replyToId = replyTarget?.id
+    const savedReplyTarget = replyTarget
+    setReplyTarget(null)
 
     // Upload files first
     let uploadedAttachments: Attachment[] = []
@@ -547,6 +553,7 @@ export default function ToGauRoomPage() {
         : "text",
       created_at: new Date().toISOString(),
       attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+      reply_to: replyToId || null,
     }
     setMessages(prev => [...prev, optimistic])
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
@@ -558,6 +565,7 @@ export default function ToGauRoomPage() {
         body: JSON.stringify({
           content: text,
           attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+          replyTo: replyToId,
         }),
       })
       if (!res.ok) {
@@ -572,6 +580,7 @@ export default function ToGauRoomPage() {
       setMessages(prev => prev.filter(m => m.id !== tempId))
       setContent(text)
       setSelectedFiles(filesToSend)
+      if (savedReplyTarget) setReplyTarget(savedReplyTarget)
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
     } finally {
       setSending(false)
@@ -1024,6 +1033,19 @@ export default function ToGauRoomPage() {
                               <Bot size={10} /> Hỏi AI
                             </span>
                           )}
+                          {/* Reply preview — trích dẫn tin nhắn gốc (s196+15) */}
+                          {msg.reply_to && !msg.is_recalled && (() => {
+                            const original = messages.find(m => m.id === msg.reply_to)
+                            return (
+                              <button
+                                onClick={() => document.getElementById(`msg-${msg.reply_to}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                                className="mb-1 px-2 py-1 rounded-lg bg-slate-50 border-l-2 border-brand-400 text-left text-[11px] text-slate-500 max-w-full truncate hover:bg-slate-100 transition-colors"
+                              >
+                                <span className="font-medium text-brand-600">{original?.sender_name || "Tin nhắn gốc"}</span>
+                                {": "}{(original?.content || "(đã xoá/không tải)").slice(0, 80)}
+                              </button>
+                            )
+                          })()}
                           {/* Inline edit form (#4) */}
                           {editingMsgId === msg.id ? (
                             <div className="space-y-1.5">
@@ -1109,6 +1131,14 @@ export default function ToGauRoomPage() {
                                 {msg.is_pinned ? "Bỏ ghim" : "Ghim"}
                               </button>
                             )}
+                            {/* Reply — mọi member (s196+15) */}
+                            <button
+                              onClick={() => setReplyTarget(msg)}
+                              title="Trả lời tin nhắn này"
+                              className="p-1 rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-brand-600 hover:text-brand-600 text-[11px] flex items-center gap-1 transition-colors shadow-sm"
+                            >
+                              <Reply size={11} /> Trả lời
+                            </button>
                             {/* Sửa — tác giả hoặc manager */}
                             {(isMe || isManager) && msg.msg_type !== "ai" && (
                               <button
@@ -1167,6 +1197,18 @@ export default function ToGauRoomPage() {
             {/* Input bar */}
             {!isArchived && (
               <div className="flex-shrink-0 border-t border-slate-200 bg-white px-4 py-3">
+                {/* Reply preview bar (s196+15) */}
+                {replyTarget && (
+                  <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg bg-slate-50 border-l-2 border-brand-400">
+                    <div className="flex-1 min-w-0 text-[12px] text-slate-500 truncate">
+                      Trả lời <span className="font-medium text-brand-600">{replyTarget.sender_name}</span>
+                      {": "}{replyTarget.content.slice(0, 100)}
+                    </div>
+                    <button onClick={() => setReplyTarget(null)} className="flex-shrink-0 text-slate-400 hover:text-slate-600">
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
                 {/* File preview row */}
                 {selectedFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-2">
