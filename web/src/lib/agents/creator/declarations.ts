@@ -217,7 +217,7 @@ export const queryLarkBaseDecl = {
 
 export const reviewPendingLearningDecl = {
   name: "reviewPendingLearning",
-  description: "Xem danh sách học liệu Bé Gấu phát hiện từ user (status=pending). Dùng khi muốn review + approve/reject.",
+  description: "Xem danh sách học liệu Bé Gấu HOẶC Gấu Tổ (Tổ Gấu, session_id bắt đầu 'togau:') phát hiện từ user (status=pending). Dùng khi muốn review + approve/reject.",
   parameters: { type: SchemaType.OBJECT, properties: { limit: { type: SchemaType.NUMBER, description: "Max records (default 20)." } } },
 }
 

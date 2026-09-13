@@ -100,7 +100,7 @@ export async function runWriteKnowledgeBase(args: {
 export async function runReviewPendingLearning(limit = 20): Promise<any> {
   const { data, error } = await supabaseAdmin
     .from("chatbot_learning_log")
-    .select("id,user_name,user_role,message_content,detected_info,learning_type,severity,existing_kb_key,conflict_detail,created_at")
+    .select("id,user_name,user_role,message_content,detected_info,learning_type,severity,existing_kb_key,conflict_detail,created_at,session_id")
     .eq("status", "pending")
     .order("created_at", { ascending: false })
     .limit(limit)

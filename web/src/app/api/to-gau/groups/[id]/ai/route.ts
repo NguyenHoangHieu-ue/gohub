@@ -4,6 +4,7 @@ import { authOptions }                from "@/lib/auth"
 import { supabaseAdmin }              from "@/lib/supabase"
 import { GoogleGenerativeAI }         from "@google/generative-ai"
 import { checkRateLimit }             from "@/lib/rate-limit"
+import { detectAndLogLearning }       from "@/lib/agents/learning"
 
 const AI_EMAIL = "ai@to-gau"
 const AI_NAME  = "Gấu Tổ"
@@ -121,7 +122,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Fetch group config
   const { data: group, error: groupErr } = await supabaseAdmin
     .from("chat_groups")
-    .select("ai_enabled, ai_scope, ai_system_prompt_append")
+    .select("name, ai_enabled, ai_scope, ai_system_prompt_append")
     .eq("id", id)
     .single()
 
@@ -264,6 +265,18 @@ Khi trả lời:
     })
     .select()
     .single()
+
+  // Self-learning (s196+4) — dùng chung module với Bé Gấu (lib/agents/learning.ts). await (không fire-
+  // and-forget) vì response JSON trả ngay sau đây — đúng bài học "Vercel đóng execution context giữa
+  // chừng" đã áp cho notifyLarkMembers (s196+1); có cooldown 5 phút/user + trả về sớm nếu câu hỏi ngắn/
+  // là câu hỏi thật (searchKB đằng nào cũng không match) nên đa số request KHÔNG tốn thêm gọi Gemini.
+  if (username && role !== "creator") {
+    await detectAndLogLearning({
+      userMsg: question, role, userId: username, userName: name,
+      sessionId: `togau:${id}`,
+      sourceLabel: `Tổ Gấu${group.name ? ` (${group.name})` : ""}`,
+    }).catch(() => {})
+  }
 
   // saveErr: câu hỏi đã lưu thành công ở trên dù lưu câu trả lời lỗi — vẫn trả question để FE hiện được
   if (saveErr) return NextResponse.json({ data: { question: questionMsg, answer: null }, error: saveErr.message }, { status: 500 })

@@ -7,6 +7,38 @@
 
 ---
 
+## ⚠️ s196+4 (2026-09-13) — Gấu Tổ giờ có self-learning như Bé Gấu
+
+Hiếu hỏi Gấu Tổ có tự học/cập nhật thông tin như Bé Gấu/Gấu Pro không — trả lời: KHÔNG, chỉ Bé Gấu có
+pipeline này (`detectAndLogLearning()` — 1-shot Gemini phân loại NEW/CONFLICT/CONFIRM khi user thường nói
+1 câu chứa thông tin thực tế, log `chatbot_learning_log`, DM Hiếu qua Lark, duyệt qua Gấu Pro "review
+pending learning"). Hiếu yêu cầu thêm cho Gấu Tổ luôn.
+
+Tách `detectAndLogLearning()` từ `be-gau.ts` sang module dùng chung mới `lib/agents/learning.ts` (tránh
+chép lại y hệt logic — đúng bài học audit s195+17 từng bắt "duplicate code" ở chỗ khác), thêm tham số
+`sourceLabel` (mặc định `"Bé Gấu"`, Gấu Tổ truyền `"Tổ Gấu (<tên nhóm>)"` để Hiếu biết ngay nguồn khi
+nhận DM Lark). `ai/route.ts` gọi hàm này SAU khi trả lời AI xong, `sessionId: "togau:<groupId>"` (dùng để
+lọc/nhận diện nguồn khi query trực tiếp `chatbot_learning_log`, không cần schema mới). Cùng logic gate y
+hệt Bé Gấu: bỏ qua nếu người hỏi là `creator`, câu quá ngắn (<30 ký tự), là câu hỏi (kết thúc `?`), hoặc
+đang trong cooldown 5 phút/user (**dùng CHUNG rate-limit map với Bé Gấu** — 1 user spam cả 2 nơi vẫn chỉ
+tính 1 lần/5 phút, không nhân đôi DM). Approve vẫn ghi vào `creator_kb` GLOBAL (không tách theo group) —
+nghĩa là 1 thông tin chia sẻ trong group Tổ Gấu, sau khi Hiếu duyệt, trở thành kiến thức DÙNG CHUNG cho cả
+Bé Gấu/Gấu Pro luôn, không chỉ riêng group đó — hợp lý vì mục đích cuối là kiến thức công ty, group chỉ là
+nơi phát hiện ra. `runReviewPendingLearning` (Gấu Pro tool) thêm `session_id` vào kết quả trả về để Hiếu
+phân biệt được nguồn Bé Gấu/Tổ Gấu khi review.
+
+tsc + lint (0 lỗi mới) + vitest (220/220 — bao gồm bộ test learning detection cũ của Bé Gấu vẫn PASS
+nguyên sau khi tách module) PASS. Không cần migration (tái dùng đúng bảng `chatbot_learning_log`+cột
+`session_id` có sẵn). **Quyết định scope**: chỉ chạy trên nội dung gửi qua "Hỏi AI" (`ai/route.ts`), KHÔNG
+quét mọi tin nhắn chat thường giữa người-với-người (`messages/route.ts`) — đúng phép so sánh với Bé Gấu
+(mọi tin nhắn TỚI Bé Gấu = đang "nói chuyện với bot", còn Tổ Gấu là group chat người-với-người, chỉ lúc
+bấm "Hỏi AI" mới tương đương). Quét toàn bộ chat thường sẽ tốn Gemini call liên tục 24/7 không cần thiết
+và đụng chạm quyền riêng tư hội thoại nội bộ nhiều hơn mức cần. **Cần Hiếu**: nói 1 câu chứa thông tin
+thật (không phải câu hỏi, ≥30 ký tự, vd "Vendor X giờ tính phí ship 20k/đơn nhé mọi người") trong 1 group
+Tổ Gấu bằng acc KHÔNG phải creator, xác nhận có nhận DM Lark "🔔 Tổ Gấu (<tên nhóm>) phát hiện học liệu...".
+
+---
+
 ## ⚠️ s196+3 (2026-09-13) — Fix bug thật hỏi AI kèm ảnh bị "Hiếu đang fix" + badge phân biệt câu hỏi AI
 
 Hiếu báo 2 việc sau khi QA s196+2: (1) đưa ảnh policy vendor + hỏi tóm tắt → luôn báo "Hiếu đang fix,
