@@ -12,6 +12,7 @@ import {
 import type { Message, UserRole }    from "@/lib/agents/types"
 import { captureForOkrLog }           from "@/lib/okr-lark-capture"
 import { usedDbTaskTool }             from "@/lib/okr-helpers"
+import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
 
 // Max history to pull per Lark user
 const HISTORY_LIMIT = 10
@@ -425,6 +426,8 @@ async function processAndReply(openId: string, chatId: string, messageId: string
         agent_id: "be-gau", user_message: userText.slice(0, 500), ai_response: beGau.text.slice(0, 3000),
         tools_used: beGau.toolsUsed.length > 0 ? beGau.toolsUsed : null,
         used_db_tool: usedDbTaskTool(beGau.toolsUsed),
+        tokens_in: beGau.tokensIn, tokens_out: beGau.tokensOut,
+        est_cost_usd: estimateCostUsd(beGau.tokensIn, beGau.tokensOut),
       })
     } catch { /* tracking không được làm vỡ luồng trả lời */ }
 

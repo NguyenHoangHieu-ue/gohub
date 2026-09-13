@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useSession, signOut }                        from "next-auth/react"
-import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen, FileSpreadsheet, Paperclip, FileText, Image as ImageIcon } from "lucide-react"
+import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen, FileSpreadsheet, Paperclip, FileText, Image as ImageIcon, ThumbsUp, ThumbsDown } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
@@ -209,7 +209,11 @@ function renderMarkdown(text: string) {
 }
 
 // ─── Nội dung 1 message assistant — tách component để có contentRef riêng (cần cho xuất PDF) ────────
-function BeGauMsgContent({ msg, streaming, isLast }: { msg: StoredMessage; streaming: boolean; isLast: boolean }) {
+function BeGauMsgContent({ msg, streaming, isLast, rated, onFeedback }: {
+  msg: StoredMessage; streaming: boolean; isLast: boolean
+  rated?: 1 | -1 | null
+  onFeedback?: (rating: 1 | -1) => void
+}) {
   const contentRef = useRef<HTMLDivElement>(null)
 
   // Chưa có nội dung (agent bi-analyst/data-explorer đang chạy function-calling 10-30s)
@@ -249,8 +253,24 @@ function BeGauMsgContent({ msg, streaming, isLast }: { msg: StoredMessage; strea
           <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
         )}
       </div>
-      {/* Ẩn nút xuất khi CHÍNH message này đang stream dở (marker có thể chưa đóng \`\`\` xong) */}
-      {!(streaming && isLast) && <ExportBar content={msg.content} contentRef={contentRef} apiEndpoint="/api/chat/export" />}
+      {/* Ẩn nút xuất/feedback khi CHÍNH message này đang stream dở (marker có thể chưa đóng \`\`\` xong) */}
+      {!(streaming && isLast) && (
+        <div className="flex items-center gap-2">
+          <ExportBar content={msg.content} contentRef={contentRef} apiEndpoint="/api/chat/export" />
+          {onFeedback && (
+            <div className="flex items-center gap-1">
+              <button onClick={() => onFeedback(1)} title="Câu trả lời hữu ích"
+                className={`p-1 rounded-md transition-colors ${rated === 1 ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20" : "text-gray-300 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"}`}>
+                <ThumbsUp size={13} />
+              </button>
+              <button onClick={() => onFeedback(-1)} title="Câu trả lời chưa tốt"
+                className={`p-1 rounded-md transition-colors ${rated === -1 ? "text-rose-600 bg-rose-50 dark:bg-rose-900/20" : "text-gray-300 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"}`}>
+                <ThumbsDown size={13} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -313,6 +333,7 @@ export default function ChatbotPage() {
   const [deletingId,     setDeletingId]    = useState<string | null>(null)
   const [mobileDrawer,   setMobileDrawer]  = useState(false)
   const [chatSidebar,    setChatSidebar]   = useState(true)   // desktop: show/hide conv list
+  const [feedbackGiven,  setFeedbackGiven] = useState<Record<number, 1 | -1>>({})   // 👍/👎 mỗi câu trả lời
 
   // Đính kèm ảnh/file (s190+3)
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
@@ -349,6 +370,19 @@ export default function ChatbotPage() {
     setAttachedFiles(prev => prev.filter(f => f.name !== name))
     setImgPreviews(prev => { const m = new Map(prev); m.delete(name); return m })
   }, [])
+
+  // Feedback loop 👍/👎 (s196+13, ý tưởng #3 roadmap audit Bé Gấu) — chưa có cơ chế nào cho non-creator
+  // đánh giá chất lượng câu trả lời trực tiếp; trước chỉ Gấu Pro/admin xem qua LLM-judge nội bộ.
+  const sendFeedback = useCallback((index: number, rating: 1 | -1) => {
+    if (feedbackGiven[index]) return
+    setFeedbackGiven(prev => ({ ...prev, [index]: rating }))
+    const question = messages[index - 1]?.content || ""
+    const answer    = messages[index]?.content || ""
+    fetch("/api/chat/feedback", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, answer, rating, agentId: messages[index]?.agent?.id }),
+    }).catch(() => {})
+  }, [feedbackGiven, messages])
 
   // Paste ảnh từ clipboard (Ctrl+V)
   useEffect(() => {
@@ -853,7 +887,8 @@ export default function ChatbotPage() {
                     {msg.role === "user" ? (
                       <span className="whitespace-pre-wrap">{msg.content}</span>
                     ) : (
-                      <BeGauMsgContent msg={msg} streaming={streaming} isLast={i === messages.length - 1} />
+                      <BeGauMsgContent msg={msg} streaming={streaming} isLast={i === messages.length - 1}
+                        rated={feedbackGiven[i]} onFeedback={r => sendFeedback(i, r)} />
                     )}
                     {/* Template download button for tao-template agent */}
                     {msg.role === "assistant" && msg.agent?.id === "tao-template" && !streaming && (() => {

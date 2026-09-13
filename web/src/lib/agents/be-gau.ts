@@ -340,7 +340,7 @@ export async function runBeGau(opts: {
   extraDirective?: string   // vd quy tắc tạm thời
   fileContexts?: FileContext[]  // ảnh/PDF/file người dùng đính kèm (s190+3)
   onChunk?: (text: string) => void  // s195+18: stream token thật ra route — gọi mỗi khi Gemini sinh thêm đoạn text
-}): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[] }> {
+}): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number }> {
   const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, onChunk } = opts
   const isPriv = priv(role)
   const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
@@ -432,8 +432,16 @@ export async function runBeGau(opts: {
 
   // Fix #8: dùng history đã nén
   const contents: any[] = [...compressedHistory, { role: "user", parts: userParts }]
+  // Tích luỹ token qua MỌI vòng gọi model (đúng pattern creator-ai.ts s196+7) — cost dashboard.
+  let tokensIn = 0, tokensOut = 0
+  const addUsage = (r: any) => {
+    const u = r?.response?.usageMetadata
+    if (u) { tokensIn += u.promptTokenCount || 0; tokensOut += u.candidatesTokenCount || 0 }
+  }
+
   // s195+18: genWithRetryStream — stream token thật, thay genWithRetry (generateContent chờ hết mới trả)
   let genResult = await genWithRetryStream(model, { contents }, onChunk)
+  addUsage(genResult)
   const sources: WebSource[] = []
   // Track tool nào được gọi trong cả vòng lặp — dùng để phân biệt "task tính KPI Bé Gấu" (đã thật sự
   // xuất dữ liệu từ DB) khỏi trả lời chay/chào hỏi (My Metrics my-metrics/route.ts, s195+18-B). Định
@@ -520,6 +528,7 @@ export async function runBeGau(opts: {
 
     contents.push({ role: "user", parts: fnParts })
     genResult = await genWithRetryStream(model, { contents }, onChunk)  // s195+18
+    addUsage(genResult)
     appendModel()
   }
 
@@ -528,18 +537,21 @@ export async function runBeGau(opts: {
     try {
       contents.push({ role: "user", parts: [{ text: "Dựa trên dữ liệu ở trên, viết câu trả lời hoàn chỉnh bằng tiếng Việt cho người dùng (kèm bảng/chart nếu hợp lý). KHÔNG gọi thêm công cụ, KHÔNG lộ SQL/tên bảng." }] })
       genResult = await genWithRetryStream(model, { contents }, onChunk)
+      addUsage(genResult)
       text = genResult.response.text()
     } catch { /* keep */ }
   }
   const finalText = text || "Mình chưa lấy được dữ liệu cho câu này, bạn thử hỏi lại cụ thể hơn nhé 😊"
 
-  // Fire-and-forget learning detection (không block response)
+  // await (không fire-and-forget) — bài học s195+18-C: serverless có thể đóng execution context
+  // trước khi promise học liệu kịp gửi đi (đúng lớp bug đã fix cho logChat/app_usage_events).
+  // detectAndLogLearning() tự bọc try/catch nội bộ, không throw → await an toàn, không chặn lâu.
   if (userId && role && role !== "creator") {
-    void detectAndLogLearning({
+    await detectAndLogLearning({
       userMsg: lastMsg, role, userId,
       userName: name || userId, sessionId,
     })
   }
 
-  return { text: finalText, sources, toolsUsed: Array.from(toolsUsed) }
+  return { text: finalText, sources, toolsUsed: Array.from(toolsUsed), tokensIn, tokensOut }
 }
