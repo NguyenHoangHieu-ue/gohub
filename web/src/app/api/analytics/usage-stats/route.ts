@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   // Fetch tất cả events trong kỳ (max 5000)
   const { data: events, error } = await supabaseAdmin
     .from("app_usage_events")
-    .select("id, event_type, page_path, tab_key, user_email, user_name, user_role, agent_id, user_message, ai_response, created_at")
+    .select("id, event_type, page_path, tab_key, user_email, user_name, user_role, agent_id, user_message, ai_response, tokens_in, tokens_out, est_cost_usd, created_at")
     .gte("created_at", since)
     .lte("created_at", until)
     .order("created_at", { ascending: false })

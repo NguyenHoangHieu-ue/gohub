@@ -631,7 +631,7 @@ export async function runCreatorAI(
   onEvent?: (e: GPEvent) => void,
   isCreator = true,
   username = "",
-): Promise<{ text: string; sources: WebSource[] }> {
+): Promise<{ text: string; sources: WebSource[]; tokensIn: number; tokensOut: number }> {
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const isFreshConversation = geminiHistory.length <= 1
   const [partnerTierInfo, ga4SiteList, kbInject] = await Promise.all([
@@ -711,8 +711,18 @@ export async function runCreatorAI(
     { role: "user", parts: userParts },
   ]
 
+  // Tích luỹ token qua MỌI vòng gọi model (mỗi vòng là 1 request Gemini riêng, tính phí riêng dù
+  // contents chồng lấn) — dùng cho cost dashboard (s196+7). usageMetadata nằm sẵn trên response,
+  // không cần sửa gemini-stream.ts.
+  let tokensIn = 0, tokensOut = 0
+  const addUsage = (r: any) => {
+    const u = r?.response?.usageMetadata
+    if (u) { tokensIn += u.promptTokenCount || 0; tokensOut += u.candidatesTokenCount || 0 }
+  }
+
   const onChunk = (delta: string) => onEvent?.({ type: "delta", content: delta })
   let genResult = await genWithRetryStream(model, { contents }, onChunk)
+  addUsage(genResult)
   const collectedSources: WebSource[] = []
 
   function appendModelContent() {
@@ -740,6 +750,7 @@ export async function runCreatorAI(
     // Send function responses as role "user" — required by this Gemini SDK's content format
     contents.push({ role: "user", parts: fnParts })
     genResult = await genWithRetryStream(model, { contents }, onChunk)
+    addUsage(genResult)
     appendModelContent()
   }
 
@@ -749,9 +760,10 @@ export async function runCreatorAI(
     try {
       contents.push({ role: "user", parts: [{ text: "Based on the data retrieved above, write a complete, detailed answer in Vietnamese. Include a markdown table or chart if the data is tabular. DO NOT call any more tools." }] })
       genResult = await genWithRetryStream(model, { contents }, onChunk)
+      addUsage(genResult)
       text = genResult.response.text()
     } catch { /* keep empty */ }
   }
 
-  return { text: text || "Không có dữ liệu trả về.", sources: collectedSources }
+  return { text: text || "Không có dữ liệu trả về.", sources: collectedSources, tokensIn, tokensOut }
 }

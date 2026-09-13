@@ -68,6 +68,7 @@ type Event = {
   id: number; event_type: string; page_path: string | null; tab_key: string | null
   user_email: string | null; user_name: string | null; user_role: string | null
   agent_id: string | null; user_message: string | null; ai_response: string | null
+  tokens_in: number | null; tokens_out: number | null; est_cost_usd: number | null
   created_at: string
 }
 type DailyStat    = { date: string; views: number; chats: number; total: number }
@@ -223,6 +224,16 @@ export default function UsagePage() {
     return Object.entries(cnt).sort((a,b)=>b[1]-a[1]).map(([id, value]) => ({ name: AGENT_LABELS[id]||id, value }))
   }, [chats])
 
+  // Cost dashboard (s196+7) — chỉ Gấu Pro ghi tokens_in/out/est_cost_usd, Bé Gấu chưa track chi phí.
+  const gpCost = useMemo(() => {
+    let usd = 0, tIn = 0, tOut = 0, n = 0
+    for (const e of chats) {
+      if (e.agent_id !== "gau_pro") continue
+      n++; usd += e.est_cost_usd || 0; tIn += e.tokens_in || 0; tOut += e.tokens_out || 0
+    }
+    return { usd, tIn, tOut, n }
+  }, [chats])
+
   const userStats = useMemo(() => {
     const map: Record<string, { name: string; email: string; role: string; tabs: Set<string>; views: number; chats: number; lastSeen: string }> = {}
     for (const e of events) {
@@ -361,7 +372,7 @@ export default function UsagePage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         <KpiCard icon={Activity}      label="Tab Views"      value={loading?"…":pageViews.length}
           sub={compareMode && prevData ? deltaStr(pageViews.length, prevData.views) : "đã dedup"}
           color="text-blue-600" />
@@ -381,6 +392,10 @@ export default function UsagePage() {
           badge={weekDiff >= 0 ? `+${weekDiff} vs tuần trước` : `${weekDiff} vs tuần trước`}
           progress={{ value: weeklyTasks?.current ?? 0, max: weeklyTasks?.target ?? 50, color: weekPct >= 100 ? "#059669" : weekPct >= 60 ? "#d97706" : "#dc2626" }}
         />
+        <KpiCard icon={TrendingUp} label="Chi phí Gấu Pro (kỳ)"
+          value={loading ? "…" : `$${gpCost.usd.toFixed(2)}`}
+          sub={`${gpCost.n} lượt · ${(gpCost.tIn/1000).toFixed(0)}k in / ${(gpCost.tOut/1000).toFixed(0)}k out token`}
+          color="text-rose-600" />
       </div>
 
       {/* Tabs */}

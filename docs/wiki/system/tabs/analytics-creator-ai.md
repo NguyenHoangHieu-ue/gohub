@@ -470,6 +470,29 @@ browser, Lark, KB) chạy Auto không cần duyệt, không có nơi xem lại "
 
 tsc + lint (0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu**: chạy migration v57.
 
+## § Gấu Pro s196+7 (2026-09-13) — Cost dashboard riêng Gấu Pro
+
+Đề xuất "D" trong roadmap audit s196+5 — Gấu Pro trước đây KHÔNG ghi `app_usage_events` cho bất kỳ lượt
+chat nào (khác Bé Gấu vốn ghi mỗi lượt) → Usage Analytics không thấy Gấu Pro có hoạt động gì, và không
+ai biết chi phí Gemini thật.
+
+- `lib/agents/gemini-pricing.ts` — giá `gemini-3.8-flash` **verify trực tiếp** `ai.google.dev/gemini-api/
+  docs/pricing` (2026-09-13, không đoán): $0.75/1M token input, $3.75/1M output (gồm thinking tokens),
+  áp dụng tới 2026-12-31 — sau đó tăng $1.5/$7.5, cần cập nhật hằng số nếu còn dùng model này.
+- `runCreatorAI()` (`creator-ai.ts`) tích luỹ `usageMetadata.promptTokenCount`/`candidatesTokenCount` qua
+  **mọi** vòng gọi `genWithRetryStream` (mỗi vòng = 1 request Gemini tính phí riêng, dù `contents` chồng
+  lấn) — trả thêm `tokensIn`/`tokensOut` trong response.
+- `api/creator-ai/chat/route.ts` — sau khi có kết quả, **await** insert `app_usage_events`
+  (`event_type:"chat", agent_id:"gau_pro"`, kèm `user_message`/`ai_response` giống Bé Gấu để Usage
+  Analytics tab "Chatbot" cũng thấy được Gấu Pro, + `tokens_in`/`tokens_out`/`est_cost_usd`). Migration
+  `v58_app_usage_events_cost.sql` thêm 3 cột.
+- UI: `analytics/creator/usage` (Usage Analytics) thêm KpiCard thứ 6 "Chi phí Gấu Pro (kỳ)" — tổng $
+  + số lượt + tổng token in/out trong khoảng thời gian đang xem (client tự tính từ `chats` đã fetch, lọc
+  `agent_id==="gau_pro"` — không cần route mới).
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu**: chạy migration v58. Bé Gấu chưa track chi
+phí (ngoài scope đề xuất — "riêng Gấu Pro"), có thể làm sau nếu muốn.
+
 ### Bé Gấu (chatbot team) — s131
 
 Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, không còn pipeline 6-agent):
