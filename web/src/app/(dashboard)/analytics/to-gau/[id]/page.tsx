@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
 import {
-  ArrowLeft, Send, Settings, X, Trash2, Crown, Paperclip, Bot,
+  ArrowLeft, Settings, X, Trash2, Crown, Bot,
   Pin, Upload, Edit2, Search, ChevronDown, ChevronUp, AlertTriangle, Reply,
 } from "lucide-react"
 import Link from "next/link"
@@ -17,7 +17,8 @@ import { DocsPanel } from "@/components/to-gau/docs-panel"
 import { NotesPanel } from "@/components/to-gau/notes-panel"
 import { WikiPanel } from "@/components/to-gau/wiki-panel"
 import { QuestionsPanel } from "@/components/to-gau/questions-panel"
-import { FilePreviewItem, AttachmentDisplay } from "@/components/to-gau/file-preview"
+import { MessageComposer } from "@/components/to-gau/message-composer"
+import { AttachmentDisplay } from "@/components/to-gau/file-preview"
 import { useConfirm } from "@/components/to-gau/confirm-modal"
 import { renderContent, fmtTime } from "@/lib/to-gau-format"
 import type { Attachment, ChatMessage, Member, GroupInfo } from "@/lib/to-gau-types"
@@ -1227,124 +1228,19 @@ export default function ToGauRoomPage() {
               )}
             </div>
 
-            {/* Input bar */}
-            {!isArchived && (
-              <div className="flex-shrink-0 border-t border-slate-200 bg-white px-4 py-3">
-                {/* Reply preview bar (s196+15) */}
-                {replyTarget && (
-                  <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg bg-slate-50 border-l-2 border-brand-400">
-                    <div className="flex-1 min-w-0 text-[12px] text-slate-500 truncate">
-                      Trả lời <span className="font-medium text-brand-600">{replyTarget.sender_name}</span>
-                      {": "}{replyTarget.content.slice(0, 100)}
-                    </div>
-                    <button onClick={() => setReplyTarget(null)} className="flex-shrink-0 text-slate-400 hover:text-slate-600">
-                      <X size={14} />
-                    </button>
-                  </div>
-                )}
-                {/* File preview row */}
-                {selectedFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {selectedFiles.map((file, idx) => (
-                      <FilePreviewItem key={idx} file={file} onRemove={() => removeSelectedFile(idx)} />
-                    ))}
-                  </div>
-                )}
-
-                {/* @mention dropdown */}
-                {showMentionDropdown && mentionSuggestions.length > 0 && (
-                  <div className="mb-2 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                    {mentionSuggestions.map((member, idx) => (
-                      <button
-                        key={member.id}
-                        type="button"
-                        onMouseDown={e => { e.preventDefault(); selectMention(member) }}
-                        onMouseEnter={() => setMentionIdx(idx)}
-                        className={cn(
-                          "w-full flex items-center gap-2.5 px-3 py-2 transition-colors text-left",
-                          idx === mentionIdx ? "bg-brand-50" : "hover:bg-brand-50"
-                        )}
-                      >
-                        <Avatar name={member.user_name} email={member.user_email} size="sm" />
-                        <div>
-                          <p className="text-[13px] font-medium text-slate-700">{member.user_name || member.user_email}</p>
-                          <p className="text-[11px] text-slate-400">{member.user_email}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex items-end gap-2">
-                  {/* Paperclip button */}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading || sending}
-                    className="flex-shrink-0 w-9 h-9 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 hover:text-brand-600 disabled:opacity-40 transition-colors"
-                    title="Đính kèm file"
-                  >
-                    <Paperclip size={15} />
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*,.pdf,.xlsx,.docx,.txt"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-
-                  <textarea
-                    ref={textareaRef}
-                    value={content}
-                    onChange={handleContentChange}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Nhập tin nhắn... (Enter gửi, Shift+Enter xuống dòng, @ để mention)"
-                    rows={1}
-                    className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-[14px] focus:outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 resize-none max-h-32 overflow-y-auto"
-                    style={{ minHeight: "42px" }}
-                  />
-
-                  {/* AI button */}
-                  {showAIButton && (
-                    <button
-                      type="button"
-                      onClick={askAI}
-                      disabled={(!content.trim() && selectedFiles.length === 0) || askingAI || sending || uploading}
-                      title="Hỏi AI Gấu Tổ (gõ chữ hoặc đính kèm ảnh để bot xem)"
-                      className="flex-shrink-0 w-9 h-9 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {askingAI ? (
-                        <span className="text-[13px] animate-pulse">🤖</span>
-                      ) : (
-                        <Bot size={15} />
-                      )}
-                    </button>
-                  )}
-
-                  {/* Send button */}
-                  <button
-                    onClick={sendMessage}
-                    disabled={(!content.trim() && selectedFiles.length === 0) || sending || uploading}
-                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {(sending || uploading) ? (
-                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <Send size={16} />
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Archived: no-input notice */}
-            {isArchived && (
-              <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-3 text-center text-[13px] text-slate-400">
-                Nhóm đã lưu trữ — không thể gửi tin nhắn mới
-              </div>
-            )}
+            {/* Input bar (s196+19 — tách sang components/to-gau/message-composer.tsx, cơ học) */}
+            <MessageComposer
+              isArchived={isArchived}
+              replyTarget={replyTarget} setReplyTarget={setReplyTarget}
+              selectedFiles={selectedFiles} removeSelectedFile={removeSelectedFile}
+              showMentionDropdown={showMentionDropdown} mentionSuggestions={mentionSuggestions}
+              mentionIdx={mentionIdx} setMentionIdx={setMentionIdx} selectMention={selectMention}
+              fileInputRef={fileInputRef} handleFileChange={handleFileChange}
+              textareaRef={textareaRef} content={content}
+              handleContentChange={handleContentChange} handleKeyDown={handleKeyDown}
+              showAIButton={showAIButton} askAI={askAI} askingAI={askingAI}
+              sending={sending} uploading={uploading} sendMessage={sendMessage}
+            />
           </>
         )}
 

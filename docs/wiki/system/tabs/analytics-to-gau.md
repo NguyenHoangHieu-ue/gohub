@@ -628,3 +628,20 @@ refactor lớn — logic agent nằm nguyên trong `ai/route.ts` (streaming SSE)
 `ai/route.ts` không đổi hành vi — chỉ import thay vì định nghĩa local. tsc + lint (0 lỗi mới) + vitest
 (243/243, +13 test) PASS. **Cần Hiếu**: không cần làm gì — chạy tự động mỗi lần `npx vitest run` từ nay,
 không cần chạy tay/tốn Gemini call như 2 harness live-DB kia.
+
+## s196+19 (2026-09-13) — Tách tiếp `[id]/page.tsx` (đề xuất G)
+
+File đã tách s183 xuống ~1224 dòng nhưng leo lại lên 1419 sau các tính năng thêm sau đó (paste ảnh,
+reply/thread, streaming). Tách CƠ HỌC (chỉ move nguyên khung JSX + prop hoá state/handler, KHÔNG đổi
+logic — đúng nguyên tắc Phase 5) khối "Input bar" (reply preview bar, file preview row, @mention
+dropdown, paperclip/textarea/nút AI/nút gửi) sang `components/to-gau/message-composer.tsx`
+(`MessageComposer`, ~21 prop) — `[id]/page.tsx` còn 1315 dòng.
+
+**Đã tự QA trực tiếp trên staging qua Chrome TRƯỚC khi tách** (session này có quyền dùng browser
+extension) — xác nhận baseline hoạt động đúng trên commit trước G: hỏi AI Gấu Tổ trong group "Test"
+trả lời đúng + stream chữ chạy dần (s196+16), câu hỏi/trả lời lưu đúng lịch sử; bấm nút "Trả lời" 1 tin
+→ preview bar hiện đúng ("Trả lời Nguyễn Hoàng Hiếu: ...") → gửi tin mới → trích dẫn tin gốc hiện đúng
+trên bubble (khớp `POST /messages` trả 201, xác nhận qua Network tab). Sẽ verify LẠI sau khi Vercel
+deploy xong commit tách này để đảm bảo không hỏng gì (ghi bổ sung ngay dưới sau khi xong).
+
+tsc + lint (0 lỗi mới) + vitest (243/243) PASS.
