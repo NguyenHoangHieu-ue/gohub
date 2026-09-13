@@ -139,6 +139,21 @@ export async function replyLarkMessage(messageId: string, text: string) {
   })
 }
 
+// Tìm open_id Lark của creator — chuỗi fallback dùng chung (trước đây chép lại y hệt ở learning.ts/
+// lark-scan-runner.ts/ca-thread-remind — s196+8 tách 1 nơi cho code path mới, không đụng 3 chỗ cũ).
+export async function getCreatorLarkOpenId(): Promise<string | null> {
+  let id = process.env.LARK_CREATOR_USER_ID
+  if (!id) {
+    const { data: s } = await supabaseAdmin.from("app_settings").select("value").eq("key", "creator_lark_user_id").maybeSingle()
+    id = s?.value || undefined
+  }
+  if (!id) {
+    const { data: u } = await supabaseAdmin.from("users").select("lark_open_id").eq("role", "creator").not("lark_open_id", "is", null).limit(1).maybeSingle()
+    id = u?.lark_open_id || undefined
+  }
+  return id || null
+}
+
 // DM trực tiếp đến 1 user Lark bằng open_id (LARK_CREATOR_USER_ID = open_id).
 // LƯU Ý: phải dùng receive_id_type=open_id (không phải user_id) vì ta truyền open_id.
 export async function sendLarkDM(openId: string, text: string): Promise<void> {

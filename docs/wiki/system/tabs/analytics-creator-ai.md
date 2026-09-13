@@ -493,6 +493,26 @@ ai biết chi phí Gemini thật.
 tsc + lint (0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu**: chạy migration v58. Bé Gấu chưa track chi
 phí (ngoài scope đề xuất — "riêng Gấu Pro"), có thể làm sau nếu muốn.
 
+## § Gấu Pro s196+8 (2026-09-13) — Digest chủ động buổi sáng (proactive layer bước đầu)
+
+Đề xuất "E"/ý tưởng #1 trong roadmap audit s196+5 — Gấu Pro trước đây 100% phản ứng theo lượt, không tự
+khởi xướng gì (khoảng cách lớn nhất với hình mẫu "trợ lý toàn năng"/Astra).
+
+- Cron mới `/api/cron/gau-pro-digest` (`45 2 * * *` = 09:45 ICT, sau prewarm 09:00 + b2c-report 09:30 để
+  dữ liệu đã ấm) — gọi thẳng `runCreatorAI([], DIGEST_PROMPT, ..., isCreator:true, username:"cron")`, tận
+  dụng nguyên bộ tool + business-rule self-validate sẵn có (không viết SQL riêng). Prompt cố định: doanh
+  thu hôm qua (tổng + B2B/B2C, so hôm trước), bất thường nếu có — không bịa nếu không có gì lạ.
+  `alertCronFailure("gau-pro-digest", err)` khi lỗi (đồng bộ pattern mọi cron khác).
+- Gửi kết quả qua `sendLarkDM()` tới `getCreatorLarkOpenId()` — helper MỚI tách vào `lib/lark.ts` (chuỗi
+  fallback env→app_settings→users vốn bị chép lại y hệt ở `learning.ts`/`lark-scan-runner.ts`/
+  `ca-thread-remind`, nay có 1 bản dùng chung cho code path mới — 3 chỗ cũ CHƯA đổi, ngoài scope).
+- `vercel.json`: thêm `maxDuration:120` + 1 cron entry (project giờ 10 cron, vẫn 1x/ngày/job đúng giới
+  hạn Hobby).
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu**: không cần làm gì (không migration, dùng
+`CRON_SECRET` đã có) — chờ 09:45 ICT ngày mai xem tin nhắn Lark DM đầu tiên, hoặc tự trigger tay:
+`curl -H "Authorization: Bearer $CRON_SECRET" https://stg-intel-v2.gohub.cloud/api/cron/gau-pro-digest`.
+
 ### Bé Gấu (chatbot team) — s131
 
 Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, không còn pipeline 6-agent):
