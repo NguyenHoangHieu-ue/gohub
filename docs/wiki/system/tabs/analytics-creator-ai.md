@@ -449,6 +449,27 @@ tsc + lint (0 lỗi mới) + vitest (220/220) PASS. Không cần Hiếu chạy m
 xem họ có từng hỏi những câu dạng "liệt kê app_settings"/"đọc conversations của..." hay không (log cũ nằm
 trong lịch sử hội thoại Supabase `conversations`/`chat_messages`, agent_id=`gau_pro`).
 
+## § Gấu Pro s196+6 (2026-09-13) — Nhật ký hành động (audit trail)
+
+Đề xuất "B" trong roadmap Gấu Pro (audit toàn diện s196+5) — từ s195+2 mọi hành động ghi (bridge
+browser, Lark, KB) chạy Auto không cần duyệt, không có nơi xem lại "Gấu Pro đã làm gì".
+
+- Bảng mới `gp_action_log` (migration `v57_gp_action_log.sql`) — ghi mọi lời gọi tool có tác dụng phụ
+  ra ngoài: `writeKnowledgeBase`, `approveLearning`, `rejectLearning`, `createLarkTask`, `updateLarkTask`,
+  `sendLarkMessage`, `controlMyBrowser`, `managePortalCredentials` (`AUDITED_TOOLS` trong
+  `creator/tools/dispatch.ts`). Không ghi tool chỉ đọc (executeSQL/querySupabase/readMyBrowser/...).
+- `dispatchTool()` tách thành `dispatchToolCore()` (logic cũ, không đổi) + wrapper `dispatchTool()` mới
+  gọi `logGpAction()` (`creator/tools/audit-log.ts`) SAU khi có kết quả — **await, không fire-and-forget**
+  (đúng bài học s195+18-C: serverless có thể đóng execution context giữa vòng lặp tool-call cuối trước khi
+  insert kịp gửi). Args bị redact field `password/secret/token/auth_header/api_key` trước khi lưu (tránh
+  `managePortalCredentials` ghi lộ mật khẩu portal vào log).
+- Route mới `GET /api/creator-ai/action-log` — **chỉ creator** (oversight toàn bộ user, không phải dữ
+  liệu riêng người gọi — khác mọi route bridge multi-tenant khác trong hệ thống).
+- UI: nút "🗂 Nhật ký" trong header trang Gấu Pro (chỉ hiện cho creator) mở panel xem 100 hành động gần
+  nhất (tool, username, thành công/lỗi, tóm tắt, thời gian).
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu**: chạy migration v57.
+
 ### Bé Gấu (chatbot team) — s131
 
 Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, không còn pipeline 6-agent):

@@ -296,7 +296,23 @@ export default function CreatorAIPage() {
   const [convId,        setConvId]        = useState<string | null>(null)
   const [pastConvs,     setPastConvs]     = useState<{ id: string; title: string; updated_at: string }[]>([])
   const [showConvList,  setShowConvList]  = useState(false)
+  const [showActionLog, setShowActionLog] = useState(false)
+  const [actionLog,     setActionLog]     = useState<{ id: number; username: string; tool_name: string; ok: boolean; summary: string; created_at: string }[]>([])
+  const [actionLogLoading, setActionLogLoading] = useState(false)
   const isCreatorRole = session?.user?.role === "creator"
+
+  const toggleActionLog = async () => {
+    const next = !showActionLog
+    setShowActionLog(next)
+    if (next && actionLog.length === 0) {
+      setActionLogLoading(true)
+      try {
+        const res = await fetch("/api/creator-ai/action-log?limit=100")
+        if (res.ok) setActionLog((await res.json()).rows || [])
+      } catch { /* ignore — panel just shows empty */ }
+      setActionLogLoading(false)
+    }
+  }
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
@@ -680,6 +696,44 @@ export default function CreatorAIPage() {
               <Plus size={13} />
               Cuộc trò chuyện mới
             </button>
+          )}
+          {isCreatorRole && (
+            <div className="relative">
+              <button
+                onClick={toggleActionLog}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
+                title="Nhật ký hành động Gấu Pro (ghi KB/Lark/portal/browser)"
+              >
+                🗂 Nhật ký
+              </button>
+              {showActionLog && (
+                <div className="absolute right-0 top-full mt-1 w-96 max-h-96 overflow-y-auto bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50">
+                  <div className="p-2 border-b border-gray-100 dark:border-slate-800 text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-3 sticky top-0 bg-white dark:bg-slate-900">
+                    Nhật ký hành động (100 gần nhất)
+                  </div>
+                  {actionLogLoading ? (
+                    <div className="p-4 text-center text-xs text-gray-400">Đang tải...</div>
+                  ) : actionLog.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-gray-400">Chưa có hành động nào được ghi.</div>
+                  ) : (
+                    <div className="divide-y divide-gray-100 dark:divide-slate-800">
+                      {actionLog.map(a => (
+                        <div key={a.id} className="px-3 py-2 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={`font-medium ${a.ok ? "text-gray-700 dark:text-slate-300" : "text-rose-600 dark:text-rose-400"}`}>
+                              {a.ok ? "" : "⚠️ "}{a.tool_name}
+                            </span>
+                            <span className="text-[10px] text-gray-400 flex-shrink-0">{new Date(a.created_at).toLocaleString("vi-VN")}</span>
+                          </div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">{a.username || "?"}</div>
+                          {a.summary && <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 truncate" title={a.summary}>{a.summary}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           {pastConvs.length > 0 && (
             <div className="relative">
