@@ -6,10 +6,35 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-14, s197+1)
+## Trạng thái hiện tại (2026-09-14, s198)
 
 | | |
 |---|---|
+| ✅ **s198 (2026-09-14) — Tab mới "Product Catalogue" — 4 đợt cùng ngày, đã QA live mỗi đợt** | Hiếu:
+  muốn 1 trang giới thiệu sản phẩm theo destination cho internal (sau đổi ý external→internal-only qua
+  AskUserQuestion), tự đề xuất ý tưởng + lên plan (EnterPlanMode) + làm. Route mới
+  `GET /api/analytics/product-catalogue` (1 query tổng hợp DUY NHẤT, đúng rule N+1 mới thêm) + trang
+  `/analytics/catalogue`, đăng ký nav "Analytics & Planning" + quyền cho `bod`/`b2b`/`b2c`/`saleb2c`/
+  `product` (`lib/analytics-roles.ts`).
+  **Đợt 1**: kiến trúc 2 tầng Destination → dòng SP (vendor×SIM/eSIM), top 8 nước theo doanh thu 90 ngày,
+  badge Best Seller/Fastest Growing/Best Value tính từ số liệu thật.
+  **Đợt 2**: Hiếu yêu cầu sâu hơn — nâng lên **3 tầng: Destination → Loại sản phẩm → Sản phẩm cụ thể**.
+  Loại SP quyết định bởi ProductType (ký tự 2 mã SKU, đọc đúng `docs/wiki/business/ma-sku.md`) +
+  `local_phone_number` thật (Supabase `products`) — 4 nhóm eSIM/SIM × Data-only/Có gọi nội địa.
+  **Đợt 3**: Hiếu gửi ảnh bảng chính sách QR/đổi máy theo vendor, yêu cầu soát kỹ Supabase `products`
+  (đọc full 36 cột qua Dev Tools `api/config/db/table`) — bổ sung `data_type` (Fixed/Daily Data, field
+  THẬT thay hẳn việc tự decode ký tự 8 SKU từng phải né vì 2 wiki nguồn ghi ngược nhau A/B),
+  `daily_reset_time`/`apn`/`operator_code`/`telco_perks`/`unsupported_apps`/`onsite_carrier`. Thêm panel
+  "Chính sách QR/đổi máy" theo operator, trích từ ảnh Hiếu (chỉ giữ thông số thực tế, bỏ quy trình CS
+  nội bộ — không hợp catalogue giới thiệu).
+  **Đợt 4**: Hiếu chốt trang chỉ để xem THÔNG TIN, không cần số liệu doanh thu — redesign FE bỏ hẳn $/%.
+  Hero đổi sang Loại SP/Tổng SP/Nhà mạng hỗ trợ/Loại phổ biến nhất; sản phẩm đổi từ hàng ngang có cột $
+  sang lưới card spec-sheet (data policy/network/APN/operator/perks), badge giữ dạng emoji góc card.
+  `route.ts` KHÔNG đổi ở đợt 4 — badge vẫn tính từ revenue/growth thật backend, FE chỉ chọn không render.
+  tsc + lint (0 lỗi mới) + vitest (243/243) PASS xuyên suốt cả 4 đợt, wiki `analytics-catalogue.md` cập
+  nhật đủ. **Đã tự QA qua Chrome trên staging sau MỖI đợt** — trang USA (ví dụ Hiếu nêu) verify đủ 5
+  loại SP, panel chính sách 3HK/BillionConnect đúng nội dung ảnh, card spec hiển thị đúng data_type/APN/
+  operator/local carrier thật. **Chưa merge main** — chờ Hiếu duyệt tổng thể.
 | ✅ **s197 (2026-09-14) — Audit LOGIC DỮ LIỆU toàn hệ thống 26 tab (khác đợt UI/performance s196+20) +
   fix hết 16/17 phát hiện** | Hiếu: "check lại toàn bộ tab analytics xem đã logic lấy dữ liệu, áp dụng
   dữ liệu đúng chưa, sai ở đâu" → sau đó "fix theo thứ tự hết đi". 4 fork song song đọc trực tiếp SQL
@@ -546,6 +571,11 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s198 — Duyệt tab mới "Product Catalogue" trên staging rồi báo merge main** — `/analytics/catalogue`,
+  đã tự QA 4 đợt trên staging (số liệu/spec đúng thật) nhưng CHƯA merge main theo đúng rule (chỉ merge khi
+  Hiếu yêu cầu rõ trong tin nhắn). Nếu ổn, nhắn "merge main đi" như mọi lần. 1 điểm cần Hiếu quyết định
+  thêm nếu muốn: bảng "Chính sách QR/đổi máy" hiện đang HARDCODE trong `route.ts` (trích từ ảnh Hiếu gửi)
+  — nếu muốn tự sửa qua UI sau này (không cần nhờ code lại), cần thêm 1 bảng Supabase riêng, báo để làm.
 - [x] **s197/s197+1 — Audit logic dữ liệu 16 fix + incident ecom T9 — XONG (2026-09-14), đã tự QA live +
   đã merge main** — B2B Performance "VN Ecom Shopee" xác nhận số đúng (229.667.051đ) sau khi thêm nút
   "Tải lại mới" + ép cache tươi. Channels CM1 khớp Revenue/GP card cùng trang. BOD toggle Phí ship/Đơn
