@@ -74,6 +74,11 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **UI s196+20 (2026-09-14) — fix bug clip bảng lồng trong expand-row**: 2 wrapper bảng sub_channels
+  (dòng ~538/~838, khối Strategic + Non-Strategic) dùng `overflow-hidden` (chặn scroll ngang của `<table>`
+  bên trong để bo góc `rounded-xl`) → nội dung bảng bị CLIP khi cột không đủ chỗ trên màn hình hẹp. Phát
+  hiện qua audit UI/UX toàn hệ thống. Đổi `overflow-hidden`→`overflow-x-auto` cả 2 chỗ — vẫn scroll ngang
+  được, bo góc có thể mất đúng ở góc khi đang scroll (đánh đổi chấp nhận được so với clip nội dung).
 - **UI s194 (2026-09-06) — KPI cards → `StatTile` (dashboard-kit)**: 5 card Actual + 5 card Projected đổi
   từ `<div>` viết tay sang `StatTile` dùng chung, icon màu theo Ý NGHĨA (`revenue`/`margin`/`positive`),
   chart Trend đổi màu sang `CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle` dùng chung. Mọi `blue-*`

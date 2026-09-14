@@ -535,7 +535,7 @@ export default function B2BPerformance() {
                                             <td colSpan={7} className="px-8 py-3">
                                               <div className="space-y-4">
                                                 {row.sub_channels && row.sub_channels.length > 0 && (
-                                                  <div className="bg-white/40 border border-indigo-50 rounded-xl overflow-hidden backdrop-blur-sm">
+                                                  <div className="bg-white/40 border border-indigo-50 rounded-xl overflow-x-auto backdrop-blur-sm">
                                                     <table className="w-full text-[10px]">
                                                       <thead>
                                                         <tr className="bg-indigo-50/50">
@@ -835,7 +835,7 @@ export default function B2BPerformance() {
                                       <td colSpan={8} className="px-8 py-3">
                                         <div className="space-y-4">
                                           {row.sub_channels && row.sub_channels.length > 0 && (
-                                            <div className="bg-white/60 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                            <div className="bg-white/60 border border-slate-200 rounded-xl overflow-x-auto shadow-sm">
                                               <table className="w-full text-[10px]">
                                                 <thead>
                                                   <tr className="bg-slate-100">

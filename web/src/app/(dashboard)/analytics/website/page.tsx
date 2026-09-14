@@ -967,7 +967,7 @@ export default function WebsiteAnalyticsPage() {
                     {expandedDestinations.has(p.destination) && p.items.length > 0 && (
                       <tr className="bg-slate-50/50">
                         <td colSpan={4} className="p-0">
-                          <div className="pl-12 pr-4 py-3 border-b border-slate-100">
+                          <div className="pl-12 pr-4 py-3 border-b border-slate-100 overflow-x-auto">
                             <table className="w-full text-left">
                               <thead className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
                                 <tr>
