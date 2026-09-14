@@ -903,6 +903,7 @@ export default function ChannelPerformancePage() {
 
           <button
             onClick={fetchChannelData}
+            aria-label="Làm mới dữ liệu kênh"
             className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
           >
             <RefreshCw className={cn("w-5 h-5 text-slate-600", loading && "animate-spin")} />
@@ -1148,7 +1149,7 @@ export default function ChannelPerformancePage() {
               )}
               {!selectedCustomer && <p className="text-sm text-slate-500">Click vào tên KH để xem performance theo kênh</p>}
             </div>
-            <button onClick={fetchB2BCustomers} className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100">
+            <button onClick={fetchB2BCustomers} aria-label="Làm mới danh sách khách hàng B2B" className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100">
               <RefreshCw className={cn("w-4 h-4 text-slate-600", loadingB2B && "animate-spin")} />
             </button>
           </div>
@@ -1255,7 +1256,7 @@ export default function ChannelPerformancePage() {
               <h3 className="text-lg font-bold text-slate-900">All Channels Overview</h3>
               <p className="text-sm text-slate-500">Performance tổng hợp tất cả kênh — click vào kênh để xem chi tiết</p>
             </div>
-            <button onClick={fetchAllChannels} className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors">
+            <button onClick={fetchAllChannels} aria-label="Làm mới tổng hợp tất cả kênh" className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors">
               <RefreshCw className={cn("w-4 h-4 text-slate-600", loadingAll && "animate-spin")} />
             </button>
           </div>

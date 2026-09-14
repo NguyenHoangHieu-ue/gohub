@@ -94,6 +94,9 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn nhập cost lại → cần khôi phục button trong `page.tsx`.
 
 ## 5. Gotchas
+- **s196+21 (2026-09-14) — aria-label cho nút refresh icon-only**: 3 nút `RefreshCw` (header chính,
+  B2B Customers, All Channels Overview) chỉ có icon, không `aria-label` — thêm mô tả ngắn. Đề xuất I
+  (P1) roadmap audit UI/UX s196+20, làm dần theo tab đang sửa.
 - **s196+21 (2026-09-14) — code-split recharts**: chart "Revenue Trend" tách sang `channels-charts.tsx`
   (`React.memo` + `next/dynamic({ssr:false})`, cùng pattern `bod-charts.tsx`) — trước import `recharts`
   trực tiếp ở `page.tsx` (1844 dòng, file lớn thứ 2 repo). Phát hiện qua audit performance toàn hệ thống.

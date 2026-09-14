@@ -606,7 +606,7 @@ export default function WebsiteAnalyticsPage() {
 
               <button onClick={() => fetchAnalytics()} className="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 transition-all shadow-sm active:scale-95">Lọc</button>
 
-              <button onClick={fetchAnalytics} disabled={loading} className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
+              <button onClick={fetchAnalytics} disabled={loading} aria-label="Làm mới dữ liệu" className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
                 <RefreshCw className={cn("w-5 h-5 text-slate-600", loading && "animate-spin")} />
               </button>
             </div>

@@ -703,7 +703,7 @@ export default function VendorPerformancePage() {
             <span className="text-sm font-medium">Filters</span>
           </button>
 
-          <button onClick={fetchData} className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm">
+          <button onClick={fetchData} aria-label="Làm mới dữ liệu" className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm">
             <RefreshCw className={cn("w-5 h-5", loading && "animate-spin")} />
           </button>
         </div>

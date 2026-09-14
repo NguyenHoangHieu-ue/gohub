@@ -28,6 +28,9 @@ Doanh thu / margin / units / orders theo **vendor (NCC)** — WorldMove, 3HK DAT
 - Có thể lọc theo nhóm kênh (B2B/B2C).
 
 ## 3. Gotchas
+- **s196+21 (2026-09-14) — aria-label cho nút refresh icon-only**: nút `RefreshCw` header chỉ có icon,
+  không `aria-label` — thêm mô tả ngắn. Đề xuất I (P1) roadmap audit UI/UX s196+20, làm dần theo tab
+  đang sửa.
 - **s196+21 (2026-09-14) — code-split recharts**: chart "Revenue Trend" tách sang `vendors-charts.tsx`
   (`React.memo` + `next/dynamic({ssr:false})`, cùng pattern `bod-charts.tsx`/`my-metrics-charts.tsx`) —
   trước import `recharts` trực tiếp ở `page.tsx` (1262 dòng), nặng vào bundle đầu dù chỉ 2/8 tab có chart
