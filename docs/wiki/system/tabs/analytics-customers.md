@@ -28,6 +28,13 @@ Phân tích khách hàng **sỉ B2B**: doanh thu/margin/số lượng theo từn
 - Thường lọc B2B (`group_name='B2B'`).
 
 ## 3. Gotchas
+- **🔴 Fix s197 (2026-09-14) — CM1/Channel Cost sai khi chọn range nhiều tháng doanh thu không đều**
+  (phát hiện qua audit toàn hệ thống logic dữ liệu): `custCost` (cost-line kiểu `percent`) trước chia
+  ĐỀU `p.revenue` (tổng cả range) cho số tháng (`p.revenue / months.length`) làm `rawRevenue` cho MỌI
+  tháng có cost record — sai khi doanh thu KH không đều giữa các tháng (VD chọn cả quý, KH bán mạnh T7
+  nhẹ T8). Cách đúng (khớp B2B tier section) là dùng doanh thu THẬT của đúng tháng đó. Fix: thêm
+  `monthlyRevenue: Record<string, number>` vào `perfMap`, tích luỹ theo `YYYY-MM` mỗi dòng, cost calc
+  dùng `p.monthlyRevenue[m]` thay vì chia đều.
 - **s196+21 (2026-09-14) — skeleton loading, sửa bug empty-state hiện nhầm lúc đang tải**: 3 bảng (Product
   breakdown, Customer Orders, All Customers Breakdown) trước hiện thẳng empty-state ("No product/order
   data available"/"No customer data found") khi `length===0` — KHÔNG phân biệt "đang tải" vs "tải xong,
