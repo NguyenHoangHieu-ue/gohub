@@ -31,6 +31,11 @@ status: active
 - **Chi phí B2C** (s131): nút "Chi phí B2C" ở header → mở `CostManagementModal` scope=b2c (Ads/Platform/Sponsor/Media theo kênh B2C + B2C group cost). Đây là "manage cost" B2C trước đây bị gỡ khỏi tab B2C, nay gộp về đây.
 
 ## 3. Gotchas
+- **🔴 Fix s197 (2026-09-14) — cột Actual không loại phí ship/đơn nội bộ/KH INACTIVE** (phát hiện qua
+  audit toàn hệ thống logic dữ liệu): `api/planning/targets` (`actualsRows`) tính `SUM(fulfilled_revenue_
+  amount_vnd)` thô — Actual bị kê cao hơn "doanh thu SP thuần" chuẩn hệ thống, không khớp cách BOD/Quarter
+  Report/B2B tính. Cùng lỗi ở `getTargetSummary()` (`analytics-helpers.ts`, dùng cho Dashboard "Overall
+  Progress vs Target"). Đã thêm `shipFilter`/`internalOpsFilter`/`excludeInactiveCustomers` vào cả 2.
 - **s194+11 (2026-09-06)**: UI — `blue-*`→`brand-*` toàn trang (bảng target/budget B2C, tips card). Không
   đổi logic/data.
 - Kế hoạch = Supabase (creator/admin sửa được); thực tế = gohub_dw.
