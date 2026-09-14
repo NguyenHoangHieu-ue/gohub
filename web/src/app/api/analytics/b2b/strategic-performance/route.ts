@@ -5,8 +5,10 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter, getPartnerTiers,
   getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths,
-  getDaysInRange, getDaysInMonth, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
+  getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, excludeOpsByCode, excludeInactiveCustomers,
+  CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
+import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
 
 type Metrics = { revenue: number; margin: number; units: number; orders?: number }
@@ -27,14 +29,21 @@ export async function GET(req: NextRequest) {
   const endDate     = searchParams.get("endDate")   || ""
   const dateColumn  = searchParams.get("dateColumn") || "fulfiled_date"
   const companyCode = searchParams.get("companyCode") || undefined
+  const includeShip         = searchParams.get("includeShip")         === "1"
+  const includeInternalOps  = searchParams.get("includeInternalOps")  === "1"
+  const includeOpsCustomers = searchParams.get("includeOpsCustomers") === "1"
 
   const source     = getAnalyticsSource(dateColumn)
   const filter     = getDateFilter(startDate || null, endDate || null, source.dateCol, "30 days", companyCode)
   const prevFilter = getPrevDateFilter(startDate || null, endDate || null, "none", source.dateCol, "30 days", companyCode)
 
   try {
-   const key = `b2b-strategic2:${dateColumn}:${startDate}:${endDate}:${companyCode ?? ""}`
+   const key = `b2b-strategic3:${dateColumn}:${startDate}:${endDate}:${companyCode ?? ""}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
    const result = await cachedQuery(key, async () => {
+    // Chuẩn "doanh thu SP thuần" toàn hệ thống — trước route này KHÔNG đọc 3 toggle dù FE B2B gửi đủ
+    // (bật/tắt trên trang B2B đổi số KPI/Performance/Trend nhưng bảng Strategic Partners đứng yên).
+    const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
+    const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)} ${excludeInactiveCustomers()}`
     const tiers = await getPartnerTiers()
     const partnerMap   = new Map<string, string>() // lower(name) -> tier
     const reversedMap  = new Map<string, string>() // lower(name) -> original name
@@ -58,7 +67,7 @@ export async function GET(req: NextRequest) {
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code)
-         WHERE (${filter} OR ${prevFilter})
+         WHERE (${filter} OR ${prevFilter}) ${sfx}
        ),
        matched_data AS (
          SELECT r.*,

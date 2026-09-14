@@ -74,6 +74,16 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **🔴 Fix s197 (2026-09-14) — bảng "Strategic Partners" không đọc toggle Phí ship/Đơn nội bộ/KH Ops**
+  (phát hiện qua audit toàn hệ thống logic dữ liệu): `b2b/strategic-performance` route dùng chung ở
+  **5 trang** (B2B/BOD/Dashboard/Products/Vendors) hoàn toàn không đọc `includeShip`/`includeInternalOps`/
+  `includeOpsCustomers` dù FE B2B gửi đủ 3 tham số — bật/tắt toggle trên trang B2B đổi số KPI/Performance/
+  Trend nhưng bảng Strategic Partners đứng yên không đổi. Fix: thread `shipFilter`/`internalOpsFilter`/
+  `excludeOpsByCode`/`excludeInactiveCustomers` vào `raw_data` CTE, cache key thêm 3 cờ. **KHÔNG đổi** hệ
+  phân loại tier (vẫn `getPartnerTiers()`/Supabase `partner_tiers` liệt kê tay, KHÔNG chuyển sang canonical
+  `quarterly_tier_keywords`) — đây là quyết định Hiếu đã chốt trước đó ("giữ view này riêng, chưa đổi",
+  xem wiki BOD mục Gotchas s131) vì bảng này có mục đích khác (đối tác NAMED cụ thể + sub-channel/cost
+  breakdown per-partner), không phải phân loại B2B Strategic/Non-Strategic tổng quát như Quarter Report.
 - **s196+21 (2026-09-14) — gộp wrapper `exportToCSV` trùng lặp**: b2b + products cùng tự viết 1 wrapper
   y hệt tên `exportToCSV` (thật ra xuất .xlsx, tên gây hiểu lầm) quanh `exportToExcel` + hậu tố
   `_startDate_to_endDate`. Gộp thành `exportWithDateRange` (`lib/export-excel.ts`), 2 trang giờ chỉ còn
