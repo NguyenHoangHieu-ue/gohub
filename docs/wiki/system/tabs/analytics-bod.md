@@ -43,6 +43,15 @@ FROM <mainTable> f WHERE <dateFilter> <extraFilters>
 - **Channel Performance** (`bod-channel-performance`): doanh thu/margin theo tháng × kênh.
 
 ## 5. Gotchas
+- **🔴 Fix s197 (2026-09-14) — Channel Performance + Daily Report KHÔNG áp toggle "Phí ship"/"Đơn nội bộ"**
+  (phát hiện qua audit toàn hệ thống logic dữ liệu): FE gửi `includeShip`/`includeInternalOps` cho cả 4 route
+  (`bod-summary`, `bod-group-margin`, `bod-report`, `bod-channel-performance`) nhưng `fetchBODChannelPerformanceData`/
+  `fetchBODReportData` (`bod-data.ts`) không có tham số này → LUÔN cộng nguyên phí ship + đơn nội bộ, bất kể
+  toggle. Trong khi Summary/Group Margin đã lọc đúng → 3 khối số cùng trang KHÔNG khớp nhau (mặc định 2 toggle
+  tắt); bật toggle để đối chiếu raw thì chỉ Summary đổi, Channel Performance/Daily Report đứng yên. Fix: thêm
+  2 tham số vào cả 2 hàm, thread `shipFilter`/`internalOpsFilterByCode` vào MỌI query con (kể cả query B2B
+  per-customer cost `custRevRows`/`custDailyRows` — nếu không đồng bộ thì tỷ lệ phân bổ cost B2B theo
+  revenue-share cũng lệch). Cache key 2 route thêm `includeShip`/`includeInternalOps`.
 - **⚠️ Fix s162 (2026-08-26) — B2B op-cost thiếu Turso per-customer**: `fetchBODGroupMarginData` (Group Margin
   cards + bod-summary), `fetchBODChannelPerformanceData` (Channel Performance) và `fetchBODReportData` (daily
   trend) trước chỉ trừ `analytics_channel_costs` (Supabase channel-level, gần như luôn rỗng cho B2B — cost B2B
