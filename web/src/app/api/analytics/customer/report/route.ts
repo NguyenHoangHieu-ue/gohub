@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getMonthsInRange } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getMonthsInRange, cachedQuery } from "@/lib/analytics-helpers"
 import { getDimCustomerCols } from "@/lib/dim-schema"
 import { fetchCustomerCosts, calcRecordCost } from "@/lib/b2b-customer-cost"
 import { fetchQuarterlySettings, makeClassifyTier } from "@/lib/quarterly-settings"
+
+export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -36,37 +38,46 @@ export async function POST(req: NextRequest) {
     const prevEnd = new Date(currentStart.getTime() - 1)
 
     const months = getMonthsInRange(startDate, endDate)
+    // Cache riêng query DW nặng nhất (rows) — TTL 15' (s196+20, cùng lớp bug timeout B2C Advanced
+    // s195+15): trước chạy lại tươi mỗi lượt bấm xem báo cáo, dù cùng bộ khách hàng + khoảng ngày.
+    const rowsCacheKey = `customer-report:v1:${dateColumn}:${prevStart.toISOString().split("T")[0]}:${currentEnd.toISOString().split("T")[0]}:${[...customers].sort().join(",")}`
     const [{ tierKeywords }, costMap, rows] = await Promise.all([
       fetchQuarterlySettings(),
       fetchCustomerCosts(months),
       // Dùng LEFT JOIN dim_customer (giống quarterly-b2b-customers) thay vì WHERE IN (codes).
       // COALESCE(c.name, f.customer_code) đảm bảo filter đúng dù format customer_code thay đổi.
-      queryAnalytics<{
-        code: string; customer_name: string; price_list_name: string | null
-        date: string; order_code: string; sku: string
-        revenue: string; margin: string; quantity: string
-        channel_name: string; product_name: string; is_3hk: string
-      }>(
-        `SELECT
-           TRIM(f.customer_code) as code,
-           COALESCE(TRIM(c.${custNameCol}::text), TRIM(f.customer_code)) as customer_name,
-           c.price_list_name,
-           f.${source.dateCol} as date,
-           f.order_code,
-           f.sku,
-           f.${source.revenueCol} as revenue,
-           f.${source.marginCol} as margin,
-           f.${source.quantityCol} as quantity,
-           TRIM(s.channel_name) as channel_name,
-           v.type_of_sim as product_name,
-           CASE WHEN REPLACE(UPPER(TRIM(v.vendor)),' ','') = '3HKDATAPOOL' THEN '1' ELSE '0' END as is_3hk
-         FROM ${source.mainTable} f
-         LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku
-         LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.${custCodeCol}::text)
-         WHERE TRIM(COALESCE(c.${custNameCol}::text, f.customer_code)) IN (${customerNames})
-           AND f.${source.dateCol}::date >= $1 AND f.${source.dateCol}::date <= $2`,
-        [prevStart.toISOString().split("T")[0], currentEnd.toISOString().split("T")[0]]
+      cachedQuery(
+        rowsCacheKey,
+        () => queryAnalytics<{
+          code: string; customer_name: string; price_list_name: string | null
+          date: string; order_code: string; sku: string
+          revenue: string; margin: string; quantity: string
+          channel_name: string; product_name: string; is_3hk: string
+        }>(
+          `SELECT
+             TRIM(f.customer_code) as code,
+             COALESCE(TRIM(c.${custNameCol}::text), TRIM(f.customer_code)) as customer_name,
+             c.price_list_name,
+             f.${source.dateCol} as date,
+             f.order_code,
+             f.sku,
+             f.${source.revenueCol} as revenue,
+             f.${source.marginCol} as margin,
+             f.${source.quantityCol} as quantity,
+             TRIM(s.channel_name) as channel_name,
+             v.type_of_sim as product_name,
+             CASE WHEN REPLACE(UPPER(TRIM(v.vendor)),' ','') = '3HKDATAPOOL' THEN '1' ELSE '0' END as is_3hk
+           FROM ${source.mainTable} f
+           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+           LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku
+           LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.${custCodeCol}::text)
+           WHERE TRIM(COALESCE(c.${custNameCol}::text, f.customer_code)) IN (${customerNames})
+             AND f.${source.dateCol}::date >= $1 AND f.${source.dateCol}::date <= $2`,
+          [prevStart.toISOString().split("T")[0], currentEnd.toISOString().split("T")[0]]
+        ),
+        15,
+        false,
+        ["customer-report"],
       ),
     ])
     const classifyTier = makeClassifyTier(tierKeywords)

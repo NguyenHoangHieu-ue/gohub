@@ -110,6 +110,11 @@ gohub_dw hiện tại → luôn `TRIM(c.code::text)` khi so khớp.
 
 ## 5. Gotchas
 
+- **s196+20 (2026-09-14)**: cache TTL 15' cho `api/analytics/order-report` (`cachedQuery`, deps
+  `["order-report"]`) — bọc quanh cả 3 query (count/aggr/data), key theo mọi filter + `page/limit/isExport`.
+  Trước không cache — export CSV (`limit=5000`, GROUP BY nặng nhất) chạy lại tươi mỗi lần bấm xuất, cùng
+  lớp bug timeout đã fix cho B2C Advanced (s195+15), phát hiện qua audit performance toàn hệ thống. Thêm
+  `export const maxDuration = 60`.
 - **s195+7 (2026-09-08, chưa xác nhận cuối)**: Hiếu báo Orders chỉ hiện đơn eSIM, đơn SIM vật lý không
   hiện. Đã audit kỹ `route.ts` + `page.tsx` — KHÔNG có filter code nào loại theo `type_of_sim`/eSIM. Giả
   thuyết: mặc định `dataSource=fulfilled` dùng `fulfiled_date` (= ngày ĐÃ XUẤT/GIAO). eSIM giao tức thì

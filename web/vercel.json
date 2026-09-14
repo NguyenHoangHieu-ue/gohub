@@ -48,6 +48,18 @@
     },
     "src/app/api/cron/vendor-quote-scan/route.ts": {
       "maxDuration": 120
+    },
+    "src/app/api/analytics/b2c/metric/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analytics/staff-report/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analytics/customer/report/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analytics/order-report/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [

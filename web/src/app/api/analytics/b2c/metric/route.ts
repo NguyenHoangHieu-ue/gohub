@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { CACHE_HEADERS, cachedQuery } from "@/lib/analytics-helpers"
 import { runGA4Report, ga4Sites } from "@/lib/ga4"
 import { supabaseAdmin } from "@/lib/supabase"
+
+export const maxDuration = 60
 
 // YTD monthly metrics cho subtab Metric của B2C:
 //   Revenue / GP / Orders by web+app từ gohub_dw (sub_group_name)
@@ -72,7 +74,12 @@ export async function GET(req: NextRequest) {
 
   try {
     // 1. gohub_dw: Revenue, GP, Orders by month + sub_group_name (web/app/other)
-    const [businessRows, customerRows] = await Promise.all([
+    // Cache TTL 60' (s196+20 — cùng lớp bug timeout đã fix cho B2C Advanced s195+15): trước đây 2 CTE
+    // này (đặc biệt customerRows với JOIN first_order quét toàn lịch sử fact_fulfillment_revenue) chạy
+    // lại tươi mỗi lượt xem trang, không cache — dễ chạm ngưỡng timeout 60s khi data lớn dần.
+    const [businessRows, customerRows] = await cachedQuery(
+      `b2c-metric:v1:${windowStart}:${windowEnd}`,
+      () => Promise.all([
       queryAnalytics<{ month: string; ctype: string; revenue: string; gross_profit: string; orders: string }>(
         `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
                 CASE WHEN s.sub_group_name = 'Websites'   THEN 'web'
@@ -121,7 +128,11 @@ export async function GET(req: NextRequest) {
          GROUP BY 1, 2, 3`,
         [windowStart, windowEnd]
       ),
-    ])
+      ]),
+      60,
+      false,
+      ["b2c-metric"],
+    )
 
     for (const r of businessRows) {
       const m = result[r.month]

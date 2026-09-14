@@ -120,3 +120,14 @@ phải "màu ngẫu nhiên" cần dọn). Không đổi logic/data.
 | `includeOpsCustomers` | Off | Bao gồm KH hệ thống (B2B Ops, B2C Customer US/VN) |
 
 Bật CẢ 3 → khớp số raw gohub_dw (dùng để validate).
+
+## 9. Cache TTL 30' (s196+20 — 2026-09-14)
+
+`api/analytics/staff-report` chạy 4 query `gohub_dw` song song (summary, monthly, groupTotal,
+custBreakdown — cái nặng nhất group theo staff×customer×month) không cache, chạy lại tươi mỗi lượt đổi
+filter/xem trang — cùng lớp bug timeout đã fix cho B2C Advanced (s195+15), phát hiện qua audit performance
+toàn hệ thống. Bọc `cachedQuery` quanh 4 query này (TTL 30', key theo mọi filter: startDate/endDate/
+channelGroup/channel/companyCode/dataSource/includeShip/includeInternalOps). `groupCostsRaw`
+(Supabase)/`customerCosts` (Turso, trả về `Map`) **cố ý KHÔNG** cache chung — `Map` JSON-serialize qua
+tầng L2 (Supabase JSONB) sẽ hỏng shape (`.get is not a function` khi đọc lại từ instance khác), 2 nguồn
+này cũng ngoài pool `gohub_dw` nên không phải điểm nghẽn timeout. Thêm `export const maxDuration = 60`.

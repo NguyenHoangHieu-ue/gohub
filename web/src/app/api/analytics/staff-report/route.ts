@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, getMonthsInRange, getGroupCostsForMonths, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
+import { analyticsGuard, getMonthsInRange, getGroupCostsForMonths, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, cachedQuery } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+
+export const maxDuration = 60
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -118,12 +120,25 @@ export async function GET(req: NextRequest) {
       GROUP BY ${staffKey}, TRIM(f.customer_code), TO_CHAR(f.${dateCol}::date, 'YYYY-MM')
     `
 
-    const [summaryRows, monthlyRows, groupTotalRows, groupCostsRaw, custBreakdownRows, customerCosts] = await Promise.all([
-      queryAnalytics(summarySQL, params),
-      queryAnalytics(monthlySQL, params),
-      queryAnalytics(groupTotalSQL, params),
+    // Cache TTL 30' (s196+20 — cùng lớp bug timeout đã fix cho B2C Advanced s195+15): 4 query gohub_dw
+    // (pool max=3, chỗ nghẽn thật) chạy lại tươi mỗi lượt đổi filter/xem trang — cache riêng nhóm này.
+    // groupCosts/customerCosts (Supabase/Turso, ngoài pool gohub_dw) giữ nguyên không cache — customerCosts
+    // là Map, JSON-serialize qua L2 (Supabase JSONB) sẽ hỏng shape nên không đưa vào cachedQuery.
+    const cacheKey = `staff-report:v1:${startDate}:${endDate}:${channelGroup}:${channel}:${companyCode}:${dataSource}:${includeShip}:${includeInternalOps}`
+    const [[summaryRows, monthlyRows, groupTotalRows, custBreakdownRows], groupCostsRaw, customerCosts] = await Promise.all([
+      cachedQuery(
+        cacheKey,
+        () => Promise.all([
+          queryAnalytics(summarySQL, params),
+          queryAnalytics(monthlySQL, params),
+          queryAnalytics(groupTotalSQL, params),
+          queryAnalytics(custBreakdownSQL, params),
+        ]),
+        30,
+        false,
+        ["staff-report"],
+      ),
       months.length ? getGroupCostsForMonths(months) : Promise.resolve([]),
-      queryAnalytics(custBreakdownSQL, params),
       months.length ? fetchCustomerCosts(months) : Promise.resolve(new Map<string, any>()),
     ])
 
