@@ -12,7 +12,10 @@ export const metadata: Metadata = {
 
 // Đặt class 'dark' TRƯỚC khi paint để tránh nhấp nháy (FOUC).
 // Mặc định LIGHT: chỉ bật dark khi user CHỦ ĐỘNG chọn (localStorage theme='dark') — KHÔNG theo OS.
-const themeScript = `try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}`
+// s196+21: tab BI (/analytics/* trừ /analytics/creator) khoá dark mode (quyết định Hiếu — xem
+// lib/theme-lock.ts DARK_LOCK_INLINE_JS, giữ đúng logic y hệt isDarkModeLocked()) — nếu không chặn ở đây,
+// user bật dark mode từ chatbot rồi F5 thẳng vào 1 tab BI sẽ thấy 1 nhịp UI vỡ trước khi JS client kịp gỡ.
+const themeScript = `try{var p=location.pathname;var locked=(p.startsWith('/analytics/creator')?false:(p==='/analytics'||p.startsWith('/analytics/')));if(!locked&&localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}`
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
