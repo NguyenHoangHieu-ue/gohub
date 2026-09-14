@@ -249,7 +249,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
               </button>
             ))}
           </div>
-          <button onClick={fetchAuto} className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors">
+          <button onClick={fetchAuto} aria-label="Làm mới dữ liệu" className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-colors">
             <RefreshCw className={cn("w-4 h-4 text-slate-500", loading && "animate-spin")} />
           </button>
           {canConfigLark && (

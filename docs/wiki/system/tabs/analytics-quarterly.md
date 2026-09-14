@@ -116,6 +116,11 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | **Biểu đồ** (cạnh 3 nút trên) | Bật/tắt bar chart revenue theo đúng chế độ đang chọn — Tháng/Ngày cộng dồn theo kỳ (nhiều dòng/kênh gộp lại), Sản phẩm lấy top 10 SKU theo revenue |
 
 ## 7. Gotchas
+- **s196+21 (2026-09-14) — thêm hint "Hướng dẫn" onboarding (đề xuất K, P2, roadmap UI/UX audit s196+20,
+  finding #9)**: trang nhiều filter/tầng (Quý/Năm, VN/US, Phí ship, Đơn nội bộ, Tải lại mới) chưa có
+  hướng dẫn cho người lần đầu dùng. Dùng lại `LogicNote collapsible` có sẵn (dashboard-kit.tsx) — không
+  tự vẽ pattern tooltip mới. My Metrics KHÔNG cần thêm (đã có nút "Cách tính" + `NotesDrawer` phục vụ
+  đúng mục đích này từ trước — chỉ thêm `aria-label` cho nút refresh icon-only).
 - **s196+21 (2026-09-14) — AbortController huỷ request cũ khi filter đổi nhanh (đề xuất E, P2, roadmap
   performance audit s196+20)**: `fetchReport`/`fetchSquadProgress`/`fetchB2BTiers` mỗi hàm giờ giữ
   `AbortController` trong `useRef`, gọi `.abort()` request TRƯỚC ĐÓ ngay khi bắt đầu request mới — trước

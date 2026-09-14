@@ -19,6 +19,7 @@ import { PivotTable } from "@/components/quarterly/pivot-table"
 import { B2BTierSection } from "@/components/quarterly/b2b-tier-section"
 import { QtVsTargetPanel } from "@/components/quarterly/qt-vs-target-bullets"
 import { MonthlyTrendChart } from "@/components/quarterly/monthly-trend-chart"
+import { LogicNote } from "@/components/dashboard-kit"
 
 // s183 Phase 5: Types/format helpers/component con (KpiCard, TableHead, ColInfo, MomBadge, MonthSubRow,
 // QtSummaryRow, QtTargetRow, PivotTable, B2BTierSection) đã tách sang lib/quarterly-types.ts,
@@ -611,6 +612,16 @@ function QuarterlyContent() {
 
       {/* ── Overview content (ẩn khi tab = squad) ── */}
       <div className={activeSection === "squad" ? "hidden" : ""}>
+
+      {/* Đề xuất K (P2, roadmap UI/UX audit s196+20 — finding #9) — trang nhiều filter/tầng, chưa có
+          hướng dẫn cho người lần đầu dùng. Dùng LogicNote collapsible có sẵn (không tự vẽ pattern mới). */}
+      <LogicNote collapsible label="Hướng dẫn">
+        Chọn <strong>Quý/Năm</strong> ở góc trên để đổi kỳ báo cáo — mặc định load từ cache (nhanh), bấm{" "}
+        <strong>Tải lại mới</strong> nếu vừa cập nhật số liệu và cần dữ liệu tươi nhất. Toggle{" "}
+        <strong>VN/US</strong> lọc theo pháp nhân; 2 checkbox <strong>Phí ship</strong>/<strong>Đơn nội
+        bộ</strong> mặc định tắt (loại khỏi doanh thu SP thuần) — bật cả 2 để đối chiếu số raw gohub_dw.
+        Click 1 hàng trong bảng để xổ chi tiết theo Tháng/Ngày/Sản phẩm.
+      </LogicNote>
 
       {/* ── Settings panel (admin/creator only) ── */}
       {canEditSettings && showSettings && qSettings && (
