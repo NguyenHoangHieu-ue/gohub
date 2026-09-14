@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
       queryAnalytics<{ source: string; units: string }>(
         `SELECT TRIM(os.sapo_name) as source, SUM(f.fulfilled_quantity) as units
          FROM fact_fulfillment_revenue f JOIN dim_order_source os ON f.order_source_code = os.code
-         WHERE f.fulfiled_date::date BETWEEN $1 AND $2 GROUP BY 1`, [startDate, endDate]
+         WHERE f.fulfiled_date::date BETWEEN $1 AND $2${groupFilter} GROUP BY 1`, [startDate, endDate]
       ),
       queryAnalytics<{ name: string }>("SELECT DISTINCT TRIM(channel_name) as name FROM dim_order_source WHERE UPPER(group_name) = 'B2B'"),
       queryAnalytics<{ name: string }>("SELECT DISTINCT TRIM(channel_name) as name FROM dim_order_source WHERE UPPER(group_name) = 'B2C'"),
