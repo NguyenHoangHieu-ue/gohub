@@ -6,7 +6,7 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-14, s197)
+## Trạng thái hiện tại (2026-09-14, s197+1)
 
 | | |
 |---|---|
@@ -35,8 +35,22 @@
   helper chung, Vendors (3 fix lịch sử s195+8/9/10 không hồi quy), 3HK Usage, My Metrics hierarchy/prorata.
   **Kết luận luôn mục mở cũ s195+7** (Orders thiếu SIM vật lý): xác nhận qua code KHÔNG phải bug — 0
   filter cứng theo `type_of_sim`, nguyên nhân đúng là `fulfiled_date` NULL phía ops/ETL nguồn.
-  **Chưa QA live trên staging** — Hiếu nên tự xem số liệu vài tab đã đổi (đặc biệt Vendors/Channels đổi
-  nhiều nhất) sau khi Vercel deploy xong, đối chiếu vài con số đã biết trước/sau fix.
+  **Đã QA live trên staging** (xem s197+1) — Vendors "VN Ecom Shopee" số đúng sau fix, Channels CM1
+  khớp Revenue/GP card cùng trang, BOD toggle hoạt động đúng.
+| ✅ **s197+1 (2026-09-14) — Incident: Hiếu báo "kênh ecom T9 sai" (Quarter Report + B2B Performance) —
+  root cause CACHE CŨ, đã fix kèm 1 bug thật + merge main** | Verify qua SQL trực tiếp trên staging:
+  "VN Ecom Shopee" T9 (1-13/9) thật có doanh thu 229.667.051đ, site đang hiện 137.802.046đ (thiếu 40% —
+  cache TTL_L1 5'/TTL_L2 10' phục vụ snapshot cũ trong lúc dữ liệu giữa tháng tiếp tục đổ về). Toàn bộ
+  công thức GP/CH.Cost/CM1/Actual-vs-Projected verify đúng 100% khi bypass cache (không phải bug tính
+  toán — khớp giữa Quarter Report và B2B Performance, xác nhận cả 2 đọc chung 1 nguồn dữ liệu đúng).
+  **Bug thật phát hiện kèm theo**: trang B2B Performance KHÔNG có nút "Tải lại mới" nào (khác Quarter
+  Report — vốn có sẵn) → Hiếu không có cách tự ép cache tính lại tươi, phải chờ TTL tự hết hạn. Đã thêm
+  nút (`fetchData(true)` → `nocache=1`, tự áp cho `b2b/kpis`/`performance`/`strategic-performance`/
+  `trend`/`channels-with-platform-fee`, không sót route nào) — **đã tự QA live: bấm nút ra đúng số ngay**
+  (229.667.051đ). Đã tự ép cache Quarter Report + B2B Performance tính lại tươi ngay lúc xử lý incident.
+  Hiếu yêu cầu thêm rule cố định "luôn check N+1 query ảnh hưởng DB" — đã thêm vào mục Coding rules.
+  **Đã merge staging→main** (`68d861c7`, theo yêu cầu Hiếu "merge main hết đi") — gộp cả 16 fix s197 lẫn
+  fix incident này, clean không conflict, tsc+vitest(243/243) PASS. Production đang tự deploy.
 | ✅ **s196+20/+21 (2026-09-14) — Audit performance + UI/UX toàn hệ thống (32 tab) + P0/P1/P2 fix, đã tự
   QA staging qua Chrome** | Theo yêu cầu Hiếu "đánh giá toàn bộ tab UI/UX + giúp load nhanh hơn, chạy mượt
   hơn" — 2 fork song song (Performance + UI/UX) đọc trực tiếp code + Grep định lượng (không suy đoán) toàn
@@ -532,15 +546,13 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
-- [ ] **s197 — QA số liệu sau audit logic dữ liệu 16 fix trên staging** — sau khi Vercel deploy xong,
-  đối chiếu vài con số đã biết trước/sau (nhất là Vendors + Channels — đổi số nhiều nhất vì trước đây
-  0 filter ship/nội bộ nào): (a) Vendors — chọn 1 vendor quen, số Revenue/Units có thể GIẢM nhẹ so với
-  trước (do trừ đúng phí ship/đơn nội bộ); (b) Channels — CM1 card giờ khớp Revenue/GP card cùng trang
-  (trước có thể lệch); (c) BOD — bật/tắt toggle Phí ship/Đơn nội bộ, xác nhận Channel Performance + Daily
-  Report giờ ĐỔI theo (trước đứng yên); (d) Dashboard "Overall Progress vs Target" — % có thể tăng nhẹ
-  (Actual giờ đúng "doanh thu SP thuần", không còn kê cao); (e) Customers — nếu có KH chọn range nhiều
-  tháng + có cấu hình cost `percent`, CM1 có thể đổi nhẹ so với trước. Không cần làm gì nếu số liệu hợp
-  lý — chỉ báo lại nếu thấy bất thường rõ ràng (lệch quá lớn, không giải thích được).
+- [x] **s197/s197+1 — Audit logic dữ liệu 16 fix + incident ecom T9 — XONG (2026-09-14), đã tự QA live +
+  đã merge main** — B2B Performance "VN Ecom Shopee" xác nhận số đúng (229.667.051đ) sau khi thêm nút
+  "Tải lại mới" + ép cache tươi. Channels CM1 khớp Revenue/GP card cùng trang. BOD toggle Phí ship/Đơn
+  nội bộ hoạt động đúng cho Channel Performance + Daily Report. Đã merge staging→main (`68d861c7`),
+  production đang tự deploy. **Hiếu vẫn nên tự đối chiếu thêm vài số quen thuộc khi rảnh** (không gấp):
+  Dashboard "Overall Progress vs Target" % có thể tăng nhẹ (Actual hết bị kê cao); Customers CM1 có thể
+  đổi nhẹ nếu có KH chọn range nhiều tháng + cost `percent`. Không cần làm gì nếu số liệu hợp lý.
 - [x] **s196+20/+21 — Audit performance/UI/UX toàn hệ thống (P0+P1+P2) + 2 quyết định UI Strict Lock —
   XONG HẾT (2026-09-14), đã tự QA qua Chrome trên staging, không cần Hiếu làm gì thêm** — Hiếu đã chốt 2
   quyết định (dark mode tab BI → khoá lại; tách admin/page.tsx → làm luôn), cả 2 đã làm + QA xong. Export
