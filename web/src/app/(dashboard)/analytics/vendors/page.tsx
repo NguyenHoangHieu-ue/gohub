@@ -239,6 +239,11 @@ export default function VendorPerformancePage() {
       const dateFilter = `${dateCol}::date >= '${startDate}' AND ${dateCol}::date <= '${endDate}'`
       const fDateFilter = `f.${dateCol}::date >= '${startDate}' AND f.${dateCol}::date <= '${endDate}'`
 
+      // Chuẩn "doanh thu SP thuần" toàn hệ thống (loại phí ship + đơn nội bộ) — trang này không có
+      // toggle riêng, trước đây 0 chỗ nào áp filter này (audit s197 toàn hệ thống logic dữ liệu).
+      const stdFilter = `AND sku != 'SHIPPINGFEE0' AND order_source_code NOT IN (SELECT code FROM dim_order_source WHERE UPPER(COALESCE(group_name,'')) = 'INTERNAL-TRANSACTION')`
+      const fStdFilter = `AND f.sku != 'SHIPPINGFEE0' AND f.order_source_code NOT IN (SELECT code FROM dim_order_source WHERE UPPER(COALESCE(group_name,'')) = 'INTERNAL-TRANSACTION')`
+
       let prevDateFilter = ""
       let fPrevDateFilter = ""
       if (comparisonType === "previous_period") {
@@ -277,22 +282,22 @@ export default function VendorPerformancePage() {
       const pmEnd   = formatDateToISO(new Date(pmDate.getFullYear(), pmDate.getMonth(), 0))
 
       // Build ALL SQL strings upfront
-      const allVendorsSql = `SELECT SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${dateFilter} ${channelFilter}`
-      const summarySql    = `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter}`
+      const allVendorsSql = `SELECT SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${dateFilter} ${channelFilter} ${stdFilter}`
+      const summarySql    = `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter} ${stdFilter}`
       const prevSummarySql = comparisonType !== "none"
-        ? `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter}`
+        ? `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} ${stdFilter}`
         : null
-      const pmSql = `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateCol}::date >= '${pmStart}' AND ${dateCol}::date <= '${pmEnd}' ${channelFilter}`
-      const trendSql = `SELECT TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter} GROUP BY ${dateCol}::date ORDER BY ${dateCol}::date`
+      const pmSql = `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateCol}::date >= '${pmStart}' AND ${dateCol}::date <= '${pmEnd}' ${channelFilter} ${stdFilter}`
+      const trendSql = `SELECT TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter} ${stdFilter} GROUP BY ${dateCol}::date ORDER BY ${dateCol}::date`
       const prevTrendSql = comparisonType !== "none"
-        ? `SELECT TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} GROUP BY ${dateCol}::date ORDER BY ${dateCol}::date`
+        ? `SELECT TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} ${stdFilter} GROUP BY ${dateCol}::date ORDER BY ${dateCol}::date`
         : null
-      const productsSql = `SELECT TRIM(sku) as sku, SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter} GROUP BY TRIM(sku) ORDER BY revenue DESC`
+      const productsSql = `SELECT TRIM(sku) as sku, SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter} ${stdFilter} GROUP BY TRIM(sku) ORDER BY revenue DESC`
       const prevProductsSql = comparisonType !== "none"
-        ? `SELECT TRIM(sku) as sku, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} GROUP BY TRIM(sku)`
+        ? `SELECT TRIM(sku) as sku, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} ${stdFilter} GROUP BY TRIM(sku)`
         : null
       const prevChannelSql = comparisonType !== "none"
-        ? `SELECT s.channel_name, SUM(f.${revCol}) as revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fVendorFilter} AND ${fPrevDateFilter} ${fChannelFilter} GROUP BY s.channel_name`
+        ? `SELECT s.channel_name, SUM(f.${revCol}) as revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fVendorFilter} AND ${fPrevDateFilter} ${fChannelFilter} ${fStdFilter} GROUP BY s.channel_name`
         : null
 
       const vendorParams = selectedVendors.map(v => `vendorCodes=${encodeURIComponent(v)}`).join("&")
@@ -332,7 +337,7 @@ export default function VendorPerformancePage() {
       // tường minh (không f.*) — marginCol có thể là literal "0" (chế độ Created, bảng sales không có
       // margin), f.0 sẽ không hợp lệ nếu lỡ prefix bằng alias.
       const marginExpr = marginCol === "0" ? "0" : `f.${marginCol}`
-      const channelSql = `WITH channel_totals AS (SELECT s.channel_name, SUM(f.${revCol}) as total_revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fDateFilter} ${fChannelFilter} GROUP BY s.channel_name), classified AS (SELECT f.order_code as order_code, f.${revCol} as rev, f.${qtyCol} as qty, ${marginExpr} as mgn, s.channel_name as channel_name, ${bizGroupSQL} as business_group FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code) WHERE ${fVendorFilter} AND ${fDateFilter} ${fChannelFilter}) SELECT cl.channel_name, SUM(cl.rev) as revenue, COUNT(DISTINCT cl.order_code) as orders, SUM(cl.qty) as units_sold, SUM(cl.mgn) as margin, MAX(t.total_revenue) as total_channel_revenue, cl.business_group FROM classified cl LEFT JOIN channel_totals t ON COALESCE(cl.channel_name, '') = COALESCE(t.channel_name, '') GROUP BY cl.channel_name, cl.business_group ORDER BY revenue DESC`
+      const channelSql = `WITH channel_totals AS (SELECT s.channel_name, SUM(f.${revCol}) as total_revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fDateFilter} ${fChannelFilter} ${fStdFilter} GROUP BY s.channel_name), classified AS (SELECT f.order_code as order_code, f.${revCol} as rev, f.${qtyCol} as qty, ${marginExpr} as mgn, s.channel_name as channel_name, ${bizGroupSQL} as business_group FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code) WHERE ${fVendorFilter} AND ${fDateFilter} ${fChannelFilter} ${fStdFilter}) SELECT cl.channel_name, SUM(cl.rev) as revenue, COUNT(DISTINCT cl.order_code) as orders, SUM(cl.qty) as units_sold, SUM(cl.mgn) as margin, MAX(t.total_revenue) as total_channel_revenue, cl.business_group FROM classified cl LEFT JOIN channel_totals t ON COALESCE(cl.channel_name, '') = COALESCE(t.channel_name, '') GROUP BY cl.channel_name, cl.business_group ORDER BY revenue DESC`
 
       // Tất cả query độc lập → bắn song song, thời gian = query chậm nhất
       const [
