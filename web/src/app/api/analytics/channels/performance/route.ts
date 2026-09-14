@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getStrategicPartnersList , CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getStrategicPartnersList, shipFilter, internalOpsFilter, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
 import { fetchCosts, getDaysInRange, getDaysInMonth, monthsBetween } from "@/lib/bod-data"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { COST_KEYS, calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
@@ -23,6 +23,9 @@ export async function GET(req: NextRequest) {
   const groupFilter = channelGroup !== "All"
     ? `AND UPPER(s.group_name) = '${channelGroup.toUpperCase()}'`
     : ""
+  // Trang Channels không có toggle Phí ship/Đơn nội bộ riêng (khác BOD/B2B/B2C) — luôn loại mặc định,
+  // khớp channels/kpis (CM1 card cùng trang) — s197 audit toàn hệ thống logic dữ liệu.
+  const sfx = `${shipFilter(false)} ${internalOpsFilter(false)}`
 
   try {
     const key = `ch-perf:${dateColumn}:${startDate}:${endDate}:${channelGroup}`
@@ -40,7 +43,7 @@ export async function GET(req: NextRequest) {
                 COUNT(DISTINCT f.order_code) as orders
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         WHERE ${filter} ${groupFilter}
+         WHERE ${filter} ${groupFilter} ${sfx}
          GROUP BY TRIM(s.channel_name), UPPER(s.group_name), is_strategic
        ),
        prv AS (
@@ -48,7 +51,7 @@ export async function GET(req: NextRequest) {
                 SUM(f.${source.revenueCol}) as revenue
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         WHERE ${prevFilter} ${groupFilter}
+         WHERE ${prevFilter} ${groupFilter} ${sfx}
          GROUP BY TRIM(s.channel_name)
        )
        SELECT c.channel, c.group_name, c.is_strategic,
@@ -80,7 +83,7 @@ export async function GET(req: NextRequest) {
           SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
                  SUM(f.${source.revenueCol}) as revenue
           FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          WHERE ${filter} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
+          WHERE ${filter} ${sfx} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
           GROUP BY 1, 2
         `),
         fetchCustomerCosts(months),
