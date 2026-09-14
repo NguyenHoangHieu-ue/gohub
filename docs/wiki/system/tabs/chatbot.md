@@ -163,3 +163,32 @@ Bộ E2E `web/src/__e2e__/agent-audit|agent-grade` (LLM-judge) audit từng agen
 
 ### UX: hiệu ứng "đang trả lời"
 Agent `bi-analyst`/`data-explorer` chạy function-calling 10–30s (non-stream) → trước đây bong bóng rỗng, trông như treo. Nay hiện **typing dots + "[tên agent] đang trả lời…"** trong bong bóng khi chưa có nội dung, badge nhấp nháy ở header (mọi kích thước màn hình). File `web/src/app/(dashboard)/chatbot/page.tsx`.
+
+## 7. s196+13 (2026-09-13) — Fix await bug + cost tracking + eval case bảo mật + feedback loop
+
+Theo roadmap audit toàn diện Bé Gấu (s196+5, xem artifact riêng). 4 việc từ nhóm "nên làm sớm":
+
+- **Fix P0 — `detectAndLogLearning()` fire-and-forget**: `be-gau.ts` trước gọi `void detectAndLogLearning(...)`
+  (dòng ~538) — đúng lớp bug đã tốn nhiều session tìm/fix trước đây (`logChat`/`app_usage_events` s195+18-C):
+  serverless có thể đóng execution context trước khi promise học liệu kịp gửi đi. Đổi sang `await` — hàm tự
+  bọc try/catch nội bộ nên an toàn, không chặn lâu (43 test be-gau vẫn PASS, verify tốc độ không đổi đáng kể).
+- **Cost/token tracking**: `runBeGau()` tích luỹ `usageMetadata` qua MỌI vòng `genWithRetryStream` (đúng
+  pattern đã làm cho Gấu Pro s196+7), trả thêm `tokensIn`/`tokensOut`. Cả 2 điểm vào (`api/chat/route.ts`
+  `logChat()` và `api/lark/events/route.ts`) ghi thêm `tokens_in`/`tokens_out`/`est_cost_usd` vào
+  `app_usage_events` — tái dùng ĐÚNG 3 cột đã thêm ở migration v58 cho Gấu Pro, KHÔNG cần migration mới.
+  Giá dùng `lib/agents/gemini-pricing.ts` (đã verify `ai.google.dev/gemini-api/docs/pricing`).
+- **Eval case bảo mật qua LLM thật** (`__e2e__/agent-banks.ts`, nhóm DX): trước chỉ có case `role:"admin"`
+  xác nhận ĐỌC ĐƯỢC bảng nhạy cảm (`users`/`app_settings`...) — thêm 2 case `role:"staff"` xác nhận executor
+  CHẶN đúng qua đường LLM thật (khác unit test `be-gau-runner.test.ts` chỉ test `listSupabaseTables`, chưa
+  test `querySupabase` trực tiếp). Cần Hiếu tự chạy (máy dev không có `.env.local`):
+  `GRADE_AGENT="data-explorer" npx vitest run --config vitest.audit.config.ts src/__e2e__/agent-grade.test.ts`.
+- **Feedback loop 👍/👎**: nút thumbs-up/down dưới mỗi câu trả lời Bé Gấu trên web (`chatbot/page.tsx`,
+  component `BeGauMsgContent`) — trước non-creator không có cách nào đánh giá trực tiếp chất lượng câu trả
+  lời (chỉ creator/admin xem qua Usage Analytics/LLM-judge nội bộ). Ghi vào bảng mới `chat_feedback`
+  (migration `v59_chat_feedback.sql`, route `POST /api/chat/feedback`, rate-limit 30/phút/user) — tách riêng
+  `app_usage_events` (đã nhiều cột, feedback là hành động chủ động khác event tự động). 1 lần/tin nhắn
+  (client chặn double-click qua state `feedbackGiven`).
+
+tsc + lint (0 lỗi mới) + vitest (230/230) PASS. **Cần Hiếu**: chạy migration v59; muốn xem cost Bé Gấu thì
+tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi phí Gấu Pro" hiện có chỉ lọc
+`gau_pro`, chưa gộp — để riêng cho rõ vì đối tượng khác nhau, xem quyết định #2 trong artifact roadmap).

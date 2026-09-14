@@ -7,7 +7,7 @@ import {
   Send, Cpu, User, Plus, Trash2, ExternalLink, Loader2,
   Database, Globe, BarChart2, Code2, Lightbulb,
   Paperclip, X, FileText, Image as ImageIcon, FileSpreadsheet,
-  FileJson, FileType, Package, Mic,
+  FileJson, FileType, Package, Mic, Volume2, VolumeX,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm     from "remark-gfm"
@@ -81,6 +81,20 @@ function stripLatex(text: string): string {
       ? part
       : LATEX_UNICODE.reduce((t, [re, rep]) => t.replace(re, rep), part)
   ).join("")
+}
+
+// Text-to-speech (s196+10) — đọc thành tiếng câu trả lời. Bỏ code block/bảng (đọc lên vô nghĩa) +
+// ký hiệu markdown, giữ lại nội dung văn bản thuần.
+function stripForSpeech(text: string): string {
+  return stripLatex(text)
+    .replace(/```[\s\S]*?```/g, " ")               // code fences (kể cả export/chart/followup marker)
+    .replace(/\|.*\|/g, " ")                        // dòng bảng markdown
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")            // ảnh
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")         // link → giữ text
+    .replace(/[#*_~`>]/g, "")                        // ký hiệu markdown còn sót
+    .replace(/^\s*[-•]\s+/gm, "")                    // gạch đầu dòng
+    .replace(/\s{2,}/g, " ")
+    .trim()
 }
 
 // Export helpers (parseExportMarker/extractCSVBlock/extractJSONArray/extractMarkdownTable/ExportBar)
@@ -196,7 +210,13 @@ function extractFollowupChips(text: string): string[] {
 
 // ─── MsgContent — assistant message with PDF ref ─────────────────────────────
 
-function MsgContent({ msg, onFollowup }: { msg: { content: string; sources?: WebSource[] }; onFollowup?: (q: string) => void }) {
+function MsgContent({ msg, onFollowup, speaking, ttsSupported, onToggleSpeak }: {
+  msg: { content: string; sources?: WebSource[] }
+  onFollowup?: (q: string) => void
+  speaking?: boolean
+  ttsSupported?: boolean
+  onToggleSpeak?: () => void
+}) {
   const contentRef = useRef<HTMLDivElement>(null)
   const chips = extractFollowupChips(msg.content)
   // Hide export/followup helper blocks from the visible answer (they drive buttons, not display)
@@ -213,7 +233,17 @@ function MsgContent({ msg, onFollowup }: { msg: { content: string; sources?: Web
           </>
         ) : renderMarkdown(display)}
       </div>
-      <ExportBar content={msg.content} contentRef={contentRef} apiEndpoint="/api/creator-ai/export" />
+      <div className="flex items-center gap-2">
+        <ExportBar content={msg.content} contentRef={contentRef} apiEndpoint="/api/creator-ai/export" />
+        {ttsSupported && onToggleSpeak && (
+          <button onClick={onToggleSpeak} title={speaking ? "Dừng đọc" : "Đọc to câu trả lời"}
+            className={`flex items-center gap-1 px-2 py-1 text-[11px] rounded-md transition-colors ${
+              speaking ? "text-violet-600 bg-violet-50 dark:bg-violet-900/20" : "text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20"
+            }`}>
+            {speaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
+          </button>
+        )}
+      </div>
       {msg.sources && msg.sources.length > 0 && <SourceCitations sources={msg.sources} />}
       {chips.length > 0 && onFollowup && (
         <div className="flex flex-wrap gap-2 mt-3">
@@ -291,12 +321,30 @@ export default function CreatorAIPage() {
   const [imgPreviews,   setImgPreviews]   = useState<Map<string, string>>(new Map())
   const [listening,     setListening]     = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(false)
+  const [ttsSupported,  setTtsSupported]  = useState(false)
+  const [speakingIdx,   setSpeakingIdx]   = useState<number | null>(null)
   const [statusText,    setStatusText]    = useState("")
   const [larkConnected, setLarkConnected] = useState<boolean | null>(null)
   const [convId,        setConvId]        = useState<string | null>(null)
   const [pastConvs,     setPastConvs]     = useState<{ id: string; title: string; updated_at: string }[]>([])
   const [showConvList,  setShowConvList]  = useState(false)
+  const [showActionLog, setShowActionLog] = useState(false)
+  const [actionLog,     setActionLog]     = useState<{ id: number; username: string; tool_name: string; ok: boolean; summary: string; created_at: string }[]>([])
+  const [actionLogLoading, setActionLogLoading] = useState(false)
   const isCreatorRole = session?.user?.role === "creator"
+
+  const toggleActionLog = async () => {
+    const next = !showActionLog
+    setShowActionLog(next)
+    if (next && actionLog.length === 0) {
+      setActionLogLoading(true)
+      try {
+        const res = await fetch("/api/creator-ai/action-log?limit=100")
+        if (res.ok) setActionLog((await res.json()).rows || [])
+      } catch { /* ignore — panel just shows empty */ }
+      setActionLogLoading(false)
+    }
+  }
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
@@ -395,6 +443,26 @@ export default function CreatorAIPage() {
     if (listening) { try { rec.stop() } catch {}; setListening(false) }
     else { try { rec.start(); setListening(true) } catch { setListening(false) } }
   }, [listening])
+
+  // Text-to-speech (s196+10) — feature-detect, đối xứng với mic input (bước đệm rẻ trước voice 2 chiều thật)
+  useEffect(() => {
+    setTtsSupported(typeof window !== "undefined" && "speechSynthesis" in window)
+    return () => { try { window.speechSynthesis?.cancel() } catch {} }
+  }, [])
+
+  const toggleSpeak = useCallback((index: number, content: string) => {
+    if (!("speechSynthesis" in window)) return
+    window.speechSynthesis.cancel()
+    if (speakingIdx === index) { setSpeakingIdx(null); return }
+    const text = stripForSpeech(content)
+    if (!text) return
+    const utter = new SpeechSynthesisUtterance(text)
+    utter.lang = "vi-VN"
+    utter.onend   = () => setSpeakingIdx(null)
+    utter.onerror = () => setSpeakingIdx(null)
+    window.speechSynthesis.speak(utter)
+    setSpeakingIdx(index)
+  }, [speakingIdx])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -681,6 +749,44 @@ export default function CreatorAIPage() {
               Cuộc trò chuyện mới
             </button>
           )}
+          {isCreatorRole && (
+            <div className="relative">
+              <button
+                onClick={toggleActionLog}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
+                title="Nhật ký hành động Gấu Pro (ghi KB/Lark/portal/browser)"
+              >
+                🗂 Nhật ký
+              </button>
+              {showActionLog && (
+                <div className="absolute right-0 top-full mt-1 w-96 max-h-96 overflow-y-auto bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50">
+                  <div className="p-2 border-b border-gray-100 dark:border-slate-800 text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-3 sticky top-0 bg-white dark:bg-slate-900">
+                    Nhật ký hành động (100 gần nhất)
+                  </div>
+                  {actionLogLoading ? (
+                    <div className="p-4 text-center text-xs text-gray-400">Đang tải...</div>
+                  ) : actionLog.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-gray-400">Chưa có hành động nào được ghi.</div>
+                  ) : (
+                    <div className="divide-y divide-gray-100 dark:divide-slate-800">
+                      {actionLog.map(a => (
+                        <div key={a.id} className="px-3 py-2 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={`font-medium ${a.ok ? "text-gray-700 dark:text-slate-300" : "text-rose-600 dark:text-rose-400"}`}>
+                              {a.ok ? "" : "⚠️ "}{a.tool_name}
+                            </span>
+                            <span className="text-[10px] text-gray-400 flex-shrink-0">{new Date(a.created_at).toLocaleString("vi-VN")}</span>
+                          </div>
+                          <div className="text-[10px] text-gray-400 mt-0.5">{a.username || "?"}</div>
+                          {a.summary && <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 truncate" title={a.summary}>{a.summary}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {pastConvs.length > 0 && (
             <div className="relative">
               <button
@@ -792,7 +898,9 @@ export default function CreatorAIPage() {
                       {msg.summarized && (
                         <div className="text-[10px] text-slate-400 dark:text-slate-500 mb-1.5 italic">🗜️ Lịch sử cũ đã được tóm tắt để tối ưu</div>
                       )}
-                      <MsgContent msg={msg} onFollowup={q => send(q)} />
+                      <MsgContent msg={msg} onFollowup={q => send(q)}
+                        speaking={speakingIdx === i} ttsSupported={ttsSupported}
+                        onToggleSpeak={() => toggleSpeak(i, msg.content)} />
                     </>
                   )}
                 </div>

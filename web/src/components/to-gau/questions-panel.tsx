@@ -9,6 +9,7 @@ import { useConfirm } from "@/components/to-gau/confirm-modal"
 import { cn } from "@/lib/utils"
 import { fmtTime } from "@/lib/to-gau-format"
 import type { QuestionItem } from "@/lib/to-gau-types"
+import { supabaseRealtime } from "@/lib/to-gau-realtime"
 
 const STATUS_META: Record<QuestionItem["status"], { label: string; badge: string; icon: React.ReactNode }> = {
   chua:    { label: "Chưa xử lý",  badge: "bg-rose-50 text-rose-600 border-rose-200",       icon: <Clock size={11} /> },
@@ -39,8 +40,8 @@ export function QuestionsPanel({
   const [posting, setPosting]       = useState(false)
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({})
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const res  = await fetch(`/api/to-gau/groups/${groupId}/questions`)
       if (!res.ok) return
@@ -49,11 +50,25 @@ export function QuestionsPanel({
     } catch {
       // ignore
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [groupId])
 
   useEffect(() => { load() }, [load])
+
+  // Realtime (s196+17, đề xuất E) — trước chỉ poll. Giữ nguyên poll 20s làm lưới an toàn (đúng tiền lệ
+  // v55 — publication thiếu không throw lỗi, chỉ im lặng không nhận event).
+  useEffect(() => {
+    // 45s (s196+21, roadmap performance s196+20 — Realtime đã phủ bảng này từ s196+17, poll chỉ còn vai
+    // trò lưới an toàn dự phòng, không cần khoảng cách ngắn như thời chưa có Realtime).
+    const t = setInterval(() => load(true), 45000)
+    const channel = supabaseRealtime
+      .channel(`chat_questions:${groupId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_questions", filter: `group_id=eq.${groupId}` },
+        () => load(true))
+      .subscribe()
+    return () => { clearInterval(t); supabaseRealtime.removeChannel(channel) }
+  }, [groupId, load])
 
   async function handleAsk(e: React.FormEvent) {
     e.preventDefault()

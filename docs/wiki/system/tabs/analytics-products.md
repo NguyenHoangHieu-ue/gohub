@@ -35,6 +35,10 @@ Doanh số bán theo **SKU**: revenue, units, orders, margin — kèm breakdown 
 - `channel` → `order_source_code IN (SELECT code FROM dim_order_source WHERE TRIM(channel_name)=...)`; hoặc `channelGroup` (B2B/B2C).
 
 ## 4. Gotchas
+- **s196+21 (2026-09-14) — code-split recharts**: 2 chart (Sales & Units Trend, Top Regions) tách sang
+  `products-charts.tsx` (`React.memo` + `next/dynamic({ssr:false})`, cùng pattern `bod-charts.tsx`) —
+  trước import `recharts` trực tiếp ở `page.tsx` (1056 dòng). Phát hiện qua audit performance toàn hệ
+  thống. Không đổi số liệu/UI.
 - **s194+11 (2026-09-06)**: UI — 5 KPI card viết tay → `StatTile`; banner "Month-End Projection" + 2 chart
   (Sales & Units Trend, Top Regions) → `CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle`; `blue-*`→
   `brand-*` (giữ indigo=B2C, slate=B2B Non-Strategic phân biệt nhóm). Không đổi logic/data.

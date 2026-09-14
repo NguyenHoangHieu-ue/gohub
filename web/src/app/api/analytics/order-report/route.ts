@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { analyticsGuard, CACHE_HEADERS, cachedQuery } from "@/lib/analytics-helpers"
+
+export const maxDuration = 60
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -112,12 +114,21 @@ export async function GET(req: NextRequest) {
   const dataSQL  = `${baseSelect} ORDER BY MIN(f.${dateCol}) DESC, f.order_code LIMIT ${limit} OFFSET ${offset}`
 
   try {
-    const [countRows, aggrRows, dataRows] = await Promise.all([
-      // Đếm tổng đơn cho CẢ export (để client loop lấy hết) lẫn view thường
-      queryAnalytics<{ total: string }>(countSQL, params),
-      isExport ? Promise.resolve([{ sum_revenue: "0", sum_gp: "0", sum_qty: "0" }]) : queryAnalytics(aggrSQL, params),
-      queryAnalytics(dataSQL, params),
-    ])
+    // Cache TTL 15' (s196+20 — cùng lớp bug timeout đã fix cho B2C Advanced s195+15): export CSV (limit
+    // 5000, group-by nặng nhất) chạy lại tươi mỗi lần bấm xuất, dễ chạm ngưỡng 60s khi data lớn dần.
+    const cacheKey = `order-report:v1:${startDate}:${endDate}:${staffCode}:${channelGroup}:${channel}:${orderSource}:${companyCode}:${dataSource}:${includeShip}:${includeInternalOps}:${isExport}:${page}:${limit}`
+    const [countRows, aggrRows, dataRows] = await cachedQuery(
+      cacheKey,
+      () => Promise.all([
+        // Đếm tổng đơn cho CẢ export (để client loop lấy hết) lẫn view thường
+        queryAnalytics<{ total: string }>(countSQL, params),
+        isExport ? Promise.resolve([{ sum_revenue: "0", sum_gp: "0", sum_qty: "0" }]) : queryAnalytics(aggrSQL, params),
+        queryAnalytics(dataSQL, params),
+      ]),
+      15,
+      false,
+      ["order-report"],
+    )
 
     const total = parseInt((countRows as any[])[0]?.total || "0")
 

@@ -90,6 +90,10 @@ Lark dùng trong group → không phân biệt được role (mọi người có
 ---
 
 ## Lưu ý kỹ thuật
+- **s196+4 (2026-09-13)** — `detectAndLogLearning()` (self-learning: phát hiện thông tin thật user nói,
+  log `chatbot_learning_log`, DM creator qua Lark, duyệt qua Gấu Pro) tách khỏi `be-gau.ts` sang
+  `lib/agents/learning.ts` dùng chung — **Gấu Tổ** (`api/to-gau/groups/[id]/ai/route.ts`) nay cũng gọi
+  hàm này (trước chỉ Bé Gấu có). Xem `tabs/analytics-to-gau.md` mục "s196+4".
 - 🔴 **s195+18-C (2026-09-11) — P0 phát hiện qua QA My Metrics: tool-calling CHẾT HOÀN TOÀN từ lúc s195+18
   đổi sang streaming, đã fix.** Mọi câu hỏi cần tool (executeSQL/querySupabase/...) — cả Bé Gấu lẫn Gấu Pro
   — lỗi thẳng `400 Function call is missing a thought_signature` ngay từ vòng lặp tool-call đầu tiên. Root

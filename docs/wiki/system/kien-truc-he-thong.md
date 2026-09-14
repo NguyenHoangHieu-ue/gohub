@@ -465,3 +465,4 @@ erDiagram
 | **Analytics DB** | `gohub_dw` — GCP Postgres LIVE (34.61.204.98), TÁCH BIỆT Supabase. BI Analyst query trực tiếp. |
 | **Turso** | Chỉ còn config intel (partner_tiers đã migrate sang Supabase). Web KHÔNG query Turso cho analytics. |
 | **Deploy** | Vercel Hobby — `gohub-intel.vercel.app`. Cron: `0 0 * * *` (Hobby limit 1/ngày). |
+| **Dark mode** | Toàn cục qua `theme-toggle.tsx` (class `dark` trên `<html>`, `localStorage.theme`). **Khoá cho tab BI** (`/analytics/*` trừ `/analytics/creator`) — quyết định Hiếu 2026-09-14, audit UI/UX s196+20 tìm thấy tab BI 0% dark token. `lib/theme-lock.ts` `isDarkModeLocked(pathname)` dùng chung ở `theme-toggle.tsx` (ẩn nút + tự gỡ class `dark`) và inline script `app/layout.tsx` (chặn FOUC dark trước khi React mount — giữ đúng logic y hệt, sửa 1 chỗ nhớ sửa cả 2). |

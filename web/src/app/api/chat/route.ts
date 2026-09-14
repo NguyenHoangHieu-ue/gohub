@@ -9,6 +9,7 @@ import { supabaseAdmin }                       from "@/lib/supabase"
 import { checkRateLimit }                      from "@/lib/rate-limit"
 import { parseUploadedFile, type FileContext } from "@/lib/agents/file-parser"
 import { usedDbTaskTool }                      from "@/lib/okr-helpers"
+import { estimateCostUsd }                     from "@/lib/agents/gemini-pricing"
 
 // Hobby plan trần cứng 60s (Vercel Runtime Timeout Error thật, xem log s195+14) — nâng lên 300s (Hobby +
 // Fluid Compute cho phép tới 5 phút, không cần nâng gói). Giữ nguyên dù s195+18 đã thêm stream token thật
@@ -21,6 +22,9 @@ export const maxDuration = 300
 // cách hoạt động/SQL cho user. Thay pipeline route→context→per-agent cũ.
 
 // Ghi 1 event chat cho Usage Analytics (cả câu hỏi + câu trả lời Bé Gấu).
+// tokensIn/tokensOut (s196+13, đề xuất B roadmap audit Bé Gấu) — port đúng cơ chế cost dashboard
+// đã làm cho Gấu Pro (s196+7): tận dụng cột tokens_in/tokens_out/est_cost_usd đã có sẵn trên
+// app_usage_events (migration v58), không cần migration mới.
 async function logChat(
   identity: string | null | undefined,
   name: string | null,
@@ -28,6 +32,8 @@ async function logChat(
   msg: string,
   aiResponse?: string | null,
   toolsUsed?: string[],
+  tokensIn = 0,
+  tokensOut = 0,
 ) {
   try {
     await supabaseAdmin.from("app_usage_events").insert({
@@ -36,6 +42,8 @@ async function logChat(
       ai_response: aiResponse ? aiResponse.slice(0, 3000) : null,
       tools_used: toolsUsed && toolsUsed.length > 0 ? toolsUsed : null,
       used_db_tool: usedDbTaskTool(toolsUsed),
+      tokens_in: tokensIn, tokens_out: tokensOut,
+      est_cost_usd: estimateCostUsd(tokensIn, tokensOut),
     })
   } catch { /* tracking không được làm vỡ chat */ }
 }
@@ -127,7 +135,7 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           controller.enqueue(encoder.encode(`__AGENT__:be-gau:Bé Gấu\n`))
-          const { text, sources, toolsUsed } = await runBeGau({
+          const { text, sources, toolsUsed, tokensIn, tokensOut } = await runBeGau({
             geminiHistory, lastMsg, role, name,
             userId: identity || session.user.email || undefined,
             sessionId: (session as any)?.sessionId || undefined,
@@ -142,7 +150,7 @@ export async function POST(req: NextRequest) {
           // đóng băng/kết thúc execution context TRƯỚC KHI insert Supabase kịp gửi đi — task KHÔNG BAO
           // GIỜ được ghi log dù trả lời đúng, verify được 2 lần liên tiếp qua gọi API trực tiếp + check
           // lại app_usage_events. logChat() tự có try/catch nội bộ nên await ở đây an toàn (không throw).
-          await logChat(identity, name, role, lastMsg, text, toolsUsed)
+          await logChat(identity, name, role, lastMsg, text, toolsUsed, tokensIn, tokensOut)
           // Trích nguồn web (nếu có) — nối cuối, không lộ cơ chế.
           if (sources.length) {
             const uniq = Array.from(new Map(sources.map(s => [s.url, s])).values()).slice(0, 5)

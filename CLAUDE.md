@@ -6,10 +6,91 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-11, s195+19)
+## Trạng thái hiện tại (2026-09-14, s196+21)
 
 | | |
 |---|---|
+| ✅ **s196+20/+21 (2026-09-14) — Audit performance + UI/UX toàn hệ thống (32 tab) + P0/P1/P2 fix, đã tự
+  QA staging qua Chrome** | Theo yêu cầu Hiếu "đánh giá toàn bộ tab UI/UX + giúp load nhanh hơn, chạy mượt
+  hơn" — 2 fork song song (Performance + UI/UX) đọc trực tiếp code + Grep định lượng (không suy đoán) toàn
+  bộ 32 tab, gộp 1 report publish Artifact cho Hiếu (không lưu file trong repo). Sau đó làm lần lượt theo
+  yêu cầu "làm P1 rồi đến P2" — **10 commit riêng đã push staging**, mỗi commit 1 việc, tsc + lint (0 lỗi
+  mới) + vitest (243/243) PASS xuyên suốt.
+  **P0** (`462594d2`/`6b318bce`/`6dae02f1`): cache 4 route BI thiếu TTL 15-60' (cùng lớp bug timeout B2C
+  s195+15) + `maxDuration=60` tường minh; fix clip bảng lồng 4 vị trí (`overflow-hidden`→`overflow-x-
+  auto`); fix sót màu `b2c/page.tsx` tab-switcher (`bg-blue-600`→`bg-brand-600`).
+  **P1** (`41a039bb`/`f2255c85`/`db0a965a`/`616a89ec`): code-split recharts 6 tab lớn (channels/vendors/
+  3hk-usage/staff/website/products, mỗi tab 1 file `<tab>-charts.tsx` `React.memo`+`next/dynamic`, cùng
+  pattern `bod-charts.tsx`); giãn polling Tổ Gấu (chat 12s→30s, docs/notes/questions 20s→45s — Realtime
+  đã phủ cả 4 bảng, poll chỉ còn lưới an toàn); `Skeleton`/`StatTileSkeleton`/`TableRowsSkeleton` dùng
+  chung (`dashboard-kit.tsx`) áp cho website/staff (KPI card) + customers (fix bug thật: 3 bảng hiện nhầm
+  empty-state trong lúc đang tải) + orders/fulfillment (bảng); aria-label cho 5 nút refresh icon-only.
+  **P2** (`4df75ed4`/`461c0a19`/`8de2683f`/`ba9ee3ed`): gộp 27 chỗ `.toLocaleString()` trần (lệch locale
+  mặc định trình duyệt người xem) → `formatNumber()` (`vi-VN` cố định) ở 6 tab; `DataTable` thêm sort/
+  search opt-in (`sortValue`/`searchBy`, không đổi hành vi chỗ dùng cũ) + component `EmptyState` dùng
+  chung; `AbortController` huỷ request cũ khi filter đổi nhanh cho `quarterly` (`fetchReport`/
+  `fetchSquadProgress`/`fetchB2BTiers` — trước có nguy cơ race condition, response cũ ghi đè nhầm response
+  mới); gộp `SubChannelTable` dùng chung cho 2 bảng con sub_channels b2b (theme indigo/slate giữ nguyên
+  màu cũ, chỉ hết trùng code — đề xuất G). Vendors KHÔNG áp AbortController (fetch nhiều query song song
+  qua helper `q()`/`qOpt()`, threading phức tạp hơn lợi ích — trigger không rapid-fire).
+  **Đã tự QA qua Chrome trên staging (đúng theo yêu cầu Hiếu "QA đi rồi làm típ")** — xác nhận qua DOM/
+  network/console, không chỉ tin code sạch: B2B bảng con `overflow-x-auto` đúng + `SubChannelTable` render
+  y hệt trước (CM1 `rgb(15,76,129)`=brand-600 đúng theme slate); B2C 3 nút tab-switcher `rgb(15,76,129)`
+  đúng brand-600, Metric cache 200/110ms; 6 tab recharts split render đúng chart, 0 lỗi console; Website/
+  Staff thấy rõ StatTileSkeleton lúc tải, aria-label "Làm mới dữ liệu" có; Customers cache 3365ms→928ms,
+  empty-state chỉ hiện khi thật sự rỗng; Quarterly bấm Q1→Q2→Q4 dồn dập → kết quả cuối đúng Q4 (Abort-
+  Controller chặn race condition thành công); Tổ Gấu load room bình thường, 0 lỗi console.
+  **Vòng 2 — "làm hết những cái chưa làm"**: Hiếu chốt 2 quyết định UI Strict Lock qua AskUserQuestion —
+  dark mode tab BI → **"Khoá lại, chỉ light mode"**; tách admin/page.tsx → **"Làm luôn"**. 4 commit thêm:
+  **(1) Khoá dark mode tab BI** (`lib/theme-lock.ts` `isDarkModeLocked(pathname)` dùng chung ở
+  `theme-toggle.tsx` + inline script `layout.tsx`) — ẩn nút toggle + tự gỡ class `dark` trên `/analytics/*`
+  trừ `/analytics/creator` (Gấu Pro, có dark support), tự bật lại đúng theme đã lưu khi rời khỏi. **(2)
+  Tách admin/page.tsx 2120 dòng → 7 file** (6 tab vốn đã tự thân là component riêng, chỉ tách file + nạp
+  `next/dynamic` — page.tsx còn 116 dòng). **(3) Chuẩn hoá Export** — gộp wrapper `exportToCSV` trùng lặp
+  (b2b+products) thành `exportWithDateRange` dùng chung; thêm nút Export còn thiếu ở website ("eSIM
+  Destinations") + cs-troubleshoot ("SKU & Telco Performance"). **(4) Rà 29 file `<table>` viết tay —
+  KẾT LUẬN: KHÔNG cần migrate file nào sang `DataTable`.** Phân loại toàn bộ: 2 file là markdown-renderer
+  (creator/ai, chatbot — không phải data table thật); còn lại ĐỀU có lý do chính đáng giữ nguyên — group-
+  header/expand-row (b2b/channels/quarterly/customers/...), pagination SERVER-SIDE không tương thích
+  `DataTable` (client-side only — orders, skus), matrix/grid tương tác (creator: Ma trận ẩn Tab), hoặc
+  inline-edit UI (promotions). Không phải nợ kỹ thuật bị bỏ sót — kiến trúc hiện tại đã đúng.
+  **Đã tự QA qua Chrome cả 4 việc trên staging sau deploy** — dark mode: bật ở chatbot→vào B2B tự tắt+ẩn
+  nút→quay lại chatbot tự bật lại đúng theme đã lưu; admin: cả 6 tab load đúng data thật (kể cả tính COGS
+  3HK combo preview); export: nút Export hiện đúng, disable đúng lúc data rỗng thật (không phải bug).
+  tsc + lint (0 lỗi mới) + vitest (243/243) PASS toàn bộ. **Không còn việc mở nào** — cả roadmap audit
+  performance/UI-UX s196+20 (P0/P1/P2) lẫn 2 quyết định UI Strict Lock đều đã xong.
+| ✅ **s196–s196+4 (2026-09-13) — Tổ Gấu: audit toàn diện + fix Realtime/AI-question/ảnh/history-role + self-learning — Hiếu đã QA OK** |
+  Audit toàn diện tab Tổ Gấu theo yêu cầu Hiếu + chuỗi fix liên tiếp, **Hiếu đã tự test xác nhận OK**.
+  **s196**: fix bug tin nhắn NGƯỜI KHÁC không tự hiện, phải F5 mới thấy — root cause `chat_messages` chưa
+  từng thêm vào publication `supabase_realtime` (migration v34 thiếu bước này) → `subscribe()` không báo
+  lỗi gì, chỉ đơn giản không bao giờ nhận event (tin CHÍNH MÌNH luôn thấy ngay vì optimistic-append cục
+  bộ, không qua Realtime). Fix: `v55_to_gau_realtime.sql` (`ALTER PUBLICATION ... ADD TABLE
+  chat_messages`, Hiếu đã chạy) + lưới an toàn `reconcileMessages()` poll REST merge 12s (độc lập trạng
+  thái publication/WebSocket).
+  **s196+1**: fix 4 nhược điểm phát hiện qua audit + 1 bug Hiếu báo (câu hỏi hỏi AI không hiện trong
+  chat — trước chỉ dùng làm prompt, không bao giờ insert `chat_messages`). Đổi `ai/route.ts` lưu câu hỏi
+  THẬT trước khi gọi Gemini (hiện dù Gemini lỗi), response đổi shape `{question,answer}`. Kèm:
+  `notifyLarkMembers()` await thay vì fire-and-forget; Docs/Notes/Câu hỏi thêm poll silent 20s (trước
+  không Realtime lẫn poll); rate-limit `/messages` (30/phút) + `/ai` (10/phút).
+  **s196+2**: paste ảnh (Ctrl+V, mirror Bé Gấu) + "Hỏi AI" giờ nhận ảnh/PDF đính kèm — upload Storage
+  trước, backend fetch lại + base64 thành `inlineData` cho Gemini multimodal (trước nút AI bị disable khi
+  không gõ chữ, hoàn toàn bỏ qua file dù có đính kèm).
+  **s196+3**: fix bug thật hỏi AI kèm ảnh luôn báo "Hiếu đang fix" — xác nhận qua Vercel Runtime Errors
+  (`get_runtime_errors`, không đoán): `GoogleGenerativeAI Error: First content should be with role
+  'user', got model`. History 20 tin gần nhất gửi Gemini không đảm bảo turn đầu là `user` cũng không
+  alternate user/model (group chat nhiều người nói liên tiếp) — merge turn liên tiếp cùng role + cắt turn
+  `model` đứng đầu trước `startChat()`. Thêm badge "🤖 Hỏi AI" (cột `is_ai_question`, migration v56, Hiếu
+  đã chạy) phân biệt tin gửi bot với chat thường. Kèm fix nhỏ: `GET /messages` thiếu `is_recalled`/
+  `edited_at` trong select (cosmetic, không lộ dữ liệu).
+  **s196+4**: Hiếu hỏi Gấu Tổ có self-learning như Bé Gấu không — KHÔNG, đã thêm. Tách
+  `detectAndLogLearning()` từ `be-gau.ts` sang module dùng chung `lib/agents/learning.ts` (tránh chép
+  logic), `ai/route.ts` gọi sau mỗi câu "Hỏi AI" — cùng gate Bé Gấu (bỏ qua creator/câu hỏi/tin ngắn/
+  cooldown 5 phút dùng CHUNG rate map), DM Lark ghi rõ nguồn `"Tổ Gấu (<tên nhóm>)"`, duyệt vẫn qua Gấu
+  Pro ("review pending learning", nay trả thêm `session_id` phân biệt nguồn). Chỉ áp dụng nội dung gửi
+  qua "Hỏi AI", không quét chat thường (đúng phép so sánh — mọi tin gửi Bé Gấu = đang nói chuyện với bot).
+  tsc + lint (0 lỗi mới) + vitest (220/220 mọi lần, bao gồm bộ test learning cũ của Bé Gấu vẫn PASS
+  nguyên sau khi tách module) PASS suốt cả chuỗi. 5 commit đã push staging (`9b4cca00`, `3ec7409b`,
+  `b4645d83`, `447342e2`, `704276e6`). **Hiếu đã tự QA xác nhận OK** — không còn việc mở nào chặn.
 | ✅ **s195+19 (2026-09-11) — Mã nước SKU sai (fix rộng) + redesign UI My Metrics + audit B2C Performance: 4 bug thật, 1 UI theo yêu cầu** |
   Tiếp sau s195+18-C, 2 việc theo yêu cầu Hiếu cùng ngày.
   **(1) Fix mã nước SKU** (`decodeSkuDestinationCode`/`getDestinationSQL`, `analytics-helpers.ts`) —
@@ -424,6 +505,17 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [x] **s196+20/+21 — Audit performance/UI/UX toàn hệ thống (P0+P1+P2) + 2 quyết định UI Strict Lock —
+  XONG HẾT (2026-09-14), đã tự QA qua Chrome trên staging, không cần Hiếu làm gì thêm** — Hiếu đã chốt 2
+  quyết định (dark mode tab BI → khoá lại; tách admin/page.tsx → làm luôn), cả 2 đã làm + QA xong. Export
+  chuẩn hoá xong (gộp wrapper trùng + vá 2 tab thiếu). Rà 29 file `<table>` xong — **kết luận: không cần
+  migrate file nào**, kiến trúc hiện tại đúng (group-header/expand-row/server-pagination/matrix/inline-edit
+  đều có lý do chính đáng). Còn duy nhất **tooltip/onboarding cho tab phức tạp** (thiết kế chủ quan, chưa
+  làm — không có risk/quyết định chặn, chỉ chưa tới lượt). Đọc report Artifact đầy đủ trong chat nếu muốn
+  xem lại chi tiết từng phát hiện.
+- [x] **s196–s196+4 — Tổ Gấu: Realtime/AI-question/ảnh/history-role/self-learning — XONG (2026-09-13),
+  Hiếu đã tự test xác nhận OK** — migration v55 (`ALTER PUBLICATION` Realtime) + v56 (`is_ai_question`)
+  đã chạy. Không còn việc mở nào ở luồng này.
 - [ ] **s195+19 — Test lại toàn bộ B2C Performance + My Metrics (Hiếu hẹn "mai tôi test")** — mọi fix đã
   tự verify bằng data/API thật trên staging, nhưng chưa ai xem lại bằng mắt qua UI thật 1 lượt đầy đủ.
   Checklist gợi ý: (a) tab B2C sub-tab Performance — đổi groupBy=SKU, kiểm tra "Tổng cộng" + xuất CSV có
@@ -584,7 +676,10 @@ CHƯA đổi hành vi — Hiếu đã chạy 2026-09-07) · **v50** `browser_bri
 Hiếu đã chạy, đã QA xong bridge hoạt động 2026-09-07) · **v51** `browser_bridge_pairings` + `owner_username`
 (bridge multi-tenant — Hiếu đã chạy + đã reload PostgREST schema cache, đã QA xong với acc khác 2026-09-07) ·
 **v52** `external_api_keys` (API sản phẩm cho manager — ⚠️ Hiếu CẦN CHẠY, chưa xác nhận — nhớ Reload schema
-Supabase sau khi chạy).
+Supabase sau khi chạy) · **v53** `okr_lark_events` thêm `is_self_initiated`/`hieu_note` · **v54**
+`app_usage_events.tools_used`/`used_db_tool` — v53-v54 Hiếu đã chạy, đã QA xong 2026-09-11 · **v55**
+`ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages` (fix tin nhắn Tổ Gấu không tự hiện) · **v56**
+`chat_messages.is_ai_question` (badge phân biệt câu hỏi AI) — v55-v56 Hiếu đã chạy, đã QA xong 2026-09-13.
 
 ---
 

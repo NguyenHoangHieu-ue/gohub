@@ -425,6 +425,200 @@ Test `browser-tool.test.ts` mở rộng đủ 3 mode (urls[] thành công + 1 UR
 sớm khi hết nút Next, infinite_scroll dừng khi hết nội dung mới). tsc + lint (0 lỗi mới) + vitest
 (212/212) PASS.
 
+## § Gấu Pro s196+5 (2026-09-13) — fix lỗ hổng bảo mật: querySupabase không gate bảng nhạy cảm theo quyền
+
+Phát hiện qua audit toàn diện Gấu Pro (đọc trực tiếp code, không đoán). `creator/tools/supabase.ts →
+runQuerySupabase()` cho MỌI user Gấu Pro (kể cả `gp_allowed_users` non-creator, multi-tenant từ s195+3)
+quyền query bất kỳ bảng nào trong `ALL_TABLES = SUPABASE_TABLES + SENSITIVE_TABLES` — **không có bước
+kiểm tra role nào**, khác hẳn `data-explorer.ts` (dùng cho Bé Gấu) vốn đã có sẵn gate đúng vấn đề này
+(`isPrivileged(role)`). Hậu quả thật: bất kỳ nhân viên nào được cấp Gấu Pro có thể hỏi thẳng
+`querySupabase(table:"app_settings", filters:[{column:"key",op:"eq",value:"lark_oauth_creator"}])` và đọc
+được token Lark cá nhân của Hiếu, hoặc đọc `conversations`/`chat_messages` của người khác (kể cả hội
+thoại riêng của Hiếu với Gấu Pro).
+
+**Fix**: `dispatchTool()` (`creator/tools/dispatch.ts`) nhận thêm `ctx.isCreator` (thread cùng cách
+`username` đã được thread ở s195+3) → `runQuerySupabase(args, isCreator)` và `listSupabaseTables` chỉ
+cho thấy/truy vấn `SENSITIVE_TABLES` khi `isCreator===true`; non-creator hỏi bảng nhạy cảm nhận lỗi rõ
+ràng thay vì im lặng trả data. `runCreatorAI()` truyền `isCreator` vào ctx (đã có sẵn biến, trước chỉ
+dùng cho `buildFunctionDeclarations`). System prompt sửa câu "you have full admin access" (sai với
+non-creator) thành mô tả đúng 2 trường hợp. Bé Gấu (`data-explorer.ts`) không đổi gì — vốn đã đúng từ
+trước, dùng làm tham chiếu khi fix.
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS. Không cần Hiếu chạy migration nào (không đổi schema).
+**Cần Hiếu**: nếu đã từng cấp Gấu Pro cho ai qua `gp_allowed_users` trước s196+5, cân nhắc tự kiểm tra lại
+xem họ có từng hỏi những câu dạng "liệt kê app_settings"/"đọc conversations của..." hay không (log cũ nằm
+trong lịch sử hội thoại Supabase `conversations`/`chat_messages`, agent_id=`gau_pro`).
+
+## § Gấu Pro s196+6 (2026-09-13) — Nhật ký hành động (audit trail)
+
+Đề xuất "B" trong roadmap Gấu Pro (audit toàn diện s196+5) — từ s195+2 mọi hành động ghi (bridge
+browser, Lark, KB) chạy Auto không cần duyệt, không có nơi xem lại "Gấu Pro đã làm gì".
+
+- Bảng mới `gp_action_log` (migration `v57_gp_action_log.sql`) — ghi mọi lời gọi tool có tác dụng phụ
+  ra ngoài: `writeKnowledgeBase`, `approveLearning`, `rejectLearning`, `createLarkTask`, `updateLarkTask`,
+  `sendLarkMessage`, `controlMyBrowser`, `managePortalCredentials` (`AUDITED_TOOLS` trong
+  `creator/tools/dispatch.ts`). Không ghi tool chỉ đọc (executeSQL/querySupabase/readMyBrowser/...).
+- `dispatchTool()` tách thành `dispatchToolCore()` (logic cũ, không đổi) + wrapper `dispatchTool()` mới
+  gọi `logGpAction()` (`creator/tools/audit-log.ts`) SAU khi có kết quả — **await, không fire-and-forget**
+  (đúng bài học s195+18-C: serverless có thể đóng execution context giữa vòng lặp tool-call cuối trước khi
+  insert kịp gửi). Args bị redact field `password/secret/token/auth_header/api_key` trước khi lưu (tránh
+  `managePortalCredentials` ghi lộ mật khẩu portal vào log).
+- Route mới `GET /api/creator-ai/action-log` — **chỉ creator** (oversight toàn bộ user, không phải dữ
+  liệu riêng người gọi — khác mọi route bridge multi-tenant khác trong hệ thống).
+- UI: nút "🗂 Nhật ký" trong header trang Gấu Pro (chỉ hiện cho creator) mở panel xem 100 hành động gần
+  nhất (tool, username, thành công/lỗi, tóm tắt, thời gian).
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu**: chạy migration v57.
+
+## § Gấu Pro s196+7 (2026-09-13) — Cost dashboard riêng Gấu Pro
+
+Đề xuất "D" trong roadmap audit s196+5 — Gấu Pro trước đây KHÔNG ghi `app_usage_events` cho bất kỳ lượt
+chat nào (khác Bé Gấu vốn ghi mỗi lượt) → Usage Analytics không thấy Gấu Pro có hoạt động gì, và không
+ai biết chi phí Gemini thật.
+
+- `lib/agents/gemini-pricing.ts` — giá `gemini-3.8-flash` **verify trực tiếp** `ai.google.dev/gemini-api/
+  docs/pricing` (2026-09-13, không đoán): $0.75/1M token input, $3.75/1M output (gồm thinking tokens),
+  áp dụng tới 2026-12-31 — sau đó tăng $1.5/$7.5, cần cập nhật hằng số nếu còn dùng model này.
+- `runCreatorAI()` (`creator-ai.ts`) tích luỹ `usageMetadata.promptTokenCount`/`candidatesTokenCount` qua
+  **mọi** vòng gọi `genWithRetryStream` (mỗi vòng = 1 request Gemini tính phí riêng, dù `contents` chồng
+  lấn) — trả thêm `tokensIn`/`tokensOut` trong response.
+- `api/creator-ai/chat/route.ts` — sau khi có kết quả, **await** insert `app_usage_events`
+  (`event_type:"chat", agent_id:"gau_pro"`, kèm `user_message`/`ai_response` giống Bé Gấu để Usage
+  Analytics tab "Chatbot" cũng thấy được Gấu Pro, + `tokens_in`/`tokens_out`/`est_cost_usd`). Migration
+  `v58_app_usage_events_cost.sql` thêm 3 cột.
+- UI: `analytics/creator/usage` (Usage Analytics) thêm KpiCard thứ 6 "Chi phí Gấu Pro (kỳ)" — tổng $
+  + số lượt + tổng token in/out trong khoảng thời gian đang xem (client tự tính từ `chats` đã fetch, lọc
+  `agent_id==="gau_pro"` — không cần route mới).
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu**: chạy migration v58. Bé Gấu chưa track chi
+phí (ngoài scope đề xuất — "riêng Gấu Pro"), có thể làm sau nếu muốn.
+
+## § Gấu Pro s196+8 (2026-09-13) — Digest chủ động buổi sáng (proactive layer bước đầu)
+
+Đề xuất "E"/ý tưởng #1 trong roadmap audit s196+5 — Gấu Pro trước đây 100% phản ứng theo lượt, không tự
+khởi xướng gì (khoảng cách lớn nhất với hình mẫu "trợ lý toàn năng"/Astra).
+
+- Cron mới `/api/cron/gau-pro-digest` (`45 2 * * *` = 09:45 ICT, sau prewarm 09:00 + b2c-report 09:30 để
+  dữ liệu đã ấm) — gọi thẳng `runCreatorAI([], DIGEST_PROMPT, ..., isCreator:true, username:"cron")`, tận
+  dụng nguyên bộ tool + business-rule self-validate sẵn có (không viết SQL riêng). Prompt cố định: doanh
+  thu hôm qua (tổng + B2B/B2C, so hôm trước), bất thường nếu có — không bịa nếu không có gì lạ.
+  `alertCronFailure("gau-pro-digest", err)` khi lỗi (đồng bộ pattern mọi cron khác).
+- Gửi kết quả qua `sendLarkDM()` tới `getCreatorLarkOpenId()` — helper MỚI tách vào `lib/lark.ts` (chuỗi
+  fallback env→app_settings→users vốn bị chép lại y hệt ở `learning.ts`/`lark-scan-runner.ts`/
+  `ca-thread-remind`, nay có 1 bản dùng chung cho code path mới — 3 chỗ cũ CHƯA đổi, ngoài scope).
+- `vercel.json`: thêm `maxDuration:120` + 1 cron entry (project giờ 10 cron, vẫn 1x/ngày/job đúng giới
+  hạn Hobby).
+
+tsc + lint (0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu**: không cần làm gì (không migration, dùng
+`CRON_SECRET` đã có) — chờ 09:45 ICT ngày mai xem tin nhắn Lark DM đầu tiên, hoặc tự trigger tay:
+`curl -H "Authorization: Bearer $CRON_SECRET" https://stg-intel-v2.gohub.cloud/api/cron/gau-pro-digest`.
+
+## § Gấu Pro s196+9 (2026-09-13) — Tự phát hiện học liệu từ chính Hiếu
+
+Đề xuất "5" trong roadmap audit s196+5 — nghịch lý phát hiện lúc audit: `lib/agents/learning.ts` (self-
+learning tự động) đã có sẵn cho Bé Gấu + Gấu Tổ nhưng LOẠI TRỪ đúng creator (`role==="creator") return`
+sớm) — người dùng chính Gấu Pro lại là người bot "không tự học từ", phải tự gõ "nhớ giúp tôi X" mới có
+tác dụng.
+
+**Quyết định thiết kế (lệch nhẹ so cách phác thảo ban đầu trong roadmap)**: KHÔNG tái dùng hàng đợi
+`chatbot_learning_log`/`reviewPendingLearning`/`approveLearning` — hàng đợi đó thiết kế cho lời NGƯỜI
+KHÁC (staff/CS...) cần Hiếu duyệt lại trước khi tin. Lời của chính Hiếu vốn đã là nguồn xác thực (creator
+= authoritative), bắt Hiếu "duyệt lại lời của chính mình" là vòng lặp thừa. Thay vào đó tận dụng đúng
+workflow confirm-first CÓ SẴN (`writeKnowledgeBase`, PROPOSE→WAIT confirm→execute) — chỉ thêm 1 đoạn
+prompt mới trong `SYSTEM_PROMPT` (`creator-ai.ts`, mục "Proactive learning detection"): model tự đánh giá
+NGAY TRONG câu trả lời — nếu Hiếu vừa nhắc thông tin mới có giá trị lâu dài mà không yêu cầu lưu rõ ràng,
+thêm 1 dòng cuối đề xuất "muốn mình lưu vào KB không?"; Hiếu xác nhận ở lượt sau → coi như bước 1 của
+workflow cũ, chạy tiếp bình thường. Không cần LLM call thứ 2 (model chính đã đọc toàn bộ ngữ cảnh hội
+thoại, đánh giá rẻ hơn và có bối cảnh tốt hơn 1 classifier tách biệt), không cần bảng/route mới.
+
+Đây là thay đổi PROMPT-ONLY — không có test tự động khả thi cho hành vi LLM (giống mọi thay đổi
+SYSTEM_PROMPT khác của Gấu Pro). tsc + lint (0 lỗi mới) + vitest (220/220) PASS (không đổi code logic).
+**Cần Hiếu QA thủ công**: trong 1 hội thoại Gấu Pro, nhắc 1 thông tin mới kiểu "à, giá NCC X giờ đổi
+thành Y" mà KHÔNG nói "nhớ giúp tôi" — xác nhận Gấu Pro có tự đề xuất lưu ở cuối câu trả lời không, và
+KHÔNG đề xuất khi chỉ hỏi câu bình thường (tránh làm phiền mỗi tin nhắn).
+
+## § Gấu Pro s196+10 (2026-09-13) — Text-to-speech đọc câu trả lời
+
+Ý tưởng #6 trong roadmap audit s196+5 — "bước đệm rẻ" về phía voice 2 chiều thật (idea #10 trong cùng
+roadmap bị đánh giá "chưa nên" vì effort cao/ROI thấp lúc này). Đối xứng với mic input 1 chiều đã có
+(Web Speech API `SpeechRecognition`), dùng `SpeechSynthesisUtterance` (Web Speech API, cùng họ, không
+cần thư viện/hạ tầng mới).
+
+- Nút loa 🔊 cạnh `ExportBar` mỗi tin nhắn trợ lý — bấm đọc to, bấm lại dừng (chỉ 1 tin đọc cùng lúc,
+  bắt đầu tin mới tự `speechSynthesis.cancel()` tin đang đọc dở).
+- `stripForSpeech()` (page.tsx) — bỏ code block/bảng markdown/ảnh/ký hiệu `#*_~` trước khi đọc (đọc
+  nguyên markdown ra sẽ đọc cả ký hiệu, vô nghĩa).
+- Feature-detect qua `useEffect` (giống `voiceSupported`) — ẩn nút hoàn toàn nếu browser không hỗ trợ.
+- Cancel khi unmount trang (tránh giọng đọc tiếp tục chạy sau khi rời trang).
+
+Chỉ Gấu Pro (chưa merge Bé Gấu — theo đúng phạm vi đề xuất, có thể làm sau nếu Hiếu muốn). tsc + lint
+(0 lỗi mới) + vitest (220/220) PASS. **Cần Hiếu QA thủ công trên staging**: bấm nút loa 1 tin nhắn dài,
+xác nhận đọc đúng tiếng Việt + bấm lại dừng được + không đọc lẫn ký hiệu markdown.
+
+## § Gấu Pro s196+11 (2026-09-13) — Eval harness (đề xuất C, roadmap audit s196+5)
+
+Gấu Pro trước đây KHÔNG có bộ eval nào — dù prompt 754 dòng + 32 tool phức tạp hơn Bé Gấu nhiều, mọi thay
+đổi prompt/tool chỉ xác nhận bằng tsc + cảm nhận cá nhân, dễ regress âm thầm. 2 lớp bổ sung:
+
+**(1) Unit test deterministic** (chạy trong suite bình thường, không cần .env.local) —
+`src/__tests__/gau-pro-security.test.ts` (8 case) — regression guard riêng cho fix P0 s196+5
+(`querySupabase` không gate bảng nhạy cảm): mock `supabaseAdmin` + `data-explorer` table lists, xác nhận
+`visibleTables`/`runQuerySupabase`/`dispatchTool` chặn đúng non-creator đọc `app_settings`/`conversations`
+và vẫn cho creator đọc bình thường. Đây là lưới an toàn RẺ NHẤT, chạy mỗi lần `npx vitest run` — nếu ai
+lỡ sửa lại logic gate này, test đỏ ngay lập tức (khác LLM-judge dưới, vốn cần chạy tay + tốn Gemini call).
+
+**(2) LLM-judge live-DB harness** (port thẳng pattern `agent-grade.test.ts` của Bé Gấu, cần GEMINI_KEY +
+SUPABASE_* + ANALYTICS_DB_* thật — máy dev không chạy được) — `src/__e2e__/gau-pro-banks.ts` (10 case,
+tái dùng type `BankCase` từ `agent-banks.ts` — không có `expectAgent`/routing vì Gấu Pro chỉ 1 agent) +
+`src/__e2e__/gau-pro-grade.test.ts` (gọi thẳng `runCreatorAI()`, không qua router/guardian vì Gấu Pro
+không có 2 lớp đó). Bank phủ: SQL/BI, Supabase, KB, export marker, business-rule self-validation
+(Internal-Transaction), VÀ 2 case bảo mật P0 (role `staff` hỏi bảng nhạy cảm phải bị từ chối — cùng bug
+vừa fix ở (1) nhưng qua đường LLM thật thay vì gọi thẳng hàm, bắt được cả trường hợp model "quên" tuân
+system prompt dù code đã chặn đúng). Wired vào `vitest.audit.config.ts`.
+
+tsc + lint (0 lỗi mới) + vitest thường (228/228, +8 so trước) PASS. **Cần Hiếu**: chạy layer (2) 1 lần để
+xác nhận baseline hiện tại (không có credentials trên máy dev nên chưa tự chạy được):
+`npx vitest run --config vitest.audit.config.ts src/__e2e__/gau-pro-grade.test.ts --disableConsoleIntercept`.
+Chạy lại mỗi khi sửa `SYSTEM_PROMPT`/thêm tool lớn để bắt regression sớm — đúng mục đích đề xuất C.
+
+## § Gấu Pro s196+12 (2026-09-13) — Second-opinion pass + Quét vendor quote định kỳ + quyết định #9
+
+Làm nốt 3 ý "thử nghiệm giới hạn" còn lại trong roadmap audit s196+5.
+
+### #7 — Second-opinion pass cho báo cáo quan trọng
+Tool mới `verifyReportNumbers(summary, sql?)` (`creator/tools/self-review.ts`) — 1 lượt Gemini ĐỘC LẬP
+(không thấy lịch sử hội thoại/tool-call, chỉ thấy summary+SQL đưa vào) phản biện tìm rủi ro cụ thể (JOIN
+nhân dòng, thiếu cutoff, nhầm đơn vị, số phi thực tế, quên exclude tài khoản nội bộ...). System prompt
+(mục "Report depth") hướng dẫn gọi tool này TRƯỚC KHI trả lời cuối cho báo cáo có số liệu QUAN TRỌNG —
+không gọi cho câu hỏi nhỏ (thêm 1 lượt Gemini = thêm cost/latency, đúng cảnh báo trong roadmap). 33 tool
+declarations (từ 32).
+
+### #8 — Quét vendor quote định kỳ
+Cron mới `/api/cron/vendor-quote-scan` (`15 3 * * *` = 10:15 ICT). **Quyết định kỹ thuật quan trọng**:
+KHÔNG tự viết parser JSON cho từng vendor (không có quyền truy cập/test schema thật của SunSpeedy/
+UHUIBAO lúc code — đoán schema rồi so giá tự động là đúng rủi ro roadmap đã cảnh báo "dễ lỗi âm thầm,
+không được báo 'không có chênh lệch' giả"). Thay vào đó giao HẲN cho Gấu Pro tự làm qua tool sẵn có
+(`managePortalCredentials` list → `browsePortal` đọc → `querySupabase` so COGS), với rào chắn RÕ trong
+prompt: chỉ so sánh khi nhận diện được cấu trúc giá THẬT RÕ RÀNG, ngược lại phải nói thẳng "không đọc
+được cấu trúc giá" — KHÔNG bịa số. Chỉ nhắm 1 portal ổn định nhất (SunSpeedy/UHUIBAO/cardweb, đã tự động
+hoá login CAPTCHA tốt) — nếu Hiếu chưa cấu hình portal đó trên môi trường đang chạy, cron tự bỏ qua êm
+(không DM), không báo lỗi giả. Chỉ DM Lark khi có kết quả thật (skip cả trường hợp "bỏ qua"/"không đọc
+được" để tránh spam Lark mỗi ngày).
+
+### #9 — Bridge đọc màn hình mở rộng có kiểm soát: KHÔNG đổi code
+Đánh giá lại theo đúng kết luận đã ghi trong roadmap: giữ NGUYÊN mô hình "đọc khi được hỏi" hiện tại
+(`readMyBrowser`/`controlMyBrowser`, s195+1/+3) — KHÔNG chuyển sang polling/ambient nền liên tục (rủi ro
+riêng tư tăng mạnh, chưa có nhu cầu cụ thể nào đòi hỏi). Đây là quyết định "không code" chủ đích, không
+phải bỏ sót.
+
+tsc + lint (0 lỗi mới) + vitest (230/230, +2 test cho verifyReportNumbers) PASS. **Cần Hiếu**:
+(1) QA thủ công #7 — hỏi 1 báo cáo số liệu lớn, xem Gấu Pro có tự gọi verifyReportNumbers không (status
+"🔍 Đang kiểm tra lại số liệu..." sẽ hiện). (2) #8 cần đã cấu hình portal SunSpeedy/UHUIBAO qua
+`managePortalCredentials` từ trước — nếu chưa, cron sẽ tự báo "bỏ qua" mỗi ngày (không DM), không lỗi gì
+cần fix; nếu ĐÃ cấu hình, theo dõi vài ngày xem nội dung DM có đúng/hữu ích không, đặc biệt để ý câu
+"không đọc được cấu trúc giá" — nếu LUÔN ra câu đó, nghĩa là path `/sim/simmanage/page` không phải nơi có
+giá gói thật, cần Hiếu cho biết path đúng (F12 Network khi xem giá trên portal) để sửa prompt.
+
 ### Bé Gấu (chatbot team) — s131
 
 Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, không còn pipeline 6-agent):

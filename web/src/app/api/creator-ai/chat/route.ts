@@ -8,6 +8,7 @@ import { classifySensitivity }        from "@/lib/agents/guardian-classify"
 import { parseUploadedFile }          from "@/lib/agents/file-parser"
 import { loadGpAllowed }              from "@/lib/gp-access"
 import { compressHistory, stripBase64Images } from "@/lib/agents/creator/compress"
+import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
 
 export const maxDuration = 300
 
@@ -114,13 +115,28 @@ export async function POST(req: NextRequest) {
         try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`)) } catch {}
       }
       try {
-        const { text, sources } = await runCreatorAI(
+        const { text, sources, tokensIn, tokensOut } = await runCreatorAI(
           history, lastMsg,
           fileContexts.length > 0 ? fileContexts : undefined,
           emit,
           isCreator,
           username,
         )
+
+        // Cost dashboard (s196+7) — Gấu Pro trước đây không ghi app_usage_events gì cả (khác Bé Gấu).
+        // Await (không fire-and-forget) — bài học s195+18-C, tránh mất log khi stream sắp đóng.
+        try {
+          await supabaseAdmin.from("app_usage_events").insert({
+            event_type: "chat", agent_id: "gau_pro",
+            user_email: session.user.email || username || null,
+            user_name:  session.user.name  || username || null,
+            user_role:  session.user.role  || null,
+            user_message: lastMsg.slice(0, 500),
+            ai_response:  text ? text.slice(0, 3000) : null,
+            tokens_in: tokensIn, tokens_out: tokensOut,
+            est_cost_usd: estimateCostUsd(tokensIn, tokensOut),
+          })
+        } catch (e) { console.error("[CreatorAI] track usage:", e) }
 
         // Tạo/cập nhật conversation (đồng bộ để có convId trước khi gửi done)
         let savedConvId = conversationId

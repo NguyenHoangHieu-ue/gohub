@@ -4,11 +4,10 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
 import {
-  ArrowLeft, Send, Settings, X, Trash2, Crown, Paperclip, Bot,
-  Pin, Upload, Edit2, Search, ChevronDown, ChevronUp, AlertTriangle,
+  ArrowLeft, Settings, X, Trash2, Crown, Bot,
+  Pin, Upload, Edit2, Search, ChevronDown, ChevronUp, AlertTriangle, Reply,
 } from "lucide-react"
 import Link from "next/link"
-import { createClient } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/toast"
 import { useDbRole } from "@/lib/use-role-guard"
@@ -18,16 +17,15 @@ import { DocsPanel } from "@/components/to-gau/docs-panel"
 import { NotesPanel } from "@/components/to-gau/notes-panel"
 import { WikiPanel } from "@/components/to-gau/wiki-panel"
 import { QuestionsPanel } from "@/components/to-gau/questions-panel"
-import { FilePreviewItem, AttachmentDisplay } from "@/components/to-gau/file-preview"
+import { MessageComposer } from "@/components/to-gau/message-composer"
+import { AttachmentDisplay } from "@/components/to-gau/file-preview"
 import { useConfirm } from "@/components/to-gau/confirm-modal"
 import { renderContent, fmtTime } from "@/lib/to-gau-format"
 import type { Attachment, ChatMessage, Member, GroupInfo } from "@/lib/to-gau-types"
+import { supabaseRealtime } from "@/lib/to-gau-realtime"
 
-// Supabase realtime client (anon key đủ để subscribe)
-const supabaseRealtime = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-)
+// s196+2: giới hạn số file đính kèm/lần — cùng con số với Bé Gấu (chatbot/page.tsx) để nhất quán UX
+const ATTACH_MAX_FILES = 5
 
 // s183 Phase 5 (tiếp): Avatar/SettingsModal/DocsPanel/NotesPanel/WikiPanel/FilePreviewItem/
 // AttachmentDisplay/ConfirmModal+useConfirm đã tách sang components/to-gau/*.tsx; types (Attachment/
@@ -100,6 +98,9 @@ export default function ToGauRoomPage() {
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
   const [editContent, setEditContent]   = useState("")
   const [savingEdit, setSavingEdit]     = useState(false)
+
+  // Reply/thread (s196+15) — tin nhắn đang được trả lời, hiện preview trên input
+  const [replyTarget, setReplyTarget]   = useState<ChatMessage | null>(null)
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
@@ -221,9 +222,45 @@ export default function ToGauRoomPage() {
     setNewMsgCount(0)
   }
 
+  // Đối chiếu lại tin nhắn mới nhất qua REST — merge (không replace) để không mất optimistic message
+  // đang gửi dở/không giật scroll. Dùng làm lưới an toàn cho Realtime (xem effect dưới).
+  const reconcileMessages = useCallback(async () => {
+    if (!groupId) return
+    try {
+      const res = await fetch(`/api/to-gau/groups/${groupId}/messages?limit=50`)
+      if (!res.ok) return
+      const json = await res.json()
+      const fresh: ChatMessage[] = json.data ?? []
+      setMessages(prev => {
+        const merged = new Map(prev.map(m => [m.id, m]))
+        let changed = false
+        for (const m of fresh) {
+          const existing = merged.get(m.id)
+          if (!existing || existing.content !== m.content || existing.is_pinned !== m.is_pinned) {
+            merged.set(m.id, m)
+            changed = true
+          }
+        }
+        if (!changed) return prev
+        return Array.from(merged.values()).sort((a, b) => a.created_at.localeCompare(b.created_at))
+      })
+    } catch {
+      // ignore
+    }
+  }, [groupId])
+
   // Supabase Realtime subscription
+  // ⚠️ Realtime "postgres_changes" chỉ hoạt động nếu bảng đã được thêm vào publication
+  // `supabase_realtime` (Supabase Dashboard/migration v55) — thiếu bước đó, subscribe() KHÔNG throw lỗi
+  // gì (channel vẫn báo SUBSCRIBED), chỉ đơn giản không bao giờ nhận event → tin người khác kẹt lại tới
+  // khi tự F5 (tin CHÍNH MÌNH luôn thấy ngay vì sendMessage() append optimistic cục bộ, không phụ thuộc
+  // Realtime — đây là lý do bug chỉ lộ ra 1 chiều). Poll REST định kỳ bên dưới là lưới an toàn, không phụ
+  // thuộc trạng thái publication/kết nối WebSocket.
   useEffect(() => {
     if (!groupId) return
+    // 30s (s196+21, roadmap performance s196+20 — trước 12s từ thời chưa có Realtime; giờ Realtime đã phủ
+    // đúng bảng này, poll chỉ còn vai trò lưới an toàn dự phòng, không cần khoảng cách ngắn).
+    const pollTimer = setInterval(() => { reconcileMessages(); loadPinned() }, 30000)
     const channel = supabaseRealtime
       .channel(`chat_messages:${groupId}`)
       .on(
@@ -260,19 +297,35 @@ export default function ToGauRoomPage() {
       )
       .subscribe()
 
-    return () => { supabaseRealtime.removeChannel(channel) }
-  }, [groupId])
+    return () => { clearInterval(pollTimer); supabaseRealtime.removeChannel(channel) }
+  }, [groupId, reconcileMessages, loadPinned])
 
-  // Handle file selection
+  // Thêm file (dùng chung cho paperclip + paste ảnh) — giới hạn ATTACH_MAX_FILES, file thừa bị cắt bớt
+  const addFiles = useCallback((incoming: FileList | File[]) => {
+    const files = Array.from(incoming)
+    if (!files.length) return
+    setSelectedFiles(prev => [...prev, ...files].slice(0, ATTACH_MAX_FILES))
+  }, [])
+
+  // Handle file selection (paperclip)
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? [])
-    setSelectedFiles(prev => [...prev, ...files])
+    addFiles(e.target.files ?? [])
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   function removeSelectedFile(idx: number) {
     setSelectedFiles(prev => prev.filter((_, i) => i !== idx))
   }
+
+  // Paste ảnh từ clipboard (Ctrl+V) — trước đây KHÔNG có, chỉ đính kèm được qua nút paperclip
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files || []).filter(f => f.type.startsWith("image/"))
+      if (files.length) { e.preventDefault(); addFiles(files) }
+    }
+    window.addEventListener("paste", onPaste)
+    return () => window.removeEventListener("paste", onPaste)
+  }, [addFiles])
 
   // @mention: parse textarea input
   function handleContentChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -438,6 +491,24 @@ export default function ToGauRoomPage() {
     }
   }
 
+  // Upload file lên Supabase Storage (dùng chung cho gửi tin thường + hỏi AI kèm ảnh)
+  async function uploadFilesToGroup(files: File[]): Promise<Attachment[]> {
+    return Promise.all(
+      files.map(async (file) => {
+        const fd = new FormData()
+        fd.append("file", file)
+        fd.append("group_id", groupId)
+        const res = await fetch("/api/to-gau/upload", { method: "POST", body: fd })
+        if (!res.ok) {
+          const j = await res.json()
+          throw new Error(j.error ?? "Upload lỗi")
+        }
+        const { url, name, size, type } = await res.json()
+        return { url, name, size, type } as Attachment
+      })
+    )
+  }
+
   async function sendMessage() {
     const text = content.trim()
     if ((!text && selectedFiles.length === 0) || sending || uploading) return
@@ -447,26 +518,16 @@ export default function ToGauRoomPage() {
     setShowMentionDropdown(false)
     const filesToSend = [...selectedFiles]
     setSelectedFiles([])
+    const replyToId = replyTarget?.id
+    const savedReplyTarget = replyTarget
+    setReplyTarget(null)
 
     // Upload files first
     let uploadedAttachments: Attachment[] = []
     if (filesToSend.length > 0) {
       setUploading(true)
       try {
-        uploadedAttachments = await Promise.all(
-          filesToSend.map(async (file) => {
-            const fd = new FormData()
-            fd.append("file", file)
-            fd.append("group_id", groupId)
-            const res = await fetch("/api/to-gau/upload", { method: "POST", body: fd })
-            if (!res.ok) {
-              const j = await res.json()
-              throw new Error(j.error ?? "Upload lỗi")
-            }
-            const { url, name, size, type } = await res.json()
-            return { url, name, size, type } as Attachment
-          })
-        )
+        uploadedAttachments = await uploadFilesToGroup(filesToSend)
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : "Upload thất bại")
         setSending(false)
@@ -489,6 +550,7 @@ export default function ToGauRoomPage() {
         : "text",
       created_at: new Date().toISOString(),
       attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+      reply_to: replyToId || null,
     }
     setMessages(prev => [...prev, optimistic])
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
@@ -500,6 +562,7 @@ export default function ToGauRoomPage() {
         body: JSON.stringify({
           content: text,
           attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+          replyTo: replyToId,
         }),
       })
       if (!res.ok) {
@@ -514,6 +577,7 @@ export default function ToGauRoomPage() {
       setMessages(prev => prev.filter(m => m.id !== tempId))
       setContent(text)
       setSelectedFiles(filesToSend)
+      if (savedReplyTarget) setReplyTarget(savedReplyTarget)
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
     } finally {
       setSending(false)
@@ -523,25 +587,115 @@ export default function ToGauRoomPage() {
 
   async function askAI() {
     const question = content.trim()
-    if (!question || askingAI) return
+    if ((!question && selectedFiles.length === 0) || askingAI || uploading) return
 
     setAskingAI(true)
     setContent("")
+    const filesToSend = [...selectedFiles]
+    setSelectedFiles([])
 
+    // Upload ảnh/file trước (nếu có) — s196+2: trước đây "Hỏi AI" hoàn toàn không nhận ảnh/file đính
+    // kèm, bot chỉ "nghe" được chữ gõ. Ảnh upload lên Storage TRƯỚC, gửi kèm URL cho backend — backend
+    // tự fetch lại để build phần multimodal (inlineData) cho Gemini.
+    let uploadedAttachments: Attachment[] = []
+    if (filesToSend.length > 0) {
+      setUploading(true)
+      try {
+        uploadedAttachments = await uploadFilesToGroup(filesToSend)
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Upload thất bại")
+        setAskingAI(false)
+        setUploading(false)
+        setContent(question)
+        setSelectedFiles(filesToSend)
+        return
+      } finally {
+        setUploading(false)
+      }
+    }
+
+    // Optimistic: hiện câu hỏi ngay — trước đây câu hỏi KHÔNG được lưu/hiện gì cả (chỉ dùng làm prompt
+    // gửi Gemini), nên chỉ câu trả lời AI hiện ra đột ngột không ai biết đã hỏi gì.
+    const tempId = `temp-ai-${Date.now()}`
+    const optimisticQuestion: ChatMessage = {
+      id: tempId, group_id: groupId, sender_email: myEmail,
+      sender_name: myName || myEmail, content: question,
+      msg_type: uploadedAttachments.length > 0 && !question
+        ? (uploadedAttachments[0].type.startsWith("image/") ? "image" : "file")
+        : "text",
+      created_at: new Date().toISOString(),
+      attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+      is_ai_question: true,
+    }
+    setMessages(prev => [...prev, optimisticQuestion])
+    requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
+
+    // s196+16: stream token thật (SSE) — trước chờ trọn vẹn response mới hiện, giờ chữ chạy dần giống
+    // Bé Gấu/Gấu Pro. tempAiId = bong bóng AI tạm, nối dần theo từng "delta" rồi thay bằng bản ghi thật
+    // ở event "done" (khớp real-time dedup như trước).
+    let questionSaved = false
+    const tempAiId = `temp-ai-answer-${Date.now()}`
+    let aiBubbleAdded = false
     try {
       const res = await fetch(`/api/to-gau/groups/${groupId}/ai`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({
+          question,
+          attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+        }),
       })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      // Add AI message immediately; dedup check handles if realtime also fires
-      if (json.data) {
-        setMessages(prev => prev.some(m => m.id === json.data.id) ? prev : [...prev, json.data])
+      if (!res.ok || !res.body) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? "Hiếu đang fix, vui lòng đợi")
+      }
+
+      const reader  = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split("\n\n")
+        buffer = parts.pop() || ""
+        for (const part of parts) {
+          if (!part.startsWith("data: ")) continue
+          const evt = JSON.parse(part.slice(6))
+          if (evt.type === "question") {
+            questionSaved = true
+            setMessages(prev => prev.map(m => m.id === tempId ? evt.data : m))
+          } else if (evt.type === "delta") {
+            if (!aiBubbleAdded) {
+              aiBubbleAdded = true
+              setMessages(prev => [...prev, {
+                id: tempAiId, group_id: groupId, sender_email: "ai@to-gau", sender_name: "Gấu Tổ",
+                content: evt.content, msg_type: "ai", created_at: new Date().toISOString(),
+              }])
+              requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
+            } else {
+              setMessages(prev => prev.map(m => m.id === tempAiId ? { ...m, content: m.content + evt.content } : m))
+            }
+          } else if (evt.type === "done") {
+            if (evt.data?.answer) {
+              setMessages(prev => {
+                const withoutTemp = prev.filter(m => m.id !== tempAiId)
+                return withoutTemp.some(m => m.id === evt.data.answer.id) ? withoutTemp : [...withoutTemp, evt.data.answer]
+              })
+            }
+            if (evt.error) toast.error(evt.error)
+          } else if (evt.type === "error") {
+            throw new Error(evt.message)
+          }
+        }
       }
     } catch (err: unknown) {
-      setContent(question)
+      if (!questionSaved) {
+        setMessages(prev => prev.filter(m => m.id !== tempId))
+        setContent(question)
+        setSelectedFiles(filesToSend)
+      }
+      if (aiBubbleAdded) setMessages(prev => prev.filter(m => m.id !== tempAiId))
       toast.error(err instanceof Error ? err.message : "Hiếu đang fix, vui lòng đợi")
     } finally {
       setAskingAI(false)
@@ -909,6 +1063,25 @@ export default function ToGauRoomPage() {
                           {showAvatar && !isMe && (
                             <p className="text-[11px] text-slate-400 mb-0.5 px-1">{msg.sender_name}</p>
                           )}
+                          {/* Badge phân biệt câu hỏi gửi AI với chat thường (s196+3) */}
+                          {msg.is_ai_question && !msg.is_recalled && (
+                            <span className="flex items-center gap-1 mb-0.5 px-1 text-[10px] font-medium text-indigo-500">
+                              <Bot size={10} /> Hỏi AI
+                            </span>
+                          )}
+                          {/* Reply preview — trích dẫn tin nhắn gốc (s196+15) */}
+                          {msg.reply_to && !msg.is_recalled && (() => {
+                            const original = messages.find(m => m.id === msg.reply_to)
+                            return (
+                              <button
+                                onClick={() => document.getElementById(`msg-${msg.reply_to}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                                className="mb-1 px-2 py-1 rounded-lg bg-slate-50 border-l-2 border-brand-400 text-left text-[11px] text-slate-500 max-w-full truncate hover:bg-slate-100 transition-colors"
+                              >
+                                <span className="font-medium text-brand-600">{original?.sender_name || "Tin nhắn gốc"}</span>
+                                {": "}{(original?.content || "(đã xoá/không tải)").slice(0, 80)}
+                              </button>
+                            )
+                          })()}
                           {/* Inline edit form (#4) */}
                           {editingMsgId === msg.id ? (
                             <div className="space-y-1.5">
@@ -994,6 +1167,14 @@ export default function ToGauRoomPage() {
                                 {msg.is_pinned ? "Bỏ ghim" : "Ghim"}
                               </button>
                             )}
+                            {/* Reply — mọi member (s196+15) */}
+                            <button
+                              onClick={() => setReplyTarget(msg)}
+                              title="Trả lời tin nhắn này"
+                              className="p-1 rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-brand-600 hover:text-brand-600 text-[11px] flex items-center gap-1 transition-colors shadow-sm"
+                            >
+                              <Reply size={11} /> Trả lời
+                            </button>
                             {/* Sửa — tác giả hoặc manager */}
                             {(isMe || isManager) && msg.msg_type !== "ai" && (
                               <button
@@ -1049,112 +1230,19 @@ export default function ToGauRoomPage() {
               )}
             </div>
 
-            {/* Input bar */}
-            {!isArchived && (
-              <div className="flex-shrink-0 border-t border-slate-200 bg-white px-4 py-3">
-                {/* File preview row */}
-                {selectedFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {selectedFiles.map((file, idx) => (
-                      <FilePreviewItem key={idx} file={file} onRemove={() => removeSelectedFile(idx)} />
-                    ))}
-                  </div>
-                )}
-
-                {/* @mention dropdown */}
-                {showMentionDropdown && mentionSuggestions.length > 0 && (
-                  <div className="mb-2 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                    {mentionSuggestions.map((member, idx) => (
-                      <button
-                        key={member.id}
-                        type="button"
-                        onMouseDown={e => { e.preventDefault(); selectMention(member) }}
-                        onMouseEnter={() => setMentionIdx(idx)}
-                        className={cn(
-                          "w-full flex items-center gap-2.5 px-3 py-2 transition-colors text-left",
-                          idx === mentionIdx ? "bg-brand-50" : "hover:bg-brand-50"
-                        )}
-                      >
-                        <Avatar name={member.user_name} email={member.user_email} size="sm" />
-                        <div>
-                          <p className="text-[13px] font-medium text-slate-700">{member.user_name || member.user_email}</p>
-                          <p className="text-[11px] text-slate-400">{member.user_email}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex items-end gap-2">
-                  {/* Paperclip button */}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading || sending}
-                    className="flex-shrink-0 w-9 h-9 rounded-lg border border-slate-200 text-slate-500 flex items-center justify-center hover:bg-slate-50 hover:text-brand-600 disabled:opacity-40 transition-colors"
-                    title="Đính kèm file"
-                  >
-                    <Paperclip size={15} />
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*,.pdf,.xlsx,.docx,.txt"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-
-                  <textarea
-                    ref={textareaRef}
-                    value={content}
-                    onChange={handleContentChange}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Nhập tin nhắn... (Enter gửi, Shift+Enter xuống dòng, @ để mention)"
-                    rows={1}
-                    className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-[14px] focus:outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 resize-none max-h-32 overflow-y-auto"
-                    style={{ minHeight: "42px" }}
-                  />
-
-                  {/* AI button */}
-                  {showAIButton && (
-                    <button
-                      type="button"
-                      onClick={askAI}
-                      disabled={!content.trim() || askingAI || sending}
-                      title="Hỏi AI Gấu Tổ"
-                      className="flex-shrink-0 w-9 h-9 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {askingAI ? (
-                        <span className="text-[13px] animate-pulse">🤖</span>
-                      ) : (
-                        <Bot size={15} />
-                      )}
-                    </button>
-                  )}
-
-                  {/* Send button */}
-                  <button
-                    onClick={sendMessage}
-                    disabled={(!content.trim() && selectedFiles.length === 0) || sending || uploading}
-                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {(sending || uploading) ? (
-                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <Send size={16} />
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Archived: no-input notice */}
-            {isArchived && (
-              <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-3 text-center text-[13px] text-slate-400">
-                Nhóm đã lưu trữ — không thể gửi tin nhắn mới
-              </div>
-            )}
+            {/* Input bar (s196+19 — tách sang components/to-gau/message-composer.tsx, cơ học) */}
+            <MessageComposer
+              isArchived={isArchived}
+              replyTarget={replyTarget} setReplyTarget={setReplyTarget}
+              selectedFiles={selectedFiles} removeSelectedFile={removeSelectedFile}
+              showMentionDropdown={showMentionDropdown} mentionSuggestions={mentionSuggestions}
+              mentionIdx={mentionIdx} setMentionIdx={setMentionIdx} selectMention={selectMention}
+              fileInputRef={fileInputRef} handleFileChange={handleFileChange}
+              textareaRef={textareaRef} content={content}
+              handleContentChange={handleContentChange} handleKeyDown={handleKeyDown}
+              showAIButton={showAIButton} askAI={askAI} askingAI={askingAI}
+              sending={sending} uploading={uploading} sendMessage={sendMessage}
+            />
           </>
         )}
 

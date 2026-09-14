@@ -8,7 +8,7 @@ import {
 import { cn } from "@/lib/utils"
 import { exportRawRows } from "@/lib/export-excel"
 import { InventoryStockView } from "@/components/inventory/stock-view"
-import { LogicNote } from "@/components/dashboard-kit"
+import { LogicNote, TableRowsSkeleton } from "@/components/dashboard-kit"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inventory — kế hoạch nhập hàng theo tuần (VN/US) + PO tracker.
@@ -362,7 +362,7 @@ function PoTracker({ company }: { company: Company }) {
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={11} className="px-4 py-6 text-center text-slate-400">Đang tải…</td></tr>}
+            {loading && <TableRowsSkeleton cols={11} />}
             {!loading && !rows.length && !editMode && <tr><td colSpan={11} className="px-4 py-6 text-center text-slate-400">Chưa có PO nào</td></tr>}
             {rows.map(r => {
               const d = drafts[r.id]
@@ -521,7 +521,7 @@ function InventoryInner() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="bg-slate-50">
             <tr>
@@ -531,7 +531,7 @@ function InventoryInner() {
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Đang tải…</td></tr>}
+            {loading && <TableRowsSkeleton cols={8} />}
             {!loading && !filtered.length && <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Chưa có SKU nào theo dõi cho {company}</td></tr>}
             {filtered.map(s => {
               const isOpen = expanded === s.sku_code

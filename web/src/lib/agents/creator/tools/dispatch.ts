@@ -1,6 +1,6 @@
 import type { GPEvent, WebSource } from "../types"
 import { TOOL_STATUS }             from "../types"
-import { ALL_TABLES }              from "./supabase"
+import { visibleTables }           from "./supabase"
 
 import { runReadKnowledgeBase, runWriteKnowledgeBase, runSearchKnowledgeBase, runReviewPendingLearning, runApproveLearning, runRejectLearning } from "./knowledge"
 import { runExecuteSQL }           from "./sql"
@@ -16,13 +16,38 @@ import { runCompareVendorQuotes }  from "./compare-quotes"
 import { runTrackSKUWinRate }      from "./win-rate"
 import { runGenerateVideo, runCheckVideoStatus } from "./video"
 import { runReadMyBrowser, runControlMyBrowser } from "./bridge"
+import { logGpAction }             from "./audit-log"
+import { runVerifyReportNumbers }  from "./self-review"
+
+// Tool có tác dụng phụ ra ngoài (ghi KB/Lark/portal/browser thật) — audit trail (s196+6).
+const AUDITED_TOOLS = new Set([
+  "writeKnowledgeBase", "approveLearning", "rejectLearning",
+  "createLarkTask", "updateLarkTask", "sendLarkMessage",
+  "controlMyBrowser", "managePortalCredentials",
+])
 
 export async function dispatchTool(
   call: { name: string; args: any },
   onEvent: ((e: GPEvent) => void) | undefined,
   collectedSources: WebSource[],
-  ctx?: { username?: string },
+  ctx?: { username?: string; isCreator?: boolean },
 ): Promise<{ functionResponse: { name: string; response: any } }> {
+  const result = await dispatchToolCore(call, onEvent, collectedSources, ctx)
+  if (AUDITED_TOOLS.has(call.name)) {
+    // await (không fire-and-forget) — serverless có thể đóng execution context giữa vòng lặp
+    // tool-call cuối trước khi insert kịp gửi đi (đúng bài học app_usage_events/logChat s195+18-C).
+    await logGpAction({ username: ctx?.username || "", tool: call.name, args: call.args, response: result.functionResponse.response })
+  }
+  return result
+}
+
+async function dispatchToolCore(
+  call: { name: string; args: any },
+  onEvent: ((e: GPEvent) => void) | undefined,
+  collectedSources: WebSource[],
+  ctx?: { username?: string; isCreator?: boolean },
+): Promise<{ functionResponse: { name: string; response: any } }> {
+  const isCreator = ctx?.isCreator === true
   // Emit status event
   const statusMsg = call.name === "webSearch"
     ? `🌐 Đang tìm kiếm: "${(call.args?.query || "").slice(0, 60)}"`
@@ -138,10 +163,10 @@ export async function dispatchTool(
     return wrap(await runWebSearchTool(call.args?.query || "", collectedSources))
 
   if (call.name === "listSupabaseTables")
-    return wrap({ tables: ALL_TABLES })
+    return wrap({ tables: visibleTables(isCreator) })
 
   if (call.name === "querySupabase")
-    return wrap(await runQuerySupabase(call.args))
+    return wrap(await runQuerySupabase(call.args, isCreator))
 
   if (call.name === "queryGA4")
     return wrap(await runQueryGA4(call.args))
@@ -156,6 +181,9 @@ export async function dispatchTool(
     const resp = await runExecuteSQL(call.args?.sql || "", call.args?.bypass_cache === true)
     return wrap(resp)
   }
+
+  if (call.name === "verifyReportNumbers")
+    return wrap(await runVerifyReportNumbers(call.args))
 
   return wrap({ error: "Unknown tool" })
 }

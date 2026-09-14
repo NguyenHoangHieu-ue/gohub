@@ -74,6 +74,24 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **s196+21 (2026-09-14) — gộp wrapper `exportToCSV` trùng lặp**: b2b + products cùng tự viết 1 wrapper
+  y hệt tên `exportToCSV` (thật ra xuất .xlsx, tên gây hiểu lầm) quanh `exportToExcel` + hậu tố
+  `_startDate_to_endDate`. Gộp thành `exportWithDateRange` (`lib/export-excel.ts`), 2 trang giờ chỉ còn
+  1 dòng delegate. Đề xuất H, P2.
+- **s196+21 (2026-09-14) — gộp `SubChannelTable` dùng chung**: 2 bảng con sub_channels (Strategic dùng
+  `theme="indigo"`, Non-Strategic dùng `theme="slate"`) trước viết tay riêng, style lệch nhau (finding #11
+  audit UI/UX s196+20 — bg-white/40 vs bg-white/60, có/không backdrop-blur, CM1 accent indigo vs brand).
+  Gộp thành `SubChannelTable` (`dashboard-kit.tsx`), `theme` giữ ĐÚNG 2 bảng màu cũ — không đổi UI, chỉ
+  hết trùng code (đề xuất G, P2). Đúng UI Strict Lock (không tự đổi màu/bố cục).
+- **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 2 chỗ (StatTile KPI Actual +
+  Projected, nhánh không phải currency), cùng lý do lệch locale mặc định trình duyệt nêu ở wiki Channels
+  — dùng lại hàm `formatNumber` local đã có sẵn trong file (tương đương `Intl.NumberFormat("vi-VN")`).
+  Đề xuất C (P2) roadmap performance audit s196+20.
+- **UI s196+20 (2026-09-14) — fix bug clip bảng lồng trong expand-row**: 2 wrapper bảng sub_channels
+  (dòng ~538/~838, khối Strategic + Non-Strategic) dùng `overflow-hidden` (chặn scroll ngang của `<table>`
+  bên trong để bo góc `rounded-xl`) → nội dung bảng bị CLIP khi cột không đủ chỗ trên màn hình hẹp. Phát
+  hiện qua audit UI/UX toàn hệ thống. Đổi `overflow-hidden`→`overflow-x-auto` cả 2 chỗ — vẫn scroll ngang
+  được, bo góc có thể mất đúng ở góc khi đang scroll (đánh đổi chấp nhận được so với clip nội dung).
 - **UI s194 (2026-09-06) — KPI cards → `StatTile` (dashboard-kit)**: 5 card Actual + 5 card Projected đổi
   từ `<div>` viết tay sang `StatTile` dùng chung, icon màu theo Ý NGHĨA (`revenue`/`margin`/`positive`),
   chart Trend đổi màu sang `CHART_PALETTE`/`CHART_GRID_COLOR`/`chartTooltipStyle` dùng chung. Mọi `blue-*`

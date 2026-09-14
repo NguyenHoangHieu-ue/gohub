@@ -28,6 +28,17 @@ Phân tích khách hàng **sỉ B2B**: doanh thu/margin/số lượng theo từn
 - Thường lọc B2B (`group_name='B2B'`).
 
 ## 3. Gotchas
+- **s196+21 (2026-09-14) — skeleton loading, sửa bug empty-state hiện nhầm lúc đang tải**: 3 bảng (Product
+  breakdown, Customer Orders, All Customers Breakdown) trước hiện thẳng empty-state ("No product/order
+  data available"/"No customer data found") khi `length===0` — KHÔNG phân biệt "đang tải" vs "tải xong,
+  thật sự không có data" → user thấy "không có dữ liệu" trong lúc chờ fetch, dễ hiểu nhầm là lỗi/đã chọn
+  sai khách hàng. Thêm nhánh `loading ? <TableRowsSkeleton/> : ...length===0 ? (empty-state) : (bảng)`.
+  Phát hiện qua audit UI/UX toàn hệ thống.
+- **s196+20 (2026-09-14)**: `api/analytics/customer/report` — cache riêng query `rows` (nặng nhất, quét
+  `fact_fulfillment_revenue` theo danh sách khách chọn) qua `cachedQuery` TTL 15' — cùng lớp bug timeout
+  đã fix cho B2C Advanced (s195+15), phát hiện qua audit performance toàn hệ thống. Key theo
+  `dateColumn:prevStart:currentEnd:danh sách khách (sorted)`. `fetchQuarterlySettings`/`fetchCustomerCosts`
+  (Turso, ngoài pool gohub_dw) giữ nguyên không cache. Thêm `export const maxDuration = 60`.
 - **s194+10 (2026-09-06)**: fix 1 hex sai `#003B95` (tier badge "All Customers Breakdown") → `brand-600`;
   vài chỗ CM1 `text-blue-*`→`brand-*`. KHÔNG đổi theme indigo xuyên suốt trang (bo góc lớn/in nghiêng hoa —
   thiết kế "editorial" riêng biệt có chủ đích từ đầu, giống cách B2C Advanced giữ nguyên Apple-glass style,

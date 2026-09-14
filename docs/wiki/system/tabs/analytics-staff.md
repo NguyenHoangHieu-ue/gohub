@@ -120,3 +120,32 @@ phải "màu ngẫu nhiên" cần dọn). Không đổi logic/data.
 | `includeOpsCustomers` | Off | Bao gồm KH hệ thống (B2B Ops, B2C Customer US/VN) |
 
 Bật CẢ 3 → khớp số raw gohub_dw (dùng để validate).
+
+## 9. Cache TTL 30' (s196+20 — 2026-09-14)
+
+`api/analytics/staff-report` chạy 4 query `gohub_dw` song song (summary, monthly, groupTotal,
+custBreakdown — cái nặng nhất group theo staff×customer×month) không cache, chạy lại tươi mỗi lượt đổi
+filter/xem trang — cùng lớp bug timeout đã fix cho B2C Advanced (s195+15), phát hiện qua audit performance
+toàn hệ thống. Bọc `cachedQuery` quanh 4 query này (TTL 30', key theo mọi filter: startDate/endDate/
+channelGroup/channel/companyCode/dataSource/includeShip/includeInternalOps). `groupCostsRaw`
+(Supabase)/`customerCosts` (Turso, trả về `Map`) **cố ý KHÔNG** cache chung — `Map` JSON-serialize qua
+tầng L2 (Supabase JSONB) sẽ hỏng shape (`.get is not a function` khi đọc lại từ instance khác), 2 nguồn
+này cũng ngoài pool `gohub_dw` nên không phải điểm nghẽn timeout. Thêm `export const maxDuration = 60`.
+
+## 12. Gộp toLocaleString() trần → formatNumber() (s196+21 — 2026-09-14)
+
+4 chỗ `X.toLocaleString()` không truyền locale → lệch định dạng số theo locale mặc định trình duyệt
+người xem, khác `vi-VN` cố định của `formatNumber()` dùng ở phần còn lại trang. Đề xuất C (P2) roadmap
+performance audit s196+20.
+
+## 11. Skeleton loading cho 6 KPI card (s196+21 — 2026-09-14)
+
+Thêm `StatTileSkeleton` (dashboard-kit) khi `loading` — trước 6 card KPI đầu trang render ngay với giá trị
+0 rồi "nhảy" số thật khi fetch xong. Phát hiện qua audit UI/UX toàn hệ thống.
+
+## 10. Code-split recharts (s196+21 — 2026-09-14)
+
+4 chart (bar doanh thu sales, bar doanh thu khách hàng, line monthly sales, line monthly khách hàng) tách
+sang `staff-charts.tsx` (`React.memo` + `next/dynamic({ssr:false})`, cùng pattern `bod-charts.tsx`) —
+trước import `recharts` trực tiếp ở `page.tsx` (1112 dòng). Phát hiện qua audit performance toàn hệ
+thống. Không đổi số liệu/UI.

@@ -1,21 +1,26 @@
 ﻿"use client"
 
 import React, { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import {
   Globe, Users, MousePointer2, TrendingUp, TrendingDown, ShoppingBag,
-  DollarSign, Calendar, Filter, RefreshCw, Tag, Activity, ChevronDown, ChevronUp, Smartphone,
+  DollarSign, Calendar, Filter, RefreshCw, Tag, Activity, ChevronDown, ChevronUp, Smartphone, Download,
 } from "lucide-react"
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  AreaChart, Area, BarChart, Bar,
-} from "recharts"
 import { cn } from "@/lib/utils"
+import { formatNumber } from "@/lib/analytics-formatters"
+import { exportRawRows } from "@/lib/export-excel"
 import { DatePresets } from "@/components/date-presets"
-import { StatTile, type MetricAccent, autoDeltaKind, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
+import { StatTile, StatTileSkeleton, type MetricAccent, autoDeltaKind, CHART_PALETTE } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel WebsiteAnalytics. Data qua /api/analytics/ga4 (generic dimensions/metrics) +
 // /api/analytics/gsc + /api/config/ga4. Bỏ date-fns (không dùng), inline getDefaultDateRange,
 // đổi nav '#settings' → /admin.
+
+// Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu (s196+21, roadmap performance s196+20).
+const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
+const TrafficOverviewChart = dynamic(() => import("./website-charts").then(m => m.TrafficOverviewChart), { ssr: false, loading: chartLoading })
+const SearchTrendsChart    = dynamic(() => import("./website-charts").then(m => m.SearchTrendsChart),    { ssr: false, loading: chartLoading })
+const RevenueBreakdownChart = dynamic(() => import("./website-charts").then(m => m.RevenueBreakdownChart), { ssr: false, loading: chartLoading })
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -497,12 +502,26 @@ export default function WebsiteAnalyticsPage() {
   const comparePurchases = compareEcoTimeSeries.reduce((acc: number, curr: any) => acc + curr.purchases, 0)
 
   const kpis: { label: string; value: string; change: number | null; icon: React.ElementType; accent: MetricAccent }[] = [
-    { label: "Sessions", value: currentSessions.toLocaleString(), change: calculateChange(currentSessions, compareSessions), icon: Users, accent: "neutral" },
-    { label: "Purchases", value: currentPurchases.toLocaleString(), change: calculateChange(currentPurchases, comparePurchases), icon: ShoppingBag, accent: "positive" },
-    { label: "Search Clicks", value: currentClicks.toLocaleString(), change: calculateChange(currentClicks, compareClicks), icon: MousePointer2, accent: "neutral" },
+    { label: "Sessions", value: formatNumber(currentSessions), change: calculateChange(currentSessions, compareSessions), icon: Users, accent: "neutral" },
+    { label: "Purchases", value: formatNumber(currentPurchases), change: calculateChange(currentPurchases, comparePurchases), icon: ShoppingBag, accent: "positive" },
+    { label: "Search Clicks", value: formatNumber(currentClicks), change: calculateChange(currentClicks, compareClicks), icon: MousePointer2, accent: "neutral" },
     { label: "Avg. CTR", value: `${currentCtr.toFixed(2)}%`, change: calculateChange(currentCtr, compareCtr), icon: Activity, accent: "positive" },
     { label: "Revenue", value: formatRevenue(currentRevenue), change: calculateChange(currentRevenue, compareRevenue), icon: DollarSign, accent: "revenue" },
   ]
+
+  // Đề xuất H (P2, roadmap UI/UX audit s196+20 — finding #7) — trước tab này KHÔNG có nút export nào dù
+  // có bảng dữ liệu, khác 12/17 tab BI khác đều có.
+  const exportEsimDestinations = () => {
+    exportRawRows(
+      esimDestinations.map(p => ({
+        "Destination": p.destination,
+        "Sessions": p.sessions,
+        "Purchases": p.conversions,
+        "Conv. Rate (%)": p.cr,
+      })),
+      `esim_destinations_${dateRange.startDate}_to_${dateRange.endDate}`,
+    )
+  }
 
   if (error) {
     return (
@@ -603,7 +622,7 @@ export default function WebsiteAnalyticsPage() {
 
               <button onClick={() => fetchAnalytics()} className="px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 transition-all shadow-sm active:scale-95">Lọc</button>
 
-              <button onClick={fetchAnalytics} disabled={loading} className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
+              <button onClick={fetchAnalytics} disabled={loading} aria-label="Làm mới dữ liệu" className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
                 <RefreshCw className={cn("w-5 h-5 text-slate-600", loading && "animate-spin")} />
               </button>
             </div>
@@ -622,7 +641,7 @@ export default function WebsiteAnalyticsPage() {
 
       {/* Main KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        {kpis.map((kpi, idx) => (
+        {loading ? Array.from({ length: 5 }).map((_, i) => <StatTileSkeleton key={i} />) : kpis.map((kpi, idx) => (
           <StatTile
             key={idx}
             icon={<kpi.icon className="w-5 h-5" />}
@@ -647,24 +666,7 @@ export default function WebsiteAnalyticsPage() {
             </div>
           </div>
           <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={CHART_PALETTE[0]} stopOpacity={0.15} /><stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorCompareUsers" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#94a3b8" stopOpacity={0.1} /><stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(val) => val.substring(6, 8) + "/" + val.substring(4, 6)} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
-                <Tooltip contentStyle={chartTooltipStyle} />
-                {compareEnabled && (<Area type="monotone" dataKey="compareUsers" name="Previous Users" stroke="#94a3b8" strokeDasharray="3 3" strokeWidth={2} fillOpacity={1} fill="url(#colorCompareUsers)" />)}
-                <Area type="monotone" dataKey="users" name="Users" stroke={CHART_PALETTE[0]} strokeWidth={2} fillOpacity={1} fill="url(#colorUsers)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            <TrafficOverviewChart data={chartData} compareEnabled={compareEnabled} />
           </div>
         </div>
 
@@ -687,18 +689,7 @@ export default function WebsiteAnalyticsPage() {
                 <p className="text-xs max-w-xs">{gscError}</p>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={gscTimeSeries}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(val) => val.substring(6, 8) + "/" + val.substring(4, 6)} />
-                  <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
-                  <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
-                  <Tooltip contentStyle={chartTooltipStyle} />
-                  {compareEnabled && (<Line yAxisId="left" type="monotone" name="Previous Clicks" dataKey="compareClicks" stroke="#94a3b8" strokeDasharray="3 3" strokeWidth={2} dot={false} />)}
-                  <Line yAxisId="left" type="monotone" name="Clicks" dataKey="clicks" stroke={CHART_PALETTE[0]} strokeWidth={2} dot={false} />
-                  <Line yAxisId="right" type="monotone" name="Impressions" dataKey="impressions" stroke="#cbd5e1" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-                </LineChart>
-              </ResponsiveContainer>
+              <SearchTrendsChart data={gscTimeSeries} compareEnabled={compareEnabled} />
             )}
           </div>
         </div>}
@@ -715,16 +706,7 @@ export default function WebsiteAnalyticsPage() {
             <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center"><DollarSign className="w-5 h-5" /></div>
           </div>
           <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={ecoTimeSeries}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(val) => val.substring(6, 8)} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
-                <Tooltip contentStyle={chartTooltipStyle} formatter={(val: number) => [formatRevenue(val), "Revenue"]} />
-                <Bar dataKey="revenue" name="Revenue" fill={CHART_PALETTE[2]} radius={[4, 4, 0, 0]} />
-                {compareEnabled && (<Bar dataKey="compareRevenue" name="Previous Revenue" fill="#cbd5e1" radius={[4, 4, 0, 0]} />)}
-              </BarChart>
-            </ResponsiveContainer>
+            <RevenueBreakdownChart data={ecoTimeSeries} compareEnabled={compareEnabled} currency={selectedSite?.currency} />
           </div>
         </div>
 
@@ -806,7 +788,7 @@ export default function WebsiteAnalyticsPage() {
                     </div>
                   )}
                   <div>
-                    <p className="text-sm font-bold text-slate-900">{country.users.toLocaleString()}</p>
+                    <p className="text-sm font-bold text-slate-900">{formatNumber(country.users)}</p>
                     <p className="text-[10px] text-slate-400 uppercase font-bold">Users</p>
                   </div>
                 </div>
@@ -837,7 +819,7 @@ export default function WebsiteAnalyticsPage() {
                   <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center text-xs font-bold text-emerald-600 shrink-0">{idx + 1}</div>
                   <div className="overflow-hidden">
                     <p className="text-sm font-bold text-slate-800 truncate">{source.name}</p>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">{source.sessions.toLocaleString()} sessions</p>
+                    <p className="text-[10px] text-slate-400 uppercase font-bold">{formatNumber(source.sessions)} sessions</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-right shrink-0 ml-4">
@@ -850,7 +832,7 @@ export default function WebsiteAnalyticsPage() {
                     </div>
                   )}
                   <div>
-                    <p className="text-sm font-bold text-slate-900">{source.users.toLocaleString()}</p>
+                    <p className="text-sm font-bold text-slate-900">{formatNumber(source.users)}</p>
                     <p className="text-[10px] text-slate-400 uppercase font-bold">Users</p>
                   </div>
                 </div>
@@ -900,10 +882,10 @@ export default function WebsiteAnalyticsPage() {
                             {q.change > 0 ? "+" : ""}{q.change.toFixed(1)}%
                           </span>
                         )}
-                        <span>{q.clicks.toLocaleString()}</span>
+                        <span>{formatNumber(q.clicks)}</span>
                       </div>
                     </td>
-                    <td className="p-3 text-sm text-slate-600 text-right">{q.impressions.toLocaleString()}</td>
+                    <td className="p-3 text-sm text-slate-600 text-right">{formatNumber(q.impressions)}</td>
                     <td className="p-3 text-sm text-emerald-600 text-right font-medium">{q.ctr.toFixed(1)}%</td>
                     <td className="p-3 text-sm text-slate-500 text-right">{q.position.toFixed(1)}</td>
                   </tr>
@@ -925,7 +907,13 @@ export default function WebsiteAnalyticsPage() {
               <h2 className="text-lg font-bold text-slate-900">eSIM Destinations (CR)</h2>
               <p className="text-sm text-slate-500">Aggregated performance by country category.</p>
             </div>
-            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center"><Globe className="w-5 h-5" /></div>
+            <div className="flex items-center gap-2">
+              <button onClick={exportEsimDestinations} disabled={esimDestinations.length === 0}
+                className="flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-40" title="Export">
+                <Download className="w-3.5 h-3.5" />Export
+              </button>
+              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center"><Globe className="w-5 h-5" /></div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -958,16 +946,16 @@ export default function WebsiteAnalyticsPage() {
                               {p.change > 0 ? "+" : ""}{p.change.toFixed(1)}%
                             </span>
                           )}
-                          <span>{p.sessions.toLocaleString()}</span>
+                          <span>{formatNumber(p.sessions)}</span>
                         </div>
                       </td>
-                      <td className="p-3 text-sm font-medium text-emerald-600 text-right">{p.conversions.toLocaleString()}</td>
+                      <td className="p-3 text-sm font-medium text-emerald-600 text-right">{formatNumber(p.conversions)}</td>
                       <td className="p-3 text-sm font-bold text-slate-900 text-right">{p.cr.toFixed(2)}%</td>
                     </tr>
                     {expandedDestinations.has(p.destination) && p.items.length > 0 && (
                       <tr className="bg-slate-50/50">
                         <td colSpan={4} className="p-0">
-                          <div className="pl-12 pr-4 py-3 border-b border-slate-100">
+                          <div className="pl-12 pr-4 py-3 border-b border-slate-100 overflow-x-auto">
                             <table className="w-full text-left">
                               <thead className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
                                 <tr>
@@ -1036,10 +1024,10 @@ export default function WebsiteAnalyticsPage() {
                               {p.change > 0 ? "+" : ""}{p.change.toFixed(1)}%
                             </span>
                           )}
-                          <span>{p.sessions.toLocaleString()}</span>
+                          <span>{formatNumber(p.sessions)}</span>
                         </div>
                       </td>
-                      <td className="p-3 text-sm font-medium text-emerald-600 text-right">{(p.conversions || 0).toLocaleString()}</td>
+                      <td className="p-3 text-sm font-medium text-emerald-600 text-right">{formatNumber(p.conversions || 0)}</td>
                       <td className="p-3 text-sm font-bold text-slate-900 text-right">{cr.toFixed(2)}%</td>
                     </tr>
                   )

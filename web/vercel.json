@@ -42,6 +42,24 @@
     },
     "src/app/api/analytics/my-metrics/lark-config/scan-now/route.ts": {
       "maxDuration": 90
+    },
+    "src/app/api/cron/gau-pro-digest/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/cron/vendor-quote-scan/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/analytics/b2c/metric/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analytics/staff-report/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analytics/customer/report/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/analytics/order-report/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -80,6 +98,14 @@
     {
       "path": "/api/cron/my-metrics-lark-scan",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/gau-pro-digest",
+      "schedule": "45 2 * * *"
+    },
+    {
+      "path": "/api/cron/vendor-quote-scan",
+      "schedule": "15 3 * * *"
     }
   ]
 }

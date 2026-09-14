@@ -345,3 +345,19 @@ UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
 The monthly endpoint and revenue snapshot queries must bound fulfillment dates through the last completed day in Asia/Ho_Chi_Minh, including customer and profit breakdowns. Cache keys include the cutoff; snapshots without matching `payload.revenueAsOf` fall back to the bounded warehouse queries.
 
 Verified against Analytics DB: September 1–6 B2C revenue is VND 284,852,800.82 (VN 258,485,490.02; US 26,367,310.80). The former unbounded query included September 7 revenue of VND 24,126,445.36, producing VND 308,979,246.18. Correct September prorata is VND 1,424,264,004.10. The local endpoint returns the corrected total with `dataAsOf=2026-09-06`; TypeScript and five UTC/Vietnam date boundary tests pass.
+
+### `/api/analytics/b2c/metric` cache TTL 60' (s196+20 — 2026-09-14)
+
+Route sub-tab Metric (Revenue/GP/Orders by web+app, Customers new/returning) gọi 2 CTE `gohub_dw` (query
+customer dùng `JOIN first_order` quét lịch sử) trực tiếp mỗi lượt xem, không cache — cùng lớp bug timeout
+đã fix cho B2C Advanced (`b2c/monthly`, s195+15), phát hiện qua audit performance toàn hệ thống. Bọc
+`cachedQuery(key, fn, 60, false, ["b2c-metric"])` quanh `Promise.all([businessRows, customerRows])`,
+key theo `windowStart:windowEnd`. GA4 traffic/users giữ nguyên không cache (ngoài pool gohub_dw). Thêm
+`export const maxDuration = 60` (khớp trần Hobby, tường minh thay vì mặc định ẩn).
+
+### Sót màu `bg-blue-600` ở tab-switcher cha (s196+20 — 2026-09-14)
+
+`b2c/page.tsx` (component cha bọc 3 subtab Advanced/Performance/Metric) dùng `bg-blue-600` cho nút subtab
+đang active thay vì `bg-brand-600` — đợt fix màu s194+2/+3 chỉ sửa 3 component con
+(`B2CAdvancedDashboard`/`B2CPerformance`/`B2CMetric`), bỏ sót chính file cha. Phát hiện qua audit UI/UX
+toàn hệ thống. Đổi cả 3 chỗ (dòng 21/30/39) sang `bg-brand-600`.

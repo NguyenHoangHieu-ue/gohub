@@ -13,9 +13,9 @@ import {
 import { domToCanvas } from "modern-screenshot"
 import { cn } from "@/lib/utils"
 import { DatePresets } from "@/components/date-presets"
-import { exportToExcel } from "@/lib/export-excel"
+import { exportWithDateRange, exportToExcel } from "@/lib/export-excel"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
-import { StatTile, MetricAccent, DeltaKind, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
+import { StatTile, MetricAccent, DeltaKind, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle, SubChannelTable } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel B2BPerformance. Backend (đã có op-cost CM1): b2b/kpis|trend|performance|
 // strategic-performance + channels-with-platform-fee + channel-costs + config/partner-tiers.
@@ -97,10 +97,8 @@ export default function B2BPerformance() {
   const projectionFactor = getProjectionFactor(startDate, endDate)
   const isProjectable = projectionFactor > 1
 
-  const exportToCSV = (data: any[], filename: string, columns: { label: string; key: keyof PerformanceData | string }[]) => {
-    exportToExcel(data as Record<string, unknown>[], columns.map(c => ({ label: c.label, key: String(c.key) })),
-      `${filename}_${startDate}_to_${endDate}`)
-  }
+  const exportToCSV = (data: any[], filename: string, columns: { label: string; key: keyof PerformanceData | string }[]) =>
+    exportWithDateRange(data as Record<string, unknown>[], filename, columns.map(c => ({ label: c.label, key: String(c.key) })), startDate, endDate)
 
   const exportToPDF = async () => {
     if (!reportRef.current) return
@@ -375,7 +373,7 @@ export default function B2BPerformance() {
                     icon={kpi.icon}
                     label={kpi.label}
                     accent={KPI_ACCENTS[idx] || "neutral"}
-                    value={kpi.isCurrency ? Math.round(kpi.actualValue || 0).toLocaleString("vi-VN") : (kpi.actualValue || 0).toLocaleString() + (kpi.label.includes("%") ? "%" : "")}
+                    value={kpi.isCurrency ? formatNumber(Math.round(kpi.actualValue || 0)) : formatNumber(kpi.actualValue || 0) + (kpi.label.includes("%") ? "%" : "")}
                     unit={kpi.isCurrency ? "VND" : undefined}
                   />
                 ))}
@@ -399,7 +397,7 @@ export default function B2BPerformance() {
                           icon={kpi.icon}
                           label={`Proj. ${kpi.label}`}
                           accent={KPI_ACCENTS[idx] || "neutral"}
-                          value={kpi.isCurrency ? Math.round(kpi.value).toLocaleString("vi-VN") : kpi.value.toLocaleString() + (kpi.label.includes("%") ? "%" : "")}
+                          value={kpi.isCurrency ? formatNumber(Math.round(kpi.value)) : formatNumber(kpi.value) + (kpi.label.includes("%") ? "%" : "")}
                           unit={kpi.isCurrency ? "VND" : undefined}
                           deltas={deltas}
                           className="bg-brand-50/50 border-brand-100"
@@ -535,34 +533,7 @@ export default function B2BPerformance() {
                                             <td colSpan={7} className="px-8 py-3">
                                               <div className="space-y-4">
                                                 {row.sub_channels && row.sub_channels.length > 0 && (
-                                                  <div className="bg-white/40 border border-indigo-50 rounded-xl overflow-hidden backdrop-blur-sm">
-                                                    <table className="w-full text-[10px]">
-                                                      <thead>
-                                                        <tr className="bg-indigo-50/50">
-                                                          <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-left">Sub-channel</th>
-                                                          <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">Revenue</th>
-                                                          <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">Units</th>
-                                                          <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">GP</th>
-                                                          <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">Margin%</th>
-                                                          <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">CM1</th>
-                                                          <th className="px-3 py-1.5 font-bold text-indigo-400 uppercase tracking-wider text-right">CM1%</th>
-                                                        </tr>
-                                                      </thead>
-                                                      <tbody className="divide-y divide-indigo-50/30">
-                                                        {row.sub_channels.map((sc, scIdx) => (
-                                                          <tr key={scIdx}>
-                                                            <td className="px-3 py-1.5 font-bold text-slate-700">{sc.name}</td>
-                                                            <td className="px-3 py-1.5 text-right font-medium text-slate-600">{formatNumber(Math.round(sc.revenue))}</td>
-                                                            <td className="px-3 py-1.5 text-right font-medium text-slate-600">{formatNumber(sc.units)}</td>
-                                                            <td className="px-3 py-1.5 text-right font-bold text-emerald-600">{formatNumber(Math.round(sc.margin))}</td>
-                                                            <td className="px-3 py-1.5 text-right font-medium text-slate-600">{sc.margin_percent.toFixed(1)}%</td>
-                                                            <td className="px-3 py-1.5 text-right font-bold text-indigo-600">{formatNumber(Math.round(sc.gpm2))}</td>
-                                                            <td className="px-3 py-1.5 text-right font-medium text-indigo-500 font-bold">{sc.gpm2_percent.toFixed(1)}%</td>
-                                                          </tr>
-                                                        ))}
-                                                      </tbody>
-                                                    </table>
-                                                  </div>
+                                                  <SubChannelTable rows={row.sub_channels} theme="indigo" />
                                                 )}
                                                 <div className="grid grid-cols-4 gap-4">
                                                   {(["ads", "platformFee", "sponsorProducts", "media"] as const).map(category => {
@@ -835,34 +806,7 @@ export default function B2BPerformance() {
                                       <td colSpan={8} className="px-8 py-3">
                                         <div className="space-y-4">
                                           {row.sub_channels && row.sub_channels.length > 0 && (
-                                            <div className="bg-white/60 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                                              <table className="w-full text-[10px]">
-                                                <thead>
-                                                  <tr className="bg-slate-100">
-                                                    <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-left">Sub-channel</th>
-                                                    <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
-                                                    <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">Units</th>
-                                                    <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">GP</th>
-                                                    <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">Margin%</th>
-                                                    <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">CM1</th>
-                                                    <th className="px-3 py-1.5 font-bold text-slate-500 uppercase tracking-wider text-right">CM1%</th>
-                                                  </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100">
-                                                  {row.sub_channels.map((sc, scIdx) => (
-                                                    <tr key={scIdx}>
-                                                      <td className="px-3 py-1.5 font-bold text-slate-700">{sc.name}</td>
-                                                      <td className="px-3 py-1.5 text-right font-medium text-slate-600">{formatNumber(Math.round(sc.revenue))}</td>
-                                                      <td className="px-3 py-1.5 text-right font-medium text-slate-600">{formatNumber(sc.units)}</td>
-                                                      <td className="px-3 py-1.5 text-right font-bold text-emerald-600">{formatNumber(Math.round(sc.margin))}</td>
-                                                      <td className="px-3 py-1.5 text-right font-medium text-slate-600">{sc.margin_percent.toFixed(1)}%</td>
-                                                      <td className="px-3 py-1.5 text-right font-bold text-brand-600">{formatNumber(Math.round(sc.gpm2))}</td>
-                                                      <td className="px-3 py-1.5 text-right font-medium text-brand-500 font-bold">{sc.gpm2_percent.toFixed(1)}%</td>
-                                                    </tr>
-                                                  ))}
-                                                </tbody>
-                                              </table>
-                                            </div>
+                                            <SubChannelTable rows={row.sub_channels} theme="slate" />
                                           )}
                                           {costLines.length > 0 ? (
                                             <div className={`grid grid-cols-${Math.min(costLines.length, 4)} gap-4`}>

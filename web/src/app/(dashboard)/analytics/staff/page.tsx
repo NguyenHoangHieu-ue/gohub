@@ -1,9 +1,10 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react"
+import dynamic from "next/dynamic"
 import { useSession } from "next-auth/react"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
-import { formatCompactNumber } from "@/lib/analytics-formatters"
+import { formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import {
   Users, Calendar, Filter, Download, Search,
@@ -13,13 +14,15 @@ import {
 } from "lucide-react"
 import { exportRawRows } from "@/lib/export-excel"
 import { cn } from "@/lib/utils"
-import { StatTile, type MetricAccent, SourceBadge, CHART_GRID_COLOR } from "@/components/dashboard-kit"
+import { StatTile, StatTileSkeleton, type MetricAccent, SourceBadge } from "@/components/dashboard-kit"
 import { useUrlStates } from "@/hooks/use-url-state"
-import {
-  LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend, Cell,
-} from "recharts"
+
+// Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu (s196+21, roadmap performance s196+20).
+const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
+const StaffRevenueBarChart    = dynamic(() => import("./staff-charts").then(m => m.StaffRevenueBarChart),    { ssr: false, loading: chartLoading })
+const CustomerRevenueBarChart = dynamic(() => import("./staff-charts").then(m => m.CustomerRevenueBarChart), { ssr: false, loading: chartLoading })
+const StaffMonthlyLineChart   = dynamic(() => import("./staff-charts").then(m => m.StaffMonthlyLineChart),   { ssr: false, loading: chartLoading })
+const CustomerMonthlyLineChart = dynamic(() => import("./staff-charts").then(m => m.CustomerMonthlyLineChart), { ssr: false, loading: chartLoading })
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface StaffTarget {
@@ -66,10 +69,6 @@ interface CustomerRow {
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const STAFF_COLORS = [
-  "#0f4c81","#E04E1B","#10b981","#8b5cf6","#f59e0b",
-  "#ef4444","#06b6d4","#84cc16","#ec4899","#6366f1",
-]
 const HK3_COLOR  = "#F97316"
 const RANK_STYLE = [
   "bg-amber-100 text-amber-700 border border-amber-200",
@@ -156,21 +155,6 @@ function MiniSparkline({ data }: { data: MonthlyItem[] }) {
         <div key={d.month} className="w-2 rounded-sm bg-brand-400 opacity-80"
           style={{ height: `${Math.max(2, (d.revenue / max) * 20)}px` }}
           title={`${d.month}: ${fck(d.revenue)}`} />
-      ))}
-    </div>
-  )
-}
-
-const ChartTooltip = ({ active, payload, label }: any) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-3 text-xs min-w-[160px]">
-      <p className="font-black text-slate-700 mb-1.5">{label}</p>
-      {payload.map((p: any) => (
-        <p key={p.name} style={{ color: p.color }} className="font-bold flex justify-between gap-4">
-          <span className="truncate max-w-[120px]">{p.name}</span>
-          <span>{fck(p.value)}</span>
-        </p>
       ))}
     </div>
   )
@@ -674,13 +658,13 @@ function StaffPageInner() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-        {([
+        {loading ? Array.from({ length: 6 }).map((_, i) => <StatTileSkeleton key={i} />) : ([
           { label: "Tổng Revenue", value: fck(totRev), icon: DollarSign, accent: "revenue" },
           { label: "3HK Revenue",  value: fck(totHk3), icon: Zap,        accent: "cost"    },
           { label: "Gross Profit", value: fck(totGP),  icon: TrendingUp, accent: "margin"  },
           { label: "CM1",          value: fck(totCM1), icon: Target,     accent: "margin"  },
-          { label: "Sales",        value: displayed.length.toLocaleString(), icon: Users,     accent: "neutral" },
-          { label: "Khách hàng",   value: totCust.toLocaleString(),          icon: UserCheck, accent: "positive" },
+          { label: "Sales",        value: formatNumber(displayed.length), icon: Users,     accent: "neutral" },
+          { label: "Khách hàng",   value: formatNumber(totCust),          icon: UserCheck, accent: "positive" },
         ] as { label: string; value: string; icon: React.ElementType; accent: MetricAccent }[]).map(card => (
           <StatTile key={card.label} icon={<card.icon className="w-5 h-5" />} label={card.label} value={card.value} accent={card.accent} />
         ))}
@@ -700,28 +684,11 @@ function StaffPageInner() {
             </div>
           </div>
           <div className="p-4" style={{ height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={displayed.slice(0, 12).map(s => ({
-                  name: s.staff_name.length > 14 ? s.staff_name.slice(0, 14) + "…" : s.staff_name,
-                  "Tổng Rev": s.total_revenue,
-                  "3HK Rev":  s.hk3_revenue,
-                }))}
-                margin={{ top: 4, right: 16, left: 0, bottom: 32 }}
-                barGap={2}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false}
-                  angle={-25} textAnchor="end" height={52} interval={0} />
-                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
-                  tickFormatter={v => fck(v)} width={64} />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="Tổng Rev" radius={[4,4,0,0]} maxBarSize={40}>
-                  {displayed.slice(0,12).map((_, i) => <Cell key={i} fill={STAFF_COLORS[i % STAFF_COLORS.length]} />)}
-                </Bar>
-                <Bar dataKey="3HK Rev" fill="#F97316" radius={[4,4,0,0]} maxBarSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
+            <StaffRevenueBarChart data={displayed.slice(0, 12).map(s => ({
+              name: s.staff_name.length > 14 ? s.staff_name.slice(0, 14) + "…" : s.staff_name,
+              "Tổng Rev": s.total_revenue,
+              "3HK Rev":  s.hk3_revenue,
+            }))} />
           </div>
         </div>
       )}
@@ -736,31 +703,14 @@ function StaffPageInner() {
             <p className="text-xs text-brand-600 mt-0.5">{applied.startDate} → {applied.endDate} · Top {Math.min(customers.length, 12)} KH</p>
           </div>
           <div className="p-4" style={{ height: 260 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={customers.slice(0, 12).map((c, i) => {
-                  const name = c.customer_name || c.customer_code
-                  return {
-                    name: name.length > 14 ? name.slice(0, 14) + "…" : name,
-                    "Revenue": c.revenue,
-                    "3HK Rev": c.hk3_revenue,
-                  }
-                })}
-                margin={{ top: 4, right: 16, left: 0, bottom: 32 }}
-                barGap={2}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#4338ca" }} axisLine={false} tickLine={false}
-                  angle={-25} textAnchor="end" height={52} interval={0} />
-                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false}
-                  tickFormatter={v => fck(v)} width={64} />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="Revenue" radius={[4,4,0,0]} maxBarSize={40}>
-                  {customers.slice(0,12).map((_, i) => <Cell key={i} fill={STAFF_COLORS[i % STAFF_COLORS.length]} />)}
-                </Bar>
-                <Bar dataKey="3HK Rev" fill="#F97316" radius={[4,4,0,0]} maxBarSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
+            <CustomerRevenueBarChart data={customers.slice(0, 12).map(c => {
+              const name = c.customer_name || c.customer_code
+              return {
+                name: name.length > 14 ? name.slice(0, 14) + "…" : name,
+                "Revenue": c.revenue,
+                "3HK Rev": c.hk3_revenue,
+              }
+            })} />
           </div>
         </div>
       )}
@@ -778,21 +728,7 @@ function StaffPageInner() {
             </div>
           </div>
           <div className="p-4" style={{ height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={staffMonthlyChart} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b", fontWeight: 700 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => fck(v)} width={64} />
-                <Tooltip content={<ChartTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                {staffLineKeys.map((key, i) => (
-                  <Line key={key} type="monotone" dataKey={key}
-                    stroke={STAFF_COLORS[i % STAFF_COLORS.length]} strokeWidth={2.5}
-                    dot={{ r: 4, fill: STAFF_COLORS[i % STAFF_COLORS.length], strokeWidth: 2, stroke: "#fff" }}
-                    activeDot={{ r: 6, strokeWidth: 0 }} />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
+            <StaffMonthlyLineChart data={staffMonthlyChart} lineKeys={staffLineKeys} />
           </div>
         </div>
       )}
@@ -809,21 +745,7 @@ function StaffPageInner() {
             </p>
           </div>
           <div className="p-4" style={{ height: 260 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={custMonthlyChart} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e7ff" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#4338ca", fontWeight: 700 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => fck(v)} width={64} />
-                <Tooltip content={<ChartTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                {custLineKeys.map((key, i) => (
-                  <Line key={key} type="monotone" dataKey={key}
-                    stroke={STAFF_COLORS[i % STAFF_COLORS.length]} strokeWidth={2.5}
-                    dot={{ r: 4, fill: STAFF_COLORS[i % STAFF_COLORS.length], strokeWidth: 2, stroke: "#fff" }}
-                    activeDot={{ r: 6, strokeWidth: 0 }} />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
+            <CustomerMonthlyLineChart data={custMonthlyChart} lineKeys={custLineKeys} />
           </div>
         </div>
       )}
@@ -979,7 +901,7 @@ function StaffPageInner() {
                         bgClass="bg-orange-50/20" tooltip={tooltip}
                         onChange={v => setDraftField(s.staff_code, "hk3_non_strategic", v)} />
                       <td className="px-4 py-3 text-right text-sm font-bold text-slate-600">{s.customer_count}</td>
-                      <td className="px-4 py-3 text-right text-sm font-bold text-slate-500">{s.total_orders.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right text-sm font-bold text-slate-500">{formatNumber(s.total_orders)}</td>
                       <td className="px-4 py-3"><MiniSparkline data={s.monthly} /></td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -1095,7 +1017,7 @@ function StaffPageInner() {
                     {fck(displayed.reduce((a,s) => a + monthsInRange.reduce((sum,m) => sum+(targets[s.staff_code]?.[m]?.hk3_non_strategic||0),0),0))}
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-slate-600">{totCust}</td>
-                  <td className="px-4 py-3 text-right text-sm text-slate-500">{totOrds.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-sm text-slate-500">{formatNumber(totOrds)}</td>
                   <td colSpan={2} />
                 </tr>
               )}

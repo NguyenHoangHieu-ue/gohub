@@ -8,6 +8,7 @@ import { useToast } from "@/components/toast"
 import { useConfirm } from "@/components/to-gau/confirm-modal"
 import { fileIcon, fmtDate, fmtFileSize } from "@/lib/to-gau-format"
 import type { DocItem } from "@/lib/to-gau-types"
+import { supabaseRealtime } from "@/lib/to-gau-realtime"
 
 export function DocsPanel({
   groupId, myEmail, isPrivileged,
@@ -31,8 +32,8 @@ export function DocsPanel({
   const [uploading, setUploading]   = useState(false)
   const docFileRef                  = useRef<HTMLInputElement>(null)
 
-  const loadDocs = useCallback(async () => {
-    setDocsLoading(true)
+  const loadDocs = useCallback(async (silent = false) => {
+    if (!silent) setDocsLoading(true)
     try {
       const res  = await fetch(`/api/to-gau/groups/${groupId}/docs`)
       if (!res.ok) return
@@ -41,11 +42,27 @@ export function DocsPanel({
     } catch {
       // ignore
     } finally {
-      setDocsLoading(false)
+      if (!silent) setDocsLoading(false)
     }
   }, [groupId])
 
   useEffect(() => { loadDocs() }, [loadDocs])
+
+  // Realtime (s196+17, đề xuất E) — trước chỉ poll, member khác thêm tài liệu phải chờ tới 20s mới thấy.
+  // event:"*" (INSERT/UPDATE/DELETE) → reload silent, đơn giản hơn merge từng loại như chat_messages (số
+  // lượng doc/lần đổi nhỏ, không cần tối ưu). Giữ nguyên poll 20s làm lưới an toàn (đúng tiền lệ v55 —
+  // publication thiếu không throw lỗi, chỉ im lặng không nhận event).
+  useEffect(() => {
+    // 45s (s196+21, roadmap performance s196+20 — Realtime đã phủ bảng này từ s196+17, poll chỉ còn vai
+    // trò lưới an toàn dự phòng, không cần khoảng cách ngắn như thời chưa có Realtime).
+    const t = setInterval(() => loadDocs(true), 45000)
+    const channel = supabaseRealtime
+      .channel(`chat_docs:${groupId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_docs", filter: `group_id=eq.${groupId}` },
+        () => loadDocs(true))
+      .subscribe()
+    return () => { clearInterval(t); supabaseRealtime.removeChannel(channel) }
+  }, [groupId, loadDocs])
 
   function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter" || e.key === ",") {

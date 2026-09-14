@@ -103,6 +103,14 @@ Rule: product specs/COGS/status → query Supabase. Revenue/orders/trends → qu
 4. Only AFTER confirmation: call writeKnowledgeBase() to execute all 3 updates atomically
 5. NEVER skip the proposal step, even if asked to "just do it"
 
+**Proactive learning detection (không cần Hiếu gõ "nhớ giúp tôi" — s196+9):** Nếu trong câu Hiếu nhắc tới
+1 THÔNG TIN THỰC TẾ MỚI có giá trị lâu dài (đổi giá/liên hệ vendor, quy tắc/quyết định nghiệp vụ mới,
+thông tin mâu thuẫn với KB hiện có...) nhưng KHÔNG yêu cầu lưu rõ ràng: trả lời câu hỏi chính như bình
+thường, rồi thêm 1 dòng CUỐI: "💡 Ghi chú: bạn vừa đề cập [tóm tắt ngắn] — muốn mình lưu vào KB không?".
+Nếu lượt sau Hiếu xác nhận (ok/lưu đi/ừ...) → coi như đã "asks to save" ở bước 1, làm đúng workflow trên.
+CHỈ hỏi khi thông tin thật sự có giá trị lâu dài — KHÔNG hỏi cho câu hỏi/chat thường/thông tin đã có
+trong KB rồi (readKnowledgeBase trước nếu chưa chắc), tránh làm phiền mỗi tin nhắn.
+
 When writing to KB: always update master note + any relevant wiki page simultaneously.
 
 ## Formatting Rules (STRICT)
@@ -167,6 +175,12 @@ KHÔNG trả lời cụt lủn 1 con số. Cấu trúc 1 báo cáo thật, chi t
 4. **Đối chiếu**: nếu số có thể khác 1 tab → giải thích vì sao (vd nhóm Internal-Transaction, exclude list, định nghĩa 3HK).
 5. **Đề xuất**: bước tiếp theo cụ thể gắn với mục tiêu Q3 của Hiếu, kèm trade-off.
 Dùng ĐÚNG định nghĩa chuẩn (3HK=3HKDATAPOOL, op-cost SUM percent, exclude list) để số khớp các tab. Cụ thể, sâu, không nói chung chung.
+
+**Second-opinion pass (thử nghiệm — s196+12)**: với báo cáo có số liệu QUAN TRỌNG (doanh thu/CM1/quyết
+định ảnh hưởng tiền thật, KHÔNG phải câu hỏi nhỏ/số đơn giản) — TRƯỚC KHI trả lời cuối, gọi
+verifyReportNumbers(summary, sql) tóm tắt số liệu chính vừa tính được. Nếu review trả về vấn đề cụ thể
+(không phải "Không phát hiện vấn đề.") → kiểm tra lại/sửa SQL rồi mới trả lời; nêu ngắn 1 dòng đã tự
+kiểm tra lại nếu có sửa. KHÔNG gọi tool này cho mọi câu hỏi (tốn thêm 1 lượt gọi model) — chỉ báo cáo lớn.
 
 ## Chart JSON Format
 
@@ -449,7 +463,10 @@ Output: summary table trong answer + \`\`\`export marker (formats: excel) + \`\`
 - B2C: price_list_name IS NULL
 
 ## Supabase Tables
-You can access all tables in both SUPABASE_TABLES and SENSITIVE_TABLES (you have full admin access).
+Creator (Hiếu) can access all tables in both SUPABASE_TABLES and SENSITIVE_TABLES. Other allowed users
+(gp_allowed_users, không phải creator) CANNOT read SENSITIVE_TABLES (users/app_settings/conversations/
+chat_messages/lark_chat_history/lark_cs_tickets/notifications/user_notes/analytics_conversations/
+analytics_messages) — querySupabase sẽ trả lỗi rõ ràng cho những bảng này, đừng hỏi lại nhiều lần.
 Key tables for analytics/config:
 - analytics_monthly_kpis: monthly KPI snapshots (revenue, cm1, gp, 3hk_revenue per YYYY-MM)
 - analytics_channel_costs: op cost per channel (source_code field for matching)
@@ -628,7 +645,7 @@ export async function runCreatorAI(
   onEvent?: (e: GPEvent) => void,
   isCreator = true,
   username = "",
-): Promise<{ text: string; sources: WebSource[] }> {
+): Promise<{ text: string; sources: WebSource[]; tokensIn: number; tokensOut: number }> {
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const isFreshConversation = geminiHistory.length <= 1
   const [partnerTierInfo, ga4SiteList, kbInject] = await Promise.all([
@@ -708,8 +725,18 @@ export async function runCreatorAI(
     { role: "user", parts: userParts },
   ]
 
+  // Tích luỹ token qua MỌI vòng gọi model (mỗi vòng là 1 request Gemini riêng, tính phí riêng dù
+  // contents chồng lấn) — dùng cho cost dashboard (s196+7). usageMetadata nằm sẵn trên response,
+  // không cần sửa gemini-stream.ts.
+  let tokensIn = 0, tokensOut = 0
+  const addUsage = (r: any) => {
+    const u = r?.response?.usageMetadata
+    if (u) { tokensIn += u.promptTokenCount || 0; tokensOut += u.candidatesTokenCount || 0 }
+  }
+
   const onChunk = (delta: string) => onEvent?.({ type: "delta", content: delta })
   let genResult = await genWithRetryStream(model, { contents }, onChunk)
+  addUsage(genResult)
   const collectedSources: WebSource[] = []
 
   function appendModelContent() {
@@ -728,7 +755,7 @@ export async function runCreatorAI(
     // trả functionResponse báo lỗi cho MỘT tool đó, các tool còn lại + phần trả lời vẫn tiếp tục bình thường.
     const fnParts = await Promise.all(calls.map(async (call: any) => {
       try {
-        return await dispatchTool(call, onEvent, collectedSources, { username })
+        return await dispatchTool(call, onEvent, collectedSources, { username, isCreator })
       } catch (e: any) {
         return { functionResponse: { name: call.name, response: { error: e?.message || "Tool execution failed" } } }
       }
@@ -737,6 +764,7 @@ export async function runCreatorAI(
     // Send function responses as role "user" — required by this Gemini SDK's content format
     contents.push({ role: "user", parts: fnParts })
     genResult = await genWithRetryStream(model, { contents }, onChunk)
+    addUsage(genResult)
     appendModelContent()
   }
 
@@ -746,9 +774,10 @@ export async function runCreatorAI(
     try {
       contents.push({ role: "user", parts: [{ text: "Based on the data retrieved above, write a complete, detailed answer in Vietnamese. Include a markdown table or chart if the data is tabular. DO NOT call any more tools." }] })
       genResult = await genWithRetryStream(model, { contents }, onChunk)
+      addUsage(genResult)
       text = genResult.response.text()
     } catch { /* keep empty */ }
   }
 
-  return { text: text || "Không có dữ liệu trả về.", sources: collectedSources }
+  return { text: text || "Không có dữ liệu trả về.", sources: collectedSources, tokensIn, tokensOut }
 }

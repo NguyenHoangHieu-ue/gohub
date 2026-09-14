@@ -1,10 +1,7 @@
 ﻿"use client"
 
 import React, { useState, useEffect, useMemo } from "react"
-import {
-  CartesianGrid, Tooltip, ResponsiveContainer,
-  Area, Line, ComposedChart, XAxis, YAxis,
-} from "recharts"
+import dynamic from "next/dynamic"
 import {
   TrendingUp, TrendingDown, DollarSign, ShoppingBag,
   Filter, Calendar, Download, RefreshCw,
@@ -17,10 +14,14 @@ import { CostManagementModal } from "@/components/cost-management-modal"
 import { exportRawRows } from "@/lib/export-excel"
 import { useDbRole } from "@/lib/use-role-guard"
 import { B2BCustomerDetail } from "@/components/channels/b2b-customer-detail"
-import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
+import { StatTile, type MetricAccent } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel ChannelPerformance (deep-dive 1 kênh). Data qua /api/analytics/query
 // (SELECT-only) + /api/channels + endpoint cost sẵn có. Bỏ motion/react (thay tr thường + CSS).
+
+// Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu (s196+21, roadmap performance s196+20).
+const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
+const RevenueTrendChart = dynamic(() => import("./channels-charts").then(m => m.RevenueTrendChart), { ssr: false, loading: chartLoading })
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -902,6 +903,7 @@ export default function ChannelPerformancePage() {
 
           <button
             onClick={fetchChannelData}
+            aria-label="Làm mới dữ liệu kênh"
             className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
           >
             <RefreshCw className={cn("w-5 h-5 text-slate-600", loading && "animate-spin")} />
@@ -1147,7 +1149,7 @@ export default function ChannelPerformancePage() {
               )}
               {!selectedCustomer && <p className="text-sm text-slate-500">Click vào tên KH để xem performance theo kênh</p>}
             </div>
-            <button onClick={fetchB2BCustomers} className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100">
+            <button onClick={fetchB2BCustomers} aria-label="Làm mới danh sách khách hàng B2B" className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100">
               <RefreshCw className={cn("w-4 h-4 text-slate-600", loadingB2B && "animate-spin")} />
             </button>
           </div>
@@ -1254,7 +1256,7 @@ export default function ChannelPerformancePage() {
               <h3 className="text-lg font-bold text-slate-900">All Channels Overview</h3>
               <p className="text-sm text-slate-500">Performance tổng hợp tất cả kênh — click vào kênh để xem chi tiết</p>
             </div>
-            <button onClick={fetchAllChannels} className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors">
+            <button onClick={fetchAllChannels} aria-label="Làm mới tổng hợp tất cả kênh" className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors">
               <RefreshCw className={cn("w-4 h-4 text-slate-600", loadingAll && "animate-spin")} />
             </button>
           </div>
@@ -1367,9 +1369,9 @@ export default function ChannelPerformancePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { label: "Projected Revenue", value: formatCompactNumber(projection.revenue), change: projection.revenueChange },
-              { label: "Projected Orders", value: Math.round(projection.orders).toLocaleString(), change: projection.ordersChange },
+              { label: "Projected Orders", value: formatNumber(Math.round(projection.orders)), change: projection.ordersChange },
               { label: "Projected AOV", value: formatCurrency(projection.aov), change: projection.aovChange },
-              { label: "Projected Units", value: Math.round(projection.units).toLocaleString(), change: projection.unitsChange },
+              { label: "Projected Units", value: formatNumber(Math.round(projection.units)), change: projection.unitsChange },
             ].map(({ label, value, change }) => (
               <div key={label} className="bg-white p-4 rounded-xl border border-brand-100 shadow-sm">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
@@ -1435,28 +1437,7 @@ export default function ChannelPerformancePage() {
             {loading ? (
               <Skeleton className="w-full h-full" />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={trendData}>
-                  <defs>
-                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={CHART_PALETTE[0]} stopOpacity={0.15} />
-                      <stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b", fontWeight: 600 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b", fontWeight: 600 }} tickFormatter={(val) => formatCompactNumber(val)} />
-                  <Tooltip
-                    contentStyle={{ ...chartTooltipStyle, padding: "12px" }}
-                    formatter={(val: number, name: string) => [formatCurrency(val), name === "revenue" ? "Current" : "Previous"]}
-                  />
-                  <Area type="monotone" dataKey="revenue" stroke={CHART_PALETTE[0]} strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="revenue" />
-                  <Line type="monotone" dataKey="margin" stroke={CHART_PALETTE[1]} strokeWidth={2} dot={false} name="Gross Profit" />
-                  {comparisonType !== "none" && (
-                    <Area type="monotone" dataKey="prevRevenue" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" fill="transparent" name="prevRevenue" />
-                  )}
-                </ComposedChart>
-              </ResponsiveContainer>
+              <RevenueTrendChart data={trendData} comparisonType={comparisonType} />
             )}
           </div>
         </div>

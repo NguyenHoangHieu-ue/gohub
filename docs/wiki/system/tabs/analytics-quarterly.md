@@ -116,6 +116,33 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | **Biểu đồ** (cạnh 3 nút trên) | Bật/tắt bar chart revenue theo đúng chế độ đang chọn — Tháng/Ngày cộng dồn theo kỳ (nhiều dòng/kênh gộp lại), Sản phẩm lấy top 10 SKU theo revenue |
 
 ## 7. Gotchas
+- **s196+22 (2026-09-14) — thêm nút Export cho bảng "B2B — Chi tiết theo Nhóm × Tháng"** (Hiếu yêu cầu):
+  `exportTierTable()` (`b2b-tier-section.tsx`) dùng `exportAOA` xuất ĐÚNG dữ liệu đang hiển thị trên bảng
+  pivot — tôn trọng filter Region (ALL/VN/US) và khung nhìn tháng (1 tháng cụ thể hoặc "Cả Quý") đang chọn,
+  không phải toàn bộ data thô. Cột 3HK tách riêng "3HK Rev"/"3HK%" (bảng UI gộp 1 ô hiển thị, xuất Excel
+  tách 2 cột số cho dễ tính toán). **Hiếu phản hồi ngay sau đó**: cần breakdown cả khách hàng bên trong
+  từng nhóm, không chỉ dòng tổng — thêm cột `Loại` ("Nhóm"/"Khách hàng") + `Mã KH`/`Tên KH`/`Region`, mỗi
+  dòng Nhóm theo sau bởi các dòng KH thuộc nhóm đó (từ `tierRaw.byRegion[VN|US].customers`, ALL gộp cả 2
+  region có cột Region phân biệt, KHÔNG áp filter tìm kiếm `custSearch` — export luôn đủ mọi KH). Số liệu
+  KH dùng `custPr(c)` (đúng số Pro-rata hiện trên dòng chính của bảng chi tiết KH trong UI) cho Tổng Quý,
+  `c.monthSummary[m]` cho từng tháng. Không đổi API/logic tính, chỉ đọc lại đúng biến đã render.
+- **s196+21 (2026-09-14) — thêm hint "Hướng dẫn" onboarding (đề xuất K, P2, roadmap UI/UX audit s196+20,
+  finding #9)**: trang nhiều filter/tầng (Quý/Năm, VN/US, Phí ship, Đơn nội bộ, Tải lại mới) chưa có
+  hướng dẫn cho người lần đầu dùng. Dùng lại `LogicNote collapsible` có sẵn (dashboard-kit.tsx) — không
+  tự vẽ pattern tooltip mới. My Metrics KHÔNG cần thêm (đã có nút "Cách tính" + `NotesDrawer` phục vụ
+  đúng mục đích này từ trước — chỉ thêm `aria-label` cho nút refresh icon-only).
+- **s196+21 (2026-09-14) — AbortController huỷ request cũ khi filter đổi nhanh (đề xuất E, P2, roadmap
+  performance audit s196+20)**: `fetchReport`/`fetchSquadProgress`/`fetchB2BTiers` mỗi hàm giờ giữ
+  `AbortController` trong `useRef`, gọi `.abort()` request TRƯỚC ĐÓ ngay khi bắt đầu request mới — trước
+  chỉ `fetchReport` có `ctrl` nhưng CHỈ để tự abort sau 65s (chặn treo loading khi server hang), KHÔNG huỷ
+  request cũ khi đổi filter liên tiếp → response cũ có thể về SAU response mới, ghi đè nhầm report/squad
+  data/b2b tiers của filter cũ lên trên filter đang xem. `AbortError` do TỰ huỷ (so `abortRef.current !==
+  ctrl`) im lặng bỏ qua, không hiện lỗi — chỉ `AbortError` do timeout 65s thật mới báo "Tải dữ liệu quá
+  lâu". `saveSquadConfig`/`refreshAll`/các POST khác KHÔNG cần (user-action đơn lẻ, không rapid-fire).
+  Vendors (tab cùng nhóm đề xuất) CHƯA áp — `fetchData` dùng nhiều query song song qua helper `q()`/
+  `qOpt()` (POST `/api/analytics/query`), threading `AbortSignal` qua các helper này phức tạp/rủi ro hơn
+  lợi ích thực tế (trigger không rapid-fire: chỉ mount/toggle dateColumn/nút Apply Filters, không đổi
+  filter liên tục như quarterly).
 - **s194 — `b2b-customer-orders?groupBy=sku`**: response TÁI DÙNG shape cũ (`period`/`channel`/`orders`/`units`/`revenue`/`gp`) — `period`=SKU, `channel`=tên sản phẩm (`v.type_of_sim`) — để FE không phải viết bảng riêng cho chế độ Sản phẩm. Chart Tháng/Ngày PHẢI cộng dồn theo `period` trước khi vẽ (data gốc 1 dòng/kênh/kỳ, nhiều kênh cùng kỳ → nhiều dòng trùng tên nếu không cộng, ra nhiều cột chồng lấn cùng tên trên trục X).
 - **Cache key đổi khi thêm field**: `qreport_raw_v2`, `qb2b_raw_v8` (v8 = s151). Đổi key khi cấu trúc cached data thay đổi để tránh crash.
 - **Costs ngoài cache**: `fetchCustomerCosts` (Turso) chạy song song với `cachedQuery` (gohub_dw) → costs luôn fresh, không bao giờ stale.

@@ -94,6 +94,18 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn nhập cost lại → cần khôi phục button trong `page.tsx`.
 
 ## 5. Gotchas
+- **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 2 chỗ `Math.round(...).
+  toLocaleString()` KHÔNG truyền locale → dùng locale MẶC ĐỊNH của trình duyệt (vd `en-US` → phẩy ngăn
+  cách, khác `vi-VN` dùng chấm) — số hiển thị LỆCH tuỳ máy/trình duyệt người xem, không nhất quán với
+  phần còn lại của trang (đã dùng `formatNumber()` = `vi-VN` cố định). Đổi sang `formatNumber()`. Đề
+  xuất C (P2) roadmap performance audit s196+20, làm dần theo tab đang sửa.
+- **s196+21 (2026-09-14) — aria-label cho nút refresh icon-only**: 3 nút `RefreshCw` (header chính,
+  B2B Customers, All Channels Overview) chỉ có icon, không `aria-label` — thêm mô tả ngắn. Đề xuất I
+  (P1) roadmap audit UI/UX s196+20, làm dần theo tab đang sửa.
+- **s196+21 (2026-09-14) — code-split recharts**: chart "Revenue Trend" tách sang `channels-charts.tsx`
+  (`React.memo` + `next/dynamic({ssr:false})`, cùng pattern `bod-charts.tsx`) — trước import `recharts`
+  trực tiếp ở `page.tsx` (1844 dòng, file lớn thứ 2 repo). Phát hiện qua audit performance toàn hệ thống.
+  Không đổi số liệu/UI.
 - **s194+9 (2026-09-06)**: UI redesign — chart Revenue Trend + toàn bộ `blue-*` đổi sang `CHART_PALETTE`/
   `brand-*` dùng chung (không đổi logic/API). Lúc làm phát hiện `CostManagementModal`/`showCostModal`/
   `dbRole` trong `page.tsx` là dead code còn sót từ lúc ngắt Manage Costs (§4 trên) — chưa dọn, không phải

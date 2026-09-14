@@ -7,6 +7,7 @@ import { useToast } from "@/components/toast"
 import { useConfirm } from "@/components/to-gau/confirm-modal"
 import { fmtDate } from "@/lib/to-gau-format"
 import type { NoteItem } from "@/lib/to-gau-types"
+import { supabaseRealtime } from "@/lib/to-gau-realtime"
 
 export function NotesPanel({
   groupId, myEmail, isPrivileged,
@@ -24,8 +25,8 @@ export function NotesPanel({
   const [editingNote, setEditingNote] = useState<string | null>(null)
   const [editContent, setEditContent] = useState("")
 
-  const loadNotes = useCallback(async () => {
-    setNotesLoading(true)
+  const loadNotes = useCallback(async (silent = false) => {
+    if (!silent) setNotesLoading(true)
     try {
       const res  = await fetch(`/api/to-gau/groups/${groupId}/notes`)
       if (!res.ok) return
@@ -34,11 +35,25 @@ export function NotesPanel({
     } catch {
       // ignore
     } finally {
-      setNotesLoading(false)
+      if (!silent) setNotesLoading(false)
     }
   }, [groupId])
 
   useEffect(() => { loadNotes() }, [loadNotes])
+
+  // Realtime (s196+17, đề xuất E) — trước chỉ poll. Giữ nguyên poll 20s làm lưới an toàn (đúng tiền lệ
+  // v55 — publication thiếu không throw lỗi, chỉ im lặng không nhận event).
+  useEffect(() => {
+    // 45s (s196+21, roadmap performance s196+20 — Realtime đã phủ bảng này từ s196+17, poll chỉ còn vai
+    // trò lưới an toàn dự phòng, không cần khoảng cách ngắn như thời chưa có Realtime).
+    const t = setInterval(() => loadNotes(true), 45000)
+    const channel = supabaseRealtime
+      .channel(`chat_notes:${groupId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_notes", filter: `group_id=eq.${groupId}` },
+        () => loadNotes(true))
+      .subscribe()
+    return () => { clearInterval(t); supabaseRealtime.removeChannel(channel) }
+  }, [groupId, loadNotes])
 
   async function handleAddNote(e: React.FormEvent) {
     e.preventDefault()

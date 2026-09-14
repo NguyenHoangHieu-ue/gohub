@@ -19,6 +19,7 @@ import { PivotTable } from "@/components/quarterly/pivot-table"
 import { B2BTierSection } from "@/components/quarterly/b2b-tier-section"
 import { QtVsTargetPanel } from "@/components/quarterly/qt-vs-target-bullets"
 import { MonthlyTrendChart } from "@/components/quarterly/monthly-trend-chart"
+import { LogicNote } from "@/components/dashboard-kit"
 
 // s183 Phase 5: Types/format helpers/component con (KpiCard, TableHead, ColInfo, MomBadge, MonthSubRow,
 // QtSummaryRow, QtTargetRow, PivotTable, B2BTierSection) đã tách sang lib/quarterly-types.ts,
@@ -187,16 +188,26 @@ function QuarterlyContent() {
     XLSX.writeFile(wb, `squad_progress_${selQ}_${selYear}.xlsx`)
   }
 
+  // Huỷ request cũ khi filter (quarter/year/company) đổi nhanh liên tục — trước không có, response cũ về
+  // SAU response mới có thể ghi đè nhầm data đúng bằng data của filter cũ (race condition, đề xuất E P2
+  // roadmap performance audit s196+20 — cùng nguyên tắc AbortController đã dùng cho fetchReport).
+  const squadAbortRef = useRef<AbortController | null>(null)
   const fetchSquadProgress = useCallback(async () => {
+    squadAbortRef.current?.abort()
+    const ctrl = new AbortController()
+    squadAbortRef.current = ctrl
     setSquadLoading(true)
     setExpandedSquads(new Set())
     try {
       const params = new URLSearchParams({ quarter: selQ, year: String(selYear), companyCode })
-      const res = await fetch(`/api/analytics/squad-progress?${params}`)
+      const res = await fetch(`/api/analytics/squad-progress?${params}`, { signal: ctrl.signal })
       if (res.ok) setSquadData(await res.json())
       else notifySquad(false, "Lỗi tải dữ liệu squad")
-    } catch { notifySquad(false, "Lỗi kết nối") }
-    finally { setSquadLoading(false) }
+    } catch (e: any) {
+      if (e.name === "AbortError") return // huỷ vì filter đổi tiếp — request mới hơn đang lo, không báo lỗi
+      notifySquad(false, "Lỗi kết nối")
+    }
+    finally { if (squadAbortRef.current === ctrl) setSquadLoading(false) }
   }, [selQ, selYear, companyCode])
 
   useEffect(() => {
@@ -306,10 +317,16 @@ function QuarterlyContent() {
     setSettingsDirty(true)
   }
 
+  const reportAbortRef = useRef<AbortController | null>(null)
   const fetchReport = useCallback(async (refresh = false) => {
+    // Huỷ request cũ khi filter đổi nhanh liên tục (đề xuất E P2 roadmap performance audit s196+20) —
+    // trước ctrl chỉ để tự abort sau 65s (chặn treo loading), KHÔNG huỷ request TRƯỚC khi bấm filter mới
+    // liên tiếp → response cũ về sau có thể ghi đè nhầm lên report của filter mới hơn.
+    reportAbortRef.current?.abort()
+    const ctrl = new AbortController()
+    reportAbortRef.current = ctrl
     setLoading(true)
     // Abort sau 65s để FE KHÔNG treo loading vô hạn nếu server 504/hang → hiện lỗi rõ ràng.
-    const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 65000)
     try {
       const qParams = new URLSearchParams({ quarter: selQ, year: String(selYear), companyCode })
@@ -320,8 +337,9 @@ function QuarterlyContent() {
       if (!res.ok) throw new Error(`${res.status}`)
       setReport(await res.json())
     } catch (e: any) {
+      if (e.name === "AbortError" && reportAbortRef.current !== ctrl) return // huỷ vì filter đổi tiếp, không phải timeout — request mới hơn đang lo
       notify(false, e.name === "AbortError" ? "Tải dữ liệu quá lâu (>65s) — thử bấm 'Tải lại mới' hoặc đợi giây lát" : `Lỗi tải dữ liệu: ${e.message}`)
-    } finally { clearTimeout(timer); setLoading(false) }
+    } finally { clearTimeout(timer); if (reportAbortRef.current === ctrl) setLoading(false) }
   }, [selQ, selYear, includeShip, includeInternalOps, companyCode])
 
   const loadTargets = useCallback(async () => {
@@ -336,7 +354,12 @@ function QuarterlyContent() {
     } catch {}
   }, [selQ, selYear])
 
+  // Huỷ request cũ khi filter đổi nhanh liên tục (đề xuất E P2 roadmap performance audit s196+20).
+  const b2bTiersAbortRef = useRef<AbortController | null>(null)
   const fetchB2BTiers = useCallback(async (refresh = false) => {
+    b2bTiersAbortRef.current?.abort()
+    const ctrl = new AbortController()
+    b2bTiersAbortRef.current = ctrl
     if (!refresh) setB2bTiers(null)
     setB2bTiersLoading(true)
     try {
@@ -346,9 +369,9 @@ function QuarterlyContent() {
       if (refresh)            tp.set("refresh", "1")
       if (includeShip)        tp.set("includeShip", "1")
       if (includeInternalOps) tp.set("includeInternalOps", "1")
-      const res = await fetch(`/api/analytics/quarterly-b2b-customers?${tp}`)
+      const res = await fetch(`/api/analytics/quarterly-b2b-customers?${tp}`, { signal: ctrl.signal })
       if (res.ok) setB2bTiers(await res.json())
-    } catch {} finally { setB2bTiersLoading(false) }
+    } catch {} finally { if (b2bTiersAbortRef.current === ctrl) setB2bTiersLoading(false) }
   }, [selQ, selYear, includeShip, includeInternalOps])
 
   const refreshAll = useCallback(async () => {
@@ -589,6 +612,16 @@ function QuarterlyContent() {
 
       {/* ── Overview content (ẩn khi tab = squad) ── */}
       <div className={activeSection === "squad" ? "hidden" : ""}>
+
+      {/* Đề xuất K (P2, roadmap UI/UX audit s196+20 — finding #9) — trang nhiều filter/tầng, chưa có
+          hướng dẫn cho người lần đầu dùng. Dùng LogicNote collapsible có sẵn (không tự vẽ pattern mới). */}
+      <LogicNote collapsible label="Hướng dẫn">
+        Chọn <strong>Quý/Năm</strong> ở góc trên để đổi kỳ báo cáo — mặc định load từ cache (nhanh), bấm{" "}
+        <strong>Tải lại mới</strong> nếu vừa cập nhật số liệu và cần dữ liệu tươi nhất. Toggle{" "}
+        <strong>VN/US</strong> lọc theo pháp nhân; 2 checkbox <strong>Phí ship</strong>/<strong>Đơn nội
+        bộ</strong> mặc định tắt (loại khỏi doanh thu SP thuần) — bật cả 2 để đối chiếu số raw gohub_dw.
+        Click 1 hàng trong bảng để xổ chi tiết theo Tháng/Ngày/Sản phẩm.
+      </LogicNote>
 
       {/* ── Settings panel (admin/creator only) ── */}
       {canEditSettings && showSettings && qSettings && (

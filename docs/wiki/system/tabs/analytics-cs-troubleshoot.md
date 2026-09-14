@@ -28,6 +28,10 @@ Tra cứu & phân tích ticket chăm sóc khách hàng (Lark) để tìm nhanh c
 - Data ban đầu migrate 24.712 ticket từ Turso (`scripts/migrate_turso_tickets.py`), sau đó sync bổ sung qua Lark Base API.
 
 ## 3. Gotchas
+- **s196+21 (2026-09-14) — thêm nút Export cho sub-tab "SKU & Telco Performance"**: trước tab này KHÔNG
+  có nút export nào dù có bảng dữ liệu (finding #7, đề xuất H P2 roadmap UI/UX audit s196+20). Xuất TOÀN
+  BỘ `sorted` (không chỉ 15 dòng hiển thị) qua `exportRawRows`. 4 sub-tab còn lại (TBS Overview/Vendor/
+  Source/Invalid Tickets) CHƯA có export — chỉ làm sub-tab dữ liệu SKU-level nặng nhất trước.
 - **s194+11 (2026-09-06)**: fix hex navy SAI `#003B95`/`#002B70` (audit s192 từng flag, 16 chỗ)→`brand-*`;
   4 KPI card viết tay → `StatTile`; chart TBS Volume by Shift → `CHART_PALETTE`/`CHART_GRID_COLOR`/
   `chartTooltipStyle`. Không đổi logic/data.

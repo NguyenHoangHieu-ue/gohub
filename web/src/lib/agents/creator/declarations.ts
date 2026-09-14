@@ -217,7 +217,7 @@ export const queryLarkBaseDecl = {
 
 export const reviewPendingLearningDecl = {
   name: "reviewPendingLearning",
-  description: "Xem danh sách học liệu Bé Gấu phát hiện từ user (status=pending). Dùng khi muốn review + approve/reject.",
+  description: "Xem danh sách học liệu Bé Gấu HOẶC Gấu Tổ (Tổ Gấu, session_id bắt đầu 'togau:') phát hiện từ user (status=pending). Dùng khi muốn review + approve/reject.",
   parameters: { type: SchemaType.OBJECT, properties: { limit: { type: SchemaType.NUMBER, description: "Max records (default 20)." } } },
 }
 
@@ -527,6 +527,19 @@ export const trackSKUWinRateDecl = {
   },
 }
 
+export const verifyReportNumbersDecl = {
+  name: "verifyReportNumbers",
+  description: "Second-opinion pass: gửi số liệu/kết luận cho 1 lượt Gemini ĐỘC LẬP (không thấy quá trình tính toán) phản biện tìm rủi ro (JOIN nhân dòng, thiếu cutoff, nhầm đơn vị, số phi thực tế...). Dùng TRƯỚC KHI hoàn thiện báo cáo có số liệu quan trọng — KHÔNG dùng cho câu hỏi thường/số nhỏ (thêm 1 lượt gọi model = thêm chi phí/độ trễ).",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      summary: { type: SchemaType.STRING, description: "Tóm tắt ngắn gọn số liệu/kết luận chính sắp trình bày cho user." },
+      sql:     { type: SchemaType.STRING, description: "Câu SQL gốc đã dùng để lấy số liệu (nếu có, giúp phản biện chính xác hơn)." },
+    },
+    required: ["summary"],
+  },
+}
+
 // Ordered list used to initialize the Gemini model tools
 export const ALL_TOOL_DECLARATIONS = [
   readKBDecl, writeKBDecl, searchKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
@@ -540,4 +553,6 @@ export const ALL_TOOL_DECLARATIONS = [
   generateVideoDecl, checkVideoStatusDecl, generateImageStabilityDecl,
   // Phase 2 (s195+1) — Extension điều khiển browser cá nhân Hiếu
   readMyBrowserDecl, controlMyBrowserDecl,
+  // s196+12 — second-opinion pass (roadmap audit s196+5, ý tưởng #7)
+  verifyReportNumbersDecl,
 ]

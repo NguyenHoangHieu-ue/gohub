@@ -37,8 +37,8 @@ describe("TOOL_STATUS", () => {
 // ─── Declarations ─────────────────────────────────────────────────────────────
 
 describe("ALL_TOOL_DECLARATIONS", () => {
-  it("có đúng 32 declarations (22 gốc + 3 Phase 4 + 4 Phase 3+KB + browseWeb s195 + readMyBrowser/controlMyBrowser s195+1)", () => {
-    expect(ALL_TOOL_DECLARATIONS).toHaveLength(32)
+  it("có đúng 33 declarations (22 gốc + 3 Phase 4 + 4 Phase 3+KB + browseWeb s195 + readMyBrowser/controlMyBrowser s195+1 + verifyReportNumbers s196+12)", () => {
+    expect(ALL_TOOL_DECLARATIONS).toHaveLength(33)
   })
 
   it("mỗi declaration có name, description, parameters", () => {
@@ -78,6 +78,11 @@ describe("ALL_TOOL_DECLARATIONS", () => {
   it("managePortalCredentials có required = ['action']", () => {
     const decl = ALL_TOOL_DECLARATIONS.find(d => d.name === "managePortalCredentials")
     expect((decl?.parameters as any)?.required).toContain("action")
+  })
+
+  it("verifyReportNumbers có required = ['summary']", () => {
+    const decl = ALL_TOOL_DECLARATIONS.find(d => d.name === "verifyReportNumbers")
+    expect((decl?.parameters as any)?.required).toContain("summary")
   })
 
   it("danh sách tools gồm đủ Lark tools", () => {
@@ -222,5 +227,10 @@ describe("dispatchTool", () => {
   it("listSupabaseTables → trả tables object", async () => {
     const r = await dispatchTool({ name: "listSupabaseTables", args: {} }, undefined, [])
     expect(r.functionResponse.response).toHaveProperty("tables")
+  })
+
+  it("verifyReportNumbers thiếu summary → error rõ ràng (không gọi Gemini)", async () => {
+    const r = await dispatchTool({ name: "verifyReportNumbers", args: {} }, undefined, [])
+    expect(r.functionResponse.response.error).toMatch(/summary/i)
   })
 })

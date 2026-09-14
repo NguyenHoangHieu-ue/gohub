@@ -55,3 +55,16 @@ export async function exportRawRows(
   XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31))
   XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`)
 }
+
+// Như exportToExcel, nhưng tự gắn hậu tố "_<startDate>_to_<endDate>" vào filename — trước b2b/page.tsx
+// và products/page.tsx mỗi trang tự viết 1 wrapper y hệt tên "exportToCSV" (đề xuất H, P2, roadmap UI/UX
+// audit s196+20 — chuẩn hoá Export). Tên hàm cũ gây hiểu lầm là xuất CSV — thật ra vẫn ra .xlsx.
+export async function exportWithDateRange(
+  rows: Record<string, unknown>[],
+  filename: string,
+  columns: { label: string; key: string }[],
+  startDate: string,
+  endDate: string,
+): Promise<void> {
+  await exportToExcel(rows, columns, `${filename}_${startDate}_to_${endDate}`)
+}

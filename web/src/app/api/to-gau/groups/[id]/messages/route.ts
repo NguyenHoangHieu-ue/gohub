@@ -3,6 +3,7 @@ import { getServerSession }         from "next-auth"
 import { authOptions }              from "@/lib/auth"
 import { supabaseAdmin }            from "@/lib/supabase"
 import { sendLarkDM }               from "@/lib/lark"
+import { checkRateLimit }           from "@/lib/rate-limit"
 
 function isPrivileged(role: string) {
   return role === "creator" || role === "admin"
@@ -106,7 +107,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   let query = supabaseAdmin
     .from("chat_messages")
-    .select("id, group_id, sender_email, sender_name, content, msg_type, attachments, reply_to, is_pinned, created_at")
+    .select("id, group_id, sender_email, sender_name, content, msg_type, attachments, reply_to, is_pinned, created_at, is_recalled, edited_at, is_ai_question")
     .eq("group_id", id)
 
   if (pinnedOnly) {
@@ -154,6 +155,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const name     = session.user.name     || username
   const { id } = params
 
+  // Rate limit: 30 tin/phút/user (chống spam gõ liên tục / lỗi client loop) — nội bộ nên nới hơn /api/chat
+  const rl = await checkRateLimit(`to-gau-msg:${username}`, 30, 60_000)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Bạn gửi quá nhiều tin nhắn. Vui lòng chờ ${Math.ceil(rl.resetMs / 1000)}s rồi thử lại.` },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(rl.resetMs / 1000)) } }
+    )
+  }
+
   if (!isPrivileged(role) && !(await isMember(id, username))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
@@ -176,6 +186,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: "content or attachments required" }, { status: 400 })
   }
 
+  // Reply/thread (s196+15, ý tưởng #5 roadmap audit Tổ Gấu) — cột reply_to đã có sẵn (trước chỉ AI
+  // dùng khi trả lời câu hỏi). Rescope theo group_id để tránh trỏ sang tin nhắn nhóm khác (IDOR).
+  let replyTo: string | null = null
+  if (typeof body.replyTo === "string" && body.replyTo) {
+    const { data: target } = await supabaseAdmin
+      .from("chat_messages")
+      .select("id")
+      .eq("id", body.replyTo)
+      .eq("group_id", id)
+      .maybeSingle()
+    if (target) replyTo = target.id
+  }
+
   // Determine msg_type
   let msgType = "text"
   if (attachments.length > 0 && !content) {
@@ -191,13 +214,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       content:      content || "",
       msg_type:     msgType,
       attachments:  attachments.length > 0 ? attachments : [],
+      reply_to:     replyTo,
     })
     .select()
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Fire-and-forget Lark notification (không block response)
-  notifyLarkMembers(id, { sender_name: name, content: content || "", msg_type: msgType }, username).catch(() => {})
+  // await (không fire-and-forget): serverless (Vercel) có thể đóng execution context ngay sau khi
+  // response được trả về, giết fire-and-forget giữa chừng trước khi Lark DM kịp gửi — cùng lớp bug đã
+  // xác nhận + fix cho logChat()/app_usage_events (s195+18-C), áp dụng nốt cho route này.
+  await notifyLarkMembers(id, { sender_name: name, content: content || "", msg_type: msgType }, username).catch(() => {})
 
   return NextResponse.json({ data }, { status: 201 })
 }
