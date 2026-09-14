@@ -40,12 +40,25 @@
   Staff thấy rõ StatTileSkeleton lúc tải, aria-label "Làm mới dữ liệu" có; Customers cache 3365ms→928ms,
   empty-state chỉ hiện khi thật sự rỗng; Quarterly bấm Q1→Q2→Q4 dồn dập → kết quả cuối đúng Q4 (Abort-
   Controller chặn race condition thành công); Tổ Gấu load room bình thường, 0 lỗi console.
-  **CHƯA làm** (rủi ro/cần quyết định trước, không tự làm): chuẩn hoá nút Export (báo cáo tự nêu "cần rà
-  export logic từng tab" trước), rà 29 file `<table>` viết tay, tooltip/onboarding cho tab phức tạp (thiết
-  kế chủ quan). **2 quyết định UI Strict Lock vẫn cần Hiếu/Bảo chốt**: dark mode cho tab BI (hiện 0%, chỉ
-  có ở nhóm chatbot), tách `admin/page.tsx` (2120 dòng, file lớn nhất repo). Không còn việc mở nào chặn từ
-  phía code — Hiếu chỉ cần tự xem qua 1 lượt (không bắt buộc, đã tự QA kỹ) và chốt 2 quyết định trên khi
-  muốn làm tiếp phần còn lại.
+  **Vòng 2 — "làm hết những cái chưa làm"**: Hiếu chốt 2 quyết định UI Strict Lock qua AskUserQuestion —
+  dark mode tab BI → **"Khoá lại, chỉ light mode"**; tách admin/page.tsx → **"Làm luôn"**. 4 commit thêm:
+  **(1) Khoá dark mode tab BI** (`lib/theme-lock.ts` `isDarkModeLocked(pathname)` dùng chung ở
+  `theme-toggle.tsx` + inline script `layout.tsx`) — ẩn nút toggle + tự gỡ class `dark` trên `/analytics/*`
+  trừ `/analytics/creator` (Gấu Pro, có dark support), tự bật lại đúng theme đã lưu khi rời khỏi. **(2)
+  Tách admin/page.tsx 2120 dòng → 7 file** (6 tab vốn đã tự thân là component riêng, chỉ tách file + nạp
+  `next/dynamic` — page.tsx còn 116 dòng). **(3) Chuẩn hoá Export** — gộp wrapper `exportToCSV` trùng lặp
+  (b2b+products) thành `exportWithDateRange` dùng chung; thêm nút Export còn thiếu ở website ("eSIM
+  Destinations") + cs-troubleshoot ("SKU & Telco Performance"). **(4) Rà 29 file `<table>` viết tay —
+  KẾT LUẬN: KHÔNG cần migrate file nào sang `DataTable`.** Phân loại toàn bộ: 2 file là markdown-renderer
+  (creator/ai, chatbot — không phải data table thật); còn lại ĐỀU có lý do chính đáng giữ nguyên — group-
+  header/expand-row (b2b/channels/quarterly/customers/...), pagination SERVER-SIDE không tương thích
+  `DataTable` (client-side only — orders, skus), matrix/grid tương tác (creator: Ma trận ẩn Tab), hoặc
+  inline-edit UI (promotions). Không phải nợ kỹ thuật bị bỏ sót — kiến trúc hiện tại đã đúng.
+  **Đã tự QA qua Chrome cả 4 việc trên staging sau deploy** — dark mode: bật ở chatbot→vào B2B tự tắt+ẩn
+  nút→quay lại chatbot tự bật lại đúng theme đã lưu; admin: cả 6 tab load đúng data thật (kể cả tính COGS
+  3HK combo preview); export: nút Export hiện đúng, disable đúng lúc data rỗng thật (không phải bug).
+  tsc + lint (0 lỗi mới) + vitest (243/243) PASS toàn bộ. **Không còn việc mở nào** — cả roadmap audit
+  performance/UI-UX s196+20 (P0/P1/P2) lẫn 2 quyết định UI Strict Lock đều đã xong.
 | ✅ **s196–s196+4 (2026-09-13) — Tổ Gấu: audit toàn diện + fix Realtime/AI-question/ảnh/history-role + self-learning — Hiếu đã QA OK** |
   Audit toàn diện tab Tổ Gấu theo yêu cầu Hiếu + chuỗi fix liên tiếp, **Hiếu đã tự test xác nhận OK**.
   **s196**: fix bug tin nhắn NGƯỜI KHÁC không tự hiện, phải F5 mới thấy — root cause `chat_messages` chưa
@@ -492,15 +505,14 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
-- [x] **s196+20/+21 — Audit performance/UI/UX P0+P1+P2 — ĐÃ TỰ QA qua Chrome trên staging (2026-09-14),
-  không cần Hiếu QA lại** — xác nhận qua DOM/network/console (không chỉ tin code sạch): B2B overflow-x-
-  auto đúng + SubChannelTable render y hệt trước; B2C màu brand-600 đúng + Metric cache nhanh (110ms);
-  6 tab recharts split render đúng, 0 lỗi console; Website/Staff skeleton hiện rõ lúc tải; Customers cache
-  nhanh hẳn (3365ms→928ms) + hết bug empty-state hiện nhầm; Quarterly bấm filter dồn dập vẫn ra đúng kết
-  quả cuối (AbortController chặn race condition thành công); Tổ Gấu load room bình thường. Chỉ còn **2
-  quyết định UI Strict Lock cần Hiếu/Bảo chốt** khi muốn làm tiếp: dark mode cho tab BI (mở rộng dần hay
-  khoá lại?), tách `admin/page.tsx` 2120 dòng (làm ngay hay để sau?). Phần CHƯA làm (Export chuẩn hoá/rà
-  29 file table/tooltip onboarding) — đọc report Artifact đầy đủ trong chat nếu muốn làm tiếp.
+- [x] **s196+20/+21 — Audit performance/UI/UX toàn hệ thống (P0+P1+P2) + 2 quyết định UI Strict Lock —
+  XONG HẾT (2026-09-14), đã tự QA qua Chrome trên staging, không cần Hiếu làm gì thêm** — Hiếu đã chốt 2
+  quyết định (dark mode tab BI → khoá lại; tách admin/page.tsx → làm luôn), cả 2 đã làm + QA xong. Export
+  chuẩn hoá xong (gộp wrapper trùng + vá 2 tab thiếu). Rà 29 file `<table>` xong — **kết luận: không cần
+  migrate file nào**, kiến trúc hiện tại đúng (group-header/expand-row/server-pagination/matrix/inline-edit
+  đều có lý do chính đáng). Còn duy nhất **tooltip/onboarding cho tab phức tạp** (thiết kế chủ quan, chưa
+  làm — không có risk/quyết định chặn, chỉ chưa tới lượt). Đọc report Artifact đầy đủ trong chat nếu muốn
+  xem lại chi tiết từng phát hiện.
 - [x] **s196–s196+4 — Tổ Gấu: Realtime/AI-question/ảnh/history-role/self-learning — XONG (2026-09-13),
   Hiếu đã tự test xác nhận OK** — migration v55 (`ALTER PUBLICATION` Realtime) + v56 (`is_ai_question`)
   đã chạy. Không còn việc mở nào ở luồng này.
