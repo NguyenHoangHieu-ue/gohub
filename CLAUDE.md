@@ -6,16 +6,16 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-14, s196+20)
+## Trạng thái hiện tại (2026-09-14, s196+21)
 
 | | |
 |---|---|
-| ⏳ **s196+20/+21 (2026-09-14) — Audit performance + UI/UX toàn hệ thống (32 tab) + P0/P1/P2 fix, chờ
-  Hiếu QA** | Theo yêu cầu Hiếu "đánh giá toàn bộ tab UI/UX + giúp load nhanh hơn, chạy mượt hơn" — 2 fork
-  song song (Performance + UI/UX) đọc trực tiếp code + Grep định lượng (không suy đoán) toàn bộ 32 tab,
-  gộp 1 report publish Artifact cho Hiếu (không lưu file trong repo). Sau đó làm lần lượt theo yêu cầu
-  "làm P1 rồi đến P2" — **9 commit riêng đã push staging**, mỗi commit 1 việc, tsc + lint (0 lỗi mới) +
-  vitest (243/243) PASS xuyên suốt.
+| ✅ **s196+20/+21 (2026-09-14) — Audit performance + UI/UX toàn hệ thống (32 tab) + P0/P1/P2 fix, đã tự
+  QA staging qua Chrome** | Theo yêu cầu Hiếu "đánh giá toàn bộ tab UI/UX + giúp load nhanh hơn, chạy mượt
+  hơn" — 2 fork song song (Performance + UI/UX) đọc trực tiếp code + Grep định lượng (không suy đoán) toàn
+  bộ 32 tab, gộp 1 report publish Artifact cho Hiếu (không lưu file trong repo). Sau đó làm lần lượt theo
+  yêu cầu "làm P1 rồi đến P2" — **10 commit riêng đã push staging**, mỗi commit 1 việc, tsc + lint (0 lỗi
+  mới) + vitest (243/243) PASS xuyên suốt.
   **P0** (`462594d2`/`6b318bce`/`6dae02f1`): cache 4 route BI thiếu TTL 15-60' (cùng lớp bug timeout B2C
   s195+15) + `maxDuration=60` tường minh; fix clip bảng lồng 4 vị trí (`overflow-hidden`→`overflow-x-
   auto`); fix sót màu `b2c/page.tsx` tab-switcher (`bg-blue-600`→`bg-brand-600`).
@@ -25,21 +25,27 @@
   đã phủ cả 4 bảng, poll chỉ còn lưới an toàn); `Skeleton`/`StatTileSkeleton`/`TableRowsSkeleton` dùng
   chung (`dashboard-kit.tsx`) áp cho website/staff (KPI card) + customers (fix bug thật: 3 bảng hiện nhầm
   empty-state trong lúc đang tải) + orders/fulfillment (bảng); aria-label cho 5 nút refresh icon-only.
-  **P2** (`4df75ed4`/`461c0a19`/`8de2683f`): gộp 27 chỗ `.toLocaleString()` trần (lệch locale mặc định
-  trình duyệt người xem) → `formatNumber()` (`vi-VN` cố định) ở 6 tab; `DataTable` thêm sort/search
-  opt-in (`sortValue`/`searchBy`, không đổi hành vi chỗ dùng cũ) + component `EmptyState` dùng chung;
-  `AbortController` huỷ request cũ khi filter đổi nhanh cho `quarterly` (`fetchReport`/`fetchSquadProgress`
-  /`fetchB2BTiers` — trước có nguy cơ race condition, response cũ ghi đè nhầm response mới); vendors
-  KHÔNG áp AbortController (fetch nhiều query song song qua helper `q()`/`qOpt()`, threading phức tạp hơn
-  lợi ích — trigger không rapid-fire).
-  **CHƯA làm** (rủi ro/cần quyết định trước, không tự làm): `ExpandableSubTable` dùng chung, chuẩn hoá nút
-  Export (báo cáo tự nêu "cần rà export logic từng tab" trước), rà 29 file `<table>` viết tay, tooltip/
-  onboarding cho tab phức tạp (thiết kế chủ quan). **2 quyết định UI Strict Lock cần Hiếu/Bảo chốt**: dark
-  mode cho tab BI (hiện 0%, chỉ có ở nhóm chatbot), tách `admin/page.tsx` (2120 dòng, file lớn nhất repo).
-  **Chưa tự QA qua browser session này** (không launch Chrome trong lượt code) — cần Hiếu tự xem lại 1
-  lượt trên staging, đặc biệt: 6 tab đổi recharts (chart vẫn hiện đúng, không mất data), customers (3 bảng
-  không còn hiện nhầm "không có dữ liệu" lúc đang tải), quarterly (đổi filter nhanh liên tục không bị lẫn
-  data cũ/mới).
+  **P2** (`4df75ed4`/`461c0a19`/`8de2683f`/`ba9ee3ed`): gộp 27 chỗ `.toLocaleString()` trần (lệch locale
+  mặc định trình duyệt người xem) → `formatNumber()` (`vi-VN` cố định) ở 6 tab; `DataTable` thêm sort/
+  search opt-in (`sortValue`/`searchBy`, không đổi hành vi chỗ dùng cũ) + component `EmptyState` dùng
+  chung; `AbortController` huỷ request cũ khi filter đổi nhanh cho `quarterly` (`fetchReport`/
+  `fetchSquadProgress`/`fetchB2BTiers` — trước có nguy cơ race condition, response cũ ghi đè nhầm response
+  mới); gộp `SubChannelTable` dùng chung cho 2 bảng con sub_channels b2b (theme indigo/slate giữ nguyên
+  màu cũ, chỉ hết trùng code — đề xuất G). Vendors KHÔNG áp AbortController (fetch nhiều query song song
+  qua helper `q()`/`qOpt()`, threading phức tạp hơn lợi ích — trigger không rapid-fire).
+  **Đã tự QA qua Chrome trên staging (đúng theo yêu cầu Hiếu "QA đi rồi làm típ")** — xác nhận qua DOM/
+  network/console, không chỉ tin code sạch: B2B bảng con `overflow-x-auto` đúng + `SubChannelTable` render
+  y hệt trước (CM1 `rgb(15,76,129)`=brand-600 đúng theme slate); B2C 3 nút tab-switcher `rgb(15,76,129)`
+  đúng brand-600, Metric cache 200/110ms; 6 tab recharts split render đúng chart, 0 lỗi console; Website/
+  Staff thấy rõ StatTileSkeleton lúc tải, aria-label "Làm mới dữ liệu" có; Customers cache 3365ms→928ms,
+  empty-state chỉ hiện khi thật sự rỗng; Quarterly bấm Q1→Q2→Q4 dồn dập → kết quả cuối đúng Q4 (Abort-
+  Controller chặn race condition thành công); Tổ Gấu load room bình thường, 0 lỗi console.
+  **CHƯA làm** (rủi ro/cần quyết định trước, không tự làm): chuẩn hoá nút Export (báo cáo tự nêu "cần rà
+  export logic từng tab" trước), rà 29 file `<table>` viết tay, tooltip/onboarding cho tab phức tạp (thiết
+  kế chủ quan). **2 quyết định UI Strict Lock vẫn cần Hiếu/Bảo chốt**: dark mode cho tab BI (hiện 0%, chỉ
+  có ở nhóm chatbot), tách `admin/page.tsx` (2120 dòng, file lớn nhất repo). Không còn việc mở nào chặn từ
+  phía code — Hiếu chỉ cần tự xem qua 1 lượt (không bắt buộc, đã tự QA kỹ) và chốt 2 quyết định trên khi
+  muốn làm tiếp phần còn lại.
 | ✅ **s196–s196+4 (2026-09-13) — Tổ Gấu: audit toàn diện + fix Realtime/AI-question/ảnh/history-role + self-learning — Hiếu đã QA OK** |
   Audit toàn diện tab Tổ Gấu theo yêu cầu Hiếu + chuỗi fix liên tiếp, **Hiếu đã tự test xác nhận OK**.
   **s196**: fix bug tin nhắn NGƯỜI KHÁC không tự hiện, phải F5 mới thấy — root cause `chat_messages` chưa
@@ -486,20 +492,15 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
-- [ ] **s196+20/+21 — QA toàn bộ P0+P1+P2 audit performance/UI/UX trên staging + chốt 2 quyết định UI
-  Strict Lock** — sau khi Vercel deploy (9 commit, xem bảng trạng thái để biết chi tiết từng commit).
-  Checklist gợi ý: (a) **P0**: B2B mở kênh có sub-channel/expand row → hết clip; Website expand destination
-  → bảng "Product Purchased" hết clip; Fulfillment sub-tab "Kế hoạch nhập hàng" scroll ngang được; B2C 3
-  nút Advanced/Performance/Metric đúng navy khi active; B2C Metric load nhanh hơn/không timeout. (b) **P1**:
-  6 tab đổi recharts (Channels/Vendors/3HK Usage/Staff/Website/Products) — chart vẫn hiện đúng, không mất
-  data/lag khi load lần đầu (skeleton xám chờ ngắn rồi hiện chart, không phải trắng trơn); Tổ Gấu vẫn nhận
-  tin/docs/notes/câu hỏi mới trong vài giây (poll giãn ra nhưng Realtime vẫn là đường chính); website/staff
-  KPI card hiện skeleton xám ngắn rồi mới ra số (không nhảy từ 0); Customers chọn khách hàng → không còn
-  thấy "No data available" chớp qua trong lúc đang tải. (c) **P2**: Quarterly đổi quarter/year/company
-  NHANH liên tục nhiều lần → số liệu cuối cùng đúng khớp filter đang chọn (không lẫn data cũ). (d) **2
-  quyết định UI Strict Lock cần chốt**: dark mode cho tab BI (mở rộng dần hay khoá lại?), tách
-  `admin/page.tsx` 2120 dòng (làm ngay hay để sau?). Phần CHƯA làm (ExpandableSubTable/Export chuẩn/rà 29
-  file table/tooltip onboarding) — đọc report Artifact đầy đủ trong chat nếu muốn làm tiếp.
+- [x] **s196+20/+21 — Audit performance/UI/UX P0+P1+P2 — ĐÃ TỰ QA qua Chrome trên staging (2026-09-14),
+  không cần Hiếu QA lại** — xác nhận qua DOM/network/console (không chỉ tin code sạch): B2B overflow-x-
+  auto đúng + SubChannelTable render y hệt trước; B2C màu brand-600 đúng + Metric cache nhanh (110ms);
+  6 tab recharts split render đúng, 0 lỗi console; Website/Staff skeleton hiện rõ lúc tải; Customers cache
+  nhanh hẳn (3365ms→928ms) + hết bug empty-state hiện nhầm; Quarterly bấm filter dồn dập vẫn ra đúng kết
+  quả cuối (AbortController chặn race condition thành công); Tổ Gấu load room bình thường. Chỉ còn **2
+  quyết định UI Strict Lock cần Hiếu/Bảo chốt** khi muốn làm tiếp: dark mode cho tab BI (mở rộng dần hay
+  khoá lại?), tách `admin/page.tsx` 2120 dòng (làm ngay hay để sau?). Phần CHƯA làm (Export chuẩn hoá/rà
+  29 file table/tooltip onboarding) — đọc report Artifact đầy đủ trong chat nếu muốn làm tiếp.
 - [x] **s196–s196+4 — Tổ Gấu: Realtime/AI-question/ảnh/history-role/self-learning — XONG (2026-09-13),
   Hiếu đã tự test xác nhận OK** — migration v55 (`ALTER PUBLICATION` Realtime) + v56 (`is_ai_question`)
   đã chạy. Không còn việc mở nào ở luồng này.
