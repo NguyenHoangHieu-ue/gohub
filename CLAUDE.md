@@ -6,10 +6,31 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-13, s196+4)
+## Trạng thái hiện tại (2026-09-14, s196+20)
 
 | | |
 |---|---|
+| ⏳ **s196+20 (2026-09-14) — Audit performance + UI/UX toàn hệ thống (32 tab) + P0 fix, chờ Hiếu QA** |
+  Theo yêu cầu Hiếu "đánh giá toàn bộ tab UI/UX + giúp load nhanh hơn, chạy mượt hơn" — 2 fork song song
+  (Performance + UI/UX) đọc trực tiếp code + Grep định lượng (không suy đoán) toàn bộ 32 tab, gộp thành 1
+  report publish Artifact cho Hiếu (không lưu file trong repo). Đã làm ngay 3 fix P0 (rủi ro thật + sửa
+  nhanh): **(1) Cache 4 route BI thiếu** (`b2c/metric`, `staff-report`, `customer/report`, `order-report`)
+  — cùng lớp bug timeout đã fix cho B2C Advanced (s195+15): 4 route này chạy lại query `gohub_dw` tươi
+  mỗi lượt xem/đổi filter, không hề cache. Bọc `cachedQuery` TTL 15-60' quanh query nặng nhất mỗi route +
+  `export const maxDuration = 60` tường minh. Lưu ý: `staff-report`'s `customerCosts` (Turso, kiểu `Map`)
+  CỐ Ý không cache chung với 4 query DW — Map JSON-serialize qua tầng L2 Supabase JSONB sẽ hỏng shape.
+  **(2) Fix bug clip bảng lồng** — 4 vị trí (`b2b/page.tsx` 2 expand-row sub_channels, `website/page.tsx`
+  breakdown product, `fulfillment/page.tsx` bảng kế hoạch nhập hàng) dùng `overflow-hidden`/thiếu overflow
+  chặn scroll ngang của `<table>` con → clip nội dung trên màn hình hẹp. Đổi sang `overflow-x-auto`.
+  **(3) Fix sót màu** `b2c/page.tsx` (tab-switcher cha) `bg-blue-600`→`bg-brand-600` — đợt fix màu
+  s194+2/+3 chỉ sửa 3 component con, bỏ sót file cha. tsc + lint (0 lỗi mới) + vitest (243/243) PASS cả 3
+  fix. 3 commit riêng đã push staging (`462594d2` cache, `6b318bce` overflow, `6dae02f1` màu b2c).
+  **Còn lại trong report** (P1/P2, chưa làm — chờ Hiếu chọn ưu tiên): dynamic-import recharts 6 tab lớn,
+  giãn polling Tổ Gấu, skeleton loading dùng chung, aria-label, gộp format số, EmptyState/DataTable
+  sort-search/ExpandableSubTable/Export chuẩn, rà 29 file `<table>`. **2 quyết định cần Hiếu/Bảo chốt**
+  (UI Strict Lock): dark mode cho tab BI (hiện 0%, chỉ có ở nhóm chatbot), tách `admin/page.tsx` (2120
+  dòng, file lớn nhất repo). Chưa tự QA qua browser lần này (máy dev không launch được Chrome session mới
+  trong lượt làm P0) — cần Hiếu tự xem 4 tab đã sửa (B2B/Website/Fulfillment/B2C) trên staging.
 | ✅ **s196–s196+4 (2026-09-13) — Tổ Gấu: audit toàn diện + fix Realtime/AI-question/ảnh/history-role + self-learning — Hiếu đã QA OK** |
   Audit toàn diện tab Tổ Gấu theo yêu cầu Hiếu + chuỗi fix liên tiếp, **Hiếu đã tự test xác nhận OK**.
   **s196**: fix bug tin nhắn NGƯỜI KHÁC không tự hiện, phải F5 mới thấy — root cause `chat_messages` chưa
@@ -456,6 +477,14 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s196+20 — QA 3 fix P0 audit performance/UI/UX trên staging + chọn ưu tiên P1/P2** — sau khi Vercel
+  deploy: (a) B2B → mở 1 kênh có sub-channel, expand row → bảng con không còn clip, scroll ngang được nếu
+  cột dư; (b) Website → expand 1 destination → bảng "Product Purchased" không clip; (c) Fulfillment → sub
+  tab "Kế hoạch nhập hàng" → bảng scroll ngang được trên màn hẹp; (d) B2C → cả 3 nút Advanced/Performance/
+  Metric hiện đúng navy `brand-600` khi active (không còn xanh dương mặc định); (e) B2C sub-tab Metric →
+  load nhanh hơn/không timeout (đã cache 60'). Đọc report đầy đủ (link Artifact trong chat) để chọn làm
+  tiếp P1 (dynamic-import recharts, giãn polling Tổ Gấu, skeleton...) hay P2, và chốt 2 quyết định UI
+  Strict Lock (dark mode tab BI, tách admin/page.tsx).
 - [x] **s196–s196+4 — Tổ Gấu: Realtime/AI-question/ảnh/history-role/self-learning — XONG (2026-09-13),
   Hiếu đã tự test xác nhận OK** — migration v55 (`ALTER PUBLICATION` Realtime) + v56 (`is_ai_question`)
   đã chạy. Không còn việc mở nào ở luồng này.
