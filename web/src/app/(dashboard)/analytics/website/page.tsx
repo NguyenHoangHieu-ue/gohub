@@ -366,6 +366,9 @@ export default function WebsiteAnalyticsPage() {
     for (const row of esimPages.rows) {
       const category = row.dimensionValues[0].value
       const itemName = row.dimensionValues[1].value
+      // Tên biến "sessions"/"conversions" là quy ước chung của trang cho cặp view/purchase metric — ở
+      // khối eSIM Destinations này giá trị thật là itemsViewed/itemsPurchased (query dòng ~154), KHÔNG
+      // phải session/conversion thật của GA4. Số vẫn đúng, chỉ tên gây hiểu nhầm khi đọc code (audit s197).
       const sessions = parseInt(row.metricValues[0].value) || 0
       const conversions = parseInt(row.metricValues[1].value) || 0
 

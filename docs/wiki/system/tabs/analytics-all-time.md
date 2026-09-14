@@ -28,6 +28,11 @@ Doanh thu/margin đa năm theo kỳ (period), tách 3 nhóm phái sinh: **B2B-St
 - Trả: `period`, `derived_group`, `channel_name`, `revenue`, `margin`, `tier`.
 
 ## 3. Gotchas
+- **🔴 Fix s197 (2026-09-14) — thiếu loại KH INACTIVE** (cùng fix ở BOD Report, phát hiện qua audit toàn
+  hệ thống logic dữ liệu): `whereClause` chính có `shipFilter`/`internalOpsFilter` nhưng thiếu
+  `excludeInactiveCustomers()` — Quarter Report/B2B tab đều loại KH có `price_list_name` chứa "INACTIVE",
+  All-Time không loại → tổng cao hơn khi có KH INACTIVE phát sinh doanh thu trong kỳ. Đã thêm vào
+  `whereClause` dùng chung cho mọi query trong route.
 - **⚠️ Fix s162 (2026-08-26) — thiếu Turso B2B per-customer cost**: `gpm2` (CM1) trước chỉ trừ
   `analytics_channel_costs` (Supabase channel-level, gần như rỗng cho B2B) + group cost → CM1 B2B cao hơn thực
   tế, khác Quarter Report cùng kỳ. Nay B2B-Strategic/B2B-Non-Strategic đổi sang Turso `b2b_customer_cost_monthly`

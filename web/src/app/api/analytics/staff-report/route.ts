@@ -44,7 +44,9 @@ export async function GET(req: NextRequest) {
     params.push(companyCode); where += ` AND f.company_code = $${params.length}`
   }
   if (channel) {
-    params.push(channel); where += ` AND TRIM(s.channel_name) = $${params.length}`
+    // Fix s197 (audit toàn hệ thống): trước case-sensitive, không nhất quán với channelGroup bên dưới
+    // (UPPER). Value luôn lấy từ dropdown nguồn DB nên rủi ro thấp, nhưng đổi cho đồng bộ style.
+    params.push(channel); where += ` AND UPPER(TRIM(s.channel_name)) = UPPER($${params.length})`
   } else if (channelGroup && channelGroup !== "All") {
     params.push(channelGroup); where += ` AND UPPER(s.group_name) = UPPER($${params.length})`
   }

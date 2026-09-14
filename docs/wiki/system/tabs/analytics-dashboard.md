@@ -51,6 +51,19 @@ Button **"Báo cáo Quý"** (BarChart3 icon, góc phải header) → modal overl
 - API: `GET /api/analytics/quarterly-report?quarter=Q3&year=2026&dateColumn=fulfiled_date&companyCode=ALL`
 
 ## 5. Gotchas
+- **🟡 Fix s197 (2026-09-14) — "B2B Phân khúc" (`b2b/tier-performance`) thiếu 2/4 filter chuẩn**: trước
+  hardcode `EXCLUDED = ["B2C Customer US","B2C Customer VN","B2B Ops"]` (không đọc config Hiếu đặt ở
+  Cài đặt Quarter Report) và thiếu `excludeInactiveCustomers()` — trong khi `b2b/kpis`/`performance`/
+  `trend` (cùng hệ B2B) áp đủ cả 4 filter (ship/internal-ops/exclude ops ĐỘNG/INACTIVE). Đổi sang đọc
+  `fetchQuarterlySettings()` (danh sách mặc định giống hệt 3 tên cũ, không đổi số liệu hiện tại — chỉ
+  từ nay tự động theo config nếu Hiếu sửa Cài đặt) + thêm loại INACTIVE. Cache key đổi `b2b_tier`→
+  `b2b_tier2` (đổi thành phần khoá).
+- **🔴 Fix s197 (2026-09-14) — "Overall Progress vs Target" Actual thiếu filter chuẩn**: `getTargetSummary()`
+  (`analytics-helpers.ts`) `actualRows` tính `SUM(fulfilled_revenue_amount_vnd)` thô, không loại ship
+  fee/đơn nội bộ/KH INACTIVE như mọi số "doanh thu SP thuần" khác hệ thống — Actual bị kê cao hơn chuẩn,
+  % Progress hiện thấp hơn thực tế đúng ra phải là. Đã thêm `shipFilter`/`internalOpsFilterByCode`/
+  `excludeInactiveCustomers`. Phát hiện qua audit toàn hệ thống logic dữ liệu. Cùng fix `api/planning/
+  targets` (tab Targets, xem wiki `analytics-targets.md`).
 - **B2B — Phân khúc** (trong "Performance by Channels", API `/api/analytics/b2b/tier-performance`): cột **"Unit Sold" (2026-08-02, BUG-DASH-1) ĐÃ sửa `COUNT(*)` → `SUM(fulfilled_quantity)`**. Trước đây đếm số DÒNG line-item nên units B2B thiếu ~49% (vd T7: hiện 26.677 vs thật 52.372). Phân loại tier từ `dim_customer.price_list_name`; exclude B2C Customer US/VN + B2B Ops.
 - **Line chart "Monthly Gross Revenue by Sources"** (`revenue-chart`): B2B Strategic/Non-Strategic nay tách theo `dim_customer.price_list_name` (Strategic = NULL/không VIP-Gold-Silver; Non-Strategic = VIP/Gold/Silver) — xem ISSUE-DASH-4 bên dưới. *(Lịch sử: BUG-DASH-2 2026-08-02 từng sửa `NOT ILIKE ANY` cho định nghĩa theo KÊNH cũ; định nghĩa kênh nay đã bỏ nên gotcha đó không còn áp dụng.)*
 - **✅ ISSUE-DASH-4 ĐÃ XỬ LÝ (Hiếu chốt, 2026-08-03): line chart đổi sang định nghĩa Strategic theo KHÁCH (`price_list_name`)** — nay ĐỒNG NHẤT với bảng "B2B — Phân khúc". Hết cảnh 2 định nghĩa khác grain trên cùng Dashboard.

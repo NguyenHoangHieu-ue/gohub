@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
     const prevOrders = new Set<string>()
 
     const trendMap = new Map<string, { name: string; revenue: number; prev_revenue: number; margin: number; active_customers: Set<string> }>()
-    const perfMap = new Map<string, { code: string; name: string; priceListName: string | null; revenue: number; margin: number; hk3Rev: number; orders: Set<string>; units: number; last_order: Date }>()
+    const perfMap = new Map<string, { code: string; name: string; priceListName: string | null; revenue: number; margin: number; hk3Rev: number; orders: Set<string>; units: number; last_order: Date; monthlyRevenue: Record<string, number> }>()
     const productsMap = new Map<string, { sku: string; product_name: string; revenue: number; quantity: number; orders: Set<string> }>()
     const channelsMap = new Map<string, number>()
     const orderMap = new Map<string, { order_code: string; customer_name: string; product_name: string; order_date: Date; revenue: number; items: number }>()
@@ -131,10 +131,12 @@ export async function POST(req: NextRequest) {
         const t = trendMap.get(tk)!
         t.revenue += rev; t.margin += mar; t.active_customers.add(customerName)
 
-        if (!perfMap.has(customerName)) perfMap.set(customerName, { code: row.code, name: customerName, priceListName: row.price_list_name ?? null, revenue: 0, margin: 0, hk3Rev: 0, orders: new Set(), units: 0, last_order: rowDate })
+        if (!perfMap.has(customerName)) perfMap.set(customerName, { code: row.code, name: customerName, priceListName: row.price_list_name ?? null, revenue: 0, margin: 0, hk3Rev: 0, orders: new Set(), units: 0, last_order: rowDate, monthlyRevenue: {} })
         const p = perfMap.get(customerName)!
         p.revenue += rev; p.margin += mar; p.hk3Rev += hk3; p.units += qty; p.orders.add(row.order_code)
         if (rowDate > p.last_order) p.last_order = rowDate
+        const rowMonth = `${rowDate.getFullYear()}-${String(rowDate.getMonth() + 1).padStart(2, "0")}`
+        p.monthlyRevenue[rowMonth] = (p.monthlyRevenue[rowMonth] || 0) + rev
 
         if (row.sku) {
           if (!productsMap.has(row.sku)) productsMap.set(row.sku, { sku: row.sku, product_name: row.product_name || row.sku, revenue: 0, quantity: 0, orders: new Set() })
@@ -185,7 +187,10 @@ export async function POST(req: NextRequest) {
         let custCost = 0
         months.forEach(m => {
           const rec = costMap.get(`${m}_${p.code}`)
-          if (rec) custCost += calcRecordCost(rec, p.revenue / Math.max(months.length, 1))
+          // Fix s197 (audit toàn hệ thống): trước chia ĐỀU p.revenue cho số tháng — sai khi doanh thu
+          // KH không đều giữa các tháng (cost-line percent tính lệch). Dùng đúng doanh thu THẬT của
+          // từng tháng (khớp cách B2B tier section tính cùng loại chi phí).
+          if (rec) custCost += calcRecordCost(rec, p.monthlyRevenue[m] || 0)
         })
         const cm1 = p.margin - custCost
         const tier = classifyTier(p.priceListName)

@@ -94,6 +94,15 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn nhập cost lại → cần khôi phục button trong `page.tsx`.
 
 ## 5. Gotchas
+- **🔴 Fix s197 (2026-09-14) — Revenue/Gross Profit/chart/Top Products/Performance Breakdown thiếu
+  filter Phí ship + Đơn nội bộ, lệch với CM1 card cùng trang** (phát hiện qua audit toàn hệ thống logic
+  dữ liệu): `channels/page.tsx` build SQL client-side (Summary/Trend/Top Products/Performance Breakdown)
+  — 0 chỗ nào loại `sku='SHIPPINGFEE0'`/nhóm `INTERNAL-TRANSACTION`, trong khi thẻ KPI "Contribution
+  Margin 1" gọi route riêng `channels/kpis` VỐN loại mặc định 2 khoản này. Trang không có toggle riêng
+  như BOD/B2B/B2C nên fix bằng cách LUÔN loại mặc định (không thêm UI mới) — khớp hành vi `channels/kpis`.
+  Route `channels/performance` (bảng breakdown per-channel dùng ở All Channels Overview) cùng lỗi, đã
+  thêm `shipFilter(false)`/`internalOpsFilter(false)` vào mọi query con (kể cả B2B per-customer cost
+  allocation). Route `channels/b2b-customers` đã đúng từ trước (không đổi).
 - **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 2 chỗ `Math.round(...).
   toLocaleString()` KHÔNG truyền locale → dùng locale MẶC ĐỊNH của trình duyệt (vd `en-US` → phẩy ngăn
   cách, khác `vi-VN` dùng chấm) — số hiển thị LỆCH tuỳ máy/trình duyệt người xem, không nhất quán với

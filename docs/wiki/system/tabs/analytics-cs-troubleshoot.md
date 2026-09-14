@@ -28,6 +28,11 @@ Tra cứu & phân tích ticket chăm sóc khách hàng (Lark) để tìm nhanh c
 - Data ban đầu migrate 24.712 ticket từ Turso (`scripts/migrate_turso_tickets.py`), sau đó sync bổ sung qua Lark Base API.
 
 ## 3. Gotchas
+- **🔴 Fix s197 (2026-09-14) — "Units Sold by Source" thiếu filter `channelGroup`** (phát hiện qua audit
+  toàn hệ thống logic dữ liệu): query `sourceRows` (`api/reports/cs-troubleshoot/route.ts`) thiếu
+  `${groupFilter}` mà 3 query anh em cùng khối (`totalRows`/`skuRows`/`vendorRows`) đều có → khi lọc
+  B2B/B2C, tử số (TBS tickets) bị lọc nhưng mẫu số (unitsSold theo Source) KHÔNG lọc → TBS Rate theo
+  Source bị kê thấp giả tạo. Không lệch khi filter="All" (chỉ hiện khi chọn B2B hoặc B2C).
 - **s196+21 (2026-09-14) — thêm nút Export cho sub-tab "SKU & Telco Performance"**: trước tab này KHÔNG
   có nút export nào dù có bảng dữ liệu (finding #7, đề xuất H P2 roadmap UI/UX audit s196+20). Xuất TOÀN
   BỘ `sorted` (không chỉ 15 dòng hiển thị) qua `exportRawRows`. 4 sub-tab còn lại (TBS Overview/Vendor/

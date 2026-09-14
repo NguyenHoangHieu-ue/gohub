@@ -74,6 +74,28 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **🔴 Incident s197 (2026-09-14) — Hiếu báo "kênh ecom tháng 9 hiển thị sai" (cả Quarter Report lẫn B2B
+  Performance) — root cause: CACHE CŨ, không phải bug tính toán**. Verify trực tiếp qua SQL: "VN Ecom
+  Shopee" T9 (1-13/9) thật có doanh thu 229.667.051đ, nhưng cả 2 trang đang hiện 137.802.046đ (thiếu
+  40% — do cache TTL_L1 5'/TTL_L2 10' phục vụ snapshot cũ trong lúc dữ liệu ngày 9-13 tiếp tục đổ về).
+  Toàn bộ công thức GP/CH.Cost/CM1/Actual-vs-Projected verify đúng 100% khi bypass cache (không phải bug
+  logic — công thức nhất quán, khớp giữa Quarter Report và B2B Performance). **Bug thật phát hiện kèm
+  theo**: trang B2B Performance KHÔNG có nút "Tải lại mới" nào (khác Quarter Report — vốn có sẵn) → Hiếu
+  không có cách tự ép cache tính lại tươi, phải chờ TTL tự hết hạn (tối đa 5 phút, tuỳ instance serverless
+  nào phục vụ request). Đã thêm nút "Tải lại mới" (`fetchData(true)` → `nocache=1`, đã tự động áp cho cả
+  `b2b/kpis`/`b2b/performance`/`b2b/strategic-performance` vì dùng chung `queryParams`, và `b2b/trend`/
+  `channels-with-platform-fee` qua biến `nc` riêng — không sót route nào). Đã tự query trực tiếp ép cache
+  Quarter Report + B2B Performance tính lại tươi ngay trong lúc xử lý incident.
+- **🔴 Fix s197 (2026-09-14) — bảng "Strategic Partners" không đọc toggle Phí ship/Đơn nội bộ/KH Ops**
+  (phát hiện qua audit toàn hệ thống logic dữ liệu): `b2b/strategic-performance` route dùng chung ở
+  **5 trang** (B2B/BOD/Dashboard/Products/Vendors) hoàn toàn không đọc `includeShip`/`includeInternalOps`/
+  `includeOpsCustomers` dù FE B2B gửi đủ 3 tham số — bật/tắt toggle trên trang B2B đổi số KPI/Performance/
+  Trend nhưng bảng Strategic Partners đứng yên không đổi. Fix: thread `shipFilter`/`internalOpsFilter`/
+  `excludeOpsByCode`/`excludeInactiveCustomers` vào `raw_data` CTE, cache key thêm 3 cờ. **KHÔNG đổi** hệ
+  phân loại tier (vẫn `getPartnerTiers()`/Supabase `partner_tiers` liệt kê tay, KHÔNG chuyển sang canonical
+  `quarterly_tier_keywords`) — đây là quyết định Hiếu đã chốt trước đó ("giữ view này riêng, chưa đổi",
+  xem wiki BOD mục Gotchas s131) vì bảng này có mục đích khác (đối tác NAMED cụ thể + sub-channel/cost
+  breakdown per-partner), không phải phân loại B2B Strategic/Non-Strategic tổng quát như Quarter Report.
 - **s196+21 (2026-09-14) — gộp wrapper `exportToCSV` trùng lặp**: b2b + products cùng tự viết 1 wrapper
   y hệt tên `exportToCSV` (thật ra xuất .xlsx, tên gây hiểu lầm) quanh `exportToExcel` + hậu tố
   `_startDate_to_endDate`. Gộp thành `exportWithDateRange` (`lib/export-excel.ts`), 2 trang giờ chỉ còn

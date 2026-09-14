@@ -13,15 +13,17 @@ export async function GET(req: NextRequest) {
   const endDate       = searchParams.get("endDate")
   const comparisonType = searchParams.get("comparisonType") || "none"
   const extraFilters   = getBODFilters(searchParams)
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
   }
 
   try {
-    const key = `bod-report:${startDate}:${endDate}:${comparisonType}:${extraFilters}`
+    const key = `bod-report:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
-      const current = await fetchBODReport(startDate, endDate, extraFilters)
+      const current = await fetchBODReport(startDate, endDate, extraFilters, includeShip, includeInternalOps)
       if (comparisonType === "none") return current
 
       const s    = new Date(startDate)
@@ -39,7 +41,7 @@ export async function GET(req: NextRequest) {
       const previous = await fetchBODReport(
         prevStart.toISOString().split("T")[0],
         prevEnd.toISOString().split("T")[0],
-        extraFilters
+        extraFilters, includeShip, includeInternalOps
       )
 
       return current.map((curr, i) => {

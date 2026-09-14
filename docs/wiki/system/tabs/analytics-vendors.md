@@ -28,6 +28,13 @@ Doanh thu / margin / units / orders theo **vendor (NCC)** — WorldMove, 3HK DAT
 - Có thể lọc theo nhóm kênh (B2B/B2C).
 
 ## 3. Gotchas
+- **🔴 Fix s197 (2026-09-14) — TOÀN BỘ tab 0 filter chuẩn nào (Phí ship/Đơn nội bộ)** (phát hiện qua
+  audit toàn hệ thống logic dữ liệu): mọi SQL build client-side (Summary/Trend/Top Products/Channel
+  Distribution) — grep `shipFilter`/`internalOpsFilter`/`SHIPPINGFEE0`/`INTERNAL-TRANSACTION` = 0 kết
+  quả trong toàn file trước fix. Doanh thu 1 vendor LUÔN cộng cả phí ship + đơn nội bộ, không khớp chuẩn
+  "doanh thu SP thuần" mọi tab khác dùng. Trang không có toggle riêng → thêm `stdFilter`/`fStdFilter`
+  (loại mặc định, không thêm UI) áp cho cả 10 câu SQL trong `fetchData()`. Route `vendors/report`/
+  `vendors/list` (dead code, không FE nào gọi) không đổi — ngoài scope.
 - **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 2 chỗ, cùng lý do lệch locale
   mặc định trình duyệt nêu ở wiki Channels. Đề xuất C (P2) roadmap performance audit s196+20.
 - **s196+21 (2026-09-14) — aria-label cho nút refresh icon-only**: nút `RefreshCw` header chỉ có icon,

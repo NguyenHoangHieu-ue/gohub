@@ -184,6 +184,15 @@ $$\text{Spend Pace} = \frac{\text{Chi phí thực tế}}{\text{Ngân sách Marke
 - **Budget**: lấy từ Manage Costs → B2C Channels (`analytics_channel_costs`), nhưng card Budget đã bỏ khỏi snapshot KPI strip.
 
 ## 6. Vấn đề đã gặp & cách khắc phục
+- **🟡 Fix s197 (2026-09-14) — chart Revenue Trend không loại ship fee/đơn nội bộ (`b2c/trend`)**: route
+  KHÔNG đọc `includeShip`/`includeInternalOps`/`includeOpsCustomers` dù FE gửi cùng `queryParams` với
+  `b2c/kpis` (route NÀY loại mặc định) — chart Trend lệch KPI card cùng trang. Đã thread `shipFilter`/
+  `internalOpsFilter`/`excludeOpsByCode` vào query, cache key thêm 3 cờ.
+- **🟡 Fix s197 (2026-09-14) — B2C Performance mặc định gộp ship fee/đơn nội bộ/KH ops, ngược chuẩn hệ
+  thống** (phát hiện qua audit toàn hệ thống logic dữ liệu): `b2c-performance.tsx` 3 toggle
+  `includeShip`/`includeInternalOps`/`includeOpsCustomers` mặc định `true` (gộp vào doanh thu) — ngược
+  chuẩn "doanh thu SP thuần" (mặc định `false`) mà B2B Performance cùng cấu trúc toggle dùng. Lần đầu
+  vào tab, số liệu cao hơn B2B Performance mặc định. Đổi cả 3 về `false` cho nhất quán.
 - **UI s194+3 (2026-09-06) — thêm màu thật (Hiếu phản hồi bản đồng bộ-màu-lệch vẫn đơn điệu)**: bảng màu
   "kênh" ở hero card (VN=`#0071e3`, US=`#6366f1`, Web=`#00a6a6`, App=`#2f9d55`, Khác=`#b7791f`) nay dùng lại
   xuyên suốt — `KpiCard`/`Section` (`b2c-advanced-dashboard.tsx`) có `icon`/`accent` prop khai từ trước

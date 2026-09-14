@@ -536,6 +536,10 @@ export default function ChannelPerformancePage() {
         productTypeFilter = `AND TRIM(sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE category_name IN (${typeList}))`
       }
 
+      // Chuẩn "doanh thu SP thuần" toàn hệ thống (loại phí ship + đơn nội bộ) — trang này không có
+      // toggle riêng như BOD/B2B/B2C nên luôn loại mặc định, khớp channels/kpis (CM1 card cùng trang).
+      const stdFilter = `AND sku != 'SHIPPINGFEE0' AND order_source_code NOT IN (SELECT code FROM dim_order_source WHERE UPPER(COALESCE(group_name,'')) = 'INTERNAL-TRANSACTION')`
+
       const isSales = dateColumn === "created_date"
       const mainTable = isSales ? "fact_sales_revenue" : "fact_fulfillment_revenue"
       const revenueCol = isSales ? "sales_revenue_amount_vnd" : "fulfilled_revenue_amount_vnd"
@@ -555,6 +559,7 @@ export default function ChannelPerformancePage() {
           ${dateFilter}
           ${vendorFilter}
           ${productTypeFilter}
+          ${stdFilter}
         ),
         previous_period AS (
           SELECT
@@ -567,6 +572,7 @@ export default function ChannelPerformancePage() {
           ${prevDateFilter || "AND 1=0"}
           ${vendorFilter}
           ${productTypeFilter}
+          ${stdFilter}
         ),
         last_month_full AS (
           SELECT
@@ -579,6 +585,7 @@ export default function ChannelPerformancePage() {
           ${prevMonthFilter}
           ${vendorFilter}
           ${productTypeFilter}
+          ${stdFilter}
         )
         SELECT
           COALESCE(c.revenue, 0) as current_revenue,
@@ -625,6 +632,7 @@ export default function ChannelPerformancePage() {
         ${dateFilter}
         ${vendorFilter}
         ${productTypeFilter}
+        ${stdFilter}
         GROUP BY ${dateColumn}::date
         ORDER BY ${dateColumn}::date
       `
@@ -643,6 +651,7 @@ export default function ChannelPerformancePage() {
           ${prevDateFilter}
           ${vendorFilter}
           ${productTypeFilter}
+          ${stdFilter}
           GROUP BY ${dateColumn}::date
           ORDER BY ${dateColumn}::date
         `
@@ -682,6 +691,7 @@ export default function ChannelPerformancePage() {
         ${dateFilter}
         ${vendorFilter}
         ${productTypeFilter}
+        AND ${mt}.sku != 'SHIPPINGFEE0' AND ${mt}.order_source_code NOT IN (SELECT code FROM dim_order_source WHERE UPPER(COALESCE(group_name,'')) = 'INTERNAL-TRANSACTION')
         GROUP BY 1, 3
         ORDER BY 4 DESC
         ${showAllProducts ? "" : "LIMIT 10"}
@@ -710,6 +720,7 @@ export default function ChannelPerformancePage() {
           ${dateFilter}
           ${vendorFilter}
           ${productTypeFilter}
+          ${stdFilter}
           GROUP BY 1
         ),
         previous_period AS (
@@ -725,6 +736,7 @@ export default function ChannelPerformancePage() {
           ${prevDateFilter || "AND 1=0"}
           ${vendorFilter}
           ${productTypeFilter}
+          ${stdFilter}
           GROUP BY 1
         )
         SELECT

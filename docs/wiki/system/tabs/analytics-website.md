@@ -67,6 +67,11 @@ s194 ở trên). Chạy đúng 1 lần (chạy lại sẽ thêm trùng entry) �
 - B2C Metric subtab cũng dùng GA4 `yearMonth` dimension để lấy Traffic/Users theo tháng — xem [[analytics-b2c]].
 
 ## 6. Gotchas
+- **🟢 Fix s197 (2026-09-14) — biến "sessions"/"conversions" khối eSIM Destinations thực chất là
+  itemsViewed/itemsPurchased** (phát hiện qua audit toàn hệ thống logic dữ liệu): số hiển thị ĐÚNG, chỉ
+  tên biến gây hiểu nhầm khi đọc code (query dùng metric `itemsViewed,itemsPurchased`, không phải session
+  thật GA4). Thêm comment chú thích tại điểm extract thay vì rename toàn bộ chuỗi tính toán/JSX render
+  (rủi ro cao hơn lợi ích cho vấn đề thuần đặt tên, không phải bug số liệu).
 - **s196+21 (2026-09-14) — thêm nút Export cho "eSIM Destinations"**: trước tab này KHÔNG có nút export
   nào dù có bảng dữ liệu, khác 12/17 tab BI khác (finding #7, đề xuất H P2 roadmap UI/UX audit s196+20).
   Dùng `exportRawRows` xuất destination/sessions/purchases/conv.rate.

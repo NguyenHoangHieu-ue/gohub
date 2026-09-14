@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { cachedAnalyticsQuery } from "@/lib/analytics-helpers"
 import { mondayOf } from "@/lib/inventory-plan"
 import { fetchInventoryAlertThresholds, type InventoryAlertThresholds } from "@/lib/inventory-thresholds"
+import { vnToday } from "@/lib/analytics-engine/date-math"
 
 // Tồn kho thời gian thực — nguồn fact_inventory (Sapo sync, gohub_dw), thay thế phần "Số tồn thực tế" OPS
 // trước phải gõ tay hàng tuần trong Kế hoạch nhập hàng. Xem docs/wiki/system/tabs/analytics-fulfillment.md.
@@ -147,11 +148,15 @@ export async function GET() {
       }
     }
 
-    const today = new Date()
+    // Fix s197 (audit toàn hệ thống): trước dùng new Date() (giờ:phút:giây hiện tại) trừ ngày HSD
+    // parse UTC-midnight → lệch ±1 ngày tuỳ thời điểm trong ngày request chạy. Dùng cutoff VN timezone-
+    // safe (vnToday, đã có sẵn trong repo) làm mốc UTC-midnight cố định, khớp cách parse expired_date.
+    const { y: todayY, m: todayM, d: todayD } = vnToday()
+    const todayUtcMidnight = Date.UTC(todayY, todayM - 1, todayD)
     const daysUntil = (dateStr: string | null): number | null => {
       if (!dateStr) return null
       const d = new Date(dateStr)
-      return Math.round((d.getTime() - today.getTime()) / 86400000)
+      return Math.round((d.getTime() - todayUtcMidnight) / 86400000)
     }
 
     const skus = Array.from(bySku.entries()).map(([sku, rows]) => {

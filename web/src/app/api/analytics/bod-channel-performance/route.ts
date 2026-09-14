@@ -15,15 +15,17 @@ export async function GET(req: NextRequest) {
   const dateColumn     = searchParams.get("dateColumn")     || "fulfiled_date"
   const comparisonType = searchParams.get("comparisonType") || "none"
   const extraFilters   = getBODFilters(searchParams)
+  const includeShip        = searchParams.get("includeShip")        === "1"
+  const includeInternalOps = searchParams.get("includeInternalOps") === "1"
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
   }
 
   try {
-    const key = `bod-channel-perf:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}`
+    const key = `bod-channel-perf:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
-      const current = await fetchBODChannelPerformanceData(startDate, endDate, dateColumn, extraFilters)
+      const current = await fetchBODChannelPerformanceData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps)
       if (comparisonType === "none") return current
 
       const s = new Date(startDate); const e = new Date(endDate)
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest) {
         prevEnd = new Date(e.getFullYear() - 1, e.getMonth(), e.getDate())
       }
       const previous = await fetchBODChannelPerformanceData(
-        prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], dateColumn, extraFilters
+        prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], dateColumn, extraFilters, includeShip, includeInternalOps
       )
       return current.map(curr => {
         const prev = previous.find(p => p.channel === curr.channel)

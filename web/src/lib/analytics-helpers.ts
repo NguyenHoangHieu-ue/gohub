@@ -692,10 +692,13 @@ export async function getTargetSummary(startDate: string, endDate: string) {
     }
   } catch {}
 
+  // Chuẩn "doanh thu SP thuần" toàn hệ thống (loại phí ship/đơn nội bộ/KH INACTIVE) — trước route này
+  // tính SUM thô, không áp filter nào → Actual cao hơn số ở BOD/Quarter Report/B2B (fix s197 audit toàn
+  // hệ thống logic dữ liệu).
   const actualRows = await queryAnalytics<{ total_actual: string }>(
     `SELECT SUM(fulfilled_revenue_amount_vnd) as total_actual
      FROM fact_fulfillment_revenue f
-     WHERE f.fulfiled_date::date BETWEEN $1 AND $2`,
+     WHERE f.fulfiled_date::date BETWEEN $1 AND $2 ${shipFilter(false)} ${internalOpsFilterByCode(false)} ${excludeInactiveCustomers()}`,
     [startDate, endDate]
   )
   const totalActual = parseFloat(actualRows[0]?.total_actual || "0")

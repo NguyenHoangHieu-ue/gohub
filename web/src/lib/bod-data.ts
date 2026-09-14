@@ -1,6 +1,6 @@
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode, excludeInactiveCustomers } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
@@ -91,7 +91,7 @@ export async function fetchBODGroupMarginData(startDate: string, endDate: string
   const filter = getDateFilter(startDate, endDate, source.dateCol)
   // Strategic/Non phân theo KHÁCH (price_list_name), cấu hình chung quarterly-settings (ISSUE-DASH-4, s131).
   const { groupCaseSql: groupCaseSQL } = await getCustomerStrategicSql()
-  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)}`
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()}`
 
   const rows = await queryAnalytics<Record<string, string>>(
     `WITH filtered_f AS (
@@ -215,16 +215,17 @@ export async function fetchBODGroupMarginData(startDate: string, endDate: string
   }
 }
 
-export async function fetchBODChannelPerformanceData(startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "") {
+export async function fetchBODChannelPerformanceData(startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "", includeShip = false, includeInternalOps = false) {
   const source = getAnalyticsSource(dateColumn)
   const filter = getDateFilter(startDate, endDate, source.dateCol)
   const strategicList = await getStrategicPartnersList()
   const groupCaseSQL = getGroupCaseSQL(strategicList)
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()}`
 
   const rows = await queryAnalytics<Record<string, string>>(
     `WITH filtered_f AS (
        SELECT ${source.dateCol}, order_source_code, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol}, ${source.quantityCol}, order_code
-       FROM ${source.mainTable} f WHERE ${filter} ${extraFilters}
+       FROM ${source.mainTable} f WHERE ${filter} ${extraFilters} ${sfx}
      )
      SELECT ${groupCaseSQL} as "group", TRIM(s.channel_name) as channel,
             TO_CHAR(f.${source.dateCol}::DATE, 'YYYY-MM') as month,
@@ -259,7 +260,7 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
     `SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
             SUM(f.${source.revenueCol}) as revenue
      FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-     WHERE ${filter} ${extraFilters} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
+     WHERE ${filter} ${extraFilters} ${sfx} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
      GROUP BY 1, 2`
   )
   const custRevMap = new Map<string, number>()
@@ -306,8 +307,9 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
 
 // Port intel fetchBODReportData: breakdown theo NGÀY, CM1 = dayMargin − op-cost rải đều theo ngày
 // (amount: value/sốNgàyTháng; percent: dcRevenue*value/100) + group-cost/sốNgàyTháng.
-export async function fetchBODReportData(startDate: string, endDate: string, extraFilters = "") {
+export async function fetchBODReportData(startDate: string, endDate: string, extraFilters = "", includeShip = false, includeInternalOps = false) {
   const filter = getDateFilter(startDate, endDate, "fulfiled_date")
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()}`
 
   const [dailyRows, channelDaily, channelInfo] = await Promise.all([
     queryAnalytics<Record<string, string>>(
@@ -315,13 +317,13 @@ export async function fetchBODReportData(startDate: string, endDate: string, ext
               SUM(fulfilled_revenue_amount_vnd) as revenue, SUM(cogs_amount_vnd) as cogs,
               SUM(gross_profit_vnd) as margin,
               CASE WHEN SUM(fulfilled_revenue_amount_vnd) > 0 THEN (SUM(gross_profit_vnd) / SUM(fulfilled_revenue_amount_vnd)) * 100 ELSE 0 END as margin_percent
-       FROM fact_fulfillment_revenue f WHERE ${filter} ${extraFilters} GROUP BY date ORDER BY date ASC`
+       FROM fact_fulfillment_revenue f WHERE ${filter} ${extraFilters} ${sfx} GROUP BY date ORDER BY date ASC`
     ),
     queryAnalytics<Record<string, string>>(
       `SELECT TO_CHAR(fulfiled_date::date, 'YYYY-MM-DD') as date, TRIM(s.channel_name) as channel,
               SUM(f.fulfilled_revenue_amount_vnd) as revenue
        FROM fact_fulfillment_revenue f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-       WHERE ${filter} ${extraFilters} GROUP BY date, channel`
+       WHERE ${filter} ${extraFilters} ${sfx} GROUP BY date, channel`
     ),
     queryAnalytics<Record<string, string>>(
       `SELECT DISTINCT TRIM(channel_name) as channel, UPPER(group_name) as group_name FROM dim_order_source`
@@ -339,7 +341,7 @@ export async function fetchBODReportData(startDate: string, endDate: string, ext
     `SELECT TO_CHAR(fulfiled_date::date, 'YYYY-MM-DD') as date, TRIM(f.customer_code) as customer_code,
             SUM(f.fulfilled_revenue_amount_vnd) as revenue
      FROM fact_fulfillment_revenue f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-     WHERE ${filter} ${extraFilters} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
+     WHERE ${filter} ${extraFilters} ${sfx} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
      GROUP BY 1, 2`
   )
   const custDayRevMap = new Map<string, number>()

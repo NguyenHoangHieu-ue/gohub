@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { flushAnalyticsCache } from "@/lib/analytics-helpers"
+import { flushAnalyticsCache, shipFilter, internalOpsFilter, excludeInactiveCustomers } from "@/lib/analytics-helpers"
 import { canWrite } from "@/lib/writable-tabs"
 
 const WRITE_ROLES = ["admin", "creator"]
@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
        LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku
        WHERE TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') IN ('${prevMonths.join("','")}')
+         ${shipFilter(false)} ${internalOpsFilter(false)} ${excludeInactiveCustomers()}
        GROUP BY 1, 2, 3`
     )
 
