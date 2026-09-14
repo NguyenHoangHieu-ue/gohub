@@ -6,10 +6,37 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-14, s196+21)
+## Trạng thái hiện tại (2026-09-14, s197)
 
 | | |
 |---|---|
+| ✅ **s197 (2026-09-14) — Audit LOGIC DỮ LIỆU toàn hệ thống 26 tab (khác đợt UI/performance s196+20) +
+  fix hết 16/17 phát hiện** | Hiếu: "check lại toàn bộ tab analytics xem đã logic lấy dữ liệu, áp dụng
+  dữ liệu đúng chưa, sai ở đâu" → sau đó "fix theo thứ tự hết đi". 4 fork song song đọc trực tiếp SQL
+  route + FE apply logic (không đoán), publish Artifact báo cáo cho Hiếu trước khi fix. **17 phát hiện —
+  16 fix + 1 false positive** (Inventory threshold validation hoá ra ĐÃ có ở route wrapper, fork chỉ đọc
+  lib thiếu route). Mỗi fix 1 commit riêng, tsc + lint (0 lỗi mới) + vitest (243/243) PASS xuyên suốt,
+  wiki cập nhật đủ từng tab.
+  **6 Cao** (số liệu sai thật/lệch giữa các khối cùng trang): (1) BOD Channel Performance + Daily Report
+  không đọc toggle Phí ship/Đơn nội bộ (`20c68fd9`); (2) CS Troubleshoot "Units Sold by Source" thiếu
+  filter channelGroup → TBS Rate lệch (`17a6f5b8`); (3) Products mã nước SKU vẫn dùng logic CŨ (ký tự
+  đầu) chưa đồng bộ fix s195+19 (`2410e16c`); (4) Channels toàn trang (Revenue/Trend/Top Products/
+  Breakdown) thiếu filter ship/nội bộ, lệch CM1 card (`e4ea918f`); (5) Vendors toàn tab 0 filter chuẩn
+  nào (`d2383a83`); (6) B2B `strategic-performance` (dùng chung 5 trang) không đọc toggle (`0ee48f58`).
+  **7 Trung bình**: Dashboard/Targets Actual thiếu filter (`f1d630c2`); BOD+All-Time thiếu loại KH
+  INACTIVE (`6f34cbb1`); My Metrics conversations thiếu ngưỡng MIN_TASK_RESPONSE_LEN (`1d140aa5`);
+  Customers CM1 sai khi range nhiều tháng doanh thu không đều (`7fb1aefe`); B2C Performance mặc định
+  ngược chuẩn hệ thống (`91a66c2b`); B2C trend thiếu filter (`c7622fe8`); B2B tier-performance (Dashboard)
+  thiếu 2/4 filter (`e3d88d8d`).
+  **3 Thấp**: Inventory `daysUntil()` không timezone-safe (`d9a01251`); Website chú thích biến đặt tên
+  sai (không đổi số, `388483bb`); Staff filter case-sensitive (`261e9b8d`).
+  **Đã xác nhận SẠCH** (không sửa): Quarter Report, All-Time (trừ INACTIVE), BOD Group Margin, Website
+  (trừ naming), Staff (trừ case), B2B kpis/performance/trend, B2C kpis/performance/monthly, mã nước SKU
+  helper chung, Vendors (3 fix lịch sử s195+8/9/10 không hồi quy), 3HK Usage, My Metrics hierarchy/prorata.
+  **Kết luận luôn mục mở cũ s195+7** (Orders thiếu SIM vật lý): xác nhận qua code KHÔNG phải bug — 0
+  filter cứng theo `type_of_sim`, nguyên nhân đúng là `fulfiled_date` NULL phía ops/ETL nguồn.
+  **Chưa QA live trên staging** — Hiếu nên tự xem số liệu vài tab đã đổi (đặc biệt Vendors/Channels đổi
+  nhiều nhất) sau khi Vercel deploy xong, đối chiếu vài con số đã biết trước/sau fix.
 | ✅ **s196+20/+21 (2026-09-14) — Audit performance + UI/UX toàn hệ thống (32 tab) + P0/P1/P2 fix, đã tự
   QA staging qua Chrome** | Theo yêu cầu Hiếu "đánh giá toàn bộ tab UI/UX + giúp load nhanh hơn, chạy mượt
   hơn" — 2 fork song song (Performance + UI/UX) đọc trực tiếp code + Grep định lượng (không suy đoán) toàn
@@ -505,6 +532,15 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s197 — QA số liệu sau audit logic dữ liệu 16 fix trên staging** — sau khi Vercel deploy xong,
+  đối chiếu vài con số đã biết trước/sau (nhất là Vendors + Channels — đổi số nhiều nhất vì trước đây
+  0 filter ship/nội bộ nào): (a) Vendors — chọn 1 vendor quen, số Revenue/Units có thể GIẢM nhẹ so với
+  trước (do trừ đúng phí ship/đơn nội bộ); (b) Channels — CM1 card giờ khớp Revenue/GP card cùng trang
+  (trước có thể lệch); (c) BOD — bật/tắt toggle Phí ship/Đơn nội bộ, xác nhận Channel Performance + Daily
+  Report giờ ĐỔI theo (trước đứng yên); (d) Dashboard "Overall Progress vs Target" — % có thể tăng nhẹ
+  (Actual giờ đúng "doanh thu SP thuần", không còn kê cao); (e) Customers — nếu có KH chọn range nhiều
+  tháng + có cấu hình cost `percent`, CM1 có thể đổi nhẹ so với trước. Không cần làm gì nếu số liệu hợp
+  lý — chỉ báo lại nếu thấy bất thường rõ ràng (lệch quá lớn, không giải thích được).
 - [x] **s196+20/+21 — Audit performance/UI/UX toàn hệ thống (P0+P1+P2) + 2 quyết định UI Strict Lock —
   XONG HẾT (2026-09-14), đã tự QA qua Chrome trên staging, không cần Hiếu làm gì thêm** — Hiếu đã chốt 2
   quyết định (dark mode tab BI → khoá lại; tách admin/page.tsx → làm luôn), cả 2 đã làm + QA xong. Export
