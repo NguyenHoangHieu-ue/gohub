@@ -74,6 +74,11 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **s196+21 (2026-09-14) — gộp `SubChannelTable` dùng chung**: 2 bảng con sub_channels (Strategic dùng
+  `theme="indigo"`, Non-Strategic dùng `theme="slate"`) trước viết tay riêng, style lệch nhau (finding #11
+  audit UI/UX s196+20 — bg-white/40 vs bg-white/60, có/không backdrop-blur, CM1 accent indigo vs brand).
+  Gộp thành `SubChannelTable` (`dashboard-kit.tsx`), `theme` giữ ĐÚNG 2 bảng màu cũ — không đổi UI, chỉ
+  hết trùng code (đề xuất G, P2). Đúng UI Strict Lock (không tự đổi màu/bố cục).
 - **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 2 chỗ (StatTile KPI Actual +
   Projected, nhánh không phải currency), cùng lý do lệch locale mặc định trình duyệt nêu ở wiki Channels
   — dùng lại hàm `formatNumber` local đã có sẵn trong file (tương đương `Intl.NumberFormat("vi-VN")`).

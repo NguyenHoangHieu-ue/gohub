@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react"
 import { ChevronLeft, ChevronRight, ChevronsUpDown, ChevronUp, ChevronDown, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { formatNumber } from "@/lib/analytics-formatters"
 
 /**
  * Dashboard Kit — bộ component dùng chung cho MỌI trang analytics (đợt UI redesign s190+2).
@@ -399,6 +400,74 @@ export function EmptyState({ icon, message, action, className }: {
       {icon && <span className="text-slate-300">{icon}</span>}
       <p className="text-sm font-medium text-slate-400">{message}</p>
       {action}
+    </div>
+  )
+}
+
+// ─── SubChannelTable (s196+21, đề xuất G roadmap UI/UX audit s196+20) ─────────
+// Pattern "click dòng cha → xổ bảng con Sub-channel" — trước viết tay riêng ≥2 chỗ trong `b2b/page.tsx`
+// (Strategic/Non-Strategic), lệch style nhau (indigo vs slate, có/không backdrop-blur — finding #11) dù
+// cùng 7 cột y hệt. Gộp 1 chỗ, `theme` giữ đúng 2 bảng màu cũ (không đổi UI — đúng UI Strict Lock), chỉ
+// hết trùng code. Overflow đã đúng `overflow-x-auto` (fix P0 s196+20).
+export interface SubChannelRow {
+  name: string
+  revenue: number
+  units: number
+  margin: number
+  margin_percent: number
+  gpm2: number
+  gpm2_percent: number
+}
+
+const SUB_CHANNEL_THEME = {
+  indigo: {
+    wrap: "bg-white/40 border border-indigo-50 rounded-xl overflow-x-auto backdrop-blur-sm",
+    headRow: "bg-indigo-50/50",
+    headText: "text-indigo-400",
+    divide: "divide-indigo-50/30",
+    cm1: "text-indigo-600",
+    cm1Pct: "text-indigo-500",
+  },
+  slate: {
+    wrap: "bg-white/60 border border-slate-200 rounded-xl overflow-x-auto shadow-sm",
+    headRow: "bg-slate-100",
+    headText: "text-slate-500",
+    divide: "divide-slate-100",
+    cm1: "text-brand-600",
+    cm1Pct: "text-brand-500",
+  },
+} as const
+
+export function SubChannelTable({ rows, theme = "indigo" }: { rows: SubChannelRow[]; theme?: keyof typeof SUB_CHANNEL_THEME }) {
+  const t = SUB_CHANNEL_THEME[theme]
+  return (
+    <div className={t.wrap}>
+      <table className="w-full text-[10px]">
+        <thead>
+          <tr className={t.headRow}>
+            <th className={cn("px-3 py-1.5 font-bold uppercase tracking-wider text-left", t.headText)}>Sub-channel</th>
+            <th className={cn("px-3 py-1.5 font-bold uppercase tracking-wider text-right", t.headText)}>Revenue</th>
+            <th className={cn("px-3 py-1.5 font-bold uppercase tracking-wider text-right", t.headText)}>Units</th>
+            <th className={cn("px-3 py-1.5 font-bold uppercase tracking-wider text-right", t.headText)}>GP</th>
+            <th className={cn("px-3 py-1.5 font-bold uppercase tracking-wider text-right", t.headText)}>Margin%</th>
+            <th className={cn("px-3 py-1.5 font-bold uppercase tracking-wider text-right", t.headText)}>CM1</th>
+            <th className={cn("px-3 py-1.5 font-bold uppercase tracking-wider text-right", t.headText)}>CM1%</th>
+          </tr>
+        </thead>
+        <tbody className={cn("divide-y", t.divide)}>
+          {rows.map((sc, i) => (
+            <tr key={i}>
+              <td className="px-3 py-1.5 font-bold text-slate-700">{sc.name}</td>
+              <td className="px-3 py-1.5 text-right font-medium text-slate-600">{formatNumber(Math.round(sc.revenue))}</td>
+              <td className="px-3 py-1.5 text-right font-medium text-slate-600">{formatNumber(sc.units)}</td>
+              <td className="px-3 py-1.5 text-right font-bold text-emerald-600">{formatNumber(Math.round(sc.margin))}</td>
+              <td className="px-3 py-1.5 text-right font-medium text-slate-600">{sc.margin_percent.toFixed(1)}%</td>
+              <td className={cn("px-3 py-1.5 text-right font-bold", t.cm1)}>{formatNumber(Math.round(sc.gpm2))}</td>
+              <td className={cn("px-3 py-1.5 text-right font-bold", t.cm1Pct)}>{sc.gpm2_percent.toFixed(1)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
