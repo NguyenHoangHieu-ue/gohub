@@ -203,13 +203,13 @@ export default function ProductPerformancePage() {
     }
   }
 
-  // Canonical regionExpr — khớp 100% với getDestinationSQL trong analytics-helpers.ts.
+  // Canonical regionExpr — khớp 100% với getDestinationSQL trong analytics-helpers.ts (branch theo
+  // ĐỘ DÀI sku, không phải ký tự đầu — bug s195+19, bản này ở Products sót lại logic cũ tới s197).
   // Dùng UPPER() để nhất quán với country_codes.code (uppercase).
   const REGION_EXPR = `UPPER(CASE
-    WHEN f.sku ~ '^[1-6]'            THEN SUBSTRING(f.sku, 3, 3)
-    WHEN f.sku ~ '^E'               THEN SUBSTRING(f.sku, 2, 3)
-    WHEN f.sku ~ '^[A-DF-Z]{3}[0-9]' THEN SUBSTRING(f.sku, 1, 3)
-    ELSE SUBSTRING(f.sku, 1, 3)
+    WHEN LENGTH(f.sku) = 14 THEN SUBSTRING(f.sku, 1, 3)
+    WHEN LENGTH(f.sku) = 15 THEN SUBSTRING(f.sku, 2, 3)
+    ELSE SUBSTRING(f.sku, 3, 3)
   END)`
 
   const fetchInitialData = async () => {
@@ -237,10 +237,9 @@ export default function ProductPerformancePage() {
       try {
         const destRows = await runQuery(
           `SELECT DISTINCT UPPER(CASE
-            WHEN sku ~ '^[1-6]'            THEN SUBSTRING(sku, 3, 3)
-            WHEN sku ~ '^E'               THEN SUBSTRING(sku, 2, 3)
-            WHEN sku ~ '^[A-DF-Z]{3}[0-9]' THEN SUBSTRING(sku, 1, 3)
-            ELSE SUBSTRING(sku, 1, 3)
+            WHEN LENGTH(sku) = 14 THEN SUBSTRING(sku, 1, 3)
+            WHEN LENGTH(sku) = 15 THEN SUBSTRING(sku, 2, 3)
+            ELSE SUBSTRING(sku, 3, 3)
           END) as code FROM dim_sku WHERE sku IS NOT NULL AND LENGTH(sku) >= 3 ORDER BY 1`
         )
         const dests: { code: string; name: string }[] = []

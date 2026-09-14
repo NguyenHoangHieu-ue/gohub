@@ -35,6 +35,15 @@ Doanh số bán theo **SKU**: revenue, units, orders, margin — kèm breakdown 
 - `channel` → `order_source_code IN (SELECT code FROM dim_order_source WHERE TRIM(channel_name)=...)`; hoặc `channelGroup` (B2B/B2C).
 
 ## 4. Gotchas
+- **🔴 Fix s197 (2026-09-14) — mã nước SKU vẫn dùng logic CŨ, sai ~25% SKU 13 ký tự nhóm chữ** (phát hiện
+  qua audit toàn hệ thống logic dữ liệu): `REGION_EXPR` (comment tự nhận "khớp 100% `getDestinationSQL`")
+  vẫn branch theo KÝ TỰ ĐẦU (`^[1-6]`/`^E`/`^[A-DF-Z]{3}[0-9]`) — đúng logic đã bị thay ở s195+19 (hàm
+  canonical `getDestinationSQL`/`decodeSkuDestinationCode` branch theo ĐỘ DÀI SKU: 14→pos1-3, 15→pos2-4,
+  else(13)→pos3-5). Vì code ở đây là FE tự build chuỗi SQL text (không gọi được hàm server-side dùng
+  chung), bản fix s195+19 không tự lan tới Products. Ảnh hưởng: chart Top Regions, cột Country Code,
+  dropdown filter Destination hiện sai nước cho SKU 13 ký tự nhóm chữ (E/A/D) — vd `ECJPN3DBUNL01` ra
+  "CJP" thay vì "JPN". Đã sửa cả 2 chỗ (`REGION_EXPR` dùng chung toàn file + query dropdown Destination
+  riêng ở `fetchInitialData`) theo đúng logic LENGTH.
 - **s196+21 (2026-09-14) — code-split recharts**: 2 chart (Sales & Units Trend, Top Regions) tách sang
   `products-charts.tsx` (`React.memo` + `next/dynamic({ssr:false})`, cùng pattern `bod-charts.tsx`) —
   trước import `recharts` trực tiếp ở `page.tsx` (1056 dòng). Phát hiện qua audit performance toàn hệ
