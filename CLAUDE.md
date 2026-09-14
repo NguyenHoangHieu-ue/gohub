@@ -763,6 +763,10 @@ Supabase sau khi chạy) · **v53** `okr_lark_events` thêm `is_self_initiated`/
 - Mọi lỗi UI hiện: "Hiếu đang fix, vui lòng đợi".
 - **Luôn tự chọn role chuyên gia phù hợp trước khi làm task không nhỏ** (Staff Engineer/Design Lead/Senior
   Data Analyst/DevSecOps...) — nêu 1 dòng ngắn rồi làm, không kể lể dài. Yêu cầu cố định của Hiếu (2026-09-06).
+- **Luôn check lỗi query N+1 ảnh hưởng tới database** khi viết/sửa code chạm DB — vòng lặp gọi query
+  riêng lẻ cho từng dòng/từng item (thay vì gộp 1 câu JOIN/IN/batch) làm nổ số round-trip tới gohub_dw
+  khi data lớn, dễ gây chậm/timeout (đúng lớp bug đã gặp nhiều lần — B2C Advanced s195+15, Daily Report
+  s157, Customer Report s196+20). Yêu cầu cố định của Hiếu (2026-09-14).
 
 ---
 
