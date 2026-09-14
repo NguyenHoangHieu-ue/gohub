@@ -8,7 +8,7 @@ import {
   TrendingUp, DollarSign, PieChart as PieChartIcon,
   AlertCircle, ArrowUpRight, ArrowDownRight, Filter,
   Calendar, Download, ChevronDown, Globe, Search, X,
-  ArrowUpDown, ShoppingBag, Check, Zap, Building2, Shield, FileText,
+  ArrowUpDown, ShoppingBag, Check, Zap, Building2, Shield, FileText, RefreshCw,
 } from "lucide-react"
 import { domToCanvas } from "modern-screenshot"
 import { cn } from "@/lib/utils"
@@ -336,6 +336,13 @@ export default function B2BPerformance() {
             </div>
             <button onClick={() => fetchData()} className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 transition-all shadow-sm active:scale-95">
               <Filter className="w-3.5 h-3.5" />Apply Filters
+            </button>
+            {/* Fix s197 (incident): trang B2B trước KHÔNG có cách nào tự ép cache tính lại tươi (chỉ
+                Quarter Report có "Tải lại mới") — nhiều số trên trang này (kể cả tháng đang chạy) có
+                thể bị cache stale (TTL_L1 5', TTL_L2 10') mà không ai biết cách tự khắc phục. */}
+            <button onClick={() => fetchData(true)} disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50">
+              <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />Tải lại mới
             </button>
             <button onClick={exportToPDF} disabled={exporting} className={cn("flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-sm active:scale-95 disabled:opacity-50", exporting && "animate-pulse")}>
               <FileText className="w-3.5 h-3.5" />{exporting ? "Exporting..." : "Export PDF"}
