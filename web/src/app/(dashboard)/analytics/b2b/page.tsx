@@ -13,7 +13,7 @@ import {
 import { domToCanvas } from "modern-screenshot"
 import { cn } from "@/lib/utils"
 import { DatePresets } from "@/components/date-presets"
-import { exportToExcel } from "@/lib/export-excel"
+import { exportWithDateRange, exportToExcel } from "@/lib/export-excel"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { StatTile, MetricAccent, DeltaKind, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle, SubChannelTable } from "@/components/dashboard-kit"
 
@@ -97,10 +97,8 @@ export default function B2BPerformance() {
   const projectionFactor = getProjectionFactor(startDate, endDate)
   const isProjectable = projectionFactor > 1
 
-  const exportToCSV = (data: any[], filename: string, columns: { label: string; key: keyof PerformanceData | string }[]) => {
-    exportToExcel(data as Record<string, unknown>[], columns.map(c => ({ label: c.label, key: String(c.key) })),
-      `${filename}_${startDate}_to_${endDate}`)
-  }
+  const exportToCSV = (data: any[], filename: string, columns: { label: string; key: keyof PerformanceData | string }[]) =>
+    exportWithDateRange(data as Record<string, unknown>[], filename, columns.map(c => ({ label: c.label, key: String(c.key) })), startDate, endDate)
 
   const exportToPDF = async () => {
     if (!reportRef.current) return

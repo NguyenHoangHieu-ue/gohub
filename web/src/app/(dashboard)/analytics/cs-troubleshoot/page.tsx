@@ -6,10 +6,11 @@ import {
 } from "recharts"
 import {
   AlertCircle, Ticket, Activity, Clock, RefreshCcw, DollarSign, Database, ChevronRight,
-  AlertTriangle, ArrowUpDown, ChevronUp, ChevronDown, CheckCircle2, LayoutList,
+  AlertTriangle, ArrowUpDown, ChevronUp, ChevronDown, CheckCircle2, LayoutList, Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatNumber } from "@/lib/analytics-formatters"
+import { exportRawRows } from "@/lib/export-excel"
 import { DatePresets } from "@/components/date-presets"
 import { useToast } from "@/components/toast"
 import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
@@ -362,10 +363,23 @@ function SKUPerformance({ data, loading }: { data: CSTroubleshootData | null; lo
   if (loading) return <div className="p-8"><div className="h-64 bg-slate-100 animate-pulse rounded-2xl"></div></div>
   const sorted = sort(data?.skuPerformance || [])
   const COLS: [string, string, boolean][] = [["sku", "SKU", false], ["telco", "Vendor/Telco", false], ["unitsSold", "Units Sold", true], ["tbs", "TBS Volume", true], ["tbsRate", "TBS Rate", true], ["refunds", "Refunds", true], ["refundRate", "Rf/TBS (%)", true]]
+  // Đề xuất H (P2, roadmap UI/UX audit s196+20 — finding #7) — trước tab này KHÔNG có nút export nào.
+  // Xuất TOÀN BỘ sorted (không chỉ 15 dòng hiển thị) — đúng convention exportRawRows "xuất tất cả rows".
+  const exportSkuPerformance = () => exportRawRows(
+    sorted.map(row => ({
+      SKU: row.sku, "Vendor/Telco": row.telco, "Units Sold": row.unitsSold,
+      "TBS Volume": row.tbs, "TBS Rate (%)": row.tbsRate, Refunds: row.refunds, "Rf/TBS (%)": row.refundRate,
+    })),
+    "cs_sku_telco_performance",
+  )
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="p-4 md:p-8 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-50/30 gap-4">
         <h3 className="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2"><Database className="w-5 h-5 md:w-6 md:h-6 text-brand-600" />SKU &amp; Telco Performance</h3>
+        <button onClick={exportSkuPerformance} disabled={sorted.length === 0}
+          className="flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-40" title="Export">
+          <Download className="w-3.5 h-3.5" />Export
+        </button>
       </div>
       <div className="overflow-x-auto no-scrollbar touch-pan-x">
         <table className="w-full text-left border-collapse min-w-[800px]">

@@ -4,10 +4,11 @@ import React, { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
 import {
   Globe, Users, MousePointer2, TrendingUp, TrendingDown, ShoppingBag,
-  DollarSign, Calendar, Filter, RefreshCw, Tag, Activity, ChevronDown, ChevronUp, Smartphone,
+  DollarSign, Calendar, Filter, RefreshCw, Tag, Activity, ChevronDown, ChevronUp, Smartphone, Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatNumber } from "@/lib/analytics-formatters"
+import { exportRawRows } from "@/lib/export-excel"
 import { DatePresets } from "@/components/date-presets"
 import { StatTile, StatTileSkeleton, type MetricAccent, autoDeltaKind, CHART_PALETTE } from "@/components/dashboard-kit"
 
@@ -508,6 +509,20 @@ export default function WebsiteAnalyticsPage() {
     { label: "Revenue", value: formatRevenue(currentRevenue), change: calculateChange(currentRevenue, compareRevenue), icon: DollarSign, accent: "revenue" },
   ]
 
+  // Đề xuất H (P2, roadmap UI/UX audit s196+20 — finding #7) — trước tab này KHÔNG có nút export nào dù
+  // có bảng dữ liệu, khác 12/17 tab BI khác đều có.
+  const exportEsimDestinations = () => {
+    exportRawRows(
+      esimDestinations.map(p => ({
+        "Destination": p.destination,
+        "Sessions": p.sessions,
+        "Purchases": p.conversions,
+        "Conv. Rate (%)": p.cr,
+      })),
+      `esim_destinations_${dateRange.startDate}_to_${dateRange.endDate}`,
+    )
+  }
+
   if (error) {
     return (
       <div className="p-8">
@@ -892,7 +907,13 @@ export default function WebsiteAnalyticsPage() {
               <h2 className="text-lg font-bold text-slate-900">eSIM Destinations (CR)</h2>
               <p className="text-sm text-slate-500">Aggregated performance by country category.</p>
             </div>
-            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center"><Globe className="w-5 h-5" /></div>
+            <div className="flex items-center gap-2">
+              <button onClick={exportEsimDestinations} disabled={esimDestinations.length === 0}
+                className="flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-40" title="Export">
+                <Download className="w-3.5 h-3.5" />Export
+              </button>
+              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center"><Globe className="w-5 h-5" /></div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">

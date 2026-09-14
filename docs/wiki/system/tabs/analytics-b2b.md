@@ -74,6 +74,10 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **s196+21 (2026-09-14) — gộp wrapper `exportToCSV` trùng lặp**: b2b + products cùng tự viết 1 wrapper
+  y hệt tên `exportToCSV` (thật ra xuất .xlsx, tên gây hiểu lầm) quanh `exportToExcel` + hậu tố
+  `_startDate_to_endDate`. Gộp thành `exportWithDateRange` (`lib/export-excel.ts`), 2 trang giờ chỉ còn
+  1 dòng delegate. Đề xuất H, P2.
 - **s196+21 (2026-09-14) — gộp `SubChannelTable` dùng chung**: 2 bảng con sub_channels (Strategic dùng
   `theme="indigo"`, Non-Strategic dùng `theme="slate"`) trước viết tay riêng, style lệch nhau (finding #11
   audit UI/UX s196+20 — bg-white/40 vs bg-white/60, có/không backdrop-blur, CM1 accent indigo vs brand).

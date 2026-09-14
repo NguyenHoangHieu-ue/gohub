@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { useToast } from "@/components/toast"
-import { exportToExcel, exportRawRows } from "@/lib/export-excel"
+import { exportWithDateRange, exportRawRows } from "@/lib/export-excel"
 import { StatTile, type MetricAccent, CHART_PALETTE } from "@/components/dashboard-kit"
 
 // Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu (s196+21, roadmap performance s196+20).
@@ -121,9 +121,8 @@ export default function ProductPerformancePage() {
     return res.json()
   }
 
-  const exportToCSV = (data: any[], filename: string, columns: { label: string; key: string }[]) => {
-    exportToExcel(data as Record<string, unknown>[], columns, `${filename}_${startDate}_to_${endDate}`)
-  }
+  const exportToCSV = (data: any[], filename: string, columns: { label: string; key: string }[]) =>
+    exportWithDateRange(data as Record<string, unknown>[], filename, columns, startDate, endDate)
 
   // Export SKU Breakdown FULL (chạy lại query KHÔNG LIMIT) — cột khớp đúng bảng hiển thị.
   const exportSkuBreakdownFull = async () => {

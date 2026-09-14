@@ -67,6 +67,9 @@ s194 ở trên). Chạy đúng 1 lần (chạy lại sẽ thêm trùng entry) �
 - B2C Metric subtab cũng dùng GA4 `yearMonth` dimension để lấy Traffic/Users theo tháng — xem [[analytics-b2c]].
 
 ## 6. Gotchas
+- **s196+21 (2026-09-14) — thêm nút Export cho "eSIM Destinations"**: trước tab này KHÔNG có nút export
+  nào dù có bảng dữ liệu, khác 12/17 tab BI khác (finding #7, đề xuất H P2 roadmap UI/UX audit s196+20).
+  Dùng `exportRawRows` xuất destination/sessions/purchases/conv.rate.
 - **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 12 chỗ, cùng lý do lệch locale
   mặc định trình duyệt nêu ở wiki Channels — file này nhiều nhất (14 chỗ toLocaleString ban đầu, 2 chỗ
   còn lại có locale/options rõ ràng nên giữ nguyên). Đề xuất C (P2) roadmap performance audit s196+20.
