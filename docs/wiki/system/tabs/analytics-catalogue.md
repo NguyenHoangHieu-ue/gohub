@@ -21,6 +21,15 @@ tin nội địa, kèm đặc điểm KYC/hotspot) rồi mới tới sản phẩ
 từ 2 tầng (destination → dòng vendor×simtype) sang **3 tầng: Destination → Loại sản phẩm → Sản phẩm
 cụ thể**, xem mục 2 bên dưới.
 
+**Đợt 3 (cùng ngày)**: Hiếu gửi ảnh bảng chính sách QR/đổi máy theo vendor, yêu cầu soát kỹ thêm field
+trong Supabase `products` (APN, operator, throttle, policy...). Đã đọc full 36 cột bảng `products` qua
+`api/config/db/table` (Dev Tools, creator-only) — bổ sung `data_type` (Fixed/Daily Data, **field CÓ SẴN
+thay thế hẳn** việc tự decode ký tự 8 SKU từng phải né vì 2 wiki nguồn ghi ngược nhau), `daily_reset_time`,
+`apn`, `operator_code`, `telco_perks`, `unsupported_apps`, `onsite_carrier`. Phần "chính sách QR/đổi máy"
+trong ảnh KHÔNG có bảng riêng trong Supabase — trích thủ công phần thông số thực tế (hạn QR/số lần cài
+lại/đổi máy) vào `OPERATOR_POLICY` (route.ts), bỏ phần quy trình xử lý CS nội bộ (refund workflow) vì
+không hợp với 1 trang catalogue giới thiệu sản phẩm — xem mục 2b.
+
 ---
 
 ## 1. Đường dẫn & File
@@ -45,20 +54,34 @@ cụ thể**, xem mục 2 bên dưới.
     Data), `sim_local` (SIM vật lý nội địa/gọi được), `other` (không decode được ProductType).
   - Đặc điểm hiển thị mỗi category: Gọi/Nhắn tin được, cần KYC (`kyc_needed`, lấy theo ĐA SỐ sản phẩm
     trong nhóm — tránh 1 SKU lệch làm sai chip), Hotspot, Network type — toàn bộ từ Supabase `products`.
-- **Sản phẩm cụ thể** = từng SKU thật đã bán (top 6 theo revenue/category), decode từ chính mã SKU theo
-  `docs/wiki/business/ma-sku.md`:
-  - **Vendor** (ký tự 6-7) + **Dung lượng** (ký tự 9-11, 4 dạng mã hoá: `NNN`=N GB, `NHM`=N×100MB,
-    `NDN`=N.NGB, `UNL`=Không giới hạn) + **Số ngày** (ký tự 12-13).
-  - **Nhóm Data Policy** (ký tự 8) — CHỈ dùng 2 nhóm **Unlimited** `{A,B,C,D,H}` / **Fixed** `{E,F,G,P,Y,Z}`
-    / **Special** `{K}`, KHÔNG hiện chi tiết mbps: 2 file wiki nguồn (`ma-sku.md` mục "Ký tự 8" và
-    `loai-data-policy.md`) **GHI NGƯỢC NHAU** ở A/B (1 file nói A=5mbps B=10mbps, file kia nói ngược lại)
-    — chưa đối chiếu được với DB thật nên an toàn hơn khi chỉ nói nhóm, không bịa số mbps cụ thể. Nếu
-    sau này đối chiếu được, có thể nâng cấp hiển thị chi tiết hơn.
+- **Sản phẩm cụ thể** = từng SKU thật đã bán (top 6 theo revenue/category):
+  - **Vendor** + **Dung lượng** + **Số ngày**: decode từ chính mã SKU theo `docs/wiki/business/ma-sku.md`
+    (ký tự 6-7 = vendor; ký tự 9-11 = dung lượng, 4 dạng mã hoá `NNN`=N GB/`NHM`=N×100MB/`NDN`=N.NGB/
+    `UNL`=Không giới hạn; ký tự 12-13 = số ngày).
+  - **Loại data** = Supabase `products.data_type` — field THẬT (`"Fixed Data"` / `"Daily Data"`), thay
+    hẳn việc tự decode ký tự 8 SKU (đợt 2 từng phải né hiện mbps chi tiết vì 2 wiki nguồn `ma-sku.md`/
+    `loai-data-policy.md` ghi NGƯỢC NHAU ở A/B — nay dùng field Supabase có sẵn, không còn phụ thuộc
+    2 wiki mâu thuẫn đó nữa). Khi `data_type = "Daily Data"` → hiện kèm `daily_reset_time` (giờ reset
+    quota mỗi ngày, VD "GMT+8"/"Local time"/"Count 24h").
+  - **APN** (`apn`) + **Operator** (`operator_code`) hiện trên mỗi dòng sản phẩm.
+  - **Ưu đãi/Hạn chế** (`telco_perks`/`unsupported_apps`/`onsite_carrier`) — chỉ hiện khi Supabase có
+    dữ liệu (nhiều SKU không có), dạng note nhỏ dưới mỗi sản phẩm.
 - **Badge** tính trong JS từ số liệu 90 ngày gần nhất, ở CẢ 2 tầng (category trong destination, sản phẩm
   trong category) — không so toàn hệ thống:
   - ⭐ **Bán chạy nhất**: revenue cao nhất trong đúng nhóm đang so (category hoặc sản phẩm).
   - 📈 **Tăng trưởng mạnh**: growth% (so 90 ngày trước đó) ≥ 15%.
   - 💰 **Giá tốt nhất** (chỉ ở tầng sản phẩm): revenue/unit thấp nhất trong nhóm có ≥10 units.
+
+## 2b. Chính sách QR/đổi máy theo Operator (đợt 3)
+
+Nút "Chính sách QR/đổi máy" ở mỗi category (chỉ hiện khi có operator nào đó nằm trong `OPERATOR_POLICY`,
+`route.ts`) — xổ ra hạn hiệu lực mã QR, số lần cài lại được, số lần đổi thiết bị. Nguồn: bảng tham chiếu
+Hiếu cung cấp (ảnh 2026-09-14), **KHÔNG có bảng tương ứng trong Supabase** — trích tay, key theo
+`operator_code`. Chỉ giữ phần THÔNG SỐ THỰC TẾ (hạn QR/số lần cài lại/đổi máy) cho mục đích giới thiệu;
+**cố tình bỏ** phần quy trình xử lý CS nội bộ trong ảnh gốc (VD cách báo lỗi cho từng vendor, quy trình
+refund, ghi chú nội bộ như "chưa rõ limit ở đâu") — nội dung đó thuộc CS Troubleshoot runbook, không hợp
+với trang catalogue giới thiệu sản phẩm cho sale/đối tác. Nếu Hiếu muốn nội dung này ĐẦY ĐỦ + editable
+qua UI (không phải hardcode trong route), cần 1 bảng Supabase riêng — chưa làm, để bàn thêm.
 
 ## 3. Phạm vi v1
 
@@ -95,4 +118,5 @@ Chưa thêm `ops-&-cs`/`hr`/`staff` — Hiếu tự cấp thêm qua Settings n�
 | Revenue/Units/Margin theo destination×vendor×type_of_sim | `fact_fulfillment_revenue` JOIN `dim_sku` | Loại ship fee + đơn nội bộ (`shipFilter`/`internalOpsFilter`) |
 | Destination code | SKU (`getDestinationSQL`) | Không dùng `dim_sku.category_name` |
 | Tên nước | Turso `country_codes` | `getCountryMappings()` |
-| Network/Hotspot/KYC | Supabase `products` | Prefix-match `product_code` với `sku` |
+| Network/Hotspot/KYC/APN/Operator/Data Type/Telco Perks | Supabase `products` | Prefix-match `product_code` với `sku` |
+| Chính sách QR/đổi máy | `OPERATOR_POLICY` (hardcode, `route.ts`) | Trích tay từ ảnh Hiếu cung cấp, key theo `operator_code` |
