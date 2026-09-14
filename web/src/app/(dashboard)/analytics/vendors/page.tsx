@@ -1,9 +1,7 @@
 ﻿"use client"
 
 import React, { useState, useEffect, useMemo } from "react"
-import {
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
-} from "recharts"
+import dynamic from "next/dynamic"
 import {
   TrendingUp, TrendingDown, DollarSign, ShoppingCart, ArrowUpRight, ArrowDownRight,
   Filter, Calendar, Download, RefreshCw, Truck, Package, Globe, LayoutDashboard,
@@ -13,10 +11,14 @@ import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { exportAOA } from "@/lib/export-excel"
-import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
+import { StatTile, type MetricAccent, CHART_PALETTE } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel VendorPerformance. Data qua /api/analytics/query (SELECT-only) +
 // /api/config/partner-tiers + /api/analytics/b2b/strategic-performance. Inline getDefaultDateRange/formatDateToISO.
+
+// Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu (s196+21, roadmap performance s196+20).
+const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
+const RevenueTrendChart = dynamic(() => import("./vendors-charts").then(m => m.RevenueTrendChart), { ssr: false, loading: chartLoading })
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -850,25 +852,7 @@ export default function VendorPerformancePage() {
           </div>
           <div className="h-[350px] w-full">
             {loading ? <Skeleton className="h-full w-full" /> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trendData}>
-                  <defs>
-                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={CHART_PALETTE[0]} stopOpacity={0.15} />
-                      <stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(val) => formatCompactNumber(val)} />
-                  <Tooltip contentStyle={chartTooltipStyle}
-                    formatter={(val: number, name: string) => [formatCurrency(val), name === "revenue" ? "Current Revenue" : "Previous Revenue"]} />
-                  <Area type="monotone" dataKey="revenue" stroke={CHART_PALETTE[0]} strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="revenue" />
-                  {comparisonType !== "none" && (
-                    <Area type="monotone" dataKey="prevRevenue" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" fill="transparent" name="prevRevenue" />
-                  )}
-                </AreaChart>
-              </ResponsiveContainer>
+              <RevenueTrendChart data={trendData} comparisonType={comparisonType} />
             )}
           </div>
         </div>

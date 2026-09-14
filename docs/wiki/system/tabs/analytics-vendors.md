@@ -28,6 +28,10 @@ Doanh thu / margin / units / orders theo **vendor (NCC)** — WorldMove, 3HK DAT
 - Có thể lọc theo nhóm kênh (B2B/B2C).
 
 ## 3. Gotchas
+- **s196+21 (2026-09-14) — code-split recharts**: chart "Revenue Trend" tách sang `vendors-charts.tsx`
+  (`React.memo` + `next/dynamic({ssr:false})`, cùng pattern `bod-charts.tsx`/`my-metrics-charts.tsx`) —
+  trước import `recharts` trực tiếp ở `page.tsx` (1262 dòng), nặng vào bundle đầu dù chỉ 2/8 tab có chart
+  lớn từng làm đúng (bod/my-metrics). Phát hiện qua audit performance toàn hệ thống. Không đổi số liệu/UI.
 - **s195+10 (2026-09-08) — fix bug thật: Channel Distribution phân loại Strategic sai (2 hệ thống
   Strategic khác nhau lệch nhau).** Hiếu báo tiếp "channel strategic mà nó để non-strategic", chỉ tham
   khảo tab Quarter Report. Phát hiện: repo có **2 hệ thống phân loại Strategic hoàn toàn khác nhau**: (1)

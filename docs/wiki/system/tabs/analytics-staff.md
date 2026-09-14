@@ -131,3 +131,10 @@ channelGroup/channel/companyCode/dataSource/includeShip/includeInternalOps). `gr
 (Supabase)/`customerCosts` (Turso, trả về `Map`) **cố ý KHÔNG** cache chung — `Map` JSON-serialize qua
 tầng L2 (Supabase JSONB) sẽ hỏng shape (`.get is not a function` khi đọc lại từ instance khác), 2 nguồn
 này cũng ngoài pool `gohub_dw` nên không phải điểm nghẽn timeout. Thêm `export const maxDuration = 60`.
+
+## 10. Code-split recharts (s196+21 — 2026-09-14)
+
+4 chart (bar doanh thu sales, bar doanh thu khách hàng, line monthly sales, line monthly khách hàng) tách
+sang `staff-charts.tsx` (`React.memo` + `next/dynamic({ssr:false})`, cùng pattern `bod-charts.tsx`) —
+trước import `recharts` trực tiếp ở `page.tsx` (1112 dòng). Phát hiện qua audit performance toàn hệ
+thống. Không đổi số liệu/UI.

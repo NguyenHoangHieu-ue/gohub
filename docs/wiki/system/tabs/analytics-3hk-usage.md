@@ -237,6 +237,10 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 ## 9. Gotchas & Lịch sử thay đổi
 
+- **s196+21 (2026-09-14) — code-split recharts**: 2 chart ("So sánh mức sử dụng theo nhóm",
+  "Phân bố mức data sử dụng/ngày") tách sang `3hk-usage-charts.tsx` (`React.memo` +
+  `next/dynamic({ssr:false})`, cùng pattern `bod-charts.tsx`) — trước import `recharts` trực tiếp ở
+  `page.tsx` (1271 dòng). Phát hiện qua audit performance toàn hệ thống. Không đổi số liệu/UI.
 - **s194+11 (2026-09-06)**: UI — `blue-*`→`brand-*` toàn trang, 2 chart CartesianGrid→`CHART_GRID_COLOR`.
   Giữ nguyên màu semantic thật (đỏ=vượt mức 3HK cấp/ngày, xanh lá=trong kế hoạch, xám=mức kế hoạch, dải màu
   categorical cho nhóm tốc độ) — không phải màu ngẫu hứng cần dọn. Không đổi logic/data.

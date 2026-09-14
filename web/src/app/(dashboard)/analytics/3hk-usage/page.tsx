@@ -1,21 +1,23 @@
 ﻿"use client"
 
 import React, { useState, useEffect, useMemo } from "react"
+import dynamic from "next/dynamic"
 import {
   Activity, Search, Filter, Download, RefreshCw, Calendar, Package,
   ChevronUp, ChevronDown, Database, BarChart3,
 } from "lucide-react"
-import {
-  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-} from "recharts"
 import { cn } from "@/lib/utils"
 import { formatNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { exportRawRows, exportAOA } from "@/lib/export-excel"
-import { CHART_GRID_COLOR } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel ThreeHKDataUsage. Data qua /api/analytics/query (SELECT-only).
 // Bỏ motion/react (không dùng), inline getDefaultDateRange/formatDate.
+
+// Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu (s196+21, roadmap performance s196+20).
+const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
+const SpeedComparisonChart = dynamic(() => import("./3hk-usage-charts").then(m => m.SpeedComparisonChart), { ssr: false, loading: chartLoading })
+const UsageDistChart       = dynamic(() => import("./3hk-usage-charts").then(m => m.UsageDistChart),       { ssr: false, loading: chartLoading })
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -1013,21 +1015,7 @@ export default function ThreeHKDataUsagePage() {
             <p className="text-[11px] text-slate-400 mt-1">Cột Thực tế <span className="text-rose-600 font-semibold">đỏ</span> = vượt mức 3HK cấp/ngày của nhóm (chi phí datapool cao hơn dự kiến), <span className="text-emerald-600 font-semibold">xanh</span> = trong kế hoạch. Cột xám = mức kế hoạch/ngày (data_amount_gb ÷ ngày).</p>
           </div>
           <div className="p-4" style={{ height: 320 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={speedChart} margin={{ top: 8, right: 16, left: 0, bottom: 8 }} barGap={4}>
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} />
-                <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" GB" width={60} />
-                <Tooltip formatter={(v: number, n: string) => [`${Number(v).toFixed(2)} GB`, n]} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="assume" name="Kế hoạch (GB/ngày)" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="actual" name="Thực tế (GB/ngày/SIM)" radius={[4, 4, 0, 0]}>
-                  {speedChart.map((d, i) => (
-                    <Cell key={i} fill={d.actual > d.assume ? "#e11d48" : "#10b981"} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <SpeedComparisonChart data={speedChart} />
           </div>
         </div>
       )}
@@ -1043,19 +1031,7 @@ export default function ThreeHKDataUsagePage() {
             <p className="text-[11px] text-slate-400 mt-1">Trục X = dải GB dùng/ngày/SIM, trục Y = số SIM (Active). Cột chồng theo nhóm tốc độ. Đường tham chiếu: giả định 1.6GB (5mbps) · 1.8GB (10mbps).</p>
           </div>
           <div className="p-4" style={{ height: 340 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={usageDist.rows} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
-                <XAxis dataKey="range" tick={{ fontSize: 11, fill: "#64748b" }} unit=" GB" />
-                <YAxis tick={{ fontSize: 11, fill: "#64748b" }} width={48} allowDecimals={false} />
-                <Tooltip formatter={(v: number, n: string) => [`${v} SIM`, n]} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                {usageDist.groups.map((g, i) => (
-                  <Bar key={g} dataKey={g} name={g} stackId="d"
-                    fill={["#6366f1", "#f59e0b", "#10b981", "#0ea5e9"][i % 4]} radius={[0, 0, 0, 0]} />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
+            <UsageDistChart rows={usageDist.rows} groups={usageDist.groups} />
           </div>
         </div>
       )}

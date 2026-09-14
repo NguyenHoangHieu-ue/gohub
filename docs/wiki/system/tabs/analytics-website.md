@@ -67,6 +67,10 @@ s194 ở trên). Chạy đúng 1 lần (chạy lại sẽ thêm trùng entry) �
 - B2C Metric subtab cũng dùng GA4 `yearMonth` dimension để lấy Traffic/Users theo tháng — xem [[analytics-b2c]].
 
 ## 6. Gotchas
+- **s196+21 (2026-09-14) — code-split recharts**: 3 chart (Traffic Overview, Search Trends, Revenue
+  Breakdown) tách sang `website-charts.tsx` (`React.memo` + `next/dynamic({ssr:false})`, cùng pattern
+  `bod-charts.tsx`) — trước import `recharts` trực tiếp ở `page.tsx` (1057 dòng). Phát hiện qua audit
+  performance toàn hệ thống. Không đổi số liệu/UI.
 - **s196+20 (2026-09-14)**: fix bug clip bảng lồng trong expand-row (dòng ~970, breakdown "Product
   Purchased" khi mở rộng 1 destination) — wrapper thiếu HẲN class overflow nào, nội dung bảng bị clip khi
   không đủ chỗ trên màn hình hẹp. Phát hiện qua audit UI/UX toàn hệ thống. Thêm `overflow-x-auto`.

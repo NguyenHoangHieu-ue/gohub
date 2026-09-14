@@ -1,20 +1,23 @@
 ﻿"use client"
 
 import React, { useState, useEffect, useMemo } from "react"
-import {
-  AreaChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from "recharts"
+import dynamic from "next/dynamic"
 import {
   ShoppingBag, TrendingUp, TrendingDown, Search, Download, Package, DollarSign,
   ShoppingCart, LayoutDashboard, ChevronDown, Check, MapPin, FileText,
 } from "lucide-react"
 import { domToCanvas } from "modern-screenshot"
 import { cn } from "@/lib/utils"
-import { formatCurrency, formatNumber, formatCompactNumber, formatTruncatedString } from "@/lib/analytics-formatters"
+import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { useToast } from "@/components/toast"
 import { exportToExcel, exportRawRows } from "@/lib/export-excel"
-import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
+import { StatTile, type MetricAccent, CHART_PALETTE } from "@/components/dashboard-kit"
+
+// Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu (s196+21, roadmap performance s196+20).
+const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
+const SalesUnitsTrendChart = dynamic(() => import("./products-charts").then(m => m.SalesUnitsTrendChart), { ssr: false, loading: chartLoading })
+const TopRegionsChart      = dynamic(() => import("./products-charts").then(m => m.TopRegionsChart),      { ssr: false, loading: chartLoading })
 
 // Port "y hệt" gohub-intel ProductPerformance. Data qua /api/analytics/query + /api/channels +
 // /api/config/sku-destination-rule + /api/config/country-codes + /api/analytics/b2b/strategic-performance +
@@ -756,22 +759,7 @@ export default function ProductPerformancePage() {
             </div>
             <div className="h-[350px] w-full">
               {loading ? <Skeleton className="h-full w-full" /> : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trendData}>
-                    <defs>
-                      <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={CHART_PALETTE[0]} stopOpacity={0.15} /><stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} dy={10} />
-                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} tickFormatter={(val) => formatCompactNumber(val)} />
-                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fill: CHART_PALETTE[1], fontSize: 12 }} />
-                    <Tooltip contentStyle={chartTooltipStyle} />
-                    <Area yAxisId="left" type="monotone" dataKey="revenue" stroke={CHART_PALETTE[0]} strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
-                    <Line yAxisId="right" type="monotone" dataKey="units" stroke={CHART_PALETTE[1]} strokeWidth={2} dot={false} name="Units" />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <SalesUnitsTrendChart data={trendData} />
               )}
             </div>
           </div>
@@ -784,15 +772,7 @@ export default function ProductPerformancePage() {
             </div>
             <div className="h-[500px] w-full">
               {loading ? <Skeleton className="h-full w-full" /> : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={regionData} layout="vertical" margin={{ left: 30, right: 40, top: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={CHART_GRID_COLOR} />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="region" type="category" axisLine={false} tickLine={false} tick={{ fill: "#475569", fontSize: 11, fontWeight: 600 }} width={180} interval={0} tickFormatter={(value) => formatTruncatedString(value, 20)} />
-                    <Tooltip contentStyle={chartTooltipStyle} formatter={(val: number) => [formatCompactNumber(val), "Revenue"]} />
-                    <Bar dataKey="revenue" fill={CHART_PALETTE[0]} radius={[0, 4, 4, 0]} barSize={32} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <TopRegionsChart data={regionData} />
               )}
             </div>
           </div>

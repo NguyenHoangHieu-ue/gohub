@@ -94,6 +94,10 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn nhập cost lại → cần khôi phục button trong `page.tsx`.
 
 ## 5. Gotchas
+- **s196+21 (2026-09-14) — code-split recharts**: chart "Revenue Trend" tách sang `channels-charts.tsx`
+  (`React.memo` + `next/dynamic({ssr:false})`, cùng pattern `bod-charts.tsx`) — trước import `recharts`
+  trực tiếp ở `page.tsx` (1844 dòng, file lớn thứ 2 repo). Phát hiện qua audit performance toàn hệ thống.
+  Không đổi số liệu/UI.
 - **s194+9 (2026-09-06)**: UI redesign — chart Revenue Trend + toàn bộ `blue-*` đổi sang `CHART_PALETTE`/
   `brand-*` dùng chung (không đổi logic/API). Lúc làm phát hiện `CostManagementModal`/`showCostModal`/
   `dbRole` trong `page.tsx` là dead code còn sót từ lúc ngắt Manage Costs (§4 trên) — chưa dọn, không phải

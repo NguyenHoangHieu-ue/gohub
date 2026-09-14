@@ -1,10 +1,7 @@
 ﻿"use client"
 
 import React, { useState, useEffect, useMemo } from "react"
-import {
-  CartesianGrid, Tooltip, ResponsiveContainer,
-  Area, Line, ComposedChart, XAxis, YAxis,
-} from "recharts"
+import dynamic from "next/dynamic"
 import {
   TrendingUp, TrendingDown, DollarSign, ShoppingBag,
   Filter, Calendar, Download, RefreshCw,
@@ -17,10 +14,14 @@ import { CostManagementModal } from "@/components/cost-management-modal"
 import { exportRawRows } from "@/lib/export-excel"
 import { useDbRole } from "@/lib/use-role-guard"
 import { B2BCustomerDetail } from "@/components/channels/b2b-customer-detail"
-import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
+import { StatTile, type MetricAccent } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel ChannelPerformance (deep-dive 1 kênh). Data qua /api/analytics/query
 // (SELECT-only) + /api/channels + endpoint cost sẵn có. Bỏ motion/react (thay tr thường + CSS).
+
+// Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu (s196+21, roadmap performance s196+20).
+const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
+const RevenueTrendChart = dynamic(() => import("./channels-charts").then(m => m.RevenueTrendChart), { ssr: false, loading: chartLoading })
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -1435,28 +1436,7 @@ export default function ChannelPerformancePage() {
             {loading ? (
               <Skeleton className="w-full h-full" />
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={trendData}>
-                  <defs>
-                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={CHART_PALETTE[0]} stopOpacity={0.15} />
-                      <stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b", fontWeight: 600 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b", fontWeight: 600 }} tickFormatter={(val) => formatCompactNumber(val)} />
-                  <Tooltip
-                    contentStyle={{ ...chartTooltipStyle, padding: "12px" }}
-                    formatter={(val: number, name: string) => [formatCurrency(val), name === "revenue" ? "Current" : "Previous"]}
-                  />
-                  <Area type="monotone" dataKey="revenue" stroke={CHART_PALETTE[0]} strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="revenue" />
-                  <Line type="monotone" dataKey="margin" stroke={CHART_PALETTE[1]} strokeWidth={2} dot={false} name="Gross Profit" />
-                  {comparisonType !== "none" && (
-                    <Area type="monotone" dataKey="prevRevenue" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" fill="transparent" name="prevRevenue" />
-                  )}
-                </ComposedChart>
-              </ResponsiveContainer>
+              <RevenueTrendChart data={trendData} comparisonType={comparisonType} />
             )}
           </div>
         </div>
