@@ -354,3 +354,10 @@ customer dùng `JOIN first_order` quét lịch sử) trực tiếp mỗi lượt
 `cachedQuery(key, fn, 60, false, ["b2c-metric"])` quanh `Promise.all([businessRows, customerRows])`,
 key theo `windowStart:windowEnd`. GA4 traffic/users giữ nguyên không cache (ngoài pool gohub_dw). Thêm
 `export const maxDuration = 60` (khớp trần Hobby, tường minh thay vì mặc định ẩn).
+
+### Sót màu `bg-blue-600` ở tab-switcher cha (s196+20 — 2026-09-14)
+
+`b2c/page.tsx` (component cha bọc 3 subtab Advanced/Performance/Metric) dùng `bg-blue-600` cho nút subtab
+đang active thay vì `bg-brand-600` — đợt fix màu s194+2/+3 chỉ sửa 3 component con
+(`B2CAdvancedDashboard`/`B2CPerformance`/`B2CMetric`), bỏ sót chính file cha. Phát hiện qua audit UI/UX
+toàn hệ thống. Đổi cả 3 chỗ (dòng 21/30/39) sang `bg-brand-600`.

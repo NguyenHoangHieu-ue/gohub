@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState } from "react"
 import { cn } from "@/lib/utils"
@@ -18,7 +18,7 @@ export default function B2CPage() {
           onClick={() => setView("advanced")}
           className={cn(
             "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
-            view === "advanced" ? "bg-blue-600 text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+            view === "advanced" ? "bg-brand-600 text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
           )}
         >
           Advanced
@@ -27,7 +27,7 @@ export default function B2CPage() {
           onClick={() => setView("main")}
           className={cn(
             "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
-            view === "main" ? "bg-blue-600 text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+            view === "main" ? "bg-brand-600 text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
           )}
         >
           Performance
@@ -36,7 +36,7 @@ export default function B2CPage() {
           onClick={() => setView("metric")}
           className={cn(
             "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
-            view === "metric" ? "bg-blue-600 text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+            view === "metric" ? "bg-brand-600 text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
           )}
         >
           Metric
