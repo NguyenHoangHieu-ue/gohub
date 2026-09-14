@@ -6,6 +6,7 @@ import { canWriteTab } from "@/lib/writable-tabs"
 import { parseQuarterLabel } from "@/lib/okr-helpers"
 
 const READ_ROLES = ["admin", "creator", "bod"]
+const MIN_TASK_RESPONSE_LEN = 15   // khớp đúng ngưỡng "task được tính" ở api/analytics/my-metrics + begau-insights
 
 // GET ?quarter=Q3-2026&page=0&limit=20
 export async function GET(req: NextRequest) {
@@ -28,20 +29,25 @@ export async function GET(req: NextRequest) {
   // + begau-insights) — trước route này liệt kê MỌI chat có response (kể cả trả lời chay), không khớp
   // số "task" hiển thị trên thẻ KPI. Thêm `used_db_tool` để danh sách này đúng là breakdown "case nào
   // được tính" thay vì danh sách chung chung.
-  const { data, error, count } = await supabaseAdmin
+  // Fix s197 (audit toàn hệ thống): thiếu ngưỡng MIN_TASK_RESPONSE_LEN mà 2 route anh em đều áp — nên
+  // convTotal ở đây có thể LỚN HƠN số Tasks trên KPI card. Supabase query builder không filter được theo
+  // LENGTH(ai_response) trực tiếp → fetch nguyên quarter (used_db_tool=true), lọc độ dài trong JS rồi mới
+  // phân trang thủ công (khớp cách begau-insights/my-metrics đang làm).
+  const { data, error } = await supabaseAdmin
     .from("app_usage_events")
-    .select("id, user_message, ai_response, user_email, user_name, created_at, agent_id, tools_used", { count: "exact" })
+    .select("id, user_message, ai_response, user_email, user_name, created_at, agent_id, tools_used")
     .eq("event_type", "chat")
     .not("ai_response", "is", null)
     .eq("used_db_tool", true)
     .gte("created_at", startDate)
     .lte("created_at", endDate)
     .order("created_at", { ascending: false })
-    .range(page * limit, (page + 1) * limit - 1)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const rows = (data ?? []).map(r => ({
+  const tasks = (data ?? []).filter(r => ((r.ai_response as string) ?? "").trim().length >= MIN_TASK_RESPONSE_LEN)
+  const total = tasks.length
+  const rows = tasks.slice(page * limit, (page + 1) * limit).map(r => ({
     id:           r.id,
     user_message: r.user_message,
     ai_response:  (r.ai_response as string)?.slice(0, 400),   // truncate để không bloat
@@ -51,5 +57,5 @@ export async function GET(req: NextRequest) {
     tools_used:   (r.tools_used as string[] | null) ?? [],
   }))
 
-  return NextResponse.json({ rows, total: count ?? 0, page, limit })
+  return NextResponse.json({ rows, total, page, limit })
 }

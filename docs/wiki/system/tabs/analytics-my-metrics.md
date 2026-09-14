@@ -13,6 +13,14 @@ status: active
 
 # My Metrics — OKR Tracking
 
+## s197 (2026-09-14) — Fix: danh sách "cuộc hội thoại được tính" đếm nhiều hơn KPI card
+Phát hiện qua audit toàn hệ thống logic dữ liệu. `api/analytics/my-metrics/conversations/route.ts` lọc
+`used_db_tool=true` nhưng thiếu `MIN_TASK_RESPONSE_LEN(15)` mà 2 route anh em (`my-metrics/route.ts`,
+`begau-insights/route.ts`) đều áp cho cùng định nghĩa "task được tính". Nút "Xem danh sách cuộc hội
+thoại được tính" trên UI có thể hiện `convTotal` LỚN HƠN số Tasks trên KPI card. Fix: Supabase query
+builder không filter được theo `LENGTH(ai_response)` trực tiếp → route giờ fetch nguyên quý
+(`used_db_tool=true`), lọc độ dài trong JS rồi mới phân trang thủ công (khớp cách 2 route kia đang làm).
+
 ## s195+19 (2026-09-11) — mã nước SKU sai + redesign UI tab phân đoạn
 
 Tiếp sau s195+18-C. 2 việc:
