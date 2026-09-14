@@ -1,25 +1,30 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { Globe, Package, TrendingUp, Award, Wifi, ShieldCheck, RefreshCw } from "lucide-react"
+import { Globe, Package, Layers, PhoneCall, Wifi, ShieldCheck, ShieldAlert, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatNumber } from "@/lib/analytics-formatters"
 import { StatTile, StatTileSkeleton, EmptyState } from "@/components/dashboard-kit"
 
-// GoHub Product Catalogue — giới thiệu thế mạnh sản phẩm theo destination cho nội bộ (Hiếu yêu cầu
-// 2026-09-14). "Dòng sản phẩm" = vendor × SIM/eSIM (dữ liệu thật dim_sku, không tự đặt taxonomy mới).
-// Badge (Best Seller/Fastest Growing/Best Value) tính từ số liệu 90 ngày thật, xem
-// api/analytics/product-catalogue/route.ts. v1: cố định 90 ngày, top 8 destination theo doanh thu.
+// GoHub Product Catalogue — 3 tầng Destination → Loại sản phẩm → Sản phẩm cụ thể (Hiếu yêu cầu
+// 2026-09-14, đợt 2). Xem api/analytics/product-catalogue/route.ts để biết cách phân loại/decode SKU
+// (dựa đúng docs/wiki/business/ma-sku.md + loai-data-policy.md, không tự đặt taxonomy).
 
-interface CatalogueLine {
-  vendor: string; typeOfSim: string; revenue: number; units: number
-  revenueSharePct: number; growthPct: number | null
-  networkType: string | null; hotspot: boolean; kycNeeded: boolean
-  badges: string[]
+interface CatalogueProduct {
+  sku: string; vendor: string; typeOfSim: string
+  dataPolicyGroup: "unlimited" | "fixed" | "special" | null
+  capLabel: string | null; days: number | null
+  revenue: number; units: number; growthPct: number | null; badges: string[]
+}
+interface CatalogueCategory {
+  key: string; label: string; hasCall: boolean
+  hotspot: boolean | null; kycNeeded: boolean | null; networkTypes: string[]
+  revenue: number; units: number; revenueSharePct: number; growthPct: number | null
+  productCount: number; badges: string[]; products: CatalogueProduct[]
 }
 interface CatalogueDestination {
-  code: string; name: string; totalRevenue: number; totalUnits: number; lineCount: number
-  lines: CatalogueLine[]
+  code: string; name: string; totalRevenue: number; totalUnits: number
+  categoryCount: number; categories: CatalogueCategory[]
 }
 
 const BADGE_META: Record<string, { label: string; className: string }> = {
@@ -27,8 +32,30 @@ const BADGE_META: Record<string, { label: string; className: string }> = {
   fastest_growing: { label: "📈 Tăng trưởng mạnh", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   best_value:      { label: "💰 Giá tốt nhất",     className: "bg-brand-50 text-brand-700 border-brand-200" },
 }
+const DATA_POLICY_LABEL: Record<string, string> = { unlimited: "Không giới hạn", fixed: "Cố định", special: "Đặc biệt" }
 
 const formatCurrency = (v: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(v).replace("₫", "VND")
+
+function Badges({ badges }: { badges: string[] }) {
+  if (badges.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {badges.map(b => (
+        <span key={b} className={cn("text-[10px] font-bold px-2 py-1 rounded-full border whitespace-nowrap", BADGE_META[b]?.className)}>
+          {BADGE_META[b]?.label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function GrowthLabel({ growthPct }: { growthPct: number | null }) {
+  return (
+    <span className={cn("font-bold", growthPct == null ? "text-slate-400" : growthPct >= 0 ? "text-emerald-600" : "text-rose-500")}>
+      {growthPct != null ? `${growthPct >= 0 ? "+" : ""}${growthPct}%` : "—"}
+    </span>
+  )
+}
 
 export default function ProductCataloguePage() {
   const [loading, setLoading] = useState(true)
@@ -55,6 +82,7 @@ export default function ProductCataloguePage() {
   useEffect(() => { fetchData() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const current = destinations.find(d => d.code === selected)
+  const topCategoryLabel = current?.categories[0]?.label || "—"
 
   return (
     <div className="flex-1 overflow-auto bg-slate-50 p-4 lg:p-8">
@@ -101,56 +129,85 @@ export default function ProductCataloguePage() {
                 <>
                   <StatTile icon={<Globe className="w-4.5 h-4.5" />} label="Doanh thu 90 ngày" value={formatCurrency(current.totalRevenue)} accent="revenue" />
                   <StatTile icon={<Package className="w-4.5 h-4.5" />} label="Sản lượng" value={formatNumber(current.totalUnits)} unit="đơn" accent="neutral" />
-                  <StatTile icon={<Award className="w-4.5 h-4.5" />} label="Số dòng sản phẩm" value={current.lineCount} accent="positive" />
-                  <StatTile icon={<TrendingUp className="w-4.5 h-4.5" />} label="Vendor dẫn đầu" value={current.lines[0]?.vendor || "—"} accent="margin" />
+                  <StatTile icon={<Layers className="w-4.5 h-4.5" />} label="Số loại sản phẩm" value={current.categoryCount} accent="positive" />
+                  <StatTile icon={<PhoneCall className="w-4.5 h-4.5" />} label="Loại dẫn đầu" value={topCategoryLabel} accent="margin" />
                 </>
               )}
             </div>
 
-            {/* Product line cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {current.lines.map((l, i) => (
-                <div key={i} className="bg-white border border-slate-200 rounded-2xl p-5 flex flex-col gap-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-base font-bold text-slate-900">{l.vendor}</p>
-                      <p className="text-xs text-slate-500">{l.typeOfSim}</p>
+            {/* Category sections */}
+            <div className="space-y-5">
+              {current.categories.map(cat => (
+                <div key={cat.key} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                  {/* Category header */}
+                  <div className="p-5 border-b border-slate-100 flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <h2 className="text-lg font-bold text-slate-900">{cat.label}</h2>
+                        <p className="text-xs text-slate-500 mt-0.5">{cat.productCount} sản phẩm · {formatNumber(cat.units)} đơn đã bán</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className="text-sm font-bold text-brand-600 bg-brand-50 px-2.5 py-1 rounded-full whitespace-nowrap">
+                          {cat.revenueSharePct}% doanh thu destination
+                        </span>
+                        <span className="text-xs">Tăng trưởng <GrowthLabel growthPct={cat.growthPct} /></span>
+                      </div>
                     </div>
-                    <span className="text-xs font-bold text-brand-600 bg-brand-50 px-2 py-1 rounded-full whitespace-nowrap">{l.revenueSharePct}% doanh thu</span>
-                  </div>
-                  {l.badges.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {l.badges.map(b => (
-                        <span key={b} className={cn("text-[10px] font-bold px-2 py-1 rounded-full border", BADGE_META[b]?.className)}>
-                          {BADGE_META[b]?.label}
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      <Badges badges={cat.badges} />
+                      <span className={cn("text-[10px] font-semibold px-2 py-1 rounded-full flex items-center gap-1",
+                        cat.hasCall ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500")}>
+                        <PhoneCall className="w-3 h-3" />{cat.hasCall ? "Gọi/Nhắn tin được" : "Chỉ Data"}
+                      </span>
+                      {cat.kycNeeded != null && (
+                        <span className={cn("text-[10px] font-semibold px-2 py-1 rounded-full flex items-center gap-1",
+                          cat.kycNeeded ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500")}>
+                          {cat.kycNeeded ? <ShieldAlert className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />}
+                          {cat.kycNeeded ? "Cần KYC" : "Không cần KYC"}
+                        </span>
+                      )}
+                      {cat.hotspot != null && cat.hotspot && (
+                        <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-500">Hỗ trợ Hotspot</span>
+                      )}
+                      {cat.networkTypes.map(nt => (
+                        <span key={nt} className="text-[10px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-500 flex items-center gap-1">
+                          <Wifi className="w-3 h-3" />{nt}
                         </span>
                       ))}
                     </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase font-semibold">Sản lượng</p>
-                      <p className="font-bold text-slate-800">{formatNumber(l.units)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase font-semibold">Tăng trưởng</p>
-                      <p className={cn("font-bold", l.growthPct == null ? "text-slate-400" : l.growthPct >= 0 ? "text-emerald-600" : "text-rose-500")}>
-                        {l.growthPct != null ? `${l.growthPct >= 0 ? "+" : ""}${l.growthPct}%` : "—"}
-                      </p>
-                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
-                    {l.networkType && (
-                      <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-full flex items-center gap-1">
-                        <Wifi className="w-3 h-3" />{l.networkType}
-                      </span>
-                    )}
-                    {l.hotspot && <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-full">Hỗ trợ Hotspot</span>}
-                    {!l.kycNeeded && (
-                      <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-full flex items-center gap-1">
-                        <ShieldCheck className="w-3 h-3" />Không cần KYC
-                      </span>
-                    )}
+
+                  {/* Products in this category */}
+                  <div className="divide-y divide-slate-50">
+                    {cat.products.map(p => (
+                      <div key={p.sku} className="p-4 flex items-center justify-between gap-4 flex-wrap hover:bg-slate-50/50 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-800 truncate">
+                              {p.vendor} — {p.capLabel || "—"}{p.days ? ` / ${p.days} ngày` : ""}
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              {p.typeOfSim} · {p.dataPolicyGroup ? DATA_POLICY_LABEL[p.dataPolicyGroup] : "—"} · <span className="font-mono">{p.sku}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-5 flex-wrap">
+                          <Badges badges={p.badges} />
+                          <div className="text-right">
+                            <p className="text-[10px] text-slate-400 uppercase font-semibold">Doanh thu</p>
+                            <p className="text-sm font-bold text-slate-800">{formatCurrency(p.revenue)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] text-slate-400 uppercase font-semibold">Sản lượng</p>
+                            <p className="text-sm font-bold text-slate-800">{formatNumber(p.units)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] text-slate-400 uppercase font-semibold">Tăng trưởng</p>
+                            <p className="text-sm"><GrowthLabel growthPct={p.growthPct} /></p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}

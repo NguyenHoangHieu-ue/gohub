@@ -8,19 +8,69 @@ import {
   CACHE_HEADERS, cachedQuery, analyticsGuard,
 } from "@/lib/analytics-helpers"
 
-// GoHub Product Catalogue — tổng hợp "dòng sản phẩm" (vendor × SIM/eSIM) theo destination, xếp hạng
-// bằng số liệu thật (revenue/units/growth) để gắn badge Best Seller/Fastest Growing/Best Value.
-// 1 câu query tổng hợp DUY NHẤT cho gohub_dw (không loop theo destination/line — rule N+1, s197).
-// v1 cố định 90 ngày gần nhất so với 90 ngày trước đó (growth), chưa có date-range picker (xem plan).
+// GoHub Product Catalogue — 3 tầng Destination → Loại sản phẩm → Sản phẩm cụ thể (Hiếu yêu cầu
+// 2026-09-14, đợt 2). Toàn bộ phân loại dựa ĐÚNG cấu trúc mã SKU thật đã tài liệu hoá ở
+// docs/wiki/business/ma-sku.md + docs/wiki/business/loai-data-policy.md — KHÔNG tự đặt taxonomy mới:
+//   - Ký tự 2 (ProductType): C=eSIM full, E=SIM full (2 loại chính bán ra thị trường) — chỉ đúng cho
+//     SKU chuẩn 13 ký tự (SKU legacy 14/15 ký tự không có prefix pháp nhân/loại SP, decode = null → "Khác").
+//   - Ký tự 8 (Data Policy): nhóm Unlimited {A,B,C,D,H} vs Fixed {E,F,G,P,Y,Z} vs Special {K} — CHỈ dùng
+//     nhóm (Unlimited/Fixed), KHÔNG dùng mbps chi tiết vì 2 wiki nguồn ghi ngược nhau A/B (chưa đối chiếu
+//     được với DB thật — an toàn hơn khi chỉ nói "Unlimited"/"Fixed", không bịa số mbps).
+//   - Ký tự 9-11 (dung lượng) + 12-13 (số ngày): decode theo 4 dạng mã hoá (NNN/NHM/NDN/UNL) trong wiki.
+//   - "Có gọi/nhắn tin nội địa" = Supabase products.local_phone_number = "Yes" (field thật, không suy đoán).
+// 1 câu query tổng hợp DUY NHẤT cho gohub_dw (rule N+1, s197) — không loop theo destination/category.
 
 const TOP_DESTINATIONS = 8
-const GROWTH_BADGE_THRESHOLD = 15   // % — dưới ngưỡng này không gắn badge "Đang tăng trưởng mạnh"
+const TOP_PRODUCTS_PER_CATEGORY = 6
+const GROWTH_BADGE_THRESHOLD = 15    // % — dưới ngưỡng này không gắn badge "Tăng trưởng mạnh"
 const MIN_UNITS_FOR_VALUE_BADGE = 10 // tránh outlier 1-2 đơn lẻ thành "Giá tốt nhất"
 
-interface LineRow {
-  destination: string; vendor: string; typeOfSim: string
-  revenue: number; prevRevenue: number; units: number; margin: number
-  topSku: string; topSkuRevenue: number
+const UNLIMITED_POLICY = new Set(["A", "B", "C", "D", "H"])
+const FIXED_POLICY = new Set(["E", "F", "G", "P", "Y", "Z"])
+
+interface SkuDecode {
+  productType: string | null
+  dataPolicyGroup: "unlimited" | "fixed" | "special" | null
+  capLabel: string | null
+  days: number | null
+}
+
+function decodeSku(sku: string): SkuDecode {
+  if (sku.length !== 13) return { productType: null, dataPolicyGroup: null, capLabel: null, days: null }
+  const productType = sku[1]?.toUpperCase() || null
+  const dpChar = sku[7]?.toUpperCase() || ""
+  const dataPolicyGroup: SkuDecode["dataPolicyGroup"] =
+    UNLIMITED_POLICY.has(dpChar) ? "unlimited" : FIXED_POLICY.has(dpChar) ? "fixed" : dpChar === "K" ? "special" : null
+  const capChars = sku.slice(8, 11)
+  let capLabel: string | null = null
+  if (capChars === "UNL") capLabel = "Không giới hạn"
+  else if (/^\d{3}$/.test(capChars)) capLabel = `${parseInt(capChars, 10)}GB`
+  else if (/^\dHM$/i.test(capChars)) capLabel = `${parseInt(capChars[0], 10) * 100}MB`
+  else if (/^\dD\d$/i.test(capChars)) capLabel = `${capChars[0]}.${capChars[2]}GB`
+  const daysStr = sku.slice(11, 13)
+  const days = /^\d{2}$/.test(daysStr) ? parseInt(daysStr, 10) : null
+  return { productType, dataPolicyGroup, capLabel, days }
+}
+
+type CategoryKey = "esim_data" | "esim_local" | "sim_data" | "sim_local" | "other"
+
+function categoryKey(productType: string | null, hasCall: boolean): CategoryKey {
+  if (productType === "C") return hasCall ? "esim_local" : "esim_data"
+  if (productType === "E") return hasCall ? "sim_local" : "sim_data"
+  return "other"
+}
+
+const CATEGORY_LABEL: Record<CategoryKey, string> = {
+  esim_data:  "eSIM — Chỉ Data",
+  esim_local: "eSIM — Có số nội địa (Gọi/Nhắn tin)",
+  sim_data:   "SIM vật lý — Chỉ Data",
+  sim_local:  "SIM vật lý — Nội địa (Gọi/Nhắn tin)",
+  other:      "Khác",
+}
+
+interface SkuAgg {
+  sku: string; vendor: string; typeOfSim: string
+  revenue: number; prevRevenue: number; units: number
 }
 
 export async function GET(req: NextRequest) {
@@ -28,17 +78,16 @@ export async function GET(req: NextRequest) {
   const guard = analyticsGuard(req, session); if (guard) return guard
 
   try {
-    const payload = await cachedQuery("product-catalogue:v1", async () => {
+    const payload = await cachedQuery("product-catalogue:v2", async () => {
       const destExpr = getDestinationSQL()
       const sfx = `${shipFilter(false)} ${internalOpsFilter(false)}`
 
-      // 1 query duy nhất: gộp 2 kỳ (current 90d / previous 90d) bằng CASE, group theo
-      // destination×vendor×type_of_sim×sku (cần sku để lấy top-SKU đại diện mỗi dòng SP).
+      // 1 query duy nhất: gộp 2 kỳ (current 90d / previous 90d) bằng CASE, giữ nguyên grain SKU (cần
+      // để decode ProductType/DataPolicy/dung lượng/số ngày ở tầng "sản phẩm cụ thể").
       const rows = await queryAnalytics<Record<string, string>>(
         `WITH tagged AS (
            SELECT f.sku, TRIM(v.vendor) as vendor, v.type_of_sim,
-                  f.fulfilled_revenue_amount_vnd as revenue, f.gross_profit_vnd as margin,
-                  f.fulfilled_quantity as units,
+                  f.fulfilled_revenue_amount_vnd as revenue, f.fulfilled_quantity as units,
                   CASE WHEN f.fulfiled_date::date >= CURRENT_DATE - INTERVAL '90 days' THEN 'current'
                        WHEN f.fulfiled_date::date >= CURRENT_DATE - INTERVAL '180 days' THEN 'previous'
                        ELSE NULL END as period,
@@ -52,7 +101,7 @@ export async function GET(req: NextRequest) {
              AND v.vendor IS NOT NULL AND v.type_of_sim IS NOT NULL
          )
          SELECT destination, vendor, type_of_sim, period, sku,
-                SUM(revenue) as revenue, SUM(margin) as margin, SUM(units) as units
+                SUM(revenue) as revenue, SUM(units) as units
          FROM tagged
          WHERE period IS NOT NULL
          GROUP BY destination, vendor, type_of_sim, period, sku`
@@ -64,95 +113,126 @@ export async function GET(req: NextRequest) {
         if (r.period !== "current") return
         destRevenue.set(r.destination, (destRevenue.get(r.destination) || 0) + parseFloat(r.revenue || "0"))
       })
-      const topDestinations = [...destRevenue.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, TOP_DESTINATIONS)
-        .map(([d]) => d)
+      const topDestinations = [...destRevenue.entries()].sort((a, b) => b[1] - a[1]).slice(0, TOP_DESTINATIONS).map(([d]) => d)
       const topDestSet = new Set(topDestinations)
 
-      // Gộp theo destination × vendor × type_of_sim (bỏ chiều sku, nhưng giữ lại SKU top-revenue đại
-      // diện mỗi dòng để lát nữa lấy metadata mô tả từ Supabase products).
-      const lineMap = new Map<string, LineRow>()
+      // Gộp theo destination × sku (giữ nguyên grain sản phẩm cụ thể).
+      const skuMap = new Map<string, Map<string, SkuAgg>>() // destination -> sku -> agg
       rows.forEach(r => {
         if (!topDestSet.has(r.destination)) return
-        const key = `${r.destination}|${r.vendor}|${r.type_of_sim}`
-        if (!lineMap.has(key)) {
-          lineMap.set(key, {
-            destination: r.destination, vendor: r.vendor, typeOfSim: r.type_of_sim,
-            revenue: 0, prevRevenue: 0, units: 0, margin: 0, topSku: "", topSkuRevenue: 0,
-          })
-        }
-        const line = lineMap.get(key)!
+        if (!skuMap.has(r.destination)) skuMap.set(r.destination, new Map())
+        const byDest = skuMap.get(r.destination)!
+        if (!byDest.has(r.sku)) byDest.set(r.sku, { sku: r.sku, vendor: r.vendor, typeOfSim: r.type_of_sim, revenue: 0, prevRevenue: 0, units: 0 })
+        const agg = byDest.get(r.sku)!
         const rev = parseFloat(r.revenue || "0")
-        if (r.period === "current") {
-          line.revenue += rev
-          line.units += parseFloat(r.units || "0")
-          line.margin += parseFloat(r.margin || "0")
-          if (rev > line.topSkuRevenue) { line.topSkuRevenue = rev; line.topSku = r.sku }
-        } else {
-          line.prevRevenue += rev
-        }
+        if (r.period === "current") { agg.revenue += rev; agg.units += parseFloat(r.units || "0") }
+        else agg.prevRevenue += rev
       })
 
-      // Metadata mô tả (network/hotspot/KYC) — 1 query Supabase duy nhất, prefix-match top-SKU mỗi dòng
-      // (product_code Supabase là 8 ký tự đầu của sku thật, sku thêm suffix theo gói dung lượng/thời hạn).
-      const topSkus = [...lineMap.values()].map(l => l.topSku).filter(Boolean)
-      const metaBySku = new Map<string, { network_type: string | null; hotspot: string | null; kyc_needed: string | null }>()
-      if (topSkus.length > 0) {
-        const { data: products } = await supabaseAdmin
-          .from("products")
-          .select("product_code, network_type, hotspot, kyc_needed")
-        ;(products || []).forEach(p => {
-          topSkus.forEach(sku => {
-            if (sku.startsWith(p.product_code)) metaBySku.set(sku, p)
-          })
-        })
-      }
+      // Metadata thật (network/hotspot/KYC/local_phone_number) — 1 query Supabase duy nhất cho TOÀN BỘ
+      // bảng products, prefix-match trong JS (product_code Supabase = 8 ký tự đầu của sku thật, đã verify
+      // ở đợt build v1 — sku có thêm suffix theo dung lượng/thời hạn nên không exact-match được).
+      const allSkus = new Set<string>()
+      skuMap.forEach(byDest => byDest.forEach(a => allSkus.add(a.sku)))
+      const { data: products } = await supabaseAdmin
+        .from("products")
+        .select("product_code, network_type, hotspot, kyc_needed, local_phone_number")
+      const metaBySku = new Map<string, { network_type: string | null; hotspot: string | null; kyc_needed: string | null; local_phone_number: string | null }>()
+      ;(products || []).forEach(p => {
+        allSkus.forEach(sku => { if (sku.startsWith(p.product_code)) metaBySku.set(sku, p) })
+      })
 
       const countryMap = await getCountryMappings()
 
       const destinations = topDestinations.map(dest => {
-        const lines = [...lineMap.values()].filter(l => l.destination === dest)
-        const totalRevenue = lines.reduce((s, l) => s + l.revenue, 0)
-        const totalUnits = lines.reduce((s, l) => s + l.units, 0)
+        const skus = [...(skuMap.get(dest)?.values() ?? [])]
+        const totalRevenue = skus.reduce((s, a) => s + a.revenue, 0)
+        const totalUnits = skus.reduce((s, a) => s + a.units, 0)
 
-        // Badge: rank trong CHÍNH destination này (không so toàn hệ thống).
-        const bestSellerKey = lines.length ? lines.reduce((a, b) => (b.revenue > a.revenue ? b : a)).vendor + lines.reduce((a, b) => (b.revenue > a.revenue ? b : a)).typeOfSim : ""
-        const valueCandidates = lines.filter(l => l.units >= MIN_UNITS_FOR_VALUE_BADGE)
-        const bestValueKey = valueCandidates.length
-          ? valueCandidates.reduce((a, b) => (b.revenue / Math.max(b.units, 1) < a.revenue / Math.max(a.units, 1) ? b : a)).vendor +
-            valueCandidates.reduce((a, b) => (b.revenue / Math.max(b.units, 1) < a.revenue / Math.max(a.units, 1) ? b : a)).typeOfSim
-          : ""
+        // Gom theo Category, mỗi SKU quyết định category qua ProductType (SKU) + local_phone_number (meta).
+        const catMap = new Map<CategoryKey, SkuAgg[]>()
+        skus.forEach(a => {
+          const meta = metaBySku.get(a.sku)
+          const decoded = decodeSku(a.sku)
+          const hasCall = meta?.local_phone_number === "Yes"
+          const key = categoryKey(decoded.productType, hasCall)
+          if (!catMap.has(key)) catMap.set(key, [])
+          catMap.get(key)!.push(a)
+        })
+
+        const catRevenues = [...catMap.entries()].map(([k, arr]) => [k, arr.reduce((s, a) => s + a.revenue, 0)] as const)
+        const bestSellerCat = catRevenues.length ? catRevenues.reduce((a, b) => (b[1] > a[1] ? b : a))[0] : null
+
+        const categories = [...catMap.entries()]
+          .map(([key, arr]) => {
+            const catRevenue = arr.reduce((s, a) => s + a.revenue, 0)
+            const catPrevRevenue = arr.reduce((s, a) => s + a.prevRevenue, 0)
+            const catUnits = arr.reduce((s, a) => s + a.units, 0)
+            const catGrowthPct = catPrevRevenue > 0 ? ((catRevenue - catPrevRevenue) / catPrevRevenue) * 100 : null
+
+            // Đại diện đặc điểm category: lấy đa số (mode) thay vì SKU đầu tiên, tránh 1 SKU lệch làm sai chip.
+            const metaList = arr.map(a => metaBySku.get(a.sku)).filter(Boolean) as NonNullable<ReturnType<typeof metaBySku.get>>[]
+            const majorityYes = (field: "hotspot" | "kyc_needed") => {
+              if (metaList.length === 0) return null
+              const yes = metaList.filter(m => m[field] === "Yes").length
+              return yes >= metaList.length / 2
+            }
+            const networkTypes = [...new Set(metaList.map(m => m.network_type).filter(Boolean))] as string[]
+
+            const sortedSkus = [...arr].sort((a, b) => b.revenue - a.revenue)
+            const bestSellerSku = sortedSkus[0]?.sku
+            const valueCandidates = arr.filter(a => a.units >= MIN_UNITS_FOR_VALUE_BADGE)
+            const bestValueSku = valueCandidates.length
+              ? valueCandidates.reduce((a, b) => (b.revenue / Math.max(b.units, 1) < a.revenue / Math.max(a.units, 1) ? b : a)).sku
+              : null
+
+            return {
+              key,
+              label: CATEGORY_LABEL[key],
+              hasCall: key === "esim_local" || key === "sim_local",
+              hotspot: majorityYes("hotspot"),
+              kycNeeded: majorityYes("kyc_needed"),
+              networkTypes,
+              revenue: Math.round(catRevenue),
+              units: Math.round(catUnits),
+              revenueSharePct: totalRevenue > 0 ? Math.round((catRevenue / totalRevenue) * 1000) / 10 : 0,
+              growthPct: catGrowthPct != null ? Math.round(catGrowthPct * 10) / 10 : null,
+              productCount: arr.length,
+              badges: [
+                key === bestSellerCat ? "best_seller" : null,
+                catGrowthPct != null && catGrowthPct >= GROWTH_BADGE_THRESHOLD ? "fastest_growing" : null,
+              ].filter(Boolean),
+              products: sortedSkus.slice(0, TOP_PRODUCTS_PER_CATEGORY).map(a => {
+                const decoded = decodeSku(a.sku)
+                const growthPct = a.prevRevenue > 0 ? ((a.revenue - a.prevRevenue) / a.prevRevenue) * 100 : null
+                return {
+                  sku: a.sku,
+                  vendor: a.vendor,
+                  typeOfSim: a.typeOfSim,
+                  dataPolicyGroup: decoded.dataPolicyGroup,
+                  capLabel: decoded.capLabel,
+                  days: decoded.days,
+                  revenue: Math.round(a.revenue),
+                  units: Math.round(a.units),
+                  growthPct: growthPct != null ? Math.round(growthPct * 10) / 10 : null,
+                  badges: [
+                    a.sku === bestSellerSku ? "best_seller" : null,
+                    growthPct != null && growthPct >= GROWTH_BADGE_THRESHOLD ? "fastest_growing" : null,
+                    a.sku === bestValueSku ? "best_value" : null,
+                  ].filter(Boolean),
+                }
+              }),
+            }
+          })
+          .sort((a, b) => b.revenue - a.revenue)
 
         return {
           code: dest,
           name: countryMap[dest] || dest,
           totalRevenue: Math.round(totalRevenue),
           totalUnits: Math.round(totalUnits),
-          lineCount: lines.length,
-          lines: lines
-            .sort((a, b) => b.revenue - a.revenue)
-            .map(l => {
-              const growthPct = l.prevRevenue > 0 ? ((l.revenue - l.prevRevenue) / l.prevRevenue) * 100 : null
-              const meta = metaBySku.get(l.topSku)
-              const lineKey = l.vendor + l.typeOfSim
-              return {
-                vendor: l.vendor,
-                typeOfSim: l.typeOfSim,
-                revenue: Math.round(l.revenue),
-                units: Math.round(l.units),
-                revenueSharePct: totalRevenue > 0 ? Math.round((l.revenue / totalRevenue) * 1000) / 10 : 0,
-                growthPct: growthPct != null ? Math.round(growthPct * 10) / 10 : null,
-                networkType: meta?.network_type || null,
-                hotspot: meta?.hotspot === "Yes",
-                kycNeeded: meta?.kyc_needed === "Yes",
-                badges: [
-                  lineKey === bestSellerKey ? "best_seller" : null,
-                  growthPct != null && growthPct >= GROWTH_BADGE_THRESHOLD ? "fastest_growing" : null,
-                  lineKey === bestValueKey ? "best_value" : null,
-                ].filter(Boolean),
-              }
-            }),
+          categoryCount: categories.length,
+          categories,
         }
       }).sort((a, b) => b.totalRevenue - a.totalRevenue)
 
