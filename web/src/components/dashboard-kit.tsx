@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import React, { useState, useEffect, useMemo } from "react"
+import { ChevronLeft, ChevronRight, ChevronsUpDown, ChevronUp, ChevronDown, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 /**
@@ -276,28 +276,78 @@ export function StatTile({ icon, label, value, unit, accent = "neutral", goalLab
 // ─── DataTable (bảng dữ liệu tổng quát, phân trang sẵn) ───────────────────────
 // Port từ `components/my-metrics/shared-ui.tsx` (chỉ 1 trang dùng trước đây) — tổng quát hoá cho mọi
 // trang. `my-metrics/shared-ui.tsx` re-export lại từ đây, KHÔNG còn 2 bản trùng logic.
-export function DataTable<T>({ columns, rows, rowKey, pageSize = 20, emptyLabel = "Chưa có dữ liệu." }: {
-  columns: { key: string; label: string; align?: "left" | "right" | "center"; render: (row: T) => React.ReactNode }[]
+export function DataTable<T>({ columns, rows, rowKey, pageSize = 20, emptyLabel = "Chưa có dữ liệu.", searchBy, searchPlaceholder = "Tìm kiếm…" }: {
+  columns: { key: string; label: string; align?: "left" | "right" | "center"; render: (row: T) => React.ReactNode; sortValue?: (row: T) => string | number }[]
   rows: T[]
   rowKey: (row: T) => string
   pageSize?: number
   emptyLabel?: string
+  // (s196+21, đề xuất F roadmap UI/UX audit s196+20) tuỳ chọn — trước DataTable chỉ có phân trang, không
+  // sort/tìm nhanh 1 dòng. Opt-in qua 2 prop mới, KHÔNG đổi hành vi chỗ dùng cũ (không truyền = y hệt trước).
+  searchBy?: (row: T) => string   // text để lọc theo, vd `r => r.name + r.code`
+  searchPlaceholder?: string
 }) {
   const [page, setPage] = useState(0)
-  useEffect(() => { setPage(0) }, [rows.length])
-  const pages = Math.max(1, Math.ceil(rows.length / pageSize))
-  const pageRows = rows.slice(page * pageSize, (page + 1) * pageSize)
+  const [query, setQuery] = useState("")
+  const [sortKey, setSortKey] = useState<string | null>(null)
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
+  useEffect(() => { setPage(0) }, [rows.length, query])
+
+  const filtered = useMemo(() => {
+    if (!searchBy || !query.trim()) return rows
+    const q = query.trim().toLowerCase()
+    return rows.filter(r => searchBy(r).toLowerCase().includes(q))
+  }, [rows, searchBy, query])
+
+  const sorted = useMemo(() => {
+    const col = columns.find(c => c.key === sortKey)
+    if (!col?.sortValue) return filtered
+    const dir = sortDir === "asc" ? 1 : -1
+    return [...filtered].sort((a, b) => {
+      const av = col.sortValue!(a), bv = col.sortValue!(b)
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir
+      return String(av).localeCompare(String(bv)) * dir
+    })
+  }, [filtered, columns, sortKey, sortDir])
+
+  const pages = Math.max(1, Math.ceil(sorted.length / pageSize))
+  const pageRows = sorted.slice(page * pageSize, (page + 1) * pageSize)
+
+  const toggleSort = (key: string) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc")
+    else { setSortKey(key); setSortDir("asc") }
+  }
+
   if (rows.length === 0) return <p className="text-[11px] text-slate-400 text-center py-4">{emptyLabel}</p>
   return (
     <div>
+      {searchBy && (
+        <div className="relative mb-2">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder={searchPlaceholder}
+            className="w-full pl-8 pr-2.5 py-1.5 text-[11px] rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600" />
+        </div>
+      )}
+      {sorted.length === 0 ? (
+        <p className="text-[11px] text-slate-400 text-center py-4">Không tìm thấy kết quả khớp &ldquo;{query}&rdquo;.</p>
+      ) : (
       <div className="overflow-x-auto rounded-xl border border-slate-100">
         <table className="w-full text-[11px]">
           <thead className="bg-slate-50">
             <tr>
               {columns.map(c => (
                 <th key={c.key} className={cn("px-2.5 py-2 font-black text-slate-500 uppercase tracking-wider text-[9px] whitespace-nowrap",
-                  c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left")}>
-                  {c.label}
+                  c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left",
+                  c.sortValue && "cursor-pointer select-none hover:text-slate-700")}
+                  onClick={c.sortValue ? () => toggleSort(c.key) : undefined}>
+                  <span className="inline-flex items-center gap-1">
+                    {c.label}
+                    {c.sortValue && (
+                      sortKey === c.key
+                        ? (sortDir === "asc" ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)
+                        : <ChevronsUpDown className="w-3 h-3 opacity-30" />
+                    )}
+                  </span>
                 </th>
               ))}
             </tr>
@@ -316,19 +366,39 @@ export function DataTable<T>({ columns, rows, rowKey, pageSize = 20, emptyLabel 
           </tbody>
         </table>
       </div>
-      {pages > 1 && (
+      )}
+      {sorted.length > 0 && pages > 1 && (
         <div className="flex items-center justify-center gap-3 pt-2">
           <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
             className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 transition-colors">
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
-          <span className="text-[10px] font-bold text-slate-500">{page + 1}/{pages} · {rows.length} dòng</span>
+          <span className="text-[10px] font-bold text-slate-500">{page + 1}/{pages} · {sorted.length} dòng</span>
           <button disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}
             className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 transition-colors">
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── EmptyState (s196+21, đề xuất E roadmap UI/UX audit s196+20) ──────────────
+// Trước đây 43+ chỗ tự viết tay empty-state, câu chữ không đồng nhất ("Chưa có dữ liệu tháng nào."/
+// "Chưa có entry nào"/"Chưa có nhóm nào"...). Component này KHÔNG bắt buộc dùng lại chỗ cũ (tránh rủi ro
+// đổi UI hàng loạt không cần thiết) — dùng cho chỗ MỚI hoặc khi tiện tay sửa tab đang chạm tới.
+export function EmptyState({ icon, message, action, className }: {
+  icon?: React.ReactNode
+  message: string
+  action?: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn("flex flex-col items-center gap-2 py-10 text-center", className)}>
+      {icon && <span className="text-slate-300">{icon}</span>}
+      <p className="text-sm font-medium text-slate-400">{message}</p>
+      {action}
     </div>
   )
 }
