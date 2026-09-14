@@ -116,6 +116,11 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | **Biểu đồ** (cạnh 3 nút trên) | Bật/tắt bar chart revenue theo đúng chế độ đang chọn — Tháng/Ngày cộng dồn theo kỳ (nhiều dòng/kênh gộp lại), Sản phẩm lấy top 10 SKU theo revenue |
 
 ## 7. Gotchas
+- **s196+22 (2026-09-14) — thêm nút Export cho bảng "B2B — Chi tiết theo Nhóm × Tháng"** (Hiếu yêu cầu):
+  `exportTierTable()` (`b2b-tier-section.tsx`) dùng `exportAOA` xuất ĐÚNG dữ liệu đang hiển thị trên bảng
+  pivot — tôn trọng filter Region (ALL/VN/US) và khung nhìn tháng (1 tháng cụ thể hoặc "Cả Quý") đang chọn,
+  không phải toàn bộ data thô. Cột 3HK tách riêng "3HK Rev"/"3HK%" (bảng UI gộp 1 ô hiển thị, xuất Excel
+  tách 2 cột số cho dễ tính toán). Không đổi API/logic tính, chỉ đọc lại đúng biến đã render.
 - **s196+21 (2026-09-14) — thêm hint "Hướng dẫn" onboarding (đề xuất K, P2, roadmap UI/UX audit s196+20,
   finding #9)**: trang nhiều filter/tầng (Quý/Năm, VN/US, Phí ship, Đơn nội bộ, Tải lại mới) chưa có
   hướng dẫn cho người lần đầu dùng. Dùng lại `LogicNote collapsible` có sẵn (dashboard-kit.tsx) — không

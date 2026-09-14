@@ -1,8 +1,9 @@
 // Tách từ quarterly/page.tsx (s183 Phase 5 tiếp — tách cơ học, JSX/logic giữ nguyên y hệt bản gốc).
 import React, { useState, useEffect, useMemo, useRef } from "react"
-import { Building2, ChevronDown, ChevronRight, FileDown, Pencil, Plus, RefreshCw, Save, Search, Trash2, Upload, Users, X, BarChart3 } from "lucide-react"
+import { Building2, ChevronDown, ChevronRight, Download, FileDown, Pencil, Plus, RefreshCw, Save, Search, Trash2, Upload, Users, X, BarChart3 } from "lucide-react"
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { cn } from "@/lib/utils"
+import { exportAOA } from "@/lib/export-excel"
 import { fc, pct, parseFmt, fmtInput, cm1Color } from "@/lib/quarterly-format"
 import { ColInfo } from "@/components/quarterly/col-info"
 import { CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
@@ -90,6 +91,41 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       header: ["customer_code","customer_name","month","cost_label","cost_type","cost_value"],
     }), "Chi phi B2B")
     XLSX.writeFile(wb, `b2b_cost_template_${(quarterLabel || "quarter").replace(/[^A-Za-z0-9-]/g, "_")}.xlsx`)
+  }
+
+  // Xuất đúng dữ liệu đang hiển thị trên bảng pivot (theo region + khung tháng/Cả Quý đang chọn).
+  const exportTierTable = async () => {
+    const EXPORT_SUB_LABELS = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%QoQ(CM1)", "3HK Rev", "3HK%"]
+    const headers: string[] = ["Nhóm", "Số KH"]
+    visibleMonths.forEach(m => {
+      const [y, mo] = m.split("-")
+      EXPORT_SUB_LABELS.forEach(l => headers.push(`T${parseInt(mo)}/${y} - ${l}`))
+    })
+    EXPORT_SUB_LABELS.forEach(l => headers.push(`Tổng Quý - ${l}`))
+
+    const rows: (string | number)[][] = tiers.map((tierRaw: any) => {
+      const tier = pickView(tierRaw)
+      const row: (string | number)[] = [tierRaw.tier, tier.customerCount]
+      visibleMonths.forEach(m => {
+        const d = tier.months.find((x: any) => x.month === m)
+        if (!d?.hasData) { EXPORT_SUB_LABELS.forEach(() => row.push("")); return }
+        row.push(
+          Math.round(d.revenue), Math.round(d.gm), d.cc > 0 ? Math.round(d.cc) : "",
+          Math.round(d.cm1), Number((d.cm1Pct ?? 0).toFixed(1)), "",
+          Math.round(d.hk3Rev ?? 0), Number((d.hk3Pct ?? 0).toFixed(1)),
+        )
+      })
+      const qPrRev = Math.round(tier.totalRevenue * futureScale)
+      const qPrGm  = Math.round(tier.totalGm * futureScale)
+      const qPrCc  = Math.round(tier.totalCc * futureScale)
+      const qPrCm1 = Math.round(tier.totalCm1 * futureScale)
+      const qPrCm1Pct = qPrRev > 0 ? Number((qPrCm1 / qPrRev * 100).toFixed(1)) : 0
+      const tierQoQ: string | number = tier.prevCm1 && tier.prevCm1 !== 0
+        ? Number(((qPrCm1 - tier.prevCm1) / Math.abs(tier.prevCm1) * 100).toFixed(1)) : ""
+      row.push(qPrRev, qPrGm, qPrCc > 0 ? qPrCc : "", qPrCm1, qPrCm1Pct, tierQoQ, Math.round(tier.totalHk3Rev ?? 0), Number((tier.totalHk3Pct ?? 0).toFixed(1)))
+      return row
+    })
+    await exportAOA(headers, rows, `b2b_nhom_thang_${(quarterLabel || "quarter").replace(/[^A-Za-z0-9-]/g, "_")}_${region}`, "B2B Nhom x Thang")
   }
 
   const handleImportFile = async (file: File) => {
@@ -452,6 +488,10 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
           </div>
           <input ref={importFileRef} type="file" accept=".xlsx,.xls" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f) }} />
+          <button onClick={exportTierTable}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all">
+            <Download className="w-3 h-3" />Export
+          </button>
           {canEditCost && !editMode && (
             <div className="flex items-center gap-1.5">
               <button onClick={downloadTemplate}
