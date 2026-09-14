@@ -237,6 +237,8 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 ## 9. Gotchas & Lịch sử thay đổi
 
+- **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 6 chỗ, cùng lý do lệch locale
+  mặc định trình duyệt nêu ở wiki Channels. Đề xuất C (P2) roadmap performance audit s196+20.
 - **s196+21 (2026-09-14) — code-split recharts**: 2 chart ("So sánh mức sử dụng theo nhóm",
   "Phân bố mức data sử dụng/ngày") tách sang `3hk-usage-charts.tsx` (`React.memo` +
   `next/dynamic({ssr:false})`, cùng pattern `bod-charts.tsx`) — trước import `recharts` trực tiếp ở

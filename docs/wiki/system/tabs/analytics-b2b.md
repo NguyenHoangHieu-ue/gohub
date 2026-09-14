@@ -74,6 +74,10 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 2 chỗ (StatTile KPI Actual +
+  Projected, nhánh không phải currency), cùng lý do lệch locale mặc định trình duyệt nêu ở wiki Channels
+  — dùng lại hàm `formatNumber` local đã có sẵn trong file (tương đương `Intl.NumberFormat("vi-VN")`).
+  Đề xuất C (P2) roadmap performance audit s196+20.
 - **UI s196+20 (2026-09-14) — fix bug clip bảng lồng trong expand-row**: 2 wrapper bảng sub_channels
   (dòng ~538/~838, khối Strategic + Non-Strategic) dùng `overflow-hidden` (chặn scroll ngang của `<table>`
   bên trong để bo góc `rounded-xl`) → nội dung bảng bị CLIP khi cột không đủ chỗ trên màn hình hẹp. Phát

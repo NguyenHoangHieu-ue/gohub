@@ -375,7 +375,7 @@ export default function B2BPerformance() {
                     icon={kpi.icon}
                     label={kpi.label}
                     accent={KPI_ACCENTS[idx] || "neutral"}
-                    value={kpi.isCurrency ? Math.round(kpi.actualValue || 0).toLocaleString("vi-VN") : (kpi.actualValue || 0).toLocaleString() + (kpi.label.includes("%") ? "%" : "")}
+                    value={kpi.isCurrency ? formatNumber(Math.round(kpi.actualValue || 0)) : formatNumber(kpi.actualValue || 0) + (kpi.label.includes("%") ? "%" : "")}
                     unit={kpi.isCurrency ? "VND" : undefined}
                   />
                 ))}
@@ -399,7 +399,7 @@ export default function B2BPerformance() {
                           icon={kpi.icon}
                           label={`Proj. ${kpi.label}`}
                           accent={KPI_ACCENTS[idx] || "neutral"}
-                          value={kpi.isCurrency ? Math.round(kpi.value).toLocaleString("vi-VN") : kpi.value.toLocaleString() + (kpi.label.includes("%") ? "%" : "")}
+                          value={kpi.isCurrency ? formatNumber(Math.round(kpi.value)) : formatNumber(kpi.value) + (kpi.label.includes("%") ? "%" : "")}
                           unit={kpi.isCurrency ? "VND" : undefined}
                           deltas={deltas}
                           className="bg-brand-50/50 border-brand-100"

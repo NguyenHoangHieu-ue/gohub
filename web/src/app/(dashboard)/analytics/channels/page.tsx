@@ -1369,9 +1369,9 @@ export default function ChannelPerformancePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { label: "Projected Revenue", value: formatCompactNumber(projection.revenue), change: projection.revenueChange },
-              { label: "Projected Orders", value: Math.round(projection.orders).toLocaleString(), change: projection.ordersChange },
+              { label: "Projected Orders", value: formatNumber(Math.round(projection.orders)), change: projection.ordersChange },
               { label: "Projected AOV", value: formatCurrency(projection.aov), change: projection.aovChange },
-              { label: "Projected Units", value: Math.round(projection.units).toLocaleString(), change: projection.unitsChange },
+              { label: "Projected Units", value: formatNumber(Math.round(projection.units)), change: projection.unitsChange },
             ].map(({ label, value, change }) => (
               <div key={label} className="bg-white p-4 rounded-xl border border-brand-100 shadow-sm">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</p>

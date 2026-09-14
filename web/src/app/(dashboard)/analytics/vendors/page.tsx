@@ -731,9 +731,9 @@ export default function VendorPerformancePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { label: "Projected Revenue", value: formatCompactNumber(projection.revenue), change: projection.revenueChange },
-              { label: "Projected Orders", value: Math.round(projection.orders).toLocaleString(), change: projection.ordersChange },
+              { label: "Projected Orders", value: formatNumber(Math.round(projection.orders)), change: projection.ordersChange },
               { label: "Projected GP", value: formatCompactNumber(projection.margin), change: projection.marginChange },
-              { label: "Projected Units", value: Math.round(projection.units).toLocaleString(), change: projection.unitsChange },
+              { label: "Projected Units", value: formatNumber(Math.round(projection.units)), change: projection.unitsChange },
             ].map(({ label, value, change }) => (
               <div key={label} className="bg-white/10 p-4 rounded-xl border border-white/10 backdrop-blur-md">
                 <p className="text-[10px] font-bold text-brand-100 uppercase tracking-wider mb-1">{label}</p>

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, Suspense } from "reac
 import dynamic from "next/dynamic"
 import { useSession } from "next-auth/react"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
-import { formatCompactNumber } from "@/lib/analytics-formatters"
+import { formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import {
   Users, Calendar, Filter, Download, Search,
@@ -663,8 +663,8 @@ function StaffPageInner() {
           { label: "3HK Revenue",  value: fck(totHk3), icon: Zap,        accent: "cost"    },
           { label: "Gross Profit", value: fck(totGP),  icon: TrendingUp, accent: "margin"  },
           { label: "CM1",          value: fck(totCM1), icon: Target,     accent: "margin"  },
-          { label: "Sales",        value: displayed.length.toLocaleString(), icon: Users,     accent: "neutral" },
-          { label: "Khách hàng",   value: totCust.toLocaleString(),          icon: UserCheck, accent: "positive" },
+          { label: "Sales",        value: formatNumber(displayed.length), icon: Users,     accent: "neutral" },
+          { label: "Khách hàng",   value: formatNumber(totCust),          icon: UserCheck, accent: "positive" },
         ] as { label: string; value: string; icon: React.ElementType; accent: MetricAccent }[]).map(card => (
           <StatTile key={card.label} icon={<card.icon className="w-5 h-5" />} label={card.label} value={card.value} accent={card.accent} />
         ))}
@@ -901,7 +901,7 @@ function StaffPageInner() {
                         bgClass="bg-orange-50/20" tooltip={tooltip}
                         onChange={v => setDraftField(s.staff_code, "hk3_non_strategic", v)} />
                       <td className="px-4 py-3 text-right text-sm font-bold text-slate-600">{s.customer_count}</td>
-                      <td className="px-4 py-3 text-right text-sm font-bold text-slate-500">{s.total_orders.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right text-sm font-bold text-slate-500">{formatNumber(s.total_orders)}</td>
                       <td className="px-4 py-3"><MiniSparkline data={s.monthly} /></td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -1017,7 +1017,7 @@ function StaffPageInner() {
                     {fck(displayed.reduce((a,s) => a + monthsInRange.reduce((sum,m) => sum+(targets[s.staff_code]?.[m]?.hk3_non_strategic||0),0),0))}
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-slate-600">{totCust}</td>
-                  <td className="px-4 py-3 text-right text-sm text-slate-500">{totOrds.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-sm text-slate-500">{formatNumber(totOrds)}</td>
                   <td colSpan={2} />
                 </tr>
               )}

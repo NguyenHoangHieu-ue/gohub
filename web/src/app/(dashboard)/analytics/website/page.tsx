@@ -7,6 +7,7 @@ import {
   DollarSign, Calendar, Filter, RefreshCw, Tag, Activity, ChevronDown, ChevronUp, Smartphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { formatNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { StatTile, StatTileSkeleton, type MetricAccent, autoDeltaKind, CHART_PALETTE } from "@/components/dashboard-kit"
 
@@ -500,9 +501,9 @@ export default function WebsiteAnalyticsPage() {
   const comparePurchases = compareEcoTimeSeries.reduce((acc: number, curr: any) => acc + curr.purchases, 0)
 
   const kpis: { label: string; value: string; change: number | null; icon: React.ElementType; accent: MetricAccent }[] = [
-    { label: "Sessions", value: currentSessions.toLocaleString(), change: calculateChange(currentSessions, compareSessions), icon: Users, accent: "neutral" },
-    { label: "Purchases", value: currentPurchases.toLocaleString(), change: calculateChange(currentPurchases, comparePurchases), icon: ShoppingBag, accent: "positive" },
-    { label: "Search Clicks", value: currentClicks.toLocaleString(), change: calculateChange(currentClicks, compareClicks), icon: MousePointer2, accent: "neutral" },
+    { label: "Sessions", value: formatNumber(currentSessions), change: calculateChange(currentSessions, compareSessions), icon: Users, accent: "neutral" },
+    { label: "Purchases", value: formatNumber(currentPurchases), change: calculateChange(currentPurchases, comparePurchases), icon: ShoppingBag, accent: "positive" },
+    { label: "Search Clicks", value: formatNumber(currentClicks), change: calculateChange(currentClicks, compareClicks), icon: MousePointer2, accent: "neutral" },
     { label: "Avg. CTR", value: `${currentCtr.toFixed(2)}%`, change: calculateChange(currentCtr, compareCtr), icon: Activity, accent: "positive" },
     { label: "Revenue", value: formatRevenue(currentRevenue), change: calculateChange(currentRevenue, compareRevenue), icon: DollarSign, accent: "revenue" },
   ]
@@ -772,7 +773,7 @@ export default function WebsiteAnalyticsPage() {
                     </div>
                   )}
                   <div>
-                    <p className="text-sm font-bold text-slate-900">{country.users.toLocaleString()}</p>
+                    <p className="text-sm font-bold text-slate-900">{formatNumber(country.users)}</p>
                     <p className="text-[10px] text-slate-400 uppercase font-bold">Users</p>
                   </div>
                 </div>
@@ -803,7 +804,7 @@ export default function WebsiteAnalyticsPage() {
                   <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center text-xs font-bold text-emerald-600 shrink-0">{idx + 1}</div>
                   <div className="overflow-hidden">
                     <p className="text-sm font-bold text-slate-800 truncate">{source.name}</p>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">{source.sessions.toLocaleString()} sessions</p>
+                    <p className="text-[10px] text-slate-400 uppercase font-bold">{formatNumber(source.sessions)} sessions</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-right shrink-0 ml-4">
@@ -816,7 +817,7 @@ export default function WebsiteAnalyticsPage() {
                     </div>
                   )}
                   <div>
-                    <p className="text-sm font-bold text-slate-900">{source.users.toLocaleString()}</p>
+                    <p className="text-sm font-bold text-slate-900">{formatNumber(source.users)}</p>
                     <p className="text-[10px] text-slate-400 uppercase font-bold">Users</p>
                   </div>
                 </div>
@@ -866,10 +867,10 @@ export default function WebsiteAnalyticsPage() {
                             {q.change > 0 ? "+" : ""}{q.change.toFixed(1)}%
                           </span>
                         )}
-                        <span>{q.clicks.toLocaleString()}</span>
+                        <span>{formatNumber(q.clicks)}</span>
                       </div>
                     </td>
-                    <td className="p-3 text-sm text-slate-600 text-right">{q.impressions.toLocaleString()}</td>
+                    <td className="p-3 text-sm text-slate-600 text-right">{formatNumber(q.impressions)}</td>
                     <td className="p-3 text-sm text-emerald-600 text-right font-medium">{q.ctr.toFixed(1)}%</td>
                     <td className="p-3 text-sm text-slate-500 text-right">{q.position.toFixed(1)}</td>
                   </tr>
@@ -924,10 +925,10 @@ export default function WebsiteAnalyticsPage() {
                               {p.change > 0 ? "+" : ""}{p.change.toFixed(1)}%
                             </span>
                           )}
-                          <span>{p.sessions.toLocaleString()}</span>
+                          <span>{formatNumber(p.sessions)}</span>
                         </div>
                       </td>
-                      <td className="p-3 text-sm font-medium text-emerald-600 text-right">{p.conversions.toLocaleString()}</td>
+                      <td className="p-3 text-sm font-medium text-emerald-600 text-right">{formatNumber(p.conversions)}</td>
                       <td className="p-3 text-sm font-bold text-slate-900 text-right">{p.cr.toFixed(2)}%</td>
                     </tr>
                     {expandedDestinations.has(p.destination) && p.items.length > 0 && (
@@ -1002,10 +1003,10 @@ export default function WebsiteAnalyticsPage() {
                               {p.change > 0 ? "+" : ""}{p.change.toFixed(1)}%
                             </span>
                           )}
-                          <span>{p.sessions.toLocaleString()}</span>
+                          <span>{formatNumber(p.sessions)}</span>
                         </div>
                       </td>
-                      <td className="p-3 text-sm font-medium text-emerald-600 text-right">{(p.conversions || 0).toLocaleString()}</td>
+                      <td className="p-3 text-sm font-medium text-emerald-600 text-right">{formatNumber(p.conversions || 0)}</td>
                       <td className="p-3 text-sm font-bold text-slate-900 text-right">{cr.toFixed(2)}%</td>
                     </tr>
                   )

@@ -28,6 +28,8 @@ Doanh thu / margin / units / orders theo **vendor (NCC)** — WorldMove, 3HK DAT
 - Có thể lọc theo nhóm kênh (B2B/B2C).
 
 ## 3. Gotchas
+- **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 2 chỗ, cùng lý do lệch locale
+  mặc định trình duyệt nêu ở wiki Channels. Đề xuất C (P2) roadmap performance audit s196+20.
 - **s196+21 (2026-09-14) — aria-label cho nút refresh icon-only**: nút `RefreshCw` header chỉ có icon,
   không `aria-label` — thêm mô tả ngắn. Đề xuất I (P1) roadmap audit UI/UX s196+20, làm dần theo tab
   đang sửa.

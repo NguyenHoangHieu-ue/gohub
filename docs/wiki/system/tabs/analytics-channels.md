@@ -94,6 +94,11 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn nhập cost lại → cần khôi phục button trong `page.tsx`.
 
 ## 5. Gotchas
+- **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 2 chỗ `Math.round(...).
+  toLocaleString()` KHÔNG truyền locale → dùng locale MẶC ĐỊNH của trình duyệt (vd `en-US` → phẩy ngăn
+  cách, khác `vi-VN` dùng chấm) — số hiển thị LỆCH tuỳ máy/trình duyệt người xem, không nhất quán với
+  phần còn lại của trang (đã dùng `formatNumber()` = `vi-VN` cố định). Đổi sang `formatNumber()`. Đề
+  xuất C (P2) roadmap performance audit s196+20, làm dần theo tab đang sửa.
 - **s196+21 (2026-09-14) — aria-label cho nút refresh icon-only**: 3 nút `RefreshCw` (header chính,
   B2B Customers, All Channels Overview) chỉ có icon, không `aria-label` — thêm mô tả ngắn. Đề xuất I
   (P1) roadmap audit UI/UX s196+20, làm dần theo tab đang sửa.

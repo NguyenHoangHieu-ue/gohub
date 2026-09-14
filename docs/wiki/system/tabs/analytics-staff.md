@@ -132,6 +132,12 @@ channelGroup/channel/companyCode/dataSource/includeShip/includeInternalOps). `gr
 tầng L2 (Supabase JSONB) sẽ hỏng shape (`.get is not a function` khi đọc lại từ instance khác), 2 nguồn
 này cũng ngoài pool `gohub_dw` nên không phải điểm nghẽn timeout. Thêm `export const maxDuration = 60`.
 
+## 12. Gộp toLocaleString() trần → formatNumber() (s196+21 — 2026-09-14)
+
+4 chỗ `X.toLocaleString()` không truyền locale → lệch định dạng số theo locale mặc định trình duyệt
+người xem, khác `vi-VN` cố định của `formatNumber()` dùng ở phần còn lại trang. Đề xuất C (P2) roadmap
+performance audit s196+20.
+
 ## 11. Skeleton loading cho 6 KPI card (s196+21 — 2026-09-14)
 
 Thêm `StatTileSkeleton` (dashboard-kit) khi `loading` — trước 6 card KPI đầu trang render ngay với giá trị

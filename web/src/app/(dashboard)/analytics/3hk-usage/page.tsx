@@ -733,7 +733,7 @@ export default function ThreeHKDataUsagePage() {
             <div className="p-2 bg-purple-50 rounded-xl text-purple-600"><Package className="w-5 h-5" /></div>
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active SIMs</span>
           </div>
-          <p className="text-2xl font-bold text-slate-900">{totals.count.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-slate-900">{formatNumber(totals.count)}</p>
           <p className="text-xs text-slate-500 mt-1">Sim tracks in this period</p>
         </div>
       </div>
@@ -848,7 +848,7 @@ export default function ThreeHKDataUsagePage() {
                     <td className="px-6 py-3 font-bold text-slate-900 text-sm">
                       <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-md border border-purple-100">{sm.sku_type}</span>
                     </td>
-                    <td className="px-6 py-3 text-center text-slate-600 text-sm font-medium">{sm.active_sims.toLocaleString()}</td>
+                    <td className="px-6 py-3 text-center text-slate-600 text-sm font-medium">{formatNumber(sm.active_sims)}</td>
                     <td className="px-6 py-3 text-right text-slate-600 text-sm">{formatNumber(sm.total_plan_gb)}</td>
                     <td className="px-6 py-3 text-right font-bold text-slate-900 text-sm">{formatNumber(sm.total_usage_gb)}</td>
                     <td className="px-6 py-3 text-right">
@@ -912,7 +912,7 @@ export default function ThreeHKDataUsagePage() {
                       <td className="px-6 py-3 font-bold text-slate-900 text-sm">
                         <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100">{sg.speed_group}</span>
                       </td>
-                      <td className="px-6 py-3 text-center text-slate-600 text-sm font-medium">{sg.active_sims.toLocaleString()}</td>
+                      <td className="px-6 py-3 text-center text-slate-600 text-sm font-medium">{formatNumber(sg.active_sims)}</td>
                       <td className="px-6 py-3 text-right text-slate-600 text-sm">{formatNumber(sg.total_plan_gb)}</td>
                       <td className="px-6 py-3 text-right font-bold text-slate-900 text-sm">{formatNumber(sg.total_usage_gb)}</td>
                       <td className="px-6 py-3 text-right">
@@ -971,7 +971,7 @@ export default function ThreeHKDataUsagePage() {
                                   return (
                                   <tr key={j} className="hover:bg-slate-50/50">
                                     <td className="px-4 py-2 font-mono text-xs text-slate-700">{m.sku}</td>
-                                    <td className="px-4 py-2 text-center text-slate-600 text-xs font-medium">{m.active_sims.toLocaleString()}</td>
+                                    <td className="px-4 py-2 text-center text-slate-600 text-xs font-medium">{formatNumber(m.active_sims)}</td>
                                     <td className="px-4 py-2 text-right text-slate-600 text-xs">{formatNumber(m.total_plan_gb)}</td>
                                     <td className="px-4 py-2 text-right text-slate-500 text-xs">
                                       {planPerDay == null ? "—" : `${planPerDay.toFixed(2)} GB`}
@@ -1072,7 +1072,7 @@ export default function ThreeHKDataUsagePage() {
                 paginatedSkuMetrics.map((sm, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-3 font-bold text-slate-900 text-sm">{sm.sku}</td>
-                    <td className="px-6 py-3 text-center text-slate-600 text-sm font-medium">{sm.active_sims.toLocaleString()}</td>
+                    <td className="px-6 py-3 text-center text-slate-600 text-sm font-medium">{formatNumber(sm.active_sims)}</td>
                     <td className="px-6 py-3 text-right text-slate-600 text-sm">{formatNumber(sm.total_plan_gb)}</td>
                     <td className="px-6 py-3 text-right font-bold text-slate-900 text-sm">{formatNumber(sm.total_usage_gb)}</td>
                     <td className="px-6 py-3 text-right">
@@ -1205,7 +1205,7 @@ export default function ThreeHKDataUsagePage() {
         {/* Pagination Controls */}
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-slate-500 font-medium">
-            Showing <span className="text-slate-900">{Math.min((page - 1) * pageSize + 1, totals.count)}</span> to <span className="text-slate-900">{Math.min(page * pageSize, totals.count)}</span> of <span className="text-slate-900">{totals.count.toLocaleString()}</span> records
+            Showing <span className="text-slate-900">{Math.min((page - 1) * pageSize + 1, totals.count)}</span> to <span className="text-slate-900">{Math.min(page * pageSize, totals.count)}</span> of <span className="text-slate-900">{formatNumber(totals.count)}</span> records
           </p>
 
           <div className="flex items-center gap-2">
