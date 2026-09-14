@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, getAnalyticsSource, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
+import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, getAnalyticsSource, shipFilter, internalOpsFilter, excludeInactiveCustomers } from "@/lib/analytics-helpers"
+import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 
 // Phân loại tier từ price_list_name (nhất quán với quarterly-b2b-customers)
 function classifyTier(priceListName: string | null): string {
@@ -22,7 +23,6 @@ function classifyRegion(priceListName: string | null, currencyCode: string | nul
   return "VN"
 }
 
-const EXCLUDED = ["B2C Customer US", "B2C Customer VN", "B2B Ops"]
 const TIER_ORDER = ["Strategic", "VIP", "Gold", "Silver"]
 
 export async function GET(req: NextRequest) {
@@ -45,9 +45,14 @@ export async function GET(req: NextRequest) {
   const includeShip        = searchParams.get("includeShip")        === "1"
   const includeInternalOps = searchParams.get("includeInternalOps") === "1"
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
-  const excludeList = EXCLUDED.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
-  const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)}`
-  const cacheKey = `b2b_tier:${startDate}:${endDate}:${dateColumn}:${companyCode}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  // Fix s197 (audit toàn hệ thống logic dữ liệu): trước hardcode EXCLUDED (3 tên cố định, không đọc
+  // config Hiếu đặt ở quarterly-settings) + thiếu excludeInactiveCustomers — 2/4 filter chuẩn B2B
+  // (b2b/kpis/performance/trend dùng cả 4: shipFilter+internalOpsFilter+excludeOpsByCode(dynamic)+
+  // excludeInactiveCustomers). Route này dùng ở Dashboard nên đổi sang danh sách exclude ĐỘNG.
+  const { excludedCustomers } = await fetchQuarterlySettings()
+  const excludeList = excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(",") || "''"
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeInactiveCustomers()}`
+  const cacheKey = `b2b_tier2:${startDate}:${endDate}:${dateColumn}:${companyCode}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${excludedCustomers.sort().join("|")}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
