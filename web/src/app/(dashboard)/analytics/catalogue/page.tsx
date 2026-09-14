@@ -1,14 +1,15 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { Globe, Package, Layers, PhoneCall, Wifi, ShieldCheck, ShieldAlert, RefreshCw, ChevronDown, Gift, Ban, Router } from "lucide-react"
+import { Layers, Package, Radio, Sparkles, PhoneCall, Wifi, ShieldCheck, ShieldAlert, RefreshCw, ChevronDown, Gift, Ban, Router, Signal } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatNumber } from "@/lib/analytics-formatters"
 import { StatTile, StatTileSkeleton, EmptyState } from "@/components/dashboard-kit"
 
 // GoHub Product Catalogue — 3 tầng Destination → Loại sản phẩm → Sản phẩm cụ thể (Hiếu yêu cầu
-// 2026-09-14, đợt 2 + đợt 3 mở rộng field APN/operator/data policy/chính sách QR-đổi máy). Xem
-// api/analytics/product-catalogue/route.ts để biết cách phân loại/decode + nguồn từng field.
+// 2026-09-14, đợt 2+3). Đợt 4: Hiếu chốt trang này CHỈ để xem THÔNG TIN sản phẩm (spec sheet), không
+// cần số liệu doanh thu/sản lượng/tăng trưởng — bỏ hẳn hiển thị $ và % khỏi UI, giữ badge (Best Seller/
+// Fastest Growing/Best Value) làm tín hiệu định tính vì vẫn tính từ số liệu bán hàng thật, chỉ không in
+// số ra. API/route.ts không đổi (vẫn tính đủ, FE chỉ chọn không render phần đó).
 
 interface OperatorInfo { code: string; qrValidity: string; reinstallLimit: string; deviceChangeLimit: string }
 interface CatalogueProduct {
@@ -17,26 +18,32 @@ interface CatalogueProduct {
   dataType: string | null; dailyResetTime: string | null
   apn: string | null; operatorCode: string | null
   telcoPerks: string | null; unsupportedApps: string | null; onsiteCarrier: string | null
-  revenue: number; units: number; growthPct: number | null; badges: string[]
+  badges: string[]
 }
 interface CatalogueCategory {
   key: string; label: string; hasCall: boolean
   hotspot: boolean | null; kycNeeded: boolean | null; networkTypes: string[]; operatorInfo: OperatorInfo[]
-  revenue: number; units: number; revenueSharePct: number; growthPct: number | null
   productCount: number; badges: string[]; products: CatalogueProduct[]
 }
 interface CatalogueDestination {
-  code: string; name: string; totalRevenue: number; totalUnits: number
+  code: string; name: string
   categoryCount: number; categories: CatalogueCategory[]
 }
 
 const BADGE_META: Record<string, { label: string; className: string }> = {
   best_seller:     { label: "⭐ Bán chạy nhất",    className: "bg-amber-50 text-amber-700 border-amber-200" },
-  fastest_growing: { label: "📈 Tăng trưởng mạnh", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  fastest_growing: { label: "📈 Đang tăng trưởng",  className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   best_value:      { label: "💰 Giá tốt nhất",     className: "bg-brand-50 text-brand-700 border-brand-200" },
 }
 
-const formatCurrency = (v: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(v).replace("₫", "VND")
+// Phụ kiện màu theo Ý NGHĨA (gọi/nhắn tin được = nổi bật hơn data-only), không phải trang trí.
+const CATEGORY_ACCENT: Record<string, { border: string; iconBg: string; iconColor: string }> = {
+  esim_data:  { border: "border-t-sky-400",     iconBg: "bg-sky-50",     iconColor: "text-sky-600" },
+  esim_local: { border: "border-t-emerald-400", iconBg: "bg-emerald-50", iconColor: "text-emerald-600" },
+  sim_data:   { border: "border-t-indigo-400",  iconBg: "bg-indigo-50", iconColor: "text-indigo-600" },
+  sim_local:  { border: "border-t-emerald-400", iconBg: "bg-emerald-50", iconColor: "text-emerald-600" },
+  other:      { border: "border-t-slate-300",   iconBg: "bg-slate-100", iconColor: "text-slate-500" },
+}
 
 function Badges({ badges }: { badges: string[] }) {
   if (badges.length === 0) return null
@@ -51,10 +58,11 @@ function Badges({ badges }: { badges: string[] }) {
   )
 }
 
-function GrowthLabel({ growthPct }: { growthPct: number | null }) {
+function SpecChip({ icon, children, tone = "neutral" }: { icon: React.ReactNode; children: React.ReactNode; tone?: "neutral" | "good" | "warn" }) {
   return (
-    <span className={cn("font-bold", growthPct == null ? "text-slate-400" : growthPct >= 0 ? "text-emerald-600" : "text-rose-500")}>
-      {growthPct != null ? `${growthPct >= 0 ? "+" : ""}${growthPct}%` : "—"}
+    <span className={cn("text-[11px] font-semibold px-2 py-1 rounded-lg flex items-center gap-1.5 whitespace-nowrap",
+      tone === "good" ? "bg-emerald-50 text-emerald-700" : tone === "warn" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600")}>
+      {icon}{children}
     </span>
   )
 }
@@ -90,6 +98,10 @@ export default function ProductCataloguePage() {
 
   const current = destinations.find(d => d.code === selected)
   const topCategoryLabel = current?.categories[0]?.label || "—"
+  const totalProducts = current?.categories.reduce((s, c) => s + c.productCount, 0) || 0
+  const operatorCount = current
+    ? new Set(current.categories.flatMap(c => c.products.map(p => p.operatorCode).filter(Boolean))).size
+    : 0
 
   return (
     <div className="flex-1 overflow-auto bg-slate-50 p-4 lg:p-8">
@@ -98,7 +110,7 @@ export default function ProductCataloguePage() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Product Catalogue</h1>
             <p className="text-sm text-slate-500 mt-0.5">
-              Thế mạnh sản phẩm GoHub theo từng điểm đến — 90 ngày gần nhất, dựa trên doanh thu/tăng trưởng thật.
+              Danh mục sản phẩm GoHub theo từng điểm đến — loại SIM, gói data, nhà mạng, chính sách sử dụng.
             </p>
           </div>
           <button onClick={fetchData} disabled={loading}
@@ -125,19 +137,19 @@ export default function ProductCataloguePage() {
         </div>
 
         {!loading && destinations.length === 0 && !error && (
-          <EmptyState message="Chưa có dữ liệu 90 ngày gần nhất." />
+          <EmptyState message="Chưa có dữ liệu." />
         )}
 
         {current && (
           <>
-            {/* Hero stats */}
+            {/* Hero — thông tin tổng quan, không có số $ */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {loading ? Array.from({ length: 4 }).map((_, i) => <StatTileSkeleton key={i} />) : (
                 <>
-                  <StatTile icon={<Globe className="w-4.5 h-4.5" />} label="Doanh thu 90 ngày" value={formatCurrency(current.totalRevenue)} accent="revenue" />
-                  <StatTile icon={<Package className="w-4.5 h-4.5" />} label="Sản lượng" value={formatNumber(current.totalUnits)} unit="đơn" accent="neutral" />
-                  <StatTile icon={<Layers className="w-4.5 h-4.5" />} label="Số loại sản phẩm" value={current.categoryCount} accent="positive" />
-                  <StatTile icon={<PhoneCall className="w-4.5 h-4.5" />} label="Loại dẫn đầu" value={topCategoryLabel} accent="margin" />
+                  <StatTile icon={<Layers className="w-4.5 h-4.5" />} label="Loại sản phẩm" value={current.categoryCount} accent="neutral" />
+                  <StatTile icon={<Package className="w-4.5 h-4.5" />} label="Tổng sản phẩm" value={totalProducts} accent="neutral" />
+                  <StatTile icon={<Radio className="w-4.5 h-4.5" />} label="Nhà mạng hỗ trợ" value={operatorCount} accent="positive" />
+                  <StatTile icon={<Sparkles className="w-4.5 h-4.5" />} label="Loại phổ biến nhất" value={topCategoryLabel} accent="margin" />
                 </>
               )}
             </div>
@@ -146,48 +158,39 @@ export default function ProductCataloguePage() {
             <div className="space-y-5">
               {current.categories.map(cat => {
                 const policyOpen = expandedPolicy.has(cat.key)
+                const accent = CATEGORY_ACCENT[cat.key] || CATEGORY_ACCENT.other
                 return (
-                <div key={cat.key} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                <div key={cat.key} className={cn("bg-white border border-slate-200 border-t-4 rounded-2xl overflow-hidden", accent.border)}>
                   {/* Category header */}
                   <div className="p-5 border-b border-slate-100 flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-3 flex-wrap">
-                      <div>
-                        <h2 className="text-lg font-bold text-slate-900">{cat.label}</h2>
-                        <p className="text-xs text-slate-500 mt-0.5">{cat.productCount} sản phẩm · {formatNumber(cat.units)} đơn đã bán</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1.5">
-                        <span className="text-sm font-bold text-brand-600 bg-brand-50 px-2.5 py-1 rounded-full whitespace-nowrap">
-                          {cat.revenueSharePct}% doanh thu destination
+                      <div className="flex items-center gap-3">
+                        <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", accent.iconBg, accent.iconColor)}>
+                          {cat.hasCall ? <PhoneCall className="w-5 h-5" /> : <Signal className="w-5 h-5" />}
                         </span>
-                        <span className="text-xs">Tăng trưởng <GrowthLabel growthPct={cat.growthPct} /></span>
+                        <div>
+                          <h2 className="text-lg font-bold text-slate-900">{cat.label}</h2>
+                          <p className="text-xs text-slate-500 mt-0.5">{cat.productCount} sản phẩm</p>
+                        </div>
                       </div>
+                      <Badges badges={cat.badges} />
                     </div>
                     <div className="flex flex-wrap gap-1.5 items-center">
-                      <Badges badges={cat.badges} />
-                      <span className={cn("text-[10px] font-semibold px-2 py-1 rounded-full flex items-center gap-1",
-                        cat.hasCall ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500")}>
-                        <PhoneCall className="w-3 h-3" />{cat.hasCall ? "Gọi/Nhắn tin được" : "Chỉ Data"}
-                      </span>
+                      <SpecChip icon={<PhoneCall className="w-3 h-3" />} tone={cat.hasCall ? "good" : "neutral"}>
+                        {cat.hasCall ? "Gọi/Nhắn tin được" : "Chỉ Data"}
+                      </SpecChip>
                       {cat.kycNeeded != null && (
-                        <span className={cn("text-[10px] font-semibold px-2 py-1 rounded-full flex items-center gap-1",
-                          cat.kycNeeded ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500")}>
-                          {cat.kycNeeded ? <ShieldAlert className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />}
+                        <SpecChip icon={cat.kycNeeded ? <ShieldAlert className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />} tone={cat.kycNeeded ? "warn" : "good"}>
                           {cat.kycNeeded ? "Cần KYC" : "Không cần KYC"}
-                        </span>
+                        </SpecChip>
                       )}
-                      {cat.hotspot != null && cat.hotspot && (
-                        <span className="text-[10px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-500 flex items-center gap-1">
-                          <Router className="w-3 h-3" />Hỗ trợ Hotspot
-                        </span>
-                      )}
+                      {cat.hotspot === true && <SpecChip icon={<Router className="w-3 h-3" />}>Hỗ trợ Hotspot</SpecChip>}
                       {cat.networkTypes.map(nt => (
-                        <span key={nt} className="text-[10px] font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-500 flex items-center gap-1">
-                          <Wifi className="w-3 h-3" />{nt}
-                        </span>
+                        <SpecChip key={nt} icon={<Wifi className="w-3 h-3" />}>{nt}</SpecChip>
                       ))}
                       {cat.operatorInfo.length > 0 && (
                         <button onClick={() => togglePolicy(cat.key)}
-                          className="text-[10px] font-bold px-2 py-1 rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1 ml-auto">
+                          className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1 ml-auto">
                           Chính sách QR/đổi máy <ChevronDown className={cn("w-3 h-3 transition-transform", policyOpen && "rotate-180")} />
                         </button>
                       )}
@@ -206,46 +209,35 @@ export default function ProductCataloguePage() {
                     )}
                   </div>
 
-                  {/* Products in this category */}
-                  <div className="divide-y divide-slate-50">
+                  {/* Products — spec-sheet grid, không có số $ */}
+                  <div className="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                     {cat.products.map(p => (
-                      <div key={p.sku} className="p-4 flex flex-col gap-2 hover:bg-slate-50/50 transition-colors">
-                        <div className="flex items-center justify-between gap-4 flex-wrap">
+                      <div key={p.sku} className="border border-slate-200 rounded-xl p-4 flex flex-col gap-2.5 hover:border-brand-300 hover:shadow-sm transition-all">
+                        <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="text-sm font-bold text-slate-800 truncate">
-                              {p.vendor} — {p.capLabel || "—"}{p.days ? ` / ${p.days} ngày` : ""}
-                            </p>
-                            <p className="text-[11px] text-slate-400">
-                              {p.typeOfSim} · {p.dataType || "—"}{p.dataType === "Daily Data" && p.dailyResetTime ? ` (reset ${p.dailyResetTime})` : ""}
-                              {p.operatorCode ? ` · ${p.operatorCode}` : ""}{p.apn ? ` · APN ${p.apn}` : ""}
-                              {" · "}<span className="font-mono">{p.sku}</span>
-                            </p>
+                            <p className="text-sm font-bold text-slate-800 truncate">{p.vendor}</p>
+                            <p className="text-base font-bold text-brand-700">{p.capLabel || "—"}{p.days ? ` · ${p.days} ngày` : ""}</p>
                           </div>
-                          <div className="flex items-center gap-5 flex-wrap">
-                            <Badges badges={p.badges} />
-                            <div className="text-right">
-                              <p className="text-[10px] text-slate-400 uppercase font-semibold">Doanh thu</p>
-                              <p className="text-sm font-bold text-slate-800">{formatCurrency(p.revenue)}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-[10px] text-slate-400 uppercase font-semibold">Sản lượng</p>
-                              <p className="text-sm font-bold text-slate-800">{formatNumber(p.units)}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-[10px] text-slate-400 uppercase font-semibold">Tăng trưởng</p>
-                              <p className="text-sm"><GrowthLabel growthPct={p.growthPct} /></p>
-                            </div>
-                          </div>
+                          {p.badges.length > 0 && (
+                            <span className="text-base flex-shrink-0" title={p.badges.map(b => BADGE_META[b]?.label).join(", ")}>
+                              {p.badges.includes("best_seller") ? "⭐" : p.badges.includes("fastest_growing") ? "📈" : "💰"}
+                            </span>
+                          )}
                         </div>
-                        {(p.telcoPerks || p.unsupportedApps || p.onsiteCarrier) && (
-                          <div className="flex flex-wrap gap-3 text-[10px] text-slate-400 pt-1 border-t border-slate-50">
-                            {p.telcoPerks && (
-                              <span className="flex items-center gap-1 text-emerald-600"><Gift className="w-3 h-3" />{p.telcoPerks}</span>
-                            )}
-                            {p.unsupportedApps && (
-                              <span className="flex items-center gap-1 text-rose-500"><Ban className="w-3 h-3" />Không hỗ trợ: {p.unsupportedApps}</span>
-                            )}
-                            {p.onsiteCarrier && <span>Nhà mạng: {p.onsiteCarrier}</span>}
+                        <div className="flex flex-wrap gap-1.5">
+                          <SpecChip icon={<Signal className="w-3 h-3" />}>{p.dataType || "—"}{p.dataType === "Daily Data" && p.dailyResetTime ? ` · reset ${p.dailyResetTime}` : ""}</SpecChip>
+                          <SpecChip icon={<Radio className="w-3 h-3" />}>{p.typeOfSim}</SpecChip>
+                        </div>
+                        <div className="text-[11px] text-slate-400 space-y-0.5">
+                          {p.operatorCode && <p><span className="text-slate-500 font-semibold">Nhà mạng:</span> {p.operatorCode}</p>}
+                          {p.apn && <p><span className="text-slate-500 font-semibold">APN:</span> {p.apn}</p>}
+                          {p.onsiteCarrier && <p><span className="text-slate-500 font-semibold">Local carrier:</span> {p.onsiteCarrier}</p>}
+                          <p className="font-mono text-slate-300">{p.sku}</p>
+                        </div>
+                        {(p.telcoPerks || p.unsupportedApps) && (
+                          <div className="flex flex-col gap-1 pt-2 border-t border-slate-50 text-[11px]">
+                            {p.telcoPerks && <span className="flex items-start gap-1.5 text-emerald-600"><Gift className="w-3 h-3 mt-0.5 flex-shrink-0" />{p.telcoPerks}</span>}
+                            {p.unsupportedApps && <span className="flex items-start gap-1.5 text-rose-500"><Ban className="w-3 h-3 mt-0.5 flex-shrink-0" />Không hỗ trợ: {p.unsupportedApps}</span>}
                           </div>
                         )}
                       </div>

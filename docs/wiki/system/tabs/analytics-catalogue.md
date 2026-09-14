@@ -30,6 +30,13 @@ trong ảnh KHÔNG có bảng riêng trong Supabase — trích thủ công phầ
 lại/đổi máy) vào `OPERATOR_POLICY` (route.ts), bỏ phần quy trình xử lý CS nội bộ (refund workflow) vì
 không hợp với 1 trang catalogue giới thiệu sản phẩm — xem mục 2b.
 
+**Đợt 4 (cùng ngày)**: Hiếu chốt trang này CHỈ để xem THÔNG TIN/spec sản phẩm, không cần số liệu doanh
+thu/sản lượng/tăng trưởng — redesign FE bỏ hẳn hiển thị số $ và % (hero stat đổi từ "Doanh thu/Sản
+lượng" sang "Loại sản phẩm/Tổng sản phẩm/Nhà mạng hỗ trợ/Loại phổ biến nhất"; sản phẩm đổi từ hàng
+ngang có cột $ sang lưới card spec-sheet, badge Best Seller/Fastest Growing/Best Value giữ lại dạng
+emoji góc card — vẫn tín hiệu định tính thật, chỉ không in số ra). **`route.ts` KHÔNG đổi** — badge vẫn
+tính từ revenue/units/growth thật ở backend, FE chỉ chọn không render phần đó.
+
 ---
 
 ## 1. Đường dẫn & File
