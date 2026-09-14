@@ -43,6 +43,11 @@ FROM <mainTable> f WHERE <dateFilter> <extraFilters>
 - **Channel Performance** (`bod-channel-performance`): doanh thu/margin theo tháng × kênh.
 
 ## 5. Gotchas
+- **🔴 Fix s197 (2026-09-14) — thiếu loại KH INACTIVE** (phát hiện qua audit toàn hệ thống logic dữ
+  liệu, cùng fix All-Time): cả 3 hàm (`fetchBODGroupMarginData`/`fetchBODChannelPerformanceData`/
+  `fetchBODReportData`) thiếu `excludeInactiveCustomers()` trong `sfx` — Quarter Report/B2B tab đều loại
+  KH có `price_list_name` chứa "INACTIVE", BOD không loại → tổng B2B cao hơn khi có KH INACTIVE phát
+  sinh doanh thu trong kỳ. Đã thêm vào `sfx` dùng chung cả 3 hàm.
 - **🔴 Fix s197 (2026-09-14) — Channel Performance + Daily Report KHÔNG áp toggle "Phí ship"/"Đơn nội bộ"**
   (phát hiện qua audit toàn hệ thống logic dữ liệu): FE gửi `includeShip`/`includeInternalOps` cho cả 4 route
   (`bod-summary`, `bod-group-margin`, `bod-report`, `bod-channel-performance`) nhưng `fetchBODChannelPerformanceData`/

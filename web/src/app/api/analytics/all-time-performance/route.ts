@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { cachedQuery, CACHE_HEADERS, getCustomerStrategicSql, safeDate, noCache, analyticsGuard, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, getCustomerStrategicSql, safeDate, noCache, analyticsGuard, shipFilter, internalOpsFilter, excludeInactiveCustomers } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
-      let whereClause = `WHERE f.fulfiled_date::date >= '${startDate}' AND f.fulfiled_date::date <= LEAST('${endDate}'::date, CURRENT_DATE - 1) ${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)}`
+      let whereClause = `WHERE f.fulfiled_date::date >= '${startDate}' AND f.fulfiled_date::date <= LEAST('${endDate}'::date, CURRENT_DATE - 1) ${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeInactiveCustomers()}`
 
       if (channelGroup) {
         const grp = channelGroup.toUpperCase().replace(/'/g, "''")

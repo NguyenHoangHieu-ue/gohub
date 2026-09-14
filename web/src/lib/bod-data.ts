@@ -1,6 +1,6 @@
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode, excludeInactiveCustomers } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
@@ -91,7 +91,7 @@ export async function fetchBODGroupMarginData(startDate: string, endDate: string
   const filter = getDateFilter(startDate, endDate, source.dateCol)
   // Strategic/Non phân theo KHÁCH (price_list_name), cấu hình chung quarterly-settings (ISSUE-DASH-4, s131).
   const { groupCaseSql: groupCaseSQL } = await getCustomerStrategicSql()
-  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)}`
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()}`
 
   const rows = await queryAnalytics<Record<string, string>>(
     `WITH filtered_f AS (
@@ -220,7 +220,7 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
   const filter = getDateFilter(startDate, endDate, source.dateCol)
   const strategicList = await getStrategicPartnersList()
   const groupCaseSQL = getGroupCaseSQL(strategicList)
-  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)}`
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()}`
 
   const rows = await queryAnalytics<Record<string, string>>(
     `WITH filtered_f AS (
@@ -309,7 +309,7 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
 // (amount: value/sốNgàyTháng; percent: dcRevenue*value/100) + group-cost/sốNgàyTháng.
 export async function fetchBODReportData(startDate: string, endDate: string, extraFilters = "", includeShip = false, includeInternalOps = false) {
   const filter = getDateFilter(startDate, endDate, "fulfiled_date")
-  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)}`
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()}`
 
   const [dailyRows, channelDaily, channelInfo] = await Promise.all([
     queryAnalytics<Record<string, string>>(
