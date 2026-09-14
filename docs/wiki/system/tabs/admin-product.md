@@ -17,6 +17,14 @@ Trang cấu hình kỹ thuật sâu dành riêng cho quản trị viên bao gồ
 
 ## 1. Tổng quan & Đường dẫn
 - **Giao diện Web**: `/admin` (`web/src/app/(dashboard)/admin/page.tsx`) — gồm các tab: Cài đặt, Tạo template, Khuyến mãi, Lịch Lark.
+- **s196+21 (2026-09-14) — tách file 2120 dòng (file lớn nhất repo) thành 7 file, quyết định Hiếu**:
+  6 tab vốn đã tự thân là 1 component riêng trong file cũ — chỉ cần tách mỗi tab ra 1 file + nạp qua
+  `next/dynamic` (code-split, cùng pattern recharts s196+21), KHÔNG đổi logic/UI (cùng nguyên tắc Phase 5
+  quarterly/channels/to-gau/my-metrics). `page.tsx` (shell + tab bar) còn **116 dòng**. File mới:
+  `settings-tab.tsx`, `template-tab.tsx` (lớn nhất, ~1019 dòng — sinh template WM/3HK), `promotions-tab.tsx`,
+  `scheduled-tab.tsx`, `ref-import-tab.tsx`, `api-keys-tab.tsx`, `admin-types.ts` (type `AppSetting` dùng
+  chung giữa Settings + Template). tsc + lint (0 lỗi mới) + vitest (243/243) PASS ngay lần đầu (không phải
+  sửa lỗi import sau khi tách — icon/type mapping đúng theo phạm vi dòng gốc).
 - **Lưu ý (s82)**: Quản lý tài khoản người dùng & phân quyền (thêm/đổi mật khẩu/role/ma trận) đã **gộp về `/analytics/users`** (tab "Users"), KHÔNG còn ở `/admin`.
 - **Lưu ý dọn trùng (s82)**: tab "Cài đặt" của `/admin` đã **bỏ** các mục bị trùng/sai chỗ:
   - **Guardian** (Chính sách truy cập Chatbot) và **Role Filters** (Lọc dòng BI theo Role) — trùng `/analytics/settings`, giờ CHỈ còn ở Settings.
