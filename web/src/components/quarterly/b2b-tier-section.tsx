@@ -93,27 +93,34 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
     XLSX.writeFile(wb, `b2b_cost_template_${(quarterLabel || "quarter").replace(/[^A-Za-z0-9-]/g, "_")}.xlsx`)
   }
 
-  // Xuất đúng dữ liệu đang hiển thị trên bảng pivot (theo region + khung tháng/Cả Quý đang chọn).
+  // Xuất đúng dữ liệu đang hiển thị trên bảng pivot (theo region + khung tháng/Cả Quý đang chọn) —
+  // gồm cả dòng tổng Nhóm lẫn breakdown từng Khách hàng bên trong nhóm đó (Hiếu yêu cầu).
   const exportTierTable = async () => {
     const EXPORT_SUB_LABELS = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%QoQ(CM1)", "3HK Rev", "3HK%"]
-    const headers: string[] = ["Nhóm", "Số KH"]
+    const headers: string[] = ["Loại", "Nhóm", "Region", "Mã KH", "Tên KH", "Số KH"]
     visibleMonths.forEach(m => {
       const [y, mo] = m.split("-")
       EXPORT_SUB_LABELS.forEach(l => headers.push(`T${parseInt(mo)}/${y} - ${l}`))
     })
     EXPORT_SUB_LABELS.forEach(l => headers.push(`Tổng Quý - ${l}`))
 
-    const rows: (string | number)[][] = tiers.map((tierRaw: any) => {
+    // Cột theo tháng dùng chung cho cả dòng Nhóm (d = tier.months[m]) lẫn dòng KH (d = c.monthSummary[m]).
+    const periodCols = (d: any | undefined): (string | number)[] => {
+      if (!d) return EXPORT_SUB_LABELS.map(() => "")
+      return [
+        Math.round(d.revenue ?? 0), Math.round(d.gm ?? 0), (d.cc ?? 0) > 0 ? Math.round(d.cc) : "",
+        Math.round(d.cm1 ?? 0), Number((d.cm1Pct ?? 0).toFixed(1)), "",
+        Math.round(d.hk3Rev ?? 0), Number((d.hk3Pct ?? 0).toFixed(1)),
+      ]
+    }
+
+    const rows: (string | number)[][] = []
+    tiers.forEach((tierRaw: any) => {
       const tier = pickView(tierRaw)
-      const row: (string | number)[] = [tierRaw.tier, tier.customerCount]
+      const tierRow: (string | number)[] = ["Nhóm", tierRaw.tier, "", "", "", tier.customerCount]
       visibleMonths.forEach(m => {
         const d = tier.months.find((x: any) => x.month === m)
-        if (!d?.hasData) { EXPORT_SUB_LABELS.forEach(() => row.push("")); return }
-        row.push(
-          Math.round(d.revenue), Math.round(d.gm), d.cc > 0 ? Math.round(d.cc) : "",
-          Math.round(d.cm1), Number((d.cm1Pct ?? 0).toFixed(1)), "",
-          Math.round(d.hk3Rev ?? 0), Number((d.hk3Pct ?? 0).toFixed(1)),
-        )
+        tierRow.push(...periodCols(d?.hasData ? d : undefined))
       })
       const qPrRev = Math.round(tier.totalRevenue * futureScale)
       const qPrGm  = Math.round(tier.totalGm * futureScale)
@@ -122,8 +129,27 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       const qPrCm1Pct = qPrRev > 0 ? Number((qPrCm1 / qPrRev * 100).toFixed(1)) : 0
       const tierQoQ: string | number = tier.prevCm1 && tier.prevCm1 !== 0
         ? Number(((qPrCm1 - tier.prevCm1) / Math.abs(tier.prevCm1) * 100).toFixed(1)) : ""
-      row.push(qPrRev, qPrGm, qPrCc > 0 ? qPrCc : "", qPrCm1, qPrCm1Pct, tierQoQ, Math.round(tier.totalHk3Rev ?? 0), Number((tier.totalHk3Pct ?? 0).toFixed(1)))
-      return row
+      tierRow.push(qPrRev, qPrGm, qPrCc > 0 ? qPrCc : "", qPrCm1, qPrCm1Pct, tierQoQ, Math.round(tier.totalHk3Rev ?? 0), Number((tier.totalHk3Pct ?? 0).toFixed(1)))
+      rows.push(tierRow)
+
+      // Breakdown khách hàng — cùng vùng region đang xem (ALL → gộp cả VN+US, có cột Region phân biệt).
+      const regionsForExport: ("VN" | "US")[] = region === "ALL" ? ["VN", "US"] : [region as "VN" | "US"]
+      regionsForExport.forEach(reg => {
+        const custs: any[] = tierRaw.byRegion?.[reg]?.customers ?? []
+        custs.forEach((c: any) => {
+          const custRow: (string | number)[] = ["Khách hàng", tierRaw.tier, reg, c.code, c.name, ""]
+          const ms: Record<string, any> = c.monthSummary ?? {}
+          visibleMonths.forEach(m => custRow.push(...periodCols(ms[m])))
+          const pr = custPr(c)
+          const cPrCc = pr.prGm - pr.prCm1
+          custRow.push(
+            pr.prRev, pr.prGm, cPrCc > 0 ? Math.round(cPrCc) : "", pr.prCm1, Number(pr.prCm1Pct.toFixed(1)),
+            pr.qoqPct != null ? Number(pr.qoqPct.toFixed(1)) : "",
+            Math.round(c.hk3Rev ?? 0), Number((c.hk3Pct ?? 0).toFixed(1)),
+          )
+          rows.push(custRow)
+        })
+      })
     })
     await exportAOA(headers, rows, `b2b_nhom_thang_${(quarterLabel || "quarter").replace(/[^A-Za-z0-9-]/g, "_")}_${region}`, "B2B Nhom x Thang")
   }

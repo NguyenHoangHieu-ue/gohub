@@ -120,7 +120,12 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
   `exportTierTable()` (`b2b-tier-section.tsx`) dùng `exportAOA` xuất ĐÚNG dữ liệu đang hiển thị trên bảng
   pivot — tôn trọng filter Region (ALL/VN/US) và khung nhìn tháng (1 tháng cụ thể hoặc "Cả Quý") đang chọn,
   không phải toàn bộ data thô. Cột 3HK tách riêng "3HK Rev"/"3HK%" (bảng UI gộp 1 ô hiển thị, xuất Excel
-  tách 2 cột số cho dễ tính toán). Không đổi API/logic tính, chỉ đọc lại đúng biến đã render.
+  tách 2 cột số cho dễ tính toán). **Hiếu phản hồi ngay sau đó**: cần breakdown cả khách hàng bên trong
+  từng nhóm, không chỉ dòng tổng — thêm cột `Loại` ("Nhóm"/"Khách hàng") + `Mã KH`/`Tên KH`/`Region`, mỗi
+  dòng Nhóm theo sau bởi các dòng KH thuộc nhóm đó (từ `tierRaw.byRegion[VN|US].customers`, ALL gộp cả 2
+  region có cột Region phân biệt, KHÔNG áp filter tìm kiếm `custSearch` — export luôn đủ mọi KH). Số liệu
+  KH dùng `custPr(c)` (đúng số Pro-rata hiện trên dòng chính của bảng chi tiết KH trong UI) cho Tổng Quý,
+  `c.monthSummary[m]` cho từng tháng. Không đổi API/logic tính, chỉ đọc lại đúng biến đã render.
 - **s196+21 (2026-09-14) — thêm hint "Hướng dẫn" onboarding (đề xuất K, P2, roadmap UI/UX audit s196+20,
   finding #9)**: trang nhiều filter/tầng (Quý/Năm, VN/US, Phí ship, Đơn nội bộ, Tải lại mới) chưa có
   hướng dẫn cho người lần đầu dùng. Dùng lại `LogicNote collapsible` có sẵn (dashboard-kit.tsx) — không
