@@ -8,6 +8,7 @@ import {
 import { exportToExcel }      from "@/lib/export-excel"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { cn } from "@/lib/utils"
+import { TableRowsSkeleton } from "@/components/dashboard-kit"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface OrderRow {
@@ -521,15 +522,7 @@ export default function OrdersPage() {
               </tr>
             </thead>
             <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan={13} className="py-10 text-center text-slate-400">
-                    <div className="flex justify-center">
-                      <div className="animate-spin h-5 w-5 border-2 border-brand-600 border-t-transparent rounded-full" />
-                    </div>
-                  </td>
-                </tr>
-              )}
+              {loading && <TableRowsSkeleton cols={13} />}
               {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={13} className="py-10 text-center text-slate-400 dark:text-slate-500">

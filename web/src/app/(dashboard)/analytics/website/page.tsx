@@ -8,7 +8,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DatePresets } from "@/components/date-presets"
-import { StatTile, type MetricAccent, autoDeltaKind, CHART_PALETTE } from "@/components/dashboard-kit"
+import { StatTile, StatTileSkeleton, type MetricAccent, autoDeltaKind, CHART_PALETTE } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel WebsiteAnalytics. Data qua /api/analytics/ga4 (generic dimensions/metrics) +
 // /api/analytics/gsc + /api/config/ga4. Bỏ date-fns (không dùng), inline getDefaultDateRange,
@@ -625,7 +625,7 @@ export default function WebsiteAnalyticsPage() {
 
       {/* Main KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        {kpis.map((kpi, idx) => (
+        {loading ? Array.from({ length: 5 }).map((_, i) => <StatTileSkeleton key={i} />) : kpis.map((kpi, idx) => (
           <StatTile
             key={idx}
             icon={<kpi.icon className="w-5 h-5" />}

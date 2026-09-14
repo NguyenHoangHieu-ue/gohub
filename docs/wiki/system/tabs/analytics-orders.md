@@ -110,6 +110,9 @@ gohub_dw hiện tại → luôn `TRIM(c.code::text)` khi so khớp.
 
 ## 5. Gotchas
 
+- **s196+21 (2026-09-14)**: bảng đơn hàng đổi spinner-only (`loading && <div className="animate-spin"...>`)
+  sang `TableRowsSkeleton` (dashboard-kit, 13 cột) — khớp bố cục bảng thật hơn thay vì 1 spinner tròn giữa
+  trang. Phát hiện qua audit UI/UX toàn hệ thống.
 - **s196+20 (2026-09-14)**: cache TTL 15' cho `api/analytics/order-report` (`cachedQuery`, deps
   `["order-report"]`) — bọc quanh cả 3 query (count/aggr/data), key theo mọi filter + `page/limit/isExport`.
   Trước không cache — export CSV (`limit=5000`, GROUP BY nặng nhất) chạy lại tươi mỗi lần bấm xuất, cùng

@@ -345,3 +345,45 @@ export const chartTooltipStyle: React.CSSProperties = {
   fontSize: 12,
   boxShadow: "0 8px 24px rgba(15,23,42,0.08)",
 }
+
+// ─── Skeleton loading dùng chung (s196+21, roadmap performance/UI-UX s196+20) ─────────────────────
+// Trước đây mỗi trang tự định nghĩa lại y hệt `const Skeleton = ({className}) => <div className="animate-
+// pulse bg-slate-200 rounded" .../>` (bod/channels/vendors/products/targets) hoặc không có skeleton nào —
+// chỉ icon Refresh nhỏ xoay trong header, nội dung chính render data rỗng/0 rồi "nhảy" số khi fetch xong.
+export function Skeleton({ className }: { className?: string }) {
+  return <div className={cn("animate-pulse bg-slate-200 rounded", className)} />
+}
+
+// Khớp đúng bố cục StatTile (icon vuông + nhãn + số lớn) — dùng thay chỗ StatTile thật khi `loading`.
+export function StatTileSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn(
+      "flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white p-4",
+      "shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+      className,
+    )}>
+      <Skeleton className="h-9 w-9 rounded-xl" />
+      <div className="min-w-0 space-y-2">
+        <Skeleton className="h-2.5 w-16" />
+        <Skeleton className="h-6 w-24" />
+      </div>
+    </div>
+  )
+}
+
+// Vài dòng bảng giả (chiều rộng cột lệch nhẹ cho giống dữ liệu thật) — đặt trong <tbody> khi `loading`.
+export function TableRowsSkeleton({ cols, rows = 5 }: { cols: number; rows?: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }).map((_, r) => (
+        <tr key={r}>
+          {Array.from({ length: cols }).map((_, c) => (
+            <td key={c} className="px-4 py-3">
+              <Skeleton className={cn("h-4", c === 0 ? "w-32" : "w-16")} />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  )
+}

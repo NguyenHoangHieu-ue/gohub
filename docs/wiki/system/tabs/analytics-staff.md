@@ -132,6 +132,11 @@ channelGroup/channel/companyCode/dataSource/includeShip/includeInternalOps). `gr
 tầng L2 (Supabase JSONB) sẽ hỏng shape (`.get is not a function` khi đọc lại từ instance khác), 2 nguồn
 này cũng ngoài pool `gohub_dw` nên không phải điểm nghẽn timeout. Thêm `export const maxDuration = 60`.
 
+## 11. Skeleton loading cho 6 KPI card (s196+21 — 2026-09-14)
+
+Thêm `StatTileSkeleton` (dashboard-kit) khi `loading` — trước 6 card KPI đầu trang render ngay với giá trị
+0 rồi "nhảy" số thật khi fetch xong. Phát hiện qua audit UI/UX toàn hệ thống.
+
 ## 10. Code-split recharts (s196+21 — 2026-09-14)
 
 4 chart (bar doanh thu sales, bar doanh thu khách hàng, line monthly sales, line monthly khách hàng) tách

@@ -9,7 +9,7 @@ import {
   Check, ShoppingBag, UserPlus, RefreshCw, Activity, Sparkles, Search, Filter, Calendar, Download,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { SourceBadge, CHART_GRID_COLOR } from "@/components/dashboard-kit"
+import { SourceBadge, CHART_GRID_COLOR, TableRowsSkeleton } from "@/components/dashboard-kit"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { Pager, PAGE_ROWS } from "@/components/pager"
@@ -415,7 +415,11 @@ export default function CustomerPerformancePage() {
                 </div>
 
                 <div className="flex-1 overflow-auto max-h-[400px] custom-scrollbar pr-2">
-                  {productData.length === 0 ? (
+                  {loading ? (
+                    <table className="w-full text-left">
+                      <tbody className="divide-y divide-slate-50"><TableRowsSkeleton cols={3} /></tbody>
+                    </table>
+                  ) : productData.length === 0 ? (
                     <div className="py-20 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
                       <Package className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No product data available</p>
@@ -463,7 +467,11 @@ export default function CustomerPerformancePage() {
                 </div>
 
                 <div className="flex-1 overflow-auto max-h-[600px] custom-scrollbar pr-2">
-                  {orderData.length === 0 ? (
+                  {loading ? (
+                    <table className="w-full text-left">
+                      <tbody className="divide-y divide-slate-50"><TableRowsSkeleton cols={6} /></tbody>
+                    </table>
+                  ) : orderData.length === 0 ? (
                     <div className="py-20 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
                       <Activity className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No order data available</p>
@@ -616,7 +624,7 @@ export default function CustomerPerformancePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {performanceData.length === 0 ? (
+                    {loading ? <TableRowsSkeleton cols={9} /> : performanceData.length === 0 ? (
                       <tr>
                         <td colSpan={9} className="px-8 py-20 text-center">
                           <div className="flex flex-col items-center gap-2">

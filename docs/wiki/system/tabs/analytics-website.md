@@ -67,6 +67,9 @@ s194 ở trên). Chạy đúng 1 lần (chạy lại sẽ thêm trùng entry) �
 - B2C Metric subtab cũng dùng GA4 `yearMonth` dimension để lấy Traffic/Users theo tháng — xem [[analytics-b2c]].
 
 ## 6. Gotchas
+- **s196+21 (2026-09-14) — skeleton loading cho 5 KPI card**: thêm `StatTileSkeleton` (dashboard-kit) khi
+  `loading` — trước KPI card render ngay với `kpis` tính từ state mặc định (0/rỗng) rồi "nhảy" giá trị
+  thật khi fetch xong (flash of empty content). Phát hiện qua audit UI/UX toàn hệ thống.
 - **s196+21 (2026-09-14) — code-split recharts**: 3 chart (Traffic Overview, Search Trends, Revenue
   Breakdown) tách sang `website-charts.tsx` (`React.memo` + `next/dynamic({ssr:false})`, cùng pattern
   `bod-charts.tsx`) — trước import `recharts` trực tiếp ở `page.tsx` (1057 dòng). Phát hiện qua audit

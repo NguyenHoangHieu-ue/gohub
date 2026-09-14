@@ -14,7 +14,7 @@ import {
 } from "lucide-react"
 import { exportRawRows } from "@/lib/export-excel"
 import { cn } from "@/lib/utils"
-import { StatTile, type MetricAccent, SourceBadge } from "@/components/dashboard-kit"
+import { StatTile, StatTileSkeleton, type MetricAccent, SourceBadge } from "@/components/dashboard-kit"
 import { useUrlStates } from "@/hooks/use-url-state"
 
 // Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu (s196+21, roadmap performance s196+20).
@@ -658,7 +658,7 @@ function StaffPageInner() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-        {([
+        {loading ? Array.from({ length: 6 }).map((_, i) => <StatTileSkeleton key={i} />) : ([
           { label: "Tổng Revenue", value: fck(totRev), icon: DollarSign, accent: "revenue" },
           { label: "3HK Revenue",  value: fck(totHk3), icon: Zap,        accent: "cost"    },
           { label: "Gross Profit", value: fck(totGP),  icon: TrendingUp, accent: "margin"  },
