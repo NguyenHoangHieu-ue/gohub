@@ -127,6 +127,10 @@ Query velocity dùng đúng pattern trailing-30d đã có ở hệ thống (`ful
 `node scripts/import_inventory_plan.mjs "<đường dẫn file Plan nhập hàng theo tháng.xlsx>"` (chạy trên máy có `web/.env.local`) — đọc sheet `Plan VN`/`Plan US` (map từng SKU 5-dòng → SKU watchlist + dữ liệu tuần, `week_start_date` suy từ mốc "as of" ở hàng 0 cộng dồn 7 ngày/cột) và sheet `PO Dự kiến nhập` (map thẳng cột → `inventory_po`). Ô nào Excel đã có số ở Bán dự kiến/Số nhập → import kèm `*_auto=false` để giữ đúng số Ops đã tính.
 
 ## 6. Gotchas
+- **🟢 Fix s197 (2026-09-14) — "Số ngày tới HSD" có thể sai ±1 ngày** (phát hiện qua audit toàn hệ
+  thống logic dữ liệu): `daysUntil()` dùng `new Date()` (giờ:phút:giây hiện tại) trừ ngày HSD parse
+  UTC-midnight — không timezone-safe. Đổi sang `vnToday()` (đã có sẵn trong repo, dùng cho cutoff T-1
+  ở nhiều tab khác) làm mốc UTC-midnight cố định theo giờ VN.
 - **s196+21 (2026-09-14)**: 2 bảng ("Kế hoạch nhập hàng" + "Tồn kho theo SKU") đổi text "Đang tải…" sang
   `TableRowsSkeleton` (dashboard-kit) — khớp bố cục bảng thật hơn. Phát hiện qua audit UI/UX toàn hệ thống.
 - **s196+20 (2026-09-14)**: fix bug clip bảng "Kế hoạch nhập hàng theo tuần" (dòng ~524, bảng top-level
