@@ -650,3 +650,12 @@ nút AI/nút gửi/reply preview/file preview) hoạt động giống hệt bả
 
 tsc + lint (0 lỗi mới) + vitest (243/243) PASS. Không cần Hiếu làm gì thêm — đã verify trực tiếp trên
 staging cả trước lẫn sau khi tách, không chỉ tin code sạch.
+
+## s196+21 (2026-09-14) — Giãn polling (lưới an toàn) sau khi có Realtime
+
+Đề xuất D (P1) roadmap performance/UI-UX audit s196+20. Chat poll 12s→30s (`[id]/page.tsx`
+`reconcileMessages`+`loadPinned`); Docs/Notes/Câu hỏi poll 20s→45s (`docs-panel.tsx`/`notes-panel.tsx`/
+`questions-panel.tsx`). Lý do: khoảng cách cũ chọn từ THỜI ĐIỂM chưa có Realtime (chat từ v55, 3 panel từ
+s196+17) — giờ Realtime đã phủ cả 4 bảng, poll chỉ còn vai trò lưới an toàn dự phòng (bắt trường hợp
+publication lỗi/mất kết nối WebSocket), không cần chạy nhanh như khi nó còn là đường CHÍNH. Không đổi cơ
+chế reconcile/merge, chỉ đổi 4 con số interval. tsc PASS. Không cần Hiếu làm gì thêm.

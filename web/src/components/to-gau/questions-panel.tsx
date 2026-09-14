@@ -59,7 +59,9 @@ export function QuestionsPanel({
   // Realtime (s196+17, đề xuất E) — trước chỉ poll. Giữ nguyên poll 20s làm lưới an toàn (đúng tiền lệ
   // v55 — publication thiếu không throw lỗi, chỉ im lặng không nhận event).
   useEffect(() => {
-    const t = setInterval(() => load(true), 20000)
+    // 45s (s196+21, roadmap performance s196+20 — Realtime đã phủ bảng này từ s196+17, poll chỉ còn vai
+    // trò lưới an toàn dự phòng, không cần khoảng cách ngắn như thời chưa có Realtime).
+    const t = setInterval(() => load(true), 45000)
     const channel = supabaseRealtime
       .channel(`chat_questions:${groupId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_questions", filter: `group_id=eq.${groupId}` },

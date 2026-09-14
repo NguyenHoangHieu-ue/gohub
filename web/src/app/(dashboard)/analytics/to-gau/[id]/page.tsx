@@ -258,7 +258,9 @@ export default function ToGauRoomPage() {
   // thuộc trạng thái publication/kết nối WebSocket.
   useEffect(() => {
     if (!groupId) return
-    const pollTimer = setInterval(() => { reconcileMessages(); loadPinned() }, 12000)
+    // 30s (s196+21, roadmap performance s196+20 — trước 12s từ thời chưa có Realtime; giờ Realtime đã phủ
+    // đúng bảng này, poll chỉ còn vai trò lưới an toàn dự phòng, không cần khoảng cách ngắn).
+    const pollTimer = setInterval(() => { reconcileMessages(); loadPinned() }, 30000)
     const channel = supabaseRealtime
       .channel(`chat_messages:${groupId}`)
       .on(
