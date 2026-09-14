@@ -91,6 +91,11 @@ CM1 staff = SUM(gross_profit_vnd) của staff đó
 
 ## 7. Gotchas
 
+**🟢 Fix s197 (2026-09-14) — filter `channel` case-sensitive, không nhất quán `channelGroup`** (phát
+hiện qua audit toàn hệ thống logic dữ liệu): `TRIM(s.channel_name) = $N` so khớp phân biệt hoa/thường,
+trong khi `channelGroup` dùng `UPPER(...) = UPPER(...)`. Value `channel` luôn lấy từ dropdown nguồn DB
+(khớp hệt) nên rủi ro thấp, đổi sang `UPPER(TRIM(...)) = UPPER($N)` cho nhất quán style.
+
 **s194+10 (2026-09-06) — UI redesign:** `STAFF_COLORS[0]` (màu categorical đầu tiên cho biểu đồ nhiều sales)
 đổi từ hex navy SAI `#003B95` sang đúng `#0f4c81` (audit s192 từng flag file này nặng nhất — 16 hex ngẫu
 hứng). 6 KPI card viết tay đổi sang `StatTile`. Giữ nguyên bảng màu tier Strategic/VIP/Gold/Silver/B2C và
