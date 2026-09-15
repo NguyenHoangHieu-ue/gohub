@@ -66,6 +66,30 @@ hiển thị "hơi chưa rõ nhìn" + 3 yêu cầu cụ thể:
 chính sách QR/đổi máy hardcode `OPERATOR_POLICY`, cache TTL 60'. **Đổi shape response** → bump cache key
 `v3`→`v4` (category.operators[] thay category.products[] phẳng).
 
+**Đợt 6 (2026-09-15) — 3 fix/thay đổi theo phản hồi Hiếu sau khi xem đợt 5.**
+1. **"Chưa rõ nhà mạng" xuất hiện dù thông tin có sẵn** — Hiếu chỉ đúng: nhóm `onsite_carrier` (đợt 5)
+   fallback `operator_code` rồi thẳng nhãn cứng "unknown" khi Supabase `products` thiếu cả 2 field (đúng
+   với SKU khối lượng lớn 3HK Datapool — vendor tồn tại thật, chỉ 2 field carrier chưa nhập). Fix: fallback
+   thêm 1 bậc nữa về **vendor GoHub** (`a.vendor`, LUÔN có — SQL đã lọc `v.vendor IS NOT NULL`) trước khi
+   chịu thua — không còn rơi vào "chưa rõ" khi thông tin vendor đã hiển thị sẵn nơi khác trên trang.
+2. **Chỉ 2 category thật: eSIM / SIM vật lý** — Hiếu chốt bỏ hẳn kiến trúc 4-category đợt 2 (data-only vs
+   có gọi nội địa × eSIM/SIM). `categoryKey()` giờ CHỈ đọc ProductType (ký tự 2 SKU: `C`→eSIM, `E`→SIM,
+   khác→"Khác") — bỏ tham số `hasCall`. "Có SDT nội địa" KHÔNG còn là trục phân loại, chuyển thành:
+   - **1 nút toggle nổi bật đầu category** ("📞 Có SDT nội địa (N gói)", field mới
+     `category.localNumberProductCount`) — bấm để lọc CHỈ hiện gói có `local_phone_number="Yes"` trong
+     mọi nhà mạng của category đó (client-side, không gọi lại API).
+   - **Chip thông tin ở panel carrier** (`operator.localNumberCountries`, distinct) — luôn hiện nếu carrier
+     đó có gói local number, không cần bật filter mới thấy.
+   - **Badge 📱 trên chip dung lượng + dòng chi tiết** (`product.hasLocalNumber`/`localNumberCountry`) khi
+     xổ card đầy đủ.
+3. **Gói ngày/data drill 2 tầng** — trước gộp "dung lượng · ngày" thành 1 chip phẳng; nay tách:
+   bấm chip **NGÀY** trước (`selectedDay` state, keyed `${category.key}:${operator.key}`) → mới hiện dải
+   chip **DUNG LƯỢNG** khớp đúng ngày đó → bấm dung lượng mới xổ card chi tiết (như cũ). Giảm số item hiện
+   cùng lúc khi 1 carrier có nhiều tổ hợp ngày×dung lượng (VD 3HK Datapool).
+
+Thêm Supabase field `local_number_country` vào select (trước chỉ có `local_phone_number`). Đổi shape →
+bump cache key `v4`→`v5`.
+
 ---
 
 ## 1. Đường dẫn & File
@@ -81,23 +105,30 @@ chính sách QR/đổi máy hardcode `OPERATOR_POLICY`, cache TTL 60'. **Đổi 
 - **Destination**: giải mã từ mã SKU qua `getDestinationSQL()`/`decodeSkuDestinationCode()`
   (`analytics-helpers.ts`, đã fix đúng theo ĐỘ DÀI sku ở s195+19/s197) — KHÔNG dùng `dim_sku.category_name`
   (phần lớn "Unknown" cho SKU khối lượng lớn 3HK Datapool).
-- **Loại sản phẩm (Category)** — 4 nhóm, quyết định bởi 2 field THẬT, không tự đặt taxonomy:
+- **Loại sản phẩm (Category)** — CHỈ 2 nhóm thật + 1 fallback (Hiếu chốt lại đợt 6, bỏ hẳn kiến trúc
+  4-nhóm của đợt 2):
   - **ProductType** = ký tự thứ 2 của mã SKU 13 ký tự (xem `docs/wiki/business/ma-sku.md` mục "Ký tự 2"):
-    `C` = eSIM full, `E` = SIM full — 2 loại CHÍNH bán ra thị trường. SKU legacy 14/15 ký tự (không có
-    prefix pháp nhân/loại SP) → decode `null` → rơi vào nhóm "Khác".
-  - **Có gọi/nhắn tin nội địa** = Supabase `products.local_phone_number === "Yes"` (field thật).
-  - 4 nhóm: `esim_data` (eSIM chỉ Data), `esim_local` (eSIM có số nội địa), `sim_data` (SIM vật lý chỉ
-    Data), `sim_local` (SIM vật lý nội địa/gọi được), `other` (không decode được ProductType).
-  - Đặc điểm hiển thị mỗi category: Gọi/Nhắn tin được, cần KYC (`kyc_needed`, lấy theo ĐA SỐ sản phẩm
-    trong nhóm — tránh 1 SKU lệch làm sai chip), Hotspot, Network type — toàn bộ từ Supabase `products`.
+    `C` → **eSIM**, `E` → **SIM vật lý**. SKU legacy 14/15 ký tự (không có prefix pháp nhân/loại SP) →
+    decode `null` → nhóm **"Khác"**.
+  - "Có gọi/nhắn tin nội địa" (`products.local_phone_number === "Yes"`) KHÔNG còn quyết định category —
+    xem mục "Có SDT nội địa" bên dưới (đợt 6, chuyển thành filter/badge chứ không phải trục phân loại).
+  - Đặc điểm hiển thị mỗi category: cần KYC (`kyc_needed`, lấy theo ĐA SỐ sản phẩm trong nhóm — tránh 1
+    SKU lệch làm sai chip), Hotspot, Network type — toàn bộ từ Supabase `products`.
 - **Nhà mạng (Operator, đợt 5)** = gom theo `products.onsite_carrier` (nhà mạng THẬT phục vụ điểm đến,
-  fallback `operator_code` rồi "Chưa rõ nhà mạng") — KHÔNG gom theo vendor GoHub (1 vendor như WorldMove
-  route qua nhiều carrier khác nhau tuỳ nước, gom theo vendor sẽ trộn lẫn carrier khác hẳn nhau). Mỗi
-  carrier: `networkTypes`, `throttleSummary` (distinct, xem field Loại data bên dưới), `perksList`/
-  `restrictionsList` (nội dung THẬT distinct từ `telco_perks`/`unsupported_apps`), `qrPolicies` (từ
-  `OPERATOR_POLICY` theo `operator_code` thật thuộc carrier đó). **Tag so sánh** (chỉ tính khi category có
-  ≥2 carrier, dựa số liệu thật không tự nhận định): 🚀 tốc độ cao nhất nhóm (`throttleRank()` — noThrottle
-  > mbps cao hơn), 📶 nhiều lựa chọn nhất (số SKU nhiều nhất), 🎁 có ưu đãi riêng.
+  fallback `operator_code` rồi **fallback cuối = vendor GoHub** `a.vendor`, LUÔN có — fix đợt 6, tránh rơi
+  vào "chưa rõ nhà mạng" khi Supabase chỉ thiếu 2 field carrier trong khi vendor đã hiển thị sẵn nơi khác)
+  — KHÔNG gom theo vendor GoHub làm trục CHÍNH (1 vendor như WorldMove route qua nhiều carrier khác nhau
+  tuỳ nước, gom theo vendor sẽ trộn lẫn carrier khác hẳn nhau). Mỗi carrier: `networkTypes`,
+  `throttleSummary` (distinct, xem field Loại data bên dưới), `perksList`/`restrictionsList` (nội dung
+  THẬT distinct từ `telco_perks`/`unsupported_apps`), `localNumberCountries` (đợt 6, distinct nước có SDT
+  nội địa trong carrier này), `qrPolicies` (từ `OPERATOR_POLICY` theo `operator_code` thật thuộc carrier
+  đó). **Tag so sánh** (chỉ tính khi category có ≥2 carrier, dựa số liệu thật không tự nhận định): 🚀 tốc
+  độ cao nhất nhóm (`throttleRank()` — noThrottle > mbps cao hơn), 📶 nhiều lựa chọn nhất (số SKU nhiều
+  nhất), 🎁 có ưu đãi riêng.
+- **Có SDT nội địa (đợt 6)** — KHÔNG còn tách category riêng. `category.localNumberProductCount` (tổng số
+  gói có `local_phone_number="Yes"` trong category) hiện thành 1 nút toggle nổi bật đầu trang category
+  ("📞 Có SDT nội địa (N gói)") — bấm lọc client-side mọi carrier trong category chỉ còn gói có SDT nội
+  địa. Không bấm vẫn thấy được carrier nào có SDT nội địa qua chip `localNumberCountries` ở panel carrier.
 - **Sản phẩm cụ thể** = từng SKU thật đã bán, gom trong mỗi carrier (KHÔNG còn giới hạn top-6/category từ
   đợt 5 — safety valve `MAX_PRODUCTS_PER_OPERATOR=60`/carrier chống payload phình bất thường, không phải
   giới hạn hiển thị chủ đích):
@@ -112,8 +143,10 @@ chính sách QR/đổi máy hardcode `OPERATOR_POLICY`, cache TTL 60'. **Đổi 
     `ma-sku.md`/`loai-data-policy.md` mà đợt 2/3 từng phải né).
   - **APN** (`apn`) hiện trên mỗi sản phẩm; **Ưu đãi/Hạn chế** (`telco_perks`/`unsupported_apps`) hiện cả
     ở tầng carrier (gộp distinct) lẫn tầng sản phẩm cụ thể (nếu khác biệt theo SKU).
-  - FE mặc định hiện dạng **chip gọn** ("5GB · 7 ngày"), bấm 1 chip mới xổ card chi tiết đầy đủ (throttle/
-    APN/reset/perks) — tránh liệt kê hết ngay gây rối mắt khi 1 carrier có nhiều combo.
+  - FE drill **2 tầng** (đổi từ 1 chip phẳng "5GB · 7 ngày" ở đợt 5, đợt 6 tách theo yêu cầu Hiếu): bấm
+    chip **NGÀY** trước → mới hiện dải chip **DUNG LƯỢNG** khớp đúng ngày đó → bấm dung lượng mới xổ card
+    chi tiết đầy đủ (throttle/APN/reset/perks/SDT nội địa). Giảm rối mắt khi 1 carrier có nhiều tổ hợp
+    ngày×dung lượng (VD 3HK Datapool).
 - **Badge** tính trong JS từ số liệu 90 ngày gần nhất, ở CẢ 2 tầng (category trong destination, sản phẩm
   trong carrier) — không so toàn hệ thống:
   - ⭐ **Bán chạy nhất**: revenue cao nhất trong đúng nhóm đang so (category hoặc sản phẩm).
@@ -156,8 +189,8 @@ Chưa thêm `ops-&-cs`/`hr`/`staff` — Hiếu tự cấp thêm qua Settings n�
   — đây là các gói ĐA QUỐC GIA (Europe pool, Asia pool), không phải lỗi thiếu mapping.
 - Nếu Supabase `products` không có entry khớp prefix cho SKU đại diện (SKU cũ/đã ngừng bán) → dòng SP
   vẫn hiện đủ số liệu doanh thu, chỉ thiếu chip network/hotspot/KYC (graceful, không lỗi).
-- Nếu `onsite_carrier` VÀ `operator_code` đều NULL cho toàn bộ SKU 1 category → carrier group duy nhất
-  tên "Chưa rõ nhà mạng" (graceful, không lỗi, nhưng không có gì để hiện throttle/QR policy).
+- Nếu `onsite_carrier` VÀ `operator_code` đều NULL → group theo tên **vendor GoHub** (đợt 6, luôn có).
+  Chỉ khi vendor cũng rỗng (không thể — SQL đã lọc `v.vendor IS NOT NULL`) mới thật sự không group được.
 - CHƯA làm: bảng so sánh side-by-side nhiều destination, date-range picker — xem plan gốc nếu cần bối
   cảnh quyết định (`purring-singing-pancake.md`).
 
@@ -171,6 +204,6 @@ Chưa thêm `ops-&-cs`/`hr`/`staff` — Hiếu tự cấp thêm qua Settings n�
 | Destination code | SKU (`getDestinationSQL`) | Không dùng `dim_sku.category_name` |
 | Tên nước | Turso `country_codes` | `getCountryMappings()` |
 | Network/Hotspot/KYC/APN/Data Type/Telco Perks/Unsupported Apps | Supabase `products` | Prefix-match `product_code` với `sku` |
-| Nhà mạng (gom nhóm) | Supabase `products.onsite_carrier` | Fallback `operator_code` rồi "Chưa rõ nhà mạng" — đợt 5 |
+| Nhà mạng (gom nhóm) | Supabase `products.onsite_carrier` | Fallback `operator_code` rồi vendor GoHub (`a.vendor`) — đợt 5, fix fallback đợt 6 |
 | Throttle (tốc độ sau quota) | Supabase `products.data_policy_code` | Map `DATA_POLICY` trong `route.ts`, đồng bộ `agents.ts` DATA_DICT — đợt 5 |
 | Chính sách QR/đổi máy | `OPERATOR_POLICY` (hardcode, `route.ts`) | Trích tay từ ảnh Hiếu cung cấp, key theo `operator_code`, scope theo carrier đang chọn từ đợt 5 |

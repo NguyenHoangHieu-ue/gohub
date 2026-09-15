@@ -3,22 +3,24 @@
 import React, { useEffect, useMemo, useState } from "react"
 import {
   Layers, Package, Radio, Sparkles, PhoneCall, Wifi, ShieldCheck, ShieldAlert, RefreshCw, ChevronDown,
-  Gift, Ban, Router, Signal, Search, Zap, Gauge, X,
+  Gift, Ban, Router, Signal, Search, Zap, Gauge, X, Smartphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { StatTile, StatTileSkeleton, EmptyState } from "@/components/dashboard-kit"
 
-// GoHub Product Catalogue — 3 tầng Destination → Loại sản phẩm → Nhà mạng → Sản phẩm cụ thể (Hiếu yêu
-// cầu 2026-09-14, đợt 2+3+4; redesign kiến trúc thông tin 2026-09-15). Giữ nguyên ngôn ngữ visual GoHub
-// Intel (brand-600 navy, StatTile/SpecChip dùng chung 32 tab khác — đổi hẳn màu/font ở riêng trang này
-// sẽ phá tính nhất quán mà Hiếu tự khoá UI cho tab BI). Đổi ở đây là KIẾN TRÚC THÔNG TIN:
-//   - Destination: bỏ giới hạn top-8, chuyển pill-row (không scale nổi full list) sang sidebar tìm-kiếm.
-//   - Nhà mạng: gom theo onsite_carrier (nhà mạng THẬT tại điểm đến) thay vì vendor GoHub — vendor có thể
-//     route qua nhiều carrier khác nhau tuỳ nước. Tag ưu điểm (nhanh nhất/nhiều lựa chọn nhất/có ưu đãi)
-//     tính từ so sánh SỐ THẬT giữa các carrier cùng category — không tự bịa nhận định.
-//   - Sản phẩm: gom theo carrier, mặc định CHỈ hiện dạng chip (dung lượng · ngày) — bấm 1 chip mới xổ chi
-//     tiết đầy đủ (throttle/APN/reset/perks). Giảm tải nhìn khi 1 carrier có nhiều combo.
-// API/route.ts response shape đổi (v3→v4): category.operators[] thay category.products[] phẳng.
+// GoHub Product Catalogue — 4 tầng Destination → Loại SP → Nhà mạng → Sản phẩm cụ thể (Hiếu yêu cầu
+// 2026-09-14, đợt 2+3+4; redesign kiến trúc đợt 5-6, 2026-09-15). Giữ nguyên ngôn ngữ visual GoHub Intel
+// (brand-600 navy, StatTile/SpecChip dùng chung 32 tab khác — đổi hẳn màu/font ở riêng trang này sẽ phá
+// tính nhất quán mà Hiếu tự khoá UI cho tab BI). Đợt 6 (2026-09-15), theo phản hồi Hiếu:
+//   - "Chưa rõ nhà mạng" xuất hiện dù thông tin có sẵn → route.ts fallback về vendor GoHub (LUÔN có) khi
+//     Supabase thiếu onsite_carrier/operator_code, thay vì rơi thẳng vào nhãn "chưa rõ".
+//   - CHỈ 2 category thật: eSIM / SIM vật lý (mã C/E) — bỏ tách data-only vs có SDT nội địa thành 2
+//     category riêng (đợt 2 làm vậy). "Có SDT nội địa" giờ là 1 toggle nổi bật lên đầu category (lọc
+//     nhanh + hiện chi tiết nước áp dụng) thay vì 1 nhánh phân loại.
+//   - Gói ngày/data drill 2 tầng: bấm NGÀY trước → mới hiện các DUNG LƯỢNG có ở ngày đó → bấm dung lượng
+//     mới xổ chi tiết đầy đủ. Trước đây gộp chung "dung lượng · ngày" thành 1 chip phẳng.
+// API/route.ts response shape đổi (v4→v5): category.localNumberProductCount, operator.localNumberCountries,
+// product.hasLocalNumber/localNumberCountry mới; category.hasCall bỏ (không còn 2 category con nữa).
 
 interface OperatorInfo { code: string; qrValidity: string; reinstallLimit: string; deviceChangeLimit: string }
 interface CatalogueProduct {
@@ -27,20 +29,21 @@ interface CatalogueProduct {
   dataType: string | null; dailyResetTime: string | null; throttleLabel: string | null
   apn: string | null; operatorCode: string | null
   telcoPerks: string | null; unsupportedApps: string | null
+  hasLocalNumber: boolean; localNumberCountry: string | null
   badges: string[]
 }
 interface CatalogueOperator {
   key: string; displayName: string
   networkTypes: string[]; productCount: number
   throttleSummary: string[]; perksList: string[]; restrictionsList: string[]
-  qrPolicies: OperatorInfo[]
+  qrPolicies: OperatorInfo[]; localNumberCountries: string[]
   tags: string[]
   products: CatalogueProduct[]
 }
 interface CatalogueCategory {
-  key: string; label: string; hasCall: boolean
+  key: string; label: string
   hotspot: boolean | null; kycNeeded: boolean | null; networkTypes: string[]
-  productCount: number; badges: string[]; operators: CatalogueOperator[]
+  productCount: number; localNumberProductCount: number; badges: string[]; operators: CatalogueOperator[]
 }
 interface CatalogueDestination {
   code: string; name: string
@@ -60,13 +63,11 @@ const TAG_META: Record<string, { label: string; icon: React.ReactNode; className
   has_perks:       { label: "Có ưu đãi riêng",       icon: <Gift className="w-3 h-3" />,   className: "bg-brand-50 text-brand-700 border-brand-200" },
 }
 
-// Phụ kiện màu theo Ý NGHĨA (gọi/nhắn tin được = nổi bật hơn data-only), không phải trang trí.
-const CATEGORY_ACCENT: Record<string, { border: string; iconBg: string; iconColor: string }> = {
-  esim_data:  { border: "border-t-sky-400",     iconBg: "bg-sky-50",     iconColor: "text-sky-600" },
-  esim_local: { border: "border-t-emerald-400", iconBg: "bg-emerald-50", iconColor: "text-emerald-600" },
-  sim_data:   { border: "border-t-indigo-400",  iconBg: "bg-indigo-50", iconColor: "text-indigo-600" },
-  sim_local:  { border: "border-t-emerald-400", iconBg: "bg-emerald-50", iconColor: "text-emerald-600" },
-  other:      { border: "border-t-slate-300",   iconBg: "bg-slate-100", iconColor: "text-slate-500" },
+// Chỉ 2 category thật — phụ kiện màu/icon theo Ý NGHĨA, không phải trang trí.
+const CATEGORY_META: Record<string, { border: string; iconBg: string; iconColor: string; icon: React.ReactNode }> = {
+  esim:  { border: "border-t-sky-400",    iconBg: "bg-sky-50",    iconColor: "text-sky-600",    icon: <Signal className="w-5 h-5" /> },
+  sim:   { border: "border-t-indigo-400", iconBg: "bg-indigo-50", iconColor: "text-indigo-600", icon: <Radio className="w-5 h-5" /> },
+  other: { border: "border-t-slate-300",  iconBg: "bg-slate-100", iconColor: "text-slate-500",  icon: <Layers className="w-5 h-5" /> },
 }
 
 function Badges({ badges }: { badges: string[] }) {
@@ -124,6 +125,8 @@ export default function ProductCataloguePage() {
   const [destSearch, setDestSearch] = useState("")
   const [expandedPolicy, setExpandedPolicy] = useState<Set<string>>(new Set())
   const [selectedOperator, setSelectedOperator] = useState<Record<string, string>>({})
+  const [localOnly, setLocalOnly] = useState<Record<string, boolean>>({})
+  const [selectedDay, setSelectedDay] = useState<Record<string, string>>({})
   const [expandedCombo, setExpandedCombo] = useState<Record<string, string>>({})
 
   const fetchData = async () => {
@@ -239,24 +242,33 @@ export default function ProductCataloguePage() {
                 {/* Category sections */}
                 <div className="space-y-5">
                   {current.categories.map(cat => {
-                    const accent = CATEGORY_ACCENT[cat.key] || CATEGORY_ACCENT.other
+                    const meta = CATEGORY_META[cat.key] || CATEGORY_META.other
                     const opSelKey = selectedOperator[cat.key] && cat.operators.some(o => o.key === selectedOperator[cat.key])
                       ? selectedOperator[cat.key] : cat.operators[0]?.key
                     const op = cat.operators.find(o => o.key === opSelKey)
                     const policyKey = `${cat.key}:${opSelKey}`
                     const policyOpen = expandedPolicy.has(policyKey)
                     const comboKey = op ? `${cat.key}:${op.key}` : ""
+                    const filterLocal = !!localOnly[cat.key]
+
+                    // Ngày → Dung lượng drill: chỉ hiện dung lượng SAU KHI chọn ngày.
+                    const visibleProducts = op ? (filterLocal ? op.products.filter(p => p.hasLocalNumber) : op.products) : []
+                    const dayMap = new Map<string, number | null>()
+                    visibleProducts.forEach(p => dayMap.set(p.days == null ? "khac" : String(p.days), p.days))
+                    const dayList = [...dayMap.entries()].sort((a, b) => (a[1] ?? 999) - (b[1] ?? 999))
+                    const selDay = selectedDay[comboKey]
+                    const dataChips = selDay != null ? visibleProducts.filter(p => (p.days == null ? "khac" : String(p.days)) === selDay) : []
                     const expandedSku = expandedCombo[comboKey]
-                    const expandedProduct = op?.products.find(p => p.sku === expandedSku)
+                    const expandedProduct = dataChips.find(p => p.sku === expandedSku)
 
                     return (
-                    <div key={cat.key} className={cn("bg-white border border-slate-200 border-t-4 rounded-2xl overflow-hidden", accent.border)}>
+                    <div key={cat.key} className={cn("bg-white border border-slate-200 border-t-4 rounded-2xl overflow-hidden", meta.border)}>
                       {/* Category header */}
                       <div className="p-5 border-b border-slate-100 flex flex-col gap-3">
                         <div className="flex items-start justify-between gap-3 flex-wrap">
                           <div className="flex items-center gap-3">
-                            <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", accent.iconBg, accent.iconColor)}>
-                              {cat.hasCall ? <PhoneCall className="w-5 h-5" /> : <Signal className="w-5 h-5" />}
+                            <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", meta.iconBg, meta.iconColor)}>
+                              {meta.icon}
                             </span>
                             <div>
                               <h2 className="text-lg font-bold text-slate-900">{cat.label}</h2>
@@ -266,9 +278,13 @@ export default function ProductCataloguePage() {
                           <Badges badges={cat.badges} />
                         </div>
                         <div className="flex flex-wrap gap-1.5 items-center">
-                          <SpecChip icon={<PhoneCall className="w-3 h-3" />} tone={cat.hasCall ? "good" : "neutral"}>
-                            {cat.hasCall ? "Gọi/Nhắn tin được" : "Chỉ Data"}
-                          </SpecChip>
+                          {cat.localNumberProductCount > 0 && (
+                            <button onClick={() => setLocalOnly(prev => ({ ...prev, [cat.key]: !prev[cat.key] }))}
+                              className={cn("text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 border transition-all",
+                                filterLocal ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-brand-200 text-brand-700 hover:bg-brand-50")}>
+                              <PhoneCall className="w-3 h-3" />Có SDT nội địa ({cat.localNumberProductCount} gói)
+                            </button>
+                          )}
                           {cat.kycNeeded != null && (
                             <SpecChip icon={cat.kycNeeded ? <ShieldAlert className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />} tone={cat.kycNeeded ? "warn" : "good"}>
                               {cat.kycNeeded ? "Cần KYC" : "Không cần KYC"}
@@ -300,6 +316,9 @@ export default function ProductCataloguePage() {
                             <div className="flex flex-wrap gap-1.5">
                               {op.networkTypes.map(nt => <SpecChip key={nt} icon={<Wifi className="w-3 h-3" />}>{nt}</SpecChip>)}
                               {op.throttleSummary.map(t => <SpecChip key={t} icon={<Gauge className="w-3 h-3" />}>{t}</SpecChip>)}
+                              {op.localNumberCountries.length > 0 && (
+                                <SpecChip icon={<PhoneCall className="w-3 h-3" />} tone="good">SDT nội địa: {op.localNumberCountries.join(", ")}</SpecChip>
+                              )}
                               {op.qrPolicies.length > 0 && (
                                 <button onClick={() => togglePolicy(policyKey)}
                                   className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1">
@@ -333,27 +352,56 @@ export default function ProductCataloguePage() {
                         )}
                       </div>
 
-                      {/* Gói theo dung lượng/ngày — gom nhóm dạng chip, bấm mới xổ chi tiết */}
+                      {/* Gói theo NGÀY → DUNG LƯỢNG: chọn ngày trước, dung lượng chỉ hiện sau khi chọn */}
                       {op && (
                         <div className="p-5 space-y-3">
-                          <div className="flex flex-wrap gap-2">
-                            {op.products.map(p => {
-                              const isOpen = p.sku === expandedSku
-                              return (
-                                <button key={p.sku}
-                                  onClick={() => setExpandedCombo(prev => ({ ...prev, [comboKey]: isOpen ? "" : p.sku }))}
-                                  className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all",
-                                    isOpen ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:border-brand-300")}>
-                                  {p.capLabel || "—"}{p.days ? ` · ${p.days} ngày` : ""}
-                                  {p.badges.length > 0 && (
-                                    <span title={p.badges.map(b => BADGE_META[b]?.label).join(", ")}>
-                                      {p.badges.includes("best_seller") ? "⭐" : p.badges.includes("fastest_growing") ? "📈" : "💰"}
-                                    </span>
-                                  )}
-                                </button>
-                              )
-                            })}
-                          </div>
+                          {visibleProducts.length === 0 ? (
+                            <p className="text-xs text-slate-400">Nhà mạng này không có gói khớp bộ lọc đang chọn.</p>
+                          ) : (
+                            <>
+                              <div className="space-y-1.5">
+                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Chọn số ngày</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {dayList.map(([dKey, dVal]) => {
+                                    const isSel = selDay === dKey
+                                    return (
+                                      <button key={dKey}
+                                        onClick={() => setSelectedDay(prev => ({ ...prev, [comboKey]: isSel ? "" : dKey }))}
+                                        className={cn("px-3 py-1.5 rounded-lg border text-xs font-bold transition-all",
+                                          isSel ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:border-brand-300")}>
+                                        {dVal != null ? `${dVal} ngày` : "Khác"}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+
+                              {selDay && (
+                                <div className="space-y-1.5">
+                                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Chọn dung lượng</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {dataChips.map(p => {
+                                      const isOpen = p.sku === expandedSku
+                                      return (
+                                        <button key={p.sku}
+                                          onClick={() => setExpandedCombo(prev => ({ ...prev, [comboKey]: isOpen ? "" : p.sku }))}
+                                          className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all",
+                                            isOpen ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:border-brand-300")}>
+                                          {p.capLabel || "—"}
+                                          {p.hasLocalNumber && <Smartphone className="w-3 h-3" />}
+                                          {p.badges.length > 0 && (
+                                            <span title={p.badges.map(b => BADGE_META[b]?.label).join(", ")}>
+                                              {p.badges.includes("best_seller") ? "⭐" : p.badges.includes("fastest_growing") ? "📈" : "💰"}
+                                            </span>
+                                          )}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
 
                           {expandedProduct && (
                             <div className="border border-brand-200 bg-brand-50/30 rounded-xl p-4 flex flex-col gap-2.5">
@@ -365,6 +413,11 @@ export default function ProductCataloguePage() {
                                 <SpecChip icon={<Signal className="w-3 h-3" />}>{expandedProduct.dataType || "—"}{expandedProduct.dataType === "Daily Data" && expandedProduct.dailyResetTime ? ` · reset ${expandedProduct.dailyResetTime}` : ""}</SpecChip>
                                 {expandedProduct.throttleLabel && <SpecChip icon={<Gauge className="w-3 h-3" />}>{expandedProduct.throttleLabel}</SpecChip>}
                                 <SpecChip icon={<Radio className="w-3 h-3" />}>{expandedProduct.typeOfSim}</SpecChip>
+                                {expandedProduct.hasLocalNumber && (
+                                  <SpecChip icon={<PhoneCall className="w-3 h-3" />} tone="good">
+                                    SDT nội địa{expandedProduct.localNumberCountry ? ` (${expandedProduct.localNumberCountry})` : ""}
+                                  </SpecChip>
+                                )}
                               </div>
                               <div className="text-[11px] text-slate-500 space-y-0.5">
                                 <p><span className="font-semibold text-slate-600">Vendor GoHub:</span> {expandedProduct.vendor}</p>

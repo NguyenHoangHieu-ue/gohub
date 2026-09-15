@@ -8,12 +8,13 @@ import {
   CACHE_HEADERS, cachedQuery, analyticsGuard,
 } from "@/lib/analytics-helpers"
 
-// GoHub Product Catalogue — 3 tầng Destination → Loại sản phẩm → Sản phẩm cụ thể (Hiếu yêu cầu
-// 2026-09-14, đợt 2 + đợt 3 mở rộng field). Toàn bộ phân loại dựa ĐÚNG dữ liệu thật, không tự đặt
-// taxonomy:
-//   - Ký tự 2 mã SKU (ProductType): C=eSIM full, E=SIM full (2 loại chính bán ra thị trường, xem
-//     docs/wiki/business/ma-sku.md) — chỉ đúng cho SKU chuẩn 13 ký tự, legacy 14/15 ký tự → "Khác".
-//   - "Có gọi/nhắn tin nội địa" = Supabase products.local_phone_number = "Yes".
+// GoHub Product Catalogue — 4 tầng Destination → Loại SP → Nhà mạng → Sản phẩm cụ thể (Hiếu yêu cầu
+// 2026-09-14, đợt 2+3+4; redesign kiến trúc đợt 5-6, 2026-09-15). Toàn bộ phân loại dựa ĐÚNG dữ liệu
+// thật, không tự đặt taxonomy:
+//   - Ký tự 2 mã SKU (ProductType): C=eSIM full, E=SIM full — CHỈ 2 loại category thật (Hiếu chốt lại
+//     đợt 6, xem docs/wiki/business/ma-sku.md) — legacy 14/15 ký tự → "Khác".
+//   - "Có SDT nội địa" (`local_phone_number`="Yes") KHÔNG còn là trục category riêng (đợt 2 làm vậy) —
+//     nay là thuộc tính nổi bật, hiển thị qua filter/badge ngay trong category eSIM/SIM (đợt 6).
 //   - "Loại data" (Fixed/Daily) = Supabase products.data_type — field CÓ SẴN, thay cho việc tự decode
 //     ký tự 8 SKU (2 wiki nguồn ma-sku.md/loai-data-policy.md ghi NGƯỢC NHAU ở mbps A/B — dùng
 //     data_type thật từ Supabase an toàn hơn nhiều, đợt trước phải né vì chưa có field này).
@@ -91,25 +92,27 @@ function decodeSku(sku: string): SkuDecode {
   return { productType, capLabel, days }
 }
 
-type CategoryKey = "esim_data" | "esim_local" | "sim_data" | "sim_local" | "other"
+// Chỉ 2 loại THẬT theo ProductType (ký tự 2 mã SKU) — Hiếu chốt lại 2026-09-15: KHÔNG tách data-only vs
+// có SDT nội địa thành category riêng nữa (đợt 2 làm vậy), gộp chung — "có SDT nội địa" giờ là 1 thuộc
+// tính nổi bật (badge/filter) NGAY TRONG category eSIM/SIM, không phải trục phân loại.
+type CategoryKey = "esim" | "sim" | "other"
 
-function categoryKey(productType: string | null, hasCall: boolean): CategoryKey {
-  if (productType === "C") return hasCall ? "esim_local" : "esim_data"
-  if (productType === "E") return hasCall ? "sim_local" : "sim_data"
+function categoryKey(productType: string | null): CategoryKey {
+  if (productType === "C") return "esim"
+  if (productType === "E") return "sim"
   return "other"
 }
 
 const CATEGORY_LABEL: Record<CategoryKey, string> = {
-  esim_data:  "eSIM — Chỉ Data",
-  esim_local: "eSIM — Có số nội địa (Gọi/Nhắn tin)",
-  sim_data:   "SIM vật lý — Chỉ Data",
-  sim_local:  "SIM vật lý — Nội địa (Gọi/Nhắn tin)",
-  other:      "Khác",
+  esim:  "eSIM",
+  sim:   "SIM vật lý",
+  other: "Khác",
 }
 
 interface ProductMeta {
   network_type: string | null; hotspot: string | null; kyc_needed: string | null
-  local_phone_number: string | null; data_type: string | null; daily_reset_time: string | null
+  local_phone_number: string | null; local_number_country: string | null
+  data_type: string | null; daily_reset_time: string | null
   apn: string | null; operator_code: string | null; telco_perks: string | null; unsupported_apps: string | null
   onsite_carrier: string | null; data_policy_code: string | null
 }
@@ -124,7 +127,7 @@ export async function GET(req: NextRequest) {
   const guard = analyticsGuard(req, session); if (guard) return guard
 
   try {
-    const payload = await cachedQuery("product-catalogue:v4", async () => {
+    const payload = await cachedQuery("product-catalogue:v5", async () => {
       const destExpr = getDestinationSQL()
       const sfx = `${shipFilter(false)} ${internalOpsFilter(false)}`
 
@@ -181,7 +184,7 @@ export async function GET(req: NextRequest) {
       skuMap.forEach(byDest => byDest.forEach(a => allSkus.add(a.sku)))
       const { data: products } = await supabaseAdmin
         .from("products")
-        .select("product_code, network_type, hotspot, kyc_needed, local_phone_number, data_type, daily_reset_time, apn, operator_code, telco_perks, unsupported_apps, onsite_carrier, data_policy_code")
+        .select("product_code, network_type, hotspot, kyc_needed, local_phone_number, local_number_country, data_type, daily_reset_time, apn, operator_code, telco_perks, unsupported_apps, onsite_carrier, data_policy_code")
       const metaBySku = new Map<string, ProductMeta>()
       ;(products || []).forEach(p => {
         allSkus.forEach(sku => { if (sku.startsWith(p.product_code)) metaBySku.set(sku, p) })
@@ -194,13 +197,11 @@ export async function GET(req: NextRequest) {
         const totalRevenue = skus.reduce((s, a) => s + a.revenue, 0)
         const totalUnits = skus.reduce((s, a) => s + a.units, 0)
 
-        // Gom theo Category, mỗi SKU quyết định category qua ProductType (SKU) + local_phone_number (meta).
+        // Gom theo Category — CHỈ 2 loại thật (esim/sim) qua ProductType (ký tự 2 SKU).
         const catMap = new Map<CategoryKey, SkuAgg[]>()
         skus.forEach(a => {
-          const meta = metaBySku.get(a.sku)
           const decoded = decodeSku(a.sku)
-          const hasCall = meta?.local_phone_number === "Yes"
-          const key = categoryKey(decoded.productType, hasCall)
+          const key = categoryKey(decoded.productType)
           if (!catMap.has(key)) catMap.set(key, [])
           catMap.get(key)!.push(a)
         })
@@ -233,10 +234,13 @@ export async function GET(req: NextRequest) {
             // Gom theo NHÀ MẠNG THẬT tại điểm đến (onsite_carrier) — không phải vendor GoHub. 1 vendor
             // (VD WorldMove) có thể route qua nhiều nhà mạng khác nhau tuỳ destination, đây mới là trục
             // so sánh có ý nghĩa với sale/đối tác ("ở nước này có carrier nào, khác nhau ra sao").
+            // Fallback cuối = vendor GoHub (LUÔN có, `v.vendor IS NOT NULL` ở SQL) — tránh rơi vào nhóm
+            // "chưa rõ nhà mạng" khi Supabase products thiếu onsite_carrier/operator_code (VD SKU khối
+            // lượng lớn 3HK Datapool) trong khi thông tin vendor đã hiển thị sẵn ở nơi khác trên trang.
             const opMap = new Map<string, SkuAgg[]>()
             arr.forEach(a => {
               const meta = metaBySku.get(a.sku)
-              const opKey = meta?.onsite_carrier || meta?.operator_code || "unknown"
+              const opKey = meta?.onsite_carrier || meta?.operator_code || a.vendor
               if (!opMap.has(opKey)) opMap.set(opKey, [])
               opMap.get(opKey)!.push(a)
             })
@@ -267,15 +271,19 @@ export async function GET(req: NextRequest) {
                     .filter(Boolean)
                 )] as string[]
                 const qrPolicies = o.operatorCodes.filter(c => OPERATOR_POLICY[c]).map(c => ({ code: c, ...OPERATOR_POLICY[c] }))
+                const localNumberCountries = [...new Set(
+                  o.opMetaList.filter(m => m.local_phone_number === "Yes").map(m => m.local_number_country).filter(Boolean)
+                )] as string[]
 
                 return {
                   key: o.key,
-                  displayName: o.key === "unknown" ? "Chưa rõ nhà mạng" : o.key,
+                  displayName: o.key,
                   networkTypes: [...new Set(o.opMetaList.map(m => m.network_type).filter(Boolean))] as string[],
                   productCount: o.arr.length,
                   throttleSummary,
                   perksList, restrictionsList,
                   qrPolicies,
+                  localNumberCountries,
                   tags: multiOperator ? [
                     o.bestRank === maxRank && maxRank > -1 ? "fastest_network" : null,
                     o.arr.length === maxOptions && maxOptions > 1 ? "most_options" : null,
@@ -300,6 +308,8 @@ export async function GET(req: NextRequest) {
                       operatorCode: meta?.operator_code || null,
                       telcoPerks: meta?.telco_perks || null,
                       unsupportedApps: meta?.unsupported_apps || null,
+                      hasLocalNumber: meta?.local_phone_number === "Yes",
+                      localNumberCountry: meta?.local_phone_number === "Yes" ? (meta?.local_number_country || null) : null,
                       revenue: Math.round(a.revenue),
                       units: Math.round(a.units),
                       growthPct: growthPct != null ? Math.round(growthPct * 10) / 10 : null,
@@ -314,13 +324,15 @@ export async function GET(req: NextRequest) {
               })
               .sort((a, b) => b.revenue - a.revenue)
 
+            const localNumberProductCount = arr.filter(a => metaBySku.get(a.sku)?.local_phone_number === "Yes").length
+
             return {
               key,
               label: CATEGORY_LABEL[key],
-              hasCall: key === "esim_local" || key === "sim_local",
               hotspot: majorityYes("hotspot"),
               kycNeeded: majorityYes("kyc_needed"),
               networkTypes,
+              localNumberProductCount,
               revenue: Math.round(catRevenue),
               units: Math.round(catUnits),
               revenueSharePct: totalRevenue > 0 ? Math.round((catRevenue / totalRevenue) * 1000) / 10 : 0,
