@@ -6,11 +6,11 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-14, s198)
+## Trạng thái hiện tại (2026-09-15, s198)
 
 | | |
 |---|---|
-| ✅ **s198 (2026-09-14) — Tab mới "Product Catalogue" — 4 đợt cùng ngày, đã QA live mỗi đợt** | Hiếu:
+| ✅ **s198 (2026-09-14/15) — Tab mới "Product Catalogue" — 9 đợt, đã QA live mỗi đợt, đã fix 1 bug P0** | Hiếu:
   muốn 1 trang giới thiệu sản phẩm theo destination cho internal (sau đổi ý external→internal-only qua
   AskUserQuestion), tự đề xuất ý tưởng + lên plan (EnterPlanMode) + làm. Route mới
   `GET /api/analytics/product-catalogue` (1 query tổng hợp DUY NHẤT, đúng rule N+1 mới thêm) + trang
@@ -34,7 +34,45 @@
   tsc + lint (0 lỗi mới) + vitest (243/243) PASS xuyên suốt cả 4 đợt, wiki `analytics-catalogue.md` cập
   nhật đủ. **Đã tự QA qua Chrome trên staging sau MỖI đợt** — trang USA (ví dụ Hiếu nêu) verify đủ 5
   loại SP, panel chính sách 3HK/BillionConnect đúng nội dung ảnh, card spec hiển thị đúng data_type/APN/
-  operator/local carrier thật. **Chưa merge main** — chờ Hiếu duyệt tổng thể.
+  operator/local carrier thật.
+  **Đợt 5 (2026-09-15) — redesign kiến trúc thông tin theo phản hồi "hơi chưa rõ nhìn"**: bỏ giới hạn
+  top-8 destination (trả toàn bộ), sidebar tìm-kiếm thay pill-row; thêm tầng thứ 4 **Nhà mạng**
+  (`onsite_carrier` thật, không phải vendor GoHub) với tag so sánh (tốc độ/số lượng/ưu đãi) tính từ số
+  thật; throttle thật qua field Supabase (sau phát hiện SAI ở đợt 9, xem dưới); sản phẩm gom dạng chip,
+  bấm mới xổ chi tiết.
+  **Đợt 6**: fix 3 phản hồi tiếp — fallback thêm vendor khi thiếu carrier (đỡ hẳn "chưa rõ nhà mạng"
+  nhưng CHƯA hết, xem đợt 7); rút gọn category chỉ còn **eSIM/SIM** (bỏ tách 4 nhóm theo gọi/không gọi
+  nội địa của đợt 2, "có SDT nội địa" chuyển thành toggle/badge); sản phẩm drill 2 tầng Ngày→Dung lượng.
+  **Đợt 7** — verify TRỰC TIẾP Supabase `products` qua REST API (Hiếu đưa key trong `tmp.txt`, không
+  đoán): phát hiện `onsite_carrier` với gói pool đa quốc gia là ĐOẠN VĂN nhiều dòng "Nước: Carrier" (có
+  case liệt kê ~40 nước) — dùng thẳng làm tên tab ra cả đoạn văn, đúng nguyên nhân thật "mất thông tin"
+  Hiếu báo lần đó. Fix: chỉ dùng `onsite_carrier` làm tên tab khi ngắn/sạch (≤40 ký tự, không xuống
+  dòng), còn lại group theo `operator_code` rồi vendor — đoạn văn giữ lại làm `coverageNotes` hiển thị
+  phụ. Thêm bảng tổng hợp TOÀN HỆ THỐNG "Gói có SDT nội địa" (chỉ ~50 product_code có field này thật,
+  build 100% ở FE từ data đã fetch, `DataTable` dùng chung).
+  **Đợt 8** — 4 việc theo yêu cầu tiếp (hỏi lại AskUserQuestion 1 điểm mơ hồ về "giá" trước khi làm — Hiếu
+  chọn giữ nguyên quyết định đợt 4, không thêm số $): AI (Gemini, 1 batch call) đặt tên khu vực tiếng Việt
+  cho destination mã thô (EU1/APA/GZ1...) từ `supported_countries` thật; loại bỏ hẳn destination `"000"`
+  (SIM frame/eSIM profile, lọc ở SQL); sắp lại panel nhà mạng đúng thứ tự onsite_carrier→đặc điểm→ưu
+  đãi→ghi chú/kích hoạt (field `note`/`activation_time`/`kyc_links` có sẵn nhưng chưa từng hiện)→phủ
+  sóng/QR; nâng "Gói có SDT nội địa" thành banner nổi bật đầu trang.
+  **Đợt 9 — 🔴 P0, Hiếu báo "không thấy bất kỳ dòng thông tin nào"**: verify trực tiếp qua Supabase REST
+  API phát hiện `data_policy_code` **KHÔNG PHẢI cột thật** (`42703 column does not exist`) — đợt 5 tin
+  nhầm theo 1 comment trong `agents.ts` chưa ai verify (nghi vấn `be-gau.ts`/`bi-analyst.ts`/
+  `creator/tools/supabase.ts` cùng select field này cũng đang lỗi, NGOÀI SCOPE task, chưa kiểm tra riêng).
+  Supabase trả lỗi 400 → code cũ không check `error` → `data` null → fallback `[]` → `metaBySku` TRỐNG
+  HOÀN TOÀN → mọi field metadata null cho MỌI sản phẩm — khớp đúng triệu chứng. Fix: xoá hẳn field/logic
+  dựa cột ảo; throttle chuyển sang field thật `skus.throttle_speed` (bảng khác, verify 11.088/12.892 SKU
+  có giá trị), fetch theo chunk 150 sku_code (phát hiện thêm: Supabase project này cap mặc định 1000
+  dòng/response, unpaged select bảng `skus` 12.892 dòng sẽ âm thầm cắt cụt); thêm check `error` thật cho
+  mọi Supabase select (trước nuốt im lặng). **Bài học**: comment mô tả field trong code không phải bằng
+  chứng field tồn tại thật — luôn verify qua REST API/schema thật trước khi dùng.
+  Đổi shape response nhiều lần trong 9 đợt → cache key cuối cùng `v8`. tsc + lint (0 lỗi mới) + vitest
+  (243/243) PASS mọi đợt. **Đã tự QA qua Chrome trên staging sau MỖI đợt kể cả đợt 9** (bypass CDN cache
+  5 phút bằng cache-bust param để xác nhận response mới trước khi tin UI) — panel nhà mạng đầy đủ
+  network/throttle thật/KYC/Hotspot/note/activation/QR, drill Ngày→Dung lượng→chi tiết hoạt động đúng.
+  **Chưa merge main** — chờ Hiếu duyệt tổng thể sau khi tự xem qua UI thật (đặc biệt xác nhận đợt 9 không
+  còn trang trống).
 | ✅ **s197 (2026-09-14) — Audit LOGIC DỮ LIỆU toàn hệ thống 26 tab (khác đợt UI/performance s196+20) +
   fix hết 16/17 phát hiện** | Hiếu: "check lại toàn bộ tab analytics xem đã logic lấy dữ liệu, áp dụng
   dữ liệu đúng chưa, sai ở đâu" → sau đó "fix theo thứ tự hết đi". 4 fork song song đọc trực tiếp SQL
@@ -572,10 +610,15 @@
 ## Việc Hiếu cần làm (còn mở)
 
 - [ ] **s198 — Duyệt tab mới "Product Catalogue" trên staging rồi báo merge main** — `/analytics/catalogue`,
-  đã tự QA 4 đợt trên staging (số liệu/spec đúng thật) nhưng CHƯA merge main theo đúng rule (chỉ merge khi
-  Hiếu yêu cầu rõ trong tin nhắn). Nếu ổn, nhắn "merge main đi" như mọi lần. 1 điểm cần Hiếu quyết định
-  thêm nếu muốn: bảng "Chính sách QR/đổi máy" hiện đang HARDCODE trong `route.ts` (trích từ ảnh Hiếu gửi)
-  — nếu muốn tự sửa qua UI sau này (không cần nhờ code lại), cần thêm 1 bảng Supabase riêng, báo để làm.
+  9 đợt (2026-09-14/15), đã tự QA live sau MỖI đợt kể cả đợt 9 (fix bug P0 "trang trống trơn" — root cause
+  `data_policy_code` không phải cột Supabase thật, xem chi tiết dòng s198 phía trên) nhưng CHƯA merge main
+  theo đúng rule (chỉ merge khi Hiếu yêu cầu rõ trong tin nhắn). **Gợi ý tự QA trước khi duyệt**: mở vài
+  destination có nhiều nhà mạng thật (VD "China" — 4 carrier), xác nhận panel không còn trống, bấm
+  Ngày→Dung lượng ra chi tiết throttle/APN/note đúng. Nếu ổn, nhắn "merge main đi" như mọi lần.
+  2 điểm cần Hiếu quyết định thêm nếu muốn (không gấp): (1) bảng "Chính sách QR/đổi máy" đang HARDCODE
+  trong `route.ts` — muốn tự sửa qua UI sau này thì cần thêm 1 bảng Supabase riêng, báo để làm; (2) tên
+  khu vực AI cho destination mã thô (EU1/GZ1...) — QA đợt 9 thấy vẫn hiện mã thô, chưa xác nhận do Gemini
+  lỗi hay bug logic, không chặn gì, báo lại nếu vẫn thấy vậy để điều tra tiếp.
 - [x] **s197/s197+1 — Audit logic dữ liệu 16 fix + incident ecom T9 — XONG (2026-09-14), đã tự QA live +
   đã merge main** — B2B Performance "VN Ecom Shopee" xác nhận số đúng (229.667.051đ) sau khi thêm nút
   "Tải lại mới" + ép cache tươi. Channels CM1 khớp Revenue/GP card cùng trang. BOD toggle Phí ship/Đơn
