@@ -26,10 +26,34 @@ import {
 //     trình xử lý CS nội bộ (refund workflow) — không hợp với 1 trang catalogue giới thiệu sản phẩm.
 // 1 câu query tổng hợp DUY NHẤT cho gohub_dw (rule N+1, s197) — không loop theo destination/category.
 
-const TOP_DESTINATIONS = 8
-const TOP_PRODUCTS_PER_CATEGORY = 6
+const MAX_PRODUCTS_PER_OPERATOR = 60 // safety valve chống payload phình bất thường, KHÔNG phải giới hạn hiển thị bình thường
 const GROWTH_BADGE_THRESHOLD = 15    // % — dưới ngưỡng này không gắn badge "Tăng trưởng mạnh"
 const MIN_UNITS_FOR_VALUE_BADGE = 10 // tránh outlier 1-2 đơn lẻ thành "Giá tốt nhất"
+
+// Bảng mã data_policy_code — field THẬT trong Supabase products (không decode ký tự 8 SKU, tránh mâu
+// thuẫn 2 wiki ma-sku.md/loai-data-policy.md ở A/B). Mapping ĐỒNG BỘ với agents.ts DATA_DICT (nguồn
+// production Bé Gấu/BI Analyst đang dùng để trả lời user — giữ 1 sự thật duy nhất xuyên hệ thống).
+interface DataPolicyInfo { label: string; capType: "Fixed" | "Daily"; mbpsAfterQuota: number | null; noThrottle: boolean }
+const DATA_POLICY: Record<string, DataPolicyInfo> = {
+  A: { label: "Daily — giảm còn 5 Mbps sau quota",   capType: "Daily", mbpsAfterQuota: 5,   noThrottle: false },
+  B: { label: "Daily — giảm còn 10 Mbps sau quota",  capType: "Daily", mbpsAfterQuota: 10,  noThrottle: false },
+  C: { label: "Không giới hạn — tối đa 20 Mbps",     capType: "Daily", mbpsAfterQuota: 20,  noThrottle: false },
+  D: { label: "Không giới hạn — tối đa 100 Mbps",    capType: "Daily", mbpsAfterQuota: 100, noThrottle: false },
+  E: { label: "Fixed — giảm còn 5 Mbps sau quota",   capType: "Fixed", mbpsAfterQuota: 5,   noThrottle: false },
+  G: { label: "Fixed — giảm còn 10 Mbps sau quota",  capType: "Fixed", mbpsAfterQuota: 10,  noThrottle: false },
+  H: { label: "Không giới hạn — tối đa 5 Mbps",      capType: "Daily", mbpsAfterQuota: 5,   noThrottle: false },
+  F: { label: "Fixed — giảm dưới 2 Mbps sau quota",  capType: "Fixed", mbpsAfterQuota: 2,   noThrottle: false },
+  P: { label: "Daily — giảm dưới 2 Mbps sau quota",  capType: "Daily", mbpsAfterQuota: 2,   noThrottle: false },
+  Y: { label: "Fixed — không giảm tốc",              capType: "Fixed", mbpsAfterQuota: null, noThrottle: true },
+  Z: { label: "Daily — không giảm tốc",              capType: "Daily", mbpsAfterQuota: null, noThrottle: true },
+}
+// Rank so sánh tốc độ giữa các nhà mạng — noThrottle > mbps cao hơn > mbps thấp hơn > không rõ
+function throttleRank(code: string | null): number {
+  const dp = code ? DATA_POLICY[code.toUpperCase()] : null
+  if (!dp) return -1
+  if (dp.noThrottle) return 1000
+  return dp.mbpsAfterQuota ?? 0
+}
 
 // Chính sách theo operator — trích thông số thực tế từ bảng Hiếu cung cấp (2026-09-14), key = operator_code
 // (khớp Supabase products.operator_code). Vendor không có eSIM (Elite) không có entry — page tự ẩn.
@@ -87,7 +111,7 @@ interface ProductMeta {
   network_type: string | null; hotspot: string | null; kyc_needed: string | null
   local_phone_number: string | null; data_type: string | null; daily_reset_time: string | null
   apn: string | null; operator_code: string | null; telco_perks: string | null; unsupported_apps: string | null
-  onsite_carrier: string | null
+  onsite_carrier: string | null; data_policy_code: string | null
 }
 
 interface SkuAgg {
@@ -100,7 +124,7 @@ export async function GET(req: NextRequest) {
   const guard = analyticsGuard(req, session); if (guard) return guard
 
   try {
-    const payload = await cachedQuery("product-catalogue:v3", async () => {
+    const payload = await cachedQuery("product-catalogue:v4", async () => {
       const destExpr = getDestinationSQL()
       const sfx = `${shipFilter(false)} ${internalOpsFilter(false)}`
 
@@ -134,7 +158,8 @@ export async function GET(req: NextRequest) {
         if (r.period !== "current") return
         destRevenue.set(r.destination, (destRevenue.get(r.destination) || 0) + parseFloat(r.revenue || "0"))
       })
-      const topDestinations = [...destRevenue.entries()].sort((a, b) => b[1] - a[1]).slice(0, TOP_DESTINATIONS).map(([d]) => d)
+      // Toàn bộ destination có doanh thu trong kỳ hiện tại — Hiếu yêu cầu bỏ giới hạn top-8 (2026-09-15).
+      const topDestinations = [...destRevenue.entries()].sort((a, b) => b[1] - a[1]).map(([d]) => d)
       const topDestSet = new Set(topDestinations)
 
       // Gộp theo destination × sku (giữ nguyên grain sản phẩm cụ thể).
@@ -156,7 +181,7 @@ export async function GET(req: NextRequest) {
       skuMap.forEach(byDest => byDest.forEach(a => allSkus.add(a.sku)))
       const { data: products } = await supabaseAdmin
         .from("products")
-        .select("product_code, network_type, hotspot, kyc_needed, local_phone_number, data_type, daily_reset_time, apn, operator_code, telco_perks, unsupported_apps, onsite_carrier")
+        .select("product_code, network_type, hotspot, kyc_needed, local_phone_number, data_type, daily_reset_time, apn, operator_code, telco_perks, unsupported_apps, onsite_carrier, data_policy_code")
       const metaBySku = new Map<string, ProductMeta>()
       ;(products || []).forEach(p => {
         allSkus.forEach(sku => { if (sku.startsWith(p.product_code)) metaBySku.set(sku, p) })
@@ -198,17 +223,96 @@ export async function GET(req: NextRequest) {
               return yes >= metaList.length / 2
             }
             const networkTypes = [...new Set(metaList.map(m => m.network_type).filter(Boolean))] as string[]
-            const operators = [...new Set(metaList.map(m => m.operator_code).filter(Boolean))] as string[]
-            const operatorInfo = operators
-              .filter(op => OPERATOR_POLICY[op])
-              .map(op => ({ code: op, ...OPERATOR_POLICY[op] }))
 
-            const sortedSkus = [...arr].sort((a, b) => b.revenue - a.revenue)
-            const bestSellerSku = sortedSkus[0]?.sku
+            const bestSellerSku = [...arr].sort((a, b) => b.revenue - a.revenue)[0]?.sku
             const valueCandidates = arr.filter(a => a.units >= MIN_UNITS_FOR_VALUE_BADGE)
             const bestValueSku = valueCandidates.length
               ? valueCandidates.reduce((a, b) => (b.revenue / Math.max(b.units, 1) < a.revenue / Math.max(a.units, 1) ? b : a)).sku
               : null
+
+            // Gom theo NHÀ MẠNG THẬT tại điểm đến (onsite_carrier) — không phải vendor GoHub. 1 vendor
+            // (VD WorldMove) có thể route qua nhiều nhà mạng khác nhau tuỳ destination, đây mới là trục
+            // so sánh có ý nghĩa với sale/đối tác ("ở nước này có carrier nào, khác nhau ra sao").
+            const opMap = new Map<string, SkuAgg[]>()
+            arr.forEach(a => {
+              const meta = metaBySku.get(a.sku)
+              const opKey = meta?.onsite_carrier || meta?.operator_code || "unknown"
+              if (!opMap.has(opKey)) opMap.set(opKey, [])
+              opMap.get(opKey)!.push(a)
+            })
+
+            const opRaw = [...opMap.entries()].map(([opKey, opArr]) => {
+              const opMetaList = opArr.map(a => metaBySku.get(a.sku)).filter(Boolean) as ProductMeta[]
+              const operatorCodes = [...new Set(opMetaList.map(m => m.operator_code).filter(Boolean))] as string[]
+              const bestRank = opArr.reduce((mx, a) => Math.max(mx, throttleRank(metaBySku.get(a.sku)?.data_policy_code ?? null)), -1)
+              return {
+                key: opKey, arr: opArr, opMetaList, operatorCodes,
+                revenue: opArr.reduce((s, a) => s + a.revenue, 0),
+                bestRank,
+              }
+            })
+            const maxOptions = Math.max(...opRaw.map(o => o.arr.length))
+            const maxRank = Math.max(...opRaw.map(o => o.bestRank))
+            const multiOperator = opRaw.length > 1
+
+            const operators = opRaw
+              .map(o => {
+                const perksList = [...new Set(o.opMetaList.map(m => m.telco_perks).filter(Boolean))] as string[]
+                const restrictionsList = [...new Set(o.opMetaList.map(m => m.unsupported_apps).filter(Boolean))] as string[]
+                const hasPerks = perksList.length > 0
+                const throttleSummary = [...new Set(
+                  o.arr.map(a => metaBySku.get(a.sku)?.data_policy_code)
+                    .filter((c): c is string => !!c)
+                    .map(c => DATA_POLICY[c.toUpperCase()]?.label)
+                    .filter(Boolean)
+                )] as string[]
+                const qrPolicies = o.operatorCodes.filter(c => OPERATOR_POLICY[c]).map(c => ({ code: c, ...OPERATOR_POLICY[c] }))
+
+                return {
+                  key: o.key,
+                  displayName: o.key === "unknown" ? "Chưa rõ nhà mạng" : o.key,
+                  networkTypes: [...new Set(o.opMetaList.map(m => m.network_type).filter(Boolean))] as string[],
+                  productCount: o.arr.length,
+                  throttleSummary,
+                  perksList, restrictionsList,
+                  qrPolicies,
+                  tags: multiOperator ? [
+                    o.bestRank === maxRank && maxRank > -1 ? "fastest_network" : null,
+                    o.arr.length === maxOptions && maxOptions > 1 ? "most_options" : null,
+                    hasPerks ? "has_perks" : null,
+                  ].filter(Boolean) as string[] : (hasPerks ? ["has_perks"] : []),
+                  revenue: Math.round(o.revenue),
+                  products: [...o.arr].sort((a, b) => b.revenue - a.revenue).slice(0, MAX_PRODUCTS_PER_OPERATOR).map(a => {
+                    const decoded = decodeSku(a.sku)
+                    const meta = metaBySku.get(a.sku)
+                    const dp = meta?.data_policy_code ? DATA_POLICY[meta.data_policy_code.toUpperCase()] : null
+                    const growthPct = a.prevRevenue > 0 ? ((a.revenue - a.prevRevenue) / a.prevRevenue) * 100 : null
+                    return {
+                      sku: a.sku,
+                      vendor: a.vendor,
+                      typeOfSim: a.typeOfSim,
+                      capLabel: decoded.capLabel,
+                      days: decoded.days,
+                      dataType: meta?.data_type || null,               // "Fixed Data" / "Daily Data" (Supabase thật)
+                      dailyResetTime: meta?.daily_reset_time || null,   // chỉ có ý nghĩa khi dataType = Daily Data
+                      throttleLabel: dp?.label || null,
+                      apn: meta?.apn || null,
+                      operatorCode: meta?.operator_code || null,
+                      telcoPerks: meta?.telco_perks || null,
+                      unsupportedApps: meta?.unsupported_apps || null,
+                      revenue: Math.round(a.revenue),
+                      units: Math.round(a.units),
+                      growthPct: growthPct != null ? Math.round(growthPct * 10) / 10 : null,
+                      badges: [
+                        a.sku === bestSellerSku ? "best_seller" : null,
+                        growthPct != null && growthPct >= GROWTH_BADGE_THRESHOLD ? "fastest_growing" : null,
+                        a.sku === bestValueSku ? "best_value" : null,
+                      ].filter(Boolean),
+                    }
+                  }),
+                }
+              })
+              .sort((a, b) => b.revenue - a.revenue)
 
             return {
               key,
@@ -217,7 +321,6 @@ export async function GET(req: NextRequest) {
               hotspot: majorityYes("hotspot"),
               kycNeeded: majorityYes("kyc_needed"),
               networkTypes,
-              operatorInfo,
               revenue: Math.round(catRevenue),
               units: Math.round(catUnits),
               revenueSharePct: totalRevenue > 0 ? Math.round((catRevenue / totalRevenue) * 1000) / 10 : 0,
@@ -227,33 +330,7 @@ export async function GET(req: NextRequest) {
                 key === bestSellerCat ? "best_seller" : null,
                 catGrowthPct != null && catGrowthPct >= GROWTH_BADGE_THRESHOLD ? "fastest_growing" : null,
               ].filter(Boolean),
-              products: sortedSkus.slice(0, TOP_PRODUCTS_PER_CATEGORY).map(a => {
-                const decoded = decodeSku(a.sku)
-                const meta = metaBySku.get(a.sku)
-                const growthPct = a.prevRevenue > 0 ? ((a.revenue - a.prevRevenue) / a.prevRevenue) * 100 : null
-                return {
-                  sku: a.sku,
-                  vendor: a.vendor,
-                  typeOfSim: a.typeOfSim,
-                  capLabel: decoded.capLabel,
-                  days: decoded.days,
-                  dataType: meta?.data_type || null,               // "Fixed Data" / "Daily Data" (Supabase thật)
-                  dailyResetTime: meta?.daily_reset_time || null,   // chỉ có ý nghĩa khi dataType = Daily Data
-                  apn: meta?.apn || null,
-                  operatorCode: meta?.operator_code || null,
-                  telcoPerks: meta?.telco_perks || null,
-                  unsupportedApps: meta?.unsupported_apps || null,
-                  onsiteCarrier: meta?.onsite_carrier || null,
-                  revenue: Math.round(a.revenue),
-                  units: Math.round(a.units),
-                  growthPct: growthPct != null ? Math.round(growthPct * 10) / 10 : null,
-                  badges: [
-                    a.sku === bestSellerSku ? "best_seller" : null,
-                    growthPct != null && growthPct >= GROWTH_BADGE_THRESHOLD ? "fastest_growing" : null,
-                    a.sku === bestValueSku ? "best_value" : null,
-                  ].filter(Boolean),
-                }
-              }),
+              operators,
             }
           })
           .sort((a, b) => b.revenue - a.revenue)
