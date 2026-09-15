@@ -89,6 +89,26 @@
   định: TBS Tickets 487, TBS Rate 2.44%, Refund 575, chart theo ca đủ 4 cột, bảng SKU/Vendor/Source đều
   có số liệu thật. tsc + lint (0 lỗi mới) + vitest (243/243) PASS. Wiki `analytics-cs-troubleshoot.md`
   cập nhật đủ. Đã push staging — **chưa merge main**, chờ Hiếu tự QA lại rồi báo.
+| ✅ **s198+11 (2026-09-15) — Fix cron "Sync GoHub Data to Supabase" (products/skus/listings/items) chết
+  57 ngày — ⚠️ CẦN MERGE MAIN mới có hiệu lực (khác mọi fix khác session này)** | Hiếu hỏi cron sync sản
+  phẩm còn chạy không, không thấy cập nhật. Kiểm tra qua `gh run list` (GitHub Actions, không đoán):
+  cron `sync.yml` (01:00 UTC hàng ngày) **thành công lần cuối 2026-07-20**, sau đó **100% run thất bại**
+  (mix "failure"/"cancelled") liên tục tới hôm nay = **57 ngày liền** — nặng hơn hẳn bug CS Troubleshoot
+  (15 ngày) vừa fix. Root cause qua log run: `requests.exceptions.HTTPError: 429 Too Many Requests` tại
+  `/skus` — `sync.py` fetch 4 resource (products/skus/listings/items, items riêng đã ~227.375 dòng/228
+  trang) SONG SONG qua `ThreadPoolExecutor(max_workers=4)`, cộng dồn request rate vượt giới hạn GoHub API
+  bắt đầu áp dụng từ ~21/7 (không phải do code repo đổi — git log xác nhận `sync.py`/`gohub_api_clients.py`
+  không đổi quanh mốc đó). Exception không bắt → script crash toàn bộ. Fix: mount `urllib3.Retry`
+  (tôn trọng header `Retry-After`, backoff luỹ thừa, retry cả 429/5xx) vào `GohubClient.session` — 1 chỗ
+  duy nhất, không cần sửa 8 call site get/post riêng lẻ. Kèm fix phụ: `timeout-minutes` 20 (thêm
+  2026-08-09, defensive chung cho 4 workflow, không tính riêng cho sync nặng) quá ngắn so với lịch sử lúc
+  còn thành công (từng mất tới 59 phút) → nâng lên 90 (repo public = Actions minutes miễn phí không giới
+  hạn). Đã verify local: `GohubClient()` construct được, urllib3 2.7.0 hỗ trợ đủ `allowed_methods`/
+  `respect_retry_after_header` (máy dev không chạy được full sync thật — thiếu `API_KEY`/
+  `SUPABASE_SERVICE_KEY`). Wiki `kien-truc-he-thong.md` cập nhật. **Đã push staging — CHƯA merge main.**
+  ⚠️ **Khác mọi fix khác trong session này**: GitHub Actions scheduled cron LUÔN chạy theo branch `main`
+  (thiết kế của GitHub, không cấu hình được), KHÔNG theo staging như Vercel — fix này sẽ KHÔNG có hiệu
+  lực cho tới khi merge vào main, dù QA/qui trình khác vẫn giữ nguyên staging-first.
 | ✅ **s197 (2026-09-14) — Audit LOGIC DỮ LIỆU toàn hệ thống 26 tab (khác đợt UI/performance s196+20) +
   fix hết 16/17 phát hiện** | Hiếu: "check lại toàn bộ tab analytics xem đã logic lấy dữ liệu, áp dụng
   dữ liệu đúng chưa, sai ở đâu" → sau đó "fix theo thứ tự hết đi". 4 fork song song đọc trực tiếp SQL
@@ -640,6 +660,14 @@
   xong thật (33.032 ticket) + TBS Volume/Replacement&Refund/SKU-Vendor-Source Performance đều có số liệu
   đúng. Không cần Hiếu làm gì để verify thêm (đã tự kiểm tra kỹ), chỉ cần duyệt rồi báo "merge main đi".
   Gợi ý: nếu rảnh, tự bấm "Sync Lark" 1 lần trên staging xem có nhanh/mượt hơn hẳn trước không.
+- [ ] **s198+11 — ƯU TIÊN CAO: merge main cron sync product/sku/listing/item** — cron `sync.yml` chết 57
+  ngày (thành công lần cuối 2026-07-20), root cause 429 rate-limit GoHub API + đã fix (retry/backoff +
+  nâng timeout 20'→90'). **Khác mọi fix khác trong session — GitHub Actions cron LUÔN chạy theo branch
+  `main`, KHÔNG theo staging**, nên chỉ push staging KHÔNG đủ để fix có hiệu lực thật. Cần Hiếu xác nhận
+  merge main (`git merge staging` hoặc PR) — không chờ đến lúc gộp chung đợt merge web app khác, vì cron
+  này độc lập hoàn toàn với Vercel/staging-production. Sau khi merge, nên tự trigger thử 1 lần qua GitHub
+  Actions ("Run workflow" thủ công trên tab Actions, workflow "Sync GoHub Data to Supabase") để xác nhận
+  chạy xong không còn 429/timeout, thay vì chờ tới 01:00 UTC hôm sau.
 - [x] **s197/s197+1 — Audit logic dữ liệu 16 fix + incident ecom T9 — XONG (2026-09-14), đã tự QA live +
   đã merge main** — B2B Performance "VN Ecom Shopee" xác nhận số đúng (229.667.051đ) sau khi thêm nút
   "Tải lại mới" + ép cache tươi. Channels CM1 khớp Revenue/GP card cùng trang. BOD toggle Phí ship/Đơn
