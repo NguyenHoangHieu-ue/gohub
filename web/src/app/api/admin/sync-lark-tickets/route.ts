@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getLarkToken } from "@/lib/lark"
 import { canWrite } from "@/lib/writable-tabs"
+import { createNotification } from "@/lib/notifications"
 
 const WRITE_ROLES = ["admin", "creator"]
 const LARK_API = "https://open.larksuite.com/open-apis"
@@ -141,6 +142,16 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ ok: true, totalSynced })
   } catch (err: any) {
     console.error("[sync-lark-tickets]", err.message)
+    // Hiếu yêu cầu (2026-09-15): cần thấy lỗi cron ngay trên Intel, không phải tự đoán/hỏi lại. Cron
+    // chạy 02:00 UTC không ai xem log Vercel mỗi ngày — bấm tay lỗi thì đã thấy toast, nhưng cron tự
+    // chạy lỗi thì trước đây im lặng hoàn toàn. Ghi vào bảng notifications (bell "Thông báo" sidebar).
+    await createNotification(
+      "error",
+      "❌ Sync Lark tickets thất bại",
+      err.message?.slice(0, 500) || "Lỗi không rõ",
+      { error: err.message },
+      "admin_manager",
+    )
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

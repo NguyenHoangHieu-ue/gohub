@@ -293,4 +293,29 @@ def sync_ncc_exist(sb):
     print(f"[ncc_exist] Done — exist=Yes: {len(yes_ids)}, exist=No: {len(no_ids)}", flush=True)
 
 if __name__ == "__main__":
-    main()
+    # Fix s198+11 (2026-09-15): Hiếu báo "không biết nó có lỗi hay không" — trước đây script crash (VD
+    # 429 rate-limit GoHub API, xem gohub_api_clients.py) chỉ có GitHub Actions run đỏ, không ai xem log
+    # đó mỗi ngày. Bắt lỗi ở đây, ghi thẳng vào bảng notifications (hiện trên chuông "Thông báo" sidebar
+    # Intel, mọi role admin/manager thấy ngay khi mở web) — rồi re-raise để GitHub Actions vẫn báo failed
+    # như cũ (không che giấu lỗi khỏi CI).
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        err_msg = f"{type(e).__name__}: {e}"
+        print(f"[FATAL] Sync thất bại: {err_msg}", flush=True)
+        traceback.print_exc()
+        try:
+            now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
+            sb_err = create_client(SUPABASE_URL, SUPABASE_KEY)
+            sb_err.table("notifications").insert({
+                "type": "error",
+                "title": f"❌ Sync GoHub API thất bại — {now_str} UTC",
+                "body": err_msg[:500],
+                "data": {"error": err_msg},
+                "visibility": "admin_manager",
+                "sent_to_lark": False,
+            }).execute()
+        except Exception as notify_err:
+            print(f"[FATAL] Không ghi được notification lỗi: {notify_err}", flush=True)
+        raise

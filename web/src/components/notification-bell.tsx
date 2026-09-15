@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Bell, X, RefreshCw, FileText, PenLine, TrendingUp, ChevronDown, ChevronUp } from "lucide-react"
+import { createPortal } from "react-dom"
+import { Bell, X, RefreshCw, FileText, PenLine, TrendingUp, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react"
 
 interface Notification {
   id: number
-  type: "sync" | "kb_doc" | "wiki" | "price_change"
+  type: "sync" | "kb_doc" | "wiki" | "price_change" | "error"
   title: string
   body: string | null
   data: any
@@ -16,10 +17,11 @@ interface Notification {
 const LAST_SEEN_KEY = "notif_last_seen"
 
 const TYPE_CFG = {
-  sync:         { icon: RefreshCw,  color: "text-blue-500",   bg: "bg-blue-50",   label: "Sync"    },
-  kb_doc:       { icon: FileText,   color: "text-green-500",  bg: "bg-green-50",  label: "Tài liệu" },
-  wiki:         { icon: PenLine,    color: "text-purple-500", bg: "bg-purple-50", label: "Wiki"     },
-  price_change: { icon: TrendingUp, color: "text-amber-500",  bg: "bg-amber-50",  label: "Giá"      },
+  sync:         { icon: RefreshCw,     color: "text-blue-500",   bg: "bg-blue-50",   label: "Sync"    },
+  kb_doc:       { icon: FileText,      color: "text-green-500",  bg: "bg-green-50",  label: "Tài liệu" },
+  wiki:         { icon: PenLine,       color: "text-purple-500", bg: "bg-purple-50", label: "Wiki"     },
+  price_change: { icon: TrendingUp,    color: "text-amber-500",  bg: "bg-amber-50",  label: "Giá"      },
+  error:        { icon: AlertTriangle, color: "text-rose-600",   bg: "bg-rose-50",   label: "Lỗi"      },
 } as const
 
 function fmtDate(iso: string) {
@@ -165,8 +167,12 @@ export function NotificationBell({ collapsed }: { collapsed: boolean }) {
         )}
       </button>
 
-      {/* Panel + backdrop */}
-      {open && (
+      {/* Panel + backdrop — render qua Portal thẳng vào document.body. Bell nằm trong <nav> sidebar có
+          class translate-x-0/-translate-x-full (collapse/expand) — theo chuẩn CSS, `transform` trên
+          ancestor biến nó thành containing block cho `position: fixed` bên trong, nên "fixed right-0"
+          trước đây bị tính theo khung sidebar hẹp (~170px) thay vì viewport → panel kẹt bên trái, chữ bị
+          cắt. Portal thoát khỏi DOM subtree đó hoàn toàn, fixed tính đúng theo viewport như thiết kế. */}
+      {open && createPortal(
         <>
           <div
             className="fixed inset-0 z-40 bg-black/10 animate-overlay-in"
@@ -214,7 +220,8 @@ export function NotificationBell({ collapsed }: { collapsed: boolean }) {
               )}
             </div>
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </>
   )
