@@ -10,6 +10,8 @@ import json
 import dataclasses
 from dataclasses import dataclass
 from typing import Optional
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # ─────────────────────────────────────────────────────────
 # Config
@@ -227,6 +229,19 @@ class GohubClient:
             "Authorization": f"Bearer {api_key}",
             "Content-Type":  "application/json",
         })
+        # Fix s198+11 (2026-09-15): GoHub API rate-limit (429) từ 2026-07-21 làm sync crash giữa chừng
+        # mỗi lần chạy (verify qua GitHub Actions run log — HTTPError 429 tại /skus, 4 resource fetch
+        # song song ThreadPoolExecutor(max_workers=4) cộng dồn request rate). Retry tự động, tôn trọng
+        # header Retry-After nếu GoHub API có trả về, backoff luỹ thừa nếu không.
+        retry = Retry(
+            total=6, backoff_factor=3,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=frozenset(["GET", "POST"]),
+            respect_retry_after_header=True,
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     # ── Internal: parse response ───────────────────────────
     def _parse(self, resp: requests.Response, model) -> ApiResponse:

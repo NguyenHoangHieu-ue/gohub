@@ -8,7 +8,10 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # s198+11 (2026-09-15): 20' (thêm s159 2026-08-09, defensive chung cho 4 workflow) quá ngắn — lịch sử
+    # lúc còn chạy thành công (trước 2026-07-21) từng mất tới 59'. Repo public = Actions minutes miễn phí
+    # không giới hạn, không có lý do giữ cap thấp làm sync bị "cancelled" giữa chừng.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
