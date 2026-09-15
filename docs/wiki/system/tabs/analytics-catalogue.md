@@ -153,6 +153,53 @@ code toàn bộ phần còn lại.**
 Thêm Supabase field `supported_countries`/`note`/`activation_time`/`top_up_options`/`kyc_links` vào select.
 Đổi shape → bump cache key `v6`→`v7`.
 
+**Đợt 9 (2026-09-15) — 🔴 P0: FIX BUG "không thấy 1 dòng thông tin nào" — root cause đã verify trực tiếp,
+đã QA lại live trên staging PASS.** Hiếu báo trang trống trơn sau đợt 8. Verify TRỰC TIẾP qua Supabase
+REST API (không đoán): gọi đúng select mà `route.ts` dùng → lỗi `400 column products.data_policy_code
+does not exist` (mã lỗi Postgres `42703`). **`data_policy_code` KHÔNG PHẢI cột thật** — đợt 5 tin nhầm
+theo comment trong `agents.ts` DATA_DICT (chưa ai verify field đó chống lại schema thật, hoá ra bản thân
+comment đó CŨNG sai — nghi vấn `be-gau.ts`/`bi-analyst.ts`/`creator/tools/supabase.ts` cùng select field
+này cũng đang âm thầm lỗi, NGOÀI SCOPE task này, chưa kiểm tra). Hậu quả dây chuyền: `route.ts` gọi
+`.select(...data_policy_code...)` → Supabase trả lỗi 400 → code cũ CHỈ lấy `const { data: products } =
+...` **không check `error`** → `data` = `null` → `(products || [])` = mảng RỖNG → `metaBySku` (map tra
+cứu metadata theo SKU) trống HOÀN TOÀN → MỌI field (network/KYC/Hotspot/APN/perks/note/activation/
+throttle) = `null`/`[]` cho **MỌI sản phẩm không trừ ai** — khớp chính xác triệu chứng Hiếu báo.
+**Fix**:
+- Xoá hẳn `data_policy_code`/`DATA_POLICY` map/`throttleRank()` (toàn bộ logic dựa trên cột ảo).
+- Throttle thay bằng field THẬT khác — `skus.throttle_speed` (bảng `skus` 13 ký tự, KHÁC bảng `products`
+  8 ký tự) — text tự do nhưng CÓ THẬT, verify 11.088/12.892 SKU có giá trị qua Supabase REST. Fetch theo
+  **chunk 150 sku_code/lần** dùng `.in("sku_code", chunk)` — KHÔNG `select()` không giới hạn, vì project
+  Supabase này cap mặc định **1000 dòng/response** (verify qua `Content-Range` header) trong khi bảng
+  `skus` có 12.892 dòng → unpaged select sẽ ÂM THẦM cắt cụt, đúng lớp lỗi vừa gặp ở `products` (973 dòng,
+  dưới cap nên trước giờ chưa lộ) — filter theo đúng tập SKU cần dùng tránh cả 2 rủi ro.
+- Bỏ tag so sánh "Tốc độ cao nhất nhóm" (`fastest_network`) — không rank được từ text tự do không cấu
+  trúc (`throttle_speed` mix Anh/Việt, format khác nhau mỗi vendor) — giữ "Nhiều lựa chọn nhất"/"Có ưu đãi
+  riêng" (tính được chắc chắn từ số liệu thật).
+- Thêm check `error` thật cho Supabase select (`if (productsErr) console.error(...)`) — lỗi loại này
+  trước bị NUỐT im lặng hoàn toàn, giờ log ra Vercel Runtime Errors để lần sau phát hiện ngay thay vì chờ
+  Hiếu báo trang trống.
+- Cache key `v7`→`v8`.
+
+**Bài học rút ra cho lần sau**: 1 comment mô tả field trong code KHÔNG phải bằng chứng field đó tồn tại
+thật trong DB — dù comment đó ở nhiều nơi trong repo (agents.ts + 3 route khác), vẫn PHẢI verify trực
+tiếp qua schema/REST API trước khi dùng, đặc biệt với Supabase (PostgREST trả lỗi rõ ràng `42703` khi
+cột không tồn tại — không hề khó phát hiện NẾU có check `error`). Mọi `const { data } = await supabase
+....select(...)` PHẢI check `error` — bỏ qua bước này biến 1 lỗi 400 rõ ràng thành "mất dữ liệu âm thầm"
+khó chẩn đoán hơn nhiều.
+
+**Đã QA lại live trên staging sau deploy** (bypass CDN cache 5 phút bằng query param cache-bust để xác
+nhận response mới trước khi tin UI) — panel nhà mạng giờ đầy đủ: chip `4G`/throttle thật (`256 kbps`,
+`500 MB high speed then drop to 10 mbps`...)/`Không cần KYC`/`Hỗ trợ Hotspot`, note + activation text
+tiếng Anh/Việt thật, nút "Chính sách QR/đổi máy" hoạt động, drill Ngày→Dung lượng→chi tiết đầy đủ (APN
+`gohub.com`, Vendor GoHub, SKU). Nhân tiện data thật giàu hơn hẳn — 1 category giờ có thể lên 4 nhà mạng
+(trước do bug chỉ thấy fallback vendor/unknown).
+
+⚠️ **Còn 2 việc phụ CHƯA xác nhận, không chặn, để theo dõi thêm**: (1) tên khu vực AI cho các destination
+mã thô (EU1/GZ1/...) — QA lần này thấy các mã đó vẫn hiện thô, chưa rõ do Gemini lỗi/rỗng `supported_
+countries` hay bug logic phát hiện "unresolved"; (2) icon SDT nội địa (📱) trên chip dung lượng — thấy
+hiện ở vài chip nhưng chưa soi kỹ đúng sai. Cả 2 không liên quan gì đến bug P0 vừa fix, để đợt sau nếu
+Hiếu còn thấy lạ.
+
 ---
 
 ## 1. Đường dẫn & File
