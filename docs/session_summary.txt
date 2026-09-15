@@ -9636,3 +9636,128 @@ nguyên sau khi tách module) PASS. Push staging `704276e6`. **Hiếu đã tự 
 xác nhận OK** — không còn việc mở nào chặn ở luồng Tổ Gấu. Wiki cập nhật đủ: `analytics-to-gau.md` (5 mục
 s196 tới s196+4) + `chatbot-agents-guardian.md` (ghi nhận tách `learning.ts`). CLAUDE.md cập nhật trạng
 thái + checklist + bảng migrations (v55/v56 Hiếu đã chạy).
+
+[Ghi chú: log chi tiết s196+20/+21 (audit performance/UI-UX + UI Strict Lock) và s197/s197+1 (audit logic
+dữ liệu 16 fix + incident ecom T9) KHÔNG có trong file này — phiên làm việc đó cập nhật CLAUDE.md nhưng bỏ
+sót append vào đây. Tóm tắt đầy đủ 2 session đó vẫn còn trong CLAUDE.md phần lịch sử/`git log` staging;
+không backfill lại ở đây để tránh chép sai chi tiết không tự tay verify. Log dưới đây (s198) là phiên hiện
+tại, viết trực tiếp bởi phiên đã thực hiện.]
+
+### s198 (2026-09-14/15) — Tab mới "Product Catalogue": 9 đợt, 1 bug P0, đã QA live mỗi đợt
+
+Hiếu muốn 1 trang giới thiệu sản phẩm theo destination cho nội bộ (đổi ý external→internal-only qua
+AskUserQuestion). Route mới `GET /api/analytics/product-catalogue` (1 query tổng hợp duy nhất, đúng rule
+N+1) + trang `/analytics/catalogue`.
+
+**Đợt 1-4** (chi tiết xem CLAUDE.md, phiên trước): kiến trúc 2→3 tầng Destination→Loại SP→Sản phẩm cụ
+thể, thêm field Supabase products (APN/operator/data_type/telco_perks...), panel chính sách QR/đổi máy
+trích từ ảnh Hiếu, redesign bỏ hẳn số liệu doanh thu/% (chỉ giữ spec-sheet thông tin).
+
+**Đợt 5 (2026-09-15)** — redesign kiến trúc thông tin theo phản hồi "hơi chưa rõ nhìn": bỏ giới hạn
+top-8 destination (trả toàn bộ), sidebar tìm-kiếm thay pill-row không scale nổi; thêm tầng thứ 4 **Nhà
+mạng** (`onsite_carrier` thật, KHÔNG phải vendor GoHub — 1 vendor có thể route qua nhiều carrier khác
+nhau tuỳ destination) với tag so sánh (tốc độ/số lượng/ưu đãi) tính từ số liệu thật; sản phẩm gom dạng
+chip, bấm mới xổ chi tiết.
+
+**Đợt 6** — fix 3 phản hồi tiếp: fallback thêm vendor khi Supabase thiếu carrier (đỡ "chưa rõ nhà mạng"
+nhưng CHƯA hết, xem đợt 7); rút gọn category chỉ còn eSIM/SIM (bỏ tách 4 nhóm theo gọi/không gọi nội địa
+của đợt 2 — "có SDT nội địa" chuyển thành toggle/badge); sản phẩm drill 2 tầng Ngày→Dung lượng thay 1
+chip phẳng.
+
+**Đợt 7** — verify TRỰC TIẾP Supabase `products` qua REST API (Hiếu đưa key trong `tmp.txt`, không đoán):
+phát hiện `onsite_carrier` với gói pool đa quốc gia là ĐOẠN VĂN nhiều dòng "Nước: Carrier" (có case liệt
+kê ~40 nước) — dùng thẳng làm tên tab ra cả đoạn văn, đúng nguyên nhân thật "mất thông tin" Hiếu báo lần
+đó. Fix: chỉ dùng `onsite_carrier` làm tên tab khi ngắn/sạch (≤40 ký tự, không xuống dòng), còn lại group
+theo `operator_code` rồi vendor — đoạn văn giữ lại làm `coverageNotes`. Thêm bảng tổng hợp TOÀN HỆ THỐNG
+"Gói có SDT nội địa" (chỉ ~50 product_code có field này thật, build 100% ở FE từ data đã fetch).
+
+**Đợt 8** — 4 việc theo yêu cầu tiếp (hỏi lại AskUserQuestion 1 điểm mơ hồ về "giá" trước khi làm — Hiếu
+chọn giữ nguyên quyết định đợt 4, không thêm số $): AI (Gemini, 1 batch call) đặt tên khu vực tiếng Việt
+cho destination mã thô (EU1/APA/GZ1...) từ `supported_countries` thật; loại bỏ hẳn destination `"000"`
+(SIM frame/eSIM profile, lọc ở SQL); sắp lại panel nhà mạng đúng thứ tự onsite_carrier→đặc điểm→ưu
+đãi→ghi chú/kích hoạt (field `note`/`activation_time`/`kyc_links` có sẵn nhưng chưa từng hiện)→phủ
+sóng/QR; nâng "Gói có SDT nội địa" thành banner nổi bật đầu trang.
+
+**Đợt 9 — 🔴 P0, Hiếu báo "không thấy bất kỳ dòng thông tin nào"**: verify trực tiếp qua Supabase REST
+API phát hiện `data_policy_code` **KHÔNG PHẢI cột thật** (`42703 column does not exist`) — đợt 5 tin nhầm
+theo 1 comment trong `agents.ts` chưa ai verify (nghi vấn `be-gau.ts`/`bi-analyst.ts`/
+`creator/tools/supabase.ts` cùng select field này cũng đang lỗi, NGOÀI SCOPE task, chưa kiểm tra riêng).
+Supabase trả lỗi 400 → code cũ không check `error` → `data` null → fallback `[]` → `metaBySku` TRỐNG
+HOÀN TOÀN → mọi field metadata null cho MỌI sản phẩm — khớp đúng triệu chứng. Fix: xoá hẳn field/logic
+dựa cột ảo; throttle chuyển sang field thật `skus.throttle_speed` (bảng khác, verify 11.088/12.892 SKU có
+giá trị), fetch theo chunk 150 sku_code (phát hiện thêm: Supabase project này cap mặc định 1000
+dòng/response, unpaged select bảng `skus` 12.892 dòng sẽ âm thầm cắt cụt); thêm check `error` thật cho
+mọi Supabase select (trước nuốt im lặng). **Bài học**: comment mô tả field trong code không phải bằng
+chứng field tồn tại thật — luôn verify qua REST API/schema thật trước khi dùng.
+
+Đổi shape response nhiều lần trong 9 đợt → cache key cuối cùng `v8`. tsc + lint (0 lỗi mới) + vitest
+(243/243) PASS mọi đợt. Đã tự QA qua Chrome trên staging sau MỖI đợt kể cả đợt 9 (bypass CDN cache 5 phút
+bằng cache-bust param để xác nhận response mới trước khi tin UI) — panel nhà mạng đầy đủ network/throttle
+thật/KYC/Hotspot/note/activation/QR, drill Ngày→Dung lượng→chi tiết hoạt động đúng. Wiki
+`analytics-catalogue.md` cập nhật đủ 9 đợt. Chưa merge main — chờ Hiếu duyệt tổng thể.
+
+### s198+10 (2026-09-15) — Fix CS Troubleshoot "không cập nhật realtime" — sync timeout 60s, đứng yên 15 ngày
+
+Hiếu báo tab CS Troubleshoot không cập nhật realtime. Verify qua Vercel Runtime Logs (không đoán):
+`Vercel Runtime Timeout Error: Task timed out after 60 seconds` trên MỌI lần chạy
+`/api/admin/sync-lark-tickets` (cả cron 1 lần/ngày lẫn bấm tay "Sync Lark") — bảng `lark_cs_tickets` đã
+lên ~30.000 ticket, phân trang Lark Base API (~60 trang) vượt quá `maxDuration=60` cũ → Vercel giết
+function giữa chừng → sync CHƯA TỪNG hoàn thành kể từ khi bảng đủ lớn → data đứng yên đúng từ 2026-08-31
+suốt 15 ngày (không phải "trễ 1 ngày" theo kiến trúc batch bình thường — mà đứng hẳn). Cùng lớp bug đã
+fix ở Bé Gấu (s195+14). Fix: nâng `maxDuration` 60→300 ở CẢ `route.ts` lẫn `vercel.json` (thiếu 1 chỗ
+không đủ) + thêm log tiến độ mỗi trang.
+
+Đã tự QA live trên staging: bấm Sync Lark sau deploy → chạy xong thật (không còn 504), tăng dần
+29.748→31.248→33.032 ticket qua vài lần test. Hiếu hỏi tiếp sao TBS Volume/Replacement&Refund vẫn 0 —
+kiểm tra lại xác nhận đó là khoảnh khắc dữ liệu tháng 9 chưa kịp đồng bộ hết (đúng lúc đang test bấm sync
+liên tục), KHÔNG phải bug thứ 2 — load lại trang sau khi sync ổn định: TBS Tickets 487, TBS Rate 2.44%,
+Refund 575, chart theo ca đủ 4 cột, bảng SKU/Vendor/Source đều có số liệu thật. tsc + lint (0 lỗi mới) +
+vitest (243/243) PASS. Wiki `analytics-cs-troubleshoot.md` cập nhật đủ. Đã push staging — chưa merge
+main, chờ Hiếu tự QA lại rồi báo.
+
+### s198+11 (2026-09-15) — Fix cron "Sync GoHub Data to Supabase" (products/skus/listings/items) chết 57 ngày
+
+Hiếu hỏi cron sync sản phẩm còn chạy không, không thấy cập nhật. Kiểm tra qua `gh run list` (GitHub
+Actions, không đoán): cron `sync.yml` (01:00 UTC hàng ngày) **thành công lần cuối 2026-07-20**, sau đó
+**100% run thất bại** (mix "failure"/"cancelled") liên tục tới hôm nay = 57 ngày liền — nặng hơn hẳn bug
+CS Troubleshoot (15 ngày) vừa fix. Root cause qua log run: `requests.exceptions.HTTPError: 429 Too Many
+Requests` tại `/skus` — `sync.py` fetch 4 resource (products/skus/listings/items, items riêng đã
+~227.375 dòng/228 trang) SONG SONG qua `ThreadPoolExecutor(max_workers=4)`, cộng dồn request rate vượt
+giới hạn GoHub API bắt đầu áp dụng từ ~21/7 (không phải do code repo đổi — git log xác nhận `sync.py`/
+`gohub_api_clients.py` không đổi quanh mốc đó). Exception không bắt → script crash toàn bộ.
+
+Fix: mount `urllib3.Retry` (tôn trọng header `Retry-After`, backoff luỹ thừa, retry cả 429/5xx) vào
+`GohubClient.session` — 1 chỗ duy nhất, không cần sửa 8 call site get/post riêng lẻ. Kèm fix phụ:
+`timeout-minutes` 20 (thêm 2026-08-09, defensive chung cho 4 workflow, không tính riêng cho sync nặng)
+quá ngắn so với lịch sử lúc còn thành công (từng mất tới 59 phút) → nâng lên 90 (repo public = Actions
+minutes miễn phí không giới hạn). Đã verify local: `GohubClient()` construct được, urllib3 2.7.0 hỗ trợ
+đủ `allowed_methods`/`respect_retry_after_header` (máy dev không chạy được full sync thật — thiếu
+`API_KEY`/`SUPABASE_SERVICE_KEY`). Wiki `kien-truc-he-thong.md` cập nhật.
+
+**⚠️ Khác mọi fix khác trong session này**: GitHub Actions scheduled cron LUÔN chạy theo branch `main`
+(thiết kế GitHub, không cấu hình được), KHÔNG theo staging như Vercel — fix này KHÔNG có hiệu lực thật
+cho tới khi merge vào main, dù QA/quy trình khác vẫn giữ nguyên staging-first. Đã push staging — CHƯA
+merge main, cần Hiếu xác nhận merge riêng (không chờ đợt merge web app khác vì cron độc lập hoàn toàn
+với Vercel).
+
+### s198+12 (2026-09-15) — Fix chuông "Thông báo" kẹt trong sidebar + thêm log lỗi cron trên Intel
+
+Hiếu: "sửa luôn cái thông báo trên Intel (đang có vấn đề), cần cập nhật log... để tôi kiểm tra dễ biết nó
+có lỗi hay không". Verify qua Chrome trên staging (bấm chuông thật, không đoán): panel `fixed right-0
+w-[380px]` bị hiện lệch hẳn sang trái, chữ cắt cụt không đọc được. Root cause: panel nằm lồng trong
+`<nav>` sidebar có class Tailwind `translate-x-0`/`-translate-x-full` (collapse/expand) — theo chuẩn CSS,
+`transform` trên ancestor (kể cả identity `translate-x-0`) biến nó thành **containing block** cho
+`position: fixed` bên trong, nên "fixed right-0" bị tính theo khung sidebar hẹp (~170px) thay vì
+viewport. Fix: `createPortal(..., document.body)` — panel thoát khỏi DOM subtree bị transform, tính đúng
+theo viewport.
+
+Đã tự QA live sau deploy — panel hiện đúng bên phải, đọc rõ hoàn toàn (nhân tiện thấy luôn bằng chứng
+phụ: sync sản phẩm cuối cùng có thay đổi là 13/07/2026, khớp đúng mốc cron s198+11 chết).
+
+Thêm loại thông báo mới `"error"` (icon đỏ AlertTriangle) + insert notification lỗi thật ở 2 nơi:
+`sync.py` (cron sản phẩm, bất kỳ exception nào trong `main()`) và `sync-lark-tickets` route (cron CS
+Troubleshoot) — cả 2 trước đây fail chỉ có log Vercel/GitHub Actions, không ai xem hàng ngày; giờ Hiếu tự
+thấy ngay trên chuông Intel, đúng yêu cầu "1 chỗ để kiểm tra dễ". tsc + lint (0 lỗi mới) + vitest
+(243/243) PASS. Wiki `kien-truc-he-thong.md` cập nhật. Đã push staging. Phần bell/panel + error-notify
+cho `sync-lark-tickets` có hiệu lực ngay (route web, theo staging bình thường); phần `sync.py` cần merge
+main giống s198+11 (cron GitHub Actions, cùng file nên gộp 1 lần merge là đủ cho cả 2).
