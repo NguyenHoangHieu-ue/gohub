@@ -73,6 +73,22 @@
   network/throttle thật/KYC/Hotspot/note/activation/QR, drill Ngày→Dung lượng→chi tiết hoạt động đúng.
   **Chưa merge main** — chờ Hiếu duyệt tổng thể sau khi tự xem qua UI thật (đặc biệt xác nhận đợt 9 không
   còn trang trống).
+| ✅ **s198+10 (2026-09-15) — Fix CS Troubleshoot "không cập nhật realtime" — đã QA live, đã push staging** |
+  Hiếu báo tab CS Troubleshoot không cập nhật realtime. Verify qua Vercel Runtime Logs (không đoán):
+  `Vercel Runtime Timeout Error: Task timed out after 60 seconds` trên **MỌI lần** chạy
+  `/api/admin/sync-lark-tickets` (cả cron 1 lần/ngày lẫn bấm tay "Sync Lark") — bảng `lark_cs_tickets` đã
+  lên ~30.000 ticket, phân trang Lark Base API (~60 trang) vượt quá `maxDuration=60` cũ → Vercel giết
+  function giữa chừng → sync CHƯA TỪNG hoàn thành kể từ khi bảng đủ lớn → data đứng yên đúng từ
+  **2026-08-31 suốt 15 ngày** (không phải "trễ 1 ngày" theo kiến trúc batch bình thường — mà đứng hẳn).
+  Cùng lớp bug đã fix ở Bé Gấu (s195+14). Fix: nâng `maxDuration` 60→300 ở CẢ `route.ts` lẫn
+  `vercel.json` (thiếu 1 chỗ không đủ) + thêm log tiến độ mỗi trang (trước không log gì, phải mò qua
+  Runtime Logs mới ra). **Đã tự QA live trên staging**: bấm Sync Lark sau deploy → chạy xong thật (không
+  còn 504), tăng dần 29.748→31.248→33.032 ticket qua vài lần test. Hiếu hỏi tiếp sao TBS Volume/
+  Replacement&Refund vẫn 0 — kiểm tra lại xác nhận đó là **khoảnh khắc dữ liệu tháng 9 chưa kịp đồng bộ
+  hết** (đúng lúc đang test bấm sync liên tục), KHÔNG phải bug thứ 2 — load lại trang sau khi sync ổn
+  định: TBS Tickets 487, TBS Rate 2.44%, Refund 575, chart theo ca đủ 4 cột, bảng SKU/Vendor/Source đều
+  có số liệu thật. tsc + lint (0 lỗi mới) + vitest (243/243) PASS. Wiki `analytics-cs-troubleshoot.md`
+  cập nhật đủ. Đã push staging — **chưa merge main**, chờ Hiếu tự QA lại rồi báo.
 | ✅ **s197 (2026-09-14) — Audit LOGIC DỮ LIỆU toàn hệ thống 26 tab (khác đợt UI/performance s196+20) +
   fix hết 16/17 phát hiện** | Hiếu: "check lại toàn bộ tab analytics xem đã logic lấy dữ liệu, áp dụng
   dữ liệu đúng chưa, sai ở đâu" → sau đó "fix theo thứ tự hết đi". 4 fork song song đọc trực tiếp SQL
@@ -619,6 +635,11 @@
   trong `route.ts` — muốn tự sửa qua UI sau này thì cần thêm 1 bảng Supabase riêng, báo để làm; (2) tên
   khu vực AI cho destination mã thô (EU1/GZ1...) — QA đợt 9 thấy vẫn hiện mã thô, chưa xác nhận do Gemini
   lỗi hay bug logic, không chặn gì, báo lại nếu vẫn thấy vậy để điều tra tiếp.
+- [ ] **s198+10 — Duyệt fix CS Troubleshoot trên staging rồi báo merge main** — bug sync Lark timeout 60s
+  (đứng yên 15 ngày, đúng nguyên nhân "không cập nhật realtime") đã fix + đã tự QA live xác nhận sync chạy
+  xong thật (33.032 ticket) + TBS Volume/Replacement&Refund/SKU-Vendor-Source Performance đều có số liệu
+  đúng. Không cần Hiếu làm gì để verify thêm (đã tự kiểm tra kỹ), chỉ cần duyệt rồi báo "merge main đi".
+  Gợi ý: nếu rảnh, tự bấm "Sync Lark" 1 lần trên staging xem có nhanh/mượt hơn hẳn trước không.
 - [x] **s197/s197+1 — Audit logic dữ liệu 16 fix + incident ecom T9 — XONG (2026-09-14), đã tự QA live +
   đã merge main** — B2B Performance "VN Ecom Shopee" xác nhận số đúng (229.667.051đ) sau khi thêm nút
   "Tải lại mới" + ép cache tươi. Channels CM1 khớp Revenue/GP card cùng trang. BOD toggle Phí ship/Đơn
