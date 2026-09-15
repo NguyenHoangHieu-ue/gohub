@@ -6,7 +6,7 @@ import {
   Gift, Ban, Router, Signal, Search, Zap, Gauge, X, Smartphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { StatTile, StatTileSkeleton, EmptyState } from "@/components/dashboard-kit"
+import { StatTile, StatTileSkeleton, EmptyState, DataTable } from "@/components/dashboard-kit"
 
 // GoHub Product Catalogue — 4 tầng Destination → Loại SP → Nhà mạng → Sản phẩm cụ thể (Hiếu yêu cầu
 // 2026-09-14, đợt 2+3+4; redesign kiến trúc đợt 5-6, 2026-09-15). Giữ nguyên ngôn ngữ visual GoHub Intel
@@ -19,8 +19,16 @@ import { StatTile, StatTileSkeleton, EmptyState } from "@/components/dashboard-k
 //     nhanh + hiện chi tiết nước áp dụng) thay vì 1 nhánh phân loại.
 //   - Gói ngày/data drill 2 tầng: bấm NGÀY trước → mới hiện các DUNG LƯỢNG có ở ngày đó → bấm dung lượng
 //     mới xổ chi tiết đầy đủ. Trước đây gộp chung "dung lượng · ngày" thành 1 chip phẳng.
-// API/route.ts response shape đổi (v4→v5): category.localNumberProductCount, operator.localNumberCountries,
-// product.hasLocalNumber/localNumberCountry mới; category.hasCall bỏ (không còn 2 category con nữa).
+// Fix đợt 7 (2026-09-15, sau khi verify TRỰC TIẾP Supabase products bằng key Hiếu cung cấp — không đoán):
+//   - `onsite_carrier` với gói pool đa quốc gia là ĐOẠN VĂN "Nước: Carrier" nhiều dòng (VD Europe/Asia
+//     pool), dùng thẳng làm tên tab nhà mạng ra cả đoạn văn → route.ts đổi fallback (chỉ dùng làm tên tab
+//     khi ngắn/sạch, còn lại group theo operator_code, đoạn văn giữ lại làm `coverageNotes` hiển thị phụ).
+//   - Thêm bảng tổng hợp TOÀN HỆ THỐNG "Gói có SDT nội địa" (nút đầu trang, `DataTable` dùng chung) — build
+//     hoàn toàn ở FE từ dữ liệu đã fetch (không gọi API riêng, chỉ ~50 product_code toàn hệ thống có field
+//     này = Yes, verify qua Supabase trực tiếp) — trước đó info này chỉ xem được rời rạc theo từng
+//     destination, không có view liệt kê "nước - vendor - nhà mạng" gộp lại như Hiếu yêu cầu.
+// API/route.ts response shape đổi (v4→v6): category.localNumberProductCount, operator.localNumberCountries/
+// coverageNotes, product.hasLocalNumber/localNumberCountry mới; category.hasCall bỏ.
 
 interface OperatorInfo { code: string; qrValidity: string; reinstallLimit: string; deviceChangeLimit: string }
 interface CatalogueProduct {
@@ -36,7 +44,7 @@ interface CatalogueOperator {
   key: string; displayName: string
   networkTypes: string[]; productCount: number
   throttleSummary: string[]; perksList: string[]; restrictionsList: string[]
-  qrPolicies: OperatorInfo[]; localNumberCountries: string[]
+  qrPolicies: OperatorInfo[]; localNumberCountries: string[]; coverageNotes: string[]
   tags: string[]
   products: CatalogueProduct[]
 }
@@ -128,6 +136,8 @@ export default function ProductCataloguePage() {
   const [localOnly, setLocalOnly] = useState<Record<string, boolean>>({})
   const [selectedDay, setSelectedDay] = useState<Record<string, string>>({})
   const [expandedCombo, setExpandedCombo] = useState<Record<string, string>>({})
+  const [expandedCoverage, setExpandedCoverage] = useState<Set<string>>(new Set())
+  const [showLocalPanel, setShowLocalPanel] = useState(false)
 
   const fetchData = async () => {
     setLoading(true); setError(null)
@@ -150,6 +160,29 @@ export default function ProductCataloguePage() {
   const togglePolicy = (key: string) => setExpandedPolicy(prev => {
     const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s
   })
+  const toggleCoverage = (key: string) => setExpandedCoverage(prev => {
+    const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s
+  })
+
+  // Bảng tổng hợp TOÀN HỆ THỐNG "Gói có SDT nội địa" — build từ dữ liệu ĐÃ fetch (mọi destination, không
+  // riêng destination đang xem), theo yêu cầu Hiếu "hiển thị các gói có SDT local của các nước - vendor -
+  // nhà mạng" (số nhiều "các nước" = xuyên destination, không phải trong 1 nước).
+  interface LocalNumberRow {
+    sku: string; destCode: string; destName: string; category: string; operator: string
+    vendor: string; combo: string; country: string
+  }
+  const localNumberRows: LocalNumberRow[] = useMemo(() => {
+    const rows: LocalNumberRow[] = []
+    destinations.forEach(d => d.categories.forEach(c => c.operators.forEach(o => o.products.forEach(p => {
+      if (!p.hasLocalNumber) return
+      rows.push({
+        sku: p.sku, destCode: d.code, destName: d.name, category: c.label, operator: o.displayName,
+        vendor: p.vendor, combo: `${p.capLabel || "—"}${p.days ? ` · ${p.days} ngày` : ""}`,
+        country: p.localNumberCountry || "—",
+      })
+    }))))
+    return rows
+  }, [destinations])
 
   const current = destinations.find(d => d.code === selected)
   const topCategoryLabel = current?.categories[0]?.label || "—"
@@ -174,14 +207,56 @@ export default function ProductCataloguePage() {
               Danh mục sản phẩm GoHub theo từng điểm đến — nhà mạng, gói data, chính sách sử dụng.
             </p>
           </div>
-          <button onClick={fetchData} disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50">
-            <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />Tải lại mới
-          </button>
+          <div className="flex items-center gap-2">
+            {localNumberRows.length > 0 && (
+              <button onClick={() => setShowLocalPanel(v => !v)}
+                className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 border",
+                  showLocalPanel ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-brand-200 text-brand-700 hover:bg-brand-50")}>
+                <PhoneCall className="w-3.5 h-3.5" />Gói có SDT nội địa ({localNumberRows.length})
+              </button>
+            )}
+            <button onClick={fetchData} disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50">
+              <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />Tải lại mới
+            </button>
+          </div>
         </div>
 
         {error && (
           <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl px-4 py-3">{error}</div>
+        )}
+
+        {/* Bảng tổng hợp toàn hệ thống — nước/vendor/nhà mạng nào có gói SDT nội địa, bấm Xem để nhảy tới */}
+        {showLocalPanel && (
+          <div className="bg-white border border-brand-200 rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-slate-800">Toàn bộ gói có SDT nội địa — mọi điểm đến</p>
+              <button onClick={() => setShowLocalPanel(false)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+            </div>
+            <DataTable
+              rows={localNumberRows}
+              rowKey={r => r.sku}
+              pageSize={10}
+              searchBy={r => `${r.destName} ${r.vendor} ${r.operator} ${r.country}`}
+              searchPlaceholder="Tìm theo nước/vendor/nhà mạng..."
+              columns={[
+                { key: "dest", label: "Điểm đến", render: r => <span className="font-semibold">{r.destName}</span>, sortValue: r => r.destName },
+                { key: "cat", label: "Loại SP", render: r => r.category, sortValue: r => r.category },
+                { key: "vendor", label: "Vendor GoHub", render: r => r.vendor, sortValue: r => r.vendor },
+                { key: "operator", label: "Nhà mạng", render: r => r.operator, sortValue: r => r.operator },
+                { key: "combo", label: "Gói", render: r => r.combo },
+                { key: "country", label: "SDT thuộc nước", render: r => r.country, sortValue: r => r.country },
+                {
+                  key: "action", label: "", align: "right", render: r => (
+                    <button onClick={() => { setSelected(r.destCode); setShowLocalPanel(false) }}
+                      className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100">
+                      Xem →
+                    </button>
+                  ),
+                },
+              ]}
+            />
+          </div>
         )}
 
         {/* Mobile: native select thay sidebar (gọn, có sẵn type-to-search của trình duyệt) */}
@@ -319,6 +394,12 @@ export default function ProductCataloguePage() {
                               {op.localNumberCountries.length > 0 && (
                                 <SpecChip icon={<PhoneCall className="w-3 h-3" />} tone="good">SDT nội địa: {op.localNumberCountries.join(", ")}</SpecChip>
                               )}
+                              {op.coverageNotes.length > 0 && (
+                                <button onClick={() => toggleCoverage(`${cat.key}:${op.key}`)}
+                                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1">
+                                  Phạm vi phủ sóng theo nước <ChevronDown className={cn("w-3 h-3 transition-transform", expandedCoverage.has(`${cat.key}:${op.key}`) && "rotate-180")} />
+                                </button>
+                              )}
                               {op.qrPolicies.length > 0 && (
                                 <button onClick={() => togglePolicy(policyKey)}
                                   className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1">
@@ -334,6 +415,11 @@ export default function ProductCataloguePage() {
                             {op.restrictionsList.length > 0 && (
                               <div className="flex flex-col gap-1 text-[11px] text-amber-600">
                                 {op.restrictionsList.map(r => <span key={r} className="flex items-start gap-1.5"><Ban className="w-3 h-3 mt-0.5 shrink-0" />Hạn chế: {r}</span>)}
+                              </div>
+                            )}
+                            {expandedCoverage.has(`${cat.key}:${op.key}`) && op.coverageNotes.length > 0 && (
+                              <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-[11px] text-slate-600 whitespace-pre-line">
+                                {op.coverageNotes.join("\n\n")}
                               </div>
                             )}
                             {policyOpen && op.qrPolicies.length > 0 && (

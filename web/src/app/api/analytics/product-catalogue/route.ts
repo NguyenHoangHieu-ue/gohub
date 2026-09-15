@@ -127,7 +127,7 @@ export async function GET(req: NextRequest) {
   const guard = analyticsGuard(req, session); if (guard) return guard
 
   try {
-    const payload = await cachedQuery("product-catalogue:v5", async () => {
+    const payload = await cachedQuery("product-catalogue:v6", async () => {
       const destExpr = getDestinationSQL()
       const sfx = `${shipFilter(false)} ${internalOpsFilter(false)}`
 
@@ -234,13 +234,18 @@ export async function GET(req: NextRequest) {
             // Gom theo NHÀ MẠNG THẬT tại điểm đến (onsite_carrier) — không phải vendor GoHub. 1 vendor
             // (VD WorldMove) có thể route qua nhiều nhà mạng khác nhau tuỳ destination, đây mới là trục
             // so sánh có ý nghĩa với sale/đối tác ("ở nước này có carrier nào, khác nhau ra sao").
-            // Fallback cuối = vendor GoHub (LUÔN có, `v.vendor IS NOT NULL` ở SQL) — tránh rơi vào nhóm
-            // "chưa rõ nhà mạng" khi Supabase products thiếu onsite_carrier/operator_code (VD SKU khối
-            // lượng lớn 3HK Datapool) trong khi thông tin vendor đã hiển thị sẵn ở nơi khác trên trang.
+            // Fallback: khi onsite_carrier RỖNG hoặc là ĐOẠN VĂN phủ sóng nhiều nước (verify qua Supabase
+            // thật 2026-09-15: gói pool đa quốc gia lưu cả list "Nước: Carrier" nhiều dòng ở field này, VD
+            // "Singapore: Simba\nMalaysia: Celcomdigi..." — dùng thẳng làm tên tab sẽ ra cả đoạn văn, không
+            // phải tên nhà mạng sạch) → group theo operator_code (tên hãng, VD "WORLDMOVE"/"JOYTEL") rồi
+            // vendor GoHub (LUÔN có). Đoạn text phủ sóng dài vẫn giữ lại làm `coverageNote` hiển thị trong
+            // panel carrier — không mất thông tin, chỉ không dùng làm TÊN TAB.
+            const isCleanCarrierName = (s: string | null | undefined): s is string =>
+              !!s && s.length <= 40 && !s.includes("\n")
             const opMap = new Map<string, SkuAgg[]>()
             arr.forEach(a => {
               const meta = metaBySku.get(a.sku)
-              const opKey = meta?.onsite_carrier || meta?.operator_code || a.vendor
+              const opKey = isCleanCarrierName(meta?.onsite_carrier) ? meta!.onsite_carrier!.trim() : (meta?.operator_code || a.vendor)
               if (!opMap.has(opKey)) opMap.set(opKey, [])
               opMap.get(opKey)!.push(a)
             })
@@ -249,8 +254,11 @@ export async function GET(req: NextRequest) {
               const opMetaList = opArr.map(a => metaBySku.get(a.sku)).filter(Boolean) as ProductMeta[]
               const operatorCodes = [...new Set(opMetaList.map(m => m.operator_code).filter(Boolean))] as string[]
               const bestRank = opArr.reduce((mx, a) => Math.max(mx, throttleRank(metaBySku.get(a.sku)?.data_policy_code ?? null)), -1)
+              const coverageNotes = [...new Set(
+                opMetaList.map(m => m.onsite_carrier).filter((s): s is string => !!s && s !== opKey && !isCleanCarrierName(s))
+              )]
               return {
-                key: opKey, arr: opArr, opMetaList, operatorCodes,
+                key: opKey, arr: opArr, opMetaList, operatorCodes, coverageNotes,
                 revenue: opArr.reduce((s, a) => s + a.revenue, 0),
                 bestRank,
               }
@@ -284,6 +292,7 @@ export async function GET(req: NextRequest) {
                   perksList, restrictionsList,
                   qrPolicies,
                   localNumberCountries,
+                  coverageNotes: o.coverageNotes,
                   tags: multiOperator ? [
                     o.bestRank === maxRank && maxRank > -1 ? "fastest_network" : null,
                     o.arr.length === maxOptions && maxOptions > 1 ? "most_options" : null,

@@ -90,6 +90,34 @@ chính sách QR/đổi máy hardcode `OPERATOR_POLICY`, cache TTL 60'. **Đổi 
 Thêm Supabase field `local_number_country` vào select (trước chỉ có `local_phone_number`). Đổi shape →
 bump cache key `v4`→`v5`.
 
+**Đợt 7 (2026-09-15) — 2 fix tiếp, verify TRỰC TIẾP Supabase `products` qua REST API (Hiếu đưa key trong
+`tmp.txt`, không đoán) sau khi Hiếu báo đợt 6 vẫn "mất thông tin" + chưa có view SDT nội địa xuyên nước.**
+1. **Root cause thật của "mất thông tin"**: fallback vendor ở đợt 6 đúng nhưng CHƯA đủ — verify qua
+   Supabase thật phát hiện `onsite_carrier` với gói **pool đa quốc gia** (Europe/Asia/Global) lưu nguyên
+   **đoạn văn nhiều dòng** dạng "Nước: Carrier" cho MỌI nước phủ sóng (VD
+   `"Singapore: Simba\nMalaysia: Celcomdigi, U-mobile\nIndonesia: Telkomsel, Indosat..."`, có case dài cả
+   trăm từ liệt kê ~40 nước). Route cũ dùng field này LÀM THẲNG tên tab nhà mạng → tab hiện nguyên cả đoạn
+   văn (không phải carrier bị mất, mà hiển thị sai dạng khiến trang rối, đọc như "mất thông tin sạch").
+   Fix (`route.ts`, hàm `isCleanCarrierName()`): CHỈ dùng `onsite_carrier` làm tên tab khi ngắn (≤40 ký tự)
+   và không xuống dòng (case carrier đơn: "Smart"/"SKT"/"DTAC"/"China Unicom, CTM"...) — còn lại (đoạn văn
+   dài) group theo `operator_code` (tên hãng: "WORLDMOVE"/"JOYTEL"/"BILLIONCONNECT") rồi vendor, và đoạn
+   văn gốc giữ lại làm `operator.coverageNotes[]` — hiện qua nút "Phạm vi phủ sóng theo nước" xổ ra (không
+   mất thông tin, chỉ không dùng làm TÊN TAB).
+2. **Bảng tổng hợp TOÀN HỆ THỐNG "Gói có SDT nội địa"** — đúng yêu cầu Hiếu "1 button hiển thị các gói có
+   SDT local của các nước - vendor - nhà mạng" (số nhiều "các nước" = xuyên destination). Verify qua
+   Supabase: CHỈ ~50 `product_code` Active toàn hệ thống có `local_phone_number="Yes"` (VN/TH/US/FR-pool
+   Europe/MN/GB) — đủ nhỏ để build 100% ở FE từ dữ liệu ĐÃ fetch (không thêm API/query nào). Nút mới đầu
+   trang "📞 Gói có SDT nội địa (N)" xổ `DataTable` (dùng chung dashboard-kit — có sẵn sort/search/phân
+   trang) liệt kê Điểm đến/Loại SP/Vendor GoHub/Nhà mạng/Gói/Nước SDT + nút "Xem →" nhảy thẳng tới đúng
+   destination (đóng panel + `setSelected`).
+
+Không đổi shape API (chỉ thêm `operator.coverageNotes` — cache key `v5`→`v6`; bảng tổng hợp hoàn toàn FE,
+không cần route mới).
+
+⚠️ **Gotcha bảo mật phát hiện lúc verify**: Hiếu để `D:\gohub\tmp.txt` chứa Supabase secret key + Vercel
+token dạng plaintext ở gốc repo (untracked, không commit). Đã dùng để verify rồi dừng — KHÔNG commit file
+này. Hiếu nên tự xoá/di chuyển ra khỏi thư mục repo khi xong việc, tránh vô tình `git add -A` dính vào.
+
 ---
 
 ## 1. Đường dẫn & File
