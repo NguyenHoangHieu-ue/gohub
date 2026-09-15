@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react"
 import {
   Layers, Package, Radio, Sparkles, PhoneCall, Wifi, ShieldCheck, ShieldAlert, RefreshCw, ChevronDown,
-  Gift, Ban, Router, Signal, Search, Zap, Gauge, X, Smartphone,
+  Gift, Ban, Router, Signal, Search, Gauge, X, Smartphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { StatTile, StatTileSkeleton, EmptyState, DataTable } from "@/components/dashboard-kit"
@@ -77,7 +77,6 @@ const BADGE_META: Record<string, { label: string; className: string }> = {
 
 // Tag so sánh nhà mạng — chỉ tính khi ≥2 carrier cùng category (thật sự có gì để so sánh).
 const TAG_META: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
-  fastest_network: { label: "Tốc độ cao nhất nhóm",  icon: <Zap className="w-3 h-3" />,   className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   most_options:    { label: "Nhiều lựa chọn nhất",   icon: <Layers className="w-3 h-3" />, className: "bg-sky-50 text-sky-700 border-sky-200" },
   has_perks:       { label: "Có ưu đãi riêng",       icon: <Gift className="w-3 h-3" />,   className: "bg-brand-50 text-brand-700 border-brand-200" },
 }

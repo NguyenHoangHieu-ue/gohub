@@ -63,30 +63,15 @@ const MAX_PRODUCTS_PER_OPERATOR = 60 // safety valve chống payload phình bấ
 const GROWTH_BADGE_THRESHOLD = 15    // % — dưới ngưỡng này không gắn badge "Tăng trưởng mạnh"
 const MIN_UNITS_FOR_VALUE_BADGE = 10 // tránh outlier 1-2 đơn lẻ thành "Giá tốt nhất"
 
-// Bảng mã data_policy_code — field THẬT trong Supabase products (không decode ký tự 8 SKU, tránh mâu
-// thuẫn 2 wiki ma-sku.md/loai-data-policy.md ở A/B). Mapping ĐỒNG BỘ với agents.ts DATA_DICT (nguồn
-// production Bé Gấu/BI Analyst đang dùng để trả lời user — giữ 1 sự thật duy nhất xuyên hệ thống).
-interface DataPolicyInfo { label: string; capType: "Fixed" | "Daily"; mbpsAfterQuota: number | null; noThrottle: boolean }
-const DATA_POLICY: Record<string, DataPolicyInfo> = {
-  A: { label: "Daily — giảm còn 5 Mbps sau quota",   capType: "Daily", mbpsAfterQuota: 5,   noThrottle: false },
-  B: { label: "Daily — giảm còn 10 Mbps sau quota",  capType: "Daily", mbpsAfterQuota: 10,  noThrottle: false },
-  C: { label: "Không giới hạn — tối đa 20 Mbps",     capType: "Daily", mbpsAfterQuota: 20,  noThrottle: false },
-  D: { label: "Không giới hạn — tối đa 100 Mbps",    capType: "Daily", mbpsAfterQuota: 100, noThrottle: false },
-  E: { label: "Fixed — giảm còn 5 Mbps sau quota",   capType: "Fixed", mbpsAfterQuota: 5,   noThrottle: false },
-  G: { label: "Fixed — giảm còn 10 Mbps sau quota",  capType: "Fixed", mbpsAfterQuota: 10,  noThrottle: false },
-  H: { label: "Không giới hạn — tối đa 5 Mbps",      capType: "Daily", mbpsAfterQuota: 5,   noThrottle: false },
-  F: { label: "Fixed — giảm dưới 2 Mbps sau quota",  capType: "Fixed", mbpsAfterQuota: 2,   noThrottle: false },
-  P: { label: "Daily — giảm dưới 2 Mbps sau quota",  capType: "Daily", mbpsAfterQuota: 2,   noThrottle: false },
-  Y: { label: "Fixed — không giảm tốc",              capType: "Fixed", mbpsAfterQuota: null, noThrottle: true },
-  Z: { label: "Daily — không giảm tốc",              capType: "Daily", mbpsAfterQuota: null, noThrottle: true },
-}
-// Rank so sánh tốc độ giữa các nhà mạng — noThrottle > mbps cao hơn > mbps thấp hơn > không rõ
-function throttleRank(code: string | null): number {
-  const dp = code ? DATA_POLICY[code.toUpperCase()] : null
-  if (!dp) return -1
-  if (dp.noThrottle) return 1000
-  return dp.mbpsAfterQuota ?? 0
-}
+// ⚠️ s198 đợt 9 (2026-09-15) — FIX BUG NGHIÊM TRỌNG: "data_policy_code" KHÔNG PHẢI cột thật trong
+// Supabase products (verify trực tiếp REST API: `column products.data_policy_code does not exist`,
+// lỗi 42703). Đợt 5 tin nhầm theo comment agents.ts/DATA_DICT (cũng SAI, chưa ai verify) mà không tự
+// kiểm tra schema. Hậu quả: MỌI lần gọi `.select(...data_policy_code...)` trả lỗi 400 → destructure
+// `const { data: products }` không check `error` → `data` = null → `(products || [])` = mảng RỖNG →
+// TOÀN BỘ metaBySku trống → MỌI field metadata (network/KYC/APN/perks/note/throttle...) null hết cho
+// MỌI sản phẩm — đúng nguyên nhân Hiếu báo "không thấy 1 dòng thông tin nào". Fix: bỏ hẳn field/logic
+// này. Throttle thay bằng field THẬT `skus.throttle_speed` (text tự do nhưng CÓ THẬT, verify 11.088/
+// 12.892 SKU có giá trị) — xem `fetchThrottleBySku()` dưới.
 
 // Chính sách theo operator — trích thông số thực tế từ bảng Hiếu cung cấp (2026-09-14), key = operator_code
 // (khớp Supabase products.operator_code). Vendor không có eSIM (Elite) không có entry — page tự ẩn.
@@ -146,7 +131,7 @@ interface ProductMeta {
   local_phone_number: string | null; local_number_country: string | null
   data_type: string | null; daily_reset_time: string | null
   apn: string | null; operator_code: string | null; telco_perks: string | null; unsupported_apps: string | null
-  onsite_carrier: string | null; data_policy_code: string | null; supported_countries: string | null
+  onsite_carrier: string | null; supported_countries: string | null
   note: string | null; activation_time: string | null; top_up_options: string | null; kyc_links: string | null
 }
 
@@ -160,7 +145,7 @@ export async function GET(req: NextRequest) {
   const guard = analyticsGuard(req, session); if (guard) return guard
 
   try {
-    const payload = await cachedQuery("product-catalogue:v7", async () => {
+    const payload = await cachedQuery("product-catalogue:v8", async () => {
       const destExpr = getDestinationSQL()
       const sfx = `${shipFilter(false)} ${internalOpsFilter(false)}`
 
@@ -216,13 +201,30 @@ export async function GET(req: NextRequest) {
       // (product_code Supabase = 8 ký tự đầu của sku thật, sku thêm suffix theo dung lượng/thời hạn).
       const allSkus = new Set<string>()
       skuMap.forEach(byDest => byDest.forEach(a => allSkus.add(a.sku)))
-      const { data: products } = await supabaseAdmin
+      const { data: products, error: productsErr } = await supabaseAdmin
         .from("products")
-        .select("product_code, network_type, hotspot, kyc_needed, local_phone_number, local_number_country, data_type, daily_reset_time, apn, operator_code, telco_perks, unsupported_apps, onsite_carrier, data_policy_code, supported_countries, note, activation_time, top_up_options, kyc_links")
+        .select("product_code, network_type, hotspot, kyc_needed, local_phone_number, local_number_country, data_type, daily_reset_time, apn, operator_code, telco_perks, unsupported_apps, onsite_carrier, supported_countries, note, activation_time, top_up_options, kyc_links")
+      // Lỗi ở đây trước s198 đợt 9 bị NUỐT im lặng (chỉ dùng `products || []`) → metaBySku rỗng toàn bộ,
+      // trang mất hết metadata mà không ai biết tại sao — log ra Vercel để lần sau phát hiện ngay.
+      if (productsErr) console.error("[analytics/product-catalogue] Supabase products select failed", productsErr)
       const metaBySku = new Map<string, ProductMeta>()
       ;(products || []).forEach(p => {
         allSkus.forEach(sku => { if (sku.startsWith(p.product_code)) metaBySku.set(sku, p) })
       })
+
+      // Throttle THẬT — bảng skus (13 ký tự, khác products 8 ký tự), field `throttle_speed` (text tự do,
+      // verify 11.088/12.892 SKU có giá trị). Fetch theo CHUNK 150 sku_code/lần (KHÔNG select() không
+      // limit — project Supabase này cap mặc định 1000 dòng/response, bảng skus có 12.892 dòng nên unpaged
+      // select sẽ ÂM THẦM cắt cụt; filter .in() theo đúng tập allSkus tránh cả 2 rủi ro: không lấy thiếu
+      // (do cap) lẫn không lấy thừa (toàn bảng không cần).
+      const throttleBySku = new Map<string, string>()
+      const skuList = [...allSkus]
+      const SKU_CHUNK = 150
+      for (let i = 0; i < skuList.length; i += SKU_CHUNK) {
+        const chunk = skuList.slice(i, i + SKU_CHUNK)
+        const { data: skuRows } = await supabaseAdmin.from("skus").select("sku_code, throttle_speed").in("sku_code", chunk)
+        ;(skuRows || []).forEach(r => { if (r.throttle_speed) throttleBySku.set(r.sku_code, r.throttle_speed) })
+      }
 
       const countryMap = await getCountryMappings()
 
@@ -287,18 +289,15 @@ export async function GET(req: NextRequest) {
             const opRaw = [...opMap.entries()].map(([opKey, opArr]) => {
               const opMetaList = opArr.map(a => metaBySku.get(a.sku)).filter(Boolean) as ProductMeta[]
               const operatorCodes = [...new Set(opMetaList.map(m => m.operator_code).filter(Boolean))] as string[]
-              const bestRank = opArr.reduce((mx, a) => Math.max(mx, throttleRank(metaBySku.get(a.sku)?.data_policy_code ?? null)), -1)
               const coverageNotes = [...new Set(
                 opMetaList.map(m => m.onsite_carrier).filter((s): s is string => !!s && s !== opKey && !isCleanCarrierName(s))
               )]
               return {
                 key: opKey, arr: opArr, opMetaList, operatorCodes, coverageNotes,
                 revenue: opArr.reduce((s, a) => s + a.revenue, 0),
-                bestRank,
               }
             })
             const maxOptions = Math.max(...opRaw.map(o => o.arr.length))
-            const maxRank = Math.max(...opRaw.map(o => o.bestRank))
             const multiOperator = opRaw.length > 1
 
             const operators = opRaw
@@ -306,12 +305,11 @@ export async function GET(req: NextRequest) {
                 const perksList = [...new Set(o.opMetaList.map(m => m.telco_perks).filter(Boolean))] as string[]
                 const restrictionsList = [...new Set(o.opMetaList.map(m => m.unsupported_apps).filter(Boolean))] as string[]
                 const hasPerks = perksList.length > 0
+                // Throttle THẬT từ bảng skus (throttleBySku) — text tự do, không rank/so sánh được giữa
+                // các carrier (không đủ cấu trúc), chỉ hiển thị nguyên văn.
                 const throttleSummary = [...new Set(
-                  o.arr.map(a => metaBySku.get(a.sku)?.data_policy_code)
-                    .filter((c): c is string => !!c)
-                    .map(c => DATA_POLICY[c.toUpperCase()]?.label)
-                    .filter(Boolean)
-                )] as string[]
+                  o.arr.map(a => throttleBySku.get(a.sku)).filter((t): t is string => !!t)
+                )]
                 const qrPolicies = o.operatorCodes.filter(c => OPERATOR_POLICY[c]).map(c => ({ code: c, ...OPERATOR_POLICY[c] }))
                 const localNumberCountries = [...new Set(
                   o.opMetaList.filter(m => m.local_phone_number === "Yes").map(m => m.local_number_country).filter(Boolean)
@@ -340,7 +338,6 @@ export async function GET(req: NextRequest) {
                   localNumberCountries,
                   coverageNotes: o.coverageNotes,
                   tags: multiOperator ? [
-                    o.bestRank === maxRank && maxRank > -1 ? "fastest_network" : null,
                     o.arr.length === maxOptions && maxOptions > 1 ? "most_options" : null,
                     hasPerks ? "has_perks" : null,
                   ].filter(Boolean) as string[] : (hasPerks ? ["has_perks"] : []),
@@ -348,7 +345,6 @@ export async function GET(req: NextRequest) {
                   products: [...o.arr].sort((a, b) => b.revenue - a.revenue).slice(0, MAX_PRODUCTS_PER_OPERATOR).map(a => {
                     const decoded = decodeSku(a.sku)
                     const meta = metaBySku.get(a.sku)
-                    const dp = meta?.data_policy_code ? DATA_POLICY[meta.data_policy_code.toUpperCase()] : null
                     const growthPct = a.prevRevenue > 0 ? ((a.revenue - a.prevRevenue) / a.prevRevenue) * 100 : null
                     return {
                       sku: a.sku,
@@ -358,7 +354,7 @@ export async function GET(req: NextRequest) {
                       days: decoded.days,
                       dataType: meta?.data_type || null,               // "Fixed Data" / "Daily Data" (Supabase thật)
                       dailyResetTime: meta?.daily_reset_time || null,   // chỉ có ý nghĩa khi dataType = Daily Data
-                      throttleLabel: dp?.label || null,
+                      throttleLabel: throttleBySku.get(a.sku) || null, // skus.throttle_speed — text tự do nhưng thật
                       apn: meta?.apn || null,
                       operatorCode: meta?.operator_code || null,
                       telcoPerks: meta?.telco_perks || null,
