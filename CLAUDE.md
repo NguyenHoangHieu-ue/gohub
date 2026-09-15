@@ -109,6 +109,24 @@
   ⚠️ **Khác mọi fix khác trong session này**: GitHub Actions scheduled cron LUÔN chạy theo branch `main`
   (thiết kế của GitHub, không cấu hình được), KHÔNG theo staging như Vercel — fix này sẽ KHÔNG có hiệu
   lực cho tới khi merge vào main, dù QA/qui trình khác vẫn giữ nguyên staging-first.
+| ✅ **s198+12 (2026-09-15) — Fix chuông "Thông báo" kẹt trong sidebar + thêm log lỗi cron trên Intel —
+  đã QA live PASS** | Hiếu: "sửa luôn cái thông báo trên Intel (đang có vấn đề), cần cập nhật log... để
+  tôi kiểm tra dễ biết nó có lỗi hay không". Verify qua Chrome trên staging (bấm chuông thật, không
+  đoán): panel `fixed right-0 w-[380px]` bị hiện lệch hẳn sang trái, chữ cắt cụt không đọc được — root
+  cause: panel nằm lồng trong `<nav>` sidebar có class Tailwind `translate-x-0`/`-translate-x-full`
+  (collapse/expand) — theo chuẩn CSS, `transform` trên ancestor (kể cả identity `translate-x-0`) biến nó
+  thành **containing block** cho `position: fixed` bên trong, nên "fixed right-0" bị tính theo khung
+  sidebar hẹp (~170px) thay vì viewport. Fix: `createPortal(..., document.body)` — panel thoát khỏi DOM
+  subtree bị transform, tính đúng theo viewport. **Đã tự QA live sau deploy — panel hiện đúng bên phải,
+  đọc rõ hoàn toàn** (nhân tiện thấy luôn bằng chứng phụ: sync sản phẩm cuối cùng có thay đổi là
+  **13/07/2026**, khớp đúng mốc cron s198+11 chết).
+  Thêm loại thông báo mới `"error"` (icon đỏ AlertTriangle, bell + `lib/notifications.ts`) + insert
+  notification lỗi thật ở 2 nơi: `sync.py` (cron sản phẩm, bất kỳ exception nào trong `main()`) và
+  `sync-lark-tickets` route (cron CS Troubleshoot) — cả 2 trước đây fail chỉ có log Vercel/GitHub Actions,
+  không ai xem hàng ngày; giờ Hiếu tự thấy ngay trên chuông Intel, đúng yêu cầu "1 chỗ để kiểm tra dễ".
+  tsc + lint (0 lỗi mới) + vitest (243/243) PASS. Wiki `kien-truc-he-thong.md` cập nhật. Đã push staging.
+  **Phần bell/panel + error-notification cho `sync-lark-tickets` có hiệu lực ngay** (route web, theo
+  staging bình thường); **phần `sync.py` cần merge main** giống s198+11 ở trên (cron GitHub Actions).
 | ✅ **s197 (2026-09-14) — Audit LOGIC DỮ LIỆU toàn hệ thống 26 tab (khác đợt UI/performance s196+20) +
   fix hết 16/17 phát hiện** | Hiếu: "check lại toàn bộ tab analytics xem đã logic lấy dữ liệu, áp dụng
   dữ liệu đúng chưa, sai ở đâu" → sau đó "fix theo thứ tự hết đi". 4 fork song song đọc trực tiếp SQL
@@ -668,6 +686,12 @@
   này độc lập hoàn toàn với Vercel/staging-production. Sau khi merge, nên tự trigger thử 1 lần qua GitHub
   Actions ("Run workflow" thủ công trên tab Actions, workflow "Sync GoHub Data to Supabase") để xác nhận
   chạy xong không còn 429/timeout, thay vì chờ tới 01:00 UTC hôm sau.
+  (Cập nhật s198+12: khi merge main, gộp luôn phần `sync.py` insert notification lỗi — cùng file,
+  không tách merge riêng được.)
+- [ ] **s198+12 — Duyệt fix chuông Thông báo trên staging rồi báo merge main** — panel kẹt trong sidebar
+  đã fix (portal), đã tự QA live xác nhận hiện đúng/đọc rõ. Phần bell + error-notify cho CS Troubleshoot
+  đã có hiệu lực trên staging ngay; phần error-notify cho `sync.py` nằm CHUNG file với s198+11 nên merge
+  main 1 lần là đủ cho cả 2. Gợi ý tự QA: mở chuông xem panel hiện đúng bên phải không bị cắt chữ.
 - [x] **s197/s197+1 — Audit logic dữ liệu 16 fix + incident ecom T9 — XONG (2026-09-14), đã tự QA live +
   đã merge main** — B2B Performance "VN Ecom Shopee" xác nhận số đúng (229.667.051đ) sau khi thêm nút
   "Tải lại mới" + ép cache tươi. Channels CM1 khớp Revenue/GP card cùng trang. BOD toggle Phí ship/Đơn
