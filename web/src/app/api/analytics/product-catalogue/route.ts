@@ -1,12 +1,44 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { GoogleGenerativeAI } from "@google/generative-ai"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import {
   getDestinationSQL, shipFilter, internalOpsFilter, getCountryMappings,
   CACHE_HEADERS, cachedQuery, analyticsGuard,
 } from "@/lib/analytics-helpers"
+
+// Gemini đặt tên khu vực tiếng Việt cho destination KHÔNG có trong Turso country_codes (gói pool đa quốc
+// gia tự đặt mã nội bộ như EU1/APA/GZ1 — không phải lỗi thiếu mapping, xem wiki mục Gotchas). Input là
+// supported_countries THẬT (ISO2, Supabase products) — không tự bịa, chỉ nhờ AI FORMAT lại cho dễ đọc.
+// 1 CALL DUY NHẤT cho mọi destination chưa map (batch, không loop từng destination — đúng tinh thần rule
+// N+1 dù đây là AI call chứ không phải DB query). Lỗi/parse fail → fallback về mã thô (graceful).
+async function formatUnmappedDestinations(items: { code: string; countries: string[] }[]): Promise<Record<string, string>> {
+  if (items.length === 0 || !process.env.GEMINI_KEY) return {}
+  try {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY)
+    const model = genAI.getGenerativeModel({
+      model: "gemini-3.8-flash",
+      generationConfig: { temperature: 0.2, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "minimal" } } as any,
+    })
+    const list = items.map(i => `${i.code}: [${i.countries.slice(0, 60).join(", ")}]`).join("\n")
+    const prompt = `Đây là các gói SIM/eSIM đa quốc gia (pool) của GoHub. Mỗi dòng là 1 mã nội bộ kèm danh
+sách mã ISO quốc gia (2 ký tự) mà gói đó phủ sóng thật:
+${list}
+
+Với MỖI mã, đặt 1 tên khu vực tiếng Việt ngắn gọn (≤25 ký tự) mô tả đúng phạm vi phủ sóng, để người dùng
+không rành kỹ thuật hiểu ngay (VD "Châu Âu", "Châu Á - Thái Bình Dương", "Toàn cầu", "Bắc Mỹ").
+
+Trả về JSON object phẳng (KHÔNG markdown, KHÔNG giải thích thêm): {"<mã>": "<tên khu vực>"}`
+    const result = await model.generateContent(prompt)
+    const parsed = JSON.parse(result.response.text().trim())
+    return typeof parsed === "object" && parsed ? parsed : {}
+  } catch (e) {
+    console.error("[analytics/product-catalogue] AI region naming failed", e)
+    return {}
+  }
+}
 
 // GoHub Product Catalogue — 4 tầng Destination → Loại SP → Nhà mạng → Sản phẩm cụ thể (Hiếu yêu cầu
 // 2026-09-14, đợt 2+3+4; redesign kiến trúc đợt 5-6, 2026-09-15). Toàn bộ phân loại dựa ĐÚNG dữ liệu
@@ -114,7 +146,8 @@ interface ProductMeta {
   local_phone_number: string | null; local_number_country: string | null
   data_type: string | null; daily_reset_time: string | null
   apn: string | null; operator_code: string | null; telco_perks: string | null; unsupported_apps: string | null
-  onsite_carrier: string | null; data_policy_code: string | null
+  onsite_carrier: string | null; data_policy_code: string | null; supported_countries: string | null
+  note: string | null; activation_time: string | null; top_up_options: string | null; kyc_links: string | null
 }
 
 interface SkuAgg {
@@ -127,7 +160,7 @@ export async function GET(req: NextRequest) {
   const guard = analyticsGuard(req, session); if (guard) return guard
 
   try {
-    const payload = await cachedQuery("product-catalogue:v6", async () => {
+    const payload = await cachedQuery("product-catalogue:v7", async () => {
       const destExpr = getDestinationSQL()
       const sfx = `${shipFilter(false)} ${internalOpsFilter(false)}`
 
@@ -147,6 +180,7 @@ export async function GET(req: NextRequest) {
              AND f.fulfiled_date::date <= CURRENT_DATE - 1
              AND f.sku != 'SHIPPINGFEE0' ${sfx}
              AND v.vendor IS NOT NULL AND v.type_of_sim IS NOT NULL
+             AND ${destExpr} != '000'
          )
          SELECT destination, vendor, type_of_sim, period, sku,
                 SUM(revenue) as revenue, SUM(units) as units
@@ -184,7 +218,7 @@ export async function GET(req: NextRequest) {
       skuMap.forEach(byDest => byDest.forEach(a => allSkus.add(a.sku)))
       const { data: products } = await supabaseAdmin
         .from("products")
-        .select("product_code, network_type, hotspot, kyc_needed, local_phone_number, local_number_country, data_type, daily_reset_time, apn, operator_code, telco_perks, unsupported_apps, onsite_carrier, data_policy_code")
+        .select("product_code, network_type, hotspot, kyc_needed, local_phone_number, local_number_country, data_type, daily_reset_time, apn, operator_code, telco_perks, unsupported_apps, onsite_carrier, data_policy_code, supported_countries, note, activation_time, top_up_options, kyc_links")
       const metaBySku = new Map<string, ProductMeta>()
       ;(products || []).forEach(p => {
         allSkus.forEach(sku => { if (sku.startsWith(p.product_code)) metaBySku.set(sku, p) })
@@ -282,14 +316,26 @@ export async function GET(req: NextRequest) {
                 const localNumberCountries = [...new Set(
                   o.opMetaList.filter(m => m.local_phone_number === "Yes").map(m => m.local_number_country).filter(Boolean)
                 )] as string[]
+                // Note/Activation/Top-up/KYC link — field CÓ SẴN trong Supabase products nhưng chưa từng
+                // hiển thị ở trang này trước đợt 8 (Hiếu: "chưa thấy mọi thông tin hiện có của sản phẩm").
+                const notesList = [...new Set(o.opMetaList.map(m => m.note).filter(Boolean))] as string[]
+                const activationList = [...new Set(o.opMetaList.map(m => m.activation_time).filter(Boolean))] as string[]
+                const kycLinks = [...new Set(o.opMetaList.map(m => m.kyc_links).filter(Boolean))] as string[]
+                const majorityYesOp = (field: "hotspot" | "kyc_needed" | "top_up_options") => {
+                  if (o.opMetaList.length === 0) return null
+                  return o.opMetaList.filter(m => m[field] === "Yes").length >= o.opMetaList.length / 2
+                }
 
                 return {
                   key: o.key,
                   displayName: o.key,
                   networkTypes: [...new Set(o.opMetaList.map(m => m.network_type).filter(Boolean))] as string[],
                   productCount: o.arr.length,
+                  hotspot: majorityYesOp("hotspot"),
+                  kycNeeded: majorityYesOp("kyc_needed"),
+                  topUpAvailable: majorityYesOp("top_up_options"),
                   throttleSummary,
-                  perksList, restrictionsList,
+                  perksList, restrictionsList, notesList, activationList, kycLinks,
                   qrPolicies,
                   localNumberCountries,
                   coverageNotes: o.coverageNotes,
@@ -365,6 +411,21 @@ export async function GET(req: NextRequest) {
           categories,
         }
       }).sort((a, b) => b.totalRevenue - a.totalRevenue)
+
+      // Destination không có trong Turso country_codes (gói pool đa quốc gia tự đặt mã, VD EU1/APA/GZ1)
+      // → nhờ AI đặt tên khu vực dễ đọc từ supported_countries THẬT (Supabase), 1 batch call duy nhất.
+      const unresolved = destinations.filter(d => d.name === d.code)
+      if (unresolved.length > 0) {
+        const items = unresolved.map(d => {
+          const countrySet = new Set<string>()
+          ;[...(skuMap.get(d.code)?.keys() ?? [])].forEach(sku => {
+            metaBySku.get(sku)?.supported_countries?.split(",").forEach(c => { const t = c.trim(); if (t) countrySet.add(t) })
+          })
+          return { code: d.code, countries: [...countrySet] }
+        }).filter(i => i.countries.length > 0)
+        const aiNames = await formatUnmappedDestinations(items)
+        destinations.forEach(d => { if (aiNames[d.code]) d.name = aiNames[d.code] })
+      }
 
       return { destinations, periodDays: 90 }
     }, 60)

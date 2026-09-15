@@ -118,6 +118,41 @@ không cần route mới).
 token dạng plaintext ở gốc repo (untracked, không commit). Đã dùng để verify rồi dừng — KHÔNG commit file
 này. Hiếu nên tự xoá/di chuyển ra khỏi thư mục repo khi xong việc, tránh vô tình `git add -A` dính vào.
 
+**Đợt 8 (2026-09-15) — 4 việc theo yêu cầu Hiếu, hỏi lại 1 điểm mơ hồ trước khi làm (AskUserQuestion) rồi
+code toàn bộ phần còn lại.**
+
+0. **Hỏi trước khi làm**: Hiếu yêu cầu "rồi mới tới giá + chi tiết gói" — mâu thuẫn tiềm tàng với quyết
+   định đợt 4 (đã chốt bỏ hẳn số $ khỏi trang, đây là trang giới thiệu không phải kế toán) + Supabase
+   không có field giá bán lẻ (chỉ có `latest_cogs` = giá vốn nội bộ, dữ liệu nhạy cảm margin). Hỏi lại qua
+   AskUserQuestion — Hiếu chọn **"Bỏ qua, không cần giá"** → giữ nguyên quyết định đợt 4, KHÔNG thêm số $
+   nào. Phần còn lại của "giá + chi tiết gói" hiểu là chi tiết THÔNG SỐ (đã có: throttle/APN/reset...).
+
+1. **Destination mã thô → AI đặt tên khu vực** (`formatUnmappedDestinations()`, `route.ts`) — với
+   destination KHÔNG có trong Turso `country_codes` (gói pool tự đặt mã như EU1/APA/GZ1), lấy
+   `supported_countries` THẬT (ISO2, Supabase `products`) của mọi SKU thuộc destination đó, gộp **1 batch
+   Gemini call DUY NHẤT** (không loop từng destination — đúng tinh thần rule N+1 dù là AI call chứ không
+   phải DB query) yêu cầu đặt tên khu vực tiếng Việt ngắn gọn (VD "Châu Âu", "Châu Á - Thái Bình Dương").
+   Model `gemini-3.8-flash` + `thinkingLevel:"minimal"` (đúng convention cost-safety đã áp cho các call
+   1-shot khác trong repo). Lỗi/parse fail → fallback về mã thô (graceful, không crash).
+2. **Loại bỏ destination "000"** (SIM frame/eSIM profile — ma-sku.md: mã đặc biệt không gắn nước cụ thể,
+   không phải sản phẩm bán ra) — thêm `AND ${destExpr} != '000'` ngay trong WHERE của query gohub_dw (lọc
+   ở DB, không phải filter JS sau khi đã fetch).
+3. **Hoàn thiện + sắp xếp lại thông tin theo đúng thứ tự Hiếu yêu cầu** — panel mỗi nhà mạng giờ theo thứ
+   tự: **onsite_carrier** (tab, luôn ở đầu, không đổi) → **Đặc điểm** (network/KYC/Hotspot/Nạp thêm data —
+   3 field cuối tính majority riêng theo TỪNG carrier, chính xác hơn category-wide cũ) → **Ưu đãi/hạn chế**
+   (perks/restrictions, như cũ) → **Ghi chú/kích hoạt** (field `note`/`activation_time`/`kyc_links` CÓ SẴN
+   Supabase nhưng CHƯA TỪNG hiển thị ở trang này trước đợt 8) → **Phủ sóng/QR policy** (ít quan trọng hơn,
+   gấp gọn cuối). Bỏ hẳn KYC/Hotspot/Network ở HEADER category (trùng lặp + kém chính xác hơn bản
+   per-carrier mới, gây rối — category giờ chỉ còn tên/số lượng/badge/toggle SDT nội địa).
+4. **"Gói có SDT nội địa" nâng thành banner riêng** — trước là nút nhỏ cạnh "Tải lại mới" (dễ bị bỏ qua);
+   nay là 1 banner đầy đủ ngay dưới header (icon + số lượng + mô tả), đúng lý do Hiếu nêu "khách thường hỏi
+   cái này trước". Bấm mở `DataTable` y hệt đợt 7 (không đổi nội dung bảng).
+   Kèm dọn nhỏ: bỏ `uppercase tracking-wide` ở 2 label "Chọn số ngày"/"Chọn dung lượng" (đổi sentence-case
+   — theo hướng dẫn thiết kế tránh ALL-CAPS cho low-tech dễ đọc hơn).
+
+Thêm Supabase field `supported_countries`/`note`/`activation_time`/`top_up_options`/`kyc_links` vào select.
+Đổi shape → bump cache key `v6`→`v7`.
+
 ---
 
 ## 1. Đường dẫn & File
@@ -213,8 +248,10 @@ Chưa thêm `ops-&-cs`/`hr`/`staff` — Hiếu tự cấp thêm qua Settings n�
 
 ## 5. Gotchas
 
-- Destination code hiển thị dạng 3 ký tự thô (VD "EU1", "AS4") nếu không có trong `country_codes` Turso
-  — đây là các gói ĐA QUỐC GIA (Europe pool, Asia pool), không phải lỗi thiếu mapping.
+- Destination không có trong `country_codes` Turso (VD "EU1", "AS4" — gói ĐA QUỐC GIA, không phải lỗi
+  thiếu mapping) từ đợt 8 được AI đặt tên khu vực tiếng Việt tự động (xem mục "Đợt 8"). Nếu Gemini lỗi/hết
+  quota → fallback về mã thô 3 ký tự như trước, không crash trang.
+- Destination `"000"` (SIM frame/eSIM profile) đã bị loại bỏ hoàn toàn khỏi trang từ đợt 8 (lọc ở SQL).
 - Nếu Supabase `products` không có entry khớp prefix cho SKU đại diện (SKU cũ/đã ngừng bán) → dòng SP
   vẫn hiện đủ số liệu doanh thu, chỉ thiếu chip network/hotspot/KYC (graceful, không lỗi).
 - Nếu `onsite_carrier` VÀ `operator_code` đều NULL → group theo tên **vendor GoHub** (đợt 6, luôn có).
@@ -231,7 +268,9 @@ Chưa thêm `ops-&-cs`/`hr`/`staff` — Hiếu tự cấp thêm qua Settings n�
 | Revenue/Units/Margin theo destination×vendor×type_of_sim | `fact_fulfillment_revenue` JOIN `dim_sku` | Loại ship fee + đơn nội bộ (`shipFilter`/`internalOpsFilter`) |
 | Destination code | SKU (`getDestinationSQL`) | Không dùng `dim_sku.category_name` |
 | Tên nước | Turso `country_codes` | `getCountryMappings()` |
-| Network/Hotspot/KYC/APN/Data Type/Telco Perks/Unsupported Apps | Supabase `products` | Prefix-match `product_code` với `sku` |
-| Nhà mạng (gom nhóm) | Supabase `products.onsite_carrier` | Fallback `operator_code` rồi vendor GoHub (`a.vendor`) — đợt 5, fix fallback đợt 6 |
+| Tên khu vực (destination không có trong country_codes) | Gemini, input = `products.supported_countries` thật | 1 batch call, cache cùng payload — đợt 8, fallback mã thô nếu lỗi |
+| Network/Hotspot/KYC/APN/Data Type/Telco Perks/Unsupported Apps/Note/Activation/Top-up/KYC Links | Supabase `products` | Prefix-match `product_code` với `sku`; Note/Activation/Top-up/KYC Links thêm đợt 8 |
+| Nhà mạng (gom nhóm) | Supabase `products.onsite_carrier` | Chỉ dùng làm tên tab khi ngắn/sạch (≤40 ký tự, không xuống dòng) — đoạn văn dài (gói pool) → group `operator_code` rồi vendor, giữ lại làm `coverageNotes` (đợt 5/6/7) |
 | Throttle (tốc độ sau quota) | Supabase `products.data_policy_code` | Map `DATA_POLICY` trong `route.ts`, đồng bộ `agents.ts` DATA_DICT — đợt 5 |
 | Chính sách QR/đổi máy | `OPERATOR_POLICY` (hardcode, `route.ts`) | Trích tay từ ảnh Hiếu cung cấp, key theo `operator_code`, scope theo carrier đang chọn từ đợt 5 |
+| KYC/Hotspot/Top-up theo TỪNG nhà mạng | Supabase `products` (majority trong carrier) | Chính xác hơn bản category-wide cũ — đợt 8 |

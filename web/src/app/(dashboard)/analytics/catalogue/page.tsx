@@ -27,8 +27,17 @@ import { StatTile, StatTileSkeleton, EmptyState, DataTable } from "@/components/
 //     hoàn toàn ở FE từ dữ liệu đã fetch (không gọi API riêng, chỉ ~50 product_code toàn hệ thống có field
 //     này = Yes, verify qua Supabase trực tiếp) — trước đó info này chỉ xem được rời rạc theo từng
 //     destination, không có view liệt kê "nước - vendor - nhà mạng" gộp lại như Hiếu yêu cầu.
-// API/route.ts response shape đổi (v4→v6): category.localNumberProductCount, operator.localNumberCountries/
-// coverageNotes, product.hasLocalNumber/localNumberCountry mới; category.hasCall bỏ.
+// Đợt 8 (2026-09-15), theo phản hồi tiếp:
+//   - Destination hiện mã thô (VD "EU1"/"APA") → route.ts nhờ AI đặt tên khu vực tiếng Việt từ
+//     supported_countries THẬT (Supabase), 1 batch call, cache cùng payload — KHÔNG tự bịa, chỉ format.
+//   - Loại bỏ hẳn destination "000" (SIM frame/eSIM profile, không phải sản phẩm bán ra) ngay ở SQL.
+//   - Panel nhà mạng giờ ưu tiên ĐÚNG THỨ TỰ Hiếu yêu cầu: onsite_carrier (tab, luôn đầu) → đặc điểm
+//     (network/KYC/Hotspot/Top-up) → ưu đãi/hạn chế → ghi chú/kích hoạt (field `note`/`activation_time`
+//     CÓ SẴN nhưng trước giờ CHƯA từng hiển thị) → phủ sóng/QR policy (gấp gọn, ít quan trọng hơn).
+//   - "Gói có SDT nội địa" nâng từ nút nhỏ cạnh header thành banner nổi bật riêng — nhu cầu khách hay hỏi
+//     cái này TRƯỚC, đặt sẵn không cần tìm.
+// API/route.ts response shape đổi (v4→v7): category.localNumberProductCount, operator.localNumberCountries/
+// coverageNotes/notesList/activationList/kycLinks/hotspot/kycNeeded/topUpAvailable mới; category.hasCall bỏ.
 
 interface OperatorInfo { code: string; qrValidity: string; reinstallLimit: string; deviceChangeLimit: string }
 interface CatalogueProduct {
@@ -43,7 +52,9 @@ interface CatalogueProduct {
 interface CatalogueOperator {
   key: string; displayName: string
   networkTypes: string[]; productCount: number
+  hotspot: boolean | null; kycNeeded: boolean | null; topUpAvailable: boolean | null
   throttleSummary: string[]; perksList: string[]; restrictionsList: string[]
+  notesList: string[]; activationList: string[]; kycLinks: string[]
   qrPolicies: OperatorInfo[]; localNumberCountries: string[]; coverageNotes: string[]
   tags: string[]
   products: CatalogueProduct[]
@@ -207,31 +218,41 @@ export default function ProductCataloguePage() {
               Danh mục sản phẩm GoHub theo từng điểm đến — nhà mạng, gói data, chính sách sử dụng.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {localNumberRows.length > 0 && (
-              <button onClick={() => setShowLocalPanel(v => !v)}
-                className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 border",
-                  showLocalPanel ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-brand-200 text-brand-700 hover:bg-brand-50")}>
-                <PhoneCall className="w-3.5 h-3.5" />Gói có SDT nội địa ({localNumberRows.length})
-              </button>
-            )}
-            <button onClick={fetchData} disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50">
-              <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />Tải lại mới
-            </button>
-          </div>
+          <button onClick={fetchData} disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50">
+            <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />Tải lại mới
+          </button>
         </div>
 
         {error && (
           <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl px-4 py-3">{error}</div>
         )}
 
+        {/* Banner nổi bật — khách thường hỏi gói có SDT nội địa TRƯỚC, đặt sẵn không cần tìm */}
+        {localNumberRows.length > 0 && (
+          <button onClick={() => setShowLocalPanel(v => !v)}
+            className={cn("w-full flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all",
+              showLocalPanel ? "bg-brand-600 border-brand-600" : "bg-brand-50 border-brand-200 hover:border-brand-400")}>
+            <span className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", showLocalPanel ? "bg-white/15" : "bg-white")}>
+              <PhoneCall className={cn("w-6 h-6", showLocalPanel ? "text-white" : "text-brand-600")} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className={cn("font-bold", showLocalPanel ? "text-white" : "text-slate-900")}>Gói có số điện thoại nội địa</p>
+              <p className={cn("text-sm mt-0.5", showLocalPanel ? "text-white/80" : "text-slate-500")}>
+                {localNumberRows.length} gói, gọi/nhắn tin được như SIM nội địa — xem nhanh theo nước, vendor, nhà mạng
+              </p>
+            </div>
+            <ChevronDown className={cn("w-5 h-5 shrink-0 transition-transform", showLocalPanel ? "text-white rotate-180" : "text-brand-400")} />
+          </button>
+        )}
+
         {/* Bảng tổng hợp toàn hệ thống — nước/vendor/nhà mạng nào có gói SDT nội địa, bấm Xem để nhảy tới */}
         {showLocalPanel && (
           <div className="bg-white border border-brand-200 rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-bold text-slate-800">Toàn bộ gói có SDT nội địa — mọi điểm đến</p>
-              <button onClick={() => setShowLocalPanel(false)} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+            <div className="flex justify-end mb-2">
+              <button onClick={() => setShowLocalPanel(false)} className="text-xs font-semibold text-slate-400 hover:text-slate-600 flex items-center gap-1">
+                <X className="w-3.5 h-3.5" />Đóng
+              </button>
             </div>
             <DataTable
               rows={localNumberRows}
@@ -352,27 +373,16 @@ export default function ProductCataloguePage() {
                           </div>
                           <Badges badges={cat.badges} />
                         </div>
-                        <div className="flex flex-wrap gap-1.5 items-center">
-                          {cat.localNumberProductCount > 0 && (
-                            <button onClick={() => setLocalOnly(prev => ({ ...prev, [cat.key]: !prev[cat.key] }))}
-                              className={cn("text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 border transition-all",
-                                filterLocal ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-brand-200 text-brand-700 hover:bg-brand-50")}>
-                              <PhoneCall className="w-3 h-3" />Có SDT nội địa ({cat.localNumberProductCount} gói)
-                            </button>
-                          )}
-                          {cat.kycNeeded != null && (
-                            <SpecChip icon={cat.kycNeeded ? <ShieldAlert className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />} tone={cat.kycNeeded ? "warn" : "good"}>
-                              {cat.kycNeeded ? "Cần KYC" : "Không cần KYC"}
-                            </SpecChip>
-                          )}
-                          {cat.hotspot === true && <SpecChip icon={<Router className="w-3 h-3" />}>Hỗ trợ Hotspot</SpecChip>}
-                          {cat.networkTypes.map(nt => (
-                            <SpecChip key={nt} icon={<Wifi className="w-3 h-3" />}>{nt}</SpecChip>
-                          ))}
-                        </div>
+                        {cat.localNumberProductCount > 0 && (
+                          <button onClick={() => setLocalOnly(prev => ({ ...prev, [cat.key]: !prev[cat.key] }))}
+                            className={cn("text-[11px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 border transition-all w-fit",
+                              filterLocal ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-brand-200 text-brand-700 hover:bg-brand-50")}>
+                            <PhoneCall className="w-3 h-3" />Có SDT nội địa ({cat.localNumberProductCount} gói)
+                          </button>
+                        )}
                       </div>
 
-                      {/* Nhà mạng — so sánh trước khi vào chi tiết sản phẩm */}
+                      {/* Nhà mạng — onsite_carrier lên đầu, rồi tới đặc điểm/ưu đãi/ghi chú của carrier đó */}
                       <div className="p-5 border-b border-slate-100 bg-slate-50/50">
                         {cat.operators.length > 1 && (
                           <p className="text-xs text-slate-500 mb-2.5">
@@ -387,13 +397,57 @@ export default function ProductCataloguePage() {
                         </div>
 
                         {op && (
-                          <div className="mt-3 bg-white border border-slate-200 rounded-xl p-3.5 space-y-2.5">
+                          <div className="mt-3 bg-white border border-slate-200 rounded-xl p-3.5 space-y-3">
+                            {/* Đặc điểm — network/KYC/Hotspot/Top-up/SDT nội địa */}
                             <div className="flex flex-wrap gap-1.5">
                               {op.networkTypes.map(nt => <SpecChip key={nt} icon={<Wifi className="w-3 h-3" />}>{nt}</SpecChip>)}
                               {op.throttleSummary.map(t => <SpecChip key={t} icon={<Gauge className="w-3 h-3" />}>{t}</SpecChip>)}
+                              {op.kycNeeded != null && (
+                                <SpecChip icon={op.kycNeeded ? <ShieldAlert className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />} tone={op.kycNeeded ? "warn" : "good"}>
+                                  {op.kycNeeded ? "Cần KYC" : "Không cần KYC"}
+                                </SpecChip>
+                              )}
+                              {op.hotspot === true && <SpecChip icon={<Router className="w-3 h-3" />} tone="good">Hỗ trợ Hotspot</SpecChip>}
+                              {op.topUpAvailable === true && <SpecChip icon={<Radio className="w-3 h-3" />} tone="good">Nạp thêm data được</SpecChip>}
                               {op.localNumberCountries.length > 0 && (
                                 <SpecChip icon={<PhoneCall className="w-3 h-3" />} tone="good">SDT nội địa: {op.localNumberCountries.join(", ")}</SpecChip>
                               )}
+                            </div>
+
+                            {/* Ưu đãi / hạn chế */}
+                            {op.perksList.length > 0 && (
+                              <div className="flex flex-col gap-1 text-[11px] text-emerald-600">
+                                {op.perksList.map(p => <span key={p} className="flex items-start gap-1.5"><Gift className="w-3 h-3 mt-0.5 shrink-0" />{p}</span>)}
+                              </div>
+                            )}
+                            {op.restrictionsList.length > 0 && (
+                              <div className="flex flex-col gap-1 text-[11px] text-amber-600">
+                                {op.restrictionsList.map(r => <span key={r} className="flex items-start gap-1.5"><Ban className="w-3 h-3 mt-0.5 shrink-0" />Hạn chế: {r}</span>)}
+                              </div>
+                            )}
+
+                            {/* Ghi chú / hướng dẫn kích hoạt — field có sẵn Supabase, trước chưa từng hiện */}
+                            {op.activationList.length > 0 && (
+                              <div className="flex flex-col gap-1 text-[11px] text-slate-500">
+                                {op.activationList.map(a => <span key={a} className="flex items-start gap-1.5"><Signal className="w-3 h-3 mt-0.5 shrink-0" />{a}</span>)}
+                              </div>
+                            )}
+                            {op.notesList.length > 0 && (
+                              <div className="flex flex-col gap-1 text-[11px] text-slate-500">
+                                {op.notesList.map(n => <span key={n} className="flex items-start gap-1.5"><ShieldAlert className="w-3 h-3 mt-0.5 shrink-0" />{n}</span>)}
+                              </div>
+                            )}
+                            {op.kycLinks.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {op.kycLinks.map(l => (
+                                  <a key={l} href={l} target="_blank" rel="noreferrer"
+                                    className="text-[11px] font-bold text-brand-600 underline hover:text-brand-700">Hướng dẫn KYC →</a>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Phủ sóng / chính sách QR — ít quan trọng hơn, gấp gọn */}
+                            <div className="flex flex-wrap gap-1.5">
                               {op.coverageNotes.length > 0 && (
                                 <button onClick={() => toggleCoverage(`${cat.key}:${op.key}`)}
                                   className="text-[11px] font-bold px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-1">
@@ -407,16 +461,6 @@ export default function ProductCataloguePage() {
                                 </button>
                               )}
                             </div>
-                            {op.perksList.length > 0 && (
-                              <div className="flex flex-col gap-1 text-[11px] text-emerald-600">
-                                {op.perksList.map(p => <span key={p} className="flex items-start gap-1.5"><Gift className="w-3 h-3 mt-0.5 shrink-0" />{p}</span>)}
-                              </div>
-                            )}
-                            {op.restrictionsList.length > 0 && (
-                              <div className="flex flex-col gap-1 text-[11px] text-amber-600">
-                                {op.restrictionsList.map(r => <span key={r} className="flex items-start gap-1.5"><Ban className="w-3 h-3 mt-0.5 shrink-0" />Hạn chế: {r}</span>)}
-                              </div>
-                            )}
                             {expandedCoverage.has(`${cat.key}:${op.key}`) && op.coverageNotes.length > 0 && (
                               <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-[11px] text-slate-600 whitespace-pre-line">
                                 {op.coverageNotes.join("\n\n")}
@@ -446,7 +490,7 @@ export default function ProductCataloguePage() {
                           ) : (
                             <>
                               <div className="space-y-1.5">
-                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Chọn số ngày</p>
+                                <p className="text-xs font-bold text-slate-500">Chọn số ngày</p>
                                 <div className="flex flex-wrap gap-2">
                                   {dayList.map(([dKey, dVal]) => {
                                     const isSel = selDay === dKey
@@ -464,7 +508,7 @@ export default function ProductCataloguePage() {
 
                               {selDay && (
                                 <div className="space-y-1.5">
-                                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Chọn dung lượng</p>
+                                  <p className="text-xs font-bold text-slate-500">Chọn dung lượng</p>
                                   <div className="flex flex-wrap gap-2">
                                     {dataChips.map(p => {
                                       const isOpen = p.sku === expandedSku
