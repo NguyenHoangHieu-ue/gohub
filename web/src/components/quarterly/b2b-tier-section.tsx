@@ -354,6 +354,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
     { label: "CM1",          tip: "CM1 tier per-month (PR)\n= GM - CH.Cost (customer-level)\nKHÔNG gồm Group Cost\nGroup Cost được khấu trừ ở cột Tổng Quý" },
     { label: "%CM1",         tip: "CM1 / Revenue × 100%\nDùng số PR (projected)" },
     { label: "%QoQ(CM1)",    tip: "So sánh CM1 PR quý này vs CM1 TT quý trước\nMức tier-level (aggregate toàn tier)\nCT: (CM1_PR - CM1_prev) / |CM1_prev|" },
+    { label: "%MoM",         tip: "So Revenue tháng này (PR nếu đang chạy) vs Revenue tháng liền trước (Actual)\nCT: (Rev_tháng - Rev_tháng_trước) / Rev_tháng_trước\nTháng đầu quý (T7) không có tháng trước trong quý → —\nChỉ có ở cột theo tháng, không áp dụng cho Tổng Quý (đã có %QoQ)" },
     { label: "3HK%",         tip: "3HK Revenue / Tier Revenue × 100%" },
   ]
   const SUB = SUB_COLS.map(c => c.label)  // backward compat cho chỗ dùng SUB.length
@@ -675,6 +676,11 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                           ))
                         }
                         const pr = d.isProjected  // tháng đang chạy → hiện cả actual + PR
+                        // %MoM: so Revenue tháng này với tháng LIỀN TRƯỚC trong quý (T7 không có → —).
+                        const mIdx = quarterMonths.indexOf(m)
+                        const prevM = mIdx > 0 ? quarterMonths[mIdx - 1] : null
+                        const prevD = prevM ? tier.months.find((x: any) => x.month === prevM) : null
+                        const momPct = prevD?.hasData && prevD.revenue > 0 ? (d.revenue - prevD.revenue) / prevD.revenue * 100 : null
                         return [
                           <td key="rev" className="px-2 py-2.5 text-right border-l border-slate-100">{dual(d.revenue, pr ? d.actualRevenue : undefined, "text-slate-700")}</td>,
                           <td key="gm"  className="px-2 py-2.5 text-right">{dual(d.gm, pr ? d.actualGm : undefined, "text-slate-600")}</td>,
@@ -682,6 +688,9 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                           <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold", cm1Color(d.cm1))}>{dual(d.cm1, pr ? d.actualCm1 : undefined, cm1Color(d.cm1))}</td>,
                           <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
                           <td key="qoq" className="px-2 py-2.5 text-right text-slate-300">—</td>,
+                          <td key="mom" className={cn("px-2 py-2.5 text-right font-semibold tabular-nums", momPct == null ? "text-slate-300" : momPct >= 0 ? "text-green-600" : "text-red-500")}>
+                            {momPct != null ? `${momPct >= 0 ? "+" : ""}${momPct.toFixed(1)}%` : "—"}
+                          </td>,
                           <td key="3hk" className="px-2 py-2.5 text-right text-slate-500 whitespace-nowrap">{fc(d.hk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(d.hk3Pct)})</span></td>,
                         ]
                       })}
@@ -700,6 +709,8 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                           </td>
                         )
                       })()}
+                      {/* %MoM không áp dụng cho Tổng Quý (đã có %QoQ ở cột trước) */}
+                      <td className="px-2 py-2.5 text-right text-slate-300 bg-blue-50/60">—</td>
                       <td className="px-2 py-2.5 text-right text-slate-500 bg-blue-50/60 whitespace-nowrap">{fc(tier.totalHk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(tier.totalHk3Pct)})</span></td>
                     </tr>
                   )
