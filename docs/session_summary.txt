@@ -9883,3 +9883,28 @@ tsc + lint (0 lỗi mới) + vitest (253/253) PASS. Wiki cập nhật: `docs/wik
 §8 (mô tả chung), `analytics-b2b.md` + `analytics-b2c.md` (2 chỗ trực tiếp nhắc "12h" cho route bị ảnh
 hưởng). Đã push staging — **chưa merge main**, gộp merge chung với s199+2 (cùng nhóm fix B2B/Quarter
 Report cùng phiên làm việc).
+
+### s199+4 (2026-09-16) — Thêm cột %MoM cho bảng "B2B — Chi tiết theo Nhóm × Tháng" (Quarter Report)
+
+Hiếu yêu cầu thêm cột %MoM. Đợt 1: thêm cột (SUB_COLS mới trong b2b-tier-section.tsx), so Revenue tháng
+đang xem (PR nếu đang chạy) với tháng liền trước LẤY TỪ `tier.months` (cùng quý). Chỉ hiện ở view theo
+tháng (T7/T8/T9), "Cả Quý" giữ "—" (đã có %QoQ). Verify sống staging: T8 Strategic +0.6%, T9 -17.2% (khớp
+tính tay). T7 (tháng đầu quý) ra "—" vì không có tháng nào khác trong `months` của quý hiện tại để so.
+
+Hiếu chỉ ra ngay: "T7 thì so với tháng 6 chứ nhỉ" — đúng, cần sửa. Route `quarterly-b2b-customers` thêm
+1 query riêng (`prevMonthRows`) fetch ĐÚNG 1 tháng liền trước tháng đầu quý (tính bằng cách lùi lịch
+chuẩn từ `months[0]`, tổng quát cho mọi quý chứ không hardcode "tháng 6"), group theo customer_code +
+price_list_name + currency_code, aggregate client-side theo tier (`classifyTier`) × region
+(`classifyRegion`) → trả `tier.prevMonthRevenue` (cả top-level lẫn từng `byRegion.VN`/`byRegion.US`) +
+`prevMonth` (label, vd "2026-06") ở response root. FE dùng field này làm baseline MoM cho T7 khi
+`quarterMonths.indexOf(m) === 0` (không có tháng trước trong quý). Cache key `qb2b_raw_v8`→`v9` (đổi
+shape cache RAW nội bộ — cachedQuery giờ trả 3 field thay 2, cần bump để tránh đọc nhầm cache cũ thiếu
+`prevMonthRows` → crash `.forEach` trên undefined).
+
+Verify sống trên staging sau deploy: gọi API trực tiếp (`prevMonth: "2026-06"`,
+`strategicPrevMonthRevenue: 5669654912`) rồi bấm T7 trên UI — Strategic %MoM = **-8,6%**, khớp tính tay
+(5.179.441.201 − 5.669.654.912)/5.669.654.912 = -8,647%. VIP -28.9%, Gold +11.9%, Silver -31.7%.
+
+tsc + lint (0 lỗi mới, chỉ warning pre-existing không liên quan) + vitest (253/253) PASS cả 2 đợt. Wiki
+`docs/wiki/system/tabs/analytics-quarterly.md` cập nhật. Đã push staging cả 2 commit — chưa merge main,
+gộp chung đợt merge với s199+2/+3 (cùng nhóm fix B2B/Quarter Report phiên làm việc này).

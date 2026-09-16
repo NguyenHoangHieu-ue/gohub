@@ -20,6 +20,13 @@
   `backend/`/`web/` ghi 2 bảng). Code tab đúng, không sửa gì bên web. **Cần Hiếu**: hỏi bên vận
   hành/vendor 3HK xem pipeline nạp `fact_data_usage`/`data_usage_log` vào gohub_dw còn chạy không (đã
   đứng yên >2 tháng tính đến hôm nay).
+| ✅ **s199+4 (2026-09-16) — Thêm cột %MoM cho bảng "B2B — Chi tiết theo Nhóm × Tháng" (Quarter Report) —
+  đã verify sống, đã push staging** | Hiếu yêu cầu thêm cột %MoM, chỉ ra ngay 1 điểm cần sửa: "T7 thì so
+  với tháng 6 chứ nhỉ" — ban đầu làm T7 luôn "—" vì tháng 6 nằm ngoài `months` (quý hiện tại). Fix: route
+  `quarterly-b2b-customers` thêm 1 query riêng fetch tháng liền trước tháng đầu quý (T6 cho Q3), aggregate
+  theo tier×region, trả `tier.prevMonthRevenue`. Cột chỉ hiện ở view theo tháng (T7/T8/T9), "Cả Quý" giữ
+  "—" (đã có %QoQ riêng). Cache key `qb2b_raw_v8`→`v9`. Verify sống staging: T7 Strategic %MoM=-8,6%
+  (khớp tính tay). tsc + lint (0 lỗi mới) + vitest (253/253) PASS. Wiki cập nhật. **Chưa merge main.**
 | ✅ **s199+3 (2026-09-16) — Fix root cause thật: cache 20 route BI hạ 12h→60 phút, khớp chu kỳ ETL thật
   — đã push staging** | Sau khi fix bug bảng KH (s199+2), Hiếu vẫn thấy card đầu B2B Performance lệch
   Quarter Report — cả Actual lẫn PR đều lệch (không phải so nhầm dòng). Verify từng số 1: lệch chỉ
@@ -716,6 +723,8 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s199+4 — Đã tự verify %MoM sống trên staging (T7 so đúng tháng 6), không cần thao tác gì thêm** —
+  gộp chung merge main với s199+2/+3 (cùng đợt fix B2B/Quarter Report).
 - [ ] **s199+3 — QA fix cache 60 phút rồi báo merge main (gộp chung merge với s199+2)** — không cần thao
   tác đặc biệt, chỉ cần theo dõi vài giờ: B2B Performance và Quarter Report giờ tự làm mới trong vòng
   ≤60 phút thay vì 12 tiếng, mở 2 tab cùng lúc số sẽ khớp sát hơn hẳn mà không cần bấm "Tải lại mới" tay.

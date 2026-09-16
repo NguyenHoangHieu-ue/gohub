@@ -116,6 +116,17 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | **Biểu đồ** (cạnh 3 nút trên) | Bật/tắt bar chart revenue theo đúng chế độ đang chọn — Tháng/Ngày cộng dồn theo kỳ (nhiều dòng/kênh gộp lại), Sản phẩm lấy top 10 SKU theo revenue |
 
 ## 7. Gotchas
+- **s199+4 (2026-09-16) — thêm cột %MoM cho bảng "B2B — Chi tiết theo Nhóm × Tháng"** (Hiếu yêu cầu, sau
+  khi hỏi thêm chỉnh đúng: "T7 thì so với tháng 6 chứ nhỉ"). Cột mới nằm giữa %QoQ(CM1) và 3HK%, CHỈ hiện
+  giá trị ở view theo tháng (T7/T8/T9) — "Cả Quý" hiện "—" (đã có %QoQ riêng cho quý). Công thức: so
+  Revenue tháng đang xem (PR nếu đang chạy) với Revenue tháng LIỀN TRƯỚC (Actual). T8/T9 lấy tháng trước
+  từ `tier.months` (cùng quý, đã có sẵn). **T7 (tháng đầu quý)** ban đầu làm thiếu — không có tháng nào
+  khác trong `months` của quý hiện tại để so → route `quarterly-b2b-customers` thêm 1 query riêng fetch
+  ĐÚNG 1 tháng liền trước tháng đầu quý (vd T6 cho Q3), aggregate theo tier×region, trả `tier.
+  prevMonthRevenue` + `prevMonth` (label) ở response root — FE dùng làm baseline MoM cho T7. Cache key
+  `qb2b_raw_v8`→`v9` (đổi shape cache nội bộ, không phải response shape công khai — additive field, không
+  vỡ FE cũ). Verify sống trên staging: T7 Strategic %MoM = **-8,6%** (khớp tính tay: (5.179.441.201 −
+  5.669.654.912)/5.669.654.912). tsc + lint (0 lỗi mới) + vitest (253/253) PASS.
 - **🔴 s199+2 (2026-09-16) — Fix bug thật: bảng "Khách hàng nhóm" (Strategic/VIP/Gold/Silver) bỏ qua
   hoàn toàn nút chọn tháng T7/T8/T9, LUÔN hiện số cả quý** — Hiếu báo "B2B Performance khác Quarter
   Report", lúc đầu verify qua API live (nocache=1) thấy TỔNG số khớp tuyệt đối cả 2 route (August/
