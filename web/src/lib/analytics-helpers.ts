@@ -147,10 +147,15 @@ export async function flushAnalyticsCacheByPrefixes(prefixes: string[]): Promise
 }
 
 // ── Query-route cache + prewarm registry ───────────────────────────────────────
-// /api/analytics/query (endpoint generic) gọi qua đây. Khác cachedQuery thường: data gohub_dw chỉ
-// update 1 lần/ngày (pipeline ngoài) nên TTL dài (mặc định 12h) → load đầu ngày đập DB, cả ngày còn lại
-// lấy cache. Đồng thời GHI LẠI SQL gốc (registry row "sqlreg:<hash>") để cron prewarm chạy lại được.
-export const QUERY_TTL_MIN = 12 * 60  // TTL chung cho cache analytics (data gohub_dw đổi 1 lần/ngày)
+// /api/analytics/query (endpoint generic) gọi qua đây. Đồng thời GHI LẠI SQL gốc (registry row
+// "sqlreg:<hash>") để cron prewarm chạy lại được.
+// s199+3 (2026-09-16): TTL trước là 12h, dựa giả định "data gohub_dw chỉ update 1 lần/ngày" — SAI so với
+// thực tế hiện tại. Verify trực tiếp bảng `jobs`/`job_logs` (gohub_dw): fact_fulfillment_revenue/
+// fact_sales_revenue được ETL nạp HÀNG GIỜ (cron `50 * * * *`/`55 * * * *`), không phải 1 lần/ngày như
+// comment cũ. TTL 12h khiến 2 tab cache độc lập (VD B2B Performance vs Quarter Report) có thể lệch nhau
+// tới nửa ngày doanh thu nếu không cùng bấm "Tải lại mới" — Hiếu báo đúng hiện tượng này (s199+3). Hạ
+// xuống khớp chu kỳ ETL thật, còn dư biên (ETL chạy :50/:55 mỗi giờ, TTL 60' đảm bảo cache luôn ≤1 chu kỳ).
+export const QUERY_TTL_MIN = 60  // TTL chung cho cache analytics — khớp chu kỳ ETL thật (hàng giờ)
 const _registered = new Set<string>()  // tránh ghi registry trùng trong 1 instance
 
 function queryHash(sql: string): string {

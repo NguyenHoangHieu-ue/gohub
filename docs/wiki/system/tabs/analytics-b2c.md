@@ -213,7 +213,7 @@ $$\text{Spend Pace} = \frac{\text{Chi phí thực tế}}{\text{Ngân sách Marke
   [[analytics-website]] mục "s194").
 - **Op-cost percent nhân dư `* ratio` (B2C-1, 2026-08-02)**: `b2c/kpis` tính channel op-cost kiểu `percent` từng nhân thêm `ratio` (số-ngày-trong-kỳ/số-ngày-tháng) → sai khi range LẺ tháng (vd nửa tháng). percent phải áp thẳng trên revenue của kỳ (`rev` đã là doanh thu range) — bỏ `* ratio`, nhất quán `bod-data.ts`. Vô hại ở view nguyên tháng (ratio=1). amount vẫn × ratio (pro-rata đúng).
 - **Spend/leads thiếu nguồn (S67-70)**: GA4 2 property + leads ở omni riêng → thiết kế đọc đa nguồn (Chatwoot/GA4/Turso) thay vì chỉ gohub_dw.
-- **Không cache (S81)**: `b2c/{kpis,performance,trend,loss-skus}` trước gọi thẳng DB → chậm. Fix: `cachedQuery` 12h.
+- **Không cache (S81)**: `b2c/{kpis,performance,trend,loss-skus}` trước gọi thẳng DB → chậm. Fix: `cachedQuery` (`QUERY_TTL_MIN`, hạ 12h→60 phút ở s199+3 — khớp chu kỳ ETL thật hàng giờ, xem `_analytics-data-model.md` §8).
 - **Đổi term CM1 (S74)**: label margin đổi GP2→CM1, giữ key `gpm2`.
 - **Cấu hình đặt sai chỗ (S82)**: "KPI Target B2C" + "Ngân sách Marketing B2C" trước nằm trong Admin → chuyển về KPI/Target cho đúng ngữ cảnh.
 

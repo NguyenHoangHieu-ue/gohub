@@ -149,7 +149,8 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
     `channel-group-costs` (Supabase) đã `flushAnalyticsCache()` từ lâu. `b2b/kpis`, `b2b/performance`,
     `b2b/trend`, `channels/kpis`, `channels/performance`, `bod-summary`/`bod-group-margin`/
     `bod-channel-performance`, `monthly-kpis`, `all-time-performance` đều cache NGUYÊN khối kết quả đã
-    tính (gồm cost) tới 12h — chỉ `quarterly-report`/`quarterly-b2b-customers` tự tươi (cố ý đặt
+    tính (gồm cost) tới 60 phút (`QUERY_TTL_MIN`, hạ từ 12h ở s199+3 — xem `_analytics-data-model.md`
+    §8) — chỉ `quarterly-report`/`quarterly-b2b-customers` tự tươi phần cost (cố ý đặt
     `fetchCustomerCosts` NGOÀI `cachedQuery`). Sửa cost xong, mọi tab kể trên giữ số CŨ tới hết TTL. Fix
     ban đầu: `flushAnalyticsCache()` sau khi lưu/xoá — **đã đổi sang scoped, xem mục s169(c) ở trên.**
   - **Bug 1**: `b2b/performance` — mẫu số chia group cost theo tỷ trọng revenue tính từ `finalRows` đã

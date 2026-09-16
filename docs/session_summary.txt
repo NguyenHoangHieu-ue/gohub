@@ -9844,3 +9844,42 @@ bug này — đã tự đọc đúng `ms[m]` theo `visibleMonths` từ s196+22, 
 
 tsc + lint (0 lỗi mới) + vitest (253/253) PASS. Wiki `docs/wiki/system/tabs/analytics-quarterly.md` cập
 nhật đủ. Đã push staging — **chưa merge main**, chờ Hiếu QA thêm 1-2 khách hàng khác cho yên tâm.
+
+### s199+3 (2026-09-16) — Fix root cause thật: cache 20 route BI hạ 12h→60 phút
+
+Sau khi fix bug bảng KH B2B (s199+2), Hiếu vẫn báo card đầu page B2B Performance lệch Quarter Report — lần
+này CẢ Actual lẫn PR đều lệch (không phải so nhầm dòng Tổng/B2B như giả thuyết trước). Verify từng số 1
+bằng cách đọc trực tiếp bảng "Tổng hợp theo Tháng" (Quarter Report) dòng ↳B2B T9 so với card MTD/Forecast
+B2B Performance — lệch chỉ 0,005-0,01% khi TỰ làm mới cả 2 route cùng lúc (nocache=1) → không phải bug
+công thức, số khớp gần tuyệt đối.
+
+Nhưng khi KHÔNG chủ động refresh: `QUERY_TTL_MIN` (hằng số cache dùng chung, `analytics-helpers.ts`,
+import trực tiếp bởi 20 route BOD/B2B/B2C/Channels/Quarterly) đang set **12 tiếng**, dựa theo comment cũ
+"data gohub_dw đổi 1 lần/ngày". Verify trực tiếp bảng `jobs`/`job_logs` (gohub_dw, registry ETL thật đang
+chạy): `fact_fulfillment_revenue` (ETL_fact_fulfilment_revenue_from_ops_admin_v2, cron `50 * * * *`) và
+`fact_sales_revenue` (ETL_fact_sales_revenue_from_gohub_cloud, cron `55 * * * *`) thật ra được nạp **HÀNG
+GIỜ**, không phải 1 lần/ngày như comment cũ giả định — comment lỗi thời, ETL đã đổi tần suất từ lâu mà TTL
+cache chưa cập nhật theo.
+
+Hệ quả: 2 tab (B2B Performance, Quarter Report) cache ĐỘC LẬP nhau tới 12 tiếng — nếu Hiếu mở 1 tab buổi
+sáng (cache set lúc đó) rồi mở tab kia buổi trưa (cache set giờ khác) mà không bấm "Tải lại mới" cả 2, sẽ
+thấy data lệch nhau tới nửa ngày doanh thu thật đã đổ về thêm. Giải thích đúng hiện tượng "cả actual lẫn
+PR đều lệch" Hiếu mô tả — PR tính từ actual gốc (PR = actual × hệ số), actual gốc cũ (stale) thì PR cũng
+lệch theo đúng tỉ lệ.
+
+Hỏi Hiếu phạm vi fix qua AskUserQuestion (chỉ 2 route hay so nhau, hay hạ TTL CHUNG áp mọi route đang
+dùng) — Hiếu chọn hạ TTL CHUNG. Đổi `QUERY_TTL_MIN` từ `12 * 60` → `60` (`analytics-helpers.ts`) — 1 hằng
+số, tự áp cho cả 20 route import nó (bod-summary/bod-report/bod-group-margin/bod-channel-performance,
+b2b/kpis/performance/trend/strategic-performance/tier-performance, b2c/kpis/performance/trend/loss-skus,
+channels/kpis/performance/trend/b2b-customers, monthly-kpis, quarterly-report, quarterly-b2b-customers).
+Cron prewarm (1 lần/ngày, giới hạn Vercel Hobby) giữ nguyên — chỉ làm nóng cache đầu ngày, TTL ngắn hơn
+thì mỗi giờ tự làm mới khi có người xem, không cần đổi lịch cron.
+
+Không đổi các cache KHÁC không dùng `QUERY_TTL_MIN` (all-time-performance dùng default 10', fulfillment/
+inventory-stock dùng `cachedAnalyticsQuery` riêng, my-metrics dùng ttl riêng cho từng feature) — ngoài
+phạm vi yêu cầu lần này.
+
+tsc + lint (0 lỗi mới) + vitest (253/253) PASS. Wiki cập nhật: `docs/wiki/system/analytics-data-model.md`
+§8 (mô tả chung), `analytics-b2b.md` + `analytics-b2c.md` (2 chỗ trực tiếp nhắc "12h" cho route bị ảnh
+hưởng). Đã push staging — **chưa merge main**, gộp merge chung với s199+2 (cùng nhóm fix B2B/Quarter
+Report cùng phiên làm việc).
