@@ -6,10 +6,38 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-15, s198)
+## Trạng thái hiện tại (2026-09-16, s199)
 
 | | |
 |---|---|
+| 🟡 **s199 (2026-09-16) — Audit: tab 3HK Data Usage tháng 8 không có dữ liệu — KHÔNG phải bug web, đã xác
+  nhận qua SQL thật** | Hiếu báo không thấy số tháng 8. Query trực tiếp staging (Dev Tools SQL Query,
+  không đoán): `fact_data_usage` mới nhất chỉ tới **2026-06-30**, ETL `loaded_at` MAX = **2026-07-20**
+  (đứng yên từ đó); `data_usage_log` (sub-report Country×Month) tới **2026-07-31**, cũng thiếu tháng 8.
+  Tra bảng `jobs`/`job_logs` (registry ETL thật, 8 job đang active: dim/vatdb_cogs/fulfillment/sales/
+  ops_sync×2/recon_telco/inventory) — **không job nào ghi vào 2 bảng này** → pipeline nạp usage 3HK nằm
+  NGOÀI phạm vi repo (không phải cron `sync.yml` GitHub Actions của web, không có script nào trong
+  `backend/`/`web/` ghi 2 bảng). Code tab đúng, không sửa gì bên web. **Cần Hiếu**: hỏi bên vận
+  hành/vendor 3HK xem pipeline nạp `fact_data_usage`/`data_usage_log` vào gohub_dw còn chạy không (đã
+  đứng yên >2 tháng tính đến hôm nay).
+| ✅ **s199+1 (2026-09-16) — Tab mới "Giám sát Dữ liệu" (Data Health, creator-only) — 3 khối, tsc+lint+
+  vitest PASS, chờ Hiếu QA staging** | Hiếu: nhìn report/số thô khó tự phát hiện sai, mỗi lần nghi ngờ
+  phải nhờ Claude vào DB check — cần 1 nơi quan sát/kiểm tra dữ liệu bằng mắt, không phải bằng câu SQL.
+  Đề xuất trước qua chat + AskUserQuestion — Hiếu chốt làm cả 3 khối, chỉ Creator xem, note kế hoạch vào
+  `PLAN_TMT.MD` (đã xoá sau khi làm xong, đúng yêu cầu). Trang mới `/analytics/creator/data-health`
+  (nhóm Creator, gate cứng `role==="creator"`, KHÔNG qua role_permissions, KHÔNG cho admin bypass).
+  **Khối 1 Độ tươi**: mở rộng ý tưởng có sẵn ở `db-status` (trước ẩn trong nút "Kiểm tra database" ở
+  Settings, 12 bảng) — lưới card cho 6 nguồn (`data-health-config.ts`), mỗi card ngày mới nhất + badge
+  🟢🟡🔴 theo ngưỡng riêng từng nguồn. **Khối 2 Bất thường**: sparkline doanh thu 30 ngày (Tổng/B2B/B2C),
+  `detectAnomalies()` (`data-health-anomaly.ts`) rule-based (median 7 ngày liền trước, lệch ≥35% → chấm
+  đỏ) — có unit test riêng. **Khối 3 Đối chiếu**: đổi thiết kế lúc code (bản nháp "so BOD vs Quarterly vs
+  Dashboard" bỏ vì 3 tab có khác biệt THIẾT KẾ đã biết, dễ báo đỏ oan) — thay bằng so số **LIVE** (export
+  thêm `computeMonthlyKpis()` từ cron `refresh-monthly-kpis`, không viết lại công thức) vs **SNAPSHOT**
+  Supabase `analytics_monthly_kpis` (bảng Bé Gấu/chatbot đọc trả lời câu hỏi CM1/doanh thu) — lệch >5% =
+  cron chưa chạy/lỗi, đúng lớp bug đã xảy ra nhiều lần (s198+10/+11). tsc + lint (0 lỗi mới) + vitest
+  (253/253, +10 test mới cho `classifyFreshness`/`median`/`detectAnomalies`) PASS. Wiki
+  `analytics-data-health.md` mới + thêm entry `HOME.md`. **Chưa push staging, chưa QA** — xem checklist
+  bên dưới.
 | ✅ **s198 (2026-09-14/15) — Tab mới "Product Catalogue" — 9 đợt, đã QA live mỗi đợt, đã fix 1 bug P0** | Hiếu:
   muốn 1 trang giới thiệu sản phẩm theo destination cho internal (sau đổi ý external→internal-only qua
   AskUserQuestion), tự đề xuất ý tưởng + lên plan (EnterPlanMode) + làm. Route mới
@@ -663,6 +691,19 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s199+1 — QA tab mới "Giám sát Dữ liệu" trên staging rồi báo merge main** —
+  `/analytics/creator/data-health` (chỉ Creator thấy trong sidebar/nav, nhóm "Creator"). Checklist: (a)
+  sub-tab Độ tươi — card `fact_data_usage`/`data_usage_log` phải đỏ (đúng thật, xem s199 audit ở trên),
+  card `fact_fulfillment_revenue`/`fact_inventory` phải xanh; (b) sub-tab Bất thường — 3 sparkline Tổng/
+  B2B/B2C render, thử đối chiếu 1 ngày có chấm đỏ với số liệu Dashboard xem có thật bất thường không; (c)
+  sub-tab Đối chiếu — bảng hiện đúng 4 dòng/tháng (Doanh thu/CM1/CM1%/3HK%), thử tự trigger cron
+  `refresh-monthly-kpis` rồi F5 xem %lệch có về gần 0 không (xác nhận logic đúng). Chưa mở rộng thêm nếu
+  Hiếu thấy thiếu — báo lại để làm tiếp (VD: cảnh báo chủ động qua Lark, tách VN/US ở Đối chiếu...).
+- [ ] **s199 — Hỏi bên vận hành/vendor 3HK: pipeline nạp `fact_data_usage`/`data_usage_log` (gohub_dw)
+  đã đứng yên từ 2026-07-20** — tab 3HK Data Usage không thiếu riêng tháng 8, thiếu LUÔN từ tháng 7. Đã
+  xác nhận qua SQL trực tiếp + tra registry ETL (`jobs`/`job_logs`) không có job nào phụ trách 2 bảng
+  này — ngoài phạm vi code sửa được ở repo `gohub-intel`. Không cần Claude làm gì thêm cho tới khi biết
+  pipeline đó do ai/ở đâu vận hành.
 - [ ] **s198 — Duyệt tab mới "Product Catalogue" trên staging rồi báo merge main** — `/analytics/catalogue`,
   9 đợt (2026-09-14/15), đã tự QA live sau MỖI đợt kể cả đợt 9 (fix bug P0 "trang trống trơn" — root cause
   `data_policy_code` không phải cột Supabase thật, xem chi tiết dòng s198 phía trên) nhưng CHƯA merge main

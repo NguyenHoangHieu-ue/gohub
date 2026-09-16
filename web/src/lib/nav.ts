@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react"
 import {
   Users, Gift, Package, Truck, Globe, Sparkles, LayoutDashboard, PieChart, Globe2, Building2,
   ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, Terminal, Activity, TrendingUp,
-  Clock, Settings, Crown, Cpu, BookOpen, BarChart2, MessageCircle, Plug, Layers,
+  Clock, Settings, Crown, Cpu, BookOpen, BarChart2, MessageCircle, Plug, Layers, Gauge,
 } from "lucide-react"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 
@@ -70,6 +70,7 @@ export const CREATOR_GROUP: NavGroup = { label: "Creator", items: [
   { href: "/analytics/creator/devtools",   label: "API & Database",   icon: Terminal },
   { href: "/analytics/creator/usage",      label: "Usage Analytics",  icon: BarChart2},
   { href: "/analytics/creator/bridge",     label: "Bridge",           icon: Plug     },
+  { href: "/analytics/creator/data-health",label: "Giám sát Dữ liệu", icon: Gauge    },
 ]}
 
 export const DEFAULT_STANDARD_TABS = new Set(["chatbot", "promotions", "countries"])

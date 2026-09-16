@@ -237,6 +237,14 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 ## 9. Gotchas & Lịch sử thay đổi
 
+- **🔴 s199 (2026-09-16) — dữ liệu đứng yên từ tháng 7, KHÔNG phải bug web** (Hiếu báo thiếu tháng 8):
+  verify trực tiếp SQL trên staging — `fact_data_usage` MAX = **2026-06-30** (`loaded_at` ETL MAX =
+  **2026-07-20**, đứng yên từ đó); `data_usage_log` (sub-report Country×Month) MAX = **2026-07-31**.
+  Tra registry ETL thật (`jobs`/`job_logs`, gohub_dw) — 8 job đang active (dim/vatdb_cogs/fulfillment/
+  sales/ops_sync×2/recon_telco/inventory) nhưng **KHÔNG job nào ghi 2 bảng này**. Pipeline nạp usage 3HK
+  nằm NGOÀI phạm vi repo `gohub-intel` (không phải cron `sync.yml` GitHub Actions của web, không có
+  script nào trong `backend/`/`web/` từng ghi 2 bảng — grep xác nhận 0 kết quả). Không có gì để sửa ở
+  code web — cần Hiếu hỏi bên vận hành/vendor 3HK pipeline đó còn chạy không.
 - **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 6 chỗ, cùng lý do lệch locale
   mặc định trình duyệt nêu ở wiki Channels. Đề xuất C (P2) roadmap performance audit s196+20.
 - **s196+21 (2026-09-14) — code-split recharts**: 2 chart ("So sánh mức sử dụng theo nhóm",

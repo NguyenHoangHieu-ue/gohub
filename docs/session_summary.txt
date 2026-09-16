@@ -9761,3 +9761,54 @@ thấy ngay trên chuông Intel, đúng yêu cầu "1 chỗ để kiểm tra d�
 (243/243) PASS. Wiki `kien-truc-he-thong.md` cập nhật. Đã push staging. Phần bell/panel + error-notify
 cho `sync-lark-tickets` có hiệu lực ngay (route web, theo staging bình thường); phần `sync.py` cần merge
 main giống s198+11 (cron GitHub Actions, cùng file nên gộp 1 lần merge là đủ cho cả 2).
+
+### s199 (2026-09-16) — Audit: tab 3HK Data Usage tháng 8 không có dữ liệu — xác nhận KHÔNG phải bug web
+
+Hiếu báo tab 3HK Data Usage không thấy số tháng 8. Verify trực tiếp qua SQL Query (Dev Tools, staging,
+không đoán): `fact_data_usage` (bảng nguồn chính) dữ liệu mới nhất chỉ tới **2026-06-30**, cột ETL
+`loaded_at` MAX = **2026-07-20** (đứng yên từ đó). `data_usage_log` (bảng nguồn sub-report Country×Month)
+nhỉnh hơn, tới **2026-07-31**, cũng không có tháng 8. Tra thêm bảng `jobs`/`job_logs` (registry ETL thật
+đang chạy trên gohub_dw, 8 job active: ETL_dim/vatdb_cogs/fulfillment/sales/ops_sync×2/recon_telco/
+inventory) — **không job nào ghi vào `fact_data_usage` hay `data_usage_log`**, `job_logs` cũng chỉ có từ
+2026-08-16 trở đi (trước đó chưa monitor). Kết luận: code tab đúng, không sai logic hiển thị/query — gốc
+là pipeline nạp dữ liệu usage 3HK đã ngừng chạy từ giữa tháng 7 (thiếu cả tháng 7 lẫn 8, không riêng
+tháng 8), nằm NGOÀI phạm vi repo `gohub-intel` (không phải cron `sync.yml`/GitHub Actions của web app,
+không có script nào trong `backend/` hay `web/` ghi 2 bảng này). Không sửa code gì (không có gì để sửa ở
+phía web). Đã cập nhật CLAUDE.md + wiki `analytics-3hk-usage.md` mục Gotchas.
+
+### s199+1 (2026-09-16) — Tab mới "Giám sát Dữ liệu" (Data Health, creator-only)
+
+Hiếu: nhìn report/số thô khó tự phát hiện sai, mỗi lần nghi ngờ phải nhờ Claude vào DB check — cần 1 nơi
+quan sát/kiểm tra dữ liệu bằng mắt, không phải bằng câu SQL. Đề xuất qua chat (role Staff Data Platform
+Architect) + AskUserQuestion chốt: làm cả 3 khối, chỉ Creator xem, note kế hoạch vào `PLAN_TMT.MD` rồi
+xoá sau khi làm xong (đúng yêu cầu Hiếu).
+
+Trang mới `/analytics/creator/data-health` (nhóm Creator trong nav, gate cứng `role==="creator"` — không
+qua `role_permissions`/`allowed_analytics`, không cho admin bypass, khác Dev Tools).
+
+- **Khối 1 — Độ tươi dữ liệu**: mở rộng ý tưởng có sẵn ở `api/analytics/db-status/route.ts` (trước ẩn
+  trong nút "Kiểm tra database" ở Settings, chỉ 12 bảng, không cảnh báo màu) thành lưới card cho 6 nguồn
+  (`lib/data-health-config.ts` — fact_fulfillment_revenue/fact_sales_revenue/fact_data_usage/
+  data_usage_log/fact_inventory/Supabase sku_catalog), mỗi nguồn có ngưỡng vàng/đỏ riêng
+  (`classifyFreshness`). API `GET /api/analytics/data-health/freshness`, cache 10 phút.
+- **Khối 2 — Bất thường số liệu**: 1 query GROUP BY ngày×nhóm (B2B/B2C/Tổng) trên
+  fact_fulfillment_revenue 30 ngày, `detectAnomalies()` (`lib/data-health-anomaly.ts`) rule-based —
+  baseline median 7 ngày liền trước, lệch ≥35% → đánh dấu. Sparkline (recharts, code-split
+  `next/dynamic`), chấm đỏ ngày bất thường. API `GET /api/analytics/data-health/anomalies?days=30`, cache
+  15 phút.
+- **Khối 3 — Đối chiếu chéo**: đổi thiết kế NGAY LÚC CODE so với bản nháp ban đầu ("so BOD vs Quarterly
+  vs Dashboard trực tiếp") — bỏ vì 3 tab đó có nhiều khác biệt THEO THIẾT KẾ đã biết (toggle ship/
+  internal, exclude list, Turso cost timing), so trực tiếp dễ báo đỏ oan. Thay bằng so số **LIVE** (export
+  thêm `computeMonthlyKpis()` từ `api/cron/refresh-monthly-kpis/route.ts`, KHÔNG viết lại công thức CM1/
+  3HK%) vs **SNAPSHOT** đang lưu Supabase `analytics_monthly_kpis` (bảng Bé Gấu/chatbot đọc để trả lời câu
+  hỏi CM1/doanh thu theo tháng, refresh bởi cron đó) — lệch >5% nghĩa là cron chưa chạy/lỗi, đúng lớp bug
+  đã xảy ra nhiều lần (CS Troubleshoot/products cron chết âm thầm, s198+10/+11). So tháng hiện tại + tháng
+  trước, company=ALL, 4 field (Doanh thu/CM1/CM1%/3HK%). API `GET /api/analytics/data-health/cross-check`.
+
+Nav: thêm vào `CREATOR_GROUP` ở CẢ `lib/nav.ts` lẫn `components/sidebar.tsx` (2 nơi, comment sẵn có trong
+`nav.ts` đã cảnh báo phải sync tay). Icon `Gauge` (lucide-react, chưa dùng ở đâu khác).
+
+tsc + lint (0 lỗi mới) + vitest (253/253, +10 test mới `classifyFreshness`/`median`/`detectAnomalies`
+trong `data-health.test.ts`) PASS. Wiki `docs/wiki/system/tabs/analytics-data-health.md` mới + thêm entry
+`HOME.md`. Đã xoá `PLAN_TMT.MD` sau khi hoàn tất implementation (đúng yêu cầu Hiếu). **Chưa push staging,
+chưa QA** — checklist QA đã ghi trong CLAUDE.md mục "Việc Hiếu cần làm".

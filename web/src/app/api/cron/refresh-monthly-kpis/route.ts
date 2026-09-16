@@ -18,7 +18,10 @@ function getMonthStr(d: Date) {
 // `.getFullYear()/.getMonth()` (LOCAL) — cùng lớp bug đã fix ở bod-data.ts, giờ dùng
 // `getDaysInMonth` từ date-math.ts (thuần, không phụ thuộc timezone máy chạy).
 
-async function computeMonthlyKpis(month: string, companyCode: string) {
+// Export dùng chung cho tab "Giám sát Dữ liệu" (Data Health, s199) — so sánh số LIVE (tính lại ngay) vs
+// snapshot đang lưu trong `analytics_monthly_kpis` (nguồn Bé Gấu/chatbot trả lời câu hỏi CM1/doanh thu
+// theo tháng) để phát hiện snapshot cũ/cron lỗi mà không cần đợi Hiếu tự hỏi.
+export async function computeMonthlyKpis(month: string, companyCode: string) {
   const startDate = `${month}-01`
   const today = new Date()
   const mDate = new Date(`${month}-01`)

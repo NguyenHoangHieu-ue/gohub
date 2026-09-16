@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, Database, Clock, Settings, Crown, Cpu, BookOpen, MessageCircle, Plug, Layers } from "lucide-react"
+import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, Database, Clock, Settings, Crown, Cpu, BookOpen, MessageCircle, Plug, Layers, Gauge } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
@@ -101,6 +101,7 @@ const CREATOR_GROUP = {
     { href: "/analytics/creator/devtools",  label: "API & Database",   icon: Terminal },
     { href: "/analytics/creator/usage",     label: "Usage Analytics",  icon: BarChart2},
     { href: "/analytics/creator/bridge",    label: "Bridge",           icon: Plug     },
+    { href: "/analytics/creator/data-health", label: "Giám sát Dữ liệu", icon: Gauge  },
     { href: "/analytics/my-metrics",        label: "My Metrics",       icon: Target   },
   ],
 }
