@@ -9812,3 +9812,35 @@ tsc + lint (0 lỗi mới) + vitest (253/253, +10 test mới `classifyFreshness`
 trong `data-health.test.ts`) PASS. Wiki `docs/wiki/system/tabs/analytics-data-health.md` mới + thêm entry
 `HOME.md`. Đã xoá `PLAN_TMT.MD` sau khi hoàn tất implementation (đúng yêu cầu Hiếu). **Chưa push staging,
 chưa QA** — checklist QA đã ghi trong CLAUDE.md mục "Việc Hiếu cần làm".
+
+### s199+2 (2026-09-16) — Fix bug thật: B2B Performance khác Quarter Report
+
+Hiếu báo số lệch. Verify API live (nocache=1) cho cả tổng lẫn per-channel (tháng đã xong + tháng đang
+chạy) — khớp tuyệt đối cả 2 route → tưởng chỉ là so nhầm cột PR (dự phóng) vs Actual (thiết kế đã biết,
+xem gotcha cũ). Hiếu khẳng định lại "có thật sự không, sao tôi thấy nó bị lệch thật á" — không chấp nhận
+kết luận sớm, đào sâu tiếp bằng cách thao tác trực tiếp trên UI Quarter Report (bấm nút T9) thay vì chỉ
+gọi API tái tạo.
+
+Phát hiện: bảng "B2B — Chi tiết theo Nhóm (Hàng) × Tháng" có nút chọn T7/T8/T9/Cả Quý (`tierViewMonth`,
+`b2b-tier-section.tsx`). Dòng NHÓM (Strategic/VIP/Gold/Silver) ở trên đổi đúng số khi bấm — nhưng dòng
+KHÁCH HÀNG (Momo, VN Ecom Shopee...) bên dưới ĐỨNG YÊN y hệt "Cả Quý" dù đã bấm T9 (xác nhận qua
+screenshot before/after). Đọc code: dòng KH luôn gọi `custPr(c)` (cộng dồn pro-rata CẢ QUÝ qua mọi
+`quarterMonths`) — biến `tierViewMonth` không hề được đọc ở khối render dòng KH, chỉ dòng Nhóm có dùng.
+Bug thật, không phải khác biệt thiết kế — đây chính là nguyên nhân Hiếu thấy "lệch thật": Momo T9 hiện
+3.513.919.900đ (số cả quý) trong khi B2B Performance cùng lúc hiện đúng ~513tr (MTD tháng 9), lệch ~7x.
+
+Fix: `custMonthView(c, month)` mới lấy đúng số 1 tháng từ `c.monthSummary[month]` (không cộng dồn quý),
+dùng cho dòng KH khi `tierViewMonth !== "QUARTER"` — dual PR/Act (giống dòng Nhóm) nếu tháng đang chạy,
+1 số nếu tháng đã xong. Ẩn badge %Tgt CM1/%TGT 3HK khi xem theo tháng (target chỉ nhập ở mức QUÝ, so 1
+tháng với target cả quý sẽ ra % sai gây hiểu nhầm mới). Thêm badge nhỏ ("T9/2026"/"Cả Quý") cạnh tiêu đề
+"Khách hàng nhóm" để biết đang xem đúng kỳ nào, tránh lặp lại nhầm lẫn tương tự. `dual()` helper (stacked
+PR/Act) nâng lên scope component để dùng chung cho cả dòng Nhóm lẫn dòng KH (trước chỉ định nghĩa cục bộ
+trong closure dòng Nhóm).
+
+**Đã verify sống trên staging sau deploy** (không chỉ tin code sạch): mở Strategic → bấm T9 → Momo đổi
+đúng "1.026.026.776 PR / 513.013.388 Act", VN Ecom Shopee "533.150.396 PR / 266.575.198 Act" — khớp
+TUYỆT ĐỐI với B2B Performance đang hiện cùng lúc (266.575.198đ). Export (`exportTierTable`) KHÔNG dính
+bug này — đã tự đọc đúng `ms[m]` theo `visibleMonths` từ s196+22, chỉ bảng LIVE trên UI mới sai.
+
+tsc + lint (0 lỗi mới) + vitest (253/253) PASS. Wiki `docs/wiki/system/tabs/analytics-quarterly.md` cập
+nhật đủ. Đã push staging — **chưa merge main**, chờ Hiếu QA thêm 1-2 khách hàng khác cho yên tâm.

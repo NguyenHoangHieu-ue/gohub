@@ -20,6 +20,17 @@
   `backend/`/`web/` ghi 2 bảng). Code tab đúng, không sửa gì bên web. **Cần Hiếu**: hỏi bên vận
   hành/vendor 3HK xem pipeline nạp `fact_data_usage`/`data_usage_log` vào gohub_dw còn chạy không (đã
   đứng yên >2 tháng tính đến hôm nay).
+| ✅ **s199+2 (2026-09-16) — Fix bug thật: B2B Performance khác Quarter Report — đã verify sống trên
+  staging, đã push** | Hiếu báo lệch số, verify API live (nocache) thấy TỔNG khớp tuyệt đối → tưởng chỉ
+  so nhầm cột PR-vs-Actual, nhưng Hiếu khẳng định vẫn lệch thật → đào sâu bằng cách bấm trực tiếp nút T9
+  trên UI Quarter Report: dòng NHÓM (Strategic/VIP/...) đổi đúng số theo tháng, dòng KHÁCH HÀNG bên dưới
+  (Momo/VN Ecom Shopee...) đứng yên y hệt "Cả Quý" dù đã bấm T9 — bug thật `b2b-tier-section.tsx`: dòng
+  KH luôn gọi `custPr(c)` (pro-rata CẢ QUÝ), biến chọn tháng không hề được đọc ở khối render này. Fix:
+  `custMonthView()` mới lấy đúng 1 tháng từ `c.monthSummary`, ẩn badge %Tgt khi xem theo tháng (target
+  chỉ có ở mức quý, so nhầm sẽ ra % sai), thêm badge kỳ đang xem. Verify sống staging: Momo T9 đổi từ
+  3.513.919.900đ (sai, luôn=cả quý) → 513.013.388đ Act, khớp tuyệt đối B2B Performance. tsc + lint (0
+  lỗi mới) + vitest (253/253) PASS. Wiki `analytics-quarterly.md` cập nhật. Đã push staging — **chưa
+  merge main**.
 | ✅ **s199+1 (2026-09-16) — Tab mới "Giám sát Dữ liệu" (Data Health, creator-only) — 3 khối, tsc+lint+
   vitest PASS, chờ Hiếu QA staging** | Hiếu: nhìn report/số thô khó tự phát hiện sai, mỗi lần nghi ngờ
   phải nhờ Claude vào DB check — cần 1 nơi quan sát/kiểm tra dữ liệu bằng mắt, không phải bằng câu SQL.
@@ -691,6 +702,11 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s199+2 — QA fix "B2B khác Quarter Report" trên staging rồi báo merge main** — vào Quarter Report
+  → bấm mở nhóm Strategic → bấm T7/T8/T9 → xác nhận dòng từng khách hàng (Momo, VN Ecom Shopee...) đổi
+  số ĐÚNG theo tháng chọn (không còn đứng yên ở số cả quý) và khớp với B2B Performance cùng kỳ. Đã tự
+  verify sống trên staging (Momo/VN Ecom Shopee khớp tuyệt đối) — chỉ cần Hiếu xác nhận thêm 1-2 khách
+  hàng khác cho yên tâm rồi báo "merge main đi".
 - [ ] **s199+1 — QA tab mới "Giám sát Dữ liệu" trên staging rồi báo merge main** —
   `/analytics/creator/data-health` (chỉ Creator thấy trong sidebar/nav, nhóm "Creator"). Checklist: (a)
   sub-tab Độ tươi — card `fact_data_usage`/`data_usage_log` phải đỏ (đúng thật, xem s199 audit ở trên),
