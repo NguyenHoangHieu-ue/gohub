@@ -74,7 +74,14 @@ Hầu hết tab có toggle **"Fulfillment" vs "Created"** (nút ở đầu trang
 - **3HK Contribution %** = Revenue từ SP 3HK (`vendor ILIKE '3HKDATAPOOL'`) / Total Revenue.
 
 ## 8. Cache & Bảo mật
-- **Cache 2 tầng TTL 12h** (data gohub_dw đổi 1 lần/ngày) + cron prewarm 06:30 ICT. Dùng `cachedQuery(key, fn, ttlMin)` + `CACHE_HEADERS`.
+- **Cache 2 tầng TTL 60 phút** (`QUERY_TTL_MIN`, s199+3 2026-09-16 — hạ từ 12h sau khi verify qua `jobs`/
+  `job_logs` gohub_dw: ETL fact_fulfillment_revenue/fact_sales_revenue chạy HÀNG GIỜ chứ không phải 1
+  lần/ngày như giả định cũ; TTL 12h khiến 2 tab cache độc lập (vd B2B Performance vs Quarter Report) có
+  thể lệch nhau tới nửa ngày doanh thu nếu không cùng bấm "Tải lại mới") + cron prewarm 06:30 ICT (giữ
+  nguyên 1 lần/ngày — chỉ làm nóng cache đầu ngày, TTL ngắn hơn thì mỗi giờ tự làm mới khi có người xem).
+  Dùng `cachedQuery(key, fn, ttlMin)` + `CACHE_HEADERS`. Áp dụng cho 20 route (BOD/B2B/B2C/Channels/
+  Quarterly) import trực tiếp `QUERY_TTL_MIN` — vài route khác dùng cache riêng (my-metrics, fulfillment
+  `cachedAnalyticsQuery`, all-time mặc định 10') KHÔNG bị ảnh hưởng bởi đổi này.
 - **Guard**: `analyticsGuard(req, session)` chặn theo role. Allow-list role của `/api/analytics/query` **phải gồm `creator`** (thiếu → creator thấy bảng rỗng, 403 âm thầm).
 - Index gohub_dw = bỏ qua (không có quyền DB) → cache trong app là fix cuối.
 

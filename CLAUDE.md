@@ -6,10 +6,187 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-14, s197)
+## Trạng thái hiện tại (2026-09-16, s199)
 
 | | |
 |---|---|
+| 🟡 **s199 (2026-09-16) — Audit: tab 3HK Data Usage tháng 8 không có dữ liệu — KHÔNG phải bug web, đã xác
+  nhận qua SQL thật** | Hiếu báo không thấy số tháng 8. Query trực tiếp staging (Dev Tools SQL Query,
+  không đoán): `fact_data_usage` mới nhất chỉ tới **2026-06-30**, ETL `loaded_at` MAX = **2026-07-20**
+  (đứng yên từ đó); `data_usage_log` (sub-report Country×Month) tới **2026-07-31**, cũng thiếu tháng 8.
+  Tra bảng `jobs`/`job_logs` (registry ETL thật, 8 job đang active: dim/vatdb_cogs/fulfillment/sales/
+  ops_sync×2/recon_telco/inventory) — **không job nào ghi vào 2 bảng này** → pipeline nạp usage 3HK nằm
+  NGOÀI phạm vi repo (không phải cron `sync.yml` GitHub Actions của web, không có script nào trong
+  `backend/`/`web/` ghi 2 bảng). Code tab đúng, không sửa gì bên web. **Cần Hiếu**: hỏi bên vận
+  hành/vendor 3HK xem pipeline nạp `fact_data_usage`/`data_usage_log` vào gohub_dw còn chạy không (đã
+  đứng yên >2 tháng tính đến hôm nay).
+| ✅ **s199+4 (2026-09-16) — Thêm cột %MoM cho bảng "B2B — Chi tiết theo Nhóm × Tháng" (Quarter Report) —
+  đã verify sống, đã push staging** | Hiếu yêu cầu thêm cột %MoM, chỉ ra ngay 1 điểm cần sửa: "T7 thì so
+  với tháng 6 chứ nhỉ" — ban đầu làm T7 luôn "—" vì tháng 6 nằm ngoài `months` (quý hiện tại). Fix: route
+  `quarterly-b2b-customers` thêm 1 query riêng fetch tháng liền trước tháng đầu quý (T6 cho Q3), aggregate
+  theo tier×region, trả `tier.prevMonthRevenue`. Cột chỉ hiện ở view theo tháng (T7/T8/T9), "Cả Quý" giữ
+  "—" (đã có %QoQ riêng). Cache key `qb2b_raw_v8`→`v9`. Verify sống staging: T7 Strategic %MoM=-8,6%
+  (khớp tính tay). tsc + lint (0 lỗi mới) + vitest (253/253) PASS. Wiki cập nhật. **Chưa merge main.**
+| ✅ **s199+3 (2026-09-16) — Fix root cause thật: cache 20 route BI hạ 12h→60 phút, khớp chu kỳ ETL thật
+  — đã push staging** | Sau khi fix bug bảng KH (s199+2), Hiếu vẫn thấy card đầu B2B Performance lệch
+  Quarter Report — cả Actual lẫn PR đều lệch (không phải so nhầm dòng). Verify từng số 1: lệch chỉ
+  0,005-0,01% khi tự làm mới cả 2 route cùng lúc (không phải bug công thức) — nhưng khi KHÔNG chủ động
+  refresh, `QUERY_TTL_MIN` (hằng số cache dùng chung cho 20 route BOD/B2B/B2C/Channels/Quarterly) đang
+  set **12 tiếng**, dựa comment cũ "data gohub_dw đổi 1 lần/ngày". Verify trực tiếp bảng `jobs`/`job_logs`
+  (gohub_dw): `fact_fulfillment_revenue`/`fact_sales_revenue` thật ra được ETL nạp **HÀNG GIỜ**
+  (`50 * * * *`/`55 * * * *`) — comment cũ sai/lỗi thời. 2 tab cache ĐỘC LẬP nhau tới 12h → nếu không
+  cùng bấm "Tải lại mới", có thể lệch nhau tới nửa ngày doanh thu thật — đúng cảm giác "cả actual lẫn PR
+  đều lệch" (PR tính từ actual gốc, actual gốc cũ thì PR cũng lệch theo tỉ lệ). Hỏi Hiếu phạm vi fix
+  (AskUserQuestion) — chọn hạ TTL CHUNG (1 hằng số, tự áp cho cả 20 route). Đổi `QUERY_TTL_MIN` 12×60→60
+  phút (`analytics-helpers.ts`) — khớp chu kỳ ETL thật, còn dư biên an toàn. tsc + lint (0 lỗi mới) +
+  vitest (253/253) PASS. Wiki `_analytics-data-model.md`/`analytics-b2b.md`/`analytics-b2c.md` cập nhật.
+  Đã push staging — **chưa merge main**.
+| ✅ **s199+2 (2026-09-16) — Fix bug thật: B2B Performance khác Quarter Report — đã verify sống trên
+  staging, đã push** | Hiếu báo lệch số, verify API live (nocache) thấy TỔNG khớp tuyệt đối → tưởng chỉ
+  so nhầm cột PR-vs-Actual, nhưng Hiếu khẳng định vẫn lệch thật → đào sâu bằng cách bấm trực tiếp nút T9
+  trên UI Quarter Report: dòng NHÓM (Strategic/VIP/...) đổi đúng số theo tháng, dòng KHÁCH HÀNG bên dưới
+  (Momo/VN Ecom Shopee...) đứng yên y hệt "Cả Quý" dù đã bấm T9 — bug thật `b2b-tier-section.tsx`: dòng
+  KH luôn gọi `custPr(c)` (pro-rata CẢ QUÝ), biến chọn tháng không hề được đọc ở khối render này. Fix:
+  `custMonthView()` mới lấy đúng 1 tháng từ `c.monthSummary`, ẩn badge %Tgt khi xem theo tháng (target
+  chỉ có ở mức quý, so nhầm sẽ ra % sai), thêm badge kỳ đang xem. Verify sống staging: Momo T9 đổi từ
+  3.513.919.900đ (sai, luôn=cả quý) → 513.013.388đ Act, khớp tuyệt đối B2B Performance. tsc + lint (0
+  lỗi mới) + vitest (253/253) PASS. Wiki `analytics-quarterly.md` cập nhật. Đã push staging — **chưa
+  merge main**.
+| ✅ **s199+1 (2026-09-16) — Tab mới "Giám sát Dữ liệu" (Data Health, creator-only) — 3 khối, tsc+lint+
+  vitest PASS, chờ Hiếu QA staging** | Hiếu: nhìn report/số thô khó tự phát hiện sai, mỗi lần nghi ngờ
+  phải nhờ Claude vào DB check — cần 1 nơi quan sát/kiểm tra dữ liệu bằng mắt, không phải bằng câu SQL.
+  Đề xuất trước qua chat + AskUserQuestion — Hiếu chốt làm cả 3 khối, chỉ Creator xem, note kế hoạch vào
+  `PLAN_TMT.MD` (đã xoá sau khi làm xong, đúng yêu cầu). Trang mới `/analytics/creator/data-health`
+  (nhóm Creator, gate cứng `role==="creator"`, KHÔNG qua role_permissions, KHÔNG cho admin bypass).
+  **Khối 1 Độ tươi**: mở rộng ý tưởng có sẵn ở `db-status` (trước ẩn trong nút "Kiểm tra database" ở
+  Settings, 12 bảng) — lưới card cho 6 nguồn (`data-health-config.ts`), mỗi card ngày mới nhất + badge
+  🟢🟡🔴 theo ngưỡng riêng từng nguồn. **Khối 2 Bất thường**: sparkline doanh thu 30 ngày (Tổng/B2B/B2C),
+  `detectAnomalies()` (`data-health-anomaly.ts`) rule-based (median 7 ngày liền trước, lệch ≥35% → chấm
+  đỏ) — có unit test riêng. **Khối 3 Đối chiếu**: đổi thiết kế lúc code (bản nháp "so BOD vs Quarterly vs
+  Dashboard" bỏ vì 3 tab có khác biệt THIẾT KẾ đã biết, dễ báo đỏ oan) — thay bằng so số **LIVE** (export
+  thêm `computeMonthlyKpis()` từ cron `refresh-monthly-kpis`, không viết lại công thức) vs **SNAPSHOT**
+  Supabase `analytics_monthly_kpis` (bảng Bé Gấu/chatbot đọc trả lời câu hỏi CM1/doanh thu) — lệch >5% =
+  cron chưa chạy/lỗi, đúng lớp bug đã xảy ra nhiều lần (s198+10/+11). tsc + lint (0 lỗi mới) + vitest
+  (253/253, +10 test mới cho `classifyFreshness`/`median`/`detectAnomalies`) PASS. Wiki
+  `analytics-data-health.md` mới + thêm entry `HOME.md`. **Chưa push staging, chưa QA** — xem checklist
+  bên dưới.
+| ✅ **s198 (2026-09-14/15) — Tab mới "Product Catalogue" — 9 đợt, đã QA live mỗi đợt, đã fix 1 bug P0** | Hiếu:
+  muốn 1 trang giới thiệu sản phẩm theo destination cho internal (sau đổi ý external→internal-only qua
+  AskUserQuestion), tự đề xuất ý tưởng + lên plan (EnterPlanMode) + làm. Route mới
+  `GET /api/analytics/product-catalogue` (1 query tổng hợp DUY NHẤT, đúng rule N+1 mới thêm) + trang
+  `/analytics/catalogue`, đăng ký nav "Analytics & Planning" + quyền cho `bod`/`b2b`/`b2c`/`saleb2c`/
+  `product` (`lib/analytics-roles.ts`).
+  **Đợt 1**: kiến trúc 2 tầng Destination → dòng SP (vendor×SIM/eSIM), top 8 nước theo doanh thu 90 ngày,
+  badge Best Seller/Fastest Growing/Best Value tính từ số liệu thật.
+  **Đợt 2**: Hiếu yêu cầu sâu hơn — nâng lên **3 tầng: Destination → Loại sản phẩm → Sản phẩm cụ thể**.
+  Loại SP quyết định bởi ProductType (ký tự 2 mã SKU, đọc đúng `docs/wiki/business/ma-sku.md`) +
+  `local_phone_number` thật (Supabase `products`) — 4 nhóm eSIM/SIM × Data-only/Có gọi nội địa.
+  **Đợt 3**: Hiếu gửi ảnh bảng chính sách QR/đổi máy theo vendor, yêu cầu soát kỹ Supabase `products`
+  (đọc full 36 cột qua Dev Tools `api/config/db/table`) — bổ sung `data_type` (Fixed/Daily Data, field
+  THẬT thay hẳn việc tự decode ký tự 8 SKU từng phải né vì 2 wiki nguồn ghi ngược nhau A/B),
+  `daily_reset_time`/`apn`/`operator_code`/`telco_perks`/`unsupported_apps`/`onsite_carrier`. Thêm panel
+  "Chính sách QR/đổi máy" theo operator, trích từ ảnh Hiếu (chỉ giữ thông số thực tế, bỏ quy trình CS
+  nội bộ — không hợp catalogue giới thiệu).
+  **Đợt 4**: Hiếu chốt trang chỉ để xem THÔNG TIN, không cần số liệu doanh thu — redesign FE bỏ hẳn $/%.
+  Hero đổi sang Loại SP/Tổng SP/Nhà mạng hỗ trợ/Loại phổ biến nhất; sản phẩm đổi từ hàng ngang có cột $
+  sang lưới card spec-sheet (data policy/network/APN/operator/perks), badge giữ dạng emoji góc card.
+  `route.ts` KHÔNG đổi ở đợt 4 — badge vẫn tính từ revenue/growth thật backend, FE chỉ chọn không render.
+  tsc + lint (0 lỗi mới) + vitest (243/243) PASS xuyên suốt cả 4 đợt, wiki `analytics-catalogue.md` cập
+  nhật đủ. **Đã tự QA qua Chrome trên staging sau MỖI đợt** — trang USA (ví dụ Hiếu nêu) verify đủ 5
+  loại SP, panel chính sách 3HK/BillionConnect đúng nội dung ảnh, card spec hiển thị đúng data_type/APN/
+  operator/local carrier thật.
+  **Đợt 5 (2026-09-15) — redesign kiến trúc thông tin theo phản hồi "hơi chưa rõ nhìn"**: bỏ giới hạn
+  top-8 destination (trả toàn bộ), sidebar tìm-kiếm thay pill-row; thêm tầng thứ 4 **Nhà mạng**
+  (`onsite_carrier` thật, không phải vendor GoHub) với tag so sánh (tốc độ/số lượng/ưu đãi) tính từ số
+  thật; throttle thật qua field Supabase (sau phát hiện SAI ở đợt 9, xem dưới); sản phẩm gom dạng chip,
+  bấm mới xổ chi tiết.
+  **Đợt 6**: fix 3 phản hồi tiếp — fallback thêm vendor khi thiếu carrier (đỡ hẳn "chưa rõ nhà mạng"
+  nhưng CHƯA hết, xem đợt 7); rút gọn category chỉ còn **eSIM/SIM** (bỏ tách 4 nhóm theo gọi/không gọi
+  nội địa của đợt 2, "có SDT nội địa" chuyển thành toggle/badge); sản phẩm drill 2 tầng Ngày→Dung lượng.
+  **Đợt 7** — verify TRỰC TIẾP Supabase `products` qua REST API (Hiếu đưa key trong `tmp.txt`, không
+  đoán): phát hiện `onsite_carrier` với gói pool đa quốc gia là ĐOẠN VĂN nhiều dòng "Nước: Carrier" (có
+  case liệt kê ~40 nước) — dùng thẳng làm tên tab ra cả đoạn văn, đúng nguyên nhân thật "mất thông tin"
+  Hiếu báo lần đó. Fix: chỉ dùng `onsite_carrier` làm tên tab khi ngắn/sạch (≤40 ký tự, không xuống
+  dòng), còn lại group theo `operator_code` rồi vendor — đoạn văn giữ lại làm `coverageNotes` hiển thị
+  phụ. Thêm bảng tổng hợp TOÀN HỆ THỐNG "Gói có SDT nội địa" (chỉ ~50 product_code có field này thật,
+  build 100% ở FE từ data đã fetch, `DataTable` dùng chung).
+  **Đợt 8** — 4 việc theo yêu cầu tiếp (hỏi lại AskUserQuestion 1 điểm mơ hồ về "giá" trước khi làm — Hiếu
+  chọn giữ nguyên quyết định đợt 4, không thêm số $): AI (Gemini, 1 batch call) đặt tên khu vực tiếng Việt
+  cho destination mã thô (EU1/APA/GZ1...) từ `supported_countries` thật; loại bỏ hẳn destination `"000"`
+  (SIM frame/eSIM profile, lọc ở SQL); sắp lại panel nhà mạng đúng thứ tự onsite_carrier→đặc điểm→ưu
+  đãi→ghi chú/kích hoạt (field `note`/`activation_time`/`kyc_links` có sẵn nhưng chưa từng hiện)→phủ
+  sóng/QR; nâng "Gói có SDT nội địa" thành banner nổi bật đầu trang.
+  **Đợt 9 — 🔴 P0, Hiếu báo "không thấy bất kỳ dòng thông tin nào"**: verify trực tiếp qua Supabase REST
+  API phát hiện `data_policy_code` **KHÔNG PHẢI cột thật** (`42703 column does not exist`) — đợt 5 tin
+  nhầm theo 1 comment trong `agents.ts` chưa ai verify (nghi vấn `be-gau.ts`/`bi-analyst.ts`/
+  `creator/tools/supabase.ts` cùng select field này cũng đang lỗi, NGOÀI SCOPE task, chưa kiểm tra riêng).
+  Supabase trả lỗi 400 → code cũ không check `error` → `data` null → fallback `[]` → `metaBySku` TRỐNG
+  HOÀN TOÀN → mọi field metadata null cho MỌI sản phẩm — khớp đúng triệu chứng. Fix: xoá hẳn field/logic
+  dựa cột ảo; throttle chuyển sang field thật `skus.throttle_speed` (bảng khác, verify 11.088/12.892 SKU
+  có giá trị), fetch theo chunk 150 sku_code (phát hiện thêm: Supabase project này cap mặc định 1000
+  dòng/response, unpaged select bảng `skus` 12.892 dòng sẽ âm thầm cắt cụt); thêm check `error` thật cho
+  mọi Supabase select (trước nuốt im lặng). **Bài học**: comment mô tả field trong code không phải bằng
+  chứng field tồn tại thật — luôn verify qua REST API/schema thật trước khi dùng.
+  Đổi shape response nhiều lần trong 9 đợt → cache key cuối cùng `v8`. tsc + lint (0 lỗi mới) + vitest
+  (243/243) PASS mọi đợt. **Đã tự QA qua Chrome trên staging sau MỖI đợt kể cả đợt 9** (bypass CDN cache
+  5 phút bằng cache-bust param để xác nhận response mới trước khi tin UI) — panel nhà mạng đầy đủ
+  network/throttle thật/KYC/Hotspot/note/activation/QR, drill Ngày→Dung lượng→chi tiết hoạt động đúng.
+  **Chưa merge main** — chờ Hiếu duyệt tổng thể sau khi tự xem qua UI thật (đặc biệt xác nhận đợt 9 không
+  còn trang trống).
+| ✅ **s198+10 (2026-09-15) — Fix CS Troubleshoot "không cập nhật realtime" — đã QA live, đã push staging** |
+  Hiếu báo tab CS Troubleshoot không cập nhật realtime. Verify qua Vercel Runtime Logs (không đoán):
+  `Vercel Runtime Timeout Error: Task timed out after 60 seconds` trên **MỌI lần** chạy
+  `/api/admin/sync-lark-tickets` (cả cron 1 lần/ngày lẫn bấm tay "Sync Lark") — bảng `lark_cs_tickets` đã
+  lên ~30.000 ticket, phân trang Lark Base API (~60 trang) vượt quá `maxDuration=60` cũ → Vercel giết
+  function giữa chừng → sync CHƯA TỪNG hoàn thành kể từ khi bảng đủ lớn → data đứng yên đúng từ
+  **2026-08-31 suốt 15 ngày** (không phải "trễ 1 ngày" theo kiến trúc batch bình thường — mà đứng hẳn).
+  Cùng lớp bug đã fix ở Bé Gấu (s195+14). Fix: nâng `maxDuration` 60→300 ở CẢ `route.ts` lẫn
+  `vercel.json` (thiếu 1 chỗ không đủ) + thêm log tiến độ mỗi trang (trước không log gì, phải mò qua
+  Runtime Logs mới ra). **Đã tự QA live trên staging**: bấm Sync Lark sau deploy → chạy xong thật (không
+  còn 504), tăng dần 29.748→31.248→33.032 ticket qua vài lần test. Hiếu hỏi tiếp sao TBS Volume/
+  Replacement&Refund vẫn 0 — kiểm tra lại xác nhận đó là **khoảnh khắc dữ liệu tháng 9 chưa kịp đồng bộ
+  hết** (đúng lúc đang test bấm sync liên tục), KHÔNG phải bug thứ 2 — load lại trang sau khi sync ổn
+  định: TBS Tickets 487, TBS Rate 2.44%, Refund 575, chart theo ca đủ 4 cột, bảng SKU/Vendor/Source đều
+  có số liệu thật. tsc + lint (0 lỗi mới) + vitest (243/243) PASS. Wiki `analytics-cs-troubleshoot.md`
+  cập nhật đủ. Đã push staging — **chưa merge main**, chờ Hiếu tự QA lại rồi báo.
+| ✅ **s198+11 (2026-09-15) — Fix cron "Sync GoHub Data to Supabase" (products/skus/listings/items) chết
+  57 ngày — ⚠️ CẦN MERGE MAIN mới có hiệu lực (khác mọi fix khác session này)** | Hiếu hỏi cron sync sản
+  phẩm còn chạy không, không thấy cập nhật. Kiểm tra qua `gh run list` (GitHub Actions, không đoán):
+  cron `sync.yml` (01:00 UTC hàng ngày) **thành công lần cuối 2026-07-20**, sau đó **100% run thất bại**
+  (mix "failure"/"cancelled") liên tục tới hôm nay = **57 ngày liền** — nặng hơn hẳn bug CS Troubleshoot
+  (15 ngày) vừa fix. Root cause qua log run: `requests.exceptions.HTTPError: 429 Too Many Requests` tại
+  `/skus` — `sync.py` fetch 4 resource (products/skus/listings/items, items riêng đã ~227.375 dòng/228
+  trang) SONG SONG qua `ThreadPoolExecutor(max_workers=4)`, cộng dồn request rate vượt giới hạn GoHub API
+  bắt đầu áp dụng từ ~21/7 (không phải do code repo đổi — git log xác nhận `sync.py`/`gohub_api_clients.py`
+  không đổi quanh mốc đó). Exception không bắt → script crash toàn bộ. Fix: mount `urllib3.Retry`
+  (tôn trọng header `Retry-After`, backoff luỹ thừa, retry cả 429/5xx) vào `GohubClient.session` — 1 chỗ
+  duy nhất, không cần sửa 8 call site get/post riêng lẻ. Kèm fix phụ: `timeout-minutes` 20 (thêm
+  2026-08-09, defensive chung cho 4 workflow, không tính riêng cho sync nặng) quá ngắn so với lịch sử lúc
+  còn thành công (từng mất tới 59 phút) → nâng lên 90 (repo public = Actions minutes miễn phí không giới
+  hạn). Đã verify local: `GohubClient()` construct được, urllib3 2.7.0 hỗ trợ đủ `allowed_methods`/
+  `respect_retry_after_header` (máy dev không chạy được full sync thật — thiếu `API_KEY`/
+  `SUPABASE_SERVICE_KEY`). Wiki `kien-truc-he-thong.md` cập nhật. **Đã push staging — CHƯA merge main.**
+  ⚠️ **Khác mọi fix khác trong session này**: GitHub Actions scheduled cron LUÔN chạy theo branch `main`
+  (thiết kế của GitHub, không cấu hình được), KHÔNG theo staging như Vercel — fix này sẽ KHÔNG có hiệu
+  lực cho tới khi merge vào main, dù QA/qui trình khác vẫn giữ nguyên staging-first.
+| ✅ **s198+12 (2026-09-15) — Fix chuông "Thông báo" kẹt trong sidebar + thêm log lỗi cron trên Intel —
+  đã QA live PASS** | Hiếu: "sửa luôn cái thông báo trên Intel (đang có vấn đề), cần cập nhật log... để
+  tôi kiểm tra dễ biết nó có lỗi hay không". Verify qua Chrome trên staging (bấm chuông thật, không
+  đoán): panel `fixed right-0 w-[380px]` bị hiện lệch hẳn sang trái, chữ cắt cụt không đọc được — root
+  cause: panel nằm lồng trong `<nav>` sidebar có class Tailwind `translate-x-0`/`-translate-x-full`
+  (collapse/expand) — theo chuẩn CSS, `transform` trên ancestor (kể cả identity `translate-x-0`) biến nó
+  thành **containing block** cho `position: fixed` bên trong, nên "fixed right-0" bị tính theo khung
+  sidebar hẹp (~170px) thay vì viewport. Fix: `createPortal(..., document.body)` — panel thoát khỏi DOM
+  subtree bị transform, tính đúng theo viewport. **Đã tự QA live sau deploy — panel hiện đúng bên phải,
+  đọc rõ hoàn toàn** (nhân tiện thấy luôn bằng chứng phụ: sync sản phẩm cuối cùng có thay đổi là
+  **13/07/2026**, khớp đúng mốc cron s198+11 chết).
+  Thêm loại thông báo mới `"error"` (icon đỏ AlertTriangle, bell + `lib/notifications.ts`) + insert
+  notification lỗi thật ở 2 nơi: `sync.py` (cron sản phẩm, bất kỳ exception nào trong `main()`) và
+  `sync-lark-tickets` route (cron CS Troubleshoot) — cả 2 trước đây fail chỉ có log Vercel/GitHub Actions,
+  không ai xem hàng ngày; giờ Hiếu tự thấy ngay trên chuông Intel, đúng yêu cầu "1 chỗ để kiểm tra dễ".
+  tsc + lint (0 lỗi mới) + vitest (243/243) PASS. Wiki `kien-truc-he-thong.md` cập nhật. Đã push staging.
+  **Phần bell/panel + error-notification cho `sync-lark-tickets` có hiệu lực ngay** (route web, theo
+  staging bình thường); **phần `sync.py` cần merge main** giống s198+11 ở trên (cron GitHub Actions).
 | ✅ **s197 (2026-09-14) — Audit LOGIC DỮ LIỆU toàn hệ thống 26 tab (khác đợt UI/performance s196+20) +
   fix hết 16/17 phát hiện** | Hiếu: "check lại toàn bộ tab analytics xem đã logic lấy dữ liệu, áp dụng
   dữ liệu đúng chưa, sai ở đâu" → sau đó "fix theo thứ tự hết đi". 4 fork song song đọc trực tiếp SQL
@@ -35,8 +212,22 @@
   helper chung, Vendors (3 fix lịch sử s195+8/9/10 không hồi quy), 3HK Usage, My Metrics hierarchy/prorata.
   **Kết luận luôn mục mở cũ s195+7** (Orders thiếu SIM vật lý): xác nhận qua code KHÔNG phải bug — 0
   filter cứng theo `type_of_sim`, nguyên nhân đúng là `fulfiled_date` NULL phía ops/ETL nguồn.
-  **Chưa QA live trên staging** — Hiếu nên tự xem số liệu vài tab đã đổi (đặc biệt Vendors/Channels đổi
-  nhiều nhất) sau khi Vercel deploy xong, đối chiếu vài con số đã biết trước/sau fix.
+  **Đã QA live trên staging** (xem s197+1) — Vendors "VN Ecom Shopee" số đúng sau fix, Channels CM1
+  khớp Revenue/GP card cùng trang, BOD toggle hoạt động đúng.
+| ✅ **s197+1 (2026-09-14) — Incident: Hiếu báo "kênh ecom T9 sai" (Quarter Report + B2B Performance) —
+  root cause CACHE CŨ, đã fix kèm 1 bug thật + merge main** | Verify qua SQL trực tiếp trên staging:
+  "VN Ecom Shopee" T9 (1-13/9) thật có doanh thu 229.667.051đ, site đang hiện 137.802.046đ (thiếu 40% —
+  cache TTL_L1 5'/TTL_L2 10' phục vụ snapshot cũ trong lúc dữ liệu giữa tháng tiếp tục đổ về). Toàn bộ
+  công thức GP/CH.Cost/CM1/Actual-vs-Projected verify đúng 100% khi bypass cache (không phải bug tính
+  toán — khớp giữa Quarter Report và B2B Performance, xác nhận cả 2 đọc chung 1 nguồn dữ liệu đúng).
+  **Bug thật phát hiện kèm theo**: trang B2B Performance KHÔNG có nút "Tải lại mới" nào (khác Quarter
+  Report — vốn có sẵn) → Hiếu không có cách tự ép cache tính lại tươi, phải chờ TTL tự hết hạn. Đã thêm
+  nút (`fetchData(true)` → `nocache=1`, tự áp cho `b2b/kpis`/`performance`/`strategic-performance`/
+  `trend`/`channels-with-platform-fee`, không sót route nào) — **đã tự QA live: bấm nút ra đúng số ngay**
+  (229.667.051đ). Đã tự ép cache Quarter Report + B2B Performance tính lại tươi ngay lúc xử lý incident.
+  Hiếu yêu cầu thêm rule cố định "luôn check N+1 query ảnh hưởng DB" — đã thêm vào mục Coding rules.
+  **Đã merge staging→main** (`68d861c7`, theo yêu cầu Hiếu "merge main hết đi") — gộp cả 16 fix s197 lẫn
+  fix incident này, clean không conflict, tsc+vitest(243/243) PASS. Production đang tự deploy.
 | ✅ **s196+20/+21 (2026-09-14) — Audit performance + UI/UX toàn hệ thống (32 tab) + P0/P1/P2 fix, đã tự
   QA staging qua Chrome** | Theo yêu cầu Hiếu "đánh giá toàn bộ tab UI/UX + giúp load nhanh hơn, chạy mượt
   hơn" — 2 fork song song (Performance + UI/UX) đọc trực tiếp code + Grep định lượng (không suy đoán) toàn
@@ -532,15 +723,66 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
-- [ ] **s197 — QA số liệu sau audit logic dữ liệu 16 fix trên staging** — sau khi Vercel deploy xong,
-  đối chiếu vài con số đã biết trước/sau (nhất là Vendors + Channels — đổi số nhiều nhất vì trước đây
-  0 filter ship/nội bộ nào): (a) Vendors — chọn 1 vendor quen, số Revenue/Units có thể GIẢM nhẹ so với
-  trước (do trừ đúng phí ship/đơn nội bộ); (b) Channels — CM1 card giờ khớp Revenue/GP card cùng trang
-  (trước có thể lệch); (c) BOD — bật/tắt toggle Phí ship/Đơn nội bộ, xác nhận Channel Performance + Daily
-  Report giờ ĐỔI theo (trước đứng yên); (d) Dashboard "Overall Progress vs Target" — % có thể tăng nhẹ
-  (Actual giờ đúng "doanh thu SP thuần", không còn kê cao); (e) Customers — nếu có KH chọn range nhiều
-  tháng + có cấu hình cost `percent`, CM1 có thể đổi nhẹ so với trước. Không cần làm gì nếu số liệu hợp
-  lý — chỉ báo lại nếu thấy bất thường rõ ràng (lệch quá lớn, không giải thích được).
+- [ ] **s199+4 — Đã tự verify %MoM sống trên staging (T7 so đúng tháng 6), không cần thao tác gì thêm** —
+  gộp chung merge main với s199+2/+3 (cùng đợt fix B2B/Quarter Report).
+- [ ] **s199+3 — QA fix cache 60 phút rồi báo merge main (gộp chung merge với s199+2)** — không cần thao
+  tác đặc biệt, chỉ cần theo dõi vài giờ: B2B Performance và Quarter Report giờ tự làm mới trong vòng
+  ≤60 phút thay vì 12 tiếng, mở 2 tab cùng lúc số sẽ khớp sát hơn hẳn mà không cần bấm "Tải lại mới" tay.
+  Nếu vẫn thấy lệch rõ sau khi cả 2 route đã tự refresh trong giờ gần nhất, báo lại kèm 2 số cụ thể.
+- [ ] **s199+2 — QA fix "B2B khác Quarter Report" trên staging rồi báo merge main** — vào Quarter Report
+  → bấm mở nhóm Strategic → bấm T7/T8/T9 → xác nhận dòng từng khách hàng (Momo, VN Ecom Shopee...) đổi
+  số ĐÚNG theo tháng chọn (không còn đứng yên ở số cả quý) và khớp với B2B Performance cùng kỳ. Đã tự
+  verify sống trên staging (Momo/VN Ecom Shopee khớp tuyệt đối) — chỉ cần Hiếu xác nhận thêm 1-2 khách
+  hàng khác cho yên tâm rồi báo "merge main đi".
+- [ ] **s199+1 — QA tab mới "Giám sát Dữ liệu" trên staging rồi báo merge main** —
+  `/analytics/creator/data-health` (chỉ Creator thấy trong sidebar/nav, nhóm "Creator"). Checklist: (a)
+  sub-tab Độ tươi — card `fact_data_usage`/`data_usage_log` phải đỏ (đúng thật, xem s199 audit ở trên),
+  card `fact_fulfillment_revenue`/`fact_inventory` phải xanh; (b) sub-tab Bất thường — 3 sparkline Tổng/
+  B2B/B2C render, thử đối chiếu 1 ngày có chấm đỏ với số liệu Dashboard xem có thật bất thường không; (c)
+  sub-tab Đối chiếu — bảng hiện đúng 4 dòng/tháng (Doanh thu/CM1/CM1%/3HK%), thử tự trigger cron
+  `refresh-monthly-kpis` rồi F5 xem %lệch có về gần 0 không (xác nhận logic đúng). Chưa mở rộng thêm nếu
+  Hiếu thấy thiếu — báo lại để làm tiếp (VD: cảnh báo chủ động qua Lark, tách VN/US ở Đối chiếu...).
+- [ ] **s199 — Hỏi bên vận hành/vendor 3HK: pipeline nạp `fact_data_usage`/`data_usage_log` (gohub_dw)
+  đã đứng yên từ 2026-07-20** — tab 3HK Data Usage không thiếu riêng tháng 8, thiếu LUÔN từ tháng 7. Đã
+  xác nhận qua SQL trực tiếp + tra registry ETL (`jobs`/`job_logs`) không có job nào phụ trách 2 bảng
+  này — ngoài phạm vi code sửa được ở repo `gohub-intel`. Không cần Claude làm gì thêm cho tới khi biết
+  pipeline đó do ai/ở đâu vận hành.
+- [ ] **s198 — Duyệt tab mới "Product Catalogue" trên staging rồi báo merge main** — `/analytics/catalogue`,
+  9 đợt (2026-09-14/15), đã tự QA live sau MỖI đợt kể cả đợt 9 (fix bug P0 "trang trống trơn" — root cause
+  `data_policy_code` không phải cột Supabase thật, xem chi tiết dòng s198 phía trên) nhưng CHƯA merge main
+  theo đúng rule (chỉ merge khi Hiếu yêu cầu rõ trong tin nhắn). **Gợi ý tự QA trước khi duyệt**: mở vài
+  destination có nhiều nhà mạng thật (VD "China" — 4 carrier), xác nhận panel không còn trống, bấm
+  Ngày→Dung lượng ra chi tiết throttle/APN/note đúng. Nếu ổn, nhắn "merge main đi" như mọi lần.
+  2 điểm cần Hiếu quyết định thêm nếu muốn (không gấp): (1) bảng "Chính sách QR/đổi máy" đang HARDCODE
+  trong `route.ts` — muốn tự sửa qua UI sau này thì cần thêm 1 bảng Supabase riêng, báo để làm; (2) tên
+  khu vực AI cho destination mã thô (EU1/GZ1...) — QA đợt 9 thấy vẫn hiện mã thô, chưa xác nhận do Gemini
+  lỗi hay bug logic, không chặn gì, báo lại nếu vẫn thấy vậy để điều tra tiếp.
+- [ ] **s198+10 — Duyệt fix CS Troubleshoot trên staging rồi báo merge main** — bug sync Lark timeout 60s
+  (đứng yên 15 ngày, đúng nguyên nhân "không cập nhật realtime") đã fix + đã tự QA live xác nhận sync chạy
+  xong thật (33.032 ticket) + TBS Volume/Replacement&Refund/SKU-Vendor-Source Performance đều có số liệu
+  đúng. Không cần Hiếu làm gì để verify thêm (đã tự kiểm tra kỹ), chỉ cần duyệt rồi báo "merge main đi".
+  Gợi ý: nếu rảnh, tự bấm "Sync Lark" 1 lần trên staging xem có nhanh/mượt hơn hẳn trước không.
+- [ ] **s198+11 — ƯU TIÊN CAO: merge main cron sync product/sku/listing/item** — cron `sync.yml` chết 57
+  ngày (thành công lần cuối 2026-07-20), root cause 429 rate-limit GoHub API + đã fix (retry/backoff +
+  nâng timeout 20'→90'). **Khác mọi fix khác trong session — GitHub Actions cron LUÔN chạy theo branch
+  `main`, KHÔNG theo staging**, nên chỉ push staging KHÔNG đủ để fix có hiệu lực thật. Cần Hiếu xác nhận
+  merge main (`git merge staging` hoặc PR) — không chờ đến lúc gộp chung đợt merge web app khác, vì cron
+  này độc lập hoàn toàn với Vercel/staging-production. Sau khi merge, nên tự trigger thử 1 lần qua GitHub
+  Actions ("Run workflow" thủ công trên tab Actions, workflow "Sync GoHub Data to Supabase") để xác nhận
+  chạy xong không còn 429/timeout, thay vì chờ tới 01:00 UTC hôm sau.
+  (Cập nhật s198+12: khi merge main, gộp luôn phần `sync.py` insert notification lỗi — cùng file,
+  không tách merge riêng được.)
+- [ ] **s198+12 — Duyệt fix chuông Thông báo trên staging rồi báo merge main** — panel kẹt trong sidebar
+  đã fix (portal), đã tự QA live xác nhận hiện đúng/đọc rõ. Phần bell + error-notify cho CS Troubleshoot
+  đã có hiệu lực trên staging ngay; phần error-notify cho `sync.py` nằm CHUNG file với s198+11 nên merge
+  main 1 lần là đủ cho cả 2. Gợi ý tự QA: mở chuông xem panel hiện đúng bên phải không bị cắt chữ.
+- [x] **s197/s197+1 — Audit logic dữ liệu 16 fix + incident ecom T9 — XONG (2026-09-14), đã tự QA live +
+  đã merge main** — B2B Performance "VN Ecom Shopee" xác nhận số đúng (229.667.051đ) sau khi thêm nút
+  "Tải lại mới" + ép cache tươi. Channels CM1 khớp Revenue/GP card cùng trang. BOD toggle Phí ship/Đơn
+  nội bộ hoạt động đúng cho Channel Performance + Daily Report. Đã merge staging→main (`68d861c7`),
+  production đang tự deploy. **Hiếu vẫn nên tự đối chiếu thêm vài số quen thuộc khi rảnh** (không gấp):
+  Dashboard "Overall Progress vs Target" % có thể tăng nhẹ (Actual hết bị kê cao); Customers CM1 có thể
+  đổi nhẹ nếu có KH chọn range nhiều tháng + cost `percent`. Không cần làm gì nếu số liệu hợp lý.
 - [x] **s196+20/+21 — Audit performance/UI/UX toàn hệ thống (P0+P1+P2) + 2 quyết định UI Strict Lock —
   XONG HẾT (2026-09-14), đã tự QA qua Chrome trên staging, không cần Hiếu làm gì thêm** — Hiếu đã chốt 2
   quyết định (dark mode tab BI → khoá lại; tách admin/page.tsx → làm luôn), cả 2 đã làm + QA xong. Export

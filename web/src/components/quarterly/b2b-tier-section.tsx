@@ -253,6 +253,37 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
     const qoqPct = prevCm1 !== 0 ? Math.round((prCm1 - prevCm1) / Math.abs(prevCm1) * 1000) / 10 : null
     return { prRev, prGm, prCm1, prHk3, exRev, exGm, exCm1, exHk3, exCc, prGmPct: prRev > 0 ? prGm/prRev*100 : 0, prCm1Pct: prRev > 0 ? prCm1/prRev*100 : 0, qoqPct }
   }
+
+  // Số của 1 KH cho ĐÚNG 1 tháng đang chọn (tierViewMonth != "QUARTER") — KHÔNG cộng dồn cả quý như
+  // custPr(). Trước đây bảng KH luôn hiện custPr() (cả quý) BẤT KỂ đang chọn T7/T8/T9 — bug thật (s199+2,
+  // Hiếu báo B2B Performance khác Quarter Report): dòng Nhóm (tier) ở trên ĐÃ đổi đúng theo tháng chọn,
+  // nhưng dòng Khách hàng bên dưới thì không, tạo cảm giác 2 tab lệch nhau dù cùng nguồn dữ liệu.
+  const custMonthView = (c: any, month: string) => {
+    const ms = c.monthSummary?.[month]
+    if (!ms) return null
+    const isProjected = !!ms.isProjected
+    const prRev = ms.revenue ?? 0, prGm = ms.gm ?? 0, prCm1 = ms.cm1 ?? 0
+    const prCc = ms.cc ?? (prGm - prCm1)
+    const prHk3 = ((ms.hk3Pct ?? 0) / 100) * prRev
+    return {
+      prRev, prGm, prCc, prCm1, prHk3,
+      prGmPct: prRev > 0 ? prGm / prRev * 100 : 0,
+      prCm1Pct: ms.cm1Pct ?? (prRev > 0 ? prCm1 / prRev * 100 : 0),
+      isProjected,
+      actRev: isProjected ? (ms.actualRevenue ?? prRev) : prRev,
+      actGm:  isProjected ? (ms.actualGm  ?? prGm)  : prGm,
+      actCc:  isProjected ? (ms.actualCc  ?? prCc)  : prCc,
+      actCm1: isProjected ? (ms.actualCm1 ?? prCm1) : prCm1,
+    }
+  }
+
+  // Stacked PR (xanh) / Actual (đen nhạt) — dùng chung cho cả dòng Nhóm lẫn dòng Khách hàng.
+  const dual = (pr: number, act: number | undefined, cls = "text-slate-700") => act != null ? (
+    <div className="flex flex-col items-end leading-snug gap-0">
+      <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cls)}>{fc(pr)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">PR</sup></span>
+      <span className="tabular-nums font-semibold text-[9px] text-blue-600 whitespace-nowrap">{fc(act)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">Act</sup></span>
+    </div>
+  ) : <span className={cn("tabular-nums text-[10px] font-semibold", cls)}>{fc(pr)}</span>
   // Ngày trong tháng "YYYY-MM" + tháng tương lai (chưa có trong summary) → để ước tính T9.
   const daysInMonthFE = (ym: string) => { const [yy, mm] = ym.split("-").map(Number); return new Date(yy, mm, 0).getDate() }
   const existingDaysFE = summary.reduce((s, m) => s + m.dim, 0)
@@ -323,6 +354,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
     { label: "CM1",          tip: "CM1 tier per-month (PR)\n= GM - CH.Cost (customer-level)\nKHÔNG gồm Group Cost\nGroup Cost được khấu trừ ở cột Tổng Quý" },
     { label: "%CM1",         tip: "CM1 / Revenue × 100%\nDùng số PR (projected)" },
     { label: "%QoQ(CM1)",    tip: "So sánh CM1 PR quý này vs CM1 TT quý trước\nMức tier-level (aggregate toàn tier)\nCT: (CM1_PR - CM1_prev) / |CM1_prev|" },
+    { label: "%MoM",         tip: "So Revenue tháng này (PR nếu đang chạy) vs Revenue tháng liền trước (Actual)\nCT: (Rev_tháng - Rev_tháng_trước) / Rev_tháng_trước\nTháng đầu quý (vd T7) so với tháng cuối quý trước (vd T6, BE fetch riêng)\nChỉ có ở cột theo tháng, không áp dụng cho Tổng Quý (đã có %QoQ)" },
     { label: "3HK%",         tip: "3HK Revenue / Tier Revenue × 100%" },
   ]
   const SUB = SUB_COLS.map(c => c.label)  // backward compat cho chỗ dùng SUB.length
@@ -622,14 +654,6 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                   const qPrCc   = r2(tier.totalCc * futureScale)
                   const qPrCm1  = r2(tier.totalCm1 * futureScale)
 
-                  // Helper: stacked PR (blue) / Actual (slate) — dùng fc() cho số đầy đủ, font nhỏ
-                  const dual = (pr: number, act: number | undefined, cls = "text-slate-700") => act != null ? (
-                    <div className="flex flex-col items-end leading-snug gap-0">
-                      <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cls)}>{fc(pr)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">PR</sup></span>
-                      <span className="tabular-nums font-semibold text-[9px] text-blue-600 whitespace-nowrap">{fc(act)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">Act</sup></span>
-                    </div>
-                  ) : <span className={cn("tabular-nums text-[10px] font-semibold", cls)}>{fc(pr)}</span>
-
                   return (
                     <tr key={tierRaw.tier}
                       onClick={() => setSelectedTier(isSel ? null : tierRaw.tier)}
@@ -652,6 +676,16 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                           ))
                         }
                         const pr = d.isProjected  // tháng đang chạy → hiện cả actual + PR
+                        // %MoM: so Revenue tháng này với tháng LIỀN TRƯỚC. Trong quý (T8/T9) → lấy từ
+                        // `tier.months`. Tháng ĐẦU quý (T7) không có tháng nào khác trong `months` của
+                        // quý hiện tại để so → dùng `tier.prevMonthRevenue` (BE fetch riêng tháng liền
+                        // trước tháng đầu quý, vd T6 cho Q3 — xem route quarterly-b2b-customers s199+4).
+                        const mIdx = quarterMonths.indexOf(m)
+                        const prevM = mIdx > 0 ? quarterMonths[mIdx - 1] : null
+                        const prevRevOutQuarter = mIdx === 0 ? (tier.prevMonthRevenue ?? 0) : null
+                        const prevD = prevM ? tier.months.find((x: any) => x.month === prevM) : null
+                        const prevRev = prevM ? (prevD?.hasData ? prevD.revenue : null) : prevRevOutQuarter
+                        const momPct = prevRev != null && prevRev > 0 ? (d.revenue - prevRev) / prevRev * 100 : null
                         return [
                           <td key="rev" className="px-2 py-2.5 text-right border-l border-slate-100">{dual(d.revenue, pr ? d.actualRevenue : undefined, "text-slate-700")}</td>,
                           <td key="gm"  className="px-2 py-2.5 text-right">{dual(d.gm, pr ? d.actualGm : undefined, "text-slate-600")}</td>,
@@ -659,6 +693,9 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                           <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold", cm1Color(d.cm1))}>{dual(d.cm1, pr ? d.actualCm1 : undefined, cm1Color(d.cm1))}</td>,
                           <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
                           <td key="qoq" className="px-2 py-2.5 text-right text-slate-300">—</td>,
+                          <td key="mom" className={cn("px-2 py-2.5 text-right font-semibold tabular-nums", momPct == null ? "text-slate-300" : momPct >= 0 ? "text-green-600" : "text-red-500")}>
+                            {momPct != null ? `${momPct >= 0 ? "+" : ""}${momPct.toFixed(1)}%` : "—"}
+                          </td>,
                           <td key="3hk" className="px-2 py-2.5 text-right text-slate-500 whitespace-nowrap">{fc(d.hk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(d.hk3Pct)})</span></td>,
                         ]
                       })}
@@ -677,6 +714,8 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                           </td>
                         )
                       })()}
+                      {/* %MoM không áp dụng cho Tổng Quý (đã có %QoQ ở cột trước) */}
+                      <td className="px-2 py-2.5 text-right text-slate-300 bg-blue-50/60">—</td>
                       <td className="px-2 py-2.5 text-right text-slate-500 bg-blue-50/60 whitespace-nowrap">{fc(tier.totalHk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(tier.totalHk3Pct)})</span></td>
                     </tr>
                   )
@@ -694,6 +733,9 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
                     Khách hàng nhóm: <span className={TIER_COLORS[selectedTierData.tier]?.text ?? "text-slate-700"}>{selectedTierData.tier}</span>
                   </h3>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-[#0f4c81]">
+                    {tierViewMonth === "QUARTER" ? "Cả Quý" : `T${parseInt(tierViewMonth.split("-")[1])}/${tierViewMonth.split("-")[0]}`}
+                  </span>
                 </div>
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -753,15 +795,43 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                             const actGm  = hp ? (c.actualGm  ?? c.gm)  : c.gm
                             const actCc  = hp ? (c.actualCc  ?? c.cc)  : c.cc
                             const actCm1 = hp ? (c.actualCm1 ?? c.cm1) : c.cm1
-                            // Main row: Pro-rata values (kpiPrFactor + futureScale gồm ước tính T9)
+                            // Main row: Cả Quý → Pro-rata cả quý (custPr, mặc định). Chọn 1 tháng (T7/T8/T9)
+                            // → CHỈ số ĐÚNG tháng đó (custMonthView) — trước đây bảng KH bỏ qua hoàn toàn nút
+                            // chọn tháng, luôn hiện cả quý dù dòng Nhóm phía trên đã đổi đúng theo tháng (bug
+                            // s199+2, xem comment custMonthView()).
+                            const monthMode = tierViewMonth !== "QUARTER"
+                            const mv = monthMode ? custMonthView(c, tierViewMonth) : null
+                            // pr = số HIỂN THỊ dòng chính (đổi theo monthMode). Sub-row mở rộng (Metrics rows
+                            // phía dưới, dùng pr.ex*/prCm1Pct để ước tính tháng tương lai) LUÔN cần bản CẢ QUÝ
+                            // — giữ riêng `pr` (không đổi theo monthMode) cho khối đó, tách biệt `rowPr` cho
+                            // dòng chính để không phải sửa lại toàn bộ logic ước tính T9 sẵn có.
                             const pr = custPr(c)
-                            const prGmPct = pr.prGmPct
-                            const qoqCls = pr.qoqPct == null ? "text-slate-300" : pr.qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
-                            // Target
+                            const rowPr = monthMode
+                              ? { prRev: mv?.prRev ?? 0, prGm: mv?.prGm ?? 0, prCm1: mv?.prCm1 ?? 0, prHk3: mv?.prHk3 ?? 0,
+                                  prGmPct: mv?.prGmPct ?? 0, prCm1Pct: mv?.prCm1Pct ?? 0, qoqPct: null as number | null }
+                              : pr
+                            const prGmPct = rowPr.prGmPct
+                            const qoqCls = rowPr.qoqPct == null ? "text-slate-300" : rowPr.qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
+                            // Target: chỉ có ở quý (không có breakdown target theo tháng) — ẩn badge %Tgt khi
+                            // đang xem 1 tháng cụ thể, tránh so nhầm CM1/3HK của 1 THÁNG với target CẢ QUÝ.
                             const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0, rev: 0, hk3rev: 0 }
                             const isEditingTgt = editingTargetCode === c.code
                             const isSavingTgt  = savingTargetCode  === c.code
                             const colSpanAll = 12 + (isCreator ? 2 : 0)
+                            if (monthMode && !mv) {
+                              // KH không phát sinh trong đúng tháng đang chọn — hiện dòng "—" (giống dòng Nhóm
+                              // khi !d.hasData), KHÔNG ẩn hẳn (vẫn cần thấy KH tồn tại, chỉ tháng này không có).
+                              return (
+                                <tr key={c.code} className={cn("border-t border-slate-50", i % 2 === 0 ? "bg-white" : "bg-slate-50/50")}>
+                                  {isCreator && <td className="px-1.5 py-1 font-mono text-slate-400 whitespace-nowrap text-[9px]">{c.code}</td>}
+                                  <td className="px-1.5 py-1 text-slate-500 max-w-[130px]"><span className="truncate text-[10px]" title={c.name}>{c.name}</span></td>
+                                  {isCreator && <td className="px-1.5 py-1" />}
+                                  {Array.from({ length: colSpanAll - (isCreator ? 2 : 0) - 1 }).map((_, ci) => (
+                                    <td key={ci} className="px-1.5 py-1 text-right text-slate-300 text-[10px]">—</td>
+                                  ))}
+                                </tr>
+                              )
+                            }
                             return (
                               <React.Fragment key={c.code}>
                                 {/* ── Main row: Pro-rata values (mặc định) — bấm tên để expand xem chi tiết ── */}
@@ -779,34 +849,51 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                       {c.priceListName ? <span className="text-[9px] font-mono text-[#0f4c81] bg-blue-50 border border-blue-100 px-1 py-0.5 rounded">{c.priceListName}</span> : <span className="text-slate-300">—</span>}
                                     </td>
                                   )}
-                                  <td className="px-1.5 py-1 text-right text-slate-700 tabular-nums font-semibold text-[10px] whitespace-nowrap">{fc(pr.prRev)}</td>
-                                  <td className="px-1.5 py-1 text-right text-slate-600 tabular-nums text-[10px] whitespace-nowrap">{fc(pr.prGm)}</td>
-                                  <td className="px-1.5 py-1 text-right text-slate-500 text-[10px]">{pct(prGmPct)}</td>
-                                  <td className="px-1.5 py-1 text-right tabular-nums text-[10px]">
-                                    {editMode && canEditCost
-                                      ? <button onClick={() => openCostModal(c)} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#0f4c81]/30 bg-blue-50 text-[#0f4c81] font-semibold hover:bg-blue-100 text-[10px]" title="Nhập chi phí">
-                                          <Pencil className="w-3 h-3" />{editedCustomerCost(c) > 0 ? fc(editedCustomerCost(c)) : "0"}
-                                        </button>
-                                      : <span className="text-slate-500 whitespace-nowrap">{c.cc > 0 ? fc(c.cc) : "—"}</span>}
-                                  </td>
-                                  <td className={cn("px-1.5 py-1 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(pr.prCm1))}>{fc(pr.prCm1)}</td>
+                                  {(() => {
+                                    // monthMode + isProjected (đang xem đúng tháng hiện tại, chưa hết tháng)
+                                    // → hiện dual PR/Act giống dòng Nhóm; ngược lại (tháng đã xong / Cả Quý
+                                    // không đang chiếu) → 1 số duy nhất.
+                                    const showAct = monthMode && mv?.isProjected
+                                    const monthCc = monthMode ? (mv?.prCc ?? 0) : c.cc
+                                    return (
+                                      <>
+                                        <td className="px-1.5 py-1 text-right text-slate-700 tabular-nums font-semibold text-[10px] whitespace-nowrap">{dual(rowPr.prRev, showAct ? mv!.actRev : undefined)}</td>
+                                        <td className="px-1.5 py-1 text-right text-slate-600 tabular-nums text-[10px] whitespace-nowrap">{dual(rowPr.prGm, showAct ? mv!.actGm : undefined, "text-slate-600")}</td>
+                                        <td className="px-1.5 py-1 text-right text-slate-500 text-[10px]">{pct(prGmPct)}</td>
+                                        <td className="px-1.5 py-1 text-right tabular-nums text-[10px]">
+                                          {editMode && canEditCost
+                                            ? <button onClick={() => openCostModal(c)} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#0f4c81]/30 bg-blue-50 text-[#0f4c81] font-semibold hover:bg-blue-100 text-[10px]" title="Nhập chi phí">
+                                                <Pencil className="w-3 h-3" />{editedCustomerCost(c) > 0 ? fc(editedCustomerCost(c)) : "0"}
+                                              </button>
+                                            : <span className="text-slate-500 whitespace-nowrap">{monthCc > 0 ? dual(monthCc, showAct ? mv!.actCc : undefined, "text-slate-500") : "—"}</span>}
+                                        </td>
+                                        <td className={cn("px-1.5 py-1 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(rowPr.prCm1))}>{dual(rowPr.prCm1, showAct ? mv!.actCm1 : undefined, cm1Color(rowPr.prCm1))}</td>
+                                      </>
+                                    )
+                                  })()}
                                   <td className="px-1.5 py-1 text-right text-[10px]">
-                                    {tgt.cm1 > 0 ? (() => { const p = pr.prCm1 / tgt.cm1 * 100; return <span className={cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#0f4c81]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span> })() : <span className="text-slate-300">—</span>}
+                                    {/* Target chỉ có ở mức QUÝ — ẩn khi đang xem 1 tháng cụ thể (tránh so nhầm
+                                        CM1 của 1 tháng với target cả quý, xem comment monthMode ở trên). */}
+                                    {!monthMode && tgt.cm1 > 0 ? (() => { const p = rowPr.prCm1 / tgt.cm1 * 100; return <span className={cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#0f4c81]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span> })() : <span className="text-slate-300">—</span>}
                                   </td>
-                                  <td className={cn("px-1.5 py-1 text-right text-[10px]", cm1Color(pr.prCm1))}>{pct(pr.prCm1Pct)}</td>
-                                  <td className={cn("px-1.5 py-1 text-right text-[10px]", qoqCls)}>{pr.qoqPct != null ? `${pr.qoqPct >= 0 ? "+" : ""}${pr.qoqPct.toFixed(1)}%` : "—"}</td>
-                                  <td className="px-1.5 py-1 text-right text-slate-500 text-[10px] whitespace-nowrap">{fc(c.hk3Rev)} <span className="text-[9px] text-slate-400">({pct(c.hk3Pct)})</span></td>
-                                  {/* Target 3HK Revenue: dùng hk3rev nếu nhập, fallback computed */}
+                                  <td className={cn("px-1.5 py-1 text-right text-[10px]", cm1Color(rowPr.prCm1))}>{pct(rowPr.prCm1Pct)}</td>
+                                  <td className={cn("px-1.5 py-1 text-right text-[10px]", qoqCls)}>{rowPr.qoqPct != null ? `${rowPr.qoqPct >= 0 ? "+" : ""}${rowPr.qoqPct.toFixed(1)}%` : "—"}</td>
+                                  <td className="px-1.5 py-1 text-right text-slate-500 text-[10px] whitespace-nowrap">
+                                    {monthMode
+                                      ? <>{fc(mv?.prHk3 ?? 0)} <span className="text-[9px] text-slate-400">({pct(c.monthSummary?.[tierViewMonth]?.hk3Pct ?? 0)})</span></>
+                                      : <>{fc(c.hk3Rev)} <span className="text-[9px] text-slate-400">({pct(c.hk3Pct)})</span></>}
+                                  </td>
+                                  {/* Target 3HK Revenue: dùng hk3rev nếu nhập, fallback computed — chỉ ở Cả Quý */}
                                   {(() => {
                                     const tgt3hk = tgt.hk3rev > 0 ? tgt.hk3rev
                                       : (tgt.rev > 0 && tgt.thk > 0 ? Math.round(tgt.rev * tgt.thk / 100) : 0)
                                     return (
                                       <>
                                         <td className="px-1.5 py-1 text-right text-slate-500 text-[10px] tabular-nums whitespace-nowrap">
-                                          {tgt3hk > 0 ? fc(tgt3hk) : <span className="text-slate-300">—</span>}
+                                          {!monthMode && tgt3hk > 0 ? fc(tgt3hk) : <span className="text-slate-300">—</span>}
                                         </td>
                                         <td className="px-1.5 py-1 text-right text-[10px]">
-                                          {tgt3hk > 0 ? (() => {
+                                          {!monthMode && tgt3hk > 0 ? (() => {
                                             const p = pr.prHk3 / tgt3hk * 100
                                             return <span className={cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#0f4c81]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span>
                                           })() : <span className="text-slate-300">—</span>}

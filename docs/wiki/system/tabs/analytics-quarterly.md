@@ -116,6 +116,39 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | **Biểu đồ** (cạnh 3 nút trên) | Bật/tắt bar chart revenue theo đúng chế độ đang chọn — Tháng/Ngày cộng dồn theo kỳ (nhiều dòng/kênh gộp lại), Sản phẩm lấy top 10 SKU theo revenue |
 
 ## 7. Gotchas
+- **s199+4 (2026-09-16) — thêm cột %MoM cho bảng "B2B — Chi tiết theo Nhóm × Tháng"** (Hiếu yêu cầu, sau
+  khi hỏi thêm chỉnh đúng: "T7 thì so với tháng 6 chứ nhỉ"). Cột mới nằm giữa %QoQ(CM1) và 3HK%, CHỈ hiện
+  giá trị ở view theo tháng (T7/T8/T9) — "Cả Quý" hiện "—" (đã có %QoQ riêng cho quý). Công thức: so
+  Revenue tháng đang xem (PR nếu đang chạy) với Revenue tháng LIỀN TRƯỚC (Actual). T8/T9 lấy tháng trước
+  từ `tier.months` (cùng quý, đã có sẵn). **T7 (tháng đầu quý)** ban đầu làm thiếu — không có tháng nào
+  khác trong `months` của quý hiện tại để so → route `quarterly-b2b-customers` thêm 1 query riêng fetch
+  ĐÚNG 1 tháng liền trước tháng đầu quý (vd T6 cho Q3), aggregate theo tier×region, trả `tier.
+  prevMonthRevenue` + `prevMonth` (label) ở response root — FE dùng làm baseline MoM cho T7. Cache key
+  `qb2b_raw_v8`→`v9` (đổi shape cache nội bộ, không phải response shape công khai — additive field, không
+  vỡ FE cũ). Verify sống trên staging: T7 Strategic %MoM = **-8,6%** (khớp tính tay: (5.179.441.201 −
+  5.669.654.912)/5.669.654.912). tsc + lint (0 lỗi mới) + vitest (253/253) PASS.
+- **🔴 s199+2 (2026-09-16) — Fix bug thật: bảng "Khách hàng nhóm" (Strategic/VIP/Gold/Silver) bỏ qua
+  hoàn toàn nút chọn tháng T7/T8/T9, LUÔN hiện số cả quý** — Hiếu báo "B2B Performance khác Quarter
+  Report", lúc đầu verify qua API live (nocache=1) thấy TỔNG số khớp tuyệt đối cả 2 route (August/
+  September, cả company lẫn từng kênh) → tưởng chỉ là so nhầm cột PR-vs-Actual. Hiếu khẳng định vẫn thấy
+  lệch thật → điều tra sâu hơn bằng cách bấm trực tiếp nút T9 trên UI (không chỉ gọi API): dòng NHÓM
+  (Strategic 43 KH...) ở bảng trên đổi đúng số theo tháng chọn, nhưng dòng KHÁCH HÀNG (Momo/VN Ecom
+  Shopee/...) bên dưới đứng yên y hệt "Cả Quý" dù đã bấm T9 — bug thật trong `b2b-tier-section.tsx`: dòng
+  KH luôn gọi `custPr(c)` (pro-rata CẢ QUÝ, cộng dồn `c.monthSummary` qua mọi `quarterMonths`), biến
+  `tierViewMonth` không hề được đọc ở khối render dòng KH (chỉ dòng Nhóm có dùng qua `visibleMonths`).
+  Verify: Momo T9 trước fix luôn hiện 3.513.919.900đ (= số Cả Quý) bất kể bấm T7/T8/T9/Cả Quý; B2B
+  Performance cùng lúc hiện đúng ~513tr (MTD tháng 9) → lệch ~7x, đúng cảm giác "lệch thật" Hiếu báo.
+  **Fix**: `custMonthView(c, month)` mới — lấy đúng số 1 tháng từ `c.monthSummary[month]` (không cộng dồn
+  quý), dùng cho dòng KH khi `tierViewMonth !== "QUARTER"` (dual PR/Act nếu tháng đang chạy, giống dòng
+  Nhóm); giữ nguyên `custPr(c)` khi xem "Cả Quý" (không đổi hành vi mặc định). %Tgt CM1/%TGT 3HK (badge
+  so với target) ẨN khi xem theo tháng — target chỉ nhập ở mức QUÝ, so 1 tháng với target cả quý sẽ ra %
+  sai gây hiểu nhầm khác (VD 111tr/tháng so target cả quý 3 tháng sẽ luôn ra %Tgt rất thấp dù thực ra
+  đúng tiến độ). Thêm badge nhỏ ("T9/2026"/"Cả Quý") cạnh tiêu đề "Khách hàng nhóm" để biết đang xem kỳ
+  nào, tránh lặp lại nhầm lẫn tương tự sau này. **Đã verify sống trên staging sau deploy**: Momo T9 →
+  1.026.026.776 PR / 513.013.388 Act; VN Ecom Shopee T9 → 533.150.396 PR / 266.575.198 Act — khớp tuyệt
+  đối B2B Performance. tsc + lint (0 lỗi mới) + vitest (253/253) PASS. Export (`exportTierTable`) KHÔNG
+  bị bug này — đã tự đọc đúng `ms[m]`/`c.monthSummary[m]` theo `visibleMonths` từ trước (s196+22), chỉ
+  bảng LIVE trên UI mới bị.
 - **s196+22 (2026-09-14) — thêm nút Export cho bảng "B2B — Chi tiết theo Nhóm × Tháng"** (Hiếu yêu cầu):
   `exportTierTable()` (`b2b-tier-section.tsx`) dùng `exportAOA` xuất ĐÚNG dữ liệu đang hiển thị trên bảng
   pivot — tôn trọng filter Region (ALL/VN/US) và khung nhìn tháng (1 tháng cụ thể hoặc "Cả Quý") đang chọn,

@@ -4,9 +4,18 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getLarkToken } from "@/lib/lark"
 import { canWrite } from "@/lib/writable-tabs"
+import { createNotification } from "@/lib/notifications"
 
 const WRITE_ROLES = ["admin", "creator"]
 const LARK_API = "https://open.larksuite.com/open-apis"
+
+// s198 đợt 10 (2026-09-15) — fix bug "CS Troubleshoot không cập nhật": verify qua Vercel Runtime Logs
+// (`Vercel Runtime Timeout Error: Task timed out after 60 seconds`) — MỌI lần sync (cron hàng ngày lẫn
+// bấm tay) đều bị Vercel giết giữa chừng ở đúng 60s, trước khi kịp phân trang hết ~30.000 ticket qua
+// Lark Base API (500 record/trang, ~60 trang). Cùng lớp bug đã gặp ở Bé Gấu (s195+14) — nâng theo đúng
+// convention repo: Hobby + Fluid Compute cho phép tới 300s, không cần nâng gói. Đổi CẢ 2 chỗ (route.ts
+// + vercel.json functions map) — chỉ đổi 1 chỗ không đủ.
+export const maxDuration = 300
 
 function getLarkString(val: unknown): string {
   if (val === null || val === undefined) return ""
@@ -123,6 +132,9 @@ export async function POST(_req: NextRequest) {
 
       totalSynced += items.length
       pageToken = body.data?.page_token
+      // Log tiến độ mỗi trang — nếu vẫn timeout lần nữa (bảng còn tăng), Vercel log cho biết dừng ở đâu
+      // thay vì lại phải đoán như lần này (trước đó KHÔNG có log nào, chỉ phát hiện qua Runtime Logs 504).
+      console.log(`[sync-lark-tickets] progress: ${totalSynced} records synced, hasMore=${!!pageToken}`)
 
       if (totalSynced >= 50000) break
     } while (pageToken)
@@ -130,6 +142,16 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ ok: true, totalSynced })
   } catch (err: any) {
     console.error("[sync-lark-tickets]", err.message)
+    // Hiếu yêu cầu (2026-09-15): cần thấy lỗi cron ngay trên Intel, không phải tự đoán/hỏi lại. Cron
+    // chạy 02:00 UTC không ai xem log Vercel mỗi ngày — bấm tay lỗi thì đã thấy toast, nhưng cron tự
+    // chạy lỗi thì trước đây im lặng hoàn toàn. Ghi vào bảng notifications (bell "Thông báo" sidebar).
+    await createNotification(
+      "error",
+      "❌ Sync Lark tickets thất bại",
+      err.message?.slice(0, 500) || "Lỗi không rõ",
+      { error: err.message },
+      "admin_manager",
+    )
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

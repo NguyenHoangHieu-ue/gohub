@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "./supabase"
 
-export type NotifType = "sync" | "kb_doc" | "wiki" | "price_change"
+export type NotifType = "sync" | "kb_doc" | "wiki" | "price_change" | "error"
 export type Visibility = "all" | "admin_manager"
 
 export async function createNotification(
