@@ -74,6 +74,17 @@ export async function GET(req: NextRequest) {
   const prevQStartDate = `${prevYear}-${String(prevQFirstMonth).padStart(2, "0")}-01`
   const prevQEndDate = new Date(prevYear, prevQ * 3, 0).toISOString().split("T")[0]
   const prevQMonths = [0, 1, 2].map(i => `${prevYear}-${String(prevQFirstMonth + i).padStart(2, "0")}`)
+  // Tháng liền trước THÁNG ĐẦU QUÝ (vd Q3 → T6) — để tính %MoM cho T7 (không có tháng nào khác trong
+  // `months` của quý hiện tại để so, xem s199+4). Có thể rơi vào quý trước NỮA nếu prevQMonths[0] là
+  // tháng 1 (hiếm, chỉ khi prevQ cũng là Q1) — công thức lùi 1 tháng lịch chuẩn, không giả định q trước.
+  const monthBeforeQStart = (() => {
+    const [y, m] = months[0].split("-").map(Number)
+    const d = new Date(y, m - 2, 1)  // m-1 = tháng hiện tại (0-index), -1 nữa = tháng liền trước
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+  })()
+  const monthBeforeQStartStart = `${monthBeforeQStart}-01`
+  const [mbY, mbM] = monthBeforeQStart.split("-").map(Number)
+  const monthBeforeQStartEnd = new Date(mbY, mbM, 0).toISOString().split("T")[0]
 
   // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
   // v8: cộng ước tính T9 CH.Cost (dùng T8 record làm fallback)
@@ -88,7 +99,7 @@ export async function GET(req: NextRequest) {
           ? `AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(",")})`
           : ""
 
-        const [customerRows, prevQuarterRows] = await Promise.all([
+        const [customerRows, prevQuarterRows, prevMonthRows] = await Promise.all([
           queryAnalytics<{
             month: string; customer_code: string; customer_name: string
             price_list_name: string | null; currency_code: string | null; channel_name: string
@@ -135,9 +146,26 @@ export async function GET(req: NextRequest) {
             ${sfx}
           GROUP BY 1
         `),
+          // Tháng liền trước tháng đầu quý (vd T6 khi quý hiện tại là Q3) — riêng cho %MoM của tháng đầu
+          // quý (s199+4), vì `months` (quý hiện tại) không chứa tháng này.
+          queryAnalytics<{ customer_code: string; price_list_name: string | null; currency_code: string | null; revenue: string }>(`
+          SELECT TRIM(f.customer_code) as customer_code, c.price_list_name, c.currency_code,
+            SUM(f.fulfilled_revenue_amount_vnd) as revenue
+          FROM fact_fulfillment_revenue f
+          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+          WHERE f.fulfiled_date::date >= '${monthBeforeQStartStart}'
+            AND f.fulfiled_date::date <= '${monthBeforeQStartEnd}'
+            ${companyFilter}
+            AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
+            AND NOT (UPPER(COALESCE(c.price_list_name, '')) LIKE '%INACTIVE%')
+            ${exclFilter}
+            ${sfx}
+          GROUP BY 1, 2, 3
+        `),
         ])
 
-        return { customerRows, prevQuarterRows }
+        return { customerRows, prevQuarterRows, prevMonthRows }
       }, QUERY_TTL_MIN, refresh),
       fetchCustomerCosts(months),          // current quarter Turso costs
       fetchCustomerCosts(prevQMonths),     // prev quarter Turso costs (để tính QoQ CM1)
@@ -145,7 +173,20 @@ export async function GET(req: NextRequest) {
     ])
 
     // ── Phần 3: Compute (pure, fast ~1ms) ────────────────────────────────────────
-    const { customerRows, prevQuarterRows } = rawData
+    const { customerRows, prevQuarterRows, prevMonthRows } = rawData
+
+    // Aggregate tháng liền trước quý (vd T6) theo tier × region — dùng cho %MoM của tháng đầu quý (T7).
+    const prevMonthTierRev: Record<string, number> = { Strategic: 0, VIP: 0, Gold: 0, Silver: 0 }
+    const prevMonthTierRevByRegion: { VN: Record<string, number>; US: Record<string, number> } = {
+      VN: { Strategic: 0, VIP: 0, Gold: 0, Silver: 0 }, US: { Strategic: 0, VIP: 0, Gold: 0, Silver: 0 },
+    }
+    ;(prevMonthRows as Array<{ customer_code: string; price_list_name: string | null; currency_code: string | null; revenue: string }>).forEach(r => {
+      const tier = classifyTier(r.price_list_name)
+      const region: "VN" | "US" = classifyRegion(r.price_list_name, r.currency_code) === "US" ? "US" : "VN"
+      const rev = parseFloat(r.revenue || "0")
+      prevMonthTierRev[tier] = (prevMonthTierRev[tier] ?? 0) + rev
+      prevMonthTierRevByRegion[region][tier] = (prevMonthTierRevByRegion[region][tier] ?? 0) + rev
+    })
 
     // Previous quarter: GP map và CM1 map (QoQ so sánh bằng CM1 = GP - CH.Cost quý trước)
     const prevQuarterMap = new Map<string, { gm: number; revenue: number }>()
@@ -429,14 +470,15 @@ export async function GET(req: NextRequest) {
         months: buildMonthRows(tier.monthAgg),
         customers: custList,
         customerCount: custList.length,
+        prevMonthRevenue: r2(prevMonthTierRev[tierName] ?? 0),
         byRegion: {
-          VN: { ...buildTotals(vnCusts), months: buildMonthRows(tier.monthAggR.VN), customers: vnCusts, customerCount: vnCusts.length },
-          US: { ...buildTotals(usCusts), months: buildMonthRows(tier.monthAggR.US), customers: usCusts, customerCount: usCusts.length },
+          VN: { ...buildTotals(vnCusts), months: buildMonthRows(tier.monthAggR.VN), customers: vnCusts, customerCount: vnCusts.length, prevMonthRevenue: r2(prevMonthTierRevByRegion.VN[tierName] ?? 0) },
+          US: { ...buildTotals(usCusts), months: buildMonthRows(tier.monthAggR.US), customers: usCusts, customerCount: usCusts.length, prevMonthRevenue: r2(prevMonthTierRevByRegion.US[tierName] ?? 0) },
         },
       }
     }).filter(t => t.totalRevenue > 0)
 
-    return NextResponse.json({ quarter, year, months, tiers }, { headers: CACHE_HEADERS })
+    return NextResponse.json({ quarter, year, months, prevMonth: monthBeforeQStart, tiers }, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[quarterly-b2b-customers]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

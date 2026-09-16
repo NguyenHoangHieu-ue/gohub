@@ -354,7 +354,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
     { label: "CM1",          tip: "CM1 tier per-month (PR)\n= GM - CH.Cost (customer-level)\nKHÔNG gồm Group Cost\nGroup Cost được khấu trừ ở cột Tổng Quý" },
     { label: "%CM1",         tip: "CM1 / Revenue × 100%\nDùng số PR (projected)" },
     { label: "%QoQ(CM1)",    tip: "So sánh CM1 PR quý này vs CM1 TT quý trước\nMức tier-level (aggregate toàn tier)\nCT: (CM1_PR - CM1_prev) / |CM1_prev|" },
-    { label: "%MoM",         tip: "So Revenue tháng này (PR nếu đang chạy) vs Revenue tháng liền trước (Actual)\nCT: (Rev_tháng - Rev_tháng_trước) / Rev_tháng_trước\nTháng đầu quý (T7) không có tháng trước trong quý → —\nChỉ có ở cột theo tháng, không áp dụng cho Tổng Quý (đã có %QoQ)" },
+    { label: "%MoM",         tip: "So Revenue tháng này (PR nếu đang chạy) vs Revenue tháng liền trước (Actual)\nCT: (Rev_tháng - Rev_tháng_trước) / Rev_tháng_trước\nTháng đầu quý (vd T7) so với tháng cuối quý trước (vd T6, BE fetch riêng)\nChỉ có ở cột theo tháng, không áp dụng cho Tổng Quý (đã có %QoQ)" },
     { label: "3HK%",         tip: "3HK Revenue / Tier Revenue × 100%" },
   ]
   const SUB = SUB_COLS.map(c => c.label)  // backward compat cho chỗ dùng SUB.length
@@ -676,11 +676,16 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                           ))
                         }
                         const pr = d.isProjected  // tháng đang chạy → hiện cả actual + PR
-                        // %MoM: so Revenue tháng này với tháng LIỀN TRƯỚC trong quý (T7 không có → —).
+                        // %MoM: so Revenue tháng này với tháng LIỀN TRƯỚC. Trong quý (T8/T9) → lấy từ
+                        // `tier.months`. Tháng ĐẦU quý (T7) không có tháng nào khác trong `months` của
+                        // quý hiện tại để so → dùng `tier.prevMonthRevenue` (BE fetch riêng tháng liền
+                        // trước tháng đầu quý, vd T6 cho Q3 — xem route quarterly-b2b-customers s199+4).
                         const mIdx = quarterMonths.indexOf(m)
                         const prevM = mIdx > 0 ? quarterMonths[mIdx - 1] : null
+                        const prevRevOutQuarter = mIdx === 0 ? (tier.prevMonthRevenue ?? 0) : null
                         const prevD = prevM ? tier.months.find((x: any) => x.month === prevM) : null
-                        const momPct = prevD?.hasData && prevD.revenue > 0 ? (d.revenue - prevD.revenue) / prevD.revenue * 100 : null
+                        const prevRev = prevM ? (prevD?.hasData ? prevD.revenue : null) : prevRevOutQuarter
+                        const momPct = prevRev != null && prevRev > 0 ? (d.revenue - prevRev) / prevRev * 100 : null
                         return [
                           <td key="rev" className="px-2 py-2.5 text-right border-l border-slate-100">{dual(d.revenue, pr ? d.actualRevenue : undefined, "text-slate-700")}</td>,
                           <td key="gm"  className="px-2 py-2.5 text-right">{dual(d.gm, pr ? d.actualGm : undefined, "text-slate-600")}</td>,

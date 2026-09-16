@@ -9,7 +9,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 // này thay vì hardcode string — nhớ đổi CẢ 2 chỗ (đây + rawCacheKey trong route.ts tương ứng) khi bump
 // version (bài học s169: prefix list hardcode ở nơi khác quên bump theo → nút "Tải lại mới" thành no-op).
 export const QREPORT_CACHE_PREFIX = "qreport_raw_v9:"
-export const QB2B_CACHE_PREFIX    = "qb2b_raw_v8:"
+export const QB2B_CACHE_PREFIX    = "qb2b_raw_v9:"  // v9 (s199+4): thêm prevMonthRows cho %MoM tháng đầu quý
 
 export const DEFAULT_EXCLUDED_CUSTOMERS = ["B2C Customer US", "B2C Customer VN", "B2B Ops"]
 
