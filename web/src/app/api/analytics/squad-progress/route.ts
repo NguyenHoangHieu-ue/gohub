@@ -7,7 +7,8 @@ import { analyticsGuard } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchCosts } from "@/lib/bod-data"
 import { buildQuarterMonthMeta, getKpiFactor, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
-import { fetchQuarterlySettings, makeExcludeSql } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
+import { fetchB2BLifecycleRows, classifyB2BLifecycle, type B2BLifecycleRow } from "@/lib/analytics-engine/b2b-lifecycle"
 
 export const dynamic = "force-dynamic"
 
@@ -91,6 +92,13 @@ export async function GET(req: NextRequest) {
 
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
 
+  // Quý trước (s200) — chỉ dùng để lấy "doanh thu quý trước" của KH giờ Inactive (lifecycle).
+  const prevQNum = q === 1 ? 4 : q - 1
+  const prevQYear = q === 1 ? year - 1 : year
+  const prevQFirst = (prevQNum - 1) * 3 + 1
+  const prevQStartDate = `${prevQYear}-${String(prevQFirst).padStart(2, "0")}-01`
+  const prevQEndDate = new Date(prevQYear, prevQNum * 3, 0).toISOString().split("T")[0]
+
   try {
     // Load song song: squad config, squad targets, excluded customers (quarterly-settings)
     const [cfgRes, tgtRes, { excludedCustomers }] = await Promise.all([
@@ -117,7 +125,7 @@ export async function GET(req: NextRequest) {
                THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)                              AS hk3_m${i}`).join(",")
 
     // Revenue + GP + 3HK per customer, tách theo tháng
-    const [custRows, picRows, { groupCosts }] = await Promise.all([
+    const [custRows, picRows, { groupCosts }, prevCustRevRows, lifecycleRows] = await Promise.all([
       queryAnalytics<Record<string, string>>(`
         SELECT
           TRIM(f.customer_code)                               AS customer_code,
@@ -157,6 +165,21 @@ export async function GET(req: NextRequest) {
         ORDER BY 2
       `),
       fetchCosts(months),
+      // Doanh thu B2B quý TRƯỚC theo KH (s200) — dùng tính "doanh thu mất" cho KH giờ Inactive.
+      queryAnalytics<{ customer_code: string; revenue: string }>(`
+        SELECT TRIM(f.customer_code) AS customer_code, SUM(f.fulfilled_revenue_amount_vnd) AS revenue
+        FROM fact_fulfillment_revenue f
+        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+        LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+        WHERE f.fulfiled_date >= '${prevQStartDate}' AND f.fulfiled_date <= '${prevQEndDate}'
+          ${companyFilter}
+          AND f.sku != 'SHIPPINGFEE0'
+          AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
+          AND NOT (UPPER(COALESCE(c.price_list_name,'')) LIKE '%INACTIVE%')
+          ${EXCLUDE_CUST_SQL}
+        GROUP BY 1
+      `).catch(() => [] as { customer_code: string; revenue: string }[]),
+      fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)).catch(() => [] as B2BLifecycleRow[]),
     ])
 
     // Load targets + chi phí KH song song
@@ -235,6 +258,24 @@ export async function GET(req: NextRequest) {
       custAgg.set(code, merged)
     })
 
+    // customerLifecycle (s200) — New/Recurring/Inactive B2B, per-squad + tổng công ty.
+    const prevRevByCode = new Map<string, number>()
+    ;(prevCustRevRows as Array<{ customer_code: string; revenue: string }>).forEach(r => {
+      prevRevByCode.set(r.customer_code, parseFloat(r.revenue || "0"))
+    })
+    const activeCodesThisQuarter = new Set(
+      [...custAgg.entries()].filter(([, r]) => (Number(r.revenue) || 0) !== 0).map(([code]) => code),
+    )
+    const lifecycleMap = classifyB2BLifecycle(lifecycleRows, activeCodesThisQuarter, qStart, qEnd)
+    const emptyLifecycle = () => ({ new: { count: 0, revenue: 0 }, recurring: { count: 0, revenue: 0 }, inactive: { count: 0, lostRevenue: 0, list: [] as { code: string; name: string; lastRevenue: number }[] } })
+    // Tổng công ty (KHÔNG chỉ cộng squad — gồm cả KH không gán PIC/squad nào), tính thẳng từ lifecycleMap.
+    const totalsLifecycle = emptyLifecycle()
+    lifecycleMap.forEach((st, code) => {
+      if (st === "new") { totalsLifecycle.new.count++; totalsLifecycle.new.revenue += Number(custAgg.get(code)?.revenue) || 0 }
+      else if (st === "recurring") { totalsLifecycle.recurring.count++; totalsLifecycle.recurring.revenue += Number(custAgg.get(code)?.revenue) || 0 }
+      else { totalsLifecycle.inactive.count++; totalsLifecycle.inactive.lostRevenue += prevRevByCode.get(code) || 0 }
+    })
+
     // Group Cost B2B — phân bổ theo revenue-share (khớp #4 NHẤT QUÁN GROUP COST trong quarterly-b2b-customers,
     // trước đây Squad Progress KHÔNG trừ khoản này → CM1 lệch cao hơn Tổng quan/tier).
     const grandTotalRevAct = custRows.reduce((s, r) => s + (Number(r.revenue) || 0), 0)
@@ -255,6 +296,29 @@ export async function GET(req: NextRequest) {
     const squads = squadsConfig.map(sq => {
       const members = Array.from(custAgg.values()).filter(r => sq.sales_pics.includes(r.sales_pic_code || ""))
       const codes   = members.map(m => m.customer_code)
+
+      // customerLifecycle per-squad (s200) — New/Recurring từ members ĐANG hoạt động quý này;
+      // Inactive lấy từ lifecycleRows (KH cũ gán PIC squad này nhưng KHÔNG có đơn quý này → không có trong members).
+      const lifecycle = emptyLifecycle()
+      members.forEach(r => {
+        const st = lifecycleMap.get(r.customer_code) ?? "new"
+        const revenue = Number(r.revenue) || 0
+        if (st === "new") { lifecycle.new.count++; lifecycle.new.revenue += revenue }
+        else if (st === "recurring") { lifecycle.recurring.count++; lifecycle.recurring.revenue += revenue }
+      })
+      lifecycleRows
+        .filter(row => sq.sales_pics.includes(row.sales_pic_code || "") && lifecycleMap.get(row.customer_code) === "inactive")
+        .forEach(row => {
+          lifecycle.inactive.count++
+          const lastRevenue = prevRevByCode.get(row.customer_code) || 0
+          lifecycle.inactive.lostRevenue += lastRevenue
+          lifecycle.inactive.list.push({ code: row.customer_code, name: row.customer_name, lastRevenue })
+        })
+      lifecycle.inactive.list.sort((a, b) => b.lastRevenue - a.lastRevenue)
+      lifecycle.inactive.list = lifecycle.inactive.list.slice(0, 10).map(x => ({ ...x, lastRevenue: Math.round(x.lastRevenue) }))
+      lifecycle.new.revenue = Math.round(lifecycle.new.revenue)
+      lifecycle.recurring.revenue = Math.round(lifecycle.recurring.revenue)
+      lifecycle.inactive.lostRevenue = Math.round(lifecycle.inactive.lostRevenue)
 
       let rev = 0, cm1 = 0, hk3 = 0, hk3Pr = 0, tgtRev = 0, tgtCm1 = 0, tgtHk3 = 0
 
@@ -345,6 +409,7 @@ export async function GET(req: NextRequest) {
         hk3_tgt_pct: effTgtHk3 > 0 ? Math.round(hk3Pr / effTgtHk3 * 100) : null,
         risk_counts: riskCounts,
         customers,
+        lifecycle,
       }
     })
 
@@ -362,6 +427,11 @@ export async function GET(req: NextRequest) {
         cm1: totCm1, cm1_pr: totCm1Pr,
         cm1_pct: totRev > 0 ? Math.round(totCm1 / totRev * 1000) / 10 : 0,
         hk3: totHk3, hk3_pct: totRev > 0 ? Math.round(totHk3 / totRev * 1000) / 10 : 0,
+        lifecycle: {
+          new: { count: totalsLifecycle.new.count, revenue: Math.round(totalsLifecycle.new.revenue) },
+          recurring: { count: totalsLifecycle.recurring.count, revenue: Math.round(totalsLifecycle.recurring.revenue) },
+          inactive: { count: totalsLifecycle.inactive.count, lostRevenue: Math.round(totalsLifecycle.inactive.lostRevenue) },
+        },
       },
       available_pics: picRows,
     })
