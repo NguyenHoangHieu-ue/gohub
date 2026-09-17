@@ -10,6 +10,16 @@
 
 | | |
 |---|---|
+| ✅ **s200+2 (2026-09-17) — 3HK Data Usage: pipeline đã tự chạy lại, thêm badge freshness** | Hiếu yêu
+  cầu xử lý tiếp tab 3HK Data Usage (sau audit s199). Verify lại trực tiếp SQL trên staging: pipeline ĐÃ
+  tự chạy — `fact_data_usage` có data tới 31/08/2026, `loaded_at` mới nhất = HÔM NAY. Đào sâu phát hiện
+  quy luật: pipeline nạp theo **3 đợt lớn rời rạc** (15/07 nạp T1-T3, 20/07 nạp T4-T6, 17/09 nạp T7-T8) —
+  KHÔNG phải ETL hàng ngày, nên tháng đang chạy (T9) luôn "thiếu" cho tới đợt kế — đúng đặc tính bình
+  thường của pipeline ngoài repo, không phải lỗi lặp lại. Thêm badge freshness dưới tiêu đề tab (ngày data
+  mới nhất + giải thích rõ "không phải bug web") để cắt vòng lặp hỏi→audit→giải thích đã lặp 2 lần trong
+  tháng. tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã tự verify sống trên staging. Wiki
+  `docs/wiki/system/tabs/analytics-3hk-usage.md` cập nhật. Đã push staging, chưa merge main. Không cần
+  Hiếu làm gì thêm — pipeline vẫn nằm ngoài phạm vi repo, tháng 9 sẽ tự có khi vendor 3HK chạy đợt kế tiếp.
 | ⏳ **s200 (2026-09-17) — Quarter Report: New/Recurring/Inactive B2B Customers + trang mới Organization
   (đã fix 1 bug thật ngay đợt đầu, đã verify sống) — đã push staging, chờ Hiếu QA** | Hiếu yêu cầu (1)
   duplicate Quarter Report group theo Organization, (2) thêm 3 chỉ số vòng đời KH B2B (New/Recurring/
