@@ -9908,3 +9908,44 @@ Verify sống trên staging sau deploy: gọi API trực tiếp (`prevMonth: "20
 tsc + lint (0 lỗi mới, chỉ warning pre-existing không liên quan) + vitest (253/253) PASS cả 2 đợt. Wiki
 `docs/wiki/system/tabs/analytics-quarterly.md` cập nhật. Đã push staging cả 2 commit — chưa merge main,
 gộp chung đợt merge với s199+2/+3 (cùng nhóm fix B2B/Quarter Report phiên làm việc này).
+
+### s200 (2026-09-17) — Quarter Report: New/Recurring/Inactive B2B Customers + trang Organization
+
+Hiếu yêu cầu 2 việc: (1) "duplicate Quarter Report và dùng data organization để format lại", (2) thêm
+"New/Recurring/Inactive B2B Customers" vào Tổng quan + Squad Progress. Đã điều tra code qua 2 đợt fork
+(pattern New/Returning B2C s195+15, cấu trúc quarterly-b2b-customers/squad-progress, StatTile/nav pattern,
+dim_customer.organization/organization_code — xác nhận 0 chỗ nào trong repo từng dùng, hiện đa số NULL)
+trước khi lên plan qua EnterPlanMode (đã duyệt). Chốt qua AskUserQuestion: "trước đây" = toàn bộ lịch sử
+trước quý đang xem; 3 chỉ số tôn trọng filter companyCode; trang Organization là trang MỚI (không phải
+toggle).
+
+**Phase 1 — Lifecycle**: module dùng chung `lib/analytics-engine/b2b-lifecycle.ts` —
+`fetchB2BLifecycleRows()` (1 query GROUP BY MIN(fulfiled_date) toàn bộ lịch sử B2B, cache riêng
+`LIFECYCLE_TTL_MIN=360` phút, TÁCH khỏi `QUERY_TTL_MIN` chung của 20 route khác — tránh lặp lại lớp bug
+full-scan gây timeout B2C s195+15) + `classifyB2BLifecycle()` (hàm thuần, 8 unit test
+`b2b-lifecycle.test.ts`). Gắn vào `quarterly-report/route.ts` (thêm `prevCustRevRows` query mới, bump
+`QREPORT_CACHE_PREFIX` v9→v10, field response mới `customerLifecycle`) và `squad-progress/route.ts` (field
+`lifecycle` per-squad tính từ `sales_pic_code` có sẵn trong lifecycle rows để gán cả KH Inactive — vốn
+không có trong `custRows` quý hiện tại — vào đúng squad; `totals.lifecycle` tính trực tiếp từ toàn bộ
+map, không cộng dồn squad để không bỏ sót KH chưa gán PIC). FE: 3 `StatTile` (dashboard-kit, dùng đúng lần
+đầu ở trang này) trên Tổng quan; badge 🆕/🔁/😴 + `<details>` xổ top 10 KH rời bỏ (kèm doanh thu quý
+trước) trên mỗi squad card; badge "🆕 Mới" ở 2 bảng chi tiết KH Squad Progress.
+
+**Phase 2 — Trang Organization**: route mới `quarterly-org-customers/route.ts` — bản group-theo-
+organization của `quarterly-b2b-customers` (KHÔNG sửa file gốc), khoá gộp
+`COALESCE(NULLIF(organization_code,''), customer_code)` — fallback graceful về customer_code khi thiếu
+data (hiện đa số case) → hành vi giống hệt bản theo KH cho tới khi ETL bổ sung. KHÔNG tính CH.Cost
+per-customer (Turso) ở mức tổ chức — CM1 tier chỉ trừ Group Cost B2B (Supabase, revenue-share, y hệt route
+gốc). Trang mới `/analytics/quarterly-org` — tái dùng nguyên API `quarterly-report` cho số tổng B2B đầu
+trang (tiền không đổi theo cách gộp ai là chủ) + tái dùng thẳng component `<PivotTable>` có sẵn (dùng cho
+B2C/B2B channel pivot) cho breakdown theo Organization × Tháng, 1 PivotTable/tier — tránh viết
+`OrgTierSection` bespoke ~300 dòng, giảm rủi ro so với sửa/nhân bản `b2b-tier-section.tsx` (đã 2 lần dính
+bug nghiêm trọng trong tháng, s199+2). Đăng ký nav.ts + sidebar.tsx (2 nơi, đúng gotcha đồng bộ đã biết) +
+analytics-roles.ts (id `quarterly-org`, quyền bod/b2b + admin/creator). Không có Squad Progress/target
+editing/CH.Cost editing ở trang này (v1, ghi rõ trong `LogicNote` đầu trang).
+
+tsc + lint (0 lỗi mới) + vitest (261/261, +8 test) PASS toàn bộ 4 commit
+(`fcfb54d5`/`90e20e06`/`d3e3a0d8`/`c9778135` + 2 commit wiki). Wiki
+`docs/wiki/system/tabs/analytics-quarterly.md` cập nhật đủ (mục 1 Đường dẫn, mục 7 Gotchas 2 đoạn riêng
+cho Organization + Lifecycle). Đã push staging — **chưa merge main**, chờ Hiếu QA (checklist trong
+CLAUDE.md).
