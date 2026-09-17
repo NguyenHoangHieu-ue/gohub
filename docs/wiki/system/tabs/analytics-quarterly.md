@@ -116,6 +116,31 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | **Biểu đồ** (cạnh 3 nút trên) | Bật/tắt bar chart revenue theo đúng chế độ đang chọn — Tháng/Ngày cộng dồn theo kỳ (nhiều dòng/kênh gộp lại), Sản phẩm lấy top 10 SKU theo revenue |
 
 ## 7. Gotchas
+- **s200 (2026-09-17) — New/Recurring/Inactive B2B Customers** (Hiếu yêu cầu vòng đời KH). Module dùng
+  chung `lib/analytics-engine/b2b-lifecycle.ts`: `fetchB2BLifecycleRows()` quét MIN(ngày mua) toàn bộ
+  lịch sử `fact_fulfillment_revenue` cho mỗi KH B2B (1 query GROUP BY, không loop) — cache TTL RIÊNG 6 giờ
+  (`LIFECYCLE_TTL_MIN`, tách khỏi `QUERY_TTL_MIN=60'` dùng chung 20 route khác, vì "ngày mua đầu tiên" gần
+  như không đổi trong ngày). Luôn loại phí ship + KH INACTIVE, KHÔNG phụ thuộc toggle Ship/Internal-Ops
+  của trang. `classifyB2BLifecycle()` (hàm thuần, có unit test `b2b-lifecycle.test.ts`) so `first_order_date`
+  với khoảng ngày quý đang xem: `>= qStart` → **new**; `< qStart` + có doanh thu quý này → **recurring**;
+  `< qStart` + không có doanh thu quý này → **inactive**; `> qEnd` (KH chưa tồn tại ở quý đang xem, khi
+  xem lại quý cũ) → bỏ qua. Định nghĩa "trước đây" = TOÀN BỘ lịch sử (không chỉ quý liền trước) — Hiếu
+  chốt qua AskUserQuestion.
+  - **Tổng quan** (`quarterly-report` route): field `customerLifecycle` — `new`/`recurring`
+    `{count,revenue}`, `inactive` `{count,lostRevenue}` (lostRevenue = tổng doanh thu QUÝ TRƯỚC của các KH
+    giờ inactive, tính từ query `prevCustRevRows` mới thêm — cache raw đổi shape, bump `QREPORT_CACHE_PREFIX`
+    v9→v10). FE: 3 `StatTile` (dashboard-kit) trên bảng "B2B — Chi tiết theo Nhóm × Tháng".
+  - **Squad Progress** (`squad-progress` route): field `lifecycle` per-squad + `totals.lifecycle` (tính
+    trực tiếp từ toàn bộ `lifecycleMap`, KHÔNG cộng dồn từ squad — gồm cả KH chưa gán PIC/squad nào). KH
+    Inactive KHÔNG có trong `custRows` (chỉ query quý hiện tại) → gán vào đúng squad qua `sales_pic_code`
+    lấy sẵn trong `B2BLifecycleRow`. Mỗi squad có `lifecycle.inactive.list` (top 10 theo doanh thu quý
+    trước, để leader biết ai cần gọi lại). Mỗi customer trong `customers[]` có thêm `lifecycle_state`.
+    FE: badge 🆕/🔁/😴 cạnh risk-chip mỗi squad card + `<details>` xổ danh sách KH rời bỏ; badge "🆕 Mới"
+    trong 2 bảng chi tiết KH (expanded + flat view).
+  - Rủi ro đã lường trước (chưa xảy ra, cần theo dõi): `fetchB2BLifecycleRows` full-scan B2B trên
+    `fact_fulfillment_revenue` không giới hạn ngày dưới — cùng lớp bug từng gây timeout B2C (s195+15).
+    Khác ở chỗ: chỉ 1 query GROUP BY (không phải CTE lồng per-page-load) + cache 6h. Nếu sau này thấy
+    trang Quarter Report chậm bất thường lúc cache lifecycle hết hạn, đây là nghi phạm đầu tiên.
 - **s199+4 (2026-09-16) — thêm cột %MoM cho bảng "B2B — Chi tiết theo Nhóm × Tháng"** (Hiếu yêu cầu, sau
   khi hỏi thêm chỉnh đúng: "T7 thì so với tháng 6 chứ nhỉ"). Cột mới nằm giữa %QoQ(CM1) và 3HK%, CHỈ hiện
   giá trị ở view theo tháng (T7/T8/T9) — "Cả Quý" hiện "—" (đã có %QoQ riêng cho quý). Công thức: so
@@ -241,6 +266,7 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | Target | Turso `target_planning_quarter` | `target_revenue`, `target_cm1`, `target_three_hk_pct` per B2B/B2C per quarter |
 | QoQ % | `fact_fulfillment_revenue` quý trước | `(CM1_cur_prorata − CM1_prev) / |CM1_prev| × 100`; monthly pro-rata |
 | Pro-rata | `fact_fulfillment_revenue` tháng hiện tại | `cm1_actual × (days_in_month / elapsed_days)` |
+| New/Recurring/Inactive B2B (s200) | `fact_fulfillment_revenue` (MIN ngày mua, toàn bộ lịch sử) | So `first_order_date` với khoảng ngày quý đang xem — xem Gotchas §7 |
 
 
 ---
