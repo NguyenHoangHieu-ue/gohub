@@ -18,6 +18,7 @@ import { exportRawRows, exportAOA } from "@/lib/export-excel"
 const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
 const SpeedComparisonChart = dynamic(() => import("./3hk-usage-charts").then(m => m.SpeedComparisonChart), { ssr: false, loading: chartLoading })
 const UsageDistChart       = dynamic(() => import("./3hk-usage-charts").then(m => m.UsageDistChart),       { ssr: false, loading: chartLoading })
+const SkuCountChart        = dynamic(() => import("./3hk-usage-charts").then(m => m.SkuCountChart),        { ssr: false, loading: chartLoading })
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -44,7 +45,15 @@ const daysOfSku = (sku: string): number | null => {
   const mNew = sku.match(/UNL(\d+)$/i)
   if (mNew) return parseInt(mNew[1])
   const mOld = sku.replace(/P[12]/i, "").match(/(\d+)D$/i)
-  return mOld ? parseInt(mOld[1]) : null
+  if (mOld) return parseInt(mOld[1])
+  // Mã CHUẨN 13 ký tự không có literal "UNL" (vd C/D/E/G/H/L/X ở vị trí 8 — s200+3) — SKU CODE kết thúc
+  // bằng 2 ký tự DayAmount (vd "EAANZ3DX00303" → "03" = 3 ngày), verify khớp cả mã Fixed/Daily 13 ký tự
+  // khác (vd "...F01215" → "15" ngày) nên áp dụng chung, không chỉ riêng Unlimited.
+  if (sku.length === 13) {
+    const d = parseInt(sku.slice(11, 13), 10)
+    if (!isNaN(d) && d > 0) return d
+  }
+  return null
 }
 
 
@@ -308,6 +317,18 @@ export default function ThreeHKDataUsagePage() {
     return sortedSkuMetrics.slice((skuPage - 1) * skuPageSize, skuPage * skuPageSize)
   }, [sortedSkuMetrics, skuPage, skuPageSize])
 
+  // Chart "mã SKU nào chiếm bao nhiêu SIM" (s200+3, Hiếu yêu cầu) — top 15 theo Active SIMs, phần còn lại
+  // gộp "Khác" để không tràn trục X (có thể tới hơn ngàn mã SKU khác nhau trong 1 kỳ).
+  const SKU_CHART_TOP_N = 15
+  const skuCountChart = useMemo(() => {
+    const items = [...skuMetrics].sort((a, b) => b.active_sims - a.active_sims)
+    const top = items.slice(0, SKU_CHART_TOP_N).map(sm => ({ sku: sm.sku, active_sims: sm.active_sims }))
+    const restTotal = items.slice(SKU_CHART_TOP_N).reduce((s, sm) => s + sm.active_sims, 0)
+    const restCount = items.length - top.length
+    if (restCount > 0) top.push({ sku: `Khác (${restCount} mã)`, active_sims: restTotal })
+    return top
+  }, [skuMetrics])
+
   const sortedSkuTypeMetrics = useMemo(() => {
     const items = [...skuTypeMetrics]
     items.sort((a, b) => {
@@ -449,6 +470,32 @@ export default function ThreeHKDataUsagePage() {
   // (first_report_date) TRONG kỳ (khớp báo cáo NCC "SIM có usage trong kỳ"), KHÔNG chỉ SIM
   // phát sinh lần đầu trong kỳ. Usage/plan gom từ CÁC BẢN GHI TRONG KỲ.
   const V3HK = "sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')"
+  // Phân loại Daily/Fixed/Unlimited (s200+3, Hiếu báo mã X bị xếp nhầm Daily dù là Unlimited):
+  // mã CHUẨN 13 ký tự có 1 ký tự "Data type" ở VỊ TRÍ 8 (SKU CODE=[VN/US(1)][Type(1)][Country(3)]
+  // [Vendor(2)][DataType(1)]...) — verify trực tiếp SQL: A/B/C/D/E/G/H/L/X đều có chữ "Unlimited" trong
+  // tên gọi (bảng mapping Hiếu cung cấp) dù nhãn có thể kèm "Daily"/"Fixed" (chỉ nói về chu kỳ reset
+  // throttle, KHÔNG phải bản chất Daily/Fixed thật) — cột `sku_type` nguồn 3HK gán SAI cho các mã không
+  // có literal "UNL" trong chuỗi (chỉ A/B tình cờ đúng vì amount field cũng ghi "UNL"; C/D/E/G/H/L/X thì
+  // không, ví dụ "EAANZ3DX00303"). K = placeholder "esim profile/sim frame" (không phải gói data thật)
+  // → xếp riêng "Other", không tính vào Fixed như trước (verify: SKU 1D0003DK00000 gánh 28k GB actual dù
+  // "plan"=0, nghi vấn dữ liệu nguồn 3HK gộp nhầm usage thật vào SKU placeholder này — CHƯA sửa, cần hỏi
+  // vendor 3HK, xem wiki Gotchas). Mã CŨ 14/15 ký tự giữ nguyên logic literal 'UNL' (đã đúng, tự mô tả
+  // rõ ràng bằng chữ "GB"/"UNL" trong chuỗi).
+  const SKU_TYPE_CASE = `
+    CASE
+      WHEN LENGTH(MAX(sku)) = 13 THEN
+        CASE SUBSTRING(MAX(sku), 8, 1)
+          WHEN 'A' THEN 'Unlimited Data' WHEN 'B' THEN 'Unlimited Data' WHEN 'C' THEN 'Unlimited Data'
+          WHEN 'D' THEN 'Unlimited Data' WHEN 'E' THEN 'Unlimited Data' WHEN 'G' THEN 'Unlimited Data'
+          WHEN 'H' THEN 'Unlimited Data' WHEN 'L' THEN 'Unlimited Data' WHEN 'X' THEN 'Unlimited Data'
+          WHEN 'F' THEN 'Fixed Data' WHEN 'Y' THEN 'Fixed Data'
+          WHEN 'P' THEN 'Daily Data' WHEN 'Z' THEN 'Daily Data' WHEN 'T' THEN 'Daily Data'
+          WHEN 'K' THEN 'Other'
+          ELSE MAX(sku_type)
+        END
+      WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data'
+      ELSE MAX(sku_type)
+    END`
   const bundlesCTE = () => `
     WITH period_records AS (
       SELECT iccid, order_code, sku, sku_type, total_data_gb, data_amount_gb, first_report_date, activation_date
@@ -458,7 +505,7 @@ export default function ThreeHKDataUsagePage() {
     ),
     bundles AS (
       SELECT iccid, order_code, MAX(sku) AS sku,
-             CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data' ELSE MAX(sku_type) END AS sku_type,
+             ${SKU_TYPE_CASE} AS sku_type,
              MIN(first_report_date) AS first_report_date, MAX(activation_date) AS activation_date,
              SUM(total_data_gb) AS total_data_gb, MAX(data_amount_gb) AS data_amount_gb, COUNT(*) AS record_count
       FROM period_records GROUP BY iccid, order_code
@@ -1046,6 +1093,22 @@ export default function ThreeHKDataUsagePage() {
           </div>
           <div className="p-4" style={{ height: 340 }}>
             <UsageDistChart rows={usageDist.rows} groups={usageDist.groups} />
+          </div>
+        </div>
+      )}
+
+      {/* Chart mã SKU nào chiếm bao nhiêu SIM (s200+3, Hiếu yêu cầu) */}
+      {skuCountChart.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Package className="w-4 h-4 text-brand-600" />
+              Mã SKU chiếm bao nhiêu SIM — Top {Math.min(SKU_CHART_TOP_N, skuMetrics.length)}
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-1">Số lượng SIM (Active) theo từng mã SKU trong kỳ đang xem — phần đuôi dài gộp vào "Khác".</p>
+          </div>
+          <div className="p-4" style={{ height: Math.max(260, skuCountChart.length * 26) }}>
+            <SkuCountChart data={skuCountChart} />
           </div>
         </div>
       )}
