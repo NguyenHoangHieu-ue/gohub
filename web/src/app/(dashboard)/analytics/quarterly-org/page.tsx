@@ -17,6 +17,7 @@ import { LogicNote, StatTile } from "@/components/dashboard-kit"
 
 interface OrgRow {
   orgKey: string; orgName: string; region: string; memberCodes: string[]; memberCount: number
+  members: { code: string; name: string; revenue: number }[]
   revenue: number; gm: number; gmPct: number; hk3Rev: number; hk3Pct: number
   monthSummary: Record<string, { revenue: number; gm: number; hk3Pct: number; isProjected: boolean; actualRevenue?: number; actualGm?: number }>
 }
@@ -139,11 +140,14 @@ function QuarterlyOrgContent() {
       </div>
 
       <LogicNote collapsible label="Về trang này">
-        Trang này gộp số liệu B2B theo <strong>Organization</strong> (khi 1 công ty mẹ có nhiều mã KH con)
-        thay vì theo từng mã KH lẻ như Quarter Report gốc. <strong>Hiện dữ liệu tổ chức trong hệ thống còn
-        rất ít</strong> — KH nào chưa được gán tổ chức sẽ tự hiển thị như 1 tổ chức riêng (giống hệt bản
-        theo KH), không có rủi ro gộp sai. Trang này KHÔNG hiện chi phí per-KH (CH.Cost Turso) — chi phí đó
-        gắn với mã KH lẻ, không có ý nghĩa ở mức tổ chức gộp nhiều mã; CM1 hiển thị chỉ trừ Group Cost B2B.
+        Trang này gộp số liệu B2B theo <strong>Organization</strong> (khi 1 công ty mẹ có nhiều mã KH chi
+        nhánh, vd "VN_Org Vietravel" gồm hơn 20 mã KH chi nhánh khác nhau) thay vì theo từng mã KH lẻ như
+        Quarter Report gốc. <strong>Hiện chỉ ~300 mã KH B2B đang phát sinh đơn được gắn tổ chức</strong> —
+        KH nào chưa được gán sẽ tự hiển thị như 1 tổ chức riêng (giống hệt bản theo KH), không có rủi ro
+        gộp sai. Một tổ chức có thể có nhiều chi nhánh ở tier khác nhau (vd vừa Gold vừa Silver) — trang
+        xếp cả tổ chức vào tier của chi nhánh có doanh thu lớn nhất. Trang này KHÔNG hiện chi phí per-KH
+        (CH.Cost Turso) — chi phí đó gắn với mã KH lẻ, không có ý nghĩa ở mức tổ chức gộp nhiều mã; CM1
+        hiển thị chỉ trừ Group Cost B2B.
       </LogicNote>
 
       {report && b2b && (
@@ -160,14 +164,46 @@ function QuarterlyOrgContent() {
       )}
 
       <div className={cn("space-y-4 transition-opacity", loading && "opacity-50 pointer-events-none")}>
-        {orgData?.tiers.map(tier => (
-          <PivotTable key={tier.tier} title={`${tier.tier} — ${tier.organizationCount} Organization × Tháng (CM1 quý ${fc(tier.totalCm1)}, ${pct(tier.totalCm1Pct)})`}
-            icon={Building2}
-            channels={orgsToChannels(tier.organizations, orgData.months)}
-            months={orgData.months}
-            expanded={expandedTiers.has(tier.tier)}
-            onToggle={() => setExpandedTiers(prev => { const next = new Set(prev); next.has(tier.tier) ? next.delete(tier.tier) : next.add(tier.tier); return next })} />
-        ))}
+        {orgData?.tiers.map(tier => {
+          const multiCustOrgs = tier.organizations.filter(o => o.memberCount > 1)
+          return (
+            <React.Fragment key={tier.tier}>
+              <PivotTable title={`${tier.tier} — ${tier.organizationCount} Organization × Tháng (CM1 quý ${fc(tier.totalCm1)}, ${pct(tier.totalCm1Pct)})`}
+                icon={Building2}
+                channels={orgsToChannels(tier.organizations, orgData.months)}
+                months={orgData.months}
+                expanded={expandedTiers.has(tier.tier)}
+                onToggle={() => setExpandedTiers(prev => { const next = new Set(prev); next.has(tier.tier) ? next.delete(tier.tier) : next.add(tier.tier); return next })} />
+
+              {/* Drill-down Organization → Khách hàng — chỉ hiện tổ chức gộp ≥2 mã KH */}
+              {expandedTiers.has(tier.tier) && multiCustOrgs.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded-xl p-4">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                    {tier.tier} — Tổ chức gồm nhiều mã KH ({multiCustOrgs.length})
+                  </p>
+                  <div className="space-y-1.5">
+                    {multiCustOrgs.map(o => (
+                      <details key={o.orgKey} className="border border-slate-100 rounded-lg">
+                        <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center justify-between">
+                          <span>{o.orgName} <span className="text-slate-400 font-normal">[{o.region}]</span></span>
+                          <span className="text-slate-400 font-normal">{o.memberCount} mã KH · {fc(o.revenue)}</span>
+                        </summary>
+                        <ul className="px-3 pb-2 space-y-0.5">
+                          {o.members.map(m => (
+                            <li key={m.code} className="flex items-center justify-between text-[11px] text-slate-600 py-0.5">
+                              <span>{m.name} <span className="text-slate-400">({m.code})</span></span>
+                              <span className="tabular-nums text-slate-500">{fc(m.revenue)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          )
+        })}
       </div>
     </div>
   )

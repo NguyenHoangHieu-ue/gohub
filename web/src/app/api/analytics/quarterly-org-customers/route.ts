@@ -7,7 +7,12 @@ import { fetchCosts } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeClassifyTier, exclHash } from "@/lib/quarterly-settings"
 import { buildQuarterMonthMeta } from "@/lib/analytics-engine/quarter-projection"
 
-// Bản "Organization" của quarterly-b2b-customers (s200) — group theo dim_customer.organization_code
+// Bản "Organization" của quarterly-b2b-customers (s200) — group theo dim_customer.organization
+// (⚠️ s200+1: đã verify trực tiếp staging — organization_code 100% rỗng/dead column trên MỌI dòng
+// dim_customer (355.389/355.389), field THẬT có data là `organization` (text, vd "VN_Org Vietravel",
+// 909 giá trị khác nhau, 1050 KH được gắn — 313 trong số đó có phát sinh đơn B2B thật). Ban đầu chọn
+// nhầm organization_code làm khoá gộp → route KHÔNG BAO GIỜ gộp được gì (luôn fallback về customer_code
+// vì cột rỗng) dù `organization` đã có data thật — đây là nguyên nhân Hiếu thấy "chưa phù hợp".
 // thay vì customer_code. KHÔNG tính CH.Cost per-customer (Turso) — chi phí đó gắn với customer_code lẻ,
 // không có ý nghĩa gộp nhiều mã KH vào 1 tổ chức. CM1 tier-level vẫn trừ Group Cost (B2B, Supabase) —
 // logic aggregation tier giống hệt quarterly-b2b-customers (không đổi công thức tier/QoQ/%MoM).
@@ -78,7 +83,7 @@ export async function GET(req: NextRequest) {
           TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') as month,
           TRIM(f.customer_code) as customer_code,
           COALESCE(c.name, TRIM(f.customer_code)) as customer_name,
-          COALESCE(NULLIF(TRIM(c.organization_code), ''), TRIM(f.customer_code)) as org_key,
+          COALESCE(NULLIF(TRIM(c.organization), ''), TRIM(f.customer_code)) as org_key,
           COALESCE(NULLIF(TRIM(c.organization), ''), COALESCE(c.name, TRIM(f.customer_code))) as org_name,
           c.price_list_name, c.currency_code,
           SUM(f.fulfilled_revenue_amount_vnd) as revenue,
@@ -115,11 +120,14 @@ export async function GET(req: NextRequest) {
     }
     const orgMap = new Map<string, OrgAgg>()
     // Doanh thu tổng theo customer_code (cả quý) — dùng chọn tier/region "đại diện" cho org khi org gồm
-    // nhiều mã KH có bảng giá khác nhau (hiếm — chỉ xảy ra khi organization_code đã gộp thật).
+    // nhiều mã KH có bảng giá khác nhau (KHÔNG hiếm — verify s200+1: 26/909 org có ≥2 price_list_name/
+    // tier khác nhau giữa các chi nhánh, vd "VN_Org Vietravel" vừa Gold vừa Silver tuỳ chi nhánh).
     const custTotalRevenue = new Map<string, number>()
+    const custNameMap = new Map<string, string>()
     rows.forEach(row => {
       const rev = parseFloat(row.revenue || "0")
       custTotalRevenue.set(row.customer_code, (custTotalRevenue.get(row.customer_code) || 0) + rev)
+      custNameMap.set(row.customer_code, row.customer_name)
     })
 
     rows.forEach(row => {
@@ -156,6 +164,7 @@ export async function GET(req: NextRequest) {
     interface OrgMonthSummary { revenue: number; gm: number; hk3Pct: number; isProjected: boolean; actualRevenue?: number; actualGm?: number }
     interface OrgRow {
       orgKey: string; orgName: string; region: string; memberCodes: string[]; memberCount: number
+      members: { code: string; name: string; revenue: number }[]
       revenue: number; gm: number; gmPct: number; hk3Rev: number; hk3Pct: number
       qoqPct: number | null
       monthSummary: Record<string, OrgMonthSummary>
@@ -190,9 +199,13 @@ export async function GET(req: NextRequest) {
         acc(tier.monthAgg); acc(tier.monthAggR[region])
       })
 
+      const members = [...org.memberCodes]
+        .map(code => ({ code, name: custNameMap.get(code) || code, revenue: r2(custTotalRevenue.get(code) || 0) }))
+        .sort((a, b) => b.revenue - a.revenue)
+
       tier.orgList.push({
         orgKey: org.orgKey, orgName: org.orgName, region,
-        memberCodes: [...org.memberCodes], memberCount: org.memberCodes.size,
+        memberCodes: [...org.memberCodes], memberCount: org.memberCodes.size, members,
         revenue: r2(totRev), gm: r2(totGm), gmPct: pct(totGm, totRev),
         hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
         qoqPct: null, // v1: không có dữ liệu quý trước theo org — để "—" ở FE, xem wiki Gotchas
