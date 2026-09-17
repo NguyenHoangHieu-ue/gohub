@@ -10115,3 +10115,39 @@ tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã tự verify sống trê
 `docs/wiki/system/tabs/analytics-3hk-usage.md` viết lại đủ §3.1 (SQL WHERE mới + CASE bỏ nhánh K) + §7
 (đổi cơ chế hẳn, giữ lịch sử cũ trong `<details>` để tham khảo) + 2 bảng data-source (mục 5 "Bảng dữ liệu
 chính" và mục cuối "Data Sources"). Đã push staging (`303d7b1b` code + `88cc9576` docs) — chưa merge main.
+
+## s200+6 (2026-09-17) — Vá kiến trúc cache invalidation (2 phần theo yêu cầu Hiếu)
+
+Hiếu hỏi thăm dò hướng giải quyết triệt để: "cơ chế cache của hệ thống đang hơi bị vấn đề, đôi lúc nếu
+data bị thay đổi thì nó sẽ bị lỗi còn dữ liệu cũ, mặc dù có cơ chế clear cache nhưng đôi lúc vẫn phải tự
+làm". Đề xuất 2 hướng qua chat (không code ngay): (1) chuyển invalidate từ "FE tự gọi flush sau khi save"
+sang "backend route ghi dữ liệu tự flush"; (2) ETL-completion-driven flush thay vì chỉ dựa TTL mù. Hiếu
+chốt "làm luôn cả 2".
+
+Audit code thật trước khi sửa (đọc `analytics-helpers.ts` toàn bộ, grep tất cả 47 chỗ `cachedQuery(` +
+mọi route dùng `fetchQuarterlySettings`/`getStrategicPartnersList`/`getPartnerTiers`): ban đầu nghi ngờ
+24 route có gap, sau khi đọc kỹ từng route mới xác nhận CHỈ 6 route thật sự có bug (đa số route khác đã
+tự đúng từ trước — bake `exclHash(excludedCustomers)` vào cache key, hoặc apply tier classification ở JS
+sau khi fetch cached rows thay vì bake vào SQL). 6 route lỗi: `b2b/kpis`, `b2c/kpis`, `b2c/performance`,
+`b2c/trend`, `b2b/strategic-performance`, `monthly-kpis` — fetch `excludedCustomers` fresh mỗi request
+rồi bake vào SQL trong `cachedQuery`, nhưng cache key không hash theo giá trị này → đổi danh sách loại
+trừ ở Quarter Report Settings không tự làm mới các route trên tới khi hết TTL 60'.
+
+Fix phần 1: thêm `exclHash(excludedCustomers)` vào cache key cả 6 route (2 route phải dời fetch settings
+ra trước dòng tính key). Route ghi `quarterly-settings` không cần sửa gì — tự invalidate qua đổi key.
+
+Phát hiện thêm lúc audit: route `web/src/app/api/cron/etl-cache-sync/route.ts` đã tồn tại untracked trên
+máy (chưa commit) — có vẻ do 1 lượt làm trước đó trong cùng phiên (trước khi bị compact mất context) đã
+bắt đầu code phần 2 rồi dừng giữa chừng. Đọc lại xác nhận code ĐÚNG và ĐỦ: theo dõi `jobs`/`job_logs`
+(gohub_dw) cho 4 job `ETL_dim`/`ETL_vatdb_cogs`/`ETL_fact_fulfilment_revenue_from_ops_admin_v2`/
+`ETL_fact_sales_revenue_from_gohub_cloud`, so `end_time` mới nhất với lần check trước
+(`app_settings.etl_cache_sync_last_seen`), job nào tiến → `flushAnalyticsCache()`. Verify độc lập qua SQL
+trực tiếp trên staging (browser + `/api/admin/sql-query`) xác nhận đúng tên job + cột (`job_logs.status`
+là chuỗi `'successful'` chứ không phải `'success'` — nếu đoán sai literal này thì query luôn ra 0 dòng,
+âm thầm không bao giờ flush) — code hiện có đã dùng đúng `'successful'`. Giữ nguyên, không sửa gì thêm.
+KHÔNG đăng ký `vercel.json` (Hobby giới hạn 1 lần/ngày/job) — cần Hiếu tự thêm 1 job cron-job.org ping
+`GET /api/cron/etl-cache-sync` mỗi 10-15 phút (đã có sẵn hạ tầng cron-job.org từ browserless keep-alive
+s195). Có sẵn `POST` cùng route để tự test tay.
+
+tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Wiki `docs/wiki/system/analytics-data-model.md` mục 8 cập
+nhật đủ. Chưa commit/push tại thời điểm ghi log này.

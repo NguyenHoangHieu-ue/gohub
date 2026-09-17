@@ -10,6 +10,31 @@
 
 | | |
 |---|---|
+| ✅ **s200+6 (2026-09-17) — Vá kiến trúc cache "phải tự tay bấm Tải lại mới" — 2 phần theo yêu cầu Hiếu
+  "làm luôn cả 2", tsc+lint+vitest (261/261) PASS, chờ Hiếu setup cron-job.org** | Hiếu hỏi hướng giải
+  quyết triệt để hiện tượng cache đôi lúc trả số cũ dù có cơ chế clear, đôi lúc vẫn phải tự làm. Audit
+  trực tiếp code (không đoán, đọc hết `analytics-helpers.ts` + tất cả route dùng `fetchQuarterlySettings`):
+  xác nhận đúng 6 route (`b2b/kpis`, `b2c/kpis`, `b2c/performance`, `b2c/trend`, `b2b/strategic-performance`,
+  `monthly-kpis`) fetch settings loại trừ KH (`excludedCustomers`) fresh mỗi request rồi bake vào SQL bên
+  trong `cachedQuery`, nhưng KHÔNG hash vào cache key (khác `b2b/trend`/`b2b/performance`/Quarter Report —
+  các route này vốn đã đúng từ trước, có `exclHash(...)` trong key) — đổi danh sách loại trừ ở Quarter
+  Report Settings không tự làm mới các route trên tới khi hết TTL 60'. **Fix phần 1**: thêm
+  `exclHash(excludedCustomers)` vào cache key cả 6 route (2 route — `b2b/strategic-performance`/
+  `monthly-kpis` — phải dời lệnh fetch settings ra TRƯỚC dòng tính key, trước đó nằm trong callback
+  `cachedQuery`) — tự invalidate qua đổi key, route ghi dữ liệu (`quarterly-settings`) không cần sửa gì
+  (đúng tinh thần "backend tự lo" thay vì FE tự gọi flush sau save). `partner_tiers` (Vendors/Strategic
+  list riêng, khác `quarterly_tier_keywords`) đã đúng từ s195+8 (gọi `flushAnalyticsCache()` khi lưu) —
+  không có gap. **Fix phần 2 — ETL-completion-driven flush**: route mới `/api/cron/etl-cache-sync` theo
+  dõi trực tiếp `jobs`/`job_logs` (gohub_dw, verify tên job thật qua SQL trên staging) cho 4 job ảnh hưởng
+  số liệu BI nhiều nhất (`ETL_dim`/`ETL_vatdb_cogs`/`ETL_fact_fulfilment_revenue_from_ops_admin_v2`/
+  `ETL_fact_sales_revenue_from_gohub_cloud`) — job nào vừa nạp xong data mới (so `end_time` mới nhất với
+  lần check trước, lưu `app_settings.etl_cache_sync_last_seen`) → `flushAnalyticsCache()` ngay, không chờ
+  TTL mù. KHÔNG đăng ký `vercel.json` (Hobby plan giới hạn 1 lần/ngày/job, không đủ tần suất theo kịp ETL
+  chạy hàng giờ) — dùng cron-job.org ping 10-15'/lần (đã có sẵn cho browserless keep-alive, xem mục
+  "s195"). Chi tiết đầy đủ: `docs/wiki/system/analytics-data-model.md` mục 8. **Cần Hiếu**: thêm 1 job
+  cron-job.org mới gọi `GET https://<domain>/api/cron/etl-cache-sync` (header `Authorization: Bearer
+  $CRON_SECRET`) mỗi 10-15 phút — có sẵn `POST` cùng route (đăng nhập admin/creator) để tự bấm test tay
+  trước khi setup cron-job.org.
 | ✅ **s200+5 (2026-09-17) — Quarter Report (Organization): tạm thời chỉ admin/creator xem được** | Hiếu
   yêu cầu giới hạn quyền. Bỏ `"quarterly-org"` khỏi `DEFAULT_ROLE_PERMISSIONS.bod` (trước tự động có qua
   `ALL_ANALYTICS_IDS`) và khỏi mảng `b2b` trong `lib/analytics-roles.ts` — admin/creator đã bypass hẳn ma
@@ -805,6 +830,13 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s200+6 — Setup cron-job.org ping cho `/api/cron/etl-cache-sync`** — route đã code + test PASS,
+  nhưng CHƯA có gì gọi nó theo lịch (giống browserless keep-alive, xem mục "s195": KHÔNG đăng ký
+  `vercel.json` vì Hobby giới hạn 1 lần/ngày/job). Vào cron-job.org (đã có tài khoản từ trước) → tạo job
+  mới: `GET https://<domain staging/production>/api/cron/etl-cache-sync`, header
+  `Authorization: Bearer <CRON_SECRET>`, lịch mỗi 10-15 phút. Có thể tự bấm test tay trước qua `POST` cùng
+  route (cần đăng nhập admin/creator, gọi từ Dev Tools hoặc trực tiếp fetch) để xác nhận trả
+  `{ok:true, advanced:[...], flushed:true/false}` đúng trước khi setup lịch tự động.
 - [ ] **s200 (toàn bộ chuỗi s200 → s200+5) — QA cuối trước khi merge main** — mọi việc dưới đây đã tự
   verify sống trên staging trong lúc làm (SQL trực tiếp + UI thật), Hiếu đã tự xem/phản hồi trực tiếp phần
   3HK (mã X, khung SIM, chart) và phần quyền Organization ngay trong phiên — chỉ còn 1 việc thật sự cần

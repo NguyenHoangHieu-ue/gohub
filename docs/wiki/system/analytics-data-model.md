@@ -84,6 +84,28 @@ Hầu hết tab có toggle **"Fulfillment" vs "Created"** (nút ở đầu trang
   `cachedAnalyticsQuery`, all-time mặc định 10') KHÔNG bị ảnh hưởng bởi đổi này.
 - **Guard**: `analyticsGuard(req, session)` chặn theo role. Allow-list role của `/api/analytics/query` **phải gồm `creator`** (thiếu → creator thấy bảng rỗng, 403 âm thầm).
 - Index gohub_dw = bỏ qua (không có quyền DB) → cache trong app là fix cuối.
+- **s200+6 (2026-09-17) — 2 phần vá kiến trúc cache theo yêu cầu Hiếu "giải quyết triệt để" hiện tượng
+  đổi setting/target xong vẫn thấy số cũ, phải tự tay bấm "Tải lại mới"**:
+  1. **Backend tự invalidate qua cache-key hash (không cần route ghi dữ liệu gọi flush riêng)** — audit
+     phát hiện 6 route (`b2b/kpis`, `b2c/kpis`, `b2c/performance`, `b2c/trend`, `b2b/strategic-performance`,
+     `monthly-kpis`) fetch `fetchQuarterlySettings().excludedCustomers` **fresh mỗi request** rồi bake vào
+     SQL bên trong `cachedQuery`, nhưng **cache key KHÔNG hash theo `excludedCustomers`** → đổi danh sách
+     loại trừ ở Quarter Report Settings không tự làm mới các route này (khác `b2b/trend`/`b2b/performance`/
+     `quarterly-report`/`quarterly-b2b-customers` — các route này ĐÃ đúng từ trước, có `exclHash(...)`
+     trong key). Fix: thêm `exclHash(excludedCustomers)` vào cache key, cùng pattern có sẵn — route write
+     `quarterly-settings` KHÔNG cần sửa gì (tự invalidate qua key đổi, không phải qua flush chủ động).
+     `partner_tiers` (Vendors/Strategic list riêng, khác `quarterly_tier_keywords`) đã đúng từ s195+8 (gọi
+     `flushAnalyticsCache()` full-wipe khi lưu) — không cần sửa thêm.
+  2. **ETL-completion-driven flush** (`/api/cron/etl-cache-sync`, KHÔNG đăng ký `vercel.json` — Hobby plan
+     giới hạn 1 lần/ngày/job, không đủ tần suất theo kịp ETL chạy hàng giờ) — theo dõi trực tiếp
+     `jobs`/`job_logs` (gohub_dw) cho 4 job ảnh hưởng số liệu BI nhiều nhất
+     (`ETL_dim`/`ETL_vatdb_cogs`/`ETL_fact_fulfilment_revenue_from_ops_admin_v2`/
+     `ETL_fact_sales_revenue_from_gohub_cloud`), lưu `end_time` mới nhất đã thấy vào `app_settings`
+     (`etl_cache_sync_last_seen`) — job nào có `end_time` mới hơn → `flushAnalyticsCache()` ngay, không chờ
+     TTL 60'. **Cần Hiếu**: thêm 1 job cron-job.org mới (cùng chỗ đang ping browserless keep-alive, xem
+     mục "s195") gọi `GET https://<domain>/api/cron/etl-cache-sync` mỗi 10-15 phút với header
+     `Authorization: Bearer $CRON_SECRET`. Có sẵn `POST` cùng route (yêu cầu login admin/creator) để tự bấm
+     test tay trước khi setup cron-job.org.
 
 ## 9. Gotchas chung
 - **Vendor 3HK** trong `dim_sku` lưu là `'3HK DATAPOOL'` (CÓ dấu cách) → lọc `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'`.
