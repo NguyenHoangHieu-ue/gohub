@@ -11,10 +11,15 @@ export const ALL_ANALYTICS_IDS = [
 
 // Quyền NỀN mặc định theo role (admin = toàn quyền, không liệt kê). Deny-by-default;
 // per-user allowed_analytics cộng dồn thêm. Admin có thể sửa trong Users / Settings.
+// "quarterly-org" (Quarter Report — Organization) — TẠM THỜI chỉ admin/creator xem được (Hiếu yêu cầu
+// 2026-09-17, admin/creator bypass hẳn ma trận này ở analytics/layout.tsx + sidebar.tsx). Giữ nguyên
+// trong ALL_ANALYTICS_IDS (không xoá) để còn cấp riêng qua allowed_analytics per-user nếu cần sau này.
+const BOD_ANALYTICS_IDS = ALL_ANALYTICS_IDS.filter(id => id !== "quarterly-org")
+
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
-  bod:        ALL_ANALYTICS_IDS, // BOD xem toàn bộ analytics (scheduled đã tách riêng management)
+  bod:        BOD_ANALYTICS_IDS, // BOD xem toàn bộ analytics (scheduled đã tách riêng management)
   staff:      ["dashboard", "products"],
-  b2b:        ["dashboard", "quarterly", "quarterly-org", "b2b", "vendors", "channels", "customers", "targets", "orders", "catalogue"],
+  b2b:        ["dashboard", "quarterly", "b2b", "vendors", "channels", "customers", "targets", "orders", "catalogue"],
   b2c:        ["dashboard", "quarterly", "b2c", "channels", "website", "products", "customers", "catalogue"],
   saleb2c:    ["dashboard", "b2c", "channels", "website", "catalogue"],
   "ops-&-cs": ["dashboard", "orders", "fulfillment", "cs-troubleshoot", "3hk-usage"],
