@@ -355,6 +355,7 @@ export async function GET(req: NextRequest) {
           sales_pic: r.sales_pic_code || "",
           tier:   classifyTier(r.price_list_name),
           region: classifyRegion(r.price_list_name, r.currency_code),
+          lifecycle_state: lifecycleMap.get(code) ?? "new",
           revenue, revenue_pr: revPr, target_rev: tgt.rev,
           rev_pct: tgt.rev > 0 ? Math.round(revPr / tgt.rev * 100) : null,
           cm1: cm1Act, cm1_pr: cm1Pr, target_cm1: tgt.cm1,
