@@ -805,14 +805,18 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
-- [ ] **s200 — QA Quarter Report: vòng đời KH B2B + trang Organization trên staging** — đã tự verify qua
-  API trực tiếp (số liệu gộp đúng thật), nhưng Hiếu nên tự xem qua UI 1 lượt trước khi merge main: (a)
-  Tổng quan — 3 StatTile mới "KH Mới/Quay Lại/Rời Bỏ" dưới bảng B2B chi tiết, số có hợp lý không; (b) Squad
-  Progress — mỗi squad card có badge 🆕/🔁/😴, bấm "Xem N KH rời bỏ" xổ đúng danh sách kèm doanh thu quý
-  trước; (c) trang mới `/analytics/quarterly-org` — số tổng B2B đầu trang khớp Quarter Report gốc, mở tier
-  Strategic/VIP xem PivotTable render đúng, kéo xuống khối "Tổ chức gồm nhiều mã KH" bấm xổ 1 tổ chức (vd
-  "VN_Org Vietravel") xem đúng danh sách mã KH chi nhánh + doanh thu từng mã. Nếu số liệu ổn, báo lại để
-  merge main.
+- [ ] **s200 (toàn bộ chuỗi s200 → s200+5) — QA cuối trước khi merge main** — mọi việc dưới đây đã tự
+  verify sống trên staging trong lúc làm (SQL trực tiếp + UI thật), Hiếu đã tự xem/phản hồi trực tiếp phần
+  3HK (mã X, khung SIM, chart) và phần quyền Organization ngay trong phiên — chỉ còn 1 việc thật sự cần
+  Hiếu tự xem lại: **Tổng quan Quarter Report** (3 StatTile "KH Mới/Quay Lại/Rời Bỏ") + **Squad Progress**
+  (badge 🆕/🔁/😴, "Xem N KH rời bỏ") — 2 phần này CHƯA có phản hồi trực tiếp từ Hiếu trong phiên, khác
+  phần Organization/3HK đã được Hiếu tự kiểm tra và góp ý ngay. Danh sách việc đã xong trong chuỗi này:
+  - Lifecycle KH B2B (New/Recurring/Inactive) + trang `/analytics/quarterly-org` — xem chi tiết.
+  - Fix `organization_code` (cột chết) → `organization` (cột thật) + drill-down Tier→Organization→Customer.
+  - 3HK Data Usage: badge freshness dữ liệu, fix phân loại Daily/Fixed/Unlimited (ký tự vị trí 8/10), loại
+    SKU khung SIM, đổi chart/breakdown sang mã ký tự — Hiếu đã tự xem và góp ý từng đợt, không cần QA thêm.
+  - Quarter Report (Organization): giới hạn quyền chỉ admin/creator xem được (Hiếu yêu cầu).
+  Nếu ổn hết, báo lại để merge main.
 - [x] **s199+4 — %MoM Quarter Report — XONG, đã tự verify sống + đã merge main (s199+5)**. T7 so đúng
   tháng 6 (BE fetch riêng), T8/T9 so trong quý — không cần Hiếu làm gì thêm.
 - [x] **s199+3 — Cache TTL 12h→60' — đã merge main (s199+5)** — theo dõi vài giờ đầu: B2B Performance/
