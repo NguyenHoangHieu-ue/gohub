@@ -237,6 +237,21 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 ## 9. Gotchas & Lịch sử thay đổi
 
+- **s200+2 (2026-09-17) — pipeline nạp theo ĐỢT lớn không đều kỳ, KHÔNG phải hàng ngày (giải thích cơ chế
+  đầy đủ, sau khi Hiếu hỏi lại về tháng 9).** Verify trực tiếp qua Dev Tools SQL Query: pipeline đã tự
+  chạy lại — `fact_data_usage` giờ có data tới **2026-08-31**, `loaded_at` mới nhất = **2026-09-17** (hôm
+  chạy audit này). Đào sâu bằng `GROUP BY loaded_at::date` phát hiện quy luật thật: nạp theo **3 đợt lớn
+  rời rạc**, mỗi đợt gồm ~2-3 tháng dữ liệu cùng lúc — **15/07** nạp T1-T3/2026, **20/07** nạp T4-T6/2026,
+  **17/09** nạp T7-T8/2026 (khoảng cách giữa đợt 2 và 3 là ~2 tháng). Đây là bằng chứng RÕ RÀNG pipeline
+  vận hành theo kiểu **batch/manual định kỳ vài tháng**, không phải ETL tự động hàng ngày/hàng giờ như
+  các bảng `fact_fulfillment_revenue`/`fact_sales_revenue` khác — nên **tháng đang chạy (vd T9 lúc viết
+  bài này) sẽ LUÔN "thiếu" cho tới đợt nạp kế tiếp**, đây là đặc tính bình thường của nguồn ngoài repo,
+  không phải lỗi cần sửa mỗi lần. Fix duy nhất khả thi ở phía web: thêm **badge freshness** ngay dưới
+  tiêu đề trang (`3hk-usage/page.tsx`, state `maxAvailableDate` — tách riêng khỏi `endDate` để không đổi
+  theo bộ lọc người dùng đang chỉnh) hiện rõ "Dữ liệu 3HK mới nhất: dd/mm/yyyy — cập nhật theo đợt, không
+  phải hàng ngày... KHÔNG phải bug web", đổi màu cảnh báo (amber) khi đã cũ >45 ngày — mục tiêu để người
+  xem (và cả Hiếu lần sau) tự hiểu ngay, tránh lặp lại chu kỳ hỏi→audit→"không phải bug" đã xảy ra 2 lần
+  trong cùng 1 tháng cho cùng 1 tab.
 - **🔴 s199 (2026-09-16) — dữ liệu đứng yên từ tháng 7, KHÔNG phải bug web** (Hiếu báo thiếu tháng 8):
   verify trực tiếp SQL trên staging — `fact_data_usage` MAX = **2026-06-30** (`loaded_at` ETL MAX =
   **2026-07-20**, đứng yên từ đó); `data_usage_log` (sub-report Country×Month) MAX = **2026-07-31**.
@@ -244,7 +259,9 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
   sales/ops_sync×2/recon_telco/inventory) nhưng **KHÔNG job nào ghi 2 bảng này**. Pipeline nạp usage 3HK
   nằm NGOÀI phạm vi repo `gohub-intel` (không phải cron `sync.yml` GitHub Actions của web, không có
   script nào trong `backend/`/`web/` từng ghi 2 bảng — grep xác nhận 0 kết quả). Không có gì để sửa ở
-  code web — cần Hiếu hỏi bên vận hành/vendor 3HK pipeline đó còn chạy không.
+  code web — cần Hiếu hỏi bên vận hành/vendor 3HK pipeline đó còn chạy không. **Cập nhật s200+2**: pipeline
+  đã tự chạy lại (xem mục trên) — kết luận "ngoài phạm vi repo" vẫn đúng, chỉ bổ sung thêm bằng chứng về
+  quy luật nạp theo đợt.
 - **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 6 chỗ, cùng lý do lệch locale
   mặc định trình duyệt nêu ở wiki Channels. Đề xuất C (P2) roadmap performance audit s196+20.
 - **s196+21 (2026-09-14) — code-split recharts**: 2 chart ("So sánh mức sử dụng theo nhóm",

@@ -9989,3 +9989,31 @@ tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Wiki `docs/wiki/system/tabs/
 tương ứng. **Đã tự verify sống trên staging sau deploy** (gọi thẳng `/api/analytics/quarterly-org-
 customers` qua Dev Tools console — Shopeepay 4 mã, Apec Travel 3 mã, nhiều tổ chức VN 2 mã, số liệu gộp
 đúng thật). Đã push staging (`be927f74`) — chưa merge main, chờ Hiếu tự xem qua UI 1 lượt.
+
+### s200+2 (2026-09-17) — 3HK Data Usage: xác nhận pipeline đã tự chạy lại + giải thích cơ chế nạp theo đợt
+
+Hiếu yêu cầu xử lý tab 3HK Data Usage (sau audit s199 kết luận "không phải bug web, hỏi vendor/ops").
+Verify lại trực tiếp qua Dev Tools SQL Query trên staging (không giả định audit cũ còn đúng): phát hiện
+pipeline ĐÃ tự chạy lại — `fact_data_usage` giờ có data tới 2026-08-31, `loaded_at` mới nhất = HÔM NAY
+(2026-09-17 01:44-01:49 UTC, đúng lúc đang làm session này). Mở thẳng tab trên staging xác nhận render
+bình thường, đúng auto-default sang tháng 8 (logic có sẵn "chọn kỳ = tháng của MAX date"), 36.977 SIM,
+bảng SKU/Country đều có số — ban đầu nghi "Average Usage by SKU" trống nhưng xác nhận lại chỉ là do bắt
+ảnh chụp lúc query con đang loading (loading skeleton không có text), KHÔNG phải bug thật (tự kiểm tra kỹ
+bằng `find` trước khi báo, tránh false positive).
+
+Hỏi lại Hiếu qua AskUserQuestion vì data đã khoẻ mạnh — nhận được: "Vẫn thiếu tháng 9 — muốn hỏi/xử lý
+tiếp". Đào sâu bằng `GROUP BY loaded_at::date`: phát hiện pipeline nạp theo **3 đợt lớn rời rạc, mỗi đợt
+2-3 tháng cùng lúc** — 15/07 nạp T1-T3, 20/07 nạp T4-T6, 17/09 (hôm nay) nạp T7-T8. Đây là bằng chứng rõ
+ràng pipeline vận hành kiểu batch/manual định kỳ vài tháng (KHÔNG phải ETL hàng ngày/hàng giờ như các
+bảng fact khác) — nên tháng đang chạy (T9) sẽ LUÔN "thiếu" cho tới đợt kế tiếp, đúng đặc tính bình thường
+của nguồn ngoài repo, không phải lỗi lặp lại cần sửa mỗi lần.
+
+Fix duy nhất khả thi phía web: thêm badge freshness ngay dưới tiêu đề tab `3hk-usage/page.tsx` — state
+`maxAvailableDate` mới (tách khỏi `endDate` để không đổi theo bộ lọc người dùng đang chỉnh, chỉ set 1 lần
+từ effect fetch MAX date có sẵn) — hiện "Dữ liệu 3HK mới nhất: dd/mm/yyyy — cập nhật theo đợt, không phải
+hàng ngày... KHÔNG phải bug web", đổi màu cảnh báo (amber) khi đã cũ >45 ngày. Mục tiêu: cắt vòng lặp
+hỏi→audit→"không phải bug" đã lặp 2 lần trong tháng này cho cùng 1 tab.
+
+tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã tự verify sống trên staging sau deploy (gọi `find` xác
+nhận badge hiện đúng "31/08/2026"). Wiki `docs/wiki/system/tabs/analytics-3hk-usage.md` mục 9 cập nhật
+đủ. Đã push staging (`69c49943`) — chưa merge main.
