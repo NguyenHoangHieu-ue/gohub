@@ -120,17 +120,30 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 
 ## 7. Gotchas
 - **s200 (2026-09-17) — Quarter Report (Organization), trang mới `/analytics/quarterly-org`.** Hiếu yêu
-  cầu "duplicate Quarter Report, dùng data organization để format lại" — bản group B2B theo
-  `dim_customer.organization_code` thay vì `customer_code` lẻ (dùng khi 1 công ty mẹ có nhiều mã KH con).
-  Route mới `quarterly-org-customers` (KHÔNG sửa `quarterly-b2b-customers` gốc) — GROUP BY
-  `COALESCE(NULLIF(TRIM(organization_code),''), customer_code)`: **fallback về customer_code khi
-  `organization_code` NULL** (hiện đa số NULL, xác nhận qua grep — 0 chỗ nào trong repo từng dùng cột này
-  trước s200) → hành vi hiện tại GIỐNG HỆT xem theo KH cho tới khi ETL bổ sung data organization, không
-  có rủi ro gộp sai/crash khi data thiếu. Trang gọi lại NGUYÊN `quarterly-report` API cho số tổng B2B đầu
-  trang (tiền không đổi theo cách gộp ai là chủ) — chỉ phần breakdown là mới. FE tái dùng thẳng
-  `<PivotTable>` (component đã có, dùng cho B2C/B2B channel pivot) thay vì viết bảng riêng — mỗi tier
-  (Strategic/VIP/Gold/Silver) 1 PivotTable, tên cột "Organization" ghép `· N mã KH` khi org gộp >1 KH +
-  badge `[VN]`/`[US]`.
+  cầu "duplicate Quarter Report, dùng data organization để format lại" — bản group B2B theo tổ chức thay
+  vì `customer_code` lẻ (1 công ty mẹ có nhiều mã KH chi nhánh). Route mới `quarterly-org-customers`
+  (KHÔNG sửa `quarterly-b2b-customers` gốc). Trang gọi lại NGUYÊN `quarterly-report` API cho số tổng B2B
+  đầu trang (tiền không đổi theo cách gộp ai là chủ) — chỉ phần breakdown là mới. FE tái dùng thẳng
+  `<PivotTable>` (component đã có, dùng cho B2C/B2B channel pivot) cho bảng tổng theo tier, cộng thêm khối
+  **drill-down Organization → Khách hàng** riêng (không thuộc PivotTable) hiện dưới mỗi tier, chỉ liệt kê
+  tổ chức gộp ≥2 mã KH — đúng hệ phân cấp Hiếu mô tả: **Tier → Organization → Customer**.
+  - 🔴 **s200+1 (cùng ngày) — bug thật ngay đợt đầu: chọn nhầm cột, route KHÔNG BAO GIỜ gộp được gì.**
+    Hiếu phản hồi kết quả "chưa phù hợp" ngay khi thấy — verify TRỰC TIẾP qua Dev Tools SQL Query trên
+    staging (không đoán): `dim_customer.organization_code` **100% RỖNG trên toàn bộ 355.389 dòng**
+    (`COUNT(*) FILTER (...) = 0`) — cột hoàn toàn chết, có lẽ chưa bao giờ được ETL nạp dù đã khai báo
+    trong schema. Field THẬT có data là **`organization`** (text, vd `"VN_Org Vietravel"` gộp 26 mã KH chi
+    nhánh, `"US_Org SHOPEEPAY"` gộp 4 mã theo từng nước) — 909 giá trị khác nhau, 1050/355.389 KH được gắn
+    (313 trong số đó có phát sinh đơn B2B thật trong lịch sử). Đợt đầu chọn `organization_code` làm khoá
+    GROUP BY → do cột này rỗng tuyệt đối, route LUÔN fallback về `customer_code` → không gộp được bất kỳ
+    tổ chức nào dù `organization` đã có data thật — đúng nguyên nhân Hiếu thấy ngay lập tức. Fix: đổi khoá
+    GROUP BY sang `organization` (đã verify sống trên staging sau deploy: Shopeepay 4 mã, Apec Travel 3
+    mã, nhiều org VN 2 mã — gộp đúng thật). **Bài học lặp lại đúng kiểu bug s198 đợt 9** (`data_policy_code`
+    cột ảo) — tên cột nghe hợp lý/đúng ý đồ thiết kế không phải bằng chứng nó có data thật, luôn verify
+    qua SQL/REST trước khi dùng làm khoá chính.
+  - **1 tổ chức có thể có nhiều tier khác nhau giữa các chi nhánh** (verify: 26/909 tổ chức có ≥2
+    `price_list_name` khác nhau, vd Vietravel vừa Gold vừa Silver tuỳ chi nhánh) — route xếp CẢ tổ chức
+    vào tier của chi nhánh có doanh thu lớn nhất (representative theo revenue, cùng cách chọn region/
+    price_list_name đại diện), ghi rõ trong `LogicNote` đầu trang.
   - **KHÔNG có CH.Cost per-customer** (Turso) ở view này — chi phí đó gắn với customer_code lẻ, không có
     ý nghĩa gộp nhiều mã. CM1 hiển thị (`totalCm1` tier-level) chỉ trừ Group Cost B2B (Supabase, phân bổ
     theo revenue-share, y hệt `quarterly-b2b-customers`). Per-org row hiện "CM1" = GM thuần (cost=0 ở mức
@@ -141,12 +154,11 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
     bảng KH gốc s199+4 — nếu cần %MoM đúng cho T7 ở đây, phải thêm query `prevMonthRows` tương tự).
   - **KHÔNG có Squad Progress** cho trang này — squad gắn theo `sales_pic_code` (con người), không đổi
     theo cách gộp tổ chức.
-  - **Không cần migration DB** — chỉ đọc thêm 2 cột có sẵn (`organization`/`organization_code`).
-  - **Cần Hiếu verify sau deploy** (không tự làm được từ máy dev, thiếu `.env.local`): (1) chạy SQL
-    `SELECT COUNT(*) FILTER (WHERE TRIM(COALESCE(organization_code,''))!='' ), COUNT(*) FROM dim_customer`
-    ở Dev Tools SQL Query — biết % KH đã có organization thật (kỳ vọng thấp); (2) mở trang, xác nhận số
-    tổng B2B khớp Quarter Report gốc, mỗi PivotTable tier mở ra đúng danh sách "organization" (nếu chưa có
-    data organization thật, mỗi dòng = 1 KH y hệt bảng gốc, đúng thiết kế fallback).
+  - **Không cần migration DB** — chỉ đọc thêm cột có sẵn `organization` (`organization_code` không dùng
+    nữa, dead column, có thể cân nhắc bỏ hẳn khỏi schema sau này nếu ETL xác nhận không bao giờ nạp).
+  - **Đã tự verify sống trên staging sau deploy** (gọi thẳng API qua Dev Tools, không chỉ tin code sạch):
+    tổ chức nhiều chi nhánh gộp đúng số liệu thật, khối drill-down Organization → Khách hàng hiện đúng
+    danh sách + doanh thu từng mã KH.
 - **s200 (2026-09-17) — New/Recurring/Inactive B2B Customers** (Hiếu yêu cầu vòng đời KH). Module dùng
   chung `lib/analytics-engine/b2b-lifecycle.ts`: `fetchB2BLifecycleRows()` quét MIN(ngày mua) toàn bộ
   lịch sử `fact_fulfillment_revenue` cho mỗi KH B2B (1 query GROUP BY, không loop) — cache TTL RIÊNG 6 giờ

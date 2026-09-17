@@ -11,25 +11,34 @@
 | | |
 |---|---|
 | ⏳ **s200 (2026-09-17) — Quarter Report: New/Recurring/Inactive B2B Customers + trang mới Organization
-  — đã push staging, chờ Hiếu QA** | Hiếu yêu cầu (1) duplicate Quarter Report group theo Organization,
-  (2) thêm 3 chỉ số vòng đời KH B2B (New/Recurring/Inactive) vào Tổng quan + Squad Progress. Đã lên plan
-  qua EnterPlanMode (đã duyệt) trước khi code. Module dùng chung mới `lib/analytics-engine/b2b-lifecycle.ts`
-  — `fetchB2BLifecycleRows()` quét MIN(ngày mua) toàn bộ lịch sử `fact_fulfillment_revenue` cho mỗi KH B2B
-  (1 query GROUP BY, cache riêng 6h tách khỏi `QUERY_TTL_MIN` chung — tránh lặp lại lớp bug full-scan từng
-  gây timeout B2C s195+15). `classifyB2BLifecycle()` (hàm thuần, 8 unit test) so `first_order_date` với
-  quý đang xem — "trước đây" = TOÀN BỘ lịch sử (Hiếu chốt qua AskUserQuestion). Gắn vào `quarterly-report`
-  (field `customerLifecycle`, 3 StatTile mới ở Tổng quan) và `squad-progress` (field `lifecycle` per-squad
-  + `totals`, kèm top 10 KH inactive theo doanh thu quý trước để leader gọi lại — badge 🆕/🔁/😴 cạnh
-  risk-chip mỗi squad card). Trang mới `/analytics/quarterly-org` (nav.ts + sidebar.tsx +
-  analytics-roles.ts, quyền bod/b2b/admin/creator) — route mới `quarterly-org-customers` group B2B theo
-  `COALESCE(organization_code, customer_code)` (fallback graceful khi `organization_code` NULL — xác nhận
-  qua grep: 0 chỗ nào trong repo từng dùng cột này, hiện đa số NULL theo wiki — nên trang mới hành vi
-  GIỐNG HỆT bản theo KH cho tới khi ETL bổ sung data), tái dùng thẳng component `<PivotTable>` có sẵn cho
-  breakdown (không viết bảng mới), tái dùng nguyên API `quarterly-report` cho số tổng đầu trang. KHÔNG có
-  CH.Cost per-customer/Squad Progress ở trang Organization (v1, đã ghi rõ trong `LogicNote` đầu trang).
-  tsc + lint (0 lỗi mới) + vitest (261/261, +8 test mới) PASS toàn bộ 4 commit. Wiki
-  `docs/wiki/system/tabs/analytics-quarterly.md` cập nhật đủ (mục 7 Gotchas + bảng Đường dẫn). **Đã push
-  staging, CHƯA merge main.** Cần Hiếu QA trên staging — xem checklist bên dưới.
+  (đã fix 1 bug thật ngay đợt đầu, đã verify sống) — đã push staging, chờ Hiếu QA** | Hiếu yêu cầu (1)
+  duplicate Quarter Report group theo Organization, (2) thêm 3 chỉ số vòng đời KH B2B (New/Recurring/
+  Inactive) vào Tổng quan + Squad Progress. Lên plan qua EnterPlanMode (đã duyệt) trước khi code.
+  **Lifecycle**: module dùng chung mới `lib/analytics-engine/b2b-lifecycle.ts` — `fetchB2BLifecycleRows()`
+  quét MIN(ngày mua) toàn bộ lịch sử `fact_fulfillment_revenue` cho mỗi KH B2B (1 query GROUP BY, cache
+  riêng 6h tách khỏi `QUERY_TTL_MIN` chung — tránh lặp lại lớp bug full-scan từng gây timeout B2C s195+15).
+  `classifyB2BLifecycle()` (hàm thuần, 8 unit test) so `first_order_date` với quý đang xem — "trước đây" =
+  TOÀN BỘ lịch sử (Hiếu chốt qua AskUserQuestion). Gắn vào `quarterly-report` (field `customerLifecycle`,
+  3 StatTile mới ở Tổng quan) và `squad-progress` (field `lifecycle` per-squad + `totals`, kèm top 10 KH
+  inactive theo doanh thu quý trước để leader gọi lại — badge 🆕/🔁/😴 cạnh risk-chip mỗi squad card).
+  **Trang Organization**: `/analytics/quarterly-org` (nav.ts + sidebar.tsx + analytics-roles.ts, quyền
+  bod/b2b/admin/creator) — route mới `quarterly-org-customers`. 🔴 **Bug thật phát hiện NGAY khi Hiếu xem
+  lần đầu** ("hơi không phù hợp"): đợt code đầu chọn nhầm `dim_customer.organization_code` làm khoá gộp —
+  verify trực tiếp qua Dev Tools SQL Query xác nhận cột này **100% RỖNG trên toàn bộ 355.389 dòng** (dead
+  column), trong khi field THẬT có data là **`organization`** (text, 909 giá trị, 1050 KH gắn, vd
+  "VN_Org Vietravel" gộp 26 mã KH chi nhánh) — route cũ vì vậy KHÔNG BAO GIỜ gộp được gì. Đã fix đổi khoá
+  sang `organization` + thêm khối drill-down Organization → Khách hàng (đúng hệ phân cấp Hiếu mô tả: Tier
+  → Organization → Customer, chỉ hiện tổ chức ≥2 mã KH — verify có 26/909 tổ chức như vậy, một số còn trải
+  nhiều tier khác nhau giữa các chi nhánh). **Đã tự verify sống trên staging sau deploy** (gọi thẳng API
+  qua Dev Tools, không chỉ tin code sạch): Shopeepay gộp đúng 4 mã, Apec Travel 3 mã, nhiều tổ chức VN 2
+  mã — số liệu gộp đúng thật. Tái dùng nguyên `quarterly-report` API cho số tổng B2B đầu trang + component
+  `<PivotTable>` có sẵn cho bảng tier (không viết bảng mới). KHÔNG có CH.Cost per-customer/Squad Progress
+  ở trang Organization (v1, ghi rõ trong `LogicNote` đầu trang).
+  tsc + lint (0 lỗi mới) + vitest (261/261, +8 test mới) PASS toàn bộ 6 commit. Wiki
+  `docs/wiki/system/tabs/analytics-quarterly.md` cập nhật đủ (mục 7 Gotchas + bảng Đường dẫn).
+  **⚠️ Lưu ý quy trình phát hiện lúc làm session này**: 7 commit đầu chỉ nằm local, quên `git push` —
+  Hiếu báo "chưa thấy deploy" mới phát hiện ra, đã push bù (`git push origin staging`) và xác nhận Vercel
+  build xong. **Đã push staging, CHƯA merge main.** Cần Hiếu QA trên staging — xem checklist bên dưới.
 | ✅ **s199+5 (2026-09-16) — MERGE MAIN (Hiếu yêu cầu rõ ràng "merge main đi")** | Gộp TOÀN BỘ staging vào
   main (28 commit từ s198 Product Catalogue → s199+4 %MoM), merge sạch không conflict (`git merge ort`).
   tsc + vitest (253/253) PASS trên main trước khi push. Production đang tự deploy qua Vercel.
@@ -751,15 +760,14 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
-- [ ] **s200 — QA Quarter Report: vòng đời KH B2B + trang Organization trên staging** — sau khi Vercel
-  deploy: (a) Tổng quan — xem 3 StatTile mới "KH Mới/Quay Lại/Rời Bỏ" dưới bảng B2B chi tiết, số có hợp lý
-  không (so nhanh với hiểu biết thực tế về khách B2B); (b) Squad Progress — mỗi squad card có badge
-  🆕/🔁/😴, bấm "Xem N KH rời bỏ" xổ đúng danh sách kèm doanh thu quý trước; (c) trang mới
-  `/analytics/quarterly-org` — số tổng B2B đầu trang khớp Quarter Report gốc, mở từng tier (Strategic/
-  VIP/...) xem breakdown Organization × Tháng render đúng; (d) chạy SQL nhanh ở Dev Tools:
-  `SELECT COUNT(*) FILTER (WHERE TRIM(COALESCE(organization_code,''))!='' ), COUNT(*) FROM dim_customer`
-  để biết % KH đã có organization thật (kỳ vọng thấp — nếu gần 0%, trang Organization sẽ hiện y hệt bản
-  theo KH, ĐÚNG THIẾT KẾ không phải bug). Nếu số liệu ổn, báo lại để merge main.
+- [ ] **s200 — QA Quarter Report: vòng đời KH B2B + trang Organization trên staging** — đã tự verify qua
+  API trực tiếp (số liệu gộp đúng thật), nhưng Hiếu nên tự xem qua UI 1 lượt trước khi merge main: (a)
+  Tổng quan — 3 StatTile mới "KH Mới/Quay Lại/Rời Bỏ" dưới bảng B2B chi tiết, số có hợp lý không; (b) Squad
+  Progress — mỗi squad card có badge 🆕/🔁/😴, bấm "Xem N KH rời bỏ" xổ đúng danh sách kèm doanh thu quý
+  trước; (c) trang mới `/analytics/quarterly-org` — số tổng B2B đầu trang khớp Quarter Report gốc, mở tier
+  Strategic/VIP xem PivotTable render đúng, kéo xuống khối "Tổ chức gồm nhiều mã KH" bấm xổ 1 tổ chức (vd
+  "VN_Org Vietravel") xem đúng danh sách mã KH chi nhánh + doanh thu từng mã. Nếu số liệu ổn, báo lại để
+  merge main.
 - [x] **s199+4 — %MoM Quarter Report — XONG, đã tự verify sống + đã merge main (s199+5)**. T7 so đúng
   tháng 6 (BE fetch riêng), T8/T9 so trong quý — không cần Hiếu làm gì thêm.
 - [x] **s199+3 — Cache TTL 12h→60' — đã merge main (s199+5)** — theo dõi vài giờ đầu: B2B Performance/

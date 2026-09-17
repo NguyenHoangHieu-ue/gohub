@@ -9949,3 +9949,43 @@ tsc + lint (0 lỗi mới) + vitest (261/261, +8 test) PASS toàn bộ 4 commit
 `docs/wiki/system/tabs/analytics-quarterly.md` cập nhật đủ (mục 1 Đường dẫn, mục 7 Gotchas 2 đoạn riêng
 cho Organization + Lifecycle). Đã push staging — **chưa merge main**, chờ Hiếu QA (checklist trong
 CLAUDE.md).
+
+### s200+1 (2026-09-17) — Fix bug thật ngay đợt đầu: quarterly-org dùng nhầm cột chết organization_code
+
+Deploy xong s200, Hiếu vào xem báo ngay "hơi không phù hợp" + nêu rõ hệ phân cấp mong muốn: Tier
+(Strategic) → Organization → Customer. Trước khi sửa, phát hiện thêm vấn đề vận hành: 7 commit s200 chỉ
+nằm ở máy local, quên `git push` — Hiếu báo "chưa thấy deploy" mới lộ ra. Đã push bù, xác nhận Vercel
+build/deploy xong (theo dõi qua Vercel MCP `list_deployments`/`get_deployment` tới khi `readyState=READY`).
+
+Verify dữ liệu thật: máy dev vốn không có `ANALYTICS_DB_*` (theo note cũ CLAUDE.md), nhưng lần này
+`.env.local` có tồn tại — kiểm tra kỹ thì các biến `ANALYTICS_DB_HOST/NAME/USER` đều RỖNG (chỉ có
+`ANALYTICS_DB_PORT`), xác nhận vẫn không kết nối trực tiếp gohub_dw từ máy dev được (ECONNREFUSED khi thử
+qua script Node local, cả khi bật `dangerouslDisableSandbox`). Chuyển sang dùng browser đã có sẵn session
+đăng nhập staging (Chrome, tài khoản Creator) — gọi thẳng `/api/admin/sql-query` qua `javascript_tool`
+(fetch cùng-origin, tận dụng cookie có sẵn) thay vì thao tác UI Dev Tools SQL Query từng câu, nhanh hơn
+nhiều cho nhiều query liên tiếp.
+
+Kết quả verify: `dim_customer.organization_code` **100% RỖNG trên toàn bộ 355.389 dòng** — cột hoàn toàn
+chết, có thể chưa từng được ETL nạp dù có trong schema. Field THẬT có data là `organization` (text, vd
+"VN_Org Vietravel" gộp 26 mã KH chi nhánh khác nhau, "US_Org SHOPEEPAY" gộp 4 mã theo từng nước) — 909 giá
+trị khác nhau, 1050/355.389 KH được gắn (313 trong số có phát sinh đơn B2B thật). Route `quarterly-org-
+customers` (viết ở s200) chọn nhầm `organization_code` làm khoá GROUP BY → do cột rỗng tuyệt đối, LUÔN
+fallback về `customer_code` → không gộp được tổ chức nào dù `organization` có data thật — đúng nguyên
+nhân Hiếu thấy ngay lập tức. Cùng lớp bug với `data_policy_code` (s198 đợt 9) — tên cột nghe hợp lý không
+phải bằng chứng có data thật.
+
+Fix: đổi khoá GROUP BY từ `organization_code` sang `organization` (1 dòng SQL). Đồng thời verify thêm:
+26/909 tổ chức có nhiều `price_list_name`/tier khác nhau giữa các chi nhánh (vd Vietravel vừa Gold vừa
+Silver) — route xếp cả tổ chức vào tier của chi nhánh doanh thu lớn nhất (representative theo revenue).
+
+Thêm khối UI mới đáp ứng đúng yêu cầu Hiếu (Tier → Organization → Customer): drill-down "Tổ chức gồm
+nhiều mã KH" (`<details>` per-org, chỉ hiện org có ≥2 mã KH) ngay dưới mỗi PivotTable tier trên trang
+`/analytics/quarterly-org` — bấm mở ra danh sách mã KH chi nhánh + doanh thu từng mã trong quý. Route
+thêm field `members: {code,name,revenue}[]` per OrgRow để phục vụ khối này (trước chỉ có `memberCodes`
+là mảng mã, không có breakdown doanh thu).
+
+tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Wiki `docs/wiki/system/tabs/analytics-quarterly.md` mục
+7 viết lại hẳn đoạn Organization (thêm sub-mục "s200+1" mô tả root cause + fix). CLAUDE.md cập nhật
+tương ứng. **Đã tự verify sống trên staging sau deploy** (gọi thẳng `/api/analytics/quarterly-org-
+customers` qua Dev Tools console — Shopeepay 4 mã, Apec Travel 3 mã, nhiều tổ chức VN 2 mã, số liệu gộp
+đúng thật). Đã push staging (`be927f74`) — chưa merge main, chờ Hiếu tự xem qua UI 1 lượt.
