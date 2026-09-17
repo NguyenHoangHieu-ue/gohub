@@ -49,7 +49,7 @@ export const UsageDistChart = React.memo(function UsageDistChart({ rows, groups 
   )
 })
 
-// Mã SKU nào chiếm bao nhiêu SIM (s200+3, Hiếu yêu cầu) — bar ngang, top N + "Khác" gộp phần đuôi dài.
+// Mã loại gói nào chiếm bao nhiêu SIM (s200+4) — bar ngang theo ký tự phân loại, "Khác" gộp phần không xác định.
 interface SkuCountChartProps { data: { sku: string; active_sims: number }[] }
 
 export const SkuCountChart = React.memo(function SkuCountChart({ data }: SkuCountChartProps) {
@@ -58,7 +58,7 @@ export const SkuCountChart = React.memo(function SkuCountChart({ data }: SkuCoun
       <BarChart data={data} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} horizontal={false} />
         <XAxis type="number" tick={{ fontSize: 11, fill: "#64748b" }} allowDecimals={false} />
-        <YAxis type="category" dataKey="sku" width={130} tick={{ fontSize: 10, fill: "#475569" }} />
+        <YAxis type="category" dataKey="sku" width={220} tick={{ fontSize: 10, fill: "#475569" }} />
         <Tooltip formatter={(v: number) => [`${v} SIM`, "Active SIMs"]} />
         <Bar dataKey="active_sims" name="Active SIMs" radius={[0, 4, 4, 0]}>
           {data.map((d, i) => (
