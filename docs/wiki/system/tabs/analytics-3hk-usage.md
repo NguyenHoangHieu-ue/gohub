@@ -51,11 +51,77 @@ Trang theo dõi chi tiết **dung lượng data thực tế tiêu thụ** của 
 | **`first_report_date`** | **⭐ Ngày báo cáo lưu lượng** (snapshot) — lưu ở **00:00:00 UTC** | **CỘT LỌC KỲ CHÍNH** (xem mục 4) |
 | `activation_date` | Ngày kích hoạt SIM | **CHỈ hiển thị** ("Acts: …"), KHÔNG dùng lọc kỳ |
 
-### 3.1 Phân loại loại gói (Daily/Fixed/Unlimited)
-Tin theo **mã SKU**, không tin cột `sku_type` (mã mới từng bị gán nhầm):
+### 3.1 Phân loại loại gói (Daily/Fixed/Unlimited) — s200+3 (2026-09-17)
+
+> ⚠️ **Fix root cause thật** — Hiếu báo mã `X` (và tương tự) là Unlimited nhưng bị xếp Daily, kèm bảng
+> mapping cấu trúc SKU chuẩn 13 ký tự. Verify trực tiếp SQL trên staging: field quyết định loại gói là
+> **1 ký tự ở VỊ TRÍ 8** của SKU CODE 13 ký tự (`SKU CODE = [VN/US][Type][Country(3)][Vendor(2)]
+> [DataType(1)][DataAmount(3)][DayAmount(2)]`). Bản CŨ chỉ nhận diện Unlimited qua substring `%UNL%` trong
+> toàn chuỗi — đúng cho `A`/`B` (vì trường DataAmount ở vị trí 9-11 CŨNG ghi literal `"UNL"`, vd
+> `EACHN3DBUNL05`) nhưng **SAI cho `C`/`D`/`E`/`G`/`H`/`L`/`X`** — các mã này KHÔNG có `"UNL"` ở đâu
+> trong chuỗi (vd `EAANZ3DX00303`) → rơi về cột `sku_type` gán sẵn từ nguồn 3HK, vốn gán theo tên gọi phụ
+> (bị "Daily"/"Fixed" đánh lừa dù bản chất là Unlimited — comment cũ ở `3hk-speed-map/route.ts` đã ghi
+> nhận hiện tượng "mã MỚI bị gán nhầm 'Daily'" từ trước nhưng chưa fix ở chỗ chính này).
+
+**Bảng mapping ký tự vị trí 8** (Hiếu cung cấp, đã verify khớp dữ liệu thật qua SQL — Fixed -5235 SIM =
+Other +5235 đúng số SKU `K`, Daily -26 = Unlimited +26 đúng số SKU `X`, khớp tuyệt đối):
+
+| Ký tự | Ý nghĩa gốc | Category |
+|---|---|---|
+| A | Daily - Unlimited 5mbps | **Unlimited Data** |
+| B | Daily - Unlimited 10mbps | **Unlimited Data** |
+| C | Unlimited 20mbps | **Unlimited Data** |
+| D | Unlimited 100mbps | **Unlimited Data** |
+| E | Fixed - Unlimited 5mbps | **Unlimited Data** |
+| G | Fixed - Unlimited 10mbps | **Unlimited Data** |
+| H | Unlimited 5mbps | **Unlimited Data** |
+| L | Unlimited 50mbps | **Unlimited Data** |
+| X | Daily Unlimited 10mbps - Midnight | **Unlimited Data** |
+| F | Fixed throttle <2mbps | Fixed Data |
+| Y | Fixed no-throttle | Fixed Data |
+| P | Daily throttle <2mbps | Daily Data |
+| Z | Daily no-throttle | Daily Data |
+| T | Daily throttle <2mbps - Midnight | Daily Data |
+| K | For esim profile and sim frame | **Other** (không phải gói data thật — placeholder) |
+
+Quy tắc: **nếu tên gọi có chữ "Unlimited" → LUÔN xếp Unlimited**, bất kể có kèm "Daily"/"Fixed" hay không
+(2 chữ đó ở đây chỉ nói về chu kỳ RESET của mức throttle, không phải bản chất dung lượng có giới hạn hay
+không). Chỉ áp dụng cho SKU **13 ký tự** (chuẩn hiện tại); mã CŨ 14/15 ký tự giữ nguyên logic literal
+`%UNL%` (tự mô tả rõ bằng chữ "GB"/"UNL" trong chuỗi, không cần đổi).
+
 ```sql
-CASE WHEN UPPER(sku) LIKE '%UNL%' THEN 'Unlimited Data' ELSE sku_type END
+CASE
+  WHEN LENGTH(sku) = 13 THEN
+    CASE SUBSTRING(sku, 8, 1)
+      WHEN 'A' THEN 'Unlimited Data' WHEN 'B' THEN 'Unlimited Data' WHEN 'C' THEN 'Unlimited Data'
+      WHEN 'D' THEN 'Unlimited Data' WHEN 'E' THEN 'Unlimited Data' WHEN 'G' THEN 'Unlimited Data'
+      WHEN 'H' THEN 'Unlimited Data' WHEN 'L' THEN 'Unlimited Data' WHEN 'X' THEN 'Unlimited Data'
+      WHEN 'F' THEN 'Fixed Data' WHEN 'Y' THEN 'Fixed Data'
+      WHEN 'P' THEN 'Daily Data' WHEN 'Z' THEN 'Daily Data' WHEN 'T' THEN 'Daily Data'
+      WHEN 'K' THEN 'Other'
+      ELSE sku_type
+    END
+  WHEN UPPER(sku) LIKE '%UNL%' THEN 'Unlimited Data'
+  ELSE sku_type
+END
 ```
+
+**`daysOfSku()` (FE, dùng cho cột "GB/ngày/SIM" ở tab Unlimited) cùng đợt fix**: trước chỉ nhận diện số
+ngày qua literal `UNLxx`/`xxD` ở cuối chuỗi → bỏ sót toàn bộ mã 13 ký tự không có `"UNL"` (C/D/E/G/H/L/X)
+→ cột luôn hiện "—" cho các mã này. Thêm fallback đọc **2 ký tự cuối** của SKU 13 ký tự (vị trí
+DayAmount) khi 2 pattern cũ không khớp — verify khớp cả SKU Fixed/Daily 13 ký tự khác (vd `...F01215` →
+"15" ngày) nên áp dụng chung, không chỉ riêng Unlimited.
+
+**Phát hiện thêm qua audit, CHƯA sửa (cần Hiếu quyết định hướng)**:
+- SKU `1D0003DK00000` (mã `K`, giờ vào bucket `Other`) gánh **28.264 GB actual** dù `plan=0` (~5.235
+  "SIM") — nghi dữ liệu nguồn 3HK gộp nhầm usage thật của nhiều SIM khác vào 1 mã placeholder "SIM
+  frame/eSIM profile" thay vì mã SKU thật của từng SIM. Chưa rõ nguyên nhân từ phía 3HK, cần hỏi vendor.
+- `GET /api/analytics/3hk-speed-map` (phục vụ 2 chart "So sánh mức sử dụng theo nhóm" + "Phân bố mức data
+  sử dụng/ngày", chỉ hiện khi tab = Unlimited) **chỉ nhận diện mã `A`/`B`** (dò theo `/[AB]UNL/i`) — chưa
+  có bucket cho `C`(20mbps)/`D`(100mbps)/`L`(50mbps)/`E`/`G`/`H`/`X`. Các mã này vẫn ĐÚNG ở bảng Summary/
+  SKU Type/SKU chính (đã fix ở trên) nhưng bị loại khỏi 2 chart phụ đó — cần quyết định thêm bucket mới
+  (hiện chỉ có 3 bucket cố định: 500MB·5mbps / 500MB·10mbps / 1GB·10mbps, không khớp tốc độ 20/50/100mbps
+  của các mã mới).
 
 ### 3.2 Cấu trúc bản ghi (quan trọng để hiểu SUM)
 - Mỗi bản ghi = 1 **snapshot theo ngày** của 1 SIM. `first_report_date` là mốc ngày (00:00:00 UTC).
@@ -237,6 +303,17 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 ## 9. Gotchas & Lịch sử thay đổi
 
+- **s200+3 (2026-09-17) — Fix phân loại Daily/Fixed/Unlimited sai + chart mới "Mã SKU chiếm bao nhiêu
+  SIM".** Xem chi tiết đầy đủ ở §3.1 (bảng mapping ký tự vị trí 8, SQL trước/sau, 2 phát hiện thêm chưa
+  sửa). Tóm tắt: mã `X` (và `C`/`D`/`E`/`G`/`H`/`L`) là Unlimited nhưng bị xếp Daily/Fixed do code cũ chỉ
+  nhận diện Unlimited qua substring `%UNL%` — không có trong các mã này. Đổi sang CASE theo ký tự vị trí 8
+  của SKU 13 ký tự (bảng mapping đầy đủ ở §3.1). Verify sống: Fixed -5235 SIM = Other +5235 (đúng số SKU
+  `K`, mã placeholder eSIM profile/SIM frame giờ tách riêng thay vì gộp nhầm Fixed), Daily -26 =
+  Unlimited +26 (đúng số SKU `X`) — khớp tuyệt đối. Kèm fix `daysOfSku()` (cột "GB/ngày/SIM" tab
+  Unlimited) thêm fallback đọc 2 ký tự cuối SKU 13 ký tự khi không có literal "UNL"/"...D" — trước luôn
+  "—" cho C/D/E/G/H/L/X. Thêm chart mới `SkuCountChart` (`3hk-usage-charts.tsx`) — bar ngang top 15 SKU
+  theo Active SIMs + gộp "Khác", dùng lại `skuMetrics` đã fetch sẵn, không thêm query. tsc + lint (0 lỗi
+  mới) + vitest (261/261) PASS.
 - **s200+2 (2026-09-17) — pipeline nạp theo ĐỢT lớn không đều kỳ, KHÔNG phải hàng ngày (giải thích cơ chế
   đầy đủ, sau khi Hiếu hỏi lại về tháng 9).** Verify trực tiếp qua Dev Tools SQL Query: pipeline đã tự
   chạy lại — `fact_data_usage` giờ có data tới **2026-08-31**, `loaded_at` mới nhất = **2026-09-17** (hôm
