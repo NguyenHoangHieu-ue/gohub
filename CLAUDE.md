@@ -10,6 +10,12 @@
 
 | | |
 |---|---|
+| ✅ **s200+5 (2026-09-17) — Quarter Report (Organization): tạm thời chỉ admin/creator xem được** | Hiếu
+  yêu cầu giới hạn quyền. Bỏ `"quarterly-org"` khỏi `DEFAULT_ROLE_PERMISSIONS.bod` (trước tự động có qua
+  `ALL_ANALYTICS_IDS`) và khỏi mảng `b2b` trong `lib/analytics-roles.ts` — admin/creator đã bypass hẳn ma
+  trận quyền này (`analytics/layout.tsx` + `sidebar.tsx`) nên không cần sửa gì thêm. Giữ nguyên trong
+  `ALL_ANALYTICS_IDS` để còn cấp riêng qua `allowed_analytics` per-user sau này nếu cần. tsc + lint (0
+  lỗi mới) + vitest (261/261) PASS. Đã push staging, chưa merge main.
 | ✅ **s200+4 (2026-09-17) — 3HK Data Usage: loại hẳn SKU khung SIM + đổi Unlimited breakdown/chart sang
   mã ký tự** | Tiếp ngay s200+3, Hiếu phản hồi 3 điểm: (1) SKU `1D0003DK00000` (mã K) xác nhận là "khung
   SIM", không phải gói data thật → loại HẲN khỏi mọi tính toán (trước chỉ tách bucket "Other") — verify
