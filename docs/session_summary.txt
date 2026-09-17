@@ -10017,3 +10017,51 @@ hỏi→audit→"không phải bug" đã lặp 2 lần trong tháng này cho cù
 tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã tự verify sống trên staging sau deploy (gọi `find` xác
 nhận badge hiện đúng "31/08/2026"). Wiki `docs/wiki/system/tabs/analytics-3hk-usage.md` mục 9 cập nhật
 đủ. Đã push staging (`69c49943`) — chưa merge main.
+
+### s200+3 (2026-09-17) — 3HK Data Usage: fix phân loại Daily/Fixed/Unlimited + chart mới
+
+Hiếu gửi ảnh bảng mapping cấu trúc SKU 3HK chuẩn (18 ký tự ITEM CODE / 13 ký tự SKU CODE) + báo mã X bị
+xếp nhầm Daily dù bản chất Unlimited, đồng thời yêu cầu thêm chart "mã SKU nào chiếm bao nhiêu SIM" và
+audit thêm các sai sót tồn đọng khác.
+
+Đọc bảng ảnh, xác định vị trí ký tự "Data type + Slow speed data" (1 ký tự) nằm ở VỊ TRÍ 8 trong SKU CODE
+13 ký tự (`[VN/US(1)][Type(1)][Country(3)][Vendor(2)][DataType(1)][DataAmount(3)][DayAmount(2)]`). Verify
+trực tiếp qua Dev Tools SQL Query (không đoán, không tin comment code cũ): code cũ chỉ nhận diện Unlimited
+qua `UPPER(sku) LIKE '%UNL%'` — đúng cho mã `A`/`B` (vì trường DataAmount vị trí 9-11 CŨNG ghi literal
+"UNL" khi dung lượng = Unlimited, vd `EACHN3DBUNL05`) nhưng SAI hoàn toàn cho `C`/`D`/`E`/`G`/`H`/`L`/`X`
+— các mã này không có "UNL" ở bất kỳ đâu trong chuỗi (vd `EAANZ3DX00303`) → rơi về cột `sku_type` gán sẵn
+từ nguồn 3HK, bị nhãn phụ "Daily"/"Fixed" đánh lừa dù bản chất Unlimited. Phát hiện comment cũ ở
+`3hk-speed-map/route.ts` đã từng ghi nhận hiện tượng này ("mã MỚI bị gán nhầm 'Daily'") nhưng chỉ vá cho
+đúng 1 chart phụ (nhận diện qua regex `/[AB]UNL/i`), CHƯA fix ở chỗ chính (`bundlesCTE` trong page.tsx,
+nguồn cho Summary/SKU Type/SKU table/CSV export — đúng chỗ Hiếu đang xem thấy sai).
+
+Fix: đổi CASE phân loại sang đọc `SUBSTRING(sku, 8, 1)` cho SKU 13 ký tự, map đầy đủ theo bảng Hiếu cung
+cấp — A/B/C/D/E/G/H/L/X → Unlimited Data (đúng "Unlimited" trong tên gọi bất kể có kèm chữ Daily/Fixed
+hay không, 2 chữ đó chỉ nói về chu kỳ reset throttle); F/Y → Fixed Data; P/Z/T → Daily Data; K → "Other"
+(mã placeholder "eSIM profile/SIM frame", KHÔNG phải gói data thật — trước bị gộp nhầm vào Fixed). Mã CŨ
+14/15 ký tự giữ nguyên logic literal `%UNL%` (tự mô tả rõ bằng "GB"/"UNL" trong chuỗi, không cần đổi).
+
+Verify sống bằng cách chạy CHÍNH XÁC câu SQL mới trên Dev Tools trước khi sửa code, rồi so trước/sau: Fixed
+17.923→12.688 (-5.235, đúng số SIM mã K), Daily 16.241→16.215 (-26, đúng số SIM mã X), Unlimited
+2.813→2.839 (+26), Other (mới) = 5.235 — khớp tuyệt đối, không dòng nào rơi/nhân đôi.
+
+Kèm fix `daysOfSku()` (FE) — trước chỉ nhận số ngày qua literal `UNLxx`/`xxD` ở cuối chuỗi, bỏ sót toàn
+bộ SKU 13 ký tự không có "UNL" → cột "GB/ngày/SIM" (tab Unlimited) luôn hiện "—" cho C/D/E/G/H/L/X. Thêm
+fallback đọc 2 ký tự cuối SKU 13 ký tự (vị trí DayAmount), verify khớp cả SKU Fixed/Daily khác nên áp
+dụng chung.
+
+Thêm chart mới `SkuCountChart` (`3hk-usage-charts.tsx`, bar ngang) — "Mã SKU chiếm bao nhiêu SIM", top 15
+theo Active SIMs + gộp phần đuôi dài thành "Khác (N mã)". Dùng lại `skuMetrics` đã fetch sẵn cho bảng
+"Average Usage by SKU" — KHÔNG thêm query mới (đúng rule N+1/hiệu năng).
+
+Audit phát hiện thêm 2 vấn đề, báo lại Hiếu quyết định thay vì tự ý sửa: (1) SKU `1D0003DK00000` (mã K)
+gánh 28.264 GB actual dù `plan=0` (~5.235 "SIM") — nghi dữ liệu nguồn 3HK gộp nhầm usage thật của nhiều
+SIM khác vào 1 mã placeholder, nguyên nhân nằm ngoài phạm vi sửa được ở web, cần hỏi vendor 3HK; (2)
+`/api/analytics/3hk-speed-map` (phục vụ 2 chart nhóm tốc độ, chỉ hiện tab Unlimited) chỉ nhận diện mã A/B
+(regex `/[AB]UNL/i`), chưa có bucket cho C(20mbps)/D(100mbps)/L(50mbps) — các mã này giờ đúng ở bảng
+chính nhưng vẫn bị loại khỏi 2 chart phụ đó, cần quyết định thiết kế bucket mới nếu muốn phủ đủ.
+
+tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã tự verify sống trên staging sau deploy (số liệu khớp
+tuyệt đối với kết quả verify SQL trước khi code). Wiki `docs/wiki/system/tabs/analytics-3hk-usage.md`
+§3.1 viết lại hẳn (bảng mapping đầy đủ + SQL trước/sau + 2 phát hiện thêm) + mục Gotchas. Đã push staging
+(`f4fbf0c4` + `02742197`) — chưa merge main.

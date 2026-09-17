@@ -10,6 +10,23 @@
 
 | | |
 |---|---|
+| ✅ **s200+3 (2026-09-17) — 3HK Data Usage: fix phân loại Daily/Fixed/Unlimited sai + chart mới "Mã SKU
+  chiếm bao nhiêu SIM"** | Hiếu báo mã X (và tương tự) là Unlimited nhưng bị xếp Daily, kèm ảnh bảng
+  mapping cấu trúc SKU chuẩn 13 ký tự. Verify trực tiếp SQL trên staging: field quyết định loại gói là 1
+  ký tự ở VỊ TRÍ 8 của SKU CODE 13 ký tự — code cũ chỉ nhận Unlimited qua substring `%UNL%`, đúng cho A/B
+  (amount field cũng ghi "UNL") nhưng SAI cho C/D/E/G/H/L/X (không có "UNL" trong chuỗi, vd
+  "EAANZ3DX00303") → rơi về `sku_type` nguồn 3HK vốn gán nhầm theo tên phụ. Đổi CASE theo vị trí ký tự 8
+  (bảng mapping đầy đủ trong wiki) — K (placeholder eSIM profile/SIM frame) tách riêng bucket "Other"
+  thay vì gộp nhầm Fixed. Verify sống: Fixed -5235 SIM = Other +5235 (đúng số SKU K), Daily -26 =
+  Unlimited +26 (đúng số SKU X) — khớp tuyệt đối. Kèm fix `daysOfSku()` (cột GB/ngày/SIM tab Unlimited,
+  trước luôn "—" cho C/D/E/G/H/L/X). Thêm chart mới "Mã SKU chiếm bao nhiêu SIM" (bar ngang top 15 + gộp
+  "Khác", dùng lại data đã fetch, không thêm query). tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã
+  tự verify sống trên staging (số liệu khớp verify SQL tuyệt đối). Wiki
+  `docs/wiki/system/tabs/analytics-3hk-usage.md` cập nhật đủ (§3.1 viết lại hẳn + Gotchas).
+  **2 phát hiện thêm, CHƯA sửa — cần Hiếu quyết định**: (1) SKU `1D0003DK00000` (mã K) gánh 28k GB actual
+  dù plan=0, nghi dữ liệu nguồn 3HK gộp nhầm; (2) `/api/analytics/3hk-speed-map` (2 chart nhóm tốc độ
+  Unlimited) chỉ nhận mã A/B, chưa có bucket cho C(20mbps)/D(100mbps)/L(50mbps) — cần thiết kế thêm bucket
+  nếu Hiếu muốn 2 chart đó phủ đủ mã mới. Đã push staging, chưa merge main.
 | ✅ **s200+2 (2026-09-17) — 3HK Data Usage: pipeline đã tự chạy lại, thêm badge freshness** | Hiếu yêu
   cầu xử lý tiếp tab 3HK Data Usage (sau audit s199). Verify lại trực tiếp SQL trên staging: pipeline ĐÃ
   tự chạy — `fact_data_usage` có data tới 31/08/2026, `loaded_at` mới nhất = HÔM NAY. Đào sâu phát hiện
