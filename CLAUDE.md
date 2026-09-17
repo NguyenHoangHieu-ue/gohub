@@ -10,6 +10,18 @@
 
 | | |
 |---|---|
+| ✅ **s200+4 (2026-09-17) — 3HK Data Usage: loại hẳn SKU khung SIM + đổi Unlimited breakdown/chart sang
+  mã ký tự** | Tiếp ngay s200+3, Hiếu phản hồi 3 điểm: (1) SKU `1D0003DK00000` (mã K) xác nhận là "khung
+  SIM", không phải gói data thật → loại HẲN khỏi mọi tính toán (trước chỉ tách bucket "Other") — verify
+  sống: tổng bundles 36.977→31.742 (đúng -5.235). (2) Đổi chart "Mã SKU chiếm bao nhiêu SIM" (per-SKU,
+  1366 mã quá chi tiết) sang gom theo KÝ TỰ PHÂN LOẠI — vị trí 8 (SKU 13 ký tự) / vị trí 10 (SKU 14 ký tự
+  cũ, Hiếu chỉ định chính xác) — verify vị trí 10 cho ra P/F hợp lý trên data thật. (3) Đổi breakdown
+  "Unlimited — Breakdown theo gói" (nhóm tốc độ 500MB·5mbps...) sang trực tiếp theo mã (A/B/C/.../X) —
+  nhờ đó bỏ hẳn `/api/analytics/3hk-speed-map` (route đã XOÁ, chỉ nhận diện A/B, lỗi thời sau s200+3), 2
+  chart phụ giờ tự phủ mọi mã Unlimited. tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã tự verify
+  sống trên staging cả trước và sau khi code (A=416, B=2.387, X=26 SIM — khớp tuyệt đối). Wiki
+  `docs/wiki/system/tabs/analytics-3hk-usage.md` viết lại đủ §3.1/§7 + 2 bảng data-source. Đã push
+  staging, chưa merge main.
 | ✅ **s200+3 (2026-09-17) — 3HK Data Usage: fix phân loại Daily/Fixed/Unlimited sai + chart mới "Mã SKU
   chiếm bao nhiêu SIM"** | Hiếu báo mã X (và tương tự) là Unlimited nhưng bị xếp Daily, kèm ảnh bảng
   mapping cấu trúc SKU chuẩn 13 ký tự. Verify trực tiếp SQL trên staging: field quyết định loại gói là 1

@@ -10065,3 +10065,53 @@ tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã tự verify sống trê
 tuyệt đối với kết quả verify SQL trước khi code). Wiki `docs/wiki/system/tabs/analytics-3hk-usage.md`
 §3.1 viết lại hẳn (bảng mapping đầy đủ + SQL trước/sau + 2 phát hiện thêm) + mục Gotchas. Đã push staging
 (`f4fbf0c4` + `02742197`) — chưa merge main.
+
+### s200+4 (2026-09-17) — 3HK Data Usage: loại hẳn SKU khung SIM + đổi Unlimited breakdown/chart sang mã ký tự
+
+Tiếp ngay s200+3 cùng ngày. Hiếu phản hồi 3 điểm sau khi xem kết quả đợt trước:
+
+1. **SKU `1D0003DK00000` (mã K) xác nhận là "khung SIM"** — không phải gói data thật, yêu cầu loại HẲN
+   khỏi báo cáo (đợt trước chỉ tách riêng bucket "Other", chưa loại). Sửa: thêm điều kiện
+   `NOT (LENGTH(sku)=13 AND SUBSTRING(sku,8,1)='K')` ngay trong `period_records` (bundlesCTE) — loại
+   TRƯỚC khi tính bất kỳ số liệu nào (Summary/SKU Type/SKU table/record list/CSV export đều sạch). Bỏ
+   luôn nhánh `WHEN 'K' THEN 'Other'` khỏi `SKU_TYPE_CASE` (không còn dòng nào lọt tới đó). Verify sống
+   qua Dev Tools SQL TRƯỚC khi code: tổng bundles kỳ T8/2026 36.977 → 31.742 (giảm đúng 5.235, khớp số
+   SIM gánh dưới mã K) — verify lại sau deploy trên UI thật khớp tuyệt đối.
+
+2. **Đổi chart "Mã SKU chiếm bao nhiêu SIM"** (đợt s200+3 làm per-SKU, nhưng 1366 mã SKU riêng lẻ trong 1
+   kỳ quá chi tiết/khó đọc) **sang gom theo KÝ TỰ PHÂN LOẠI** — Hiếu chỉ định chính xác 2 vị trí: **vị trí
+   8** cho SKU CHUẨN 13 ký tự (đã dùng ở s200+3 cho việc phân loại Daily/Fixed/Unlimited), **vị trí 10**
+   cho SKU CŨ 14 ký tự. Hàm mới `typeLetterOfSku()`. Verify qua SQL trước khi code:
+   `SUBSTRING(sku,10,1)` trên toàn bộ SKU 14 ký tự trong kỳ ra kết quả hợp lý — P (165 bundle, 28 SKU) và
+   F (154 bundle, 13 SKU) là 2 giá trị phổ biến nhất, khớp đúng quy ước Daily/Fixed cũ (parseOldGroup ở
+   3hk-speed-map cũ cũng dùng P-code cho mục đích tương tự) — xác nhận vị trí Hiếu đưa ra là đúng trước
+   khi tin dùng. Độ dài SKU khác (15/17/18 ký tự, số lượng nhỏ) chưa xác định được vị trí tương ứng → gộp
+   "Khác (mã dài khác)" thay vì đoán bừa. Component chart `SkuCountChart` (đổi tên nội dung, giữ nguyên
+   code) tái sử dụng nguyên vẹn — chỉ đổi DỮ LIỆU truyền vào từ per-SKU sang per-ký-tự, mở rộng cột YAxis
+   130→220px để chứa nhãn dài hơn (kèm mô tả gốc, vd "A — Daily-Unlimited 5mbps").
+
+3. **Breakdown "Unlimited — Breakdown theo gói"** (bảng + 2 chart phụ, chỉ hiện tab Unlimited) đợt trước
+   vẫn gom theo NHÓM TỐC ĐỘ/THROTTLE (500MB·5mbps/500MB·10mbps/1GB·10mbps, tính qua route
+   `/api/analytics/3hk-speed-map` — route này CHỈ nhận diện được mã A/B qua regex `/[AB]UNL/i`, nên dù
+   s200+3 đã sửa C/D/E/G/H/L/X thành Unlimited đúng ở bảng chính, chúng vẫn bị loại khỏi 2 chart phụ này
+   vì speed-map không biết xếp chúng vào nhóm tốc độ nào). Hiếu yêu cầu đổi hẳn sang hiển thị TRỰC TIẾP
+   theo mã ký tự ("mã A là bao nhiêu, mã B là bao nhiêu, mã X là bao nhiêu"). Sửa: `speedGroups`/
+   `speedGroupMembers` (dùng chung cho bảng breakdown + 2 chart `speedChart`/`usageDist`) đổi khoá gom
+   nhóm từ `speedMap[sm.sku]?.group` (throttle label từ API) sang `typeLetterOfSku(sm.sku)` (ký tự, tính
+   client-side, không cần gọi API nữa) — nhờ đó GIẢI QUYẾT LUÔN giới hạn "chỉ A/B" đã nêu ở s200+3 mà
+   không cần thiết kế thêm bucket mbps mới như dự tính ban đầu (bucket theo mã tự nhiên bao trọn mọi mã,
+   không cần biết trước có bao nhiêu bucket). Badge mã trong bảng kèm mô tả gốc từ `CODE_LABELS` (dùng
+   chung với chart #2) làm phụ chú dễ đọc, ví dụ "X — Daily Unlimited 10mbps - Midnight".
+
+   Vì không còn dùng, **xoá hẳn** route `GET /api/analytics/3hk-speed-map` (dead code — chỉ còn đúng 1
+   consumer, đã đổi) + state `speedMap`/effect fetch liên quan trong `page.tsx` + hàm `groupShort()` (3
+   chỗ dùng, nay chỉ cần dùng thẳng ký tự làm nhãn, không cần "rút gọn" throttle label nữa). Cập nhật mô
+   tả 1 dòng liên quan trong `lib/data-lineage.ts` (Data Map ở Dev Tools) cho khớp thực tế mới.
+
+tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã tự verify sống trên staging CẢ TRƯỚC lẫn SAU khi code
+(không chỉ tin code sạch): trước khi sửa, chạy đúng câu SQL mới qua Dev Tools SQL Query xác nhận số liệu
+đúng như kỳ vọng; sau khi deploy, mở lại tab Unlimited trên UI thật xác nhận bảng breakdown hiện đúng A=
+416 SIM/B=2.387 SIM/X=26 SIM — khớp tuyệt đối với số đã verify qua SQL. Wiki
+`docs/wiki/system/tabs/analytics-3hk-usage.md` viết lại đủ §3.1 (SQL WHERE mới + CASE bỏ nhánh K) + §7
+(đổi cơ chế hẳn, giữ lịch sử cũ trong `<details>` để tham khảo) + 2 bảng data-source (mục 5 "Bảng dữ liệu
+chính" và mục cuối "Data Sources"). Đã push staging (`303d7b1b` code + `88cc9576` docs) — chưa merge main.
