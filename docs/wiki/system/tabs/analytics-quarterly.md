@@ -45,6 +45,9 @@ KH đó) — không chỉ Supabase. **Chi phí B2C** = channel cost (Supabase) +
 | Trang | `web/src/app/(dashboard)/analytics/quarterly/page.tsx` |
 | API báo cáo | `web/src/app/api/analytics/quarterly-report/route.ts` |
 | API B2B customers | `web/src/app/api/analytics/quarterly-b2b-customers/route.ts` |
+| Trang Organization (s200) | `web/src/app/(dashboard)/analytics/quarterly-org/page.tsx` — id phân quyền `quarterly-org` |
+| API Organization (s200) | `web/src/app/api/analytics/quarterly-org-customers/route.ts` |
+| Lifecycle KH B2B (s200) | `web/src/lib/analytics-engine/b2b-lifecycle.ts` — dùng chung `quarterly-report`+`squad-progress` |
 | API B2B customer cost | `web/src/app/api/analytics/b2b-customer-costs/route.ts` |
 | API target | `web/src/app/api/analytics/quarterly-targets/route.ts` |
 | API cache flush | `web/src/app/api/analytics/quarterly-cache-flush/route.ts` |
@@ -116,6 +119,34 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | **Biểu đồ** (cạnh 3 nút trên) | Bật/tắt bar chart revenue theo đúng chế độ đang chọn — Tháng/Ngày cộng dồn theo kỳ (nhiều dòng/kênh gộp lại), Sản phẩm lấy top 10 SKU theo revenue |
 
 ## 7. Gotchas
+- **s200 (2026-09-17) — Quarter Report (Organization), trang mới `/analytics/quarterly-org`.** Hiếu yêu
+  cầu "duplicate Quarter Report, dùng data organization để format lại" — bản group B2B theo
+  `dim_customer.organization_code` thay vì `customer_code` lẻ (dùng khi 1 công ty mẹ có nhiều mã KH con).
+  Route mới `quarterly-org-customers` (KHÔNG sửa `quarterly-b2b-customers` gốc) — GROUP BY
+  `COALESCE(NULLIF(TRIM(organization_code),''), customer_code)`: **fallback về customer_code khi
+  `organization_code` NULL** (hiện đa số NULL, xác nhận qua grep — 0 chỗ nào trong repo từng dùng cột này
+  trước s200) → hành vi hiện tại GIỐNG HỆT xem theo KH cho tới khi ETL bổ sung data organization, không
+  có rủi ro gộp sai/crash khi data thiếu. Trang gọi lại NGUYÊN `quarterly-report` API cho số tổng B2B đầu
+  trang (tiền không đổi theo cách gộp ai là chủ) — chỉ phần breakdown là mới. FE tái dùng thẳng
+  `<PivotTable>` (component đã có, dùng cho B2C/B2B channel pivot) thay vì viết bảng riêng — mỗi tier
+  (Strategic/VIP/Gold/Silver) 1 PivotTable, tên cột "Organization" ghép `· N mã KH` khi org gộp >1 KH +
+  badge `[VN]`/`[US]`.
+  - **KHÔNG có CH.Cost per-customer** (Turso) ở view này — chi phí đó gắn với customer_code lẻ, không có
+    ý nghĩa gộp nhiều mã. CM1 hiển thị (`totalCm1` tier-level) chỉ trừ Group Cost B2B (Supabase, phân bổ
+    theo revenue-share, y hệt `quarterly-b2b-customers`). Per-org row hiện "CM1" = GM thuần (cost=0 ở mức
+    row) — không sai, chỉ là "chưa biết cost ở granularity này", đã ghi rõ trong `LogicNote` đầu trang.
+  - **KHÔNG có %QoQ per-org** (v1) — route không fetch dữ liệu quý trước theo org (khác `%MoM` per-tier
+    vẫn có vì tier aggregation không đổi bởi việc group theo org). %MoM per-org tính client-side (so
+    `monthSummary` tháng liền trước trong CÙNG mảng `months`, không có xử lý riêng cho tháng đầu quý như
+    bảng KH gốc s199+4 — nếu cần %MoM đúng cho T7 ở đây, phải thêm query `prevMonthRows` tương tự).
+  - **KHÔNG có Squad Progress** cho trang này — squad gắn theo `sales_pic_code` (con người), không đổi
+    theo cách gộp tổ chức.
+  - **Không cần migration DB** — chỉ đọc thêm 2 cột có sẵn (`organization`/`organization_code`).
+  - **Cần Hiếu verify sau deploy** (không tự làm được từ máy dev, thiếu `.env.local`): (1) chạy SQL
+    `SELECT COUNT(*) FILTER (WHERE TRIM(COALESCE(organization_code,''))!='' ), COUNT(*) FROM dim_customer`
+    ở Dev Tools SQL Query — biết % KH đã có organization thật (kỳ vọng thấp); (2) mở trang, xác nhận số
+    tổng B2B khớp Quarter Report gốc, mỗi PivotTable tier mở ra đúng danh sách "organization" (nếu chưa có
+    data organization thật, mỗi dòng = 1 KH y hệt bảng gốc, đúng thiết kế fallback).
 - **s200 (2026-09-17) — New/Recurring/Inactive B2B Customers** (Hiếu yêu cầu vòng đời KH). Module dùng
   chung `lib/analytics-engine/b2b-lifecycle.ts`: `fetchB2BLifecycleRows()` quét MIN(ngày mua) toàn bộ
   lịch sử `fact_fulfillment_revenue` cho mỗi KH B2B (1 query GROUP BY, không loop) — cache TTL RIÊNG 6 giờ
