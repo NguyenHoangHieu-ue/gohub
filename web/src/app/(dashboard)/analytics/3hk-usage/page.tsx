@@ -140,6 +140,9 @@ export default function ThreeHKDataUsagePage() {
   // Để rỗng ban đầu → mount effect đặt kỳ = đầu-tháng(max-data) .. max-data (3HK có thể chậm sync vài tháng).
   const [startDate, setStartDate] = useState<string>("")
   const [endDate, setEndDate] = useState<string>("")
+  // Ngày data mới nhất THẬT SỰ (không đổi theo bộ lọc người dùng đang chỉnh, khác endDate) — hiện badge
+  // freshness (s200+2) để không ai tưởng "thiếu tháng X" là bug web mỗi lần 3HK sync trễ.
+  const [maxAvailableDate, setMaxAvailableDate] = useState<string | null>(null)
   // Ngày chỉ áp khi bấm "Lọc" (không tự lọc mỗi lần đổi ngày). appliedTick bump → chạy lại query.
   const [appliedTick, setAppliedTick] = useState(0)
   const [sortConfig, setSortConfig] = useState<{ key: keyof DataUsageRecord; direction: "asc" | "desc" }>({ key: "first_report_date", direction: "desc" })
@@ -192,7 +195,7 @@ export default function ThreeHKDataUsagePage() {
           const p = (n: number) => String(n).padStart(2, "0")
           const endStr   = `${maxD.getUTCFullYear()}-${p(maxD.getUTCMonth()+1)}-${p(maxD.getUTCDate())}`
           const startStr = `${maxD.getUTCFullYear()}-${p(maxD.getUTCMonth()+1)}-01`
-          setStartDate(startStr); setEndDate(endStr); setAppliedTick(t => t + 1); return
+          setStartDate(startStr); setEndDate(endStr); setMaxAvailableDate(endStr); setAppliedTick(t => t + 1); return
         }
       } catch (e) { console.error("Error fetching 3hk max date:", e) }
       const d = getDefaultDateRange(); setStartDate(d.startDate); setEndDate(d.endDate); setAppliedTick(t => t + 1)
@@ -647,6 +650,17 @@ export default function ThreeHKDataUsagePage() {
             3HK Data Usage
           </h1>
           <p className="text-slate-500 text-sm mt-1">Phân tích hành vi &amp; hiệu suất sản phẩm theo kỳ cước</p>
+          {maxAvailableDate && (() => {
+            const [y, m, d] = maxAvailableDate.split("-")
+            const daysStale = Math.floor((Date.now() - Date.UTC(+y, +m - 1, +d)) / 86400000)
+            return (
+              <p className={cn("text-xs mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg font-medium",
+                daysStale > 45 ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500")}>
+                Dữ liệu 3HK mới nhất: <b>{d}/{m}/{y}</b> — nguồn 3HK cập nhật theo đợt (không phải hàng
+                ngày), có thể trễ vài tuần đến vài tháng so với hôm nay. Thiếu tháng gần đây KHÔNG phải bug web.
+              </p>
+            )
+          })()}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
