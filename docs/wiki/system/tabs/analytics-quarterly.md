@@ -45,7 +45,7 @@ KH đó) — không chỉ Supabase. **Chi phí B2C** = channel cost (Supabase) +
 | Trang | `web/src/app/(dashboard)/analytics/quarterly/page.tsx` |
 | API báo cáo | `web/src/app/api/analytics/quarterly-report/route.ts` |
 | API B2B customers | `web/src/app/api/analytics/quarterly-b2b-customers/route.ts` |
-| Trang Organization (s200) | `web/src/app/(dashboard)/analytics/quarterly-org/page.tsx` — id phân quyền `quarterly-org` |
+| Trang Organization (s200) | `web/src/app/(dashboard)/analytics/quarterly-org/page.tsx` — id phân quyền `quarterly-org`. **TẠM THỜI chỉ admin/creator xem được** (Hiếu yêu cầu 2026-09-17) — đã bỏ khỏi `DEFAULT_ROLE_PERMISSIONS.bod`/`.b2b` trong `lib/analytics-roles.ts`, vẫn giữ trong `ALL_ANALYTICS_IDS` để cấp riêng qua `allowed_analytics` per-user nếu cần. |
 | API Organization (s200) | `web/src/app/api/analytics/quarterly-org-customers/route.ts` |
 | Lifecycle KH B2B (s200) | `web/src/lib/analytics-engine/b2b-lifecycle.ts` — dùng chung `quarterly-report`+`squad-progress` |
 | API B2B customer cost | `web/src/app/api/analytics/b2b-customer-costs/route.ts` |
