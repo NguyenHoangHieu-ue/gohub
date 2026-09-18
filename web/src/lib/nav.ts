@@ -31,6 +31,7 @@ export const ANALYTICS_GROUPS: NavGroup[] = [
   { label: "Overview", items: [
     { href: "/analytics",           label: "Dashboard",       icon: LayoutDashboard },
     { href: "/analytics/quarterly", label: "Quarter Report",  icon: BarChart3       },
+    { href: "/analytics/quarterly-org", label: "Quarter Report (Organization)", icon: Building2 },
     { href: "/analytics/bod",       label: "BOD Report",      icon: PieChart        },
     { href: "/analytics/all-time",  label: "All-Time Report", icon: BarChart3       },
   ]},

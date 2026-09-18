@@ -7,6 +7,7 @@ import { fetchCosts, getDaysInMonth, getDaysInRange, matchChannelCost } from "@/
 import { fetchQuarterlySettings, makeExcludeSql, exclHash, QREPORT_CACHE_PREFIX } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts, type CostRecord } from "@/lib/b2b-customer-cost"
 import { buildQuarterMonthMeta, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
+import { fetchB2BLifecycleRows, classifyB2BLifecycle } from "@/lib/analytics-engine/b2b-lifecycle"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
@@ -123,11 +124,11 @@ export async function GET(req: NextRequest) {
   const INACTIVE_FILTER = `AND NOT EXISTS (SELECT 1 FROM inactive_cust ic WHERE ic.code = TRIM(f.customer_code))`
 
   try {
-    const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }, customerCostMap, prevCustomerCostMap] = await Promise.all([
+    const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }, customerCostMap, prevCustomerCostMap, lifecycleRows] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
-        // GIỚI HẠN 2 query đồng thời (thay vì cả 5) → giảm connection footprint trên gohub_dw.
-        // Mỗi query ~2s → 5 query / 2 luồng ≈ 6s, vẫn nhanh nhưng nhẹ với DB (tránh cạn slot).
-        const [groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows] = await runLimited(2, [
+        // GIỚI HẠN 2 query đồng thời (thay vì cả 7) → giảm connection footprint trên gohub_dw.
+        // Mỗi query ~2s → 7 query / 2 luồng ≈ 8s, vẫn nhanh nhưng nhẹ với DB (tránh cạn slot).
+        const [groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows, prevCustRevRows] = await runLimited(2, [
           () => queryAnalytics<{ month: string; bg: string; revenue: string; gp: string }>(`
           ${CTE_PREAMBLE}
           SELECT
@@ -234,23 +235,71 @@ export async function GET(req: NextRequest) {
             ${sfx}
           GROUP BY 1, 2
         `),
+          // Revenue B2B theo KH quý TRƯỚC (không tách tháng) — dùng tính "doanh thu mất" của KH Inactive
+          // (s200, customerLifecycle). Cùng filter với custRevRows, chỉ đổi khoảng ngày.
+          () => queryAnalytics<{ customer_code: string; revenue: string }>(`
+          ${CTE_PREAMBLE}
+          SELECT
+            TRIM(f.customer_code) as customer_code,
+            SUM(f.${REV_COL}) as revenue
+          FROM ${MAIN_TABLE} f
+          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          WHERE f.${DATE_COL} >= '${prevQStartDate}' AND f.${DATE_COL} <= '${prevQEndDate}'
+            ${companyFilter}
+            AND UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2B'
+            ${INACTIVE_FILTER}
+            ${EXCLUDE_CUST_SQL}
+            ${sfx}
+          GROUP BY 1
+        `),
         ])
 
-        return { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows }
+        return { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows, prevCustRevRows }
       }, QUERY_TTL_MIN, refresh),
       fetchCosts(months),
       fetchCosts(prevQMonths),
       fetchCustomerCosts(months).catch(() => new Map<string, CostRecord>()),      // Turso B2B customer costs current Q
       fetchCustomerCosts(prevQMonths).catch(() => new Map<string, CostRecord>()), // Turso B2B customer costs prev Q (QoQ)
+      fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)).catch(() => [] as import("@/lib/analytics-engine/b2b-lifecycle").B2BLifecycleRow[]), // s200
     ])
 
-    const { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows } = rawData
+    const { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows, prevCustRevRows } = rawData
 
     // Index revenue B2B theo `${month}_${code}` để áp chi phí per-customer đúng (percent × revenue KH đó).
     const custRevMap = new Map<string, number>()
     ;(custRevRows as Array<{ month: string; customer_code: string; revenue: string }>).forEach(r => {
       custRevMap.set(`${r.month}_${r.customer_code}`, parseFloat(r.revenue || "0"))
     })
+
+    // customerLifecycle (s200) — New/Recurring/Inactive B2B, dùng custRevRows đã fetch (KHÔNG query thêm).
+    const custTotalRevThisQ = new Map<string, number>()
+    ;(custRevRows as Array<{ month: string; customer_code: string; revenue: string }>).forEach(r => {
+      custTotalRevThisQ.set(r.customer_code, (custTotalRevThisQ.get(r.customer_code) || 0) + parseFloat(r.revenue || "0"))
+    })
+    const activeCodesThisQuarter = new Set(
+      [...custTotalRevThisQ.entries()].filter(([, rev]) => rev !== 0).map(([code]) => code),
+    )
+    const prevRevByCode = new Map<string, number>()
+    ;(prevCustRevRows as Array<{ customer_code: string; revenue: string }>).forEach(r => {
+      prevRevByCode.set(r.customer_code, parseFloat(r.revenue || "0"))
+    })
+    const lifecycleMap = classifyB2BLifecycle(lifecycleRows, activeCodesThisQuarter, qStartDate, qEndDate)
+    const customerLifecycle = { new: { count: 0, revenue: 0 }, recurring: { count: 0, revenue: 0 }, inactive: { count: 0, lostRevenue: 0 } }
+    lifecycleMap.forEach((state, code) => {
+      if (state === "new") {
+        customerLifecycle.new.count++
+        customerLifecycle.new.revenue += custTotalRevThisQ.get(code) || 0
+      } else if (state === "recurring") {
+        customerLifecycle.recurring.count++
+        customerLifecycle.recurring.revenue += custTotalRevThisQ.get(code) || 0
+      } else {
+        customerLifecycle.inactive.count++
+        customerLifecycle.inactive.lostRevenue += prevRevByCode.get(code) || 0
+      }
+    })
+    customerLifecycle.new.revenue = Math.round(customerLifecycle.new.revenue)
+    customerLifecycle.recurring.revenue = Math.round(customerLifecycle.recurring.revenue)
+    customerLifecycle.inactive.lostRevenue = Math.round(customerLifecycle.inactive.lostRevenue)
     // Tổng chi phí B2B per-customer (Turso) theo tháng — amount pro-rata ngày, percent × revenue KH.
     // Chỉ tính chi phí cho customer CÓ ORDERS trong tháng đó (custRev > 0).
     // Lý do: nếu customer có Turso cost entry nhưng không có đơn hàng trong tháng, quarterly-b2b-customers
@@ -514,6 +563,7 @@ export async function GET(req: NextRequest) {
       b2cChannels: buildChannels("B2C"),
       elapsed_days,
       quarter_days,
+      customerLifecycle,
     }, { headers: CACHE_HEADERS })
   } catch (err: any) {
     console.error("[quarterly-report]", err.message)

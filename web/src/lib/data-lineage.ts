@@ -220,7 +220,7 @@ export const DB_TABLES: DbTable[] = [
   },
   {
     id: 'data_usage_log', label: 'data_usage_log', source: 'supabase',
-    description: 'Log usage data 3HK thô theo ngày: cơ sở cho speed-map và usage by country.',
+    description: 'Log usage data 3HK thô theo ngày: cơ sở cho usage by country.',
     updateFreq: 'Sync từ 3HK API (thủ công/định kỳ)',
     keyFields: [
       { name: 'iccid', type: 'text' },

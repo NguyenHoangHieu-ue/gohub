@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
-import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2, Settings2, Upload, FileDown, Shield, ChevronUp } from "lucide-react"
+import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2, Settings2, Upload, FileDown, Shield, ChevronUp, UserPlus, Repeat, UserMinus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { useRoleGuard } from "@/lib/use-role-guard"
@@ -19,7 +19,7 @@ import { PivotTable } from "@/components/quarterly/pivot-table"
 import { B2BTierSection } from "@/components/quarterly/b2b-tier-section"
 import { QtVsTargetPanel } from "@/components/quarterly/qt-vs-target-bullets"
 import { MonthlyTrendChart } from "@/components/quarterly/monthly-trend-chart"
-import { LogicNote } from "@/components/dashboard-kit"
+import { LogicNote, StatTile } from "@/components/dashboard-kit"
 
 // s183 Phase 5: Types/format helpers/component con (KpiCard, TableHead, ColInfo, MomBadge, MonthSubRow,
 // QtSummaryRow, QtTargetRow, PivotTable, B2BTierSection) đã tách sang lib/quarterly-types.ts,
@@ -1027,6 +1027,21 @@ function QuarterlyContent() {
         </div>
       )}
 
+      {/* ── Vòng đời KH B2B (New/Recurring/Inactive, s200) — so với toàn bộ lịch sử trước quý đang xem ── */}
+      {report?.customerLifecycle && (
+        <div className={cn("grid grid-cols-1 sm:grid-cols-3 gap-3", loading && "opacity-50 pointer-events-none")}>
+          <StatTile icon={<UserPlus className="w-5 h-5" />} accent="positive"
+            label="KH Mới trong quý" value={report.customerLifecycle.new.count} unit="KH"
+            deltas={[{ label: "Doanh thu", value: fc(report.customerLifecycle.new.revenue), kind: "up" }]} />
+          <StatTile icon={<Repeat className="w-5 h-5" />} accent="revenue"
+            label="KH Quay Lại" value={report.customerLifecycle.recurring.count} unit="KH"
+            deltas={[{ label: "Doanh thu", value: fc(report.customerLifecycle.recurring.revenue), kind: "up" }]} />
+          <StatTile icon={<UserMinus className="w-5 h-5" />} accent="warn"
+            label="KH Rời Bỏ (quý này chưa mua lại)" value={report.customerLifecycle.inactive.count} unit="KH"
+            deltas={[{ label: "Doanh thu quý trước", value: fc(report.customerLifecycle.inactive.lostRevenue), kind: "down" }]} />
+        </div>
+      )}
+
       {/* ── B2B tier breakdown (replaces channel pivot for B2B) ── */}
       <B2BTierSection
         b2bTiers={b2bTiers}
@@ -1450,6 +1465,7 @@ function QuarterlyContent() {
                                   <td className="px-4 py-2.5 font-medium text-slate-700">
                                     {c.customer_name}
                                     <span className={cn("ml-1.5 text-[9px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
+                                    {c.lifecycle_state === "new" && <span title="KH mới trong quý" className="ml-1 text-[9px] px-1 py-0.5 rounded font-bold bg-sky-100 text-sky-600">🆕 Mới</span>}
                                   </td>
                                   <td className="px-3 py-2.5 text-slate-500 text-[11px]">
                                     <span className="font-medium text-slate-700">{c.squad_name}</span>
@@ -1499,6 +1515,26 @@ function QuarterlyContent() {
                                     <span className="text-[11px] text-slate-400 shrink-0">{sq.customer_count} KH</span>
                                   </button>
                                   <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                                    {sq.lifecycle && (
+                                      <>
+                                        {sq.lifecycle.new.count > 0 && (
+                                          <span title="KH mới trong quý" className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200">
+                                            🆕 {sq.lifecycle.new.count}
+                                          </span>
+                                        )}
+                                        {sq.lifecycle.recurring.count > 0 && (
+                                          <span title="KH quay lại mua trong quý" className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200">
+                                            🔁 {sq.lifecycle.recurring.count}
+                                          </span>
+                                        )}
+                                        {sq.lifecycle.inactive.count > 0 && (
+                                          <span title={`KH cũ quý này chưa mua lại — mất ~${fc(sq.lifecycle.inactive.lostRevenue)} (quý trước)`}
+                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-300">
+                                            😴 {sq.lifecycle.inactive.count}
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
                                     {(["danger_high","danger_low","safe_low","safe","very_safe"] as const).map(k => {
                                       const cnt = sq.risk_counts?.[k] ?? 0
                                       if (!cnt) return null
@@ -1524,6 +1560,23 @@ function QuarterlyContent() {
                                     target={sq.target_hk3 > 0 ? sq.target_hk3 : undefined} pct={sq.hk3_tgt_pct}
                                     actualNote={`${sq.hk3_pct}% doanh thu`} />
                                 </div>
+
+                                {/* Danh sách KH rời bỏ (Inactive) — top 10 theo doanh thu quý trước, để leader biết ai cần gọi lại */}
+                                {sq.lifecycle?.inactive?.list?.length > 0 && (
+                                  <details className="ml-6 mt-2.5 text-[11px]">
+                                    <summary className="cursor-pointer text-slate-500 hover:text-slate-800 font-semibold">
+                                      😴 Xem {sq.lifecycle.inactive.list.length} KH rời bỏ (cần gọi lại)
+                                    </summary>
+                                    <ul className="mt-1.5 space-y-1">
+                                      {sq.lifecycle.inactive.list.map((c: { code: string; name: string; lastRevenue: number }) => (
+                                        <li key={c.code} className="flex items-center justify-between px-2 py-1 rounded bg-slate-50 text-slate-600">
+                                          <span>{c.name}</span>
+                                          <span className="tabular-nums text-slate-400">Quý trước: {fc(c.lastRevenue)}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </details>
+                                )}
                               </div>
 
                               {/* S4: Expanded customer table — 9 cột */}
@@ -1553,6 +1606,7 @@ function QuarterlyContent() {
                                             <td className="px-4 py-2.5 font-medium text-slate-700">
                                               {c.customer_name}
                                               <span className={cn("ml-1.5 text-[9px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
+                                              {c.lifecycle_state === "new" && <span title="KH mới trong quý" className="ml-1 text-[9px] px-1 py-0.5 rounded font-bold bg-sky-100 text-sky-600">🆕 Mới</span>}
                                             </td>
                                             <td className="px-3 py-2.5 text-slate-500">
                                               {picInfo?.name ?? c.sales_pic}

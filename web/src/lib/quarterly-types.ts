@@ -32,6 +32,11 @@ export interface QReport {
   prevQuarterTotals?: { b2bRevenue: number; b2bGp: number; b2bCm1: number; b2cRevenue: number; b2cGp: number; b2cCm1: number }
   b2bChannels: Channel[]; b2cChannels: Channel[]
   elapsed_days: number; quarter_days: number
+  customerLifecycle?: {
+    new: { count: number; revenue: number }
+    recurring: { count: number; revenue: number }
+    inactive: { count: number; lostRevenue: number }
+  }
 }
 
 export interface Targets { b2bRev: number; b2bCm1: number; b2bThk: number; b2cRev: number; b2cCm1: number; b2cThk: number }

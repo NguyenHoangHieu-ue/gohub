@@ -8,7 +8,7 @@ import {
   getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, excludeOpsByCode, excludeInactiveCustomers,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
-import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
 
 type Metrics = { revenue: number; margin: number; units: number; orders?: number }
@@ -38,11 +38,14 @@ export async function GET(req: NextRequest) {
   const prevFilter = getPrevDateFilter(startDate || null, endDate || null, "none", source.dateCol, "30 days", companyCode)
 
   try {
-   const key = `b2b-strategic3:${dateColumn}:${startDate}:${endDate}:${companyCode ?? ""}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
+   // excludedCustomers fetch TRƯỚC key (thay vì trong cachedQuery callback) để hash được vào cache key —
+   // đổi danh sách loại trừ ở Quarter Report Settings phải tự làm mới cache route này (trước đây "đứng yên"
+   // tới khi TTL hết hạn dù danh sách đã đổi, xem cache-architecture audit).
+   const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
+   const key = `b2b-strategic3:${dateColumn}:${startDate}:${endDate}:${companyCode ?? ""}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash(excludedCustomers)}`
    const result = await cachedQuery(key, async () => {
     // Chuẩn "doanh thu SP thuần" toàn hệ thống — trước route này KHÔNG đọc 3 toggle dù FE B2B gửi đủ
     // (bật/tắt trên trang B2B đổi số KPI/Performance/Trend nhưng bảng Strategic Partners đứng yên).
-    const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)} ${excludeInactiveCustomers()}`
     const tiers = await getPartnerTiers()
     const partnerMap   = new Map<string, string>() // lower(name) -> tier

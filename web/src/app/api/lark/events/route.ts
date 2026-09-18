@@ -316,6 +316,21 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Lệnh đặt group này làm kênh nhận thông báo tính năng mới khi merge lên production (chỉ admin/creator).
+  // Xem web/src/app/api/notify/release/route.ts — gọi từ GitHub Actions khi push lên `main`.
+  if (chatType === "group" && userText.trim().toLowerCase() === "/set-release-channel") {
+    const { role } = await getUserRole(openId)
+    if (role !== "admin" && role !== "creator") {
+      await sendLarkMessage(chatId, "chat_id", "🔒 Chỉ Admin/Creator mới đặt được kênh này.")
+    } else {
+      await supabaseAdmin.from("app_settings")
+        .upsert({ key: "lark_release_chat_id", value: chatId, category: "lark" }, { onConflict: "key" })
+      await sendLarkMessage(chatId, "chat_id",
+        "✅ Đã đặt group này làm kênh nhận thông báo mỗi khi GoHub Intel có tính năng mới lên production.")
+    }
+    return NextResponse.json({ ok: true })
+  }
+
   console.log("[Lark] processing | chatType:", chatType, "| isInThread:", isInThread,
     "| msgType:", msgType, "| text:", userText.slice(0, 60))
 

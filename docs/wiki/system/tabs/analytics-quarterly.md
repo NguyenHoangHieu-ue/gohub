@@ -45,6 +45,9 @@ KH đó) — không chỉ Supabase. **Chi phí B2C** = channel cost (Supabase) +
 | Trang | `web/src/app/(dashboard)/analytics/quarterly/page.tsx` |
 | API báo cáo | `web/src/app/api/analytics/quarterly-report/route.ts` |
 | API B2B customers | `web/src/app/api/analytics/quarterly-b2b-customers/route.ts` |
+| Trang Organization (s200) | `web/src/app/(dashboard)/analytics/quarterly-org/page.tsx` — id phân quyền `quarterly-org`. **TẠM THỜI chỉ admin/creator xem được** (Hiếu yêu cầu 2026-09-17) — đã bỏ khỏi `DEFAULT_ROLE_PERMISSIONS.bod`/`.b2b` trong `lib/analytics-roles.ts`, vẫn giữ trong `ALL_ANALYTICS_IDS` để cấp riêng qua `allowed_analytics` per-user nếu cần. |
+| API Organization (s200) | `web/src/app/api/analytics/quarterly-org-customers/route.ts` |
+| Lifecycle KH B2B (s200) | `web/src/lib/analytics-engine/b2b-lifecycle.ts` — dùng chung `quarterly-report`+`squad-progress` |
 | API B2B customer cost | `web/src/app/api/analytics/b2b-customer-costs/route.ts` |
 | API target | `web/src/app/api/analytics/quarterly-targets/route.ts` |
 | API cache flush | `web/src/app/api/analytics/quarterly-cache-flush/route.ts` |
@@ -116,6 +119,71 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | **Biểu đồ** (cạnh 3 nút trên) | Bật/tắt bar chart revenue theo đúng chế độ đang chọn — Tháng/Ngày cộng dồn theo kỳ (nhiều dòng/kênh gộp lại), Sản phẩm lấy top 10 SKU theo revenue |
 
 ## 7. Gotchas
+- **s200 (2026-09-17) — Quarter Report (Organization), trang mới `/analytics/quarterly-org`.** Hiếu yêu
+  cầu "duplicate Quarter Report, dùng data organization để format lại" — bản group B2B theo tổ chức thay
+  vì `customer_code` lẻ (1 công ty mẹ có nhiều mã KH chi nhánh). Route mới `quarterly-org-customers`
+  (KHÔNG sửa `quarterly-b2b-customers` gốc). Trang gọi lại NGUYÊN `quarterly-report` API cho số tổng B2B
+  đầu trang (tiền không đổi theo cách gộp ai là chủ) — chỉ phần breakdown là mới. FE tái dùng thẳng
+  `<PivotTable>` (component đã có, dùng cho B2C/B2B channel pivot) cho bảng tổng theo tier, cộng thêm khối
+  **drill-down Organization → Khách hàng** riêng (không thuộc PivotTable) hiện dưới mỗi tier, chỉ liệt kê
+  tổ chức gộp ≥2 mã KH — đúng hệ phân cấp Hiếu mô tả: **Tier → Organization → Customer**.
+  - 🔴 **s200+1 (cùng ngày) — bug thật ngay đợt đầu: chọn nhầm cột, route KHÔNG BAO GIỜ gộp được gì.**
+    Hiếu phản hồi kết quả "chưa phù hợp" ngay khi thấy — verify TRỰC TIẾP qua Dev Tools SQL Query trên
+    staging (không đoán): `dim_customer.organization_code` **100% RỖNG trên toàn bộ 355.389 dòng**
+    (`COUNT(*) FILTER (...) = 0`) — cột hoàn toàn chết, có lẽ chưa bao giờ được ETL nạp dù đã khai báo
+    trong schema. Field THẬT có data là **`organization`** (text, vd `"VN_Org Vietravel"` gộp 26 mã KH chi
+    nhánh, `"US_Org SHOPEEPAY"` gộp 4 mã theo từng nước) — 909 giá trị khác nhau, 1050/355.389 KH được gắn
+    (313 trong số đó có phát sinh đơn B2B thật trong lịch sử). Đợt đầu chọn `organization_code` làm khoá
+    GROUP BY → do cột này rỗng tuyệt đối, route LUÔN fallback về `customer_code` → không gộp được bất kỳ
+    tổ chức nào dù `organization` đã có data thật — đúng nguyên nhân Hiếu thấy ngay lập tức. Fix: đổi khoá
+    GROUP BY sang `organization` (đã verify sống trên staging sau deploy: Shopeepay 4 mã, Apec Travel 3
+    mã, nhiều org VN 2 mã — gộp đúng thật). **Bài học lặp lại đúng kiểu bug s198 đợt 9** (`data_policy_code`
+    cột ảo) — tên cột nghe hợp lý/đúng ý đồ thiết kế không phải bằng chứng nó có data thật, luôn verify
+    qua SQL/REST trước khi dùng làm khoá chính.
+  - **1 tổ chức có thể có nhiều tier khác nhau giữa các chi nhánh** (verify: 26/909 tổ chức có ≥2
+    `price_list_name` khác nhau, vd Vietravel vừa Gold vừa Silver tuỳ chi nhánh) — route xếp CẢ tổ chức
+    vào tier của chi nhánh có doanh thu lớn nhất (representative theo revenue, cùng cách chọn region/
+    price_list_name đại diện), ghi rõ trong `LogicNote` đầu trang.
+  - **KHÔNG có CH.Cost per-customer** (Turso) ở view này — chi phí đó gắn với customer_code lẻ, không có
+    ý nghĩa gộp nhiều mã. CM1 hiển thị (`totalCm1` tier-level) chỉ trừ Group Cost B2B (Supabase, phân bổ
+    theo revenue-share, y hệt `quarterly-b2b-customers`). Per-org row hiện "CM1" = GM thuần (cost=0 ở mức
+    row) — không sai, chỉ là "chưa biết cost ở granularity này", đã ghi rõ trong `LogicNote` đầu trang.
+  - **KHÔNG có %QoQ per-org** (v1) — route không fetch dữ liệu quý trước theo org (khác `%MoM` per-tier
+    vẫn có vì tier aggregation không đổi bởi việc group theo org). %MoM per-org tính client-side (so
+    `monthSummary` tháng liền trước trong CÙNG mảng `months`, không có xử lý riêng cho tháng đầu quý như
+    bảng KH gốc s199+4 — nếu cần %MoM đúng cho T7 ở đây, phải thêm query `prevMonthRows` tương tự).
+  - **KHÔNG có Squad Progress** cho trang này — squad gắn theo `sales_pic_code` (con người), không đổi
+    theo cách gộp tổ chức.
+  - **Không cần migration DB** — chỉ đọc thêm cột có sẵn `organization` (`organization_code` không dùng
+    nữa, dead column, có thể cân nhắc bỏ hẳn khỏi schema sau này nếu ETL xác nhận không bao giờ nạp).
+  - **Đã tự verify sống trên staging sau deploy** (gọi thẳng API qua Dev Tools, không chỉ tin code sạch):
+    tổ chức nhiều chi nhánh gộp đúng số liệu thật, khối drill-down Organization → Khách hàng hiện đúng
+    danh sách + doanh thu từng mã KH.
+- **s200 (2026-09-17) — New/Recurring/Inactive B2B Customers** (Hiếu yêu cầu vòng đời KH). Module dùng
+  chung `lib/analytics-engine/b2b-lifecycle.ts`: `fetchB2BLifecycleRows()` quét MIN(ngày mua) toàn bộ
+  lịch sử `fact_fulfillment_revenue` cho mỗi KH B2B (1 query GROUP BY, không loop) — cache TTL RIÊNG 6 giờ
+  (`LIFECYCLE_TTL_MIN`, tách khỏi `QUERY_TTL_MIN=60'` dùng chung 20 route khác, vì "ngày mua đầu tiên" gần
+  như không đổi trong ngày). Luôn loại phí ship + KH INACTIVE, KHÔNG phụ thuộc toggle Ship/Internal-Ops
+  của trang. `classifyB2BLifecycle()` (hàm thuần, có unit test `b2b-lifecycle.test.ts`) so `first_order_date`
+  với khoảng ngày quý đang xem: `>= qStart` → **new**; `< qStart` + có doanh thu quý này → **recurring**;
+  `< qStart` + không có doanh thu quý này → **inactive**; `> qEnd` (KH chưa tồn tại ở quý đang xem, khi
+  xem lại quý cũ) → bỏ qua. Định nghĩa "trước đây" = TOÀN BỘ lịch sử (không chỉ quý liền trước) — Hiếu
+  chốt qua AskUserQuestion.
+  - **Tổng quan** (`quarterly-report` route): field `customerLifecycle` — `new`/`recurring`
+    `{count,revenue}`, `inactive` `{count,lostRevenue}` (lostRevenue = tổng doanh thu QUÝ TRƯỚC của các KH
+    giờ inactive, tính từ query `prevCustRevRows` mới thêm — cache raw đổi shape, bump `QREPORT_CACHE_PREFIX`
+    v9→v10). FE: 3 `StatTile` (dashboard-kit) trên bảng "B2B — Chi tiết theo Nhóm × Tháng".
+  - **Squad Progress** (`squad-progress` route): field `lifecycle` per-squad + `totals.lifecycle` (tính
+    trực tiếp từ toàn bộ `lifecycleMap`, KHÔNG cộng dồn từ squad — gồm cả KH chưa gán PIC/squad nào). KH
+    Inactive KHÔNG có trong `custRows` (chỉ query quý hiện tại) → gán vào đúng squad qua `sales_pic_code`
+    lấy sẵn trong `B2BLifecycleRow`. Mỗi squad có `lifecycle.inactive.list` (top 10 theo doanh thu quý
+    trước, để leader biết ai cần gọi lại). Mỗi customer trong `customers[]` có thêm `lifecycle_state`.
+    FE: badge 🆕/🔁/😴 cạnh risk-chip mỗi squad card + `<details>` xổ danh sách KH rời bỏ; badge "🆕 Mới"
+    trong 2 bảng chi tiết KH (expanded + flat view).
+  - Rủi ro đã lường trước (chưa xảy ra, cần theo dõi): `fetchB2BLifecycleRows` full-scan B2B trên
+    `fact_fulfillment_revenue` không giới hạn ngày dưới — cùng lớp bug từng gây timeout B2C (s195+15).
+    Khác ở chỗ: chỉ 1 query GROUP BY (không phải CTE lồng per-page-load) + cache 6h. Nếu sau này thấy
+    trang Quarter Report chậm bất thường lúc cache lifecycle hết hạn, đây là nghi phạm đầu tiên.
 - **s199+4 (2026-09-16) — thêm cột %MoM cho bảng "B2B — Chi tiết theo Nhóm × Tháng"** (Hiếu yêu cầu, sau
   khi hỏi thêm chỉnh đúng: "T7 thì so với tháng 6 chứ nhỉ"). Cột mới nằm giữa %QoQ(CM1) và 3HK%, CHỈ hiện
   giá trị ở view theo tháng (T7/T8/T9) — "Cả Quý" hiện "—" (đã có %QoQ riêng cho quý). Công thức: so
@@ -241,6 +309,7 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | Target | Turso `target_planning_quarter` | `target_revenue`, `target_cm1`, `target_three_hk_pct` per B2B/B2C per quarter |
 | QoQ % | `fact_fulfillment_revenue` quý trước | `(CM1_cur_prorata − CM1_prev) / |CM1_prev| × 100`; monthly pro-rata |
 | Pro-rata | `fact_fulfillment_revenue` tháng hiện tại | `cm1_actual × (days_in_month / elapsed_days)` |
+| New/Recurring/Inactive B2B (s200) | `fact_fulfillment_revenue` (MIN ngày mua, toàn bộ lịch sử) | So `first_order_date` với khoảng ngày quý đang xem — xem Gotchas §7 |
 
 
 ---

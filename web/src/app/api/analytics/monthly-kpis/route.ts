@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, getAnalyticsSource, getStrategicPartnersList, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, excludeOpsByCode, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
-import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -53,7 +53,10 @@ export async function GET(req: NextRequest) {
   }
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
 
-  const cacheKey = `monthly-kpis:${companyCode}:${dateColumn}:${startDate}:${endDate}`
+  // excludedCustomers fetch TRƯỚC cacheKey (thay vì trong callback) để hash vào key — đổi danh sách loại
+  // trừ ở Quarter Report Settings phải tự làm mới cache route này (xem cache-architecture audit).
+  const { excludedCustomers } = await fetchQuarterlySettings()
+  const cacheKey = `monthly-kpis:${companyCode}:${dateColumn}:${startDate}:${endDate}:${exclHash(excludedCustomers)}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -102,7 +105,6 @@ export async function GET(req: NextRequest) {
 
       // B2B per-customer cost (Turso b2b_customer_cost_monthly) — khớp Quarter Report/b2b-kpis,
       // KHÔNG dùng analytics_channel_costs cho B2B (tránh double-count với Turso).
-      const { excludedCustomers } = await fetchQuarterlySettings()
       const b2bSfx = `${shipFilter(false)} ${internalOpsFilter(false)} ${excludeOpsByCode(excludedCustomers)}`
       const [custRevRows, customerCostMap] = await Promise.all([
         queryAnalytics<{ customer_code: string; month: string; revenue: string }>(`

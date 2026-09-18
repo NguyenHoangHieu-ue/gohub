@@ -9908,3 +9908,246 @@ Verify sống trên staging sau deploy: gọi API trực tiếp (`prevMonth: "20
 tsc + lint (0 lỗi mới, chỉ warning pre-existing không liên quan) + vitest (253/253) PASS cả 2 đợt. Wiki
 `docs/wiki/system/tabs/analytics-quarterly.md` cập nhật. Đã push staging cả 2 commit — chưa merge main,
 gộp chung đợt merge với s199+2/+3 (cùng nhóm fix B2B/Quarter Report phiên làm việc này).
+
+### s200 (2026-09-17) — Quarter Report: New/Recurring/Inactive B2B Customers + trang Organization
+
+Hiếu yêu cầu 2 việc: (1) "duplicate Quarter Report và dùng data organization để format lại", (2) thêm
+"New/Recurring/Inactive B2B Customers" vào Tổng quan + Squad Progress. Đã điều tra code qua 2 đợt fork
+(pattern New/Returning B2C s195+15, cấu trúc quarterly-b2b-customers/squad-progress, StatTile/nav pattern,
+dim_customer.organization/organization_code — xác nhận 0 chỗ nào trong repo từng dùng, hiện đa số NULL)
+trước khi lên plan qua EnterPlanMode (đã duyệt). Chốt qua AskUserQuestion: "trước đây" = toàn bộ lịch sử
+trước quý đang xem; 3 chỉ số tôn trọng filter companyCode; trang Organization là trang MỚI (không phải
+toggle).
+
+**Phase 1 — Lifecycle**: module dùng chung `lib/analytics-engine/b2b-lifecycle.ts` —
+`fetchB2BLifecycleRows()` (1 query GROUP BY MIN(fulfiled_date) toàn bộ lịch sử B2B, cache riêng
+`LIFECYCLE_TTL_MIN=360` phút, TÁCH khỏi `QUERY_TTL_MIN` chung của 20 route khác — tránh lặp lại lớp bug
+full-scan gây timeout B2C s195+15) + `classifyB2BLifecycle()` (hàm thuần, 8 unit test
+`b2b-lifecycle.test.ts`). Gắn vào `quarterly-report/route.ts` (thêm `prevCustRevRows` query mới, bump
+`QREPORT_CACHE_PREFIX` v9→v10, field response mới `customerLifecycle`) và `squad-progress/route.ts` (field
+`lifecycle` per-squad tính từ `sales_pic_code` có sẵn trong lifecycle rows để gán cả KH Inactive — vốn
+không có trong `custRows` quý hiện tại — vào đúng squad; `totals.lifecycle` tính trực tiếp từ toàn bộ
+map, không cộng dồn squad để không bỏ sót KH chưa gán PIC). FE: 3 `StatTile` (dashboard-kit, dùng đúng lần
+đầu ở trang này) trên Tổng quan; badge 🆕/🔁/😴 + `<details>` xổ top 10 KH rời bỏ (kèm doanh thu quý
+trước) trên mỗi squad card; badge "🆕 Mới" ở 2 bảng chi tiết KH Squad Progress.
+
+**Phase 2 — Trang Organization**: route mới `quarterly-org-customers/route.ts` — bản group-theo-
+organization của `quarterly-b2b-customers` (KHÔNG sửa file gốc), khoá gộp
+`COALESCE(NULLIF(organization_code,''), customer_code)` — fallback graceful về customer_code khi thiếu
+data (hiện đa số case) → hành vi giống hệt bản theo KH cho tới khi ETL bổ sung. KHÔNG tính CH.Cost
+per-customer (Turso) ở mức tổ chức — CM1 tier chỉ trừ Group Cost B2B (Supabase, revenue-share, y hệt route
+gốc). Trang mới `/analytics/quarterly-org` — tái dùng nguyên API `quarterly-report` cho số tổng B2B đầu
+trang (tiền không đổi theo cách gộp ai là chủ) + tái dùng thẳng component `<PivotTable>` có sẵn (dùng cho
+B2C/B2B channel pivot) cho breakdown theo Organization × Tháng, 1 PivotTable/tier — tránh viết
+`OrgTierSection` bespoke ~300 dòng, giảm rủi ro so với sửa/nhân bản `b2b-tier-section.tsx` (đã 2 lần dính
+bug nghiêm trọng trong tháng, s199+2). Đăng ký nav.ts + sidebar.tsx (2 nơi, đúng gotcha đồng bộ đã biết) +
+analytics-roles.ts (id `quarterly-org`, quyền bod/b2b + admin/creator). Không có Squad Progress/target
+editing/CH.Cost editing ở trang này (v1, ghi rõ trong `LogicNote` đầu trang).
+
+tsc + lint (0 lỗi mới) + vitest (261/261, +8 test) PASS toàn bộ 4 commit
+(`fcfb54d5`/`90e20e06`/`d3e3a0d8`/`c9778135` + 2 commit wiki). Wiki
+`docs/wiki/system/tabs/analytics-quarterly.md` cập nhật đủ (mục 1 Đường dẫn, mục 7 Gotchas 2 đoạn riêng
+cho Organization + Lifecycle). Đã push staging — **chưa merge main**, chờ Hiếu QA (checklist trong
+CLAUDE.md).
+
+### s200+1 (2026-09-17) — Fix bug thật ngay đợt đầu: quarterly-org dùng nhầm cột chết organization_code
+
+Deploy xong s200, Hiếu vào xem báo ngay "hơi không phù hợp" + nêu rõ hệ phân cấp mong muốn: Tier
+(Strategic) → Organization → Customer. Trước khi sửa, phát hiện thêm vấn đề vận hành: 7 commit s200 chỉ
+nằm ở máy local, quên `git push` — Hiếu báo "chưa thấy deploy" mới lộ ra. Đã push bù, xác nhận Vercel
+build/deploy xong (theo dõi qua Vercel MCP `list_deployments`/`get_deployment` tới khi `readyState=READY`).
+
+Verify dữ liệu thật: máy dev vốn không có `ANALYTICS_DB_*` (theo note cũ CLAUDE.md), nhưng lần này
+`.env.local` có tồn tại — kiểm tra kỹ thì các biến `ANALYTICS_DB_HOST/NAME/USER` đều RỖNG (chỉ có
+`ANALYTICS_DB_PORT`), xác nhận vẫn không kết nối trực tiếp gohub_dw từ máy dev được (ECONNREFUSED khi thử
+qua script Node local, cả khi bật `dangerouslDisableSandbox`). Chuyển sang dùng browser đã có sẵn session
+đăng nhập staging (Chrome, tài khoản Creator) — gọi thẳng `/api/admin/sql-query` qua `javascript_tool`
+(fetch cùng-origin, tận dụng cookie có sẵn) thay vì thao tác UI Dev Tools SQL Query từng câu, nhanh hơn
+nhiều cho nhiều query liên tiếp.
+
+Kết quả verify: `dim_customer.organization_code` **100% RỖNG trên toàn bộ 355.389 dòng** — cột hoàn toàn
+chết, có thể chưa từng được ETL nạp dù có trong schema. Field THẬT có data là `organization` (text, vd
+"VN_Org Vietravel" gộp 26 mã KH chi nhánh khác nhau, "US_Org SHOPEEPAY" gộp 4 mã theo từng nước) — 909 giá
+trị khác nhau, 1050/355.389 KH được gắn (313 trong số có phát sinh đơn B2B thật). Route `quarterly-org-
+customers` (viết ở s200) chọn nhầm `organization_code` làm khoá GROUP BY → do cột rỗng tuyệt đối, LUÔN
+fallback về `customer_code` → không gộp được tổ chức nào dù `organization` có data thật — đúng nguyên
+nhân Hiếu thấy ngay lập tức. Cùng lớp bug với `data_policy_code` (s198 đợt 9) — tên cột nghe hợp lý không
+phải bằng chứng có data thật.
+
+Fix: đổi khoá GROUP BY từ `organization_code` sang `organization` (1 dòng SQL). Đồng thời verify thêm:
+26/909 tổ chức có nhiều `price_list_name`/tier khác nhau giữa các chi nhánh (vd Vietravel vừa Gold vừa
+Silver) — route xếp cả tổ chức vào tier của chi nhánh doanh thu lớn nhất (representative theo revenue).
+
+Thêm khối UI mới đáp ứng đúng yêu cầu Hiếu (Tier → Organization → Customer): drill-down "Tổ chức gồm
+nhiều mã KH" (`<details>` per-org, chỉ hiện org có ≥2 mã KH) ngay dưới mỗi PivotTable tier trên trang
+`/analytics/quarterly-org` — bấm mở ra danh sách mã KH chi nhánh + doanh thu từng mã trong quý. Route
+thêm field `members: {code,name,revenue}[]` per OrgRow để phục vụ khối này (trước chỉ có `memberCodes`
+là mảng mã, không có breakdown doanh thu).
+
+tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Wiki `docs/wiki/system/tabs/analytics-quarterly.md` mục
+7 viết lại hẳn đoạn Organization (thêm sub-mục "s200+1" mô tả root cause + fix). CLAUDE.md cập nhật
+tương ứng. **Đã tự verify sống trên staging sau deploy** (gọi thẳng `/api/analytics/quarterly-org-
+customers` qua Dev Tools console — Shopeepay 4 mã, Apec Travel 3 mã, nhiều tổ chức VN 2 mã, số liệu gộp
+đúng thật). Đã push staging (`be927f74`) — chưa merge main, chờ Hiếu tự xem qua UI 1 lượt.
+
+### s200+2 (2026-09-17) — 3HK Data Usage: xác nhận pipeline đã tự chạy lại + giải thích cơ chế nạp theo đợt
+
+Hiếu yêu cầu xử lý tab 3HK Data Usage (sau audit s199 kết luận "không phải bug web, hỏi vendor/ops").
+Verify lại trực tiếp qua Dev Tools SQL Query trên staging (không giả định audit cũ còn đúng): phát hiện
+pipeline ĐÃ tự chạy lại — `fact_data_usage` giờ có data tới 2026-08-31, `loaded_at` mới nhất = HÔM NAY
+(2026-09-17 01:44-01:49 UTC, đúng lúc đang làm session này). Mở thẳng tab trên staging xác nhận render
+bình thường, đúng auto-default sang tháng 8 (logic có sẵn "chọn kỳ = tháng của MAX date"), 36.977 SIM,
+bảng SKU/Country đều có số — ban đầu nghi "Average Usage by SKU" trống nhưng xác nhận lại chỉ là do bắt
+ảnh chụp lúc query con đang loading (loading skeleton không có text), KHÔNG phải bug thật (tự kiểm tra kỹ
+bằng `find` trước khi báo, tránh false positive).
+
+Hỏi lại Hiếu qua AskUserQuestion vì data đã khoẻ mạnh — nhận được: "Vẫn thiếu tháng 9 — muốn hỏi/xử lý
+tiếp". Đào sâu bằng `GROUP BY loaded_at::date`: phát hiện pipeline nạp theo **3 đợt lớn rời rạc, mỗi đợt
+2-3 tháng cùng lúc** — 15/07 nạp T1-T3, 20/07 nạp T4-T6, 17/09 (hôm nay) nạp T7-T8. Đây là bằng chứng rõ
+ràng pipeline vận hành kiểu batch/manual định kỳ vài tháng (KHÔNG phải ETL hàng ngày/hàng giờ như các
+bảng fact khác) — nên tháng đang chạy (T9) sẽ LUÔN "thiếu" cho tới đợt kế tiếp, đúng đặc tính bình thường
+của nguồn ngoài repo, không phải lỗi lặp lại cần sửa mỗi lần.
+
+Fix duy nhất khả thi phía web: thêm badge freshness ngay dưới tiêu đề tab `3hk-usage/page.tsx` — state
+`maxAvailableDate` mới (tách khỏi `endDate` để không đổi theo bộ lọc người dùng đang chỉnh, chỉ set 1 lần
+từ effect fetch MAX date có sẵn) — hiện "Dữ liệu 3HK mới nhất: dd/mm/yyyy — cập nhật theo đợt, không phải
+hàng ngày... KHÔNG phải bug web", đổi màu cảnh báo (amber) khi đã cũ >45 ngày. Mục tiêu: cắt vòng lặp
+hỏi→audit→"không phải bug" đã lặp 2 lần trong tháng này cho cùng 1 tab.
+
+tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã tự verify sống trên staging sau deploy (gọi `find` xác
+nhận badge hiện đúng "31/08/2026"). Wiki `docs/wiki/system/tabs/analytics-3hk-usage.md` mục 9 cập nhật
+đủ. Đã push staging (`69c49943`) — chưa merge main.
+
+### s200+3 (2026-09-17) — 3HK Data Usage: fix phân loại Daily/Fixed/Unlimited + chart mới
+
+Hiếu gửi ảnh bảng mapping cấu trúc SKU 3HK chuẩn (18 ký tự ITEM CODE / 13 ký tự SKU CODE) + báo mã X bị
+xếp nhầm Daily dù bản chất Unlimited, đồng thời yêu cầu thêm chart "mã SKU nào chiếm bao nhiêu SIM" và
+audit thêm các sai sót tồn đọng khác.
+
+Đọc bảng ảnh, xác định vị trí ký tự "Data type + Slow speed data" (1 ký tự) nằm ở VỊ TRÍ 8 trong SKU CODE
+13 ký tự (`[VN/US(1)][Type(1)][Country(3)][Vendor(2)][DataType(1)][DataAmount(3)][DayAmount(2)]`). Verify
+trực tiếp qua Dev Tools SQL Query (không đoán, không tin comment code cũ): code cũ chỉ nhận diện Unlimited
+qua `UPPER(sku) LIKE '%UNL%'` — đúng cho mã `A`/`B` (vì trường DataAmount vị trí 9-11 CŨNG ghi literal
+"UNL" khi dung lượng = Unlimited, vd `EACHN3DBUNL05`) nhưng SAI hoàn toàn cho `C`/`D`/`E`/`G`/`H`/`L`/`X`
+— các mã này không có "UNL" ở bất kỳ đâu trong chuỗi (vd `EAANZ3DX00303`) → rơi về cột `sku_type` gán sẵn
+từ nguồn 3HK, bị nhãn phụ "Daily"/"Fixed" đánh lừa dù bản chất Unlimited. Phát hiện comment cũ ở
+`3hk-speed-map/route.ts` đã từng ghi nhận hiện tượng này ("mã MỚI bị gán nhầm 'Daily'") nhưng chỉ vá cho
+đúng 1 chart phụ (nhận diện qua regex `/[AB]UNL/i`), CHƯA fix ở chỗ chính (`bundlesCTE` trong page.tsx,
+nguồn cho Summary/SKU Type/SKU table/CSV export — đúng chỗ Hiếu đang xem thấy sai).
+
+Fix: đổi CASE phân loại sang đọc `SUBSTRING(sku, 8, 1)` cho SKU 13 ký tự, map đầy đủ theo bảng Hiếu cung
+cấp — A/B/C/D/E/G/H/L/X → Unlimited Data (đúng "Unlimited" trong tên gọi bất kể có kèm chữ Daily/Fixed
+hay không, 2 chữ đó chỉ nói về chu kỳ reset throttle); F/Y → Fixed Data; P/Z/T → Daily Data; K → "Other"
+(mã placeholder "eSIM profile/SIM frame", KHÔNG phải gói data thật — trước bị gộp nhầm vào Fixed). Mã CŨ
+14/15 ký tự giữ nguyên logic literal `%UNL%` (tự mô tả rõ bằng "GB"/"UNL" trong chuỗi, không cần đổi).
+
+Verify sống bằng cách chạy CHÍNH XÁC câu SQL mới trên Dev Tools trước khi sửa code, rồi so trước/sau: Fixed
+17.923→12.688 (-5.235, đúng số SIM mã K), Daily 16.241→16.215 (-26, đúng số SIM mã X), Unlimited
+2.813→2.839 (+26), Other (mới) = 5.235 — khớp tuyệt đối, không dòng nào rơi/nhân đôi.
+
+Kèm fix `daysOfSku()` (FE) — trước chỉ nhận số ngày qua literal `UNLxx`/`xxD` ở cuối chuỗi, bỏ sót toàn
+bộ SKU 13 ký tự không có "UNL" → cột "GB/ngày/SIM" (tab Unlimited) luôn hiện "—" cho C/D/E/G/H/L/X. Thêm
+fallback đọc 2 ký tự cuối SKU 13 ký tự (vị trí DayAmount), verify khớp cả SKU Fixed/Daily khác nên áp
+dụng chung.
+
+Thêm chart mới `SkuCountChart` (`3hk-usage-charts.tsx`, bar ngang) — "Mã SKU chiếm bao nhiêu SIM", top 15
+theo Active SIMs + gộp phần đuôi dài thành "Khác (N mã)". Dùng lại `skuMetrics` đã fetch sẵn cho bảng
+"Average Usage by SKU" — KHÔNG thêm query mới (đúng rule N+1/hiệu năng).
+
+Audit phát hiện thêm 2 vấn đề, báo lại Hiếu quyết định thay vì tự ý sửa: (1) SKU `1D0003DK00000` (mã K)
+gánh 28.264 GB actual dù `plan=0` (~5.235 "SIM") — nghi dữ liệu nguồn 3HK gộp nhầm usage thật của nhiều
+SIM khác vào 1 mã placeholder, nguyên nhân nằm ngoài phạm vi sửa được ở web, cần hỏi vendor 3HK; (2)
+`/api/analytics/3hk-speed-map` (phục vụ 2 chart nhóm tốc độ, chỉ hiện tab Unlimited) chỉ nhận diện mã A/B
+(regex `/[AB]UNL/i`), chưa có bucket cho C(20mbps)/D(100mbps)/L(50mbps) — các mã này giờ đúng ở bảng
+chính nhưng vẫn bị loại khỏi 2 chart phụ đó, cần quyết định thiết kế bucket mới nếu muốn phủ đủ.
+
+tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã tự verify sống trên staging sau deploy (số liệu khớp
+tuyệt đối với kết quả verify SQL trước khi code). Wiki `docs/wiki/system/tabs/analytics-3hk-usage.md`
+§3.1 viết lại hẳn (bảng mapping đầy đủ + SQL trước/sau + 2 phát hiện thêm) + mục Gotchas. Đã push staging
+(`f4fbf0c4` + `02742197`) — chưa merge main.
+
+### s200+4 (2026-09-17) — 3HK Data Usage: loại hẳn SKU khung SIM + đổi Unlimited breakdown/chart sang mã ký tự
+
+Tiếp ngay s200+3 cùng ngày. Hiếu phản hồi 3 điểm sau khi xem kết quả đợt trước:
+
+1. **SKU `1D0003DK00000` (mã K) xác nhận là "khung SIM"** — không phải gói data thật, yêu cầu loại HẲN
+   khỏi báo cáo (đợt trước chỉ tách riêng bucket "Other", chưa loại). Sửa: thêm điều kiện
+   `NOT (LENGTH(sku)=13 AND SUBSTRING(sku,8,1)='K')` ngay trong `period_records` (bundlesCTE) — loại
+   TRƯỚC khi tính bất kỳ số liệu nào (Summary/SKU Type/SKU table/record list/CSV export đều sạch). Bỏ
+   luôn nhánh `WHEN 'K' THEN 'Other'` khỏi `SKU_TYPE_CASE` (không còn dòng nào lọt tới đó). Verify sống
+   qua Dev Tools SQL TRƯỚC khi code: tổng bundles kỳ T8/2026 36.977 → 31.742 (giảm đúng 5.235, khớp số
+   SIM gánh dưới mã K) — verify lại sau deploy trên UI thật khớp tuyệt đối.
+
+2. **Đổi chart "Mã SKU chiếm bao nhiêu SIM"** (đợt s200+3 làm per-SKU, nhưng 1366 mã SKU riêng lẻ trong 1
+   kỳ quá chi tiết/khó đọc) **sang gom theo KÝ TỰ PHÂN LOẠI** — Hiếu chỉ định chính xác 2 vị trí: **vị trí
+   8** cho SKU CHUẨN 13 ký tự (đã dùng ở s200+3 cho việc phân loại Daily/Fixed/Unlimited), **vị trí 10**
+   cho SKU CŨ 14 ký tự. Hàm mới `typeLetterOfSku()`. Verify qua SQL trước khi code:
+   `SUBSTRING(sku,10,1)` trên toàn bộ SKU 14 ký tự trong kỳ ra kết quả hợp lý — P (165 bundle, 28 SKU) và
+   F (154 bundle, 13 SKU) là 2 giá trị phổ biến nhất, khớp đúng quy ước Daily/Fixed cũ (parseOldGroup ở
+   3hk-speed-map cũ cũng dùng P-code cho mục đích tương tự) — xác nhận vị trí Hiếu đưa ra là đúng trước
+   khi tin dùng. Độ dài SKU khác (15/17/18 ký tự, số lượng nhỏ) chưa xác định được vị trí tương ứng → gộp
+   "Khác (mã dài khác)" thay vì đoán bừa. Component chart `SkuCountChart` (đổi tên nội dung, giữ nguyên
+   code) tái sử dụng nguyên vẹn — chỉ đổi DỮ LIỆU truyền vào từ per-SKU sang per-ký-tự, mở rộng cột YAxis
+   130→220px để chứa nhãn dài hơn (kèm mô tả gốc, vd "A — Daily-Unlimited 5mbps").
+
+3. **Breakdown "Unlimited — Breakdown theo gói"** (bảng + 2 chart phụ, chỉ hiện tab Unlimited) đợt trước
+   vẫn gom theo NHÓM TỐC ĐỘ/THROTTLE (500MB·5mbps/500MB·10mbps/1GB·10mbps, tính qua route
+   `/api/analytics/3hk-speed-map` — route này CHỈ nhận diện được mã A/B qua regex `/[AB]UNL/i`, nên dù
+   s200+3 đã sửa C/D/E/G/H/L/X thành Unlimited đúng ở bảng chính, chúng vẫn bị loại khỏi 2 chart phụ này
+   vì speed-map không biết xếp chúng vào nhóm tốc độ nào). Hiếu yêu cầu đổi hẳn sang hiển thị TRỰC TIẾP
+   theo mã ký tự ("mã A là bao nhiêu, mã B là bao nhiêu, mã X là bao nhiêu"). Sửa: `speedGroups`/
+   `speedGroupMembers` (dùng chung cho bảng breakdown + 2 chart `speedChart`/`usageDist`) đổi khoá gom
+   nhóm từ `speedMap[sm.sku]?.group` (throttle label từ API) sang `typeLetterOfSku(sm.sku)` (ký tự, tính
+   client-side, không cần gọi API nữa) — nhờ đó GIẢI QUYẾT LUÔN giới hạn "chỉ A/B" đã nêu ở s200+3 mà
+   không cần thiết kế thêm bucket mbps mới như dự tính ban đầu (bucket theo mã tự nhiên bao trọn mọi mã,
+   không cần biết trước có bao nhiêu bucket). Badge mã trong bảng kèm mô tả gốc từ `CODE_LABELS` (dùng
+   chung với chart #2) làm phụ chú dễ đọc, ví dụ "X — Daily Unlimited 10mbps - Midnight".
+
+   Vì không còn dùng, **xoá hẳn** route `GET /api/analytics/3hk-speed-map` (dead code — chỉ còn đúng 1
+   consumer, đã đổi) + state `speedMap`/effect fetch liên quan trong `page.tsx` + hàm `groupShort()` (3
+   chỗ dùng, nay chỉ cần dùng thẳng ký tự làm nhãn, không cần "rút gọn" throttle label nữa). Cập nhật mô
+   tả 1 dòng liên quan trong `lib/data-lineage.ts` (Data Map ở Dev Tools) cho khớp thực tế mới.
+
+tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã tự verify sống trên staging CẢ TRƯỚC lẫn SAU khi code
+(không chỉ tin code sạch): trước khi sửa, chạy đúng câu SQL mới qua Dev Tools SQL Query xác nhận số liệu
+đúng như kỳ vọng; sau khi deploy, mở lại tab Unlimited trên UI thật xác nhận bảng breakdown hiện đúng A=
+416 SIM/B=2.387 SIM/X=26 SIM — khớp tuyệt đối với số đã verify qua SQL. Wiki
+`docs/wiki/system/tabs/analytics-3hk-usage.md` viết lại đủ §3.1 (SQL WHERE mới + CASE bỏ nhánh K) + §7
+(đổi cơ chế hẳn, giữ lịch sử cũ trong `<details>` để tham khảo) + 2 bảng data-source (mục 5 "Bảng dữ liệu
+chính" và mục cuối "Data Sources"). Đã push staging (`303d7b1b` code + `88cc9576` docs) — chưa merge main.
+
+## s200+6 (2026-09-17) — Vá kiến trúc cache invalidation (2 phần theo yêu cầu Hiếu)
+
+Hiếu hỏi thăm dò hướng giải quyết triệt để: "cơ chế cache của hệ thống đang hơi bị vấn đề, đôi lúc nếu
+data bị thay đổi thì nó sẽ bị lỗi còn dữ liệu cũ, mặc dù có cơ chế clear cache nhưng đôi lúc vẫn phải tự
+làm". Đề xuất 2 hướng qua chat (không code ngay): (1) chuyển invalidate từ "FE tự gọi flush sau khi save"
+sang "backend route ghi dữ liệu tự flush"; (2) ETL-completion-driven flush thay vì chỉ dựa TTL mù. Hiếu
+chốt "làm luôn cả 2".
+
+Audit code thật trước khi sửa (đọc `analytics-helpers.ts` toàn bộ, grep tất cả 47 chỗ `cachedQuery(` +
+mọi route dùng `fetchQuarterlySettings`/`getStrategicPartnersList`/`getPartnerTiers`): ban đầu nghi ngờ
+24 route có gap, sau khi đọc kỹ từng route mới xác nhận CHỈ 6 route thật sự có bug (đa số route khác đã
+tự đúng từ trước — bake `exclHash(excludedCustomers)` vào cache key, hoặc apply tier classification ở JS
+sau khi fetch cached rows thay vì bake vào SQL). 6 route lỗi: `b2b/kpis`, `b2c/kpis`, `b2c/performance`,
+`b2c/trend`, `b2b/strategic-performance`, `monthly-kpis` — fetch `excludedCustomers` fresh mỗi request
+rồi bake vào SQL trong `cachedQuery`, nhưng cache key không hash theo giá trị này → đổi danh sách loại
+trừ ở Quarter Report Settings không tự làm mới các route trên tới khi hết TTL 60'.
+
+Fix phần 1: thêm `exclHash(excludedCustomers)` vào cache key cả 6 route (2 route phải dời fetch settings
+ra trước dòng tính key). Route ghi `quarterly-settings` không cần sửa gì — tự invalidate qua đổi key.
+
+Phát hiện thêm lúc audit: route `web/src/app/api/cron/etl-cache-sync/route.ts` đã tồn tại untracked trên
+máy (chưa commit) — có vẻ do 1 lượt làm trước đó trong cùng phiên (trước khi bị compact mất context) đã
+bắt đầu code phần 2 rồi dừng giữa chừng. Đọc lại xác nhận code ĐÚNG và ĐỦ: theo dõi `jobs`/`job_logs`
+(gohub_dw) cho 4 job `ETL_dim`/`ETL_vatdb_cogs`/`ETL_fact_fulfilment_revenue_from_ops_admin_v2`/
+`ETL_fact_sales_revenue_from_gohub_cloud`, so `end_time` mới nhất với lần check trước
+(`app_settings.etl_cache_sync_last_seen`), job nào tiến → `flushAnalyticsCache()`. Verify độc lập qua SQL
+trực tiếp trên staging (browser + `/api/admin/sql-query`) xác nhận đúng tên job + cột (`job_logs.status`
+là chuỗi `'successful'` chứ không phải `'success'` — nếu đoán sai literal này thì query luôn ra 0 dòng,
+âm thầm không bao giờ flush) — code hiện có đã dùng đúng `'successful'`. Giữ nguyên, không sửa gì thêm.
+KHÔNG đăng ký `vercel.json` (Hobby giới hạn 1 lần/ngày/job) — cần Hiếu tự thêm 1 job cron-job.org ping
+`GET /api/cron/etl-cache-sync` mỗi 10-15 phút (đã có sẵn hạ tầng cron-job.org từ browserless keep-alive
+s195). Có sẵn `POST` cùng route để tự test tay.
+
+tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Wiki `docs/wiki/system/analytics-data-model.md` mục 8 cập
+nhật đủ. Chưa commit/push tại thời điểm ghi log này.

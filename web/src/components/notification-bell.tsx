@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { Bell, X, RefreshCw, FileText, PenLine, TrendingUp, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react"
+import { Bell, X, RefreshCw, FileText, PenLine, TrendingUp, AlertTriangle, CheckCircle, ChevronDown, ChevronUp } from "lucide-react"
 
 interface Notification {
   id: number
-  type: "sync" | "kb_doc" | "wiki" | "price_change" | "error"
+  type: "sync" | "kb_doc" | "wiki" | "price_change" | "error" | "success"
   title: string
   body: string | null
   data: any
@@ -22,6 +22,7 @@ const TYPE_CFG = {
   wiki:         { icon: PenLine,       color: "text-purple-500", bg: "bg-purple-50", label: "Wiki"     },
   price_change: { icon: TrendingUp,    color: "text-amber-500",  bg: "bg-amber-50",  label: "Giá"      },
   error:        { icon: AlertTriangle, color: "text-rose-600",   bg: "bg-rose-50",   label: "Lỗi"      },
+  success:      { icon: CheckCircle,   color: "text-emerald-600",bg: "bg-emerald-50",label: "Thành công" },
 } as const
 
 function fmtDate(iso: string) {

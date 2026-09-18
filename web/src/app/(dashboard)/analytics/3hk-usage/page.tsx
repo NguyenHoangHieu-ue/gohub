@@ -18,6 +18,7 @@ import { exportRawRows, exportAOA } from "@/lib/export-excel"
 const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
 const SpeedComparisonChart = dynamic(() => import("./3hk-usage-charts").then(m => m.SpeedComparisonChart), { ssr: false, loading: chartLoading })
 const UsageDistChart       = dynamic(() => import("./3hk-usage-charts").then(m => m.UsageDistChart),       { ssr: false, loading: chartLoading })
+const SkuCountChart        = dynamic(() => import("./3hk-usage-charts").then(m => m.SkuCountChart),        { ssr: false, loading: chartLoading })
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -44,12 +45,36 @@ const daysOfSku = (sku: string): number | null => {
   const mNew = sku.match(/UNL(\d+)$/i)
   if (mNew) return parseInt(mNew[1])
   const mOld = sku.replace(/P[12]/i, "").match(/(\d+)D$/i)
-  return mOld ? parseInt(mOld[1]) : null
+  if (mOld) return parseInt(mOld[1])
+  // Mã CHUẨN 13 ký tự không có literal "UNL" (vd C/D/E/G/H/L/X ở vị trí 8 — s200+3) — SKU CODE kết thúc
+  // bằng 2 ký tự DayAmount (vd "EAANZ3DX00303" → "03" = 3 ngày), verify khớp cả mã Fixed/Daily 13 ký tự
+  // khác (vd "...F01215" → "15" ngày) nên áp dụng chung, không chỉ riêng Unlimited.
+  if (sku.length === 13) {
+    const d = parseInt(sku.slice(11, 13), 10)
+    if (!isNaN(d) && d > 0) return d
+  }
+  return null
 }
 
 
-// Rút gọn tên nhóm tốc độ cho nhãn biểu đồ: "500MB high-speed · throttle 5 mbps" → "500MB·5mbps".
-const groupShort = (g: string) => g.replace(" high-speed · throttle ", "·").replace(" mbps", "mbps")
+// Ký tự phân loại "Data type" của mã SKU 3HK (s200+3/+4, bảng mapping Hiếu cung cấp) — VỊ TRÍ 8 cho
+// mã CHUẨN 13 ký tự, VỊ TRÍ 10 cho mã CŨ 14 ký tự (verify qua SQL thật, xem wiki analytics-3hk-usage.md
+// §3.1). Độ dài khác (15/17/18 ký tự, số lượng nhỏ) — chưa xác định vị trí, trả null (gộp "Khác" ở FE).
+const typeLetterOfSku = (sku: string): string | null => {
+  if (sku.length === 13) return sku[7]?.toUpperCase() ?? null
+  if (sku.length === 14) return sku[9]?.toUpperCase() ?? null
+  return null
+}
+
+// Mô tả người-đọc-được cho từng ký tự phân loại (bảng Hiếu cung cấp) — dùng cho tooltip/label, KHÔNG
+// dùng để tính toán (tính toán bucket Daily/Fixed/Unlimited nằm ở SQL `SKU_TYPE_CASE` bên dưới).
+const CODE_LABELS: Record<string, string> = {
+  A: "Daily - Unlimited 5mbps", B: "Daily - Unlimited 10mbps", C: "Unlimited 20mbps",
+  D: "Unlimited 100mbps", E: "Fixed - Unlimited 5mbps", G: "Fixed - Unlimited 10mbps",
+  H: "Unlimited 5mbps", L: "Unlimited 50mbps", X: "Daily Unlimited 10mbps - Midnight",
+  F: "Fixed throttle <2mbps", Y: "Fixed no-throttle", P: "Daily throttle <2mbps",
+  Z: "Daily no-throttle", T: "Daily throttle <2mbps - Midnight",
+}
 
 interface DataUsageRecord {
   order_code: string
@@ -83,7 +108,7 @@ interface SKUTypeMetrics {
 // Nhóm gói Unlimited 3HK = (high-speed × throttle). Hiện chỉ có 3 loại:
 //   500MB·5mbps · 500MB·10mbps · 1GB·10mbps.
 interface SpeedGroupMetrics {
-  speed_group: string
+  speed_group: string  // s200+4: ký tự phân loại (A/B/C/.../X), KHÔNG còn là nhãn tốc độ/throttle
   active_sims: number
   total_plan_gb: number
   total_usage_gb: number
@@ -112,16 +137,10 @@ const monthLabel = (ym: string, multiYear: boolean) => {
 // TB 2 chữ số thập phân theo vi-VN (dấu phẩy) — khớp mẫu "16,92".
 const fmtTB = (n: number) => (n || 0).toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-// Nhóm tốc độ (high-speed × throttle) được tính SERVER-side ở /api/analytics/3hk-speed-map:
-// gộp throttle_speed product DB (chính) + offer_name + giá (cogs) + ký tự SKU (P1=10/P2=5).
-// Trang chỉ tra map[sku].group. (Trước đây suy client-side từ mã SKU; mã CŨ bị đảo 5/10mbps.)
-
 export default function ThreeHKDataUsagePage() {
   const [data, setData] = useState<DataUsageRecord[]>([])
   const [skuMetrics, setSkuMetrics] = useState<SKUMetrics[]>([])
   const [skuTypeMetrics, setSkuTypeMetrics] = useState<SKUTypeMetrics[]>([])
-  // Map sku -> nhóm tốc độ (server tính sẵn: throttle_speed + offer + giá). Tách 500MB vs 1GB × 5/10mbps.
-  const [speedMap, setSpeedMap] = useState<Record<string, { group: string | null; source?: string }>>({})
   const [loading, setLoading] = useState(false)
   const [loadingSKU, setLoadingSKU] = useState(false)
   const [loadingType, setLoadingType] = useState(false)
@@ -140,6 +159,9 @@ export default function ThreeHKDataUsagePage() {
   // Để rỗng ban đầu → mount effect đặt kỳ = đầu-tháng(max-data) .. max-data (3HK có thể chậm sync vài tháng).
   const [startDate, setStartDate] = useState<string>("")
   const [endDate, setEndDate] = useState<string>("")
+  // Ngày data mới nhất THẬT SỰ (không đổi theo bộ lọc người dùng đang chỉnh, khác endDate) — hiện badge
+  // freshness (s200+2) để không ai tưởng "thiếu tháng X" là bug web mỗi lần 3HK sync trễ.
+  const [maxAvailableDate, setMaxAvailableDate] = useState<string | null>(null)
   // Ngày chỉ áp khi bấm "Lọc" (không tự lọc mỗi lần đổi ngày). appliedTick bump → chạy lại query.
   const [appliedTick, setAppliedTick] = useState(0)
   const [sortConfig, setSortConfig] = useState<{ key: keyof DataUsageRecord; direction: "asc" | "desc" }>({ key: "first_report_date", direction: "desc" })
@@ -192,23 +214,10 @@ export default function ThreeHKDataUsagePage() {
           const p = (n: number) => String(n).padStart(2, "0")
           const endStr   = `${maxD.getUTCFullYear()}-${p(maxD.getUTCMonth()+1)}-${p(maxD.getUTCDate())}`
           const startStr = `${maxD.getUTCFullYear()}-${p(maxD.getUTCMonth()+1)}-01`
-          setStartDate(startStr); setEndDate(endStr); setAppliedTick(t => t + 1); return
+          setStartDate(startStr); setEndDate(endStr); setMaxAvailableDate(endStr); setAppliedTick(t => t + 1); return
         }
       } catch (e) { console.error("Error fetching 3hk max date:", e) }
       const d = getDefaultDateRange(); setStartDate(d.startDate); setEndDate(d.endDate); setAppliedTick(t => t + 1)
-    })()
-  }, [])
-
-  // Map sku -> nhóm tốc độ (1 lần): server gộp throttle_speed product DB + offer_name + giá để tách
-  // 500MB/1GB × 5/10mbps. Không phụ thuộc khoảng ngày.
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/analytics/3hk-speed-map")
-        if (!res.ok) return
-        const json = await res.json()
-        setSpeedMap(json.map || {})
-      } catch (e) { console.error("Error fetching 3hk speed map:", e) }
     })()
   }, [])
 
@@ -305,6 +314,25 @@ export default function ThreeHKDataUsagePage() {
     return sortedSkuMetrics.slice((skuPage - 1) * skuPageSize, skuPage * skuPageSize)
   }, [sortedSkuMetrics, skuPage, skuPageSize])
 
+  // Chart "mã nào chiếm bao nhiêu SIM" (s200+4, Hiếu chỉnh lại từ bản per-SKU sang per-KÝ TỰ phân loại —
+  // gọn hơn hẳn 1366 mã SKU riêng lẻ, đi thẳng vào câu hỏi "mã A/B/X... chiếm bao nhiêu"). Gom theo
+  // `typeLetterOfSku()` (vị trí 8 mã 13 ký tự / vị trí 10 mã 14 ký tự); SKU không xác định được vị trí
+  // (15/17/18 ký tự, số lượng nhỏ) gộp vào "Khác (mã dài khác)".
+  const typeLetterChart = useMemo(() => {
+    const acc: Record<string, number> = {}
+    let unknownTotal = 0
+    for (const sm of skuMetrics) {
+      const letter = typeLetterOfSku(sm.sku)
+      if (letter) acc[letter] = (acc[letter] ?? 0) + sm.active_sims
+      else unknownTotal += sm.active_sims
+    }
+    const rows = Object.entries(acc)
+      .map(([letter, active_sims]) => ({ sku: CODE_LABELS[letter] ? `${letter} — ${CODE_LABELS[letter]}` : letter, active_sims }))
+      .sort((a, b) => b.active_sims - a.active_sims)
+    if (unknownTotal > 0) rows.push({ sku: "Khác (mã dài khác)", active_sims: unknownTotal })
+    return rows
+  }, [skuMetrics])
+
   const sortedSkuTypeMetrics = useMemo(() => {
     const items = [...skuTypeMetrics]
     items.sort((a, b) => {
@@ -322,13 +350,14 @@ export default function ThreeHKDataUsagePage() {
     return items
   }, [skuTypeMetrics, skuTypeSort])
 
-  // Breakdown Unlimited theo (high-speed × throttle) — gom skuMetrics (đã lọc Unlimited) theo datatype SKU + offer.
+  // Breakdown Unlimited theo MÃ KÝ TỰ phân loại (s200+4, Hiếu chỉnh lại từ nhóm tốc độ/throttle sang
+  // trực tiếp ký tự A/B/C/.../X) — gom skuMetrics (đã lọc Unlimited) theo `typeLetterOfSku()`.
   const speedGroups = useMemo<SpeedGroupMetrics[]>(() => {
     if (activeTab !== "Unlimited") return []
     const acc: Record<string, SpeedGroupMetrics> = {}
     for (const sm of skuMetrics) {
-      const group = speedMap[sm.sku]?.group
-      if (!group) continue   // bỏ SKU không xác định datatype
+      const group = typeLetterOfSku(sm.sku)
+      if (!group) continue   // bỏ SKU không xác định được vị trí ký tự (15/17/18 ký tự)
       const g = acc[group] ?? (acc[group] = { speed_group: group, active_sims: 0, total_plan_gb: 0, total_usage_gb: 0, avg_usage_pct: 0, sim_days: 0, actual_per_day: 0, plan_per_day: 0 })
       g.active_sims    += sm.active_sims
       g.total_plan_gb  += sm.total_plan_gb
@@ -343,20 +372,20 @@ export default function ThreeHKDataUsagePage() {
       g.plan_per_day   = g.sim_days > 0 ? g.total_plan_gb  / g.sim_days : 0
     }
     return list.sort((a, b) => a.speed_group.localeCompare(b.speed_group))
-  }, [activeTab, skuMetrics, speedMap])
+  }, [activeTab, skuMetrics])
 
-  // Danh sách SKU thuộc từng nhóm tốc độ — cho nút "Chi tiết" bung ra (user tự kiểm phân loại).
+  // Danh sách SKU thuộc từng mã ký tự — cho nút "Chi tiết" bung ra (user tự kiểm phân loại).
   const speedGroupMembers = useMemo<Record<string, SKUMetrics[]>>(() => {
     if (activeTab !== "Unlimited") return {}
     const acc: Record<string, SKUMetrics[]> = {}
     for (const sm of skuMetrics) {
-      const group = speedMap[sm.sku]?.group
+      const group = typeLetterOfSku(sm.sku)
       if (!group) continue
       ;(acc[group] ??= []).push(sm)
     }
     for (const g of Object.keys(acc)) acc[g].sort((a, b) => b.total_usage_gb - a.total_usage_gb)
     return acc
-  }, [activeTab, skuMetrics, speedMap])
+  }, [activeTab, skuMetrics])
 
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
 
@@ -376,7 +405,7 @@ export default function ThreeHKDataUsagePage() {
       // Kế hoạch/ngày = tổng data_amount_gb ÷ tổng (SIM×ngày) — mức 3HK cấp/ngày (từ DB), KHÔNG hardcode
       // theo throttle (spec cũ 1.6/1.8-theo-mbps BỊ NGƯỢC chiều A/B so với data_amount_gb thực tế).
       const assume = simDays > 0 ? plan / simDays : 0
-      return { name: groupShort(sg.speed_group), actual: +actual.toFixed(3), assume: +assume.toFixed(3), usagePct: +sg.avg_usage_pct.toFixed(1) }
+      return { name: sg.speed_group, actual: +actual.toFixed(3), assume: +assume.toFixed(3), usagePct: +sg.avg_usage_pct.toFixed(1) }
     })
   }, [activeTab, speedGroups, speedGroupMembers])
 
@@ -392,14 +421,14 @@ export default function ThreeHKDataUsagePage() {
   ]
   const usageDist = useMemo(() => {
     if (activeTab !== "Unlimited") return { rows: [] as Record<string, number | string>[], groups: [] as string[] }
-    const groups = speedGroups.map(sg => groupShort(sg.speed_group))
+    const groups = speedGroups.map(sg => sg.speed_group)
     const rows: Record<string, number | string>[] = USAGE_BUCKETS.map(b => {
       const o: Record<string, number | string> = { range: b.label }
       for (const g of groups) o[g] = 0
       return o
     })
     for (const sg of speedGroups) {
-      const gname = groupShort(sg.speed_group)
+      const gname = sg.speed_group
       for (const m of speedGroupMembers[sg.speed_group] ?? []) {
         const d = daysOfSku(m.sku)
         if (!d || d <= 0 || m.active_sims <= 0) continue
@@ -446,16 +475,43 @@ export default function ThreeHKDataUsagePage() {
   // (first_report_date) TRONG kỳ (khớp báo cáo NCC "SIM có usage trong kỳ"), KHÔNG chỉ SIM
   // phát sinh lần đầu trong kỳ. Usage/plan gom từ CÁC BẢN GHI TRONG KỲ.
   const V3HK = "sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','') = '3HKDATAPOOL')"
+  // Loại mã "khung SIM/eSIM profile" (s200+4, Hiếu xác nhận đây không phải gói data thật, bỏ hẳn khỏi
+  // báo cáo) — ký tự vị trí 8 = 'K' trên mã 13 ký tự (vd 1D0003DK00000, ~5.235 "SIM" gánh usage bất
+  // thường 28k GB dù plan=0 — nghi dữ liệu nguồn 3HK gộp nhầm, xem wiki Gotchas).
+  const EXCLUDE_FRAME = "NOT (LENGTH(sku) = 13 AND SUBSTRING(sku, 8, 1) = 'K')"
+  // Phân loại Daily/Fixed/Unlimited (s200+3, Hiếu báo mã X bị xếp nhầm Daily dù là Unlimited):
+  // mã CHUẨN 13 ký tự có 1 ký tự "Data type" ở VỊ TRÍ 8 (SKU CODE=[VN/US(1)][Type(1)][Country(3)]
+  // [Vendor(2)][DataType(1)]...) — verify trực tiếp SQL: A/B/C/D/E/G/H/L/X đều có chữ "Unlimited" trong
+  // tên gọi (bảng mapping Hiếu cung cấp) dù nhãn có thể kèm "Daily"/"Fixed" (chỉ nói về chu kỳ reset
+  // throttle, KHÔNG phải bản chất Daily/Fixed thật) — cột `sku_type` nguồn 3HK gán SAI cho các mã không
+  // có literal "UNL" trong chuỗi (chỉ A/B tình cờ đúng vì amount field cũng ghi "UNL"; C/D/E/G/H/L/X thì
+  // không, ví dụ "EAANZ3DX00303"). Mã CŨ 14/15 ký tự giữ nguyên logic literal 'UNL' (đã đúng, tự mô tả
+  // rõ ràng bằng chữ "GB"/"UNL" trong chuỗi).
+  const SKU_TYPE_CASE = `
+    CASE
+      WHEN LENGTH(MAX(sku)) = 13 THEN
+        CASE SUBSTRING(MAX(sku), 8, 1)
+          WHEN 'A' THEN 'Unlimited Data' WHEN 'B' THEN 'Unlimited Data' WHEN 'C' THEN 'Unlimited Data'
+          WHEN 'D' THEN 'Unlimited Data' WHEN 'E' THEN 'Unlimited Data' WHEN 'G' THEN 'Unlimited Data'
+          WHEN 'H' THEN 'Unlimited Data' WHEN 'L' THEN 'Unlimited Data' WHEN 'X' THEN 'Unlimited Data'
+          WHEN 'F' THEN 'Fixed Data' WHEN 'Y' THEN 'Fixed Data'
+          WHEN 'P' THEN 'Daily Data' WHEN 'Z' THEN 'Daily Data' WHEN 'T' THEN 'Daily Data'
+          ELSE MAX(sku_type)
+        END
+      WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data'
+      ELSE MAX(sku_type)
+    END`
   const bundlesCTE = () => `
     WITH period_records AS (
       SELECT iccid, order_code, sku, sku_type, total_data_gb, data_amount_gb, first_report_date, activation_date
       FROM fact_data_usage
       WHERE ${V3HK}
+        AND ${EXCLUDE_FRAME}
         AND first_report_date >= '${startDate}' AND first_report_date <= '${endDate}'
     ),
     bundles AS (
       SELECT iccid, order_code, MAX(sku) AS sku,
-             CASE WHEN UPPER(MAX(sku)) LIKE '%UNL%' THEN 'Unlimited Data' ELSE MAX(sku_type) END AS sku_type,
+             ${SKU_TYPE_CASE} AS sku_type,
              MIN(first_report_date) AS first_report_date, MAX(activation_date) AS activation_date,
              SUM(total_data_gb) AS total_data_gb, MAX(data_amount_gb) AS data_amount_gb, COUNT(*) AS record_count
       FROM period_records GROUP BY iccid, order_code
@@ -647,6 +703,17 @@ export default function ThreeHKDataUsagePage() {
             3HK Data Usage
           </h1>
           <p className="text-slate-500 text-sm mt-1">Phân tích hành vi &amp; hiệu suất sản phẩm theo kỳ cước</p>
+          {maxAvailableDate && (() => {
+            const [y, m, d] = maxAvailableDate.split("-")
+            const daysStale = Math.floor((Date.now() - Date.UTC(+y, +m - 1, +d)) / 86400000)
+            return (
+              <p className={cn("text-xs mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 rounded-lg font-medium",
+                daysStale > 45 ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500")}>
+                Dữ liệu 3HK mới nhất: <b>{d}/{m}/{y}</b> — nguồn 3HK cập nhật theo đợt (không phải hàng
+                ngày), có thể trễ vài tuần đến vài tháng so với hôm nay. Thiếu tháng gần đây KHÔNG phải bug web.
+              </p>
+            )
+          })()}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -874,21 +941,21 @@ export default function ThreeHKDataUsagePage() {
         </div>
       </div>
 
-      {/* Unlimited Breakdown theo nhóm tốc độ (high-speed + throttle) — chỉ tab Unlimited */}
+      {/* Unlimited Breakdown theo MÃ ký tự phân loại (s200+4) — chỉ tab Unlimited */}
       {activeTab === "Unlimited" && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100 bg-slate-50/50">
             <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-indigo-600" />
-              Unlimited — Breakdown theo gói (high-speed × throttle)
+              Unlimited — Breakdown theo mã
             </h2>
-            <p className="text-[11px] text-slate-400 mt-1">3 loại: 500MB·5mbps · 500MB·10mbps · 1GB·10mbps. Mã CŨ phân loại theo P-code (P2=5, P1=10, PY=1GB·10); mã MỚI theo cột throttle_speed Product DB (A=5, B=10; tách 500MB/1GB ở 10mbps).</p>
+            <p className="text-[11px] text-slate-400 mt-1">Gom theo ký tự phân loại của SKU (vị trí 8 mã 13 ký tự / vị trí 10 mã 14 ký tự) — mỗi mã (A/B/C/.../X) là 1 dòng riêng, không gộp theo tốc độ nữa.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nhóm tốc độ</th>
+                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mã</th>
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">Active SIMs</th>
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Plan (GB)</th>
                   <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Actual (GB)</th>
@@ -910,7 +977,10 @@ export default function ThreeHKDataUsagePage() {
                     <React.Fragment key={idx}>
                     <tr className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-3 font-bold text-slate-900 text-sm">
-                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100">{sg.speed_group}</span>
+                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100" title={CODE_LABELS[sg.speed_group] ?? ""}>
+                          {sg.speed_group}
+                        </span>
+                        {CODE_LABELS[sg.speed_group] && <span className="ml-2 text-[11px] font-normal text-slate-400">{CODE_LABELS[sg.speed_group]}</span>}
                       </td>
                       <td className="px-6 py-3 text-center text-slate-600 text-sm font-medium">{formatNumber(sg.active_sims)}</td>
                       <td className="px-6 py-3 text-right text-slate-600 text-sm">{formatNumber(sg.total_plan_gb)}</td>
@@ -1010,9 +1080,9 @@ export default function ThreeHKDataUsagePage() {
           <div className="p-4 border-b border-slate-100 bg-slate-50/50">
             <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-indigo-600" />
-              So sánh mức sử dụng theo nhóm — Thực tế (GB/ngày/SIM) vs Kế hoạch
+              So sánh mức sử dụng theo mã — Thực tế (GB/ngày/SIM) vs Kế hoạch
             </h2>
-            <p className="text-[11px] text-slate-400 mt-1">Cột Thực tế <span className="text-rose-600 font-semibold">đỏ</span> = vượt mức 3HK cấp/ngày của nhóm (chi phí datapool cao hơn dự kiến), <span className="text-emerald-600 font-semibold">xanh</span> = trong kế hoạch. Cột xám = mức kế hoạch/ngày (data_amount_gb ÷ ngày).</p>
+            <p className="text-[11px] text-slate-400 mt-1">Cột Thực tế <span className="text-rose-600 font-semibold">đỏ</span> = vượt mức 3HK cấp/ngày của mã (chi phí datapool cao hơn dự kiến), <span className="text-emerald-600 font-semibold">xanh</span> = trong kế hoạch. Cột xám = mức kế hoạch/ngày (data_amount_gb ÷ ngày).</p>
           </div>
           <div className="p-4" style={{ height: 320 }}>
             <SpeedComparisonChart data={speedChart} />
@@ -1026,12 +1096,28 @@ export default function ThreeHKDataUsagePage() {
           <div className="p-4 border-b border-slate-100 bg-slate-50/50">
             <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-indigo-600" />
-              Phân bố mức data sử dụng/ngày — theo loại gói Unlimited
+              Phân bố mức data sử dụng/ngày — theo mã gói Unlimited
             </h2>
-            <p className="text-[11px] text-slate-400 mt-1">Trục X = dải GB dùng/ngày/SIM, trục Y = số SIM (Active). Cột chồng theo nhóm tốc độ. Đường tham chiếu: giả định 1.6GB (5mbps) · 1.8GB (10mbps).</p>
+            <p className="text-[11px] text-slate-400 mt-1">Trục X = dải GB dùng/ngày/SIM, trục Y = số SIM (Active). Cột chồng theo mã (A/B/C/.../X).</p>
           </div>
           <div className="p-4" style={{ height: 340 }}>
             <UsageDistChart rows={usageDist.rows} groups={usageDist.groups} />
+          </div>
+        </div>
+      )}
+
+      {/* Chart mã loại gói (ký tự phân loại vị trí 8/10) chiếm bao nhiêu SIM (s200+4, Hiếu yêu cầu) */}
+      {typeLetterChart.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <Package className="w-4 h-4 text-brand-600" />
+              Mã loại gói chiếm bao nhiêu SIM
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-1">Số lượng SIM (Active) theo ký tự phân loại — vị trí 8 (mã 13 ký tự) hoặc vị trí 10 (mã 14 ký tự) trong kỳ đang xem.</p>
+          </div>
+          <div className="p-4" style={{ height: Math.max(260, typeLetterChart.length * 30) }}>
+            <SkuCountChart data={typeLetterChart} />
           </div>
         </div>
       )}

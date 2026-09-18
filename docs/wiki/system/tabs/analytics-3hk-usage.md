@@ -24,9 +24,11 @@ Trang theo dõi chi tiết **dung lượng data thực tế tiêu thụ** của 
 | **Trang web** | `/analytics/3hk-usage` |
 | **File FE** | `web/src/app/(dashboard)/analytics/3hk-usage/page.tsx` |
 | **API dữ liệu bảng** | `POST /api/analytics/query` (SELECT-only) — FE tự sinh SQL rồi gửi |
-| **API nhóm tốc độ Unlimited** | `GET /api/analytics/3hk-speed-map` |
 | **Bảng nguồn (analytics)** | `gohub_dw.fact_data_usage` + `gohub_dw.dim_sku` |
-| **Bảng nguồn (product)** | Supabase `skus` (cột `throttle_speed`, cho phân loại Unlimited) |
+
+> ⚠️ **s200+4**: route `GET /api/analytics/3hk-speed-map` (nhóm tốc độ Unlimited theo `skus.throttle_speed`)
+> đã XOÁ — breakdown Unlimited giờ gom trực tiếp theo ký tự phân loại vị trí 8/10 của SKU (xem §3.1/§7),
+> không cần tra Product DB nữa.
 
 > ⚠️ **Không còn** route `/api/analytics/3hk-usage/report` — đã xoá (dead code). Trang gửi thẳng SQL qua `/api/analytics/query`.
 
@@ -51,11 +53,90 @@ Trang theo dõi chi tiết **dung lượng data thực tế tiêu thụ** của 
 | **`first_report_date`** | **⭐ Ngày báo cáo lưu lượng** (snapshot) — lưu ở **00:00:00 UTC** | **CỘT LỌC KỲ CHÍNH** (xem mục 4) |
 | `activation_date` | Ngày kích hoạt SIM | **CHỈ hiển thị** ("Acts: …"), KHÔNG dùng lọc kỳ |
 
-### 3.1 Phân loại loại gói (Daily/Fixed/Unlimited)
-Tin theo **mã SKU**, không tin cột `sku_type` (mã mới từng bị gán nhầm):
+### 3.1 Phân loại loại gói (Daily/Fixed/Unlimited) — s200+3 (2026-09-17)
+
+> ⚠️ **Fix root cause thật** — Hiếu báo mã `X` (và tương tự) là Unlimited nhưng bị xếp Daily, kèm bảng
+> mapping cấu trúc SKU chuẩn 13 ký tự. Verify trực tiếp SQL trên staging: field quyết định loại gói là
+> **1 ký tự ở VỊ TRÍ 8** của SKU CODE 13 ký tự (`SKU CODE = [VN/US][Type][Country(3)][Vendor(2)]
+> [DataType(1)][DataAmount(3)][DayAmount(2)]`). Bản CŨ chỉ nhận diện Unlimited qua substring `%UNL%` trong
+> toàn chuỗi — đúng cho `A`/`B` (vì trường DataAmount ở vị trí 9-11 CŨNG ghi literal `"UNL"`, vd
+> `EACHN3DBUNL05`) nhưng **SAI cho `C`/`D`/`E`/`G`/`H`/`L`/`X`** — các mã này KHÔNG có `"UNL"` ở đâu
+> trong chuỗi (vd `EAANZ3DX00303`) → rơi về cột `sku_type` gán sẵn từ nguồn 3HK, vốn gán theo tên gọi phụ
+> (bị "Daily"/"Fixed" đánh lừa dù bản chất là Unlimited — comment cũ ở `3hk-speed-map/route.ts` đã ghi
+> nhận hiện tượng "mã MỚI bị gán nhầm 'Daily'" từ trước nhưng chưa fix ở chỗ chính này).
+
+**Bảng mapping ký tự vị trí 8** (Hiếu cung cấp, đã verify khớp dữ liệu thật qua SQL — Fixed -5235 SIM
+đúng số SKU `K` khi test ban đầu, Daily -26 = Unlimited +26 đúng số SKU `X`, khớp tuyệt đối):
+
+| Ký tự | Ý nghĩa gốc | Category |
+|---|---|---|
+| A | Daily - Unlimited 5mbps | **Unlimited Data** |
+| B | Daily - Unlimited 10mbps | **Unlimited Data** |
+| C | Unlimited 20mbps | **Unlimited Data** |
+| D | Unlimited 100mbps | **Unlimited Data** |
+| E | Fixed - Unlimited 5mbps | **Unlimited Data** |
+| G | Fixed - Unlimited 10mbps | **Unlimited Data** |
+| H | Unlimited 5mbps | **Unlimited Data** |
+| L | Unlimited 50mbps | **Unlimited Data** |
+| X | Daily Unlimited 10mbps - Midnight | **Unlimited Data** |
+| F | Fixed throttle <2mbps | Fixed Data |
+| Y | Fixed no-throttle | Fixed Data |
+| P | Daily throttle <2mbps | Daily Data |
+| Z | Daily no-throttle | Daily Data |
+| T | Daily throttle <2mbps - Midnight | Daily Data |
+| K | For esim profile and sim frame | **LOẠI HẲN khỏi báo cáo** (s200+4 — Hiếu xác nhận đây là "khung SIM", không phải gói data thật, xem dưới) |
+
+Quy tắc: **nếu tên gọi có chữ "Unlimited" → LUÔN xếp Unlimited**, bất kể có kèm "Daily"/"Fixed" hay không
+(2 chữ đó ở đây chỉ nói về chu kỳ RESET của mức throttle, không phải bản chất dung lượng có giới hạn hay
+không). Chỉ áp dụng cho SKU **13 ký tự** (chuẩn hiện tại); mã CŨ 14/15 ký tự giữ nguyên logic literal
+`%UNL%` (tự mô tả rõ bằng chữ "GB"/"UNL" trong chuỗi, không cần đổi).
+
 ```sql
-CASE WHEN UPPER(sku) LIKE '%UNL%' THEN 'Unlimited Data' ELSE sku_type END
+-- WHERE của period_records (bundlesCTE) — loại hẳn mã khung SIM TRƯỚC khi tính bất kỳ số liệu nào:
+AND NOT (LENGTH(sku) = 13 AND SUBSTRING(sku, 8, 1) = 'K')
+
+-- CASE phân loại category (SKU_TYPE_CASE) — K đã bị loại ở WHERE nên không cần nhánh riêng nữa:
+CASE
+  WHEN LENGTH(sku) = 13 THEN
+    CASE SUBSTRING(sku, 8, 1)
+      WHEN 'A' THEN 'Unlimited Data' WHEN 'B' THEN 'Unlimited Data' WHEN 'C' THEN 'Unlimited Data'
+      WHEN 'D' THEN 'Unlimited Data' WHEN 'E' THEN 'Unlimited Data' WHEN 'G' THEN 'Unlimited Data'
+      WHEN 'H' THEN 'Unlimited Data' WHEN 'L' THEN 'Unlimited Data' WHEN 'X' THEN 'Unlimited Data'
+      WHEN 'F' THEN 'Fixed Data' WHEN 'Y' THEN 'Fixed Data'
+      WHEN 'P' THEN 'Daily Data' WHEN 'Z' THEN 'Daily Data' WHEN 'T' THEN 'Daily Data'
+      ELSE sku_type
+    END
+  WHEN UPPER(sku) LIKE '%UNL%' THEN 'Unlimited Data'
+  ELSE sku_type
+END
 ```
+
+**`daysOfSku()` (FE, dùng cho cột "GB/ngày/SIM" ở tab Unlimited) cùng đợt fix**: trước chỉ nhận diện số
+ngày qua literal `UNLxx`/`xxD` ở cuối chuỗi → bỏ sót toàn bộ mã 13 ký tự không có `"UNL"` (C/D/E/G/H/L/X)
+→ cột luôn hiện "—" cho các mã này. Thêm fallback đọc **2 ký tự cuối** của SKU 13 ký tự (vị trí
+DayAmount) khi 2 pattern cũ không khớp — verify khớp cả SKU Fixed/Daily 13 ký tự khác (vd `...F01215` →
+"15" ngày) nên áp dụng chung, không chỉ riêng Unlimited.
+
+**s200+4 (cùng ngày) — loại hẳn mã khung SIM + đổi chart/breakdown sang mã ký tự (thay cho "Other" bucket
+và giả thuyết chưa xử lý ở đợt trước)**:
+- SKU `1D0003DK00000` (mã `K`) — **Hiếu xác nhận đây là "khung SIM"** (SIM frame/eSIM profile placeholder,
+  không phải gói data thật) → **loại HẲN khỏi mọi tính toán** (thêm điều kiện `NOT (LENGTH(sku)=13 AND
+  SUBSTRING(sku,8,1)='K')` ngay trong `period_records`, không còn bucket "Other" nữa — nhánh `K` trong
+  `SKU_TYPE_CASE` cũng bỏ luôn vì không còn dòng nào lọt tới đó). Verify sống: tổng bundles kỳ T8/2026
+  36.977 → 31.742 (giảm đúng 5.235, khớp số "SIM" gánh dưới mã K).
+- **Chart "Mã SKU chiếm bao nhiêu SIM"** (per-SKU, quá chi tiết — 1366 mã riêng lẻ trong 1 kỳ) đổi thành
+  **gom theo KÝ TỰ PHÂN LOẠI** — hàm `typeLetterOfSku()` mới: vị trí 8 cho SKU 13 ký tự, **vị trí 10** cho
+  SKU CŨ 14 ký tự (Hiếu chỉ định 2 vị trí này, đã verify qua SQL: `SUBSTRING(sku,10,1)` trên mã 14 ký tự
+  ra `P`/`F` — 2 giá trị phổ biến nhất, khớp đúng quy ước Daily/Fixed cũ). Độ dài khác (15/17/18 ký tự)
+  chưa xác định vị trí → gộp "Khác (mã dài khác)". Đổi tên chart thành "Mã loại gói chiếm bao nhiêu SIM".
+- **Breakdown "Unlimited — Breakdown theo gói"** đổi từ nhóm tốc độ/throttle (`500MB·5mbps`...) **sang
+  trực tiếp mã ký tự** (mỗi dòng = 1 mã A/B/C/.../X, kèm mô tả gốc từ `CODE_LABELS` làm phụ chú) — đúng
+  yêu cầu "mã A là bao nhiêu, mã B là bao nhiêu". Nhờ đổi cách gom nhóm, **bỏ hẳn** phụ thuộc
+  `GET /api/analytics/3hk-speed-map` — route này (chỉ nhận diện mã `A`/`B` qua regex `/[AB]UNL/i`, đã lỗi
+  thời từ khi C/D/E/G/H/L/X được phân loại đúng Unlimited ở s200+3) đã **XOÁ HẲN** (`route.ts` + state/
+  fetch liên quan trong page.tsx). 2 chart phụ "So sánh mức sử dụng theo mã" + "Phân bố mức data sử
+  dụng/ngày" giờ tự động phủ MỌI mã Unlimited, không riêng A/B như trước.
+  tsc + lint (0 lỗi mới) + vitest (261/261) PASS.
 
 ### 3.2 Cấu trúc bản ghi (quan trọng để hiểu SUM)
 - Mỗi bản ghi = 1 **snapshot theo ngày** của 1 SIM. `first_report_date` là mốc ngày (00:00:00 UTC).
@@ -188,29 +269,27 @@ LIMIT 50 OFFSET 0;      -- OFFSET = (trang-1)*50
 
 ---
 
-## 7. Phân loại nhóm tốc độ gói Unlimited
+## 7. Phân loại nhóm/mã gói Unlimited
 
-Tab **Unlimited** có bảng "Breakdown theo gói (high-speed × throttle)" + biểu đồ. Nhóm được tính SERVER-side ở **`/api/analytics/3hk-speed-map`**. Có tối đa **3 nhóm**: `500MB·5mbps`, `500MB·10mbps`, `1GB·10mbps`.
+> ⚠️ **s200+4 (2026-09-17) — đổi hẳn cơ chế**, không còn nhóm theo tốc độ (high-speed × throttle) nữa.
 
-### 7.1 Mã cũ vs mã mới
-| Loại mã | Ví dụ | Cách phân loại |
-|---|---|---|
-| **CŨ** (code-based) | `ECHN3DP1UNLI05D`, `CHN3DUNLIP205D` | Theo P-code: **P2 → 5mbps (500MB)**, **P1 → 10mbps (500MB)**, **PY → 1GB·10mbps** |
-| **MỚI** (`[AB]UNL`) | `EACHN3DBUNL05`, `3ACHN3DAUNL03` | Ưu tiên đọc cột **`throttle_speed`** (Supabase `skus`); fallback theo chữ: **A → 5mbps**, **B → 10mbps** |
+Tab **Unlimited** có bảng "Unlimited — Breakdown theo mã" + 2 biểu đồ. Nhóm được tính **CLIENT-side**
+trong `page.tsx` bằng `typeLetterOfSku()` — đọc thẳng ký tự phân loại tại vị trí 8 (SKU 13 ký tự) hoặc vị
+trí 10 (SKU 14 ký tự cũ), KHÔNG còn gọi API riêng, KHÔNG còn phụ thuộc `skus.throttle_speed` (Supabase).
+Mỗi mã (A/B/C/D/E/G/H/L/X, và bất kỳ ký tự nào khác gặp trong dữ liệu thật) là 1 dòng riêng trong bảng,
+kèm mô tả gốc từ `CODE_LABELS` (xem bảng mapping ở §3.1) làm phụ chú. GB/ngày/SIM so plan/actual dùng
+`daysOfSku()` (đọc DayAmount ở cuối SKU, xem §3.1) — không đổi công thức, chỉ đổi khoá gom nhóm.
 
-- Đối chiếu chéo đã xác nhận nhất quán: **A↔P2 (5mbps)**, **B↔P1 (10mbps)**.
-- Chuỗi `throttle_speed` dạng `"500 MB high speed then drop to 10 mbps"` → parse ra mbps + có "1GB" hay không.
+<details><summary>Lịch sử trước s200+4 (đã bỏ — giữ tham khảo)</summary>
 
-### 7.2 Dung lượng 500MB vs 1GB
-- **Chỉ suy được từ `throttle_speed`** (không suy được từ chữ A/B — chữ chỉ mã hoá tốc độ).
-- **Hiện tại (T6/2026): TẤT CẢ gói mới đều 500MB** — không có mã mới 1GB nào trong catalog/usage. "1GB·10mbps" chỉ còn **1 mã PY cũ** (`ECHM3DPYUNLI05D`).
-- ⚠️ Nếu 3HK ra gói **1GB** sau này, team SP **phải ghi `throttle_speed` chứa "1GB..."** trong Supabase `skus` thì speed-map mới bắt đúng (nếu không, sẽ bị xếp nhầm 500MB).
+Trước đây nhóm được tính SERVER-side ở route `GET /api/analytics/3hk-speed-map` (đã XOÁ), gộp theo
+tốc độ throttle thay vì theo mã, tối đa 3 nhóm cố định: `500MB·5mbps`, `500MB·10mbps`, `1GB·10mbps`.
+Mã CŨ (`ECHN3DP1UNLI05D`...) phân loại theo P-code (P2→5mbps, P1→10mbps, PY→1GB·10mbps); mã MỚI
+(`EACHN3DBUNL05`...) ưu tiên đọc `skus.throttle_speed` (Supabase), fallback theo chữ A→5mbps/B→10mbps.
+Nhược điểm phát hiện dẫn tới đổi cơ chế: chỉ nhận diện được mã A/B, không có bucket cho C(20mbps)/
+D(100mbps)/L(50mbps)/E/G/H/X — các mã này bị loại khỏi 2 chart phụ dù đã đúng ở bảng chính.
 
-### 7.3 Backfill throttle_speed (Session 93)
-- 55/147 mã UNL mới từng thiếu `throttle_speed` → đã backfill (suy từ mã cùng họ / chữ A/B, toàn 500MB, 0 conflict) → speed-map giờ đọc nguồn chuẩn cho 100% mã mới.
-
-### 7.4 Giả định để so sánh
-- GB/ngày/SIM giả định theo throttle (spec NCC): **10mbps → 1.8 GB/ngày**, **5mbps → 1.6 GB/ngày**. Biểu đồ tô **đỏ** khi thực tế vượt giả định, **xanh** khi trong giả định.
+</details>
 
 ---
 
@@ -237,6 +316,51 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 ## 9. Gotchas & Lịch sử thay đổi
 
+- **s200+4 (2026-09-17) — Loại hẳn SKU "khung SIM" + đổi chart/breakdown Unlimited sang mã ký tự.** Tiếp
+  ngay s200+3 cùng ngày, Hiếu phản hồi 3 điểm:
+  1. **SKU `1D0003DK00000` (mã `K`) xác nhận là "khung SIM"** — không phải gói data thật → **loại HẲN**
+     khỏi mọi tính toán (`WHERE NOT (LENGTH(sku)=13 AND SUBSTRING(sku,8,1)='K')` trong `period_records`),
+     KHÔNG còn tách bucket "Other" như đợt s200+3 (bucket "Other" đã bị xoá khỏi `SKU_TYPE_CASE`). Verify
+     sống: tổng bundles 36.977 → 31.742 (giảm đúng 5.235, khớp số SKU K).
+  2. **Đổi chart "Mã SKU chiếm bao nhiêu SIM"** (per-SKU, quá chi tiết với 1366 mã riêng lẻ) **sang gom
+     theo KÝ TỰ PHÂN LOẠI** — `typeLetterOfSku()` mới: vị trí 8 cho SKU chuẩn 13 ký tự, **vị trí 10** cho
+     SKU CŨ 14 ký tự (Hiếu chỉ định chính xác, verify qua SQL: `SUBSTRING(sku,10,1)` trên mã 14 ký tự ra
+     `P`/`F` hợp lý — khớp quy ước Daily/Fixed cũ). Độ dài khác (15/17/18 ký tự) chưa xác định được vị trí
+     → gộp "Khác (mã dài khác)". Chart đổi tên thành "Mã loại gói chiếm bao nhiêu SIM".
+  3. **Breakdown "Unlimited — Breakdown theo gói"** đổi từ nhóm tốc độ/throttle (`500MB·5mbps`...) **sang
+     trực tiếp mã ký tự** (A/B/C/.../X, kèm mô tả gốc làm phụ chú qua `CODE_LABELS`) — đúng yêu cầu "mã A
+     là bao nhiêu, mã B là bao nhiêu". Nhờ đó **bỏ hẳn phụ thuộc `GET /api/analytics/3hk-speed-map`**
+     (route đã XOÁ — chỉ nhận diện mã A/B qua regex `/[AB]UNL/i`, lỗi thời sau khi C/D/E/G/H/L/X được
+     phân loại đúng Unlimited ở s200+3) — 2 chart phụ "So sánh mức sử dụng theo mã" + "Phân bố mức data/
+     ngày" giờ tự động phủ MỌI mã Unlimited, không riêng A/B như trước.
+  tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã tự verify sống trên staging TRƯỚC khi code (chạy
+  đúng câu SQL mới qua Dev Tools) — số liệu khớp tuyệt đối.
+- **s200+3 (2026-09-17) — Fix phân loại Daily/Fixed/Unlimited sai + chart mới "Mã SKU chiếm bao nhiêu
+  SIM".** Xem chi tiết đầy đủ ở §3.1 (bảng mapping ký tự vị trí 8, SQL trước/sau, 2 phát hiện thêm chưa
+  sửa). Tóm tắt: mã `X` (và `C`/`D`/`E`/`G`/`H`/`L`) là Unlimited nhưng bị xếp Daily/Fixed do code cũ chỉ
+  nhận diện Unlimited qua substring `%UNL%` — không có trong các mã này. Đổi sang CASE theo ký tự vị trí 8
+  của SKU 13 ký tự (bảng mapping đầy đủ ở §3.1). Verify sống: Fixed -5235 SIM = Other +5235 (đúng số SKU
+  `K`, mã placeholder eSIM profile/SIM frame giờ tách riêng thay vì gộp nhầm Fixed), Daily -26 =
+  Unlimited +26 (đúng số SKU `X`) — khớp tuyệt đối. Kèm fix `daysOfSku()` (cột "GB/ngày/SIM" tab
+  Unlimited) thêm fallback đọc 2 ký tự cuối SKU 13 ký tự khi không có literal "UNL"/"...D" — trước luôn
+  "—" cho C/D/E/G/H/L/X. Thêm chart mới `SkuCountChart` (`3hk-usage-charts.tsx`) — bar ngang top 15 SKU
+  theo Active SIMs + gộp "Khác", dùng lại `skuMetrics` đã fetch sẵn, không thêm query. tsc + lint (0 lỗi
+  mới) + vitest (261/261) PASS.
+- **s200+2 (2026-09-17) — pipeline nạp theo ĐỢT lớn không đều kỳ, KHÔNG phải hàng ngày (giải thích cơ chế
+  đầy đủ, sau khi Hiếu hỏi lại về tháng 9).** Verify trực tiếp qua Dev Tools SQL Query: pipeline đã tự
+  chạy lại — `fact_data_usage` giờ có data tới **2026-08-31**, `loaded_at` mới nhất = **2026-09-17** (hôm
+  chạy audit này). Đào sâu bằng `GROUP BY loaded_at::date` phát hiện quy luật thật: nạp theo **3 đợt lớn
+  rời rạc**, mỗi đợt gồm ~2-3 tháng dữ liệu cùng lúc — **15/07** nạp T1-T3/2026, **20/07** nạp T4-T6/2026,
+  **17/09** nạp T7-T8/2026 (khoảng cách giữa đợt 2 và 3 là ~2 tháng). Đây là bằng chứng RÕ RÀNG pipeline
+  vận hành theo kiểu **batch/manual định kỳ vài tháng**, không phải ETL tự động hàng ngày/hàng giờ như
+  các bảng `fact_fulfillment_revenue`/`fact_sales_revenue` khác — nên **tháng đang chạy (vd T9 lúc viết
+  bài này) sẽ LUÔN "thiếu" cho tới đợt nạp kế tiếp**, đây là đặc tính bình thường của nguồn ngoài repo,
+  không phải lỗi cần sửa mỗi lần. Fix duy nhất khả thi ở phía web: thêm **badge freshness** ngay dưới
+  tiêu đề trang (`3hk-usage/page.tsx`, state `maxAvailableDate` — tách riêng khỏi `endDate` để không đổi
+  theo bộ lọc người dùng đang chỉnh) hiện rõ "Dữ liệu 3HK mới nhất: dd/mm/yyyy — cập nhật theo đợt, không
+  phải hàng ngày... KHÔNG phải bug web", đổi màu cảnh báo (amber) khi đã cũ >45 ngày — mục tiêu để người
+  xem (và cả Hiếu lần sau) tự hiểu ngay, tránh lặp lại chu kỳ hỏi→audit→"không phải bug" đã xảy ra 2 lần
+  trong cùng 1 tháng cho cùng 1 tab.
 - **🔴 s199 (2026-09-16) — dữ liệu đứng yên từ tháng 7, KHÔNG phải bug web** (Hiếu báo thiếu tháng 8):
   verify trực tiếp SQL trên staging — `fact_data_usage` MAX = **2026-06-30** (`loaded_at` ETL MAX =
   **2026-07-20**, đứng yên từ đó); `data_usage_log` (sub-report Country×Month) MAX = **2026-07-31**.
@@ -244,7 +368,9 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
   sales/ops_sync×2/recon_telco/inventory) nhưng **KHÔNG job nào ghi 2 bảng này**. Pipeline nạp usage 3HK
   nằm NGOÀI phạm vi repo `gohub-intel` (không phải cron `sync.yml` GitHub Actions của web, không có
   script nào trong `backend/`/`web/` từng ghi 2 bảng — grep xác nhận 0 kết quả). Không có gì để sửa ở
-  code web — cần Hiếu hỏi bên vận hành/vendor 3HK pipeline đó còn chạy không.
+  code web — cần Hiếu hỏi bên vận hành/vendor 3HK pipeline đó còn chạy không. **Cập nhật s200+2**: pipeline
+  đã tự chạy lại (xem mục trên) — kết luận "ngoài phạm vi repo" vẫn đúng, chỉ bổ sung thêm bằng chứng về
+  quy luật nạp theo đợt.
 - **s196+21 (2026-09-14) — gộp toLocaleString() trần → formatNumber()**: 6 chỗ, cùng lý do lệch locale
   mặc định trình duyệt nêu ở wiki Channels. Đề xuất C (P2) roadmap performance audit s196+20.
 - **s196+21 (2026-09-14) — code-split recharts**: 2 chart ("So sánh mức sử dụng theo nhóm",
@@ -298,11 +424,11 @@ Bảng phụ trong tab 3HK, mô phỏng báo cáo NCC "Data Usage by Country x M
 - `avg_usage_pct` = `total_usage_gb / total_plan_gb × 100`.
 - Số ngày gói: `daysOfSku(sku)` (mã mới `…UNL05`→5; mã cũ `…05D`, bỏ token P1/P2 trước).
 
-**Bảng "Unlimited — Breakdown theo gói" (cấp nhóm high-speed × throttle):**
+**Bảng "Unlimited — Breakdown theo mã" (s200+4, gom theo ký tự phân loại):**
 | Cột | Nguồn / công thức |
 |---|---|
-| Nhóm tốc độ | `speedMap[sku].group` (API `3hk-speed-map`, đọc `throttle_speed` Supabase: A="drop to 5 mbps", B="drop to 10 mbps"; mã cũ theo P-code) |
-| Active SIMs | `Σ active_sims` các SKU trong nhóm |
+| Mã | `typeLetterOfSku(sku)` — vị trí 8 (13 ký tự) / vị trí 10 (14 ký tự), xem §3.1/§7 |
+| Active SIMs | `Σ active_sims` các SKU cùng mã |
 | Total Plan (GB) | `Σ total_plan_gb` (= Σ data_amount_gb — hạn mức mềm) |
 | Total Actual (GB) | `Σ total_usage_gb` |
 | **GB/ngày/SIM** (thêm s95) | `Σ total_usage_gb ÷ Σ(active_sims × ngày)` — **KPI chi phí chính**; đỏ nếu > kế hoạch/ngày |
@@ -328,7 +454,7 @@ Bảng phụ trong tab 3HK, mô phỏng báo cáo NCC "Data Usage by Country x M
 | Total Capacity (GB) | `fact_data_usage.data_amount_gb` | `SUM(data_amount_gb)` — định mức/plan của gói |
 | Avg. Usage % | Tính từ 2 cột trên | `SUM(total_data_gb) / SUM(data_amount_gb) × 100` (Weighted) |
 | GB/ngày/SIM | `fact_data_usage` | `SUM(total_data_gb) ÷ (active_sims × số_ngày)` — KPI chính cho Unlimited |
-| SKU Type | `fact_data_usage.sku` + `dim_sku` | `CASE WHEN UPPER(sku) LIKE '%UNL%' THEN 'Unlimited Data' ELSE sku_type END` |
-| Nhóm tốc độ (Unlimited) | Supabase `skus.throttle_speed` | API `/api/analytics/3hk-speed-map`; A=5mbps, B=10mbps; mã cũ P1/P2/PY |
+| SKU Type | `fact_data_usage.sku` + `dim_sku` | Xem `SKU_TYPE_CASE` đầy đủ ở §3.1 (theo ký tự vị trí 8, không chỉ literal `%UNL%`) |
+| Mã loại gói (Unlimited) | `fact_data_usage.sku` | `typeLetterOfSku(sku)` — vị trí 8 (13 ký tự) / vị trí 10 (14 ký tự), xem §3.1/§7 |
 | Country × Month (TB) | `data_usage_log` | `SUM(data_gb)/1024` GROUP BY `country`, `to_char(report_date,'YYYY-MM')` |
 | Vendor filter | `dim_sku.vendor` | `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'` |

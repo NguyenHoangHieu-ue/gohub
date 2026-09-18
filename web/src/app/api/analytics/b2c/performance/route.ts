@@ -8,7 +8,7 @@ import {
   getDaysInMonth, getDaysInRange,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
-import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { fetchCosts, matchChannelCost } from "@/lib/bod-data"
 
@@ -195,7 +195,7 @@ export async function GET(req: NextRequest) {
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
     // v4 (s195+19): đổi shape response array→{rows,total,totalGroups} (fix Tổng cộng thiếu doanh thu
     // khi groupBy=sku/destination có >50 nhóm) — bump key để cache 12h cũ (shape cũ) không phục vụ nhầm.
-    const key = `b2c-perf:v4:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
+    const key = `b2c-perf:v4:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
       if (comparisonType === "none") {
         return await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx)

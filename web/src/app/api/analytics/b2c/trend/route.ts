@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getAnalyticsSource, getDateFilter, shipFilter, internalOpsFilter, excludeOpsByCode, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
-import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     // trang có loại, số liệu lệch nhau.
     const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
-    const key = `b2c-trend:${dateColumn}:${startDate}:${endDate}:${period}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}`
+    const key = `b2c-trend:${dateColumn}:${startDate}:${endDate}:${period}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
     const rows = await queryAnalytics<Record<string, string>>(
       `SELECT TO_CHAR(f.${source.dateCol}::date, '${dateFormat}') as name,
