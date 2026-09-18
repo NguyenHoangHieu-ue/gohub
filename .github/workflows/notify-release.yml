@@ -1,0 +1,26 @@
+name: Notify Lark on Release
+
+# Chỉ báo khi có commit lên `main` (production thật) — theo yêu cầu Hiếu tránh spam group
+# lúc code còn dang dở trên staging. Xem web/src/app/api/notify/release/route.ts.
+on:
+  push:
+    branches: [main]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: github.event.commits != null && github.event.commits[0] != null
+    steps:
+      - name: Send release summary to Lark
+        env:
+          COMMITS_JSON: ${{ toJson(github.event.commits) }}
+        run: |
+          PAYLOAD=$(echo "$COMMITS_JSON" | jq -c '{commits: [.[] | {sha: .id, message: .message}]}')
+          STATUS=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
+            -X POST https://gohub-intel.vercel.app/api/notify/release \
+            -H "Authorization: Bearer ${{ secrets.MCP_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+          echo "Release notify status: $STATUS"
+          cat /tmp/resp.json
+        continue-on-error: true
