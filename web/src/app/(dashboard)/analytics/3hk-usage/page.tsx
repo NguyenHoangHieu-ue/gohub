@@ -66,6 +66,21 @@ const typeLetterOfSku = (sku: string): string | null => {
   return null
 }
 
+// Vintage của mã (13 ký tự CHUẨN vs 14 ký tự CŨ) — 2 vintage dùng CHUNG ký tự nhưng KHÁC HẲN quy ước,
+// tuyệt đối không được gộp chung khi hiển thị. Verify trực tiếp SQL trên staging (fact_data_usage,
+// vendor 3HKDATAPOOL): ký tự 'P' ở mã CŨ 14kt (vị trí 10) — 350/350 SKU distinct đều chứa literal "UNL"
+// trong chuỗi (100%, vd nằm trong token "UNLIP1"/"UNLIP2") → BẢN CHẤT LÀ UNLIMITED, không liên quan gì
+// "Daily". Ký tự 'P' ở mã MỚI 13kt (vị trí 8) — 0/792 SKU distinct có "UNL" → đúng là Daily throttle
+// <2mbps (CODE_LABELS). Cùng 1 chữ cái 'P' nhưng 2 Ý NGHĨA HOÀN TOÀN TRÁI NGƯỢC nhau tuỳ vintage — mọi nơi
+// gom nhóm theo `typeLetterOfSku()` PHẢI tách riêng vintage để không lẫn 2 quy ước này vào 1 bucket.
+const skuVintage = (sku: string): "13" | "14" | null => {
+  if (sku.length === 13) return "13"
+  if (sku.length === 14) return "14"
+  return null
+}
+// Nhãn ngắn cho vintage — dùng trực tiếp trong UI (badge/tooltip) để Hiếu luôn biết đang xem mã nào.
+const vintageLabel = (v: "13" | "14") => (v === "13" ? "mã mới · 13kt" : "mã cũ · 14kt")
+
 // Mô tả người-đọc-được cho từng ký tự phân loại (bảng Hiếu cung cấp) — dùng cho tooltip/label, KHÔNG
 // dùng để tính toán (tính toán bucket Daily/Fixed/Unlimited nằm ở SQL `SKU_TYPE_CASE` bên dưới).
 const CODE_LABELS: Record<string, string> = {
@@ -74,6 +89,17 @@ const CODE_LABELS: Record<string, string> = {
   H: "Unlimited 5mbps", L: "Unlimited 50mbps", X: "Daily Unlimited 10mbps - Midnight",
   F: "Fixed throttle <2mbps", Y: "Fixed no-throttle", P: "Daily throttle <2mbps",
   Z: "Daily no-throttle", T: "Daily throttle <2mbps - Midnight",
+}
+
+// `data_usage_log.country` viết khác `ncc_3hk.country` cho vài nước — verify trực tiếp SQL (đối chiếu 46
+// nước distinct trong data_usage_log với 47 nước trong ncc_3hk): "USA"≠"US", "United Kingdom"≠"UK",
+// "Slovak Republic"≠"Slovakia" (tổng ~6,7 TB, ~0,5% toàn kỳ — nhỏ nhưng vẫn map đúng thay vì rơi "Chưa rõ
+// Zone"). "Latvia" xuất hiện trong data_usage_log nhưng KHÔNG có trong ncc_3hk (thiếu hẳn, không phải lỗi
+// đặt tên) — rơi đúng vào "Chưa rõ Zone" (0,01 TB, không đáng kể).
+const COUNTRY_ALIAS: Record<string, string> = {
+  "USA": "US",
+  "United Kingdom": "UK",
+  "Slovak Republic": "Slovakia",
 }
 
 interface DataUsageRecord {
@@ -108,7 +134,9 @@ interface SKUTypeMetrics {
 // Nhóm gói Unlimited 3HK = (high-speed × throttle). Hiện chỉ có 3 loại:
 //   500MB·5mbps · 500MB·10mbps · 1GB·10mbps.
 interface SpeedGroupMetrics {
+  key: string           // `${speed_group}_${vintage}` — khoá DUY NHẤT tránh lẫn 2 vintage cùng ký tự
   speed_group: string  // s200+4: ký tự phân loại (A/B/C/.../X), KHÔNG còn là nhãn tốc độ/throttle
+  vintage: "13" | "14"  // mã CHUẨN 13kt hay mã CŨ 14kt — xem comment `skuVintage()` (2 quy ước khác nhau)
   active_sims: number
   total_plan_gb: number
   total_usage_gb: number
@@ -176,9 +204,30 @@ export default function ThreeHKDataUsagePage() {
   // (tối đa 12 tháng gần nhất). RUN-RATE 12M = tổng tháng mới nhất × 12 (ước năm hoá).
   const [countryMonths, setCountryMonths] = useState<string[]>([])
   const [countryRows, setCountryRows] = useState<CountryUsageRow[]>([])
-  const [countryGrand, setCountryGrand] = useState<{ monthly: Record<string, number>; total: number; runRate: number }>({ monthly: {}, total: 0, runRate: 0 })
   const [loadingCountry, setLoadingCountry] = useState(false)
   const [countryError, setCountryError] = useState<string | null>(null)
+
+  // Zone × Month (Hiếu yêu cầu): nhóm 47 nước trong Supabase `ncc_3hk` thành 4 Zone (A=A1+A2, B, C, D).
+  // Dùng lại `/api/ncc/3hk-zones` (route có sẵn cho NCC Catalog, mở cho mọi role đã login) — không thêm
+  // route/query gohub_dw mới, zoneRows tính CLIENT-SIDE từ countryRows đã fetch ở trên (§ zoneRows dưới).
+  const [zoneByCountry, setZoneByCountry] = useState<Record<string, string>>({})
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/ncc/3hk-zones")
+        const j = await res.json()
+        const map: Record<string, string> = {}
+        for (const r of (j.data ?? [])) {
+          const raw = String(r.zone || "").toUpperCase()
+          // Gộp A1+A2 thành 1 "Zone A" (Hiếu yêu cầu) — B/C/D giữ nguyên (đã là 1 mã/zone).
+          map[String(r.country || "").trim()] = raw === "A1" || raw === "A2" ? "A" : raw
+        }
+        setZoneByCountry(map)
+      } catch (e) {
+        console.error("Error fetching ncc_3hk zones:", e)
+      }
+    })()
+  }, [])
 
   const runQuery = async (sql: string) => {
     const res = await fetch("/api/analytics/query", {
@@ -221,11 +270,15 @@ export default function ThreeHKDataUsagePage() {
     })()
   }, [])
 
-  // Sub-report Country × Month: tải lại mỗi khi bấm "Lọc" (appliedTick thay đổi).
-  // Hiển thị TẤT CẢ nước (không gộp OTHERS). Dùng startDate/endDate của page.
+  // Sub-report Country × Month: ĐỘC LẬP với bộ lọc ngày của bảng chính (đúng như comment thiết kế gốc ở
+  // trên — trước đây code lại vô tình dùng CHUNG startDate/endDate của page, nên mặc định chỉ hiện ĐÚNG 1
+  // THÁNG (khớp verify trực tiếp: chỉ có cột "AUG" khi mở trang) thay vì trend 12 tháng như comment mô tả.
+  // Fix: tự tính cửa sổ rộng nhất (data thật chỉ từ 2026-01 nên 24 tháng đủ phủ toàn bộ lịch sử hiện có,
+  // dư sức cho các tháng phát sinh sau này) neo theo MAX(report_date) của CHÍNH bảng data_usage_log — không
+  // phụ thuộc filter ngày người dùng đang chỉnh ở bảng SKU. Tải 1 lần khi mount, "Lọc" KHÔNG ảnh hưởng bảng
+  // này nữa (đúng tinh thần "độc lập" đã ghi trong comment).
   useEffect(() => {
-    if (!startDate || !endDate) return
-    ;(async () => {
+    (async () => {
       setLoadingCountry(true); setCountryError(null)
       try {
         const sql = `
@@ -234,7 +287,7 @@ export default function ThreeHKDataUsagePage() {
                  ROUND((SUM(data_gb) / 1024.0)::numeric, 4)    AS tb
           FROM data_usage_log
           WHERE report_date IS NOT NULL
-            AND report_date::date BETWEEN '${startDate}'::date AND '${endDate}'::date
+            AND report_date::date >= (SELECT MAX(report_date)::date FROM data_usage_log) - INTERVAL '23 months'
           GROUP BY 1, 2
           ORDER BY 1, 2
         `
@@ -250,20 +303,16 @@ export default function ThreeHKDataUsagePage() {
         const months = Array.from(monthSet).sort()
         const latest = months[months.length - 1]
 
-        // Dựng dòng theo country, sắp theo tổng giảm dần. KHÔNG gộp OTHERS — hiện tất cả nước.
+        // Dựng dòng theo country, sắp theo tổng giảm dần — dùng làm nguồn cho bảng Zone (zoneRows/
+        // zoneMembers) bên dưới, KHÔNG còn render trực tiếp bảng theo nước (đã bỏ, thay bằng drill-down
+        // trong bảng Zone theo yêu cầu Hiếu).
         const all: CountryUsageRow[] = Object.entries(byCountry).map(([country, monthly]) => {
           const total = months.reduce((s, m) => s + (monthly[m] ?? 0), 0)
           return { country, monthly, total, runRate: (monthly[latest] ?? 0) * 12 }
         }).sort((a, b) => b.total - a.total)
 
-        // GRAND TOTAL
-        const grandMonthly: Record<string, number> = {}
-        for (const m of months) grandMonthly[m] = all.reduce((s, r) => s + (r.monthly[m] ?? 0), 0)
-        const grandTotal = all.reduce((s, r) => s + r.total, 0)
-
         setCountryMonths(months)
         setCountryRows(all)
-        setCountryGrand({ monthly: grandMonthly, total: grandTotal, runRate: (grandMonthly[latest] ?? 0) * 12 })
       } catch (e: any) {
         console.error("Error fetching country usage:", e)
         setCountryError("Không tải được bảng Usage by Country.")
@@ -271,8 +320,9 @@ export default function ThreeHKDataUsagePage() {
         setLoadingCountry(false)
       }
     })()
+    // Chạy đúng 1 lần khi mount — cố ý KHÔNG phụ thuộc appliedTick/startDate/endDate (xem comment trên).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appliedTick, startDate, endDate])
+  }, [])
 
   useEffect(() => {
     if (!startDate || !endDate) return  // chờ mount effect đặt kỳ mặc định thông minh
@@ -318,16 +368,31 @@ export default function ThreeHKDataUsagePage() {
   // gọn hơn hẳn 1366 mã SKU riêng lẻ, đi thẳng vào câu hỏi "mã A/B/X... chiếm bao nhiêu"). Gom theo
   // `typeLetterOfSku()` (vị trí 8 mã 13 ký tự / vị trí 10 mã 14 ký tự); SKU không xác định được vị trí
   // (15/17/18 ký tự, số lượng nhỏ) gộp vào "Khác (mã dài khác)".
+  // ⚠️ Fix trùng mã (Hiếu báo) — khoá gộp PHẢI kèm `skuVintage()`: ký tự 'P' mã MỚI 13kt (Daily throttle
+  // thật, verify 0/792 SKU có "UNL") và 'P' mã CŨ 14kt (Unlimited thật, verify 350/350 SKU có "UNL") là 2
+  // THỨ HOÀN TOÀN KHÁC NHAU — gộp chung theo mỗi 1 chữ cái sẽ cộng nhầm 2 quy ước vào cùng 1 cột khi xem
+  // tab "Tất cả" (nơi cả Daily lẫn Unlimited cùng xuất hiện). Xem comment đầy đủ ở `skuVintage()`.
   const typeLetterChart = useMemo(() => {
     const acc: Record<string, number> = {}
     let unknownTotal = 0
     for (const sm of skuMetrics) {
-      const letter = typeLetterOfSku(sm.sku)
-      if (letter) acc[letter] = (acc[letter] ?? 0) + sm.active_sims
-      else unknownTotal += sm.active_sims
+      const letter  = typeLetterOfSku(sm.sku)
+      const vintage = skuVintage(sm.sku)
+      if (letter && vintage) {
+        const key = `${letter}_${vintage}`
+        acc[key] = (acc[key] ?? 0) + sm.active_sims
+      } else {
+        unknownTotal += sm.active_sims
+      }
     }
     const rows = Object.entries(acc)
-      .map(([letter, active_sims]) => ({ sku: CODE_LABELS[letter] ? `${letter} — ${CODE_LABELS[letter]}` : letter, active_sims }))
+      .map(([key, active_sims]) => {
+        const [letter, vintage] = key.split("_") as [string, "13" | "14"]
+        const label = vintage === "13"
+          ? (CODE_LABELS[letter] ? `${letter} (${vintageLabel(vintage)}) — ${CODE_LABELS[letter]}` : `${letter} (${vintageLabel(vintage)})`)
+          : `${letter} (${vintageLabel(vintage)})`
+        return { sku: label, active_sims }
+      })
       .sort((a, b) => b.active_sims - a.active_sims)
     if (unknownTotal > 0) rows.push({ sku: "Khác (mã dài khác)", active_sims: unknownTotal })
     return rows
@@ -352,13 +417,19 @@ export default function ThreeHKDataUsagePage() {
 
   // Breakdown Unlimited theo MÃ KÝ TỰ phân loại (s200+4, Hiếu chỉnh lại từ nhóm tốc độ/throttle sang
   // trực tiếp ký tự A/B/C/.../X) — gom skuMetrics (đã lọc Unlimited) theo `typeLetterOfSku()`.
+  // ⚠️ Khoá `key` PHẢI kèm vintage (13/14) — dù trong tab Unlimited 1 chữ cái mới (13kt) không trùng chữ
+  // Daily/Fixed cũ (khác sku_type nên đã bị lọc khỏi tab này), vẫn tách rõ để hiển thị đúng: mã CŨ 14kt
+  // không có bảng CODE_LABELS xác nhận (chỉ verify được P=Unlimited, F/O chưa rõ nghĩa thật) — không tự
+  // gán nhãn "kiểu mới" cho nó.
   const speedGroups = useMemo<SpeedGroupMetrics[]>(() => {
     if (activeTab !== "Unlimited") return []
     const acc: Record<string, SpeedGroupMetrics> = {}
     for (const sm of skuMetrics) {
-      const group = typeLetterOfSku(sm.sku)
-      if (!group) continue   // bỏ SKU không xác định được vị trí ký tự (15/17/18 ký tự)
-      const g = acc[group] ?? (acc[group] = { speed_group: group, active_sims: 0, total_plan_gb: 0, total_usage_gb: 0, avg_usage_pct: 0, sim_days: 0, actual_per_day: 0, plan_per_day: 0 })
+      const group   = typeLetterOfSku(sm.sku)
+      const vintage = skuVintage(sm.sku)
+      if (!group || !vintage) continue   // bỏ SKU không xác định được vị trí ký tự (15/17/18 ký tự)
+      const key = `${group}_${vintage}`
+      const g = acc[key] ?? (acc[key] = { key, speed_group: group, vintage, active_sims: 0, total_plan_gb: 0, total_usage_gb: 0, avg_usage_pct: 0, sim_days: 0, actual_per_day: 0, plan_per_day: 0 })
       g.active_sims    += sm.active_sims
       g.total_plan_gb  += sm.total_plan_gb
       g.total_usage_gb += sm.total_usage_gb
@@ -371,17 +442,18 @@ export default function ThreeHKDataUsagePage() {
       g.actual_per_day = g.sim_days > 0 ? g.total_usage_gb / g.sim_days : 0
       g.plan_per_day   = g.sim_days > 0 ? g.total_plan_gb  / g.sim_days : 0
     }
-    return list.sort((a, b) => a.speed_group.localeCompare(b.speed_group))
+    return list.sort((a, b) => a.speed_group === b.speed_group ? a.vintage.localeCompare(b.vintage) : a.speed_group.localeCompare(b.speed_group))
   }, [activeTab, skuMetrics])
 
-  // Danh sách SKU thuộc từng mã ký tự — cho nút "Chi tiết" bung ra (user tự kiểm phân loại).
+  // Danh sách SKU thuộc từng mã ký tự (keyed `${letter}_${vintage}`) — cho nút "Chi tiết" bung ra.
   const speedGroupMembers = useMemo<Record<string, SKUMetrics[]>>(() => {
     if (activeTab !== "Unlimited") return {}
     const acc: Record<string, SKUMetrics[]> = {}
     for (const sm of skuMetrics) {
-      const group = typeLetterOfSku(sm.sku)
-      if (!group) continue
-      ;(acc[group] ??= []).push(sm)
+      const group   = typeLetterOfSku(sm.sku)
+      const vintage = skuVintage(sm.sku)
+      if (!group || !vintage) continue
+      ;(acc[`${group}_${vintage}`] ??= []).push(sm)
     }
     for (const g of Object.keys(acc)) acc[g].sort((a, b) => b.total_usage_gb - a.total_usage_gb)
     return acc
@@ -389,11 +461,14 @@ export default function ThreeHKDataUsagePage() {
 
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
 
+  // Tên hiển thị cho chart (unique dù 2 vintage trùng chữ cái) — mã cũ luôn kèm hậu tố phân biệt.
+  const sgChartName = (sg: SpeedGroupMetrics) => sg.vintage === "14" ? `${sg.speed_group} (cũ)` : sg.speed_group
+
   // Dữ liệu biểu đồ so sánh 3 loại gói: Thực tế (GB/ngày/SIM, trung bình có trọng số) vs Giả định.
   const speedChart = useMemo(() => {
     if (activeTab !== "Unlimited") return []
     return speedGroups.map(sg => {
-      const members = speedGroupMembers[sg.speed_group] ?? []
+      const members = speedGroupMembers[sg.key] ?? []
       let usage = 0, plan = 0, simDays = 0
       for (const m of members) {
         const d = daysOfSku(m.sku)
@@ -405,7 +480,7 @@ export default function ThreeHKDataUsagePage() {
       // Kế hoạch/ngày = tổng data_amount_gb ÷ tổng (SIM×ngày) — mức 3HK cấp/ngày (từ DB), KHÔNG hardcode
       // theo throttle (spec cũ 1.6/1.8-theo-mbps BỊ NGƯỢC chiều A/B so với data_amount_gb thực tế).
       const assume = simDays > 0 ? plan / simDays : 0
-      return { name: sg.speed_group, actual: +actual.toFixed(3), assume: +assume.toFixed(3), usagePct: +sg.avg_usage_pct.toFixed(1) }
+      return { name: sgChartName(sg), actual: +actual.toFixed(3), assume: +assume.toFixed(3), usagePct: +sg.avg_usage_pct.toFixed(1) }
     })
   }, [activeTab, speedGroups, speedGroupMembers])
 
@@ -421,15 +496,15 @@ export default function ThreeHKDataUsagePage() {
   ]
   const usageDist = useMemo(() => {
     if (activeTab !== "Unlimited") return { rows: [] as Record<string, number | string>[], groups: [] as string[] }
-    const groups = speedGroups.map(sg => sg.speed_group)
+    const groups = speedGroups.map(sg => sgChartName(sg))
     const rows: Record<string, number | string>[] = USAGE_BUCKETS.map(b => {
       const o: Record<string, number | string> = { range: b.label }
       for (const g of groups) o[g] = 0
       return o
     })
     for (const sg of speedGroups) {
-      const gname = sg.speed_group
-      for (const m of speedGroupMembers[sg.speed_group] ?? []) {
+      const gname = sgChartName(sg)
+      for (const m of speedGroupMembers[sg.key] ?? []) {
         const d = daysOfSku(m.sku)
         if (!d || d <= 0 || m.active_sims <= 0) continue
         const perDay = m.total_usage_gb / m.active_sims / d
@@ -682,16 +757,65 @@ export default function ThreeHKDataUsagePage() {
     [countryMonths],
   )
 
-  // Xuất Excel bảng Country × Month (bao gồm cột Total, Run-rate + dòng GRAND TOTAL).
-  const exportCountryCsv = () => {
-    if (countryRows.length === 0) return
-    const header = ["Country", ...countryMonths.map(m => monthLabel(m, countryMultiYear)), "Total", "Run-rate 12M"]
+  // Zone × Month (Hiếu yêu cầu) — nhóm LẠI từ countryRows đã fetch (không query gohub_dw thêm lần nào).
+  // Zone A = A1+A2 gộp (ncc_3hk); B/C/D giữ nguyên. Nước không tra được zone (thiếu hẳn trong ncc_3hk, vd
+  // "Latvia" — verify SQL không có trong 47 dòng ncc_3hk) rơi vào "Chưa rõ Zone" — hiện riêng, KHÔNG âm
+  // thầm bỏ qua, để lộ rõ nếu sau này ncc_3hk thiếu nước mới phát sinh usage.
+  const ZONE_ORDER = ["A", "B", "C", "D"]
+  // Nhãn hiển thị cho 1 zone key ("A"/"B"/.../"Chưa rõ Zone") — dùng cả cho bảng lẫn export.
+  const zoneLabel = (zone: string) => (zone === "Chưa rõ Zone" ? zone : `Zone ${zone}`)
+
+  // Danh sách nước THUỘC từng zone (Hiếu yêu cầu — bấm vào 1 zone phải biết ngay zone đó gồm nước nào),
+  // sắp theo TB giảm dần. `country` field của zoneRows dưới GIỮ NGUYÊN zone key thô (không phải "Zone A")
+  // để làm key React/lookup — label hiển thị qua `zoneLabel()` tại chỗ render.
+  const zoneMembers = useMemo(() => {
+    const acc: Record<string, CountryUsageRow[]> = {}
+    for (const row of countryRows) {
+      const lookup = COUNTRY_ALIAS[row.country] ?? row.country
+      const zone = zoneByCountry[lookup] ?? "Chưa rõ Zone"
+      ;(acc[zone] ??= []).push(row)
+    }
+    for (const z of Object.keys(acc)) acc[z].sort((a, b) => b.total - a.total)
+    return acc
+  }, [countryRows, zoneByCountry])
+
+  const zoneRows = useMemo(() => {
+    if (countryRows.length === 0 || Object.keys(zoneByCountry).length === 0) return [] as CountryUsageRow[]
+    const latest = countryMonths[countryMonths.length - 1]
+    const ordered = [...ZONE_ORDER, ...Object.keys(zoneMembers).filter(z => !ZONE_ORDER.includes(z))]
+    return ordered.filter(z => zoneMembers[z]?.length).map(zone => {
+      const monthly: Record<string, number> = {}
+      for (const m of countryMonths) monthly[m] = zoneMembers[zone].reduce((s, r) => s + (r.monthly[m] ?? 0), 0)
+      const total = countryMonths.reduce((s, m) => s + (monthly[m] ?? 0), 0)
+      return { country: zone, monthly, total, runRate: (monthly[latest] ?? 0) * 12 }
+    })
+  }, [countryRows, countryMonths, zoneByCountry, zoneMembers])
+
+  const zoneGrand = useMemo(() => {
+    const latest = countryMonths[countryMonths.length - 1]
+    const monthly: Record<string, number> = {}
+    for (const m of countryMonths) monthly[m] = zoneRows.reduce((s, r) => s + (r.monthly[m] ?? 0), 0)
+    const total = zoneRows.reduce((s, r) => s + r.total, 0)
+    return { monthly, total, runRate: (monthly[latest] ?? 0) * 12 }
+  }, [zoneRows, countryMonths])
+
+  const [expandedZone, setExpandedZone] = useState<string | null>(null)
+
+  // Export: giữ mỗi zone 1 dòng (mức tổng hợp) + LIỆT KÊ luôn từng nước bên dưới (thụt lề bằng prefix
+  // "  · ") — đúng yêu cầu "biết zone nào có nước nào" ngay cả khi mở file ngoài web, không chỉ trên UI.
+  const exportZoneCsv = () => {
+    if (zoneRows.length === 0) return
+    const header = ["Zone / Country", ...countryMonths.map(m => monthLabel(m, countryMultiYear)), "Total", "Run-rate 12M"]
     const num = (n: number) => Number((n || 0).toFixed(2))
-    const rows: (string | number)[][] = [
-      ...countryRows.map(r => [r.country, ...countryMonths.map(m => num(r.monthly[m] ?? 0)), num(r.total), num(r.runRate)]),
-      ["GRAND TOTAL", ...countryMonths.map(m => num(countryGrand.monthly[m] ?? 0)), num(countryGrand.total), num(countryGrand.runRate)],
-    ]
-    exportAOA(header, rows, `3hk-usage-by-country-${new Date().toISOString().slice(0, 10)}`, "By Country")
+    const rows: (string | number)[][] = []
+    for (const r of zoneRows) {
+      rows.push([zoneLabel(r.country), ...countryMonths.map(m => num(r.monthly[m] ?? 0)), num(r.total), num(r.runRate)])
+      for (const c of zoneMembers[r.country] ?? []) {
+        rows.push([`  · ${c.country}`, ...countryMonths.map(m => num(c.monthly[m] ?? 0)), num(c.total), num(c.runRate)])
+      }
+    }
+    rows.push(["TỔNG 4 ZONE", ...countryMonths.map(m => num(zoneGrand.monthly[m] ?? 0)), num(zoneGrand.total), num(zoneGrand.runRate)])
+    exportAOA(header, rows, `3hk-usage-by-zone-${new Date().toISOString().slice(0, 10)}`, "By Zone")
   }
 
   return (
@@ -805,28 +929,30 @@ export default function ThreeHKDataUsagePage() {
         </div>
       </div>
 
-      {/* Data Usage by Country × Month (TB) — sub-report từ data_usage_log */}
+      {/* Data Usage by Zone × Month (TB) — Zone A(=A1+A2)/B/C/D theo Supabase ncc_3hk, tổng lại từ
+          countryRows (không query gohub_dw thêm lần nào). Bấm 1 zone → xổ danh sách nước thuộc zone đó
+          (Hiếu yêu cầu — thay hẳn bảng riêng theo nước, đã bỏ, xem git log nếu cần khôi phục). */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h3 className="font-bold text-slate-900 flex items-center gap-2">
               <Database className="w-4 h-4 text-brand-600" />
-              Data Usage by Country × Month (TB)
+              Data Usage by Zone × Month (TB)
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              Nguồn <code className="text-slate-600">data_usage_log</code> · Đơn vị TB (data_gb/1024)
+              Nhóm theo <code className="text-slate-600">ncc_3hk.zone</code> (Zone A = A1+A2 gộp)
               {countryMonths.length > 0 && (
                 <> · Tháng {monthLabel(countryMonths[0], countryMultiYear)} – {monthLabel(countryMonths[countryMonths.length - 1], countryMultiYear)}</>
-              )}
+              )} · Bấm 1 zone để xem breakdown theo nước.
             </p>
           </div>
           <div className="flex items-center gap-3">
             {countryMonths.length > 0 && (
               <span className="text-[11px] font-semibold text-brand-700 bg-brand-50 border border-brand-100 rounded-lg px-3 py-1.5 whitespace-nowrap">
-                RUN-RATE 12M = {monthLabel(countryMonths[countryMonths.length - 1], countryMultiYear)} × 12 = {fmtTB(countryGrand.runRate)} TB
+                RUN-RATE 12M = {monthLabel(countryMonths[countryMonths.length - 1], countryMultiYear)} × 12 = {fmtTB(zoneGrand.runRate)} TB
               </span>
             )}
-            <button onClick={exportCountryCsv} disabled={countryRows.length === 0}
+            <button onClick={exportZoneCsv} disabled={zoneRows.length === 0}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all">
               <Download className="w-3.5 h-3.5" /> Export
             </button>
@@ -834,17 +960,17 @@ export default function ThreeHKDataUsagePage() {
         </div>
 
         {loadingCountry ? (
-          <div className="p-8 text-center text-sm text-slate-400">Đang tải dữ liệu theo quốc gia…</div>
+          <div className="p-8 text-center text-sm text-slate-400">Đang tải dữ liệu theo zone…</div>
         ) : countryError ? (
           <div className="p-8 text-center text-sm text-rose-500">{countryError}</div>
-        ) : countryRows.length === 0 ? (
-          <div className="p-8 text-center text-sm text-slate-400">Không có dữ liệu usage theo quốc gia.</div>
+        ) : zoneRows.length === 0 ? (
+          <div className="p-8 text-center text-sm text-slate-400">Không có dữ liệu usage theo zone.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-right border-collapse text-sm">
               <thead>
                 <tr className="bg-slate-700 text-white">
-                  <th className="sticky left-0 z-10 bg-slate-700 px-3 py-2.5 text-left font-bold text-xs uppercase tracking-wider">Country</th>
+                  <th className="sticky left-0 z-10 bg-slate-700 px-3 py-2.5 text-left font-bold text-xs uppercase tracking-wider">Zone</th>
                   {countryMonths.map((m) => (
                     <th key={m} className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider whitespace-nowrap">{monthLabel(m, countryMultiYear)}</th>
                   ))}
@@ -853,23 +979,56 @@ export default function ThreeHKDataUsagePage() {
                 </tr>
               </thead>
               <tbody>
-                {countryRows.map((row) => (
-                  <tr key={row.country} className={cn("border-b border-slate-100 hover:bg-slate-50/70", row.country === "OTHERS" && "text-slate-500 italic")}>
-                    <td className="sticky left-0 z-10 bg-white px-3 py-2 text-left font-semibold text-slate-700 whitespace-nowrap">{row.country}</td>
-                    {countryMonths.map((m) => (
-                      <td key={m} className="px-3 py-2 tabular-nums text-slate-600">{fmtTB(row.monthly[m] ?? 0)}</td>
-                    ))}
-                    <td className="px-3 py-2 tabular-nums font-bold text-slate-900 bg-slate-50">{fmtTB(row.total)}</td>
-                    <td className="px-3 py-2 tabular-nums font-semibold text-brand-700 bg-brand-50/60">{fmtTB(row.runRate)}</td>
-                  </tr>
-                ))}
+                {zoneRows.map((row) => {
+                  const expanded = expandedZone === row.country
+                  const members = zoneMembers[row.country] ?? []
+                  return (
+                  <React.Fragment key={row.country}>
+                    <tr onClick={() => setExpandedZone(expanded ? null : row.country)}
+                      className={cn("border-b border-slate-100 hover:bg-slate-50/70 cursor-pointer", row.country === "Chưa rõ Zone" && "text-slate-500 italic")}>
+                      <td className="sticky left-0 z-10 bg-white px-3 py-2 text-left font-semibold text-slate-700 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5">
+                          {expanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+                          {zoneLabel(row.country)}
+                          <span className="text-[10px] font-normal text-slate-400">({members.length} nước)</span>
+                        </span>
+                      </td>
+                      {countryMonths.map((m) => (
+                        <td key={m} className="px-3 py-2 tabular-nums text-slate-600">{fmtTB(row.monthly[m] ?? 0)}</td>
+                      ))}
+                      <td className="px-3 py-2 tabular-nums font-bold text-slate-900 bg-slate-50">{fmtTB(row.total)}</td>
+                      <td className="px-3 py-2 tabular-nums font-semibold text-brand-700 bg-brand-50/60">{fmtTB(row.runRate)}</td>
+                    </tr>
+                    {expanded && (
+                      <tr className="bg-slate-50/60">
+                        <td colSpan={countryMonths.length + 3} className="p-0">
+                          <table className="w-full text-right border-collapse text-xs">
+                            <tbody>
+                              {members.map((c) => (
+                                <tr key={c.country} className="border-b border-slate-100/70 hover:bg-white/70">
+                                  <td className="sticky left-0 z-10 bg-slate-50/60 px-3 py-1.5 pl-9 text-left font-medium text-slate-600 whitespace-nowrap">{c.country}</td>
+                                  {countryMonths.map((m) => (
+                                    <td key={m} className="px-3 py-1.5 tabular-nums text-slate-500">{fmtTB(c.monthly[m] ?? 0)}</td>
+                                  ))}
+                                  <td className="px-3 py-1.5 tabular-nums font-semibold text-slate-700 bg-slate-100/60">{fmtTB(c.total)}</td>
+                                  <td className="px-3 py-1.5 tabular-nums font-medium text-brand-600 bg-brand-50/40">{fmtTB(c.runRate)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                  )
+                })}
                 <tr className="bg-amber-50 border-t-2 border-amber-200 font-bold text-slate-900">
-                  <td className="sticky left-0 z-10 bg-amber-50 px-3 py-2.5 text-left uppercase text-xs tracking-wider">Grand Total</td>
+                  <td className="sticky left-0 z-10 bg-amber-50 px-3 py-2.5 text-left uppercase text-xs tracking-wider">Tổng 4 Zone</td>
                   {countryMonths.map((m) => (
-                    <td key={m} className="px-3 py-2.5 tabular-nums">{fmtTB(countryGrand.monthly[m] ?? 0)}</td>
+                    <td key={m} className="px-3 py-2.5 tabular-nums">{fmtTB(zoneGrand.monthly[m] ?? 0)}</td>
                   ))}
-                  <td className="px-3 py-2.5 tabular-nums bg-amber-100">{fmtTB(countryGrand.total)}</td>
-                  <td className="px-3 py-2.5 tabular-nums text-brand-800 bg-brand-100/70">{fmtTB(countryGrand.runRate)}</td>
+                  <td className="px-3 py-2.5 tabular-nums bg-amber-100">{fmtTB(zoneGrand.total)}</td>
+                  <td className="px-3 py-2.5 tabular-nums text-brand-800 bg-brand-100/70">{fmtTB(zoneGrand.runRate)}</td>
                 </tr>
               </tbody>
             </table>
@@ -971,16 +1130,20 @@ export default function ThreeHKDataUsagePage() {
                   ))
                 ) : speedGroups.length > 0 ? (
                   speedGroups.map((sg, idx) => {
-                    const expanded = expandedGroup === sg.speed_group
-                    const members = speedGroupMembers[sg.speed_group] ?? []
+                    const expanded = expandedGroup === sg.key
+                    const members = speedGroupMembers[sg.key] ?? []
+                    const isNew = sg.vintage === "13"
                     return (
                     <React.Fragment key={idx}>
                     <tr className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-3 font-bold text-slate-900 text-sm">
-                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100" title={CODE_LABELS[sg.speed_group] ?? ""}>
+                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100" title={isNew ? (CODE_LABELS[sg.speed_group] ?? "") : "Mã CŨ 14 ký tự — quy ước khác mã chuẩn, KHÔNG áp dụng bảng nghĩa mã mới"}>
                           {sg.speed_group}
                         </span>
-                        {CODE_LABELS[sg.speed_group] && <span className="ml-2 text-[11px] font-normal text-slate-400">{CODE_LABELS[sg.speed_group]}</span>}
+                        <span className={cn("ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded", isNew ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
+                          {vintageLabel(sg.vintage)}
+                        </span>
+                        {isNew && CODE_LABELS[sg.speed_group] && <span className="ml-2 text-[11px] font-normal text-slate-400">{CODE_LABELS[sg.speed_group]}</span>}
                       </td>
                       <td className="px-6 py-3 text-center text-slate-600 text-sm font-medium">{formatNumber(sg.active_sims)}</td>
                       <td className="px-6 py-3 text-right text-slate-600 text-sm">{formatNumber(sg.total_plan_gb)}</td>
@@ -1001,7 +1164,7 @@ export default function ThreeHKDataUsagePage() {
                             <div className={cn("h-1.5 rounded-full", sg.avg_usage_pct > 80 ? "bg-rose-500" : sg.avg_usage_pct > 50 ? "bg-amber-500" : "bg-emerald-500")}
                               style={{ width: `${Math.min(100, sg.avg_usage_pct)}%` }} />
                           </div>
-                          <button onClick={() => setExpandedGroup(expanded ? null : sg.speed_group)}
+                          <button onClick={() => setExpandedGroup(expanded ? null : sg.key)}
                             className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 whitespace-nowrap">
                             Chi tiết ({members.length})
                             {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}

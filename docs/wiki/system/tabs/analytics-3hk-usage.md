@@ -316,6 +316,36 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 ## 9. Gotchas & Lịch sử thay đổi
 
+- **s200+10 (2026-09-18) — Đổi bảng theo nước sang bảng Zone có drill-down, bỏ hẳn bảng theo nước.**
+  Tiếp ngay s200+9 (lúc đó vẫn giữ song song 2 bảng theo nước + theo zone) — Hiếu yêu cầu: bảng Zone phải
+  cho biết được "zone nào có nước nào" (bấm 1 zone → xổ breakdown các nước), sau đó BỎ HẲN bảng theo nước
+  riêng vì không còn cần thiết. Đã thêm `zoneMembers` (Record zone→danh sách nước, sort TB giảm dần) +
+  state `expandedZone` — bấm cả hàng Zone (không chỉ icon) toggle 1 bảng con thu nhỏ/thụt lề ngay dưới.
+  Đã xoá hẳn bảng "Data Usage by Country × Month" (JSX card riêng) + dọn code chết đi kèm
+  (`countryGrand` state/`setCountryGrand`, `exportCountryCsv` — không còn nơi nào gọi). `exportZoneCsv`
+  đổi để xuất đủ 2 cấp (mỗi Zone kèm danh sách nước con, prefix `"  · "`) — mở Excel vẫn thấy đủ mapping.
+  Xem chi tiết đầy đủ (query, verify số liệu, layout) ở mục 6 (đã viết lại toàn bộ, gộp luôn nội dung mục
+  6b cũ). tsc + lint (0 lỗi mới — 2 warning `error`/`hasMore` tại dòng 176/182 là code CŨ có từ trước cả
+  s200+9, không liên quan đợt sửa này) + vitest (261/261) PASS. Đã push staging, chưa merge main.
+
+- **s200+9 (2026-09-18) — 3 việc theo yêu cầu Hiếu: fix regression bảng Country×Month, thêm bảng Zone,
+  fix trùng mã P cũ/mới.** Tất cả đã verify trực tiếp SQL/API trên staging trước khi code (không đoán).
+  1. **Bảng "Data Usage by Country × Month" chỉ hiện 1 tháng** — regression thật, không rõ từ session
+     nào: effect fetch bảng này bị đổi sang dùng CHUNG `startDate`/`endDate` với bộ lọc SKU chính thay vì
+     tự tính cửa sổ rộng độc lập như thiết kế gốc s95. Fix trả lại đúng thiết kế gốc (cửa sổ tự tính từ
+     `MAX(report_date)`, không phụ thuộc filter nào) — bảng này sau đó bị BỎ HẲN ở s200+10, xem mục 6.
+  2. **Bảng mới "Data Usage by Zone × Month"** — nhóm 47 nước trong Supabase `ncc_3hk` thành 4 Zone
+     (A=A1+A2 gộp, B, C, D) qua route có sẵn `GET /api/ncc/3hk-zones`, tính lại từ `countryRows` đã fetch
+     (không thêm query gohub_dw). 4 dòng Zone + dòng "Chưa rõ Zone" (nước thiếu trong `ncc_3hk`, hiện tại
+     chỉ "Latvia", 0,01 TB) + dòng cuối "Tổng 4 Zone". Đợt này CHƯA có drill-down (thêm ở s200+10) — xem
+     mục 6.
+  3. **Fix trùng mã P giữa mã SKU CŨ (14kt) và MỚI (13kt)** — verify SQL xác nhận P-mới=Daily thật
+     (0% "UNL"), P-cũ=Unlimited thật (100% "UNL") — 2 nghĩa hoàn toàn khác nhau bị gộp chung 1 bucket ở
+     tầng hiển thị (KHÔNG ảnh hưởng phân loại Daily/Fixed/Unlimited chính, vẫn đúng từ trước). Fix thêm
+     `skuVintage()`, mọi nơi gom theo ký tự giờ tách rõ badge "mã mới · 13kt"/"mã cũ · 14kt". Xem mục 7.
+
+  tsc + lint (0 lỗi mới) + vitest (261/261) PASS cả 3 việc.
+
 - **s200+4 (2026-09-17) — Loại hẳn SKU "khung SIM" + đổi chart/breakdown Unlimited sang mã ký tự.** Tiếp
   ngay s200+3 cùng ngày, Hiếu phản hồi 3 điểm:
   1. **SKU `1D0003DK00000` (mã `K`) xác nhận là "khung SIM"** — không phải gói data thật → **loại HẲN**
@@ -389,29 +419,53 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 ---
 
-## 6. Sub-report: Data Usage by Country × Month (TB) — thêm s95
+## 6. Sub-report: Data Usage by Zone × Month (TB) — thêm s95 (theo nước), đổi hẳn sang Zone s200+9/+10
 
-Bảng phụ trong tab 3HK, mô phỏng báo cáo NCC "Data Usage by Country x Month (TB)". **Độc lập** với kỳ/tab của bảng chính (mount effect riêng, chạy 1 lần).
+> ⚠️ **s200+10 (2026-09-18) — Đổi từ bảng "theo nước" sang "theo Zone có drill-down", THEO YÊU CẦU HIẾU
+> (không phải bug).** Hiếu: bảng theo nước cũ (s95, 47 dòng, dài khó nhìn) đổi sang gom theo Zone
+> (Supabase `ncc_3hk`) làm dòng CHÍNH, nhưng vẫn phải biết "zone nào có nước nào" — bấm 1 dòng Zone xổ ra
+> breakdown các nước thuộc zone đó, ngay trong cùng 1 bảng (không cần bảng riêng theo nước nữa). Sau khi
+> làm xong, **bảng "Data Usage by Country × Month" cũ (mục 6 cũ) đã BỎ HẲN** — không còn hiển thị độc lập,
+> dữ liệu theo nước giờ chỉ xem qua drill-down trong bảng Zone. Đây là thay đổi kế tiếp ngay sau s200+9
+> (lúc đó vẫn giữ CẢ 2 bảng song song) — xem lịch sử fix regression + xây zone lần đầu ở mục 9, s200+9.
+> `countryRows`/`countryMonths` (state fetch) vẫn giữ nguyên logic/query y hệt s200+9 — chỉ không còn
+> render riêng, dùng làm nguồn cho `zoneMembers`/`zoneRows` bên dưới.
 
-- **Nguồn**: `data_usage_log` (log thô từng ngày — cột `report_date`, `country`, `data_gb`). KHÔNG dùng `fact_data_usage` (bảng đó không có `country`).
-- **Đơn vị**: TB = `SUM(data_gb) / 1024`.
-- **Query** (gom dạng "dài" rồi pivot client-side, tránh crosstab SQL động):
-  ```sql
-  SELECT COALESCE(NULLIF(TRIM(country),''),'Unknown') AS country,
-         to_char(report_date,'YYYY-MM') AS ym,
-         SUM(data_gb)/1024.0 AS tb
-  FROM data_usage_log
-  WHERE report_date IS NOT NULL
-    AND report_date >= (SELECT MAX(report_date) FROM data_usage_log) - INTERVAL '11 months'
-  GROUP BY 1,2 ORDER BY 1,2
-  ```
-- **Pivot (FE)**: top 16 nước theo tổng TB + gộp phần còn lại vào **OTHERS**; mỗi dòng có cột **Total** + **Run-rate 12M** (= TB tháng mới nhất × 12); dòng cuối **GRAND TOTAL** (mọi nước). Nút **CSV** export (dấu chấm thập phân, BOM UTF-8).
-- **Gotcha**:
-  - Phải lọc `report_date IS NOT NULL` — có ~358k dòng report_date NULL (≈318 TB) sẽ làm sai GRAND TOTAL nếu gộp.
-  - Nhãn tháng EN viết hoa (JAN…DEC); nếu bảng trải nhiều năm thì thêm `'YY`. Số format vi-VN 2 chữ số (dấu phẩy) khớp mẫu "16,92".
-  - DB hiện chỉ có **Jan–Jun 2026** (6 tháng) → bảng render động theo tháng CÓ THẬT (ảnh NCC gốc 10 tháng là data cũ hơn).
-- **Đối chiếu** (T6/2026): China 131,91 · Japan 15,00 · South Korea 6,88 · **GRAND TOTAL 186,80** TB — khớp DB thật.
-- **File**: `web/src/app/(dashboard)/analytics/3hk-usage/page.tsx` (state `countryMonths/countryRows/countryGrand`, `fmtTB`, `monthLabel`, `exportCountryCsv`).
+Bảng nhóm theo Zone (Supabase `ncc_3hk`, Zone A = gộp `A1`+`A2` theo yêu cầu Hiếu, B/C/D giữ nguyên — đã
+là 1 mã/zone trong `ncc_3hk`). Verify trực tiếp qua `GET /api/ncc/3hk-zones` (route có sẵn cho NCC
+Catalog, mở cho mọi role đã login — không tạo route mới): 47 dòng, đúng 4 zone gốc (A1=5 nước, A2=27
+nước, B=7 nước, C=6 nước, D=2 nước = 47). **Độc lập** với kỳ/tab của bảng SKU chính (mount effect riêng,
+chạy 1 lần — KHÔNG phụ thuộc nút "Lọc"/ngày ở đầu trang).
+
+- **Nguồn nước** (`countryRows`, nội bộ không render riêng): `data_usage_log` (log thô từng ngày — cột
+  `report_date`, `country`, `data_gb`). KHÔNG dùng `fact_data_usage` (bảng đó không có `country`). Đơn vị
+  TB = `SUM(data_gb) / 1024`. Cửa sổ tự tính `MAX(report_date) − INTERVAL '23 months'` (đủ phủ toàn bộ
+  lịch sử thật hiện có từ 2026-01), KHÔNG lọc `report_date::date BETWEEN startDate AND endDate` như bug
+  regression s200+9 đã fix — xem query đầy đủ + số liệu verify ở mục 9 (s200+9).
+- **KHÔNG query gohub_dw thêm lần nào cho Zone** — `zoneMembers`/`zoneRows`/`zoneGrand` tính CLIENT-SIDE
+  từ `countryRows` đã fetch, group theo zone tra được từ `ncc_3hk.country`.
+- **Alias tên nước** (`COUNTRY_ALIAS` trong `page.tsx`) — verify đối chiếu 46 nước distinct trong
+  `data_usage_log` với 47 nước trong `ncc_3hk`: `"USA"` (data_usage_log) ≠ `"US"` (ncc_3hk), `"United
+  Kingdom"` ≠ `"UK"`, `"Slovak Republic"` ≠ `"Slovakia"` — 3 cặp tên khác spelling y hệt 1 nước, tổng
+  ~6,7 TB (~0,5% toàn kỳ) sẽ rơi nhầm "Chưa rõ Zone" nếu không map. Đã thêm alias map, verify lại khớp.
+- **`"Latvia"`** xuất hiện trong `data_usage_log` (0,01 TB, không đáng kể) nhưng **KHÔNG có trong
+  `ncc_3hk`** — thiếu hẳn (không phải lỗi đặt tên) → rơi đúng vào dòng "Chưa rõ Zone" (hiện riêng, KHÔNG
+  âm thầm bỏ qua — nếu sau này 1 nước MỚI phát sinh usage lớn mà chưa có trong `ncc_3hk`, dòng này sẽ phồng
+  lên rõ ràng thay vì lặng lẽ mất số liệu).
+- **Layout**: 4 dòng Zone A/B/C/D (thứ tự cố định, không sort theo TB) + dòng "Chưa rõ Zone" nếu có +
+  dòng cuối **"Tổng 4 Zone"** (verify sống: khớp TUYỆT ĐỐI GRAND TOTAL bảng theo nước cũ — 1.237,60 TB
+  toàn kỳ 8 tháng — vì cùng 1 nguồn, cách kiểm tra nhanh nếu nghi mapping sai). Mỗi dòng Zone có state
+  `expandedZone` — bấm (cả hàng, không chỉ icon) → xổ 1 bảng con NGAY DƯỚI, liệt kê từng nước thuộc zone
+  đó (từ `zoneMembers[zone]`, sort theo TB giảm dần), cùng cột tháng/Total/Run-rate, style thu nhỏ + thụt
+  lề (`pl-9`) để phân biệt cấp con. Đóng lại bằng bấm lại chính hàng Zone đó.
+- **Export** (`exportZoneCsv`) — GIỮ đủ cả 2 cấp trong 1 file: mỗi dòng Zone theo sau bởi các dòng nước
+  thuộc zone đó (prefix `"  · "` phân biệt cấp con), rồi tới dòng "TỔNG 4 ZONE" cuối cùng — mở Excel vẫn
+  biết đủ "zone nào có nước nào" mà không cần vào lại web.
+- **Đối chiếu** (T6/2026, đã re-verify s200+10): GRAND TOTAL/TỔNG 4 ZONE = **186,80 TB** — khớp DB thật
+  từ s95, không đổi qua các đợt sửa.
+- **File**: `web/src/app/(dashboard)/analytics/3hk-usage/page.tsx` — state `countryMonths/countryRows`
+  (fetch), `zoneByCountry` (fetch `ncc_3hk`), `zoneMembers`/`zoneRows`/`zoneGrand` (useMemo), `expandedZone`
+  (state UI), `zoneLabel()`, `exportZoneCsv`. `fmtTB`, `monthLabel` dùng chung.
 
 ---
 
@@ -424,11 +478,26 @@ Bảng phụ trong tab 3HK, mô phỏng báo cáo NCC "Data Usage by Country x M
 - `avg_usage_pct` = `total_usage_gb / total_plan_gb × 100`.
 - Số ngày gói: `daysOfSku(sku)` (mã mới `…UNL05`→5; mã cũ `…05D`, bỏ token P1/P2 trước).
 
+> ⚠️ **s200+9 (2026-09-18) — Fix trùng mã P giữa mã CŨ và mã MỚI (Hiếu báo).** Verify trực tiếp SQL trên
+> staging (`fact_data_usage`, vendor `3HKDATAPOOL`) trước khi sửa: ký tự `P` ở mã **MỚI 13kt** (vị trí 8)
+> — 792 SKU distinct, **0/792 (0%)** có chuỗi "UNL" → đúng là **Daily throttle <2mbps** (khớp
+> `CODE_LABELS`). Ký tự `P` ở mã **CŨ 14kt** (vị trí 10) — 350 SKU distinct, **350/350 (100%)** có chuỗi
+> "UNL" (nằm trong token `"UNLIP1"`/`"UNLIP2"`) → **THỰC CHẤT LÀ UNLIMITED**, không liên quan gì "Daily".
+> `typeLetterOfSku()` trước gộp cả 2 vintage vào chung 1 bucket "P" khi tính chart "Mã loại gói chiếm bao
+> nhiêu SIM" (tab "Tất cả", nơi cả 2 loại cùng xuất hiện) — nhãn `CODE_LABELS["P"]="Daily throttle
+> <2mbps"` áp NHẦM cho cả 350 SKU Unlimited-cũ. **Lưu ý: bucket phân loại chính (Daily/Fixed/Unlimited,
+> `SKU_TYPE_CASE` §3.1) KHÔNG bị ảnh hưởng** — nhánh `UPPER(sku) LIKE '%UNL%'` cho mã 14kt đã tự động xếp
+> đúng 350 SKU này vào Unlimited từ trước; bug chỉ nằm ở tầng HIỂN THỊ/GOM NHÓM theo ký tự đơn lẻ. Fix:
+> `skuVintage(sku)` mới (13/14 ký tự) — mọi nơi gom theo `typeLetterOfSku()` giờ khoá kèm vintage
+> (`${letter}_${vintage}`), hiển thị badge rõ "mã mới · 13kt" (xanh lá) / "mã cũ · 14kt" (vàng); `F`/`O` ở
+> mã cũ (184 và 1 SKU) cũng tách riêng dù CHƯA xác định được ý nghĩa thật (không tự gán `CODE_LABELS` cho
+> vintage cũ — chỉ verify chắc chắn được `P`=Unlimited). tsc + lint (0 lỗi mới) + vitest (261/261) PASS.
+
 **Bảng "Unlimited — Breakdown theo mã" (s200+4, gom theo ký tự phân loại):**
 | Cột | Nguồn / công thức |
 |---|---|
-| Mã | `typeLetterOfSku(sku)` — vị trí 8 (13 ký tự) / vị trí 10 (14 ký tự), xem §3.1/§7 |
-| Active SIMs | `Σ active_sims` các SKU cùng mã |
+| Mã | `typeLetterOfSku(sku)` + `skuVintage(sku)` (s200+9) — vị trí 8 (13 ký tự, "mã mới") / vị trí 10 (14 ký tự, "mã cũ") — LUÔN hiện kèm badge vintage, xem §3.1/§7 |
+| Active SIMs | `Σ active_sims` các SKU cùng mã (cùng vintage) |
 | Total Plan (GB) | `Σ total_plan_gb` (= Σ data_amount_gb — hạn mức mềm) |
 | Total Actual (GB) | `Σ total_usage_gb` |
 | **GB/ngày/SIM** (thêm s95) | `Σ total_usage_gb ÷ Σ(active_sims × ngày)` — **KPI chi phí chính**; đỏ nếu > kế hoạch/ngày |
@@ -456,5 +525,5 @@ Bảng phụ trong tab 3HK, mô phỏng báo cáo NCC "Data Usage by Country x M
 | GB/ngày/SIM | `fact_data_usage` | `SUM(total_data_gb) ÷ (active_sims × số_ngày)` — KPI chính cho Unlimited |
 | SKU Type | `fact_data_usage.sku` + `dim_sku` | Xem `SKU_TYPE_CASE` đầy đủ ở §3.1 (theo ký tự vị trí 8, không chỉ literal `%UNL%`) |
 | Mã loại gói (Unlimited) | `fact_data_usage.sku` | `typeLetterOfSku(sku)` — vị trí 8 (13 ký tự) / vị trí 10 (14 ký tự), xem §3.1/§7 |
-| Country × Month (TB) | `data_usage_log` | `SUM(data_gb)/1024` GROUP BY `country`, `to_char(report_date,'YYYY-MM')` |
+| Zone × Month (TB) | Supabase `ncc_3hk` + `data_usage_log` (qua `countryRows`, không render riêng từ s200+10) | Zone A=A1+A2 gộp, B/C/D nguyên; alias tên nước USA/UK/Slovak Republic; bấm zone → drill-down nước (s200+9/+10). Cửa sổ tự tính `MAX(report_date)-23 tháng`, độc lập filter trang |
 | Vendor filter | `dim_sku.vendor` | `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'` |
