@@ -255,10 +255,14 @@ def main():
     sync_sku_catalog(sb)
     sync_ncc_exist(sb)
 
+    counts = {tbl: len(fetched[tbl]) for tbl, _fn, _pk in tasks}
+
     # Detect changes + insert notifications
     if new_sku_rows:
         non_price, price_ch = detect_sku_changes(old_skus, new_sku_rows)
         insert_sync_notifications(sb, non_price, price_ch)
+
+    return counts
 
 def sync_ncc_exist(sb):
     """Cập nhật cột exist (Yes/No) trên ncc_worldmove.
@@ -299,7 +303,21 @@ if __name__ == "__main__":
     # Intel, mọi role admin/manager thấy ngay khi mở web) — rồi re-raise để GitHub Actions vẫn báo failed
     # như cũ (không che giấu lỗi khỏi CI).
     try:
-        main()
+        counts = main()
+        now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
+        body = " · ".join(f"{tbl}: {n:,}" for tbl, n in counts.items())
+        try:
+            sb_ok = create_client(SUPABASE_URL, SUPABASE_KEY)
+            sb_ok.table("notifications").insert({
+                "type": "success",
+                "title": f"✅ Sync GoHub API thành công — {now_str} UTC",
+                "body": body,
+                "data": {"counts": counts},
+                "visibility": "admin_manager",
+                "sent_to_lark": False,
+            }).execute()
+        except Exception as notify_err:
+            print(f"[WARN] Không ghi được notification thành công: {notify_err}", flush=True)
     except Exception as e:
         import traceback
         err_msg = f"{type(e).__name__}: {e}"
