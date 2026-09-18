@@ -11,11 +11,20 @@ import { summarizeReleaseCommits, type ReleaseCommit } from "@/lib/release-notif
 // Push `main` (Hiếu yêu cầu, s200+11): kèm luôn danh sách commit ĐANG CÒN trên `staging` mà CHƯA merge —
 // workflow tự tính `git log origin/main..origin/staging` (cần git access, không làm được trong route này)
 // rồi gửi qua field `pendingCommits`. Route chỉ tóm tắt + ghép nội dung, không tự đi tính diff branch.
+// Lọc CỨNG trước khi tốn 1 lượt Gemini nào — commit cập nhật wiki/tài liệu (Hiếu yêu cầu KHÔNG noti) luôn
+// theo đúng convention "docs:"/"docs(scope):" của repo (xem mọi commit message trong session_summary.txt).
+// Không dựa vào Gemini để lọc loại này — chặn CHẮC CHẮN, không tốn token, không rủi ro model đoán sai.
+const DOCS_ONLY_RE = /^docs(\([^)]*\))?\s*:/i
+function isDocsCommit(message: string): boolean {
+  return DOCS_ONLY_RE.test(message.trim())
+}
+
 function parseCommits(raw: unknown): ReleaseCommit[] {
   return Array.isArray(raw)
     ? raw
         .filter((c: any) => typeof c?.message === "string" && c.message.trim())
         .map((c: any) => ({ sha: String(c.sha ?? "").slice(0, 12), message: String(c.message) }))
+        .filter((c: ReleaseCommit) => !isDocsCommit(c.message))
     : []
 }
 

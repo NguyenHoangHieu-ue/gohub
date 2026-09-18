@@ -497,13 +497,32 @@ erDiagram
   đổi `on: push branches:[main]` → `branches:[main, staging]`; thêm bước `actions/checkout@v4
   fetch-depth:0` (cần full git history để diff branch — trước đây route chỉ đọc `github.event.commits`,
   không checkout code) + bước tính `git log origin/main..origin/staging` (chỉ chạy khi `github.ref_name
-  == 'main'`, parse qua `node -e` với separator `\x1f` tránh escape JSON thủ công trong bash) → gửi kèm
-  `pendingCommits` + `environment` (`"staging"`/`"production"`, suy từ `github.ref_name`) trong payload
-  POST. Route `/api/notify/release` đổi: `environment==="staging"` → prefix "🧪 [Staging] Vừa cập nhật
-  (đang test, chưa lên production):"; `environment==="production"` → prefix "🚀 [Production] Vừa lên
-  production:" + nếu có `pendingCommits` thêm khối "🧪 Còn trên staging, CHƯA lên production:" (tóm tắt
-  Gemini riêng, 2 lượt gọi khi cả 2 phần đều có nội dung). Cùng 1 group Lark (`lark_release_chat_id`),
-  không cần group riêng cho từng môi trường — phân biệt bằng nhãn trong tin nhắn. tsc + lint (0 lỗi mới)
-  + vitest (261/261) PASS.
+  == 'main'`, parse qua `node -e`) → gửi kèm `pendingCommits` + `environment` (`"staging"`/`"production"`,
+  suy từ `github.ref_name`) trong payload POST. Route `/api/notify/release` đổi: `environment==="staging"`
+  → prefix "🧪 [Staging] Vừa cập nhật (đang test, chưa lên production):"; `environment==="production"` →
+  prefix "🚀 [Production] Vừa lên production:" + nếu có `pendingCommits` thêm khối "🧪 Còn trên staging,
+  CHƯA lên production:" (tóm tắt Gemini riêng, 2 lượt gọi khi cả 2 phần đều có nội dung). Cùng 1 group
+  Lark (`lark_release_chat_id`), không cần group riêng cho từng môi trường — phân biệt bằng nhãn trong tin
+  nhắn. tsc + lint (0 lỗi mới) + vitest (261/261) PASS.
+  ⚠️ **Fix ngay sau khi push lần đầu — YAML lỗi do byte điều khiển lẫn vào file**: dùng `''` (unit
+  separator) làm delimiter tách sha/message trong script `node -e` nhúng trong `run: |` — khi ghi file,
+  chuỗi escape 6-ký-tự bị hiểu nhầm thành ký tự điều khiển THẬT (byte 0x1F) do tầng truyền tham số dạng
+  JSON tự unescape ``. Hệ quả: YAML parse lỗi ("non-printable characters"), GitHub Actions báo
+  "failed because of a workflow file issue", run 0s không chạy được bước nào. Verify bằng `js-yaml` local
+  (`node -e "require('js-yaml').load(...)"`) trước khi push lại. Fix: đổi sang delimiter IN ĐƯỢC `"|||"` —
+  an toàn tuyệt đối, hết rủi ro escape. **Bài học**: bất kỳ chuỗi dạng `\uXXXX`/`\xXX` cần giữ NGUYÊN VĂN
+  (không phải ký tự thật) khi ghi vào file qua tool truyền tham số JSON, PHẢI escape kép hoặc đổi hẳn sang
+  delimiter không cần escape — không dùng control-char escape cho mục đích này nữa.
+
+  **s200+12 (cùng ngày) — Lọc BỎ commit đồng bộ wiki/tài liệu + thay đổi nhỏ nhặt (Hiếu yêu cầu)**: 2 lớp
+  lọc, không chỉ dựa Gemini:
+  1. **Lọc CỨNG ở route** (`isDocsCommit()`, `parseCommits()`) — regex `^docs(\(scope\))?:` khớp ĐÚNG
+     convention commit "docs:"/"docs(wiki):" toàn repo dùng xuyên suốt (mọi commit sync CLAUDE.md/wiki đều
+     theo mẫu này) — loại bỏ TRƯỚC KHI gọi Gemini, không tốn token, không rủi ro model đoán sai giữ lại.
+  2. **Tăng cường prompt** (`release-notify.ts`) — thêm 2 rule rõ ràng: bỏ HẲN nội dung update wiki/tài
+     liệu dù nằm CHUNG 1 commit với thay đổi khác (lớp phòng hờ cho commit không theo đúng convention
+     "docs:"); bỏ HẲN thay đổi nhỏ nhặt (sửa chính tả, đổi tên biến, format code, bump version không đổi
+     tính năng...) — kèm chỉ dẫn "THÀ bỏ sót còn hơn báo phiền". tsc + lint (0 lỗi mới) + vitest
+     (261/261) PASS.
 | **Sync GoHub API — 502 upstream 2026-09-17 + thêm loại "success"** (s200+7) | Hiếu báo nhận thông báo lỗi sync 17/09 05:37 UTC (`RetryError ... too many 502 error responses` từ `api-pm.space.gohub.com`). Verify qua `gh run list`/`gh run view`: đây là **lỗi 502 từ chính GoHub API** (server nguồn, ngoài repo) — `urllib3.Retry` (fix s198+11) đã retry đúng nhưng 502 kéo dài nên hết lượt retry, không phải bug code. Phát hiện thêm 2 việc lúc audit: (1) step "Notify Lark" (`sync.yml`, gọi `POST /api/notify/lark` với `MCP_SECRET`) trả **401 Unauthorized** ở MỌI lần chạy gần đây (cả run thành công lẫn thất bại, kiểm tra nhiều ngày) — `MCP_SECRET` trên GitHub Actions secret lệch với `MCP_SECRET` trên Vercel env, khiến toàn bộ notify-to-Lark-group (SKU/giá đổi, `visibility="all"`) bị chặn âm thầm từ ít nhất vài ngày qua — **cần Hiếu đối chiếu lại 2 giá trị secret**; (2) hệ thống trước đây CHỈ có notification khi **lỗi** (`type:"error"`, s198+12) — không có gì báo khi sync **thành công**, đúng như Hiếu hỏi. Đã thêm `type:"success"` (`sync.py` insert vào bảng `notifications` sau khi `main()` chạy xong không lỗi, kèm số dòng mỗi bảng products/skus/listings/items) — `main()` đổi để `return counts` thay vì trả về `None`. Web: `NotifType`/`Notification.type` thêm `"success"`, `TYPE_CFG` (`notification-bell.tsx`) thêm icon `CheckCircle` màu emerald. Không cần migration (cột `type` là text tự do, không có CHECK constraint, giống cách thêm `"error"` trước đó). tsc + lint (0 lỗi mới) + vitest (261/261) PASS. |
 | **Chuông "Thông báo"** (`components/notification-bell.tsx`, bảng Supabase `notifications`) | ⚠️ Fix s198+12 (2026-09-15) — Hiếu báo panel hiển thị "có vấn đề": verify qua Chrome trên staging, panel `fixed right-0 w-[380px]` render lồng bên trong `<nav>` sidebar có class `translate-x-0`/`-translate-x-full` (Tailwind, collapse/expand) — theo chuẩn CSS, `transform` trên ancestor (kể cả identity `translate-x-0`) biến nó thành **containing block** cho `position: fixed` bên trong, nên panel bị tính theo khung sidebar hẹp (~170px) thay vì viewport → hiện lệch hẳn sang trái, chữ bị cắt không đọc được. Fix: render panel qua `createPortal(..., document.body)`, thoát khỏi DOM subtree bị transform — panel giờ tính đúng theo viewport. Thêm loại thông báo mới `"error"` (icon đỏ) + insert notification lỗi thật từ `sync.py` (cron sản phẩm crash) và `sync-lark-tickets` (cron CS Troubleshoot lỗi) — trước đây 2 cron này fail silent, giờ Hiếu tự thấy ngay trên chuông, không cần hỏi lại/tra Vercel-GitHub Actions log. |
