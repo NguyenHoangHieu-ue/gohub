@@ -23,9 +23,9 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             git fetch origin staging --quiet
-            PENDING=$(git log origin/main..origin/staging --pretty=format:'%H%x1f%s' | node -e "
+            PENDING=$(git log origin/main..origin/staging --pretty=format:'%H|||%s' | node -e "
               const lines = require('fs').readFileSync(0, 'utf8').split('\n').filter(Boolean);
-              const commits = lines.map(l => { const [sha, message] = l.split(''); return { sha, message }; });
+              const commits = lines.map(l => { const i = l.indexOf('|||'); return { sha: l.slice(0, i), message: l.slice(i + 3) }; });
               process.stdout.write(JSON.stringify(commits));
             ")
           else
