@@ -6,10 +6,70 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-17, s200)
+## Trạng thái hiện tại (2026-09-18, s200+10)
 
 | | |
 |---|---|
+| ✅ **s200+10 (2026-09-18) — 3HK Data Usage: Zone table drill-down theo nước, bỏ bảng Country×Month riêng
+  — đã push staging + merge main, đã verify sống** | Tiếp ngay s200+9 (khi đó vẫn giữ song song bảng theo
+  nước + theo zone). Hiếu: bảng Zone phải cho biết "zone nào có nước nào" (bấm 1 zone → xổ breakdown các
+  nước), sau đó bỏ hẳn bảng theo nước riêng. Thêm `zoneMembers` (zone→danh sách nước, sort TB giảm dần) +
+  state `expandedZone` — bấm cả hàng Zone → xổ bảng con thu nhỏ/thụt lề ngay dưới, đóng lại bấm lần nữa.
+  Xoá hẳn card "Data Usage by Country × Month" + dọn code chết đi kèm (`countryGrand`, `exportCountryCsv`).
+  `exportZoneCsv` đổi xuất đủ 2 cấp (mỗi Zone kèm nước con, prefix `"  · "`). tsc + lint (0 lỗi mới) +
+  vitest (261/261) PASS. **Đã tự verify sống trên staging qua Chrome** (lần đầu load dính cache cũ, reload
+  lại đúng) — bấm Zone A xổ đúng China/Japan/Philippines/USA... sort TB giảm dần.
+| ✅ **s200+9 (2026-09-18) — 3HK Data Usage: 3 việc theo yêu cầu Hiếu, cả 3 verify SQL trực tiếp trước khi
+  code** | (1) **Fix regression thật**: bảng "Data Usage by Country × Month" bị đổi dùng CHUNG
+  `startDate`/`endDate` với bộ lọc SKU chính (không rõ session nào gây ra) → chỉ hiện đúng 1 tháng, trái
+  thiết kế gốc s95 (độc lập, tự tính cửa sổ rộng). Trả lại đúng thiết kế: cửa sổ tự tính
+  `MAX(report_date)-23 tháng`, không phụ thuộc filter nào — verify lại T6=186,80 TB khớp số cũ. (2) **Thêm
+  bảng "Data Usage by Zone × Month"** — nhóm 47 nước Supabase `ncc_3hk` thành 4 Zone (A=A1+A2 gộp, B, C,
+  D) qua route có sẵn `GET /api/ncc/3hk-zones`, tính lại từ `countryRows` (không thêm query gohub_dw).
+  Alias tên nước (USA≠US, United Kingdom≠UK, Slovak Republic≠Slovakia) + "Chưa rõ Zone" cho nước thiếu
+  trong `ncc_3hk` (chỉ Latvia, 0,01 TB). Verify TỔNG 4 ZONE khớp tuyệt đối GRAND TOTAL theo nước
+  (1.237,60 TB). (3) **Fix trùng mã P giữa SKU CŨ (14kt) và MỚI (13kt)** — verify SQL: P-mới (vị trí 8) =
+  Daily thật (0/792 SKU có "UNL"); P-cũ (vị trí 10) = thực chất Unlimited (350/350 SKU có "UNL", nằm trong
+  token "UNLIP1/P2") — 2 nghĩa trái ngược bị gộp chung 1 bucket khi xem tab "Tất cả". Thêm `skuVintage()`,
+  mọi nơi gom theo ký tự giờ tách badge "mã mới · 13kt"/"mã cũ · 14kt". tsc + lint (0 lỗi mới) + vitest
+  (261/261) PASS cả 3 việc. **Đã tự QA qua Chrome trên staging** (bảng Unlimited breakdown hiện đúng badge
+  vintage, chart "Mã loại gói..." tách riêng "P (mã mới)"/"P (mã cũ)").
+  ⚠️ **Phát hiện thêm khi Hiếu hỏi lại "sao Zone khác data tổng"** (cùng ngày, sau khi build xong Zone):
+  verify sâu hơn phát hiện T8/2026 lệch bất thường — `data_usage_log` (nguồn bảng Zone, RAW không lọc gì)
+  = 181,25 TB; `fact_data_usage` sau loại mã K (nguồn "data tổng" KPI/bảng SKU) = 153,50 TB — lệch 27,75
+  TB (~15%), trong khi T1-T7 lệch <0,25% (nhiễu làm tròn bình thường). Đào tới gốc: mã K (khung SIM) tháng
+  8 đột nhiên gánh **5.235 ICCID / 27,60 TB** usage thật (T4-T7 chỉ 0-8 ICCID, gần 0 TB) — khớp gần tuyệt
+  đối phần lệch. **Kết luận: bảng Zone KHÔNG sai** (raw đầy đủ nhất, không có SKU để lọc) — lệch là do
+  ~5.235 SIM tháng 8 bị GÁN NHẦM sang mã khung SIM ở phía nguồn/ETL, nên bị loại khỏi "data tổng" (đúng
+  logic loại-K theo yêu cầu Hiếu s200+4). **Đây CHÍNH LÀ vấn đề đã ghi nhận nhưng CHƯA sửa từ audit s198**
+  ("SKU K gánh usage bất thường — nghi dữ liệu nguồn 3HK gộp nhầm") — giờ xác định chính xác hơn: CHỈ xảy
+  ra ở đợt nạp tháng 8 (17/09), không phải lỗi lặp lại mọi tháng. **Cần Hiếu quyết định hướng xử lý** (chưa
+  làm gì thêm, chỉ mới định vị chính xác nguyên nhân) — xem mục checklist bên dưới.
+| ✅ **s200+8 (2026-09-18) — Tự động báo group Lark khi có tính năng mới lên production — đã merge main**
+  | Hiếu: muốn 1 group Lark tự nhận thông báo mỗi khi merge tính năng mới. 3 quyết định qua
+  AskUserQuestion: (1) CHỈ báo khi merge `main` (không báo mỗi lần push staging, tránh spam lúc code dở);
+  (2) nội dung do Gemini tóm tắt commit message (vốn viết chi tiết kỹ thuật) thành thông báo ngắn không
+  thuật ngữ code; (3) group MỚI riêng, tách khỏi group đang nhận thông báo sync/SKU đổi giá hiện có.
+  Luồng: `.github/workflows/notify-release.yml` (trigger `push:[main]`) gom `github.event.commits` →
+  `POST /api/notify/release` (auth `Bearer $MCP_SECRET`) → `summarizeReleaseCommits()`
+  (`lib/release-notify.ts`, Gemini `gemini-3.8-flash` `thinkingLevel:"low"`) → gửi group đọc từ
+  `app_settings.lark_release_chat_id` (key MỚI, tách `lark_notify_chat_id`). Đặt group đích qua lệnh Lark
+  mới `/set-release-channel` (chỉ admin/creator, mention bot trong group muốn nhận). tsc + lint (0 lỗi
+  mới) + vitest (261/261) PASS. **Cần Hiếu**: add bot vào group muốn nhận → mention bot gõ
+  `/set-release-channel` → bot xác nhận. ⚠️ Phụ thuộc CÙNG bug `MCP_SECRET` lệch ở mục s200+7 — sửa 1 chỗ
+  hết lỗi cho cả 2 tính năng Lark notify.
+| ✅ **s200+7 (2026-09-18) — Điều tra thông báo sync lỗi + thêm loại "success" — đã merge main** | Hiếu
+  nhận thông báo lỗi sync (502 từ `api-pm.space.gohub.com`). Verify qua `gh run list`/`gh run view`: lỗi
+  502 từ chính GoHub API (upstream, ngoài repo) — `urllib3.Retry` (fix s198+11) đã retry đúng nhưng hết
+  lượt vì 502 kéo dài, không phải bug code. **Phát hiện thêm 1 bug thật**: step "Notify Lark" trong
+  `sync.yml` (gọi `/api/notify/lark`, `Bearer $MCP_SECRET`) trả **401 mọi lần chạy gần đây** (cả lần
+  KHÔNG lỗi) — `MCP_SECRET` GitHub Actions lệch `MCP_SECRET` Vercel, chặn âm thầm toàn bộ thông báo Lark
+  nhóm về SKU/giá đổi (`visibility=all`) từ ít nhất vài ngày qua. **Cần Hiếu**: đối chiếu lại 2 giá trị
+  secret. **Thêm theo yêu cầu Hiếu — thông báo sync THÀNH CÔNG**: trước chỉ có `type="error"` (s198+12),
+  không có gì báo khi xong việc. `sync.py` giờ insert `type="success"` vào bảng `notifications` sau khi
+  `main()` chạy xong không lỗi (kèm số dòng mỗi bảng products/skus/listings/items); chuông web thêm icon
+  ✅ xanh lá. Không cần migration (cột `type` là text tự do). tsc + lint (0 lỗi mới) + vitest (261/261)
+  PASS.
 | ✅ **s200+6 (2026-09-17) — Vá kiến trúc cache "phải tự tay bấm Tải lại mới" — 2 phần theo yêu cầu Hiếu
   "làm luôn cả 2", tsc+lint+vitest (261/261) PASS, chờ Hiếu setup cron-job.org** | Hiếu hỏi hướng giải
   quyết triệt để hiện tượng cache đôi lúc trả số cũ dù có cơ chế clear, đôi lúc vẫn phải tự làm. Audit
@@ -830,6 +890,27 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [x] **s200+7/+8/+11 — MCP_SECRET đã đối chiếu lại + group Lark đã setup — XONG, verify sống bằng curl**
+  — Hiếu tạo secret mới, cập nhật khớp Vercel + GitHub, redeploy; đã chạy `/set-release-channel` trong
+  group đích. Test trực tiếp `/api/notify/lark` + `/api/notify/release` bằng curl (cả staging lẫn
+  production): auth 200 (hết 401), gửi tin thật thành công, Gemini tóm tắt đúng nội dung. Không cần làm
+  gì thêm cho 2 mục này.
+- [ ] **s200+11 — QA thông báo Lark phân biệt Staging/Production + backlog** — push code này lên staging
+  sẽ tự trigger workflow ngay (trigger mới `on:push branches:[main,staging]`) — kiểm tra group Lark có tin
+  gắn nhãn "🧪 [Staging]" đúng nội dung commit vừa push không. Khi merge main kế tiếp, kiểm tra tin gắn
+  nhãn "🚀 [Production]" + nếu lúc đó staging còn commit chưa merge thì phải thấy thêm khối "🧪 Còn trên
+  staging, CHƯA lên production:". Chưa tự verify được phần "pendingCommits" bằng dữ liệu THẬT (cần đúng
+  tình huống staging đang có commit vượt main tại đúng lúc push main) — logic đã tsc+vitest PASS nhưng
+  behavior thật cần Hiếu tự quan sát 1-2 lần merge tới.
+- [ ] **s200+9 — Quyết định hướng xử lý: ~5.235 SIM tháng 8/2026 bị gán nhầm sang mã khung SIM (K)** —
+  phát hiện khi Hiếu hỏi lại "sao Zone khác data tổng": tháng 8 riêng lẻ có 5.235 ICCID / 27,60 TB usage
+  thật bị tính vào mã `K` (khung SIM/eSIM profile, vốn phải luôn ~0 vì không phải gói data thật — T4-T7
+  chỉ 0-8 ICCID). Đây là dữ liệu THẬT bị lệch ở nguồn/ETL, không phải bug ở tab 3HK Data Usage. Cùng vấn
+  đề đã ghi nhận nhưng CHƯA sửa từ audit s198 ("SKU K gánh usage bất thường — nghi dữ liệu nguồn 3HK gộp
+  nhầm"), giờ định vị chính xác hơn: chỉ xảy ra đúng đợt nạp tháng 8 (17/09). Cần Hiếu chọn hướng: (a) hỏi
+  bên vận hành/3HK xem SIM nào bị gán nhầm SKU khung ở tháng 8, sửa lại SKU đúng ở nguồn; (b) chấp nhận
+  hiện trạng, chỉ ghi chú rõ trong UI khi thấy Zone lệch nhiều so với KPI card; (c) khác — báo lại hướng
+  muốn làm, chưa code gì thêm cho việc này.
 - [ ] **s200+6 — Setup cron-job.org ping cho `/api/cron/etl-cache-sync`** — route đã code + test PASS,
   nhưng CHƯA có gì gọi nó theo lịch (giống browserless keep-alive, xem mục "s195": KHÔNG đăng ký
   `vercel.json` vì Hobby giới hạn 1 lần/ngày/job). Vào cron-job.org (đã có tài khoản từ trước) → tạo job

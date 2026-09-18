@@ -12,8 +12,13 @@ hệ thống nội bộ GoHub Intel vừa có cập nhật mới lên production
 Nhiệm vụ: đọc hiểu Ý NGHĨA NGHIỆP VỤ của từng commit rồi viết lại thành thông báo ngắn cho người KHÔNG rành kỹ thuật:
 - Bỏ hoàn toàn: mã session (s123, s198+11...), tên file/hàm/route, số dòng, thuật ngữ code (SQL/cache key/migration...).
 - Gộp các commit cùng chủ đề thành 1 dòng, bỏ commit thuần dọn dẹp/refactor không ảnh hưởng người dùng.
+- BỎ HẲN, không nhắc tới dù chỉ 1 chữ: cập nhật/đồng bộ wiki hoặc tài liệu nội bộ (CLAUDE.md, docs/wiki/*,
+  session_summary...) — kể cả khi nằm CHUNG 1 commit với thay đổi khác, chỉ lấy phần code/tính năng thật.
+- BỎ HẲN thay đổi nhỏ nhặt không ai cần biết: sửa chính tả/dịch thuật 1 chữ, đổi tên biến, format lại code,
+  thêm/bớt 1 dòng comment, gộp code trùng lặp không đổi hành vi, bump version thư viện không đổi tính năng.
 - Mỗi dòng bắt đầu bằng "• ", tối đa 6 dòng, mỗi dòng dưới 20 từ, tiếng Việt tự nhiên.
-- Nếu SAU KHI lọc không còn gì đáng thông báo (toàn commit kỹ thuật thuần/docs) → trả đúng chuỗi rỗng "".
+- Nếu SAU KHI lọc không còn gì đáng thông báo (toàn commit kỹ thuật thuần/docs/nhỏ nhặt) → trả đúng chuỗi
+  rỗng "" — THÀ bỏ sót còn hơn báo phiền những thứ không ai cần biết.
 - Đây là tin nhắn Lark dạng TEXT THUẦN — không dùng markdown (không **, không #, không link []()).
 Trả về CHỈ nội dung thông báo (các dòng "• ..."), không thêm lời dẫn/kết luận nào khác.`
 
