@@ -890,18 +890,18 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
-- [ ] **s200+7/+8 — Đối chiếu lại `MCP_SECRET` (GitHub Actions secret vs Vercel env)** — step "Notify Lark"
-  trong `sync.yml` trả 401 mọi lần chạy gần đây (verify qua `gh run view` nhiều ngày liên tiếp) → 2 giá trị
-  đang lệch nhau. Đang chặn ÂM THẦM cả 2 tính năng: (1) thông báo Lark nhóm khi SKU/giá đổi (route
-  `/api/notify/lark`, đã có từ lâu), (2) thông báo Lark tính năng mới lên production (route MỚI
-  `/api/notify/release`, s200+8). Sửa 1 chỗ (khớp lại secret) là hết lỗi cho cả 2. Vào GitHub repo →
-  Settings → Secrets and variables → Actions, đối chiếu `MCP_SECRET` với giá trị trên Vercel (Project
-  Settings → Environment Variables) — cập nhật giá trị nào cũ hơn cho khớp.
-- [ ] **s200+8 — Setup group Lark nhận thông báo tính năng mới** — add bot vào group muốn nhận (group MỚI,
-  tách khỏi group đang nhận thông báo SKU/giá đổi) → @mention bot, gõ đúng lệnh `/set-release-channel`
-  (cần role admin/creator) → bot xác nhận "✅ Đã đặt group này...". Từ merge main kế tiếp trở đi, group đó
-  tự nhận thông báo tóm tắt (cần làm mục trên trước — `MCP_SECRET` lệch sẽ khiến workflow chạy nhưng
-  gửi thất bại 401).
+- [x] **s200+7/+8/+11 — MCP_SECRET đã đối chiếu lại + group Lark đã setup — XONG, verify sống bằng curl**
+  — Hiếu tạo secret mới, cập nhật khớp Vercel + GitHub, redeploy; đã chạy `/set-release-channel` trong
+  group đích. Test trực tiếp `/api/notify/lark` + `/api/notify/release` bằng curl (cả staging lẫn
+  production): auth 200 (hết 401), gửi tin thật thành công, Gemini tóm tắt đúng nội dung. Không cần làm
+  gì thêm cho 2 mục này.
+- [ ] **s200+11 — QA thông báo Lark phân biệt Staging/Production + backlog** — push code này lên staging
+  sẽ tự trigger workflow ngay (trigger mới `on:push branches:[main,staging]`) — kiểm tra group Lark có tin
+  gắn nhãn "🧪 [Staging]" đúng nội dung commit vừa push không. Khi merge main kế tiếp, kiểm tra tin gắn
+  nhãn "🚀 [Production]" + nếu lúc đó staging còn commit chưa merge thì phải thấy thêm khối "🧪 Còn trên
+  staging, CHƯA lên production:". Chưa tự verify được phần "pendingCommits" bằng dữ liệu THẬT (cần đúng
+  tình huống staging đang có commit vượt main tại đúng lúc push main) — logic đã tsc+vitest PASS nhưng
+  behavior thật cần Hiếu tự quan sát 1-2 lần merge tới.
 - [ ] **s200+9 — Quyết định hướng xử lý: ~5.235 SIM tháng 8/2026 bị gán nhầm sang mã khung SIM (K)** —
   phát hiện khi Hiếu hỏi lại "sao Zone khác data tổng": tháng 8 riêng lẻ có 5.235 ICCID / 27,60 TB usage
   thật bị tính vào mã `K` (khung SIM/eSIM profile, vốn phải luôn ~0 vì không phải gói data thật — T4-T7

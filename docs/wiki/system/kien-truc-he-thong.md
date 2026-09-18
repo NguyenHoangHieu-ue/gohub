@@ -485,9 +485,25 @@ erDiagram
   chỉ cần gõ lại lệnh ở group mới). **Cần Hiếu**: add bot vào group muốn nhận thông báo → @mention bot gõ
   `/set-release-channel` → bot xác nhận "✅ Đã đặt group này...". Chưa làm thì merge main vẫn chạy workflow
   bình thường nhưng route trả lỗi rõ ràng "chưa cấu hình" (không throw ẩn).
-  ⚠️ **Phụ thuộc y hệt bug đang mở ở mục "s200+7" bên dưới**: nếu `MCP_SECRET` GitHub Actions vẫn lệch
-  Vercel (401), route `/api/notify/release` cũng sẽ 401 y hệt `/api/notify/lark` — sửa 1 chỗ (đối chiếu
-  lại secret) là cả 2 tính năng cùng hết lỗi. tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Chưa merge
-  main nên CHƯA có hiệu lực thật (giống mọi thay đổi chạm GitHub Actions cron — luôn chạy theo `main`).
+  ✅ **Cập nhật s200+11**: `MCP_SECRET` đã được Hiếu tạo lại + đối chiếu khớp Vercel/GitHub (secret cũ
+  lệch, xem "s200+7"), verify trực tiếp qua curl: `/api/notify/lark` + `/api/notify/release` đều trả 200
+  (trước 401). Test sống `/api/notify/release` với nội dung commit thật → Gemini tóm tắt đúng + gửi Lark
+  thành công. tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã merge main, có hiệu lực thật.
+
+- **s200+11 (2026-09-18) — Phân biệt môi trường Staging/Production + kèm backlog "còn gì trên staging
+  chưa lên production"**: Hiếu yêu cầu tiếp ngay sau khi verify s200+8 hoạt động — (1) push `staging`
+  cũng báo (không chỉ `main` như quyết định ban đầu), gắn rõ nhãn môi trường; (2) push `main` ngoài tóm
+  tắt commit vừa lên, còn liệt kê thêm commit ĐANG CÒN trên `staging` mà CHƯA merge. `notify-release.yml`
+  đổi `on: push branches:[main]` → `branches:[main, staging]`; thêm bước `actions/checkout@v4
+  fetch-depth:0` (cần full git history để diff branch — trước đây route chỉ đọc `github.event.commits`,
+  không checkout code) + bước tính `git log origin/main..origin/staging` (chỉ chạy khi `github.ref_name
+  == 'main'`, parse qua `node -e` với separator `\x1f` tránh escape JSON thủ công trong bash) → gửi kèm
+  `pendingCommits` + `environment` (`"staging"`/`"production"`, suy từ `github.ref_name`) trong payload
+  POST. Route `/api/notify/release` đổi: `environment==="staging"` → prefix "🧪 [Staging] Vừa cập nhật
+  (đang test, chưa lên production):"; `environment==="production"` → prefix "🚀 [Production] Vừa lên
+  production:" + nếu có `pendingCommits` thêm khối "🧪 Còn trên staging, CHƯA lên production:" (tóm tắt
+  Gemini riêng, 2 lượt gọi khi cả 2 phần đều có nội dung). Cùng 1 group Lark (`lark_release_chat_id`),
+  không cần group riêng cho từng môi trường — phân biệt bằng nhãn trong tin nhắn. tsc + lint (0 lỗi mới)
+  + vitest (261/261) PASS.
 | **Sync GoHub API — 502 upstream 2026-09-17 + thêm loại "success"** (s200+7) | Hiếu báo nhận thông báo lỗi sync 17/09 05:37 UTC (`RetryError ... too many 502 error responses` từ `api-pm.space.gohub.com`). Verify qua `gh run list`/`gh run view`: đây là **lỗi 502 từ chính GoHub API** (server nguồn, ngoài repo) — `urllib3.Retry` (fix s198+11) đã retry đúng nhưng 502 kéo dài nên hết lượt retry, không phải bug code. Phát hiện thêm 2 việc lúc audit: (1) step "Notify Lark" (`sync.yml`, gọi `POST /api/notify/lark` với `MCP_SECRET`) trả **401 Unauthorized** ở MỌI lần chạy gần đây (cả run thành công lẫn thất bại, kiểm tra nhiều ngày) — `MCP_SECRET` trên GitHub Actions secret lệch với `MCP_SECRET` trên Vercel env, khiến toàn bộ notify-to-Lark-group (SKU/giá đổi, `visibility="all"`) bị chặn âm thầm từ ít nhất vài ngày qua — **cần Hiếu đối chiếu lại 2 giá trị secret**; (2) hệ thống trước đây CHỈ có notification khi **lỗi** (`type:"error"`, s198+12) — không có gì báo khi sync **thành công**, đúng như Hiếu hỏi. Đã thêm `type:"success"` (`sync.py` insert vào bảng `notifications` sau khi `main()` chạy xong không lỗi, kèm số dòng mỗi bảng products/skus/listings/items) — `main()` đổi để `return counts` thay vì trả về `None`. Web: `NotifType`/`Notification.type` thêm `"success"`, `TYPE_CFG` (`notification-bell.tsx`) thêm icon `CheckCircle` màu emerald. Không cần migration (cột `type` là text tự do, không có CHECK constraint, giống cách thêm `"error"` trước đó). tsc + lint (0 lỗi mới) + vitest (261/261) PASS. |
 | **Chuông "Thông báo"** (`components/notification-bell.tsx`, bảng Supabase `notifications`) | ⚠️ Fix s198+12 (2026-09-15) — Hiếu báo panel hiển thị "có vấn đề": verify qua Chrome trên staging, panel `fixed right-0 w-[380px]` render lồng bên trong `<nav>` sidebar có class `translate-x-0`/`-translate-x-full` (Tailwind, collapse/expand) — theo chuẩn CSS, `transform` trên ancestor (kể cả identity `translate-x-0`) biến nó thành **containing block** cho `position: fixed` bên trong, nên panel bị tính theo khung sidebar hẹp (~170px) thay vì viewport → hiện lệch hẳn sang trái, chữ bị cắt không đọc được. Fix: render panel qua `createPortal(..., document.body)`, thoát khỏi DOM subtree bị transform — panel giờ tính đúng theo viewport. Thêm loại thông báo mới `"error"` (icon đỏ) + insert notification lỗi thật từ `sync.py` (cron sản phẩm crash) và `sync-lark-tickets` (cron CS Troubleshoot lỗi) — trước đây 2 cron này fail silent, giờ Hiếu tự thấy ngay trên chuông, không cần hỏi lại/tra Vercel-GitHub Actions log. |

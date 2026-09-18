@@ -1,21 +1,49 @@
 name: Notify Lark on Release
 
-# Chỉ báo khi có commit lên `main` (production thật) — theo yêu cầu Hiếu tránh spam group
-# lúc code còn dang dở trên staging. Xem web/src/app/api/notify/release/route.ts.
+# Báo CẢ push staging (đang test) lẫn push main (production) — Hiếu yêu cầu (s200+11) phân biệt rõ 2 môi
+# trường trong tin nhắn. Push main còn kèm danh sách commit ĐANG CÒN trên staging mà CHƯA merge (backlog).
+# Xem web/src/app/api/notify/release/route.ts.
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     if: github.event.commits != null && github.event.commits[0] != null
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Chỉ push `main` mới cần biết staging đang có gì CHƯA merge — dùng git log diff branch (chỉ làm
+      # được ở đây, có full history; route API không có git access nên không tự tính được).
+      - name: Compute commits pending on staging
+        id: pending
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            git fetch origin staging --quiet
+            PENDING=$(git log origin/main..origin/staging --pretty=format:'%H%x1f%s' | node -e "
+              const lines = require('fs').readFileSync(0, 'utf8').split('\n').filter(Boolean);
+              const commits = lines.map(l => { const [sha, message] = l.split(''); return { sha, message }; });
+              process.stdout.write(JSON.stringify(commits));
+            ")
+          else
+            PENDING="[]"
+          fi
+          echo "json=$PENDING" >> "$GITHUB_OUTPUT"
+
       - name: Send release summary to Lark
         env:
           COMMITS_JSON: ${{ toJson(github.event.commits) }}
+          PENDING_JSON: ${{ steps.pending.outputs.json }}
+          ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
         run: |
-          PAYLOAD=$(echo "$COMMITS_JSON" | jq -c '{commits: [.[] | {sha: .id, message: .message}]}')
+          PAYLOAD=$(jq -n \
+            --argjson commits "$(echo "$COMMITS_JSON" | jq -c '[.[] | {sha: .id, message: .message}]')" \
+            --argjson pending "$PENDING_JSON" \
+            --arg environment "$ENVIRONMENT" \
+            '{commits: $commits, pendingCommits: $pending, environment: $environment}')
           STATUS=$(curl -s -o /tmp/resp.json -w "%{http_code}" \
             -X POST https://gohub-intel.vercel.app/api/notify/release \
             -H "Authorization: Bearer ${{ secrets.MCP_SECRET }}" \
