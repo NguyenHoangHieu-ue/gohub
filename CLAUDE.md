@@ -10,6 +10,7 @@
 
 | | |
 |---|---|
+| ⏳ **s201 (2026-09-19) — Sửa sync PM→Supabase (gốc rễ) + dựng lại Product Catalogue — CHƯA commit, chờ Hiếu bảo "commit lên staging"** | **Sync**: Supabase products/skus/listings/items đóng băng từ 2026-07-20 — gốc: `sync.py` tải cả 4 bảng rồi mới ghi, mà items (233k dòng) mất ~82' (server cắt 200 dòng/trang, client tuần tự) nên run 09-18 hết timeout 90' ở 89% và KHÔNG ghi gì kể cả 3 bảng nhanh. Fix: `sync.py core|items|all`, `sync.yml` 2 job (core 30' / items 150'), tải trang song song có giới hạn, retry cấp trang + cooldown chung, timeout kết nối, flush log; pytest 8 ca PASS. ⚠️ `.gitignore` có `backend/` → `test_pagination.py` cần `git add -f`. Sau khi push: `gh workflow run sync.yml --ref staging` để backfill; cron hằng ngày chỉ có hiệu lực sau khi merge main. **Catalogue**: đập bản s198, dựng lại theo "chọn nước → theo nhà cung cấp → drawer chi tiết tiếng thường", chỉ Supabase, giá vốn chỉ admin/creator/product; wiki `analytics-catalogue.md` viết lại. tsc + lint + vitest (282) PASS; ngăn chi tiết + tab Theo nhà cung cấp cần QA staging. Chi tiết: `docs/session_summary.txt` cuối file. ⚠️ `tmp.txt` chứa secret thật (Vercel token lộ vào hội thoại) — nên rotate + xoá. |
 | ✅ **s200+12 (2026-09-18) — Lọc bỏ commit đồng bộ wiki + thay đổi nhỏ nhặt khỏi thông báo Lark — đã merge
   main, đã verify sống** | Hiếu: commit sync wiki/tài liệu và thay đổi nhỏ nhặt không cần noti. Chặn CỨNG
   (không tốn Gemini) commit `docs:`/`docs(scope):` ngay tại `parseCommits()` (route
