@@ -9,6 +9,7 @@ import {
   productsOfCountry, countryAliases,
 } from "@/lib/catalogue/country-index"
 import { makeVendorNamer, findUnrecognized } from "@/lib/catalogue/auto-names"
+import { isHiddenStatus, isShouting } from "@/lib/catalogue/plain-language"
 import { distinctSims, distinctDataKinds } from "@/lib/catalogue/country-index"
 import { simBreakdown, simLabel, dataKindLabel } from "@/lib/catalogue/plain-language"
 import type { CatalogueCountryRef, CatalogueIndex, CatalogueProductLite, SkuAggregate } from "@/lib/catalogue/types"
@@ -128,6 +129,7 @@ describe("plain-language — tiếng thường", () => {
     expect(vendorDisplayName("WM", "WORLDMOVE")).toBe("WorldMove")
     expect(vendorDisplayName("ZZ", "SOME VENDOR")).toBe("Some Vendor")
     expect(vendorDisplayName("ZZ", null)).toBe("ZZ")
+    expect(vendorDisplayName("WM", null)).toBe("WorldMove")
   })
 
   test("châu lục & yes/no", () => {
@@ -265,5 +267,36 @@ describe("tự thích ứng khi dữ liệu có giá trị MỚI", () => {
     expect(u.countries).toEqual(["XX"])
     expect(u.total).toBe(5)
     expect(findUnrecognized(idx([prod({ vendorCode: "WM" })])).total).toBe(0)
+  })
+})
+
+describe("tên vendor: ref_vendors do người sửa thắng bảng tên trong code (BC Datapool tách 2)", () => {
+  test("WD / W1 lấy đúng tên trong ref_vendors dù WD có trong bảng chuẩn của code", () => {
+    expect(vendorDisplayName("WD", "BC Datapool (CMHK)")).toBe("BC Datapool (CMHK)")
+    expect(vendorDisplayName("W1", "BC Datapool (Singtel)")).toBe("BC Datapool (Singtel)")
+    expect(vendorDisplayName("WD", null)).toBe("BillionConnect Datapool")        // ref thiếu → bảng chuẩn
+    expect(vendorDisplayName("WM", "WORLDMOVE")).toBe("WorldMove")               // ref chỉ IN HOA → bảng chuẩn cho đẹp
+    expect(isShouting("WORLDMOVE")).toBe(true); expect(isShouting("BC Datapool (CMHK)")).toBe(false)
+  })
+
+  test("makeVendorNamer: ref đứng đầu; dòng sync tự thêm bị đánh dấu tên tạm", () => {
+    const p = [prod({ code: "A", vendorCode: "WD", operatorCode: "BCDATAPOOL" }), prod({ code: "B", vendorCode: "W1", operatorCode: "BCDATAPOOL" }), prod({ code: "C", vendorCode: "VT", operatorCode: "VIETTECH" })]
+    const namer = makeVendorNamer({ products: p, vendors: [
+      { code: "WD", name: "BC Datapool (CMHK)" }, { code: "W1", name: "BC Datapool (Singtel)" },
+      { code: "VT", name: "Viettech", autoAdded: true },
+    ] })
+    expect(namer.name("WD")).toBe("BC Datapool (CMHK)"); expect(namer.source("WD")).toBe("ref")
+    expect(namer.name("W1")).toBe("BC Datapool (Singtel)")
+    expect(namer.isTemporary("WD")).toBe(false); expect(namer.isTemporary("VT")).toBe(true)
+    const u = findUnrecognized({ products: p, vendors: [{ code: "WD", name: "BC Datapool (CMHK)" }, { code: "W1", name: "BC Datapool (Singtel)" }, { code: "VT", name: "Viettech", autoAdded: true }], countries: REFS, lastSync: null, generatedAt: "" })
+    expect(u.vendors.map(v => v.code)).toEqual(["VT"])
+  })
+})
+
+describe("Inactive không đưa lên Catalogue", () => {
+  test("isHiddenStatus", () => {
+    expect(isHiddenStatus("Inactive")).toBe(true); expect(isHiddenStatus("Deleted")).toBe(true)
+    expect(isHiddenStatus("Active")).toBe(false); expect(isHiddenStatus("Preparing")).toBe(false)
+    expect(isHiddenStatus(null)).toBe(false)
   })
 })

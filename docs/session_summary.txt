@@ -10183,3 +10183,16 @@ nhưng ghi bị Supabase `57014 statement timeout` ở khối 500 dòng → mấ
 (thứ tự trang, đếm khớp total), `upsert` tự CHIA ĐÔI khối khi timeout (tối đa 6 tầng) + khối items 200 dòng; pytest 14 ca PASS.
 Chưa giải quyết: items vẫn ~100'/lần ⇒ cần API filter theo last_modified (chưa biết có không) hoặc đổi items sang chạy tuần 1 lần.
 Catalogue: thêm tự thích ứng vendor/loại SIM/kiểu data/trạng thái/nước mới (`lib/catalogue/auto-names.ts`), banner admin. Vitest 285, tsc sạch.
+
+### s201+2 (2026-09-19) — Thông báo Lark nêu tab + vendor mới tự động (CHƯA commit)
+(1) Thông báo release Lark nêu TÊN TAB: `lib/release-tabs.ts` (file → tab, nhãn từ nav.ts) + `release-notify.ts` (`withTabsFooter`, `[Tab: …]` cho Gemini)
++ `notify-release.yml` gửi kèm files. Test `release-tabs.test.ts` (8 ca); script node trong workflow đã chạy thử local trên dải commit thật.
+(2) Vendor mới tự động: `sync.py` `sync_new_vendors()` (tự chèn `ref_vendors`, không ghi đè; thông báo `visibility=all`) + `flush_catalogue_cache()`
+(xoá `catalogue:%` sau sync). Dry-run dữ liệu thật: sẽ tự thêm `W1` ("Bcdatapool", 15 gói) và `VT` ("Viettech", 6 gói) — 2 vendor đang thiếu trong ref_vendors.
+pytest 18 ca, vitest 294, tsc sạch.
+
+### s201+3 (2026-09-19) — Catalogue: sửa tên vendor BC Datapool tách 2 + ẩn gói Inactive (CHƯA commit)
+Bug: BC Datapool đã tách `WD`="BC Datapool (CMHK)" + `W1`="BC Datapool (Singtel)" trong ref_vendors nhưng Catalogue hiện `WD` sai — `vendorDisplayName`
+cho bảng `VENDOR_NAMES` trong code thắng ref_vendors. Đảo ưu tiên: ref_vendors không IN HOA thắng; IN HOA/thiếu → bảng chuẩn. `ref_vendors.description`
+"Tự thêm bởi sync" đánh dấu tên tạm (banner admin). Inactive/Deleted loại từ server (`HIDDEN_STATUSES`), chi tiết 404. Đã verify dữ liệu thật:
+1.048 gói (Active 1.026, Temporary 16, Preparing 6), WD 26 gói / W1 18 gói đúng tên. Vitest 297, tsc sạch.

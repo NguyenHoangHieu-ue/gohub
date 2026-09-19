@@ -486,7 +486,7 @@ erDiagram
   `/set-release-channel` → bot xác nhận "✅ Đã đặt group này...". Chưa làm thì merge main vẫn chạy workflow
   bình thường nhưng route trả lỗi rõ ràng "chưa cấu hình" (không throw ẩn).
   ✅ **Cập nhật s200+11**: `MCP_SECRET` đã được Hiếu tạo lại + đối chiếu khớp Vercel/GitHub (secret cũ
-  lệch, xem "s200+7"), verify trực tiếp qua curl: `/api/notify/lark` + `/api/notify/release` đều trả 200
+  lệch, xem "s200+7"), **[s201+2 2026-09-19] Thông báo release nêu TÊN TAB**: workflow `notify-release.yml` gửi kèm danh sách FILE của mỗi commit (`github.event.commits[].added/modified/removed`; push `main` thì bước tính commit chờ dùng `node` + `git diff-tree`), `lib/release-tabs.ts` `tabsForFiles()` suy ra tên tab từ ĐƯỜNG DẪN FILE (nhãn lấy từ `nav.ts` nên tab mới tự có; components/lib/api dùng chung có bảng ánh xạ), Gemini được báo `[Tab: …]` để nêu tab đầu dòng và route luôn ghép dòng `📍 Tab: …` cuối tin (chắc chắn có dù Gemini bỏ sót). Test: `release-tabs.test.ts`. verify trực tiếp qua curl: `/api/notify/lark` + `/api/notify/release` đều trả 200
   (trước 401). Test sống `/api/notify/release` với nội dung commit thật → Gemini tóm tắt đúng + gửi Lark
   thành công. tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Đã merge main, có hiệu lực thật.
 

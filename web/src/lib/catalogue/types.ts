@@ -47,6 +47,8 @@ export interface CatalogueCountryRef {
 export interface CatalogueVendorRef {
   code: string
   name: string
+  /** true nếu dòng ref_vendors do sync tự thêm (tên tạm, chưa ai xác nhận) */
+  autoAdded?: boolean
 }
 
 export interface CatalogueIndex {

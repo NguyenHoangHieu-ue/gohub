@@ -211,6 +211,74 @@ def insert_sync_notifications(sb, non_price: list, price_changes: list):
         print("[notify] No changes — no notification.", flush=True)
 
 
+def derive_new_vendors(products: list[dict], known_codes: set[str]) -> list[dict]:
+    """Vendor xuất hiện trong products nhưng CHƯA có trong ref_vendors → [{code, name, products}] (nhiều gói nhất trước).
+
+    Tên tạm = operator_code phổ biến nhất của các gói thuộc vendor (VD 3D→"3HK"), chữ HOA → Title Case;
+    không có operator thì dùng mã. Cùng quy tắc với Catalogue (web/src/lib/catalogue/auto-names.ts).
+    """
+    votes: dict[str, dict[str, int]] = {}
+    count: dict[str, int] = {}
+    for p in products:
+        code = (p.get("vendor_code") or "").strip()
+        if not code:
+            continue
+        count[code] = count.get(code, 0) + 1
+        op = (p.get("operator_code") or "").strip()
+        if op:
+            votes.setdefault(code, {})
+            votes[code][op] = votes[code].get(op, 0) + 1
+    out = []
+    for code, n in count.items():
+        if code in known_codes:
+            continue
+        ops = votes.get(code)
+        op = sorted(ops.items(), key=lambda kv: (-kv[1], kv[0]))[0][0] if ops else ""
+        name = (op.title() if op.isupper() else op) if op else code
+        out.append({"code": code, "name": name, "products": n})
+    return sorted(out, key=lambda v: (-v["products"], v["code"]))
+
+
+def sync_new_vendors(sb) -> list[dict]:
+    """Tự thêm nhà cung cấp MỚI vào ref_vendors + báo thông báo — không còn phải nạp tay từng vendor.
+
+    s201+2 (2026-09-19): Hiếu — thêm vendor mới phải làm tay (thêm ref_vendors...) rất mất thời gian. Nay sync
+    phát hiện vendor_code mới trong products, tự chèn `ref_vendors` (KHÔNG ghi đè dòng đã có, tên/mô tả do
+    người sửa vẫn giữ) rồi gửi 1 thông báo. Catalogue/Bé Gấu/import NCC đọc bảng này nên tự biết vendor mới.
+    """
+    products = fetch_all_rows(sb, "products", "vendor_code,operator_code")
+    known = {r["vendor_code"] for r in fetch_all_rows(sb, "ref_vendors", "vendor_code")}
+    new = derive_new_vendors(products, known)
+    if not new:
+        print("[vendors] Không có nhà cung cấp mới.", flush=True)
+        return []
+    sb.table("ref_vendors").insert([
+        {"vendor_code": v["code"], "name": v["name"], "description": "Tự thêm bởi sync (tên tạm — sửa ở Admin → Import ref data nếu cần)"}
+        for v in new
+    ]).execute()
+    now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
+    names = ", ".join(f"{v['name']} ({v['products']} gói)" for v in new)
+    sb.table("notifications").insert({
+        "type": "sync",
+        "title": f"Sync {now_str} — có nhà cung cấp mới: " + ", ".join(v["name"] for v in new),
+        "body": f"Nhà cung cấp mới xuất hiện trong danh sách sản phẩm: {names}. Đã tự thêm vào danh mục nhà cung cấp và Product Catalogue.",
+        "data": {"vendors": new},
+        "visibility": "all",
+        "sent_to_lark": False,
+    }).execute()
+    print(f"[vendors] Đã thêm {len(new)} nhà cung cấp mới vào ref_vendors: {names}", flush=True)
+    return new
+
+
+def flush_catalogue_cache(sb):
+    """Xoá cache Product Catalogue (analytics_query_cache) để dữ liệu mới hiện ngay sau sync, không chờ hết TTL 30'."""
+    try:
+        sb.table("analytics_query_cache").delete().like("cache_key", "catalogue:%").execute()
+        print("[catalogue] Đã xoá cache Product Catalogue.", flush=True)
+    except Exception as e:  # noqa: BLE001 — cache chỉ là tối ưu, không được làm hỏng sync
+        print(f"[WARN] Không xoá được cache Catalogue: {e}", flush=True)
+
+
 # Cột bỏ khỏi bản ghi trước khi upsert (không có trong schema Supabase / nhạy cảm)
 DROP_COLS = {
     "skus":     {"original_cost", "reference_cost_vnd",
@@ -288,6 +356,13 @@ def run_core(client, sb) -> dict:
 
     sync_sku_catalog(sb)
     sync_ncc_exist(sb)
+
+    # Vendor mới → tự thêm ref_vendors + thông báo (lỗi ở đây KHÔNG được làm hỏng sync đã ghi xong dữ liệu chính)
+    try:
+        sync_new_vendors(sb)
+    except Exception as e:  # noqa: BLE001
+        print(f"[WARN] Không tự thêm được vendor mới: {e}", flush=True)
+    flush_catalogue_cache(sb)
 
     # Detect changes + insert notifications
     if new_sku_rows:

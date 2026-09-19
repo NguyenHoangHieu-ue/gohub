@@ -78,6 +78,28 @@ Thêm vendor / loại SIM / kiểu data / trạng thái / nước mới vào h�
 để biết cần bổ sung tên chuẩn (Admin → Import ref data cho `ref_vendors`, hoặc bảng tên trong `plain-language.ts`).
 Trang luôn hiển thị được, banner chỉ là nhắc việc. Test: `catalogue.test.ts` mục "tự thích ứng".
 
+## 3c. Vendor mới tự động (s201+2)
+
+Không còn phải làm tay khi thêm nhà cung cấp mới trong danh sách sản phẩm. Toàn bộ chuỗi:
+
+1. Vendor mới xuất hiện trong hệ thống quản lý sản phẩm → cron sync `core` (hằng ngày) kéo về `products`.
+2. `sync.py` `sync_new_vendors()` so `vendor_code` trong `products` với `ref_vendors`: **vendor chưa có thì tự chèn**
+   (tên tạm = operator_code phổ biến nhất, VD `VT` → "Viettech"; không ghi đè dòng đã có nên tên do người sửa vẫn giữ)
+   và tạo 1 thông báo (chuông + Lark, `visibility=all`) "có nhà cung cấp mới: …".
+3. `flush_catalogue_cache()` xoá cache `catalogue:%` trong `analytics_query_cache` → Catalogue hiện vendor mới ngay,
+   không chờ hết TTL 30' (chỉ còn cache bộ nhớ 5').
+4. Catalogue tự có vendor ở tab Theo nhà cung cấp + mọi trang nước nó phủ (mục 3b). Nếu tên tạm chưa đẹp, admin sửa ở
+   Admin → Import ref data (bảng `ref_vendors`) hoặc thêm vào `VENDOR_NAMES` (`plain-language.ts`); banner admin
+   nhắc các vendor còn tên tạm.
+
+Lỗi ở bước tự thêm vendor / xoá cache chỉ ghi `[WARN]`, không làm hỏng sync đã ghi xong dữ liệu chính.
+
+## 3d. Gói Inactive không lên Catalogue (s201+3)
+
+Theo yêu cầu Hiếu: sản phẩm **Inactive** (và Deleted) không đưa lên Catalogue. Loại ngay từ server (`buildCatalogueIndex` lọc
+`HIDDEN_STATUSES`) nên mọi bộ đếm, tab Theo nhà cung cấp, số nước… tự đúng; route chi tiết trả 404 cho gói bị ẩn và bỏ SKU Inactive/Deleted
+(giao diện báo "không còn trong danh mục"). Còn hiện: Active, Temporary (đang bán) và Preparing (chỉ khi bấm "Hiện cả gói sắp có").
+
 ## 4. Phân quyền
 
 Route dùng `analyticsGuard` (đăng nhập); route chi tiết chỉ check session (không `analyticsGuard` để khỏi đăng ký
@@ -98,9 +120,12 @@ Tab hiển thị theo ma trận role như cũ (`bod`/`b2b`/`b2c`/`saleb2c`/`prod
    thẻ gói hiện cả hai. `throttleShort`/`throttleSentence` (`plain-language.ts`) diễn giải; không hiểu thì trả nguyên văn.
 4. **Dung lượng không giới hạn = `data_amount 9999`** (đơn vị GB). `SkuAggregate.gbMin/gbMax` chỉ tính SKU có giới hạn;
    không giới hạn đi bằng cờ `hasUnlimited`.
-5. **Mã vendor ↔ tên**: lấy `ref_vendors` nhưng `vendorDisplayName` có bảng chuẩn (ref_vendors hay viết hoa: "3HK DATAPOOL",
-   "WORLDMOVE"). ⚠️ `ref_vendors` ghi `GB` = **Gighub**, trong khi wiki business `ma-sku.md` ghi GB = WorldMove — chưa đối chiếu;
-   catalogue dùng ref_vendors (bảng sống).
+5. **Mã vendor ↔ tên — `ref_vendors` do admin sửa là nguồn sự thật** (s201+3): tên trong `ref_vendors` **không phải chữ IN HOA** thì thắng
+   mọi thứ (VD `WD` = "BC Datapool (CMHK)", `W1` = "BC Datapool (Singtel)" sau khi BC Datapool tách 2 vendor); ref_vendors chỉ IN HOA
+   ("WORLDMOVE", "3HK DATAPOOL") hoặc thiếu → bảng `VENDOR_NAMES` trong `plain-language.ts` cho đẹp. **Bug đã sửa**: trước đây bảng
+   trong code thắng ref_vendors nên `WD` luôn hiện "BillionConnect Datapool" dù admin đã đổi. Sửa tên vendor: chỉ cần sửa `ref_vendors`
+   (Admin → Import ref data) rồi bấm "Tải lại" trên Catalogue (cache 30'; sync tự xoá cache). ⚠️ `ref_vendors` ghi `GB` = **Gighub**,
+   trong khi wiki business `ma-sku.md` ghi GB = WorldMove — chưa đối chiếu; catalogue dùng ref_vendors (bảng sống).
 6. Chi tiết gói **không qua `cachedQuery`** (3 truy vấn khoá chính, luôn tươi) để không phình `analytics_query_cache`.
 7. Vitest không parse `.tsx` với tsconfig `jsx: preserve` — test chỉ đặt cho `.ts` thuần (`lib/catalogue/*`); giao diện
    kiểm bằng render tĩnh dữ liệu thật + QA staging.

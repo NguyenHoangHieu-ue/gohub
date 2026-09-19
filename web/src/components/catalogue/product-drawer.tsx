@@ -145,7 +145,9 @@ export function ProductDrawer({ code, index, contextCountry, onClose }: {
               <Skeleton className="mt-6 h-5 w-1/4" /><Skeleton className="h-24 w-full" />
             </div>
           )}
-          {error && <p className="m-6 rounded-xl bg-red-50 p-4 text-sm text-red-600">Hiếu đang fix, vui lòng đợi. ({error})</p>}
+          {error && (error.includes("404")
+            ? <p className="m-6 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">Gói này không còn trong danh mục (có thể đã ngưng bán).</p>
+            : <p className="m-6 rounded-xl bg-red-50 p-4 text-sm text-red-600">Hiếu đang fix, vui lòng đợi. ({error})</p>)}
 
           {lite && detail && (
             <>
@@ -179,7 +181,7 @@ export function ProductDrawer({ code, index, contextCountry, onClose }: {
                   </button>
                   {hiddenSkus > 0 && (
                     <button type="button" onClick={() => setShowAllSkus(v => !v)} className="text-slate-500 hover:underline">
-                      {showAllSkus ? "Ẩn gói ngưng bán" : `Hiện thêm ${hiddenSkus} gói ngưng bán/sắp có`}
+                      {showAllSkus ? "Ẩn gói sắp có" : `Hiện thêm ${hiddenSkus} gói sắp có`}
                     </button>
                   )}
                 </div>

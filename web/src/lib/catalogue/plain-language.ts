@@ -12,17 +12,29 @@ const VENDOR_NAMES: Record<string, string> = {
 
 export function hasVendorTableName(code: string): boolean { return code in VENDOR_NAMES }
 
+/** Chữ IN HOA toàn bộ ("3HK DATAPOOL", "WORLDMOVE") — dấu hiệu tên chưa ai trau chuốt. */
+export function isShouting(s: string): boolean {
+  const letters = s.replace(/[^A-Za-z]/g, "")
+  return letters.length > 3 && letters === letters.toUpperCase()
+}
+
+/**
+ * Tên nhà cung cấp. Thứ tự ưu tiên (s201+3, 2026-09-19):
+ *  1. `ref_vendors.name` NẾU đã được người viết cẩn thận (không phải chữ IN HOA) — bảng do admin quản lý là nguồn sự thật,
+ *     VD WD = "BC Datapool (CMHK)", W1 = "BC Datapool (Singtel)" (trước đây bảng tên trong code thắng nên WD sai);
+ *  2. bảng tên chuẩn trong code — khi ref_vendors thiếu HOẶC chỉ là chữ IN HOA ("WORLDMOVE" → "WorldMove");
+ *  3. ref_vendors dạng IN HOA được chuyển thành Title Case; 4. mã thô.
+ */
 export function vendorDisplayName(code: string, refName?: string | null): string {
+  const ref = (refName ?? "").trim()
+  if (ref && !isShouting(ref)) return ref
   if (VENDOR_NAMES[code]) return VENDOR_NAMES[code]
-  if (refName) return titleCaseIfShouting(refName)
+  if (ref) return titleCaseIfShouting(ref)
   return code
 }
 
 export function titleCaseIfShouting(s: string): string {
-  const letters = s.replace(/[^A-Za-z]/g, "")
-  if (letters.length > 3 && letters === letters.toUpperCase()) {
-    return s.toLowerCase().replace(/(^|[\s-])([a-z])/g, (_m, sep, ch) => sep + ch.toUpperCase())
-  }
+  if (isShouting(s)) return s.toLowerCase().replace(/(^|[\s-])([a-z])/g, (_m, sep, ch) => sep + ch.toUpperCase())
   return s
 }
 
@@ -86,6 +98,9 @@ export function statusLabel(s: string): string {
   }
 }
 export const SELLABLE_STATUSES = new Set(["Active", "Temporary"])
+/** Gói/SKU KHÔNG đưa lên Catalogue (Hiếu 2026-09-19: Inactive không cần hiện). Loại ngay từ server. */
+export const HIDDEN_STATUSES = new Set(["Inactive", "Deleted"])
+export function isHiddenStatus(s: string | null | undefined): boolean { return HIDDEN_STATUSES.has((s ?? "").trim()) }
 
 export function tenantLabel(t: string): string {
   if (t === "VN") return "Bán từ pháp nhân Việt Nam"

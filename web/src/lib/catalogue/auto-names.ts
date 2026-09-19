@@ -9,18 +9,21 @@ export type NameSource = "table" | "ref" | "operator" | "code"
 export interface VendorNamer {
   name: (code: string) => string
   source: (code: string) => NameSource
+  /** Tên chưa chốt (suy từ operator/mã hoặc dòng ref_vendors sync tự thêm) */
+  isTemporary: (code: string) => boolean
 }
 
 /**
  * Tên hiển thị nhà cung cấp, thứ tự ưu tiên:
- *  1. bảng chuẩn trong code (plain-language.ts)
- *  2. bảng Supabase ref_vendors
+ *  1. bảng Supabase ref_vendors (do admin quản lý — nguồn sự thật; tên IN HOA thì dùng bảng chuẩn trong code để đẹp hơn)
+ *  2. bảng chuẩn trong code (plain-language.ts)
  *  3. **operator_code phổ biến nhất của các gói thuộc vendor đó** (VD 3D→"3HK", BC→"Billionconnect") — tự có tên
  *     cho vendor mới mà không cần ai nạp ref_vendors
  *  4. mã vendor thô
  */
 export function makeVendorNamer(index: Pick<CatalogueIndex, "products" | "vendors">): VendorNamer {
   const ref = new Map(index.vendors.map(v => [v.code, v.name]))
+  const auto = new Set(index.vendors.filter(v => v.autoAdded).map(v => v.code))
   const votes = new Map<string, Map<string, number>>()
   for (const p of index.products) {
     if (!p.operatorCode) continue
@@ -34,16 +37,17 @@ export function makeVendorNamer(index: Pick<CatalogueIndex, "products" | "vendor
     return Array.from(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0]
   }
   const source = (code: string): NameSource => {
+    if (ref.get(code)) return "ref"          // ref_vendors do người quản lý — nguồn sự thật, đứng đầu
     if (hasVendorTableName(code)) return "table"
-    if (ref.get(code)) return "ref"
     if (dominantOperator(code)) return "operator"
     return "code"
   }
   return {
     source,
+    isTemporary: (code: string) => { const s = source(code); return s === "operator" || s === "code" || auto.has(code) },
     name: (code: string) => {
       const src = source(code)
-      if (src === "table" || src === "ref") return vendorDisplayName(code, ref.get(code))
+      if (src === "table" || src === "ref") return vendorDisplayName(code, ref.get(code))   // ref không IN HOA thắng; IN HOA → bảng chuẩn
       if (src === "operator") return titleCaseIfShouting(dominantOperator(code)!)
       return code || "Không rõ"
     },
@@ -78,7 +82,7 @@ export function findUnrecognized(index: CatalogueIndex): Unrecognized {
     }
   }
   const vendors = Array.from(vendorCount)
-    .filter(([code]) => { const s = namer.source(code); return s === "operator" || s === "code" })
+    .filter(([code]) => namer.isTemporary(code))
     .map(([code, products]) => ({ code, tempName: namer.name(code), products }))
     .sort((a, b) => b.products - a.products)
   const out = {
