@@ -1,11 +1,11 @@
 """
 Sync GoHub API data → Supabase.
 GitHub Actions: chạy tự động mỗi ngày lúc 01:00 UTC
-Local: cd sync && python sync.py  (cần set env vars API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY)
+Local: cd backend/data_sync && python sync.py [core|items|all]  (cần set env vars API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY)
+CORE = products/skus/listings (nhanh, ghi ngay); ITEMS = 233k dòng (chậm) chạy job riêng — xem .github/workflows/sync.yml
 """
 import os
 import dataclasses
-import concurrent.futures
 from datetime import datetime, timezone
 from supabase import create_client
 from gohub_api_clients import GohubClient
@@ -182,10 +182,52 @@ def insert_sync_notifications(sb, non_price: list, price_changes: list):
         print("[notify] No changes — no notification.", flush=True)
 
 
-def main():
-    client = GohubClient(api_key=API_KEY)
-    sb     = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Cột bỏ khỏi bản ghi trước khi upsert (không có trong schema Supabase / nhạy cảm)
+DROP_COLS = {
+    "skus":     {"original_cost", "reference_cost_vnd",
+                 "final_cogs_included_vat_vnd", "final_cogs_usd", "wr_group"},
+    "products": {"data_plan_type"},
+}
 
+# Item 4 (Phase 1): listings — cột NÒNG CỐT giữ dạng cột; phần còn lại gom vào JSONB `metadata`.
+# Vẫn GHI song song cột phẳng (rollback được) → chỉ THÊM key metadata. Khớp backfill v21_listings_metadata.sql.
+LISTING_CORE = {"listing_code", "reference_product_code", "tenant", "status",
+                "listing_type", "type_of_sim", "product_type", "category_code",
+                "listing_name_en", "listing_name_vn"}
+
+# Số luồng tải trang song song mỗi bảng (server GoHub API cắt 200 dòng/trang). Chỉnh qua env nếu bị 429.
+CORE_PAGE_WORKERS  = int(os.environ.get("GOHUB_CORE_WORKERS", "3"))
+ITEMS_PAGE_WORKERS = int(os.environ.get("GOHUB_ITEMS_WORKERS", "4"))
+
+
+def _prepare_rows(table: str, rows: list[dict]) -> list[dict]:
+    if table == "listings":
+        rows = [{**r, "metadata": {k: v for k, v in r.items() if k not in LISTING_CORE}} for r in rows]
+    if table in DROP_COLS:
+        drop = DROP_COLS[table]
+        rows = [{k: v for k, v in r.items() if k not in drop} for r in rows]
+    return rows
+
+
+def _sync_table(sb, table: str, rows: list[dict], pk: str):
+    rows = _prepare_rows(table, rows)
+    print(f"[{table}] Upserting {len(rows):,} rows...", flush=True)
+    upsert(sb, table, rows, pk)
+    sb.table("sync_log").upsert(
+        {"table_name": table, "last_sync": datetime.now(timezone.utc).isoformat(),
+         "record_count": len(rows)},
+        on_conflict="table_name",
+    ).execute()
+    print(f"[{table}] Done ✓", flush=True)
+
+
+def run_core(client, sb) -> dict:
+    """Giai đoạn CORE: products → skus → listings (~vài phút).
+
+    s201 (2026-09-19): trước đây tải CẢ 4 bảng (kể cả items 233k dòng ≈ 82 phút) rồi mới upsert → items
+    chậm/chết thì products/skus/listings cũng không được ghi (Supabase đóng băng ở 2026-07-20). Nay mỗi
+    bảng được upsert NGAY khi tải xong, items tách sang run_items() chạy job riêng.
+    """
     # Snapshot SKU state trước khi sync (để detect changes)
     print("[changes] Snapshotting SKU state...", flush=True)
     old_skus = {
@@ -201,67 +243,47 @@ def main():
         ("products", client.get_all_products, "product_code"),
         ("skus",     client.get_all_skus,     "sku_code"),
         ("listings", client.get_all_listings, "listing_code"),
-        ("items",    client.get_all_items,    "item_code"),
     ]
-
-    DROP_COLS = {
-        "skus":     {"original_cost", "reference_cost_vnd",
-                     "final_cogs_included_vat_vnd", "final_cogs_usd", "wr_group"},
-        "products": {"data_plan_type"},
-    }
-
-    # Item 4 (Phase 1): listings — cột NÒNG CỐT giữ dạng cột; phần còn lại gom vào JSONB `metadata`.
-    # Vẫn GHI song song cột phẳng (rollback được) → chỉ THÊM key metadata. Khớp backfill v21_listings_metadata.sql.
-    LISTING_CORE = {"listing_code", "reference_product_code", "tenant", "status",
-                    "listing_type", "type_of_sim", "product_type", "category_code",
-                    "listing_name_en", "listing_name_vn"}
-
-    new_sku_rows = []  # raw rows trước khi DROP_COLS
-
-    # Parallel fetch: 4 API calls không có FK dependency → chạy đồng thời
-    # Upsert vẫn theo đúng thứ tự FK: products → skus → listings → items
-    def _fetch(task):
-        tbl, fn, _pk = task
-        print(f"[{tbl}] Fetching...", flush=True)
-        rows = [dataclasses.asdict(r) for r in fn()]
-        print(f"[{tbl}] Fetched {len(rows):,} rows", flush=True)
-        return tbl, rows
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        fetched: dict[str, list[dict]] = dict(pool.map(_fetch, tasks))
-
+    counts: dict[str, int] = {}
+    new_sku_rows: list[dict] = []
+    # Thứ tự FK: products → skus → listings. Tải tuần tự từng bảng (mỗi bảng đã song song theo trang)
+    # để tổng số request đồng thời ≤ CORE_PAGE_WORKERS, tránh 429.
     for table, fetch_fn, pk in tasks:
-        rows = fetched[table]
-
+        print(f"[{table}] Fetching...", flush=True)
+        rows = [dataclasses.asdict(r) for r in fetch_fn(workers=CORE_PAGE_WORKERS)]
+        print(f"[{table}] Fetched {len(rows):,} rows", flush=True)
         if table == "skus":
-            new_sku_rows = rows  # save raw (có latest_cogs) để detect changes
-
-        if table == "listings":
-            rows = [{**r, "metadata": {k: v for k, v in r.items() if k not in LISTING_CORE}} for r in rows]
-
-        if table in DROP_COLS:
-            drop = DROP_COLS[table]
-            rows = [{k: v for k, v in r.items() if k not in drop} for r in rows]
-
-        print(f"[{table}] Upserting {len(rows):,} rows...", flush=True)
-        upsert(sb, table, rows, pk)
-        sb.table("sync_log").upsert(
-            {"table_name": table, "last_sync": datetime.now(timezone.utc).isoformat(),
-             "record_count": len(rows)},
-            on_conflict="table_name",
-        ).execute()
-        print(f"[{table}] Done ✓", flush=True)
+            new_sku_rows = rows  # raw (có latest_cogs) để detect changes
+        _sync_table(sb, table, rows, pk)
+        counts[table] = len(rows)
 
     sync_sku_catalog(sb)
     sync_ncc_exist(sb)
-
-    counts = {tbl: len(fetched[tbl]) for tbl, _fn, _pk in tasks}
 
     # Detect changes + insert notifications
     if new_sku_rows:
         non_price, price_ch = detect_sku_changes(old_skus, new_sku_rows)
         insert_sync_notifications(sb, non_price, price_ch)
+    return counts
 
+
+def run_items(client, sb) -> dict:
+    """Giai đoạn ITEMS (233k dòng, chậm nhất) — chạy độc lập sau CORE."""
+    print("[items] Fetching...", flush=True)
+    rows = [dataclasses.asdict(r) for r in client.get_all_items(workers=ITEMS_PAGE_WORKERS)]
+    print(f"[items] Fetched {len(rows):,} rows", flush=True)
+    _sync_table(sb, "items", rows, "item_code")
+    return {"items": len(rows)}
+
+
+def main(phase: str = "all") -> dict:
+    client = GohubClient(api_key=API_KEY)
+    sb     = create_client(SUPABASE_URL, SUPABASE_KEY)
+    counts: dict[str, int] = {}
+    if phase in ("core", "all"):
+        counts.update(run_core(client, sb))
+    if phase in ("items", "all"):
+        counts.update(run_items(client, sb))
     return counts
 
 def sync_ncc_exist(sb):
@@ -302,15 +324,20 @@ if __name__ == "__main__":
     # đó mỗi ngày. Bắt lỗi ở đây, ghi thẳng vào bảng notifications (hiện trên chuông "Thông báo" sidebar
     # Intel, mọi role admin/manager thấy ngay khi mở web) — rồi re-raise để GitHub Actions vẫn báo failed
     # như cũ (không che giấu lỗi khỏi CI).
+    import sys
+    PHASE = sys.argv[1] if len(sys.argv) > 1 else "all"
+    if PHASE not in ("core", "items", "all"):
+        raise SystemExit(f"phase không hợp lệ: {PHASE} (core | items | all)")
+    PHASE_LABEL = {"core": "products/skus/listings", "items": "items", "all": "toàn bộ"}[PHASE]
     try:
-        counts = main()
+        counts = main(PHASE)
         now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
         body = " · ".join(f"{tbl}: {n:,}" for tbl, n in counts.items())
         try:
             sb_ok = create_client(SUPABASE_URL, SUPABASE_KEY)
             sb_ok.table("notifications").insert({
                 "type": "success",
-                "title": f"✅ Sync GoHub API thành công — {now_str} UTC",
+                "title": f"✅ Sync GoHub API ({PHASE_LABEL}) thành công — {now_str} UTC",
                 "body": body,
                 "data": {"counts": counts},
                 "visibility": "admin_manager",
@@ -321,14 +348,14 @@ if __name__ == "__main__":
     except Exception as e:
         import traceback
         err_msg = f"{type(e).__name__}: {e}"
-        print(f"[FATAL] Sync thất bại: {err_msg}", flush=True)
+        print(f"[FATAL] Sync {PHASE_LABEL} thất bại: {err_msg}", flush=True)
         traceback.print_exc()
         try:
             now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
             sb_err = create_client(SUPABASE_URL, SUPABASE_KEY)
             sb_err.table("notifications").insert({
                 "type": "error",
-                "title": f"❌ Sync GoHub API thất bại — {now_str} UTC",
+                "title": f"❌ Sync GoHub API ({PHASE_LABEL}) thất bại — {now_str} UTC",
                 "body": err_msg[:500],
                 "data": {"error": err_msg},
                 "visibility": "admin_manager",
