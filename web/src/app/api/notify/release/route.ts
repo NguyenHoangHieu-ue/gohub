@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin }             from "@/lib/supabase"
 import { sendLarkMessage }           from "@/lib/lark"
-import { summarizeReleaseCommits, type ReleaseCommit } from "@/lib/release-notify"
+import { summarizeReleaseCommits, withTabsFooter, type ReleaseCommit } from "@/lib/release-notify"
 
 // Gọi từ GitHub Actions (.github/workflows/notify-release.yml) mỗi khi có commit push lên `staging`
 // (test) hoặc `main` (production) — tóm tắt commit message bằng Gemini rồi gửi vào group Lark riêng cho
@@ -23,7 +23,12 @@ function parseCommits(raw: unknown): ReleaseCommit[] {
   return Array.isArray(raw)
     ? raw
         .filter((c: any) => typeof c?.message === "string" && c.message.trim())
-        .map((c: any) => ({ sha: String(c.sha ?? "").slice(0, 12), message: String(c.message) }))
+        .map((c: any) => ({
+          sha: String(c.sha ?? "").slice(0, 12),
+          message: String(c.message),
+          // đường dẫn file commit đã đổi (workflow gửi) → suy ra tab bị ảnh hưởng; giới hạn để payload không phình
+          files: Array.isArray(c.files) ? c.files.filter((f: unknown) => typeof f === "string").slice(0, 300) : [],
+        }))
         .filter((c: ReleaseCommit) => !isDocsCommit(c.message))
     : []
 }
@@ -56,8 +61,8 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const doneSummary    = commits.length        ? await summarizeReleaseCommits(commits)        : ""
-  const pendingSummary = pendingCommits.length  ? await summarizeReleaseCommits(pendingCommits)  : ""
+  const doneSummary    = commits.length        ? withTabsFooter(await summarizeReleaseCommits(commits), commits)               : ""
+  const pendingSummary = pendingCommits.length  ? withTabsFooter(await summarizeReleaseCommits(pendingCommits), pendingCommits)  : ""
 
   let text: string
   if (environment === "staging") {

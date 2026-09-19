@@ -23,9 +23,16 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             git fetch origin staging --quiet
-            PENDING=$(git log origin/main..origin/staging --pretty=format:'%H|||%s' | node -e "
-              const lines = require('fs').readFileSync(0, 'utf8').split('\n').filter(Boolean);
-              const commits = lines.map(l => { const i = l.indexOf('|||'); return { sha: l.slice(0, i), message: l.slice(i + 3) }; });
+            # Kèm danh sách FILE mỗi commit (git diff-tree) để route suy ra tab bị ảnh hưởng
+            PENDING=$(node -e "
+              const { execSync } = require('child_process');
+              const sh = c => execSync(c, { encoding: 'utf8' }).trim();
+              const shas = sh('git log origin/main..origin/staging --pretty=format:%H').split('\n').filter(Boolean);
+              const commits = shas.map(sha => ({
+                sha,
+                message: sh('git log -1 --pretty=format:%s ' + sha),
+                files: sh('git diff-tree --no-commit-id --name-only -r ' + sha).split('\n').filter(Boolean),
+              }));
               process.stdout.write(JSON.stringify(commits));
             ")
           else
@@ -40,7 +47,7 @@ jobs:
           ENVIRONMENT: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
         run: |
           PAYLOAD=$(jq -n \
-            --argjson commits "$(echo "$COMMITS_JSON" | jq -c '[.[] | {sha: .id, message: .message}]')" \
+            --argjson commits "$(echo "$COMMITS_JSON" | jq -c '[.[] | {sha: .id, message: .message, files: ((.added // []) + (.modified // []) + (.removed // []))}]')" \
             --argjson pending "$PENDING_JSON" \
             --arg environment "$ENVIRONMENT" \
             '{commits: $commits, pendingCommits: $pending, environment: $environment}')
