@@ -181,3 +181,91 @@ def test_upsert_non_timeout_error_propagates(monkeypatch):
 
     with pytest.raises(ValueError):
         sync.upsert(Boom(limit=10), "items", [{"item_code": "1"}], "item_code")
+
+
+def test_derive_new_vendors(monkeypatch):
+    sync = _load_sync(monkeypatch)
+    products = [
+        {"vendor_code": "3D", "operator_code": "3HK"},                       # đã biết → bỏ qua
+        {"vendor_code": "ZZ", "operator_code": "NEWTELCO"},
+        {"vendor_code": "ZZ", "operator_code": "NEWTELCO"},
+        {"vendor_code": "ZZ", "operator_code": "OTHER"},
+        {"vendor_code": "QQ", "operator_code": None},                        # không operator → dùng mã
+        {"vendor_code": "MM", "operator_code": "MixedCase"},                 # không viết hoa toàn bộ → giữ nguyên
+        {"vendor_code": "", "operator_code": "X"},                           # rỗng → bỏ
+    ]
+    got = sync.derive_new_vendors(products, {"3D"})
+    assert [(v["code"], v["name"], v["products"]) for v in got] == [
+        ("ZZ", "Newtelco", 3), ("MM", "MixedCase", 1), ("QQ", "QQ", 1)]
+    assert sync.derive_new_vendors(products, {"3D", "ZZ", "QQ", "MM"}) == []
+
+
+class _Rec:
+    def __init__(self, rows):
+        self.rows = rows
+        self.inserted = {}
+        self.deleted = []
+        self._t = None
+        self._sel = None
+
+    def table(self, t):
+        self._t = t
+        return self
+
+    def select(self, _cols):
+        return self
+
+    def range(self, a, b):
+        self._range = (a, b)
+        return self
+
+    def insert(self, payload):
+        self.inserted.setdefault(self._t, []).extend(payload if isinstance(payload, list) else [payload])
+        return self
+
+    def delete(self):
+        self._del = True
+        return self
+
+    def like(self, col, pat):
+        self.deleted.append((self._t, col, pat))
+        return self
+
+    def execute(self):
+        class R: pass
+        r = R()
+        a, b = getattr(self, "_range", (0, 10**9))
+        r.data = self.rows.get(self._t, [])[a:b + 1]
+        self._range = (0, 10**9)
+        return r
+
+
+def test_sync_new_vendors_inserts_only_missing_and_notifies(monkeypatch):
+    sync = _load_sync(monkeypatch)
+    sb = _Rec({
+        "products": [{"vendor_code": "3D", "operator_code": "3HK"}, {"vendor_code": "ZZ", "operator_code": "NEWTELCO"}],
+        "ref_vendors": [{"vendor_code": "3D"}],
+    })
+    new = sync.sync_new_vendors(sb)
+    assert [v["code"] for v in new] == ["ZZ"]
+    assert [r["vendor_code"] for r in sb.inserted["ref_vendors"]] == ["ZZ"]      # chỉ chèn vendor mới, không đụng dòng cũ
+    n = sb.inserted["notifications"][0]
+    assert n["type"] == "sync" and n["visibility"] == "all" and "Newtelco" in n["title"]
+
+
+def test_sync_new_vendors_noop_when_all_known(monkeypatch):
+    sync = _load_sync(monkeypatch)
+    sb = _Rec({"products": [{"vendor_code": "3D", "operator_code": "3HK"}], "ref_vendors": [{"vendor_code": "3D"}]})
+    assert sync.sync_new_vendors(sb) == []
+    assert sb.inserted == {}
+
+
+def test_flush_catalogue_cache_deletes_catalogue_keys_and_never_raises(monkeypatch):
+    sync = _load_sync(monkeypatch)
+    sb = _Rec({})
+    sync.flush_catalogue_cache(sb)
+    assert sb.deleted == [("analytics_query_cache", "cache_key", "catalogue:%")]
+
+    class Boom:
+        def table(self, _t): raise RuntimeError("supabase down")
+    sync.flush_catalogue_cache(Boom())     # nuốt lỗi: cache chỉ là tối ưu
