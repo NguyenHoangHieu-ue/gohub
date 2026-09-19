@@ -10,6 +10,7 @@ import {
 } from "@/lib/catalogue/country-index"
 import { makeVendorNamer, findUnrecognized } from "@/lib/catalogue/auto-names"
 import { isHiddenStatus, isShouting } from "@/lib/catalogue/plain-language"
+import { filterDataHint, filterDataLabel, filterSimHint, filterSimLabel } from "@/lib/catalogue/filter-labels"
 import { distinctSims, distinctDataKinds } from "@/lib/catalogue/country-index"
 import { simBreakdown, simLabel, dataKindLabel } from "@/lib/catalogue/plain-language"
 import type { CatalogueCountryRef, CatalogueIndex, CatalogueProductLite, SkuAggregate } from "@/lib/catalogue/types"
@@ -296,7 +297,29 @@ describe("tên vendor: ref_vendors do người sửa thắng bảng tên trong c
 describe("Inactive không đưa lên Catalogue", () => {
   test("isHiddenStatus", () => {
     expect(isHiddenStatus("Inactive")).toBe(true); expect(isHiddenStatus("Deleted")).toBe(true)
-    expect(isHiddenStatus("Active")).toBe(false); expect(isHiddenStatus("Preparing")).toBe(false)
+    expect(isHiddenStatus("Preparing")).toBe(true)                                   // gói sắp có cũng không hiện
+    expect(isHiddenStatus("Active")).toBe(false); expect(isHiddenStatus("Temporary")).toBe(false)
     expect(isHiddenStatus(null)).toBe(false)
+  })
+})
+
+describe("bộ lọc tiếng Anh + Unlimited", () => {
+  test("nhãn tiếng Anh", () => {
+    expect(filterDataLabel("fixed")).toBe("Fixed"); expect(filterDataLabel("daily")).toBe("Daily")
+    expect(filterDataLabel("unlimited")).toBe("Unlimited")          // kiểu mới → viết hoa chữ đầu
+    expect(filterSimLabel("eSIM")).toBe("eSIM"); expect(filterSimLabel("SIM")).toBe("SIM (physical)"); expect(filterSimLabel("iSIM")).toBe("iSIM")
+    expect(filterDataHint("daily")).toMatch(/every day/); expect(filterSimHint("eSIM")).toMatch(/QR/)
+  })
+
+  test("lọc Unlimited: chỉ gói có SKU không giới hạn, kết hợp được với Fixed/Daily", () => {
+    const unl: SkuAggregate = { count: 3, gbMin: 1, gbMax: 5, hasUnlimited: true, daysMin: 1, daysMax: 7, throttles: [] }
+    const list = [
+      prod({ code: "U1", dataKind: "daily", sku: unl }),
+      prod({ code: "U2", dataKind: "fixed", sku: unl }),
+      prod({ code: "N1", dataKind: "daily" }),
+    ]
+    expect(filterProducts(list, { unlimited: true }).map(p => p.code)).toEqual(["U1", "U2"])
+    expect(filterProducts(list, { unlimited: true, dataKind: "daily" }).map(p => p.code)).toEqual(["U1"])
+    expect(filterProducts(list, { dataKind: "daily" }).map(p => p.code)).toEqual(["U1", "N1"])
   })
 })

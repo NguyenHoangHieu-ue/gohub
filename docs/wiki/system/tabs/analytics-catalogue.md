@@ -48,8 +48,7 @@ status: active
    theo châu lục ("N gói · M nhà cung cấp"). Tab phụ "Theo nhà cung cấp": vendor → các nước nó phủ → bấm sang trang nước
    (đã lọc theo vendor).
 2. **Trang nước** (`?country=JP`, chia sẻ được bằng URL; thêm `&vendor=`, `&p=<mã gói>`): câu tóm tắt tiếng thường,
-   bộ lọc chip (Phạm vi riêng/dùng chung · eSIM/SIM · Trọn gói/Theo ngày · Có số điện thoại · Không cần KYC · hiện cả
-   gói ngưng bán), gói **xếp theo nhà cung cấp**, đầu mỗi nhóm ghi nhà mạng tại nước đó; mỗi nhóm hiện 6 gói đầu + "Xem thêm".
+   **bộ lọc chip bằng TIẾNG ANH** (Hiếu yêu cầu 2026-09-19): Scope (All / Only <nước> / Multi-country) · Type (eSIM / SIM (physical)) · Data (Fixed / Daily / **Unlimited** — Unlimited = gói CÓ lựa chọn dung lượng không giới hạn, kết hợp được với Fixed/Daily) · Other (Phone number / No KYC); nhãn ở `lib/catalogue/filter-labels.ts`. Phần còn lại (thẻ gói, ngăn chi tiết) vẫn tiếng Việt, gói **xếp theo nhà cung cấp**, đầu mỗi nhóm ghi nhà mạng tại nước đó; mỗi nhóm hiện 6 gói đầu + "Xem thêm".
    Trong nhóm: gói riêng cho nước lên trước, càng ít nước càng trên.
 3. **Thẻ gói**: eSIM/SIM · Trọn gói/Theo ngày · mạng · pháp nhân (VN/US — phân biệt 2 gói trùng nhau) · nhà mạng ·
    khoảng "300 MB – 50 GB · 1 – 30 ngày (33 lựa chọn)" · **"Khi hết mức data: …"** (phân biệt các gói trông giống nhau) · huy hiệu
@@ -94,11 +93,12 @@ Không còn phải làm tay khi thêm nhà cung cấp mới trong danh sách s�
 
 Lỗi ở bước tự thêm vendor / xoá cache chỉ ghi `[WARN]`, không làm hỏng sync đã ghi xong dữ liệu chính.
 
-## 3d. Gói Inactive không lên Catalogue (s201+3)
+## 3d. Gói Inactive / Preparing không lên Catalogue (s201+3, s201+5)
 
-Theo yêu cầu Hiếu: sản phẩm **Inactive** (và Deleted) không đưa lên Catalogue. Loại ngay từ server (`buildCatalogueIndex` lọc
-`HIDDEN_STATUSES`) nên mọi bộ đếm, tab Theo nhà cung cấp, số nước… tự đúng; route chi tiết trả 404 cho gói bị ẩn và bỏ SKU Inactive/Deleted
-(giao diện báo "không còn trong danh mục"). Còn hiện: Active, Temporary (đang bán) và Preparing (chỉ khi bấm "Hiện cả gói sắp có").
+Theo yêu cầu Hiếu: sản phẩm **Inactive** (và Deleted) rồi cả **Preparing** (sắp có) không đưa lên Catalogue. Loại ngay từ server
+(`buildCatalogueIndex` lọc `HIDDEN_STATUSES` trong `plain-language.ts`) nên mọi bộ đếm, tab Theo nhà cung cấp, số nước… tự đúng; route chi tiết
+trả 404 cho gói bị ẩn và bỏ SKU thuộc các trạng thái đó (giao diện báo "không còn trong danh mục"). Chỉ còn hiện **Active** và **Temporary**
+(`SELLABLE_STATUSES`). Đã bỏ công tắc "Include upcoming". Trạng thái LẠ chưa khai báo cũng bị ẩn — banner admin nhắc khai báo vào `SELLABLE_STATUSES` hoặc `HIDDEN_STATUSES`.
 
 ## 4. Phân quyền
 

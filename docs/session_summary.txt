@@ -10196,3 +10196,11 @@ Bug: BC Datapool đã tách `WD`="BC Datapool (CMHK)" + `W1`="BC Datapool (Singt
 cho bảng `VENDOR_NAMES` trong code thắng ref_vendors. Đảo ưu tiên: ref_vendors không IN HOA thắng; IN HOA/thiếu → bảng chuẩn. `ref_vendors.description`
 "Tự thêm bởi sync" đánh dấu tên tạm (banner admin). Inactive/Deleted loại từ server (`HIDDEN_STATUSES`), chi tiết 404. Đã verify dữ liệu thật:
 1.048 gói (Active 1.026, Temporary 16, Preparing 6), WD 26 gói / W1 18 gói đúng tên. Vitest 297, tsc sạch.
+
+### s201+4 (2026-09-19) — Catalogue: bộ lọc trang nước sang tiếng Anh + thêm Unlimited (CHƯA commit)
+Khối bộ lọc: Scope / Type / Data (Fixed, Daily, Unlimited) / Other, nút Clear filters, "Showing x of y". Unlimited = `sku.hasUnlimited` (SKU 9999), lọc độc lập kết hợp
+được với Fixed/Daily. `filter-labels.ts` + `ProductFilters.unlimited`. Thẻ gói/ngăn chi tiết giữ tiếng Việt. Render dữ liệu thật JP/FR có đủ nhãn; vitest 299.
+
+### s201+5 (2026-09-19) — Catalogue: ẩn hẳn gói Preparing, bỏ công tắc "Include upcoming" (CHƯA commit)
+Hiếu: không cần hiển thị gói Preparing. `HIDDEN_STATUSES` thêm "Preparing" (loại từ server, cả SKU); bỏ chip "Include upcoming" và nút "Hiện thêm gói sắp có" ở ngăn chi tiết.
+Chỉ còn Active + Temporary. Vitest 299, tsc sạch.

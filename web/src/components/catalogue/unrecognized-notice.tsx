@@ -31,7 +31,7 @@ export function UnrecognizedNotice({ u }: { u: Unrecognized }) {
           )}
           {u.sims.length > 0 && <li><b>Loại SIM mới:</b> {u.sims.join(", ")} — đang hiện nguyên tên gốc; muốn tên tiếng Việt thì thêm vào <code>simLabel</code>.</li>}
           {u.dataKinds.length > 0 && <li><b>Kiểu tính dung lượng mới:</b> {u.dataKinds.join(", ")} — đang hiện nguyên tên gốc; thêm mô tả ở <code>dataKindLabel</code>.</li>}
-          {u.statuses.length > 0 && <li><b>Trạng thái mới:</b> {u.statuses.join(", ")} — gói này bị coi là <u>không bán</u> (ẩn mặc định) cho tới khi khai báo trong <code>SELLABLE_STATUSES</code>.</li>}
+          {u.statuses.length > 0 && <li><b>Trạng thái mới:</b> {u.statuses.join(", ")} — gói thuộc trạng thái này đang bị <u>ẩn</u> khỏi Catalogue cho tới khi khai báo trong <code>SELLABLE_STATUSES</code> (đang bán) hoặc <code>HIDDEN_STATUSES</code>.</li>}
           {u.countries.length > 0 && <li><b>Mã nước chưa có trong ref_countries:</b> {u.countries.join(", ")} — vẫn hiện tên theo chuẩn quốc tế nhưng nằm nhóm "Khác".</li>}
         </ul>
       )}
