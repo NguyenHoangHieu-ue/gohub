@@ -8,9 +8,10 @@ import type { CatalogueIndex, CatalogueProductLite, CatalogueSkuRow } from "@/li
 import { carrierForCountry, parseCarrierMap } from "@/lib/catalogue/carriers"
 import {
   dataAmountLabel, daysLabel, dataKindLabel, simExplain, simLabel, statusLabel, summarySentences, tenantLabel,
-  throttleSentence, vendorDisplayName, toGb, yesNo, SELLABLE_STATUSES,
+  throttleSentence, toGb, yesNo, dailyResetSentence, SELLABLE_STATUSES,
 } from "@/lib/catalogue/plain-language"
 import { countryAliases, countryNameVn } from "@/lib/catalogue/country-index"
+import { makeVendorNamer } from "@/lib/catalogue/auto-names"
 import { useProductDetail } from "./use-catalogue"
 import { Badge, CopyButton, Flag, InfoRow, Section } from "./catalogue-ui"
 import { Skeleton } from "@/components/dashboard-kit"
@@ -62,10 +63,10 @@ export function ProductDrawer({ code, index, contextCountry, onClose }: {
   }, [onClose])
 
   const lite: CatalogueProductLite | undefined = useMemo(() => index.products.find(p => p.code === code), [index.products, code])
-  const vendorRef = useMemo(() => new Map(index.vendors.map(v => [v.code, v.name])), [index.vendors])
+  const namer = useMemo(() => makeVendorNamer(index), [index])
   const refMap = useMemo(() => new Map(index.countries.map(c => [c.code.toUpperCase(), c])), [index.countries])
   const knownLabels = useMemo(() => index.countries.map(c => c.name), [index.countries])
-  const vendorName = lite ? vendorDisplayName(lite.vendorCode, vendorRef.get(lite.vendorCode)) : ""
+  const vendorName = lite ? namer.name(lite.vendorCode) : ""
   const prod = detail?.product ?? {}
 
   const countryNames = useMemo(() => (lite?.countries ?? []).map(c => countryNameVn(c, refMap.get(c))), [lite, refMap])
@@ -215,7 +216,7 @@ export function ProductDrawer({ code, index, contextCountry, onClose }: {
                 <dl>
                   <InfoRow label="Kích hoạt">{activationTime || <span className="text-slate-400">Chưa có thông tin</span>}</InfoRow>
                   {activation && <InfoRow label="Cách kích hoạt riêng"><Linkify text={activation} /></InfoRow>}
-                  {lite.dataKind === "daily" && <InfoRow label="Cấp lại data mỗi ngày">{dailyReset ? `Lúc ${dailyReset}` : <span className="text-slate-400">Chưa có thông tin</span>}</InfoRow>}
+                  {lite.dataKind === "daily" && <InfoRow label="Cấp lại data mỗi ngày">{dailyResetSentence(dailyReset) ?? <span className="text-slate-400">Chưa có thông tin</span>}</InfoRow>}
                   <InfoRow label="APN (cài đặt mạng)">
                     {apn ? <span className="inline-flex flex-wrap items-center gap-2"><code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">{apn}</code><CopyButton text={apn} /></span> : <span className="text-slate-400">Không cần / chưa có</span>}
                   </InfoRow>

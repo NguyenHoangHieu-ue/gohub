@@ -2,15 +2,18 @@
 
 import React, { Suspense, useCallback, useMemo, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { AlertTriangle, Layers, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/dashboard-kit"
 import { buildCountryStats, isSellable } from "@/lib/catalogue/country-index"
+import { findUnrecognized } from "@/lib/catalogue/auto-names"
 import { useCatalogueIndex } from "@/components/catalogue/use-catalogue"
 import { CountryHome } from "@/components/catalogue/country-home"
 import { CountryPage } from "@/components/catalogue/country-page"
 import { VendorView } from "@/components/catalogue/vendor-view"
 import { ProductDrawer } from "@/components/catalogue/product-drawer"
+import { UnrecognizedNotice } from "@/components/catalogue/unrecognized-notice"
 
 // Product Catalogue — dựng lại hoàn toàn (s201, 2026-09-19). Mục tiêu: người không rành kỹ thuật vẫn biết
 // NƯỚC nào có những sản phẩm nào, của NHÀ CUNG CẤP nào, dùng NHÀ MẠNG nào, chi tiết ra sao.
@@ -32,6 +35,8 @@ function CatalogueInner() {
   const pathname = usePathname()
   const sp = useSearchParams()
   const { data, error, loading, reload } = useCatalogueIndex()
+  const { data: session } = useSession()
+  const role = (session?.user as { role?: string } | undefined)?.role
 
   const country = sp.get("country")?.toUpperCase() ?? null
   const vendor = sp.get("vendor")
@@ -49,6 +54,8 @@ function CatalogueInner() {
   const stats = useMemo(() => (data ? buildCountryStats(data.products, data.countries) : []), [data])
   const sellingCount = useMemo(() => data?.products.filter(isSellable).length ?? 0, [data])
   const vendorCount = useMemo(() => new Set((data?.products ?? []).filter(isSellable).map(p => p.vendorCode)).size, [data])
+
+  const unrecognized = useMemo(() => (data && (role === "admin" || role === "creator") ? findUnrecognized(data) : null), [data, role])
 
   const ageDays = data?.lastSync ? Math.floor((Date.now() - new Date(data.lastSync).getTime()) / 86_400_000) : null
   const stale = ageDays != null && ageDays >= 3
@@ -86,6 +93,8 @@ function CatalogueInner() {
           <span>{stats.length} nước · {sellingCount} gói đang bán · {vendorCount} nhà cung cấp</span>
         </div>
       )}
+
+      {unrecognized && unrecognized.total > 0 && <UnrecognizedNotice u={unrecognized} />}
 
       {loading && !data && (
         <div className="space-y-4">

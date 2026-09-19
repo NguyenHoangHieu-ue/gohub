@@ -2,7 +2,7 @@
 // Nước lấy từ products.supported_countries (ISO2) — KHÔNG suy từ mã SKU — nên gói khu vực (vd châu Âu) tự
 // xuất hiện ở mọi nước nó phủ.
 import type { CatalogueCountryRef, CatalogueProductLite } from "./types"
-import { SELLABLE_STATUSES } from "./plain-language"
+import { SELLABLE_STATUSES, simRank, KNOWN_DATA_KINDS } from "./plain-language"
 
 export interface CountryStat {
   code: string
@@ -11,8 +11,8 @@ export interface CountryStat {
   continent: string | null
   productCount: number
   vendorCodes: string[]
-  esimCount: number
-  simCount: number
+  /** Số gói theo từng loại SIM (eSIM, SIM, và loại mới nếu có) */
+  simCounts: Record<string, number>
 }
 
 /** Bỏ dấu + hạ chữ thường để tìm "nhat" ra "Nhật Bản". */
@@ -42,6 +42,7 @@ function dn(lang: "vi" | "en"): Intl.DisplayNames | null {
 /** Tên gọi thông dụng ngắn gọn thay cho tên chính thức quá dài của Intl. */
 const NAME_VN_OVERRIDE: Record<string, string> = {
   US: "Mỹ (Hoa Kỳ)", GB: "Anh (Vương quốc Anh)", HK: "Hồng Kông", MO: "Ma Cao",
+  IT: "Ý (Italy)", AE: "UAE (Ả Rập Thống nhất)",
 }
 
 /** Tên tiếng Việt của nước: bảng tên thông dụng → Intl (chuẩn, không cần dữ liệu) → cột name_vn → tên tiếng Anh → mã. */
@@ -86,14 +87,14 @@ export function buildCountryStats(
   opts: { sellableOnly?: boolean } = { sellableOnly: true },
 ): CountryStat[] {
   const refMap = new Map(refs.map(r => [r.code.toUpperCase(), r]))
-  const acc = new Map<string, { n: number; vendors: Set<string>; esim: number; sim: number }>()
+  const acc = new Map<string, { n: number; vendors: Set<string>; sims: Record<string, number> }>()
   for (const p of products) {
     if (opts.sellableOnly !== false && !isSellable(p)) continue
     for (const raw of p.countries) {
       const c = raw.toUpperCase()
-      const a = acc.get(c) ?? { n: 0, vendors: new Set<string>(), esim: 0, sim: 0 }
+      const a = acc.get(c) ?? { n: 0, vendors: new Set<string>(), sims: {} }
       a.n++; a.vendors.add(p.vendorCode)
-      if (p.sim === "eSIM") a.esim++; else a.sim++
+      a.sims[p.sim] = (a.sims[p.sim] ?? 0) + 1
       acc.set(c, a)
     }
   }
@@ -103,7 +104,7 @@ export function buildCountryStats(
     out.push({
       code, name: countryNameVn(code, ref), nameEn: ref?.name ?? dn("en")?.of(code) ?? code,
       continent: ref?.continent ?? null, productCount: a.n, vendorCodes: Array.from(a.vendors),
-      esimCount: a.esim, simCount: a.sim,
+      simCounts: a.sims,
     })
   }
   return out.sort((x, y) => x.name.localeCompare(y.name, "vi"))
@@ -127,10 +128,10 @@ export function searchCountries(stats: CountryStat[], refs: CatalogueCountryRef[
 }
 
 export interface ProductFilters {
-  sim?: "eSIM" | "SIM" | null
+  sim?: string | null
   localNumber?: boolean
   noKyc?: boolean
-  dataKind?: "fixed" | "daily" | null
+  dataKind?: string | null
   sellableOnly?: boolean
   vendor?: string | null
   /** own = gói chỉ dành cho 1 nước; shared = gói dùng chung nhiều nước (khu vực/toàn cầu) */
@@ -165,9 +166,20 @@ export function groupByVendor(list: CatalogueProductLite[]): VendorGroup[] {
     const a = m.get(p.vendorCode) ?? []
     a.push(p); m.set(p.vendorCode, a)
   }
-  const rank = (p: CatalogueProductLite) => (p.sim === "eSIM" ? 0 : 1)
+  const rank = (p: CatalogueProductLite) => simRank(p.sim)
   return Array.from(m, ([vendorCode, products]) => ({
     vendorCode,
     products: products.slice().sort((a, b) => a.countries.length - b.countries.length || rank(a) - rank(b) || a.code.localeCompare(b.code)),
   })).sort((a, b) => b.products.length - a.products.length || a.vendorCode.localeCompare(b.vendorCode))
+}
+
+/** Các loại SIM có mặt trong danh sách (eSIM, SIM trước; loại mới theo tên) — để bộ lọc tự sinh theo dữ liệu. */
+export function distinctSims(list: CatalogueProductLite[]): string[] {
+  return Array.from(new Set(list.map(p => p.sim))).sort((a, b) => simRank(a) - simRank(b) || a.localeCompare(b))
+}
+
+/** Các kiểu tính dung lượng có mặt (fixed, daily trước; kiểu mới theo tên). */
+export function distinctDataKinds(list: CatalogueProductLite[]): string[] {
+  const rank = (k: string) => { const i = KNOWN_DATA_KINDS.indexOf(k); return i >= 0 ? i : KNOWN_DATA_KINDS.length }
+  return Array.from(new Set(list.map(p => p.dataKind).filter((k): k is string => !!k))).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
 }

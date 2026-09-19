@@ -61,6 +61,23 @@ status: active
    Thông tin kỹ thuật (gập sẵn: mã product/vendor/pháp nhân/listing).
 5. Banner độ tươi dữ liệu (`sync_log`): ≥3 ngày → hộp cảnh báo vàng "không phải lỗi hiển thị" (xem Gotchas #1).
 
+## 3b. Tự thích ứng khi dữ liệu có giá trị MỚI (s201+1)
+
+Thêm vendor / loại SIM / kiểu data / trạng thái / nước mới vào hệ thống sản phẩm thì Catalogue **không cần sửa code**:
+
+| Giá trị mới | Trang xử lý thế nào |
+|---|---|
+| Nhà cung cấp mới | Tự có mặt ở tab Theo nhà cung cấp + mọi trang nước nó phủ. Tên: bảng chuẩn trong code → `ref_vendors` → **operator_code phổ biến nhất của các gói vendor đó** (`auto-names.ts` `makeVendorNamer`) → mã thô |
+| Loại SIM mới (khác eSIM/SIM) | Hiện nguyên tên gốc, KHÔNG bị nhầm thành "SIM vật lý"; chip lọc tự sinh từ dữ liệu (`distinctSims`); đếm theo từng loại (`simBreakdown`) |
+| Kiểu tính dung lượng mới (khác fixed/daily) | Giữ chuỗi gốc của `products.data_type`, chip lọc tự sinh (`distinctDataKinds`) |
+| Đơn vị dung lượng lạ (KB/TB) | `toGb` quy đổi; đơn vị lạ coi như GB để vẫn so sánh được |
+| Trạng thái mới | Hiện nguyên tên; coi là KHÔNG bán (ẩn mặc định) tới khi khai báo trong `SELLABLE_STATUSES` — banner nhắc admin |
+| Mã nước ngoài `ref_countries` | Tên theo `Intl.DisplayNames`, xếp nhóm "Khác" |
+
+`findUnrecognized(index)` liệt kê các giá trị trên; **banner xanh chỉ hiện với admin/creator** (`unrecognized-notice.tsx`)
+để biết cần bổ sung tên chuẩn (Admin → Import ref data cho `ref_vendors`, hoặc bảng tên trong `plain-language.ts`).
+Trang luôn hiển thị được, banner chỉ là nhắc việc. Test: `catalogue.test.ts` mục "tự thích ứng".
+
 ## 4. Phân quyền
 
 Route dùng `analyticsGuard` (đăng nhập); route chi tiết chỉ check session (không `analyticsGuard` để khỏi đăng ký

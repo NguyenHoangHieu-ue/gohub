@@ -10,13 +10,15 @@ const VENDOR_NAMES: Record<string, string> = {
   TM: "Truemove", UB: "Uhuibao", VM: "Vietnamobile", WM: "WorldMove",
 }
 
+export function hasVendorTableName(code: string): boolean { return code in VENDOR_NAMES }
+
 export function vendorDisplayName(code: string, refName?: string | null): string {
   if (VENDOR_NAMES[code]) return VENDOR_NAMES[code]
   if (refName) return titleCaseIfShouting(refName)
   return code
 }
 
-function titleCaseIfShouting(s: string): string {
+export function titleCaseIfShouting(s: string): string {
   const letters = s.replace(/[^A-Za-z]/g, "")
   if (letters.length > 3 && letters === letters.toUpperCase()) {
     return s.toLowerCase().replace(/(^|[\s-])([a-z])/g, (_m, sep, ch) => sep + ch.toUpperCase())
@@ -35,23 +37,41 @@ export function continentLabel(c: string | null | undefined): string {
   return CONTINENT_VN[c] ?? c
 }
 
+/** Loại đã biết có tên tiếng Việt; loại MỚI xuất hiện trong dữ liệu sau này được hiện nguyên tên gốc (không bị nhầm thành "SIM vật lý"). */
+export const KNOWN_SIMS = ["eSIM", "SIM"]
 export function simLabel(sim: string): string {
-  return sim === "eSIM" ? "eSIM" : "SIM vật lý"
+  if (sim === "eSIM") return "eSIM"
+  if (sim === "SIM") return "SIM vật lý"
+  return sim
 }
 export function simExplain(sim: string): string {
-  return sim === "eSIM"
-    ? "eSIM: không có thẻ nhựa, khách quét mã QR để cài vào điện thoại."
-    : "SIM vật lý: thẻ nhựa, khách lắp vào điện thoại."
+  if (sim === "eSIM") return "eSIM: không có thẻ nhựa, khách quét mã QR để cài vào điện thoại."
+  if (sim === "SIM") return "SIM vật lý: thẻ nhựa, khách lắp vào điện thoại."
+  return `Loại: ${sim}.`
+}
+export function simRank(sim: string): number {
+  const i = KNOWN_SIMS.indexOf(sim)
+  return i >= 0 ? i : KNOWN_SIMS.length
+}
+/** "65 eSIM, 73 SIM vật lý" — đếm theo từng loại, loại mới tự có mặt. */
+export function simBreakdown(counts: Record<string, number>): string {
+  return Object.entries(counts)
+    .filter(([, n]) => n > 0)
+    .sort(([a], [b]) => simRank(a) - simRank(b) || a.localeCompare(b))
+    .map(([k, n]) => `${n} ${simLabel(k)}`)
+    .join(", ")
 }
 
 export function dataKindLabel(k: DataKind): string {
   if (k === "fixed") return "Trọn gói"
   if (k === "daily") return "Theo ngày"
-  return "Chưa rõ"
+  return k || "Chưa rõ"
 }
+export const KNOWN_DATA_KINDS = ["fixed", "daily"]
 export function dataKindExplain(k: DataKind): string {
   if (k === "fixed") return "Trọn gói: một lượng dữ liệu dùng chung cho cả thời gian sử dụng, không cấp lại theo ngày."
   if (k === "daily") return "Theo ngày: mỗi ngày được một lượng dữ liệu, sang ngày mới được cấp lại."
+  if (k) return `Kiểu tính dung lượng: ${k}.`
   return "Chưa có thông tin cách tính dung lượng."
 }
 
@@ -80,7 +100,12 @@ export const UNLIMITED_GB = 9999
 export function toGb(amount: number | null | undefined, unit: string | null | undefined): number | null {
   if (amount == null || Number.isNaN(Number(amount))) return null
   const n = Number(amount)
-  return (unit ?? "GB").toUpperCase() === "MB" ? n / 1000 : n
+  switch ((unit ?? "GB").toUpperCase()) {
+    case "KB": return n / 1_000_000
+    case "MB": return n / 1000
+    case "TB": return n * 1000
+    default: return n            // GB (hoặc đơn vị lạ: coi như GB để vẫn so sánh được)
+  }
 }
 
 export function formatGb(gb: number): string {
@@ -93,7 +118,8 @@ export function dataAmountLabel(amount: number | null | undefined, unit: string 
   const gb = toGb(amount, unit)
   if (gb == null) return "—"
   if (gb >= UNLIMITED_GB) return "Không giới hạn"
-  if ((unit ?? "GB").toUpperCase() === "MB") return `${Number(amount)} MB`
+  const u = (unit ?? "GB").toUpperCase()
+  if (u === "MB" || u === "KB" || u === "TB") return `${Number(amount)} ${u}`
   return formatGb(gb)
 }
 
@@ -154,6 +180,16 @@ export function throttleShort(raw: string | null | undefined): string | null {
 export function throttleSummary(list: string[]): string | null {
   const parts = Array.from(new Set(list.map(throttleShort).filter((x): x is string => !!x)))
   return parts.length ? parts.join(" / ") : null
+}
+
+/** Giờ cấp lại data mỗi ngày: dữ liệu thô có "Count 24h", "Local time", "GMT+8"… */
+export function dailyResetSentence(raw: string | null | undefined): string | null {
+  const s = (raw ?? "").trim()
+  if (!s) return null
+  if (/^count\s*24\s*h$/i.test(s)) return "Tính theo chu kỳ 24 giờ kể từ lúc bắt đầu dùng"
+  if (/^local\s*time$/i.test(s)) return "Theo giờ địa phương của nước đang dùng"
+  if (/^(gmt|utc)\s*[+-]\s*\d+/i.test(s)) return `Theo múi giờ ${s.replace(/\s+/g, "")}`
+  return s
 }
 
 // ── Nghe gọi / SĐT ────────────────────────────────────────────────────────────

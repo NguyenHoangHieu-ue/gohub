@@ -4,7 +4,8 @@ import React, { useMemo, useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { CatalogueIndex } from "@/lib/catalogue/types"
-import { vendorDisplayName } from "@/lib/catalogue/plain-language"
+import { simBreakdown } from "@/lib/catalogue/plain-language"
+import { makeVendorNamer } from "@/lib/catalogue/auto-names"
 import { countryNameVn, isSellable } from "@/lib/catalogue/country-index"
 import { Flag } from "./catalogue-ui"
 
@@ -12,23 +13,23 @@ import { Flag } from "./catalogue-ui"
 export function VendorView({ index, onPick }: { index: CatalogueIndex; onPick: (country: string, vendor: string) => void }) {
   const [open, setOpen] = useState<string | null>(null)
   const refMap = useMemo(() => new Map(index.countries.map(c => [c.code.toUpperCase(), c])), [index.countries])
-  const vendorRef = useMemo(() => new Map(index.vendors.map(v => [v.code, v.name])), [index.vendors])
+  const namer = useMemo(() => makeVendorNamer(index), [index])
 
   const vendors = useMemo(() => {
-    const m = new Map<string, { esim: number; sim: number; countries: Map<string, number> }>()
+    const m = new Map<string, { sims: Record<string, number>; total: number; countries: Map<string, number> }>()
     for (const p of index.products) {
       if (!isSellable(p)) continue
-      const a = m.get(p.vendorCode) ?? { esim: 0, sim: 0, countries: new Map<string, number>() }
-      if (p.sim === "eSIM") a.esim++; else a.sim++
+      const a = m.get(p.vendorCode) ?? { sims: {}, total: 0, countries: new Map<string, number>() }
+      a.sims[p.sim] = (a.sims[p.sim] ?? 0) + 1; a.total++
       for (const c of p.countries) a.countries.set(c, (a.countries.get(c) ?? 0) + 1)
       m.set(p.vendorCode, a)
     }
     return Array.from(m, ([code, a]) => ({
-      code, name: vendorDisplayName(code, vendorRef.get(code)), esim: a.esim, sim: a.sim,
+      code, name: namer.name(code), sims: a.sims, total: a.total,
       countries: Array.from(a.countries, ([c, n]) => ({ code: c, n, name: countryNameVn(c, refMap.get(c)) }))
         .sort((x, y) => x.name.localeCompare(y.name, "vi")),
-    })).sort((a, b) => (b.esim + b.sim) - (a.esim + a.sim))
-  }, [index.products, vendorRef, refMap])
+    })).sort((a, b) => b.total - a.total)
+  }, [index.products, namer, refMap])
 
   return (
     <div className="space-y-3">
@@ -41,7 +42,7 @@ export function VendorView({ index, onPick }: { index: CatalogueIndex; onPick: (
               <span>
                 <span className="block text-base font-bold text-slate-800">{v.name}</span>
                 <span className="block text-sm text-slate-500">
-                  {v.esim + v.sim} gói ({v.esim} eSIM, {v.sim} SIM vật lý) · phủ {v.countries.length} nước
+                  {v.total} gói ({simBreakdown(v.sims)}) · phủ {v.countries.length} nước
                 </span>
               </span>
               <ChevronDown className={cn("h-5 w-5 shrink-0 text-slate-400 transition-transform", isOpen && "rotate-180")} />

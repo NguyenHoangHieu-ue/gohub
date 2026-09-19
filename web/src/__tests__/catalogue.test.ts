@@ -2,13 +2,16 @@ import { describe, test, expect } from "vitest"
 import { parseCarrierMap, carrierForCountry } from "@/lib/catalogue/carriers"
 import {
   throttleSentence, rangeLabel, dataAmountLabel, formatGb, vendorDisplayName, continentLabel,
-  summarySentences, yesNo, toGb, throttleShort, throttleSummary,
+  summarySentences, yesNo, toGb, throttleShort, throttleSummary, dailyResetSentence,
 } from "@/lib/catalogue/plain-language"
 import {
   normalizeText, flagEmoji, buildCountryStats, searchCountries, filterProducts, groupByVendor,
   productsOfCountry, countryAliases,
 } from "@/lib/catalogue/country-index"
-import type { CatalogueCountryRef, CatalogueProductLite, SkuAggregate } from "@/lib/catalogue/types"
+import { makeVendorNamer, findUnrecognized } from "@/lib/catalogue/auto-names"
+import { distinctSims, distinctDataKinds } from "@/lib/catalogue/country-index"
+import { simBreakdown, simLabel, dataKindLabel } from "@/lib/catalogue/plain-language"
+import type { CatalogueCountryRef, CatalogueIndex, CatalogueProductLite, SkuAggregate } from "@/lib/catalogue/types"
 
 const emptySku: SkuAggregate = { count: 0, gbMin: null, gbMax: null, hasUnlimited: false, daysMin: null, daysMax: null, throttles: [] }
 function prod(o: Partial<CatalogueProductLite>): CatalogueProductLite {
@@ -95,6 +98,14 @@ describe("plain-language — tiếng thường", () => {
     expect(throttleSummary([])).toBeNull()
   })
 
+  test("dailyResetSentence", () => {
+    expect(dailyResetSentence("Count 24h")).toBe("Tính theo chu kỳ 24 giờ kể từ lúc bắt đầu dùng")
+    expect(dailyResetSentence("Local time")).toBe("Theo giờ địa phương của nước đang dùng")
+    expect(dailyResetSentence("GMT+8")).toBe("Theo múi giờ GMT+8")
+    expect(dailyResetSentence("00:00 UTC")).toBe("00:00 UTC")
+    expect(dailyResetSentence("")).toBeNull()
+  })
+
   test("dung lượng: MB/GB/không giới hạn", () => {
     expect(dataAmountLabel(500, "MB")).toBe("500 MB")
     expect(dataAmountLabel(5, "GB")).toBe("5 GB")
@@ -154,7 +165,7 @@ describe("country-index — nước, tìm kiếm, lọc, gom vendor", () => {
     const jp = stats.find(s => s.code === "JP")!
     expect(jp.productCount).toBe(3)                 // JP1 + JP2 + EU1 (JP3 Inactive bị bỏ)
     expect(jp.vendorCodes.sort()).toEqual(["3D", "KD", "WM"])
-    expect(jp.esimCount).toBe(2); expect(jp.simCount).toBe(1)
+    expect(jp.simCounts).toEqual({ eSIM: 2, SIM: 1 })
     expect(stats.find(s => s.code === "FR")!.productCount).toBe(1)
     expect(buildCountryStats(P, REFS, { sellableOnly: false }).find(s => s.code === "JP")!.productCount).toBe(4)
   })
@@ -205,5 +216,54 @@ describe("country-index — nước, tìm kiếm, lọc, gom vendor", () => {
     const g = groupByVendor(more)
     expect(g[0].vendorCode).toBe("WM")                              // WM có 2 gói
     expect(g[0].products.map(p => p.code)).toEqual(["JP9", "JP2"])  // eSIM (JP9) trước SIM (JP2)
+  })
+})
+
+describe("tự thích ứng khi dữ liệu có giá trị MỚI", () => {
+  const idx = (products: CatalogueProductLite[], vendors: { code: string; name: string }[] = [], countries: CatalogueCountryRef[] = REFS): CatalogueIndex =>
+    ({ products, vendors, countries, lastSync: null, generatedAt: "" })
+
+  test("vendor mới: tên lấy theo operator_code phổ biến nhất, không cần ref_vendors", () => {
+    const p = [
+      prod({ code: "N1", vendorCode: "ZZ", operatorCode: "NEWTELCO" }),
+      prod({ code: "N2", vendorCode: "ZZ", operatorCode: "NEWTELCO" }),
+      prod({ code: "N3", vendorCode: "ZZ", operatorCode: "OTHER" }),
+      prod({ code: "N4", vendorCode: "QQ", operatorCode: null }),
+      prod({ code: "K1", vendorCode: "WM", operatorCode: "WORLDMOVE" }),
+      prod({ code: "R1", vendorCode: "RR", operatorCode: "X" }),
+    ]
+    const namer = makeVendorNamer(idx(p, [{ code: "RR", name: "REF VENDOR" }]))
+    expect(namer.name("ZZ")).toBe("Newtelco"); expect(namer.source("ZZ")).toBe("operator")
+    expect(namer.name("QQ")).toBe("QQ"); expect(namer.source("QQ")).toBe("code")
+    expect(namer.name("WM")).toBe("WorldMove"); expect(namer.source("WM")).toBe("table")
+    expect(namer.name("RR")).toBe("Ref Vendor"); expect(namer.source("RR")).toBe("ref")
+  })
+
+  test("loại SIM / kiểu data mới không bị nhầm thành SIM vật lý, bộ lọc tự sinh", () => {
+    const list = [
+      prod({ code: "A", sim: "eSIM" }), prod({ code: "B", sim: "SIM" }),
+      prod({ code: "C", sim: "iSIM", dataKind: "unlimited" }), prod({ code: "D", dataKind: "daily" }),
+    ]
+    expect(distinctSims(list)).toEqual(["eSIM", "SIM", "iSIM"])
+    expect(distinctDataKinds(list)).toEqual(["fixed", "daily", "unlimited"])
+    expect(simLabel("iSIM")).toBe("iSIM"); expect(dataKindLabel("unlimited")).toBe("unlimited")
+    expect(simBreakdown({ SIM: 3, eSIM: 5, iSIM: 1 })).toBe("5 eSIM, 3 SIM vật lý, 1 iSIM")
+    const stats = buildCountryStats(list, REFS)
+    expect(stats.find(s => s.code === "JP")!.simCounts).toEqual({ eSIM: 2, SIM: 1, iSIM: 1 })
+    expect(filterProducts(list, { sim: "iSIM" }).map(p => p.code)).toEqual(["C"])
+    expect(filterProducts(list, { dataKind: "unlimited" }).map(p => p.code)).toEqual(["C"])
+  })
+
+  test("findUnrecognized liệt kê đúng giá trị mới để admin bổ sung", () => {
+    const p = [
+      prod({ code: "N1", vendorCode: "ZZ", operatorCode: "NEWTELCO", sim: "iSIM", dataKind: "unlimited", status: "Live", countries: ["JP", "XX"] }),
+      prod({ code: "N2", vendorCode: "WM", countries: ["JP"] }),
+    ]
+    const u = findUnrecognized(idx(p))
+    expect(u.vendors).toEqual([{ code: "ZZ", tempName: "Newtelco", products: 1 }])
+    expect(u.sims).toEqual(["iSIM"]); expect(u.dataKinds).toEqual(["unlimited"]); expect(u.statuses).toEqual(["Live"])
+    expect(u.countries).toEqual(["XX"])
+    expect(u.total).toBe(5)
+    expect(findUnrecognized(idx([prod({ vendorCode: "WM" })])).total).toBe(0)
   })
 })

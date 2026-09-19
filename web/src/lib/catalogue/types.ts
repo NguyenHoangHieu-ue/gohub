@@ -1,8 +1,10 @@
 // Kiểu dữ liệu dùng chung giữa API và giao diện Product Catalogue (bản dựng lại s201, 2026-09-19).
 // Nguồn dữ liệu: Supabase products/skus/listings + ref_countries/ref_vendors (KHÔNG gohub_dw, không doanh thu).
 
-export type SimKind = "eSIM" | "SIM"
-export type DataKind = "fixed" | "daily" | null
+/** Loại SIM lấy nguyên từ products.type_of_sim ("eSIM", "SIM", hoặc loại mới sau này). */
+export type SimKind = string
+/** "fixed" | "daily" cho 2 kiểu đã biết; kiểu mới sau này giữ nguyên chuỗi gốc của products.data_type. */
+export type DataKind = string | null
 
 /** Tổng hợp SKU của 1 gói (product) để hiện "1–30 GB · 3–30 ngày" mà không cần tải cả 16k SKU xuống trình duyệt. */
 export interface SkuAggregate {

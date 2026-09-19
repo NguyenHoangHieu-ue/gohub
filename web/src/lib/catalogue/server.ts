@@ -69,7 +69,7 @@ function dataKindOf(v: string | null): DataKind {
   const s = (v ?? "").toLowerCase()
   if (s.startsWith("fixed")) return "fixed"
   if (s.startsWith("daily")) return "daily"
-  return null
+  return (v ?? "").trim() || null    // kiểu mới → giữ nguyên chuỗi gốc, giao diện tự hiện + tự thêm bộ lọc
 }
 
 export function parseCountries(v: string | null): string[] {
@@ -90,7 +90,7 @@ export function toLite(p: ProductRow, agg: Map<string, SkuAggregate>): Catalogue
     operatorCode: p.operator_code,
     tenant: p.tenant ?? "",
     status: p.status ?? "",
-    sim: p.type_of_sim === "eSIM" ? "eSIM" : "SIM",
+    sim: (p.type_of_sim ?? "").trim() || "SIM",
     dataKind: dataKindOf(p.data_type),
     network: p.network_type,
     carrierRaw: p.onsite_carrier,
