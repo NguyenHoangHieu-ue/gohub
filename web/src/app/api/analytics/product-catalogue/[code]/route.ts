@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { COGS_ROLES } from "@/lib/catalogue/server"
+import { isHiddenStatus } from "@/lib/catalogue/plain-language"
 import type { CatalogueProductDetail, CatalogueSkuRow, CatalogueListingRow } from "@/lib/catalogue/types"
 
 // Chi tiết 1 gói: đủ cột products + toàn bộ SKU + listing. 3 truy vấn cố định (không N+1).
@@ -34,11 +35,11 @@ export async function GET(req: NextRequest, { params }: { params: { code: string
         if (prod.error) throw new Error(prod.error.message)
         if (skus.error) throw new Error(skus.error.message)
         if (listings.error) throw new Error(listings.error.message)
-        if (!prod.data) return null
+        if (!prod.data || isHiddenStatus((prod.data as { status?: string }).status)) return null   // Inactive/Deleted không lên Catalogue
 
         const product: Record<string, unknown> = { ...(prod.data as Record<string, unknown>) }
         delete product.synced_at
-        const skuRows: CatalogueSkuRow[] = (skus.data ?? []).map((s: any) => ({
+        const skuRows: CatalogueSkuRow[] = (skus.data ?? []).filter((s: any) => !isHiddenStatus(s.status)).map((s: any) => ({
           code: s.sku_code, status: s.status ?? "", dataAmount: s.data_amount, dataUnit: s.data_amount_unit,
           days: s.day_amount, throttle: s.throttle_speed, call: s.call, callDetails: s.call_sms_details,
           vendorSku: s.vendor_sku,

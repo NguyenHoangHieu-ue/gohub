@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import type {
   CatalogueIndex, CatalogueProductLite, CatalogueCountryRef, CatalogueVendorRef, SkuAggregate, DataKind,
 } from "./types"
-import { toGb, UNLIMITED_GB, yesNo } from "./plain-language"
+import { isHiddenStatus, toGb, UNLIMITED_GB, yesNo } from "./plain-language"
 
 const PAGE = 1000            // Supabase project này cap 1000 dòng/response — phải phân trang
 const PARALLEL = 4
@@ -112,7 +112,7 @@ export async function buildCatalogueIndex(): Promise<CatalogueIndex> {
     ),
     fetchAllRows<SkuMini>("skus", "product_code,status,data_amount,data_amount_unit,day_amount,throttle_speed", "sku_code"),
     supabaseAdmin.from("ref_countries").select("code,name,name_vn,continent").limit(1000),
-    supabaseAdmin.from("ref_vendors").select("vendor_code,name").limit(1000),
+    supabaseAdmin.from("ref_vendors").select("vendor_code,name,description").limit(1000),
     supabaseAdmin.from("sync_log").select("last_sync").eq("table_name", "products").maybeSingle(),
   ])
   if (countries.error) throw new Error(`[catalogue] ref_countries: ${countries.error.message}`)
@@ -120,11 +120,16 @@ export async function buildCatalogueIndex(): Promise<CatalogueIndex> {
 
   const agg = aggregateSkus(skus)
   return {
-    products: products.map(p => toLite(p, agg)),
+    // Inactive/Deleted không đưa lên Catalogue (loại từ server → payload nhỏ hơn, mọi bộ đếm/tab đều tự đúng)
+    products: products.filter(p => !isHiddenStatus(p.status)).map(p => toLite(p, agg)),
     countries: (countries.data ?? []).map((c): CatalogueCountryRef => ({
       code: String(c.code), name: String(c.name ?? c.code), nameVn: c.name_vn ?? null, continent: c.continent ?? null,
     })),
-    vendors: (vendors.data ?? []).map((v): CatalogueVendorRef => ({ code: String(v.vendor_code), name: String(v.name ?? v.vendor_code) })),
+    vendors: (vendors.data ?? []).map((v): CatalogueVendorRef => ({
+      code: String(v.vendor_code), name: String(v.name ?? v.vendor_code),
+      // dòng do sync tự thêm (tên tạm) — banner admin nhắc sửa cho đẹp
+      autoAdded: String(v.description ?? "").startsWith("Tự thêm bởi sync"),
+    })),
     lastSync: (sync.data?.last_sync as string | undefined) ?? null,
     generatedAt: new Date().toISOString(),
   }

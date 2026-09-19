@@ -110,8 +110,8 @@ export function CountryPage({ index, code, initialVendor, activeProduct, onBack,
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Khác</span>
             <FilterChip active={!!f.localNumber} onClick={() => set({ localNumber: !f.localNumber })} title="Có số điện thoại tại nước đó, nhận cuộc gọi/OTP">Có số điện thoại</FilterChip>
             <FilterChip active={!!f.noKyc} onClick={() => set({ noKyc: !f.noKyc })} title="Khách không phải xác minh danh tính">Không cần KYC</FilterChip>
-            <FilterChip active={f.sellableOnly === false} onClick={() => set({ sellableOnly: f.sellableOnly === false })} title="Hiện cả gói sắp có, ngưng bán">
-              Hiện cả gói ngưng bán{hiddenCount > 0 ? ` (${hiddenCount})` : ""}
+            <FilterChip active={f.sellableOnly === false} onClick={() => set({ sellableOnly: f.sellableOnly === false })} title="Hiện cả gói sắp có / chưa mở bán">
+              Hiện cả gói sắp có{hiddenCount > 0 ? ` (${hiddenCount})` : ""}
             </FilterChip>
           </div>
           {f.vendor && (
