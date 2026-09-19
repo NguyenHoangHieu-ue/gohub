@@ -38,6 +38,16 @@ class Pagination:
         return f"Page {self.page}/{pages} — {self.total} total items"
 
 
+def _build(cls, d: dict):
+    """Dựng dataclass từ dict API, chịu được trường THIẾU/THỪA.
+
+    s201 (2026-09-19): API GoHub thôi trả một số trường (VD skus thiếu `expirations`) ⇒ `cls(**d)` ném
+    TypeError "missing 1 required positional argument" và làm chết cả sync (không ai thấy vì các run cũ
+    chết trước đó do 429/timeout). Trường thiếu → None (cột Supabase đều cho phép NULL); trường thừa bỏ qua.
+    """
+    return cls(**{k: d.get(k) for k in cls.__dataclass_fields__})
+
+
 @dataclass
 class Product:
     tenant:                 str
@@ -77,8 +87,7 @@ class Product:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Product":
-        known = set(cls.__dataclass_fields__)
-        return cls(**{k: v for k, v in d.items() if k in known})
+        return _build(cls, d)
 
 
 @dataclass
@@ -115,8 +124,7 @@ class Sku:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Sku":
-        known = set(cls.__dataclass_fields__)
-        return cls(**{k: v for k, v in d.items() if k in known})
+        return _build(cls, d)
 
 
 @dataclass
@@ -174,8 +182,7 @@ class Listing:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Listing":
-        known = set(cls.__dataclass_fields__)
-        return cls(**{k: v for k, v in d.items() if k in known})
+        return _build(cls, d)
 
 
 @dataclass
@@ -208,8 +215,7 @@ class Item:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Item":
-        known = set(cls.__dataclass_fields__)
-        return cls(**{k: v for k, v in d.items() if k in known})
+        return _build(cls, d)
 
 
 @dataclass
