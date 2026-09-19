@@ -25,7 +25,9 @@ export async function GET(req: NextRequest) {
   const status   = sp.get("status")    || "Active"
   const itemType = sp.get("item_type") || ""   // exact match từ dropdown
 
-  let q = supabaseAdmin.from("items").select(SELECT_COLS, { count: "exact" })
+  // count "estimated" (không phải "exact"): bảng items ~230k dòng, COUNT(*) chính xác vượt statement timeout của Supabase
+  // (57014, đo 2026-09-19: exact 8,9s → lỗi; estimated 0,4s) làm tab Item ở /skus không tải được. Tổng chỉ để phân trang.
+  let q = supabaseAdmin.from("items").select(SELECT_COLS, { count: "estimated" })
 
   if (search) q = (q as any).or(
     `item_code.ilike.%${search}%,alias.ilike.%${search}%,sku_code.ilike.%${search}%,listing_code.ilike.%${search}%,item_name_vn.ilike.%${search}%`

@@ -5,6 +5,9 @@ Endpoints: GET/POST /products, GET/POST /skus, GET/POST /listings, GET/POST /ite
 """
 
 import os
+import time
+import threading
+import concurrent.futures
 import requests
 import json
 import dataclasses
@@ -33,6 +36,16 @@ class Pagination:
     def __str__(self):
         pages = -(-self.total // self.limit)
         return f"Page {self.page}/{pages} — {self.total} total items"
+
+
+def _build(cls, d: dict):
+    """Dựng dataclass từ dict API, chịu được trường THIẾU/THỪA.
+
+    s201 (2026-09-19): API GoHub thôi trả một số trường (VD skus thiếu `expirations`) ⇒ `cls(**d)` ném
+    TypeError "missing 1 required positional argument" và làm chết cả sync (không ai thấy vì các run cũ
+    chết trước đó do 429/timeout). Trường thiếu → None (cột Supabase đều cho phép NULL); trường thừa bỏ qua.
+    """
+    return cls(**{k: d.get(k) for k in cls.__dataclass_fields__})
 
 
 @dataclass
@@ -74,8 +87,7 @@ class Product:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Product":
-        known = set(cls.__dataclass_fields__)
-        return cls(**{k: v for k, v in d.items() if k in known})
+        return _build(cls, d)
 
 
 @dataclass
@@ -112,8 +124,7 @@ class Sku:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Sku":
-        known = set(cls.__dataclass_fields__)
-        return cls(**{k: v for k, v in d.items() if k in known})
+        return _build(cls, d)
 
 
 @dataclass
@@ -171,8 +182,7 @@ class Listing:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Listing":
-        known = set(cls.__dataclass_fields__)
-        return cls(**{k: v for k, v in d.items() if k in known})
+        return _build(cls, d)
 
 
 @dataclass
@@ -205,8 +215,7 @@ class Item:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Item":
-        known = set(cls.__dataclass_fields__)
-        return cls(**{k: v for k, v in d.items() if k in known})
+        return _build(cls, d)
 
 
 @dataclass
@@ -221,7 +230,21 @@ class ApiResponse:
 # ─────────────────────────────────────────────────────────
 # Client
 # ─────────────────────────────────────────────────────────
+class _TimeoutAdapter(HTTPAdapter):
+    """requests không có timeout mặc định → 1 kết nối treo làm cả job đứng tới hết timeout GitHub Actions."""
+    def send(self, request, **kwargs):
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = (10, 60)
+        return super().send(request, **kwargs)
+
+
 class GohubClient:
+    # Lỗi tạm thời mà vòng thử lại cấp trang (ngoài urllib3.Retry) sẽ thử tiếp thay vì bỏ cả job.
+    _TRANSIENT = (requests.exceptions.RetryError, requests.exceptions.ConnectionError,
+                  requests.exceptions.Timeout, requests.exceptions.HTTPError)
+    PAGE_ATTEMPTS = 5
+    RETRY_DELAY_BASE = 20   # giây; chờ = BASE × số lần thử (tối đa 120s)
+
     def __init__(self, api_key: str = API_KEY):
         self.base_url = BASE_URL
         self.session = requests.Session()
@@ -233,15 +256,50 @@ class GohubClient:
         # mỗi lần chạy (verify qua GitHub Actions run log — HTTPError 429 tại /skus, 4 resource fetch
         # song song ThreadPoolExecutor(max_workers=4) cộng dồn request rate). Retry tự động, tôn trọng
         # header Retry-After nếu GoHub API có trả về, backoff luỹ thừa nếu không.
+        # s201 (2026-09-19): 502 kéo dài (run 09-17) vượt hết 6 lần retry này → thêm vòng thử lại cấp trang
+        # (_fetch_page) + cooldown dùng chung giữa các luồng, xem _fetch_all.
         retry = Retry(
-            total=6, backoff_factor=3,
+            total=4, backoff_factor=2,
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=frozenset(["GET", "POST"]),
             respect_retry_after_header=True,
         )
-        adapter = HTTPAdapter(max_retries=retry)
+        adapter = _TimeoutAdapter(max_retries=retry)
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
+        self._cooldown_until = 0.0
+        self._cooldown_lock = threading.Lock()
+
+    # ── Cooldown dùng chung: 1 luồng dính lỗi tạm thời thì mọi luồng khác chờ, tránh dồn thêm request ──
+    def _wait_cooldown(self):
+        while True:
+            with self._cooldown_lock:
+                left = self._cooldown_until - time.monotonic()
+            if left <= 0:
+                return
+            time.sleep(min(left, 5))
+
+    def _set_cooldown(self, seconds: float):
+        with self._cooldown_lock:
+            self._cooldown_until = max(self._cooldown_until, time.monotonic() + seconds)
+
+    def _fetch_page(self, fetch_page_fn, page: int, limit: int, label: str):
+        last_err = None
+        for attempt in range(1, self.PAGE_ATTEMPTS + 1):
+            self._wait_cooldown()
+            try:
+                return fetch_page_fn(page=page, limit=limit)
+            except self._TRANSIENT as e:
+                status = getattr(getattr(e, "response", None), "status_code", None)
+                # 4xx thật (trừ 429) là lỗi cấu hình/quyền — thử lại vô ích
+                if status is not None and 400 <= status < 500 and status != 429:
+                    raise
+                last_err = e
+                delay = min(self.RETRY_DELAY_BASE * attempt, 120)
+                self._set_cooldown(delay)
+                print(f"  [{label}] page {page} lỗi tạm thời ({type(e).__name__}) — thử lại {attempt}/{self.PAGE_ATTEMPTS} sau {delay}s",
+                      flush=True)
+        raise last_err
 
     # ── Internal: parse response ───────────────────────────
     def _parse(self, resp: requests.Response, model) -> ApiResponse:
@@ -255,16 +313,71 @@ class GohubClient:
         )
 
     # ── Internal: auto-paginate ────────────────────────────
-    def _fetch_all(self, fetch_page_fn, limit: int = 1000) -> list:
-        all_items, page = [], 1
-        while True:
-            r = fetch_page_fn(page=page, limit=limit)
-            all_items.extend(r.items)
-            total_pages = -(-r.pagination.total // limit)
-            print(f"  Page {page}/{total_pages} — +{len(r.items)} (tổng: {len(all_items)}/{r.pagination.total})")
-            if len(all_items) >= r.pagination.total:
-                break
-            page += 1
+    def _fetch_all(self, fetch_page_fn, limit: int = 1000, label: str = "", workers: int = 1,
+                   sink=None, sink_size: int = 2000) -> list:
+        """Tải toàn bộ các trang.
+
+        s201 (2026-09-19): server GoHub API cắt cứng 200 dòng/trang dù xin limit=1000 (log run 09-18: "+200").
+        Client cũ tải TUẦN TỰ từng trang (items 233k dòng = 1.167 request × ~4,7s ≈ 82 phút → hết timeout
+        90' của GitHub Actions). Bản này: lấy trang 1 để biết page size THỰC, rồi tải các trang còn lại song
+        song có giới hạn (workers), ghép lại đúng thứ tự trang và kiểm tổng số dòng khớp `pagination.total`.
+
+        `sink` (tuỳ chọn): hàm nhận từng khối ~`sink_size` dòng THEO ĐÚNG THỨ TỰ TRANG ngay khi tải xong khối đó
+        (thay vì giữ hết trong RAM rồi mới ghi). s201: items 233k dòng tải mất ~100' — nếu chỉ ghi ở cuối mà bước ghi
+        lỗi (Supabase `statement timeout` 57014 ở run 2026-09-19) thì mất trắng. Có sink → trả list rỗng, đếm nội bộ.
+        """
+        label = label or "api"
+        first = self._fetch_page(fetch_page_fn, 1, limit, label)
+        total = first.pagination.total
+        page_size = len(first.items)
+        if total <= page_size or page_size == 0:
+            print(f"  [{label}] {len(first.items):,}/{total:,} dòng (1 trang)", flush=True)
+            if sink and first.items:
+                sink(list(first.items))
+                return []
+            return list(first.items)
+
+        total_pages = -(-total // page_size)
+        print(f"  [{label}] tổng {total:,} dòng · {page_size}/trang · {total_pages} trang · {workers} luồng", flush=True)
+        pages: dict[int, list] = {1: first.items}
+        buf: list = []
+        sunk = 0
+        if sink:
+            pages = {}
+            buf.extend(first.items)
+        done = 1
+        started = time.monotonic()
+
+        def _get(p: int):
+            # limit = page_size để offset của server nhất quán ((p-1)*page_size) với trang 1
+            return p, self._fetch_page(fetch_page_fn, p, page_size, label).items
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+            for p, rows in ex.map(_get, range(2, total_pages + 1)):
+                if sink:
+                    buf.extend(rows)
+                    if len(buf) >= sink_size:
+                        sink(buf)
+                        sunk += len(buf)
+                        buf = []
+                else:
+                    pages[p] = rows
+                done += 1
+                if done % 25 == 0 or done == total_pages:
+                    el = time.monotonic() - started
+                    eta = el / max(done - 1, 1) * (total_pages - done)
+                    print(f"  [{label}] {done}/{total_pages} trang — đã {el/60:.1f}′, còn ~{eta/60:.1f}′", flush=True)
+
+        if sink:
+            if buf:
+                sink(buf)
+                sunk += len(buf)
+            if sunk != total:
+                raise RuntimeError(f"[{label}] ghi thiếu/thừa dòng: {sunk:,} ≠ total {total:,}")
+            return []
+        all_items = [it for p in sorted(pages) for it in pages[p]]
+        if len(all_items) != total:
+            raise RuntimeError(f"[{label}] tải thiếu/thừa dòng: nhận {len(all_items):,} ≠ total {total:,}")
         return all_items
 
     # ══════════════════════════════════════════════════════
@@ -303,9 +416,10 @@ class GohubClient:
         resp = self.session.post(f"{self.base_url}/products", json=body)
         return self._parse(resp, Product)
 
-    def get_all_products(self, tenant=None, status=None) -> list:
+    def get_all_products(self, tenant=None, status=None, workers=1) -> list:
         return self._fetch_all(
-            lambda page, limit: self.get_products(page=page, limit=limit, tenant=tenant, status=status)
+            lambda page, limit: self.get_products(page=page, limit=limit, tenant=tenant, status=status),
+            label="products", workers=workers
         )
 
     def post_all_products(self, tenant=None, product_codes=None, status=None) -> list:
@@ -354,11 +468,12 @@ class GohubClient:
         resp = self.session.post(f"{self.base_url}/skus", json=body)
         return self._parse(resp, Sku)
 
-    def get_all_skus(self, tenant=None, sku_codes=None, product_codes=None, status=None) -> list:
+    def get_all_skus(self, tenant=None, sku_codes=None, product_codes=None, status=None, workers=1) -> list:
         return self._fetch_all(
             lambda page, limit: self.get_skus(page=page, limit=limit, tenant=tenant,
                                               sku_codes=sku_codes, product_codes=product_codes,
-                                              status=status)
+                                              status=status),
+            label="skus", workers=workers
         )
 
     def post_all_skus(self, tenant=None, sku_codes=None, product_codes=None, status=None) -> list:
@@ -404,10 +519,11 @@ class GohubClient:
         resp = self.session.post(f"{self.base_url}/listings", json=body)
         return self._parse(resp, Listing)
 
-    def get_all_listings(self, tenant=None, listing_type_code=None, status=None) -> list:
+    def get_all_listings(self, tenant=None, listing_type_code=None, status=None, workers=1) -> list:
         return self._fetch_all(
             lambda page, limit: self.get_listings(page=page, limit=limit, tenant=tenant,
-                                                  listing_type_code=listing_type_code, status=status)
+                                                  listing_type_code=listing_type_code, status=status),
+            label="listings", workers=workers
         )
 
     def post_all_listings(self, tenant=None, listing_codes=None, product_codes=None, status=None) -> list:
@@ -453,10 +569,11 @@ class GohubClient:
         resp = self.session.post(f"{self.base_url}/items", json=body)
         return self._parse(resp, Item)
 
-    def get_all_items(self, tenant=None, item_type_code=None, status=None) -> list:
+    def get_all_items(self, tenant=None, item_type_code=None, status=None, workers=1, sink=None) -> list:
         return self._fetch_all(
             lambda page, limit: self.get_items(page=page, limit=limit, tenant=tenant,
-                                               item_type_code=item_type_code, status=status)
+                                               item_type_code=item_type_code, status=status),
+            label="items", workers=workers, sink=sink
         )
 
     def post_all_items(self, tenant=None, item_codes=None, listing_codes=None, sku_codes=None) -> list:

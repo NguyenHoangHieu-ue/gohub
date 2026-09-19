@@ -6114,7 +6114,8 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
 59. Quy hoạch lại Cấu trúc Thư mục Toàn hệ thống (Repository Restructuring):
     - Di chuyển toàn bộ mã nguồn Python, migrations và SQL seeding trong `database/` và `sync/` về thư mục cha quản lý tập trung **`backend/`** (`backend/migrations/`, `backend/seeding/`, `backend/data_sync/`).
     - Di chuyển toàn bộ file excel, báo giá, biểu mẫu nhạy cảm (`Data/`, `TaiLieuCongTy_Chung/`, `VENDOR/`, `Add_product/`) về thư mục cha **`resources/`** (`resources/reference/`, `resources/company_templates/`, `resources/vendor_catalogs/`, `resources/product_templates/`) và cấu hình ẩn/ignore trong `.gitignore` để đảm bảo không rò rỉ dữ liệu lên GitHub.
-    - Di chuyển thư mục quy tắc AI `_Skills_AI/` $ightarrow$ **`.ai/`** (thư mục ẩn tiện lợi).
+    - Di chuyển thư mục quy tắc AI `_Skills_AI/` $
+ightarrow$ **`.ai/`** (thư mục ẩn tiện lợi).
     - Cấu hình lại các tệp Github Actions (`sync.yml` và `data_sync.yml`) và `README.md` tương thích 100% với cấu trúc mới.
 
 60. Thiết lập QA Pipeline và Bộ Kiểm thử Tự động (Testing Suite):
@@ -6128,7 +6129,9 @@ User message → [Router] → [Agent] → tool calls → Supabase → Gemini str
     - Thiết lập Vercel Cron Job tự động kích hoạt đồng bộ hàng ngày lúc **`02:00 UTC`** cấu hình trong `web/vercel.json` (maxDuration 60 giây).
 
 62. Áp dụng Chỉ thị Khống chế (Vận hành & Giao diện):
-    - Ghi nhận quy tắc phân nhánh **Staging-first** bắt buộc: code $ightarrow$ staging $ightarrow$ main.
+    - Ghi nhận quy tắc phân nhánh **Staging-first** bắt buộc: code $
+ightarrow$ staging $
+ightarrow$ main.
     - Ghi nhận quy tắc **UI Strict Lock**: Giữ nguyên vẹn giao diện frontend của tất cả các tab báo cáo Analytics, chỉ tối ưu logic hoặc backend ngầm cho đến khi có chỉ thị trực tiếp từ anh Bảo.
 
 63. Khắc phục Vercel Block & Deploy Production thành công (LIVE):
@@ -10151,3 +10154,32 @@ s195). Có sẵn `POST` cùng route để tự test tay.
 
 tsc + lint (0 lỗi mới) + vitest (261/261) PASS. Wiki `docs/wiki/system/analytics-data-model.md` mục 8 cập
 nhật đủ. Chưa commit/push tại thời điểm ghi log này.
+
+
+## s201 (2026-09-19) — Sửa sync PM→Supabase + dựng lại Product Catalogue (CHƯA commit/push, chờ Hiếu bảo)
+
+### A. Sync sản phẩm không thành công (nguyên nhân gốc)
+Verify (không đoán): `sync_log` Supabase dừng 2026-07-20 (products 973 vs API 1.084; skus 12.892 vs 15.936; items 203.726 vs
+233.324); `gh run list` 20 run gần nhất 0 thành công (429 tới 09-12 → Retry s198+11; 502 ở 09-17; **09-18 cancelled sau 90' khi
+items mới tải 208k/233k**). Gốc: tải cả 4 bảng rồi mới ghi + server cắt 200 dòng/trang + client tuần tự → items ~82' chặn
+cả products/skus/listings. Fix: tách core/items (2 job), tải trang song song có giới hạn, page size thực, retry cấp trang +
+cooldown chung, timeout kết nối, flush log. Test pytest 8 ca PASS. Chưa chạy được full sync ở máy dev (thiếu API_KEY) — kiểm chứng
+bằng `gh workflow run sync.yml --ref staging` sau khi push. Phụ: bước Notify Lark 401 (MCP_SECRET) tới run 09-18 — kiểm lại run 09-19.
+File: `backend/data_sync/{sync.py,gohub_api_clients.py,test_pagination.py}`, `.github/workflows/sync.yml`.
+
+### B. Product Catalogue dựng lại hoàn toàn
+Đập bản s198 (destination từ SKU + doanh thu + tên vùng AI). Bản mới: chọn nước (từ `products.supported_countries`) → gói xếp theo
+nhà cung cấp → drawer chi tiết tiếng thường. Chỉ Supabase. Giá vốn chỉ admin/creator/product. Bố cục Hiếu chọn qua AskUserQuestion.
+Phát hiện khi test dữ liệu thật: 3HK Nhật có 69 gói trông y hệt nhau → thẻ hiện thêm "Khi hết mức data" + pháp nhân; gói khu vực
+(Pháp: 92/92 gói dùng chung) → lọc Phạm vi riêng/chung, gói riêng xếp trước, mỗi vendor 6 gói + "Xem thêm"; Windows không hiện emoji
+cờ → ảnh flagcdn. Wiki `analytics-catalogue.md` viết lại. tsc + lint (0 lỗi) + vitest 282/282 (thêm 21 ca `catalogue.test.ts`) PASS.
+Đã render tĩnh dữ liệu thật + xem qua Chrome (home, Nhật, Pháp); **ngăn chi tiết + tab Theo nhà cung cấp chưa QA thị giác — cần
+staging**. Lưu ý: tmp.txt (untracked) chứa secret thật (Vercel token bị lộ vào hội thoại lúc kiểm tra — nên rotate).
+
+### s201+1 (2026-09-19, tiếp) — items backfill lộ 2 lỗi mới + Catalogue tự thích ứng (CHƯA commit)
+Backfill run 35431521907: core thành công (~8'); products 1.087/skus 17.248 khớp API, sync_log lên 19/09. **items**: tải đủ 233.438 dòng
+nhưng ghi bị Supabase `57014 statement timeout` ở khối 500 dòng → mất trắng (chưa ghi gì). Đo: 4 luồng tải KHÔNG nhanh hơn tuần tự
+(~10 trang/phút, server tuần tự hoá) ⇒ fetch items ~100'. Fix (chưa commit): `_fetch_all(sink=...)` ghi từng khối ~2000 dòng ngay khi tải xong
+(thứ tự trang, đếm khớp total), `upsert` tự CHIA ĐÔI khối khi timeout (tối đa 6 tầng) + khối items 200 dòng; pytest 14 ca PASS.
+Chưa giải quyết: items vẫn ~100'/lần ⇒ cần API filter theo last_modified (chưa biết có không) hoặc đổi items sang chạy tuần 1 lần.
+Catalogue: thêm tự thích ứng vendor/loại SIM/kiểu data/trạng thái/nước mới (`lib/catalogue/auto-names.ts`), banner admin. Vitest 285, tsc sạch.

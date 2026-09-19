@@ -6,10 +6,38 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-18, s200+10)
+## Trạng thái hiện tại (2026-09-18, s200+12)
 
 | | |
 |---|---|
+| ⏳ **s201 (2026-09-19) — Sửa sync PM→Supabase (gốc rễ) + dựng lại Product Catalogue — CHƯA commit, chờ Hiếu bảo "commit lên staging"** | **Sync**: Supabase products/skus/listings/items đóng băng từ 2026-07-20 — gốc: `sync.py` tải cả 4 bảng rồi mới ghi, mà items (233k dòng) mất ~82' (server cắt 200 dòng/trang, client tuần tự) nên run 09-18 hết timeout 90' ở 89% và KHÔNG ghi gì kể cả 3 bảng nhanh. Fix: `sync.py core|items|all`, `sync.yml` 2 job (core 30' / items 150'), tải trang song song có giới hạn, retry cấp trang + cooldown chung, timeout kết nối, flush log; pytest 8 ca PASS. ⚠️ `.gitignore` có `backend/` → `test_pagination.py` cần `git add -f`. Sau khi push: `gh workflow run sync.yml --ref staging` để backfill; cron hằng ngày chỉ có hiệu lực sau khi merge main. **Catalogue**: đập bản s198, dựng lại theo "chọn nước → theo nhà cung cấp → drawer chi tiết tiếng thường", chỉ Supabase, giá vốn chỉ admin/creator/product; wiki `analytics-catalogue.md` viết lại. tsc + lint + vitest (282) PASS; ngăn chi tiết + tab Theo nhà cung cấp cần QA staging. Chi tiết: `docs/session_summary.txt` cuối file. **Cập nhật s201+1**: backfill lộ thêm 2 lỗi — model API thiếu `expirations` (đã fix) và items ghi cuối bị Supabase `57014 statement timeout` (tải xong 233k dòng nhưng mất trắng): items nay ghi theo khối (`sink`), upsert tự chia đôi khi timeout. Items tải ~100' (4 luồng không nhanh hơn tuần tự) và Catalogue KHÔNG dùng bảng này ⇒ `sync.yml`: cron hằng ngày chỉ `core`, cron Chủ nhật 02:00 UTC chạy `items`, chạy tay = cả hai. Catalogue thêm tự thích ứng vendor/loại SIM/kiểu data/trạng thái mới (`lib/catalogue/auto-names.ts`) + banner admin. ⚠️ `tmp.txt` chứa secret thật (Vercel token lộ vào hội thoại) — nên rotate + xoá. |
+| ✅ **s200+12 (2026-09-18) — Lọc bỏ commit đồng bộ wiki + thay đổi nhỏ nhặt khỏi thông báo Lark — đã merge
+  main, đã verify sống** | Hiếu: commit sync wiki/tài liệu và thay đổi nhỏ nhặt không cần noti. Chặn CỨNG
+  (không tốn Gemini) commit `docs:`/`docs(scope):` ngay tại `parseCommits()` (route
+  `api/notify/release`) trước khi vào Gemini — quy ước prefix commit sẵn có của repo. Phần "nhỏ nhặt"
+  (đổi tên biến/format/gộp code trùng không đổi hành vi/bump version...) giao cho Gemini lọc qua
+  `SYSTEM_PROMPT` (`release-notify.ts`) — 2 rule mới "BỎ HẲN wiki/tài liệu dù chung 1 commit" + "BỎ HẲN
+  thay đổi nhỏ nhặt", cùng rule cũ "trả rỗng nếu không còn gì đáng nói" nhấn mạnh "thà bỏ sót còn hơn báo
+  phiền". tsc + lint (0 lỗi mới) + vitest PASS. **Đã merge main + verify sống bằng curl trực tiếp** —
+  gọi `/api/notify/release` với commit thật khớp mẫu, nhận đúng format `🚀 [Production]...` +
+  `🧪 Còn trên staging...`, gửi tin thật vào group Lark thành công.
+| ✅ **s200+11 (2026-09-18) — Thông báo Lark phân biệt Staging/Production + kèm backlog staging chưa merge
+  — đã merge main, đã verify sống bằng curl** | Hiếu: staging thì note "thay đổi trên staging", production
+  thì note "đã đưa lên production" + liệt kê thêm "có trên staging nhưng chưa lên production". Workflow
+  `notify-release.yml` đổi trigger `on:push branches:[main,staging]` (trước chỉ `main`); khi push `main`
+  thêm bước `git log origin/main..origin/staging` tính backlog, gửi kèm field `pendingCommits` +
+  `environment`. Route `api/notify/release` build message khác nhau theo `environment` — staging:
+  `🧪 [Staging] Vừa cập nhật (đang test, chưa lên production)`; production: `🚀 [Production] Vừa lên
+  production` + (nếu có pending) khối `🧪 Còn trên staging, CHƯA lên production`. **Bug thật gặp lúc code**:
+  dùng ký tự `` (control byte) làm delimiter trong lệnh `git log --pretty=format` + script Node lồng
+  trong YAML — bị JSON-unescape thành byte 0x1F thật khi ghi file qua tool, làm hỏng cú pháp YAML (GitHub
+  Actions fail "workflow file issue", 0 giây, không log gì). Phát hiện qua `od -c` (thấy byte bát phân
+  `037`) + validate bằng `js-yaml`. Fix: đổi delimiter sang chuỗi in được `'|||'`. tsc + lint + vitest PASS.
+  **Verify sống**: sau khi deploy, curl trực tiếp `/api/notify/release` (bypass workflow) với dữ liệu mô
+  phỏng — trả đúng cả 2 nhãn môi trường + khối backlog, gửi tin thật vào group Lark. Vercel
+  `get_deployment` xác nhận đúng commit SHA đang chạy production. Response ban đầu (ngay sau lúc vừa
+  redeploy) còn trả format CŨ — do độ trễ lan truyền edge, KHÔNG phải bug — retest vài phút sau ra đúng
+  format mới, xác nhận chắc chắn không phải lỗi code.
 | ✅ **s200+10 (2026-09-18) — 3HK Data Usage: Zone table drill-down theo nước, bỏ bảng Country×Month riêng
   — đã push staging + merge main, đã verify sống** | Tiếp ngay s200+9 (khi đó vẫn giữ song song bảng theo
   nước + theo zone). Hiếu: bảng Zone phải cho biết "zone nào có nước nào" (bấm 1 zone → xổ breakdown các
@@ -895,13 +923,12 @@
   group đích. Test trực tiếp `/api/notify/lark` + `/api/notify/release` bằng curl (cả staging lẫn
   production): auth 200 (hết 401), gửi tin thật thành công, Gemini tóm tắt đúng nội dung. Không cần làm
   gì thêm cho 2 mục này.
-- [ ] **s200+11 — QA thông báo Lark phân biệt Staging/Production + backlog** — push code này lên staging
-  sẽ tự trigger workflow ngay (trigger mới `on:push branches:[main,staging]`) — kiểm tra group Lark có tin
-  gắn nhãn "🧪 [Staging]" đúng nội dung commit vừa push không. Khi merge main kế tiếp, kiểm tra tin gắn
-  nhãn "🚀 [Production]" + nếu lúc đó staging còn commit chưa merge thì phải thấy thêm khối "🧪 Còn trên
-  staging, CHƯA lên production:". Chưa tự verify được phần "pendingCommits" bằng dữ liệu THẬT (cần đúng
-  tình huống staging đang có commit vượt main tại đúng lúc push main) — logic đã tsc+vitest PASS nhưng
-  behavior thật cần Hiếu tự quan sát 1-2 lần merge tới.
+- [x] **s200+11/+12 — Thông báo Lark Staging/Production + backlog + lọc docs/nhỏ nhặt — XONG, đã verify
+  sống bằng curl thật** — gọi trực tiếp `/api/notify/release` production với dữ liệu mô phỏng, nhận đúng
+  format `🚀 [Production] Vừa lên production...` + `🧪 Còn trên staging, CHƯA lên production...`, gửi tin
+  thật vào group Lark thành công. Vẫn còn 1 việc nhỏ: **quan sát 1-2 lần merge THẬT sắp tới** để xác nhận
+  workflow tự tính `pendingCommits` đúng khi staging thật sự có commit vượt main tại đúng lúc push main
+  (mới verify bằng mô phỏng qua curl, chưa qua tình huống git-diff thật) — không chặn gì, chỉ nên để ý.
 - [ ] **s200+9 — Quyết định hướng xử lý: ~5.235 SIM tháng 8/2026 bị gán nhầm sang mã khung SIM (K)** —
   phát hiện khi Hiếu hỏi lại "sao Zone khác data tổng": tháng 8 riêng lẻ có 5.235 ICCID / 27,60 TB usage
   thật bị tính vào mã `K` (khung SIM/eSIM profile, vốn phải luôn ~0 vì không phải gói data thật — T4-T7
