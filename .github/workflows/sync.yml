@@ -2,16 +2,21 @@ name: Sync GoHub Data to Supabase
 
 on:
   schedule:
-    - cron: "0 1 * * *"   # 01:00 UTC = 08:00 ICT (sau khi GoHub API cập nhật data buổi sáng)
-  workflow_dispatch:
+    - cron: "0 1 * * *"   # 01:00 UTC = 08:00 ICT hằng ngày: chỉ job `core` (products/skus/listings, ~8')
+    - cron: "0 2 * * 0"   # 02:00 UTC Chủ nhật hằng tuần: job `items` (233k dòng, ~100')
+  workflow_dispatch:      # chạy tay: cả `core` lẫn `items`
 
 # s201 (2026-09-19): tách 2 job. Trước đây 1 job tải cả 4 bảng rồi mới ghi → items (233k dòng, server cắt
 # 200 dòng/trang, ~82 phút tuần tự) làm cả job vượt timeout 90' và KHÔNG ghi gì → Supabase đóng băng từ
 # 2026-07-20. Nay: `core` (products/skus/listings, vài phút) ghi ngay; `items` chạy sau, timeout riêng,
 # lỗi/timeout của items không ảnh hưởng dữ liệu core đã ghi.
+# Items (233k dòng) tải ~100' (server cắt 200 dòng/trang, không nhanh hơn khi thêm luồng) và Catalogue KHÔNG dùng
+# bảng này (chỉ products/skus/listings) — items chỉ phục vụ tab Item ở /skus + Bé Gấu tra giá bán/alias — nên
+# chỉ đồng bộ mỗi tuần 1 lần hoặc khi chạy tay.
 jobs:
   core:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'schedule' || github.event.schedule == '0 1 * * *' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +49,8 @@ jobs:
   items:
     runs-on: ubuntu-latest
     needs: core
-    if: ${{ always() }}      # chạy dù core lỗi (items độc lập); FK mới thiếu sẽ báo lỗi rõ trong log/thông báo
+    # Chủ nhật 02:00 UTC (core bị bỏ qua) hoặc chạy tay (sau core, dù core lỗi — items độc lập; FK thiếu sẽ báo rõ)
+    if: ${{ always() && (github.event_name == 'workflow_dispatch' || github.event.schedule == '0 2 * * 0') }}
     timeout-minutes: 150     # repo public = Actions minutes miễn phí; 233k dòng ≈ 25–40' với tải song song
     steps:
       - uses: actions/checkout@v4

@@ -5,6 +5,7 @@ Local: cd backend/data_sync && python sync.py [core|items|all]  (cần set env v
 CORE = products/skus/listings (nhanh, ghi ngay); ITEMS = 233k dòng (chậm) chạy job riêng — xem .github/workflows/sync.yml
 """
 import os
+import time
 import dataclasses
 from datetime import datetime, timezone
 from supabase import create_client
@@ -17,11 +18,39 @@ SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 CHUNK      = 500
 FULL_TYPES = {"C", "E", "1", "2"}
 
-def upsert(sb, table: str, rows: list[dict], pk: str):
-    now = datetime.now(timezone.utc).isoformat()
-    for i in range(0, len(rows), CHUNK):
-        batch = [{**r, "synced_at": now} for r in rows[i:i + CHUNK]]
+def _is_timeout(e: Exception) -> bool:
+    """Supabase/PostgREST: 57014 = statement timeout; cũng gom lỗi mạng/5xx tạm thời."""
+    txt = f"{getattr(e, 'code', '')} {e}".lower()
+    return "57014" in txt or "statement timeout" in txt or "timeout" in txt or "timed out" in txt \
+        or "502" in txt or "503" in txt or "504" in txt or "connection" in txt
+
+
+def _upsert_batch(sb, table: str, batch: list[dict], pk: str, depth: int = 0):
+    """Upsert 1 khối; nếu Supabase báo timeout thì CHIA ĐÔI khối rồi thử lại (tối đa 6 tầng ≈ 1/64 khối gốc).
+
+    s201 (2026-09-19): run items chết vì `canceling statement due to statement timeout` (57014) ở khối 500 dòng
+    của bảng ~230k dòng. Nhỏ hơn thì qua; upsert idempotent nên thử lại an toàn.
+    """
+    try:
         sb.table(table).upsert(batch, on_conflict=pk).execute()
+    except Exception as e:  # noqa: BLE001
+        if not _is_timeout(e) or depth >= 6:
+            raise
+        if len(batch) > 1:
+            mid = len(batch) // 2
+            print(f"  [{table}] timeout khi ghi {len(batch)} dòng — chia đôi (tầng {depth + 1})", flush=True)
+            _upsert_batch(sb, table, batch[:mid], pk, depth + 1)
+            _upsert_batch(sb, table, batch[mid:], pk, depth + 1)
+        else:
+            time.sleep(min(5 * (depth + 1), 30))
+            _upsert_batch(sb, table, batch, pk, depth + 1)
+
+
+def upsert(sb, table: str, rows: list[dict], pk: str, chunk: int = CHUNK):
+    now = datetime.now(timezone.utc).isoformat()
+    for i in range(0, len(rows), chunk):
+        batch = [{**r, "synced_at": now} for r in rows[i:i + chunk]]
+        _upsert_batch(sb, table, batch, pk)
 
 def fetch_all_rows(sb, table: str, select: str) -> list[dict]:
     """Fetch toàn bộ rows, bypass Supabase 1000-row limit."""
@@ -197,7 +226,7 @@ LISTING_CORE = {"listing_code", "reference_product_code", "tenant", "status",
 
 # Số luồng tải trang song song mỗi bảng (server GoHub API cắt 200 dòng/trang). Chỉnh qua env nếu bị 429.
 CORE_PAGE_WORKERS  = int(os.environ.get("GOHUB_CORE_WORKERS", "3"))
-ITEMS_PAGE_WORKERS = int(os.environ.get("GOHUB_ITEMS_WORKERS", "4"))
+ITEMS_PAGE_WORKERS = int(os.environ.get("GOHUB_ITEMS_WORKERS", "4"))  # server tuần tự hoá: >4 luồng không nhanh hơn (đo 09-19: ~10 trang/phút)
 
 
 def _prepare_rows(table: str, rows: list[dict]) -> list[dict]:
@@ -267,13 +296,33 @@ def run_core(client, sb) -> dict:
     return counts
 
 
+ITEMS_UPSERT_CHUNK = int(os.environ.get("GOHUB_ITEMS_UPSERT_CHUNK", "200"))
+
+
 def run_items(client, sb) -> dict:
-    """Giai đoạn ITEMS (233k dòng, chậm nhất) — chạy độc lập sau CORE."""
-    print("[items] Fetching...", flush=True)
-    rows = [dataclasses.asdict(r) for r in client.get_all_items(workers=ITEMS_PAGE_WORKERS)]
-    print(f"[items] Fetched {len(rows):,} rows", flush=True)
-    _sync_table(sb, "items", rows, "item_code")
-    return {"items": len(rows)}
+    """Giai đoạn ITEMS (233k dòng, chậm nhất) — chạy độc lập sau CORE.
+
+    Ghi THEO TỪNG KHỐI ngay khi tải xong (sink) thay vì tải hết rồi mới ghi: fetch mất ~100', nếu ghi ở cuối
+    mà lỗi thì mất trắng (run 2026-09-19). Nay lỗi giữa chừng vẫn giữ phần đã ghi (upsert idempotent).
+    Bảng ~230k dòng nên khối ghi nhỏ (200) để không chạm statement timeout của Supabase.
+    """
+    print("[items] Fetching + upserting theo khối...", flush=True)
+    written = 0
+
+    def sink(objs):
+        nonlocal written
+        rows = _prepare_rows("items", [dataclasses.asdict(r) for r in objs])
+        upsert(sb, "items", rows, "item_code", chunk=ITEMS_UPSERT_CHUNK)
+        written += len(rows)
+        print(f"[items] đã ghi {written:,} dòng", flush=True)
+
+    client.get_all_items(workers=ITEMS_PAGE_WORKERS, sink=sink)
+    sb.table("sync_log").upsert(
+        {"table_name": "items", "last_sync": datetime.now(timezone.utc).isoformat(), "record_count": written},
+        on_conflict="table_name",
+    ).execute()
+    print(f"[items] Done ✓ ({written:,} dòng)", flush=True)
+    return {"items": written}
 
 
 def main(phase: str = "all") -> dict:

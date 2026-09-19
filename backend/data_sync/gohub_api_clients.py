@@ -313,13 +313,18 @@ class GohubClient:
         )
 
     # ── Internal: auto-paginate ────────────────────────────
-    def _fetch_all(self, fetch_page_fn, limit: int = 1000, label: str = "", workers: int = 1) -> list:
+    def _fetch_all(self, fetch_page_fn, limit: int = 1000, label: str = "", workers: int = 1,
+                   sink=None, sink_size: int = 2000) -> list:
         """Tải toàn bộ các trang.
 
         s201 (2026-09-19): server GoHub API cắt cứng 200 dòng/trang dù xin limit=1000 (log run 09-18: "+200").
         Client cũ tải TUẦN TỰ từng trang (items 233k dòng = 1.167 request × ~4,7s ≈ 82 phút → hết timeout
         90' của GitHub Actions). Bản này: lấy trang 1 để biết page size THỰC, rồi tải các trang còn lại song
         song có giới hạn (workers), ghép lại đúng thứ tự trang và kiểm tổng số dòng khớp `pagination.total`.
+
+        `sink` (tuỳ chọn): hàm nhận từng khối ~`sink_size` dòng THEO ĐÚNG THỨ TỰ TRANG ngay khi tải xong khối đó
+        (thay vì giữ hết trong RAM rồi mới ghi). s201: items 233k dòng tải mất ~100' — nếu chỉ ghi ở cuối mà bước ghi
+        lỗi (Supabase `statement timeout` 57014 ở run 2026-09-19) thì mất trắng. Có sink → trả list rỗng, đếm nội bộ.
         """
         label = label or "api"
         first = self._fetch_page(fetch_page_fn, 1, limit, label)
@@ -327,11 +332,19 @@ class GohubClient:
         page_size = len(first.items)
         if total <= page_size or page_size == 0:
             print(f"  [{label}] {len(first.items):,}/{total:,} dòng (1 trang)", flush=True)
+            if sink and first.items:
+                sink(list(first.items))
+                return []
             return list(first.items)
 
         total_pages = -(-total // page_size)
         print(f"  [{label}] tổng {total:,} dòng · {page_size}/trang · {total_pages} trang · {workers} luồng", flush=True)
         pages: dict[int, list] = {1: first.items}
+        buf: list = []
+        sunk = 0
+        if sink:
+            pages = {}
+            buf.extend(first.items)
         done = 1
         started = time.monotonic()
 
@@ -341,13 +354,27 @@ class GohubClient:
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
             for p, rows in ex.map(_get, range(2, total_pages + 1)):
-                pages[p] = rows
+                if sink:
+                    buf.extend(rows)
+                    if len(buf) >= sink_size:
+                        sink(buf)
+                        sunk += len(buf)
+                        buf = []
+                else:
+                    pages[p] = rows
                 done += 1
                 if done % 25 == 0 or done == total_pages:
                     el = time.monotonic() - started
                     eta = el / max(done - 1, 1) * (total_pages - done)
                     print(f"  [{label}] {done}/{total_pages} trang — đã {el/60:.1f}′, còn ~{eta/60:.1f}′", flush=True)
 
+        if sink:
+            if buf:
+                sink(buf)
+                sunk += len(buf)
+            if sunk != total:
+                raise RuntimeError(f"[{label}] ghi thiếu/thừa dòng: {sunk:,} ≠ total {total:,}")
+            return []
         all_items = [it for p in sorted(pages) for it in pages[p]]
         if len(all_items) != total:
             raise RuntimeError(f"[{label}] tải thiếu/thừa dòng: nhận {len(all_items):,} ≠ total {total:,}")
@@ -542,11 +569,11 @@ class GohubClient:
         resp = self.session.post(f"{self.base_url}/items", json=body)
         return self._parse(resp, Item)
 
-    def get_all_items(self, tenant=None, item_type_code=None, status=None, workers=1) -> list:
+    def get_all_items(self, tenant=None, item_type_code=None, status=None, workers=1, sink=None) -> list:
         return self._fetch_all(
             lambda page, limit: self.get_items(page=page, limit=limit, tenant=tenant,
                                                item_type_code=item_type_code, status=status),
-            label="items", workers=workers
+            label="items", workers=workers, sink=sink
         )
 
     def post_all_items(self, tenant=None, item_codes=None, listing_codes=None, sku_codes=None) -> list:

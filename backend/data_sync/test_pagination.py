@@ -109,3 +109,75 @@ def test_models_tolerate_missing_and_extra_fields():
     assert Product.from_dict({"product_code": "P"}).vendor_code is None
     assert Listing.from_dict({}).listing_code is None
     assert Item.from_dict({"item_code": "I"}).item_code == "I"
+
+
+def test_sink_receives_all_rows_in_order_in_chunks(client):
+    fetch, _ = make_server(1084)
+    got = []
+    client._fetch_all(fetch, limit=1000, label="t", workers=3, sink=lambda rows: got.append(list(rows)), sink_size=300)
+    flat = [x for chunk in got for x in chunk]
+    assert flat == list(range(1084))                 # đúng thứ tự trang, không mất/thừa
+    assert len(got) >= 3 and all(len(c) >= 1 for c in got)
+
+
+def test_sink_single_page(client):
+    fetch, _ = make_server(150)
+    got = []
+    assert client._fetch_all(fetch, limit=1000, label="t", workers=2, sink=lambda r: got.extend(r)) == []
+    assert got == list(range(150))
+
+
+def test_sink_count_mismatch_raises(client):
+    fetch, _ = make_server(1000, drop_last=True)
+    with pytest.raises(RuntimeError, match="ghi thiếu/thừa"):
+        client._fetch_all(fetch, limit=1000, label="t", workers=2, sink=lambda r: None)
+
+
+def _load_sync(monkeypatch):
+    monkeypatch.setenv("API_KEY", "x"); monkeypatch.setenv("SUPABASE_URL", "http://x"); monkeypatch.setenv("SUPABASE_SERVICE_KEY", "x")
+    import importlib, sys
+    sys.modules.pop("sync", None)
+    return importlib.import_module("sync")
+
+
+class _TimeoutErr(Exception):
+    code = "57014"
+
+
+class _FakeSb:
+    """Giả Supabase: ghi khối > limit dòng thì báo statement timeout."""
+    def __init__(self, limit):
+        self.limit = limit
+        self.saved = []
+        self.calls = 0
+    def table(self, _t):
+        return self
+    def upsert(self, batch, on_conflict=None):
+        self._batch = batch
+        return self
+    def execute(self):
+        self.calls += 1
+        if len(self._batch) > self.limit:
+            raise _TimeoutErr("canceling statement due to statement timeout")
+        self.saved.extend(self._batch)
+
+
+def test_upsert_splits_batch_on_statement_timeout(monkeypatch):
+    sync = _load_sync(monkeypatch)
+    monkeypatch.setattr(sync.time, "sleep", lambda *_: None)
+    sb = _FakeSb(limit=30)
+    rows = [{"item_code": str(i)} for i in range(200)]
+    sync.upsert(sb, "items", rows, "item_code", chunk=200)
+    assert sorted(int(r["item_code"]) for r in sb.saved) == list(range(200))   # đủ, không trùng
+    assert sb.calls > 1
+
+
+def test_upsert_non_timeout_error_propagates(monkeypatch):
+    sync = _load_sync(monkeypatch)
+
+    class Boom(_FakeSb):
+        def execute(self):
+            raise ValueError("violates foreign key constraint")
+
+    with pytest.raises(ValueError):
+        sync.upsert(Boom(limit=10), "items", [{"item_code": "1"}], "item_code")
