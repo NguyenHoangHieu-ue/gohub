@@ -98,8 +98,8 @@ export function statusLabel(s: string): string {
   }
 }
 export const SELLABLE_STATUSES = new Set(["Active", "Temporary"])
-/** Gói/SKU KHÔNG đưa lên Catalogue (Hiếu 2026-09-19: Inactive không cần hiện). Loại ngay từ server. */
-export const HIDDEN_STATUSES = new Set(["Inactive", "Deleted"])
+/** Gói/SKU KHÔNG đưa lên Catalogue (Hiếu 2026-09-19: Inactive, rồi Preparing cũng không cần hiện). Loại ngay từ server. */
+export const HIDDEN_STATUSES = new Set(["Inactive", "Deleted", "Preparing"])
 export function isHiddenStatus(s: string | null | undefined): boolean { return HIDDEN_STATUSES.has((s ?? "").trim()) }
 
 export function tenantLabel(t: string): string {

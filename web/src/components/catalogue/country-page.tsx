@@ -4,7 +4,8 @@ import React, { useMemo, useState } from "react"
 import { ArrowLeft, Link2, RotateCcw } from "lucide-react"
 import type { CatalogueIndex } from "@/lib/catalogue/types"
 import { carrierForCountry } from "@/lib/catalogue/carriers"
-import { dataKindExplain, dataKindLabel, simBreakdown, simExplain, simLabel } from "@/lib/catalogue/plain-language"
+import { simBreakdown } from "@/lib/catalogue/plain-language"
+import { UNLIMITED_HINT, UNLIMITED_LABEL, filterDataHint, filterDataLabel, filterSimHint, filterSimLabel } from "@/lib/catalogue/filter-labels"
 import { makeVendorNamer } from "@/lib/catalogue/auto-names"
 import {
   countryAliases, countryNameVn, distinctDataKinds, distinctSims, filterProducts, groupByVendor, isSellable, productsOfCountry,
@@ -43,13 +44,14 @@ export function CountryPage({ index, code, initialVendor, activeProduct, onBack,
   }, [selling])
   const sims = useMemo(() => distinctSims(all), [all])
   const dataKinds = useMemo(() => distinctDataKinds(all), [all])
+  const anyUnlimited = useMemo(() => all.some(p => p.sku.hasUnlimited), [all])
+  const nameEn = ref?.name ?? name.split(" (")[0]
   const own = selling.filter(p => p.countries.length === 1).length
   const sharedCount = selling.length - own
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const PER_VENDOR = 6
   const vendors = new Set(selling.map(p => p.vendorCode)).size
-  const hiddenCount = all.length - selling.length
-  const filtersOn = !!(f.sim || f.localNumber || f.noKyc || f.dataKind || f.vendor || f.scope || f.sellableOnly === false)
+  const filtersOn = !!(f.sim || f.localNumber || f.noKyc || f.dataKind || f.unlimited || f.vendor || f.scope)
   const set = (patch: Partial<ProductFilters>) => setF(cur => ({ ...cur, ...patch }))
 
   return (
@@ -82,48 +84,48 @@ export function CountryPage({ index, code, initialVendor, activeProduct, onBack,
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           {sharedCount > 0 && own > 0 && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Phạm vi</span>
-              <FilterChip active={!f.scope} onClick={() => set({ scope: null })}>Tất cả</FilterChip>
-              <FilterChip active={f.scope === "own"} onClick={() => set({ scope: "own" })} title="Gói chỉ dùng cho nước này">Riêng {name.split(" (")[0]}</FilterChip>
-              <FilterChip active={f.scope === "shared"} onClick={() => set({ scope: "shared" })} title="Một gói dùng được ở nhiều nước cùng lúc (khu vực/toàn cầu)">Dùng chung nhiều nước</FilterChip>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Scope</span>
+              <FilterChip active={!f.scope} onClick={() => set({ scope: null })}>All</FilterChip>
+              <FilterChip active={f.scope === "own"} onClick={() => set({ scope: "own" })} title="Packages made only for this country">Only {nameEn}</FilterChip>
+              <FilterChip active={f.scope === "shared"} onClick={() => set({ scope: "shared" })} title="One package usable in several countries (regional / global)">Multi-country</FilterChip>
             </div>
           )}
           {sims.length > 1 && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Loại</span>
-              <FilterChip active={!f.sim} onClick={() => set({ sim: null })}>Tất cả</FilterChip>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Type</span>
+              <FilterChip active={!f.sim} onClick={() => set({ sim: null })}>All</FilterChip>
               {sims.map(s => (
-                <FilterChip key={s} active={f.sim === s} onClick={() => set({ sim: s })} title={simExplain(s)}>{simLabel(s)}</FilterChip>
+                <FilterChip key={s} active={f.sim === s} onClick={() => set({ sim: s })} title={filterSimHint(s)}>{filterSimLabel(s)}</FilterChip>
               ))}
             </div>
           )}
-          {dataKinds.length > 1 && (
+          {(dataKinds.length > 1 || anyUnlimited) && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Dung lượng</span>
-              <FilterChip active={!f.dataKind} onClick={() => set({ dataKind: null })}>Tất cả</FilterChip>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Data</span>
+              <FilterChip active={!f.dataKind && !f.unlimited} onClick={() => set({ dataKind: null, unlimited: false })}>All</FilterChip>
               {dataKinds.map(k => (
-                <FilterChip key={k} active={f.dataKind === k} onClick={() => set({ dataKind: k })} title={dataKindExplain(k)}>{dataKindLabel(k)}</FilterChip>
+                <FilterChip key={k} active={f.dataKind === k} onClick={() => set({ dataKind: f.dataKind === k ? null : k })} title={filterDataHint(k)}>{filterDataLabel(k)}</FilterChip>
               ))}
+              {anyUnlimited && (
+                <FilterChip active={!!f.unlimited} onClick={() => set({ unlimited: !f.unlimited })} title={UNLIMITED_HINT}>{UNLIMITED_LABEL}</FilterChip>
+              )}
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Khác</span>
-            <FilterChip active={!!f.localNumber} onClick={() => set({ localNumber: !f.localNumber })} title="Có số điện thoại tại nước đó, nhận cuộc gọi/OTP">Có số điện thoại</FilterChip>
-            <FilterChip active={!!f.noKyc} onClick={() => set({ noKyc: !f.noKyc })} title="Khách không phải xác minh danh tính">Không cần KYC</FilterChip>
-            <FilterChip active={f.sellableOnly === false} onClick={() => set({ sellableOnly: f.sellableOnly === false })} title="Hiện cả gói sắp có / chưa mở bán">
-              Hiện cả gói sắp có{hiddenCount > 0 ? ` (${hiddenCount})` : ""}
-            </FilterChip>
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Other</span>
+            <FilterChip active={!!f.localNumber} onClick={() => set({ localNumber: !f.localNumber })} title="Local phone number — can receive calls / OTP">Phone number</FilterChip>
+            <FilterChip active={!!f.noKyc} onClick={() => set({ noKyc: !f.noKyc })} title="Customer does not need identity verification">No KYC</FilterChip>
           </div>
           {f.vendor && (
-            <FilterChip active onClick={() => set({ vendor: null })} title="Bỏ lọc nhà cung cấp">Chỉ {vendorName(f.vendor)} ✕</FilterChip>
+            <FilterChip active onClick={() => set({ vendor: null })} title="Remove vendor filter">Only {vendorName(f.vendor)} ✕</FilterChip>
           )}
           {filtersOn && (
             <button type="button" onClick={() => setF({ sellableOnly: true, vendor: null, scope: null })} className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline">
-              <RotateCcw className="h-3.5 w-3.5" /> Xoá bộ lọc
+              <RotateCcw className="h-3.5 w-3.5" /> Clear filters
             </button>
           )}
         </div>
-        {filtersOn && <p className="mt-3 text-xs text-slate-400">Đang hiện {shown.length} / {all.length} gói.</p>}
+        {filtersOn && <p className="mt-3 text-xs text-slate-400">Showing {shown.length} of {all.length} packages.</p>}
       </div>
 
       {groups.length === 0 ? (
@@ -131,7 +133,7 @@ export function CountryPage({ index, code, initialVendor, activeProduct, onBack,
           <EmptyState
             icon={<Link2 className="h-8 w-8" />}
             message={filtersOn ? "Không có gói nào khớp bộ lọc." : "Chưa có gói nào cho nước này."}
-            action={filtersOn ? <button type="button" className="text-sm font-medium text-brand-600 hover:underline" onClick={() => setF({ sellableOnly: true, vendor: null, scope: null })}>Xoá bộ lọc</button> : undefined}
+            action={filtersOn ? <button type="button" className="text-sm font-medium text-brand-600 hover:underline" onClick={() => setF({ sellableOnly: true, vendor: null, scope: null })}>Clear filters</button> : undefined}
           />
         </div>
       ) : (

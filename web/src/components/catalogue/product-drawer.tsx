@@ -50,7 +50,6 @@ export function ProductDrawer({ code, index, contextCountry, onClose }: {
   onClose: () => void
 }) {
   const { detail, error, loading } = useProductDetail(code)
-  const [showAllSkus, setShowAllSkus] = useState(false)
   const [showSkuTable, setShowSkuTable] = useState(false)
   const [showTech, setShowTech] = useState(false)
 
@@ -76,10 +75,8 @@ export function ProductDrawer({ code, index, contextCountry, onClose }: {
   const carrierText = carrierHere && (carrierHere.mode === "single" || carrierHere.mode === "country") ? carrierHere.text : null
 
   const liveSkus: CatalogueSkuRow[] = useMemo(() => {
-    const all = detail?.skus ?? []
-    return showAllSkus ? all : all.filter(s => SELLABLE_STATUSES.has(s.status))
-  }, [detail, showAllSkus])
-  const hiddenSkus = (detail?.skus.length ?? 0) - (detail?.skus.filter(s => SELLABLE_STATUSES.has(s.status)).length ?? 0)
+    return (detail?.skus ?? []).filter(s => SELLABLE_STATUSES.has(s.status))
+  }, [detail])
 
   // "Xem nhanh": mỗi dung lượng → các số ngày có sẵn
   const quick = useMemo(() => {
@@ -179,11 +176,6 @@ export function ProductDrawer({ code, index, contextCountry, onClose }: {
                   <button type="button" onClick={() => setShowSkuTable(v => !v)} className="font-semibold text-brand-600 hover:underline">
                     {showSkuTable ? "Ẩn" : "Xem"} chi tiết từng gói ({liveSkus.length})
                   </button>
-                  {hiddenSkus > 0 && (
-                    <button type="button" onClick={() => setShowAllSkus(v => !v)} className="text-slate-500 hover:underline">
-                      {showAllSkus ? "Ẩn gói sắp có" : `Hiện thêm ${hiddenSkus} gói sắp có`}
-                    </button>
-                  )}
                 </div>
                 {showSkuTable && (
                   <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">

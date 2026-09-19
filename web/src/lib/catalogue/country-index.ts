@@ -136,6 +136,8 @@ export interface ProductFilters {
   vendor?: string | null
   /** own = gói chỉ dành cho 1 nước; shared = gói dùng chung nhiều nước (khu vực/toàn cầu) */
   scope?: "own" | "shared" | null
+  /** Chỉ gói CÓ lựa chọn dung lượng không giới hạn (SKU 9999). Kết hợp được với Fixed/Daily. */
+  unlimited?: boolean
 }
 
 export function filterProducts(list: CatalogueProductLite[], f: ProductFilters): CatalogueProductLite[] {
@@ -146,6 +148,7 @@ export function filterProducts(list: CatalogueProductLite[], f: ProductFilters):
     if (f.noKyc && p.kycNeeded !== false) return false
     if (f.dataKind && p.dataKind !== f.dataKind) return false
     if (f.vendor && p.vendorCode !== f.vendor) return false
+    if (f.unlimited && !p.sku.hasUnlimited) return false
     if (f.scope === "own" && p.countries.length !== 1) return false
     if (f.scope === "shared" && p.countries.length <= 1) return false
     return true
