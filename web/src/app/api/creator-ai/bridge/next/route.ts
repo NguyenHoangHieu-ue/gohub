@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { authBridge } from "@/lib/bridge-device"
 
 // s195+3: multi-tenant — token → username qua browser_bridge_pairings (mỗi user 1 hàng đợi riêng).
-async function resolveUsername(req: NextRequest): Promise<string | null> {
-  const auth  = req.headers.get("authorization") ?? ""
-  const token = auth.replace("Bearer ", "").trim()
-  if (!token) return null
-  const { data } = await supabaseAdmin.from("browser_bridge_pairings").select("username").eq("token", token).maybeSingle()
-  return data?.username ?? null
-}
-
+// s202: extension gửi X-Device-Id (+ X-Device-Info) → ghi nhận thiết bị, gắn device/IP vào từng lệnh được nhận.
 // Extension poll GET định kỳ để lấy lệnh kế tiếp CỦA CHÍNH MÌNH. Không có lệnh → { command: null }.
 export async function GET(req: NextRequest) {
-  const username = await resolveUsername(req)
-  if (!username) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const auth = await authBridge(req, true)
+  if (!auth.ok) return auth.res
+  const { username, deviceId, ip } = auth
 
   await supabaseAdmin.from("browser_bridge_pairings")
     .update({ last_seen: new Date().toISOString() })
@@ -39,7 +34,7 @@ export async function GET(req: NextRequest) {
 
   const { error: claimErr } = await supabaseAdmin
     .from("browser_bridge_commands")
-    .update({ status: "claimed", claimed_at: new Date().toISOString() })
+    .update({ status: "claimed", claimed_at: new Date().toISOString(), device_id: deviceId, claimed_ip: ip })
     .eq("id", row.id)
     .eq("status", "pending")
 

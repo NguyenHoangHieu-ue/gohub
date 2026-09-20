@@ -96,7 +96,10 @@ export async function computeMonthlyKpis(month: string, companyCode: string) {
   }
 }
 
-export async function POST(req: NextRequest) {
+// s202: Vercel Cron gọi bằng GET — trước đây route chỉ export POST nên MỌI lần cron chạy đều 405, snapshot
+// `analytics_monthly_kpis` đứng yên ở lần chạy tay 2026-07-20 (Bé Gấu trả doanh thu/CM1 tháng 8-9 thiếu). Giữ POST
+// cho gọi tay. Guard: `__tests__/cron-methods.test.ts` bắt mọi cron trong vercel.json phải export GET.
+async function refreshAll(req: NextRequest) {
   if (!isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const today = new Date()
@@ -105,6 +108,7 @@ export async function POST(req: NextRequest) {
     return getMonthStr(d)
   })
   const companies = ["ALL", "VN", "US"]
+  const expected = companies.length * months.length
 
   const rows = []
   for (const company of companies) {
@@ -117,13 +121,24 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (rows.length > 0) {
-    await supabaseAdmin.from("analytics_monthly_kpis")
-      .upsert(rows, { onConflict: "month,company_code" })
-  } else {
+  if (rows.length === 0) {
     await alertCronFailure("refresh-monthly-kpis", new Error("0 rows refreshed — all queries failed"))
+    return NextResponse.json({ ok: false, refreshed: 0, expected })
   }
 
-  console.log(`[monthly-kpis cron] refreshed ${rows.length} rows`)
-  return NextResponse.json({ ok: rows.length > 0, refreshed: rows.length })
+  const { error } = await supabaseAdmin.from("analytics_monthly_kpis")
+    .upsert(rows, { onConflict: "month,company_code" })
+  if (error) {
+    await alertCronFailure("refresh-monthly-kpis", new Error(`upsert lỗi: ${error.message}`))
+    return NextResponse.json({ ok: false, refreshed: 0, expected, error: error.message }, { status: 500 })
+  }
+  if (rows.length < expected) {
+    await alertCronFailure("refresh-monthly-kpis", new Error(`chỉ làm mới ${rows.length}/${expected} dòng — một số tháng/công ty tính lỗi`))
+  }
+
+  console.log(`[monthly-kpis cron] refreshed ${rows.length}/${expected} rows`)
+  return NextResponse.json({ ok: true, refreshed: rows.length, expected })
 }
+
+export async function GET(req: NextRequest) { return refreshAll(req) }
+export async function POST(req: NextRequest) { return refreshAll(req) }

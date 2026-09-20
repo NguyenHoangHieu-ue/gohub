@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-
-async function resolveUsername(req: NextRequest): Promise<string | null> {
-  const auth  = req.headers.get("authorization") ?? ""
-  const token = auth.replace("Bearer ", "").trim()
-  if (!token) return null
-  const { data } = await supabaseAdmin.from("browser_bridge_pairings").select("username").eq("token", token).maybeSingle()
-  return data?.username ?? null
-}
+import { authBridge } from "@/lib/bridge-device"
 
 // Extension POST kết quả sau khi thực thi (hoặc lỗi) 1 lệnh đã claim — chỉ cho lệnh thuộc CHÍNH mình.
 export async function POST(req: NextRequest) {
-  const username = await resolveUsername(req)
-  if (!username) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const auth = await authBridge(req, false)
+  if (!auth.ok) return auth.res
+  const { username } = auth
 
   const body = await req.json().catch(() => null)
   if (!body?.id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 })

@@ -5,11 +5,18 @@ is_hidden: true
 department: tech
 tags: [tab, data-health, observability, creator-only]
 created: 2026-09-16
-updated: 2026-09-16
+updated: 2026-09-20
 status: active
 ---
 
 # Giám sát Dữ liệu (Data Health)
+
+> **s202 (2026-09-20)** — Hiếu: gộp 3 mục (Độ tươi / Bất thường / Đối chiếu) thành **1 trang liền** (xếp dọc, có
+> thanh anchor + "Làm mới tất cả") và **gộp cả tab này vào "Dữ liệu & API"** (`/analytics/creator/devtools`, tab con
+> **Giám sát**, mặc định cho creator). `/analytics/creator/data-health` chỉ còn là redirect. Code: `devtools/data-health-view.tsx`
+> (`DataHealthView`) + `devtools/data-health-charts.tsx`. Tab con "Giám sát" **chỉ creator thấy**; admin (được bật Tab Visibility)
+> vẫn dùng các tab API/DB/SQL nhưng không thấy Giám sát, và mọi API `data-health/*` vẫn `requireCreator()`. Các mục 1–4 dưới đây
+> mô tả logic từng khối vẫn đúng; chỉ đổi phần "3 tab con" → "3 khối trên cùng 1 trang" và đường dẫn file.
 
 > **s199 (2026-09-16)** — Hiếu: nhìn report/số thô khó tự phát hiện sai, mỗi lần nghi ngờ phải nhờ Claude
 > vào DB check — mất thời gian. Cần 1 nơi quan sát/kiểm tra dữ liệu bằng mắt, không phải bằng câu SQL.
@@ -74,6 +81,9 @@ ngày/tuần không ai biết). So cho tháng hiện tại + tháng trước, co
 - Anomaly/Cross-Check KHÔNG chủ động báo (Lark DM) khi phát hiện bất thường — chỉ hiển thị passive khi mở
   tab. Có thể thêm cron cảnh báo chủ động sau nếu Hiếu muốn.
 - Chỉ 4 field ở Cross-Check (Doanh thu/CM1/CM1%/3HK%), company=ALL — chưa tách VN/US, chưa có B2C riêng.
+
+
+- **s202 — vì sao Đối chiếu báo "Chưa có snapshot" (đã sửa)**: `analytics_monthly_kpis` chỉ có 9 dòng (2026-05..07 × ALL/VN/US) ghi 1 lần lúc chạy tay 2026-07-20, không bao giờ được cron làm mới. Nguyên nhân: route `api/cron/refresh-monthly-kpis` chỉ export `POST`, còn Vercel Cron gọi `GET` → **405 mỗi đêm**, không chạy gì và cũng không alert (code chưa hề chạy). Bé Gấu vì vậy thiếu/cũ doanh thu-CM1 tháng 8-9. Fix: `GET` + `POST` dùng chung `refreshAll()`, thêm alert Lark khi upsert lỗi hoặc chỉ làm mới một phần; test `cron-methods.test.ts` đọc `vercel.json` và bắt mọi cron phải export `GET`.
 
 ## 4. Phân quyền
 Chỉ `creator`. Không thêm vào `analytics-roles.ts`/`role_permissions` — admin/BOD/manager KHÔNG thấy tab
