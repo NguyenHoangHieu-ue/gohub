@@ -8,6 +8,7 @@ import { checkRateLimit } from "@/lib/rate-limit"
 const ALLOWED = /^\s*(SELECT|WITH|EXPLAIN)\b/i
 const BLOCKED  = /\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|COPY|VACUUM|ANALYZE)\b/i
 const WRITE_ROLES = ["admin", "creator"]
+const MAX_ROWS = 10_000
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -38,7 +39,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const rows = await queryAnalytics(query)
-    return NextResponse.json({ rows, rowCount: rows.length })
+    // Trần 10.000 dòng trả về trình duyệt (Query Studio gom nhóm/vẽ biểu đồ phía client) — cắt thì báo truncated.
+    const truncated = rows.length > MAX_ROWS
+    return NextResponse.json({ rows: truncated ? rows.slice(0, MAX_ROWS) : rows, rowCount: rows.length, truncated })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
   }
