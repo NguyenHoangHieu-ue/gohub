@@ -6,8 +6,40 @@
 const TINY_ICON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 const WRITE_ACTIONS = new Set(["click", "fill", "navigate"])
 const POLL_INTERVAL_MS = 15000
+const EXT_VERSION = chrome.runtime.getManifest().version
 
 let pollTimer = null
+let infoSent = false
+
+// Device ID cố định cho mỗi máy/profile Chrome (sinh 1 lần) — server lưu để truy vết thiết bị khi có sự cố.
+async function getDeviceId() {
+  const { deviceId } = await chrome.storage.local.get("deviceId")
+  if (deviceId) return deviceId
+  const id = crypto.randomUUID()
+  await chrome.storage.local.set({ deviceId: id })
+  return id
+}
+
+// Thông tin thiết bị gửi kèm (Chrome extension không đọc được tên máy tính). Gửi 1 lần mỗi lần worker khởi động.
+async function collectDeviceInfo() {
+  const plat = await chrome.runtime.getPlatformInfo().catch(() => ({}))
+  const prof = await chrome.identity.getProfileUserInfo({ accountStatus: "ANY" }).catch(() => ({}))
+  const ua = navigator.userAgent || ""
+  const m = ua.match(/Chrome\/([\d.]+)/)
+  return {
+    os: plat.os, arch: plat.arch, user_agent: ua, browser_version: m ? m[1] : "",
+    ext_version: EXT_VERSION, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    language: navigator.language, cpu_cores: navigator.hardwareConcurrency,
+    memory_gb: navigator.deviceMemory, chrome_email: prof.email || "",
+  }
+}
+
+function b64(obj) {
+  const bytes = new TextEncoder().encode(JSON.stringify(obj))
+  let bin = ""
+  bytes.forEach(b => { bin += String.fromCharCode(b) })
+  return btoa(bin)
+}
 
 async function getConfig() {
   const { serverUrl, token, enabled } = await chrome.storage.local.get(["serverUrl", "token", "enabled"])
@@ -17,10 +49,11 @@ async function getConfig() {
 async function apiFetch(path, opts = {}) {
   const { serverUrl, token } = await getConfig()
   if (!serverUrl || !token) throw new Error("Chưa cấu hình Server URL / Token trong popup")
-  return fetch(`${serverUrl}${path}`, {
-    ...opts,
-    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json", ...(opts.headers || {}) },
-  })
+  const headers = { "Authorization": `Bearer ${token}`, "Content-Type": "application/json", "X-Device-Id": await getDeviceId() }
+  if (!infoSent) headers["X-Device-Info"] = b64(await collectDeviceInfo())
+  const res = await fetch(`${serverUrl}${path}`, { ...opts, headers: { ...headers, ...(opts.headers || {}) } })
+  if (res.ok) infoSent = true
+  return res
 }
 
 async function readTab(tabId) {

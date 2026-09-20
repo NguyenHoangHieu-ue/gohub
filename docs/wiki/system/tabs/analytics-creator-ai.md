@@ -619,6 +619,17 @@ cần fix; nếu ĐÃ cấu hình, theo dõi vài ngày xem nội dung DM có đ
 "không đọc được cấu trúc giá" — nếu LUÔN ra câu đó, nghĩa là path `/sim/simmanage/page` không phải nơi có
 giá gói thật, cần Hiếu cho biết path đúng (F12 Network khi xem giá trên portal) để sửa prompt.
 
+## § Bridge s202 (2026-09-20) — Ghi nhận thiết bị để truy vết
+
+Hiếu: khi có người dùng Bridge, cần lưu thông tin máy để nếu có sự cố vẫn truy ra ai làm.
+
+- **Extension 1.1.0** (`browser-extension/`): sinh `deviceId` (UUID, `chrome.storage.local`) cố định mỗi máy/profile; gửi header `X-Device-Id` mọi request và `X-Device-Info` (base64 JSON: OS, arch, UA, phiên bản Chrome/extension, múi giờ, ngôn ngữ, số nhân CPU, RAM, email tài khoản Chrome qua `identity.email`) 1 lần mỗi lần service worker khởi động. Popup có dòng thông báo minh bạch. **Chrome extension KHÔNG đọc được tên máy tính** — dùng device ID + OS + email Chrome + IP thay thế.
+- **Server** (`lib/bridge-device.ts` `authBridge()`): token → username, `X-Device-Id` bắt buộc (thiếu → 400 `extension_outdated`, nghĩa là bản extension cũ bị từ chối tới khi reload), thiết bị `revoked` → 403; poll thì upsert `browser_bridge_devices` (thông tin + `last_ip` từ `x-forwarded-for` + `last_seen`). Lệnh được nhận (`claim`) gắn `device_id` + `claimed_ip` → biết chính xác máy/IP nào chạy lệnh nào.
+- **DB** (migration `v61_browser_bridge_devices.sql`): bảng `browser_bridge_devices` (unique `username+device_id`), cột `browser_bridge_commands.device_id/claimed_ip`. Nhớ Reload schema Supabase sau khi chạy.
+- **UI** (`/analytics/creator/bridge`, `bridge-devices.tsx`): mọi user thấy thiết bị của mình + nút Thu hồi/Khôi phục; **creator** thêm chế độ "Toàn bộ user + nhật ký lệnh" (bảng lệnh: giờ, user, lệnh + tóm tắt payload, thiết bị/IP, trạng thái). API `GET/PATCH /api/creator-ai/bridge/devices` (`?all=1` chỉ creator).
+- Bổ sung cho `gp_action_log` (s196+6, ghi tool Gấu Pro gọi) — bảng này thêm phần "máy nào".
+- Thu hồi thiết bị = chặn theo `device_id` (token vẫn dùng chung cho mọi máy của cùng user; muốn chặn hẳn user thì tạo token mới).
+
 ### Bé Gấu (chatbot team) — s131
 
 Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, không còn pipeline 6-agent):

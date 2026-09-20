@@ -19,6 +19,7 @@
     .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; }
     input:checked + .slider { background-color: #7c3aed; }
     input:checked + .slider:before { transform: translateX(18px); }
+    .notice { margin-top: 12px; font-size: 10.5px; line-height: 1.4; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 6px 8px; }
   </style>
 </head>
 <body>
@@ -42,6 +43,8 @@
     <button id="save">Lưu</button>
     <span id="statusText" class="status off">Đang tắt</span>
   </div>
+
+  <div class="notice">Extension ghi nhận thông tin thiết bị (mã máy, hệ điều hành, trình duyệt, email tài khoản Chrome, IP) và nhật ký lệnh Gấu Pro để phục vụ truy vết an toàn.</div>
 
   <script src="popup.js"></script>
 </body>

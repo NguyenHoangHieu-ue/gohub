@@ -4,10 +4,12 @@ import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { Plug, RefreshCw, Copy, CheckCircle, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { BridgeDevices } from "./bridge-devices"
 
 export default function BridgePage() {
   const { status } = useSession()
   const [allowed, setAllowed] = useState<boolean | null>(null)
+  const [isCreator, setIsCreator] = useState(false)
 
   // s195+3: Bridge mở cho MỌI user có quyền Gấu Pro (gp_enabled — creator hoặc trong gp_allowed_users),
   // không còn creator-only — mỗi người tự pair browser CỦA CHÍNH HỌ (mirror my-metrics/page.tsx).
@@ -15,6 +17,7 @@ export default function BridgePage() {
     if (status !== "authenticated") return
     fetch("/api/user/me").then(r => r.ok ? r.json() : null).then(d => {
       setAllowed(d?.gp_enabled === true)
+      setIsCreator(d?.role === "creator")
     }).catch(() => setAllowed(false))
   }, [status])
 
@@ -26,10 +29,10 @@ export default function BridgePage() {
       </div>
     )
   }
-  return <BridgeSettings />
+  return <BridgeSettings isCreator={isCreator} />
 }
 
-function BridgeSettings() {
+function BridgeSettings({ isCreator }: { isCreator: boolean }) {
   const [token, setToken]         = useState<string | null>(null)
   const [lastSeen, setLastSeen]   = useState<string | null>(null)
   const [loading, setLoading]     = useState(true)
@@ -123,9 +126,12 @@ function BridgeSettings() {
           <p>2. Bấm <strong>Load unpacked</strong> → chọn thư mục <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">browser-extension/</code> trong repo.</p>
           <p>3. Bấm icon extension trên thanh Chrome → dán token phía trên + Server URL (domain đang dùng, vd <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">https://stg-intel-v2.gohub.cloud</code>) → bật toggle <strong>Bridge ON</strong>.</p>
           <p>4. Vào Gấu Pro, thử hỏi "list các tab đang mở" để xác nhận kết nối.</p>
+          <p>Đã cài bản cũ? Bấm nút reload extension trong <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">chrome://extensions</code> để lên bản 1.1.0 (ghi nhận thiết bị) — bản cũ sẽ bị từ chối.</p>
           <p className="text-amber-700 pt-1">⚠️ click/fill/navigate thực thi NGAY (không cần duyệt) — chỉ hiện thông báo Chrome không chặn để biết Gấu Pro vừa làm gì. Đây là session đăng nhập THẬT của bạn — cân nhắc kỹ khi nhờ Gấu Pro thao tác việc quan trọng. Token của bạn RIÊNG — không chia sẻ cho ai.</p>
         </div>
       </div>
+
+      <BridgeDevices isCreator={isCreator} />
     </div>
   )
 }
