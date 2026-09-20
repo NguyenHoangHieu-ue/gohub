@@ -10204,3 +10204,11 @@ Khối bộ lọc: Scope / Type / Data (Fixed, Daily, Unlimited) / Other, nút C
 ### s201+5 (2026-09-19) — Catalogue: ẩn hẳn gói Preparing, bỏ công tắc "Include upcoming" (CHƯA commit)
 Hiếu: không cần hiển thị gói Preparing. `HIDDEN_STATUSES` thêm "Preparing" (loại từ server, cả SKU); bỏ chip "Include upcoming" và nút "Hiện thêm gói sắp có" ở ngăn chi tiết.
 Chỉ còn Active + Temporary. Vitest 299, tsc sạch.
+
+## s202 (2026-09-20) — Bridge thiết bị + gộp Giám sát vào "Dữ liệu & API" + Query Studio (đã push staging, chưa merge main)
+Việc đầu phiên: chuyển secret `tmp.txt` → `web/.env.local` (xoá tmp.txt), hướng dẫn cron-job.org ping `/api/cron/etl-cache-sync` (Hiếu đã tạo). Sau đó 3 yêu cầu:
+(1) Giám sát Dữ liệu: 3 mục → 1 trang liền; gộp vào devtools (tab con "Giám sát", creator-only), route cũ redirect, nav đổi "Dữ liệu & API".
+(2) SQL Query làm lại kiểu Power BI (Query Studio): quyết định qua AskUserQuestion — chỉ "chạy SQL → dựng biểu đồ", không canvas nhiều visual/không query builder. Logic thuần `lib/query-studio.ts` (pg trả numeric dạng chuỗi nên tự suy kiểu cột), test 17 ca.
+(3) Bridge: extension 1.1.0 + `authBridge` + migration v61 (devices, commands.device_id/claimed_ip) + UI thiết bị/nhật ký; email tài khoản Chrome qua `identity.email` (Hiếu chọn), minh bạch trong popup + trang Bridge.
+QA staging qua Chrome: redirect + 3 khối OK; SQL group-by → tự gợi ý Line, Legend tách VN/US, Table OK. Bug tìm ra khi QA và đã fix: Top N cắt trục ngày (chỉ còn 20 ngày cuối) → chỉ áp cho trục chữ; focus mode không phủ topbar → z-[100]; ngày 00:00 hiện gọn. Chưa QA Bridge UI (cần chạy migration v61).
+Phát hiện: tab Đối chiếu báo thiếu snapshot analytics_monthly_kpis tháng 08/09 → cron refresh-monthly-kpis nghi chưa chạy.
