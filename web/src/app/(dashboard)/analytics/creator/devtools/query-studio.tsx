@@ -59,7 +59,9 @@ const cellText = (v: unknown, c: ColInfo): string => {
     const n = Number(v)
     return Number.isFinite(n) ? formatNumber(n) : String(v)
   }
-  return String(v).replace(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(\.\d+)?Z?$/, "$1 $2")
+  return String(v)
+    .replace(/^(\d{4}-\d{2}-\d{2})T00:00:00(\.0+)?Z?$/, "$1")
+    .replace(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(\.\d+)?Z?$/, "$1 $2")
 }
 
 export function QueryStudio() {
@@ -144,7 +146,7 @@ export function QueryStudio() {
   return (
     <div className={cn(
       "flex flex-col lg:flex-row bg-slate-50 overflow-hidden border border-slate-200 shadow-sm",
-      focus ? "fixed inset-0 z-40 rounded-none" : "h-[78vh] min-h-[560px] rounded-2xl",
+      focus ? "fixed inset-0 z-[100] rounded-none" : "h-[calc(100vh-200px)] min-h-[560px] rounded-2xl",
     )}>
       {/* ── Data pane (schema) ─────────────────────────────────────────── */}
       <aside className="lg:w-64 w-full max-h-56 lg:max-h-none border-b lg:border-b-0 lg:border-r border-slate-200 bg-white flex flex-col shrink-0">
@@ -288,7 +290,7 @@ export function QueryStudio() {
               !cfg.axis || !cfg.values.length
                 ? <Hint>Chọn trường cho <b>Axis</b> và <b>Values</b> ở panel bên phải (hoặc kéo trường vào).</Hint>
                 : <div className="h-full min-h-[260px] flex flex-col">
-                    {chart.truncated && <p className="text-[11px] text-amber-600 mb-1">Hiển thị {cfg.topN} nhóm đầu — chỉnh Top N để xem thêm.</p>}
+                    {chart.truncated && <p className="text-[11px] text-amber-600 mb-1">Chỉ hiển thị {chart.data.length} nhóm — với trục chữ hãy chỉnh Top N, trục ngày/số giới hạn 500 điểm.</p>}
                     <div className="flex-1 min-h-0"><StudioChart type={cfg.type as Exclude<VisualType, "table" | "card">} chart={chart} stacked={cfg.stacked} /></div>
                   </div>
             )}

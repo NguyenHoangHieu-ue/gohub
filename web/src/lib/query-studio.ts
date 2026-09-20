@@ -156,7 +156,8 @@ export function aggregateForChart(rows: Row[], cfg: VisualConfig, cols: ColInfo[
   } else {
     data.sort((a, b) => String(a[AXIS_KEY]).localeCompare(String(b[AXIS_KEY]), undefined, { numeric: true }))
   }
-  const cap = cfg.topN > 0 ? cfg.topN : 500
+  // Top N chỉ áp cho trục chữ (xếp hạng); trục ngày/số phải giữ đủ chuỗi thời gian (tối đa 500 điểm gần nhất).
+  const cap = axisKind === "text" && cfg.topN > 0 ? cfg.topN : 500
   const truncated = data.length > cap
   if (truncated) data = axisKind === "text" ? data.slice(0, cap) : data.slice(-cap)
   return { axisKey: AXIS_KEY, series, data, truncated }

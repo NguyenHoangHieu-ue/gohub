@@ -44,7 +44,7 @@ Bố cục 3 cột giống Power BI:
   (localStorage `qs_history_v1`), toàn màn hình, Export Excel. Canvas hiện visual đang chọn + số dòng/thời gian chạy.
 - **Visualizations** (phải): 7 loại — Table, Column, Bar, Line, Area, Donut, Card. **Fields** = các cột kết quả (icon Σ số / lịch ngày / Aa chữ, tự nhận
   diện kiểu vì pg trả numeric/bigint dạng chuỗi). Ô **Axis / Legend / Values** nhận kéo-thả (hoặc chọn từ danh sách); mỗi Value chọn Sum/Average/Count/
-  Count distinct/Min/Max; Top N; Stacked. Sau mỗi lần chạy tự gợi ý visual như "Recommended" (1 dòng → Card; có ngày+số → Line; chữ+số → Column);
+  Count distinct/Min/Max; Top N (chỉ trục chữ; trục ngày/số giữ đủ, tối đa 500 điểm); Stacked. Sau mỗi lần chạy tự gợi ý visual như "Recommended" (1 dòng → Card; có ngày+số → Line; chữ+số → Column);
   chạy lại cùng bộ cột thì giữ nguyên cấu hình visual.
 - **Table visual**: click tiêu đề để sắp xếp (số theo giá trị), lọc nhanh, tổng cột số, phân trang 100 dòng, số format vi-VN (cột kiểu id/code/sku giữ nguyên).
 - Việc gom nhóm/vẽ là phía client trên kết quả query → muốn tổng theo nhóm với dữ liệu lớn thì `GROUP BY` trong SQL. API `/api/admin/sql-query` giờ **cắt 10.000

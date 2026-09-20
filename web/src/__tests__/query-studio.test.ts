@@ -71,6 +71,12 @@ describe("query-studio — gom nhóm", () => {
     expect(r.truncated).toBe(true)
     expect(r.data[0][AXIS_KEY]).toBe("k29")
   })
+  it("Top N KHÔNG cắt trục ngày (giữ đủ chuỗi thời gian)", () => {
+    const days = Array.from({ length: 30 }, (_, i) => ({ d: `2026-09-${String(i + 1).padStart(2, "0")}`, v: "1" }))
+    const r = aggregateForChart(days, cfg({ axis: "d", values: [{ field: "v", agg: "sum" }], topN: 5 }), inferColumns(days))
+    expect(r.data).toHaveLength(30)
+    expect(r.truncated).toBe(false)
+  })
   it("trục ngày sắp tăng dần, timestamp gom theo ngày", () => {
     const d = [{ d: "2026-09-02T08:00:00Z", v: "1" }, { d: "2026-09-01T23:00:00Z", v: "2" }, { d: "2026-09-02T01:00:00Z", v: "3" }]
     const r = aggregateForChart(d, cfg({ axis: "d", values: [{ field: "v", agg: "sum" }] }), inferColumns(d))
