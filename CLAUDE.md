@@ -921,7 +921,7 @@
 ## Việc Hiếu cần làm (còn mở)
 
 - [ ] **s202 — Bridge**: chạy `web/db/migrations/v61_browser_bridge_devices.sql` + Reload schema Supabase; reload extension (`chrome://extensions`) lên 1.1.0 rồi cho các user đã pair reload theo (bản cũ bị từ chối). Xong vào `/analytics/creator/bridge` xem thiết bị.
-- [ ] **s202 — Phát hiện khi QA**: tab Giám sát → Đối chiếu báo "Chưa có snapshot `analytics_monthly_kpis`" cho 2026-08 và 2026-09 → cron `refresh-monthly-kpis` chưa ghi snapshot (Bé Gấu trả doanh thu tháng theo bảng này). Cần điều tra/chạy tay.
+- [x] **s202 — `refresh-monthly-kpis` không ghi snapshot**: đã tìm ra + sửa (route chỉ export POST, Vercel Cron gọi GET → 405 mỗi đêm từ khi tạo; snapshot đứng yên ở lần chạy tay 2026-07-20). Đã thêm GET + alert + test guard mọi cron trong `vercel.json` phải export GET (`cron-methods.test.ts`), đã backfill 9 dòng (tháng 7-9 × ALL/VN/US), Đối chiếu tất cả "Khớp". ⚠️ **Vercel Cron chỉ chạy theo production (`main`)** — cron đêm chỉ tự chạy đúng sau khi merge main.
 - [x] s201: cron sync đã thành công, `ref_vendors` ổn, v52 đã chạy, secret `tmp.txt` đã chuyển vào `web/.env.local` (còn phải rotate Vercel token), cron-job.org `etl-cache-sync` đã tạo.
 - [ ] **s201 — Theo dõi sau merge main (2026-09-19)**: (a) cron sync 01:00 UTC 20/09 là lần đầu chạy `core` bằng code mới (có tự thêm vendor + xoá cache
   Catalogue) — xem chuông "Thông báo" có ✅ thành công; (b) Chủ nhật 21/09 02:00 UTC là lần đầu `items` chạy theo lịch tuần; (c) xem tin Lark release
