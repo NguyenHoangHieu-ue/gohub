@@ -82,6 +82,9 @@ ngày/tuần không ai biết). So cho tháng hiện tại + tháng trước, co
   tab. Có thể thêm cron cảnh báo chủ động sau nếu Hiếu muốn.
 - Chỉ 4 field ở Cross-Check (Doanh thu/CM1/CM1%/3HK%), company=ALL — chưa tách VN/US, chưa có B2C riêng.
 
+
+- **s202 — vì sao Đối chiếu báo "Chưa có snapshot" (đã sửa)**: `analytics_monthly_kpis` chỉ có 9 dòng (2026-05..07 × ALL/VN/US) ghi 1 lần lúc chạy tay 2026-07-20, không bao giờ được cron làm mới. Nguyên nhân: route `api/cron/refresh-monthly-kpis` chỉ export `POST`, còn Vercel Cron gọi `GET` → **405 mỗi đêm**, không chạy gì và cũng không alert (code chưa hề chạy). Bé Gấu vì vậy thiếu/cũ doanh thu-CM1 tháng 8-9. Fix: `GET` + `POST` dùng chung `refreshAll()`, thêm alert Lark khi upsert lỗi hoặc chỉ làm mới một phần; test `cron-methods.test.ts` đọc `vercel.json` và bắt mọi cron phải export `GET`.
+
 ## 4. Phân quyền
 Chỉ `creator`. Không thêm vào `analytics-roles.ts`/`role_permissions` — admin/BOD/manager KHÔNG thấy tab
 này kể cả được cấp quyền riêng qua Settings (khác cơ chế thường của mọi tab analytics khác).
