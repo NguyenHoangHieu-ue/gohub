@@ -131,7 +131,13 @@ function BridgeSettings({ isCreator }: { isCreator: boolean }) {
         </div>
       </div>
 
-      <BridgeDevices isCreator={isCreator} />
+      {isCreator ? (
+        <BridgeDevices isCreator />
+      ) : (
+        <p className="text-xs text-slate-400 leading-relaxed">
+          Extension ghi nhận thông tin thiết bị và nhật ký lệnh của bạn để phục vụ an toàn hệ thống. Thông tin này chỉ quản trị cao nhất xem được.
+        </p>
+      )}
     </div>
   )
 }
