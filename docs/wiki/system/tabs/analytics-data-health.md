@@ -5,11 +5,18 @@ is_hidden: true
 department: tech
 tags: [tab, data-health, observability, creator-only]
 created: 2026-09-16
-updated: 2026-09-16
+updated: 2026-09-20
 status: active
 ---
 
 # Giám sát Dữ liệu (Data Health)
+
+> **s202 (2026-09-20)** — Hiếu: gộp 3 mục (Độ tươi / Bất thường / Đối chiếu) thành **1 trang liền** (xếp dọc, có
+> thanh anchor + "Làm mới tất cả") và **gộp cả tab này vào "Dữ liệu & API"** (`/analytics/creator/devtools`, tab con
+> **Giám sát**, mặc định cho creator). `/analytics/creator/data-health` chỉ còn là redirect. Code: `devtools/data-health-view.tsx`
+> (`DataHealthView`) + `devtools/data-health-charts.tsx`. Tab con "Giám sát" **chỉ creator thấy**; admin (được bật Tab Visibility)
+> vẫn dùng các tab API/DB/SQL nhưng không thấy Giám sát, và mọi API `data-health/*` vẫn `requireCreator()`. Các mục 1–4 dưới đây
+> mô tả logic từng khối vẫn đúng; chỉ đổi phần "3 tab con" → "3 khối trên cùng 1 trang" và đường dẫn file.
 
 > **s199 (2026-09-16)** — Hiếu: nhìn report/số thô khó tự phát hiện sai, mỗi lần nghi ngờ phải nhờ Claude
 > vào DB check — mất thời gian. Cần 1 nơi quan sát/kiểm tra dữ liệu bằng mắt, không phải bằng câu SQL.

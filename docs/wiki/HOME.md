@@ -55,9 +55,9 @@ Kho tri thức nội bộ, chia làm hai khu vực theo đối tượng đọc.
 - [[system/tabs/analytics-my-metrics|My Metrics (OKR Hiếu)]]
 
 **Công cụ hệ thống & admin**
-- [[system/tabs/analytics-management|Management BI]] · [[system/tabs/analytics-scheduled|Scheduled Messages]] · [[system/tabs/analytics-devtools|API & Database (SQL Query gộp vào đây, s190)]]
+- [[system/tabs/analytics-management|Management BI]] · [[system/tabs/analytics-scheduled|Scheduled Messages]] · [[system/tabs/analytics-devtools|Dữ liệu & API (SQL Query kiểu Power BI + Giám sát, s202)]]
 - [[system/tabs/admin-product|Admin Product]] · [[system/tabs/analytics-to-gau|Tổ Gấu]] · [[system/tabs/analytics-creator|Creator Settings]] · [[system/tabs/analytics-creator-ai|Gấu Pro]]
-- [[system/tabs/analytics-data-health|Giám sát Dữ liệu (Data Health, creator-only)]]
+- [[system/tabs/analytics-data-health|Giám sát Dữ liệu (tab con của Dữ liệu & API, creator-only)]]
 
 **Sản phẩm, danh mục & tri thức**
 - [[system/tabs/skus|System SKUs]] · [[system/tabs/ncc|NCC Catalog]] · [[system/tabs/countries|Reference Countries]] · [[system/tabs/promotions|Promotions]]

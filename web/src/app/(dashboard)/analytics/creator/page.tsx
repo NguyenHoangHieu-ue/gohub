@@ -35,7 +35,7 @@ const ALL_TABS = [
   { id: "targets",         label: "KPI / Targets" },
   { id: "scheduled",       label: "Scheduled Messages" },
   { id: "admin",           label: "Admin (Product)" },
-  { id: "api-database",    label: "API & Database (Devtools)" },
+  { id: "api-database",    label: "Dữ liệu & API (Devtools)" },
 ]
 
 // Tab mặc định ẨN cho tất cả role (default-deny) — creator phải bật để cấp quyền
@@ -226,7 +226,7 @@ function CreatorSettings() {
           <p className="px-6 py-3 text-[11px] text-slate-400 border-t border-slate-100 flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="inline-flex items-center gap-1 text-rose-500"><EyeOff className="w-3 h-3" />Đỏ = ẩn với role đó</span>
             <span>Trắng = hiển thị bình thường</span>
-            <span className="text-amber-600 font-medium">⚠️ "API & Database" ẩn theo mặc định — bật để cấp quyền cho role tương ứng</span>
+            <span className="text-amber-600 font-medium">⚠️ "Dữ liệu & API" ẩn theo mặc định — bật để cấp quyền cho role tương ứng</span>
           </p>
         </div>
       )}

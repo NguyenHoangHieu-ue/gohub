@@ -36,7 +36,7 @@ const API_ANALYTICS: [RegExp, string][] = [
   [/^(cs-|lark-tickets)/, "/analytics/cs-troubleshoot"],
   [/^(products|product-)/, "/analytics/products"],
   [/^(okr|my-metrics)/, "/analytics/my-metrics"],
-  [/^(data-health|db-status)/, "/analytics/creator/data-health"],
+  [/^(data-health|db-status)/, "/analytics/creator/devtools"],
 ]
 
 /** API route cấp cao `/api/<name>` → href. */

@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, Database, Clock, Settings, Crown, Cpu, BookOpen, MessageCircle, Plug, Layers, Gauge } from "lucide-react"
+import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, Database, Clock, Settings, Crown, Cpu, BookOpen, MessageCircle, Plug, Layers } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
@@ -99,10 +99,9 @@ const CREATOR_GROUP = {
     { href: "/analytics/creator",           label: "Creator Settings", icon: Crown    },
     { href: "/analytics/creator/ai",        label: "Gấu Pro",          icon: Cpu      },
     { href: "/analytics/creator/knowledge", label: "Own Info",         icon: BookOpen },
-    { href: "/analytics/creator/devtools",  label: "API & Database",   icon: Terminal },
+    { href: "/analytics/creator/devtools",  label: "Dữ liệu & API",   icon: Terminal },
     { href: "/analytics/creator/usage",     label: "Usage Analytics",  icon: BarChart2},
     { href: "/analytics/creator/bridge",    label: "Bridge",           icon: Plug     },
-    { href: "/analytics/creator/data-health", label: "Giám sát Dữ liệu", icon: Gauge  },
     { href: "/analytics/my-metrics",        label: "My Metrics",       icon: Target   },
   ],
 }
@@ -415,7 +414,7 @@ export function Sidebar() {
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="brand" />
             ))}
             {isAdminUser && !hiddenTabs.has("api-database") && (
-              <NavRow href="/analytics/creator/devtools" label="API & Database" Icon={Terminal} active={isActive("/analytics/creator/devtools")} collapsed accent="brand" />
+              <NavRow href="/analytics/creator/devtools" label="Dữ liệu & API" Icon={Terminal} active={isActive("/analytics/creator/devtools")} collapsed accent="brand" />
             )}
             {isCreatorUser && CREATOR_GROUP.items.map(it => (
               <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed accent="violet" />
@@ -473,7 +472,7 @@ export function Sidebar() {
                     ))}
                     {/* API & Database: chỉ hiện cho admin khi creator đã cấp quyền (không ẩn trong hiddenTabs) */}
                     {isAdminUser && !hiddenTabs.has("api-database") && (
-                      <NavRow href="/analytics/creator/devtools" label="API & Database" Icon={Terminal} active={isActive("/analytics/creator/devtools")} collapsed={false} accent="brand" />
+                      <NavRow href="/analytics/creator/devtools" label="Dữ liệu & API" Icon={Terminal} active={isActive("/analytics/creator/devtools")} collapsed={false} accent="brand" />
                     )}
                   </div>
                 )}
