@@ -161,16 +161,11 @@ export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { count } = await supabaseAdmin
-    .from("lark_cs_tickets")
-    .select("*", { count: "exact", head: true })
-
-  const { data: latest } = await supabaseAdmin
-    .from("lark_cs_tickets")
-    .select("updated_at")
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .single()
+  // s203: 2 lần đọc Supabase độc lập (mỗi lần ~0,4s từ iad1) → song song (trang CS Troubleshoot gọi route này mỗi lần mở).
+  const [{ count }, { data: latest }] = await Promise.all([
+    supabaseAdmin.from("lark_cs_tickets").select("*", { count: "exact", head: true }),
+    supabaseAdmin.from("lark_cs_tickets").select("updated_at").order("updated_at", { ascending: false }).limit(1).single(),
+  ])
 
   // Trả trạng thái chi tiết để debug: từng env var có được đọc không.
   const hasBaseId    = !!process.env.LARK_BASE_ID
