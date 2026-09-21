@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { analyticsGuard } from "@/lib/analytics-helpers"
+import { analyticsGuard, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchCosts } from "@/lib/bod-data"
 import { buildQuarterMonthMeta, getKpiFactor, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
@@ -125,62 +125,72 @@ export async function GET(req: NextRequest) {
                THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)                              AS hk3_m${i}`).join(",")
 
     // Revenue + GP + 3HK per customer, tách theo tháng
-    const [custRows, picRows, { groupCosts }, prevCustRevRows, lifecycleRows] = await Promise.all([
-      queryAnalytics<Record<string, string>>(`
-        SELECT
-          TRIM(f.customer_code)                               AS customer_code,
-          COALESCE(c.name, TRIM(f.customer_code))             AS customer_name,
-          TRIM(c.sales_pic_code)                              AS sales_pic_code,
-          c.price_list_name,
-          c.currency_code,
-          SUM(f.fulfilled_revenue_amount_vnd)                 AS revenue,
-          SUM(f.gross_profit_vnd)                             AS gm,
-          SUM(CASE WHEN sk.sku IS NOT NULL
-                   THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) AS hk3,
-          ${monthCols}
-        FROM fact_fulfillment_revenue f
-        LEFT JOIN dim_order_source s  ON f.order_source_code = s.code
-        LEFT JOIN dim_customer    c   ON TRIM(f.customer_code) = TRIM(c.code::text)
-        LEFT JOIN (
-          SELECT DISTINCT TRIM(sku) AS sku FROM dim_sku
-          WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
-        ) sk ON TRIM(f.sku) = sk.sku
-        WHERE f.fulfiled_date >= '${qStart}'
-          AND f.fulfiled_date <= '${qEnd}'
-          ${companyFilter}
-          AND f.sku != 'SHIPPINGFEE0'
-          AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
-          AND NOT (UPPER(COALESCE(c.price_list_name,'')) LIKE '%INACTIVE%')
-          ${EXCLUDE_CUST_SQL}
-        GROUP BY 1, 2, 3, c.price_list_name, c.currency_code
-      `),
-      queryAnalytics<{ code: string; name: string }>(`
-        SELECT DISTINCT
-          TRIM(c.sales_pic_code)                       AS code,
-          COALESCE(st.name, TRIM(c.sales_pic_code))    AS name
-        FROM dim_customer c
-        LEFT JOIN dim_staff st ON TRIM(c.sales_pic_code) = TRIM(st.code)
-        WHERE c.sales_pic_code IS NOT NULL AND TRIM(c.sales_pic_code) != ''
-          AND NOT (UPPER(COALESCE(c.price_list_name,'')) LIKE '%INACTIVE%')
-        ORDER BY 2
-      `),
+    // s203: route này TRƯỚC KHÔNG cache → mỗi lần mở Quarter Report chạy lại 3 query fact/dim (9-17s khi nguội). Nay khối
+    // DOANH THU thô được cache SWR (khoá theo quý/năm/công ty/ngày/bộ loại trừ); chi phí, target, squad config vẫn đọc
+    // tươi mỗi request (nhập xong hiện ngay, không cần flush).
+    const rawKey = `squad_raw_v1:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
+    const [raw, { groupCosts }, lifecycleRows] = await Promise.all([
+      cachedQuery(rawKey, async () => {
+        const [custRows, picRows, prevCustRevRows] = await Promise.all([
+        queryAnalytics<Record<string, string>>(`
+          SELECT
+            TRIM(f.customer_code)                               AS customer_code,
+            COALESCE(c.name, TRIM(f.customer_code))             AS customer_name,
+            TRIM(c.sales_pic_code)                              AS sales_pic_code,
+            c.price_list_name,
+            c.currency_code,
+            SUM(f.fulfilled_revenue_amount_vnd)                 AS revenue,
+            SUM(f.gross_profit_vnd)                             AS gm,
+            SUM(CASE WHEN sk.sku IS NOT NULL
+                     THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) AS hk3,
+            ${monthCols}
+          FROM fact_fulfillment_revenue f
+          LEFT JOIN dim_order_source s  ON f.order_source_code = s.code
+          LEFT JOIN dim_customer    c   ON TRIM(f.customer_code) = TRIM(c.code::text)
+          LEFT JOIN (
+            SELECT DISTINCT TRIM(sku) AS sku FROM dim_sku
+            WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
+          ) sk ON TRIM(f.sku) = sk.sku
+          WHERE f.fulfiled_date >= '${qStart}'
+            AND f.fulfiled_date <= '${qEnd}'
+            ${companyFilter}
+            AND f.sku != 'SHIPPINGFEE0'
+            AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
+            AND NOT (UPPER(COALESCE(c.price_list_name,'')) LIKE '%INACTIVE%')
+            ${EXCLUDE_CUST_SQL}
+          GROUP BY 1, 2, 3, c.price_list_name, c.currency_code
+        `),
+        queryAnalytics<{ code: string; name: string }>(`
+          SELECT DISTINCT
+            TRIM(c.sales_pic_code)                       AS code,
+            COALESCE(st.name, TRIM(c.sales_pic_code))    AS name
+          FROM dim_customer c
+          LEFT JOIN dim_staff st ON TRIM(c.sales_pic_code) = TRIM(st.code)
+          WHERE c.sales_pic_code IS NOT NULL AND TRIM(c.sales_pic_code) != ''
+            AND NOT (UPPER(COALESCE(c.price_list_name,'')) LIKE '%INACTIVE%')
+          ORDER BY 2
+        `),
+        // Doanh thu B2B quý TRƯỚC theo KH (s200) — dùng tính "doanh thu mất" cho KH giờ Inactive.
+        queryAnalytics<{ customer_code: string; revenue: string }>(`
+          SELECT TRIM(f.customer_code) AS customer_code, SUM(f.fulfilled_revenue_amount_vnd) AS revenue
+          FROM fact_fulfillment_revenue f
+          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+          WHERE f.fulfiled_date >= '${prevQStartDate}' AND f.fulfiled_date <= '${prevQEndDate}'
+            ${companyFilter}
+            AND f.sku != 'SHIPPINGFEE0'
+            AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
+            AND NOT (UPPER(COALESCE(c.price_list_name,'')) LIKE '%INACTIVE%')
+            ${EXCLUDE_CUST_SQL}
+          GROUP BY 1
+        `).catch(() => [] as { customer_code: string; revenue: string }[]),
+        ])
+        return { custRows, picRows, prevCustRevRows }
+      }, QUERY_TTL_MIN, noCache(req)),
       fetchCosts(months),
-      // Doanh thu B2B quý TRƯỚC theo KH (s200) — dùng tính "doanh thu mất" cho KH giờ Inactive.
-      queryAnalytics<{ customer_code: string; revenue: string }>(`
-        SELECT TRIM(f.customer_code) AS customer_code, SUM(f.fulfilled_revenue_amount_vnd) AS revenue
-        FROM fact_fulfillment_revenue f
-        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-        LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
-        WHERE f.fulfiled_date >= '${prevQStartDate}' AND f.fulfiled_date <= '${prevQEndDate}'
-          ${companyFilter}
-          AND f.sku != 'SHIPPINGFEE0'
-          AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
-          AND NOT (UPPER(COALESCE(c.price_list_name,'')) LIKE '%INACTIVE%')
-          ${EXCLUDE_CUST_SQL}
-        GROUP BY 1
-      `).catch(() => [] as { customer_code: string; revenue: string }[]),
       fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)).catch(() => [] as B2BLifecycleRow[]),
     ])
+    const { custRows, picRows, prevCustRevRows } = raw
 
     // Load targets + chi phí KH song song
     const custCodes = [...new Set(custRows.map(r => r.customer_code))]
