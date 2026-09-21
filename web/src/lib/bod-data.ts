@@ -86,50 +86,23 @@ export interface BODGroup {
   margin_percent: number; gpm2: number; gpm2_percent: number
 }
 
-export async function fetchBODGroupMarginData(startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "", includeShip = false, includeInternalOps = false) {
-  const source = getAnalyticsSource(dateColumn)
-  const filter = getDateFilter(startDate, endDate, source.dateCol)
-  // Strategic/Non phân theo KHÁCH (price_list_name), cấu hình chung quarterly-settings (ISSUE-DASH-4, s131).
-  const { groupCaseSql: groupCaseSQL } = await getCustomerStrategicSql()
-  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()}`
+export interface BODPeriod { startDate: string; endDate: string }
+export interface BODGroupMarginResult {
+  groups: BODGroup[]
+  summary: { total_revenue: number; total_margin: number; total_gpm2: number; avg_margin_percent: number; avg_gpm2_percent: number }
+}
 
-  // s203: 2 query fact + 2 nguồn chi phí độc lập → chạy SONG SONG (trước nối tiếp: mỗi query 2-4s + 2 hop Supabase/Turso,
-  // bod-summary gọi hàm này 3 lần → 12-18s khi cache nguội). Pool max=3 vẫn tự xếp hàng nếu cần.
-  const months = monthsBetween(startDate, endDate)
-  const rowsP = queryAnalytics<Record<string, string>>(
-    `WITH filtered_f AS (
-       SELECT sku, order_source_code, customer_code, order_code, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol}
-       FROM ${source.mainTable} f WHERE ${filter} ${extraFilters} ${sfx}
-     )
-     SELECT ${groupCaseSQL} as "group", TRIM(s.channel_name) as channel,
-            SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.cogsCol}) as cogs,
-            SUM(f.${source.marginCol}) as margin, SUM(f.${source.quantityCol}) as units,
-            COUNT(DISTINCT f.order_code) as orders
-     FROM filtered_f f
-     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-     LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
-     GROUP BY 1, 2`
-  )
-  const costsP = fetchCosts(months)
-
-  // B2B per-customer cost (Turso b2b_customer_cost_monthly) — B2B KHÔNG dùng analytics_channel_costs
-  // (tránh double-count, khớp Quarter Report/b2b-kpis/b2b-performance). Cần revenue theo KH×tháng, CÙNG
-  // phân loại Strategic/Non-Strategic (groupCaseSQL) để cộng đúng nhóm.
-  const custRevP = queryAnalytics<Record<string, string>>(
-    `WITH filtered_f AS (
-       SELECT sku, order_source_code, customer_code, order_code, ${source.dateCol}, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol}
-       FROM ${source.mainTable} f WHERE ${filter} ${extraFilters} ${sfx}
-     )
-     SELECT ${groupCaseSQL} as "group", TRIM(f.customer_code) as customer_code,
-            TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
-            SUM(f.${source.revenueCol}) as revenue
-     FROM filtered_f f
-     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-     LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
-     WHERE ${groupCaseSQL} IN ('B2B-Strategic', 'B2B-Non-Strategic')
-     GROUP BY 1, 2, 3`
-  )
-  const [rows, { channelCosts, groupCosts }, custRevRows, customerCostMap] = await Promise.all([rowsP, costsP, custRevP, fetchCustomerCosts(months)])
+// Tính BODGroup[] cho MỘT kỳ từ dữ liệu thô đã tách theo kỳ — hàm thuần (không I/O). `channelCosts/groupCosts/customerCostMap`
+// đã được lọc đúng các tháng của kỳ này (nếu lọc thiếu, chi phí % sẽ bị cộng cho tháng ngoài kỳ).
+export function finalizeGroupMargin(
+  rows: Record<string, string>[],
+  custRevRows: Record<string, string>[],
+  channelCosts: ChannelCost[],
+  groupCosts: any[],
+  customerCostMap: Map<string, import("@/lib/b2b-customer-cost").CostRecord>,
+  startDate: string,
+  endDate: string,
+): BODGroupMarginResult {
   const custRevMap = new Map<string, number>()
   custRevRows.forEach(r => custRevMap.set(`${r.month}_${r.customer_code}`, parseFloat(r.revenue || "0")))
   const b2bTursoCostByGroup: Record<string, number> = { "B2B-Strategic": 0, "B2B-Non-Strategic": 0 }
@@ -214,6 +187,90 @@ export async function fetchBODGroupMarginData(startDate: string, endDate: string
       avg_gpm2_percent: totalRevenue > 0 ? (totalGpm2 / totalRevenue) * 100 : 0,
     },
   }
+}
+
+const periodsOverlap = (periods: BODPeriod[]) => {
+  const sorted = [...periods].sort((a, b) => a.startDate.localeCompare(b.startDate))
+  return sorted.some((p, i) => i > 0 && p.startDate <= sorted[i - 1].endDate)
+}
+
+/**
+ * NHIỀU kỳ (vd kỳ này / kỳ trước / cùng kỳ năm ngoái của bod-summary) trong 2 query fact DUY NHẤT thay vì 2 query × số kỳ.
+ * gohub_dw thực tế chạy gần như TUẦN TỰ (đo s203: 3 query nặng song song = 3× thời gian 1 query) nên tổng số lần quét bảng fact
+ * mới quyết định độ trễ. Mỗi dòng fact thuộc tối đa 1 kỳ (kỳ giao nhau → quay về chạy riêng từng kỳ như cũ).
+ */
+export async function fetchBODGroupMarginMulti(
+  periods: BODPeriod[], dateColumn = "fulfiled_date", extraFilters = "", includeShip = false, includeInternalOps = false,
+): Promise<BODGroupMarginResult[]> {
+  if (periods.length === 0) return []
+  if (periods.length > 1 && periodsOverlap(periods)) {
+    return Promise.all(periods.map(p => fetchBODGroupMarginMulti([p], dateColumn, extraFilters, includeShip, includeInternalOps).then(r => r[0])))
+  }
+  const source = getAnalyticsSource(dateColumn)
+  // Strategic/Non phân theo KHÁCH (price_list_name), cấu hình chung quarterly-settings (ISSUE-DASH-4, s131).
+  const { groupCaseSql: groupCaseSQL } = await getCustomerStrategicSql()
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()}`
+
+  const conds = periods.map(p => getDateFilter(p.startDate, p.endDate, source.dateCol))
+  const periodCase = `CASE ${conds.map((c, i) => `WHEN (${c}) THEN ${i}`).join(" ")} END`
+  const anyPeriod = conds.map(c => `(${c})`).join(" OR ")
+  const monthsOf = periods.map(p => monthsBetween(p.startDate, p.endDate))
+  const unionMonths = [...new Set(monthsOf.flat())]
+
+  const rowsP = queryAnalytics<Record<string, string>>(
+    `WITH filtered_f AS (
+       SELECT sku, order_source_code, customer_code, order_code, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol},
+              ${periodCase} AS period
+       FROM ${source.mainTable} f WHERE (${anyPeriod}) ${extraFilters} ${sfx}
+     )
+     SELECT f.period, ${groupCaseSQL} as "group", TRIM(s.channel_name) as channel,
+            SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.cogsCol}) as cogs,
+            SUM(f.${source.marginCol}) as margin, SUM(f.${source.quantityCol}) as units,
+            COUNT(DISTINCT f.order_code) as orders
+     FROM filtered_f f
+     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+     LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
+     GROUP BY 1, 2, 3`
+  )
+  // B2B per-customer cost (Turso b2b_customer_cost_monthly) — B2B KHÔNG dùng analytics_channel_costs
+  // (tránh double-count, khớp Quarter Report/b2b-kpis/b2b-performance). Cần revenue theo KH×tháng, CÙNG
+  // phân loại Strategic/Non-Strategic (groupCaseSQL) để cộng đúng nhóm.
+  const custRevP = queryAnalytics<Record<string, string>>(
+    `WITH filtered_f AS (
+       SELECT sku, order_source_code, customer_code, order_code, ${source.dateCol}, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol},
+              ${periodCase} AS period
+       FROM ${source.mainTable} f WHERE (${anyPeriod}) ${extraFilters} ${sfx}
+     )
+     SELECT f.period, ${groupCaseSQL} as "group", TRIM(f.customer_code) as customer_code,
+            TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
+            SUM(f.${source.revenueCol}) as revenue
+     FROM filtered_f f
+     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+     LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
+     WHERE ${groupCaseSQL} IN ('B2B-Strategic', 'B2B-Non-Strategic')
+     GROUP BY 1, 2, 3, 4`
+  )
+  const [rows, { channelCosts, groupCosts }, custRevRows, customerCostMap] =
+    await Promise.all([rowsP, fetchCosts(unionMonths), custRevP, fetchCustomerCosts(unionMonths)])
+
+  return periods.map((p, i) => {
+    const monthSet = new Set(monthsOf[i])
+    const periodCustCost = new Map<string, import("@/lib/b2b-customer-cost").CostRecord>()
+    customerCostMap.forEach((rec, key) => { if (monthSet.has(key.slice(0, 7))) periodCustCost.set(key, rec) })
+    return finalizeGroupMargin(
+      rows.filter(r => Number(r.period) === i),
+      custRevRows.filter(r => Number(r.period) === i),
+      channelCosts.filter(c => monthSet.has(c.month)),
+      groupCosts.filter(c => monthSet.has(c.month)),
+      periodCustCost,
+      p.startDate, p.endDate,
+    )
+  })
+}
+
+export async function fetchBODGroupMarginData(startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "", includeShip = false, includeInternalOps = false) {
+  const [r] = await fetchBODGroupMarginMulti([{ startDate, endDate }], dateColumn, extraFilters, includeShip, includeInternalOps)
+  return r
 }
 
 export async function fetchBODChannelPerformanceData(startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "", includeShip = false, includeInternalOps = false) {
