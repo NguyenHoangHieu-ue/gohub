@@ -10212,3 +10212,33 @@ Việc đầu phiên: chuyển secret `tmp.txt` → `web/.env.local` (xoá tmp.t
 (3) Bridge: extension 1.1.0 + `authBridge` + migration v61 (devices, commands.device_id/claimed_ip) + UI thiết bị/nhật ký; email tài khoản Chrome qua `identity.email` (Hiếu chọn), minh bạch trong popup + trang Bridge.
 QA staging qua Chrome: redirect + 3 khối OK; SQL group-by → tự gợi ý Line, Legend tách VN/US, Table OK. Bug tìm ra khi QA và đã fix: Top N cắt trục ngày (chỉ còn 20 ngày cuối) → chỉ áp cho trục chữ; focus mode không phủ topbar → z-[100]; ngày 00:00 hiện gọn. Chưa QA Bridge UI (cần chạy migration v61).
 Phát hiện: tab Đối chiếu báo thiếu snapshot analytics_monthly_kpis tháng 08/09 → cron refresh-monthly-kpis nghi chưa chạy.
+
+
+## s203 (2026-09-21) — Audit + tăng tốc toàn bộ tab analytics (đã push staging, chưa merge main)
+Yêu cầu Hiếu: nhiều tab load rất lâu → tự đo, chẩn đoán, sửa, kiểm thử. Role: Staff Performance Engineer.
+
+### Đo (không đoán)
+- Log Vercel 7 ngày gần như sạch (không phải lỗi 5xx) → chậm là latency. Route mới `/api/analytics/perf-probe` (creator-only): từ vùng iad1,
+  gohub_dw ~30ms/query, Turso ~150ms, **Supabase 280-450ms/hop** (bảng cache tới 1,3s), Vercel Runtime Cache 4-15ms. `preferredRegion` không đổi được vùng (cài đặt cấp project).
+- Sweep SPA cold (nocache) mọi tab: tệ nhất b2c/monthly 62s, my-metrics/sku-scan 25s, b2b-performance 21,5s, quarterly-report 14-22s, bod-summary 12-18s, squad-progress 17s.
+- Log `[analytics-db] SLOW wait=… run=…` (thêm vào `analytics-db.ts`) tách chờ pool khỏi DB chạy lâu. Probe `heavy1/heavy3`: 1 query nặng 0,58s, 3 song song 1,72s → **DB chạy tuần tự**, tăng pool vô ích, chỉ giảm tổng công việc.
+- **Nguyên nhân gốc lớn nhất**: `LEFT JOIN dim_customer c ON TRIM(f.customer_code)=TRIM(c.code)` → 9,6-10,9s; `=c.code` → ~1s (verify: dim.code 355.391 dòng & fact.customer_code 618.658 dòng không padding/NULL/rỗng).
+
+### Sửa
+1. **Cache** (`lib/analytics-helpers.ts`): L1 45s + L2 Vercel Runtime Cache (thay Supabase), SWR (≤6h, làm mới nền `waitUntil`), dedupe request đồng thời, ghi L2 không chặn, epoch soft/hard, expireTag theo `dep:`/`pfx:`, nén gzip mục >400KB (trần 2MB im lặng). `softExpireAll` + prewarm nền ở `/api/cron/etl-cache-sync`. Test 37 ca trong `analytics-helpers.test.ts`.
+2. **memo** (`lib/memo.ts`) cho `fetchQuarterlySettings`, `getPartnerTiers`, `user/me`, layout phân quyền (Supabase đọc nối tiếp mỗi request).
+3. **TRIM dim_customer** bỏ ở 22 file; hướng dẫn SQL cho Bé Gấu/Gấu Pro cập nhật.
+4. **Quarter Report** 7→2 query (`lib/analytics-engine/quarter-rows.ts` + test), lifecycle nén (`packLifecycleRows`), squad-progress cache SWR khối doanh thu thô + tra tên top-10 riêng.
+5. **BOD**: `fetchBODGroupMarginMulti` + `finalizeGroupMargin`, bod-summary 10→4 query; các fetch BOD song song; FE BOD/Dashboard bắn request tháng trước cùng lúc.
+6. **B2C**: FE gửi `live=1` (không `nocache=1` mỗi lượt xem), route song song hoá 5 lần đọc Supabase.
+7. planning/targets cache actuals; sync-lark-tickets GET song song; fix test `release-tabs` (alias trang redirect data-health).
+
+### Kiểm thử
+Baseline JSON lưu localStorage trước khi đổi, diff sau deploy (tolerance 1e-6): quarterly-report Q3/Q2/Q3-VN, squad-progress Q3/Q2, quarterly-org, bod-summary/report/group-margin/channel-performance = **0 khác biệt**.
+Đo cold→: quarterly-report 14,4→4,6s; squad 17,2→5,7s; b2b-performance 21,5→2,0s. Lượt xem thứ 2 mọi tab 0,5-4s. tsc + lint (0 lỗi) + vitest 359 PASS.
+
+### Còn lại / lưu ý
+- Chưa merge main (chờ Hiếu). Runtime Cache tách preview/production → lượt đầu mỗi khoá trên production cold; chạy tay `/api/cron/prewarm-analytics`.
+- bod-summary vẫn ~12s cold (4 query nặng tuần tự trên DB); B2C customer-breakdown 60s cold (Admin GoHub API ngoài); Website 4s (GA4 ngoài).
+- Nghiệp vụ (chưa sửa): "KH Rời bỏ" trong Quarter Report ~112.000 (mọi KH B2B từng mua mà quý này không có doanh thu) — cần Hiếu quyết định định nghĩa.
+- Chưa đụng: my-metrics/sku-scan cold 17s (3 scan + JOIN dim_sku), inventory-stock, vendors/products (nhiều `/api/analytics/query` — đã được SWR).
