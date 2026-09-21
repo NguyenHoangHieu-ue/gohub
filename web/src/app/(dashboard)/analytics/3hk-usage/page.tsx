@@ -782,13 +782,16 @@ export default function ThreeHKDataUsagePage() {
         const plan = parseFloat(r.total_plan_gb || 0)
         const usage = parseFloat(r.total_usage_gb || 0)
         const d = daysOfSku(r.sku || "")
+        const okDay = d != null && d > 0 && sims > 0
         return {
           "Tháng": r.ym || "",
           "SKU": r.sku || "",
           "Active SIMs": sims,
           "Total Plan (GB)": Number(plan.toFixed(2)),
+          "Kế hoạch (GB/ngày/SIM)": okDay ? Number((plan / sims / d!).toFixed(3)) : "",
           "Total Actual (GB)": Number(usage.toFixed(2)),
-          "GB/ngày/SIM": d && d > 0 && sims > 0 ? Number((usage / sims / d).toFixed(3)) : "",
+          "Avg. Usage %": plan > 0 ? Number(((usage / plan) * 100).toFixed(1)) : 0,
+          "GB/ngày/SIM": okDay ? Number((usage / sims / d!).toFixed(3)) : "",
         }
       })
       exportRawRows(rows, `3hk-usage-by-sku-month-${activeTab}-${startDate}_to_${endDate}`, "By SKU x Month")
@@ -1351,7 +1354,7 @@ export default function ThreeHKDataUsagePage() {
             Average Usage by SKU
           </h2>
           <button onClick={exportMonthly} disabled={exportingMonthly || !startDate || !endDate}
-            title="Xuất bảng SKU theo từng tháng trong kỳ đang lọc: Tháng · SKU · Active SIMs · Total Plan · Total Actual · GB/ngày/SIM"
+            title="Xuất bảng SKU theo từng tháng trong kỳ đang lọc: Tháng · SKU · Active SIMs · Total Plan · Kế hoạch/ngày/SIM · Total Actual · Avg. Usage % · GB/ngày/SIM"
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all">
             <Download className="w-3.5 h-3.5" /> {exportingMonthly ? "Exporting..." : "Export theo tháng"}
           </button>

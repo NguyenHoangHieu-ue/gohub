@@ -318,7 +318,7 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 - **s203+ (2026-09-21) — Export bảng "Average Usage by SKU" theo tháng.** Hiếu: export nhiều tháng cần cột
   tháng để phân biệt + thống kê. Nút **"Export theo tháng"** (header bảng SKU, `exportMonthly`) xuất 1 sheet
-  cột y hệt bảng UI: `Tháng · SKU · Active SIMs · Total Plan (GB) · Total Actual (GB) · GB/ngày/SIM`, mỗi dòng
+  cột y hệt bảng UI: `Tháng · SKU · Active SIMs · Total Plan (GB) · Kế hoạch (GB/ngày/SIM) · Total Actual (GB) · Avg. Usage % · GB/ngày/SIM`, mỗi dòng
   = 1 SKU trong 1 tháng (YYYY-MM) của kỳ đang lọc, theo tab Daily/Fixed/Unlimited + ô Search. Không có dòng
   "Cả kỳ" (tránh cộng đôi khi pivot). GB/ngày/SIM = usage ÷ SIMs ÷ số ngày gói (`daysOfSku`), để trống nếu
   không xác định được số ngày. (Bản trước làm nhiều sheet + thừa cột → Hiếu yêu cầu đúng cột bảng SKU, đã bỏ.)
