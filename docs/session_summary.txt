@@ -10245,8 +10245,9 @@ Baseline JSON lưu localStorage trước khi đổi, diff sau deploy (tolerance 
 
 
 ## s203+1 (2026-09-21) — 3HK Data Usage: Export theo tháng
-Yêu cầu Hiếu: export nhiều tháng cần cột ngày/tháng để phân biệt + thống kê.
-- Thêm `exportMonthly` + nút "Export theo tháng" (page.tsx, header bảng Average Usage by SKU): Tháng × SKU Type × SKU, tôn trọng tab + search, thêm Kỳ từ/Kỳ đến.
+Yêu cầu Hiếu: export nhiều tháng cần cột tháng để phân biệt + thống kê.
+- Nút "Export theo tháng" (page.tsx, header bảng "Average Usage by SKU", `exportMonthly`): 1 sheet, cột y hệt bảng SKU trên UI + Tháng: Tháng · SKU · Active SIMs · Total Plan (GB) · Kế hoạch (GB/ngày/SIM) · Total Actual (GB) · Avg. Usage % · GB/ngày/SIM. Mỗi dòng = SKU × tháng (YYYY-MM) của kỳ lọc, theo tab Daily/Fixed/Unlimited + Search. Không có dòng "Cả kỳ" (pivot không cộng đôi).
 - Export Records thêm cột Tháng / Kỳ từ / Kỳ đến.
-- Verify: SQL chạy trên staging (T7-T8/2026 = 2.809 dòng), nút hiện sau deploy; chưa bấm tải file. tsc PASS. Commit 94d78d1d (staging, chưa merge main).
-- Lưu ý: tổng Active SIMs qua các tháng của 1 SKU > số bảng SKU (đúng thiết kế).
+- Lịch sử: bản 1 (94d78d1d) chỉ Tháng×SKU → thiếu cột; bản 2 (5d6d5f40) nhiều sheet quá tay; bản 3 (edaa3b68) đúng 6 cột; bản chốt (33db63e8) thêm Kế hoạch/ngày/SIM + Avg. Usage %. Bài học: hỏi rõ bảng nào/cột nào trước khi làm export nhiều sheet.
+- Verify: SQL theo tháng chạy được trên staging (T7-T8/2026 = 2.809 dòng SKU×tháng×type); tsc PASS. Chưa tải file thật (Hiếu tự thử). Chưa merge main.
+- Lưu ý: tổng Active SIMs qua các tháng của 1 SKU > số bảng UI (đúng thiết kế).
