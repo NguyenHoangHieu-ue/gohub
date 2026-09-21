@@ -10242,3 +10242,11 @@ Baseline JSON lưu localStorage trước khi đổi, diff sau deploy (tolerance 
 - bod-summary vẫn ~12s cold (4 query nặng tuần tự trên DB); B2C customer-breakdown 60s cold (Admin GoHub API ngoài); Website 4s (GA4 ngoài).
 - Nghiệp vụ (chưa sửa): "KH Rời bỏ" trong Quarter Report ~112.000 (mọi KH B2B từng mua mà quý này không có doanh thu) — cần Hiếu quyết định định nghĩa.
 - Chưa đụng: my-metrics/sku-scan cold 17s (3 scan + JOIN dim_sku), inventory-stock, vendors/products (nhiều `/api/analytics/query` — đã được SWR).
+
+
+## s203+1 (2026-09-21) — 3HK Data Usage: Export theo tháng
+Yêu cầu Hiếu: export nhiều tháng cần cột ngày/tháng để phân biệt + thống kê.
+- Thêm `exportMonthly` + nút "Export theo tháng" (page.tsx, header bảng Average Usage by SKU): Tháng × SKU Type × SKU, tôn trọng tab + search, thêm Kỳ từ/Kỳ đến.
+- Export Records thêm cột Tháng / Kỳ từ / Kỳ đến.
+- Verify: SQL chạy trên staging (T7-T8/2026 = 2.809 dòng), nút hiện sau deploy; chưa bấm tải file. tsc PASS. Commit 94d78d1d (staging, chưa merge main).
+- Lưu ý: tổng Active SIMs qua các tháng của 1 SKU > số bảng SKU (đúng thiết kế).
