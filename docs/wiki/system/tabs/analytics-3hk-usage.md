@@ -316,18 +316,15 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 ## 9. Gotchas & Lịch sử thay đổi
 
-- **s203+ (2026-09-21) — Export đầy đủ (theo tháng).** Hiếu: export nhiều tháng cần ngày/tháng để phân biệt +
-  thống kê, và file phải đủ thông tin UI hiển thị (bản đầu chỉ có Tháng×SKU, thiếu nhiều cột). Nút **"Export
-  đầy đủ (theo tháng)"** (header bảng "Average Usage by SKU", `exportMonthly`) xuất 1 file .xlsx nhiều sheet,
-  mỗi sheet có dòng `Cả kỳ` + từng tháng (YYYY-MM), tôn trọng tab Daily/Fixed/Unlimited + ô Search:
-  `Tổng quan` (4 card: Total Usage/Capacity/Avg %/Active SIMs, + Avg GB/ngày/SIM khi tab Unlimited, kèm Kỳ
-  từ/đến, tab, search) · `Theo SKU Type` (+Efficiency) · `Theo SKU` (+Mã loại gói, phiên bản mã, mô tả mã, số
-  ngày gói, Kế hoạch GB/ngày/SIM, GB/ngày/SIM, Efficiency) · `Unlimited theo mã` (chỉ tab Unlimited) ·
-  `Zone x Tháng (TB)` (Zone → nước, như nút Export của bảng Zone). Chỉ 2 query (cả kỳ theo SKU + từng tháng
-  theo SKU); các bảng khác cộng dồn client-side (đúng vì mỗi bundle thuộc đúng 1 sku_type/sku). Helper mới
-  `exportSheets` (`lib/export-excel.ts`). Nút Export của bảng Records vẫn riêng (thêm cột `Tháng`/`Kỳ từ`/
-  `Kỳ đến`). ⚠️ (iccid, order_code) tính riêng TỪNG tháng có usage → tổng Active SIMs các tháng của 1 SKU có
-  thể LỚN HƠN dòng `Cả kỳ` (1 SIM = 1 lần cả kỳ) — đúng thiết kế, không phải bug.
+- **s203+ (2026-09-21) — Export bảng "Average Usage by SKU" theo tháng.** Hiếu: export nhiều tháng cần cột
+  tháng để phân biệt + thống kê. Nút **"Export theo tháng"** (header bảng SKU, `exportMonthly`) xuất 1 sheet
+  cột y hệt bảng UI: `Tháng · SKU · Active SIMs · Total Plan (GB) · Total Actual (GB) · GB/ngày/SIM`, mỗi dòng
+  = 1 SKU trong 1 tháng (YYYY-MM) của kỳ đang lọc, theo tab Daily/Fixed/Unlimited + ô Search. Không có dòng
+  "Cả kỳ" (tránh cộng đôi khi pivot). GB/ngày/SIM = usage ÷ SIMs ÷ số ngày gói (`daysOfSku`), để trống nếu
+  không xác định được số ngày. (Bản trước làm nhiều sheet + thừa cột → Hiếu yêu cầu đúng cột bảng SKU, đã bỏ.)
+  Nút Export của bảng Records vẫn riêng (thêm cột `Tháng`/`Kỳ từ`/`Kỳ đến`). ⚠️ (iccid, order_code) tính
+  riêng TỪNG tháng có usage → tổng Active SIMs các tháng của 1 SKU có thể LỚN HƠN số ở bảng UI (1 SIM = 1 lần
+  cả kỳ) — đúng thiết kế, không phải bug.
 
 - **s200+10 (2026-09-18) — Đổi bảng theo nước sang bảng Zone có drill-down, bỏ hẳn bảng theo nước.**
   Tiếp ngay s200+9 (lúc đó vẫn giữ song song 2 bảng theo nước + theo zone) — Hiếu yêu cầu: bảng Zone phải

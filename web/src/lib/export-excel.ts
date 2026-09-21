@@ -43,19 +43,6 @@ export async function exportAOA(
   XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`)
 }
 
-// Xuất 1 file .xlsx NHIỀU sheet (mỗi sheet = headers + array-of-arrays). Cho export tổng hợp nhiều bảng.
-export async function exportSheets(
-  sheets: { name: string; headers: string[]; rows: (string | number)[][] }[],
-  filename: string,
-): Promise<void> {
-  const XLSX = await import("xlsx")
-  const wb = XLSX.utils.book_new()
-  for (const sh of sheets) {
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([sh.headers, ...sh.rows]), sh.name.slice(0, 31))
-  }
-  XLSX.writeFile(wb, filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`)
-}
-
 // Xuất mảng object phẳng (header = union tất cả keys, theo thứ tự xuất hiện).
 export async function exportRawRows(
   rows: Record<string, unknown>[],
