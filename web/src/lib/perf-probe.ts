@@ -1,0 +1,47 @@
+import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { queryAnalytics } from "@/lib/analytics-db"
+import { supabaseAdmin } from "@/lib/supabase"
+import { tursoQuery, tursoConfigured } from "@/lib/turso"
+import { Redis } from "@upstash/redis"
+
+// Đo độ trễ THẬT từ vùng chạy function tới từng kho dữ liệu (gohub_dw / Supabase / Turso / Upstash) — creator-only.
+// Dùng để phân biệt "query nặng" với "mỗi hop mạng chậm" khi tab analytics load lâu.
+
+async function time<T>(fn: () => PromiseLike<T>): Promise<number> {
+  const t = performance.now()
+  try { await fn() } catch { return -1 }
+  return Math.round(performance.now() - t)
+}
+
+async function series(n: number, fn: () => PromiseLike<unknown>): Promise<number[]> {
+  const out: number[] = []
+  for (let i = 0; i < n; i++) out.push(await time(fn))
+  return out
+}
+
+export async function runPerfProbe() {
+  const session = await getServerSession(authOptions)
+  if (!session || session.user.role !== "creator") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+  const gohubDw    = await series(4, () => queryAnalytics("SELECT 1"))
+  const dwParallel = await time(() => Promise.all([queryAnalytics("SELECT 1"), queryAnalytics("SELECT 1"), queryAnalytics("SELECT 1")]))
+  const supabase   = await series(4, () => supabaseAdmin.from("app_settings").select("value").eq("key", "role_permissions").maybeSingle().then(r => r))
+  const supaCache  = await series(3, () => supabaseAdmin.from("analytics_query_cache").select("cache_key, cached_at").limit(1).then(r => r))
+  const turso      = tursoConfigured() ? await series(4, () => tursoQuery("SELECT 1")) : []
+  const hasUpstash = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
+  let upstash: number[] = [], upstash50k: number[] = []
+  if (hasUpstash) {
+    const redis = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL!, token: process.env.UPSTASH_REDIS_REST_TOKEN! })
+    upstash = await series(4, () => redis.get("perf-probe:none"))
+    await redis.set("perf-probe:50k", { blob: "x".repeat(50_000) }, { ex: 120 })
+    upstash50k = await series(3, () => redis.get("perf-probe:50k"))
+  }
+
+  return NextResponse.json({
+    region: process.env.VERCEL_REGION ?? null,
+    note: "ms mỗi lần gọi tuần tự; lần 1 gồm cả bắt tay kết nối (TLS/DNS), các lần sau dùng lại kết nối",
+    gohubDw, gohubDwParallel3: dwParallel, supabaseAppSettings: supabase, supabaseCacheTable: supaCache, turso, upstash, upstashGet50KB: upstash50k,
+  })
+}
