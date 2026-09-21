@@ -59,6 +59,13 @@ ${dataBlock}`
       body: JSON.stringify({ msg_type: "interactive", card }),
     })
     if (!res.ok) throw new Error(`Lark webhook returned ${res.status}`)
+    // Lark custom-bot trả HTTP 200 kể cả khi lỗi nghiệp vụ (vd 19024 "Key Words Not Found" khi đổi từ khoá bảo mật) → phải đọc body,
+    // nếu không báo cáo "thành công" giả (claim đã ghi, không ai được báo).
+    const body = await res.json().catch(() => null) as { code?: number; StatusCode?: number; msg?: string; StatusMessage?: string } | null
+    const larkCode = body?.code ?? body?.StatusCode
+    if (typeof larkCode === "number" && larkCode !== 0) {
+      throw new Error(`Lark webhook lỗi ${larkCode}: ${body?.msg ?? body?.StatusMessage ?? "không rõ"}`)
+    }
   } else {
     const { data } = await supabaseAdmin
       .from("app_settings").select("value").eq("key", "lark_notify_chat_id").maybeSingle()

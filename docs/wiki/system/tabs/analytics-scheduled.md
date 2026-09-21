@@ -172,3 +172,25 @@ mật độ). Toàn bộ `blue-*` (nút, focus ring, spinner) đổi sang `brand
 | Report data (số liệu) | `fact_fulfillment_revenue` (qua `scheduled-report-data.ts`) | SQL cố định: Revenue/GP/CM1/3HK per company_code (VN/US/Tổng), MoM/WoW, top B2B KH, top kênh B2C |
 | Operation Cost | Supabase `analytics_channel_group_costs` | Dùng cho CM1 trong precomputed report |
 | Message delivery | Lark Bot API (`lib/lark.ts`) | Push formatted message vào `chat_id` Lark group |
+
+### E. ⚠️ Sự cố "Daily Revenue không tới Lark ~1 tuần, cron-job.org báo timeout" — lần 2 (s203, 2026-09-21)
+
+**Triệu chứng**: cron-job.org báo timeout mỗi ngày; group Lark không nhận Daily từ khoảng 2026-09-12. `last_run_at` của lịch vẫn tiến đều mỗi ngày
+(vì ATOMIC CLAIM ghi slot TRƯỚC khi gửi) nên nhìn DB tưởng "đã chạy".
+
+**Đo (route creator-only `/api/analytics/perf-probe-report`)**: dựng số liệu Daily chỉ 1,3-2,4s; chạy TRỌN đường cron (`?full=Daily Revenue Update`, dryRun —
+không gửi Lark, không ghi `last_run_at`) mất **~32s** ⇒ ~30s là Gemini. Webhook Lark còn sống (thăm dò bằng payload sai → `19024 Key Words Not Found`, không đăng tin).
+
+**Nguyên nhân**: 2026-09-10 (s195+17) đổi `bi-analyst` sang `gemini-3.8-flash` — model này MẶC ĐỊNH `thinking=medium`, còn `bi-analyst` không đặt `thinkingConfig`
+⇒ báo cáo tự động (chỉ FORMAT số đã tính sẵn) từ ~10s lên ~30s, vượt timeout 30s của cron-job.org; scheduler ngắt kết nối giữa chừng và bản tin không bao giờ tới Lark.
+(Lark webhook trả HTTP 200 kể cả khi lỗi nghiệp vụ — code chỉ kiểm `res.ok`, xem gotcha bên dưới.)
+
+**Fix**:
+- `bi-analyst.ts`: `thinkingConfig.thinkingLevel` tường minh — báo cáo tự động truyền `"minimal"`, còn lại mặc định `"low"` (như Bé Gấu).
+- `api/cron/scheduled-messages`: CLAIM slot rồi **trả lời NGAY**, chạy báo cáo trong `waitUntil` (sống tới maxDuration=180s, không phụ thuộc client còn kết nối).
+  Response đổi `ran` → `started`. Lỗi/soft-timeout vẫn nhả claim + alert Lark như cũ.
+- `scheduled-runner.ts`: thêm `dryRun` (dựng báo cáo + card nhưng không gửi/không ghi `last_run_at`) cho chẩn đoán.
+
+**Gotcha còn mở**: Lark custom-bot webhook trả HTTP 200 kèm `{"code":19024,...}` khi lỗi từ khoá/chữ ký/token — `runScheduledMessage` chỉ kiểm `res.ok`, nên
+đổi từ khoá bảo mật ở Lark sẽ khiến báo cáo "thành công" giả. Nên đọc body và ném lỗi khi `code !== 0`.
+
