@@ -57,7 +57,13 @@ const SHARED: [string, string][] = [
   ["lib/scheduled-", "/analytics/scheduled"],
 ]
 
-function labelFor(href: string): string | null {
+/** Trang đã chuyển thành redirect (không còn trong menu) → tab thật đang hiển thị nội dung đó. */
+const PAGE_ALIAS: Record<string, string> = {
+  "/analytics/creator/data-health": "/analytics/creator/devtools",
+}
+
+function labelFor(hrefIn: string): string | null {
+  const href = PAGE_ALIAS[hrefIn] ?? hrefIn
   const l = HREF_LABEL.get(href)
   if (l) return FRIENDLY[href] ?? l
   // Trang có thật nhưng không nằm trong menu (VD My Metrics chỉ vài người thấy) → tên từ đoạn URL cuối: "my-metrics" → "My Metrics"

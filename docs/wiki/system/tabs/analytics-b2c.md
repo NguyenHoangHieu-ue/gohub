@@ -370,3 +370,11 @@ key theo `windowStart:windowEnd`. GA4 traffic/users giữ nguyên không cache (
 đang active thay vì `bg-brand-600` — đợt fix màu s194+2/+3 chỉ sửa 3 component con
 (`B2CAdvancedDashboard`/`B2CPerformance`/`B2CMetric`), bỏ sót chính file cha. Phát hiện qua audit UI/UX
 toàn hệ thống. Đổi cả 3 chỗ (dòng 21/30/39) sang `bg-brand-600`.
+
+## s203 (2026-09-21) — B2C Advanced không còn "nocache mỗi lượt xem"
+
+FE `b2c-advanced-dashboard.tsx` từng gửi `nocache=1` MỖI lần mở tab (để luôn số live, không đọc snapshot) → mỗi lượt xem chạy lại 4 query
+fact + nhiều lần đọc Supabase nối tiếp (5-60s). Nay gửi `live=1`: route `b2c/monthly` **bỏ snapshot** (vẫn số live T-1) nhưng dùng cache SWR
+của các khối tính toán; `nocache=1` chỉ còn cho làm mới chủ động/cron. 5 lần đọc Supabase (target/budget/chi phí nhóm/chi phí kênh/leads)
++ revenueComparison chạy `Promise.all` thay vì nối tiếp. Target/budget/chi phí vẫn đọc tươi mỗi request (nhập xong hiện ngay). Header response
+`live` = `no-store` (giữ fix CDN s195+19).

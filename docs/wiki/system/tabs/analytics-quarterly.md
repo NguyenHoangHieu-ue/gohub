@@ -492,3 +492,18 @@ việc đổi 1 trang FE 3000+ dòng cần làm riêng, cẩn trọng hơn (xem 
 PASS. **Chưa verify số thật qua API live** (máy dev thiếu `ANALYTICS_DB_*`) — đây là refactor thuần
 (zero behavior change, đã verify bằng test công thức giống hệt), rủi ro thấp nhưng Hiếu vẫn nên đối chiếu
 1-2 squad trên staging trước khi yên tâm.
+
+## s203 (2026-09-21) — Tăng tốc Quarter Report / Squad Progress / Organization (số liệu KHÔNG đổi, đã diff API 0 khác biệt)
+
+Đo cold (cache nguội, staging): quarterly-report **14,4s → 4,6s** (Q3), squad-progress **17,2s → 5,7s**, Q2 9,4s → 4,4s.
+- **quarterly-report**: 7 query (mỗi cái quét lại bảng fact) → **2 query** phủ [quý trước → quý này] (`quarterly-report/route.ts`),
+  tách theo tháng ở JS bằng hàm thuần `lib/analytics-engine/quarter-rows.ts` `splitQuarterRows` (test `quarter-rows.test.ts`).
+  Cùng bộ lọc INACTIVE/exclude/ship/company. Khoá cache `qreport_raw_v10` giữ nguyên (shape không đổi).
+- **squad-progress**: trước KHÔNG có cache (mỗi lần mở tab chạy lại 3 query). Nay khối doanh thu thô cache SWR (`squad_raw_v1:…`);
+  chi phí/target/squad config vẫn đọc tươi mỗi request nên nhập xong hiện ngay.
+- **Lifecycle (New/Recurring/Inactive)**: bảng `b2b_lifecycle` có ~112.000 KH B2B (chỉ ~216 hoạt động ở Q3) → JSON ~3,4MB vượt trần
+  2MB của Runtime Cache. Nay nén gzip+base64 dạng mảng `[mã, PIC, ngày]` (~0,7MB) — `packLifecycleRows`/`unpackLifecycleRows`; khối cache
+  KHÔNG chứa tên KH (top-10 rời bỏ mỗi squad tra tên riêng qua `fetchCustomerNames`). Khoá `b2b_lifecycle_v2`.
+  ⚠️ Lưu ý nghiệp vụ (chưa sửa, không thuộc đợt tốc độ): "KH Rời bỏ" đếm mọi KH B2B từng mua mà quý này không có doanh thu → ~112.000,
+  con số này khó có ý nghĩa quản trị — nên hỏi Hiếu có muốn giới hạn (vd chỉ KH có doanh thu ở quý liền trước).
+- **JOIN dim_customer**: bỏ `TRIM()` phía dim (`TRIM(f.customer_code) = c.code`) — join 355k dòng từ ~10s còn ~1s (xem analytics-data-model §10).

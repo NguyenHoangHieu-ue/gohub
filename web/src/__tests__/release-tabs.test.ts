@@ -7,7 +7,7 @@ describe("release-tabs — file → tên tab", () => {
     expect(tabsForFiles(["web/src/app/(dashboard)/analytics/catalogue/page.tsx"])).toEqual(["Product Catalogue"])
     expect(tabsForFiles(["web/src/app/(dashboard)/analytics/b2b/page.tsx"])).toEqual(["B2B"])
     expect(tabsForFiles(["web/src/app/(dashboard)/analytics/page.tsx"])).toEqual(["Dashboard"])
-    expect(tabsForFiles(["web/src/app/(dashboard)/analytics/creator/data-health/page.tsx"])).toEqual(["Giám sát Dữ liệu"])
+    expect(tabsForFiles(["web/src/app/(dashboard)/analytics/creator/data-health/page.tsx"])).toEqual(["Dữ liệu & API"])
   })
 
   test("trang ngoài analytics", () => {
