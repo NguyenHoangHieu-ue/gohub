@@ -28,6 +28,10 @@ export async function runPerfProbe() {
 
   const gohubDw    = await series(4, () => queryAnalytics("SELECT 1"))
   const dwParallel = await time(() => Promise.all([queryAnalytics("SELECT 1"), queryAnalytics("SELECT 1"), queryAnalytics("SELECT 1")]))
+  // Khả năng chạy song song của gohub_dw: 1 query nặng chạy 1 mình vs 3 cùng lúc (pool app max=3).
+  const heavy = "SELECT COUNT(DISTINCT f.order_code) c, SUM(f.fulfilled_revenue_amount_vnd) r FROM fact_fulfillment_revenue f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE UPPER(s.group_name) = 'B2B' AND f.fulfiled_date >= '2026-07-01'"
+  const heavy1 = await series(2, () => queryAnalytics(heavy))
+  const heavy3 = await series(2, () => Promise.all([queryAnalytics(heavy), queryAnalytics(heavy), queryAnalytics(heavy)]))
   const supabase   = await series(4, () => supabaseAdmin.from("app_settings").select("value").eq("key", "role_permissions").maybeSingle().then(r => r))
   const supaCache  = await series(3, () => supabaseAdmin.from("analytics_query_cache").select("cache_key, cached_at").limit(1).then(r => r))
   const turso      = tursoConfigured() ? await series(4, () => tursoQuery("SELECT 1")) : []
@@ -50,6 +54,6 @@ export async function runPerfProbe() {
     runtimeCache: { setMs: rcSet, get50kMs: rcGet, missMs: rcMiss, hitOk: !!rcHit },
     region: process.env.VERCEL_REGION ?? null,
     note: "ms mỗi lần gọi tuần tự; lần 1 gồm cả bắt tay kết nối (TLS/DNS), các lần sau dùng lại kết nối",
-    gohubDw, gohubDwParallel3: dwParallel, supabaseAppSettings: supabase, supabaseCacheTable: supaCache, turso, upstash, upstashGet50KB: upstash50k,
+    gohubDw, gohubDwParallel3: dwParallel, heavy1, heavy3, supabaseAppSettings: supabase, supabaseCacheTable: supaCache, turso, upstash, upstashGet50KB: upstash50k,
   })
 }

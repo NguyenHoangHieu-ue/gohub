@@ -115,6 +115,18 @@ export default function DashboardHome() {
         return res.json().catch((e: any) => { throw new Error(`${name} JSON error: ${e.message}`) })
       }
 
+      // KPI tháng trước (badge so sánh) không phụ thuộc 11 request dưới → bắn CÙNG LÚC, gắn kết quả khi về (không chặn trang;
+      // trước đây nối tiếp SAU Promise.all nên cộng thêm cả thời gian của request chậm nhất).
+      const prevMonthPromise = (async () => {
+        try {
+          const date = new Date(startDate)
+          const prevMonthLastDay = new Date(date.getFullYear(), date.getMonth(), 0)
+          const prevMonthFirstDay = new Date(date.getFullYear(), date.getMonth() - 1, 1)
+          const prevMonthKpiRes = await fetch(`/api/analytics/kpis?startDate=${formatDateToISO(prevMonthFirstDay)}&endDate=${formatDateToISO(prevMonthLastDay)}&dateColumn=${dateColumn}`)
+          if (prevMonthKpiRes.ok) setPrevMonthKpis(await prevMonthKpiRes.json())
+        } catch (e) { console.error("Error fetching prev month KPIs:", e) }
+      })()
+
       const [kpiData, revData, regData, perfSrcData, perfChanData, recentData, targetData, tiersData, strategicPerfData, monthlyData, tierPerfData] = await Promise.all([
         fetchJson(`/api/analytics/kpis${queryParams}`, "KPIs"),
         fetchJson(`/api/analytics/revenue-chart${queryParams}`, "Revenue"),
@@ -141,13 +153,7 @@ export default function DashboardHome() {
       if (monthlyData) setMonthlyKpis(monthlyData)
       if (tierPerfData) setB2bTierData(tierPerfData)
 
-      try {
-        const date = new Date(startDate)
-        const prevMonthLastDay = new Date(date.getFullYear(), date.getMonth(), 0)
-        const prevMonthFirstDay = new Date(date.getFullYear(), date.getMonth() - 1, 1)
-        const prevMonthKpiRes = await fetch(`/api/analytics/kpis?startDate=${formatDateToISO(prevMonthFirstDay)}&endDate=${formatDateToISO(prevMonthLastDay)}&dateColumn=${dateColumn}`)
-        if (prevMonthKpiRes.ok) setPrevMonthKpis(await prevMonthKpiRes.json())
-      } catch (e) { console.error("Error fetching prev month KPIs:", e) }
+      void prevMonthPromise
     } catch (err: any) {
       console.error("Error fetching dashboard data:", err)
       setError(`Failed to fetch dashboard data: ${err.message}`)

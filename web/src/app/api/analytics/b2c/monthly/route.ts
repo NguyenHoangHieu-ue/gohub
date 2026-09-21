@@ -89,6 +89,10 @@ export async function GET(req: NextRequest) {
   // forceRefresh thì dùng "hôm nay" (now, theo giờ server UTC) làm windowEnd → bug thật: cộng dư doanh thu
   // của ngày chưa xong vào snapshot/live fallback. Xem docs/wiki/system/tabs/analytics-b2c.md.
   const forceRefresh = noCache(req)
+  // `live=1` (s203): FE Advanced bỏ qua SNAPSHOT (luôn số live T-1) NHƯNG vẫn dùng cache SWR của các khối tính toán —
+  // trước đây FE gửi nocache=1 mỗi lần mở tab nên MỖI lượt xem chạy lại 4 query fact + nhiều hop Supabase nối tiếp
+  // (5-60s). `nocache=1` giờ chỉ còn cho nút làm mới chủ động / cron prewarm.
+  const live = forceRefresh || req.nextUrl.searchParams.get("live") === "1"
   const dataAsOf = getSafeReportDate(1)
   const [cutoffY, cutoffM, cutoffD] = dataAsOf.split("-").map(Number)
 
@@ -136,7 +140,7 @@ export async function GET(req: NextRequest) {
 
   try {
     try {
-      const snapshots = forceRefresh ? [] : await readB2CMonthlySnapshots(months)
+      const snapshots = live ? [] : await readB2CMonthlySnapshots(months)
       const hasCurrentBreakdowns = snapshots.every(s => (s.payload as any)?.marketChannels && (s.payload as any)?.customerChannels)
       if (snapshots.length === months.length && hasCurrentBreakdowns && snapshots.every(s => s.payload.revenueAsOf === dataAsOf)) {
         const snapshotData = snapshotsToMonthlyResponse(snapshots, months)
@@ -489,63 +493,77 @@ export async function GET(req: NextRequest) {
       return { markets, channels, marketChannels, profitByChannel }
     }, undefined, forceRefresh)
 
-    // Chạy SAU khối revenue ở trên (không gộp Promise.all) — tránh dồn quá nhiều query cùng lúc vào
-    // pool gohub_dw max=3 khi loadCustomerBreakdown() phải rơi về nhánh CTE nặng (Admin API lỗi/chưa cấu hình).
-    const customerData = await loadCustomerBreakdown()
-
     // KPI targets + Budget: đều nhập trong tab KPI/Target.
     // budget = ngân sách marketing B2C kế hoạch (app_settings key b2c_budget, nhập ở B2CMarketingBudgetSection).
-    let targets: Record<string, { vn: number; us: number; total: number }> = {}
-    let budget = Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>
-    const budgetByMarket = Object.fromEntries(months.map(m => [m, { vn: 0, us: 0, total: 0 }])) as Record<string, { vn: number; us: number; total: number }>
-    try {
-      const { data: rows } = await supabaseAdmin
-        .from("app_settings").select("key, value").in("key", ["b2c_kpi_targets", "b2c_budget"])
-      for (const r of rows ?? []) {
-        if (r.key === "b2c_kpi_targets" && r.value) targets = JSON.parse(r.value)
-        if (r.key === "b2c_budget" && r.value) {
-          // model mới { [month]: {vn, us} }; backward-compat format cũ { [month]: number } → gán hết vào VN.
-          const saved: Record<string, unknown> = JSON.parse(r.value)
-          for (const m of months) {
-            const cell = saved[m]
-            let vn = 0, us = 0
-            if (typeof cell === "number") vn = cell
-            else if (cell && typeof cell === "object") { vn = Number((cell as any).vn) || 0; us = Number((cell as any).us) || 0 }
-            budget[m] = vn + us
-            budgetByMarket[m] = { vn, us, total: vn + us }
+    const loadTargetsBudget = async () => {
+      let targets: Record<string, { vn: number; us: number; total: number }> = {}
+      let budget = Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>
+      const budgetByMarket = Object.fromEntries(months.map(m => [m, { vn: 0, us: 0, total: 0 }])) as Record<string, { vn: number; us: number; total: number }>
+      try {
+        const { data: rows } = await supabaseAdmin
+          .from("app_settings").select("key, value").in("key", ["b2c_kpi_targets", "b2c_budget"])
+        for (const r of rows ?? []) {
+          if (r.key === "b2c_kpi_targets" && r.value) targets = JSON.parse(r.value)
+          if (r.key === "b2c_budget" && r.value) {
+            // model mới { [month]: {vn, us} }; backward-compat format cũ { [month]: number } → gán hết vào VN.
+            const saved: Record<string, unknown> = JSON.parse(r.value)
+            for (const m of months) {
+              const cell = saved[m]
+              let vn = 0, us = 0
+              if (typeof cell === "number") vn = cell
+              else if (cell && typeof cell === "object") { vn = Number((cell as any).vn) || 0; us = Number((cell as any).us) || 0 }
+              budget[m] = vn + us
+              budgetByMarket[m] = { vn, us, total: vn + us }
+            }
           }
         }
-      }
-    } catch (e) { console.error("[b2c/monthly] targets/budget (app_settings)", (e as Error).message) }
+      } catch (e) { console.error("[b2c/monthly] targets/budget (app_settings)", (e as Error).message) }
+      return { targets, budget, budgetByMarket }
+    }
 
     // Chi phí nhóm B2C (analytics_channel_group_costs) — dùng PHÂN BỔ vào CM1 (profitByChannelFinal).
-    const groupSpend: Record<string, number> = {}
-    for (const m of months) groupSpend[m] = 0
-    try {
-      const { data: costRows } = await supabaseAdmin
-        .from("analytics_channel_group_costs")
-        .select("month, amount")
-        .eq("group_name", "B2C")
-        .gte("month", months[0])
-      for (const r of costRows ?? []) {
-        if (groupSpend[r.month] !== undefined) groupSpend[r.month] += Number(r.amount) || 0
-      }
-    } catch (e) { console.error("[b2c/monthly] group spend (supabase)", (e as Error).message) }
+    const loadGroupSpend = async () => {
+      const groupSpend: Record<string, number> = {}
+      for (const m of months) groupSpend[m] = 0
+      try {
+        const { data: costRows } = await supabaseAdmin
+          .from("analytics_channel_group_costs")
+          .select("month, amount")
+          .eq("group_name", "B2C")
+          .gte("month", months[0])
+        for (const r of costRows ?? []) {
+          if (groupSpend[r.month] !== undefined) groupSpend[r.month] += Number(r.amount) || 0
+        }
+      } catch (e) { console.error("[b2c/monthly] group spend (supabase)", (e as Error).message) }
+      return groupSpend
+    }
 
     // Chi phí kênh B2C (analytics_channel_costs: Ads/Platform/Sponsor/Media amount) — nhập ở Manage Cost.
     // (Fix s131): "Chi phí MKT" hiển thị = group cost + chi phí kênh. Trước đây chỉ tính group cost nên cost
     // nhập theo kênh KHÔNG hiện trong Advanced (Acquisition/Spend/ROAS/CAC). Phần % vẫn chỉ vào CM1, không phải spend cố định.
-    let channelSpend: Record<string, number> = {}
-    try { channelSpend = await getB2CChannelBudgetByMonth(months) } catch (e) { console.error("[b2c/monthly] channel spend", (e as Error).message) }
+    const loadChannelSpend = async () => {
+      try { return await getB2CChannelBudgetByMonth(months) as Record<string, number> }
+      catch (e) { console.error("[b2c/monthly] channel spend", (e as Error).message); return {} as Record<string, number> }
+    }
+
+    const emptyLeads = () => ({ leads: Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>, leadsByChannel: [] as { label: string; byMonth: Record<string, number> }[] })
+
+    // s203: 5 nguồn độc lập (mỗi lần đọc Supabase ~0,4s từ iad1) chạy SONG SONG thay vì nối tiếp ~2-3s. Khối doanh thu
+    // (`data`, 4 query gohub_dw) và khách hàng (cache 60') đã chờ ở trên; các lần đọc Supabase này không đụng pool gohub_dw.
+    const customerDataP = loadCustomerBreakdown()
+    const [customerData, { targets, budget, budgetByMarket }, groupSpend, channelSpend, { leads, leadsByChannel }, revenueComparison] = await Promise.all([
+      customerDataP,
+      loadTargetsBudget(),
+      loadGroupSpend(),
+      loadChannelSpend(),
+      // Leads marketing theo tháng + breakdown kênh. Ưu tiên Turso chat center, fallback Omni/Chatwoot.
+      skipLeads ? Promise.resolve(emptyLeads()) : loadLeads(),
+      loadRevenueComparison(),
+    ])
 
     // spend HIỂN THỊ (Section Spend/ROAS/CAC/Acquisition) = group + kênh.
     const spend: Record<string, number> = {}
     for (const m of months) spend[m] = (groupSpend[m] || 0) + (channelSpend[m] || 0)
-
-    // Leads marketing theo tháng + breakdown kênh. Ưu tiên Turso chat center, fallback Omni/Chatwoot.
-    const { leads, leadsByChannel } = skipLeads
-      ? { leads: Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>, leadsByChannel: [] as { label: string; byMonth: Record<string, number> }[] }
-      : await loadLeads()
 
     // BUG1 FIX: Phân bổ Group Cost B2C vào CM1 theo revenue-share per channel.
     // CHỈ dùng groupSpend (chi phí kênh Ads/... đã nằm trong profitByChannel.opCost rồi → tránh đếm 2 lần).
@@ -575,8 +593,8 @@ export async function GET(req: NextRequest) {
         months, currentMonth, elapsedDays, totalDays,
         targets, budget, budgetByMarket, spend, leads, leadsByChannel,
         dataAsOf,
-        revenueComparison: await loadRevenueComparison(),
-        isLive: forceRefresh,
+        revenueComparison,
+        isLive: live,
         refreshTimestamp: new Date().toISOString(),
         ...data,
         customers: customerData.customers,
@@ -588,14 +606,14 @@ export async function GET(req: NextRequest) {
           : undefined,
         profitByChannel: profitByChannelFinal,
       },
-      // s195+19: nhánh này chạy khi forceRefresh=true (FE Advance dashboard LUÔN gửi nocache=1) — trước
+      // s195+19: nhánh này chạy khi live (trước s203: forceRefresh=true, FE Advance dashboard LUÔN gửi nocache=1) — trước
       // vẫn gắn CACHE_HEADERS (s-maxage=300, stale-while-revalidate=600) nên Vercel Edge CDN cache
       // NGUYÊN response "live" này 5-15 phút theo đúng URL+query — user vừa lưu KPI Target B2C/Budget ở
       // Manage Costs xong reload lại trang B2C vẫn thấy "Chưa nhập mục tiêu" vì CDN trả bản cache cũ, dù
       // DB đã có target mới và bản thân tính toán trong route này luôn chạy tươi. Bug này ĐỘC LẬP với
       // `flushAnalyticsCache()` gọi trong 2 route save — hàm đó chỉ xoá cache tầng app (Supabase
       // `analytics_query_cache`), không đụng được tới CDN cache dựa trên response header như thế này.
-      { headers: forceRefresh ? { "Cache-Control": "no-store" } : CACHE_HEADERS }
+      { headers: live ? { "Cache-Control": "no-store" } : CACHE_HEADERS }
     )
   } catch (err: any) {
     console.error("[analytics/b2c/monthly]", err.message)
