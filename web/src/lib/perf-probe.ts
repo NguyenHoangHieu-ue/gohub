@@ -5,6 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { tursoQuery, tursoConfigured } from "@/lib/turso"
 import { Redis } from "@upstash/redis"
+import { getCache } from "@vercel/functions"
 
 // Đo độ trễ THẬT từ vùng chạy function tới từng kho dữ liệu (gohub_dw / Supabase / Turso / Upstash) — creator-only.
 // Dùng để phân biệt "query nặng" với "mỗi hop mạng chậm" khi tab analytics load lâu.
@@ -39,7 +40,14 @@ export async function runPerfProbe() {
     upstash50k = await series(3, () => redis.get("perf-probe:50k"))
   }
 
+  const rc = getCache({ namespace: "perf-probe" })
+  const rcSet = await series(2, () => rc.set("blob50k", { blob: "x".repeat(50_000) }, { ttl: 120, tags: ["perf-probe"] }))
+  const rcGet = await series(4, () => rc.get("blob50k"))
+  const rcMiss = await series(2, () => rc.get("no-such-key"))
+  const rcHit = await rc.get("blob50k")
+
   return NextResponse.json({
+    runtimeCache: { setMs: rcSet, get50kMs: rcGet, missMs: rcMiss, hitOk: !!rcHit },
     region: process.env.VERCEL_REGION ?? null,
     note: "ms mỗi lần gọi tuần tự; lần 1 gồm cả bắt tay kết nối (TLS/DNS), các lần sau dùng lại kết nối",
     gohubDw, gohubDwParallel3: dwParallel, supabaseAppSettings: supabase, supabaseCacheTable: supaCache, turso, upstash, upstashGet50KB: upstash50k,
