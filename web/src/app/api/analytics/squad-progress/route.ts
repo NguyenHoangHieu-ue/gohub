@@ -8,7 +8,7 @@ import { fetchCustomerCosts, calcRecordCostProjected } from "@/lib/b2b-customer-
 import { fetchCosts } from "@/lib/bod-data"
 import { buildQuarterMonthMeta, getKpiFactor, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
-import { fetchB2BLifecycleRows, classifyB2BLifecycle, type B2BLifecycleRow } from "@/lib/analytics-engine/b2b-lifecycle"
+import { fetchB2BLifecycleRows, classifyB2BLifecycle, fetchCustomerNames, type B2BLifecycleRow } from "@/lib/analytics-engine/b2b-lifecycle"
 
 export const dynamic = "force-dynamic"
 
@@ -413,6 +413,13 @@ export async function GET(req: NextRequest) {
         lifecycle,
       }
     })
+
+    // Tên KH của top-10 rời bỏ mỗi squad: khối cache lifecycle không chứa tên (xem b2b-lifecycle.ts) → tra 1 lần cho ≤ vài chục mã.
+    const inactiveListCodes = squads.flatMap(sq => sq.lifecycle.inactive.list.map(x => x.code))
+    if (inactiveListCodes.length > 0) {
+      const names = await fetchCustomerNames(inactiveListCodes).catch(() => new Map<string, string>())
+      squads.forEach(sq => sq.lifecycle.inactive.list.forEach(x => { x.name = names.get(x.code) ?? x.code }))
+    }
 
     const totRev = squads.reduce((s, sq) => s + sq.revenue, 0)
     const totCm1 = squads.reduce((s, sq) => s + sq.cm1,     0)
