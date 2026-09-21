@@ -13,7 +13,7 @@ import { buildReportData, inferPeriod } from "@/lib/scheduled-report-data"
 //   can thiệp vào lịch tự động.
 export async function runScheduledMessage(
   msg: any,
-  options?: { slotMs?: number; noUpdateLastRun?: boolean },
+  options?: { slotMs?: number; noUpdateLastRun?: boolean; dryRun?: boolean },
 ): Promise<string> {
   const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10)
 
@@ -48,6 +48,9 @@ ${dataBlock}`
   // Render card đẹp (header + bảng). Nếu có lark_keyword (bảo mật custom bot) → chèn vào đầu card.
   const title = msg.title || msg.name || "Báo cáo tự động"
   const card = buildReportCard(title, report, msg.lark_keyword || undefined)
+
+  // dryRun (chẩn đoán): dựng xong báo cáo + card nhưng KHÔNG gửi Lark, KHÔNG đụng last_run_at.
+  if (options?.dryRun) return report
 
   if (msg.lark_webhook_url) {
     const res = await fetch(msg.lark_webhook_url, {
