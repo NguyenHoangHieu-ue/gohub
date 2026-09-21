@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
            SUM(CASE WHEN s.group_name NOT IN ('B2B','B2C') OR s.group_name IS NULL THEN f.revenue ELSE 0 END) as other
          FROM filtered_f f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+         LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
          GROUP BY f.date::date ORDER BY f.date::date`
       )
       return rows.map(r => ({

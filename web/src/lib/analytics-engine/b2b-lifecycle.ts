@@ -70,7 +70,7 @@ export async function fetchB2BLifecycleRows(
       MIN(f.fulfiled_date::date)::text as first_order_date
     FROM fact_fulfillment_revenue f
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-    LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+    LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
     WHERE UPPER(COALESCE(s.group_name,'')) = 'B2B'
       AND f.sku != 'SHIPPINGFEE0'
       AND NOT (UPPER(COALESCE(c.price_list_name,'')) LIKE '%INACTIVE%')

@@ -68,7 +68,7 @@ export function makeExcludeSql(excludedCustomers: string[]): string {
   }
   if (names.length > 0) {
     const esc = names.map(n => `'${n.replace(/'/g, "''")}'`).join(", ")
-    parts.push(`EXISTS (SELECT 1 FROM dim_customer cx WHERE TRIM(cx.code::text) = TRIM(f.customer_code) AND COALESCE(cx.name, '') IN (${esc}))`)
+    parts.push(`EXISTS (SELECT 1 FROM dim_customer cx WHERE cx.code = TRIM(f.customer_code) AND COALESCE(cx.name, '') IN (${esc}))`)
   }
   if (parts.length === 0) return ""
   return `AND NOT (UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2B' AND (${parts.join(" OR ")}))`

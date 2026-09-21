@@ -107,7 +107,7 @@ export async function fetchBODGroupMarginData(startDate: string, endDate: string
             COUNT(DISTINCT f.order_code) as orders
      FROM filtered_f f
      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-     LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+     LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
      GROUP BY 1, 2`
   )
   const costsP = fetchCosts(months)
@@ -125,7 +125,7 @@ export async function fetchBODGroupMarginData(startDate: string, endDate: string
             SUM(f.${source.revenueCol}) as revenue
      FROM filtered_f f
      LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-     LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+     LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
      WHERE ${groupCaseSQL} IN ('B2B-Strategic', 'B2B-Non-Strategic')
      GROUP BY 1, 2, 3`
   )

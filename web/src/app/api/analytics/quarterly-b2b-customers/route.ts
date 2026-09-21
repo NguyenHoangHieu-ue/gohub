@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
             SUM(CASE WHEN sk.sku IS NOT NULL THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as hk3
           FROM fact_fulfillment_revenue f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
           LEFT JOIN (
             SELECT DISTINCT TRIM(sku) as sku FROM dim_sku
             WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
@@ -137,7 +137,7 @@ export async function GET(req: NextRequest) {
             SUM(f.fulfilled_revenue_amount_vnd) as revenue
           FROM fact_fulfillment_revenue f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
           WHERE f.fulfiled_date::date >= '${prevQStartDate}'
             AND f.fulfiled_date::date <= '${prevQEndDate}'
             ${companyFilter}
@@ -153,7 +153,7 @@ export async function GET(req: NextRequest) {
             SUM(f.fulfilled_revenue_amount_vnd) as revenue
           FROM fact_fulfillment_revenue f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
           WHERE f.fulfiled_date::date >= '${monthBeforeQStartStart}'
             AND f.fulfiled_date::date <= '${monthBeforeQStartEnd}'
             ${companyFilter}

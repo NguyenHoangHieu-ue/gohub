@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
        ${locationJoin}
        LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)
-       LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.${custCodeCol}::text)
+       LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.${custCodeCol}::text
        LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v ON f.sku = v.sku
        ${where}
        ORDER BY f.${dateCol}::date DESC`,

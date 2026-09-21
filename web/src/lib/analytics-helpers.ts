@@ -561,7 +561,7 @@ export function excludeOpsByCode(excludedCustomers: string[]): string {
  * bất cứ khi nào 1 KH INACTIVE có phát sinh trong kỳ. Self-contained subquery, không cần JOIN dim_customer.
  */
 export function excludeInactiveCustomers(): string {
-  return `AND NOT EXISTS (SELECT 1 FROM dim_customer ic WHERE TRIM(ic.code::text) = TRIM(f.customer_code) AND UPPER(COALESCE(ic.price_list_name,'')) LIKE '%INACTIVE%')`
+  return `AND NOT EXISTS (SELECT 1 FROM dim_customer ic WHERE ic.code = TRIM(f.customer_code) AND UPPER(COALESCE(ic.price_list_name,'')) LIKE '%INACTIVE%')`
 }
 
 // ── SKU destination (for region chart) ───────────────────────────────────────

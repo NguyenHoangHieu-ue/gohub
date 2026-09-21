@@ -60,7 +60,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
     joinClause = "LEFT JOIN dim_staff st ON TRIM(data.staff_code) = TRIM(st.code)"
   } else if (groupBy === "customer") {
     selectClause = "COALESCE(c.name, NULLIF(TRIM(data.customer_code), ''), 'Unknown') as name"
-    joinClause = "LEFT JOIN dim_customer c ON TRIM(data.customer_code) = TRIM(c.code)"
+    joinClause = "LEFT JOIN dim_customer c ON TRIM(data.customer_code) = c.code"
   }
 
   const withMarket = groupBy === "customer"

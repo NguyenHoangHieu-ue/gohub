@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 
   // dim_customer join cần có trong cả summary lẫn monthly (where tham chiếu dc)
   const baseJoins = `
-    LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
+    LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = dc.code
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code`
 
   const skuJoin = `LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)`

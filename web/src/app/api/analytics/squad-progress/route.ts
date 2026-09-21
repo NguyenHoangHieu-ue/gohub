@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
             ${monthCols}
           FROM fact_fulfillment_revenue f
           LEFT JOIN dim_order_source s  ON f.order_source_code = s.code
-          LEFT JOIN dim_customer    c   ON TRIM(f.customer_code) = TRIM(c.code::text)
+          LEFT JOIN dim_customer    c   ON TRIM(f.customer_code) = c.code
           LEFT JOIN (
             SELECT DISTINCT TRIM(sku) AS sku FROM dim_sku
             WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
           SELECT TRIM(f.customer_code) AS customer_code, SUM(f.fulfilled_revenue_amount_vnd) AS revenue
           FROM fact_fulfillment_revenue f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
           WHERE f.fulfiled_date >= '${prevQStartDate}' AND f.fulfiled_date <= '${prevQEndDate}'
             ${companyFilter}
             AND f.sku != 'SHIPPINGFEE0'

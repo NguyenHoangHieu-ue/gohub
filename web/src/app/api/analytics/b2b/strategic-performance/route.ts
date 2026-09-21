@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
                 CASE WHEN ${filter} THEN 'current' ELSE 'previous' END as period
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code)
+         LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
          WHERE (${filter} OR ${prevFilter}) ${sfx}
        ),
        matched_data AS (
