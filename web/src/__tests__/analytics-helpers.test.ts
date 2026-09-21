@@ -196,6 +196,23 @@ describe("cachedQuery — L2 Runtime Cache + stale-while-revalidate", () => {
     expect(fn2).not.toHaveBeenCalled()
   })
 
+  test("khối 3MB (vượt trần 2MB Runtime Cache) được nén → vẫn vào L2 và instance mới đọc lại đúng", async () => {
+    const key = "big:" + Math.random()
+    const rows = Array.from({ length: 30_000 }, (_, i) => ({ sku: "SKU" + i, name: "Sản phẩm số " + i, rev: i * 1.5, gp: i * 0.3 }))
+    expect(JSON.stringify(rows).length).toBeGreaterThan(2 * 1024 * 1024)
+    const fn = vi.fn(async () => rows)
+    await cachedQuery(key, fn, 60)
+    await Promise.all(bgTasks)
+    const stored = l2Store.get("aq:" + key)?.value ?? [...l2Store.entries()].find(([k]) => k.includes(key))?.[1].value
+    expect(stored).toBeTruthy()
+    expect(JSON.stringify(stored).length).toBeLessThan(2 * 1024 * 1024)
+    vi.resetModules()
+    const fresh = await import("@/lib/analytics-helpers")
+    const fn2 = vi.fn(async () => [])
+    expect(await fresh.cachedQuery(key, fn2, 60)).toEqual(rows)
+    expect(fn2).not.toHaveBeenCalled()
+  })
+
   test("hết TTL nhưng còn ≤6h → trả bản CŨ ngay + làm mới nền; lần sau thấy bản mới", async () => {
     vi.useFakeTimers()
     try {

@@ -1,5 +1,6 @@
 import { createHash } from "crypto"
 import { getCache, waitUntil } from "@vercel/functions"
+import { gzipSync, gunzipSync } from "node:zlib"
 import { NextResponse, type NextRequest } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { memo } from "@/lib/memo"
@@ -71,11 +72,28 @@ async function setEpoch(patch: Partial<Epoch>): Promise<void> {
 /** Đánh dấu MỌI cache hiện có là "hết TTL" nhưng còn dùng được làm bản cũ (SWR) — dùng khi ETL vừa nạp data mới. */
 export async function softExpireAll(): Promise<void> { await setEpoch({ soft: Date.now() }) }
 
+// Runtime Cache trần 2MB/mục và KHÔNG báo lỗi khi vượt (mục đơn giản là không được lưu — đo s203: my-metrics/sku-scan 3,0MB
+// bị tính lại 17s mỗi lần). JSON >400KB nén gzip+base64 (thường co 8-10×) → vừa trần, đỡ cả băng thông đọc/ghi L2.
+const COMPRESS_OVER = 400_000
+interface StoredEntry { cachedAt: number; data?: unknown; z?: string }
+function encodeEntry(entry: CacheEntry): StoredEntry {
+  const json = JSON.stringify(entry.data)
+  if (json && json.length > COMPRESS_OVER) return { cachedAt: entry.cachedAt, z: gzipSync(Buffer.from(json)).toString("base64") }
+  return entry
+}
+function decodeEntry<T>(stored: StoredEntry | undefined | null): CacheEntry<T> | undefined {
+  if (!stored || typeof stored.cachedAt !== "number") return undefined
+  if (typeof stored.z === "string") {
+    try { return { cachedAt: stored.cachedAt, data: JSON.parse(gunzipSync(Buffer.from(stored.z, "base64")).toString()) as T } } catch { return undefined }
+  }
+  return stored as CacheEntry<T>
+}
+
 export async function persistCacheEntry<T>(key: string, data: T, deps: string[] = []): Promise<void> {
   const entry: CacheEntry<T> = { data, cachedAt: Date.now() }
   l1Set(key, entry, deps)
   try {
-    await runtimeCache().set(key, entry, {
+    await runtimeCache().set(key, encodeEntry(entry), {
       ttl: L2_TTL_S, name: "analytics-query",
       tags: [TAG_ALL, prefixTag(key), ...deps.map(depTag)],
     })
@@ -134,7 +152,7 @@ export async function cachedQuery<T>(
   if (usable(l1) && isFresh(l1) && now - l1.cachedAt < L1_TTL_MS) return l1.data
 
   let entry: CacheEntry<T> | undefined
-  try { entry = (await runtimeCache().get(key)) as CacheEntry<T> | undefined } catch { entry = undefined }
+  try { entry = decodeEntry<T>((await runtimeCache().get(key)) as StoredEntry | undefined) } catch { entry = undefined }
 
   if (usable(entry)) {
     if (isFresh(entry)) { l1Set(key, entry, deps); return entry.data }
