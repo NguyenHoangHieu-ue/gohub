@@ -80,6 +80,9 @@ async function readTargets() {
   return targets
 }
 
+// Thời điểm (ms) tới khi được thử lại Admin GoHub API sau lần lỗi gần nhất (mỗi instance) — tránh dồn thêm request vào bucket vừa vượt trần.
+let adminCustomerDownUntil = 0
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session && !localPreviewAllowed(req) && !isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -273,83 +276,101 @@ export async function GET(req: NextRequest) {
         [windowStart, dataAsOf]
       )
 
+    const buildCustomerBreakdown = (
+      custRowsRaw: { month: string; type: string; revenue: string; count: string }[],
+      channelRowsRaw: CustomerChannelRow[],
+      customerSource: "admin-gohub" | "analytics-db",
+    ) => {
+      let customerBreakdown: "new-returning" | "total-only" = "new-returning"
+      const customers: Record<string, CustRow> = {}
+      for (const m of months) customers[m] = emptyCustRow()
+      for (const r of custRowsRaw) {
+        const row = customers[r.month]
+        if (!row) continue
+        const rev = parseFloat(r.revenue || "0")
+        const cnt = parseInt(r.count || "0")
+        if (r.type === "total") {
+          customerBreakdown = "total-only"
+          row.total.revenue += rev
+          row.total.count += cnt
+          continue
+        }
+        const bucket = r.type === "new" ? row.new : row.returning
+        bucket.revenue += rev
+        bucket.count += cnt
+        row.total.revenue += rev
+        row.total.count += cnt
+      }
+
+      const customerChannels: Record<string, CustomerChannelCell> = {}
+      for (const m of months) customerChannels[m] = emptyCustomerChannelCell()
+      for (const r of channelRowsRaw) {
+        const monthCell = customerChannels[r.month]
+        if (!monthCell) continue
+        const revenue = parseFloat(r.revenue || "0")
+        const count = parseInt(r.count || "0")
+        const addToBucket = (bucket: CustRow) => {
+          const target = r.type === "new" ? bucket.new : bucket.returning
+          target.revenue += revenue
+          target.count += count
+          bucket.total.revenue += revenue
+          bucket.total.count += count
+        }
+        addToBucket(monthCell[r.bucket])
+        addToBucket(r.bucket === "vnWeb" ? monthCell.vnB2c : monthCell.usB2c)
+      }
+
+      return { customers, customerChannels, customerSource, customerBreakdown }
+    }
+
     // Customer New/Returning không cần live-theo-giây (cutoff dữ liệu vốn đã T-1) — tách cache riêng
     // TTL 60' (thay vì bypass mỗi lượt xem trang theo forceRefresh) + ưu tiên Admin GoHub API (page 1
     // summary, nhẹ — đã dùng cho snapshot cron) trước khi rơi về CTE quét toàn bộ lịch sử
     // fact_fulfillment_revenue (không index được, ngày càng chậm theo thời gian — nguyên nhân query
     // timeout khi Advanced tab từng bắt buộc chạy lại 2 CTE này ở MỌI lượt xem trang).
-    const loadCustomerBreakdown = () => cachedQuery(
-      `b2c-customer-breakdown:v1:${windowStart}:${dataAsOf}`,
+    // ⚠️ Bản Admin và bản DB cache RIÊNG: bản DB đếm customer_code (mã kênh chung, chỉ 2-3 "khách"/tháng —
+    // không phải khách thật) nên CHỈ là phương án tạm, cache ngắn 5' + cooldown 2' không gọi lại Admin khi vừa
+    // lỗi (tránh dồn thêm request vào bucket đã vượt trần 30 req/5'). Trước đây bản DB sai bị cache 60'.
+    const breakdownKey = `b2c-customer-breakdown:v2:${windowStart}:${dataAsOf}`
+    const loadCustomerFromAdmin = () => cachedQuery(
+      `${breakdownKey}:admin`,
       async () => {
-        let customerSource: "admin-gohub" | "analytics-db" = "analytics-db"
-        let custRowsRaw: { month: string; type: string; revenue: string; count: string }[]
-        let channelRowsRaw: CustomerChannelRow[]
-        if (adminGohubConfigured()) {
-          try {
-            const [adminCust, adminChannel] = await Promise.all([
-              adminGohubCustomerRows(months),
-              adminGohubCustomerChannelRows(months),
-            ])
-            custRowsRaw = adminCust
-            // Admin API trả cả bucket cha (vnB2c/usB2c) đã cộng sẵn — bỏ, để reducer dưới tự cộng lại
-            // từ con (vnWeb/usWeb/usApp) giống hệt cách CTE DB làm, tránh đếm 2 lần.
-            channelRowsRaw = adminChannel.filter(
-              (r): r is CustomerChannelRow => r.bucket === "vnWeb" || r.bucket === "usWeb" || r.bucket === "usApp"
-            )
-            customerSource = "admin-gohub"
-          } catch (e) {
-            console.error("[b2c/monthly] admin gohub customer -> fallback analytics-db", (e as Error).message)
-            ;[custRowsRaw, channelRowsRaw] = await Promise.all([customerRowsFromDb(), customerChannelRowsFromDb()])
-          }
-        } else {
-          [custRowsRaw, channelRowsRaw] = await Promise.all([customerRowsFromDb(), customerChannelRowsFromDb()])
-        }
-
-        let customerBreakdown: "new-returning" | "total-only" = "new-returning"
-        const customers: Record<string, CustRow> = {}
-        for (const m of months) customers[m] = emptyCustRow()
-        for (const r of custRowsRaw) {
-          const row = customers[r.month]
-          if (!row) continue
-          const rev = parseFloat(r.revenue || "0")
-          const cnt = parseInt(r.count || "0")
-          if (r.type === "total") {
-            customerBreakdown = "total-only"
-            row.total.revenue += rev
-            row.total.count += cnt
-            continue
-          }
-          const bucket = r.type === "new" ? row.new : row.returning
-          bucket.revenue += rev
-          bucket.count += cnt
-          row.total.revenue += rev
-          row.total.count += cnt
-        }
-
-        const customerChannels: Record<string, CustomerChannelCell> = {}
-        for (const m of months) customerChannels[m] = emptyCustomerChannelCell()
-        for (const r of channelRowsRaw) {
-          const monthCell = customerChannels[r.month]
-          if (!monthCell) continue
-          const revenue = parseFloat(r.revenue || "0")
-          const count = parseInt(r.count || "0")
-          const addToBucket = (bucket: CustRow) => {
-            const target = r.type === "new" ? bucket.new : bucket.returning
-            target.revenue += revenue
-            target.count += count
-            bucket.total.revenue += revenue
-            bucket.total.count += count
-          }
-          addToBucket(monthCell[r.bucket])
-          addToBucket(r.bucket === "vnWeb" ? monthCell.vnB2c : monthCell.usB2c)
-        }
-
-        return { customers, customerChannels, customerSource, customerBreakdown }
+        const [adminCust, adminChannel] = await Promise.all([
+          adminGohubCustomerRows(months),
+          adminGohubCustomerChannelRows(months),
+        ])
+        // Admin API trả cả bucket cha (vnB2c/usB2c) đã cộng sẵn — bỏ, để reducer tự cộng lại từ con
+        // (vnWeb/usWeb/usApp) giống hệt cách CTE DB làm, tránh đếm 2 lần.
+        const channelRows = adminChannel.filter(
+          (r): r is CustomerChannelRow => r.bucket === "vnWeb" || r.bucket === "usWeb" || r.bucket === "usApp"
+        )
+        return buildCustomerBreakdown(adminCust, channelRows, "admin-gohub")
       },
       60,
       false,
       ["b2c-customer"],
     )
+    const loadCustomerFromDb = () => cachedQuery(
+      `${breakdownKey}:db`,
+      async () => {
+        const [custRows, channelRows] = await Promise.all([customerRowsFromDb(), customerChannelRowsFromDb()])
+        return buildCustomerBreakdown(custRows, channelRows, "analytics-db")
+      },
+      5,
+      false,
+      ["b2c-customer"],
+    )
+    const loadCustomerBreakdown = async () => {
+      if (adminGohubConfigured() && Date.now() >= adminCustomerDownUntil) {
+        try {
+          return await loadCustomerFromAdmin()
+        } catch (e) {
+          adminCustomerDownUntil = Date.now() + 2 * 60_000
+          console.error("[b2c/monthly] admin gohub customer -> fallback analytics-db", (e as Error).message)
+        }
+      }
+      return loadCustomerFromDb()
+    }
 
     const data = await cachedQuery(`b2c-monthly:v15:${windowStart}:${dataAsOf}:revenue-only`, async () => {
       const [marketRows, channelRows, marketChannelRows, profitRows] = await Promise.all([

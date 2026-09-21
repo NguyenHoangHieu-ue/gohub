@@ -196,7 +196,9 @@ $$\text{Spend Pace} = \frac{\text{Chi phí thực tế}}{\text{Ngân sách Marke
   tổng / theo kênh / snapshot → 1 lần dựng breakdown = 9 request. ⚠️ SỐ ĐỔI (định nghĩa): trước, new/returning
   tính trong phạm vi từng tenant (khách từng mua kênh khác vẫn "mới" ở kênh này); nay theo `userType` toàn cục
   của khách. Đo T8/2026 VN web: mới 1.677→1.501, quay lại 918→1.094 (tổng khách 2.595, đơn 3.111 không đổi).
-  Tenant `gohub-cloud` (4 khách) vẫn không thuộc kênh nào. Chưa làm: không cache kết quả fallback DB lâu.
+  Tenant `gohub-cloud` (4 khách) vẫn không thuộc kênh nào. Route `b2c/monthly` cũng đổi: bản Admin và bản DB cache RIÊNG (`b2c-customer-breakdown:v2:…:admin` 60' /
+  `…:db` 5'), lỗi Admin → cooldown 2' không gọi lại (`adminCustomerDownUntil`) — trước đó bản DB sai bị cache 60'
+  nên sau khi hết vượt trần vẫn thấy số sai cả giờ. Bump key v1→v2 để xoá bản sai đang cache.
 - **🟡 Fix s197 (2026-09-14) — chart Revenue Trend không loại ship fee/đơn nội bộ (`b2c/trend`)**: route
   KHÔNG đọc `includeShip`/`includeInternalOps`/`includeOpsCustomers` dù FE gửi cùng `queryParams` với
   `b2c/kpis` (route NÀY loại mặc định) — chart Trend lệch KPI card cùng trang. Đã thread `shipFilter`/
