@@ -921,6 +921,7 @@
 
 ## Việc Hiếu cần làm (còn mở)
 
+- [ ] **s203 — Scheduled Daily/Weekly không tới Lark ~1 tuần (đã sửa trên staging, CHƯA merge main)**: gốc = 2026-09-10 đổi `bi-analyst` sang `gemini-3.8-flash` (mặc định thinking=medium) → báo cáo ~32s > timeout 30s của cron-job.org. Fix: `thinkingLevel:"low"` (đo trọn đường cron 32s→12s; ⚠️ KHÔNG dùng "minimal" khi có functionDeclarations) + cron route trả lời ngay, chạy báo cáo trong `waitUntil` + kiểm body webhook Lark (`code!=0`). **Cần Hiếu**: (1) kiểm cron-job.org đang gọi URL nào — log cho thấy lần gọi gần nhất rơi vào deployment **staging**, không phải production; (2) merge main để production có fix; (3) Daily/Weekly hôm nay đang "đến hạn" (last_run_at cũ) → tick kế sẽ tự gửi bù. Chi tiết: wiki `analytics-scheduled.md` §E.
 - [ ] **s202 — Bảo mật**: **rotate Vercel token** (đã lộ vào hội thoại Claude; `tmp.txt` đã xoá, secret giờ nằm ở `web/.env.local`). Vercel → Account Settings → Tokens: xoá token cũ, tạo mới rồi cập nhật `VERCEL_TOKEN` trong `web/.env.local`.
 - [ ] **s202 — Bridge**: báo mọi người đã pair reload extension lên 1.1.0 (`chrome://extensions`) — production cũng từ chối bản cũ (thiếu Device ID). Hiếu đã reload + xác nhận máy mình ghi nhận đúng.
 - [ ] **s202 — Xác nhận cron `refresh-monthly-kpis`** (sáng 21/09): Vercel Cron lần đầu chạy GET thật lúc 01:30 UTC; vào `/analytics/creator/devtools` → Giám sát → Đối chiếu, "Snapshot cập nhật lúc" phải là 21/09 và tất cả "Khớp".
