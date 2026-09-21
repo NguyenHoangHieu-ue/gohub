@@ -730,14 +730,68 @@ export default function ThreeHKDataUsagePage() {
         "Actual (GB)": parseFloat(r.total_data_gb || 0),
         "Usage %": Number(parseFloat(r.usage_pct || 0).toFixed(2)),
         "First Report": r.first_report_date || "",
+        "Tháng": r.first_report_date ? String(r.first_report_date).slice(0, 7) : "",
         "Activation": r.activation_date || "",
         "Records": r.record_count || 0,
+        "Kỳ từ": startDate,
+        "Kỳ đến": endDate,
       }))
       exportRawRows(rows, `3hk-records-${activeTab}-${startDate}_to_${endDate}`, "Records")
     } catch (err) {
       console.error("Error exporting 3HK records:", err)
     } finally {
       setExportingRecords(false)
+    }
+  }
+
+  const [exportingMonthly, setExportingMonthly] = useState(false)
+  // Xuất theo THÁNG × loại gói × SKU cho cả kỳ đang lọc (Hiếu cần phân biệt tháng khi xuất nhiều tháng để
+  // thống kê). Mỗi (iccid, order_code) được tính riêng trong từng tháng nó có usage — tổng các tháng của
+  // 1 SKU có thể lớn hơn "Active SIMs" của bảng SKU (bảng đó gom 1 SIM = 1 lần cho cả kỳ).
+  const exportMonthly = async () => {
+    if (exportingMonthly) return
+    setExportingMonthly(true)
+    try {
+      const sql = `
+        WITH period_records AS (
+          SELECT iccid, order_code, sku, sku_type, total_data_gb, data_amount_gb,
+                 to_char(first_report_date::date, 'YYYY-MM') AS ym
+          FROM fact_data_usage
+          WHERE ${V3HK}
+            AND ${EXCLUDE_FRAME}
+            AND first_report_date >= '${startDate}' AND first_report_date <= '${endDate}'
+        ),
+        bundles AS (
+          SELECT ym, iccid, order_code, MAX(sku) AS sku,
+                 ${SKU_TYPE_CASE} AS sku_type,
+                 SUM(total_data_gb) AS total_data_gb, MAX(data_amount_gb) AS data_amount_gb
+          FROM period_records GROUP BY ym, iccid, order_code
+        )
+        SELECT ym, COALESCE(sku_type, 'Unknown') AS sku_type, sku,
+          COUNT(*) AS active_sims,
+          SUM(data_amount_gb) AS total_plan_gb, SUM(total_data_gb) AS total_usage_gb,
+          CASE WHEN SUM(data_amount_gb) > 0 THEN (SUM(total_data_gb) / SUM(data_amount_gb)) * 100 ELSE 0 END AS avg_usage_pct
+        FROM bundles WHERE 1=1 ${tabClause()} ${searchClause()}
+        GROUP BY ym, 2, sku
+        ORDER BY ym, 2, total_usage_gb DESC
+      `
+      const result = await runQuery(sql)
+      const rows = (Array.isArray(result) ? result : []).map((r: any) => ({
+        "Tháng": r.ym || "",
+        "SKU Type": r.sku_type || "",
+        "SKU": r.sku || "",
+        "Active SIMs": parseInt(r.active_sims || 0),
+        "Plan (GB)": Number(parseFloat(r.total_plan_gb || 0).toFixed(2)),
+        "Actual (GB)": Number(parseFloat(r.total_usage_gb || 0).toFixed(2)),
+        "Usage %": Number(parseFloat(r.avg_usage_pct || 0).toFixed(2)),
+        "Kỳ từ": startDate,
+        "Kỳ đến": endDate,
+      }))
+      exportRawRows(rows, `3hk-usage-by-month-${activeTab}-${startDate}_to_${endDate}`, "By Month")
+    } catch (err) {
+      console.error("Error exporting 3HK monthly:", err)
+    } finally {
+      setExportingMonthly(false)
     }
   }
 
@@ -1287,11 +1341,16 @@ export default function ThreeHKDataUsagePage() {
 
       {/* SKU Performance Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
             <Package className="w-4 h-4 text-brand-600" />
             Average Usage by SKU
           </h2>
+          <button onClick={exportMonthly} disabled={exportingMonthly || !startDate || !endDate}
+            title="Xuất từng tháng trong kỳ đang lọc: Tháng × Loại gói × SKU"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all">
+            <Download className="w-3.5 h-3.5" /> {exportingMonthly ? "Exporting..." : "Export theo tháng"}
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
