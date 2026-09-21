@@ -4,6 +4,7 @@ import { redirect }         from "next/navigation"
 import { headers }          from "next/headers"
 import { supabaseAdmin }    from "@/lib/supabase"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
+import { memo } from "@/lib/memo"
 
 // /analytics → "dashboard"; /analytics/bod → "bod"
 function pathToAnalyticsId(pathname: string): string {
@@ -21,21 +22,25 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   // admin/creator: toàn quyền — không cần truy DB (kiểm JWT trước cho nhanh)
   if (role === "admin" || role === "creator") return <>{children}</>
 
-  // Lấy hồ sơ mới nhất từ DB — không phụ thuộc JWT cũ (vd role vừa đổi chưa re-login)
-  const { data: profile } = await supabaseAdmin
-    .from("users")
-    .select("role, allowed_analytics")
-    .eq("username", username)
-    .maybeSingle()
+  // Hồ sơ + ma trận quyền: 2 lần đọc Supabase độc lập → chạy SONG SONG và memo 20s (mỗi lần ~0,4s từ iad1, đo s203;
+  // trước đây nối tiếp mỗi lần chuyển trang). Vẫn lấy từ DB (không phụ thuộc JWT cũ), chỉ trễ tối đa 20s.
+  const [profile, rpValue] = await Promise.all([
+    memo(`layout-profile:${username}`, 20_000, async () => {
+      const { data } = await supabaseAdmin.from("users").select("role, allowed_analytics").eq("username", username).maybeSingle()
+      return data
+    }),
+    memo("layout-role-permissions", 20_000, async () => {
+      const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", "role_permissions").maybeSingle()
+      return (data?.value as string | undefined) ?? null
+    }),
+  ])
   const dbRole = profile?.role ?? role
   // dbRole có thể khác JWT nếu admin vừa đổi role → dùng DB làm nguồn sự thật
   if (dbRole === "admin" || dbRole === "creator") return <>{children}</>
 
   // Quyền nền theo role (ma trận role_permissions) ∪ trang cấp thêm per-user (allowed_analytics)
-  const { data: rp } = await supabaseAdmin
-    .from("app_settings").select("value").eq("key", "role_permissions").maybeSingle()
   let roleMatrix: Record<string, string[]> = DEFAULT_ROLE_PERMISSIONS
-  try { if (rp?.value) roleMatrix = JSON.parse(rp.value) } catch {}
+  try { if (rpValue) roleMatrix = JSON.parse(rpValue) } catch {}
 
   // Union code defaults + DB: DB có thể thêm tab, nhưng code defaults luôn được giữ
   // (tránh tình trạng DB cũ không có tab mới → bị block dù code đã thêm vào defaults).

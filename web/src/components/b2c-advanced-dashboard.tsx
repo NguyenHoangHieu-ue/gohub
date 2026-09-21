@@ -422,7 +422,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
       const params = new URLSearchParams()
       if (localPreview) params.set("localPreview", "1")
       params.set("skipLeads", "1")
-      params.set("nocache", "1")   // luôn live, không đọc snapshot
+      params.set("live", "1")      // luôn số live T-1 (bỏ qua snapshot) nhưng dùng cache SWR — không còn nocache mỗi lượt xem (s203)
       const res = await fetch(`/api/analytics/b2c/monthly?${params.toString()}`)
       if (!res.ok) {
         const body = await res.json().catch(() => null)

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { flushAnalyticsCache, shipFilter, internalOpsFilter, excludeInactiveCustomers } from "@/lib/analytics-helpers"
+import { flushAnalyticsCache, shipFilter, internalOpsFilter, excludeInactiveCustomers, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 import { canWrite } from "@/lib/writable-tabs"
 
 const WRITE_ROLES = ["admin", "creator"]
@@ -38,7 +38,9 @@ export async function GET(req: NextRequest) {
 
     // Actuals từ gohub_dw cho prev quarter — gộp theo KÊNH (để CM1 trừ op-cost theo kênh giống intel),
     // kèm gross_profit_vnd (margin) cho CM1. grp = B2C/B2B để aggregate sau.
-    const actualsRows = await queryAnalytics<{
+    // s203: 3 nguồn độc lập → Promise.all; khối actuals (query fact ~2-3s mỗi lượt mở tab) cache SWR theo tháng quý trước.
+    // Chi phí kênh + target đã lưu vẫn đọc TƯƠI mỗi request (nhập xong hiện ngay).
+    const actualsP = cachedQuery(`planning-targets-actuals:v1:${prevMonths.join(",")}`, () => queryAnalytics<{
       channel: string; grp: string; month: string; revenue: string; margin: string; revenue_3hk: string
     }>(
       `SELECT
@@ -54,13 +56,14 @@ export async function GET(req: NextRequest) {
        WHERE TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') IN ('${prevMonths.join("','")}')
          ${shipFilter(false)} ${internalOpsFilter(false)} ${excludeInactiveCustomers()}
        GROUP BY 1, 2, 3`
-    )
+    ), QUERY_TTL_MIN, false, ["b2b-cost"])
 
     // Op-cost theo kênh/tháng (full-month, prevMonths đều là tháng đủ → không prorate, giống intel)
-    const { data: ccData } = await supabaseAdmin
+    const ccP = supabaseAdmin
       .from("analytics_channel_costs")
       .select("channel, month, ads, platform_fee, sponsor_products, media")
       .in("month", prevMonths)
+    const [actualsRows, { data: ccData }] = await Promise.all([actualsP, ccP])
     const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
     const channelCosts = (ccData || []).map((r: any) => ({
       channel: r.channel, month: String(r.month),

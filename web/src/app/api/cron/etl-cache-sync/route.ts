@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { isCronReq, flushAnalyticsCache } from "@/lib/analytics-helpers"
+import { isCronReq, softExpireAll, prewarmAnalyticsUrls } from "@/lib/analytics-helpers"
+import { waitUntil } from "@vercel/functions"
 import { alertCronFailure } from "@/lib/cron-alert"
 
 export const dynamic = "force-dynamic"
@@ -28,7 +29,7 @@ const STATE_KEY = "etl_cache_sync_last_seen"
 
 interface JobEnd { name: string; last_end: string | null }
 
-async function checkAndFlush(): Promise<{ advanced: string[]; flushed: boolean }> {
+async function checkAndFlush(origin: string): Promise<{ advanced: string[]; flushed: boolean }> {
   const rows = await queryAnalytics<JobEnd>(
     `SELECT j.name, MAX(jl.end_time) as last_end
      FROM job_logs jl JOIN jobs j ON j.id = jl.job_id
@@ -53,7 +54,10 @@ async function checkAndFlush(): Promise<{ advanced: string[]; flushed: boolean }
   }
 
   if (advanced.length > 0) {
-    await flushAnalyticsCache()
+    // s203: KHÔNG xoá cứng nữa — đánh dấu cache "hết TTL" để người xem vẫn nhận bản cũ ngay (stale-while-revalidate),
+    // đồng thời làm tươi trước ở nền các URL được xem gần đây để lượt xem kế tiếp đã có số mới.
+    await softExpireAll()
+    waitUntil(prewarmAnalyticsUrls(origin, 30, 3).then(() => {}, () => {}))
     await supabaseAdmin.from("app_settings").upsert(
       { key: STATE_KEY, value: JSON.stringify(nextSeen), category: "cache" },
       { onConflict: "key" },
@@ -67,7 +71,7 @@ async function checkAndFlush(): Promise<{ advanced: string[]; flushed: boolean }
 export async function GET(req: NextRequest) {
   if (!isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   try {
-    const result = await checkAndFlush()
+    const result = await checkAndFlush(req.nextUrl.origin)
     return NextResponse.json({ ok: true, ...result, at: new Date().toISOString() })
   } catch (err) {
     await alertCronFailure("etl-cache-sync", err)
@@ -76,14 +80,14 @@ export async function GET(req: NextRequest) {
 }
 
 // Trigger tay từ Settings (admin/creator) để test.
-export async function POST() {
+export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   const role = (session?.user as { role?: string })?.role ?? ""
   if (!session || !["admin", "creator"].includes(role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   try {
-    const result = await checkAndFlush()
+    const result = await checkAndFlush(req.nextUrl.origin)
     return NextResponse.json({ ok: true, ...result })
   } catch (err) {
     return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 })

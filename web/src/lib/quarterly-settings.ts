@@ -2,6 +2,7 @@
 // Lưu trong Supabase app_settings. Dùng chung bởi quarterly-report + quarterly-b2b-customers.
 
 import { supabaseAdmin } from "@/lib/supabase"
+import { memo } from "@/lib/memo"
 
 // Prefix cache hiện hành của quarterly-report/quarterly-b2b-customers — đặt ở lib dùng chung (KHÔNG đặt
 // trong route.ts vì Next.js App Router chỉ cho export tên hàm đã biết như GET/POST/dynamic/maxDuration...,
@@ -25,16 +26,23 @@ export interface QuarterlySettings {
   tierKeywords:      Record<string, string[]>
 }
 
+async function loadQuarterlySettings(): Promise<QuarterlySettings> {
+  const [{ data: excl, error: e1 }, { data: tier, error: e2 }] = await Promise.all([
+    supabaseAdmin.from("app_settings").select("value").eq("key", "quarterly_excluded_customers").maybeSingle(),
+    supabaseAdmin.from("app_settings").select("value").eq("key", "quarterly_tier_keywords").maybeSingle(),
+  ])
+  if (e1 || e2) throw new Error(e1?.message || e2?.message)   // để memo KHÔNG cache kết quả lỗi
+  return {
+    excludedCustomers: excl?.value ? JSON.parse(excl.value) : DEFAULT_EXCLUDED_CUSTOMERS,
+    tierKeywords:      tier?.value ? JSON.parse(tier.value) : DEFAULT_TIER_KEYWORDS,
+  }
+}
+
+// Đọc ở MỌI request analytics (≈20 route) → memo 15s trong instance (Supabase ~400ms/lần từ iad1, đo s203).
+// Route lưu cấu hình (`quarterly-settings` POST) gọi `memoInvalidate("qsettings")` cho instance đó.
 export async function fetchQuarterlySettings(): Promise<QuarterlySettings> {
   try {
-    const [{ data: excl }, { data: tier }] = await Promise.all([
-      supabaseAdmin.from("app_settings").select("value").eq("key", "quarterly_excluded_customers").maybeSingle(),
-      supabaseAdmin.from("app_settings").select("value").eq("key", "quarterly_tier_keywords").maybeSingle(),
-    ])
-    return {
-      excludedCustomers: excl?.value ? JSON.parse(excl.value) : DEFAULT_EXCLUDED_CUSTOMERS,
-      tierKeywords:      tier?.value ? JSON.parse(tier.value) : DEFAULT_TIER_KEYWORDS,
-    }
+    return await memo("qsettings", 15_000, loadQuarterlySettings)
   } catch {
     return { excludedCustomers: DEFAULT_EXCLUDED_CUSTOMERS, tierKeywords: DEFAULT_TIER_KEYWORDS }
   }
@@ -60,10 +68,17 @@ export function makeExcludeSql(excludedCustomers: string[]): string {
   }
   if (names.length > 0) {
     const esc = names.map(n => `'${n.replace(/'/g, "''")}'`).join(", ")
-    parts.push(`EXISTS (SELECT 1 FROM dim_customer cx WHERE TRIM(cx.code::text) = TRIM(f.customer_code) AND COALESCE(cx.name, '') IN (${esc}))`)
+    parts.push(`EXISTS (SELECT 1 FROM dim_customer cx WHERE cx.code = TRIM(f.customer_code) AND COALESCE(cx.name, '') IN (${esc}))`)
   }
   if (parts.length === 0) return ""
   return `AND NOT (UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2B' AND (${parts.join(" OR ")}))`
+}
+
+/** Danh sách loại trừ cho các route B2C. Danh sách gốc (Quarter Report) chứa CẢ các mã khách B2C dùng chung
+ *  ("B2C Customer VN/US", "VN B2C Website"...) — gần như MỌI đơn B2C đều nằm dưới các mã này, nên loại chúng khỏi
+ *  route B2C làm doanh thu tụt ~10× (T9/2026: 92tr thay vì 979tr). Chỉ giữ lại các mục KHÔNG phải KH B2C. */
+export function excludedForB2C(excludedCustomers: string[]): string[] {
+  return excludedCustomers.filter(e => !/b2c/i.test(e))
 }
 
 /** Hash ngắn của exclusion list để đưa vào cache key (auto-invalidate khi list thay đổi). */

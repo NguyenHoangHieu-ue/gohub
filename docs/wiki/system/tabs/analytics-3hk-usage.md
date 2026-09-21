@@ -316,6 +316,16 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 ## 9. Gotchas & Lịch sử thay đổi
 
+- **s203+ (2026-09-21) — Export bảng "Average Usage by SKU" theo tháng.** Hiếu: export nhiều tháng cần cột
+  tháng để phân biệt + thống kê. Nút **"Export theo tháng"** (header bảng SKU, `exportMonthly`) xuất 1 sheet
+  cột y hệt bảng UI: `Tháng · SKU · Active SIMs · Total Plan (GB) · Kế hoạch (GB/ngày/SIM) · Total Actual (GB) · Avg. Usage % · GB/ngày/SIM`, mỗi dòng
+  = 1 SKU trong 1 tháng (YYYY-MM) của kỳ đang lọc, theo tab Daily/Fixed/Unlimited + ô Search. Không có dòng
+  "Cả kỳ" (tránh cộng đôi khi pivot). GB/ngày/SIM = usage ÷ SIMs ÷ số ngày gói (`daysOfSku`), để trống nếu
+  không xác định được số ngày. (Bản trước làm nhiều sheet + thừa cột → Hiếu yêu cầu đúng cột bảng SKU, đã bỏ.)
+  Nút Export của bảng Records vẫn riêng (thêm cột `Tháng`/`Kỳ từ`/`Kỳ đến`). ⚠️ (iccid, order_code) tính
+  riêng TỪNG tháng có usage → tổng Active SIMs các tháng của 1 SKU có thể LỚN HƠN số ở bảng UI (1 SIM = 1 lần
+  cả kỳ) — đúng thiết kế, không phải bug.
+
 - **s200+10 (2026-09-18) — Đổi bảng theo nước sang bảng Zone có drill-down, bỏ hẳn bảng theo nước.**
   Tiếp ngay s200+9 (lúc đó vẫn giữ song song 2 bảng theo nước + theo zone) — Hiếu yêu cầu: bảng Zone phải
   cho biết được "zone nào có nước nào" (bấm 1 zone → xổ breakdown các nước), sau đó BỎ HẲN bảng theo nước

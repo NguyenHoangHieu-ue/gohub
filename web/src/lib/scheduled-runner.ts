@@ -13,7 +13,7 @@ import { buildReportData, inferPeriod } from "@/lib/scheduled-report-data"
 //   can thiệp vào lịch tự động.
 export async function runScheduledMessage(
   msg: any,
-  options?: { slotMs?: number; noUpdateLastRun?: boolean },
+  options?: { slotMs?: number; noUpdateLastRun?: boolean; dryRun?: boolean },
 ): Promise<string> {
   const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10)
 
@@ -43,11 +43,14 @@ Hôm nay: ${today} (giờ VN). Loại báo cáo: ${period.toUpperCase()}. "Thán
 ${dataBlock}`
 
   const systemInstruction = AGENTS["bi-analyst"].systemPrompt + directive
-  const report = await runBIAnalyst(systemInstruction, [], msg.prompt, "admin")
+  const report = await runBIAnalyst(systemInstruction, [], msg.prompt, "admin", { thinkingLevel: "low" })
 
   // Render card đẹp (header + bảng). Nếu có lark_keyword (bảo mật custom bot) → chèn vào đầu card.
   const title = msg.title || msg.name || "Báo cáo tự động"
   const card = buildReportCard(title, report, msg.lark_keyword || undefined)
+
+  // dryRun (chẩn đoán): dựng xong báo cáo + card nhưng KHÔNG gửi Lark, KHÔNG đụng last_run_at.
+  if (options?.dryRun) return report
 
   if (msg.lark_webhook_url) {
     const res = await fetch(msg.lark_webhook_url, {
@@ -56,6 +59,13 @@ ${dataBlock}`
       body: JSON.stringify({ msg_type: "interactive", card }),
     })
     if (!res.ok) throw new Error(`Lark webhook returned ${res.status}`)
+    // Lark custom-bot trả HTTP 200 kể cả khi lỗi nghiệp vụ (vd 19024 "Key Words Not Found" khi đổi từ khoá bảo mật) → phải đọc body,
+    // nếu không báo cáo "thành công" giả (claim đã ghi, không ai được báo).
+    const body = await res.json().catch(() => null) as { code?: number; StatusCode?: number; msg?: string; StatusMessage?: string } | null
+    const larkCode = body?.code ?? body?.StatusCode
+    if (typeof larkCode === "number" && larkCode !== 0) {
+      throw new Error(`Lark webhook lỗi ${larkCode}: ${body?.msg ?? body?.StatusMessage ?? "không rõ"}`)
+    }
   } else {
     const { data } = await supabaseAdmin
       .from("app_settings").select("value").eq("key", "lark_notify_chat_id").maybeSingle()

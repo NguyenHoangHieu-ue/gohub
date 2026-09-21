@@ -730,14 +730,75 @@ export default function ThreeHKDataUsagePage() {
         "Actual (GB)": parseFloat(r.total_data_gb || 0),
         "Usage %": Number(parseFloat(r.usage_pct || 0).toFixed(2)),
         "First Report": r.first_report_date || "",
+        "Tháng": r.first_report_date ? String(r.first_report_date).slice(0, 7) : "",
         "Activation": r.activation_date || "",
         "Records": r.record_count || 0,
+        "Kỳ từ": startDate,
+        "Kỳ đến": endDate,
       }))
       exportRawRows(rows, `3hk-records-${activeTab}-${startDate}_to_${endDate}`, "Records")
     } catch (err) {
       console.error("Error exporting 3HK records:", err)
     } finally {
       setExportingRecords(false)
+    }
+  }
+
+  const [exportingMonthly, setExportingMonthly] = useState(false)
+  // Export bảng "Average Usage by SKU" theo TỪNG THÁNG trong kỳ đang lọc (Hiếu cần cột tháng để phân biệt +
+  // thống kê khi xuất nhiều tháng). Cột y hệt bảng trên UI: SKU · Active SIMs · Total Plan · Total Actual ·
+  // GB/ngày/SIM, thêm cột Tháng. Tôn trọng tab Daily/Fixed/Unlimited + ô Search.
+  // ⚠️ (iccid, order_code) tính riêng TỪNG tháng có usage → tổng Active SIMs các tháng của 1 SKU có thể lớn
+  // hơn số ở bảng UI (bảng đó 1 SIM = 1 lần cho cả kỳ) — đúng thiết kế. Không xuất dòng "Cả kỳ" để pivot
+  // theo tháng không bị cộng đôi.
+  const exportMonthly = async () => {
+    if (exportingMonthly) return
+    setExportingMonthly(true)
+    try {
+      const sql = `
+        WITH period_records AS (
+          SELECT iccid, order_code, sku, sku_type, total_data_gb, data_amount_gb,
+                 to_char(first_report_date::date, 'YYYY-MM') AS ym
+          FROM fact_data_usage
+          WHERE ${V3HK}
+            AND ${EXCLUDE_FRAME}
+            AND first_report_date >= '${startDate}' AND first_report_date <= '${endDate}'
+        ),
+        bundles AS (
+          SELECT ym, iccid, order_code, MAX(sku) AS sku,
+                 ${SKU_TYPE_CASE} AS sku_type,
+                 SUM(total_data_gb) AS total_data_gb, MAX(data_amount_gb) AS data_amount_gb
+          FROM period_records GROUP BY ym, iccid, order_code
+        )
+        SELECT ym, sku, COUNT(*) AS active_sims,
+          SUM(data_amount_gb) AS total_plan_gb, SUM(total_data_gb) AS total_usage_gb
+        FROM bundles WHERE 1=1 ${tabClause()} ${searchClause()}
+        GROUP BY ym, sku
+        ORDER BY ym, total_usage_gb DESC
+      `
+      const result = await runQuery(sql)
+      const rows = (Array.isArray(result) ? result : []).map((r: any) => {
+        const sims = parseInt(r.active_sims || 0)
+        const plan = parseFloat(r.total_plan_gb || 0)
+        const usage = parseFloat(r.total_usage_gb || 0)
+        const d = daysOfSku(r.sku || "")
+        const okDay = d != null && d > 0 && sims > 0
+        return {
+          "Tháng": r.ym || "",
+          "SKU": r.sku || "",
+          "Active SIMs": sims,
+          "Total Plan (GB)": Number(plan.toFixed(2)),
+          "Kế hoạch (GB/ngày/SIM)": okDay ? Number((plan / sims / d!).toFixed(3)) : "",
+          "Total Actual (GB)": Number(usage.toFixed(2)),
+          "Avg. Usage %": plan > 0 ? Number(((usage / plan) * 100).toFixed(1)) : 0,
+          "GB/ngày/SIM": okDay ? Number((usage / sims / d!).toFixed(3)) : "",
+        }
+      })
+      exportRawRows(rows, `3hk-usage-by-sku-month-${activeTab}-${startDate}_to_${endDate}`, "By SKU x Month")
+    } catch (err) {
+      console.error("Error exporting 3HK monthly:", err)
+    } finally {
+      setExportingMonthly(false)
     }
   }
 
@@ -1287,11 +1348,16 @@ export default function ThreeHKDataUsagePage() {
 
       {/* SKU Performance Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
             <Package className="w-4 h-4 text-brand-600" />
             Average Usage by SKU
           </h2>
+          <button onClick={exportMonthly} disabled={exportingMonthly || !startDate || !endDate}
+            title="Xuất bảng SKU theo từng tháng trong kỳ đang lọc: Tháng · SKU · Active SIMs · Total Plan · Kế hoạch/ngày/SIM · Total Actual · Avg. Usage % · GB/ngày/SIM"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all">
+            <Download className="w-3.5 h-3.5" /> {exportingMonthly ? "Exporting..." : "Export theo tháng"}
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">

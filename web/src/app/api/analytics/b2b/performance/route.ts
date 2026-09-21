@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
       selectClause = "f.sku as name"
     } else if (groupBy === "customer") {
       selectClause = "COALESCE(c.name, NULLIF(NULLIF(TRIM(f.customer_code), ''), 'NaN'), 'Chưa xác định') as name, TRIM(f.customer_code) as customer_code"
-      joinClause = "LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code)"
+      joinClause = "LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code"
     } else if (groupBy === "staff") {
       selectClause = "COALESCE(st.name, NULLIF(NULLIF(TRIM(f.staff_code), ''), 'NaN'), 'Chưa gán NV') as name"
       joinClause = "LEFT JOIN dim_staff st ON TRIM(f.staff_code) = TRIM(st.code)"

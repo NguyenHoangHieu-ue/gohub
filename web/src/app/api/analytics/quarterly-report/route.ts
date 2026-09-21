@@ -6,6 +6,7 @@ import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shi
 import { fetchCosts, getDaysInMonth, getDaysInRange, matchChannelCost } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash, QREPORT_CACHE_PREFIX } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts, type CostRecord } from "@/lib/b2b-customer-cost"
+import { splitQuarterRows } from "@/lib/analytics-engine/quarter-rows"
 import { buildQuarterMonthMeta, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
 import { fetchB2BLifecycleRows, classifyB2BLifecycle } from "@/lib/analytics-engine/b2b-lifecycle"
 
@@ -126,28 +127,15 @@ export async function GET(req: NextRequest) {
   try {
     const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }, customerCostMap, prevCustomerCostMap, lifecycleRows] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
-        // GIỚI HẠN 2 query đồng thời (thay vì cả 7) → giảm connection footprint trên gohub_dw.
-        // Mỗi query ~2s → 7 query / 2 luồng ≈ 8s, vẫn nhanh nhưng nhẹ với DB (tránh cạn slot).
-        const [groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows, prevCustRevRows] = await runLimited(2, [
-          () => queryAnalytics<{ month: string; bg: string; revenue: string; gp: string }>(`
-          ${CTE_PREAMBLE}
-          SELECT
-            LEFT(f.${DATE_COL}, 7) as month,
-            UPPER(COALESCE(s.group_name, 'OTHER')) as bg,
-            SUM(f.${REV_COL}) as revenue,
-            SUM(f.${GP_COL}) as gp
-          FROM ${MAIN_TABLE} f
-          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          WHERE f.${DATE_COL} >= '${qStartDate}' AND f.${DATE_COL} <= '${qEndDate}'
-            ${companyFilter}
-            AND UPPER(COALESCE(s.group_name, 'OTHER')) IN ('B2B', 'B2C')
-            ${INACTIVE_FILTER}
-            ${EXCLUDE_CUST_SQL}
-            ${sfx}
-          GROUP BY 1, 2
-          ORDER BY 1, 2
-        `),
-          () => queryAnalytics<{ month: string; bg: string; channel: string; source_code: string; revenue: string; gp: string; hk3: string }>(`
+        // s203: GỘP 7 query (mỗi cái quét lại cả bảng fact ~2-4s) thành 2 query trên KHOẢNG [quý trước → quý này] rồi
+        // tách theo tháng ở JS. Trước: 7 lần quét / 2 luồng ≈ 12-22s khi cache nguội. Cùng bộ lọc (INACTIVE/exclude/ship/
+        // company) nên số liệu giữ nguyên; chỉ khác thứ tự cộng số thực (sai số ~1e-9 tương đối).
+        const rangeStart = prevQStartDate
+        const rangeEnd   = qEndDate
+        type BaseRow = { month: string; bg: string; channel: string | null; source_code: string | null; revenue: string; gp: string; hk3: string }
+        const [baseRows, custRows] = await runLimited(2, [
+          // Hạt (tháng × nhóm × kênh) — đủ để dựng groupRows / channelRows / hk3Rows / prevGroupRows / prevChannelRows.
+          () => queryAnalytics<BaseRow>(`
           ${CTE_PREAMBLE}
           SELECT
             LEFT(f.${DATE_COL}, 7) as month,
@@ -160,65 +148,14 @@ export async function GET(req: NextRequest) {
           FROM ${MAIN_TABLE} f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
           LEFT JOIN hk3_skus hk ON hk.sku = TRIM(f.sku)
-          WHERE f.${DATE_COL} >= '${qStartDate}' AND f.${DATE_COL} <= '${qEndDate}'
+          WHERE f.${DATE_COL} >= '${rangeStart}' AND f.${DATE_COL} <= '${rangeEnd}'
             ${companyFilter}
-            AND UPPER(COALESCE(s.group_name, 'OTHER')) IN ('B2B', 'B2C')
-            AND s.channel_name IS NOT NULL AND TRIM(s.channel_name) != ''
-            ${INACTIVE_FILTER}
-            ${EXCLUDE_CUST_SQL}
-            ${sfx}
-          GROUP BY 1, 2, 3
-          ORDER BY 1, 2, 3
-        `),
-          () => queryAnalytics<{ month: string; hk3: string }>(`
-          ${CTE_PREAMBLE}
-          SELECT
-            LEFT(f.${DATE_COL}, 7) as month,
-            SUM(CASE WHEN hk.sku IS NOT NULL THEN f.${REV_COL} ELSE 0 END) as hk3
-          FROM ${MAIN_TABLE} f
-          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          LEFT JOIN hk3_skus hk ON hk.sku = TRIM(f.sku)
-          WHERE f.${DATE_COL} >= '${qStartDate}' AND f.${DATE_COL} <= '${qEndDate}'
-            ${companyFilter}
-            ${INACTIVE_FILTER}
-            ${EXCLUDE_CUST_SQL}
-            ${sfx}
-          GROUP BY 1
-        `),
-          () => queryAnalytics<{ bg: string; revenue: string; gp: string }>(`
-          ${CTE_PREAMBLE}
-          SELECT UPPER(COALESCE(s.group_name,'OTHER')) as bg,
-            SUM(f.${REV_COL}) as revenue, SUM(f.${GP_COL}) as gp
-          FROM ${MAIN_TABLE} f
-          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          WHERE f.${DATE_COL} >= '${prevQStartDate}' AND f.${DATE_COL} <= '${prevQEndDate}'
-            ${companyFilter}
-            AND UPPER(COALESCE(s.group_name,'OTHER')) IN ('B2B','B2C')
-            ${INACTIVE_FILTER}
-            ${EXCLUDE_CUST_SQL}
-            ${sfx}
-          GROUP BY 1
-        `),
-          () => queryAnalytics<{ month: string; bg: string; channel: string; revenue: string; gp: string }>(`
-          ${CTE_PREAMBLE}
-          SELECT
-            LEFT(f.${DATE_COL}, 7) as month,
-            UPPER(COALESCE(s.group_name, 'OTHER')) as bg,
-            TRIM(s.channel_name) as channel,
-            SUM(f.${REV_COL}) as revenue,
-            SUM(f.${GP_COL}) as gp
-          FROM ${MAIN_TABLE} f
-          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          WHERE f.${DATE_COL} >= '${prevQStartDate}' AND f.${DATE_COL} <= '${prevQEndDate}'
-            ${companyFilter}
-            AND UPPER(COALESCE(s.group_name, 'OTHER')) IN ('B2B', 'B2C')
-            AND s.channel_name IS NOT NULL AND TRIM(s.channel_name) != ''
             ${INACTIVE_FILTER}
             ${EXCLUDE_CUST_SQL}
             ${sfx}
           GROUP BY 1, 2, 3
         `),
-          // Revenue B2B theo KH×tháng — để áp chi phí per-customer (Turso) đúng: percent×revenue KH đó.
+          // Doanh thu B2B theo KH × tháng (cả quý trước) — áp chi phí per-customer (Turso) + vòng đời KH (s200).
           () => queryAnalytics<{ month: string; customer_code: string; revenue: string }>(`
           ${CTE_PREAMBLE}
           SELECT
@@ -227,7 +164,7 @@ export async function GET(req: NextRequest) {
             SUM(f.${REV_COL}) as revenue
           FROM ${MAIN_TABLE} f
           LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          WHERE f.${DATE_COL} >= '${qStartDate}' AND f.${DATE_COL} <= '${qEndDate}'
+          WHERE f.${DATE_COL} >= '${rangeStart}' AND f.${DATE_COL} <= '${rangeEnd}'
             ${companyFilter}
             AND UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2B'
             ${INACTIVE_FILTER}
@@ -235,26 +172,9 @@ export async function GET(req: NextRequest) {
             ${sfx}
           GROUP BY 1, 2
         `),
-          // Revenue B2B theo KH quý TRƯỚC (không tách tháng) — dùng tính "doanh thu mất" của KH Inactive
-          // (s200, customerLifecycle). Cùng filter với custRevRows, chỉ đổi khoảng ngày.
-          () => queryAnalytics<{ customer_code: string; revenue: string }>(`
-          ${CTE_PREAMBLE}
-          SELECT
-            TRIM(f.customer_code) as customer_code,
-            SUM(f.${REV_COL}) as revenue
-          FROM ${MAIN_TABLE} f
-          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          WHERE f.${DATE_COL} >= '${prevQStartDate}' AND f.${DATE_COL} <= '${prevQEndDate}'
-            ${companyFilter}
-            AND UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2B'
-            ${INACTIVE_FILTER}
-            ${EXCLUDE_CUST_SQL}
-            ${sfx}
-          GROUP BY 1
-        `),
         ])
 
-        return { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows, prevCustRevRows }
+        return splitQuarterRows(baseRows, custRows, months, prevQMonths)
       }, QUERY_TTL_MIN, refresh),
       fetchCosts(months),
       fetchCosts(prevQMonths),

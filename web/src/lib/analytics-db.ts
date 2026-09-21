@@ -76,8 +76,17 @@ export async function queryAnalytics<T = Record<string, unknown>>(
   for (let attempt = 0; attempt < 3; attempt++) {
     let client: pg.PoolClient | null = null
     try {
-      client = await getAnalyticsPool().connect()
+      const tWait = performance.now()
+      const pool = getAnalyticsPool()
+      const queued = pool.waitingCount
+      client = await pool.connect()
+      const tRun = performance.now()
       const result = await client.query(sql, params)
+      const tEnd = performance.now()
+      // Chẩn đoán tốc độ (s203): chỉ log query chậm để phân biệt "chờ slot pool" (wait) với "DB chạy lâu" (run).
+      if (tEnd - tWait > 1500) {
+        console.warn(`[analytics-db] SLOW wait=${Math.round(tRun - tWait)}ms run=${Math.round(tEnd - tRun)}ms rows=${result.rowCount} queued=${queued} sql=${sql.replace(/\s+/g, " ").trim().slice(0, 90)}`)
+      }
       return result.rows as T[]
     } catch (e: any) {
       lastErr = e

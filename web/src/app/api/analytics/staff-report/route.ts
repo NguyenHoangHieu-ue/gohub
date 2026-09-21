@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   }
 
   const baseJoins = `
-    LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = TRIM(dc.code::text)
+    LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = dc.code
     LEFT JOIN dim_staff st    ON TRIM(${staffKey}) = TRIM(st.code)
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code`
 

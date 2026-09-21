@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         SUM(f.fulfilled_quantity) as units
       FROM fact_fulfillment_revenue f
       LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-      LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+      LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
       WHERE ${dateFilter}
         AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
         AND NOT (UPPER(COALESCE(c.price_list_name, '')) LIKE '%INACTIVE%')

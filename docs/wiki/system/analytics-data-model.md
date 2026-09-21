@@ -5,7 +5,7 @@ is_hidden: true
 department: all
 tags: [analytics, data-model, reference]
 created: 2026-07-15
-updated: 2026-07-15
+updated: 2026-09-21
 status: active
 ---
 
@@ -116,3 +116,38 @@ Hầu hết tab có toggle **"Fulfillment" vs "Created"** (nút ở đầu trang
   đều 1 ký tự) → nước ở ký tự 3-5; 14 ký tự (legacy) → ký tự 1-3; 15 ký tự (legacy Datapool) → ký tự
   2-4. Bug cũ branch theo ký tự đầu làm sai nước cho ~25% SKU 13 ký tự pháp nhân chữ (US A-E) — đã fix,
   xem comment trong `analytics-helpers.ts`. Dùng ở My Metrics/Products/Region Chart/B2B/B2C performance.
+
+## 10. Hiệu năng — quy tắc bắt buộc khi viết SQL/route analytics (s203, 2026-09-21)
+
+**Đo thật là gốc của mọi quyết định** — `/api/analytics/perf-probe` (creator-only) đo độ trễ từ vùng chạy function tới từng kho;
+log `[analytics-db] SLOW wait=… run=…` (mọi query >1,5s) tách "chờ slot pool" khỏi "DB chạy lâu". Số đo s203 (function ở iad1):
+gohub_dw ~30ms/query đơn giản · Turso ~150ms · **Supabase 280-450ms MỖI lần đọc/ghi** (bảng cache tới 1,3s vì JSON lớn) ·
+Vercel Runtime Cache 4-15ms. Người dùng VN → edge HKG → function iad1 ⇒ ~280ms RTT tối thiểu mỗi request API.
+
+**Quy tắc SQL**
+- ⛔ KHÔNG bọc `TRIM()` lên cột PHÍA `dim_customer` trong JOIN/EXISTS. `TRIM(f.customer_code) = TRIM(c.code)` khiến Postgres không
+  dùng khoá chính → join 355k dòng mất **9,6-10,9s**; `TRIM(f.customer_code) = c.code` chỉ ~1s, kết quả y hệt (đã verify:
+  `dim_customer.code` 355.391 dòng và `fact.customer_code` 618.658 dòng đều không có khoảng trắng thừa/NULL/rỗng).
+  `TRIM` phía fact vẫn giữ. Route mới: theo mẫu `LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code`.
+- Mỗi query quét cả bảng fact ~0,5-1s (không có index ngoài khoá chính, Hiếu không có DDL). Gộp nhiều query cùng bộ lọc thành 1 query
+  hạt mịn rồi tách ở JS (mẫu: `lib/analytics-engine/quarter-rows.ts` gộp 7 query Quarter Report → 2).
+- Nguồn I/O độc lập trong 1 route (query fact + chi phí Supabase + Turso + settings) → `Promise.all`, đừng `await` nối tiếp.
+  Pool gohub_dw `max=3`/instance: nhiều query song song tự xếp hàng, không sợ.
+- Đừng đưa vào cache một khối > 2MB (trần Runtime Cache; ghi lỗi chỉ `console.warn "[analytics-cache] L2 set lỗi"` rồi mất L2). Khối lớn
+  → nén (mẫu: `packLifecycleRows`, 112k KH ~3,4MB → ~0,7MB gzip+base64) hoặc tách phần cần hiển thị.
+
+**Kiến trúc cache (`cachedQuery`, `lib/analytics-helpers.ts`)**
+- L1 Map trong instance (TTL 45s) + **L2 = Vercel Runtime Cache** (`@vercel/functions getCache`, namespace `aq`, dùng chung mọi
+  instance trong vùng, sống qua deploy/cold start) — thay Supabase `analytics_query_cache` (bảng đó CHỈ còn registry prewarm
+  `sqlreg:`/`urlreg:`). Runtime Cache tách `preview`/`production` → staging và production KHÔNG dùng chung cache.
+- **Stale-while-revalidate**: hết TTL (mặc định 60' — `QUERY_TTL_MIN`) mà còn ≤ 6h → TRẢ NGAY bản cũ + tính lại ở nền (`waitUntil`).
+  Người dùng không còn chờ cold-query trừ khi (a) khoá mới (khoảng ngày/bộ lọc chưa ai xem), (b) bản cũ > 6h, (c) `nocache=1`.
+- Xoá cache: `flushByDeps([...])`/`flushAnalyticsCacheByPrefixes([...])` → `expireTag` (tag `dep:<tên>`, `pfx:<phần trước ':' đầu tiên>`);
+  `flushAnalyticsCache()` = mốc **hard** (mọi bản cũ bị bỏ, tính lại đồng bộ) — route GHI dữ liệu dùng các hàm này như cũ.
+  `softExpireAll()` = mốc **soft** (mọi cache thành "hết TTL", vẫn phục vụ bản cũ + làm mới nền) — dùng khi ETL nạp xong
+  (`/api/cron/etl-cache-sync` gọi nó rồi prewarm 30 URL gần nhất, 3 luồng) thay cho xoá cứng.
+- `nocache=1` (nút "Tải lại mới", prewarm cron) = `bypass`: tính lại ĐỒNG BỘ và ghi đè cache. Route B2C Advanced dùng `live=1`
+  (bỏ snapshot nhưng vẫn qua cache SWR) — KHÔNG gửi `nocache=1` mỗi lượt xem.
+- `lib/memo.ts` — memo 15-20s TRONG instance cho cấu hình đọc ở mọi request (`fetchQuarterlySettings`, `getPartnerTiers`,
+  `user/me`, layout phân quyền), có dedupe request đồng thời; route ghi gọi `memoInvalidate(prefix)`.
+- Request đồng thời cùng cache-key tới 1 instance chỉ chạy `fn` 1 lần (in-flight dedupe).

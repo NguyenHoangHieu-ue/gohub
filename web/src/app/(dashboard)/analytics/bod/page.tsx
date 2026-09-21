@@ -205,6 +205,22 @@ export default function BODReport() {
         if (!res.ok) throw new Error(`Failed to fetch ${name}: ${res.statusText}`)
         return res.json()
       }
+      // Tháng trước (cho so sánh MoM) KHÔNG phụ thuộc kết quả 6 request dưới → bắn CÙNG LÚC và gắn kết quả khi nó về,
+      // không chặn trang. Trước đây nối tiếp SAU Promise.all nên cộng thêm cả thời gian bod-summary (12-18s khi cache nguội).
+      const prevMonthPromise = (async () => {
+        try {
+          const date = new Date(dateRange.start)
+          const prevMonthLastDay = new Date(date.getFullYear(), date.getMonth(), 0)
+          const prevMonthFirstDay = new Date(date.getFullYear(), date.getMonth() - 1, 1)
+          const prevQueryParams = new URLSearchParams({
+            startDate: formatDateToISO(prevMonthFirstDay), endDate: formatDateToISO(prevMonthLastDay), comparisonType: "none",
+            vendors: selectedVendors.join(","), subChannels: selectedSubChannels.join(","),
+            channelGroups: selectedChannelGroups.join(","), productTypes: selectedProductTypes.join(","), dateColumn,
+          })
+          const prevSummaryRes = await fetch(`/api/analytics/bod-summary?${prevQueryParams}`)
+          if (prevSummaryRes.ok) setPrevMonthSummary(await prevSummaryRes.json())
+        } catch (e) { console.error("Error fetching prev month summary:", e) }
+      })()
       const [summaryData, reportData, groupData, channelData, stratData, tiersData] = await Promise.all([
         fetchJson(`/api/analytics/bod-summary?${queryParams}`, "Summary"),
         fetchJson(`/api/analytics/bod-report?${queryParams}`, "Report"),
@@ -220,19 +236,7 @@ export default function BODReport() {
       setChannelPerformance(channelData)
       setStrategicPerformance(stratData)
       setPartnerTiers(tiersData)
-
-      try {
-        const date = new Date(dateRange.start)
-        const prevMonthLastDay = new Date(date.getFullYear(), date.getMonth(), 0)
-        const prevMonthFirstDay = new Date(date.getFullYear(), date.getMonth() - 1, 1)
-        const prevQueryParams = new URLSearchParams({
-          startDate: formatDateToISO(prevMonthFirstDay), endDate: formatDateToISO(prevMonthLastDay), comparisonType: "none",
-          vendors: selectedVendors.join(","), subChannels: selectedSubChannels.join(","),
-          channelGroups: selectedChannelGroups.join(","), productTypes: selectedProductTypes.join(","), dateColumn,
-        })
-        const prevSummaryRes = await fetch(`/api/analytics/bod-summary?${prevQueryParams}`)
-        if (prevSummaryRes.ok) setPrevMonthSummary(await prevSummaryRes.json())
-      } catch (e) { console.error("Error fetching prev month summary:", e) }
+      void prevMonthPromise
     } catch (error) {
       console.error("Error fetching BOD data:", error)
     } finally {

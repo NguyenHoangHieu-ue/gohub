@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
            SUM(COALESCE(f.gross_profit_vnd, f.fulfilled_revenue_amount_vnd - COALESCE(f.cogs_amount_vnd, 0), 0)) as margin
          FROM fact_fulfillment_revenue f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+         LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
          ${whereClause}
          GROUP BY 1, 2, 3, 4
          ORDER BY 1 ASC`
@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
                   SUM(COALESCE(f.fulfilled_revenue_amount_vnd, 0)) as revenue
            FROM fact_fulfillment_revenue f
            LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-           LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+           LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
            ${whereClause}
            AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
            GROUP BY 1, 2, 3`

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { runScheduledMessage, getMatchedSlotMs } from "@/lib/scheduled-runner"
 import { alertCronFailure } from "@/lib/cron-alert"
+import { waitUntil } from "@vercel/functions"
 
 // Scheduler (GitHub Actions mỗi 15' + Vercel Cron backstop) gọi endpoint này định kỳ. Tìm các scheduled
 // message ĐANG active + ĐẾN HẠN kể từ lần chạy cuối (so cron_expression theo ICT/UTC+7, catch-up chịu được
@@ -57,8 +58,13 @@ export async function GET(req: NextRequest) {
     return slotMs != null ? { msg: m, slotMs } : null
   }).filter(Boolean) as { msg: any; slotMs: number }[]
 
-  const results: { id: string; name: string; ok: boolean; skipped?: boolean; error?: string }[] = []
+  const results: { id: string; name: string; ok: boolean; skipped?: boolean; started?: boolean; error?: string }[] = []
   const startedAt = Date.now()
+
+  // s203: báo cáo (số liệu + Gemini format + gửi Lark) mất ~30s+ — scheduler ngoài (cron-job.org) chỉ chờ 30s rồi báo "timeout"
+  // và NGẮT kết nối, bản tin không bao giờ tới Lark. Nay route CLAIM slot rồi TRẢ LỜI NGAY; phần chạy báo cáo nằm trong
+  // `waitUntil` (sống tới maxDuration=180s, không phụ thuộc client còn kết nối). Lỗi/soft-timeout vẫn nhả claim + alert như cũ.
+  const background: Array<() => Promise<void>> = []
 
   for (const { msg, slotMs } of dueList) {
     // Hết ngân sách request (nhiều message đến hạn cùng lúc, vd catch-up sau downtime) → dừng, KHÔNG claim
@@ -93,27 +99,34 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    try {
-      // Đã chiếm slot (last_run_at = slotUtcIso) → runner KHÔNG ghi lại last_run_at nữa.
-      await withSoftTimeout(
-        runScheduledMessage(msg, { slotMs, noUpdateLastRun: true }),
-        Math.min(SOFT_TIMEOUT_MS, remainingMs - 5_000),
-        msg.name,
-      )
-      results.push({ id: msg.id, name: msg.name, ok: true })
-    } catch (err: any) {
-      // Gửi lỗi thật (hoặc soft-timeout) → nhả claim (trả last_run_at về giá trị cũ) để tick sau thử lại.
-      await supabaseAdmin
-        .from("lark_scheduled_messages")
-        .update({ last_run_at: msg.last_run_at })
-        .eq("id", msg.id)
-      results.push({ id: msg.id, name: msg.name, ok: false, error: err.message })
-      // Trước đây lỗi per-message không alert (chỉ lỗi đọc danh sách ở đầu route mới alert) → thất bại
-      // âm thầm nhiều ngày không ai biết. Nay luôn báo Lark khi 1 message thất bại.
-      await alertCronFailure("scheduled-messages", new Error(`"${msg.name}": ${err.message}`))
-    }
+    results.push({ id: msg.id, name: msg.name, ok: true, started: true })
+    // Ngân sách còn lại tính lúc CHẠY nền (các message xếp hàng tuần tự), không phải lúc claim.
+    background.push(async () => {
+      const left = REQUEST_BUDGET_MS - (Date.now() - startedAt)
+      try {
+        if (left < 15_000) throw new Error("Hết ngân sách thời gian lần chạy này — sẽ thử lại lần kế tiếp")
+        // Đã chiếm slot (last_run_at = slotUtcIso) → runner KHÔNG ghi lại last_run_at nữa.
+        await withSoftTimeout(
+          runScheduledMessage(msg, { slotMs, noUpdateLastRun: true }),
+          Math.min(SOFT_TIMEOUT_MS, left - 5_000),
+          msg.name,
+        )
+      } catch (err: any) {
+        // Gửi lỗi thật (hoặc soft-timeout) → nhả claim (trả last_run_at về giá trị cũ) để tick sau thử lại.
+        await supabaseAdmin
+          .from("lark_scheduled_messages")
+          .update({ last_run_at: msg.last_run_at })
+          .eq("id", msg.id)
+        // Trước đây lỗi per-message không alert → thất bại âm thầm nhiều ngày không ai biết. Nay luôn báo Lark.
+        await alertCronFailure("scheduled-messages", new Error(`"${msg.name}": ${err.message}`))
+      }
+    })
   }
 
-  const ran = results.filter(r => r.ok && !r.skipped).length
-  return NextResponse.json({ checked: messages?.length || 0, ran, results })
+  if (background.length > 0) {
+    waitUntil((async () => { for (const job of background) await job().catch(() => {}) })())
+  }
+
+  const started = results.filter(r => r.started).length
+  return NextResponse.json({ checked: messages?.length || 0, started, results })
 }

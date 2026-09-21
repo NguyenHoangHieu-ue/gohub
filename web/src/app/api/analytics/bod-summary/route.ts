@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache, getStrategicSettingsHash } from "@/lib/analytics-helpers"
-import { fetchBODGroupMarginData } from "@/lib/bod-data"
+import { fetchBODGroupMarginMulti } from "@/lib/bod-data"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 
 // Port intel bod-summary: summary (rev/margin/gpm2 + %) lấy từ fetchBODGroupMarginData (gồm op-cost);
@@ -26,14 +26,6 @@ export async function GET(req: NextRequest) {
 
   try {
     const source = getAnalyticsSource(dateColumn)
-    const fetch3hkRev = async (sd: string, ed: string) => {
-      const rows = await queryAnalytics<{ r: string }>(
-        `SELECT SUM(CASE WHEN TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL') THEN f.${source.revenueCol} ELSE 0 END) as r
-         FROM ${source.mainTable} f WHERE ${getDateFilter(sd, ed, source.dateCol)} ${extraFilters}`
-      )
-      return parseFloat(rows[0]?.r || "0")
-    }
-
     // previous period + previous year (summary only)
     const s = new Date(startDate); const e = new Date(endDate)
     const diff = e.getTime() - s.getTime()
@@ -42,29 +34,47 @@ export async function GET(req: NextRequest) {
     const lyStart = new Date(s.getFullYear() - 1, s.getMonth(), s.getDate())
     const lyEnd   = new Date(e.getFullYear() - 1, e.getMonth(), e.getDate())
     const iso = (d: Date) => d.toISOString().split("T")[0]
+    const periods = [
+      { startDate, endDate },
+      { startDate: iso(prevStart), endDate: iso(prevEnd) },
+      { startDate: iso(lyStart), endDate: iso(lyEnd) },
+    ]
+
+    // s203: 3 kỳ × (2 query nhóm-biên + 1 query 3HK) + 1 query cogs/units = 10 lần quét fact → gộp còn 3 lần
+    // (2 cho nhóm-biên đa kỳ, 1 cho cogs/units/3HK dùng FILTER theo kỳ). gohub_dw chạy gần như tuần tự nên đây mới là chỗ ăn thời gian.
+    const conds = periods.map(p => getDateFilter(p.startDate, p.endDate, source.dateCol))
+    const hk3In = `TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL')`
+    const fetchAggregates = async () => {
+      const cols = [
+        `SUM(f.${source.cogsCol}) FILTER (WHERE (${conds[0]})) as total_cogs`,
+        `SUM(f.${source.quantityCol}) FILTER (WHERE (${conds[0]})) as total_units`,
+        ...conds.map((c, i) => `SUM(CASE WHEN ${hk3In} THEN f.${source.revenueCol} ELSE 0 END) FILTER (WHERE (${c})) as hk3_${i}`),
+      ].join(", ")
+      const rows = await queryAnalytics<Record<string, string>>(
+        `SELECT ${cols} FROM ${source.mainTable} f WHERE (${conds.map(c => `(${c})`).join(" OR ")}) ${extraFilters}`
+      )
+      const r = rows[0] ?? {}
+      return {
+        total_cogs: parseFloat(r.total_cogs || "0"), total_units: parseFloat(r.total_units || "0"),
+        hk3: [0, 1, 2].map(i => parseFloat(r[`hk3_${i}`] || "0")),
+      }
+    }
 
     // Cache 12h (data gohub_dw đổi 1 lần/ngày). Trước: ~20 query, nhiều cái await TUẦN TỰ → 25-50s.
     // Nay gom HẾT query độc lập vào 1 Promise.all (giảm critical path) + cache toàn bộ payload.
     const stratHash = await getStrategicSettingsHash()
     const key = `bod-summary2:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
-      const [groupResult, rawRows, cur3hk, targetData, prev, prevYear, prev3hk, ly3hk] = await Promise.all([
-        fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps),
-        queryAnalytics<Record<string, string>>(
-          `SELECT SUM(f.${source.cogsCol}) as total_cogs, SUM(f.${source.quantityCol}) as total_units
-           FROM ${source.mainTable} f WHERE ${getDateFilter(startDate, endDate, source.dateCol)} ${extraFilters}`
-        ),
-        fetch3hkRev(startDate, endDate),
+      const [[groupResult, prev, prevYear], agg, targetData] = await Promise.all([
+        fetchBODGroupMarginMulti(periods, dateColumn, extraFilters, includeShip, includeInternalOps),
+        fetchAggregates(),
         getTargetSummary(startDate, endDate),
-        fetchBODGroupMarginData(iso(prevStart), iso(prevEnd), dateColumn, extraFilters, includeShip, includeInternalOps),
-        fetchBODGroupMarginData(iso(lyStart), iso(lyEnd), dateColumn, extraFilters, includeShip, includeInternalOps),
-        fetch3hkRev(iso(prevStart), iso(prevEnd)),
-        fetch3hkRev(iso(lyStart), iso(lyEnd)),
       ])
+      const [cur3hk, prev3hk, ly3hk] = agg.hk3
 
       const current: any = { ...groupResult.summary }
-      current.total_cogs  = parseFloat(rawRows[0]?.total_cogs || "0")
-      current.total_units = parseFloat(rawRows[0]?.total_units || "0")
+      current.total_cogs  = agg.total_cogs
+      current.total_units = agg.total_units
       current.total_3hk_revenue = cur3hk
       current.total_3hk_contribution = current.total_revenue > 0 ? (cur3hk / current.total_revenue) * 100 : 0
       current.total_target_revenue = targetData.proRataTarget

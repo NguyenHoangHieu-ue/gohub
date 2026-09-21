@@ -184,6 +184,29 @@ $$\text{Spend Pace} = \frac{\text{Chi phí thực tế}}{\text{Ngân sách Marke
 - **Budget**: lấy từ Manage Costs → B2C Channels (`analytics_channel_costs`), nhưng card Budget đã bỏ khỏi snapshot KPI strip.
 
 ## 6. Vấn đề đã gặp & cách khắc phục
+- **🔴 s203+3 (2026-09-21) — B2C Performance (KPI/breakdown/trend) chỉ hiện ~10% doanh thu: danh sách "KH loại trừ" chứa
+  mã khách B2C dùng chung.** Hiếu thấy số T9 thấp. Đối chiếu DB (1-20/09): B2C = 979,2tr nhưng `b2c/kpis` mặc định
+  trả 92,0tr. Nguyên nhân: `excludedCustomers` (cài đặt Quarter Report) gồm "B2C Customer US/VN", "VN B2C Website",
+  "VN B2C Customer" — gần như MỌI đơn B2C nằm dưới các mã này (fact chỉ có ~3 mã KH B2C) — nên `excludeOpsByCode()`
+  ở `b2c/kpis`/`performance`/`trend` (mặc định bật từ s197 khi đổi 3 toggle về false) loại gần hết doanh thu. Fix:
+  `excludedForB2C()` (`lib/quarterly-settings.ts`) bỏ các mục chứa "b2c" khỏi danh sách trước khi áp cho 3 route B2C;
+  toggle "KH Ops" vẫn còn tác dụng với các mục ops thật. Cache key đã chứa `exclHash` nên tự đổi. B2B/BOD không đổi
+  (đã khớp DB). B2C Advanced (route `monthly`) không dùng danh sách này nên không bị. Test `excluded-for-b2c.test.ts`.
+- **🔴 s203+2 (2026-09-21) — Khách theo kênh lấy theo kênh GHI TRÊN ĐƠN (`summary.byTenant`) + hết vượt trần Admin API.**
+  Triệu chứng: mục "Doanh thu theo Customers" hiện 2-3 khách/tháng (số của mã kênh trong fact, không phải khách
+  thật) kèm cảnh báo "Admin GoHub API không khả dụng". Log Vercel: `Rate limit exceeded. Maximum 30 requests per
+  5 minute(s) for customers-revenue-list bucket` — mỗi lần dựng breakdown gọi 4 request/tháng (1 tổng + 3 tenant
+  qua tham số `tenantId`) → 9 tháng = 36 > 30 (từ tháng 8 đã vượt); bucket còn dùng chung cron `refresh-b2c-report`
+  + danh sách KH B2C Quarter Report; khi lỗi route rơi về đếm `customer_code` trong fact (sai) và cache 60'.
+  Fix (`lib/admin-gohub.ts`): (1) kênh lấy từ `summary.byTenant[]` của response trang 1 (tenant của đơn, kèm
+  `byUserType` từng tenant) thay vì gọi lại theo `tenantId` — chỉ còn 1 request/tháng, chỉ rơi về cách cũ nếu API
+  không trả `byTenant`; (2) `fetchMonthSummary()` memo 60s + dedupe request đồng thời, dùng chung cho số khách
+  tổng / theo kênh / snapshot → 1 lần dựng breakdown = 9 request. ⚠️ SỐ ĐỔI (định nghĩa): trước, new/returning
+  tính trong phạm vi từng tenant (khách từng mua kênh khác vẫn "mới" ở kênh này); nay theo `userType` toàn cục
+  của khách. Đo T8/2026 VN web: mới 1.677→1.501, quay lại 918→1.094 (tổng khách 2.595, đơn 3.111 không đổi).
+  Tenant `gohub-cloud` (4 khách) vẫn không thuộc kênh nào. Route `b2c/monthly` cũng đổi: bản Admin và bản DB cache RIÊNG (`b2c-customer-breakdown:v2:…:admin` 60' /
+  `…:db` 5'), lỗi Admin → cooldown 2' không gọi lại (`adminCustomerDownUntil`) — trước đó bản DB sai bị cache 60'
+  nên sau khi hết vượt trần vẫn thấy số sai cả giờ. Bump key v1→v2 để xoá bản sai đang cache.
 - **🟡 Fix s197 (2026-09-14) — chart Revenue Trend không loại ship fee/đơn nội bộ (`b2c/trend`)**: route
   KHÔNG đọc `includeShip`/`includeInternalOps`/`includeOpsCustomers` dù FE gửi cùng `queryParams` với
   `b2c/kpis` (route NÀY loại mặc định) — chart Trend lệch KPI card cùng trang. Đã thread `shipFilter`/
@@ -370,3 +393,11 @@ key theo `windowStart:windowEnd`. GA4 traffic/users giữ nguyên không cache (
 đang active thay vì `bg-brand-600` — đợt fix màu s194+2/+3 chỉ sửa 3 component con
 (`B2CAdvancedDashboard`/`B2CPerformance`/`B2CMetric`), bỏ sót chính file cha. Phát hiện qua audit UI/UX
 toàn hệ thống. Đổi cả 3 chỗ (dòng 21/30/39) sang `bg-brand-600`.
+
+## s203 (2026-09-21) — B2C Advanced không còn "nocache mỗi lượt xem"
+
+FE `b2c-advanced-dashboard.tsx` từng gửi `nocache=1` MỖI lần mở tab (để luôn số live, không đọc snapshot) → mỗi lượt xem chạy lại 4 query
+fact + nhiều lần đọc Supabase nối tiếp (5-60s). Nay gửi `live=1`: route `b2c/monthly` **bỏ snapshot** (vẫn số live T-1) nhưng dùng cache SWR
+của các khối tính toán; `nocache=1` chỉ còn cho làm mới chủ động/cron. 5 lần đọc Supabase (target/budget/chi phí nhóm/chi phí kênh/leads)
++ revenueComparison chạy `Promise.all` thay vì nối tiếp. Target/budget/chi phí vẫn đọc tươi mỗi request (nhập xong hiện ngay). Header response
+`live` = `no-store` (giữ fix CDN s195+19).

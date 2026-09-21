@@ -491,7 +491,7 @@ dim_sku: sku, vendor, category_name, product_type, type_of_sim, purchase_type, s
   · eSIM vs SIM: type_of_sim ('eSIM'/'SIM'); product_type (A=Datapack, B/C=eSIM, D/E=SIM Full...).
 dim_staff: code, name, phone, email   → JOIN fact.staff_code = dim_staff.code (KHÔNG BAO GIỜ trả phone/email)
 dim_customer: code, name, price_list_name, currency_code, status, sales_pic_code
-  → JOIN fact.customer_code = dim_customer.code. LUÔN TRIM() customer_code trước khi JOIN.
+  → JOIN TRIM(f.customer_code) = c.code — TRIM phía fact, KHÔNG TRIM cột phía dim_customer (làm join 355k dòng chậm ~10 lần).
   ⚠️ dim_customer có 355k rows (99.7% là B2C với price_list_name=NULL). LEFT JOIN thay vì INNER JOIN.
      Lọc B2B bằng dim_order_source.group_name='B2B' (ưu tiên), KHÔNG lọc bằng dim_customer.
   ⚠️ LOẠI 3 KH HỆ THỐNG (tránh số cao hơn dashboard):
@@ -601,7 +601,7 @@ KHÔNG nói "tôi sẽ chạy query" rồi dừng — PHẢI gọi executeSQL NG
          SUM(f.fulfilled_revenue_amount_vnd) doanh_thu, SUM(f.gross_profit_vnd) gp
   FROM fact_fulfillment_revenue f
   JOIN dim_order_source s ON f.order_source_code = s.code
-  LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+  LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
   WHERE f.fulfiled_date::date BETWEEN '2026-07-01' AND LEAST('2026-07-31'::date, CURRENT_DATE - 1)
     AND UPPER(COALESCE(s.group_name,'OTHER')) IN ('B2B','B2C')
     AND UPPER(COALESCE(c.price_list_name,'')) NOT LIKE '%INACTIVE%'

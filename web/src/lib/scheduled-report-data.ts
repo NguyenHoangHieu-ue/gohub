@@ -187,7 +187,7 @@ async function b2bCustomersByDay(start: string, end: string) {
            SUM(f.${REV}) AS revenue
     FROM fact_fulfillment_revenue f
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-    LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code)
+    LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
     WHERE ${getDateFilter(start, end, "fulfiled_date")} AND UPPER(s.group_name)='B2B' AND f.sku != 'SHIPPINGFEE0'
     GROUP BY 1,2`
   return cachedAnalyticsQuery<{ cust: string; d: string; revenue: string }>(sql)

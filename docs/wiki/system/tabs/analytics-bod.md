@@ -105,3 +105,13 @@ Từ s132, tất cả tab analytics có 3 filter:
 
 UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
 
+## s203 (2026-09-21) — Tăng tốc BOD Report (số liệu không đổi, đã diff API 0 khác biệt)
+
+- **bod-summary** cold 14s: 10 lần quét fact → 3. `fetchBODGroupMarginMulti` (`lib/bod-data.ts`) chạy 2 query cho cả 3 kỳ (kỳ này / kỳ trước /
+  cùng kỳ năm ngoái, gắn cột `period`; kỳ giao nhau → tự quay lại chạy riêng từng kỳ) và `finalizeGroupMargin` là hàm thuần tính nhóm-biên cho 1 kỳ.
+  cogs/units/3HK của 3 kỳ gộp 1 query dùng `FILTER (WHERE …)`. Lý do: gohub_dw chạy gần như tuần tự (3 query nặng song song = 3× thời gian 1 query),
+  nên TỔNG số lần quét mới quyết định độ trễ.
+- `fetchBODGroupMarginData/ChannelPerformanceData/ReportData`: các nguồn độc lập (query fact, chi phí Supabase, chi phí KH Turso, strategic) chạy `Promise.all`.
+- **FE** `bod/page.tsx` + Dashboard `page.tsx`: request "tháng trước" (so MoM) bắn CÙNG LÚC với các request chính (trước nối tiếp SAU `Promise.all`,
+  cộng thêm cả thời gian của request chậm nhất), gắn kết quả khi về, không chặn trang.
+- Join `dim_customer` bỏ `TRIM()` phía dim (xem analytics-data-model §10).

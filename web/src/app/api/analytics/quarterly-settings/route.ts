@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { canWriteTab } from "@/lib/writable-tabs"
+import { memoInvalidate } from "@/lib/memo"
 
 const WRITE_ROLES = ["admin", "creator"]
 
@@ -36,5 +37,6 @@ export async function POST(req: NextRequest) {
   }
 
   if (saved === 0) return NextResponse.json({ error: "Không có dữ liệu để lưu" }, { status: 400 })
+  memoInvalidate("qsettings")
   return NextResponse.json({ ok: true })
 }

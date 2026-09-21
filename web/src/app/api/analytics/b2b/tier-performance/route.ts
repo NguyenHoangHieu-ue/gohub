@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
           SUM(f.${source.quantityCol}) AS units
         FROM ${source.mainTable} f
         LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-        LEFT JOIN dim_customer c ON TRIM(f.customer_code) = TRIM(c.code::text)
+        LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
         WHERE f.${source.dateCol}::date >= '${startDate}'
           AND f.${source.dateCol}::date <= '${endDate}'
           ${companyFilter}

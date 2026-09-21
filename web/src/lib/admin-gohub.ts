@@ -15,6 +15,13 @@ interface RevenueBucket {
 interface CustomerRevenueItem {
   customerId: string
   userType?: string
+  name?: string
+  email?: string
+  tenantId?: string
+  preferredCurrency?: string
+  totalOrders?: number
+  firstOrderAt?: string
+  lastOrderAt?: string
   revenueByCurrency?: RevenueBucket[]
 }
 
@@ -40,6 +47,17 @@ interface CustomerRevenueResponse {
           totalOrders: number
         }>
       }>>
+      // Phân theo tenant CỦA ĐƠN HÀNG (kênh ghi trên đơn), mỗi tenant kèm byUserType riêng — 1 request cho
+      // cả tháng, thay vì gọi lại 1 lần/tenant qua tham số `tenantId`.
+      byTenant?: Array<{
+        tenantId: string
+        customerCount?: number
+        totalOrders?: number
+        byUserType?: Partial<Record<"new" | "returning", {
+          customerCount?: number
+          byCurrency?: Array<{ currency: string; totalRevenue: number }>
+        }>>
+      }>
     }
   }
   pagination?: {
@@ -120,8 +138,7 @@ function summaryRevenueToVnd(buckets: Array<{ currency: string; totalRevenue: nu
   return revenueToVnd(buckets.map(bucket => ({ currency: bucket.currency, revenue: bucket.totalRevenue })), usdRate)
 }
 
-async function fetchCustomerPage(month: string, page: number, extraParams: Record<string, string> = {}): Promise<CustomerRevenueResponse> {
-  const { dateFrom, dateTo } = monthRange(month)
+async function fetchCustomerPageRange(dateFrom: string, dateTo: string, page: number, extraParams: Record<string, string> = {}): Promise<CustomerRevenueResponse> {
   const url = new URL(`${BASE}/v1/internal/customers/revenue`)
   url.searchParams.set("page", String(page))
   url.searchParams.set("limit", "100")
@@ -148,6 +165,24 @@ async function fetchCustomerPage(month: string, page: number, extraParams: Recor
   return body
 }
 
+async function fetchCustomerPage(month: string, page: number, extraParams: Record<string, string> = {}): Promise<CustomerRevenueResponse> {
+  const { dateFrom, dateTo } = monthRange(month)
+  return fetchCustomerPageRange(dateFrom, dateTo, page, extraParams)
+}
+
+// Trang 1 (summary) của 1 tháng, dùng chung giữa số khách tổng, số khách theo kênh và snapshot — trước mỗi
+// nơi tự gọi lại nên 1 lần dựng breakdown 9 tháng tốn 36 request, vượt trần 30 request/5 phút của Admin API.
+const MONTH_SUMMARY_TTL_MS = 60_000
+const monthSummaryMemo = new Map<string, { at: number; p: Promise<CustomerRevenueResponse> }>()
+function fetchMonthSummary(month: string): Promise<CustomerRevenueResponse> {
+  const hit = monthSummaryMemo.get(month)
+  if (hit && Date.now() - hit.at < MONTH_SUMMARY_TTL_MS) return hit.p
+  const p = fetchCustomerPage(month, 1)
+  monthSummaryMemo.set(month, { at: Date.now(), p })
+  p.catch(() => { if (monthSummaryMemo.get(month)?.p === p) monthSummaryMemo.delete(month) })
+  return p
+}
+
 function tenantList(envKey: string, fallback: string): string[] {
   return String(process.env[envKey] || fallback)
     .split(",")
@@ -169,6 +204,24 @@ async function customerRowsForTenants(month: string, bucket: AdminCustomerChanne
   const sums = {
     new: { revenue: 0, count: 0 },
     returning: { revenue: 0, count: 0 },
+  }
+
+  // Kênh theo tenant ghi trên ĐƠN (summary.byTenant) — 1 request/tháng dùng chung; new/returning là
+  // userType toàn cục của khách (khách từng mua ở kênh khác vẫn tính "quay lại"). Chỉ khi API không trả
+  // byTenant mới rơi về cách cũ (gọi lại mỗi tenant qua tham số tenantId).
+  const monthSummary = (await fetchMonthSummary(month)).data?.summary
+  if (Array.isArray(monthSummary?.byTenant)) {
+    for (const t of monthSummary.byTenant) {
+      if (!tenants.includes(t.tenantId)) continue
+      sums.new.revenue += summaryRevenueToVnd(t.byUserType?.new?.byCurrency ?? [], usdRate)
+      sums.new.count += Number(t.byUserType?.new?.customerCount ?? 0)
+      sums.returning.revenue += summaryRevenueToVnd(t.byUserType?.returning?.byCurrency ?? [], usdRate)
+      sums.returning.count += Number(t.byUserType?.returning?.customerCount ?? 0)
+    }
+    return [
+      { month, bucket, type: "new", revenue: String(sums.new.revenue), count: String(sums.new.count) },
+      { month, bucket, type: "returning", revenue: String(sums.returning.revenue), count: String(sums.returning.count) },
+    ]
   }
 
   for (const tenantId of tenants) {
@@ -207,7 +260,7 @@ export async function adminGohubCustomerMonthSnapshot(month: string): Promise<Ad
     returning: { revenue: 0, count: 0 },
   }
 
-  const first = await fetchCustomerPage(month, 1)
+  const first = await fetchMonthSummary(month)
   const totalPages = pageCount(first)
   const totalRecords = Number(first.pagination?.total ?? first.data?.summary?.customerCount ?? 0)
   const byUserType = first.data?.summary?.byUserType
@@ -276,7 +329,7 @@ export async function adminGohubCustomerRows(months: string[]): Promise<AdminCus
   const usdRate = await getUsdToVndRate()
   const rows: AdminCustomerRow[] = []
   for (const month of months) {
-    const response = await fetchCustomerPage(month, 1)
+    const response = await fetchMonthSummary(month)
     const summary = response.data?.summary
     const byUserType = summary?.byUserType
     if (byUserType?.new || byUserType?.returning) {
@@ -347,4 +400,93 @@ export async function adminGohubCustomerChannelRows(months: string[]): Promise<A
   }
 
   return rows
+}
+
+
+// ── Danh sách KH B2C theo khoảng ngày (Quarter Report — breakdown KH mới/quay lại/rời bỏ, s203) ─────────────────
+// API giới hạn 100 KH/trang (limit>100 → 400) → 1 quý ~6-8k KH = 60-80 trang; tải song song có giới hạn.
+export interface AdminCustomerDetail {
+  id: string
+  name: string
+  emailMasked: string
+  market: "VN" | "US" | "Khác"
+  userType: "new" | "returning"
+  revenueVnd: number
+  orders: number
+  firstOrderAt: string | null
+  lastOrderAt: string | null
+}
+
+/** a***@domain — danh sách này hiển thị cho người xem báo cáo, không đưa email đầy đủ ra trình duyệt. */
+export function maskEmail(email?: string): string {
+  if (!email || !email.includes("@")) return ""
+  const [user, domain] = email.split("@")
+  return `${user.slice(0, 1)}***@${domain}`
+}
+
+function marketOf(item: CustomerRevenueItem): "VN" | "US" | "Khác" {
+  const cur = String(item.preferredCurrency || item.revenueByCurrency?.[0]?.currency || "").toUpperCase()
+  if (cur === "VND") return "VN"
+  if (cur === "USD") return "US"
+  return "Khác"
+}
+
+/** Tổng hợp nhanh (1 request): số KH + doanh thu mới/quay lại của cả khoảng — dùng cho ô tổng quan, không cần tải danh sách. */
+export async function adminGohubCustomerRangeSummary(dateFrom: string, dateTo: string): Promise<{
+  new: { count: number; revenue: number }; returning: { count: number; revenue: number }; total: number
+}> {
+  if (!adminGohubConfigured()) throw new Error("Admin GoHub API chưa được cấu hình")
+  const usdRate = await getUsdToVndRate()
+  const first = await fetchCustomerPageRange(dateFrom, dateTo, 1)
+  const by = first.data?.summary?.byUserType
+  return {
+    new: { count: Number(by?.new?.customerCount ?? 0), revenue: summaryRevenueToVnd(by?.new?.byCurrency ?? [], usdRate) },
+    returning: { count: Number(by?.returning?.customerCount ?? 0), revenue: summaryRevenueToVnd(by?.returning?.byCurrency ?? [], usdRate) },
+    total: Number(first.pagination?.total ?? first.data?.summary?.customerCount ?? 0),
+  }
+}
+
+export async function adminGohubCustomerList(dateFrom: string, dateTo: string, opts?: { concurrency?: number; maxPages?: number }): Promise<AdminCustomerDetail[]> {
+  if (!adminGohubConfigured()) throw new Error("Admin GoHub API chưa được cấu hình")
+  const usdRate = await getUsdToVndRate()
+  const concurrency = opts?.concurrency ?? 6
+  const maxPages = opts?.maxPages ?? 150
+
+  const toDetail = (it: CustomerRevenueItem): AdminCustomerDetail => ({
+    id: it.customerId,
+    name: it.name || "",
+    emailMasked: maskEmail(it.email),
+    market: marketOf(it),
+    userType: normalizeUserType(it.userType),
+    revenueVnd: Math.round(revenueToVnd(it.revenueByCurrency, usdRate)),
+    orders: Number(it.totalOrders) || 0,
+    firstOrderAt: it.firstOrderAt ?? null,
+    lastOrderAt: it.lastOrderAt ?? null,
+  })
+
+  // Retry nhẹ 2 lần (429/5xx từng gặp ở API ngoài) — lỗi kéo dài thì ném ra, KHÔNG trả danh sách cụt.
+  const getPage = async (page: number): Promise<CustomerRevenueResponse> => {
+    let lastErr: unknown
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try { return await fetchCustomerPageRange(dateFrom, dateTo, page) } catch (e) {
+        lastErr = e
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
+      }
+    }
+    throw lastErr
+  }
+
+  const first = await getPage(1)
+  const totalPages = pageCount(first)
+  if (totalPages > maxPages) throw new Error(`Admin GoHub customers ${dateFrom.slice(0, 10)}→${dateTo.slice(0, 10)} cần ${totalPages} trang, vượt giới hạn ${maxPages}`)
+  const pages: CustomerRevenueResponse[] = [first]
+  let next = 2
+  const worker = async () => {
+    while (next <= totalPages) {
+      const page = next++
+      pages[page - 1] = await getPage(page)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(0, totalPages - 1)) }, worker))
+  return pages.flatMap(pg => (pg.data?.items ?? []).map(toDetail))
 }
