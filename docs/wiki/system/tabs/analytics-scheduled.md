@@ -191,6 +191,5 @@ không gửi Lark, không ghi `last_run_at`) mất **~32s** ⇒ ~30s là Gemini.
   Response đổi `ran` → `started`. Lỗi/soft-timeout vẫn nhả claim + alert Lark như cũ.
 - `scheduled-runner.ts`: thêm `dryRun` (dựng báo cáo + card nhưng không gửi/không ghi `last_run_at`) cho chẩn đoán.
 
-**Gotcha còn mở**: Lark custom-bot webhook trả HTTP 200 kèm `{"code":19024,...}` khi lỗi từ khoá/chữ ký/token — `runScheduledMessage` chỉ kiểm `res.ok`, nên
-đổi từ khoá bảo mật ở Lark sẽ khiến báo cáo "thành công" giả. Nên đọc body và ném lỗi khi `code !== 0`.
-
+**Gotcha đã vá cùng đợt**: Lark custom-bot webhook trả HTTP 200 kèm `{"code":19024,...}` khi lỗi từ khoá/chữ ký/token — trước đây `runScheduledMessage` chỉ kiểm `res.ok` nên báo cáo
+"thành công" giả (claim đã ghi, không alert). Nay đọc body và ném lỗi khi `code !== 0` → nhả claim + alert Lark.
