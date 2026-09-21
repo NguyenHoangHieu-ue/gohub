@@ -47,6 +47,17 @@ interface CustomerRevenueResponse {
           totalOrders: number
         }>
       }>>
+      // Phân theo tenant CỦA ĐƠN HÀNG (kênh ghi trên đơn), mỗi tenant kèm byUserType riêng — 1 request cho
+      // cả tháng, thay vì gọi lại 1 lần/tenant qua tham số `tenantId`.
+      byTenant?: Array<{
+        tenantId: string
+        customerCount?: number
+        totalOrders?: number
+        byUserType?: Partial<Record<"new" | "returning", {
+          customerCount?: number
+          byCurrency?: Array<{ currency: string; totalRevenue: number }>
+        }>>
+      }>
     }
   }
   pagination?: {
@@ -159,6 +170,19 @@ async function fetchCustomerPage(month: string, page: number, extraParams: Recor
   return fetchCustomerPageRange(dateFrom, dateTo, page, extraParams)
 }
 
+// Trang 1 (summary) của 1 tháng, dùng chung giữa số khách tổng, số khách theo kênh và snapshot — trước mỗi
+// nơi tự gọi lại nên 1 lần dựng breakdown 9 tháng tốn 36 request, vượt trần 30 request/5 phút của Admin API.
+const MONTH_SUMMARY_TTL_MS = 60_000
+const monthSummaryMemo = new Map<string, { at: number; p: Promise<CustomerRevenueResponse> }>()
+function fetchMonthSummary(month: string): Promise<CustomerRevenueResponse> {
+  const hit = monthSummaryMemo.get(month)
+  if (hit && Date.now() - hit.at < MONTH_SUMMARY_TTL_MS) return hit.p
+  const p = fetchCustomerPage(month, 1)
+  monthSummaryMemo.set(month, { at: Date.now(), p })
+  p.catch(() => { if (monthSummaryMemo.get(month)?.p === p) monthSummaryMemo.delete(month) })
+  return p
+}
+
 function tenantList(envKey: string, fallback: string): string[] {
   return String(process.env[envKey] || fallback)
     .split(",")
@@ -180,6 +204,24 @@ async function customerRowsForTenants(month: string, bucket: AdminCustomerChanne
   const sums = {
     new: { revenue: 0, count: 0 },
     returning: { revenue: 0, count: 0 },
+  }
+
+  // Kênh theo tenant ghi trên ĐƠN (summary.byTenant) — 1 request/tháng dùng chung; new/returning là
+  // userType toàn cục của khách (khách từng mua ở kênh khác vẫn tính "quay lại"). Chỉ khi API không trả
+  // byTenant mới rơi về cách cũ (gọi lại mỗi tenant qua tham số tenantId).
+  const monthSummary = (await fetchMonthSummary(month)).data?.summary
+  if (Array.isArray(monthSummary?.byTenant)) {
+    for (const t of monthSummary.byTenant) {
+      if (!tenants.includes(t.tenantId)) continue
+      sums.new.revenue += summaryRevenueToVnd(t.byUserType?.new?.byCurrency ?? [], usdRate)
+      sums.new.count += Number(t.byUserType?.new?.customerCount ?? 0)
+      sums.returning.revenue += summaryRevenueToVnd(t.byUserType?.returning?.byCurrency ?? [], usdRate)
+      sums.returning.count += Number(t.byUserType?.returning?.customerCount ?? 0)
+    }
+    return [
+      { month, bucket, type: "new", revenue: String(sums.new.revenue), count: String(sums.new.count) },
+      { month, bucket, type: "returning", revenue: String(sums.returning.revenue), count: String(sums.returning.count) },
+    ]
   }
 
   for (const tenantId of tenants) {
@@ -218,7 +260,7 @@ export async function adminGohubCustomerMonthSnapshot(month: string): Promise<Ad
     returning: { revenue: 0, count: 0 },
   }
 
-  const first = await fetchCustomerPage(month, 1)
+  const first = await fetchMonthSummary(month)
   const totalPages = pageCount(first)
   const totalRecords = Number(first.pagination?.total ?? first.data?.summary?.customerCount ?? 0)
   const byUserType = first.data?.summary?.byUserType
@@ -287,7 +329,7 @@ export async function adminGohubCustomerRows(months: string[]): Promise<AdminCus
   const usdRate = await getUsdToVndRate()
   const rows: AdminCustomerRow[] = []
   for (const month of months) {
-    const response = await fetchCustomerPage(month, 1)
+    const response = await fetchMonthSummary(month)
     const summary = response.data?.summary
     const byUserType = summary?.byUserType
     if (byUserType?.new || byUserType?.returning) {

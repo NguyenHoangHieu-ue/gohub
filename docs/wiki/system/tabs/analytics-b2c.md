@@ -184,6 +184,19 @@ $$\text{Spend Pace} = \frac{\text{Chi phí thực tế}}{\text{Ngân sách Marke
 - **Budget**: lấy từ Manage Costs → B2C Channels (`analytics_channel_costs`), nhưng card Budget đã bỏ khỏi snapshot KPI strip.
 
 ## 6. Vấn đề đã gặp & cách khắc phục
+- **🔴 s203+2 (2026-09-21) — Khách theo kênh lấy theo kênh GHI TRÊN ĐƠN (`summary.byTenant`) + hết vượt trần Admin API.**
+  Triệu chứng: mục "Doanh thu theo Customers" hiện 2-3 khách/tháng (số của mã kênh trong fact, không phải khách
+  thật) kèm cảnh báo "Admin GoHub API không khả dụng". Log Vercel: `Rate limit exceeded. Maximum 30 requests per
+  5 minute(s) for customers-revenue-list bucket` — mỗi lần dựng breakdown gọi 4 request/tháng (1 tổng + 3 tenant
+  qua tham số `tenantId`) → 9 tháng = 36 > 30 (từ tháng 8 đã vượt); bucket còn dùng chung cron `refresh-b2c-report`
+  + danh sách KH B2C Quarter Report; khi lỗi route rơi về đếm `customer_code` trong fact (sai) và cache 60'.
+  Fix (`lib/admin-gohub.ts`): (1) kênh lấy từ `summary.byTenant[]` của response trang 1 (tenant của đơn, kèm
+  `byUserType` từng tenant) thay vì gọi lại theo `tenantId` — chỉ còn 1 request/tháng, chỉ rơi về cách cũ nếu API
+  không trả `byTenant`; (2) `fetchMonthSummary()` memo 60s + dedupe request đồng thời, dùng chung cho số khách
+  tổng / theo kênh / snapshot → 1 lần dựng breakdown = 9 request. ⚠️ SỐ ĐỔI (định nghĩa): trước, new/returning
+  tính trong phạm vi từng tenant (khách từng mua kênh khác vẫn "mới" ở kênh này); nay theo `userType` toàn cục
+  của khách. Đo T8/2026 VN web: mới 1.677→1.501, quay lại 918→1.094 (tổng khách 2.595, đơn 3.111 không đổi).
+  Tenant `gohub-cloud` (4 khách) vẫn không thuộc kênh nào. Chưa làm: không cache kết quả fallback DB lâu.
 - **🟡 Fix s197 (2026-09-14) — chart Revenue Trend không loại ship fee/đơn nội bộ (`b2c/trend`)**: route
   KHÔNG đọc `includeShip`/`includeInternalOps`/`includeOpsCustomers` dù FE gửi cùng `queryParams` với
   `b2c/kpis` (route NÀY loại mặc định) — chart Trend lệch KPI card cùng trang. Đã thread `shipFilter`/
