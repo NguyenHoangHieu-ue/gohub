@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
-import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2, Settings2, Upload, FileDown, Shield, ChevronUp, UserPlus, Repeat, UserMinus } from "lucide-react"
+import { RefreshCw, Save, Building2, ShoppingBag, TrendingUp, ChevronRight, ChevronDown, Search, Users, CalendarDays, Pencil, Plus, X, Trash2, Settings2, Upload, FileDown, Shield, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { useRoleGuard } from "@/lib/use-role-guard"
@@ -17,6 +17,7 @@ import { QtSummaryRow } from "@/components/quarterly/qt-summary-row"
 import { QtTargetRow } from "@/components/quarterly/qt-target-row"
 import { PivotTable } from "@/components/quarterly/pivot-table"
 import { B2BTierSection } from "@/components/quarterly/b2b-tier-section"
+import { CustomerLifecycleSection } from "@/components/quarterly/customer-lifecycle-section"
 import { QtVsTargetPanel } from "@/components/quarterly/qt-vs-target-bullets"
 import { MonthlyTrendChart } from "@/components/quarterly/monthly-trend-chart"
 import { LogicNote, StatTile } from "@/components/dashboard-kit"
@@ -1027,19 +1028,14 @@ function QuarterlyContent() {
         </div>
       )}
 
-      {/* ── Vòng đời KH B2B (New/Recurring/Inactive, s200) — so với toàn bộ lịch sử trước quý đang xem ── */}
+      {/* ── Vòng đời KH (New/Recurring/Inactive) — tách B2B/B2C, bấm ô để xem danh sách từng KH (s200 → s203) ── */}
       {report?.customerLifecycle && (
-        <div className={cn("grid grid-cols-1 sm:grid-cols-3 gap-3", loading && "opacity-50 pointer-events-none")}>
-          <StatTile icon={<UserPlus className="w-5 h-5" />} accent="positive"
-            label="KH Mới trong quý" value={report.customerLifecycle.new.count} unit="KH"
-            deltas={[{ label: "Doanh thu", value: fc(report.customerLifecycle.new.revenue), kind: "up" }]} />
-          <StatTile icon={<Repeat className="w-5 h-5" />} accent="revenue"
-            label="KH Quay Lại" value={report.customerLifecycle.recurring.count} unit="KH"
-            deltas={[{ label: "Doanh thu", value: fc(report.customerLifecycle.recurring.revenue), kind: "up" }]} />
-          <StatTile icon={<UserMinus className="w-5 h-5" />} accent="warn"
-            label="KH Rời Bỏ (quý này chưa mua lại)" value={report.customerLifecycle.inactive.count} unit="KH"
-            deltas={[{ label: "Doanh thu quý trước", value: fc(report.customerLifecycle.inactive.lostRevenue), kind: "down" }]} />
-        </div>
+        <CustomerLifecycleSection
+          quarter={selQ} year={selYear} companyCode={companyCode}
+          includeShip={includeShip} includeInternalOps={includeInternalOps}
+          b2b={report.customerLifecycle} loading={loading}
+          canViewB2c={["admin", "creator", "bod", "b2c"].includes(userRole)}
+        />
       )}
 
       {/* ── B2B tier breakdown (replaces channel pivot for B2B) ── */}
