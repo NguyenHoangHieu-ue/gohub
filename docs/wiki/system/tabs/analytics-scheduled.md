@@ -186,7 +186,7 @@ không gửi Lark, không ghi `last_run_at`) mất **~32s** ⇒ ~30s là Gemini.
 (Lark webhook trả HTTP 200 kể cả khi lỗi nghiệp vụ — code chỉ kiểm `res.ok`, xem gotcha bên dưới.)
 
 **Fix**:
-- `bi-analyst.ts`: `thinkingConfig.thinkingLevel` tường minh — báo cáo tự động truyền `"minimal"`, còn lại mặc định `"low"` (như Bé Gấu).
+- `bi-analyst.ts`: `thinkingConfig.thinkingLevel` tường minh — `"low"` (như Bé Gấu; KHÔNG dùng `"minimal"` khi request có functionDeclarations — Gemini 3.8-flash trả 400).
 - `api/cron/scheduled-messages`: CLAIM slot rồi **trả lời NGAY**, chạy báo cáo trong `waitUntil` (sống tới maxDuration=180s, không phụ thuộc client còn kết nối).
   Response đổi `ran` → `started`. Lỗi/soft-timeout vẫn nhả claim + alert Lark như cũ.
 - `scheduled-runner.ts`: thêm `dryRun` (dựng báo cáo + card nhưng không gửi/không ghi `last_run_at`) cho chẩn đoán.

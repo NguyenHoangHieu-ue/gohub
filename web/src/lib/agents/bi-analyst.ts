@@ -90,8 +90,9 @@ export async function runBIAnalyst(
   lastMsg: string,
   role?: string,
   // s203: gemini-3.8-flash MẶC ĐỊNH thinking=medium → báo cáo tự động (chỉ FORMAT số đã tính sẵn) mất ~30s thay vì ~10s, vượt
-  // timeout 30s của cron-job.org từ 2026-09-10 (đổi model). Báo cáo tự động truyền "minimal"; còn lại "low" như Bé Gấu.
-  opts?: { thinkingLevel?: "minimal" | "low" }
+  // timeout 30s của cron-job.org từ 2026-09-10 (đổi model). Đặt "low" như Bé Gấu. ⚠️ KHÔNG dùng "minimal" ở đây: request có
+  // functionDeclarations → Gemini 3.8-flash trả 400 "Thinking level MINIMAL is not supported" (chỉ dùng được khi không khai tool).
+  opts?: { thinkingLevel?: "low" }
 ): Promise<string> {
   // Role data filter + custom admin rules
   const [dataFilter, customRules] = await Promise.all([getRoleDataFilter(role), getCustomRules()])
