@@ -2,14 +2,13 @@ import { NextResponse }    from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions }      from "@/lib/auth"
 import { supabaseAdmin }    from "@/lib/supabase"
+import { memo }             from "@/lib/memo"
 
 const WRITABLE_TABS_KEY = "permissions.writable_tabs"
 
-export async function GET() {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-  const username = session.user.username
+// Trang nào cũng gọi route này lúc mở; 5 lần đọc Supabase song song vẫn ~0,5-3s từ iad1 (s203) → memo 20s/người dùng.
+// Quyền vừa đổi hiện ra sau tối đa 20s (instance khác) — chấp nhận được cho cờ hiển thị menu/nút.
+async function loadMe(username: string, sessionRole: string) {
 
   const [userRes, configRes, gpRes, portalRes, myMetricsRes] = await Promise.all([
     supabaseAdmin.from("users").select("role, department, allowed_analytics, allowed_tabs").eq("username", username).single(),
@@ -58,8 +57,8 @@ export async function GET() {
     } catch {}
   }
 
-  return NextResponse.json({
-    role:                data?.role              ?? session.user.role,
+  return {
+    role:                data?.role              ?? sessionRole,
     department:          data?.department        ?? "none",
     allowed_analytics:   data?.allowed_analytics ?? null,
     allowed_tabs:        data?.allowed_tabs       ?? null,
@@ -67,5 +66,13 @@ export async function GET() {
     gp_enabled:          gpEnabled,
     portal_enabled:      portalEnabled,
     my_metrics_enabled:  myMetricsEnabled,
-  })
+  }
+}
+
+export async function GET() {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const username = session.user.username
+  const payload = await memo(`me:${username}`, 20_000, () => loadMe(username, session.user.role as string))
+  return NextResponse.json(payload)
 }

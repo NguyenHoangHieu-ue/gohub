@@ -1,19 +1,28 @@
 import { vi, describe, test, expect } from "vitest"
 
-// L2 cache (Supabase) mock: không hit sẵn (maybeSingle → null), upsert no-op → cô lập L1 in-memory.
-// overlaps() ghi lại arg cuối cùng gọi để flushByDeps test kiểm tra đúng filter được gửi đi.
-let mockLastOverlapsArgs: [string, string[]] | null = null
+// L2 = Vercel Runtime Cache (s203) — mock bằng Map trong bộ nhớ, có tags + expireTag như thật. waitUntil gom promise
+// nền vào `bgTasks` để test chủ động chờ (không để việc làm mới nền chạy lơ lửng).
+const l2Store = new Map<string, { value: unknown; tags: string[] }>()
+const expiredTags: string[][] = []
+const bgTasks: Promise<unknown>[] = []
+vi.mock("@vercel/functions", () => ({
+  waitUntil: (p: Promise<unknown>) => { bgTasks.push(p.catch(() => {})) },
+  getCache: () => ({
+    get: async (k: string) => l2Store.get(k)?.value,
+    set: async (k: string, value: unknown, opts?: { tags?: string[] }) => { l2Store.set(k, { value: JSON.parse(JSON.stringify(value)), tags: opts?.tags ?? [] }) },
+    delete: async (k: string) => { l2Store.delete(k) },
+    expireTag: async (t: string | string[]) => {
+      const tags = Array.isArray(t) ? t : [t]
+      expiredTags.push(tags)
+      for (const [k, v] of l2Store) if (v.tags.some(x => tags.includes(x))) l2Store.delete(k)
+    },
+  }),
+}))
 vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: {
     from: () => ({
       select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null }) }) }),
       upsert: () => Promise.resolve({ data: null, error: null }),
-      delete: () => ({
-        overlaps: (col: string, val: string[]) => {
-          mockLastOverlapsArgs = [col, val]
-          return Promise.resolve({ count: 0, error: null })
-        },
-      }),
     }),
   },
 }))
@@ -23,7 +32,7 @@ vi.mock("@/lib/turso", () => ({ tursoQuery: vi.fn() }))
 import {
   safeDate, safeCompanyCode, getDateFilter, getPrevDateFilter,
   getDaysInMonth, getDaysInRange, getMonthsInRange,
-  cachedQuery, flushByDeps, isCronReq, analyticsGuard,
+  cachedQuery, flushByDeps, flushAnalyticsCache, flushAnalyticsCacheByPrefixes, softExpireAll, isCronReq, analyticsGuard,
   excludeInactiveCustomers, buildIsStrategicSql, shipFilter, internalOpsFilter,
   decodeSkuDestinationCode,
 } from "@/lib/analytics-helpers"
@@ -151,16 +160,136 @@ describe("flushByDeps — flush theo deps khai tại cachedQuery (thay prefix-li
     expect(fn3).toHaveBeenCalledTimes(1)
   })
 
-  test("gọi đúng Supabase .overlaps('deps', [...]) — không phải .like() (đã ghi nhận không hoạt động đúng runtime)", async () => {
+  test("gọi Runtime Cache expireTag với tag dep:<tên> — không đụng Supabase", async () => {
+    expiredTags.length = 0
     await flushByDeps(["b2b-cost", "b2c-budget"])
-    expect(mockLastOverlapsArgs).toEqual(["deps", ["b2b-cost", "b2c-budget"]])
+    expect(expiredTags).toEqual([["dep:b2b-cost", "dep:b2c-budget"]])
   })
 
-  test("deps rỗng → no-op, không gọi Supabase", async () => {
-    mockLastOverlapsArgs = null
+  test("deps rỗng → no-op, không gọi expireTag", async () => {
+    expiredTags.length = 0
     const res = await flushByDeps([])
     expect(res).toEqual({ deleted: 0 })
-    expect(mockLastOverlapsArgs).toBeNull()
+    expect(expiredTags).toEqual([])
+  })
+
+  test("flushAnalyticsCacheByPrefixes → expireTag theo phần trước dấu ':' của prefix", async () => {
+    expiredTags.length = 0
+    await flushAnalyticsCacheByPrefixes(["qreport_raw_v10:", "qb2b_raw_v9:"])
+    expect(expiredTags).toEqual([["pfx:qreport_raw_v10", "pfx:qb2b_raw_v9"]])
+  })
+})
+
+// s203: L2 = Runtime Cache dùng chung mọi instance + stale-while-revalidate (trả bản cũ ngay, tính lại nền).
+describe("cachedQuery — L2 Runtime Cache + stale-while-revalidate", () => {
+  const MIN = 60_000
+
+  test("instance MỚI (L1 trống) vẫn thấy cache của instance khác qua L2 → không chạy fn", async () => {
+    const key = "l2:" + Math.random()
+    const fn = vi.fn(async () => ({ n: 1 }))
+    await cachedQuery(key, fn, 60)
+    await Promise.all(bgTasks)               // chờ ghi L2 nền xong
+    vi.resetModules()                        // giả lập cold start: module mới, L1 rỗng, cùng L2
+    const fresh = await import("@/lib/analytics-helpers")
+    const fn2 = vi.fn(async () => ({ n: 2 }))
+    expect(await fresh.cachedQuery(key, fn2, 60)).toEqual({ n: 1 })
+    expect(fn2).not.toHaveBeenCalled()
+  })
+
+  test("hết TTL nhưng còn ≤6h → trả bản CŨ ngay + làm mới nền; lần sau thấy bản mới", async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date("2026-09-20T00:00:00Z"))
+      const key = "swr:" + Math.random()
+      let version = 1
+      const fn = vi.fn(async () => ({ v: version }))
+      expect(await cachedQuery(key, fn, 60)).toEqual({ v: 1 })
+      await Promise.all(bgTasks)
+
+      version = 2
+      vi.setSystemTime(new Date(Date.now() + 61 * MIN))         // quá TTL 60' (L1 cũng hết 45s)
+      bgTasks.length = 0
+      expect(await cachedQuery(key, fn, 60)).toEqual({ v: 1 })  // bản cũ, KHÔNG chờ tính lại
+      await Promise.all(bgTasks)                                 // nền chạy xong
+      expect(fn).toHaveBeenCalledTimes(2)
+      expect(await cachedQuery(key, fn, 60)).toEqual({ v: 2 })  // bản mới đã vào cache
+      expect(fn).toHaveBeenCalledTimes(2)
+    } finally { vi.useRealTimers() }
+  })
+
+  test("quá 6h → KHÔNG phục vụ bản cũ, tính lại đồng bộ", async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date("2026-09-20T00:00:00Z"))
+      const key = "old:" + Math.random()
+      let version = 1
+      const fn = vi.fn(async () => ({ v: version }))
+      await cachedQuery(key, fn, 60)
+      await Promise.all(bgTasks)
+      version = 2
+      vi.setSystemTime(new Date(Date.now() + 6 * 60 * MIN + MIN))
+      expect(await cachedQuery(key, fn, 60)).toEqual({ v: 2 })
+    } finally { vi.useRealTimers() }
+  })
+
+  test("nocache (bypass=true) → tính lại đồng bộ dù cache còn tươi, và ghi đè cache", async () => {
+    const key = "bypass:" + Math.random()
+    let version = 1
+    const fn = vi.fn(async () => ({ v: version }))
+    await cachedQuery(key, fn, 60)
+    version = 2
+    expect(await cachedQuery(key, fn, 60, true)).toEqual({ v: 2 })
+    expect(await cachedQuery(key, fn, 60)).toEqual({ v: 2 })
+    expect(fn).toHaveBeenCalledTimes(2)
+  })
+
+  test("nhiều request cùng key đồng thời → fn chỉ chạy 1 lần (in-flight dedupe)", async () => {
+    const key = "dedupe:" + Math.random()
+    let release: () => void = () => {}
+    const gate = new Promise<void>(r => { release = r })
+    const fn = vi.fn(async () => { await gate; return "x" })
+    const all = Promise.all([cachedQuery(key, fn, 60), cachedQuery(key, fn, 60), cachedQuery(key, fn, 60)])
+    await new Promise(r => setTimeout(r, 5))
+    release()
+    expect(await all).toEqual(["x", "x", "x"])
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  test("softExpireAll (ETL vừa nạp) → entry đang tươi thành 'cũ': vẫn trả ngay + làm mới nền", async () => {
+    const key = "soft:" + Math.random()
+    let version = 1
+    const fn = vi.fn(async () => ({ v: version }))
+    await cachedQuery(key, fn, 60)
+    await Promise.all(bgTasks)
+    version = 2
+    await new Promise(r => setTimeout(r, 2))
+    await softExpireAll()
+    bgTasks.length = 0
+    // L1 45s vẫn tươi nhưng < mốc soft → không được coi là tươi
+    expect(await cachedQuery(key, fn, 60)).toEqual({ v: 1 })
+    await Promise.all(bgTasks)
+    expect(await cachedQuery(key, fn, 60)).toEqual({ v: 2 })
+  })
+
+  test("flushAnalyticsCache (hard) → bản cũ KHÔNG còn được phục vụ, tính lại đồng bộ", async () => {
+    const key = "hard:" + Math.random()
+    let version = 1
+    const fn = vi.fn(async () => ({ v: version }))
+    await cachedQuery(key, fn, 60)
+    await Promise.all(bgTasks)
+    version = 2
+    await new Promise(r => setTimeout(r, 2))
+    await flushAnalyticsCache()
+    expect(await cachedQuery(key, fn, 60)).toEqual({ v: 2 })
+  })
+
+  test("L2 lỗi (get/set ném) → vẫn trả dữ liệu đúng, không throw", async () => {
+    // fn lỗi phải lan ra ngoài (không nuốt), còn cache L2 lỗi thì không ảnh hưởng — kiểm tra nhánh fn lỗi
+    const key = "err:" + Math.random()
+    await expect(cachedQuery(key, async () => { throw new Error("db down") }, 60)).rejects.toThrow("db down")
+    // lỗi không bị cache: lần sau chạy lại fn
+    const ok = vi.fn(async () => 7)
+    expect(await cachedQuery(key, ok, 60)).toBe(7)
   })
 })
 

@@ -1,6 +1,8 @@
 import { createHash } from "crypto"
+import { getCache, waitUntil } from "@vercel/functions"
 import { NextResponse, type NextRequest } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { memo } from "@/lib/memo"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { tursoQuery } from "@/lib/turso"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
@@ -15,14 +17,80 @@ export function isLocalPreviewReq(req: NextRequest): boolean {
   )
 }
 
-// ── Two-level query cache ──────────────────────────────────────────────────────
-// L1: in-memory Map (cực nhanh, per serverless instance, mất khi cold start)
-// L2: Supabase analytics_query_cache (shared, sống qua cold start, TTL 10 phút)
-// → Dữ liệu luôn tươi (max TTL_L2 cũ), cold start không cần re-query gohub_dw.
+// ── Query cache: L1 in-memory + L2 Vercel Runtime Cache, stale-while-revalidate ─────────────────────────
+// s203 (audit tốc độ): đo thật từ vùng chạy function (iad1) — Supabase mỗi lần đọc/ghi 280-450ms (bảng cache
+// tới 1,3s vì payload JSON lớn), trong khi gohub_dw chỉ ~30ms/query. Cache cũ dùng chính Supabase làm L2 nên
+// MỖI request (kể cả cache-hit) tốn ≥1 hop chậm, cache-miss thêm 1 hop ghi chặn response → route B2B 5-22s.
+//   L1  = Map trong instance (mất khi cold start), TTL ngắn L1_TTL_MS.
+//   L2  = Vercel Runtime Cache (`@vercel/functions` getCache) — dùng chung mọi instance trong vùng, sống qua
+//         cold start/deploy, vài ms/lần. Bảng Supabase `analytics_query_cache` CHỈ còn giữ registry prewarm
+//         (`sqlreg:`/`urlreg:`), không còn chứa dữ liệu cache.
+//   SWR = hết TTL (hoặc ETL vừa nạp data mới → `softExpireAll`) thì TRẢ NGAY bản cũ (≤ MAX_STALE_MS) và tính lại
+//         ở nền qua waitUntil → người dùng không phải chờ cold-query. Bản cũ quá MAX_STALE_MS, "Tải lại mới"
+//         (nocache=1) hoặc route ghi dữ liệu (flush*) thì tính lại ĐỒNG BỘ như trước.
+//   Trùng lặp: nhiều request cùng key đến 1 instance chỉ chạy `fn` 1 lần (in-flight dedupe).
 
-const _cache = new Map<string, { data: unknown; exp: number; deps: string[] }>()
-const TTL_L1 = 5  * 60_000  // 5 phút in-memory
-const TTL_L2 = 10            // 10 phút trong Supabase (minutes)
+interface CacheEntry<T = unknown> { data: T; cachedAt: number }
+interface L1Entry extends CacheEntry { deps: string[] }
+
+const _cache = new Map<string, L1Entry>()
+const _inflight = new Map<string, Promise<unknown>>()
+const L1_TTL_MS    = 45_000               // ngắn: L2 đã nhanh, L1 chỉ để né hop khi bấm liên tục
+const TTL_L2       = 10                   // phút — mặc định khi route không truyền ttl
+const MAX_STALE_MS = 6 * 60 * 60_000      // quá 6h thì không phục vụ bản cũ nữa
+const L2_TTL_S     = MAX_STALE_MS / 1000
+const TAG_ALL      = "aq-all"
+
+function runtimeCache() { return getCache({ namespace: "aq" }) }
+const prefixTag = (key: string) => `pfx:${key.split(":")[0].replace(/,/g, "_").slice(0, 200)}`
+const depTag    = (d: string)   => `dep:${d.replace(/,/g, "_").slice(0, 200)}`
+
+// Mốc "coi như hết hạn mềm / cứng" toàn cục, lưu ở L2 (cache 5s trong instance để khỏi thêm 1 hop mỗi request).
+//   soft: entry cũ hơn mốc này bị coi là HẾT TTL → vẫn phục vụ bản cũ + tính lại nền (ETL vừa nạp data mới)
+//   hard: entry cũ hơn mốc này bị BỎ hẳn → tính lại đồng bộ (admin bấm "xoá cache toàn hệ thống")
+interface Epoch { soft: number; hard: number }
+let _epoch: { v: Epoch; at: number } | null = null
+const EPOCH_KEY = "epoch"
+async function getEpoch(): Promise<Epoch> {
+  if (_epoch && Date.now() - _epoch.at < 5_000) return _epoch.v
+  let v: Epoch = { soft: 0, hard: 0 }
+  try {
+    const e = (await runtimeCache().get(EPOCH_KEY)) as Epoch | undefined
+    if (e) v = { soft: e.soft || 0, hard: e.hard || 0 }
+  } catch { /* L2 lỗi → không có mốc */ }
+  _epoch = { v, at: Date.now() }
+  return v
+}
+async function setEpoch(patch: Partial<Epoch>): Promise<void> {
+  const cur = await getEpoch()
+  const next = { ...cur, ...patch }
+  _epoch = { v: next, at: Date.now() }
+  try { await runtimeCache().set(EPOCH_KEY, next, { ttl: 30 * 24 * 3600, name: "aq-epoch" }) } catch { /* bỏ qua */ }
+}
+
+/** Đánh dấu MỌI cache hiện có là "hết TTL" nhưng còn dùng được làm bản cũ (SWR) — dùng khi ETL vừa nạp data mới. */
+export async function softExpireAll(): Promise<void> { await setEpoch({ soft: Date.now() }) }
+
+export async function persistCacheEntry<T>(key: string, data: T, deps: string[] = []): Promise<void> {
+  const entry: CacheEntry<T> = { data, cachedAt: Date.now() }
+  l1Set(key, entry, deps)
+  try {
+    await runtimeCache().set(key, entry, {
+      ttl: L2_TTL_S, name: "analytics-query",
+      tags: [TAG_ALL, prefixTag(key), ...deps.map(depTag)],
+    })
+  } catch (e: any) {
+    console.warn("[analytics-cache] L2 set lỗi (dùng L1 thôi):", key.slice(0, 60), e?.message)
+  }
+}
+
+function l1Set(key: string, entry: CacheEntry, deps: string[]) {
+  _cache.set(key, { ...entry, deps })
+  if (_cache.size > 200) {
+    const now = Date.now()
+    for (const [k, v] of _cache) if (now - v.cachedAt > MAX_STALE_MS) _cache.delete(k)
+  }
+}
 
 /**
  * `deps` (s190+2 — thay cơ chế prefix-list viết tay, đã gây ≥3 sự cố lịch sử: thiếu flush s168b, prefix
@@ -35,71 +103,55 @@ export async function cachedQuery<T>(
   key: string,
   fn:  () => Promise<T>,
   ttlMinutes = TTL_L2,
-  bypass = false,   // true → bỏ qua ĐỌC cache (L1+L2), tính lại tươi; VẪN ghi cache mới (re-warm).
+  bypass = false,   // true → bỏ qua ĐỌC cache, tính lại tươi ĐỒNG BỘ; VẪN ghi cache mới (re-warm).
   deps: string[] = [],
 ): Promise<T> {
-  if (bypass) {
-    const data = await fn()
-    _cache.set(key, { data, exp: Date.now() + TTL_L1, deps })
-    try {
-      await supabaseAdmin
-        .from("analytics_query_cache")
-        .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString(), deps })
-    } catch { /* Supabase lỗi → vẫn trả data */ }
-    return data
+  const freshMs = ttlMinutes * 60_000
+
+  const compute = (): Promise<T> => {
+    const running = _inflight.get(key) as Promise<T> | undefined
+    if (running) return running
+    const p = (async () => {
+      const data = await fn()
+      // Ghi cache KHÔNG chặn response (waitUntil giữ function sống tới khi ghi xong).
+      waitUntil(persistCacheEntry(key, data, deps))
+      return data
+    })().finally(() => { _inflight.delete(key) })
+    _inflight.set(key, p)
+    return p
   }
 
-  // L1 hit
-  const hit = _cache.get(key)
-  if (hit && Date.now() < hit.exp) return hit.data as T
+  if (bypass) return compute()
 
-  // L2 hit (Supabase shared cache)
-  try {
-    const { data: row } = await supabaseAdmin
-      .from("analytics_query_cache")
-      .select("data, cached_at")
-      .eq("cache_key", key)
-      .maybeSingle()
-    if (row?.cached_at) {
-      const ageMs = Date.now() - new Date(row.cached_at).getTime()
-      if (ageMs < ttlMinutes * 60_000) {
-        const result = row.data as T
-        _cache.set(key, { data: result, exp: Date.now() + TTL_L1, deps })
-        return result
-      }
-    }
-  } catch { /* Supabase unavailable → fall through to gohub_dw */ }
+  const epoch = await getEpoch()
+  const now   = Date.now()
+  const usable = (e: CacheEntry | undefined | null): e is CacheEntry =>
+    !!e && typeof e.cachedAt === "number" && e.cachedAt >= epoch.hard && now - e.cachedAt < MAX_STALE_MS
+  const isFresh = (e: CacheEntry) => now - e.cachedAt < freshMs && e.cachedAt >= epoch.soft
 
-  // Cache miss: query gohub_dw
-  const data = await fn()
+  // L1 chỉ dùng khi còn tươi và chưa quá L1_TTL_MS (tránh giữ bản cũ ở instance này khi flush đã xảy ra ở instance khác).
+  const l1 = _cache.get(key) as CacheEntry<T> | undefined
+  if (usable(l1) && isFresh(l1) && now - l1.cachedAt < L1_TTL_MS) return l1.data
 
-  // Warm L1
-  _cache.set(key, { data, exp: Date.now() + TTL_L1, deps })
-  if (_cache.size > 200) {
-    const now = Date.now()
-    for (const [k, v] of _cache) { if (v.exp < now) _cache.delete(k) }
+  let entry: CacheEntry<T> | undefined
+  try { entry = (await runtimeCache().get(key)) as CacheEntry<T> | undefined } catch { entry = undefined }
+
+  if (usable(entry)) {
+    if (isFresh(entry)) { l1Set(key, entry, deps); return entry.data }
+    // Hết TTL (hoặc ETL vừa nạp data mới): trả bản cũ ngay, làm mới ở nền.
+    waitUntil(compute().then(() => {}, () => {}))
+    return entry.data
   }
 
-  // Warm L2 — PHẢI await: supabase-js builder lazy, `void ...upsert()` KHÔNG gửi request (chỉ chạy khi
-  // .then()/await) → trước đây L2 chưa từng persist, chỉ có L1 in-memory (mất khi cold start). Await ~100ms
-  // trên nhánh cache-MISS (vốn đã chậm vì query) → đổi lại L2 dùng chung mọi instance + sống qua cold start.
-  try {
-    await supabaseAdmin
-      .from("analytics_query_cache")
-      .upsert({ cache_key: key, data: data as object, cached_at: new Date().toISOString(), deps })
-  } catch { /* Supabase lỗi → vẫn trả data, chỉ mất L2 */ }
-
-  return data
+  return compute()
 }
 
-// Xoá toàn bộ L2 cache (admin — gọi từ Settings, nút "Tải lại mới" toàn hệ thống)
+// Xoá toàn bộ cache (admin — gọi từ Settings, nút "Tải lại mới" toàn hệ thống). Bản cũ KHÔNG còn được phục vụ.
 export async function flushAnalyticsCache(): Promise<{ deleted: number }> {
+  const n = _cache.size
   _cache.clear()
-  const { count } = await supabaseAdmin
-    .from("analytics_query_cache")
-    .delete({ count: "exact" })
-    .lt("cached_at", new Date(Date.now() + 1000).toISOString()) // xoá hết
-  return { deleted: count ?? 0 }
+  await setEpoch({ hard: Date.now() })
+  return { deleted: n }
 }
 
 /**
@@ -109,41 +161,26 @@ export async function flushAnalyticsCache(): Promise<{ deleted: number }> {
 export async function flushByDeps(deps: string[]): Promise<{ deleted: number }> {
   const clean = deps.filter(Boolean)
   if (clean.length === 0) return { deleted: 0 }
-
+  let n = 0
   for (const [k, v] of _cache) {
-    if (v.deps?.some(d => clean.includes(d))) _cache.delete(k)
+    if (v.deps?.some(d => clean.includes(d))) { _cache.delete(k); n++ }
   }
-
-  const { count } = await supabaseAdmin
-    .from("analytics_query_cache")
-    .delete({ count: "exact" })
-    .overlaps("deps", clean)
-  return { deleted: count ?? 0 }
+  try { await runtimeCache().expireTag(clean.map(depTag)) } catch (e: any) { console.warn("[analytics-cache] expireTag lỗi:", e?.message) }
+  return { deleted: n }
 }
 
-// Xoá cache theo prefix cache-key literal — vẫn hợp lệ cho các route CHƯA khai `deps` (vd b2c-monthly/
-// b2c-leads, quarterly-report/quarterly-b2b-customers) hoặc khi cần gộp nhiều prefix biết chắc còn đúng
-// version tại chỗ gọi (import prefix TRỰC TIẾP từ module sinh ra key, không hardcode chuỗi rời rạc — xem
-// `quarterly-cache-flush/route.ts`). Cache B2B cost (trước là `B2B_COST_CACHE_PREFIXES`) đã chuyển hẳn
-// sang `flushByDeps(["b2b-cost"])` ở trên — không dùng prefix cứng cho nhóm đó nữa.
+// Xoá cache theo prefix cache-key literal (phần trước dấu ':' đầu tiên) — vẫn hợp lệ cho các route CHƯA
+// khai `deps` (vd b2c-monthly/b2c-leads, quarterly-report/quarterly-b2b-customers). Import prefix TRỰC TIẾP từ
+// module sinh ra key, không hardcode chuỗi rời rạc — xem `quarterly-cache-flush/route.ts`.
 export async function flushAnalyticsCacheByPrefixes(prefixes: string[]): Promise<{ deleted: number }> {
   const clean = prefixes.filter(Boolean)
   if (clean.length === 0) return { deleted: 0 }
+  let n = 0
   for (const key of Array.from(_cache.keys())) {
-    if (clean.some(prefix => key.startsWith(prefix))) _cache.delete(key)
+    if (clean.some(prefix => key.startsWith(prefix))) { _cache.delete(key); n++ }
   }
-
-  const all = await supabaseAdmin.from("analytics_query_cache").select("cache_key").limit(5000)
-  const keys = (all.data ?? [])
-    .map(r => r.cache_key as string)
-    .filter(key => clean.some(prefix => key.startsWith(prefix)))
-  if (keys.length === 0) return { deleted: 0 }
-
-  const { count } = await supabaseAdmin
-    .from("analytics_query_cache")
-    .delete({ count: "exact" })
-    .in("cache_key", keys)
-  return { deleted: count ?? keys.length }
+  try { await runtimeCache().expireTag(clean.map(p => prefixTag(p))) } catch (e: any) { console.warn("[analytics-cache] expireTag lỗi:", e?.message) }
+  return { deleted: n }
 }
 
 // ── Query-route cache + prewarm registry ───────────────────────────────────────
@@ -205,11 +242,7 @@ export async function prewarmAnalyticsCache(limit = 40): Promise<{ prewarmed: nu
   for (const r of rows) {
     try {
       const data = await queryAnalytics(r.sql)
-      const dataKey = r.key.replace("sqlreg:", "q:")
-      _cache.set(dataKey, { data, exp: Date.now() + TTL_L1, deps: [] })
-      await supabaseAdmin
-        .from("analytics_query_cache")
-        .upsert({ cache_key: dataKey, data: data as object, cached_at: new Date().toISOString() })
+      await persistCacheEntry(r.key.replace("sqlreg:", "q:"), data)
       prewarmed++
     } catch { failed++ }
   }
@@ -255,7 +288,7 @@ export function analyticsGuard(req: NextRequest, session: unknown): NextResponse
 }
 
 // Cron prewarm cho endpoint chuyên dụng: xoá key dedicated (force tươi) rồi re-fetch URL đã đăng ký.
-export async function prewarmAnalyticsUrls(baseUrl: string, limit = 50): Promise<{ prewarmed: number; failed: number }> {
+export async function prewarmAnalyticsUrls(baseUrl: string, limit = 50, concurrency = 3): Promise<{ prewarmed: number; failed: number }> {
   const regs = await readCacheByPrefix("urlreg:")
   const urls = regs
     .map(r => ({ url: r.data?.url as string, ts: r.data?.ts ?? 0 }))
@@ -263,22 +296,23 @@ export async function prewarmAnalyticsUrls(baseUrl: string, limit = 50): Promise
     .sort((a, b) => b.ts - a.ts)
     .slice(0, limit)
 
-  // Xoá key dedicated (bod-/b2b-/b2c-/ch-) ở L2+L1 → lần fetch sau = cache-miss → data mới.
-  const all = await supabaseAdmin.from("analytics_query_cache").select("cache_key").limit(5000)
-  const delKeys = (all.data ?? []).map(r => r.cache_key as string).filter(k => /^(bod-|b2b-|b2c-|ch-)/.test(k))
-  if (delKeys.length > 0) {
-    await supabaseAdmin.from("analytics_query_cache").delete().in("cache_key", delKeys)
-    for (const k of delKeys) _cache.delete(k)
-  }
-
+  // Gọi lại URL kèm nocache=1 → route bỏ qua đọc cache, tính lại tươi và GHI cache mới (không cần xoá key trước,
+  // nên người dùng vào giữa lúc prewarm vẫn có bản cũ để xem). Chạy `concurrency` URL song song (pool DB max=3/instance).
   const auth = `Bearer ${process.env.CRON_SECRET ?? ""}`
   let prewarmed = 0, failed = 0
-  for (const u of urls) {
-    try {
-      const res = await fetch(`${baseUrl}${u.url}`, { headers: { authorization: auth }, cache: "no-store" })
-      res.ok ? prewarmed++ : failed++
-    } catch { failed++ }
+  let next = 0
+  const worker = async () => {
+    while (next < urls.length) {
+      const u = urls[next++]
+      try {
+        const sep = u.url.includes("?") ? "&" : "?"
+        const target = u.url.includes("nocache=") ? u.url : `${u.url}${sep}nocache=1`
+        const res = await fetch(`${baseUrl}${target}`, { headers: { authorization: auth }, cache: "no-store" })
+        res.ok ? prewarmed++ : failed++
+      } catch { failed++ }
+    }
   }
+  await Promise.all(Array.from({ length: Math.min(concurrency, urls.length) }, worker))
   return { prewarmed, failed }
 }
 
@@ -368,12 +402,15 @@ export function getAnalyticsSource(dateColumn: string) {
 
 export async function getPartnerTiers(): Promise<Record<string, string[]>> {
   try {
-    const { data } = await supabaseAdmin
-      .from("app_settings")
-      .select("value")
-      .eq("key", "partner_tiers")
-      .single()
-    if (data?.value) return JSON.parse(data.value)
+    return await memo("partner_tiers", 15_000, async () => {
+      const { data, error } = await supabaseAdmin
+        .from("app_settings")
+        .select("value")
+        .eq("key", "partner_tiers")
+        .maybeSingle()
+      if (error) throw new Error(error.message)
+      return data?.value ? JSON.parse(data.value) as Record<string, string[]> : { Strategic: [] }
+    })
   } catch {}
   return { Strategic: [] }
 }

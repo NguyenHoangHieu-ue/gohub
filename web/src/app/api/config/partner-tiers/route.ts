@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getPartnerTiers, cachedQuery, flushAnalyticsCache } from "@/lib/analytics-helpers"
 import { canWrite } from "@/lib/writable-tabs"
+import { memoInvalidate } from "@/lib/memo"
 
 const WRITE_ROLES = ["admin", "creator"]
 
@@ -27,6 +28,7 @@ export async function POST(req: Request) {
   }, { onConflict: "key" })
   // Strategic partners ảnh hưởng nhiều report (B2B strategic/performance/other, all-time, bod, channels...) — chúng
   // cache theo ngày và đọc getPartnerTiers() bên trong. Xóa cache để report tính lại theo danh sách strategic mới.
+  memoInvalidate("partner_tiers")
   await flushAnalyticsCache().catch(() => {})
   return NextResponse.json({ ok: true })
 }
