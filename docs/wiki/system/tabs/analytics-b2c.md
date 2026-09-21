@@ -184,6 +184,14 @@ $$\text{Spend Pace} = \frac{\text{Chi phí thực tế}}{\text{Ngân sách Marke
 - **Budget**: lấy từ Manage Costs → B2C Channels (`analytics_channel_costs`), nhưng card Budget đã bỏ khỏi snapshot KPI strip.
 
 ## 6. Vấn đề đã gặp & cách khắc phục
+- **🔴 s203+3 (2026-09-21) — B2C Performance (KPI/breakdown/trend) chỉ hiện ~10% doanh thu: danh sách "KH loại trừ" chứa
+  mã khách B2C dùng chung.** Hiếu thấy số T9 thấp. Đối chiếu DB (1-20/09): B2C = 979,2tr nhưng `b2c/kpis` mặc định
+  trả 92,0tr. Nguyên nhân: `excludedCustomers` (cài đặt Quarter Report) gồm "B2C Customer US/VN", "VN B2C Website",
+  "VN B2C Customer" — gần như MỌI đơn B2C nằm dưới các mã này (fact chỉ có ~3 mã KH B2C) — nên `excludeOpsByCode()`
+  ở `b2c/kpis`/`performance`/`trend` (mặc định bật từ s197 khi đổi 3 toggle về false) loại gần hết doanh thu. Fix:
+  `excludedForB2C()` (`lib/quarterly-settings.ts`) bỏ các mục chứa "b2c" khỏi danh sách trước khi áp cho 3 route B2C;
+  toggle "KH Ops" vẫn còn tác dụng với các mục ops thật. Cache key đã chứa `exclHash` nên tự đổi. B2B/BOD không đổi
+  (đã khớp DB). B2C Advanced (route `monthly`) không dùng danh sách này nên không bị. Test `excluded-for-b2c.test.ts`.
 - **🔴 s203+2 (2026-09-21) — Khách theo kênh lấy theo kênh GHI TRÊN ĐƠN (`summary.byTenant`) + hết vượt trần Admin API.**
   Triệu chứng: mục "Doanh thu theo Customers" hiện 2-3 khách/tháng (số của mã kênh trong fact, không phải khách
   thật) kèm cảnh báo "Admin GoHub API không khả dụng". Log Vercel: `Rate limit exceeded. Maximum 30 requests per

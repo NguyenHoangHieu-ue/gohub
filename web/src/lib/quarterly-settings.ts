@@ -74,6 +74,13 @@ export function makeExcludeSql(excludedCustomers: string[]): string {
   return `AND NOT (UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2B' AND (${parts.join(" OR ")}))`
 }
 
+/** Danh sách loại trừ cho các route B2C. Danh sách gốc (Quarter Report) chứa CẢ các mã khách B2C dùng chung
+ *  ("B2C Customer VN/US", "VN B2C Website"...) — gần như MỌI đơn B2C đều nằm dưới các mã này, nên loại chúng khỏi
+ *  route B2C làm doanh thu tụt ~10× (T9/2026: 92tr thay vì 979tr). Chỉ giữ lại các mục KHÔNG phải KH B2C. */
+export function excludedForB2C(excludedCustomers: string[]): string[] {
+  return excludedCustomers.filter(e => !/b2c/i.test(e))
+}
+
 /** Hash ngắn của exclusion list để đưa vào cache key (auto-invalidate khi list thay đổi). */
 export function exclHash(excludedCustomers: string[]): string {
   return [...excludedCustomers].sort().join("|").slice(0, 24)

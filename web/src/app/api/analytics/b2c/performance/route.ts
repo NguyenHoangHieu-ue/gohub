@@ -8,7 +8,7 @@ import {
   getDaysInMonth, getDaysInRange,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
-import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings, exclHash, excludedForB2C } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { fetchCosts, matchChannelCost } from "@/lib/bod-data"
 
@@ -191,7 +191,7 @@ export async function GET(req: NextRequest) {
   const advancedFilter = getBODFilters(searchParams)
 
   try {
-    const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
+    const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : { excludedCustomers: excludedForB2C((await fetchQuarterlySettings()).excludedCustomers) }
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
     // v4 (s195+19): đổi shape response array→{rows,total,totalGroups} (fix Tổng cộng thiếu doanh thu
     // khi groupBy=sku/destination có >50 nhóm) — bump key để cache 12h cũ (shape cũ) không phục vụ nhầm.

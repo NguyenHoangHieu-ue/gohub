@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode, getMonthsInRange, getDaysInRange, getDaysInMonth, getChannelCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
-import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings, exclHash, excludedForB2C } from "@/lib/quarterly-settings"
 import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
 import { matchChannelCost } from "@/lib/bod-data"
 
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   const advancedFilter = getBODFilters(searchParams)
 
   try {
-    const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
+    const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : { excludedCustomers: excludedForB2C((await fetchQuarterlySettings()).excludedCustomers) }
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
     const key = `b2c-kpis:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
