@@ -43,7 +43,7 @@ Hôm nay: ${today} (giờ VN). Loại báo cáo: ${period.toUpperCase()}. "Thán
 ${dataBlock}`
 
   const systemInstruction = AGENTS["bi-analyst"].systemPrompt + directive
-  const report = await runBIAnalyst(systemInstruction, [], msg.prompt, "admin")
+  const report = await runBIAnalyst(systemInstruction, [], msg.prompt, "admin", { thinkingLevel: "minimal" })
 
   // Render card đẹp (header + bảng). Nếu có lark_keyword (bảo mật custom bot) → chèn vào đầu card.
   const title = msg.title || msg.name || "Báo cáo tự động"

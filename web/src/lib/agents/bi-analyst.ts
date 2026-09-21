@@ -88,7 +88,10 @@ export async function runBIAnalyst(
   systemInstruction: string,
   geminiHistory: any[],
   lastMsg: string,
-  role?: string
+  role?: string,
+  // s203: gemini-3.8-flash MẶC ĐỊNH thinking=medium → báo cáo tự động (chỉ FORMAT số đã tính sẵn) mất ~30s thay vì ~10s, vượt
+  // timeout 30s của cron-job.org từ 2026-09-10 (đổi model). Báo cáo tự động truyền "minimal"; còn lại "low" như Bé Gấu.
+  opts?: { thinkingLevel?: "minimal" | "low" }
 ): Promise<string> {
   // Role data filter + custom admin rules
   const [dataFilter, customRules] = await Promise.all([getRoleDataFilter(role), getCustomRules()])
@@ -123,7 +126,7 @@ export async function runBIAnalyst(
     model: "gemini-3.8-flash",
     systemInstruction: finalInstruction + ga4SiteList + partnerTierInfo,
     tools: [{ functionDeclarations: [executeSQLDecl, queryGA4Decl, queryGSCDecl, queryProductDecl] }],
-    generationConfig: { temperature: 0 },
+    generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: opts?.thinkingLevel ?? "low" } } as any,
   })
 
   // Build conversation contents manually — bypass SDK chat API which sends role "function"
