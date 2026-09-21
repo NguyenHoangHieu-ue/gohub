@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/utils"
 import { formatNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
-import { exportRawRows, exportAOA } from "@/lib/export-excel"
+import { exportRawRows, exportAOA, exportSheets } from "@/lib/export-excel"
 
 // Port "y hệt" gohub-intel ThreeHKDataUsage. Data qua /api/analytics/query (SELECT-only).
 // Bỏ motion/react (không dùng), inline getDefaultDateRange/formatDate.
@@ -745,14 +745,24 @@ export default function ThreeHKDataUsagePage() {
   }
 
   const [exportingMonthly, setExportingMonthly] = useState(false)
-  // Xuất theo THÁNG × loại gói × SKU cho cả kỳ đang lọc (Hiếu cần phân biệt tháng khi xuất nhiều tháng để
-  // thống kê). Mỗi (iccid, order_code) được tính riêng trong từng tháng nó có usage — tổng các tháng của
-  // 1 SKU có thể lớn hơn "Active SIMs" của bảng SKU (bảng đó gom 1 SIM = 1 lần cho cả kỳ).
+  // Export TỔNG HỢP nhiều sheet — đủ thông tin các bảng UI đang hiển thị, kèm cả "Cả kỳ" lẫn từng THÁNG
+  // (Hiếu: export nhiều tháng cần phân biệt tháng để thống kê). Chỉ 2 query: (1) cả kỳ theo SKU, (2) từng
+  // tháng theo SKU; mọi bảng còn lại (tổng quan, theo SKU Type, theo mã Unlimited) cộng dồn từ đó — chính xác
+  // vì mỗi bundle thuộc đúng 1 (sku_type, sku). Tôn trọng tab Daily/Fixed/Unlimited + ô Search.
+  // ⚠️ Số tháng: (iccid, order_code) tính riêng TỪNG tháng có usage → tổng Active SIMs các tháng của 1 SKU
+  // có thể lớn hơn dòng "Cả kỳ" (1 SIM = 1 lần cho cả kỳ) — đúng thiết kế.
   const exportMonthly = async () => {
     if (exportingMonthly) return
     setExportingMonthly(true)
     try {
-      const sql = `
+      const periodSql = `
+        ${bundlesCTE()}
+        SELECT COALESCE(sku_type, 'Unknown') AS sku_type, sku, COUNT(*) AS active_sims,
+          SUM(data_amount_gb) AS total_plan_gb, SUM(total_data_gb) AS total_usage_gb
+        FROM bundles WHERE 1=1 ${tabClause()} ${searchClause()}
+        GROUP BY 1, 2
+      `
+      const monthSql = `
         WITH period_records AS (
           SELECT iccid, order_code, sku, sku_type, total_data_gb, data_amount_gb,
                  to_char(first_report_date::date, 'YYYY-MM') AS ym
@@ -767,27 +777,111 @@ export default function ThreeHKDataUsagePage() {
                  SUM(total_data_gb) AS total_data_gb, MAX(data_amount_gb) AS data_amount_gb
           FROM period_records GROUP BY ym, iccid, order_code
         )
-        SELECT ym, COALESCE(sku_type, 'Unknown') AS sku_type, sku,
-          COUNT(*) AS active_sims,
-          SUM(data_amount_gb) AS total_plan_gb, SUM(total_data_gb) AS total_usage_gb,
-          CASE WHEN SUM(data_amount_gb) > 0 THEN (SUM(total_data_gb) / SUM(data_amount_gb)) * 100 ELSE 0 END AS avg_usage_pct
+        SELECT ym, COALESCE(sku_type, 'Unknown') AS sku_type, sku, COUNT(*) AS active_sims,
+          SUM(data_amount_gb) AS total_plan_gb, SUM(total_data_gb) AS total_usage_gb
         FROM bundles WHERE 1=1 ${tabClause()} ${searchClause()}
         GROUP BY ym, 2, sku
         ORDER BY ym, 2, total_usage_gb DESC
       `
-      const result = await runQuery(sql)
-      const rows = (Array.isArray(result) ? result : []).map((r: any) => ({
-        "Tháng": r.ym || "",
-        "SKU Type": r.sku_type || "",
-        "SKU": r.sku || "",
-        "Active SIMs": parseInt(r.active_sims || 0),
-        "Plan (GB)": Number(parseFloat(r.total_plan_gb || 0).toFixed(2)),
-        "Actual (GB)": Number(parseFloat(r.total_usage_gb || 0).toFixed(2)),
-        "Usage %": Number(parseFloat(r.avg_usage_pct || 0).toFixed(2)),
-        "Kỳ từ": startDate,
-        "Kỳ đến": endDate,
+      const [periodRaw, monthRaw] = await Promise.all([runQuery(periodSql), runQuery(monthSql)])
+      type Row = { ym: string; type: string; sku: string; sims: number; plan: number; usage: number }
+      const toRows = (raw: any, defaultYm: string): Row[] => (Array.isArray(raw) ? raw : []).map((r: any) => ({
+        ym: r.ym || defaultYm, type: r.sku_type || "Unknown", sku: r.sku || "",
+        sims: parseInt(r.active_sims || 0), plan: parseFloat(r.total_plan_gb || 0), usage: parseFloat(r.total_usage_gb || 0),
       }))
-      exportRawRows(rows, `3hk-usage-by-month-${activeTab}-${startDate}_to_${endDate}`, "By Month")
+      const ALL = "Cả kỳ"
+      const rows = [...toRows(periodRaw, ALL), ...toRows(monthRaw, "")]
+      const months = Array.from(new Set(rows.filter(r => r.ym !== ALL).map(r => r.ym))).sort()
+      const periods = [ALL, ...months]
+      const isUnl = activeTab === "Unlimited"
+
+      const r2 = (n: number) => Number((n || 0).toFixed(2))
+      const pct = (u: number, p: number) => (p > 0 ? r2((u / p) * 100) : 0)
+      const eff = (u: number, p: number) => (p > 0 ? r2(Math.min(100, (u / p) * 100)) : 0)
+      // sim-days = Σ(active_sims × số ngày gói) — mẫu số GB/ngày/SIM (chỉ tính SKU xác định được số ngày).
+      const simDays = (list: Row[]) => list.reduce((s, r) => { const d = daysOfSku(r.sku); return d && d > 0 ? s + r.sims * d : s }, 0)
+      const usageOfDays = (list: Row[]) => list.reduce((s, r) => { const d = daysOfSku(r.sku); return d && d > 0 ? s + r.usage : s }, 0)
+      const planOfDays = (list: Row[]) => list.reduce((s, r) => { const d = daysOfSku(r.sku); return d && d > 0 ? s + r.plan : s }, 0)
+      const perDay = (num: number, den: number): number | string => (den > 0 ? Number((num / den).toFixed(3)) : "")
+      const sum = (list: Row[]) => list.reduce((a, r) => ({ sims: a.sims + r.sims, plan: a.plan + r.plan, usage: a.usage + r.usage }), { sims: 0, plan: 0, usage: 0 })
+      const byPeriod = (ym: string) => rows.filter(r => r.ym === ym)
+
+      const filterLabel = activeTab === "all" ? "Tất cả" : activeTab
+      // 1) Tổng quan — 4 card đầu trang (+ GB/ngày/SIM khi tab Unlimited).
+      const ovHeaders = ["Tháng", "Total Usage (GB)", "Total Capacity (GB)", "Avg. Usage %", "Active SIMs",
+        ...(isUnl ? ["Avg. GB/ngày/SIM"] : []), "Kỳ từ", "Kỳ đến", "Tab lọc", "Từ khoá search"]
+      const overview = periods.map(ym => {
+        const l = byPeriod(ym), t = sum(l)
+        return [ym, r2(t.usage), r2(t.plan), pct(t.usage, t.plan), t.sims,
+          ...(isUnl ? [perDay(usageOfDays(l), simDays(l))] : []), startDate, endDate, filterLabel, debouncedSearch]
+      })
+
+      // 2) Theo SKU Type — bảng "Average Usage by SKU Type".
+      const typeRows: (string | number)[][] = []
+      for (const ym of periods) {
+        const l = byPeriod(ym)
+        const types = Array.from(new Set(l.map(r => r.type)))
+          .map(ty => ({ ty, t: sum(l.filter(r => r.type === ty)) }))
+          .sort((a, b) => b.t.usage - a.t.usage)
+        for (const { ty, t } of types) typeRows.push([ym, ty, t.sims, r2(t.plan), r2(t.usage), pct(t.usage, t.plan), eff(t.usage, t.plan)])
+      }
+
+      // 3) Theo SKU — bảng "Average Usage by SKU" + cột kế hoạch/thực tế theo ngày + mã loại gói.
+      const skuRows: (string | number)[][] = []
+      for (const ym of periods) {
+        for (const r of byPeriod(ym).sort((a, b) => b.usage - a.usage)) {
+          const letter = typeLetterOfSku(r.sku), vint = skuVintage(r.sku), d = daysOfSku(r.sku)
+          const okDay = d != null && d > 0 && r.sims > 0
+          skuRows.push([
+            ym, r.type, r.sku, letter ?? "", vint ? vintageLabel(vint) : "",
+            vint === "13" && letter ? (CODE_LABELS[letter] ?? "") : "", d ?? "",
+            r.sims, r2(r.plan), okDay ? Number((r.plan / r.sims / d!).toFixed(3)) : "",
+            r2(r.usage), pct(r.usage, r.plan), okDay ? Number((r.usage / r.sims / d!).toFixed(3)) : "", eff(r.usage, r.plan),
+          ])
+        }
+      }
+
+      const sheets: { name: string; headers: string[]; rows: (string | number)[][] }[] = [
+        { name: "Tổng quan", headers: ovHeaders, rows: overview },
+        { name: "Theo SKU Type", headers: ["Tháng", "SKU Type", "Active SIMs", "Total Plan (GB)", "Total Actual (GB)", "Avg. Usage %", "Efficiency % (cap 100)"], rows: typeRows },
+        { name: "Theo SKU", headers: ["Tháng", "SKU Type", "SKU", "Mã loại gói", "Phiên bản mã", "Mô tả mã", "Số ngày gói", "Active SIMs",
+          "Total Plan (GB)", "Kế hoạch (GB/ngày/SIM)", "Total Actual (GB)", "Avg. Usage %", "GB/ngày/SIM", "Efficiency % (cap 100)"], rows: skuRows },
+      ]
+
+      // 4) Unlimited — Breakdown theo mã (chỉ khi tab Unlimited, đúng như UI).
+      if (isUnl) {
+        const codeRows: (string | number)[][] = []
+        for (const ym of periods) {
+          const groups: Record<string, Row[]> = {}
+          for (const r of byPeriod(ym)) {
+            const l = typeLetterOfSku(r.sku), v = skuVintage(r.sku)
+            if (!l || !v) continue
+            ;(groups[`${l}_${v}`] ??= []).push(r)
+          }
+          for (const key of Object.keys(groups).sort()) {
+            const [l, v] = key.split("_") as [string, "13" | "14"]
+            const list = groups[key], t = sum(list), sd = simDays(list)
+            codeRows.push([ym, l, vintageLabel(v), v === "13" ? (CODE_LABELS[l] ?? "") : "", t.sims, r2(t.plan), r2(t.usage),
+              perDay(usageOfDays(list), sd), perDay(planOfDays(list), sd), pct(t.usage, t.plan)])
+          }
+        }
+        sheets.push({ name: "Unlimited theo mã", headers: ["Tháng", "Mã", "Phiên bản mã", "Mô tả mã", "Active SIMs", "Total Plan (GB)",
+          "Total Actual (GB)", "GB/ngày/SIM", "Kế hoạch (GB/ngày/SIM)", "Thực tế / Kế hoạch %"], rows: codeRows })
+      }
+
+      // 5) Zone × Tháng (TB) — bảng độc lập kỳ lọc, giống hệt nút Export của bảng Zone.
+      if (zoneRows.length > 0) {
+        const num = (n: number) => Number((n || 0).toFixed(2))
+        const zr: (string | number)[][] = []
+        for (const z of zoneRows) {
+          zr.push([zoneLabel(z.country), "", ...countryMonths.map(m => num(z.monthly[m] ?? 0)), num(z.total), num(z.runRate)])
+          for (const c of zoneMembers[z.country] ?? []) zr.push([zoneLabel(z.country), c.country, ...countryMonths.map(m => num(c.monthly[m] ?? 0)), num(c.total), num(c.runRate)])
+        }
+        zr.push(["TỔNG 4 ZONE", "", ...countryMonths.map(m => num(zoneGrand.monthly[m] ?? 0)), num(zoneGrand.total), num(zoneGrand.runRate)])
+        sheets.push({ name: "Zone x Tháng (TB)", headers: ["Zone", "Quốc gia", ...countryMonths.map(m => monthLabel(m, countryMultiYear)), "Total", "Run-rate 12M"], rows: zr })
+      }
+
+      exportSheets(sheets, `3hk-usage-${activeTab}-${startDate}_to_${endDate}`)
     } catch (err) {
       console.error("Error exporting 3HK monthly:", err)
     } finally {
@@ -1347,9 +1441,9 @@ export default function ThreeHKDataUsagePage() {
             Average Usage by SKU
           </h2>
           <button onClick={exportMonthly} disabled={exportingMonthly || !startDate || !endDate}
-            title="Xuất từng tháng trong kỳ đang lọc: Tháng × Loại gói × SKU"
+            title="Xuất Excel nhiều sheet: Tổng quan, theo SKU Type, theo SKU, Unlimited theo mã, Zone — Cả kỳ + từng tháng"
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-all">
-            <Download className="w-3.5 h-3.5" /> {exportingMonthly ? "Exporting..." : "Export theo tháng"}
+            <Download className="w-3.5 h-3.5" /> {exportingMonthly ? "Exporting..." : "Export đầy đủ (theo tháng)"}
           </button>
         </div>
         <div className="overflow-x-auto">

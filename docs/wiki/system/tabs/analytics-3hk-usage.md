@@ -316,13 +316,18 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 
 ## 9. Gotchas & Lịch sử thay đổi
 
-- **s203+ (2026-09-21) — Export theo tháng + cột kỳ/tháng.** Hiếu: export nhiều tháng cần ngày/tháng để
-  phân biệt và thống kê. Trước: export Records gom 1 dòng/bundle cho CẢ kỳ (không biết thuộc tháng nào).
-  Thêm nút **"Export theo tháng"** ở header bảng "Average Usage by SKU" (`exportMonthly`, 1 query riêng,
-  tôn trọng tab Daily/Fixed/Unlimited + ô Search): mỗi dòng = Tháng (YYYY-MM) × SKU Type × SKU với Active
-  SIMs/Plan/Actual/Usage%/Kỳ từ/Kỳ đến. ⚠️ (iccid, order_code) tính riêng trong TỪNG tháng có usage → tổng
-  Active SIMs các tháng của 1 SKU có thể LỚN HƠN số ở bảng SKU (bảng đó 1 SIM = 1 lần cả kỳ) — đúng, không
-  phải bug. Export Records thêm cột `Tháng` (từ First Report) + `Kỳ từ`/`Kỳ đến`.
+- **s203+ (2026-09-21) — Export đầy đủ (theo tháng).** Hiếu: export nhiều tháng cần ngày/tháng để phân biệt +
+  thống kê, và file phải đủ thông tin UI hiển thị (bản đầu chỉ có Tháng×SKU, thiếu nhiều cột). Nút **"Export
+  đầy đủ (theo tháng)"** (header bảng "Average Usage by SKU", `exportMonthly`) xuất 1 file .xlsx nhiều sheet,
+  mỗi sheet có dòng `Cả kỳ` + từng tháng (YYYY-MM), tôn trọng tab Daily/Fixed/Unlimited + ô Search:
+  `Tổng quan` (4 card: Total Usage/Capacity/Avg %/Active SIMs, + Avg GB/ngày/SIM khi tab Unlimited, kèm Kỳ
+  từ/đến, tab, search) · `Theo SKU Type` (+Efficiency) · `Theo SKU` (+Mã loại gói, phiên bản mã, mô tả mã, số
+  ngày gói, Kế hoạch GB/ngày/SIM, GB/ngày/SIM, Efficiency) · `Unlimited theo mã` (chỉ tab Unlimited) ·
+  `Zone x Tháng (TB)` (Zone → nước, như nút Export của bảng Zone). Chỉ 2 query (cả kỳ theo SKU + từng tháng
+  theo SKU); các bảng khác cộng dồn client-side (đúng vì mỗi bundle thuộc đúng 1 sku_type/sku). Helper mới
+  `exportSheets` (`lib/export-excel.ts`). Nút Export của bảng Records vẫn riêng (thêm cột `Tháng`/`Kỳ từ`/
+  `Kỳ đến`). ⚠️ (iccid, order_code) tính riêng TỪNG tháng có usage → tổng Active SIMs các tháng của 1 SKU có
+  thể LỚN HƠN dòng `Cả kỳ` (1 SIM = 1 lần cả kỳ) — đúng thiết kế, không phải bug.
 
 - **s200+10 (2026-09-18) — Đổi bảng theo nước sang bảng Zone có drill-down, bỏ hẳn bảng theo nước.**
   Tiếp ngay s200+9 (lúc đó vẫn giữ song song 2 bảng theo nước + theo zone) — Hiếu yêu cầu: bảng Zone phải
