@@ -497,7 +497,7 @@ export async function GET(req: NextRequest) {
     // budget = ngân sách marketing B2C kế hoạch (app_settings key b2c_budget, nhập ở B2CMarketingBudgetSection).
     const loadTargetsBudget = async () => {
       let targets: Record<string, { vn: number; us: number; total: number }> = {}
-      let budget = Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>
+      const budget = Object.fromEntries(months.map(m => [m, 0])) as Record<string, number>
       const budgetByMarket = Object.fromEntries(months.map(m => [m, { vn: 0, us: 0, total: 0 }])) as Record<string, { vn: number; us: number; total: number }>
       try {
         const { data: rows } = await supabaseAdmin
