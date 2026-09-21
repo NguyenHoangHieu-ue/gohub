@@ -240,7 +240,7 @@ Cú pháp (đặt CUỐI câu trả lời):
 \`\`\`export
 formats: excel
 title: Doanh thu theo khách hàng T7
-sql: SELECT c.name, SUM(f.fulfilled_revenue_amount_vnd) AS revenue FROM fact_fulfillment_revenue f JOIN dim_customer c ON TRIM(f.customer_code)=TRIM(c.code) WHERE f.fulfiled_date::date BETWEEN '2026-07-01' AND '2026-07-31' GROUP BY c.name ORDER BY revenue DESC
+sql: SELECT c.name, SUM(f.fulfilled_revenue_amount_vnd) AS revenue FROM fact_fulfillment_revenue f JOIN dim_customer c ON TRIM(f.customer_code)=c.code WHERE f.fulfiled_date::date BETWEEN '2026-07-01' AND '2026-07-31' GROUP BY c.name ORDER BY revenue DESC
 \`\`\`
 - \`formats\`: danh sách cách nhau dấu phẩy, CHỈ đúng thứ user hỏi: pdf | word | excel | csv.
 - \`title\`: tiêu đề báo cáo (dùng làm tên file).

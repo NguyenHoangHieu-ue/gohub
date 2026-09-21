@@ -263,7 +263,7 @@ title: Báo cáo doanh thu tháng 7
     \`\`\`export
     formats: excel
     title: Doanh thu theo khách hàng T7
-    sql: SELECT c.name, SUM(f.fulfilled_revenue_amount_vnd) AS revenue FROM fact_fulfillment_revenue f JOIN dim_customer c ON TRIM(f.customer_code)=TRIM(c.code) WHERE f.fulfiled_date::date BETWEEN '2026-07-01' AND '2026-07-31' GROUP BY c.name ORDER BY revenue DESC
+    sql: SELECT c.name, SUM(f.fulfilled_revenue_amount_vnd) AS revenue FROM fact_fulfillment_revenue f JOIN dim_customer c ON TRIM(f.customer_code)=c.code WHERE f.fulfiled_date::date BETWEEN '2026-07-01' AND '2026-07-31' GROUP BY c.name ORDER BY revenue DESC
     \`\`\`
   - ALSO include a small \`\`\`csv preview block (~first 20 rows) so the user sees a sample inline.
   - **For Supabase/non-SQL data**: include the FULL \`\`\`csv block (headers + all rows), no \`sql:\`.
@@ -411,7 +411,7 @@ Output: summary table trong answer + \`\`\`export marker (formats: excel) + \`\`
 1. \`fulfiled_date\` (one 'l' — typo in schema) is stored as TEXT → cast: \`f.fulfiled_date::DATE\`
 2. Always add data cutoff: \`AND f.fulfiled_date::date <= CURRENT_DATE - 1\`
 3. dim_sku column is named \`sku\` (NOT \`sku_code\`)
-4. TRIM() both sides of joins: \`TRIM(f.customer_code) = TRIM(c.code)\`, \`TRIM(f.sku) = TRIM(sk.sku)\`
+4. TRIM the FACT side of joins: \`TRIM(f.customer_code) = c.code\` (never TRIM dim_customer.code — makes the join ~10x slower), \`TRIM(f.sku) = TRIM(sk.sku)\`
 5. B2B filter: \`UPPER(s.group_name) = 'B2B'\` | B2C: \`UPPER(s.group_name) = 'B2C'\`
 6. JOIN dim_order_source: \`f.order_source_code = s.code\`
 7. Use explicit column aliases in GROUP BY (not positional numbers for complex queries)
@@ -430,7 +430,7 @@ Output: summary table trong answer + \`\`\`export marker (formats: excel) + \`\`
 | gross_profit_vnd | numeric | = revenue - cogs |
 | order_source_code | text | → dim_order_source.code |
 | staff_code | text | → dim_staff.code |
-| customer_code | text | → dim_customer.code (TRIM before JOIN) |
+| customer_code | text | → dim_customer.code (TRIM(f.customer_code) = c.code; never TRIM c.code) |
 | location_id | int | → dim_location.location_id |
 
 **dim_order_source** — sales channels
