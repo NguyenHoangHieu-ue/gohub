@@ -215,7 +215,14 @@ export default function ThreeHKDataUsagePage() {
   // request CŨ hơn có thể trả lời VỀ SAU request MỚI (network timing, không đảm bảo thứ tự) — nếu chỉ
   // dựa "await xong thì set state" thì response cũ tới sau sẽ ĐÈ mất kết quả đúng của request mới. Mỗi
   // lần gọi tăng `skuMetricsReqIdRef`, chỉ áp dụng kết quả nếu vẫn là request MỚI NHẤT lúc trả lời về.
-  const skuMetricsReqIdRef = useRef(0)
+  // Cùng bug/cùng fix áp cho 3 fetch tab-phụ-thuộc còn lại (`skuTypeMetricsReqIdRef`/`totalsReqIdRef`/
+  // `recordsReqIdRef`) — verify sống trên staging thấy card "Average Usage by SKU Type" hiện SAI tab
+  // (VD "Fixed Data") trong khi bảng breakdown bên dưới đã đúng "Unlimited" cùng lúc, xác nhận đúng bug
+  // này xảy ra độc lập ở từng fetch, không chỉ riêng fetchSKUMetrics.
+  const skuMetricsReqIdRef     = useRef(0)
+  const skuTypeMetricsReqIdRef = useRef(0)
+  const totalsReqIdRef         = useRef(0)
+  const recordsReqIdRef        = useRef(0)
   const [skuTypeMetrics, setSkuTypeMetrics] = useState<SKUTypeMetrics[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingSKU, setLoadingSKU] = useState(false)
@@ -704,6 +711,7 @@ export default function ThreeHKDataUsagePage() {
 
   const fetchSKUTypeMetrics = async () => {
     setLoadingType(true)
+    const reqId = ++skuTypeMetricsReqIdRef.current
     try {
       const sql = `
         ${bundlesCTE()}
@@ -714,6 +722,7 @@ export default function ThreeHKDataUsagePage() {
         GROUP BY 1 ORDER BY total_usage_gb DESC
       `
       const result = await runQuery(sql)
+      if (reqId !== skuTypeMetricsReqIdRef.current) return
       setSkuTypeMetrics(result.map((r: any) => ({
         sku_type: r.sku_type,
         active_sims: parseInt(r.active_sims || 0),
@@ -722,9 +731,10 @@ export default function ThreeHKDataUsagePage() {
         avg_usage_pct: parseFloat(r.avg_usage_pct || 0),
       })))
     } catch (e) {
+      if (reqId !== skuTypeMetricsReqIdRef.current) return
       console.error("Error fetching SKU Type metrics:", e); throw e
     } finally {
-      setLoadingType(false)
+      if (reqId === skuTypeMetricsReqIdRef.current) setLoadingType(false)
     }
   }
 
@@ -759,6 +769,7 @@ export default function ThreeHKDataUsagePage() {
   }
 
   const fetchTotals = async () => {
+    const reqId = ++totalsReqIdRef.current
     try {
       const sql = `
         ${bundlesCTE()}
@@ -768,6 +779,7 @@ export default function ThreeHKDataUsagePage() {
         FROM bundles WHERE 1=1 ${tabClause()} ${searchClause()}
       `
       const result = await runQuery(sql)
+      if (reqId !== totalsReqIdRef.current) return
       if (result && result[0]) {
         setTotals({
           totalUsage: parseFloat(result[0].total_usage || 0),
@@ -777,6 +789,7 @@ export default function ThreeHKDataUsagePage() {
         })
       }
     } catch (e) {
+      if (reqId !== totalsReqIdRef.current) return
       console.error("Error fetching totals:", e); throw e
     }
   }
@@ -784,6 +797,7 @@ export default function ThreeHKDataUsagePage() {
   const fetchRecords = async (pageNum: number, isNewSearch: boolean = false) => {
     if (isNewSearch) setLoading(true)
     else setLoadingMore(true)
+    const reqId = ++recordsReqIdRef.current
 
     setError(null)
     try {
@@ -800,6 +814,7 @@ export default function ThreeHKDataUsagePage() {
         LIMIT ${pageSize} OFFSET ${offset}
       `
       const result = await runQuery(sql)
+      if (reqId !== recordsReqIdRef.current) return
       if (Array.isArray(result)) {
         const formatted = result.map((r: any) => ({
           ...r,
@@ -811,11 +826,11 @@ export default function ThreeHKDataUsagePage() {
         setHasMore(formatted.length === pageSize)
       }
     } catch (err) {
+      if (reqId !== recordsReqIdRef.current) return
       console.error("Error fetching 3HK data usage:", err)
       setError("Could not load data usage statistics.")
     } finally {
-      setLoading(false)
-      setLoadingMore(false)
+      if (reqId === recordsReqIdRef.current) { setLoading(false); setLoadingMore(false) }
     }
   }
 
