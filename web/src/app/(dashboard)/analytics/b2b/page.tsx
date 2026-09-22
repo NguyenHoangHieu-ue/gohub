@@ -8,7 +8,7 @@ import {
   TrendingUp, DollarSign, PieChart as PieChartIcon,
   AlertCircle, ArrowUpRight, ArrowDownRight, Filter,
   Calendar, Download, ChevronDown, Globe, Search, X,
-  ArrowUpDown, ShoppingBag, Check, Zap, Building2, Shield, FileText, RefreshCw,
+  ArrowUpDown, ShoppingBag, Check, Zap, Building2, Shield, FileText, RefreshCw, Smartphone,
 } from "lucide-react"
 import { domToCanvas } from "modern-screenshot"
 import { cn } from "@/lib/utils"
@@ -53,6 +53,10 @@ interface PerformanceData {
   cost_lines?: Array<{ label?: string; type: string; value: number }> // từ Turso, để hiển thị expand
   sub_channels?: PerformanceData[]; cost_breakdown?: Record<string, number>
 }
+// VN Ecom breakdown (Lazada/Shopee/Tiktokshop → shop SIM/eSIM → Shopee-SIM → Gohub/Nobrand).
+// Xem `api/analytics/b2b/ecom-breakdown/route.ts` — staff_code map Gohub/Nobrand chốt qua chat 2026-09-22.
+interface EcomShop { name: string; revenue: number; margin: number; units: number; orders: number; subshops?: EcomShop[] }
+interface EcomCustomer { name: string; revenue: number; margin: number; units: number; orders: number; shops: EcomShop[] }
 
 export default function B2BPerformance() {
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
@@ -74,6 +78,7 @@ export default function B2BPerformance() {
   const [strategicPerformance, setStrategicPerformance] = useState<(PerformanceData & { tier: string })[]>([])
   const [partnerTiers, setPartnerTiers] = useState<Record<string, string[]>>({ Strategic: [] })
   const [channelsWithPlatformFee, setChannelsWithPlatformFee] = useState<string[]>([])
+  const [ecomBreakdown, setEcomBreakdown] = useState<EcomCustomer[]>([])
 
   const [wholesaleSort, setWholesaleSort] = useState<{ key: keyof PerformanceData; direction: "asc" | "desc" }>({ key: "revenue", direction: "desc" })
   const [tierSearch, setTierSearch] = useState("")
@@ -134,7 +139,7 @@ export default function B2BPerformance() {
 
       // cost_lines hiển thị trong expand panel nay do backend b2b/performance trả trực tiếp.
       // Không cần fetch b2b-customer-costs riêng nữa.
-      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData, quarterlySettings] = await Promise.all([
+      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData, quarterlySettings, ecomData] = await Promise.all([
         fetch(`/api/analytics/b2b/kpis?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/performance?${queryParams.toString()}&groupBy=customer`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/strategic-performance?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
@@ -142,6 +147,7 @@ export default function B2BPerformance() {
         fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: ["Traveloka", "Momo"] }).catch(() => ({ Strategic: ["Traveloka", "Momo"] })),
         fetch(`/api/analytics/quarterly-settings`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`/api/analytics/b2b/ecom-breakdown?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
       ])
 
       const safeB2BKpis = Array.isArray(b2bKpis) ? b2bKpis : []
@@ -156,6 +162,7 @@ export default function B2BPerformance() {
       setStrategicPerformance(safeStrategicPerf)
       setTrendData(safeTrend)
       setChannelsWithPlatformFee(safeFeeChannels)
+      setEcomBreakdown(Array.isArray(ecomData) ? ecomData : [])
 
       const findKPI = (kpis: any[], label: string) => kpis.find(k => k.label === label)
       // Revenue + Orders: vẫn từ b2b/kpis (có kỳ trước để so sánh)
@@ -900,6 +907,91 @@ export default function B2BPerformance() {
                   </table>
                 </div>
               </div>
+
+              {/* VN Ecom Breakdown — Lazada/Shopee/Tiktokshop → shop SIM/eSIM → Shopee-SIM → Gohub/Nobrand */}
+              {ecomBreakdown.length > 0 && (
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-cyan-600 rounded-xl"><Smartphone className="w-5 h-5 text-white" /></div>
+                      <div>
+                        <h2 className="text-lg font-bold text-slate-900 font-sans tracking-tight">VN Ecom — Breakdown SIM / eSIM</h2>
+                        <p className="text-xs text-slate-500 font-medium">Lazada · Shopee · Tiktokshop — mỗi KH tách shop SIM/eSIM. Shopee-SIM tách thêm Gohub / Nobrand theo người tạo đơn.</p>
+                      </div>
+                    </div>
+                    <button onClick={() => {
+                      const columns = [
+                        { label: "Customer", key: "customer" }, { label: "Shop", key: "shop" }, { label: "Sub-shop", key: "subshop" },
+                        { label: "Revenue", key: "revenue" }, { label: "Orders", key: "orders" }, { label: "Units", key: "units" },
+                        { label: "GP", key: "margin" }, { label: "Margin %", key: "margin_percent" },
+                      ]
+                      const exportRows: Record<string, unknown>[] = []
+                      ecomBreakdown.forEach(c => {
+                        c.shops.forEach(s => {
+                          if (s.subshops && s.subshops.length > 0) {
+                            s.subshops.forEach(sub => exportRows.push({ customer: c.name, shop: s.name, subshop: sub.name, revenue: sub.revenue, orders: sub.orders, units: sub.units, margin: sub.margin, margin_percent: sub.revenue > 0 ? Math.round((sub.margin / sub.revenue) * 1000) / 10 : 0 }))
+                          } else {
+                            exportRows.push({ customer: c.name, shop: s.name, subshop: "", revenue: s.revenue, orders: s.orders, units: s.units, margin: s.margin, margin_percent: s.revenue > 0 ? Math.round((s.margin / s.revenue) * 1000) / 10 : 0 })
+                          }
+                        })
+                      })
+                      exportToCSV(exportRows as unknown as PerformanceData[], "VN_Ecom_Breakdown", columns)
+                    }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
+                      <Download className="w-3 h-3" />Export
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50/50">
+                          <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Shop</th>
+                          <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Revenue</th>
+                          <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Orders</th>
+                          <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Units</th>
+                          <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">GP</th>
+                          <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Margin %</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {ecomBreakdown.map(c => (
+                          <React.Fragment key={c.name}>
+                            <tr className="bg-cyan-50/40">
+                              <td className="px-8 py-3 text-sm font-black text-cyan-800">{c.name}</td>
+                              <td className="px-8 py-3 text-right text-sm font-black text-slate-900">{formatCurrency(c.revenue).replace("₫", "VND")}</td>
+                              <td className="px-8 py-3 text-right text-sm font-bold text-slate-600">{formatNumber(c.orders)}</td>
+                              <td className="px-8 py-3 text-right text-sm font-bold text-slate-600">{formatNumber(c.units)}</td>
+                              <td className="px-8 py-3 text-right text-sm font-bold text-emerald-700">{formatCurrency(c.margin).replace("₫", "VND")}</td>
+                              <td className="px-8 py-3 text-right text-sm font-bold text-slate-600">{(c.revenue > 0 ? (c.margin / c.revenue) * 100 : 0).toFixed(1)}%</td>
+                            </tr>
+                            {c.shops.map(s => (
+                              <React.Fragment key={s.name}>
+                                <tr className="hover:bg-slate-50/50">
+                                  <td className="px-8 py-2.5 pl-14 text-xs font-bold text-slate-700">{s.name}</td>
+                                  <td className="px-8 py-2.5 text-right text-xs font-bold text-slate-800">{formatCurrency(s.revenue).replace("₫", "VND")}</td>
+                                  <td className="px-8 py-2.5 text-right text-xs text-slate-500">{formatNumber(s.orders)}</td>
+                                  <td className="px-8 py-2.5 text-right text-xs text-slate-500">{formatNumber(s.units)}</td>
+                                  <td className="px-8 py-2.5 text-right text-xs font-bold text-emerald-600">{formatCurrency(s.margin).replace("₫", "VND")}</td>
+                                  <td className="px-8 py-2.5 text-right text-xs text-slate-500">{(s.revenue > 0 ? (s.margin / s.revenue) * 100 : 0).toFixed(1)}%</td>
+                                </tr>
+                                {s.subshops?.map(sub => (
+                                  <tr key={sub.name} className="hover:bg-slate-50/50">
+                                    <td className="px-8 py-2 pl-20 text-[11px] font-semibold text-slate-500">↳ {sub.name}</td>
+                                    <td className="px-8 py-2 text-right text-[11px] font-bold text-slate-600">{formatCurrency(sub.revenue).replace("₫", "VND")}</td>
+                                    <td className="px-8 py-2 text-right text-[11px] text-slate-400">{formatNumber(sub.orders)}</td>
+                                    <td className="px-8 py-2 text-right text-[11px] text-slate-400">{formatNumber(sub.units)}</td>
+                                    <td className="px-8 py-2 text-right text-[11px] font-bold text-emerald-600/80">{formatCurrency(sub.margin).replace("₫", "VND")}</td>
+                                    <td className="px-8 py-2 text-right text-[11px] text-slate-400">{(sub.revenue > 0 ? (sub.margin / sub.revenue) * 100 : 0).toFixed(1)}%</td>
+                                  </tr>
+                                ))}
+                              </React.Fragment>
+                            ))}
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

@@ -20,6 +20,7 @@ Hiệu suất kênh sỉ B2B: doanh thu/margin/units theo kênh & sub-channel, t
 |---|---|
 | Web | `/analytics/b2b` — `web/src/app/(dashboard)/analytics/b2b/page.tsx` |
 | API (KPI/trend) | `/api/analytics/b2b/{kpis, performance, strategic-performance, trend}` |
+| API (VN Ecom breakdown, s204+5) | `/api/analytics/b2b/ecom-breakdown` |
 | API (chi phí KH) | `/api/analytics/b2b-customer-costs?month=YYYY-MM` |
 | Nguồn doanh thu | fact (Fulfillment/Sales) + `dim_order_source` · `dim_customer` · `dim_sku` · `dim_staff` |
 | Nguồn chi phí KH | **Turso** `b2b_customer_cost_monthly` — chi phí per-customer nhập thủ công |
@@ -74,6 +75,24 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
 - Muốn quản lý channel costs → dùng tab khác có Manage Costs (nếu còn).
 
 ## 6. Gotchas
+- **s204+5 (2026-09-22) — VN Ecom Breakdown (SIM/eSIM + Shopee Gohub/Nobrand), section mới cuối trang B2B
+  Performance.** Hiếu yêu cầu breakdown 3 KH VN Ecom (Lazada/Shopee/Tiktokshop) → mỗi KH tách shop
+  SIM/eSIM (`dim_sku.type_of_sim`) → riêng Shopee-SIM tách thêm 2 shop con **Gohub**/**Nobrand** theo
+  người tạo đơn (`staff_code` → `dim_staff.name`). Route mới `api/analytics/b2b/ecom-breakdown` — match
+  KH qua `dim_customer.name ILIKE 'VN Ecom %'` (KHÔNG hardcode customer_code — 3 mã thật hiện tại:
+  `cnmgp9io9t`/`zwY4XcuAyk`/`bY3vgC9a3W`, nhưng 2 mã `B2BCustomerVn*` cũ trong `dim_customer` **rỗng
+  hoàn toàn** dữ liệu — không dùng pattern code, chỉ dùng name).
+  - **Xác nhận qua chat trước khi code (đã verify SQL sống, không đoán)**: Hiếu ban đầu nói "Gohub =
+    HUỲNH LÊ MINH, Nobrand = KA" — verify Shopee-SIM thấy **KA có 0 đơn trong SIM** (KA chỉ tạo đơn ở
+    Shopee-eSIM, 2.856 đơn/932tr — 69% eSIM còn lại không gắn staff nào). Báo lại Hiếu, Hiếu sửa: **Gohub
+    = HUỲNH LÊ MINH, Nobrand = Kieu Anh** (`SHOP_STAFF` trong route, so khớp UPPER(tên), không phải KA).
+  - Đã check thêm `company_code`/`location_id`/`order_source_code` trong Shopee-SIM — đồng nhất 1 giá
+    trị, KHÔNG có field nào khác trong gohub_dw tách được Gohub/Nobrand ngoài `staff_code`.
+  - Chỉ Shopee-SIM có sub-shop; Lazada/Tiktokshop và mọi eSIM KHÔNG tách (đúng yêu cầu Hiếu, không suy
+    diễn thêm ra ngoài phạm vi).
+  - Cache riêng `b2b-ecom1:...` (TTL 60' như route B2B khác), dep `b2b-ecom` — KHÔNG áp 3 filter chuẩn
+    Ship/Internal-Ops/Ops-Customers (VN Ecom không phải KH ops, không cần) — chỉ nhận `startDate`/
+    `endDate`/`dateColumn`/`includeShip` (mặc định loại phí ship, khớp default toàn trang).
 - **🔴 Incident s197 (2026-09-14) — Hiếu báo "kênh ecom tháng 9 hiển thị sai" (cả Quarter Report lẫn B2B
   Performance) — root cause: CACHE CŨ, không phải bug tính toán**. Verify trực tiếp qua SQL: "VN Ecom
   Shopee" T9 (1-13/9) thật có doanh thu 229.667.051đ, nhưng cả 2 trang đang hiện 137.802.046đ (thiếu
