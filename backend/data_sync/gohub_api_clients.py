@@ -92,15 +92,18 @@ class Product:
 
 @dataclass
 class Sku:
+    # s202 (2026-09-22): đồng bộ lại đúng field response /skus THẬT (verify qua debug dump trực tiếp API,
+    # xem docs/session_summary.txt) — `expirations` đổi tên thật thành `vendor_expirations`; API còn trả
+    # thêm `sku_ref`/`parents`/`data`/`speed`/`data_plan`/`topup_timing` mà bản cũ bỏ sót hoàn toàn (không
+    # bao giờ lưu vào Supabase). Bỏ hẳn 5 field theo yêu cầu Hiếu (Supabase chưa từng có cột cho các field
+    # này — verify DB thật: `original_cost`/`reference_cost_vnd`/`final_cogs_included_vat_vnd`/
+    # `final_cogs_usd`/`wr_group` không tồn tại trong bảng `skus`).
     tenant:                     str
     sku_code:                   str
     product_code:               str
     status:                     str
     sim_esim:                   str
     product_type:               str
-    throttle_speed:             str
-    call:                       str
-    expirations:                str
     currency:                   str
     day_amount:                 int
     day_amount_unit:            str
@@ -109,18 +112,22 @@ class Sku:
     date_created:               str
     last_modified_date:         str
     # Nullable / optional
+    sku_ref:                    Optional[str]   = None
+    parents:                    Optional[str]   = None
     frame:                      Optional[str]   = None
     datapack:                   Optional[str]   = None
+    throttle_speed:             Optional[str]   = None
+    data:                       Optional[float] = None
+    speed:                      Optional[float] = None
+    call:                       Optional[str]   = None
     call_sms_details:           Optional[str]   = None
+    vendor_expirations:         Optional[str]   = None
     vendor_sku:                 Optional[str]   = None
     vendor_sku_sim:             Optional[str]   = None
-    original_cost:              Optional[float] = None
-    reference_cost_vnd:         Optional[float] = None
     latest_cogs:                Optional[float] = None
     latest_cogs_currency:       Optional[str]   = None
-    final_cogs_included_vat_vnd:Optional[float] = None
-    final_cogs_usd:             Optional[float] = None
-    wr_group:                   Optional[str]   = None
+    data_plan:                  Optional[str]   = None
+    topup_timing:               Optional[str]   = None
 
     @classmethod
     def from_dict(cls, d: dict) -> "Sku":
