@@ -200,6 +200,12 @@ const fmtTB = (n: number) => (n || 0).toLocaleString("vi-VN", { minimumFractionD
 export default function ThreeHKDataUsagePage() {
   const [data, setData] = useState<DataUsageRecord[]>([])
   const [skuMetrics, setSkuMetrics] = useState<SKUMetrics[]>([])
+  // Tab mà `skuMetrics` HIỆN TẠI thực sự thuộc về — tránh race condition: đổi tab bằng setActiveTab()
+  // render lại NGAY (activeTab mới) nhưng fetch mới cho tab đó là async, nên có 1 khoảng `skuMetrics`
+  // vẫn còn dữ liệu của tab CŨ (VD "Tất cả", lẫn cả Fixed/Daily) trong khi activeTab đã là "Unlimited".
+  // `speedGroups` không tự biết `skuMetrics` có "đúng hạn" hay không nếu chỉ nhìn `activeTab` — phải gắn
+  // kèm cờ này (set ngay sau `setSkuMetrics` bên dưới) rồi so cả 2 mới coi là dữ liệu đáng tin.
+  const [skuMetricsTab, setSkuMetricsTab] = useState<"all" | "Daily" | "Fixed" | "Unlimited">("all")
   const [skuTypeMetrics, setSkuTypeMetrics] = useState<SKUTypeMetrics[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingSKU, setLoadingSKU] = useState(false)
@@ -478,7 +484,9 @@ export default function ThreeHKDataUsagePage() {
   // không có bảng CODE_LABELS xác nhận (chỉ verify được P=Unlimited, F/O chưa rõ nghĩa thật) — không tự
   // gán nhãn "kiểu mới" cho nó.
   const speedGroups = useMemo<SpeedGroupMetrics[]>(() => {
-    if (activeTab !== "Unlimited") return []
+    // skuMetricsTab !== activeTab → skuMetrics còn là dữ liệu tab CŨ (fetch tab mới chưa xong) — trả
+    // rỗng thay vì tính nhầm trên data sai tab (VD lẫn cả Fixed/Daily khi vừa bấm sang Unlimited).
+    if (activeTab !== "Unlimited" || skuMetricsTab !== "Unlimited") return []
     const acc: Record<string, SpeedGroupMetrics> = {}
     for (const sm of skuMetrics) {
       const group   = typeLetterOfSku(sm.sku)
@@ -506,11 +514,11 @@ export default function ThreeHKDataUsagePage() {
     return list.sort((a, b) => a.speed_group === b.speed_group
       ? (a.vintage === b.vintage ? (a.data ?? 0) - (b.data ?? 0) : a.vintage.localeCompare(b.vintage))
       : a.speed_group.localeCompare(b.speed_group))
-  }, [activeTab, skuMetrics, skuMeta])
+  }, [activeTab, skuMetrics, skuMeta, skuMetricsTab])
 
   // Danh sách SKU thuộc từng sub-variant (keyed qua `variantKeyOf()`) — cho nút "Chi tiết" bung ra.
   const speedGroupMembers = useMemo<Record<string, SKUMetrics[]>>(() => {
-    if (activeTab !== "Unlimited") return {}
+    if (activeTab !== "Unlimited" || skuMetricsTab !== "Unlimited") return {}
     const acc: Record<string, SKUMetrics[]> = {}
     for (const sm of skuMetrics) {
       const group   = typeLetterOfSku(sm.sku)
@@ -521,9 +529,33 @@ export default function ThreeHKDataUsagePage() {
     }
     for (const g of Object.keys(acc)) acc[g].sort((a, b) => b.total_usage_gb - a.total_usage_gb)
     return acc
-  }, [activeTab, skuMetrics, skuMeta])
+  }, [activeTab, skuMetrics, skuMeta, skuMetricsTab])
 
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
+
+  // s202: SKU có độ dài KHÁC 13/14 ký tự (15/17/18kt — `typeLetterOfSku()`/`skuVintage()` trả null, bị
+  // `continue` bỏ qua ở speedGroups/speedGroupMembers) trước đây IM LẶNG biến mất khỏi bảng breakdown,
+  // làm tổng "Active SIMs" thấp hơn KPI card "Average Usage by SKU Type" (lệch nhỏ, đã phát hiện lúc QA
+  // s202 — ~6/2839 SIM kỳ 08/2026). Gom riêng thành 1 dòng "Khác" ở cuối bảng để tổng luôn khớp KPI card,
+  // đúng tinh thần "Khác (mã dài khác)" đã áp dụng cho chart `typeLetterChart` phía trên.
+  const otherLengthGroup = useMemo(() => {
+    if (activeTab !== "Unlimited" || skuMetricsTab !== "Unlimited") return null
+    let active_sims = 0, total_plan_gb = 0, total_usage_gb = 0, members: SKUMetrics[] = []
+    for (const sm of skuMetrics) {
+      if (typeLetterOfSku(sm.sku) && skuVintage(sm.sku)) continue
+      active_sims    += sm.active_sims
+      total_plan_gb  += sm.total_plan_gb
+      total_usage_gb += sm.total_usage_gb
+      members.push(sm)
+    }
+    if (active_sims === 0) return null
+    return {
+      active_sims, total_plan_gb, total_usage_gb,
+      avg_usage_pct: total_plan_gb > 0 ? (total_usage_gb / total_plan_gb) * 100 : 0,
+      members: members.sort((a, b) => b.total_usage_gb - a.total_usage_gb),
+    }
+  }, [activeTab, skuMetrics, skuMetricsTab])
+  const [otherLengthExpanded, setOtherLengthExpanded] = useState(false)
 
   // Tên hiển thị cho chart — NGẮN GỌN (trục X không đủ chỗ cho câu mô tả đầy đủ như bảng breakdown), nhưng
   // vẫn phân biệt được sub-variant (s202: kèm ngưỡng data khi biết) + vintage cũ.
@@ -590,7 +622,7 @@ export default function ThreeHKDataUsagePage() {
   }
   // Trung bình có trọng số GB/ngày/SIM toàn bộ gói Unlimited (cho summary card).
   const unlimitedGbPerDaySim = useMemo(() => {
-    if (activeTab !== "Unlimited") return null
+    if (activeTab !== "Unlimited" || skuMetricsTab !== "Unlimited") return null
     let usage = 0, simDays = 0
     for (const sm of skuMetrics) {
       const d = daysOfSku(sm.sku)
@@ -599,7 +631,7 @@ export default function ThreeHKDataUsagePage() {
       simDays += sm.active_sims * d
     }
     return simDays > 0 ? usage / simDays : null
-  }, [activeTab, skuMetrics])
+  }, [activeTab, skuMetrics, skuMetricsTab])
 
   // Search + tab filter áp trên bảng bundles (đã gom) → tên cột trần.
   const searchClause = () => debouncedSearch ? `
@@ -688,6 +720,7 @@ export default function ThreeHKDataUsagePage() {
 
   const fetchSKUMetrics = async () => {
     setLoadingSKU(true)
+    const tabAtFetch = activeTab   // chụp lại tab tại lúc gọi — set vào skuMetricsTab sau khi có kết quả
     try {
       const sql = `
         ${bundlesCTE()}
@@ -704,6 +737,7 @@ export default function ThreeHKDataUsagePage() {
         total_usage_gb: parseFloat(r.total_usage_gb || 0),
         avg_usage_pct: parseFloat(r.avg_usage_pct || 0),
       })))
+      setSkuMetricsTab(tabAtFetch)
     } catch (e) {
       console.error("Error fetching SKU metrics:", e); throw e
     } finally {
@@ -1366,6 +1400,64 @@ export default function ThreeHKDataUsagePage() {
                   })
                 ) : (
                   <tr><td colSpan={7} className="px-6 py-6 text-center text-slate-400 text-sm">Không có dữ liệu nhóm Unlimited trong kỳ này</td></tr>
+                )}
+                {!loadingSKU && otherLengthGroup && (
+                  <React.Fragment>
+                  <tr className="hover:bg-slate-50/50 transition-colors bg-slate-50/30">
+                    <td className="px-6 py-3 font-bold text-slate-900 text-sm">
+                      <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-md border border-slate-200 text-xs font-mono">?</span>
+                      <div className="mt-0.5 font-normal text-[13px] text-slate-500" title="SKU có độ dài khác 13/14 ký tự (15/17/18kt) — chưa xác định được vị trí ký tự phân loại, gộp riêng để tổng khớp KPI card phía trên">
+                        Mã dài khác (chưa xác định được vị trí ký tự)
+                      </div>
+                    </td>
+                    <td className="px-6 py-3 text-center text-slate-600 text-sm font-medium">{formatNumber(otherLengthGroup.active_sims)}</td>
+                    <td className="px-6 py-3 text-right text-slate-600 text-sm">{formatNumber(otherLengthGroup.total_plan_gb)}</td>
+                    <td className="px-6 py-3 text-right font-bold text-slate-900 text-sm">{formatNumber(otherLengthGroup.total_usage_gb)}</td>
+                    <td className="px-6 py-3 text-right text-slate-400 text-sm">—</td>
+                    <td className="px-6 py-3 text-right">
+                      <span className="text-sm font-bold text-slate-500">{otherLengthGroup.avg_usage_pct.toFixed(1)}%</span>
+                    </td>
+                    <td className="px-6 py-3">
+                      <div className="flex items-center justify-end gap-3">
+                        <button onClick={() => setOtherLengthExpanded(v => !v)}
+                          className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 whitespace-nowrap">
+                          Chi tiết ({otherLengthGroup.members.length})
+                          {otherLengthExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {otherLengthExpanded && (
+                    <tr className="bg-slate-50/40">
+                      <td colSpan={7} className="px-6 py-3">
+                        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="border-b border-slate-100 bg-slate-50/60">
+                                <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">SKU</th>
+                                <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">Active SIMs</th>
+                                <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Plan (GB)</th>
+                                <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Actual (GB)</th>
+                                <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Avg. Usage %</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                              {otherLengthGroup.members.map((m, j) => (
+                                <tr key={j} className="hover:bg-slate-50/50">
+                                  <td className="px-4 py-2 font-mono text-xs text-slate-700">{m.sku}</td>
+                                  <td className="px-4 py-2 text-center text-slate-600 text-xs font-medium">{formatNumber(m.active_sims)}</td>
+                                  <td className="px-4 py-2 text-right text-slate-600 text-xs">{formatNumber(m.total_plan_gb)}</td>
+                                  <td className="px-4 py-2 text-right font-bold text-slate-900 text-xs">{formatNumber(m.total_usage_gb)}</td>
+                                  <td className="px-4 py-2 text-right text-xs font-bold text-slate-700">{m.avg_usage_pct.toFixed(1)}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 )}
               </tbody>
             </table>

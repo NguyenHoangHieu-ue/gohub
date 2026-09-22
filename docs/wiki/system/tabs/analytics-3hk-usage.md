@@ -545,6 +545,27 @@ giảm còn {speed}Mbps"`. Không có gì cả (SKU không tra được) thì l�
 Test: chưa có unit test riêng (hàm thuần nằm trong `page.tsx`, không export) — verify bằng tsc + lint (0
 lỗi mới) + vitest (368/368) PASS + tự xem qua UI (đọc bảng breakdown sau khi Supabase trả `skuMeta`).
 
+> ⚠️ **2 bug phát hiện khi tự QA sống trên staging ngay sau khi làm §3.1d — đã fix cùng đợt:**
+> 1. **Race condition thoáng qua** — bấm tab "Unlimited" thì React re-render NGAY với `activeTab`="Unlimited"
+>    nhưng `skuMetrics` vẫn còn dữ liệu tab CŨ (VD "Tất cả", lẫn cả Fixed/Daily) cho tới khi fetch mới xong
+>    (async) — `speedGroups` không tự biết `skuMetrics` có "đúng hạn" hay không (chỉ nhìn `activeTab`), nên
+>    có 1-2 giây hiện SAI hẳn (VD mã `F`/Fixed lẫn vào bảng Unlimited với số SIM rất lớn). Verify qua SQL
+>    trực tiếp (Dev Tools) xác nhận backend/API hoàn toàn đúng — bug thuần FE. Fix: thêm state
+>    `skuMetricsTab` (gắn NGAY sau `setSkuMetrics` trong `fetchSKUMetrics()`, chụp lại tab tại lúc gọi) —
+>    `speedGroups`/`speedGroupMembers`/`unlimitedGbPerDaySim` chỉ tính khi `activeTab === skuMetricsTab ===
+>    "Unlimited"`, không chỉ nhìn `activeTab`. Race condition này CÓ SẴN từ trước (không phải do sub-variant
+>    fix gây ra) — chỉ tình cờ bị soi kỹ hơn lúc QA đợt này.
+> 2. **Tổng bảng thấp hơn KPI card** — SKU độ dài khác 13/14 ký tự (15/17/18kt, `typeLetterOfSku()`/
+>    `skuVintage()` trả null) bị `continue` bỏ qua ÂM THẦM ở `speedGroups`/`speedGroupMembers`, làm tổng
+>    "Active SIMs" thấp hơn "Average Usage by SKU Type" card ~6 SIM/2839 (kỳ 08/2026) — pre-existing từ
+>    s200+4 (đã có tiền lệ y hệt ở `typeLetterChart`, chart phía trên, bucket "Khác (mã dài khác)" — riêng
+>    bảng breakdown này trước chưa làm). Fix: `otherLengthGroup` — 1 dòng "Mã dài khác" cuối bảng, tổng
+>    active_sims/plan/usage của các SKU này, có nút "Chi tiết" bung xem từng SKU. Giờ tổng bảng luôn khớp
+>    tuyệt đối KPI card.
+>
+> Đã verify sống trên staging sau fix: chờ đủ lâu cho fetch xong (không còn nháy sai), tổng bảng khớp KPI
+> card. tsc + lint (0 lỗi mới) + vitest (368/368) PASS.
+
 **Bảng "Unlimited — Breakdown theo mã" (s200+4, gom theo ký tự phân loại; s202: tách thêm theo sub-variant
 data/speed — xem §3.1d):**
 | Cột | Nguồn / công thức |
