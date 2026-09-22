@@ -34,9 +34,17 @@ Usage theo tháng + fix Bridge device tracking (creator-only) + Query Studio ki�
   hết "Khác") — cảnh báo "Không rõ chi tiết gói" khi không tra được gì thay vì đoán im lặng. Kèm 2 bug
   FE phát hiện lúc QA: race condition (sửa bằng request-id `useRef`, áp cho 4 fetch tab-phụ-thuộc) + số
   thập phân không đồng nhất dấu `.`/`,` (thêm `fmtDec()` vi-VN).
+- **s205 (2026-09-22) — VN Ecom Breakdown (B2B Performance): CH.Cost + cột CM1/%CM1 (riêng b2b_ecom_cost_monthly,
+  không chung CH.Cost B2B khác).** Nhập độc lập theo customer/shop/sub-shop × tháng, pro-rata đúng công
+  thức chuẩn hệ thống (cost-engine.ts, cùng logic `b2b/performance`). QA sống phát hiện + fix ngay 2 bug
+  thật: (1) Vercel CDN cache response theo URL 5' bất kể app-level `nocache=1` — sửa cost lần 2 không lên
+  UI dù server tính đúng, fix trả `Cache-Control: no-store` khi bypass; (2) modal prefill hiện "Chưa nhập"
+  y hệt trạng thái rỗng thật trong lúc GET đang tải → dễ tưởng "phải bấm + Thêm mới hiện cost đã lưu", fix
+  bằng state loading riêng. Thêm cột CH.Cost hiện trực tiếp trên bảng (không cần mở modal). Verify sống
+  nhiều vòng qua browser thật (claude-in-chrome) — PASS.
 - Chi tiết đầy đủ: `docs/session_summary.txt` (đọc từ cuối lên), wiki `analytics-data-model.md` §10,
   `analytics-b2c.md` §6, `analytics-quarterly.md`, `analytics-3hk-usage.md` §3.1d/§3.1e/§9,
-  `analytics-devtools.md`, `docs/wiki/business/*.md`.
+  `analytics-devtools.md`, `analytics-b2b.md` §6, `docs/wiki/business/*.md`.
 
 **Kiến trúc & agent hiện tại** (xem `docs/wiki/system/kien-truc-he-thong.md` để biết đầy đủ + diagram):
 - Chatbot chính = **Bé Gấu** (`be-gau.ts`, 1 agent function-calling, model `gemini-3.8-flash`

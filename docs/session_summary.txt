@@ -10375,3 +10375,59 @@ Trạng thái cuối session: tất cả nằm trên staging, ĐÃ merge main ph
 "merge main trước đi rồi fix cho tôi" — merge tại thời điểm đó chỉ gồm tới s204+2, các fix race
 condition/số thập phân/mã cũ P1-P2 làm SAU lúc merge nên còn ở staging, CHƯA merge). Wiki cập nhật đủ:
 analytics-3hk-usage.md §3.1d/§3.1e, docs/wiki/business/*.md (6 file sửa + 2 file mới).
+
+## s205 (2026-09-22) — VN Ecom Breakdown: CH.Cost + CM1/%CM1 (B2B Performance)
+Yêu cầu Hiếu: "thêm phần nhập cost, và thêm cột CM1, %CM1 nữa (cost này sẽ lưu riêng với những loại cost
+khác)" cho section VN Ecom — Breakdown SIM/eSIM (cuối trang B2B Performance, ship s204+5).
+
+Thiết kế: bảng Turso MỚI `b2b_ecom_cost_monthly` (`lib/b2b-ecom-cost.ts`, tự tạo qua
+`ensureB2bEcomCostTable()` — không cần migration SQL tay), tách biệt hoàn toàn khỏi
+`b2b_customer_cost_monthly` (CH.Cost B2B khác) theo đúng yêu cầu. Key
+`id = month::customer_name::shop_name::subshop_name` — cho phép nhập cost ĐỘC LẬP ở cả 3 cấp
+(customer/shop/sub-shop), mỗi cấp không tự cộng dồn từ cấp con (nhập ở customer không tự trừ CM1 của
+shop con bên dưới — đúng thiết kế, tránh trừ 2 lần nếu sau này cần rollup thì làm riêng).
+
+Route `api/analytics/b2b/ecom-breakdown` (GET, đã có từ s204+5) sửa: SQL thêm
+`TO_CHAR(..., 'YYYY-MM') AS month` + GROUP BY theo tháng (trước gộp cả kỳ) → build `monthly_data` mỗi
+bucket → trừ CH.Cost pro-rata đúng qua `calcChCostForPeriod` (`analytics-engine/cost-engine.ts` — cùng
+hàm `b2b/performance` dùng cho CH.Cost per-customer, công thức chuẩn s133: amount × dayRatio theo tháng,
+percent × revenue thực tháng đó). Route mới `api/analytics/b2b/ecom-costs` (GET đọc để prefill modal /
+POST batch upsert / DELETE 1 record), quyền `canWrite(session, "b2b", [...])`.
+
+FE: nút nhỏ "Cost" cạnh tên mỗi dòng (customer/shop/sub-shop) mở modal — lưới thẻ theo THÁNG trong
+khoảng ngày đang chọn (`monthsInRange()` thuần client), mỗi thẻ nhập nhiều dòng chi phí (label/đ hoặc
+%/giá trị) — port style modal "Sửa chi tiết" CH.Cost B2B ở Quarter Report nhưng đơn giản hoá 1
+bucket/lần. Lưu xong gọi `fetchData(true)` (nocache) để CM1 tươi ngay.
+
+QA sống trên staging qua claude-in-chrome (browser thật, đăng nhập acc Creator) — phát hiện + fix ngay
+2 bug thật trong lúc QA (không đợi Hiếu report lại):
+
+1. **CDN cache theo URL (nghiêm trọng hơn tưởng)**: Hiếu test xong báo "nhập cost và lưu thì không lưu".
+   Verify: POST 200, server tính CM1 đúng 100% (khớp toán tuyệt đối qua fetch bypass cache). Root cause
+   thật: response `ecom-breakdown` LUÔN gắn `CACHE_HEADERS` (`s-maxage=300`) kể cả khi server tự bypass
+   cache nội bộ qua `nocache=1` — Vercel Edge/CDN cache theo ĐÚNG URL đó 5 phút bất kể app-level flag.
+   Request `nocache=1` LẦN 2 cùng params (sửa cost lại) bị CDN trả thẳng bản lần 1, không tới lại route
+   — lần đầu (chỉ 1 lần save) work bình thường nên dễ bỏ sót. Fix 2 bước: (a) thêm `cache: "no-store"`
+   cho các fetch phía FE — không đủ vì đây là CDN cache, không phải browser cache; (b) fix đúng gốc: route
+   trả `Cache-Control: no-store` khi `noCache(req)` true thay vì `CACHE_HEADERS` cố định — CHỈ áp route
+   này, các route B2B khác dùng `nocache=1` cho "Tải lại mới" có khả năng dính bug tương tự nhưng ngoài
+   phạm vi, chưa sửa/chưa xác nhận qua QA thật.
+2. **UX modal prefill**: mở modal cho dòng ĐÃ có cost lưu trước, thấy "Chưa nhập" y hệt trạng thái rỗng
+   thật (vì set state rỗng NGAY trước khi GET prefill trả về, tránh chớp UI) — user dễ tưởng phải bấm
+   "+Thêm" mới "hiện" cost đã lưu (thực chất do race giữa click sớm và prefill vừa arrive, addLine dùng
+   functional-update nên không mất data thật, nhưng trải nghiệm confusing). Fix: state `ecomCostLoading`
+   riêng — hiện "Đang tải chi phí đã lưu…" trong lúc chờ, khoá nút Lưu (tránh bấm Lưu quá sớm gửi state
+   rỗng đè lên record thật trên Turso).
+
+Cũng thêm cột **CH.Cost** vào bảng (giữa Margin% và CM1) theo yêu cầu Hiếu "thêm 1 cột Cost để xem cho
+dễ" — hiện trực tiếp không cần mở modal, "—" khi chưa có cost.
+
+Verify: QA nhiều vòng qua browser thật (claude-in-chrome + javascript_tool, không phải giả lập) — nhập/
+sửa/xoá cost nhiều lần liên tiếp trên VN Ecom Lazada, mọi lần CM1/%CM1/CH.Cost khớp toán học tuyệt đối
+(vd 1.589.538 − 250.000×21/30 = 1.414.538). Reopen modal ngay sau save không còn kẹt "Chưa nhập". Dọn
+sạch data test sau mỗi vòng, verify server (fetch bypass cache `_cb=timestamp`) về đúng baseline
+`ch_cost=0`. tsc + vitest 368/368 PASS mọi commit. Wiki `analytics-b2b.md` §1/§6 cập nhật đủ.
+
+5 commit trên staging: ccf30305 (feature CH.Cost+CM1), f45c9322 (fetch no-store — không đủ), f31dce41
+(fix CDN cache đúng gốc), 3aa5c991 (cột CH.Cost + fix loading modal), 9ca62a85 (docs wiki). Chưa merge
+main.
