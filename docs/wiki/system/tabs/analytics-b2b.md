@@ -118,7 +118,23 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
     theo THÁNG trong khoảng ngày đang chọn (`monthsInRange()`, thuần client-side), mỗi thẻ tự nhập nhiều
     dòng chi phí (label/loại đ hoặc %/giá trị) — style/UX port y hệt modal "Sửa chi tiết" CH.Cost B2B ở
     Quarter Report (`b2b-tier-section.tsx`) nhưng đơn giản hoá cho 1 bucket/lần thay vì lưới nhiều KH.
-    Lưu xong gọi lại `fetchData(true)` (nocache) để CM1 tươi ngay.
+    Lưu xong gọi lại `fetchData(true)` (nocache) để CM1 tươi ngay. Bảng có thêm cột **CH.Cost** (giữa
+    Margin% và CM1) hiện trực tiếp không cần mở modal.
+  - **🔴 Bug s204+5(b) (2026-09-22, QA sau khi ship) — sửa cost LẦN 2 (cùng dòng, cùng params) không lên
+    UI dù server tính đúng.** Root cause: response `ecom-breakdown` LUÔN gắn `CACHE_HEADERS`
+    (`s-maxage=300`) kể cả khi server tự bypass cache nội bộ qua `nocache=1` — Vercel CDN cache theo
+    ĐÚNG URL đó 5 phút bất kể app-level flag, request `nocache=1` lần 2 bị CDN trả thẳng bản lần 1. Verify
+    trực tiếp qua fetch bypass (thêm `_cb=timestamp` phá cache key) thấy server luôn đúng, chỉ CDN response
+    cache sai. Fix: route trả `Cache-Control: no-store` khi `noCache(req)` true (thay vì `CACHE_HEADERS`
+    cố định) — CHỈ áp cho route này, chưa áp toàn hệ thống (các route B2B khác dùng `nocache=1` cho
+    "Tải lại mới" có khả năng dính bug tương tự nhưng ngoài phạm vi, chưa xác nhận qua QA thật).
+  - **🟡 UX bug (2026-09-22) — mở modal cost cho dòng ĐÃ có data lưu trước, thấy "Chưa nhập" cho tới khi
+    bấm "+Thêm" mới hiện giá trị thật.** Không phải mất data — do modal set state rỗng NGAY (trước khi
+    GET prefill trả về) để tránh chớp UI, nhưng "rỗng vì đang tải" và "rỗng vì thật sự chưa có" hiện y
+    hệt nhau → user bấm "+Thêm" sớm, đụng race với prefill vừa arrive (functional-update của addLine
+    dùng state mới nhất nên không mất data, nhưng trải nghiệm confusing). Fix: state `ecomCostLoading`
+    — hiện "Đang tải chi phí đã lưu…" riêng biệt trong lúc chờ GET, khoá nút Lưu (tránh bấm Lưu quá sớm
+    gửi state rỗng đè lên record đã lưu thật trên Turso).
 - **🔴 Incident s197 (2026-09-14) — Hiếu báo "kênh ecom tháng 9 hiển thị sai" (cả Quarter Report lẫn B2B
   Performance) — root cause: CACHE CŨ, không phải bug tính toán**. Verify trực tiếp qua SQL: "VN Ecom
   Shopee" T9 (1-13/9) thật có doanh thu 229.667.051đ, nhưng cả 2 trang đang hiện 137.802.046đ (thiếu
