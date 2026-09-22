@@ -128,7 +128,11 @@ export async function GET(req: NextRequest) {
         .sort((a, b) => b.revenue - a.revenue)
     }, QUERY_TTL_MIN, noCache(req), ["b2b-ecom", "b2b-ecom-cost"])
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    // nocache=1 (sau khi lưu CH.Cost) → route tự tính tươi NHƯNG nếu vẫn trả CACHE_HEADERS
+    // (s-maxage=300) thì Vercel CDN cache theo đúng URL đó 5' — request nocache=1 THỨ 2 cùng
+    // params (vd sửa cost lần 2) bị CDN trả thẳng bản đã cache ở lần đầu, không tới lại route.
+    // Phát hiện qua QA sống 2026-09-22: sửa cost lần 2 không lên UI dù server tính đúng.
+    return NextResponse.json(payload, { headers: noCache(req) ? { "Cache-Control": "no-store" } : CACHE_HEADERS })
   } catch (err: any) {
     console.error("[analytics/b2b/ecom-breakdown]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
