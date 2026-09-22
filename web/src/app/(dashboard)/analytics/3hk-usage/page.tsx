@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import React, { useState, useEffect, useMemo } from "react"
+import React, { useState, useEffect, useMemo, useRef } from "react"
 import dynamic from "next/dynamic"
 import {
   Activity, Search, Filter, Download, RefreshCw, Calendar, Package,
@@ -208,12 +208,14 @@ const fmtDec = (n: number, decimals: number) =>
 export default function ThreeHKDataUsagePage() {
   const [data, setData] = useState<DataUsageRecord[]>([])
   const [skuMetrics, setSkuMetrics] = useState<SKUMetrics[]>([])
-  // Tab mà `skuMetrics` HIỆN TẠI thực sự thuộc về — tránh race condition: đổi tab bằng setActiveTab()
-  // render lại NGAY (activeTab mới) nhưng fetch mới cho tab đó là async, nên có 1 khoảng `skuMetrics`
-  // vẫn còn dữ liệu của tab CŨ (VD "Tất cả", lẫn cả Fixed/Daily) trong khi activeTab đã là "Unlimited".
-  // `speedGroups` không tự biết `skuMetrics` có "đúng hạn" hay không nếu chỉ nhìn `activeTab` — phải gắn
-  // kèm cờ này (set ngay sau `setSkuMetrics` bên dưới) rồi so cả 2 mới coi là dữ liệu đáng tin.
+  // Tab mà `skuMetrics` HIỆN TẠI thực sự thuộc về — `speedGroups` không tự biết `skuMetrics` có "đúng
+  // hạn" hay không nếu chỉ nhìn `activeTab` — phải gắn kèm cờ này rồi so cả 2 mới coi là dữ liệu đáng tin.
   const [skuMetricsTab, setSkuMetricsTab] = useState<"all" | "Daily" | "Fixed" | "Unlimited">("all")
+  // Chặn out-of-order response: bấm đổi tab liên tiếp bắn nhiều request `fetchSKUMetrics()` cùng lúc,
+  // request CŨ hơn có thể trả lời VỀ SAU request MỚI (network timing, không đảm bảo thứ tự) — nếu chỉ
+  // dựa "await xong thì set state" thì response cũ tới sau sẽ ĐÈ mất kết quả đúng của request mới. Mỗi
+  // lần gọi tăng `skuMetricsReqIdRef`, chỉ áp dụng kết quả nếu vẫn là request MỚI NHẤT lúc trả lời về.
+  const skuMetricsReqIdRef = useRef(0)
   const [skuTypeMetrics, setSkuTypeMetrics] = useState<SKUTypeMetrics[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingSKU, setLoadingSKU] = useState(false)
@@ -729,6 +731,7 @@ export default function ThreeHKDataUsagePage() {
   const fetchSKUMetrics = async () => {
     setLoadingSKU(true)
     const tabAtFetch = activeTab   // chụp lại tab tại lúc gọi — set vào skuMetricsTab sau khi có kết quả
+    const reqId = ++skuMetricsReqIdRef.current
     try {
       const sql = `
         ${bundlesCTE()}
@@ -738,6 +741,7 @@ export default function ThreeHKDataUsagePage() {
         GROUP BY 1 ORDER BY total_usage_gb DESC
       `
       const result = await runQuery(sql)
+      if (reqId !== skuMetricsReqIdRef.current) return   // có request mới hơn đã bắn ra sau — bỏ response cũ này
       setSkuMetrics(result.map((r: any) => ({
         sku: r.sku,
         active_sims: parseInt(r.active_sims || 0),
@@ -747,9 +751,10 @@ export default function ThreeHKDataUsagePage() {
       })))
       setSkuMetricsTab(tabAtFetch)
     } catch (e) {
+      if (reqId !== skuMetricsReqIdRef.current) return   // request cũ lỗi sau khi đã có request mới — bỏ qua
       console.error("Error fetching SKU metrics:", e); throw e
     } finally {
-      setLoadingSKU(false)
+      if (reqId === skuMetricsReqIdRef.current) setLoadingSKU(false)
     }
   }
 
