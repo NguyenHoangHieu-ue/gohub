@@ -102,10 +102,10 @@ def test_missing_rows_raise(client):
 
 
 def test_models_tolerate_missing_and_extra_fields():
-    """API bỏ trường `expirations` của SKU (run 2026-09-19) — không được ném TypeError."""
+    """API có thể bỏ/thêm trường bất kỳ (VD `vendor_expirations` của SKU) — không được ném TypeError."""
     from gohub_api_clients import Sku, Product, Listing, Item
     sku = Sku.from_dict({"sku_code": "X", "product_code": "P", "tenant": "VN", "status": "Active", "unexpected": 1})
-    assert sku.sku_code == "X" and sku.expirations is None and not hasattr(sku, "unexpected")
+    assert sku.sku_code == "X" and sku.vendor_expirations is None and not hasattr(sku, "unexpected")
     assert Product.from_dict({"product_code": "P"}).vendor_code is None
     assert Listing.from_dict({}).listing_code is None
     assert Item.from_dict({"item_code": "I"}).item_code == "I"

@@ -10,7 +10,7 @@ const MAX_PAGE_SIZE = 200
 // cầu Hiếu. KHÔNG import từ web/src/app/api/skus/route.ts (route UI nội bộ) — ổn định độc lập.
 const SELECT_COLS = [
   "sku_code", "product_code", "tenant", "status", "sim_esim", "data_amount", "data_amount_unit",
-  "day_amount", "day_amount_unit", "throttle_speed", "call", "expirations", "frame", "datapack",
+  "day_amount", "day_amount_unit", "throttle_speed", "call", "expirations:vendor_expirations", "frame", "datapack",
   "vendor_sku", "vendor_sku_sim", "latest_cogs", "latest_cogs_currency",
 ].join(",")
 

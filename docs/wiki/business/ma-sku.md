@@ -9,7 +9,7 @@ aliases: ["SKU Code", "Mã SKU", "SKU Structure", "13 ký tự"]
 last_edited_by: ""
 last_edited_at: ""
 created: 2026-06-13
-updated: 2026-09-04
+updated: 2026-09-22
 status: active
 ---
 
@@ -17,7 +17,7 @@ status: active
 
 Mã SKU là mã 13 ký tự định danh duy nhất cho từng sản phẩm trong hệ thống GoHub. Chỉ cần đọc đúng cách,
 một mã SKU cho biết ngay gói đó thuộc pháp nhân nào, bán ở nước nào, từ vendor nào, bao nhiêu GB, và bao
-nhiêu ngày. Ví dụ `3CUSAGBY00507` giải mã ra: pháp nhân VN company, loại eSIM Full, nước USA, vendor WM,
+nhiêu ngày. Ví dụ `3CUSAWMY00507` giải mã ra: pháp nhân VN company, loại eSIM Full, nước USA, vendor WM,
 loại data Fixed no-throttle, dung lượng 5GB, thời hạn 7 ngày.
 
 Mã SKU ghép theo trình tự: ký tự thứ nhất là pháp nhân/kênh mua (PurchaseType), ký tự thứ hai là loại sản
@@ -25,9 +25,9 @@ phẩm (ProductType), ba ký tự tiếp theo (vị trí 3-5) là mã nước ho
 là mã vendor, ký tự thứ tám là loại data, ba ký tự tiếp theo (vị trí 9-11) là dung lượng, và hai ký tự
 cuối (vị trí 12-13) là số ngày.
 
-Một vài ví dụ giải mã đầy đủ: `3CUSAGBY00507` là VN company, eSIM Full, nước USA, vendor GB (WM), loại
-Fixed no-throttle, 5GB, 7 ngày. `DCUSAGBY00507` là US company, eSIM Full, nước USA, vendor GB, Fixed
-no-throttle, 5GB, 7 ngày. `DCAUSGBY06530` là US company, eSIM Full, nước AUS, vendor GB, Fixed
+Một vài ví dụ giải mã đầy đủ: `3CUSAWMY00507` là VN company, eSIM Full, nước USA, vendor WM, loại Fixed
+no-throttle, 5GB, 7 ngày. `DCUSAWMY00507` là US company, eSIM Full, nước USA, vendor WM, Fixed
+no-throttle, 5GB, 7 ngày. `DCAUSWMY06530` là US company, eSIM Full, nước AUS, vendor WM, Fixed
 no-throttle, 65GB, 30 ngày.
 
 Product Code chính là 8 ký tự đầu của SKU Code — ví dụ với `3CUSAGBY00507`, Product Code là `3CUSAGBY`.
@@ -66,18 +66,48 @@ GoHub hiện có 77 nhóm nước và 271 mã quốc gia; danh sách đầy đ�
 
 ## Ký tự 6–7 — Mã vendor
 
-`GB` là WorldMove (mã nội bộ GoHub, không phải viết tắt tên vendor). `3D` là 3HK Datapool. `BC` là Billion
-Connect. `JY` là Joytel. `KD` là KDDI (Nhật). `TM` là TruemoveH. `SS` là SimStore.
+> ⚠️ **Đã sửa 2026-09-22**: bản cũ ghi nhầm `GB` là mã nội bộ của WorldMove — SAI, đã verify qua bảng
+> `ref_vendors` (Supabase, nguồn sự thật duy nhất cho tên/mã vendor) và dữ liệu `products` thật: **`GB` là
+> Gighub (Airhub)**, một vendor/aggregator riêng biệt, không liên quan WorldMove. Mã đúng của WorldMove là
+> **`WM`**.
+
+`WM` là WorldMove. `3D` là 3HK Datapool (dòng chính, chiếm phần lớn sản phẩm 3HK). `3H` là 3HK (một mã
+vendor riêng biệt, ít dùng hơn `3D`, không phải lỗi trùng). `BC` là Billion Connect (dòng sản phẩm tiêu
+chuẩn/gói cố định). `WD` và `W1` đều là BC Datapool (dòng linh hoạt của Billion Connect) nhưng tách theo
+nhà mạng nền: `WD` chạy trên CMHK, `W1` chạy trên Singtel — không gộp chung `BC` với `WD`/`W1` khi làm báo
+cáo vì khác hẳn về COGS/sản lượng. `JY` là Joytel. `KD` là KDDI (Nhật). `TM` là Truemove(H). `SS` (và `SI`,
+mã phụ ít dùng) là SimStore. `EL` là Elite. `GB` là Gighub (Airhub) — vendor phụ dùng cho vài nước lẻ.
+
+Các mã ít gặp hơn: `CU` là China Unicom Hong Kong, `CT` là China Telecom, `CB` là Commbitz, `DT` là DTAC,
+`MB` là Mobifone, `SF` là Skyfi, `TB` là T-mobile, `UB` là Uhuibao, `VM` là VietnamMobile, `VT` là
+Viettech, `3U` là 3UK. Danh sách đầy đủ (24 mã, kèm tên chính thức) nằm ở bảng `ref_vendors` trên Supabase
+— đây là nguồn sự thật duy nhất, không suy đoán từ tên biến trong code.
 
 ## Ký tự 8 — Loại data và throttle
 
-`A` là Daily - Unlimited 5mbps (tốc độ cao hết quota thì giảm về 5 Mbps). `B` là Daily - Unlimited 10mbps
-(giảm về 10 Mbps). `C` là Unlimited 20mbps. `D` là Unlimited 100mbps, tức True Unlimited tốc độ cao nhất.
-`E` là Fixed - Unlimited 5mbps. `F` là Fixed throttle dưới 2mbps (hết quota giảm xuống dưới 2 Mbps). `G`
-là Unlimited 10mbps. `H` là Unlimited 5mbps. `K` dùng cho eSIM profile và SIM frame, không có data thật.
-`L` là Unlimited 50mbps. `P` là Daily throttle dưới 2mbps. `T` là Daily throttle dưới 2mbps, reset lúc
-nửa đêm (Midnight). `X` là Daily Unlimited 10mbps, reset lúc nửa đêm. `Y` là Fixed no-throttle, hết quota
-vẫn giữ tốc độ bình thường. `Z` là Daily no-throttle. Chi tiết từng loại data policy xem ở bài
+> ⚠️ **Đã sửa 2026-09-22** theo bảng mapping đã verify trực tiếp qua SQL trên `fact_data_usage` (session
+> s200+3, khớp tuyệt đối với data thật — xem `system/tabs/analytics-3hk-usage.md` §3.1). Quy tắc chốt:
+> **nếu tên gọi có chữ "Unlimited" → LUÔN xếp Unlimited**, dù có kèm chữ "Daily"/"Fixed" hay không — hai
+> chữ đó chỉ nói về chu kỳ RESET của mức throttle, không phải bản chất có giới hạn dung lượng hay không.
+
+Nhóm Unlimited gồm: `A` là Daily - Unlimited 5mbps (tốc độ cao hết quota ngày thì giảm về 5 Mbps), `B` là
+Daily - Unlimited 10mbps (giảm về 10 Mbps), `C` là Unlimited 20mbps, `D` là Unlimited 100mbps tức True
+Unlimited tốc độ cao nhất, `E` là Fixed - Unlimited 5mbps, `G` là Fixed - Unlimited 10mbps, `H` là
+Unlimited 5mbps, `L` là Unlimited 50mbps, và `X` là Daily Unlimited 10mbps reset lúc nửa đêm (Midnight).
+
+Nhóm Fixed gồm: `F` là Fixed throttle dưới 2mbps (hết quota giảm xuống dưới 2 Mbps), `Y` là Fixed
+no-throttle (hết quota vẫn giữ tốc độ bình thường).
+
+Nhóm Daily gồm: `P` là Daily throttle dưới 2mbps, `Z` là Daily no-throttle, `T` là Daily throttle dưới
+2mbps reset lúc nửa đêm.
+
+`K` dùng cho eSIM profile và SIM frame — không có data thật, phải LOẠI HẲN khỏi mọi báo cáo doanh
+thu/usage, không xếp vào Fixed hay bucket "Other" nào.
+
+Lưu ý mã SKU CŨ (14 ký tự, còn sót trong lịch sử): ký tự quyết định loại gói nằm ở **vị trí 10** chứ
+không phải vị trí 8, và ý nghĩa từng chữ cái KHÁC bộ 13 ký tự ở trên — ví dụ `P` ở vị trí 10 của mã cũ lại
+là Unlimited (embedded trong token `UNLIP1`/`UNLIP2`), trái ngược hẳn `P` ở vị trí 8 của mã mới (Daily).
+Đừng gộp chung hai bộ quy ước này. Chi tiết từng loại data policy xem ở bài
 [[loai-data-policy|Data Policy Codes]].
 
 ## Ký tự 9–11 — Dung lượng data
@@ -98,3 +128,10 @@ Product Code dài 8 ký tự, dùng để nhóm các gói cùng loại — cùng
 dài 13 ký tự, là đơn vị sản phẩm thật, phân biệt theo dung lượng và số ngày. Item Code (còn gọi là Alias)
 dài từ 18 ký tự trở lên, là đơn vị bán thực tế, gắn với một kênh và một đối tác cụ thể. Cấu trúc chi tiết
 của mã Item/Alias xem ở bài [[ma-item-alias|Cấu Trúc Mã Item & Alias]].
+
+## Trạng thái SKU: Temporary
+
+Khi một SKU được đánh dấu trạng thái `Temporary`, nghĩa là gói sắp hết hàng hoặc sẽ không nhập thêm
+(phase-out/clearance) — không phải lỗi hệ thống. Đây là tín hiệu để các kênh bán (B2B, B2C, Sales, CS)
+chủ động theo dõi tồn kho thực tế và tự canh số lượng khi chốt đơn, tránh đứt hàng hoặc bán vượt tồn kho
+thật (over-sell).

@@ -9,7 +9,7 @@ aliases: ["Vendor Priority", "Chọn Vendor", "Ưu tiên vendor", "Dùng vendor 
 last_edited_by: ""
 last_edited_at: ""
 created: 2026-06-13
-updated: 2026-09-04
+updated: 2026-09-22
 status: active
 ---
 
@@ -52,10 +52,25 @@ nhau.
 
 ## Trạng thái từng vendor
 
-WorldMove (mã SKU `GB`) đang hoạt động đầy đủ với 8.921 gói. 3HK Datapool (mã SKU `3D`) đang hoạt động đầy
+WorldMove (mã SKU `WM`) đang hoạt động đầy đủ với 8.921 gói. 3HK Datapool (mã SKU `3D`) đang hoạt động đầy
 đủ với 45 vùng giá. KDDI (mã SKU `KD`) hoạt động cho Nhật Bản theo partnership, phạm vi giới hạn.
-BillionConnect (mã `BC`), SimStore (mã `SS`), TruemoveH (mã `TM`), và Viettel (mã `VT`) đều chưa triển
-khai đầy đủ hoặc chưa triển khai.
+BillionConnect (mã `BC`), SimStore (mã `SS`), TruemoveH (mã `TM`), Joytel (mã `JY`), và Elite (mã `EL`)
+đều là vendor phụ, dùng khi WM/3HK/KDDI không đáp ứng được.
+
+## Phân biệt Billion Connect (BC) và BC Datapool (WD / W1)
+
+Đừng gộp chung "BC" với "BC Datapool" — đây là hai dòng sản phẩm khác nhau của cùng một hãng Billion
+Connect, mã SKU khác hẳn nhau: `BC` là dòng tiêu chuẩn/gói cố định; `WD` và `W1` đều là BC Datapool (dòng
+tính giá linh hoạt theo GB, giống mô hình 3HK) nhưng tách theo nhà mạng nền — `WD` chạy trên hạ tầng CMHK,
+`W1` chạy trên Singtel. Khi khách hoặc nội bộ hỏi "BC" thì hiểu là dòng cố định (`BC`); khi hỏi "BC
+Datapool" hoặc "WD" thì hiểu là dòng linh hoạt (`WD`/`W1`) — không gộp chung khi tra COGS, sản lượng, hay
+GP%, vì công thức tính và giá vốn hoàn toàn khác nhau.
+
+## Chính sách QR / đổi thiết bị / hủy hoàn tiền theo vendor
+
+Mỗi vendor có quy định riêng về hạn dùng mã QR kích hoạt, số lần được cài lại/đổi thiết bị, và điều kiện
+hủy/hoàn tiền — CS bắt buộc nắm trước khi tư vấn hoặc xử lý khiếu nại. Xem đầy đủ ở bài
+[[chinh-sach-vendor|Chính Sách Vendor: QR, Đổi Thiết Bị, Hủy/Hoàn Tiền]].
 
 Xem thêm bài [[vendor-worldmove|Chi tiết vendor WM]], [[vendor-3hk|Chi tiết vendor 3HK]],
 [[combo-chuan|42 combo chuẩn GoHub theo nước]], và [[cong-thuc-gia-3hk|Tính giá 3HK]].

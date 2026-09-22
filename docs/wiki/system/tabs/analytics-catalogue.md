@@ -125,7 +125,8 @@ Tab hiển thị theo ma trận role như cũ (`bod`/`b2b`/`b2c`/`saleb2c`/`prod
    ("WORLDMOVE", "3HK DATAPOOL") hoặc thiếu → bảng `VENDOR_NAMES` trong `plain-language.ts` cho đẹp. **Bug đã sửa**: trước đây bảng
    trong code thắng ref_vendors nên `WD` luôn hiện "BillionConnect Datapool" dù admin đã đổi. Sửa tên vendor: chỉ cần sửa `ref_vendors`
    (Admin → Import ref data) rồi bấm "Tải lại" trên Catalogue (cache 30'; sync tự xoá cache). ⚠️ `ref_vendors` ghi `GB` = **Gighub**,
-   trong khi wiki business `ma-sku.md` ghi GB = WorldMove — chưa đối chiếu; catalogue dùng ref_vendors (bảng sống).
+   — **đã đối chiếu 2026-09-22**: wiki business `ma-sku.md` từng ghi nhầm GB = WorldMove, đã sửa lại đúng
+theo `ref_vendors` (GB = Gighub/Airhub, WM = WorldMove). Catalogue vẫn dùng thẳng `ref_vendors` (bảng sống).
 6. Chi tiết gói **không qua `cachedQuery`** (3 truy vấn khoá chính, luôn tươi) để không phình `analytics_query_cache`.
 7. Vitest không parse `.tsx` với tsconfig `jsx: preserve` — test chỉ đặt cho `.ts` thuần (`lib/catalogue/*`); giao diện
    kiểm bằng render tĩnh dữ liệu thật + QA staging.

@@ -5,7 +5,7 @@ is_hidden: true
 department: all
 tags: [tab, analytics, 3hk]
 created: 2026-06-28
-updated: 2026-07-15
+updated: 2026-09-22
 status: active
 ---
 
@@ -23,12 +23,16 @@ Trang theo dõi chi tiết **dung lượng data thực tế tiêu thụ** của 
 |---|---|
 | **Trang web** | `/analytics/3hk-usage` |
 | **File FE** | `web/src/app/(dashboard)/analytics/3hk-usage/page.tsx` |
-| **API dữ liệu bảng** | `POST /api/analytics/query` (SELECT-only) — FE tự sinh SQL rồi gửi |
+| **API dữ liệu bảng** | `POST /api/analytics/query` (SELECT-only) — FE tự sinh SQL rồi gửi (nguồn `gohub_dw`) |
+| **API meta sub-variant Unlimited** | `POST /api/analytics/3hk-sku-meta` (s202) — tra `data`/`speed`/`throttle_speed` từ Supabase `skus` cho 1 list sku_code, xem §3.1d |
 | **Bảng nguồn (analytics)** | `gohub_dw.fact_data_usage` + `gohub_dw.dim_sku` |
 
-> ⚠️ **s200+4**: route `GET /api/analytics/3hk-speed-map` (nhóm tốc độ Unlimited theo `skus.throttle_speed`)
-> đã XOÁ — breakdown Unlimited giờ gom trực tiếp theo ký tự phân loại vị trí 8/10 của SKU (xem §3.1/§7),
-> không cần tra Product DB nữa.
+> ⚠️ **s200+4**: route `GET /api/analytics/3hk-speed-map` (nhóm tốc độ Unlimited theo `skus.throttle_speed`,
+> chỉ nhận diện được mã A/B qua regex) đã XOÁ — breakdown Unlimited đổi gom theo ký tự phân loại vị trí
+> 8/10 của SKU (xem §3.1/§7).
+> **s202**: quay lại tra Supabase `skus`, nhưng khác hẳn route cũ — route mới (`3hk-sku-meta`) chỉ tra
+> đúng 2 cột nguồn thật `data`/`speed` (không đoán qua regex) cho ĐÚNG list sku_code đang hiển thị, dùng
+> để tách sub-variant TRONG mỗi ký tự (xem §3.1d), không thay thế cách phân loại theo ký tự ở §3.1.
 
 > ⚠️ **Không còn** route `/api/analytics/3hk-usage/report` — đã xoá (dead code). Trang gửi thẳng SQL qua `/api/analytics/query`.
 
@@ -503,11 +507,50 @@ chạy 1 lần — KHÔNG phụ thuộc nút "Lọc"/ngày ở đầu trang).
 > mã cũ (184 và 1 SKU) cũng tách riêng dù CHƯA xác định được ý nghĩa thật (không tự gán `CODE_LABELS` cho
 > vintage cũ — chỉ verify chắc chắn được `P`=Unlimited). tsc + lint (0 lỗi mới) + vitest (261/261) PASS.
 
-**Bảng "Unlimited — Breakdown theo mã" (s200+4, gom theo ký tự phân loại):**
+### 3.1d Tách sub-variant Unlimited cùng ký tự (s202)
+
+> ⚠️ **Hiếu báo**: cùng ký tự phân loại (VD `B`) có thể gộp CHUNG nhiều gói THẬT khác nhau — VD "500MB tốc
+> độ cao rồi giảm còn 10Mbps" và "1GB tốc độ cao rồi giảm còn 10Mbps" đều là mã `B` (cùng nghĩa gốc "Daily
+> - Unlimited 10mbps" trong `CODE_LABELS`), chỉ nhìn SKU letter KHÔNG phân biệt được — trước s202 hai gói
+> này bị gộp nhầm chung 1 dòng "B" trong bảng breakdown, làm sai lệch cả "GB/ngày/SIM" (trộn 2 mức tiêu
+> dùng thật khác nhau vào 1 trung bình) lẫn "Kế hoạch" (trộn 2 định mức khác nhau).
+
+**Nguồn dữ liệu mới**: đợt sync s202 (đọc trực tiếp response `GET /skus` thật của GoHub API, xem
+`docs/session_summary.txt`) thêm 2 cột vào Supabase `skus`: `data` (ngưỡng data tốc độ cao trước khi giảm
+tốc, đơn vị MB — VD `500`/`1024`) và `speed` (tốc độ Mbps SAU khi hết ngưỡng — VD `10`). Đây là 2 cột SỐ,
+lấy thẳng từ vendor, đáng tin hơn hẳn việc tự suy đoán qua regex trên `throttle_speed` (cách route cũ
+`/api/analytics/3hk-speed-map` từng làm, chỉ nhận diện được A/B, đã xoá ở s200+4).
+
+**Vấn đề cross-DB**: `fact_data_usage.sku` nằm ở `gohub_dw` (GCP Postgres), còn `skus.data`/`skus.speed`
+nằm ở Supabase — 2 database TÁCH BIỆT, không JOIN được bằng 1 câu SQL. Giải pháp: FE tự fetch 2 nguồn rồi
+merge ở client — `skuMetrics` (từ `/api/analytics/query`, gohub_dw) giữ nguyên; thêm 1 `useEffect` (chỉ
+chạy khi `activeTab==="Unlimited"`) POST danh sách sku_code distinct đang hiển thị sang route mới
+`/api/analytics/3hk-sku-meta` (Supabase, chunk 150 sku/lần — khớp tiền lệ Product Catalogue s198), lưu vào
+state `skuMeta: Record<sku_code, {data, speed, throttle_speed}>`.
+
+**Khoá gộp nhóm đổi** từ `${letter}_${vintage}` sang `variantKeyOf()` = `${letter}_${vintage}_${data}_
+${speed}` (hàm `variantKeyOf()`, `page.tsx`) — cùng ký tự nhưng khác `data`/`speed` giờ tách thành 2 dòng
+riêng trong bảng breakdown, mỗi dòng có "Active SIMs"/"GB ngày/SIM"/"Kế hoạch" tính riêng, không còn trộn.
+SKU không tra được meta (VD sản phẩm đã ngừng bán, mất khỏi `skus` hiện tại) tự lùi về gộp theo `${letter}
+_${vintage}_x_x` như hành vi CŨ (không vỡ nhóm), kèm badge "chưa rõ gói cụ thể" trên UI.
+
+**Nhãn hiển thị** (`variantLabelOf()`) ưu tiên dùng thẳng `skus.throttle_speed` — chuỗi người-đọc-được lấy
+nguyên văn từ GoHub API (VD `"1GB high speed then drop to 10 mbps"`), tự nhiên và chính xác hơn hẳn tự
+ghép câu. Không có `throttle_speed` nhưng có `data`+`speed` thì tự ghép: `"{data ra GB/MB} tốc độ cao,
+giảm còn {speed}Mbps"`. Không có gì cả (SKU không tra được) thì lùi về `CODE_LABELS[letter]` cũ.
+
+**Chart** (`sgChartName()`) dùng nhãn NGẮN hơn bảng (trục X không đủ chỗ cho câu mô tả đầy đủ) — dạng
+`B·500MB`/`B·1GB`, kèm hậu tố "(cũ)" nếu vintage 14 ký tự.
+
+Test: chưa có unit test riêng (hàm thuần nằm trong `page.tsx`, không export) — verify bằng tsc + lint (0
+lỗi mới) + vitest (368/368) PASS + tự xem qua UI (đọc bảng breakdown sau khi Supabase trả `skuMeta`).
+
+**Bảng "Unlimited — Breakdown theo mã" (s200+4, gom theo ký tự phân loại; s202: tách thêm theo sub-variant
+data/speed — xem §3.1d):**
 | Cột | Nguồn / công thức |
 |---|---|
-| Mã | `typeLetterOfSku(sku)` + `skuVintage(sku)` (s200+9) — vị trí 8 (13 ký tự, "mã mới") / vị trí 10 (14 ký tự, "mã cũ") — LUÔN hiện kèm badge vintage, xem §3.1/§7 |
-| Active SIMs | `Σ active_sims` các SKU cùng mã (cùng vintage) |
+| Mã | `typeLetterOfSku(sku)` + `skuVintage(sku)` (s200+9) — vị trí 8 (13 ký tự, "mã mới") / vị trí 10 (14 ký tự, "mã cũ") — LUÔN hiện kèm badge vintage, xem §3.1/§7. Dòng mô tả đầy đủ (VD "1GB high speed then drop to 10 mbps") lấy từ `variantLabelOf()` — §3.1d |
+| Active SIMs | `Σ active_sims` các SKU cùng mã + cùng sub-variant (data/speed, §3.1d) |
 | Total Plan (GB) | `Σ total_plan_gb` (= Σ data_amount_gb — hạn mức mềm) |
 | Total Actual (GB) | `Σ total_usage_gb` |
 | **GB/ngày/SIM** (thêm s95) | `Σ total_usage_gb ÷ Σ(active_sims × ngày)` — **KPI chi phí chính**; đỏ nếu > kế hoạch/ngày |
@@ -535,5 +578,6 @@ chạy 1 lần — KHÔNG phụ thuộc nút "Lọc"/ngày ở đầu trang).
 | GB/ngày/SIM | `fact_data_usage` | `SUM(total_data_gb) ÷ (active_sims × số_ngày)` — KPI chính cho Unlimited |
 | SKU Type | `fact_data_usage.sku` + `dim_sku` | Xem `SKU_TYPE_CASE` đầy đủ ở §3.1 (theo ký tự vị trí 8, không chỉ literal `%UNL%`) |
 | Mã loại gói (Unlimited) | `fact_data_usage.sku` | `typeLetterOfSku(sku)` — vị trí 8 (13 ký tự) / vị trí 10 (14 ký tự), xem §3.1/§7 |
+| Sub-variant Unlimited (data/speed) | Supabase `skus.data`/`skus.speed`/`skus.throttle_speed` | Tra qua `POST /api/analytics/3hk-sku-meta` (merge client-side với `skuMetrics` từ gohub_dw — 2 DB tách biệt, không JOIN SQL được), xem §3.1d |
 | Zone × Month (TB) | Supabase `ncc_3hk` + `data_usage_log` (qua `countryRows`, không render riêng từ s200+10) | Zone A=A1+A2 gộp, B/C/D nguyên; alias tên nước USA/UK/Slovak Republic; bấm zone → drill-down nước (s200+9/+10). Cửa sổ tự tính `MAX(report_date)-23 tháng`, độc lập filter trang |
 | Vendor filter | `dim_sku.vendor` | `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'` |

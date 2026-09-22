@@ -15,7 +15,7 @@ async function enrichWithSku(rows: any[]): Promise<any[]> {
   if (!rows.length) return rows
   const ids = rows.map((r: any) => r.vendor_product_id).filter(Boolean)
   const { data: skuRows } = await (supabaseAdmin.from("skus") as any)
-    .select("sku_code,vendor_sku,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,call,expirations,frame,datapack,latest_cogs,latest_cogs_currency")
+    .select("sku_code,vendor_sku,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,call,expirations:vendor_expirations,frame,datapack,latest_cogs,latest_cogs_currency")
     .in("vendor_sku", ids)
     .limit(ids.length * 3 + 10)
 

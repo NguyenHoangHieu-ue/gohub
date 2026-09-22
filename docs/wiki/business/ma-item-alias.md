@@ -5,7 +5,7 @@ department: all
 tags: [item, alias, ma-hoa, kenh-ban, reference]
 aliases: ["Item Code", "Mã Item", "Alias", "18 ký tự"]
 created: 2026-06-13
-updated: 2026-09-04
+updated: 2026-09-22
 status: active
 ---
 
@@ -56,6 +56,19 @@ sản phẩm và đơn hàng liên quan.
 Hai ví dụ thực tế: `BSP011CRUS12A00107AA` giải mã là B2C, đối tác ShopeePay, bảng giá 01, sản phẩm eSIM
 Full nước Nga 1GB/ngày trong 7 ngày (thuộc pháp nhân VN). `WKK021CJPNKDD00107AB` giải mã là WS, đối tác
 KKday, bảng giá 02, sản phẩm eSIM Full nước Nhật True Unlimited trong 7 ngày (thuộc pháp nhân VN).
+
+## Quy tắc kiểm tra trạng thái mở bán trên Ecom
+
+Các sàn Ecom (Shopee, TikTokShop, Lazada) có thể có nhiều mã Alias lẻ riêng cho từng sàn (bắt đầu bằng
+`DES`, `DET`, `DEL`...), nhưng hệ thống Ecom thực tế đang dùng chung một mã Alias TỔNG bắt đầu bằng
+`DVE` (dạng `DVE[sku]000`, nghĩa là "VN B2B - Ecom") để phát sinh đơn hàng thật. Một số mã lẻ `DES/DET/DEL`
+có thể đang ghi trạng thái `Inactive` trong hệ thống dù sàn vẫn bán bình thường — đó không phải bằng
+chứng SKU đã bị tắt bán.
+
+Khi cần xác nhận một SKU còn mở bán trên Ecom hay không, làm đúng hai bước: kiểm tra trạng thái của mã
+Alias TỔNG `DVE...` trước tiên, sau đó đối chiếu xem có đơn hàng phát sinh thật gần đây ở kênh VN-Ecom
+không. Tuyệt đối không kết luận một SKU đã bị tắt bán trên Ecom chỉ vì thấy mã Alias lẻ (`DES`/`DET`/
+`DEL`) đang ở trạng thái `Inactive`.
 
 ## Phân biệt các loại mã
 
