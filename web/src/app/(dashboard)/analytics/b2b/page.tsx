@@ -55,8 +55,24 @@ interface PerformanceData {
 }
 // VN Ecom breakdown (Lazada/Shopee/Tiktokshop → shop SIM/eSIM → Shopee-SIM → Gohub/Nobrand).
 // Xem `api/analytics/b2b/ecom-breakdown/route.ts` — staff_code map Gohub/Nobrand chốt qua chat 2026-09-22.
-interface EcomShop { name: string; revenue: number; margin: number; units: number; orders: number; subshops?: EcomShop[] }
-interface EcomCustomer { name: string; revenue: number; margin: number; units: number; orders: number; shops: EcomShop[] }
+// CH.Cost VN Ecom lưu RIÊNG (Turso `b2b_ecom_cost_monthly`, KHÔNG chung b2b_customer_cost_monthly — theo
+// yêu cầu Hiếu 2026-09-22) — backend `ecom-breakdown` route đã trừ pro-rata → ch_cost/cm1/cm1_percent.
+interface EcomCostLine { label?: string; type: "amount" | "percent"; value: number }
+interface EcomShop { name: string; revenue: number; margin: number; units: number; orders: number; ch_cost: number; cm1: number; cm1_percent: number; cost_lines: EcomCostLine[]; subshops?: EcomShop[] }
+interface EcomCustomer { name: string; revenue: number; margin: number; units: number; orders: number; ch_cost: number; cm1: number; cm1_percent: number; cost_lines: EcomCostLine[]; shops: EcomShop[] }
+// month "YYYY-MM" cho từng ngày trong [startDate, endDate] — dùng cho modal nhập cost (chọn tháng cần nhập).
+function monthsInRange(startDate: string, endDate: string): string[] {
+  if (!startDate || !endDate) return []
+  const months: string[] = []
+  const [sy, sm] = startDate.split("-").map(Number)
+  const [ey, em] = endDate.split("-").map(Number)
+  let y = sy, m = sm
+  while (y < ey || (y === ey && m <= em)) {
+    months.push(`${y}-${String(m).padStart(2, "0")}`)
+    m++; if (m > 12) { m = 1; y++ }
+  }
+  return months
+}
 
 export default function B2BPerformance() {
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
@@ -79,6 +95,11 @@ export default function B2BPerformance() {
   const [partnerTiers, setPartnerTiers] = useState<Record<string, string[]>>({ Strategic: [] })
   const [channelsWithPlatformFee, setChannelsWithPlatformFee] = useState<string[]>([])
   const [ecomBreakdown, setEcomBreakdown] = useState<EcomCustomer[]>([])
+  // Modal nhập CH.Cost VN Ecom (customer/shop/sub-shop × tháng) — Turso riêng, xem ecomCostKey.
+  const [ecomCostTarget, setEcomCostTarget] = useState<{ customerName: string; shopName: string; subshopName: string; label: string } | null>(null)
+  const [ecomCostEdits, setEcomCostEdits] = useState<Record<string, EcomCostLine[]>>({})
+  const [savingEcomCost, setSavingEcomCost] = useState(false)
+  const [ecomCostError, setEcomCostError] = useState<string | null>(null)
 
   const [wholesaleSort, setWholesaleSort] = useState<{ key: keyof PerformanceData; direction: "asc" | "desc" }>({ key: "revenue", direction: "desc" })
   const [tierSearch, setTierSearch] = useState("")
@@ -104,6 +125,54 @@ export default function B2BPerformance() {
 
   const exportToCSV = (data: any[], filename: string, columns: { label: string; key: keyof PerformanceData | string }[]) =>
     exportWithDateRange(data as Record<string, unknown>[], filename, columns.map(c => ({ label: c.label, key: String(c.key) })), startDate, endDate)
+
+  // ── Modal nhập CH.Cost VN Ecom (customer/shop/sub-shop × tháng, Turso riêng) ──
+  const ecomMonths = useMemo(() => monthsInRange(startDate, endDate), [startDate, endDate])
+  const openEcomCostModal = async (customerName: string, shopName: string, subshopName: string, label: string) => {
+    setEcomCostError(null)
+    setEcomCostTarget({ customerName, shopName, subshopName, label })
+    const initial: Record<string, EcomCostLine[]> = {}
+    ecomMonths.forEach(m => { initial[m] = [] })
+    setEcomCostEdits(initial)
+    try {
+      const res = await fetch(`/api/analytics/b2b/ecom-costs`)
+      const d = await res.json().catch(() => ({}))
+      const rows: any[] = Array.isArray(d?.rows) ? d.rows : []
+      const filled: Record<string, EcomCostLine[]> = { ...initial }
+      rows
+        .filter(r => r.customer_name === customerName && (r.shop_name || "") === shopName && (r.subshop_name || "") === subshopName)
+        .forEach(r => { if (ecomMonths.includes(r.month)) filled[r.month] = r.cost_lines_parsed || [] })
+      setEcomCostEdits(filled)
+    } catch { /* giữ empty nếu fetch lỗi — user vẫn nhập mới được */ }
+  }
+  const closeEcomCostModal = () => { setEcomCostTarget(null); setEcomCostEdits({}); setEcomCostError(null) }
+  const setEcomLine = (month: string, idx: number, patch: Partial<EcomCostLine>) =>
+    setEcomCostEdits(prev => ({ ...prev, [month]: (prev[month] || []).map((l, i) => i === idx ? { ...l, ...patch } : l) }))
+  const addEcomLine = (month: string) =>
+    setEcomCostEdits(prev => ({ ...prev, [month]: [...(prev[month] || []), { label: "", type: "amount" as const, value: 0 }] }))
+  const removeEcomLine = (month: string, idx: number) =>
+    setEcomCostEdits(prev => ({ ...prev, [month]: (prev[month] || []).filter((_, i) => i !== idx) }))
+  const ecomLineTotal = (lines: EcomCostLine[]) => lines.reduce((s, l) => s + (l.type === "percent" ? 0 : (Number(l.value) || 0)), 0)
+  const saveEcomCost = async () => {
+    if (!ecomCostTarget) return
+    setSavingEcomCost(true); setEcomCostError(null)
+    try {
+      const costs = ecomMonths.map(m => ({
+        month: m, customer_name: ecomCostTarget.customerName, shop_name: ecomCostTarget.shopName, subshop_name: ecomCostTarget.subshopName,
+        cost_lines: JSON.stringify((ecomCostEdits[m] || []).filter(l => (Number(l.value) || 0) !== 0 || l.label)),
+      }))
+      const res = await fetch(`/api/analytics/b2b/ecom-costs`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ costs }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok && d?.ok) {
+        closeEcomCostModal()
+        fetchData(true)
+      } else setEcomCostError(d?.error || "Lưu chi phí thất bại")
+    } catch (e: any) {
+      setEcomCostError(e?.message || "Lỗi kết nối")
+    } finally { setSavingEcomCost(false) }
+  }
 
   const exportToPDF = async () => {
     if (!reportRef.current) return
@@ -924,14 +993,15 @@ export default function B2BPerformance() {
                         { label: "Customer", key: "customer" }, { label: "Shop", key: "shop" }, { label: "Sub-shop", key: "subshop" },
                         { label: "Revenue", key: "revenue" }, { label: "Orders", key: "orders" }, { label: "Units", key: "units" },
                         { label: "GP", key: "margin" }, { label: "Margin %", key: "margin_percent" },
+                        { label: "CH.Cost", key: "ch_cost" }, { label: "CM1", key: "cm1" }, { label: "CM1 %", key: "cm1_percent" },
                       ]
                       const exportRows: Record<string, unknown>[] = []
                       ecomBreakdown.forEach(c => {
                         c.shops.forEach(s => {
                           if (s.subshops && s.subshops.length > 0) {
-                            s.subshops.forEach(sub => exportRows.push({ customer: c.name, shop: s.name, subshop: sub.name, revenue: sub.revenue, orders: sub.orders, units: sub.units, margin: sub.margin, margin_percent: sub.revenue > 0 ? Math.round((sub.margin / sub.revenue) * 1000) / 10 : 0 }))
+                            s.subshops.forEach(sub => exportRows.push({ customer: c.name, shop: s.name, subshop: sub.name, revenue: sub.revenue, orders: sub.orders, units: sub.units, margin: sub.margin, margin_percent: sub.revenue > 0 ? Math.round((sub.margin / sub.revenue) * 1000) / 10 : 0, ch_cost: sub.ch_cost, cm1: sub.cm1, cm1_percent: Math.round(sub.cm1_percent * 10) / 10 }))
                           } else {
-                            exportRows.push({ customer: c.name, shop: s.name, subshop: "", revenue: s.revenue, orders: s.orders, units: s.units, margin: s.margin, margin_percent: s.revenue > 0 ? Math.round((s.margin / s.revenue) * 1000) / 10 : 0 })
+                            exportRows.push({ customer: c.name, shop: s.name, subshop: "", revenue: s.revenue, orders: s.orders, units: s.units, margin: s.margin, margin_percent: s.revenue > 0 ? Math.round((s.margin / s.revenue) * 1000) / 10 : 0, ch_cost: s.ch_cost, cm1: s.cm1, cm1_percent: Math.round(s.cm1_percent * 10) / 10 })
                           }
                         })
                       })
@@ -950,13 +1020,20 @@ export default function B2BPerformance() {
                           <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Units</th>
                           <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">GP</th>
                           <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Margin %</th>
+                          <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">CM1</th>
+                          <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">CM1 %</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                         {ecomBreakdown.map(c => (
                           <React.Fragment key={c.name}>
                             <tr className="bg-cyan-50/40">
-                              <td className="px-8 py-3 text-sm font-black text-cyan-800">{c.name}</td>
+                              <td className="px-8 py-3 text-sm font-black text-cyan-800">
+                                <div className="flex items-center gap-2">
+                                  {c.name}
+                                  <button onClick={() => openEcomCostModal(c.name, "", "", c.name)} className="text-[9px] font-bold text-[#0f4c81] normal-case tracking-normal border border-[#0f4c81]/30 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100" title="Nhập chi phí">Cost</button>
+                                </div>
+                              </td>
                               <td className="px-8 py-3 text-right">
                                 <div className="flex flex-col items-end">
                                   <span className="text-sm font-black text-slate-900">{formatCurrency(c.revenue).replace("₫", "VND")}</span>
@@ -972,11 +1049,23 @@ export default function B2BPerformance() {
                                 </div>
                               </td>
                               <td className="px-8 py-3 text-right text-sm font-bold text-slate-600">{(c.revenue > 0 ? (c.margin / c.revenue) * 100 : 0).toFixed(1)}%</td>
+                              <td className="px-8 py-3 text-right">
+                                <div className="flex flex-col items-end">
+                                  <span className="text-sm font-bold text-indigo-700">{formatCurrency(c.cm1).replace("₫", "VND")}</span>
+                                  {isProjectable && <span className="text-[10px] font-bold text-indigo-600/70 mt-0.5">Est. {formatCurrency(c.cm1 * projectionFactor).replace("₫", "")}</span>}
+                                </div>
+                              </td>
+                              <td className="px-8 py-3 text-right text-sm font-bold text-slate-600">{c.cm1_percent.toFixed(1)}%</td>
                             </tr>
                             {c.shops.map(s => (
                               <React.Fragment key={s.name}>
                                 <tr className="hover:bg-slate-50/50">
-                                  <td className="px-8 py-2.5 pl-14 text-xs font-bold text-slate-700">{s.name}</td>
+                                  <td className="px-8 py-2.5 pl-14 text-xs font-bold text-slate-700">
+                                    <div className="flex items-center gap-2">
+                                      {s.name}
+                                      <button onClick={() => openEcomCostModal(c.name, s.name, "", `${c.name} · ${s.name}`)} className="text-[9px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100" title="Nhập chi phí">Cost</button>
+                                    </div>
+                                  </td>
                                   <td className="px-8 py-2.5 text-right">
                                     <div className="flex flex-col items-end">
                                       <span className="text-xs font-bold text-slate-800">{formatCurrency(s.revenue).replace("₫", "VND")}</span>
@@ -992,10 +1081,22 @@ export default function B2BPerformance() {
                                     </div>
                                   </td>
                                   <td className="px-8 py-2.5 text-right text-xs text-slate-500">{(s.revenue > 0 ? (s.margin / s.revenue) * 100 : 0).toFixed(1)}%</td>
+                                  <td className="px-8 py-2.5 text-right">
+                                    <div className="flex flex-col items-end">
+                                      <span className="text-xs font-bold text-indigo-600">{formatCurrency(s.cm1).replace("₫", "VND")}</span>
+                                      {isProjectable && <span className="text-[9px] font-bold text-indigo-600/70 mt-0.5">Est. {formatCurrency(s.cm1 * projectionFactor).replace("₫", "")}</span>}
+                                    </div>
+                                  </td>
+                                  <td className="px-8 py-2.5 text-right text-xs text-slate-500">{s.cm1_percent.toFixed(1)}%</td>
                                 </tr>
                                 {s.subshops?.map(sub => (
                                   <tr key={sub.name} className="hover:bg-slate-50/50">
-                                    <td className="px-8 py-2 pl-20 text-[11px] font-semibold text-slate-500">↳ {sub.name}</td>
+                                    <td className="px-8 py-2 pl-20 text-[11px] font-semibold text-slate-500">
+                                      <div className="flex items-center gap-2">
+                                        ↳ {sub.name}
+                                        <button onClick={() => openEcomCostModal(c.name, s.name, sub.name, `${c.name} · ${s.name} · ${sub.name}`)} className="text-[9px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100" title="Nhập chi phí">Cost</button>
+                                      </div>
+                                    </td>
                                     <td className="px-8 py-2 text-right">
                                       <div className="flex flex-col items-end">
                                         <span className="text-[11px] font-bold text-slate-600">{formatCurrency(sub.revenue).replace("₫", "VND")}</span>
@@ -1011,6 +1112,13 @@ export default function B2BPerformance() {
                                       </div>
                                     </td>
                                     <td className="px-8 py-2 text-right text-[11px] text-slate-400">{(sub.revenue > 0 ? (sub.margin / sub.revenue) * 100 : 0).toFixed(1)}%</td>
+                                    <td className="px-8 py-2 text-right">
+                                      <div className="flex flex-col items-end">
+                                        <span className="text-[11px] font-bold text-indigo-600/80">{formatCurrency(sub.cm1).replace("₫", "VND")}</span>
+                                        {isProjectable && <span className="text-[9px] font-bold text-indigo-600/60 mt-0.5">Est. {formatCurrency(sub.cm1 * projectionFactor).replace("₫", "")}</span>}
+                                      </div>
+                                    </td>
+                                    <td className="px-8 py-2 text-right text-[11px] text-slate-400">{sub.cm1_percent.toFixed(1)}%</td>
                                   </tr>
                                 ))}
                               </React.Fragment>
@@ -1020,8 +1128,8 @@ export default function B2BPerformance() {
                         {(() => {
                           const total = ecomBreakdown.reduce((acc, c) => ({
                             revenue: acc.revenue + c.revenue, margin: acc.margin + c.margin,
-                            units: acc.units + c.units, orders: acc.orders + c.orders,
-                          }), { revenue: 0, margin: 0, units: 0, orders: 0 })
+                            units: acc.units + c.units, orders: acc.orders + c.orders, cm1: acc.cm1 + c.cm1,
+                          }), { revenue: 0, margin: 0, units: 0, orders: 0, cm1: 0 })
                           return (
                             <tr className="bg-slate-100/80 font-black border-t-2 border-slate-200">
                               <td className="px-8 py-4 text-[11px] uppercase tracking-[0.2em] text-slate-700 font-bold">TOTAL VN ECOM</td>
@@ -1040,11 +1148,81 @@ export default function B2BPerformance() {
                                 </div>
                               </td>
                               <td className="px-8 py-4 text-right text-sm text-slate-700">{(total.revenue > 0 ? (total.margin / total.revenue) * 100 : 0).toFixed(1)}%</td>
+                              <td className="px-8 py-4 text-right">
+                                <div className="flex flex-col items-end">
+                                  <span className="text-sm font-black text-indigo-700">{formatCurrency(Math.round(total.cm1)).replace("₫", "VND")}</span>
+                                  {isProjectable && <span className="text-[10px] font-bold text-indigo-600/90 mt-0.5">Est. {formatCurrency(Math.round(total.cm1 * projectionFactor)).replace("₫", "")}</span>}
+                                </div>
+                              </td>
+                              <td className="px-8 py-4 text-right text-sm text-slate-700">{(total.revenue > 0 ? (total.cm1 / total.revenue) * 100 : 0).toFixed(1)}%</td>
                             </tr>
                           )
                         })()}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal nhập CH.Cost VN Ecom (Turso riêng b2b_ecom_cost_monthly) — theo customer/shop/sub-shop × tháng */}
+              {ecomCostTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={closeEcomCostModal}>
+                  <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">Chi phí VN Ecom — <span className="text-[#0f4c81]">{ecomCostTarget.label}</span></h3>
+                        <p className="text-[11px] text-slate-400">{startDate} → {endDate} · lưu riêng theo tháng, không ảnh hưởng CH.Cost B2B khác</p>
+                      </div>
+                      <button onClick={closeEcomCostModal} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
+                    </div>
+                    <div className="p-5 overflow-y-auto">
+                      {ecomMonths.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic">Chọn khoảng ngày hợp lệ trước khi nhập chi phí.</p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {ecomMonths.map(m => {
+                            const lines = ecomCostEdits[m] || []
+                            const total = ecomLineTotal(lines)
+                            return (
+                              <div key={m} className="border border-slate-200 rounded-lg p-3 flex flex-col">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs font-bold text-slate-700">{m}</span>
+                                  <button onClick={() => addEcomLine(m)} className="text-[11px] font-bold text-[#0f4c81] hover:underline">+ Thêm</button>
+                                </div>
+                                <div className="space-y-1.5 flex-1">
+                                  {lines.length === 0 && <p className="text-[11px] text-slate-400 italic">Chưa nhập. Bấm &quot;+ Thêm&quot;.</p>}
+                                  {lines.map((l, idx) => (
+                                    <div key={idx} className="flex items-center gap-1">
+                                      <input value={l.label || ""} onChange={e => setEcomLine(m, idx, { label: e.target.value })} placeholder="Ghi chú"
+                                        className="flex-1 min-w-0 px-1.5 py-1 text-[11px] border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
+                                      <select value={l.type} onChange={e => setEcomLine(m, idx, { type: e.target.value as "amount" | "percent" })}
+                                        className="px-1 py-1 text-[11px] border border-slate-200 rounded bg-white focus:outline-none">
+                                        <option value="amount">đ</option>
+                                        <option value="percent">%</option>
+                                      </select>
+                                      <input type="number" min="0" value={l.value || ""} onChange={e => setEcomLine(m, idx, { value: parseFloat(e.target.value) || 0 })} placeholder="0"
+                                        className="w-24 px-2 py-1 text-[12px] text-right tabular-nums border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
+                                      <button onClick={() => removeEcomLine(m, idx)} className="text-slate-300 hover:text-red-500"><X className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="mt-2 pt-2 border-t border-slate-100 text-right text-[11px]">
+                                  Tổng (đ): <span className="font-bold text-slate-800 tabular-nums">{formatCurrency(total).replace("₫", "VND")}</span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                      {ecomCostError && <p className="mt-3 text-xs text-red-500 font-medium">{ecomCostError}</p>}
+                    </div>
+                    <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 bg-slate-50">
+                      <button onClick={closeEcomCostModal} className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100">Hủy</button>
+                      <button onClick={saveEcomCost} disabled={savingEcomCost || ecomMonths.length === 0}
+                        className="px-4 py-2 text-xs font-bold text-white bg-[#0f4c81] rounded-lg hover:bg-[#0f4c81]/90 disabled:opacity-50">
+                        {savingEcomCost ? "Đang lưu…" : "Lưu chi phí"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

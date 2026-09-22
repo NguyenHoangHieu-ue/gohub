@@ -21,6 +21,7 @@ Hiệu suất kênh sỉ B2B: doanh thu/margin/units theo kênh & sub-channel, t
 | Web | `/analytics/b2b` — `web/src/app/(dashboard)/analytics/b2b/page.tsx` |
 | API (KPI/trend) | `/api/analytics/b2b/{kpis, performance, strategic-performance, trend}` |
 | API (VN Ecom breakdown, s204+5) | `/api/analytics/b2b/ecom-breakdown` |
+| API (VN Ecom CH.Cost, s204+5) | `/api/analytics/b2b/ecom-costs` (Turso RIÊNG `b2b_ecom_cost_monthly`, không chung CH.Cost B2B khác) |
 | API (chi phí KH) | `/api/analytics/b2b-customer-costs?month=YYYY-MM` |
 | Nguồn doanh thu | fact (Fulfillment/Sales) + `dim_order_source` · `dim_customer` · `dim_sku` · `dim_staff` |
 | Nguồn chi phí KH | **Turso** `b2b_customer_cost_monthly` — chi phí per-customer nhập thủ công |
@@ -93,6 +94,31 @@ Nút "Manage Costs" và `CostManagementModal` đã **xóa hoàn toàn** khỏi t
   - Cache riêng `b2b-ecom1:...` (TTL 60' như route B2B khác), dep `b2b-ecom` — KHÔNG áp 3 filter chuẩn
     Ship/Internal-Ops/Ops-Customers (VN Ecom không phải KH ops, không cần) — chỉ nhận `startDate`/
     `endDate`/`dateColumn`/`includeShip` (mặc định loại phí ship, khớp default toàn trang).
+  - Sau đó thêm: hàng **TOTAL VN ECOM** cuối bảng (`reduce` qua cấp customer, không double-count) + cột
+    "Est. (projected)" nhỏ dưới mỗi số tiền khi `isProjectable` (× `projectionFactor`, giống các bảng
+    B2B khác).
+- **CH.Cost VN Ecom + cột CM1/%CM1 (2026-09-22, cùng đợt s204+5).** Hiếu yêu cầu thêm phần nhập chi phí +
+  2 cột CM1/%CM1 cho breakdown này, **lưu riêng** với CH.Cost B2B khác (không chung
+  `b2b_customer_cost_monthly` — breakdown VN Ecom theo shop/sub-shop, không có `customer_code` cho từng
+  cấp shop/sub-shop).
+  - Bảng Turso mới `b2b_ecom_cost_monthly` (`lib/b2b-ecom-cost.ts`, tự tạo qua `ensureB2bEcomCostTable()`
+    — không cần chạy migration SQL tay): key `id = month::customer_name::shop_name::subshop_name` (rỗng
+    khi không áp dụng cấp đó) — cho phép nhập cost độc lập ở CẢ 3 cấp (customer / shop / sub-shop), mỗi
+    cấp không tự cộng dồn từ cấp con (nếu chỉ nhập cost ở cấp customer thì CM1 của shop con bên dưới
+    KHÔNG bị trừ — đúng thiết kế, tách biệt hoàn toàn theo cấp đã chọn).
+  - Route `api/analytics/b2b/ecom-breakdown` SQL thêm `TO_CHAR(..., 'YYYY-MM') AS month` + GROUP BY theo
+    tháng (trước đó gộp cả kỳ) → build `monthly_data` per bucket → trừ CH.Cost pro-rata đúng
+    (`calcChCostForPeriod` từ `analytics-engine/cost-engine.ts`, cùng công thức chuẩn hệ thống s133: amount
+    × dayRatio theo tháng, percent × revenue thực tháng đó) — same pattern `b2b/performance` dùng cho
+    CH.Cost per-customer. Cache dep thêm `b2b-ecom-cost` (giữ nguyên `b2b-ecom` cho phần revenue).
+  - Route mới `api/analytics/b2b/ecom-costs` (GET đọc để prefill modal / POST batch upsert / DELETE 1
+    record) — quyền `canWrite(session, "b2b", [...])`, flush cache dep `b2b-ecom-cost` sau khi lưu (KHÔNG
+    đụng `b2b-ecom` — revenue không đổi khi sửa cost).
+  - FE: nút nhỏ "Cost" cạnh tên mỗi dòng (customer/shop/sub-shop) mở modal — mỗi modal hiện lưới thẻ
+    theo THÁNG trong khoảng ngày đang chọn (`monthsInRange()`, thuần client-side), mỗi thẻ tự nhập nhiều
+    dòng chi phí (label/loại đ hoặc %/giá trị) — style/UX port y hệt modal "Sửa chi tiết" CH.Cost B2B ở
+    Quarter Report (`b2b-tier-section.tsx`) nhưng đơn giản hoá cho 1 bucket/lần thay vì lưới nhiều KH.
+    Lưu xong gọi lại `fetchData(true)` (nocache) để CM1 tươi ngay.
 - **🔴 Incident s197 (2026-09-14) — Hiếu báo "kênh ecom tháng 9 hiển thị sai" (cả Quarter Report lẫn B2B
   Performance) — root cause: CACHE CŨ, không phải bug tính toán**. Verify trực tiếp qua SQL: "VN Ecom
   Shopee" T9 (1-13/9) thật có doanh thu 229.667.051đ, nhưng cả 2 trang đang hiện 137.802.046đ (thiếu
