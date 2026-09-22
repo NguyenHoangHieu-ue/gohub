@@ -12,14 +12,31 @@
 
 Branch làm việc: `staging` → merge `main` **CHỈ khi Hiếu yêu cầu RÕ RÀNG**. tsc + `next build` + `next lint` + vitest phải PASS trước khi push.
 
-**Mốc gần nhất — s203+3 (2026-09-21, đã merge main `3693cd72`)**: audit + tăng tốc toàn hệ thống BI
-(gốc: `TRIM()` phía `dim_customer` trong JOIN làm chậm ~10×, Supabase L2 cache chậm, gohub_dw chạy tuần
-tự) + fix B2C Performance/KPI/trend thiếu ~90% doanh thu (loại nhầm mã KH B2C dùng chung khỏi
-`excludedForB2C()`) + B2C customer-breakdown lấy kênh từ `summary.byTenant` trên đơn (thay field channel
-cũ, tránh vượt trần Admin API) + export 3HK Data Usage theo tháng + fix Bridge device tracking
-(creator-only) + Query Studio kiểu Power BI + fix cron `refresh-monthly-kpis` thiếu GET. Chi tiết đầy đủ:
-`docs/session_summary.txt` (đọc từ dòng cuối lên), wiki `analytics-data-model.md` §10,
-`analytics-b2c.md` §6, `analytics-quarterly.md`, `analytics-3hk-usage.md` §9, `analytics-devtools.md`.
+**Mốc gần nhất trên `main` — s203+3 (2026-09-21, `3693cd72`)**: audit + tăng tốc toàn hệ thống BI (gốc:
+`TRIM()` phía `dim_customer` trong JOIN làm chậm ~10×, Supabase L2 cache chậm, gohub_dw chạy tuần tự) +
+fix B2C Performance/KPI/trend thiếu ~90% doanh thu (loại nhầm mã KH B2C dùng chung khỏi
+`excludedForB2C()`) + B2C customer-breakdown lấy kênh từ `summary.byTenant` trên đơn + export 3HK Data
+Usage theo tháng + fix Bridge device tracking (creator-only) + Query Studio kiểu Power BI + fix cron
+`refresh-monthly-kpis` thiếu GET.
+
+**Tiếp theo cùng ngày 2026-09-22, đang ở `staging` — CHƯA merge main**:
+- Tinh gọn CLAUDE.md (1269→162 dòng, giữ trạng thái+rule+checklist, bỏ narrative cũ — chính file này).
+- Wiki business: sửa sai sót thật (mã vendor `GB` nhầm là WorldMove → đúng là Gighub, WorldMove là `WM`;
+  ký tự vị trí 8 data policy sai nhiều chữ; hệ số Daily 3HK 40%→38% lỗi thời; tỷ giá cũ) + 2 bài mới
+  `chinh-sach-vendor.md` (QR/đổi máy/hủy-hoàn tiền 11 vendor) + `quy-trinh-cs-van-hanh.md`.
+- Đồng bộ field response GoHub API `/skus` thật (migration `v62`, Hiếu đã chạy): bỏ 5 field chết
+  (`original_cost`/`reference_cost_vnd`/`final_cogs_included_vat_vnd`/`final_cogs_usd`/`wr_group` — chưa
+  từng có cột), đổi `expirations`→`vendor_expirations` (tên thật), thêm `sku_ref`/`parents`/`data`/
+  `speed`/`data_plan`/`topup_timing`. Vỡ 6 chỗ code đọc cột cũ (sync.py + 3 route + 1 tool Bé Gấu + 1 mô
+  tả schema agent) — đã sửa hết, verify sync chạy lại thành công.
+- 3HK Data Usage: tách sub-variant Unlimited theo `skus.data`/`skus.speed` (mã mới 13kt, cùng ký tự
+  nhưng khác gói thật vd 500MB vs 1GB) + giải mã P1/P2 từ cấu trúc mã CŨ 14kt (SIM)/15kt (eSIM, trước rơi
+  hết "Khác") — cảnh báo "Không rõ chi tiết gói" khi không tra được gì thay vì đoán im lặng. Kèm 2 bug
+  FE phát hiện lúc QA: race condition (sửa bằng request-id `useRef`, áp cho 4 fetch tab-phụ-thuộc) + số
+  thập phân không đồng nhất dấu `.`/`,` (thêm `fmtDec()` vi-VN).
+- Chi tiết đầy đủ: `docs/session_summary.txt` (đọc từ cuối lên), wiki `analytics-data-model.md` §10,
+  `analytics-b2c.md` §6, `analytics-quarterly.md`, `analytics-3hk-usage.md` §3.1d/§3.1e/§9,
+  `analytics-devtools.md`, `docs/wiki/business/*.md`.
 
 **Kiến trúc & agent hiện tại** (xem `docs/wiki/system/kien-truc-he-thong.md` để biết đầy đủ + diagram):
 - Chatbot chính = **Bé Gấu** (`be-gau.ts`, 1 agent function-calling, model `gemini-3.8-flash`
@@ -79,9 +96,11 @@ cũ, tránh vượt trần Admin API) + export 3HK Data Usage theo tháng + fix 
 
 v31–v56 (cũ, xem `docs/session_summary.txt` nếu cần chi tiết) · **v57** `gp_action_log` · **v58**
 `app_usage_events` cost · **v59** `chat_feedback` · **v60** To-Gau docs/notes/questions Realtime ·
-**v61** `browser_bridge_devices` + `browser_bridge_commands.device_id/claimed_ip` (Hiếu đã chạy, đã QA
-sống 2026-09-20). ⚠️ **v52** `external_api_keys` — CHƯA xác nhận đã chạy (xem checklist trên). ⚠️ **v43**
-`kb_wiki_group_scope` — chưa xác nhận lại gần đây.
+**v61** `browser_bridge_devices` + `browser_bridge_commands.device_id/claimed_ip` · **v62**
+`skus` field đầy đủ (bỏ 5 field chết, `expirations`→`vendor_expirations`, thêm `sku_ref`/`parents`/
+`data`/`speed`/`data_plan`/`topup_timing`) — tất cả Hiếu đã chạy, đã verify sống. ⚠️ **v52**
+`external_api_keys` — CHƯA xác nhận đã chạy (xem checklist trên). ⚠️ **v43** `kb_wiki_group_scope` —
+chưa xác nhận lại gần đây.
 
 ---
 

@@ -10251,3 +10251,127 @@ Yêu cầu Hiếu: export nhiều tháng cần cột tháng để phân biệt +
 - Lịch sử: bản 1 (94d78d1d) chỉ Tháng×SKU → thiếu cột; bản 2 (5d6d5f40) nhiều sheet quá tay; bản 3 (edaa3b68) đúng 6 cột; bản chốt (33db63e8) thêm Kế hoạch/ngày/SIM + Avg. Usage %. Bài học: hỏi rõ bảng nào/cột nào trước khi làm export nhiều sheet.
 - Verify: SQL theo tháng chạy được trên staging (T7-T8/2026 = 2.809 dòng SKU×tháng×type); tsc PASS. Chưa tải file thật (Hiếu tự thử). Chưa merge main.
 - Lưu ý: tổng Active SIMs qua các tháng của 1 SKU > số bảng UI (đúng thiết kế).
+
+
+## s204 (2026-09-22) — Tinh gọn CLAUDE.md + wiki business fix sai sót thật (commit 964fcc81)
+Yêu cầu Hiếu: "đọc hệ thống và tinh gọn CLAUDE.md". File đã phình to s190→s203+3 dù chính file đã ghi
+sẵn policy "chỉ giữ trạng thái hiện tại, không giữ narrative cũ" (rút gọn s189) mà chưa ai áp dụng lại.
+Nén 1269→162 dòng: giữ nguyên trạng thái hiện tại (gọn), toàn bộ checklist còn MỞ, migration list rút
+gọn, rules/coding rules/stack giữ nguyên vẹn. Bỏ narrative s190→s203+3 — không mất thông tin, toàn bộ
+vẫn còn trong session_summary.txt + git log + wiki.
+
+Tiếp theo Hiếu yêu cầu đọc "Own Info" (Supabase creator_kb, KB riêng của Gấu Pro) đối chiếu với
+docs/wiki/business/ — phát hiện nhiều sai sót thật, đã sửa cùng 1 commit (đã đọc kien-truc-he-thong.md
+trước khi làm, đúng yêu cầu "đọc hệ thống"):
+- Mã vendor GB bị ghi nhầm là WorldMove suốt 3 file (ma-sku.md/chon-vendor.md/vendor-worldmove.md) —
+  verify qua ref_vendors (Supabase, nguồn sự thật) + products.vendor_code thật: GB = Gighub (Airhub),
+  một vendor/aggregator RIÊNG BIỆT không liên quan WorldMove. Mã đúng của WorldMove là WM. Đã sửa cả 3
+  file + ví dụ minh hoạ.
+- Ký tự vị trí 8 (data policy) sai nhiều chữ trong ma-sku.md/loai-data-policy.md (E/G đảo ngược tốc độ,
+  thiếu hẳn L/X/T) — thay bằng bảng đã verify SQL thật từ session s200+3 (khớp tuyệt đối
+  fact_data_usage), thêm ghi chú khác biệt SKU 14 ký tự cũ (vị trí 10, ý nghĩa khác hẳn).
+- Hệ số Daily Data 3HK vẫn ghi 40% trong vendor-3hk.md/cong-thuc-gia-3hk.md — thực tế đã đổi xuống 38%
+  từ 2026-08 (app_settings sống, verify trực tiếp qua REST). Sửa + tính lại ví dụ minh hoạ.
+- Tỷ giá ty-gia.md dùng số tháng 6/2026 — cập nhật theo app_settings hiện hành (04/09/2026: 1 USD =
+  26.266 VND / 7.801 HKD / 31.666 TWD) + thêm cảnh báo đây là giá trị SỐNG, đừng hardcode.
+- Thêm phân biệt BC vs BC Datapool (WD=CMHK, W1=Singtel) vào chon-vendor.md.
+- Thêm "Quy tắc lọc dữ liệu chuẩn" (vendor exact-match không LIKE, loại tài khoản hệ thống B2C Customer
+  US/VN + B2B Ops, Operation Cost SUM không MAX) vào thuat-ngu-kinh-doanh.md.
+- Thêm quy tắc kiểm tra mở bán Ecom (mã tổng DVE vs mã lẻ DES/DET) vào ma-item-alias.md.
+- 2 bài mới: chinh-sach-vendor.md (chính sách QR/cài đặt/đổi thiết bị/hủy-hoàn tiền cho 11 vendor: BC
+  Datapool, 3HK, WM, DTac/TrueMove, KDDI, Joytel, Elite, BC, China Unicom, Mobifone, Skyfi — theo ảnh
+  OPS Hiếu gửi) và quy-trinh-cs-van-hanh.md (SIMPIN Gighub/Airhub, playbook tồn kho phôi SIM cận date,
+  báo cáo tuần PIC Non-Strategic — KHÔNG chép credential vendor vào git, chỉ ghi hướng dẫn thao tác).
+- Đối chiếu lại note nghi vấn cũ ở analytics-catalogue.md (s201+3 từng nêu "GB=WorldMove chưa đối
+  chiếu") — nay xác nhận đúng và cập nhật link 2 chiều.
+
+Không đọc được gohub_dw trực tiếp từ máy dev lúc này (ECONNREFUSED — IP không nằm trong allowlist GCP,
+chỉ Vercel mới vào được) nên toàn bộ đối chiếu dùng Supabase REST (creator_kb/ref_vendors/app_settings/
+skus/products) qua curl trực tiếp, không đoán.
+
+## s204+1 (2026-09-22) — Check response GoHub API /skus + đồng bộ field (v62)
+Hiếu yêu cầu "check response GoHub API (skus) rồi show cho tôi xem". Máy dev thiếu API_KEY (biến env
+pull-API, chỉ nằm ở GitHub Actions secret) → không gọi sống được. Trigger qua GitHub Actions: gắn tạm 1
+job dump_skus vào sync.yml (input dump_skus_only/dump_sku_code, guard không đụng job sync thật), dispatch
+trên --ref staging (workflow_dispatch chỉ dispatch được workflow ĐÃ có trên default branch — nội dung
+job chạy theo ref chỉ định), lấy log qua gh api .../logs --allow-escape-sequences, xong revert sạch cả
+job lẫn script debug (không để lại debug cruft, 2 lượt: dump toàn bảng + dump theo skuCode cụ thể
+EAAS53DBUNL05).
+
+Phát hiện response thật có nhiều field mà model Sku (Python, gohub_api_clients.py) KHÔNG khai — chưa từng
+lưu Supabase: sku_ref, parents, data, speed, data_plan, topup_timing. Field expirations API đã đổi tên
+thật thành vendor_expirations từ lâu — code cũ đọc tên cũ nên cột này LUÔN NULL âm thầm (không lỗi,
+không cảnh báo).
+
+Hiếu yêu cầu: lấy đủ field mới, TRỪ 5 field: original_cost/reference_cost_vnd/
+final_cogs_included_vat_vnd/final_cogs_usd/wr_group — verify DB thật xác nhận Supabase skus CHƯA TỪNG có
+cột cho các field này (dataclass khai nhưng không map cột thật, dataclasses.asdict() gửi lên bị bỏ qua
+từ trước tới giờ). Migration v62_skus_full_fields.sql (Hiếu đã chạy): thêm 6 cột mới, xoá cột chết
+expirations.
+
+Chạy sync core lần 1 sau migration → FAIL ngay (column skus.expirations does not exist, 42703) — lộ ra
+6 chỗ code khác vẫn đọc thẳng cột cũ, chưa từng phát hiện trước đó:
+- sync_sku_catalog() (sync.py) SELECT thẳng expirations để build bảng sku_catalog.
+- 3 route web (api/skus, api/external/skus, api/ncc/worldmove) select thẳng cột cũ.
+- 1 tool Bé Gấu (tools.ts getProductByCode).
+- 1 mô tả schema cho Data Explorer agent (data-explorer.ts, text prompt không phải query nhưng sai sẽ
+  làm agent tự đoán nhầm cột khi tự soạn SELECT).
+Sửa bằng alias PostgREST expirations:vendor_expirations (route/tool, giữ nguyên JSON key ra ngoài, không
+vỡ consumer) hoặc đọc đúng tên cột mới (sync.py). Trigger lại sync → thành công (~19 phút, chậm hơn bình
+thường nhưng không lỗi), verify data thật khớp response API gốc.
+
+Phát hiện thêm, CHƯA sửa (pre-existing, ngoài phạm vi, đã ghi rõ trong commit để theo dõi): tool
+queryProduct của cả 3 agent (Bé Gấu execProduct, pipeline cũ bi-analyst.ts, Gấu Pro
+creator/tools/supabase.ts runQueryProduct) đang SELECT nhầm cột thuộc bảng sku_catalog (is_unlimited/
+is_daily/hotspot/kyc_needed/operator_code/network_type) từ bảng skus — tool tra SKU 13 ký tự nhiều khả
+năng ĐÃ LỖI 42703 từ trước, không liên quan gì đổi schema hôm nay. Cần sửa riêng (JOIN đúng bảng hoặc
+tách 2 query), chưa làm.
+
+## s204+2/+3/+4 (2026-09-22) — 3HK Data Usage: tách sub-variant Unlimited (data/speed + P1/P2 mã cũ)
+Hiếu: cùng 1 ký tự phân loại Unlimited (VD mã B) có thể gộp CHUNG nhiều gói THẬT khác nhau (500MB vs 1GB
+trước khi giảm tốc) — chỉ dựa SKU letter không phân biệt được. Sau khi sync v62 có cột skus.data/
+skus.speed, dùng 2 cột này tách đúng sub-variant.
+
+s204+2 — mã MỚI (13kt): route mới POST /api/analytics/3hk-sku-meta (Supabase, chunk 150 sku/lần) tra
+data/speed/throttle_speed cho list sku_code đang hiển thị — merge client-side với skuMetrics (gohub_dw,
+2 DB tách biệt không JOIN SQL được). Đổi khoá gộp nhóm ${letter}_${vintage} → ${letter}_${vintage}_
+${data}_${speed}. Nhãn ưu tiên throttle_speed thật từ API.
+
+QA sống phát hiện 2 bug FE liên tiếp (đã verify không phải backend):
+1. Race condition — bấm đổi tab, activeTab đổi ngay nhưng skuMetrics còn data tab CŨ tới khi fetch mới
+   xong (async) → hiện sai hẳn 1-2s (mã Fixed lẫn vào bảng Unlimited). Fix lần 1 (cờ skuMetricsTab)
+   KHÔNG đủ — response CŨ có thể trả VỀ SAU response MỚI (network timing không đảm bảo thứ tự), request
+   cũ tới sau ĐÈ mất kết quả đúng → bảng kẹt "Không có dữ liệu" vĩnh viễn. Fix đúng: useRef đếm
+   request-id, chỉ áp response khi vẫn là request MỚI NHẤT — áp luôn cho 3 fetch khác cùng lớp bug
+   (fetchSKUTypeMetrics/fetchTotals/fetchRecords, phát hiện card "Average Usage by SKU Type" cũng lệch
+   tab độc lập với bảng breakdown lúc verify sống).
+2. Số thập phân không đồng nhất (Hiếu báo) — cột GB/ngày/SIM và % dùng .toFixed() trần (dấu chấm, kiểu
+   Mỹ) trong khi Active SIMs/Total Plan/Total Actual dùng formatNumber() (vi-VN, dấu phẩy). Thêm fmtDec()
+   (vi-VN, số thập phân cố định) thay mọi .toFixed() hiển thị, CHỪA nguyên phần export Excel/CSV (cần
+   Number thuần).
+3. Tổng bảng thấp hơn KPI card ~6 SIM (SKU độ dài lạ 15/17/18kt bị bỏ qua âm thầm) — thêm dòng "Mã dài
+   khác" (otherLengthGroup) cuối bảng, tổng giờ khớp tuyệt đối KPI card.
+
+s204+4 — mã CŨ 14kt/15kt (Hiếu cung cấp cấu trúc, verify 100% qua SQL thật trước khi code):
+- 14kt (SIM vật lý): [Nước(3)][Vendor(2)][SốLượng(4): NNGB|UNLI][Loại(2)][SốNgày(3)] — Loại=P1
+  (Unlimited 10Mbps) / P2 (Unlimited 5Mbps) khi SốLượng=UNLI.
+- 15kt (eSIM): 'E' + [Nước(3)][Vendor(2)][Loại(2)][SốLượng(4)][SốNgày(3)] — thứ tự Loại/SốLượng ĐẢO so
+  với 14kt. Hiếu ban đầu không nhắc ký tự E đầu, phát hiện qua verify SQL rồi Hiếu xác nhận lại đúng.
+- Nước có thể chứa số (VD AP1) — regex dùng [A-Z0-9]. Verify: 182/182 SKU 14/15kt chứa "UNL" khớp đúng
+  1 trong 2 regex (91 P1, 90 P2, 1 case lạ Loại=PY+UNLI — tự rơi "không rõ", không crash).
+- parseOldSku()/resolveVariant() hợp nhất cả 3 vintage vào 1 shape chung {data,speed,label,unknown}.
+  Đổi thứ tự ưu tiên mã MỚI đúng yêu cầu Hiếu: data+speed (Supabase) → throttle_speed (text API) →
+  cảnh báo "⚠️ Không rõ chi tiết gói" khi cả 2 đều thiếu (trước lùi về đoán CODE_LABELS[letter] âm thầm,
+  không báo gì).
+- skuVintage() giờ CHỈ công nhận mã cũ khi khớp đúng cấu trúc thật — sai cấu trúc tự rơi "Mã dài khác",
+  đúng yêu cầu Hiếu "mã cũ nào khác cấu trúc thì để sang mục khác".
+
+Verify sống trên staging sau deploy (cả 2 đợt fix + feature mới): tổng bảng khớp tuyệt đối KPI card
+(2.839 SIM kỳ 08/2026, không dòng nào rơi "Khác"), P1/P2 hiện đúng "Unlimited 10Mbps"/"Unlimited 5Mbps"
+kèm badge "(SIM)"/"(eSIM)" phân biệt, cảnh báo "không rõ" hiện đúng màu cam. Bấm dồn dập nhiều tab liên
+tiếp không còn kẹt/nháy sai. tsc + lint (0 lỗi mới) + vitest (368/368) PASS mọi commit.
+
+Trạng thái cuối session: tất cả nằm trên staging, ĐÃ merge main phần s204+1/+2 (theo yêu cầu rõ ràng
+"merge main trước đi rồi fix cho tôi" — merge tại thời điểm đó chỉ gồm tới s204+2, các fix race
+condition/số thập phân/mã cũ P1-P2 làm SAU lúc merge nên còn ở staging, CHƯA merge). Wiki cập nhật đủ:
+analytics-3hk-usage.md §3.1d/§3.1e, docs/wiki/business/*.md (6 file sửa + 2 file mới).
