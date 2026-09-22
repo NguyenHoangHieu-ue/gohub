@@ -135,7 +135,7 @@ export default function B2BPerformance() {
     ecomMonths.forEach(m => { initial[m] = [] })
     setEcomCostEdits(initial)
     try {
-      const res = await fetch(`/api/analytics/b2b/ecom-costs`)
+      const res = await fetch(`/api/analytics/b2b/ecom-costs`, { cache: "no-store" })
       const d = await res.json().catch(() => ({}))
       const rows: any[] = Array.isArray(d?.rows) ? d.rows : []
       const filled: Record<string, EcomCostLine[]> = { ...initial }
@@ -216,7 +216,7 @@ export default function B2BPerformance() {
         fetch(`/api/analytics/channels-with-platform-fee?startDate=${startDate}&endDate=${endDate}${nc}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: ["Traveloka", "Momo"] }).catch(() => ({ Strategic: ["Traveloka", "Momo"] })),
         fetch(`/api/analytics/quarterly-settings`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`/api/analytics/b2b/ecom-breakdown?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/analytics/b2b/ecom-breakdown?${queryParams.toString()}`, fresh ? { cache: "no-store" } : undefined).then(r => r.ok ? r.json() : []).catch(() => []),
       ])
 
       const safeB2BKpis = Array.isArray(b2bKpis) ? b2bKpis : []
