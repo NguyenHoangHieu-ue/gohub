@@ -565,6 +565,13 @@ lỗi mới) + vitest (368/368) PASS + tự xem qua UI (đọc bảng breakdown 
 >
 > Đã verify sống trên staging sau fix: chờ đủ lâu cho fetch xong (không còn nháy sai), tổng bảng khớp KPI
 > card. tsc + lint (0 lỗi mới) + vitest (368/368) PASS.
+>
+> **Fix thêm cùng đợt (Hiếu báo)**: cột GB/ngày/SIM và Thực tế/Kế hoạch % dùng `.toFixed()` trần (kiểu Mỹ,
+> dấu chấm thập phân "1.92") trong khi Active SIMs/Total Plan/Total Actual cùng bảng dùng `formatNumber()`
+> (vi-VN, dấu phẩy thập phân "24.253,2") — không đồng nhất trong CÙNG 1 bảng. Thêm helper `fmtDec(n,
+> decimals)` (vi-VN, số chữ số thập phân cố định) thay mọi `.toFixed()` ở chỗ HIỂN THỊ trong trang (bảng
+> breakdown, SKU Type, Average Usage by SKU, Records, tooltip chart) — CHỪA nguyên `.toFixed()` ở phần
+> export Excel/CSV (cần Number thuần, không phải chuỗi định dạng).
 
 **Bảng "Unlimited — Breakdown theo mã" (s200+4, gom theo ký tự phân loại; s202: tách thêm theo sub-variant
 data/speed — xem §3.1d):**

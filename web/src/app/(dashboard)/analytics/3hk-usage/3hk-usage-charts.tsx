@@ -16,7 +16,7 @@ export const SpeedComparisonChart = React.memo(function SpeedComparisonChart({ d
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} />
         <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} />
         <YAxis tick={{ fontSize: 11, fill: "#64748b" }} unit=" GB" width={60} />
-        <Tooltip formatter={(v: number, n: string) => [`${Number(v).toFixed(2)} GB`, n]} />
+        <Tooltip formatter={(v: number, n: string) => [`${Number(v).toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GB`, n]} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Bar dataKey="assume" name="Kế hoạch (GB/ngày)" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
         <Bar dataKey="actual" name="Thực tế (GB/ngày/SIM)" radius={[4, 4, 0, 0]}>

@@ -100,7 +100,7 @@ const CODE_LABELS: Record<string, string> = {
 // merge ở client).
 const formatDataAmount = (mb: number): string => {
   if (mb >= 1024 && mb % 1024 === 0) return `${mb / 1024}GB`
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)}GB`
+  if (mb >= 1024) return `${fmtDec(mb / 1024, 1)}GB`
   return `${mb}MB`
 }
 // Nhãn hiển thị cho 1 sub-variant. Ưu tiên `throttle_speed` (text người-đọc-được lấy thẳng từ GoHub API,
@@ -196,6 +196,14 @@ const monthLabel = (ym: string, multiYear: boolean) => {
 }
 // TB 2 chữ số thập phân theo vi-VN (dấu phẩy) — khớp mẫu "16,92".
 const fmtTB = (n: number) => (n || 0).toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+// s202: chuẩn hoá số thập phân hiển thị theo vi-VN (dấu phẩy = thập phân, dấu chấm = hàng nghìn) — trước
+// nhiều chỗ dùng `.toFixed()` trần (kiểu Mỹ, dấu chấm thập phân: "1.92") trong khi cột "Active SIMs"/
+// "Total Plan"/"Total Actual" cùng bảng lại dùng `formatNumber()` (vi-VN: "24.253,2") — không đồng nhất
+// trong CÙNG 1 bảng. `fmtDec()` thay `.toFixed()` ở MỌI chỗ HIỂN THỊ (JSX) — KHÔNG áp cho export Excel/CSV
+// (những chỗ đó cần Number thuần, để nguyên `.toFixed()` — Excel tự định dạng theo locale máy người mở file).
+const fmtDec = (n: number, decimals: number) =>
+  (n || 0).toLocaleString("vi-VN", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 
 export default function ThreeHKDataUsagePage() {
   const [data, setData] = useState<DataUsageRecord[]>([])
@@ -1068,13 +1076,13 @@ export default function ThreeHKDataUsagePage() {
           {activeTab === "Unlimited" ? (
             <>
               <p className="text-2xl font-bold text-slate-900">
-                {unlimitedGbPerDaySim != null ? `${unlimitedGbPerDaySim.toFixed(2)} GB` : "—"}
+                {unlimitedGbPerDaySim != null ? `${fmtDec(unlimitedGbPerDaySim, 2)} GB` : "—"}
               </p>
               <p className="text-xs text-slate-500 mt-1">Data high-speed dùng/ngày/SIM (gói unlimited)</p>
             </>
           ) : (
             <>
-              <p className="text-2xl font-bold text-slate-900">{totals.avgUsage.toFixed(1)}%</p>
+              <p className="text-2xl font-bold text-slate-900">{fmtDec(totals.avgUsage, 1)}%</p>
               <div className="w-full bg-slate-100 rounded-full h-1.5 mt-3">
                 <div className="bg-amber-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, totals.avgUsage)}%` }} />
               </div>
@@ -1242,7 +1250,7 @@ export default function ThreeHKDataUsagePage() {
                     <td className="px-6 py-3 text-right font-bold text-slate-900 text-sm">{formatNumber(sm.total_usage_gb)}</td>
                     <td className="px-6 py-3 text-right">
                       <span className={cn("text-sm font-bold", sm.avg_usage_pct > 80 ? "text-rose-600" : sm.avg_usage_pct > 50 ? "text-amber-600" : "text-emerald-600")}>
-                        {sm.avg_usage_pct.toFixed(1)}%
+                        {fmtDec(sm.avg_usage_pct, 1)}%
                       </span>
                     </td>
                     <td className="px-6 py-3">
@@ -1319,13 +1327,13 @@ export default function ThreeHKDataUsagePage() {
                       <td className="px-6 py-3 text-right text-slate-600 text-sm">{formatNumber(sg.total_plan_gb)}</td>
                       <td className="px-6 py-3 text-right font-bold text-slate-900 text-sm">{formatNumber(sg.total_usage_gb)}</td>
                       <td className="px-6 py-3 text-right">
-                        <span className={cn("text-sm font-bold", sg.actual_per_day > sg.plan_per_day ? "text-rose-600" : "text-emerald-600")} title={`Kế hoạch ${sg.plan_per_day.toFixed(2)} GB/ngày/SIM`}>
-                          {sg.actual_per_day.toFixed(2)} GB
+                        <span className={cn("text-sm font-bold", sg.actual_per_day > sg.plan_per_day ? "text-rose-600" : "text-emerald-600")} title={`Kế hoạch ${fmtDec(sg.plan_per_day, 2)} GB/ngày/SIM`}>
+                          {fmtDec(sg.actual_per_day, 2)} GB
                         </span>
                       </td>
                       <td className="px-6 py-3 text-right">
                         <span className={cn("text-sm font-bold", sg.avg_usage_pct > 100 ? "text-rose-600" : sg.avg_usage_pct > 80 ? "text-amber-600" : "text-emerald-600")}>
-                          {sg.avg_usage_pct.toFixed(1)}%
+                          {fmtDec(sg.avg_usage_pct, 1)}%
                         </span>
                       </td>
                       <td className="px-6 py-3">
@@ -1377,12 +1385,12 @@ export default function ThreeHKDataUsagePage() {
                                     <td className="px-4 py-2 text-center text-slate-600 text-xs font-medium">{formatNumber(m.active_sims)}</td>
                                     <td className="px-4 py-2 text-right text-slate-600 text-xs">{formatNumber(m.total_plan_gb)}</td>
                                     <td className="px-4 py-2 text-right text-slate-500 text-xs">
-                                      {planPerDay == null ? "—" : `${planPerDay.toFixed(2)} GB`}
+                                      {planPerDay == null ? "—" : `${fmtDec(planPerDay, 2)} GB`}
                                     </td>
                                     <td className="px-4 py-2 text-right font-bold text-slate-900 text-xs">{formatNumber(m.total_usage_gb)}</td>
-                                    <td className="px-4 py-2 text-right text-xs font-bold text-slate-700">{m.avg_usage_pct.toFixed(1)}%</td>
+                                    <td className="px-4 py-2 text-right text-xs font-bold text-slate-700">{fmtDec(m.avg_usage_pct, 1)}%</td>
                                     <td className={cn("px-4 py-2 text-right text-xs font-bold", gbPerDaySim == null ? "text-slate-300" : over ? "text-rose-600" : "text-emerald-600")}>
-                                      {gbPerDaySim == null ? "—" : `${gbPerDaySim.toFixed(2)} GB`}
+                                      {gbPerDaySim == null ? "—" : `${fmtDec(gbPerDaySim, 2)} GB`}
                                     </td>
                                   </tr>
                                   )
@@ -1415,7 +1423,7 @@ export default function ThreeHKDataUsagePage() {
                     <td className="px-6 py-3 text-right font-bold text-slate-900 text-sm">{formatNumber(otherLengthGroup.total_usage_gb)}</td>
                     <td className="px-6 py-3 text-right text-slate-400 text-sm">—</td>
                     <td className="px-6 py-3 text-right">
-                      <span className="text-sm font-bold text-slate-500">{otherLengthGroup.avg_usage_pct.toFixed(1)}%</span>
+                      <span className="text-sm font-bold text-slate-500">{fmtDec(otherLengthGroup.avg_usage_pct, 1)}%</span>
                     </td>
                     <td className="px-6 py-3">
                       <div className="flex items-center justify-end gap-3">
@@ -1448,7 +1456,7 @@ export default function ThreeHKDataUsagePage() {
                                   <td className="px-4 py-2 text-center text-slate-600 text-xs font-medium">{formatNumber(m.active_sims)}</td>
                                   <td className="px-4 py-2 text-right text-slate-600 text-xs">{formatNumber(m.total_plan_gb)}</td>
                                   <td className="px-4 py-2 text-right font-bold text-slate-900 text-xs">{formatNumber(m.total_usage_gb)}</td>
-                                  <td className="px-4 py-2 text-right text-xs font-bold text-slate-700">{m.avg_usage_pct.toFixed(1)}%</td>
+                                  <td className="px-4 py-2 text-right text-xs font-bold text-slate-700">{fmtDec(m.avg_usage_pct, 1)}%</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1560,10 +1568,10 @@ export default function ThreeHKDataUsagePage() {
                     <td className="px-6 py-3 text-right">
                       {activeTab === "Unlimited" ? (() => {
                         const g = gbPerDaySimOfSku(sm)
-                        return <span className="text-sm font-bold text-slate-700">{g != null ? `${g.toFixed(2)} GB` : "—"}</span>
+                        return <span className="text-sm font-bold text-slate-700">{g != null ? `${fmtDec(g, 2)} GB` : "—"}</span>
                       })() : (
                         <span className={cn("text-sm font-bold", sm.avg_usage_pct > 80 ? "text-rose-600" : sm.avg_usage_pct > 50 ? "text-amber-600" : "text-emerald-600")}>
-                          {sm.avg_usage_pct.toFixed(1)}%
+                          {fmtDec(sm.avg_usage_pct, 1)}%
                         </span>
                       )}
                     </td>
@@ -1655,8 +1663,8 @@ export default function ThreeHKDataUsagePage() {
                         <span className="text-[10px] text-slate-400 italic">Acts: {formatDate(record.activation_date)}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-right font-medium text-slate-600 text-sm">{record.data_amount_gb.toFixed(2)}</td>
-                    <td className="px-6 py-4 text-right font-bold text-slate-900 text-sm">{record.total_data_gb.toFixed(2)}</td>
+                    <td className="px-6 py-4 text-right font-medium text-slate-600 text-sm">{fmtDec(record.data_amount_gb, 2)}</td>
+                    <td className="px-6 py-4 text-right font-bold text-slate-900 text-sm">{fmtDec(record.total_data_gb, 2)}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-3">
                         <div className="w-16 bg-slate-100 rounded-full h-1.5 overflow-hidden">
@@ -1664,7 +1672,7 @@ export default function ThreeHKDataUsagePage() {
                             style={{ width: `${Math.min(100, record.usage_pct)}%` }} />
                         </div>
                         <span className={cn("text-xs font-bold min-w-[40px] text-right", record.usage_pct > 90 ? "text-rose-600" : record.usage_pct > 70 ? "text-amber-600" : "text-emerald-600")}>
-                          {record.usage_pct.toFixed(1)}%
+                          {fmtDec(record.usage_pct, 1)}%
                         </span>
                       </div>
                     </td>
