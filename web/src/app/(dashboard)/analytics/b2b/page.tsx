@@ -100,6 +100,7 @@ export default function B2BPerformance() {
   const [ecomCostEdits, setEcomCostEdits] = useState<Record<string, EcomCostLine[]>>({})
   const [savingEcomCost, setSavingEcomCost] = useState(false)
   const [ecomCostError, setEcomCostError] = useState<string | null>(null)
+  const [ecomCostLoading, setEcomCostLoading] = useState(false)
 
   const [wholesaleSort, setWholesaleSort] = useState<{ key: keyof PerformanceData; direction: "asc" | "desc" }>({ key: "revenue", direction: "desc" })
   const [tierSearch, setTierSearch] = useState("")
@@ -134,6 +135,11 @@ export default function B2BPerformance() {
     const initial: Record<string, EcomCostLine[]> = {}
     ecomMonths.forEach(m => { initial[m] = [] })
     setEcomCostEdits(initial)
+    // ecomCostLoading: hiện "Đang tải…" thay vì "Chưa nhập" trong lúc chờ GET prefill — trước đó 2 state
+    // giống hệt nhau (đều lines=[]) nên user hay bấm "+Thêm" ngay khi tưởng trống, đè lên lúc prefill
+    // vừa tới (Hiếu báo 2026-09-22: cost đã lưu nhưng phải bấm "+Thêm" mới "hiện" ra — thực chất do
+    // race giữa click sớm và fetch chưa xong, không phải mất data).
+    setEcomCostLoading(true)
     try {
       const res = await fetch(`/api/analytics/b2b/ecom-costs`, { cache: "no-store" })
       const d = await res.json().catch(() => ({}))
@@ -144,6 +150,7 @@ export default function B2BPerformance() {
         .forEach(r => { if (ecomMonths.includes(r.month)) filled[r.month] = r.cost_lines_parsed || [] })
       setEcomCostEdits(filled)
     } catch { /* giữ empty nếu fetch lỗi — user vẫn nhập mới được */ }
+    finally { setEcomCostLoading(false) }
   }
   const closeEcomCostModal = () => { setEcomCostTarget(null); setEcomCostEdits({}); setEcomCostError(null) }
   const setEcomLine = (month: string, idx: number, patch: Partial<EcomCostLine>) =>
@@ -1020,6 +1027,7 @@ export default function B2BPerformance() {
                           <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Units</th>
                           <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">GP</th>
                           <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Margin %</th>
+                          <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">CH.Cost</th>
                           <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">CM1</th>
                           <th className="px-8 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">CM1 %</th>
                         </tr>
@@ -1049,6 +1057,7 @@ export default function B2BPerformance() {
                                 </div>
                               </td>
                               <td className="px-8 py-3 text-right text-sm font-bold text-slate-600">{(c.revenue > 0 ? (c.margin / c.revenue) * 100 : 0).toFixed(1)}%</td>
+                              <td className="px-8 py-3 text-right text-sm font-bold text-rose-600">{c.ch_cost > 0 ? formatCurrency(c.ch_cost).replace("₫", "VND") : "—"}</td>
                               <td className="px-8 py-3 text-right">
                                 <div className="flex flex-col items-end">
                                   <span className="text-sm font-bold text-indigo-700">{formatCurrency(c.cm1).replace("₫", "VND")}</span>
@@ -1081,6 +1090,7 @@ export default function B2BPerformance() {
                                     </div>
                                   </td>
                                   <td className="px-8 py-2.5 text-right text-xs text-slate-500">{(s.revenue > 0 ? (s.margin / s.revenue) * 100 : 0).toFixed(1)}%</td>
+                                  <td className="px-8 py-2.5 text-right text-xs font-bold text-rose-500">{s.ch_cost > 0 ? formatCurrency(s.ch_cost).replace("₫", "VND") : "—"}</td>
                                   <td className="px-8 py-2.5 text-right">
                                     <div className="flex flex-col items-end">
                                       <span className="text-xs font-bold text-indigo-600">{formatCurrency(s.cm1).replace("₫", "VND")}</span>
@@ -1112,6 +1122,7 @@ export default function B2BPerformance() {
                                       </div>
                                     </td>
                                     <td className="px-8 py-2 text-right text-[11px] text-slate-400">{(sub.revenue > 0 ? (sub.margin / sub.revenue) * 100 : 0).toFixed(1)}%</td>
+                                    <td className="px-8 py-2 text-right text-[11px] font-bold text-rose-500/80">{sub.ch_cost > 0 ? formatCurrency(sub.ch_cost).replace("₫", "VND") : "—"}</td>
                                     <td className="px-8 py-2 text-right">
                                       <div className="flex flex-col items-end">
                                         <span className="text-[11px] font-bold text-indigo-600/80">{formatCurrency(sub.cm1).replace("₫", "VND")}</span>
@@ -1128,8 +1139,8 @@ export default function B2BPerformance() {
                         {(() => {
                           const total = ecomBreakdown.reduce((acc, c) => ({
                             revenue: acc.revenue + c.revenue, margin: acc.margin + c.margin,
-                            units: acc.units + c.units, orders: acc.orders + c.orders, cm1: acc.cm1 + c.cm1,
-                          }), { revenue: 0, margin: 0, units: 0, orders: 0, cm1: 0 })
+                            units: acc.units + c.units, orders: acc.orders + c.orders, cm1: acc.cm1 + c.cm1, ch_cost: acc.ch_cost + c.ch_cost,
+                          }), { revenue: 0, margin: 0, units: 0, orders: 0, cm1: 0, ch_cost: 0 })
                           return (
                             <tr className="bg-slate-100/80 font-black border-t-2 border-slate-200">
                               <td className="px-8 py-4 text-[11px] uppercase tracking-[0.2em] text-slate-700 font-bold">TOTAL VN ECOM</td>
@@ -1148,6 +1159,7 @@ export default function B2BPerformance() {
                                 </div>
                               </td>
                               <td className="px-8 py-4 text-right text-sm text-slate-700">{(total.revenue > 0 ? (total.margin / total.revenue) * 100 : 0).toFixed(1)}%</td>
+                              <td className="px-8 py-4 text-right text-sm font-black text-rose-600">{total.ch_cost > 0 ? formatCurrency(Math.round(total.ch_cost)).replace("₫", "VND") : "—"}</td>
                               <td className="px-8 py-4 text-right">
                                 <div className="flex flex-col items-end">
                                   <span className="text-sm font-black text-indigo-700">{formatCurrency(Math.round(total.cm1)).replace("₫", "VND")}</span>
@@ -1178,6 +1190,8 @@ export default function B2BPerformance() {
                     <div className="p-5 overflow-y-auto">
                       {ecomMonths.length === 0 ? (
                         <p className="text-xs text-slate-400 italic">Chọn khoảng ngày hợp lệ trước khi nhập chi phí.</p>
+                      ) : ecomCostLoading ? (
+                        <p className="text-xs text-slate-400 italic py-6 text-center">Đang tải chi phí đã lưu…</p>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           {ecomMonths.map(m => {
@@ -1218,7 +1232,7 @@ export default function B2BPerformance() {
                     </div>
                     <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 bg-slate-50">
                       <button onClick={closeEcomCostModal} className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100">Hủy</button>
-                      <button onClick={saveEcomCost} disabled={savingEcomCost || ecomMonths.length === 0}
+                      <button onClick={saveEcomCost} disabled={savingEcomCost || ecomCostLoading || ecomMonths.length === 0}
                         className="px-4 py-2 text-xs font-bold text-white bg-[#0f4c81] rounded-lg hover:bg-[#0f4c81]/90 disabled:opacity-50">
                         {savingEcomCost ? "Đang lưu…" : "Lưu chi phí"}
                       </button>
