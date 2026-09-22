@@ -1017,6 +1017,32 @@ export default function B2BPerformance() {
                             ))}
                           </React.Fragment>
                         ))}
+                        {(() => {
+                          const total = ecomBreakdown.reduce((acc, c) => ({
+                            revenue: acc.revenue + c.revenue, margin: acc.margin + c.margin,
+                            units: acc.units + c.units, orders: acc.orders + c.orders,
+                          }), { revenue: 0, margin: 0, units: 0, orders: 0 })
+                          return (
+                            <tr className="bg-slate-100/80 font-black border-t-2 border-slate-200">
+                              <td className="px-8 py-4 text-[11px] uppercase tracking-[0.2em] text-slate-700 font-bold">TOTAL VN ECOM</td>
+                              <td className="px-8 py-4 text-right">
+                                <div className="flex flex-col items-end">
+                                  <span className="text-sm font-black text-slate-900">{formatCurrency(Math.round(total.revenue)).replace("₫", "VND")}</span>
+                                  {isProjectable && <span className="text-[10px] font-bold text-brand-600 mt-0.5">Est. {formatCurrency(Math.round(total.revenue * projectionFactor)).replace("₫", "")}</span>}
+                                </div>
+                              </td>
+                              <td className="px-8 py-4 text-right text-sm text-slate-800">{formatNumber(total.orders)}</td>
+                              <td className="px-8 py-4 text-right text-sm text-slate-800">{formatNumber(total.units)}</td>
+                              <td className="px-8 py-4 text-right">
+                                <div className="flex flex-col items-end">
+                                  <span className="text-sm font-black text-emerald-700">{formatCurrency(Math.round(total.margin)).replace("₫", "VND")}</span>
+                                  {isProjectable && <span className="text-[10px] font-bold text-emerald-600/90 mt-0.5">Est. {formatCurrency(Math.round(total.margin * projectionFactor)).replace("₫", "")}</span>}
+                                </div>
+                              </td>
+                              <td className="px-8 py-4 text-right text-sm text-slate-700">{(total.revenue > 0 ? (total.margin / total.revenue) * 100 : 0).toFixed(1)}%</td>
+                            </tr>
+                          )
+                        })()}
                       </tbody>
                     </table>
                   </div>
