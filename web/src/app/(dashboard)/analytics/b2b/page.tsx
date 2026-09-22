@@ -957,29 +957,59 @@ export default function B2BPerformance() {
                           <React.Fragment key={c.name}>
                             <tr className="bg-cyan-50/40">
                               <td className="px-8 py-3 text-sm font-black text-cyan-800">{c.name}</td>
-                              <td className="px-8 py-3 text-right text-sm font-black text-slate-900">{formatCurrency(c.revenue).replace("₫", "VND")}</td>
+                              <td className="px-8 py-3 text-right">
+                                <div className="flex flex-col items-end">
+                                  <span className="text-sm font-black text-slate-900">{formatCurrency(c.revenue).replace("₫", "VND")}</span>
+                                  {isProjectable && <span className="text-[10px] font-bold text-brand-500 mt-0.5">Est. {formatCurrency(c.revenue * projectionFactor).replace("₫", "")}</span>}
+                                </div>
+                              </td>
                               <td className="px-8 py-3 text-right text-sm font-bold text-slate-600">{formatNumber(c.orders)}</td>
                               <td className="px-8 py-3 text-right text-sm font-bold text-slate-600">{formatNumber(c.units)}</td>
-                              <td className="px-8 py-3 text-right text-sm font-bold text-emerald-700">{formatCurrency(c.margin).replace("₫", "VND")}</td>
+                              <td className="px-8 py-3 text-right">
+                                <div className="flex flex-col items-end">
+                                  <span className="text-sm font-bold text-emerald-700">{formatCurrency(c.margin).replace("₫", "VND")}</span>
+                                  {isProjectable && <span className="text-[10px] font-bold text-emerald-600/70 mt-0.5">Est. {formatCurrency(c.margin * projectionFactor).replace("₫", "")}</span>}
+                                </div>
+                              </td>
                               <td className="px-8 py-3 text-right text-sm font-bold text-slate-600">{(c.revenue > 0 ? (c.margin / c.revenue) * 100 : 0).toFixed(1)}%</td>
                             </tr>
                             {c.shops.map(s => (
                               <React.Fragment key={s.name}>
                                 <tr className="hover:bg-slate-50/50">
                                   <td className="px-8 py-2.5 pl-14 text-xs font-bold text-slate-700">{s.name}</td>
-                                  <td className="px-8 py-2.5 text-right text-xs font-bold text-slate-800">{formatCurrency(s.revenue).replace("₫", "VND")}</td>
+                                  <td className="px-8 py-2.5 text-right">
+                                    <div className="flex flex-col items-end">
+                                      <span className="text-xs font-bold text-slate-800">{formatCurrency(s.revenue).replace("₫", "VND")}</span>
+                                      {isProjectable && <span className="text-[9px] font-bold text-brand-500 mt-0.5">Est. {formatCurrency(s.revenue * projectionFactor).replace("₫", "")}</span>}
+                                    </div>
+                                  </td>
                                   <td className="px-8 py-2.5 text-right text-xs text-slate-500">{formatNumber(s.orders)}</td>
                                   <td className="px-8 py-2.5 text-right text-xs text-slate-500">{formatNumber(s.units)}</td>
-                                  <td className="px-8 py-2.5 text-right text-xs font-bold text-emerald-600">{formatCurrency(s.margin).replace("₫", "VND")}</td>
+                                  <td className="px-8 py-2.5 text-right">
+                                    <div className="flex flex-col items-end">
+                                      <span className="text-xs font-bold text-emerald-600">{formatCurrency(s.margin).replace("₫", "VND")}</span>
+                                      {isProjectable && <span className="text-[9px] font-bold text-emerald-600/70 mt-0.5">Est. {formatCurrency(s.margin * projectionFactor).replace("₫", "")}</span>}
+                                    </div>
+                                  </td>
                                   <td className="px-8 py-2.5 text-right text-xs text-slate-500">{(s.revenue > 0 ? (s.margin / s.revenue) * 100 : 0).toFixed(1)}%</td>
                                 </tr>
                                 {s.subshops?.map(sub => (
                                   <tr key={sub.name} className="hover:bg-slate-50/50">
                                     <td className="px-8 py-2 pl-20 text-[11px] font-semibold text-slate-500">↳ {sub.name}</td>
-                                    <td className="px-8 py-2 text-right text-[11px] font-bold text-slate-600">{formatCurrency(sub.revenue).replace("₫", "VND")}</td>
+                                    <td className="px-8 py-2 text-right">
+                                      <div className="flex flex-col items-end">
+                                        <span className="text-[11px] font-bold text-slate-600">{formatCurrency(sub.revenue).replace("₫", "VND")}</span>
+                                        {isProjectable && <span className="text-[9px] font-bold text-brand-500/80 mt-0.5">Est. {formatCurrency(sub.revenue * projectionFactor).replace("₫", "")}</span>}
+                                      </div>
+                                    </td>
                                     <td className="px-8 py-2 text-right text-[11px] text-slate-400">{formatNumber(sub.orders)}</td>
                                     <td className="px-8 py-2 text-right text-[11px] text-slate-400">{formatNumber(sub.units)}</td>
-                                    <td className="px-8 py-2 text-right text-[11px] font-bold text-emerald-600/80">{formatCurrency(sub.margin).replace("₫", "VND")}</td>
+                                    <td className="px-8 py-2 text-right">
+                                      <div className="flex flex-col items-end">
+                                        <span className="text-[11px] font-bold text-emerald-600/80">{formatCurrency(sub.margin).replace("₫", "VND")}</span>
+                                        {isProjectable && <span className="text-[9px] font-bold text-emerald-600/60 mt-0.5">Est. {formatCurrency(sub.margin * projectionFactor).replace("₫", "")}</span>}
+                                      </div>
+                                    </td>
                                     <td className="px-8 py-2 text-right text-[11px] text-slate-400">{(sub.revenue > 0 ? (sub.margin / sub.revenue) * 100 : 0).toFixed(1)}%</td>
                                   </tr>
                                 ))}
