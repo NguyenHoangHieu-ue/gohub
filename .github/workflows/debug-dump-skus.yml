@@ -1,0 +1,19 @@
+name: Debug Dump GoHub /skus Response
+
+# Tạm thời, dùng 1 lần để xem raw response /skus — XOÁ sau khi dùng xong.
+on:
+  workflow_dispatch:
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - working-directory: ./backend/data_sync
+        run: python -u debug_dump_skus.py
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
