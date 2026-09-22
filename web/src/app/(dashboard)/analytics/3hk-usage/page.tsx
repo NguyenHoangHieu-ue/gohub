@@ -57,32 +57,60 @@ const daysOfSku = (sku: string): number | null => {
 }
 
 
-// Ký tự phân loại "Data type" của mã SKU 3HK (s200+3/+4, bảng mapping Hiếu cung cấp) — VỊ TRÍ 8 cho
-// mã CHUẨN 13 ký tự, VỊ TRÍ 10 cho mã CŨ 14 ký tự (verify qua SQL thật, xem wiki analytics-3hk-usage.md
-// §3.1). Độ dài khác (15/17/18 ký tự, số lượng nhỏ) — chưa xác định vị trí, trả null (gộp "Khác" ở FE).
-const typeLetterOfSku = (sku: string): string | null => {
-  if (sku.length === 13) return sku[7]?.toUpperCase() ?? null
-  if (sku.length === 14) return sku[9]?.toUpperCase() ?? null
+// ─── Phân loại ký tự/nhóm theo mã SKU — 3 vintage KHÁC cấu trúc hoàn toàn (s202+2, Hiếu cung cấp cấu
+// trúc mã CŨ, verify 100% qua SQL thật trên fact_data_usage 2026-09-22 — xem wiki §3.1e):
+//   Mã MỚI (13kt): ký tự phân loại ở VỊ TRÍ 8 (xem CODE_LABELS) — không đổi.
+//   Mã CŨ 14kt (SIM vật lý): [Nước(3)][Vendor(2)][SốLượng(4): NNGB hoặc UNLI][Loại(2)][SốNgày(3): NND]
+//     — Loại = P1 (Unlimited 10Mbps) / P2 (Unlimited 5Mbps) khi SốLượng=UNLI; mã Daily/Fixed khác (SốLượng
+//     là NNGB) không cần giải mã Loại chi tiết — SQL đã lọc chỉ còn Unlimited trước khi tới FE.
+//   Mã CŨ 15kt (eSIM): 'E' + [Nước(3)][Vendor(2)][Loại(2)][SốLượng(4)][SốNgày(3)] — thứ tự Loại/SốLượng
+//     ĐẢO so với 14kt (Hiếu xác nhận, verify khớp dữ liệu thật).
+//   Verify: 182/182 SKU 14/15kt có "UNL" trong chuỗi khớp đúng 1 trong 2 regex dưới (91 P1, 90 P2, 1
+//   "PY"+UNLI lạ — tự rơi "không rõ", đúng ý). Mã nước có thể chứa số (VD "AP1") nên dùng [A-Z0-9].
+const OLD_SIM_RE  = /^([A-Z0-9]{3})([A-Z0-9]{2})(\d{2}GB|UNLI)([A-Z0-9]{2})(\d{2}D)$/
+const OLD_ESIM_RE = /^E([A-Z0-9]{3})([A-Z0-9]{2})([A-Z0-9]{2})(\d{2}GB|UNLI)(\d{2}D)$/
+
+interface OldSkuInfo { typeCode: string; amount: string; unliSpeed: 10 | 5 | null }
+const parseOldSku = (sku: string): OldSkuInfo | null => {
+  if (sku.length === 14) {
+    const m = sku.match(OLD_SIM_RE)
+    if (!m) return null
+    const [, , , amount, typeCode] = m
+    return { typeCode, amount, unliSpeed: amount === "UNLI" ? (typeCode === "P1" ? 10 : typeCode === "P2" ? 5 : null) : null }
+  }
+  if (sku.length === 15) {
+    const m = sku.match(OLD_ESIM_RE)
+    if (!m) return null
+    const [, , , typeCode, amount] = m
+    return { typeCode, amount, unliSpeed: amount === "UNLI" ? (typeCode === "P1" ? 10 : typeCode === "P2" ? 5 : null) : null }
+  }
   return null
 }
 
-// Vintage của mã (13 ký tự CHUẨN vs 14 ký tự CŨ) — 2 vintage dùng CHUNG ký tự nhưng KHÁC HẲN quy ước,
-// tuyệt đối không được gộp chung khi hiển thị. Verify trực tiếp SQL trên staging (fact_data_usage,
-// vendor 3HKDATAPOOL): ký tự 'P' ở mã CŨ 14kt (vị trí 10) — 350/350 SKU distinct đều chứa literal "UNL"
-// trong chuỗi (100%, vd nằm trong token "UNLIP1"/"UNLIP2") → BẢN CHẤT LÀ UNLIMITED, không liên quan gì
-// "Daily". Ký tự 'P' ở mã MỚI 13kt (vị trí 8) — 0/792 SKU distinct có "UNL" → đúng là Daily throttle
-// <2mbps (CODE_LABELS). Cùng 1 chữ cái 'P' nhưng 2 Ý NGHĨA HOÀN TOÀN TRÁI NGƯỢC nhau tuỳ vintage — mọi nơi
-// gom nhóm theo `typeLetterOfSku()` PHẢI tách riêng vintage để không lẫn 2 quy ước này vào 1 bucket.
-const skuVintage = (sku: string): "13" | "14" | null => {
+// Mã nhóm hiển thị badge — vị trí 8 cho mã mới 13kt, field "Loại" (P1/P2/...) cho mã cũ 14/15kt. Mã cũ
+// KHÔNG khớp đúng cấu trúc (xem parseOldSku) trả null → rơi vào "Khác" ở FE, đúng yêu cầu Hiếu.
+const typeLetterOfSku = (sku: string): string | null => {
+  if (sku.length === 13) return sku[7]?.toUpperCase() ?? null
+  if (sku.length === 14 || sku.length === 15) return parseOldSku(sku)?.typeCode ?? null
+  return null
+}
+
+// Vintage của mã — 13kt (mới), 14kt (cũ · SIM vật lý), 15kt (cũ · eSIM). Mã cũ CHỈ được công nhận vintage
+// khi khớp đúng cấu trúc thật (parseOldSku) — sai cấu trúc thì coi như KHÔNG xác định (null), rơi "Khác"
+// thay vì đoán bừa. 3 vintage dùng chung 1 số ký tự (vd 'P') nhưng Ý NGHĨA KHÁC NHAU hoàn toàn — mọi nơi
+// gom nhóm theo `typeLetterOfSku()` PHẢI tách riêng vintage để không lẫn.
+const skuVintage = (sku: string): "13" | "14" | "15" | null => {
   if (sku.length === 13) return "13"
-  if (sku.length === 14) return "14"
+  if (sku.length === 14) return parseOldSku(sku) ? "14" : null
+  if (sku.length === 15) return parseOldSku(sku) ? "15" : null
   return null
 }
 // Nhãn ngắn cho vintage — dùng trực tiếp trong UI (badge/tooltip) để Hiếu luôn biết đang xem mã nào.
-const vintageLabel = (v: "13" | "14") => (v === "13" ? "mã mới · 13kt" : "mã cũ · 14kt")
+const vintageLabel = (v: "13" | "14" | "15") =>
+  v === "13" ? "mã mới · 13kt" : v === "14" ? "mã cũ · 14kt (SIM)" : "mã cũ · 15kt (eSIM)"
 
-// Mô tả người-đọc-được cho từng ký tự phân loại (bảng Hiếu cung cấp) — dùng cho tooltip/label, KHÔNG
-// dùng để tính toán (tính toán bucket Daily/Fixed/Unlimited nằm ở SQL `SKU_TYPE_CASE` bên dưới).
+// Mô tả người-đọc-được cho từng ký tự phân loại MÃ MỚI (bảng Hiếu cung cấp) — dùng cho tooltip/label,
+// KHÔNG dùng để tính toán (tính toán bucket Daily/Fixed/Unlimited nằm ở SQL `SKU_TYPE_CASE` bên dưới).
 const CODE_LABELS: Record<string, string> = {
   A: "Daily - Unlimited 5mbps", B: "Daily - Unlimited 10mbps", C: "Unlimited 20mbps",
   D: "Unlimited 100mbps", E: "Fixed - Unlimited 5mbps", G: "Fixed - Unlimited 10mbps",
@@ -90,35 +118,42 @@ const CODE_LABELS: Record<string, string> = {
   F: "Fixed throttle <2mbps", Y: "Fixed no-throttle", P: "Daily throttle <2mbps",
   Z: "Daily no-throttle", T: "Daily throttle <2mbps - Midnight",
 }
+const UNKNOWN_LABEL = "⚠️ Không rõ chi tiết gói"
 
-// s202: cùng 1 ký tự phân loại Unlimited (VD 'B') có thể gộp CHUNG NHIỀU gói thật khác nhau — vd 500MB
-// tốc độ cao rồi giảm còn 10Mbps VÀ 1GB tốc độ cao rồi giảm còn 10Mbps đều là 'B' (cùng "Daily - Unlimited
-// 10mbps" theo bảng CODE_LABELS), chỉ SKU letter không phân biệt được. Sau khi sync thêm cột `data`
-// (ngưỡng tốc độ cao, đơn vị MB) + `speed` (Mbps sau khi hết ngưỡng) vào Supabase `skus`, dùng combo
-// (letter, vintage, data, speed) làm khoá gộp thật thay vì chỉ (letter, vintage) — xem `skuMeta` fetch ở
-// trên (cross-DB: fact_data_usage nằm gohub_dw, data/speed nằm Supabase, không JOIN được bằng SQL, phải
-// merge ở client).
 const formatDataAmount = (mb: number): string => {
   if (mb >= 1024 && mb % 1024 === 0) return `${mb / 1024}GB`
   if (mb >= 1024) return `${fmtDec(mb / 1024, 1)}GB`
   return `${mb}MB`
 }
-// Nhãn hiển thị cho 1 sub-variant. Ưu tiên `throttle_speed` (text người-đọc-được lấy thẳng từ GoHub API,
-// VD "1GB high speed then drop to 10 mbps") — đúng và tự nhiên hơn tự ghép chữ. Không có thì tự ghép từ
-// data/speed. Không có cả hai (SKU không tra được trên Supabase — VD đã ngừng bán, mất khỏi catalog hiện
-// tại) thì lùi về nhãn cũ theo CODE_LABELS[letter] (mất độ chi tiết nhưng không hiện rỗng).
-const variantLabelOf = (
-  letter: string, meta: { data: number | null; speed: number | null; throttle_speed: string | null } | undefined,
-): string => {
-  if (meta?.throttle_speed) return meta.throttle_speed
-  if (meta?.data != null && meta?.speed != null) return `${formatDataAmount(meta.data)} tốc độ cao, giảm còn ${meta.speed}Mbps`
-  return CODE_LABELS[letter] ?? letter
+
+// Kết quả "giải mã" 1 SKU Unlimited — hợp nhất cả 3 vintage vào 1 shape chung để speedGroups xử lý đồng
+// nhất (s202+2, Hiếu yêu cầu): mã MỚI ưu tiên data+speed (Supabase, số thật) → throttle_speed (text thật
+// từ API) → CẢNH BÁO "không rõ" nếu cả 2 đều thiếu (KHÔNG lùi về đoán CODE_LABELS im lặng nữa như trước).
+// Mã CŨ 14/15kt giải mã trực tiếp từ ký tự P1/P2 trong SKU — không tra Supabase (catalog cũ không còn).
+interface ResolvedVariant { data: number | null; speed: number | null; label: string; unknown: boolean }
+const resolveVariant = (
+  sku: string, vintage: "13" | "14" | "15",
+  meta: { data: number | null; speed: number | null; throttle_speed: string | null } | undefined,
+): ResolvedVariant => {
+  if (vintage === "13") {
+    if (meta?.data != null && meta?.speed != null) {
+      return { data: meta.data, speed: meta.speed, label: `${formatDataAmount(meta.data)} tốc độ cao, giảm còn ${meta.speed}Mbps`, unknown: false }
+    }
+    if (meta?.throttle_speed) return { data: null, speed: null, label: meta.throttle_speed, unknown: false }
+    return { data: null, speed: null, label: UNKNOWN_LABEL, unknown: true }
+  }
+  const info = parseOldSku(sku)   // 14kt / 15kt
+  if (info?.unliSpeed) return { data: null, speed: info.unliSpeed, label: `Unlimited ${info.unliSpeed}Mbps`, unknown: false }
+  return { data: null, speed: null, label: UNKNOWN_LABEL, unknown: true }
 }
-// Khoá gộp nhóm sub-variant — thêm data/speed vào key cũ `${letter}_${vintage}` (chưa tra được meta thì
-// giữ nguyên hành vi cũ, gộp theo letter, tránh vỡ nhóm khi Supabase lookup chưa kịp trả về/lỗi).
-const variantKeyOf = (
-  letter: string, vintage: string, meta: { data: number | null; speed: number | null } | undefined,
-): string => `${letter}_${vintage}_${meta?.data ?? "x"}_${meta?.speed ?? "x"}`
+// Khoá gộp nhóm sub-variant — ưu tiên data/speed (số, đáng tin nhất), sau đó text label (chỉ biết
+// throttle_speed), cuối cùng gộp "unknown" riêng theo (groupCode, vintage) — không trộn unknown mã A với
+// unknown mã B.
+const variantKeyOf = (groupCode: string, vintage: string, r: ResolvedVariant): string => {
+  if (r.data != null || r.speed != null) return `${groupCode}_${vintage}_${r.data ?? "x"}_${r.speed ?? "x"}`
+  if (!r.unknown) return `${groupCode}_${vintage}_lbl_${r.label}`
+  return `${groupCode}_${vintage}_unknown`
+}
 
 // `data_usage_log.country` viết khác `ncc_3hk.country` cho vài nước — verify trực tiếp SQL (đối chiếu 46
 // nước distinct trong data_usage_log với 47 nước trong ncc_3hk): "USA"≠"US", "United Kingdom"≠"UK",
@@ -160,15 +195,15 @@ interface SKUTypeMetrics {
   avg_usage_pct: number
 }
 
-// Nhóm gói Unlimited 3HK = (high-speed × throttle). Hiện chỉ có 3 loại:
-//   500MB·5mbps · 500MB·10mbps · 1GB·10mbps.
+// Nhóm gói Unlimited 3HK theo sub-variant thật (data/speed hoặc P1/P2) — xem `resolveVariant()`.
 interface SpeedGroupMetrics {
-  key: string           // s202: `${speed_group}_${vintage}_${data}_${speed}` — xem `variantKeyOf()`
-  speed_group: string  // s200+4: ký tự phân loại (A/B/C/.../X), KHÔNG còn là nhãn tốc độ/throttle
-  vintage: "13" | "14"  // mã CHUẨN 13kt hay mã CŨ 14kt — xem comment `skuVintage()` (2 quy ước khác nhau)
-  data: number | null    // s202: ngưỡng data tốc độ cao (MB, từ Supabase skus.data) — null nếu chưa tra được
-  speed: number | null   // s202: tốc độ Mbps sau khi hết ngưỡng (Supabase skus.speed)
-  label: string          // s202: nhãn người-đọc-được — xem `variantLabelOf()`
+  key: string           // s202+2: xem `variantKeyOf()`
+  speed_group: string  // ký tự phân loại (mã mới) hoặc "P1"/"P2"/... (mã cũ) — xem `typeLetterOfSku()`
+  vintage: "13" | "14" | "15"  // mã mới 13kt / cũ 14kt (SIM) / cũ 15kt (eSIM) — xem `skuVintage()`
+  data: number | null    // ngưỡng data tốc độ cao (MB, Supabase skus.data — chỉ mã mới) — null nếu không có
+  speed: number | null   // tốc độ Mbps sau khi hết ngưỡng (Supabase skus.speed, hoặc P1/P2 mã cũ)
+  label: string          // nhãn người-đọc-được — xem `resolveVariant()`
+  unknown: boolean       // s202+2: true = không tra được data/speed/throttle_speed nào — hiện cảnh báo
   active_sims: number
   total_plan_gb: number
   total_usage_gb: number
@@ -445,8 +480,8 @@ export default function ThreeHKDataUsagePage() {
 
   // Chart "mã nào chiếm bao nhiêu SIM" (s200+4, Hiếu chỉnh lại từ bản per-SKU sang per-KÝ TỰ phân loại —
   // gọn hơn hẳn 1366 mã SKU riêng lẻ, đi thẳng vào câu hỏi "mã A/B/X... chiếm bao nhiêu"). Gom theo
-  // `typeLetterOfSku()` (vị trí 8 mã 13 ký tự / vị trí 10 mã 14 ký tự); SKU không xác định được vị trí
-  // (15/17/18 ký tự, số lượng nhỏ) gộp vào "Khác (mã dài khác)".
+  // `typeLetterOfSku()` (vị trí 8 mã mới 13kt / field Loại mã cũ 14kt-15kt, xem `parseOldSku()`). SKU
+  // không khớp cấu trúc nào (17/18 ký tự, hoặc 14/15kt sai cấu trúc) gộp vào "Khác (mã dài khác)".
   // ⚠️ Fix trùng mã (Hiếu báo) — khoá gộp PHẢI kèm `skuVintage()`: ký tự 'P' mã MỚI 13kt (Daily throttle
   // thật, verify 0/792 SKU có "UNL") và 'P' mã CŨ 14kt (Unlimited thật, verify 350/350 SKU có "UNL") là 2
   // THỨ HOÀN TOÀN KHÁC NHAU — gộp chung theo mỗi 1 chữ cái sẽ cộng nhầm 2 quy ước vào cùng 1 cột khi xem
@@ -466,7 +501,7 @@ export default function ThreeHKDataUsagePage() {
     }
     const rows = Object.entries(acc)
       .map(([key, active_sims]) => {
-        const [letter, vintage] = key.split("_") as [string, "13" | "14"]
+        const [letter, vintage] = key.split("_") as [string, "13" | "14" | "15"]
         const label = vintage === "13"
           ? (CODE_LABELS[letter] ? `${letter} (${vintageLabel(vintage)}) — ${CODE_LABELS[letter]}` : `${letter} (${vintageLabel(vintage)})`)
           : `${letter} (${vintageLabel(vintage)})`
@@ -508,12 +543,12 @@ export default function ThreeHKDataUsagePage() {
     for (const sm of skuMetrics) {
       const group   = typeLetterOfSku(sm.sku)
       const vintage = skuVintage(sm.sku)
-      if (!group || !vintage) continue   // bỏ SKU không xác định được vị trí ký tự (15/17/18 ký tự)
-      const meta = skuMeta[sm.sku]
-      const key = variantKeyOf(group, vintage, meta)
+      if (!group || !vintage) continue   // bỏ SKU không xác định được cấu trúc (rơi "Khác" — otherLengthGroup)
+      const resolved = resolveVariant(sm.sku, vintage, skuMeta[sm.sku])
+      const key = variantKeyOf(group, vintage, resolved)
       const g = acc[key] ?? (acc[key] = {
-        key, speed_group: group, vintage, data: meta?.data ?? null, speed: meta?.speed ?? null,
-        label: variantLabelOf(group, meta),
+        key, speed_group: group, vintage, data: resolved.data, speed: resolved.speed,
+        label: resolved.label, unknown: resolved.unknown,
         active_sims: 0, total_plan_gb: 0, total_usage_gb: 0, avg_usage_pct: 0, sim_days: 0, actual_per_day: 0, plan_per_day: 0,
       })
       g.active_sims    += sm.active_sims
@@ -541,7 +576,7 @@ export default function ThreeHKDataUsagePage() {
       const group   = typeLetterOfSku(sm.sku)
       const vintage = skuVintage(sm.sku)
       if (!group || !vintage) continue
-      const key = variantKeyOf(group, vintage, skuMeta[sm.sku])
+      const key = variantKeyOf(group, vintage, resolveVariant(sm.sku, vintage, skuMeta[sm.sku]))
       ;(acc[key] ??= []).push(sm)
     }
     for (const g of Object.keys(acc)) acc[g].sort((a, b) => b.total_usage_gb - a.total_usage_gb)
@@ -577,8 +612,10 @@ export default function ThreeHKDataUsagePage() {
   // Tên hiển thị cho chart — NGẮN GỌN (trục X không đủ chỗ cho câu mô tả đầy đủ như bảng breakdown), nhưng
   // vẫn phân biệt được sub-variant (s202: kèm ngưỡng data khi biết) + vintage cũ.
   const sgChartName = (sg: SpeedGroupMetrics) => {
-    const base = sg.data != null ? `${sg.speed_group}·${formatDataAmount(sg.data)}` : sg.speed_group
-    return sg.vintage === "14" ? `${base} (cũ)` : base
+    const base = sg.data != null ? `${sg.speed_group}·${formatDataAmount(sg.data)}`
+      : sg.speed != null ? `${sg.speed_group}·${sg.speed}Mbps`
+      : sg.speed_group
+    return sg.vintage === "13" ? base : `${base} (cũ)`
   }
 
   // Dữ liệu biểu đồ so sánh 3 loại gói: Thực tế (GB/ngày/SIM, trung bình có trọng số) vs Giả định.
@@ -1329,19 +1366,17 @@ export default function ThreeHKDataUsagePage() {
                     <tr className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-3 font-bold text-slate-900 text-sm">
                         <div className="flex items-center flex-wrap gap-1.5">
-                          <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100 text-xs font-mono" title="Ký tự phân loại trên SKU">
+                          <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100 text-xs font-mono" title="Ký tự/mã nhóm phân loại trên SKU (vị trí 8 mã mới, hoặc field Loại P1/P2 mã cũ)">
                             {sg.speed_group}
                           </span>
                           <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", isNew ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
                             {vintageLabel(sg.vintage)}
                           </span>
-                          {sg.data == null && (
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500" title="Không tra được data/speed từ Supabase (SKU có thể đã ngừng bán) — đang hiện nhãn ước lượng theo mã">
-                              chưa rõ gói cụ thể
-                            </span>
-                          )}
                         </div>
-                        <div className="mt-0.5 font-normal text-[13px] text-slate-700">{sg.label}</div>
+                        <div className={cn("mt-0.5 font-normal text-[13px]", sg.unknown ? "text-amber-600 font-semibold" : "text-slate-700")}
+                          title={sg.unknown ? "Không tra được data/speed (mã mới, Supabase) lẫn P1/P2 (mã cũ) cho SKU này — có thể đã ngừng bán hoặc SKU lạ" : undefined}>
+                          {sg.label}
+                        </div>
                       </td>
                       <td className="px-6 py-3 text-center text-slate-600 text-sm font-medium">{formatNumber(sg.active_sims)}</td>
                       <td className="px-6 py-3 text-right text-slate-600 text-sm">{formatNumber(sg.total_plan_gb)}</td>

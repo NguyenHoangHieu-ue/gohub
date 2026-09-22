@@ -583,6 +583,50 @@ lỗi mới) + vitest (368/368) PASS + tự xem qua UI (đọc bảng breakdown 
 > breakdown, SKU Type, Average Usage by SKU, Records, tooltip chart) — CHỪA nguyên `.toFixed()` ở phần
 > export Excel/CSV (cần Number thuần, không phải chuỗi định dạng).
 
+### 3.1e Giải mã sub-variant cho mã CŨ 14kt/15kt (s202+2)
+
+3 vintage SKU, cấu trúc HOÀN TOÀN KHÁC NHAU (Hiếu cung cấp, verify 100% qua SQL thật trên
+`fact_data_usage` 2026-09-22 trước khi code — xem `docs/session_summary.txt`):
+
+- **Mã MỚI (13kt)**: ký tự phân loại vị trí 8 (không đổi, xem §3.1).
+- **Mã CŨ 14kt (SIM vật lý)**: `[Nước(3)][Vendor(2)][SốLượng(4): NNGB hoặc UNLI][Loại(2)][SốNgày(3): NND]`
+  — VD `CHN3DUNLIP105D` = CHN·3D·UNLI·P1·05D. `Loại` = `P1` (Unlimited 10Mbps) / `P2` (Unlimited 5Mbps)
+  khi `SốLượng=UNLI`; mã Daily/Fixed khác (SốLượng dạng `NNGB`) không cần giải mã `Loại` chi tiết — SQL
+  (`SKU_TYPE_CASE` §3.1, nhánh `LIKE '%UNL%'`) đã lọc chỉ còn Unlimited trước khi tới FE.
+- **Mã CŨ 15kt (eSIM)**: `'E' + [Nước(3)][Vendor(2)][Loại(2)][SốLượng(4)][SốNgày(3)]` — thứ tự
+  `Loại`/`SốLượng` ĐẢO so với 14kt (Hiếu xác nhận, verify khớp dữ liệu thật). VD `ECHM3DP2UNLI03D` = E·CHM·3D·P2·UNLI·03D.
+  ⚠️ Hiếu mô tả ban đầu KHÔNG nhắc ký tự `E` đầu (chỉ 14 ký tự nếu bỏ `E`) — verify SQL xác nhận `E` LUÔN
+  có mặt trên dữ liệu thật, thiếu nó sẽ không khớp 15kt.
+- Mã nước có thể chứa SỐ (VD `AP1`, `AS4`) — regex dùng `[A-Z0-9]`, không chỉ `[A-Z]`.
+- **Verify độ phủ**: trong toàn bộ SKU 14/15kt chứa `"UNL"` (182 SKU distinct, tức true Unlimited theo SQL)
+  — **182/182 (100%) khớp đúng 1 trong 2 regex** (`OLD_SIM_RE`/`OLD_ESIM_RE`, `page.tsx`): 91 `P1`, 90 `P2`,
+  1 case lạ `Loại="PY"` nhưng `SốLượng=UNLI` (dữ liệu nguồn không nhất quán) — case này tự rơi vào nhánh
+  "không rõ" ở dưới, không crash, không đoán bừa. Mã 14/15kt KHÔNG chứa "UNL" (không phải Unlimited, VD
+  đơn vị `NNN M`/`NNHM` thay vì `GB`) không khớp regex nhưng KHÔNG SAO — chúng không bao giờ lọt vào tab
+  Unlimited (SQL đã lọc trước), quy định "khác cấu trúc → rơi Khác" chỉ áp dụng cho SKU ĐÃ ở trong tab này.
+  Mã cũ nào 14/15kt lọt vào tab Unlimited nhưng KHÔNG khớp 2 regex trên (hiếm, tuỳ dữ liệu) → rơi đúng vào
+  `otherLengthGroup` ("Mã dài khác", §3.1d) — đúng yêu cầu Hiếu "để sang mục khác".
+
+**Hợp nhất 3 vintage** — `resolveVariant(sku, vintage, meta)` trả về 1 shape chung
+`{data, speed, label, unknown}` cho cả `speedGroups`/`speedGroupMembers` xử lý đồng nhất, thay hẳn hàm cũ
+`variantLabelOf()`:
+- Mã mới (13kt): ưu tiên `data`+`speed` (Supabase, số thật) → `throttle_speed` (text thật từ API) →
+  **cảnh báo "⚠️ Không rõ chi tiết gói"** nếu cả 2 đều thiếu (Hiếu yêu cầu — TRƯỚC đây lùi về đoán
+  `CODE_LABELS[letter]` ÂM THẦM, không báo gì, dễ hiểu nhầm là chắc chắn đúng).
+- Mã cũ 14/15kt: giải mã trực tiếp `P1`/`P2` trong SKU → `Unlimited 10Mbps`/`Unlimited 5Mbps`; không khớp
+  `P1`/`P2` (case `PY`+UNLI lạ nói trên, hoặc SKU không tra được cấu trúc) → cùng cảnh báo "không rõ".
+
+`variantKeyOf()` đổi ưu tiên khoá gộp: có `data`/`speed` (số) → gộp theo số; không có nhưng có `label` text
+(mã mới qua `throttle_speed`) → gộp theo text; còn lại → gộp "unknown" RIÊNG theo từng `(groupCode,
+vintage)` (không trộn unknown của mã A với unknown của mã B).
+
+Badge vintage đổi nhãn: "mã cũ · 14kt (SIM)" / "mã cũ · 15kt (eSIM)" (trước chỉ "mã cũ · 14kt" chung
+chung, không phân biệt SIM/eSIM). Chart `sgChartName()` thêm nhánh hiển thị `{mã}·{speed}Mbps` khi biết
+`speed` nhưng không biết `data` (đúng trường hợp mã cũ P1/P2).
+
+Test: `parseOldSku()` verify độc lập ngoài app (node script) khớp 100% các case mẫu trước khi merge vào
+`page.tsx` (không unit test riêng trong repo — hàm thuần không export). tsc + vitest (368/368) PASS.
+
 **Bảng "Unlimited — Breakdown theo mã" (s200+4, gom theo ký tự phân loại; s202: tách thêm theo sub-variant
 data/speed — xem §3.1d):**
 | Cột | Nguồn / công thức |
