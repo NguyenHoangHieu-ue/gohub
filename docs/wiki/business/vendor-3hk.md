@@ -9,7 +9,7 @@ aliases: ["3HK", "3 Hong Kong", "3HK Datapool"]
 last_edited_by: ""
 last_edited_at: ""
 created: 2026-06-13
-updated: 2026-09-04
+updated: 2026-09-22
 status: active
 ---
 
@@ -64,12 +64,18 @@ chứ không phải giá trọn gói, nên không tiết lộ giá nhập cho kh
 
 ## Thông tin kỹ thuật cho team Product
 
-Trong mã SKU, vendor 3HK được mã hoá bằng hai ký tự `3D` ở vị trí 6-7. Công thức COGS tóm tắt như sau: gói
-Fixed Data nhân dung lượng gói với hệ số 0.55 (ví dụ 5GB cho ra 5×0.55×5 = 13.75 HKD ở vùng 5 HKD/GB); gói
-Daily Data nhân dung lượng mỗi ngày với số ngày rồi với hệ số 0.40 (ví dụ 1GB×7 ngày cho ra
-7×0.4×5 = 14 HKD); gói Unlimited 10 Mbps tính 1.8GB mỗi ngày nhân số ngày (ví dụ 7 ngày cho ra
-1.8×7×5 = 63 HKD); gói Unlimited 5 Mbps tính 1.6GB mỗi ngày nhân số ngày (ví dụ 7 ngày cho ra
-1.6×7×5 = 56 HKD). Công thức chi tiết đầy đủ nằm ở bài [[cong-thuc-gia-3hk|Công Thức Tính Giá Nhập 3HK]].
+Trong mã SKU, vendor 3HK Datapool được mã hoá bằng hai ký tự `3D` ở vị trí 6-7 (có thêm mã `3H` riêng cho
+3HK thường, ít dùng hơn). Công thức COGS tóm tắt như sau: gói Fixed Data nhân dung lượng gói với hệ số
+0.55 (ví dụ 5GB cho ra 5×0.55×5 = 13.75 HKD ở vùng 5 HKD/GB); gói Daily Data nhân dung lượng mỗi ngày với
+số ngày rồi với hệ số **0.38** (ví dụ 1GB×7 ngày cho ra 7×0.38×5 = 13.3 HKD); gói Unlimited 10 Mbps tính
+1.8GB mỗi ngày nhân số ngày (ví dụ 7 ngày cho ra 1.8×7×5 = 63 HKD); gói Unlimited 5 Mbps tính 1.6GB mỗi
+ngày nhân số ngày (ví dụ 7 ngày cho ra 1.6×7×5 = 56 HKD). Hệ số Daily Data đã điều chỉnh xuống 38% (từ 40%
+trước đó, cập nhật 2026-08) — bốn hệ số này có thể chỉnh trực tiếp ở Admin, Cài đặt, phần Công thức 3HK
+Datapool, nên luôn kiểm tra ở đó nếu nghi ngờ số đã đổi. Công thức chi tiết đầy đủ nằm ở bài
+[[cong-thuc-gia-3hk|Công Thức Tính Giá Nhập 3HK]].
+
+Chính sách hạn dùng mã QR, số lần cài lại/đổi thiết bị, và điều kiện hủy/hoàn tiền của 3HK xem ở bài
+[[chinh-sach-vendor|Chính Sách Vendor]].
 
 Xem thêm bài [[chon-vendor|Khi nào chọn 3HK vs WM?]], [[ty-gia|Tỷ giá HKD/USD/VND]],
 [[ma-sku|Cách đọc mã SKU]], và [[combo-chuan|42 combo chuẩn GoHub]].

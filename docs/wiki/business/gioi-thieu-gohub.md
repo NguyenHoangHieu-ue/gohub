@@ -9,7 +9,7 @@ aliases: ["GoHub Overview", "Giới thiệu GoHub", "GoHub là gì"]
 last_edited_by: ""
 last_edited_at: ""
 created: 2026-06-13
-updated: 2026-09-04
+updated: 2026-09-22
 status: active
 ---
 
@@ -41,8 +41,10 @@ CS nên tham khảo thêm bài [[chon-vendor|Chọn Vendor Nào?]] để biết 
 
 WorldMove (WM) là vendor chính, có hơn 8.900 gói, phủ sóng rộng và không yêu cầu KYC. 3HK Datapool cũng
 là vendor chính, tính giá theo GB trên 45 vùng địa lý, linh hoạt cho việc tạo gói mới. KDDI được dùng hạn
-chế, chỉ cho Nhật Bản, nhưng chất lượng cao. BillionConnect và SimStore đang trong giai đoạn phát triển,
-chưa đủ điều kiện triển khai rộng.
+chế, chỉ cho Nhật Bản, nhưng chất lượng cao. Ngoài hai vendor chính, GoHub còn dùng một số vendor phụ cho
+các trường hợp đặc thù: Billion Connect (BC, gồm cả dòng Datapool linh hoạt), Joytel, Elite (chỉ bán SIM
+vật lý, không có eSIM), SimStore, TruemoveH, và Gighub/Airhub — mỗi vendor có chính sách QR/đổi thiết bị/
+hoàn tiền riêng, xem đầy đủ ở bài [[chinh-sach-vendor|Chính Sách Vendor]].
 
 ## Cấu trúc sản phẩm bốn cấp
 

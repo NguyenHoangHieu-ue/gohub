@@ -5,7 +5,7 @@ department: all
 tags: [index, moc, home]
 aliases: ["Wiki Home", "Index"]
 created: 2026-06-13
-updated: 2026-09-04
+updated: 2026-09-22
 status: active
 ---
 
@@ -28,9 +28,11 @@ Kho tri thức nội bộ, chia làm hai khu vực theo đối tượng đọc.
 - [[business/loai-data-policy|Data Policy Codes]] — Các mã A/B/C/D.../Z
 - [[business/combo-chuan|Combo Chuẩn GoHub]] — 42 combo/country (Daily/Fix/Unlimited)
 - [[business/ty-gia|Tỷ Giá Nội Bộ]] — USD/VND, HKD/USD, TWD/USD
-- [[business/cong-thuc-gia-3hk|Công Thức Giá Nhập 3HK]] — Fixed×55%, Daily×40%, Unlimited
+- [[business/cong-thuc-gia-3hk|Công Thức Giá Nhập 3HK]] — Fixed×55%, Daily×38%, Unlimited
 - [[business/goi-fup-tuy-chinh-3hk|Gói FUP Tùy Chỉnh 3HK]] — Tính giá khi cap và throttle khác 500MB/10-5Mbps
 - [[business/chon-vendor|Chọn Vendor Nào?]] — WM vs 3HK vs KDDI theo nước
+- [[business/chinh-sach-vendor|Chính Sách Vendor]] — QR/đổi thiết bị/hủy-hoàn tiền theo từng vendor
+- [[business/quy-trinh-cs-van-hanh|Quy Trình CS & Vận Hành]] — SIMPIN Gighub, tồn kho cận date, báo cáo tuần
 - [[business/quy-trinh-import-ncc|Quy Trình Import NCC]] — Upload → Diff → Confirm
 
 ---

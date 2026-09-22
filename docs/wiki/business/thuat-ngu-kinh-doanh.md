@@ -9,7 +9,7 @@ aliases: ["CM1", "Contribution Margin 1", "GPM", "3HK Contribution", "Business M
 last_edited_by: ""
 last_edited_at: ""
 created: 2026-06-23
-updated: 2026-09-04
+updated: 2026-09-22
 status: active
 ---
 
@@ -45,5 +45,23 @@ Revenue % là tỷ trọng doanh thu đến từ sản phẩm 3HK (vendor `3HKDA
 Toàn bộ trang analytics đã đổi nhãn hiển thị từ GP2/GPM2 sang CM1/CM1% (áp dụng ở các tab Channels, BOD,
 B2B, B2C, All-Time, Targets). 3HK Contribution % hiển thị dạng KPI ngay trên trang BOD (Board of Directors
 Report). Trong dữ liệu, sản phẩm 3HK được nhận diện qua điều kiện `dim_sku.vendor ILIKE '3HKDATAPOOL'`.
+
+## Quy tắc lọc dữ liệu chuẩn khi tính các chỉ số trên
+
+Khi lọc doanh thu sản phẩm 3HK, điều kiện chuẩn là so khớp CHÍNH XÁC vendor sau khi bỏ khoảng trắng và
+viết hoa (`3HKDATAPOOL`) — không dùng kiểu so khớp gần đúng như "bắt đầu bằng 3HK", vì hệ thống còn có
+những vendor khác cũng bắt đầu bằng "3H" (xem [[ma-sku|Cấu Trúc Mã SKU]] mục vendor).
+
+Khi phân tích riêng khối B2B, bắt buộc loại trừ các tài khoản hệ thống không phải khách hàng thật:
+"B2C Customer US", "B2C Customer VN", "B2B Ops" — đây là các mã dùng nội bộ để gán đơn, không phải khách
+hàng B2B thật, lẫn vào sẽ làm sai số lượng khách và doanh thu bình quân.
+
+Chênh lệch giữa GP tổng và tổng GP theo từng kênh thường do nhóm "Internal-Transaction" (SIM dùng nội bộ)
+— nhóm này có COGS thật (tốn tiền nhập hàng) nhưng Doanh thu ghi nhận bằng 0, nên kéo GP tổng xuống âm so
+với khi cộng riêng từng kênh. Đây là hiện tượng bình thường, không phải sai số tính toán.
+
+Chi phí vận hành (Operation Cost) khi tính CM1 luôn phải CỘNG DỒN (SUM) tất cả các khoản phí phần trăm áp
+trên kênh, không được lấy giá trị lớn nhất (MAX) — một kênh có thể chịu nhiều loại phí cùng lúc (phí sàn,
+phí quảng cáo, phí tài trợ...) và phải cộng đủ mới ra đúng chi phí vận hành thật.
 
 Xem thêm bài [[gioi-thieu-gohub|GoHub Overview]] và [[vendor-3hk|3HK]].

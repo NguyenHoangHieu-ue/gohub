@@ -9,7 +9,7 @@ aliases: ["WorldMove", "WM", "WORLDMOVE"]
 last_edited_by: ""
 last_edited_at: ""
 created: 2026-06-13
-updated: 2026-09-04
+updated: 2026-09-22
 status: active
 ---
 
@@ -76,12 +76,15 @@ cần chất lượng cao nhất ở Nhật thì chuyển sang KDDI.
 
 ## Thông tin kỹ thuật cho team Product/BD
 
-Trong mã SKU, vendor WM được mã hoá bằng hai ký tự `GB` ở vị trí 6-7 (mã nội bộ GoHub, không phải viết
-tắt tên vendor). WM báo giá theo gói cố định, không tính theo GB như 3HK. Tổng sản phẩm hiện có là 8.921
-gói, không yêu cầu KYC.
+Trong mã SKU, vendor WM được mã hoá bằng hai ký tự `WM` ở vị trí 6-7 (đã sửa 2026-09-22 — bản cũ ghi nhầm
+`GB`; mã `GB` thực ra là vendor khác, Gighub/Airhub, xem [[ma-sku|Cấu Trúc Mã SKU]] mục vendor). WM báo
+giá theo gói cố định, không tính theo GB như 3HK. Tổng sản phẩm hiện có là 8.921 gói, không yêu cầu KYC.
 
 Format file báo giá là GoHub Standard XLSX, sheet "Goi co san" — tải template tại trang SP Vendor, nút
 "Tải template". Gap analysis tự động chạy ở tab SP Vendor, mục WM, bộ lọc "Chưa có trong HT".
+
+Chính sách hạn dùng mã QR, số lần cài lại/đổi thiết bị của WM xem ở bài
+[[chinh-sach-vendor|Chính Sách Vendor]].
 
 Xem thêm bài [[chon-vendor|Khi nào WM vs 3HK vs KDDI?]], [[ma-sku|Đọc mã SKU]],
 [[loai-data-policy|Các mã data policy]], và [[quy-trinh-import-ncc|Quy trình import báo giá WM]].
