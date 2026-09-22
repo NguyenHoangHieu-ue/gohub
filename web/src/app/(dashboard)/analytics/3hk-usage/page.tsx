@@ -91,6 +91,35 @@ const CODE_LABELS: Record<string, string> = {
   Z: "Daily no-throttle", T: "Daily throttle <2mbps - Midnight",
 }
 
+// s202: cùng 1 ký tự phân loại Unlimited (VD 'B') có thể gộp CHUNG NHIỀU gói thật khác nhau — vd 500MB
+// tốc độ cao rồi giảm còn 10Mbps VÀ 1GB tốc độ cao rồi giảm còn 10Mbps đều là 'B' (cùng "Daily - Unlimited
+// 10mbps" theo bảng CODE_LABELS), chỉ SKU letter không phân biệt được. Sau khi sync thêm cột `data`
+// (ngưỡng tốc độ cao, đơn vị MB) + `speed` (Mbps sau khi hết ngưỡng) vào Supabase `skus`, dùng combo
+// (letter, vintage, data, speed) làm khoá gộp thật thay vì chỉ (letter, vintage) — xem `skuMeta` fetch ở
+// trên (cross-DB: fact_data_usage nằm gohub_dw, data/speed nằm Supabase, không JOIN được bằng SQL, phải
+// merge ở client).
+const formatDataAmount = (mb: number): string => {
+  if (mb >= 1024 && mb % 1024 === 0) return `${mb / 1024}GB`
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)}GB`
+  return `${mb}MB`
+}
+// Nhãn hiển thị cho 1 sub-variant. Ưu tiên `throttle_speed` (text người-đọc-được lấy thẳng từ GoHub API,
+// VD "1GB high speed then drop to 10 mbps") — đúng và tự nhiên hơn tự ghép chữ. Không có thì tự ghép từ
+// data/speed. Không có cả hai (SKU không tra được trên Supabase — VD đã ngừng bán, mất khỏi catalog hiện
+// tại) thì lùi về nhãn cũ theo CODE_LABELS[letter] (mất độ chi tiết nhưng không hiện rỗng).
+const variantLabelOf = (
+  letter: string, meta: { data: number | null; speed: number | null; throttle_speed: string | null } | undefined,
+): string => {
+  if (meta?.throttle_speed) return meta.throttle_speed
+  if (meta?.data != null && meta?.speed != null) return `${formatDataAmount(meta.data)} tốc độ cao, giảm còn ${meta.speed}Mbps`
+  return CODE_LABELS[letter] ?? letter
+}
+// Khoá gộp nhóm sub-variant — thêm data/speed vào key cũ `${letter}_${vintage}` (chưa tra được meta thì
+// giữ nguyên hành vi cũ, gộp theo letter, tránh vỡ nhóm khi Supabase lookup chưa kịp trả về/lỗi).
+const variantKeyOf = (
+  letter: string, vintage: string, meta: { data: number | null; speed: number | null } | undefined,
+): string => `${letter}_${vintage}_${meta?.data ?? "x"}_${meta?.speed ?? "x"}`
+
 // `data_usage_log.country` viết khác `ncc_3hk.country` cho vài nước — verify trực tiếp SQL (đối chiếu 46
 // nước distinct trong data_usage_log với 47 nước trong ncc_3hk): "USA"≠"US", "United Kingdom"≠"UK",
 // "Slovak Republic"≠"Slovakia" (tổng ~6,7 TB, ~0,5% toàn kỳ — nhỏ nhưng vẫn map đúng thay vì rơi "Chưa rõ
@@ -134,9 +163,12 @@ interface SKUTypeMetrics {
 // Nhóm gói Unlimited 3HK = (high-speed × throttle). Hiện chỉ có 3 loại:
 //   500MB·5mbps · 500MB·10mbps · 1GB·10mbps.
 interface SpeedGroupMetrics {
-  key: string           // `${speed_group}_${vintage}` — khoá DUY NHẤT tránh lẫn 2 vintage cùng ký tự
+  key: string           // s202: `${speed_group}_${vintage}_${data}_${speed}` — xem `variantKeyOf()`
   speed_group: string  // s200+4: ký tự phân loại (A/B/C/.../X), KHÔNG còn là nhãn tốc độ/throttle
   vintage: "13" | "14"  // mã CHUẨN 13kt hay mã CŨ 14kt — xem comment `skuVintage()` (2 quy ước khác nhau)
+  data: number | null    // s202: ngưỡng data tốc độ cao (MB, từ Supabase skus.data) — null nếu chưa tra được
+  speed: number | null   // s202: tốc độ Mbps sau khi hết ngưỡng (Supabase skus.speed)
+  label: string          // s202: nhãn người-đọc-được — xem `variantLabelOf()`
   active_sims: number
   total_plan_gb: number
   total_usage_gb: number
@@ -198,6 +230,30 @@ export default function ThreeHKDataUsagePage() {
   const [skuTypeSort, setSkuTypeSort] = useState<{ key: keyof SKUTypeMetrics; direction: "asc" | "desc" }>({ key: "total_usage_gb", direction: "desc" })
 
   const [totals, setTotals] = useState({ totalUsage: 0, totalCapacity: 0, avgUsage: 0, count: 0 })
+
+  // s202: meta (data/speed/throttle_speed) từ Supabase `skus` cho từng sku_code — cần để tách sub-variant
+  // Unlimited CÙNG ký tự phân loại nhưng KHÁC gói thật (VD mã B: 500MB·10mbps vs 1GB·10mbps — chỉ dựa
+  // SKU letter không phân biệt được, xem comment `variantKeyOf()`/`variantLabelOf()` bên dưới).
+  const [skuMeta, setSkuMeta] = useState<Record<string, { data: number | null; speed: number | null; throttle_speed: string | null }>>({})
+  useEffect(() => {
+    if (activeTab !== "Unlimited" || skuMetrics.length === 0) return
+    const codes = [...new Set(skuMetrics.map(sm => sm.sku))]
+    ;(async () => {
+      try {
+        const res = await fetch("/api/analytics/3hk-sku-meta", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ codes }),
+        })
+        const j = await res.json()
+        const map: Record<string, { data: number | null; speed: number | null; throttle_speed: string | null }> = {}
+        for (const r of (j.data ?? [])) {
+          map[r.sku_code] = { data: r.data ?? null, speed: r.speed ?? null, throttle_speed: r.throttle_speed ?? null }
+        }
+        setSkuMeta(map)
+      } catch (e) {
+        console.error("Error fetching sku meta (data/speed):", e)
+      }
+    })()
+  }, [activeTab, skuMetrics])
 
   // Sub-report: Data Usage by Country × Month (TB). Nguồn data_usage_log (log thô có cột country),
   // đơn vị TB = data_gb / 1024. Độc lập với kỳ/tab của bảng chính — luôn hiển thị trend theo tháng
@@ -428,8 +484,13 @@ export default function ThreeHKDataUsagePage() {
       const group   = typeLetterOfSku(sm.sku)
       const vintage = skuVintage(sm.sku)
       if (!group || !vintage) continue   // bỏ SKU không xác định được vị trí ký tự (15/17/18 ký tự)
-      const key = `${group}_${vintage}`
-      const g = acc[key] ?? (acc[key] = { key, speed_group: group, vintage, active_sims: 0, total_plan_gb: 0, total_usage_gb: 0, avg_usage_pct: 0, sim_days: 0, actual_per_day: 0, plan_per_day: 0 })
+      const meta = skuMeta[sm.sku]
+      const key = variantKeyOf(group, vintage, meta)
+      const g = acc[key] ?? (acc[key] = {
+        key, speed_group: group, vintage, data: meta?.data ?? null, speed: meta?.speed ?? null,
+        label: variantLabelOf(group, meta),
+        active_sims: 0, total_plan_gb: 0, total_usage_gb: 0, avg_usage_pct: 0, sim_days: 0, actual_per_day: 0, plan_per_day: 0,
+      })
       g.active_sims    += sm.active_sims
       g.total_plan_gb  += sm.total_plan_gb
       g.total_usage_gb += sm.total_usage_gb
@@ -442,10 +503,12 @@ export default function ThreeHKDataUsagePage() {
       g.actual_per_day = g.sim_days > 0 ? g.total_usage_gb / g.sim_days : 0
       g.plan_per_day   = g.sim_days > 0 ? g.total_plan_gb  / g.sim_days : 0
     }
-    return list.sort((a, b) => a.speed_group === b.speed_group ? a.vintage.localeCompare(b.vintage) : a.speed_group.localeCompare(b.speed_group))
-  }, [activeTab, skuMetrics])
+    return list.sort((a, b) => a.speed_group === b.speed_group
+      ? (a.vintage === b.vintage ? (a.data ?? 0) - (b.data ?? 0) : a.vintage.localeCompare(b.vintage))
+      : a.speed_group.localeCompare(b.speed_group))
+  }, [activeTab, skuMetrics, skuMeta])
 
-  // Danh sách SKU thuộc từng mã ký tự (keyed `${letter}_${vintage}`) — cho nút "Chi tiết" bung ra.
+  // Danh sách SKU thuộc từng sub-variant (keyed qua `variantKeyOf()`) — cho nút "Chi tiết" bung ra.
   const speedGroupMembers = useMemo<Record<string, SKUMetrics[]>>(() => {
     if (activeTab !== "Unlimited") return {}
     const acc: Record<string, SKUMetrics[]> = {}
@@ -453,16 +516,21 @@ export default function ThreeHKDataUsagePage() {
       const group   = typeLetterOfSku(sm.sku)
       const vintage = skuVintage(sm.sku)
       if (!group || !vintage) continue
-      ;(acc[`${group}_${vintage}`] ??= []).push(sm)
+      const key = variantKeyOf(group, vintage, skuMeta[sm.sku])
+      ;(acc[key] ??= []).push(sm)
     }
     for (const g of Object.keys(acc)) acc[g].sort((a, b) => b.total_usage_gb - a.total_usage_gb)
     return acc
-  }, [activeTab, skuMetrics])
+  }, [activeTab, skuMetrics, skuMeta])
 
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
 
-  // Tên hiển thị cho chart (unique dù 2 vintage trùng chữ cái) — mã cũ luôn kèm hậu tố phân biệt.
-  const sgChartName = (sg: SpeedGroupMetrics) => sg.vintage === "14" ? `${sg.speed_group} (cũ)` : sg.speed_group
+  // Tên hiển thị cho chart — NGẮN GỌN (trục X không đủ chỗ cho câu mô tả đầy đủ như bảng breakdown), nhưng
+  // vẫn phân biệt được sub-variant (s202: kèm ngưỡng data khi biết) + vintage cũ.
+  const sgChartName = (sg: SpeedGroupMetrics) => {
+    const base = sg.data != null ? `${sg.speed_group}·${formatDataAmount(sg.data)}` : sg.speed_group
+    return sg.vintage === "14" ? `${base} (cũ)` : base
+  }
 
   // Dữ liệu biểu đồ so sánh 3 loại gói: Thực tế (GB/ngày/SIM, trung bình có trọng số) vs Giả định.
   const speedChart = useMemo(() => {
@@ -1169,7 +1237,7 @@ export default function ThreeHKDataUsagePage() {
               <BarChart3 className="w-4 h-4 text-indigo-600" />
               Unlimited — Breakdown theo mã
             </h2>
-            <p className="text-[11px] text-slate-400 mt-1">Gom theo ký tự phân loại của SKU (vị trí 8 mã 13 ký tự / vị trí 10 mã 14 ký tự) — mỗi mã (A/B/C/.../X) là 1 dòng riêng, không gộp theo tốc độ nữa.</p>
+            <p className="text-[11px] text-slate-400 mt-1">Gom theo gói THẬT (ký tự phân loại SKU + ngưỡng data/tốc độ tra từ Supabase `skus.data`/`skus.speed`) — cùng 1 mã (VD B) có thể tách thành nhiều dòng nếu là gói khác nhau (VD 500MB vs 1GB trước khi giảm tốc).</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -1198,13 +1266,20 @@ export default function ThreeHKDataUsagePage() {
                     <React.Fragment key={idx}>
                     <tr className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-3 font-bold text-slate-900 text-sm">
-                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100" title={isNew ? (CODE_LABELS[sg.speed_group] ?? "") : "Mã CŨ 14 ký tự — quy ước khác mã chuẩn, KHÔNG áp dụng bảng nghĩa mã mới"}>
-                          {sg.speed_group}
-                        </span>
-                        <span className={cn("ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded", isNew ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
-                          {vintageLabel(sg.vintage)}
-                        </span>
-                        {isNew && CODE_LABELS[sg.speed_group] && <span className="ml-2 text-[11px] font-normal text-slate-400">{CODE_LABELS[sg.speed_group]}</span>}
+                        <div className="flex items-center flex-wrap gap-1.5">
+                          <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100 text-xs font-mono" title="Ký tự phân loại trên SKU">
+                            {sg.speed_group}
+                          </span>
+                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", isNew ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
+                            {vintageLabel(sg.vintage)}
+                          </span>
+                          {sg.data == null && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500" title="Không tra được data/speed từ Supabase (SKU có thể đã ngừng bán) — đang hiện nhãn ước lượng theo mã">
+                              chưa rõ gói cụ thể
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 font-normal text-[13px] text-slate-700">{sg.label}</div>
                       </td>
                       <td className="px-6 py-3 text-center text-slate-600 text-sm font-medium">{formatNumber(sg.active_sims)}</td>
                       <td className="px-6 py-3 text-right text-slate-600 text-sm">{formatNumber(sg.total_plan_gb)}</td>
