@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 
   // Chỉ fetch cột có trong PM system (bỏ: sku_ref, parents, product_type text, synced_at, dates)
   let q = supabaseAdmin.from("skus").select(
-    "sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,call,expirations,frame,datapack,vendor_sku,vendor_sku_sim,latest_cogs,latest_cogs_currency",
+    "sku_code,product_code,tenant,status,sim_esim,data_amount,data_amount_unit,day_amount,day_amount_unit,throttle_speed,call,expirations:vendor_expirations,frame,datapack,vendor_sku,vendor_sku_sim,latest_cogs,latest_cogs_currency",
     { count: "exact" }
   )
 

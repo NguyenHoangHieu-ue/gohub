@@ -807,7 +807,7 @@ const PRODUCT_COLS = [
 // Explicit columns cho skus (bỏ wr_group + dropped cost cols + date fields)
 const SKU_COLS = [
   "sku_code","product_code","tenant","status","sim_esim","product_type",
-  "throttle_speed","call","expirations","currency",
+  "throttle_speed","call","expirations:vendor_expirations","currency",
   "day_amount","day_amount_unit","data_amount","data_amount_unit",
   "frame","datapack","call_sms_details","vendor_sku","vendor_sku_sim",
   "latest_cogs","latest_cogs_currency","synced_at",
@@ -845,7 +845,7 @@ export async function getProductByCode(product_code: string): Promise<any> {
 
   const [{ data: skus }, listings] = await Promise.all([
     supabaseAdmin.from("skus")
-      .select("sku_code,status,sim_esim,data_amount,data_amount_unit,day_amount,expirations,throttle_speed,latest_cogs,latest_cogs_currency,vendor_sku,note,synced_at")
+      .select("sku_code,status,sim_esim,data_amount,data_amount_unit,day_amount,expirations:vendor_expirations,throttle_speed,latest_cogs,latest_cogs_currency,vendor_sku,note,synced_at")
       .eq("product_code", product_code)
       .eq("status", "Active")
       .order("day_amount"),
