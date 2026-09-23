@@ -340,15 +340,48 @@ export function markdownToLarkElements(md: string): any[] {
   return elements
 }
 
-// Card báo cáo (schema 2.0): header màu + nội dung (text + bảng).
-export function buildReportCard(title: string, reportMarkdown: string, prefix?: string): any {
+// Lark card schema 2.0 cho tối đa 5 table/card — vượt → 11310 "card table number over limit".
+const LARK_CARD_MAX_TABLES = 5
+
+// Card báo cáo (schema 2.0): header màu + nội dung (text + bảng). Báo cáo nhiều bảng (Daily 【1】→【8】) tách
+// thành nhiều card ≤5 bảng, cắt trước tiêu đề mục đứng ngay trên bảng. prefix (keyword bot) lặp ở MỖI card
+// vì custom bot kiểm keyword theo từng tin.
+export function buildReportCards(title: string, reportMarkdown: string, prefix?: string): any[] {
   const elements = markdownToLarkElements(reportMarkdown)
-  if (prefix) elements.unshift({ tag: "markdown", content: prefix })
-  return {
-    schema: "2.0",
-    header: { title: { tag: "plain_text", content: title || "Báo cáo" }, template: "blue" },
-    body: { elements: elements.length ? elements : [{ tag: "markdown", content: reportMarkdown || "(trống)" }] },
+  if (!elements.length) elements.push({ tag: "markdown", content: reportMarkdown || "(trống)" })
+
+  const chunks: any[][] = [[]]
+  let tables = 0
+  for (const el of elements) {
+    let cur = chunks[chunks.length - 1]
+    if (el.tag === "table" && tables === LARK_CARD_MAX_TABLES) {
+      const next: any[] = []
+      const last = cur[cur.length - 1]
+      if (last?.tag === "markdown") {
+        // Chỉ đoạn cuối (tiêu đề mục) sang card mới; nhận xét của mục trước ở lại card cũ.
+        const cut = last.content.lastIndexOf("\n\n")
+        if (cut > 0) {
+          next.push({ tag: "markdown", content: last.content.slice(cut + 2) })
+          last.content = last.content.slice(0, cut)
+        } else if (cur.length > 1) next.push(cur.pop())
+      }
+      chunks.push(next)
+      cur = next
+      tables = 0
+    }
+    if (el.tag === "table") tables++
+    cur.push(el)
   }
+
+  const baseTitle = title || "Báo cáo"
+  return chunks.map((els, i) => ({
+    schema: "2.0",
+    header: {
+      title: { tag: "plain_text", content: chunks.length > 1 ? `${baseTitle} (${i + 1}/${chunks.length})` : baseTitle },
+      template: "blue",
+    },
+    body: { elements: prefix ? [{ tag: "markdown", content: prefix }, ...els] : els },
+  }))
 }
 
 // Gửi interactive card vào 1 chat qua bot API (dùng cho scheduled message khi không có webhook).

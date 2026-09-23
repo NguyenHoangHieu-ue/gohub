@@ -5,7 +5,7 @@ is_hidden: true
 department: tech
 tags: [tab, admin, scheduled]
 created: 2026-06-28
-updated: 2026-08-31
+updated: 2026-09-23
 status: active
 ---
 
@@ -138,6 +138,24 @@ TOÀN ÂM THẦM, lặp lại mỗi ngày (slot mới lại bị đánh dấu xo
   tiếp, tránh message sau bị kill câm lặng vì message trước ăn hết giờ.
 - **Alert Lark khi 1 message thất bại** (`alertCronFailure`) — trước chỉ alert khi lỗi đọc danh sách active
   messages ở đầu route, lỗi per-message (kể cả timeout) hoàn toàn im lặng. Nay mọi thất bại đều có Lark alert.
+
+### E. ⚠️ Lark 11310 "card table number over limit" — tách nhiều card (s206, 2026-09-23)
+
+**Triệu chứng**: bấm "Test" lịch "Daily Revenue Update" → toast `Lark webhook lỗi 11246: ErrCode: 11310; ErrMsg: card
+table number over limit; ErrorValue: table;`. Dry-run (`/api/analytics/perf-probe-report?full=<tên lịch>`) dựng báo
+cáo bình thường (~14s) → lỗi CHỈ ở bước gửi.
+
+**Nguyên nhân**: Lark card schema 2.0 cho **tối đa 5 component `table`/card**. `markdownToLarkElements` biến mỗi bảng
+markdown thành 1 `table` → Daily (【1】→【8】) thường có >5 bảng. Số bảng tuỳ Gemini format mỗi lần nên có hôm lọt
+(≤5), có hôm lỗi — dễ tưởng lỗi ngẫu nhiên.
+
+**Fix**: `buildReportCard` → `buildReportCards` (`lib/lark.ts`) trả MẢNG card, mỗi card ≤5 bảng, tiêu đề
+`"<tên> (1/n)"`; cắt trước đoạn tiêu đề mục ngay trên bảng (nhận xét mục trước ở lại card cũ). `lark_keyword` lặp ở
+MỖI card (custom bot kiểm keyword theo từng tin). Runner gửi tuần tự (`sendCard`). Test:
+`src/__tests__/lark-report-cards.test.ts`.
+
+Gotcha: card 1 gửi được mà card sau lỗi → cron release claim → tick sau gửi lại TỪ ĐẦU (card 1 bị lặp). Chấp nhận
+vì lỗi giữa chừng hiếm.
 
 ### C. Chống gửi TRÙNG & đúng slot (`scheduled-cron.ts` + `scheduled-runner.ts`)
 Có **2 scheduler** cùng hit `/api/cron/scheduled-messages`: GitHub Actions `*/15 * * * *` + Vercel Cron `0 0 * * *` (backstop 1 lần/ngày).

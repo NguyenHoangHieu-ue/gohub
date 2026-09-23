@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { AGENTS } from "@/lib/agents/agents"
 import { runBIAnalyst } from "@/lib/agents/bi-analyst"
-import { buildReportCard, sendLarkCardToChat } from "@/lib/lark"
+import { buildReportCards, sendLarkCardToChat } from "@/lib/lark"
 import { buildReportData, inferPeriod } from "@/lib/scheduled-report-data"
 
 // Chạy 1 scheduled message: số liệu TÍNH SẴN trong code (scheduled-report-data) → BI Analyst chỉ FORMAT,
@@ -47,11 +47,26 @@ ${dataBlock}`
 
   // Render card đẹp (header + bảng). Nếu có lark_keyword (bảo mật custom bot) → chèn vào đầu card.
   const title = msg.title || msg.name || "Báo cáo tự động"
-  const card = buildReportCard(title, report, msg.lark_keyword || undefined)
+  const cards = buildReportCards(title, report, msg.lark_keyword || undefined)
 
   // dryRun (chẩn đoán): dựng xong báo cáo + card nhưng KHÔNG gửi Lark, KHÔNG đụng last_run_at.
   if (options?.dryRun) return report
 
+  // Gửi TUẦN TỰ để các phần (1/n, 2/n...) tới group đúng thứ tự.
+  for (const card of cards) await sendCard(msg, card)
+
+  if (!options?.noUpdateLastRun) {
+    // Ghi slot time (không phải execution time) để dedup chính xác cho lần quét tiếp theo.
+    const slotMs = options?.slotMs
+    const lastRunIso = slotMs != null
+      ? new Date(slotMs - 7 * 3600_000).toISOString()  // convert ICT-shifted → UTC
+      : new Date().toISOString()
+    await supabaseAdmin.from("lark_scheduled_messages").update({ last_run_at: lastRunIso }).eq("id", msg.id)
+  }
+  return report
+}
+
+async function sendCard(msg: any, card: any): Promise<void> {
   if (msg.lark_webhook_url) {
     const res = await fetch(msg.lark_webhook_url, {
       method: "POST",
@@ -72,16 +87,6 @@ ${dataBlock}`
     if (!data?.value) throw new Error("Chưa có lark_notify_chat_id (bot chưa nhận message group nào) và không cấu hình lark_webhook_url")
     await sendLarkCardToChat(data.value, card)
   }
-
-  if (!options?.noUpdateLastRun) {
-    // Ghi slot time (không phải execution time) để dedup chính xác cho lần quét tiếp theo.
-    const slotMs = options?.slotMs
-    const lastRunIso = slotMs != null
-      ? new Date(slotMs - 7 * 3600_000).toISOString()  // convert ICT-shifted → UTC
-      : new Date().toISOString()
-    await supabaseAdmin.from("lark_scheduled_messages").update({ last_run_at: lastRunIso }).eq("id", msg.id)
-  }
-  return report
 }
 
 // Khớp lịch cron (isCronDue) + đến-hạn-kể-từ-last_run (isDueSince) tách ở scheduled-cron.ts (leaf, thuần).
