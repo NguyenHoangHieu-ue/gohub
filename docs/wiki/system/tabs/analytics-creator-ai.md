@@ -714,3 +714,18 @@ chạm được ổ đĩa → thêm daemon `local-agent/daemon.mjs` (Node thuầ
 - Tool `assistantMemory` (creator-only, audit): save · update · forget (= archive, khôi phục được bằng SQL) · list.
   Áp dụng cả web lẫn Lark DM (cùng `runCreatorAI` + username). Cron (digest, `username="cron"`) không nạp trí nhớ.
 - Test `assistant-memory.test.ts`.
+
+## § s206+5 (2026-09-23) — Fix Lark OAuth (đá sang production + token thiếu quyền task) + 2 lỗi QA
+
+- **Kết nối Lark từ staging bị chuyển sang production**: start/callback lấy base từ `NEXTAUTH_URL` — biến này trên
+  Preview trỏ production. Nay dùng `req.nextUrl.origin` (cả 2 domain đã đăng ký redirect trong Lark Security Settings).
+- **Token thiếu `task:task:read/write` dù app đã bật scope** (Lark `99991679`): authorize không truyền `scope` → theo docs
+  Lark "không xin thêm quyền nào" (và thiếu `offline_access` thì không có refresh_token). Nay truyền tường minh
+  `offline_access task:task:read task:task:write task:tasklist:read` (override env `LARK_OAUTH_SCOPES`). Chỉ liệt kê scope
+  app ĐÃ bật + publish — sai 1 cái Lark báo lỗi ở màn authorize (gotcha cũ "bỏ scope để tránh thiếu quyền" là do lúc đó
+  sai tên scope). Quyền cộng dồn qua các lần cấp nên không mất quyền cũ (gửi tin Cà Thread).
+- Badge "Đã kết nối Lark/Google" giờ bấm được = cấp quyền lại (trước không có đường re-auth khi app thêm quyền).
+- **"Cuộc trò chuyện mới" bị đè**: không có localStorage → auto-load cuộc gần nhất qua 2 fetch; bấm "mới"/gửi tin trong
+  lúc đó thì bản tải về sau đè lên, tin vừa gõ mất. `userActedRef` huỷ auto-restore khi người dùng đã thao tác.
+- **Đi lạc khi tool lỗi**: gặp `99991679` Gấu Pro gọi thêm Lark Base, đọc browser Hiếu, Supabase. System prompt thêm mục
+  "When a tool returns an error": lỗi quyền/kết nối/config → dừng, báo lỗi + cách sửa, không gọi tool không liên quan.

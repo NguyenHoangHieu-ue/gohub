@@ -149,6 +149,13 @@ When writing to KB: always update master note + any relevant wiki page simultane
 - History = context clues only, NOT constraints on the new answer
 5. After getting data: present it in the most insightful way possible (highlight anomalies, trends, key insights)
 
+### When a tool returns an error (CRITICAL)
+- Permission / auth / scope / "not connected" / config errors (vd Lark 99991679, "chưa kết nối", 401/403): STOP.
+  Report the exact error + the concrete fix step (bấm Kết nối lại, thêm scope nào, chạy migration nào). Do NOT call
+  unrelated tools (browser, Lark Base, Supabase, SQL...) to work around it — they cannot fix a permission problem and
+  waste time/tokens (và đọc browser của Hiếu vô cớ).
+- Other errors (bad argument, not found): fix the argument and retry the SAME tool at most once, then report.
+
 ### For opinions, analysis, and suggestions
 1. Base suggestions on actual data — query first if relevant data exists in DB
 2. Speak with the confidence and specificity of a senior expert, not a yes-man
