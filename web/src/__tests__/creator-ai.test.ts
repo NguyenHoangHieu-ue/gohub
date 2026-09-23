@@ -37,8 +37,8 @@ describe("TOOL_STATUS", () => {
 // ─── Declarations ─────────────────────────────────────────────────────────────
 
 describe("ALL_TOOL_DECLARATIONS", () => {
-  it("có đúng 33 declarations (22 gốc + 3 Phase 4 + 4 Phase 3+KB + browseWeb s195 + readMyBrowser/controlMyBrowser s195+1 + verifyReportNumbers s196+12)", () => {
-    expect(ALL_TOOL_DECLARATIONS).toHaveLength(33)
+  it("có đúng 34 declarations (22 gốc + 3 Phase 4 + 4 Phase 3+KB + browseWeb s195 + readMyBrowser/controlMyBrowser s195+1 + verifyReportNumbers s196+12 + localFiles s206)", () => {
+    expect(ALL_TOOL_DECLARATIONS).toHaveLength(34)
   })
 
   it("mỗi declaration có name, description, parameters", () => {
@@ -113,10 +113,12 @@ describe("buildFunctionDeclarations", () => {
     expect(names).toContain("controlMyBrowser")
   })
 
-  it("isCreator true/false trả về cùng danh sách tool (không còn khác biệt — cơ chế lọc giữ lại cho tool khác sau này)", () => {
+  it("localFiles (đụng ổ đĩa máy thật) chỉ có với creator, các tool khác như nhau", () => {
     const all = buildFunctionDeclarations(true)
     const restricted = buildFunctionDeclarations(false)
-    expect(restricted.length).toBe(all.length)
+    expect(all.map(d => d.name)).toContain("localFiles")
+    expect(restricted.map(d => d.name)).not.toContain("localFiles")
+    expect(restricted.length).toBe(all.length - 1)
   })
 })
 

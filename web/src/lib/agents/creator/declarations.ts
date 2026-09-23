@@ -369,6 +369,22 @@ export const controlMyBrowserDecl = {
   },
 }
 
+export const localFilesDecl = {
+  name: "localFiles",
+  description: "Đọc/ghi file trên MÁY TÍNH của người dùng qua daemon local (local-agent/daemon.mjs) — chỉ trong các thư mục họ cho phép. list = liệt kê thư mục (bỏ trống path = xem các thư mục gốc được phép); read = đọc file text; write = ghi đè/tạo file (daemon tự backup bản cũ); edit = thay đúng 1 chỗ `find` → `replace` (find phải khớp DUY NHẤT 1 lần). KHÔNG có xoá. Trước khi write/edit LUÔN nói rõ file nào, sửa gì và chờ người dùng đồng ý trong chat; read trước rồi mới edit.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      action:  { type: SchemaType.STRING, description: "list | read | write | edit" },
+      path:    { type: SchemaType.STRING, description: "Đường dẫn tuyệt đối trên máy người dùng (vd D:\gohub\docs\a.md)." },
+      content: { type: SchemaType.STRING, description: "Nội dung đầy đủ (cho write)." },
+      find:    { type: SchemaType.STRING, description: "Đoạn text cần thay, khớp chính xác (cho edit)." },
+      replace: { type: SchemaType.STRING, description: "Đoạn text thay vào (cho edit)." },
+    },
+    required: ["action"],
+  },
+}
+
 export const browsePortalDecl = {
   name: "browsePortal",
   description: "Login to an external supplier/partner portal and fetch its page content. Credentials are stored in Supabase. Use to get product listings, prices, inventory, or any data from external web portals. Returns cleaned text content of the page for analysis.",
@@ -552,7 +568,7 @@ export const ALL_TOOL_DECLARATIONS = [
   // Phase 3 tools
   generateVideoDecl, checkVideoStatusDecl, generateImageStabilityDecl,
   // Phase 2 (s195+1) — Extension điều khiển browser cá nhân Hiếu
-  readMyBrowserDecl, controlMyBrowserDecl,
+  readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl,
   // s196+12 — second-opinion pass (roadmap audit s196+5, ý tưởng #7)
   verifyReportNumbersDecl,
 ]

@@ -21,11 +21,15 @@ export async function GET(req: NextRequest) {
     .in("status", ["pending", "claimed"])
     .lt("expires_at", new Date().toISOString())
 
-  const { data: row } = await supabaseAdmin
+  // Daemon local (X-Agent-Kind: local) chỉ nhận lệnh file "fs_*"; extension (không gửi header) không bao giờ nhận chúng.
+  const isLocalAgent = req.headers.get("x-agent-kind") === "local"
+  let q = supabaseAdmin
     .from("browser_bridge_commands")
     .select("id,action,payload,requires_confirm")
     .eq("owner_username", username)
     .eq("status", "pending")
+  q = isLocalAgent ? q.like("action", "fs_%") : q.not("action", "like", "fs_%")
+  const { data: row } = await q
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle()

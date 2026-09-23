@@ -637,3 +637,21 @@ Từ s131, Bé Gấu chuyển sang `be-gau.ts` (single function-calling agent, k
 - Tools: executeSQL (gohub_dw), querySupabase, queryProduct, webSearch, readKnowledgeBase, queryGA4, queryGSC
 - Guardian pre-flight vẫn giữ ở route level
 - Legacy pipeline (router/graph/orchestrator/agents) giữ file nhưng không còn là luồng chính
+
+## § Gấu Pro s206 (2026-09-23) — `localFiles`: đọc/sửa file trên máy creator qua daemon local (P3 trợ lý toàn diện)
+
+Bước P3 của lộ trình "trợ lý toàn diện" (cloud làm não + local làm tay chân). Gấu Pro chạy trên Vercel nên không
+chạm được ổ đĩa → thêm daemon `local-agent/daemon.mjs` (Node thuần, không dependency) chạy trên máy creator.
+
+- **Hàng đợi**: dùng lại `browser_bridge_commands` (KHÔNG migration) — lệnh file có action tiền tố `fs_`
+  (`fs_list/fs_read/fs_write/fs_edit`). `bridge/next` tách luồng theo header `X-Agent-Kind: local`: daemon chỉ nhận
+  `fs_*`, extension Chrome (không gửi header) không bao giờ nhận `fs_*`. Auth = token Bridge của user + `X-Device-Id`
+  riêng (daemon hiện trong danh sách thiết bị ở `/analytics/creator/bridge`, thu hồi được).
+- **Tool `localFiles`** (`creator/tools/bridge.ts` → `runLocalFiles`): creator-only (`CREATOR_ONLY_TOOLS` + chặn lại
+  trong dispatch), ghi audit `gp_action_log`. Prompt tool bắt nói rõ file/thay đổi và chờ đồng ý trước write/edit.
+- **An toàn phía daemon**: chỉ trong `roots` (config), chặn `..`/symlink ra ngoài, `.git`/`node_modules`, file bí mật
+  (`.env*`, key/pem, `secret`, `credentials`) — không bao giờ gửi lên cloud. Backup trước mỗi lần ghi vào
+  `%USERPROFILE%\.gohub-agent\backups`. Không có xoá. Text ≤256KB, file nhị phân chưa hỗ trợ.
+- Config/token ở `%USERPROFILE%\.gohub-agent\config.json` (ngoài repo). Poll 10s rảnh / 2s trong 3' sau lệnh.
+- ⚠️ Thứ tự deploy: daemon chỉ được chạy SAU khi server có bản tách luồng `fs_` — server cũ sẽ đưa lệnh browser cho daemon.
+- Chưa làm: đọc/ghi docx/xlsx, Claude Agent SDK phía local cho việc nhiều bước (chờ API key), duyệt qua Lark.

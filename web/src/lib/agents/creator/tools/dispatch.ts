@@ -15,7 +15,7 @@ import { runWebSearchTool }        from "./search"
 import { runCompareVendorQuotes }  from "./compare-quotes"
 import { runTrackSKUWinRate }      from "./win-rate"
 import { runGenerateVideo, runCheckVideoStatus } from "./video"
-import { runReadMyBrowser, runControlMyBrowser } from "./bridge"
+import { runReadMyBrowser, runControlMyBrowser, runLocalFiles } from "./bridge"
 import { logGpAction }             from "./audit-log"
 import { runVerifyReportNumbers }  from "./self-review"
 
@@ -23,7 +23,7 @@ import { runVerifyReportNumbers }  from "./self-review"
 const AUDITED_TOOLS = new Set([
   "writeKnowledgeBase", "approveLearning", "rejectLearning",
   "createLarkTask", "updateLarkTask", "sendLarkMessage",
-  "controlMyBrowser", "managePortalCredentials",
+  "controlMyBrowser", "managePortalCredentials", "localFiles",
 ])
 
 export async function dispatchTool(
@@ -101,6 +101,9 @@ async function dispatchToolCore(
 
   if (call.name === "controlMyBrowser")
     return wrap(await runControlMyBrowser(call.args, ctx?.username || "", onEvent))
+
+  if (call.name === "localFiles")
+    return wrap(ctx?.isCreator ? await runLocalFiles(call.args, ctx?.username || "", onEvent) : { error: "localFiles chỉ dành cho creator." })
 
   if (call.name === "managePortalCredentials")
     return wrap(await runManagePortalCredentials(call.args))
