@@ -744,3 +744,15 @@ chạm được ổ đĩa → thêm daemon `local-agent/daemon.mjs` (Node thuầ
 - "Cuộc trò chuyện mới" bị đè: sau fix không tái hiện lại được lỗi gốc (trang không tự khôi phục cuộc cũ khi mở mới).
   Các lần lỗi trước nhiều khả năng do extension Chrome khác chặn công cụ điều khiển trình duyệt ("Cannot access a
   chrome-extension:// URL of different extension") — fix `userActedRef` vẫn giữ vì đúng về logic.
+
+## § s206+7 (2026-09-23) — Tool `larkDocs`: tìm/đọc/tạo/ghi tài liệu Lark (Drive, Docs, Sheets, Wiki)
+
+- `lib/agents/creator/tools/lark-docs.ts`, creator-only, audit, dùng user token Lark của creator (thấy đúng những gì
+  tài khoản đó thấy). Actions: search (`POST /suite/docs-api/search/object`) · read (docx `raw_content`; sheet
+  `sheets/v2 values`; link wiki → `wiki/v2/spaces/get_node` ra tài liệu thật) · create_doc (tạo docx rồi markdown →
+  `docx/v1/documents/blocks/convert` → chèn `…/descendant` theo lô ≤1000 block, bỏ `merge_info` của bảng — docs
+  bắt buộc) · append_doc · create_sheet · write_sheet · append_sheet. Link lấy qua `drive/v1/metas/batch_query`.
+- Nhận link dán thẳng (`/docx/`, `/sheets/`, `/wiki/`) hoặc token (`parseLarkRef`, test `lark-docs.test.ts`).
+- OAuth start xin thêm `drive:drive docx:document docx:document.block:convert sheets:spreadsheet wiki:wiki`. Scope app
+  chưa bật chỉ hiện "không thể cấp" trên màn authorize, không chặn scope khác. Sau khi app thêm quyền → bấm badge
+  "Đã kết nối Lark" cấp quyền lại. Lỗi 99991679 → tool tự nhắc bước này.

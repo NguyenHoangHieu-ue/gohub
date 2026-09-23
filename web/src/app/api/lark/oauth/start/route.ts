@@ -3,7 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { randomBytes } from "crypto"
 
-const LARK_OAUTH_SCOPES = "offline_access task:task:read task:task:write task:tasklist:read"
+// Scope app chưa bật chỉ hiện ở mục "không thể cấp" trên màn authorize, các scope còn lại vẫn cấp bình thường (đã thấy thực tế).
+const LARK_OAUTH_SCOPES = "offline_access task:task:read task:task:write task:tasklist:read " +
+  "drive:drive docx:document docx:document.block:convert sheets:spreadsheet wiki:wiki"
 
 // Khởi động OAuth: redirect creator sang trang cấp quyền Lark.
 // Chỉ creator (task cá nhân của Hiếu).

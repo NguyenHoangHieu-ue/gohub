@@ -641,8 +641,8 @@ Hôm nay: ${fmt(now)} (${dow}). Data cutoff gohub_dw = CURRENT_DATE-1 = ${fmt(ye
 // browser Hiếu, user khác gọi sẽ nhắm nhầm vào browser Hiếu). s195+3: bridge đã multi-tenant thật (mỗi
 // user 1 token/1 queue riêng — owner_username) nên rủi ro đó hết, bỏ 2 tool ra khỏi set này. Giữ cơ chế
 // buildFunctionDeclarations() cho tool nào THẬT SỰ cần creator-only về sau.
-// localFiles (ổ đĩa máy thật) + googleWorkspace (token Google của creator) + assistantMemory (trí nhớ cá nhân) → chỉ creator.
-const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace", "assistantMemory"])
+// localFiles (ổ đĩa máy thật) + googleWorkspace (token Google của creator) + assistantMemory (trí nhớ cá nhân) + larkDocs (token Lark của creator) → chỉ creator.
+const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace", "assistantMemory", "larkDocs"])
 
 export function buildFunctionDeclarations(isCreator: boolean) {
   return isCreator ? ALL_TOOL_DECLARATIONS : ALL_TOOL_DECLARATIONS.filter(d => !CREATOR_ONLY_TOOLS.has(d.name))

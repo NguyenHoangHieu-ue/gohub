@@ -18,6 +18,7 @@ import { runGenerateVideo, runCheckVideoStatus } from "./video"
 import { runReadMyBrowser, runControlMyBrowser, runLocalFiles } from "./bridge"
 import { runGoogleWorkspace } from "./google"
 import { runAssistantMemory } from "@/lib/assistant-memory"
+import { runLarkDocs } from "./lark-docs"
 import { logGpAction }             from "./audit-log"
 import { runVerifyReportNumbers }  from "./self-review"
 
@@ -25,7 +26,7 @@ import { runVerifyReportNumbers }  from "./self-review"
 const AUDITED_TOOLS = new Set([
   "writeKnowledgeBase", "approveLearning", "rejectLearning",
   "createLarkTask", "updateLarkTask", "sendLarkMessage",
-  "controlMyBrowser", "managePortalCredentials", "localFiles", "googleWorkspace", "assistantMemory",
+  "controlMyBrowser", "managePortalCredentials", "localFiles", "googleWorkspace", "assistantMemory", "larkDocs",
 ])
 
 export async function dispatchTool(
@@ -112,6 +113,9 @@ async function dispatchToolCore(
 
   if (call.name === "assistantMemory")
     return wrap(ctx?.isCreator ? await runAssistantMemory(call.args, ctx?.username || "", "gau-pro") : { error: "assistantMemory chỉ dành cho creator." })
+
+  if (call.name === "larkDocs")
+    return wrap(ctx?.isCreator ? await runLarkDocs(call.args) : { error: "larkDocs chỉ dành cho creator." })
 
   if (call.name === "managePortalCredentials")
     return wrap(await runManagePortalCredentials(call.args))
