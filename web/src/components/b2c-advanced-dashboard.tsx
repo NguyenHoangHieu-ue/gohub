@@ -974,7 +974,6 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     "2026-07": { meta: 42_070_736, google: 70_479_701 },
     "2026-08": { meta: 10_623_472, google: 19_567_666 },
   }
-  const mktReportMonths = data ? data.months.filter(m => manualMktSpend[m]) : []
   const profitTotalForMonth = (month: string) => {
     const rows = Object.values(data?.profitByChannel?.[month] ?? {})
     return rows.reduce((acc, cell) => ({
@@ -983,15 +982,17 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
       grossProfit: acc.grossProfit + (cell.grossProfit ?? 0),
     }), { revenue: 0, cogs: 0, grossProfit: 0 })
   }
+  // Total MKT lấy từ DB (data.spend = Manage Cost group + kênh, cùng nguồn Spend/ROAS) → tháng mới tự hiện, không
+  // cần sửa code. manualMktSpend chỉ còn để tách Meta/Google cho các tháng cũ (DB không tách theo nền tảng).
+  const mktSpendOf = (month: string) => data?.spend?.[month] ?? 0
+  const mktReportMonths = data ? data.months.filter(m => mktSpendOf(m) > 0 || profitTotalForMonth(m).revenue > 0) : []
   const pctText = (value: number, total: number) => total > 0 ? `${((value / total) * 100).toFixed(1)}%` : "—"
-  const mktMetric = (month: string, metric: "meta" | "google" | "totalMkt" | "revenue" | "mktRate" | "grossProfit" | "gpRate" | "cm1" | "cm1Rate") => {
-    const spend = manualMktSpend[month]
-    if (!spend) return 0
+  const mktMetric = (month: string, metric: "meta" | "google" | "totalMkt" | "revenue" | "mktRate" | "grossProfit" | "gpRate" | "cm1" | "cm1Rate"): number | null => {
+    if (metric === "meta") return manualMktSpend[month]?.meta ?? null
+    if (metric === "google") return manualMktSpend[month]?.google ?? null
     const profit = profitTotalForMonth(month)
-    const totalMkt = spend.meta + spend.google
+    const totalMkt = mktSpendOf(month)
     const cm1 = profit.grossProfit - totalMkt
-    if (metric === "meta") return spend.meta
-    if (metric === "google") return spend.google
     if (metric === "totalMkt") return totalMkt
     if (metric === "revenue") return profit.revenue
     if (metric === "mktRate") return profit.revenue > 0 ? totalMkt / profit.revenue : 0
@@ -1005,7 +1006,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     if (idx <= 0) return <div className="mt-0.5 text-[11px] text-slate-300">—</div>
     const currentValue = mktMetric(month, metric)
     const prevValue = mktMetric(mktReportMonths[idx - 1], metric)
-    if (!prevValue) return <div className="mt-0.5 text-[11px] text-slate-300">—</div>
+    if (currentValue === null || !prevValue) return <div className="mt-0.5 text-[11px] text-slate-300">—</div>
     const diff = currentValue - prevValue
     const change = (diff / Math.abs(prevValue)) * 100
     const positive = diff >= 0
@@ -1050,7 +1051,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               </td>
               {mktReportMonths.map(month => (
                 <td key={month} className={`px-4 py-4 text-right tabular-nums min-w-[175px] ${month === data?.currentMonth ? "bg-[#0071e3]/[0.06]" : ""}`}>
-                  <div className={row.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}>{row.fmt(mktMetric(month, row.metric))}</div>
+                  <div className={row.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}>{(() => { const v = mktMetric(month, row.metric); return v === null ? <span className="text-slate-400 font-normal">Chưa tách</span> : row.fmt(v) })()}</div>
                   <MktDelta month={month} metric={row.metric} />
                   {month === data?.currentMonth && <div className="text-[10px] text-[#0071e3] mt-0.5 uppercase tracking-wide">MTD</div>}
                 </td>
@@ -1363,7 +1364,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               icon={<DollarSign className="w-5 h-5" />}
               iconColor="#0071e3"
               title="B2C MKT Profit Report"
-              desc="Total chi phí MKT = Meta + Google · Revenue/COGS/GP lấy từ fulfillment B2C"
+              desc="Total chi phí MKT = chi phí B2C nhập ở Manage Cost · Meta/Google chỉ tách được các tháng cũ · Revenue/COGS/GP lấy từ fulfillment B2C"
               source="admin"
             >
               {mktReportMonths.length > 0 ? (
