@@ -729,3 +729,18 @@ chạm được ổ đĩa → thêm daemon `local-agent/daemon.mjs` (Node thuầ
   lúc đó thì bản tải về sau đè lên, tin vừa gõ mất. `userActedRef` huỷ auto-restore khi người dùng đã thao tác.
 - **Đi lạc khi tool lỗi**: gặp `99991679` Gấu Pro gọi thêm Lark Base, đọc browser Hiếu, Supabase. System prompt thêm mục
   "When a tool returns an error": lỗi quyền/kết nối/config → dừng, báo lỗi + cách sửa, không gọi tool không liên quan.
+
+## § s206+6 (2026-09-23) — QA sống P1 + trí nhớ
+
+- Trí nhớ: lưu 2 mục → cuộc trò chuyện mới liệt kê đúng → forget #2 → DB `archived=true`. Web và Lark DM chung
+  username (`users.username` theo `lark_open_id`) nên chung kho trí nhớ.
+- Lark Task: list OK (task hiện có đa số chỉ có start, không due) · create hạn `2026-09-25 15:00` → `due.timestamp`
+  `1790323200000` = 08:00 UTC = 15:00 VN (đúng mili giây + giờ VN) · update complete OK.
+- Nhắc deadline chạy thật lần đầu 22:01 VN: quét 23 task mở, task test hạn 22:21 → `soon=true` (đã DM).
+- ⚠️ **Thực tế cron-job.org gọi `/api/cron/scheduled-messages` MỖI GIỜ (phút :01), không phải mỗi phút**, và đang trỏ
+  **staging** (log Vercel 2026-09-23). Nên nhắc "sắp tới hạn" tới trong khoảng 0–60' trước hạn (mỗi task 1 lần), cổng
+  10' trong code chỉ là phòng hờ. Cả 2 môi trường dùng chung Supabase nên 1 nơi chạy là đủ; muốn nhắc sát hơn thì
+  tăng tần suất job ở cron-job.org (không cần sửa code).
+- "Cuộc trò chuyện mới" bị đè: sau fix không tái hiện lại được lỗi gốc (trang không tự khôi phục cuộc cũ khi mở mới).
+  Các lần lỗi trước nhiều khả năng do extension Chrome khác chặn công cụ điều khiển trình duyệt ("Cannot access a
+  chrome-extension:// URL of different extension") — fix `userActedRef` vẫn giữ vì đúng về logic.
