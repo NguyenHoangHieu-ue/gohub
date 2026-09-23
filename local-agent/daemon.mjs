@@ -63,6 +63,20 @@ function loadConfig() {
 
 const cfg = loadConfig()
 
+// Chỉ 1 bản chạy (autostart + bấm tay trùng nhau) — 2 bản cùng poll sẽ tranh lệnh của nhau.
+const LOCK_PATH = path.join(HOME, "agent.pid")
+function acquireLock() {
+  if (existsSync(LOCK_PATH)) {
+    const pid = Number(readFileSync(LOCK_PATH, "utf8"))
+    if (pid > 0) try { process.kill(pid, 0); console.error(`Daemon đã chạy (PID ${pid}).`); process.exit(0) } catch { /* PID chết → lock cũ */ }
+  }
+  writeFileSync(LOCK_PATH, String(process.pid))
+  const release = () => { try { if (readFileSync(LOCK_PATH, "utf8") === String(process.pid)) writeFileSync(LOCK_PATH, "") } catch { /* bỏ qua */ } }
+  process.on("exit", release)
+  for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => process.exit(0))
+}
+acquireLock()
+
 const norm = p => (process.platform === "win32" ? p.toLowerCase() : p)
 
 function insideRoots(abs) {

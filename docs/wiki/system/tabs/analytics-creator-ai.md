@@ -655,3 +655,17 @@ chạm được ổ đĩa → thêm daemon `local-agent/daemon.mjs` (Node thuầ
 - Config/token ở `%USERPROFILE%\.gohub-agent\config.json` (ngoài repo). Poll 10s rảnh / 2s trong 3' sau lệnh.
 - ⚠️ Thứ tự deploy: daemon chỉ được chạy SAU khi server có bản tách luồng `fs_` — server cũ sẽ đưa lệnh browser cho daemon.
 - Chưa làm: đọc/ghi docx/xlsx, Claude Agent SDK phía local cho việc nhiều bước (chờ API key), duyệt qua Lark.
+- **Autostart (s206+1)**: `local-agent/install-autostart.ps1` tạo shortcut Startup + Desktop chạy `start-hidden.vbs`
+  (ẩn console). Khoá 1 bản chạy qua `%USERPROFILE%\.gohub-agentgent.pid`.
+
+## § s206+1 (2026-09-23) — Model Gemini tập trung 1 chỗ + tự báo model mới
+
+- `lib/ai-models.ts`: `GEMINI_MODEL` (mặc định `gemini-3.8-flash`) + `GEMINI_MODEL_PRO` (mặc định = GEMINI_MODEL vì
+  bản Pro sẵn có `gemini-3.1-pro-preview` cũ hơn 3.8-flash — kiểm qua API list models 2026-09-23, chưa có gemini-4).
+  Override bằng env Vercel cùng tên. Mọi `model: "gemini-3.8-flash"` trong code (21 file) đã chuyển sang hằng số.
+- Không tự đổi model (model mới có thể từ chối `thinkingLevel` cũ) → `lib/gemini-model-watch.ts` so danh sách model
+  của key với lần trước (`app_settings.gemini_known_models`), cron `gau-pro-digest` DM creator khi có model mới.
+  Lần chạy đầu chỉ ghi mốc.
+- ⚠️ `gemini-pricing.ts` vẫn cố định giá 3.8-flash — đổi model thì cập nhật giá theo.
+- Hiếu chốt 2026-09-23: không dùng Claude API (gói Claude Pro không gồm API, tính tiền theo token riêng) → trợ lý
+  toàn diện chạy hoàn toàn trên Gemini.
