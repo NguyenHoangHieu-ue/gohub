@@ -4,6 +4,7 @@
 // weekly-report/narrative.ts: Gemini CHỈ diễn giải lại nội dung đã có, không tự bịa thêm.
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { tabsForFiles } from "@/lib/release-tabs"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 /** `files`: các file commit đã đổi (workflow gửi lên) — dùng để suy ra TAB bị ảnh hưởng, không nhờ Gemini đoán. */
 export interface ReleaseCommit { sha: string; message: string; files?: string[] }
@@ -58,7 +59,7 @@ export async function summarizeReleaseCommits(commits: ReleaseCommit[]): Promise
 
   try {
     const model = getAI().getGenerativeModel({
-      model: "gemini-3.8-flash",
+      model: GEMINI_MODEL,
       systemInstruction: SYSTEM_PROMPT,
       // SDK v0.21.0 chưa có type cho thinkingConfig (ra đời sau SDK) → "as any" (cùng pattern be-gau.ts).
       generationConfig: {

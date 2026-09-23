@@ -9,6 +9,7 @@ import { genWithRetryStream }         from "@/lib/agents/gemini-stream"
 import { guardCheck }                 from "@/lib/agents/guardian"
 import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
 import { AI_EMAIL, AI_NAME, buildChatHistory, isSummaryRequest, searchKB } from "@/lib/to-gau-ai-helpers"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 function isPrivileged(role: string) {
   return role === "creator" || role === "admin"
@@ -180,7 +181,7 @@ Khi trả lời:
           // thinkingLevel "low" (s196+14) — gemini-3.8-flash mặc định thinking=medium nếu không set.
           const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
           const model = genAI.getGenerativeModel({
-            model: "gemini-3.8-flash",
+            model: GEMINI_MODEL,
             systemInstruction,
             generationConfig: { thinkingConfig: { thinkingLevel: "low" } } as any,
           })

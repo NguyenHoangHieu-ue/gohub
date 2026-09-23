@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import type { AgentId } from "./types"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 export type IntentType =
   | "product_search"
@@ -97,7 +98,7 @@ const FALLBACK: ClassifyResult = { intent: "system_explain", needs_clarification
 export async function classify(message: string): Promise<ClassifyResult> {
   try {
     const model = getAI().getGenerativeModel({
-      model: "gemini-3.8-flash",
+      model: GEMINI_MODEL,
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: {
         temperature:     0,

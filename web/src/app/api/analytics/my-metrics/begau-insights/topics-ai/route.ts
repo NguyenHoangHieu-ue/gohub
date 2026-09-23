@@ -6,6 +6,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai"
 import { canWriteTab } from "@/lib/writable-tabs"
 import { quarterRange } from "@/lib/okr-helpers"
 import { cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 const READ_ROLES = ["admin", "creator", "bod"]
 
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
       const numbered = questions.map((q, i) => `${i}: "${q.slice(0, 150)}"`).join("\n")
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
       const model = genAI.getGenerativeModel({
-        model: "gemini-3.8-flash",
+        model: GEMINI_MODEL,
         generationConfig: { temperature: 0.2, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "low" } } as any,
       })
       const prompt = `Bạn là chuyên gia phân tích câu hỏi chatbot BI nội bộ GoHub (SIM/eSIM du lịch). Đây là các câu hỏi ĐÃ được Bé Gấu trả lời bằng cách truy vấn dữ liệu thật (không phải chào hỏi):

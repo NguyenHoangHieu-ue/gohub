@@ -4,6 +4,7 @@ import { getPartnerTiers }               from "@/lib/analytics-helpers"
 import { supabaseAdmin }                   from "@/lib/supabase"
 import { runGA4Report, runGSC, ga4Sites } from "@/lib/ga4"
 import { getCustomRules }                 from "@/lib/agents/guardian"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 // Role data filter: cấp quản lý (admin/creator/manager/bod) không giới hạn dữ liệu.
 // Các role khác (staff/dept) đọc directive từ app_settings.role_filters.
@@ -124,7 +125,7 @@ export async function runBIAnalyst(
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.8-flash",
+    model: GEMINI_MODEL,
     systemInstruction: finalInstruction + ga4SiteList + partnerTierInfo,
     tools: [{ functionDeclarations: [executeSQLDecl, queryGA4Decl, queryGSCDecl, queryProductDecl] }],
     generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: opts?.thinkingLevel ?? "low" } } as any,

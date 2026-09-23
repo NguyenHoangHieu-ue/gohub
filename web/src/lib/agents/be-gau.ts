@@ -42,6 +42,7 @@ import {
   generateImageStabilityDecl, generateVideoDecl, checkVideoStatusDecl,
 } from "./creator/declarations"
 import { dispatchTool } from "./creator/tools/dispatch"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 // Tool mở cho MỌI role (business/productivity, không phải hành động nhạy cảm/trả phí).
 const GP_TOOLS_OPEN = [
@@ -399,7 +400,7 @@ export async function runBeGau(opts: {
   // mỗi vòng × tối đa 12 vòng) đội lại đúng bug timeout vừa fix (s195+14, maxDuration 60→300). SDK v0.21.0
   // chưa có type cho thinkingConfig (ra đời sau SDK) → "as any".
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.8-flash",
+    model: GEMINI_MODEL,
     systemInstruction,
     tools: [{ functionDeclarations }],
     generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,

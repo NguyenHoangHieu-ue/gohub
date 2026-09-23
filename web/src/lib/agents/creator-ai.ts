@@ -11,6 +11,7 @@ export type { FileContext }  from "./file-parser"
 import { ALL_TOOL_DECLARATIONS } from "./creator/declarations"
 import { dispatchTool }          from "./creator/tools/dispatch"
 import { genWithRetryStream }    from "./gemini-stream"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 // ─── Creator AI ───────────────────────────────────────────────────────────────
 // Private AI exclusively for Hiếu (creator role).
@@ -686,7 +687,7 @@ export async function runCreatorAI(
   // KHÔNG để mặc định "medium" (billable, latency ẩn mỗi vòng). "as any": SDK v0.21.0 chưa có type field
   // này (ra đời sau SDK).
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.8-flash",
+    model: GEMINI_MODEL,
     systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
     tools: [{ functionDeclarations: buildFunctionDeclarations(isCreator) }],
     generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,

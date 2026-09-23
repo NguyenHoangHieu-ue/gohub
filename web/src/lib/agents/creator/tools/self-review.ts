@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 // Second-opinion pass (ý tưởng #7, roadmap audit s196+5) — 1 lượt Gemini ĐỘC LẬP (không thấy lịch sử
 // hội thoại/tool-call trước đó) phản biện lại số liệu trước khi Gấu Pro trình bày báo cáo quan trọng.
@@ -20,7 +21,7 @@ export async function runVerifyReportNumbers(args: { summary: string; sql?: stri
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
     const model = genAI.getGenerativeModel({
-      model: "gemini-3.8-flash",
+      model: GEMINI_MODEL,
       systemInstruction: REVIEW_PROMPT,
       generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
     })

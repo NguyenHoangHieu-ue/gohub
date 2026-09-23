@@ -9,6 +9,7 @@ import { guardCheck, canViewCogs } from "./guardian"
 import { getChannelFromRole }   from "./tools"
 import { runMulti, ensureAnswer } from "./orchestrator"
 import type { Message, UserRole } from "./types"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 export interface AnswerResult {
   kind:      "guard" | "clarify" | "agent"
@@ -77,7 +78,7 @@ export async function answerQuestion(
   }
 
   const genAI  = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-  const model  = genAI.getGenerativeModel({ model: "gemini-3.8-flash", systemInstruction })
+  const model  = genAI.getGenerativeModel({ model: GEMINI_MODEL, systemInstruction })
   const result = await model.startChat({ history: geminiHistoryEarly }).sendMessage(lastMsg)
   return { kind: "agent", agentId, agentName, text: ensureAnswer(result.response.text(), agentId) }
 }

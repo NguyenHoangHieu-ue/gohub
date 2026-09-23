@@ -2,6 +2,7 @@
 // Import từ đây thay vì creator-ai.ts để tránh kéo theo analytics-db / Lark / portal / etc.
 
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 export interface WebSource { title: string; url: string }
 
@@ -9,7 +10,7 @@ export async function runWebSearch(query: string): Promise<{ result: string; sou
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
     const searchModel = genAI.getGenerativeModel({
-      model: "gemini-3.8-flash",
+      model: GEMINI_MODEL,
       tools: [{ googleSearch: {} } as any],
     })
     const result = await searchModel.generateContent({

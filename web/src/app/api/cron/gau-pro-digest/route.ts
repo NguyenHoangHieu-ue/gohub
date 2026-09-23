@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { runCreatorAI }              from "@/lib/agents/creator-ai"
 import { getCreatorLarkOpenId, sendLarkDM } from "@/lib/lark"
 import { alertCronFailure }          from "@/lib/cron-alert"
+import { detectNewGeminiModels, newModelMessage } from "@/lib/gemini-model-watch"
 
 // Digest chủ động buổi sáng cho Gấu Pro (đề xuất "E"/ý tưởng #1 roadmap audit s196+5) — trước đây Gấu
 // Pro 100% phản ứng theo lượt, không tự khởi xướng gì. Chạy 1 lần/ngày (Vercel Hobby: cron tối đa
@@ -28,6 +29,10 @@ export async function GET(req: NextRequest) {
     if (!openId) return NextResponse.json({ ok: false, error: "Không tìm được Lark open_id của creator" }, { status: 500 })
 
     await sendLarkDM(openId, `☀️ Digest sáng nay từ Gấu Pro\n\n${text}`)
+
+    // Ké cron digest (Hobby giới hạn số cron) — lỗi quét model không được làm hỏng digest.
+    const newModels = await detectNewGeminiModels().catch(e => { console.error("[gemini-model-watch]", (e as Error).message); return [] as string[] })
+    if (newModels.length) await sendLarkDM(openId, newModelMessage(newModels))
     return NextResponse.json({ ok: true, at: new Date().toISOString() })
   } catch (err) {
     await alertCronFailure("gau-pro-digest", err)

@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 export function stripBase64Images(text: string): string {
   return text.replace(/!\[([^\]]*)\]\(data:image\/[^)]{20,}\)/g, "[📸 Ảnh Gấu Pro đã tạo — xem ở trên]")
@@ -21,7 +22,7 @@ export async function compressHistory(
     // né mặc định "medium" của gemini-3.8-flash (billable, thêm latency ẩn). "as any": SDK v0.21.0 pin
     // cứng chưa có type cho field này (ra đời sau SDK).
     const model = genAI.getGenerativeModel({
-      model: "gemini-3.8-flash",
+      model: GEMINI_MODEL,
       generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "minimal" } } as any,
     })
     const convText = toSummarize.map(m => `[${m.role}] ${m.parts[0]?.text || ""}`).join("\n").slice(0, 40000)

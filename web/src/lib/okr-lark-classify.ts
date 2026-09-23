@@ -4,6 +4,7 @@
 // temperature 0, responseMimeType application/json, parse thủ công, fallback an toàn khi lỗi.
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import type { LarkThread } from "./lark-thread-scan"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 export interface LarkClassifyResult {
   is_match: boolean
@@ -48,7 +49,7 @@ export async function classifyLarkThread(thread: LarkThread): Promise<LarkClassi
   }
   try {
     const model = getAI().getGenerativeModel({
-      model: "gemini-3.8-flash",
+      model: GEMINI_MODEL,
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: {
         temperature: 0,

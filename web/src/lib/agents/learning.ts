@@ -5,6 +5,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { supabaseAdmin }      from "@/lib/supabase"
 import { sendLarkDM }         from "@/lib/lark"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 const LEARNING_COOLDOWN = 5 * 60_000
 const _learningRL = new Map<string, number>()
@@ -40,7 +41,7 @@ export async function detectAndLogLearning(opts: {
     // cho field này (ra đời sau SDK) → "as any". Xem chatbot-agents-guardian.md (bài học gemini-3.5-flash
     // thinking model cần thinkingBudget=0 mới ổn định JSON — né lặp lại đúng lớp sự cố).
     const model = genAI.getGenerativeModel({
-      model: "gemini-3.8-flash",
+      model: GEMINI_MODEL,
       generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "minimal" } } as any,
     })
     const prompt = `Phân tích xem câu sau của user có chứa THÔNG TIN THỰC TẾ có thể học không (không phải câu hỏi).

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse }  from "next/server"
 import { getServerSession }           from "next-auth"
 import { authOptions }                from "@/lib/auth"
 import { GoogleGenerativeAI }         from "@google/generative-ai"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 // POST /api/analytics/usage-stats/classify
 // Input: { questions: string[] }
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.8-flash",
+    model: GEMINI_MODEL,
     generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
   })
 

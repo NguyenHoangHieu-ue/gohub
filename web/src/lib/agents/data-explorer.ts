@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai"
 import { queryAnalytics }                 from "@/lib/analytics-db"
 import { supabaseAdmin }                   from "@/lib/supabase"
 import { getRoleDataFilter }               from "./bi-analyst"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 // ─── Data Explorer Agent ─────────────────────────────────────────────────────
 // Agent truy xuất DỮ LIỆU THÔ toàn hệ thống: gohub_dw (Postgres, SELECT tự do) +
@@ -218,7 +219,7 @@ export async function runDataExplorer(
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.8-flash",
+    model: GEMINI_MODEL,
     systemInstruction: finalInstruction,
     tools: [{ functionDeclarations: [executeSQLDecl, querySupabaseDecl, listTablesDecl] }],
     generationConfig: { temperature: 0 },

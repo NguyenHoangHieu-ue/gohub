@@ -3,6 +3,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import type { ChannelMoM } from "./data"
 import { fmtVnd, fmtPct } from "./period"
+import { GEMINI_MODEL } from "@/lib/ai-models"
 
 export interface ChannelNarrative { channel: string; sentence: string }
 
@@ -31,7 +32,7 @@ export async function generateChannelNarratives(channels: ChannelMoM[]): Promise
 
   try {
     const model = getAI().getGenerativeModel({
-      model: "gemini-3.8-flash",
+      model: GEMINI_MODEL,
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: { temperature: 0.3, maxOutputTokens: 4000, responseMimeType: "application/json" },
     })
