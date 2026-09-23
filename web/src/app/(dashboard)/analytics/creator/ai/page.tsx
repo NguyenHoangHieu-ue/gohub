@@ -327,6 +327,8 @@ export default function CreatorAIPage() {
   const [larkConnected, setLarkConnected] = useState<boolean | null>(null)
   const [google, setGoogle] = useState<{ connected: boolean; email?: string } | null>(null)
   const [convId,        setConvId]        = useState<string | null>(null)
+  // Người dùng đã thao tác (mới/mở cuộc khác/gửi) → huỷ auto-restore cuộc gần nhất đang tải dở, tránh nó về SAU và đè lên.
+  const userActedRef = useRef(false)
   const [pastConvs,     setPastConvs]     = useState<{ id: string; title: string; updated_at: string }[]>([])
   const [showConvList,  setShowConvList]  = useState(false)
   const [showActionLog, setShowActionLog] = useState(false)
@@ -386,7 +388,7 @@ export default function CreatorAIPage() {
       .then((list: { id: string; title: string; updated_at: string }[]) => {
         if (!Array.isArray(list)) return
         setPastConvs(list)
-        if (!loaded && list.length > 0) loadConversation(list[0].id)
+        if (!loaded && list.length > 0 && !userActedRef.current) loadConversation(list[0].id, true)
       })
       .catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -487,12 +489,14 @@ export default function CreatorAIPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [loading])
 
-  const loadConversation = useCallback(async (id: string) => {
+  const loadConversation = useCallback(async (id: string, auto = false) => {
+    if (!auto) userActedRef.current = true
     try {
       const r = await fetch(`/api/chat/conversations/${id}`)
       if (!r.ok) return
       const msgs = await r.json() as { role: string; content: string }[]
       if (!Array.isArray(msgs) || msgs.length === 0) return
+      if (auto && userActedRef.current) return
       const converted: Message[] = msgs.map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
       setMessages(converted)
       setConvId(id)
@@ -502,6 +506,7 @@ export default function CreatorAIPage() {
   }, [LS_KEY])
 
   const clearConversation = useCallback(() => {
+    userActedRef.current = true
     setMessages([])
     setInput("")
     setAttachedFiles([])
@@ -559,6 +564,7 @@ export default function CreatorAIPage() {
   }, [])
 
   const send = useCallback(async (content: string) => {
+    userActedRef.current = true
     const text = content.trim()
     if ((!text && attachedFiles.length === 0) || loading) return
 
@@ -728,9 +734,9 @@ export default function CreatorAIPage() {
         <div className="flex items-center gap-2">
           {isCreatorRole && larkConnected !== null && (
             larkConnected ? (
-              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg" title="Gấu Pro xem được task Lark của bạn">
+              <a href="/api/lark/oauth/start" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg" title="Gấu Pro xem được task Lark của bạn — bấm để cấp quyền lại (khi app Lark thêm quyền mới)">
                 🔗 Đã kết nối Lark
-              </span>
+              </a>
             ) : (
               <a href="/api/lark/oauth/start"
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors"
@@ -741,9 +747,9 @@ export default function CreatorAIPage() {
           )}
           {isCreatorRole && google !== null && (
             google.connected ? (
-              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg" title={`Gấu Pro đọc/sửa được Drive, Docs, Sheets của ${google.email ?? "bạn"}`}>
+              <a href="/api/google/oauth/start" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg" title={`Gấu Pro đọc/sửa được Drive, Docs, Sheets của ${google.email ?? "bạn"} — bấm để cấp quyền lại`}>
                 📁 Đã kết nối Google
-              </span>
+              </a>
             ) : (
               <a href="/api/google/oauth/start"
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors"
