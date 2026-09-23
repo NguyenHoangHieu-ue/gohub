@@ -5,7 +5,7 @@ is_hidden: true
 department: all
 tags: [tab, analytics, b2c]
 created: 2026-06-28
-updated: 2026-08-20
+updated: 2026-09-23
 status: active
 ---
 
@@ -401,3 +401,16 @@ fact + nhiều lần đọc Supabase nối tiếp (5-60s). Nay gửi `live=1`: r
 của các khối tính toán; `nocache=1` chỉ còn cho làm mới chủ động/cron. 5 lần đọc Supabase (target/budget/chi phí nhóm/chi phí kênh/leads)
 + revenueComparison chạy `Promise.all` thay vì nối tiếp. Target/budget/chi phí vẫn đọc tươi mỗi request (nhập xong hiện ngay). Header response
 `live` = `no-store` (giữ fix CDN s195+19).
+
+## s206 (2026-09-23) — B2C MKT Profit Report mất cột Tháng 9 + KPI "Units Sold" hiện %
+
+- **MKT Profit Report (Advanced) không hiện T9**: Meta/Google spend hardcode theo tháng trong FE (`manualMktSpend`,
+  port từ bản của Minh s-08/2026) và bảng lọc `data.months` theo object đó → tháng chưa ai thêm vào code (T9) biến mất
+  khỏi bảng. Hardcode còn lệch DB (T8: 30,2tr vs 148,8tr Manage Cost — số nhập giữa tháng không cập nhật).
+  Fix (Hiếu chốt): **Total chi phí MKT / CM1 / % lấy `data.spend[month]`** (Manage Cost group + kênh, cùng nguồn
+  Spend/ROAS/CAC) → tháng mới tự hiện. Dòng Meta/Google giữ số hardcode cho tháng cũ, tháng không có hiện "Chưa tách"
+  (DB `analytics_channel_group_costs` chia theo VN/Global, không tách nền tảng). ⚠️ Vì vậy Meta + Google ≠ Total ở các
+  tháng cũ — đúng thiết kế, Total là số chuẩn.
+- **Performance KPI card**: FE format mọi KPI không phải tiền & không chứa "Orders" thành `%` → "Units Sold" hiện
+  `5439.0%`; dòng "vs last period" của Units/Orders cũng gắn `%`. Nay chỉ label chứa `%` (Margin %, CM1 %) hiện `%`,
+  còn lại là số nguyên.

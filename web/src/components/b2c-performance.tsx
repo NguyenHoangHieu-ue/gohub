@@ -917,10 +917,10 @@ export function B2CPerformance() {
               </div>
               <p className="text-sm font-medium text-slate-500 mb-1">{kpi.label}</p>
               <h3 className="text-2xl font-bold text-slate-900">
-                {kpi.isCurrency ? formatCompact(kpi.value) : kpi.label.includes("Orders") ? kpi.value.toLocaleString() : kpi.value.toFixed(1) + "%"}
+                {kpi.isCurrency ? formatCompact(kpi.value) : kpi.label.includes("%") ? kpi.value.toFixed(1) + "%" : Math.round(kpi.value).toLocaleString()}
               </h3>
               <p className="text-xs text-slate-400 mt-2">
-                {kpi.lastPeriod !== 0 ? `vs last period: ${kpi.isCurrency ? formatCompact(kpi.lastPeriod) : kpi.lastPeriod.toFixed(1) + "%"}` : "No prev data"}
+                {kpi.lastPeriod !== 0 ? `vs last period: ${kpi.isCurrency ? formatCompact(kpi.lastPeriod) : kpi.label.includes("%") ? kpi.lastPeriod.toFixed(1) + "%" : Math.round(kpi.lastPeriod).toLocaleString()}` : "No prev data"}
               </p>
             </div>
           ))}
