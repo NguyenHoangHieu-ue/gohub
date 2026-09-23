@@ -656,7 +656,7 @@ chạm được ổ đĩa → thêm daemon `local-agent/daemon.mjs` (Node thuầ
 - ⚠️ Thứ tự deploy: daemon chỉ được chạy SAU khi server có bản tách luồng `fs_` — server cũ sẽ đưa lệnh browser cho daemon.
 - Chưa làm: đọc/ghi docx/xlsx, Claude Agent SDK phía local cho việc nhiều bước (chờ API key), duyệt qua Lark.
 - **Autostart (s206+1)**: `local-agent/install-autostart.ps1` tạo shortcut Startup + Desktop chạy `start-hidden.vbs`
-  (ẩn console). Khoá 1 bản chạy qua `%USERPROFILE%\.gohub-agentgent.pid`.
+  (ẩn console). Khoá 1 bản chạy qua `%USERPROFILE%\.gohub-agent\agent.pid`.
 
 ## § s206+1 (2026-09-23) — Model Gemini tập trung 1 chỗ + tự báo model mới
 

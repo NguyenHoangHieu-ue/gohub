@@ -10,6 +10,13 @@ chỉ nhận lệnh `fs_*`, và chỉ làm việc trong các thư mục `roots`.
 3. Mở config: dán token Bridge (trang `/analytics/creator/bridge`), chỉnh `baseUrl` (staging/production) và `roots`.
 4. Chạy lại `node local-agent/daemon.mjs` (hoặc `start-agent.cmd`). Log ở `%USERPROFILE%\.gohub-agent\agent.log`.
 
+## Tự chạy khi mở máy
+
+- `powershell -ExecutionPolicy Bypass -File local-agent\install-autostart.ps1` — tạo shortcut "GoHub Agent" trong
+  Startup (tự chạy ẩn khi đăng nhập Windows) + trên Desktop (bấm đúp để bật tay nếu đã tắt). Gỡ: thêm `-Uninstall`.
+- Chỉ 1 bản chạy (khoá `agent.pid`) — bấm shortcut khi daemon đang chạy thì bản mới tự thoát.
+- Tắt: Task Manager → `node.exe` có dòng lệnh chứa `daemon.mjs`.
+
 ## An toàn
 
 - Chỉ đọc/ghi trong `roots`; chặn `..`, symlink trỏ ra ngoài, thư mục `.git`/`node_modules`.
