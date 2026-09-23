@@ -10431,3 +10431,39 @@ sạch data test sau mỗi vòng, verify server (fetch bypass cache `_cb=timesta
 5 commit trên staging: ccf30305 (feature CH.Cost+CM1), f45c9322 (fetch no-store — không đủ), f31dce41
 (fix CDN cache đúng gốc), 3aa5c991 (cột CH.Cost + fix loading modal), 9ca62a85 (docs wiki). Chưa merge
 main.
+
+## s206 (2026-09-23) — Trợ lý toàn diện cho Hiếu (Gấu Pro) + 3 fix analytics
+
+Fix:
+- Scheduled message "Daily Revenue Update" bấm Test lỗi liên tục: Lark 11310 "card table number over limit" — card
+  schema 2.0 tối đa 5 bảng, Daily có 【1】→【8】 (số bảng tuỳ Gemini format → lúc được lúc không). buildReportCards tách
+  nhiều card ≤5 bảng, keyword lặp mỗi card, gửi tuần tự. Dry-run qua perf-probe-report xác nhận phần số liệu/Gemini OK.
+- B2C Advanced "B2C MKT Profit Report" không có T9: Meta/Google spend hardcode theo tháng trong FE (Minh) → tháng chưa
+  thêm vào code biến mất. Hiếu chốt: Total MKT/CM1 lấy data.spend (Manage Cost), Meta/Google giữ số cũ, tháng thiếu
+  "Chưa tách". Hệ quả: T7/T8 Total đổi (T8 30,2tr → 148,8tr — hardcode cũ lệch DB). Kèm fix KPI "Units Sold" hiện %.
+
+Trợ lý toàn diện (Hiếu chốt: cloud + local, Gemini-only, task từ DM/Tasks/group):
+- localFiles + daemon local-agent/ (Node thuần, hàng đợi Bridge fs_*, roots allowlist, chặn file bí mật, backup, không
+  xoá, autostart Windows + khoá 1 bản).
+- lib/ai-models.ts gom 21 file hardcode model; digest DM khi có model Gemini mới (key hiện chưa có gemini-4; Pro mới
+  nhất 3.1-pro-preview cũ hơn 3.8-flash).
+- Kết nối Google (client "GoHub Intel - Drive", project GCP "hieu" — tạo qua browser) + googleWorkspace.
+- P1: DM Lark creator → Gấu Pro; group @creator → Gemini phân loại → tạo task + DM; nhắc deadline; digest thêm task.
+- assistantMemory (v63), tách khỏi creator_kb vì KB đọc được bởi mọi role.
+- larkDocs (search/read/create_doc markdown→blocks/append/create_sheet/write/append_sheet).
+
+Bug phát hiện khi QA:
+- createLarkTask/updateLarkTask gửi due theo GIÂY, Lark v2 dùng MILI giây → hạn về 1970 (có từ trước).
+- Lark OAuth: start/callback dùng NEXTAUTH_URL (Preview trỏ production) → kết nối từ staging bị đá sang production;
+  authorize không truyền scope → theo docs Lark không cấp quyền mới (token thiếu task:task:read dù app đã bật) và
+  thiếu offline_access thì không có refresh_token. Fix: origin + scope tường minh.
+- Gấu Pro gặp lỗi quyền tool thì đi lạc gọi browser/Lark Base/Supabase → rule system prompt dừng + báo cách sửa.
+- "Cuộc trò chuyện mới" bị đè: thêm userActedRef, nhưng sau fix không tái hiện được lỗi gốc — nhiều khả năng do
+  extension Chrome khác chặn claude-in-chrome ("Cannot access a chrome-extension:// URL of different extension").
+- cron-job.org gọi scheduled-messages MỖI GIỜ (không phải mỗi phút như wiki cũ) và trỏ staging.
+
+QA sống: file local (đọc/ghi qua Gấu Pro, hỏi xác nhận trước khi ghi), Google Doc/Sheet, Lark Task (hạn 15:00 VN =
+1790323200000 đúng), nhắc deadline chạy thật 22:01 (task test soon=true), trí nhớ qua nhiều cuộc trò chuyện + forget,
+Lark Docs (search/read/create Doc có bảng/Sheet). Chưa QA: DM bot, giao việc qua group (cần Hiếu + đồng nghiệp).
+Hiếu hỏi mở cho người khác dùng → giải thích cần token theo từng người + quyết định quyền dữ liệu; tạm chưa làm.
+Tất cả đã merge main (c46f7b47).

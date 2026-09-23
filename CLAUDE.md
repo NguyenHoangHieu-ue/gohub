@@ -8,43 +8,24 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-22)
+## Trạng thái hiện tại (2026-09-23)
 
 Branch làm việc: `staging` → merge `main` **CHỈ khi Hiếu yêu cầu RÕ RÀNG**. tsc + `next build` + `next lint` + vitest phải PASS trước khi push.
 
-**Mốc gần nhất trên `main` — s203+3 (2026-09-21, `3693cd72`)**: audit + tăng tốc toàn hệ thống BI (gốc:
-`TRIM()` phía `dim_customer` trong JOIN làm chậm ~10×, Supabase L2 cache chậm, gohub_dw chạy tuần tự) +
-fix B2C Performance/KPI/trend thiếu ~90% doanh thu (loại nhầm mã KH B2C dùng chung khỏi
-`excludedForB2C()`) + B2C customer-breakdown lấy kênh từ `summary.byTenant` trên đơn + export 3HK Data
-Usage theo tháng + fix Bridge device tracking (creator-only) + Query Studio kiểu Power BI + fix cron
-`refresh-monthly-kpis` thiếu GET.
-
-**Tiếp theo cùng ngày 2026-09-22, đang ở `staging` — CHƯA merge main**:
-- Tinh gọn CLAUDE.md (1269→162 dòng, giữ trạng thái+rule+checklist, bỏ narrative cũ — chính file này).
-- Wiki business: sửa sai sót thật (mã vendor `GB` nhầm là WorldMove → đúng là Gighub, WorldMove là `WM`;
-  ký tự vị trí 8 data policy sai nhiều chữ; hệ số Daily 3HK 40%→38% lỗi thời; tỷ giá cũ) + 2 bài mới
-  `chinh-sach-vendor.md` (QR/đổi máy/hủy-hoàn tiền 11 vendor) + `quy-trinh-cs-van-hanh.md`.
-- Đồng bộ field response GoHub API `/skus` thật (migration `v62`, Hiếu đã chạy): bỏ 5 field chết
-  (`original_cost`/`reference_cost_vnd`/`final_cogs_included_vat_vnd`/`final_cogs_usd`/`wr_group` — chưa
-  từng có cột), đổi `expirations`→`vendor_expirations` (tên thật), thêm `sku_ref`/`parents`/`data`/
-  `speed`/`data_plan`/`topup_timing`. Vỡ 6 chỗ code đọc cột cũ (sync.py + 3 route + 1 tool Bé Gấu + 1 mô
-  tả schema agent) — đã sửa hết, verify sync chạy lại thành công.
-- 3HK Data Usage: tách sub-variant Unlimited theo `skus.data`/`skus.speed` (mã mới 13kt, cùng ký tự
-  nhưng khác gói thật vd 500MB vs 1GB) + giải mã P1/P2 từ cấu trúc mã CŨ 14kt (SIM)/15kt (eSIM, trước rơi
-  hết "Khác") — cảnh báo "Không rõ chi tiết gói" khi không tra được gì thay vì đoán im lặng. Kèm 2 bug
-  FE phát hiện lúc QA: race condition (sửa bằng request-id `useRef`, áp cho 4 fetch tab-phụ-thuộc) + số
-  thập phân không đồng nhất dấu `.`/`,` (thêm `fmtDec()` vi-VN).
-- **s205 (2026-09-22) — VN Ecom Breakdown (B2B Performance): CH.Cost + cột CM1/%CM1 (riêng b2b_ecom_cost_monthly,
-  không chung CH.Cost B2B khác).** Nhập độc lập theo customer/shop/sub-shop × tháng, pro-rata đúng công
-  thức chuẩn hệ thống (cost-engine.ts, cùng logic `b2b/performance`). QA sống phát hiện + fix ngay 2 bug
-  thật: (1) Vercel CDN cache response theo URL 5' bất kể app-level `nocache=1` — sửa cost lần 2 không lên
-  UI dù server tính đúng, fix trả `Cache-Control: no-store` khi bypass; (2) modal prefill hiện "Chưa nhập"
-  y hệt trạng thái rỗng thật trong lúc GET đang tải → dễ tưởng "phải bấm + Thêm mới hiện cost đã lưu", fix
-  bằng state loading riêng. Thêm cột CH.Cost hiện trực tiếp trên bảng (không cần mở modal). Verify sống
-  nhiều vòng qua browser thật (claude-in-chrome) — PASS.
-- Chi tiết đầy đủ: `docs/session_summary.txt` (đọc từ cuối lên), wiki `analytics-data-model.md` §10,
-  `analytics-b2c.md` §6, `analytics-quarterly.md`, `analytics-3hk-usage.md` §3.1d/§3.1e/§9,
-  `analytics-devtools.md`, `analytics-b2b.md` §6, `docs/wiki/business/*.md`.
+**Mốc gần nhất trên `main` — s206 (2026-09-23, `c46f7b47`), staging = main.** Toàn bộ s204/s205 (3HK sub-variant,
+VN Ecom CH.Cost/CM1, wiki business, v62) đã merge. s206 = **trợ lý toàn diện (Gấu Pro)** + vài fix:
+- Scheduled message: Lark 11310 "card table number over limit" (≤5 bảng/card) → tách nhiều card.
+- B2C Advanced MKT Profit Report mất T9 (Meta/Google hardcode) → Total MKT lấy Manage Cost; KPI Units Sold hiện %.
+- Model Gemini tập trung `lib/ai-models.ts` (`GEMINI_MODEL`/`GEMINI_MODEL_PRO`, env override) + digest DM khi
+  Google mở model mới. Hiếu chốt KHÔNG dùng Claude API (gói Pro không gồm API).
+- Gấu Pro (creator-only): `localFiles` (daemon `local-agent/`, autostart Windows) · Kết nối Google + `googleWorkspace`
+  · `larkDocs` (Lark Drive/Docs/Sheets/Wiki) · `assistantMemory` (bảng `assistant_memory`, v63) · DM Lark creator →
+  Gấu Pro · tự tạo task khi bị @giao việc trong group · nhắc deadline (ké cron scheduled-messages) · digest thêm task.
+- Fix Lark OAuth: redirect theo origin (không NEXTAUTH_URL) + xin scope tường minh (bỏ trống = không cấp quyền mới).
+  Bug cũ: `createLarkTask` gửi hạn theo giây (Lark dùng ms) → hạn về 1970.
+- QA sống đủ: file local, Google, Lark Task/Docs, trí nhớ, nhắc deadline. **Chưa QA**: DM bot + giao việc qua group.
+- Chi tiết: wiki `analytics-creator-ai.md` §s206..s206+7, `analytics-scheduled.md` §E, `analytics-b2c.md` s206,
+  `docs/session_summary.txt` s206.
 
 **Kiến trúc & agent hiện tại** (xem `docs/wiki/system/kien-truc-he-thong.md` để biết đầy đủ + diagram):
 - Chatbot chính = **Bé Gấu** (`be-gau.ts`, 1 agent function-calling, model `gemini-3.8-flash`
@@ -55,13 +36,20 @@ Usage theo tháng + fix Bridge device tracking (creator-only) + Query Studio ki�
   lại ai cũng như nhau (đã xoá cơ chế policy DB `access_policy`).
 - Cache BI: `cachedQuery()` L1 45s + L2 Vercel Runtime Cache (nén gzip >400KB) + stale-while-revalidate +
   `deps[]` để flush theo chủ đề (không dùng prefix-list viết tay nữa) — xem `analytics-data-model.md` §8/§10.
-- Deploy: Vercel (Hobby — cron tối đa 1 lần/ngày/job). Staging domain `stg-intel-v2.gohub.cloud`.
+- Deploy: Vercel (Hobby — cron tối đa 1 lần/ngày/job). Staging `stg-intel-v2.gohub.cloud`, production `intel-v2.gohub.cloud`.
+- ⚠️ cron-job.org thực tế gọi `scheduled-messages` MỖI GIỜ (:01) và đang trỏ **staging** (kiểm log 2026-09-23).
 - Sync GoHub API → Supabase: `backend/data_sync/sync.py` qua GitHub Actions `sync.yml`, chạy theo `main`
   (không theo staging) — `core` (products/skus/listings) hằng ngày, `items` hằng tuần (Chủ nhật).
 
 ---
 
 ## Việc Hiếu cần làm (còn mở)
+
+**Ưu tiên gần nhất (s206):**
+- [ ] QA 2 luồng còn lại của trợ lý: nhắn DM bot ("mai 10h ...") → task; nhờ đồng nghiệp @Hiếu giao việc trong group có bot.
+- [ ] Xoá file test trên Drive: Google `[TEST] Gấu Pro - …` (Doc + Sheet) và Lark `[TEST] Gấu Pro - … (Lark)` (Doc + Sheet).
+- [ ] (Tuỳ chọn) Tạo secret mới cho OAuth client Google "GoHub Intel - Drive" (secret cũ đã dán vào chat) rồi cập nhật Vercel + `.env.local`.
+- [ ] (Tuỳ chọn) Tăng tần suất job cron-job.org `scheduled-messages` (hiện mỗi giờ) nếu muốn nhắc deadline sát hơn.
 
 **Ưu tiên gần nhất (s202-s203):**
 - [ ] Chạy tay `GET /api/cron/prewarm-analytics` (Bearer CRON_SECRET) trên production để làm nóng Runtime Cache lần đầu.
@@ -74,7 +62,7 @@ Usage theo tháng + fix Bridge device tracking (creator-only) + Query Studio ki�
 - [ ] Hỏi bên vận hành/vendor 3HK: pipeline nạp `fact_data_usage`/`data_usage_log` (gohub_dw) đứng yên từ 2026-07-20, có job nào phụ trách không.
 
 **Migration + config còn treo:**
-- [ ] Chạy `web/db/migrations/v63_assistant_memory.sql` + Reload schema Supabase — bật trí nhớ dài hạn của trợ lý (Gấu Pro). Chưa chạy thì trí nhớ tắt, chat vẫn bình thường.
+- [x] v63 `assistant_memory` — Hiếu đã chạy 2026-09-23.
 - [ ] Chạy `web/db/migrations/v52_external_api_keys.sql` (chưa xác nhận đã chạy) + Reload schema Supabase → tạo API key ở `/admin` tab "API bên ngoài" → gửi manager (xem `admin-product.md` §4).
 - [ ] Kiểm tra lại migration v43 (`kb_wiki_group_scope`) đã chạy chưa (chưa xác nhận gần đây).
 - [ ] Tạo tài khoản Upstash Redis (free tier) + set `UPSTASH_REDIS_REST_URL`/`TOKEN` trên Vercel — rate-limit hiện chạy in-memory, chưa cross-instance.
@@ -107,7 +95,7 @@ v31–v56 (cũ, xem `docs/session_summary.txt` nếu cần chi tiết) · **v57*
 `app_usage_events` cost · **v59** `chat_feedback` · **v60** To-Gau docs/notes/questions Realtime ·
 **v61** `browser_bridge_devices` + `browser_bridge_commands.device_id/claimed_ip` · **v62**
 `skus` field đầy đủ (bỏ 5 field chết, `expirations`→`vendor_expirations`, thêm `sku_ref`/`parents`/
-`data`/`speed`/`data_plan`/`topup_timing`) — tất cả Hiếu đã chạy, đã verify sống. ⚠️ **v52**
+`data`/`speed`/`data_plan`/`topup_timing`) · **v63** `assistant_memory` (trí nhớ trợ lý, 2026-09-23) — tất cả Hiếu đã chạy, đã verify sống. ⚠️ **v52**
 `external_api_keys` — CHƯA xác nhận đã chạy (xem checklist trên). ⚠️ **v43** `kb_wiki_group_scope` —
 chưa xác nhận lại gần đây.
 
