@@ -17,6 +17,7 @@ import { runTrackSKUWinRate }      from "./win-rate"
 import { runGenerateVideo, runCheckVideoStatus } from "./video"
 import { runReadMyBrowser, runControlMyBrowser, runLocalFiles } from "./bridge"
 import { runGoogleWorkspace } from "./google"
+import { runAssistantMemory } from "@/lib/assistant-memory"
 import { logGpAction }             from "./audit-log"
 import { runVerifyReportNumbers }  from "./self-review"
 
@@ -24,7 +25,7 @@ import { runVerifyReportNumbers }  from "./self-review"
 const AUDITED_TOOLS = new Set([
   "writeKnowledgeBase", "approveLearning", "rejectLearning",
   "createLarkTask", "updateLarkTask", "sendLarkMessage",
-  "controlMyBrowser", "managePortalCredentials", "localFiles", "googleWorkspace",
+  "controlMyBrowser", "managePortalCredentials", "localFiles", "googleWorkspace", "assistantMemory",
 ])
 
 export async function dispatchTool(
@@ -108,6 +109,9 @@ async function dispatchToolCore(
 
   if (call.name === "googleWorkspace")
     return wrap(ctx?.isCreator ? await runGoogleWorkspace(call.args) : { error: "googleWorkspace chỉ dành cho creator." })
+
+  if (call.name === "assistantMemory")
+    return wrap(ctx?.isCreator ? await runAssistantMemory(call.args, ctx?.username || "", "gau-pro") : { error: "assistantMemory chỉ dành cho creator." })
 
   if (call.name === "managePortalCredentials")
     return wrap(await runManagePortalCredentials(call.args))

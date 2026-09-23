@@ -12,6 +12,7 @@ import { ALL_TOOL_DECLARATIONS } from "./creator/declarations"
 import { dispatchTool }          from "./creator/tools/dispatch"
 import { genWithRetryStream }    from "./gemini-stream"
 import { GEMINI_MODEL } from "@/lib/ai-models"
+import { buildMemoryBlock } from "@/lib/assistant-memory"
 
 // ─── Creator AI ───────────────────────────────────────────────────────────────
 // Private AI exclusively for Hiếu (creator role).
@@ -633,8 +634,8 @@ Hôm nay: ${fmt(now)} (${dow}). Data cutoff gohub_dw = CURRENT_DATE-1 = ${fmt(ye
 // browser Hiếu, user khác gọi sẽ nhắm nhầm vào browser Hiếu). s195+3: bridge đã multi-tenant thật (mỗi
 // user 1 token/1 queue riêng — owner_username) nên rủi ro đó hết, bỏ 2 tool ra khỏi set này. Giữ cơ chế
 // buildFunctionDeclarations() cho tool nào THẬT SỰ cần creator-only về sau.
-// localFiles (ổ đĩa máy thật) + googleWorkspace (token Google của creator) → chỉ creator.
-const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace"])
+// localFiles (ổ đĩa máy thật) + googleWorkspace (token Google của creator) + assistantMemory (trí nhớ cá nhân) → chỉ creator.
+const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace", "assistantMemory"])
 
 export function buildFunctionDeclarations(isCreator: boolean) {
   return isCreator ? ALL_TOOL_DECLARATIONS : ALL_TOOL_DECLARATIONS.filter(d => !CREATOR_ONLY_TOOLS.has(d.name))
@@ -650,7 +651,7 @@ export async function runCreatorAI(
 ): Promise<{ text: string; sources: WebSource[]; tokensIn: number; tokensOut: number }> {
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const isFreshConversation = geminiHistory.length <= 1
-  const [partnerTierInfo, ga4SiteList, kbInject] = await Promise.all([
+  const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock] = await Promise.all([
     getPartnerTiers().then(tiers => {
       const lines = Object.entries(tiers).map(([tier, channels]) => `  ${tier}: ${(channels as string[]).join(", ")}`).join("\n")
       return lines ? `\n\n━━━ PARTNER TIERS (B2B từ Supabase) ━━━\n${lines}` : ""
@@ -676,6 +677,8 @@ export async function runCreatorAI(
           return `\n\n━━━ CREATOR KB (đã nạp — NGUỒN SỰ THẬT, override training data khi mâu thuẫn) ━━━\n${body.slice(0, MAX_KB)}${suffix}`
         }).catch(() => "")
       : Promise.resolve(""),
+    // Trí nhớ dài hạn — nạp MỖI lượt (khác KB chỉ lượt đầu) để điều vừa nhớ có hiệu lực ngay.
+    isCreator && username ? buildMemoryBlock(username).catch(() => "") : Promise.resolve(""),
   ])
 
   // Business date context — auto-inject để Gấu tự biết "tháng này"/"hôm nay" mà không hỏi lại
@@ -688,7 +691,7 @@ export async function runCreatorAI(
   // này (ra đời sau SDK).
   const model = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
-    systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject,
+    systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject + memoryBlock,
     tools: [{ functionDeclarations: buildFunctionDeclarations(isCreator) }],
     generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
   })

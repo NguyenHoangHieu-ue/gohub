@@ -74,6 +74,7 @@ Usage theo tháng + fix Bridge device tracking (creator-only) + Query Studio ki�
 - [ ] Hỏi bên vận hành/vendor 3HK: pipeline nạp `fact_data_usage`/`data_usage_log` (gohub_dw) đứng yên từ 2026-07-20, có job nào phụ trách không.
 
 **Migration + config còn treo:**
+- [ ] Chạy `web/db/migrations/v63_assistant_memory.sql` + Reload schema Supabase — bật trí nhớ dài hạn của trợ lý (Gấu Pro). Chưa chạy thì trí nhớ tắt, chat vẫn bình thường.
 - [ ] Chạy `web/db/migrations/v52_external_api_keys.sql` (chưa xác nhận đã chạy) + Reload schema Supabase → tạo API key ở `/admin` tab "API bên ngoài" → gửi manager (xem `admin-product.md` §4).
 - [ ] Kiểm tra lại migration v43 (`kb_wiki_group_scope`) đã chạy chưa (chưa xác nhận gần đây).
 - [ ] Tạo tài khoản Upstash Redis (free tier) + set `UPSTASH_REDIS_REST_URL`/`TOKEN` trên Vercel — rate-limit hiện chạy in-memory, chưa cross-instance.

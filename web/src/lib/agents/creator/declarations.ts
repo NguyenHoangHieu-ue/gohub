@@ -405,6 +405,23 @@ export const googleWorkspaceDecl = {
   },
 }
 
+export const assistantMemoryDecl = {
+  name: "assistantMemory",
+  description: "Trí nhớ dài hạn về người dùng (hồ sơ, sở thích cách làm việc, dự án đang theo, người liên quan, quyết định đã chốt). Khối TRÍ NHỚ đã tự nạp sẵn trong system prompt kèm id [#id]. save = nhớ điều mới (1 ý/lần); update = sửa điều đã nhớ theo id; forget = bỏ điều sai/lỗi thời theo id; list = xem toàn bộ (lọc kind/query). Không lưu số liệu tra lại được, chuyện tạm thời hay thông tin nhạy cảm.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      action:  { type: SchemaType.STRING, description: "save | update | forget | list" },
+      id:      { type: SchemaType.NUMBER, description: "id trí nhớ (update/forget)." },
+      kind:    { type: SchemaType.STRING, description: "profile | preference | project | person | decision | other" },
+      content: { type: SchemaType.STRING, description: "Nội dung ngắn gọn ≤500 ký tự, kèm mốc thời gian nếu liên quan (save/update)." },
+      pinned:  { type: SchemaType.BOOLEAN, description: "true = luôn ưu tiên nạp (điều rất quan trọng)." },
+      query:   { type: SchemaType.STRING, description: "Từ khoá lọc (list)." },
+    },
+    required: ["action"],
+  },
+}
+
 export const browsePortalDecl = {
   name: "browsePortal",
   description: "Login to an external supplier/partner portal and fetch its page content. Credentials are stored in Supabase. Use to get product listings, prices, inventory, or any data from external web portals. Returns cleaned text content of the page for analysis.",
@@ -588,7 +605,7 @@ export const ALL_TOOL_DECLARATIONS = [
   // Phase 3 tools
   generateVideoDecl, checkVideoStatusDecl, generateImageStabilityDecl,
   // Phase 2 (s195+1) — Extension điều khiển browser cá nhân Hiếu
-  readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl, googleWorkspaceDecl,
+  readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl, googleWorkspaceDecl, assistantMemoryDecl,
   // s196+12 — second-opinion pass (roadmap audit s196+5, ý tưởng #7)
   verifyReportNumbersDecl,
 ]

@@ -701,3 +701,16 @@ chạm được ổ đĩa → thêm daemon `local-agent/daemon.mjs` (Node thuầ
 - **Bug có sẵn đã sửa**: `createLarkTask`/`updateLarkTask` gửi `due.timestamp` theo GIÂY — Lark Task v2 dùng MILI giây
   (docs: "距1970-01-01 00:00:00 UTC的毫秒数") → mọi hạn tạo qua Gấu Pro từng rơi về 01/1970. `dueMs()` sửa + chuỗi giờ
   không kèm múi giờ hiểu là giờ VN (server UTC). Test `lark-task-due.test.ts`, `task-reminders.test.ts`.
+
+## § s206+4 (2026-09-23) — Trí nhớ dài hạn riêng cho trợ lý (`assistantMemory`)
+
+- Bảng `assistant_memory` (migration **v63**, Hiếu phải chạy): `username, kind (profile|preference|project|person|
+  decision|other), content ≤500, source, pinned, archived`. RLS bật, không policy → chỉ service_role.
+- **Tách khỏi `creator_kb`** có chủ đích: creator_kb là kiến thức nghiệp vụ và `readKnowledgeBase` mở cho MỌI role →
+  lưu điều riêng tư về Hiếu vào đó là lộ.
+- `lib/assistant-memory.ts`: `buildMemoryBlock(username)` nạp vào system prompt Gấu Pro **mỗi lượt** (khác KB chỉ lượt
+  đầu), ưu tiên ghim rồi mới cập nhật, trần 4.000 ký tự, có id `[#id]` để model update/forget đúng mục. Khối kèm quy
+  tắc khi nào lưu / không lưu. Chưa chạy migration → khối rỗng, chat không hỏng; tool báo cách sửa.
+- Tool `assistantMemory` (creator-only, audit): save · update · forget (= archive, khôi phục được bằng SQL) · list.
+  Áp dụng cả web lẫn Lark DM (cùng `runCreatorAI` + username). Cron (digest, `username="cron"`) không nạp trí nhớ.
+- Test `assistant-memory.test.ts`.
