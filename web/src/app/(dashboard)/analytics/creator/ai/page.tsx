@@ -325,6 +325,7 @@ export default function CreatorAIPage() {
   const [speakingIdx,   setSpeakingIdx]   = useState<number | null>(null)
   const [statusText,    setStatusText]    = useState("")
   const [larkConnected, setLarkConnected] = useState<boolean | null>(null)
+  const [google, setGoogle] = useState<{ connected: boolean; email?: string } | null>(null)
   const [convId,        setConvId]        = useState<string | null>(null)
   const [pastConvs,     setPastConvs]     = useState<{ id: string; title: string; updated_at: string }[]>([])
   const [showConvList,  setShowConvList]  = useState(false)
@@ -428,13 +429,17 @@ export default function CreatorAIPage() {
     if (!isCreatorRole) return
     const params = new URLSearchParams(window.location.search)
     const lark = params.get("lark")
-    if (lark) {
+    const googleParam = params.get("google")
+    if (lark || googleParam) {
       // dọn query param khỏi URL
       window.history.replaceState({}, "", window.location.pathname)
     }
     fetch("/api/lark/oauth/status").then(r => r.ok ? r.json() : null).then(d => {
       setLarkConnected(!!d?.connected)
     }).catch(() => setLarkConnected(false))
+    fetch("/api/google/oauth/status").then(r => r.ok ? r.json() : null).then(d => {
+      setGoogle(d?.connected ? d : { connected: false })
+    }).catch(() => setGoogle({ connected: false }))
   }, [isCreatorRole])
 
   const toggleVoice = useCallback(() => {
@@ -731,6 +736,19 @@ export default function CreatorAIPage() {
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors"
                 title="Cấp quyền để Gấu Pro xem task/task list Lark của bạn">
                 🔗 Kết nối Lark
+              </a>
+            )
+          )}
+          {isCreatorRole && google !== null && (
+            google.connected ? (
+              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg" title={`Gấu Pro đọc/sửa được Drive, Docs, Sheets của ${google.email ?? "bạn"}`}>
+                📁 Đã kết nối Google
+              </span>
+            ) : (
+              <a href="/api/google/oauth/start"
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors"
+                title="Cấp quyền để Gấu Pro đọc/sửa Google Drive, Docs, Sheets của bạn">
+                📁 Kết nối Google
               </a>
             )
           )}

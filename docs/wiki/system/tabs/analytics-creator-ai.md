@@ -669,3 +669,17 @@ chạm được ổ đĩa → thêm daemon `local-agent/daemon.mjs` (Node thuầ
 - ⚠️ `gemini-pricing.ts` vẫn cố định giá 3.8-flash — đổi model thì cập nhật giá theo.
 - Hiếu chốt 2026-09-23: không dùng Claude API (gói Claude Pro không gồm API, tính tiền theo token riêng) → trợ lý
   toàn diện chạy hoàn toàn trên Gemini.
+
+## § s206+2 (2026-09-23) — Kết nối Google: tool `googleWorkspace` (Drive/Docs/Sheets)
+
+- **OAuth**: client "GoHub Intel - Drive" (GCP project "hieu" của hieuhc07@gmail.com, consent External + In
+  production). Redirect `https://{stg-intel-v2|intel-v2}.gohub.cloud/api/google/oauth/callback` (theo origin đang
+  truy cập — domain khác sẽ lỗi redirect_uri_mismatch). Env `GOOGLE_OAUTH_CLIENT_ID/SECRET` (Vercel Prod+Preview +
+  `.env.local`). Routes `api/google/oauth/{start,callback,status}`, `lib/google-oauth.ts` lưu
+  `app_settings.google_oauth_creator` (access + refresh, tự refresh; Google chỉ trả refresh_token lần consent đầu →
+  giữ refresh cũ khi refresh). `prompt=consent` + `access_type=offline`. Scope `drive` (đọc/sửa toàn bộ Drive).
+  App chưa verify → lần đầu Google hiện "Google chưa xác minh ứng dụng này" → Nâng cao → Đi tới (an toàn, app của mình).
+- **Tool `googleWorkspace`** (creator-only, audit): search · read (Doc → markdown qua export, Sheet → values, file
+  text) · create_doc (upload markdown → Drive tự convert thành Doc) · append_doc · replace_in_doc · create_sheet ·
+  write_sheet · append_sheet. REST thẳng, không thêm SDK `googleapis`. Tạo mới làm luôn, sửa file có sẵn phải hỏi.
+- UI: badge "📁 Kết nối Google" / "Đã kết nối Google" cạnh badge Lark ở header Gấu Pro.

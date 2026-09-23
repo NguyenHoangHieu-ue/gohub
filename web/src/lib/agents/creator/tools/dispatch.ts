@@ -16,6 +16,7 @@ import { runCompareVendorQuotes }  from "./compare-quotes"
 import { runTrackSKUWinRate }      from "./win-rate"
 import { runGenerateVideo, runCheckVideoStatus } from "./video"
 import { runReadMyBrowser, runControlMyBrowser, runLocalFiles } from "./bridge"
+import { runGoogleWorkspace } from "./google"
 import { logGpAction }             from "./audit-log"
 import { runVerifyReportNumbers }  from "./self-review"
 
@@ -23,7 +24,7 @@ import { runVerifyReportNumbers }  from "./self-review"
 const AUDITED_TOOLS = new Set([
   "writeKnowledgeBase", "approveLearning", "rejectLearning",
   "createLarkTask", "updateLarkTask", "sendLarkMessage",
-  "controlMyBrowser", "managePortalCredentials", "localFiles",
+  "controlMyBrowser", "managePortalCredentials", "localFiles", "googleWorkspace",
 ])
 
 export async function dispatchTool(
@@ -104,6 +105,9 @@ async function dispatchToolCore(
 
   if (call.name === "localFiles")
     return wrap(ctx?.isCreator ? await runLocalFiles(call.args, ctx?.username || "", onEvent) : { error: "localFiles chỉ dành cho creator." })
+
+  if (call.name === "googleWorkspace")
+    return wrap(ctx?.isCreator ? await runGoogleWorkspace(call.args) : { error: "googleWorkspace chỉ dành cho creator." })
 
   if (call.name === "managePortalCredentials")
     return wrap(await runManagePortalCredentials(call.args))

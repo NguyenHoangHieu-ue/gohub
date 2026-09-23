@@ -385,6 +385,26 @@ export const localFilesDecl = {
   },
 }
 
+export const googleWorkspaceDecl = {
+  name: "googleWorkspace",
+  description: "Làm việc với Google Drive/Docs/Sheets của người dùng (tài khoản đã bấm Kết nối Google). search = tìm file theo tên/nội dung; read = đọc Doc (ra markdown), Sheet (range, mặc định sheet đầu) hoặc file text; create_doc = tạo Google Doc từ markdown (heading/bảng/bullet giữ nguyên) — dùng để XUẤT BÁO CÁO/tài liệu ra Docs; append_doc = nối text vào cuối Doc; replace_in_doc = thay mọi chỗ khớp find; create_sheet = tạo Sheet mới (kèm dữ liệu tuỳ chọn); write_sheet = ghi đè range; append_sheet = thêm dòng. Luôn trả link file cho người dùng. Tạo file mới thì làm luôn; SỬA file có sẵn (append/replace/write) thì nói rõ file + thay đổi và chờ đồng ý trước.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      action:      { type: SchemaType.STRING, description: "search | read | create_doc | append_doc | replace_in_doc | create_sheet | write_sheet | append_sheet" },
+      query:       { type: SchemaType.STRING, description: "Từ khoá tìm (search)." },
+      file_id:     { type: SchemaType.STRING, description: "ID file (lấy từ search, hoặc phần giữa /d/ và /edit trong link)." },
+      title:       { type: SchemaType.STRING, description: "Tên file mới (create_doc/create_sheet)." },
+      content:     { type: SchemaType.STRING, description: "Nội dung markdown (create_doc) hoặc text (append_doc)." },
+      find:        { type: SchemaType.STRING, description: "Text cần thay (replace_in_doc)." },
+      replace:     { type: SchemaType.STRING, description: "Text thay vào (replace_in_doc)." },
+      range:       { type: SchemaType.STRING, description: "Range A1 của Sheet, vd 'Sheet1'!A1:D20 (read/write_sheet/append_sheet)." },
+      values_json: { type: SchemaType.STRING, description: "Mảng 2 chiều dạng JSON cho Sheet, vd [[\"Tháng\",\"Doanh thu\"],[\"T9\",1072572881]]." },
+    },
+    required: ["action"],
+  },
+}
+
 export const browsePortalDecl = {
   name: "browsePortal",
   description: "Login to an external supplier/partner portal and fetch its page content. Credentials are stored in Supabase. Use to get product listings, prices, inventory, or any data from external web portals. Returns cleaned text content of the page for analysis.",
@@ -568,7 +588,7 @@ export const ALL_TOOL_DECLARATIONS = [
   // Phase 3 tools
   generateVideoDecl, checkVideoStatusDecl, generateImageStabilityDecl,
   // Phase 2 (s195+1) — Extension điều khiển browser cá nhân Hiếu
-  readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl,
+  readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl, googleWorkspaceDecl,
   // s196+12 — second-opinion pass (roadmap audit s196+5, ý tưởng #7)
   verifyReportNumbersDecl,
 ]
