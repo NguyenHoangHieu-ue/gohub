@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { runScheduledMessage, getMatchedSlotMs } from "@/lib/scheduled-runner"
 import { alertCronFailure } from "@/lib/cron-alert"
 import { waitUntil } from "@vercel/functions"
+import { runTaskReminders } from "@/lib/task-assistant"
 
 // Scheduler (GitHub Actions mỗi 15' + Vercel Cron backstop) gọi endpoint này định kỳ. Tìm các scheduled
 // message ĐANG active + ĐẾN HẠN kể từ lần chạy cuối (so cron_expression theo ICT/UTC+7, catch-up chịu được
@@ -126,6 +127,10 @@ export async function GET(req: NextRequest) {
   if (background.length > 0) {
     waitUntil((async () => { for (const job of background) await job().catch(() => {}) })())
   }
+
+  // P1 trợ lý: nhắc deadline Lark Task — ké route này vì cron-job.org gọi mỗi phút (Vercel Hobby cron chỉ 1 lần/ngày);
+  // runTaskReminders tự giới hạn 10'/lần. Chạy nền để không làm chậm response (cron-job.org timeout 30s).
+  waitUntil(runTaskReminders().catch(e => console.error("[task-reminders]", (e as Error).message)))
 
   const started = results.filter(r => r.started).length
   return NextResponse.json({ checked: messages?.length || 0, started, results })

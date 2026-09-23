@@ -11,10 +11,13 @@ export const dynamic    = "force-dynamic"
 export const maxDuration = 120
 
 const DIGEST_PROMPT = `Viết digest buổi sáng ngắn gọn cho Hiếu, gửi qua Lark (không dùng bảng/chart
-markdown — chỉ text + bullet + emoji nhẹ, tối đa ~120 từ):
+markdown — chỉ text + bullet + emoji nhẹ, tối đa ~180 từ):
 1. Doanh thu HÔM QUA (fulfillment): tổng + tách B2B/B2C, so với hôm trước tăng/giảm bao nhiêu %.
 2. Nếu có bất thường đáng chú ý (sụt giảm mạnh 1 kênh, SKU nào đó đột biến, v.v.) thì nêu — không có gì
    bất thường thì bỏ qua mục này, đừng bịa.
+3. Việc của Hiếu: gọi listLarkTasks, liệt kê task CHƯA xong có hạn HÔM NAY và task ĐÃ QUÁ HẠN (tên + hạn,
+   tối đa 8 dòng). Không có thì ghi "Không có task tới hạn hôm nay". Lỗi/chưa kết nối Lark thì ghi 1 dòng nhắc
+   "bấm Kết nối Lark ở Gấu Pro".
 Không cần chào hỏi dài dòng, đi thẳng vào số liệu.`
 
 export async function GET(req: NextRequest) {

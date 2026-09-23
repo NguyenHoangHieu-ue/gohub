@@ -683,3 +683,21 @@ chạm được ổ đĩa → thêm daemon `local-agent/daemon.mjs` (Node thuầ
   text) · create_doc (upload markdown → Drive tự convert thành Doc) · append_doc · replace_in_doc · create_sheet ·
   write_sheet · append_sheet. REST thẳng, không thêm SDK `googleapis`. Tạo mới làm luôn, sửa file có sẵn phải hỏi.
 - UI: badge "📁 Kết nối Google" / "Đã kết nối Google" cạnh badge Lark ở header Gấu Pro.
+
+## § s206+3 (2026-09-23) — P1 trợ lý: task Lark từ DM/group + nhắc deadline
+
+- **DM creator → Gấu Pro**: `api/lark/events` — role `creator` + `chat_type=p2p` đi `replyCreatorDM()` → `runCreatorAI`
+  (đủ tool, username thật để dùng localFiles/Bridge) thay vì Bé Gấu. Directive kèm giờ VN hiện tại: tin nhắn là ghi
+  chú việc/nhắc nhở → tự `createLarkTask` rồi xác nhận ngắn. Người khác DM vẫn đi Bé Gấu như cũ. Log `agent_id=gau-pro`.
+- **Group @creator → task**: tin group có mention open_id creator (người gửi ≠ creator) → `detectGroupTask()`
+  (`lib/task-assistant.ts`): Gemini JSON phân loại có phải giao việc + tóm tắt + hạn → tạo Lark Task (mô tả kèm người
+  giao + trích tin) → DM creator "📌 Đã tạo task từ group". Dedupe `larkevt:grptask:<messageId>`. Nội dung tin chỉ là
+  dữ liệu (prompt bọc `<msg>`, bỏ qua lệnh bên trong). ⚠️ Bot chỉ nhận tin KHÔNG @bot khi app Lark có scope
+  `im:message.group_msg` (+ publish version) và bot đã ở trong group.
+- **Nhắc deadline**: `runTaskReminders()` ké cron `scheduled-messages` (cron-job.org gọi mỗi phút) qua `waitUntil`, tự
+  giới hạn 10'/lần (`app_settings.task_reminder_last_run`). Task chưa xong: còn ≤60' → nhắc 1 lần; quá hạn → nhắc 1
+  lần/ngày (`task_reminder_state`). Cần user token Lark (Kết nối Lark); chưa kết nối thì bỏ qua im lặng.
+- **Digest sáng** thêm mục 3: task hạn hôm nay + quá hạn (qua `listLarkTasks`).
+- **Bug có sẵn đã sửa**: `createLarkTask`/`updateLarkTask` gửi `due.timestamp` theo GIÂY — Lark Task v2 dùng MILI giây
+  (docs: "距1970-01-01 00:00:00 UTC的毫秒数") → mọi hạn tạo qua Gấu Pro từng rơi về 01/1970. `dueMs()` sửa + chuỗi giờ
+  không kèm múi giờ hiểu là giờ VN (server UTC). Test `lark-task-due.test.ts`, `task-reminders.test.ts`.

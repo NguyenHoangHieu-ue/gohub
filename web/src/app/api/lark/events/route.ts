@@ -7,12 +7,14 @@ import { runBeGau }                  from "@/lib/agents/be-gau"
 import {
   sendLarkMessage, replyLarkMessage, replyLarkTable,
   parseMarkdownTable, splitTextAndTable,
-  getLarkUserInfo, stripMarkdown,
+  getLarkUserInfo, stripMarkdown, getCreatorLarkOpenId,
 } from "@/lib/lark"
 import type { Message, UserRole }    from "@/lib/agents/types"
 import { captureForOkrLog }           from "@/lib/okr-lark-capture"
 import { usedDbTaskTool }             from "@/lib/okr-helpers"
 import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
+import { runCreatorAI }               from "@/lib/agents/creator-ai"
+import { detectGroupTask }            from "@/lib/task-assistant"
 
 // Max history to pull per Lark user
 const HISTORY_LIMIT = 10
@@ -74,15 +76,16 @@ async function alreadyHandled(eventId: string): Promise<boolean> {
 
 // Look up user role by lark_open_id
 // isRegistered=false → user chưa login web (chưa có trong DB) → cần login để phân quyền
-async function getUserRole(openId: string): Promise<{ role: UserRole; name: string; isRegistered: boolean }> {
+async function getUserRole(openId: string): Promise<{ role: UserRole; name: string; username: string; isRegistered: boolean }> {
   const { data } = await supabaseAdmin
     .from("users")
-    .select("role,name")
+    .select("role,name,username")
     .eq("lark_open_id", openId)
     .maybeSingle()
   return {
     role: (data?.role as UserRole) ?? "staff",
     name: data?.name ?? "",
+    username: data?.username ?? "",
     isRegistered: !!data,
   }
 }
@@ -264,6 +267,22 @@ export async function POST(req: NextRequest) {
     ],
   })
 
+  // P1 trợ lý: có người @creator trong group → xét có phải giao việc không → tự tạo Lark Task + DM creator.
+  // Cần scope im:message.group_msg để nhận cả tin KHÔNG @bot. await (không fire-and-forget) — serverless.
+  if (chatType === "group" && userText) {
+    const creatorId = await getCreatorLarkOpenId()
+    const mentioned = [
+      ...((msg?.mentions ?? []) as any[]).map(m => m?.id?.open_id),
+      ...postMentions.map((m: any) => m?.id?.open_id),
+    ]
+    if (creatorId && openId !== creatorId && mentioned.includes(creatorId) && !(await alreadyHandled(`grptask:${messageId}`))) {
+      try {
+        const { name: senderName } = await getUserRole(openId)
+        await detectGroupTask({ text: userText, senderOpenId: openId, senderName, chatId, messageId, createTimeMs: Number(msg.create_time) || Date.now() })
+      } catch (e) { console.error("[Lark] group task detect:", (e as Error).message) }
+    }
+  }
+
   // Nếu user chỉ gõ "@BotName" không kèm text → userText rỗng
   // Với p2p: bỏ qua (blank message)
   // Với group/post có at-mention: dùng fallback "xin chào" thay vì bỏ qua
@@ -344,21 +363,55 @@ export async function POST(req: NextRequest) {
   // ⚠️ Netlify (Free) KHÔNG hỗ trợ waitUntil/background cho App Router route handler:
   // fire-and-forget sẽ bị đóng băng sau khi trả response → reply không bao giờ gửi (hoặc
   // gửi rất trễ khi container thaw). Vì vậy phải xử lý ĐỒNG BỘ rồi mới trả 200.
-  await processAndReply(openId, chatId, messageId, threadId, userText)
+  await processAndReply(openId, chatId, messageId, threadId, userText, chatType)
   return NextResponse.json({ ok: true })
 }
 
 const WEB_URL = process.env.NEXTAUTH_URL || "https://gohub-intel.vercel.app"
 
-async function processAndReply(openId: string, chatId: string, messageId: string, threadId: string, userText: string) {
+const CREATOR_DM_DIRECTIVE = `
+
+(Nội bộ — kênh Lark DM của Hiếu, trợ lý cá nhân. Giờ VN hiện tại: {NOW}.)
+- Nếu tin nhắn là GHI CHÚ việc cần làm / nhắc nhở / deadline (kể cả không nói "tạo task") → gọi createLarkTask
+  (summary ngắn bắt đầu bằng động từ, due dạng YYYY-MM-DDTHH:mm giờ VN nếu có mốc thời gian, "mai"/"thứ 6"... tự
+  quy ra ngày) rồi xác nhận 1-2 dòng: tên task + hạn.
+- Muốn xem/hoàn thành/đổi hạn task → listLarkTasks / updateLarkTask.
+- Trả lời ngắn gọn kiểu tin nhắn, không bảng lớn, không khối chart.`
+
+async function replyCreatorDM(openId: string, messageId: string, threadId: string, userText: string, name: string, username: string) {
+  const history = await getLarkHistory(openId, threadId)
+  const geminiHistory = history.map(m => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] }))
+  const now = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 16).replace("T", " ")
+  const gp = await runCreatorAI(geminiHistory, userText + CREATOR_DM_DIRECTIVE.replace("{NOW}", now), undefined, undefined, true, username)
+  const response = gp.text.replace(/```chart[\s\S]*?```/g, "").trim() || "(Gấu Pro không có câu trả lời)"
+  await replyLarkMessage(messageId, stripMarkdown(response))
+  saveLarkMessage(openId, threadId, "user", userText)
+  saveLarkMessage(openId, threadId, "assistant", response)
+  try {
+    await supabaseAdmin.from("app_usage_events").insert({
+      event_type: "chat", user_email: `lark:${openId}`, user_name: name || openId, user_role: "creator",
+      agent_id: "gau-pro", user_message: userText.slice(0, 500), ai_response: response.slice(0, 3000),
+      tokens_in: gp.tokensIn, tokens_out: gp.tokensOut, est_cost_usd: estimateCostUsd(gp.tokensIn, gp.tokensOut),
+    })
+  } catch { /* tracking không được làm vỡ luồng trả lời */ }
+}
+
+async function processAndReply(openId: string, chatId: string, messageId: string, threadId: string, userText: string, chatType: string) {
   let responseSent = false
   try {
     // Auth check: user đã login web chưa?
-    const { role, name, isRegistered } = await getUserRole(openId)
+    const { role, name, username, isRegistered } = await getUserRole(openId)
 
     if (!isRegistered) {
       const loginMsg = `Bạn chưa đăng nhập vào hệ thống GoHub nên chưa được phân quyền trả lời 🔐\n\nVui lòng đăng nhập tại: ${WEB_URL}/login\n(Dùng tài khoản Lark để đăng nhập)`
       await replyLarkMessage(messageId, loginMsg)
+      return
+    }
+
+    // P1 trợ lý: creator nhắn riêng cho bot → Gấu Pro (đủ tool: Lark Task, Google, file máy, SQL...) thay vì Bé Gấu.
+    if (role === "creator" && chatType === "p2p") {
+      await replyCreatorDM(openId, messageId, threadId, userText, name, username)
+      responseSent = true
       return
     }
 
