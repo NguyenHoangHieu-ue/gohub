@@ -756,3 +756,8 @@ chạm được ổ đĩa → thêm daemon `local-agent/daemon.mjs` (Node thuầ
 - OAuth start xin thêm `drive:drive docx:document docx:document.block:convert sheets:spreadsheet wiki:wiki`. Scope app
   chưa bật chỉ hiện "không thể cấp" trên màn authorize, không chặn scope khác. Sau khi app thêm quyền → bấm badge
   "Đã kết nối Lark" cấp quyền lại. Lỗi 99991679 → tool tự nhắc bước này.
+- **QA sống larkDocs (2026-09-23, staging, sau khi cấp quyền lại 22:52)**: search "báo cáo" ra 5 tài liệu thật (sheet +
+  docx) · read docx (tóm tắt đúng nội dung) · create_doc → Doc có H1, đoạn, bullet, bảng thật 2×4 (mở bằng trình duyệt
+  kiểm) · create_sheet + read lại đúng 4 dòng. Link dạng `https://esimgohub.sg.larksuite.com/{docx|sheets}/<token>`.
+  Lưu ý: số truyền dạng chuỗi có định dạng ("1.072.572.881 ₫") vào Sheet thành TEXT (không tính toán được) — muốn tính
+  thì truyền số thuần.
