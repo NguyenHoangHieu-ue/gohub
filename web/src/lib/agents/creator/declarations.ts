@@ -179,7 +179,7 @@ export const createLarkTaskDecl = {
     properties: {
       summary:     { type: SchemaType.STRING, description: "Task title." },
       description: { type: SchemaType.STRING, description: "Task description (markdown ok)." },
-      due:         { type: SchemaType.STRING, description: "Due date YYYY-MM-DD." },
+      due:         { type: SchemaType.STRING, description: "Hạn: YYYY-MM-DD (hiểu là 23:59 giờ VN) hoặc YYYY-MM-DDTHH:mm (giờ VN), vd 2026-09-24T15:00." },
     },
     required: ["summary"],
   },
@@ -194,7 +194,7 @@ export const updateLarkTaskDecl = {
       task_guid:   { type: SchemaType.STRING, description: "Task GUID." },
       summary:     { type: SchemaType.STRING, description: "New title (optional)." },
       description: { type: SchemaType.STRING, description: "New description (optional)." },
-      due:         { type: SchemaType.STRING, description: "New due date YYYY-MM-DD (optional)." },
+      due:         { type: SchemaType.STRING, description: "Hạn mới (tuỳ chọn): YYYY-MM-DD (23:59 giờ VN) hoặc YYYY-MM-DDTHH:mm (giờ VN)." },
       complete:    { type: SchemaType.BOOLEAN, description: "true = mark done." },
     },
     required: ["task_guid"],

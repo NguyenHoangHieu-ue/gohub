@@ -2,6 +2,16 @@ import { getLarkToken, getLarkUserToken, getLarkUserOpenId } from "@/lib/lark"
 
 const LARK = "https://open.larksuite.com/open-apis"
 
+// Lark Task v2 due.timestamp = MILI giây (trước đây gửi giây → hạn rơi về 01/1970). Chuỗi giờ không kèm múi giờ
+// hiểu là giờ VN (server Vercel chạy UTC, new Date("2026-09-24T15:00") sẽ lệch 7 tiếng).
+export function dueMs(due: string): string {
+  const hasTz = /(Z|[+-]\d{2}:?\d{2})$/.test(due)
+  const iso = !hasTz && /T\d{2}:\d{2}/.test(due) ? `${due}+07:00` : !hasTz && /^\d{4}-\d{2}-\d{2}$/.test(due) ? `${due}T23:59:00+07:00` : due
+  const ms = new Date(iso).getTime()
+  if (!Number.isFinite(ms)) throw new Error(`due không hợp lệ: ${due}`)
+  return String(ms)
+}
+
 export async function runLarkTask(action: string, args: any): Promise<any> {
   try {
     const userToken = await getLarkUserToken()
@@ -49,7 +59,7 @@ export async function runLarkTask(action: string, args: any): Promise<any> {
         members: creatorOpenId ? [{ id: creatorOpenId, type: "user", role: "assignee" }] : undefined,
       }
       if (args.description) body.description = { content: args.description, content_type: "markdown" }
-      if (args.due) body.due = { timestamp: String(new Date(args.due).getTime() / 1000 | 0) }
+      if (args.due) body.due = { timestamp: dueMs(args.due) }
       const res = await fetch(`${LARK}/task/v2/tasks?user_id_type=open_id`, { method: "POST", headers: h, body: JSON.stringify(body) })
       const d = await res.json()
       if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d }
@@ -59,7 +69,7 @@ export async function runLarkTask(action: string, args: any): Promise<any> {
       const body: any = { task: {}, update_fields: [] as string[] }
       if (args.summary)     { body.task.summary = args.summary; body.update_fields.push("summary") }
       if (args.description) { body.task.description = { content: args.description, content_type: "markdown" }; body.update_fields.push("description") }
-      if (args.due)         { body.task.due = { timestamp: String(new Date(args.due).getTime() / 1000 | 0) }; body.update_fields.push("due") }
+      if (args.due)         { body.task.due = { timestamp: dueMs(args.due) }; body.update_fields.push("due") }
       if (args.complete)    { body.task.completed_at = String(Date.now() / 1000 | 0); body.update_fields.push("completed_at") }
       const res = await fetch(`${LARK}/task/v2/tasks/${encodeURIComponent(args.task_guid)}?user_id_type=open_id`, { method: "PATCH", headers: h, body: JSON.stringify(body) })
       const d = await res.json()
