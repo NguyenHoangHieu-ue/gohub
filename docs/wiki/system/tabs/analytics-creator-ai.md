@@ -761,3 +761,19 @@ chạm được ổ đĩa → thêm daemon `local-agent/daemon.mjs` (Node thuầ
   kiểm) · create_sheet + read lại đúng 4 dòng. Link dạng `https://esimgohub.sg.larksuite.com/{docx|sheets}/<token>`.
   Lưu ý: số truyền dạng chuỗi có định dạng ("1.072.572.881 ₫") vào Sheet thành TEXT (không tính toán được) — muốn tính
   thì truyền số thuần.
+
+## § s207 (2026-09-24) — Fix lag UI Gấu Pro khi hội thoại dài
+
+Hiếu báo nhắn nhiều thì Gấu Pro lag. Nguyên nhân hoàn toàn phía client (`creator/ai/page.tsx`), mỗi lần render lại
+parse markdown TOÀN BỘ hội thoại (`stripLatex` ~60 regex + `ReactMarkdown`) và bị kích hoạt quá dày:
+- Danh sách tin không `memo` → mỗi phím gõ (`input`), mỗi giây (`elapsed`), mỗi token stream đều render lại mọi bubble.
+- `localStorage.setItem(JSON.stringify(messages))` chạy đồng bộ MỖI token stream.
+- `scrollIntoView({behavior:"smooth"})` mỗi token → animation chồng nhau.
+- `setMessages` mỗi delta (hàng chục lần/giây).
+
+Fix: `MessageRow = memo(...)` (tin cũ giữ reference nên không render lại; `onFollowup`/`toggleSpeak` ổn định qua ref
+`sendRef`/`speakingIdxRef`) · persist localStorage bỏ qua lúc `loading`, ghi 1 lần khi stream xong · cuộn `auto` khi
+đang stream, `smooth` khi xong · gộp delta bằng `requestAnimationFrame` (huỷ rAF chờ ở nhánh cuối/lỗi để không đè
+nội dung cuối). Không đổi UI/giao diện.
+Gotcha: tin ĐANG stream vẫn parse markdown lại mỗi frame — câu trả lời rất dài vẫn có thể nặng; nếu còn giật thì
+chỉ render markdown khi stream xong. Lag phía server (chờ chữ đầu) là vấn đề khác, đã có `compressHistory`.

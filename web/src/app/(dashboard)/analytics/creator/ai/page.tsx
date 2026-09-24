@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect, useCallback, memo } from "react"
 import { useSession }                                from "next-auth/react"
 import { useRouter }                                 from "next/navigation"
 import {
@@ -259,6 +259,61 @@ function MsgContent({ msg, onFollowup, speaking, ttsSupported, onToggleSpeak }: 
   )
 }
 
+// Memo: gõ phím / đồng hồ elapsed / stream token chỉ render lại bubble thật sự đổi (msg giữ nguyên
+// reference với các tin cũ), thay vì parse lại markdown toàn bộ hội thoại mỗi lần.
+const MessageRow = memo(function MessageRow({ msg, index, speaking, ttsSupported, onFollowup, onToggleSpeak }: {
+  msg: Message
+  index: number
+  speaking: boolean
+  ttsSupported: boolean
+  onFollowup: (q: string) => void
+  onToggleSpeak: (index: number, content: string) => void
+}) {
+  return (
+    <div className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+      {msg.role === "assistant" && (
+        <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm shadow-violet-600/20">
+          <Cpu size={14} className="text-white" />
+        </div>
+      )}
+      <div className={`flex flex-col gap-1 ${msg.role === "user" ? "max-w-[80%]" : "max-w-[92%]"}`}>
+        {/* File chip on user messages */}
+        {msg.role === "user" && msg.fileName && (
+          <div className="flex justify-end">
+            <span className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] text-violet-300 bg-violet-700/60 rounded-lg">
+              {fileIcon(msg.fileName)}
+              {msg.fileName}
+            </span>
+          </div>
+        )}
+        <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+          msg.role === "user"
+            ? "bg-violet-600 text-white rounded-tr-sm shadow-sm"
+            : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-slate-100 rounded-tl-sm shadow-sm"
+        }`}>
+          {msg.role === "user" ? (
+            <span className="whitespace-pre-wrap">{msg.content}</span>
+          ) : (
+            <>
+              {msg.summarized && (
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 mb-1.5 italic">🗜️ Lịch sử cũ đã được tóm tắt để tối ưu</div>
+              )}
+              <MsgContent msg={msg} onFollowup={onFollowup}
+                speaking={speaking} ttsSupported={ttsSupported}
+                onToggleSpeak={() => onToggleSpeak(index, msg.content)} />
+            </>
+          )}
+        </div>
+      </div>
+      {msg.role === "user" && (
+        <div className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <User size={14} className="text-gray-500 dark:text-slate-400" />
+        </div>
+      )}
+    </div>
+  )
+})
+
 // ─── Quick prompts ────────────────────────────────────────────────────────────
 
 const QUICK_GROUPS = [
@@ -394,8 +449,10 @@ export default function CreatorAIPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Persist conversation + convId to localStorage on every change
+  // Persist conversation + convId to localStorage — bỏ qua lúc đang stream (mỗi token stringify cả hội thoại
+  // là đồng bộ, chặn main thread); ghi 1 lần khi stream xong (loading→false).
   useEffect(() => {
+    if (loading) return
     try {
       if (messages.length > 0) {
         localStorage.setItem(LS_KEY, JSON.stringify(messages))
@@ -405,7 +462,7 @@ export default function CreatorAIPage() {
         localStorage.removeItem(LS_KEY + "_id")
       }
     } catch {}
-  }, [messages, convId, LS_KEY])
+  }, [messages, convId, LS_KEY, loading])
 
   // Setup Web Speech API (voice input) — feature-detect, ẩn nút nếu browser không hỗ trợ
   useEffect(() => {
@@ -457,10 +514,13 @@ export default function CreatorAIPage() {
     return () => { try { window.speechSynthesis?.cancel() } catch {} }
   }, [])
 
+  const speakingIdxRef = useRef<number | null>(null)
+  speakingIdxRef.current = speakingIdx
+
   const toggleSpeak = useCallback((index: number, content: string) => {
     if (!("speechSynthesis" in window)) return
     window.speechSynthesis.cancel()
-    if (speakingIdx === index) { setSpeakingIdx(null); return }
+    if (speakingIdxRef.current === index) { setSpeakingIdx(null); return }
     const text = stripForSpeech(content)
     if (!text) return
     const utter = new SpeechSynthesisUtterance(text)
@@ -469,10 +529,11 @@ export default function CreatorAIPage() {
     utter.onerror = () => setSpeakingIdx(null)
     window.speechSynthesis.speak(utter)
     setSpeakingIdx(index)
-  }, [speakingIdx])
+  }, [])
 
+  // Smooth-scroll mỗi token stream chồng animation lên nhau → giật khi hội thoại dài; khi đang stream nhảy thẳng.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    bottomRef.current?.scrollIntoView({ behavior: loading ? "auto" : "smooth" })
   }, [messages, loading])
 
   useEffect(() => {
@@ -582,6 +643,7 @@ export default function CreatorAIPage() {
     setImgPreviews(new Map())
     setLoading(true)
     let placeholderAdded = false
+    let rafId = 0
 
     try {
       const serializedMsgs = next.map(m => ({ role: m.role, content: m.content }))
@@ -639,7 +701,8 @@ export default function CreatorAIPage() {
             else if (ev.type === "delta") {
               assistantContent += ev.content
               setStatusText("")
-              updateBubble(assistantContent)
+              // Gộp nhiều delta trong 1 frame → 1 lần render (≤60/s thay vì mỗi token)
+              if (!rafId) rafId = requestAnimationFrame(() => { rafId = 0; updateBubble(assistantContent) })
             }
             else if (ev.type === "text")   assistantContent = ev.content
             else if (ev.type === "done") {
@@ -654,6 +717,7 @@ export default function CreatorAIPage() {
       }
 
       setStatusText("")
+      if (rafId) { cancelAnimationFrame(rafId); rafId = 0 }
       updateBubble(assistantContent || "Không có nội dung trả về.", { sources: finalSources, summarized: finalSummarized })
       if (newConvId && !convId) {
         setConvId(newConvId)
@@ -664,6 +728,7 @@ export default function CreatorAIPage() {
       }
     } catch (e: any) {
       setStatusText("")
+      if (rafId) { cancelAnimationFrame(rafId); rafId = 0 }
       // Nếu đã stream được phần nào trước khi lỗi → giữ lại, nối thêm lỗi thay vì xoá trắng thay thế.
       if (placeholderAdded) {
         setMessages(prev => {
@@ -680,6 +745,10 @@ export default function CreatorAIPage() {
       setTimeout(() => inputRef.current?.focus(), 100)
     }
   }, [messages, loading, attachedFiles, addFiles, imgPreviews])
+
+  const sendRef = useRef(send)
+  sendRef.current = send
+  const handleFollowup = useCallback((q: string) => { sendRef.current(q) }, [])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -894,47 +963,9 @@ export default function CreatorAIPage() {
         {/* Messages */}
         <div className="max-w-3xl mx-auto space-y-5">
           {messages.map((msg, i) => (
-            <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              {msg.role === "assistant" && (
-                <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm shadow-violet-600/20">
-                  <Cpu size={14} className="text-white" />
-                </div>
-              )}
-              <div className={`flex flex-col gap-1 ${msg.role === "user" ? "max-w-[80%]" : "max-w-[92%]"}`}>
-                {/* File chip on user messages */}
-                {msg.role === "user" && msg.fileName && (
-                  <div className="flex justify-end">
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] text-violet-300 bg-violet-700/60 rounded-lg">
-                      {fileIcon(msg.fileName)}
-                      {msg.fileName}
-                    </span>
-                  </div>
-                )}
-                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                  msg.role === "user"
-                    ? "bg-violet-600 text-white rounded-tr-sm shadow-sm"
-                    : "bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-slate-100 rounded-tl-sm shadow-sm"
-                }`}>
-                  {msg.role === "user" ? (
-                    <span className="whitespace-pre-wrap">{msg.content}</span>
-                  ) : (
-                    <>
-                      {msg.summarized && (
-                        <div className="text-[10px] text-slate-400 dark:text-slate-500 mb-1.5 italic">🗜️ Lịch sử cũ đã được tóm tắt để tối ưu</div>
-                      )}
-                      <MsgContent msg={msg} onFollowup={q => send(q)}
-                        speaking={speakingIdx === i} ttsSupported={ttsSupported}
-                        onToggleSpeak={() => toggleSpeak(i, msg.content)} />
-                    </>
-                  )}
-                </div>
-              </div>
-              {msg.role === "user" && (
-                <div className="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <User size={14} className="text-gray-500 dark:text-slate-400" />
-                </div>
-              )}
-            </div>
+            <MessageRow key={i} msg={msg} index={i}
+              speaking={speakingIdx === i} ttsSupported={ttsSupported}
+              onFollowup={handleFollowup} onToggleSpeak={toggleSpeak} />
           ))}
 
           {/* Loading */}

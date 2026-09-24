@@ -10467,3 +10467,9 @@ QA sống: file local (đọc/ghi qua Gấu Pro, hỏi xác nhận trước khi 
 Lark Docs (search/read/create Doc có bảng/Sheet). Chưa QA: DM bot, giao việc qua group (cần Hiếu + đồng nghiệp).
 Hiếu hỏi mở cho người khác dùng → giải thích cần token theo từng người + quyết định quyền dữ liệu; tạm chưa làm.
 Tất cả đã merge main (c46f7b47).
+
+## s207 (2026-09-24) — Fix lag UI Gấu Pro khi nhắn nhiều
+Nguyên nhân client-side: list tin không memo (gõ phím/elapsed/token đều parse lại markdown cả hội thoại), stringify
+localStorage mỗi token, scroll smooth mỗi token, setMessages mỗi delta. Fix trong creator/ai/page.tsx: MessageRow memo,
+persist localStorage chỉ khi hết stream, scroll auto lúc stream, gộp delta bằng rAF. tsc PASS. Chưa QA sống trên
+staging (Hiếu thử lại). Chi tiết: wiki analytics-creator-ai.md §s207.
