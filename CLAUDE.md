@@ -12,7 +12,15 @@
 
 Branch làm việc: `staging` → merge `main` **CHỈ khi Hiếu yêu cầu RÕ RÀNG**. tsc + `next build` + `next lint` + vitest phải PASS trước khi push.
 
-**Mốc gần nhất trên `main` — s208 (2026-09-25), staging = main** (đã merge theo yêu cầu Hiếu 2026-09-25). Gồm:
+**Đang trên `staging`, CHƯA merge `main` — s209 (2026-09-25, `bf386674`):** Quarter Report.
+- **Squad Progress**: bấm ô "KH đang mua"/tier/4 ô vòng đời → xổ danh sách khách hàng ngay dưới (`squad-customer-summary.tsx`;
+  route thêm `lifecycle_group`, `prev_revenue`, danh sách "chưa quay lại" đủ ≤300).
+- **Tab mới "Performance"** (cạnh Tổng quan/Squad Progress): bảng ALL/B2B/B2C theo mẫu Excel của Hiếu — Q trước+%QoQ | tháng+quý (PR) |
+  target tháng quý sau+"Target +%QoQ" | cột cả năm (chỉ Q3/Q4). Số thực tế = route `quarterly-report` (thêm `hk3Rev` cho B2B/B2C);
+  target tháng lưu `app_settings.company_monthly_targets` (API `company-monthly-targets`); ALL trống = B2B+B2C. %QoQ TƯƠNG ĐỐI kể cả
+  dòng % (đổi cả bảng Squad). Logic thuần + test: `lib/quarterly-company-view.ts`. Wiki `analytics-quarterly.md` §s209.
+
+**Mốc gần nhất trên `main` — s208 (2026-09-25, `c92b3440`)** (merge theo yêu cầu Hiếu 2026-09-25). Gồm:
 - **s208 — Quarter Report › Squad Progress**: thẻ **GP** mỗi squad + Target GP; summary KH mỗi squad (số KH theo tier,
   mới / cũ tiếp tục / cũ quay lại sau gián đoạn / cũ chưa quay lại — "chưa quay lại" = có mua QUÝ TRƯỚC, quý này chưa mua);
   bảng **Performance theo tháng** từng squad (T7–T9 PR + quý | target T10–12 + quý sau + %QoQ). `POST squad-targets`
@@ -57,6 +65,10 @@ VN Ecom CH.Cost/CM1, wiki business, v62) đã merge. s206 = **trợ lý toàn di
 **Plan đang chạy:** `docs/plans/saas-be-gau.md` — Bé Gấu SaaS đa khách hàng (M0–M6). Đọc file đó trước khi
 làm bất cứ việc gì liên quan SaaS/tenant. **File TẠM: khi mọi mốc xong (hoặc Hiếu bỏ plan) phải xoá file +
 xoá dòng này**, chuyển kiến thức còn giá trị sang wiki `docs/wiki/system/`.
+
+**Ưu tiên gần nhất (s209):**
+- [ ] Merge `main` s209 khi Hiếu yêu cầu (tab Performance + bấm ô KH xem danh sách).
+- [ ] Nhập **target tháng Q4** (ALL/B2B/B2C × Revenue/GP/CM1/3HK) ở tab Performance › "Target Q4-2026" — độc lập với target quý B2B/B2C (Turso) và target squad, chưa tự đồng bộ; quyết định có cần fallback Σ3 tháng → target quý không.
 
 **Ưu tiên gần nhất (s208):**
 - [ ] Quarter Report › Squad Progress: nhập **Target GP** từng squad + **target T10/T11/T12** (Revenue/GP/CM1/3HK Rev) ở nút "Target Squad" để bảng Performance theo tháng có cột target.
