@@ -111,8 +111,9 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
       const cols: Col[] = []
       const prevData = prevQs.map(n => ({ n, d: extractQuarter(prevReports[n], seg) }))
       prevData.forEach(({ n, d }, i) => {
-        if (i > 0) cols.push({ id: `qoq-p${n}`, kind: "qoq", header: "%QoQ", a: d.total, b: prevData[i - 1].d.total })
         cols.push({ id: `q${n}`, kind: "q", header: `Q${n}-${selYear}`, vals: d.total })
+        // %QoQ đứng ngay SAU quý nó mô tả (Q1, Q2, %QoQ) — đúng mẫu Excel.
+        if (i > 0) cols.push({ id: `qoq-p${n}`, kind: "qoq", header: "%QoQ", a: d.total, b: prevData[i - 1].d.total })
       })
       cols.push({ id: "gap1", kind: "gap", header: "" })
       const cur = extractQuarter(report, seg)
