@@ -42,6 +42,8 @@ const ROWS: { key: string; label: string; metric?: Metric; num?: Metric }[] = [
   { key: "hk3_pct", label: "3HK%",          num: "hk3" },
 ]
 
+// Độ rộng cột CỐ ĐỊNH — mọi squad dùng chung nên các bảng thẳng hàng nhau (và cùng bố cục bảng ở tab Performance).
+const LABEL_W = 176, MONTH_W = 112, TOTAL_W = 132, GAP_W = 12, QOQ_W = 104
 const monthNum = (m: string) => String(parseInt(m.split("-")[1], 10))
 const ratio = (num?: number, den?: number) => (num != null && den != null && den > 0 ? (num / den) * 100 : undefined)
 const signed = (v: number, digits = 1) => `${v >= 0 ? "+" : ""}${v.toFixed(digits)}`
@@ -97,24 +99,33 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
 
           return (
             <div key={sq.name} className="overflow-x-auto">
-              <table className="w-full border-collapse text-xs">
+              <table className="w-full border-collapse text-xs table-fixed" style={{ minWidth: LABEL_W + MONTH_W * 6 + TOTAL_W * 2 + GAP_W + QOQ_W }}>
+                <colgroup>
+                  <col style={{ width: LABEL_W }} />
+                  {[0, 1, 2].map(i => <col key={`a${i}`} style={{ width: MONTH_W }} />)}
+                  <col style={{ width: TOTAL_W }} />
+                  <col style={{ width: GAP_W }} />
+                  {[0, 1, 2].map(i => <col key={`b${i}`} style={{ width: MONTH_W }} />)}
+                  <col style={{ width: TOTAL_W }} />
+                  <col style={{ width: QOQ_W }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="sticky left-0 z-10 bg-amber-50 px-4 py-2 text-left text-[12px] font-bold text-slate-900 whitespace-nowrap min-w-[150px]">
+                    <th className="sticky left-0 z-10 bg-amber-50 px-4 py-2 text-left text-[12px] font-bold text-slate-900 truncate">
                       {sq.name}
                       {leader && <span className="ml-2 text-[10px] font-medium text-slate-500">{leader}</span>}
                     </th>
                     {quarterMonths.map((m, i) => (
                       <th key={m} className={cn(th, "bg-amber-50 text-slate-700")}>
-                        T{monthNum(m)}
-                        {cur[i].state === "current" && <span className="ml-1 text-[9px] font-semibold text-blue-600">(PR)</span>}
+                        {monthNum(m)}
+                        {cur[i].state === "current" && <span className="ml-1 text-[9px] font-semibold text-blue-600">(pro-rata)</span>}
                       </th>
                     ))}
                     <th className={cn(th, "bg-[#0f4c81]/10 text-[#0f4c81]")}>{quarterLabel}{anyNotDone ? " (PR)" : ""}</th>
                     <th className="w-3 bg-slate-100" aria-hidden />
                     {nextQuarter.months.map(m => (
                       <th key={m} className={cn(th, "bg-amber-50 text-slate-700")}>
-                        T{monthNum(m)} <span className="text-[9px] font-semibold text-amber-600">(target)</span>
+                        {monthNum(m)} <span className="text-[9px] font-semibold text-amber-600">(target)</span>
                       </th>
                     ))}
                     <th className={cn(th, "bg-[#0f4c81]/10 text-[#0f4c81]")}>{nextQuarter.label}</th>
@@ -133,7 +144,7 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
                       if (totalCur !== 0) { const d = ((totalNext - totalCur) / Math.abs(totalCur)) * 100; qoq = `${signed(d)}%`; qoqUp = d >= 0 }
                     }
                     return (
-                      <tr key={row.key} className={cn("border-b border-slate-100", isPct && "bg-slate-50/60")}>
+                      <tr key={row.key} className={cn("border-b border-slate-100", isPct ? "h-8 bg-slate-50/60" : "h-11")}>
                         <td className={cn("sticky left-0 z-10 px-4 py-2 font-semibold whitespace-nowrap bg-blue-50",
                           isPct ? "text-slate-500 pl-7 font-medium" : "text-slate-800")}>
                           {row.label}

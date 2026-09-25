@@ -21,6 +21,8 @@ interface Props {
   includeShip: boolean
   includeInternalOps: boolean
   report: QReport | null
+  /** Page đang tải lại báo cáo (đổi quý/bộ lọc) — ẩn số cũ để không hiện nhầm quý khác. */
+  reportLoading?: boolean
   canEdit: boolean
 }
 
@@ -46,7 +48,12 @@ const digitsOnly = (v: string) => v.replace(/[^0-9]/g, "")
 const showDigits = (v: string) => (v ? Number(v).toLocaleString("vi-VN") : "")
 const pad = (n: number) => String(n).padStart(2, "0")
 
-export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip, includeInternalOps, report, canEdit }: Props) {
+// Độ rộng cột CỐ ĐỊNH (table-fixed) — 3 khối ALL/B2B/B2C dùng chung bộ cột nên luôn thẳng hàng nhau.
+const COL_W: Record<Col["kind"], number> = { q: 120, month: 112, tgt: 112, cur: 132, next: 132, year: 132, qoq: 72, gap: 12 }
+const LABEL_W = 140
+const widthOf = (c: Col) => (c.kind === "qoq" && c.header.length > 6 ? 104 : COL_W[c.kind])
+
+export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip, includeInternalOps, report, reportLoading, canEdit }: Props) {
   const q = parseInt(selQ.replace("Q", ""), 10)
   const prevQs = quartersBefore(q)
   const nextQ = q === 4 ? 1 : q + 1
@@ -54,7 +61,10 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
   const nextLabel = `Q${nextQ}-${nextYear}`
   const curLabel = `${selQ}-${selYear}`
 
-  const [prevReports, setPrevReports] = useState<Record<number, QReport>>({})
+  // Kết quả các quý trước kèm khoá bộ lọc đã dùng — chỉ dùng khi khoá còn khớp (tránh hiện số của bộ lọc cũ).
+  const prevKey = `${selQ}|${selYear}|${companyCode}|${includeShip ? 1 : 0}|${includeInternalOps ? 1 : 0}`
+  const [prevState, setPrevState] = useState<{ key: string; data: Record<number, QReport> }>({ key: "", data: {} })
+  const prevReports = prevState.data
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [targets, setTargets] = useState<CompanyTargets>({})
@@ -65,7 +75,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
 
   // Các quý trước trong năm — mỗi quý 1 request (route đã cache); đổi filter → huỷ kết quả cũ.
   useEffect(() => {
-    if (prevQs.length === 0) { setPrevReports({}); return }
+    if (prevQs.length === 0) { setPrevState({ key: prevKey, data: {} }); return }
     let cancelled = false
     setLoading(true); setErr(null)
     Promise.all(prevQs.map(async n => {
@@ -76,7 +86,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
       if (!res.ok) throw new Error(`Q${n}: ${res.status}`)
       return [n, (await res.json()) as QReport] as const
     }))
-      .then(list => { if (!cancelled) setPrevReports(Object.fromEntries(list)) })
+      .then(list => { if (!cancelled) setPrevState({ key: prevKey, data: Object.fromEntries(list) }) })
       .catch(e => { if (!cancelled) setErr(e.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -93,6 +103,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
   useEffect(() => { loadTargets() }, [loadTargets])
 
   const eff = useMemo(() => effectiveTargets(targets), [targets])
+  const ready = !!report && report.quarter === selQ && report.year === selYear && !reportLoading && (prevQs.length === 0 || prevState.key === prevKey)
 
   const colsBySeg = useMemo(() => {
     const out = {} as Record<Segment, Col[]>
@@ -232,7 +243,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
           </div>
         )}
 
-        {!report ? (
+        {!ready ? (
           <div className="py-12 text-center text-slate-400 text-sm">Đang tải dữ liệu…</div>
         ) : (
           <div className="divide-y divide-slate-200">
@@ -240,10 +251,14 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
               const cols = colsBySeg[seg]
               return (
                 <div key={seg} className="overflow-x-auto">
-                  <table className="w-full border-collapse text-xs">
+                  <table className="w-full border-collapse text-xs table-fixed" style={{ minWidth: LABEL_W + cols.reduce((s, c) => s + widthOf(c), 0) }}>
+                    <colgroup>
+                      <col style={{ width: LABEL_W }} />
+                      {cols.map(c => <col key={c.id} style={{ width: widthOf(c) }} />)}
+                    </colgroup>
                     <thead>
                       <tr className="border-b border-slate-200">
-                        <th className="sticky left-0 z-10 bg-amber-50 px-4 py-2 text-left text-[12px] font-bold text-slate-900 min-w-[130px]">{seg}</th>
+                        <th className="sticky left-0 z-10 bg-amber-50 px-4 py-2 text-left text-[12px] font-bold text-slate-900 truncate">{seg}</th>
                         {cols.map(c => c.kind === "gap"
                           ? <th key={c.id} className="w-3 bg-slate-100" aria-hidden />
                           : (
@@ -259,7 +274,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
                         const isPct = !row.metric
                         const isCm1 = row.metric === "cm1" || row.num === "cm1"
                         return (
-                          <tr key={row.key} className={cn("border-b border-slate-100", isPct && "bg-slate-50/60")}>
+                          <tr key={row.key} className={cn("border-b border-slate-100", isPct ? "h-8 bg-slate-50/60" : "h-11")}>
                             <td className={cn("sticky left-0 z-10 px-4 py-2 whitespace-nowrap bg-blue-50",
                               isPct ? "pl-7 font-medium text-slate-500" : "font-semibold text-slate-800")}>{row.label}</td>
                             {cols.map(c => {

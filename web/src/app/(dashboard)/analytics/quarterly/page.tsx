@@ -1738,7 +1738,7 @@ function QuarterlyContent() {
       {/* ── Performance: Q trước | tháng + quý này | target quý sau | cả năm — ALL / B2B / B2C ── */}
       {activeSection === "performance" && (
         <CompanyPerformanceView selQ={selQ} selYear={selYear} companyCode={companyCode}
-          includeShip={includeShip} includeInternalOps={includeInternalOps} report={report} canEdit={canEditSettings} />
+          includeShip={includeShip} includeInternalOps={includeInternalOps} report={report} reportLoading={loading} canEdit={canEditSettings} />
       )}
     </div>
   )
