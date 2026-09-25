@@ -114,13 +114,11 @@ export function B2CPerformance() {
   const [comparisonType, setComparisonType] = useState<"none" | "previous_period" | "previous_year">("none")
   const [showAllPerformance, setShowAllPerformance] = useState(false)
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
-  // Fix s197 (audit toàn hệ thống logic dữ liệu): mặc định trước là true (gộp vào doanh thu) — NGƯỢC
-  // chuẩn hệ thống "doanh thu SP thuần" (mặc định false, loại ship fee/đơn nội bộ/KH ops), khác B2B
-  // Performance cùng cấu trúc toggle (b2b/page.tsx dùng false). Không rõ chủ ý nghiệp vụ hay lỗi copy
-  // component — đồng bộ về false theo chuẩn chung.
-  const [includeShip,        setIncludeShip]        = useState(false)
-  const [includeInternalOps, setIncludeInternalOps] = useState(false)
-  const [includeOpsCustomers, setIncludeOpsCustomers] = useState(false)
+  // Hiếu chốt 2026-09-25: MỌI tab có bộ lọc Phí ship / Đơn nội bộ / KH Ops mặc định TICK (gồm hết) — số mặc định
+  // khớp raw gohub_dw; bỏ tick để về "doanh thu SP thuần".
+  const [includeShip,        setIncludeShip]        = useState(true)
+  const [includeInternalOps, setIncludeInternalOps] = useState(true)
+  const [includeOpsCustomers, setIncludeOpsCustomers] = useState(true)
 
   const toggleVendor = (vendor: string) => {
     setSelectedVendors(prev =>

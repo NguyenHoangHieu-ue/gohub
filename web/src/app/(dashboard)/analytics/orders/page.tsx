@@ -102,8 +102,8 @@ export default function OrdersPage() {
 
   // Filter state
   const [companyCode,  setCompanyCode]  = useState("")          // "" = ALL, "VN", "US", "SG", "HK"
-  const [includeShip,        setIncludeShip]        = useState(false)  // No (default) = loại shipping fee
-  const [includeInternalOps, setIncludeInternalOps] = useState(false)  // No (default) = loại internal ops
+  const [includeShip,        setIncludeShip]        = useState(true)  // Yes (default, Hiếu chốt 2026-09-25) = gồm shipping fee
+  const [includeInternalOps, setIncludeInternalOps] = useState(true)  // Yes (default, Hiếu chốt 2026-09-25) = gồm internal ops
   const [staffCode,    setStaffCode]    = useState("")
   const [channelGroup, setChannelGroup] = useState("")
   const [channel,      setChannel]      = useState("")
@@ -407,7 +407,7 @@ export default function OrdersPage() {
 
           <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 self-end mb-0.5" />
 
-          {/* Include ShippingFee: Yes/No — default No (loại phí ship) */}
+          {/* Include ShippingFee: Yes/No — default Yes (gồm phí ship) */}
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm phí ship vào doanh thu">Include ShippingFee</label>
             <select value={includeShip ? "yes" : "no"} onChange={e => setIncludeShip(e.target.value === "yes")}
@@ -419,7 +419,7 @@ export default function OrdersPage() {
             </select>
           </div>
 
-          {/* Include Internal Ops: Yes/No — default No (loại đơn nội bộ) */}
+          {/* Include Internal Ops: Yes/No — default Yes (gồm đơn nội bộ) */}
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm đơn chuyển nội bộ (INTERNAL-TRANSACTION, revenue=0)">Include Internal Ops</label>
             <select value={includeInternalOps ? "yes" : "no"} onChange={e => setIncludeInternalOps(e.target.value === "yes")}

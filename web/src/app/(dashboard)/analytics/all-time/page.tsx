@@ -48,8 +48,8 @@ export default function AllTimeReport() {
   const [selectedChannelGroup, setSelectedChannelGroup] = useState("")
   const [selectedCustomerTier, setSelectedCustomerTier] = useState("")
   const [showFilters, setShowFilters] = useState(false)
-  const [includeShip,        setIncludeShip]        = useState(false)
-  const [includeInternalOps, setIncludeInternalOps] = useState(false)
+  const [includeShip,        setIncludeShip]        = useState(true)
+  const [includeInternalOps, setIncludeInternalOps] = useState(true)
 
   useEffect(() => { fetchChannels() }, [])
   useEffect(() => {

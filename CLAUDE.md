@@ -67,6 +67,7 @@ làm bất cứ việc gì liên quan SaaS/tenant. **File TẠM: khi mọi mốc
 xoá dòng này**, chuyển kiến thức còn giá trị sang wiki `docs/wiki/system/`.
 
 **Ưu tiên gần nhất (s209):**
+- [x] s210 (2026-09-25): filter **Phí ship / Đơn nội bộ / KH Ops mặc định TICK** ở 8 tab (B2B, B2C, BOD, Quarter Report + Organization, Staff, All-Time, Orders) — Hiếu chốt. Tab không có filter (Channels, Vendors, Customers, Dashboard, Squad Progress) vẫn loại ship/nội bộ nên số KHÔNG khớp tab đã tick. Wiki: ghi chú §s210 ở `analytics-data-model.md` + các tab.
 - [ ] Merge `main` s209 khi Hiếu yêu cầu (tab Performance + bấm ô KH xem danh sách).
 - [ ] Nhập **target tháng Q4** (ALL/B2B/B2C × Revenue/GP/CM1/3HK) ở tab Performance › "Target Q4-2026" — độc lập với target quý B2B/B2C (Turso) và target squad, chưa tự đồng bộ; quyết định có cần fallback Σ3 tháng → target quý không.
 

@@ -73,8 +73,8 @@ export default function BODReport() {
   const [showFilters, setShowFilters] = useState(false)
   const [comparisonType, setComparisonType] = useState<"none" | "previous_period" | "previous_year">("none")
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
-  const [includeShip,        setIncludeShip]        = useState(false)
-  const [includeInternalOps, setIncludeInternalOps] = useState(false)
+  const [includeShip,        setIncludeShip]        = useState(true)
+  const [includeInternalOps, setIncludeInternalOps] = useState(true)
 
   const [vendors, setVendors] = useState<string[]>([])
   const [selectedVendors, setSelectedVendors] = useState<string[]>([])

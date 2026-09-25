@@ -88,3 +88,8 @@ B2B-Strategic = `brand-600`, B2B-Non-Strategic = `brand-300`, B2C = `emerald-600
 B2B, tách hue cho B2C). Dùng `CHART_GRID_COLOR`/`chartTooltipStyle` từ `dashboard-kit.tsx`. Mọi nút/focus
 ring `blue-*` khác đổi sang `brand-*`. Không đổi logic tính toán/query.
 
+
+
+## s210 (2026-09-25) — Filter Phí ship / Đơn nội bộ / KH Ops MẶC ĐỊNH TICK (gồm hết)
+
+Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm phí ship + đơn nội bộ, và KH Ops ở B2B/B2C) — số mặc định khớp raw `gohub_dw`; bỏ tick để về "doanh thu SP thuần". **Thay thế** cột "Default = Off" của bảng "Filter Chuẩn" cũ ở trang này (bản chép ở các wiki tab khác cũng vậy). Áp cho 8 nơi: B2B, B2C (`b2c-performance.tsx`), BOD, Quarter Report (kéo theo tab Performance), Quarter Report (Organization), Staff, All-Time, Orders (dropdown Yes/No mặc định Yes). API KHÔNG đổi: thiếu tham số vẫn = loại (chỉ FE truyền cờ). Tab không có bộ lọc (Channels, Vendors, Customers, Dashboard, Squad Progress...) vẫn cố định loại ship/nội bộ → số không còn khớp tab đã tick mặc định.

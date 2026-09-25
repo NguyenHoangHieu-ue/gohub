@@ -202,8 +202,8 @@ function StaffPageInner() {
 
   const applyFilters = () => { setApplied(draft); setUrlState(draft) }
 
-  const [includeShip,        setIncludeShip]        = useState(false)
-  const [includeInternalOps, setIncludeInternalOps] = useState(false)
+  const [includeShip,        setIncludeShip]        = useState(true)
+  const [includeInternalOps, setIncludeInternalOps] = useState(true)
   const [channels,     setChannels]     = useState<string[]>([])
   const [staffData,    setStaffData]    = useState<StaffRow[]>([])
   const [loading,      setLoading]      = useState(true)

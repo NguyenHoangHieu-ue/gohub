@@ -82,9 +82,9 @@ export default function B2BPerformance() {
   const [error, setError] = useState<string | null>(null)
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
   const [granularity, setGranularity] = useState<"day" | "week" | "month">("week")
-  const [includeShip,        setIncludeShip]        = useState(false)
-  const [includeInternalOps, setIncludeInternalOps] = useState(false)
-  const [includeOpsCustomers, setIncludeOpsCustomers] = useState(false)
+  const [includeShip,        setIncludeShip]        = useState(true)
+  const [includeInternalOps, setIncludeInternalOps] = useState(true)
+  const [includeOpsCustomers, setIncludeOpsCustomers] = useState(true)
 
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
 

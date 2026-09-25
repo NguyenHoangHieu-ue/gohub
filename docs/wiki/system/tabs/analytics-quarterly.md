@@ -557,3 +557,8 @@ bảng cho **ALL / B2B / B2C** theo mẫu Excel của Hiếu — Q trước tron
 - **Lỗi UI đã sửa**: (1) mỗi bảng tự co cột nên ALL/B2B/B2C và các squad lệch cột (đo: 98px vs 92px, cột ngăn 2px) → `table-fixed` + `colgroup` dùng chung bộ độ rộng; (2) dòng có ghi chú "TT" cao hơn dòng khác → dòng giá trị h-11, dòng % h-8; (3) nhãn tháng thống nhất "7 / 9 (pro-rata) / 10 (target)" như Excel.
 - **Lỗi số liệu ở trường hợp biên đã sửa** (tab Performance): xem Q4 khi chưa có dữ liệu → cột Q4 hiện `0`, %QoQ `-100%`, cột cả năm hiện tổng 3 quý như đủ năm. Nay quý chưa đủ tin cậy (`isQuarterReliable`: đủ 3 tháng và mỗi tháng đã xong hoặc đã chiếu Pro-rata) thì cột quý ghi "(chưa đủ dữ liệu)", %QoQ + cột cả năm hiện "—". Đổi quý/bộ lọc: bảng chỉ hiện khi báo cáo + các quý trước khớp quý/bộ lọc đang chọn (chặn hiện nhầm số quý cũ khi mạng chậm).
 - **Vị trí %QoQ**: cột %QoQ của quý trước đứng SAU quý nó mô tả (Q1, Q2, %QoQ) đúng mẫu Excel — trước đó đứng trước (Q1, %QoQ, Q2), số đúng nhưng dễ đọc nhầm.
+
+
+## s210 (2026-09-25) — Filter Phí ship / Đơn nội bộ / KH Ops MẶC ĐỊNH TICK (gồm hết)
+
+Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm phí ship + đơn nội bộ, và KH Ops ở B2B/B2C) — số mặc định khớp raw `gohub_dw`; bỏ tick để về "doanh thu SP thuần". **Thay thế** cột "Default = Off" của bảng "Filter Chuẩn" cũ ở trang này (bản chép ở các wiki tab khác cũng vậy). Áp cho 8 nơi: B2B, B2C (`b2c-performance.tsx`), BOD, Quarter Report (kéo theo tab Performance), Quarter Report (Organization), Staff, All-Time, Orders (dropdown Yes/No mặc định Yes). API KHÔNG đổi: thiếu tham số vẫn = loại (chỉ FE truyền cờ). Tab không có bộ lọc (Channels, Vendors, Customers, Dashboard, Squad Progress...) vẫn cố định loại ship/nội bộ → số không còn khớp tab đã tick mặc định.

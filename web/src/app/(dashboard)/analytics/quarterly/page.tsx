@@ -80,8 +80,8 @@ function QuarterlyContent() {
   const today = new Date()
   const [selQ, setSelQ]       = useState(`Q${Math.ceil((today.getMonth() + 1) / 3)}`)
   const [selYear, setSelYear] = useState(today.getFullYear())
-  const [includeShip,        setIncludeShip]        = useState(false)
-  const [includeInternalOps, setIncludeInternalOps] = useState(false)
+  const [includeShip,        setIncludeShip]        = useState(true)
+  const [includeInternalOps, setIncludeInternalOps] = useState(true)
   const [report, setReport]   = useState<QReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving]   = useState(false)
@@ -650,7 +650,7 @@ function QuarterlyContent() {
         Chọn <strong>Quý/Năm</strong> ở góc trên để đổi kỳ báo cáo — mặc định load từ cache (nhanh), bấm{" "}
         <strong>Tải lại mới</strong> nếu vừa cập nhật số liệu và cần dữ liệu tươi nhất. Toggle{" "}
         <strong>VN/US</strong> lọc theo pháp nhân; 2 checkbox <strong>Phí ship</strong>/<strong>Đơn nội
-        bộ</strong> mặc định tắt (loại khỏi doanh thu SP thuần) — bật cả 2 để đối chiếu số raw gohub_dw.
+        bộ</strong> mặc định đang bật (gồm cả 2, khớp số raw gohub_dw) — bỏ tick để về doanh thu SP thuần.
         Click 1 hàng trong bảng để xổ chi tiết theo Tháng/Ngày/Sản phẩm.
       </LogicNote>
 
