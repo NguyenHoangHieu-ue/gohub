@@ -162,7 +162,7 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
                           )
                         })}
                         <td className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap font-bold bg-[#0f4c81]/5",
-                          isPct ? "text-slate-600 text-[11px]" : valueCls(totalCur, isCm1))}>
+                          totalCur == null ? "text-slate-300" : isPct ? "text-slate-600 text-[11px]" : valueCls(totalCur, isCm1))}>
                           {fmt(row, totalCur)}
                         </td>
                         <td className="w-3 bg-slate-100" aria-hidden />
@@ -173,7 +173,7 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
                           </td>
                         ))}
                         <td className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap font-bold bg-[#0f4c81]/5",
-                          isPct ? "text-slate-600 text-[11px]" : valueCls(totalNext, isCm1))}>
+                          totalNext == null ? "text-slate-300" : isPct ? "text-slate-600 text-[11px]" : valueCls(totalNext, isCm1))}>
                           {fmt(row, totalNext)}
                         </td>
                         <td className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap font-bold bg-[#0f4c81]/5",
