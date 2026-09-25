@@ -260,7 +260,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
                         const isCm1 = row.metric === "cm1" || row.num === "cm1"
                         return (
                           <tr key={row.key} className={cn("border-b border-slate-100", isPct && "bg-slate-50/60")}>
-                            <td className={cn("sticky left-0 z-10 px-4 py-2 whitespace-nowrap bg-blue-50/80",
+                            <td className={cn("sticky left-0 z-10 px-4 py-2 whitespace-nowrap bg-blue-50",
                               isPct ? "pl-7 font-medium text-slate-500" : "font-semibold text-slate-800")}>{row.label}</td>
                             {cols.map(c => {
                               if (c.kind === "gap") return <td key={c.id} className="w-3 bg-slate-100" aria-hidden />

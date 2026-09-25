@@ -134,7 +134,7 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
                     }
                     return (
                       <tr key={row.key} className={cn("border-b border-slate-100", isPct && "bg-slate-50/60")}>
-                        <td className={cn("sticky left-0 z-10 px-4 py-2 font-semibold whitespace-nowrap bg-blue-50/80",
+                        <td className={cn("sticky left-0 z-10 px-4 py-2 font-semibold whitespace-nowrap bg-blue-50",
                           isPct ? "text-slate-500 pl-7 font-medium" : "text-slate-800")}>
                           {row.label}
                         </td>
