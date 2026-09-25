@@ -8,11 +8,20 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-23)
+## Trạng thái hiện tại (2026-09-25)
 
 Branch làm việc: `staging` → merge `main` **CHỈ khi Hiếu yêu cầu RÕ RÀNG**. tsc + `next build` + `next lint` + vitest phải PASS trước khi push.
 
-**Mốc gần nhất trên `main` — s206 (2026-09-23, `c46f7b47`), staging = main.** Toàn bộ s204/s205 (3HK sub-variant,
+**Mốc gần nhất trên `main` — s208 (2026-09-25), staging = main** (đã merge theo yêu cầu Hiếu 2026-09-25). Gồm:
+- **s208 — Quarter Report › Squad Progress**: thẻ **GP** mỗi squad + Target GP; summary KH mỗi squad (số KH theo tier,
+  mới / cũ tiếp tục / cũ quay lại sau gián đoạn / cũ chưa quay lại — "chưa quay lại" = có mua QUÝ TRƯỚC, quý này chưa mua);
+  bảng **Performance theo tháng** từng squad (T7–T9 PR + quý | target T10–12 + quý sau + %QoQ). `POST squad-targets`
+  giờ MERGE theo squad + nhận `next` (target tháng quý sau). Wiki `analytics-quarterly.md` §s208, session_summary s208.
+- **s207 — Gấu Pro giảm lag UI** khi hội thoại dài (memo list tin, persist localStorage khi hết stream, gộp delta bằng rAF).
+  Chưa QA sống — Hiếu thử lại. Wiki `analytics-creator-ai.md` §s207.
+- **Plan đang chạy (tạm)**: `docs/plans/saas-be-gau.md` — Bé Gấu SaaS đa khách hàng, chưa bắt đầu code (xem mục dưới).
+
+**Mốc s206 (2026-09-23, `c46f7b47`).** Toàn bộ s204/s205 (3HK sub-variant,
 VN Ecom CH.Cost/CM1, wiki business, v62) đã merge. s206 = **trợ lý toàn diện (Gấu Pro)** + vài fix:
 - Scheduled message: Lark 11310 "card table number over limit" (≤5 bảng/card) → tách nhiều card.
 - B2C Advanced MKT Profit Report mất T9 (Meta/Google hardcode) → Total MKT lấy Manage Cost; KPI Units Sold hiện %.
@@ -44,6 +53,16 @@ VN Ecom CH.Cost/CM1, wiki business, v62) đã merge. s206 = **trợ lý toàn di
 ---
 
 ## Việc Hiếu cần làm (còn mở)
+
+**Plan đang chạy:** `docs/plans/saas-be-gau.md` — Bé Gấu SaaS đa khách hàng (M0–M6). Đọc file đó trước khi
+làm bất cứ việc gì liên quan SaaS/tenant. **File TẠM: khi mọi mốc xong (hoặc Hiếu bỏ plan) phải xoá file +
+xoá dòng này**, chuyển kiến thức còn giá trị sang wiki `docs/wiki/system/`.
+
+**Ưu tiên gần nhất (s208):**
+- [ ] Quarter Report › Squad Progress: nhập **Target GP** từng squad + **target T10/T11/T12** (Revenue/GP/CM1/3HK Rev) ở nút "Target Squad" để bảng Performance theo tháng có cột target.
+- [ ] Quyết định có đổi định nghĩa "KH cũ chưa quay lại" ở tab Tổng quan (`quarterly-customer-lifecycle`, hiện đếm toàn lịch sử ~112.000 KH) cho khớp Squad Progress (chỉ KH có mua quý trước) không.
+- [ ] Thử lại Gấu Pro nhắn nhiều tin xem hết lag (s207).
+- [ ] Trả lời 3 câu mở trong `docs/plans/saas-be-gau.md` (module SaaS cùng repo? Vercel/Supabase Pro khi nào? tên sản phẩm).
 
 **Ưu tiên gần nhất (s206):**
 - [ ] QA 2 luồng còn lại của trợ lý: nhắn DM bot ("mai 10h ...") → task; nhờ đồng nghiệp @Hiếu giao việc trong group có bot.
