@@ -43,7 +43,7 @@ const ROWS: { key: string; label: string; metric?: Metric; num?: Metric }[] = [
 ]
 
 // Độ rộng cột CỐ ĐỊNH — mọi squad dùng chung nên các bảng thẳng hàng nhau (và cùng bố cục bảng ở tab Performance).
-const LABEL_W = 176, MONTH_W = 112, TOTAL_W = 132, GAP_W = 12, QOQ_W = 104
+const LABEL_W = 160, MONTH_W = 104, TOTAL_W = 120, GAP_W = 10, QOQ_W = 96
 const monthNum = (m: string) => String(parseInt(m.split("-")[1], 10))
 const ratio = (num?: number, den?: number) => (num != null && den != null && den > 0 ? (num / den) * 100 : undefined)
 const signed = (v: number, digits = 1) => `${v >= 0 ? "+" : ""}${v.toFixed(digits)}`
@@ -53,7 +53,7 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
 
   const anyNotDone = squads.some(sq => quarterMonths.some(m => sq.monthly?.find(x => x.month === m)?.status !== "done"))
 
-  const th = "px-3 py-2 text-center text-[11px] font-bold whitespace-nowrap"
+  const th = "px-2 py-2 text-center text-[11px] font-bold whitespace-nowrap"
   const valueCls = (v: number | undefined, isCm1: boolean) =>
     v == null ? "text-slate-300" : isCm1 && v < 0 ? "text-red-600" : "text-slate-800"
 
@@ -153,7 +153,7 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
                           const v = c.state === "none" ? undefined : cellOf(row, c.vals)
                           const act = c.state === "current" && c.actual && row.metric ? c.actual[row.metric] : undefined
                           return (
-                            <td key={i} className={cn("px-3 py-2 text-right tabular-nums whitespace-nowrap",
+                            <td key={i} className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap",
                               isPct ? "text-slate-500 text-[11px]" : valueCls(v, isCm1))}
                               title={c.state === "none" ? "Tháng chưa bắt đầu" : undefined}>
                               {fmt(row, v)}
@@ -161,22 +161,22 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
                             </td>
                           )
                         })}
-                        <td className={cn("px-3 py-2 text-right tabular-nums whitespace-nowrap font-bold bg-[#0f4c81]/5",
+                        <td className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap font-bold bg-[#0f4c81]/5",
                           isPct ? "text-slate-600 text-[11px]" : valueCls(totalCur, isCm1))}>
                           {fmt(row, totalCur)}
                         </td>
                         <td className="w-3 bg-slate-100" aria-hidden />
                         {nextMonths.map((v, i) => (
-                          <td key={i} className={cn("px-3 py-2 text-right tabular-nums whitespace-nowrap",
+                          <td key={i} className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap",
                             isPct ? "text-slate-500 text-[11px]" : valueCls(cellOf(row, v), isCm1))}>
                             {fmt(row, cellOf(row, v))}
                           </td>
                         ))}
-                        <td className={cn("px-3 py-2 text-right tabular-nums whitespace-nowrap font-bold bg-[#0f4c81]/5",
+                        <td className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap font-bold bg-[#0f4c81]/5",
                           isPct ? "text-slate-600 text-[11px]" : valueCls(totalNext, isCm1))}>
                           {fmt(row, totalNext)}
                         </td>
-                        <td className={cn("px-3 py-2 text-right tabular-nums whitespace-nowrap font-bold bg-[#0f4c81]/5",
+                        <td className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap font-bold bg-[#0f4c81]/5",
                           qoqUp == null ? "text-slate-300" : qoqUp ? "text-emerald-600" : "text-red-500")}>
                           {qoq ?? "—"}
                         </td>

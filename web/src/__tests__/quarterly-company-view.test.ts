@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import {
-  extractQuarter, effectiveTargets, sumVals, addVals, ratioPct, relChange, cellOf, quartersBefore, ROW_DEFS,
+  isQuarterReliable, extractQuarter, effectiveTargets, sumVals, addVals, ratioPct, relChange, cellOf, quartersBefore, ROW_DEFS,
 } from "@/lib/quarterly-company-view"
 import type { QReport, MonthStats } from "@/lib/quarterly-types"
 
@@ -31,9 +31,9 @@ describe("extractQuarter", () => {
     const old = { ...report, summary: [month("2026-07", stats(100, 0, 0, undefined, 25), stats(0, 0, 0), stats(0, 0, 0))] } as unknown as QReport
     expect(extractQuarter(old, "ALL").total.hk3).toBe(25)
   })
-  it("thiếu report → tổng 0, không tháng", () => {
+  it("thiếu report / quý chưa có tháng nào → total rỗng (không phải 0, tránh QoQ -100%)", () => {
     const e = extractQuarter(null, "ALL")
-    expect(e.total).toEqual({ rev: 0, gp: 0, cm1: 0, hk3: 0 })
+    expect(e.total).toEqual({})
     expect(Object.keys(e.months)).toHaveLength(0)
   })
 })
@@ -80,5 +80,23 @@ describe("sum / ratio / relChange", () => {
   it("quartersBefore", () => {
     expect(quartersBefore(1)).toEqual([])
     expect(quartersBefore(3)).toEqual([1, 2])
+  })
+})
+
+describe("isQuarterReliable — chặn QoQ/cả năm khi quý chưa đủ dữ liệu", () => {
+  const sm = (m: string, elapsed: number, dim: number, isProjected: boolean) => ({ ...month(m, stats(1, 1, 1), stats(1, 1, 1), stats(1, 1, 1)), elapsed, dim, isProjected })
+  const rep = (list: ReturnType<typeof sm>[]) => ({ summary: list } as unknown as QReport)
+  const keys = ["2026-07", "2026-08", "2026-09"]
+  it("đủ 3 tháng, tháng cuối đang chạy đã chiếu → tin cậy", () => {
+    expect(isQuarterReliable(rep([sm("2026-07", 31, 31, false), sm("2026-08", 31, 31, false), sm("2026-09", 24, 30, true)]), keys)).toBe(true)
+  })
+  it("thiếu tháng (quý chưa xong, chưa có T9) → không tin cậy", () => {
+    expect(isQuarterReliable(rep([sm("2026-07", 31, 31, false), sm("2026-08", 31, 31, false)]), keys)).toBe(false)
+  })
+  it("tháng đang chạy < 7 ngày (chưa chiếu) → không tin cậy", () => {
+    expect(isQuarterReliable(rep([sm("2026-07", 31, 31, false), sm("2026-08", 31, 31, false), sm("2026-09", 3, 30, false)]), keys)).toBe(false)
+  })
+  it("không có report → không tin cậy", () => {
+    expect(isQuarterReliable(null, keys)).toBe(false)
   })
 })

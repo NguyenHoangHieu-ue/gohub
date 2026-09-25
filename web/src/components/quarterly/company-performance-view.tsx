@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { fc } from "@/lib/quarterly-format"
 import type { QReport } from "@/lib/quarterly-types"
 import {
-  SEGMENTS, ROW_DEFS, METRICS, extractQuarter, effectiveTargets, sumVals, addVals, cellOf, relChange, quartersBefore,
+  SEGMENTS, ROW_DEFS, METRICS, extractQuarter, isQuarterReliable, effectiveTargets, sumVals, addVals, cellOf, relChange, quartersBefore,
   type Segment, type Vals, type CompanyTargets,
 } from "@/lib/quarterly-company-view"
 
@@ -49,9 +49,9 @@ const showDigits = (v: string) => (v ? Number(v).toLocaleString("vi-VN") : "")
 const pad = (n: number) => String(n).padStart(2, "0")
 
 // Độ rộng cột CỐ ĐỊNH (table-fixed) — 3 khối ALL/B2B/B2C dùng chung bộ cột nên luôn thẳng hàng nhau.
-const COL_W: Record<Col["kind"], number> = { q: 120, month: 112, tgt: 112, cur: 132, next: 132, year: 132, qoq: 72, gap: 12 }
-const LABEL_W = 140
-const widthOf = (c: Col) => (c.kind === "qoq" && c.header.length > 6 ? 104 : COL_W[c.kind])
+const COL_W: Record<Col["kind"], number> = { q: 108, month: 100, tgt: 100, cur: 118, next: 118, year: 118, qoq: 60, gap: 10 }
+const LABEL_W = 120
+const widthOf = (c: Col) => (c.kind === "qoq" && c.header.length > 6 ? 92 : COL_W[c.kind])
 
 export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip, includeInternalOps, report, reportLoading, canEdit }: Props) {
   const q = parseInt(selQ.replace("Q", ""), 10)
@@ -117,28 +117,31 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
       cols.push({ id: "gap1", kind: "gap", header: "" })
       const cur = extractQuarter(report, seg)
       const months = [0, 1, 2].map(i => `${selYear}-${pad((q - 1) * 3 + i + 1)}`)
+      // Quý đang xem chưa đủ tin cậy (thiếu tháng / tháng đang chạy chưa chiếu) → không so QoQ, không cộng cả năm (tránh số sai).
+      const reliable = isQuarterReliable(report, months)
+      const curForCmp: Vals = reliable ? cur.total : {}
       const anyProjected = (report?.summary ?? []).some(m => m.isProjected)
       months.forEach(m => {
         const sm = report?.summary?.find(x => x.month === m)
         cols.push({ id: `m${m}`, kind: "month", header: String(parseInt(m.split("-")[1], 10)),
           tag: sm?.isProjected ? "pro-rata" : undefined, vals: cur.months[m] })
       })
-      cols.push({ id: "cur", kind: "cur", header: curLabel, tag: anyProjected ? "PR" : undefined, vals: cur.total })
-      if (prevData.length > 0) cols.push({ id: "qoq-cur", kind: "qoq", header: "%QoQ", a: cur.total, b: prevData[prevData.length - 1].d.total })
+      cols.push({ id: "cur", kind: "cur", header: curLabel, tag: !reliable ? "chưa đủ dữ liệu" : anyProjected ? "PR" : undefined, vals: cur.total })
+      if (prevData.length > 0) cols.push({ id: "qoq-cur", kind: "qoq", header: "%QoQ", a: curForCmp, b: prevData[prevData.length - 1].d.total })
       cols.push({ id: "gap2", kind: "gap", header: "" })
       const tm = eff[seg]
       const nextMonths = [0, 1, 2].map(i => (nextQ - 1) * 3 + i + 1)
       nextMonths.forEach((mn, i) => cols.push({ id: `t${mn}`, kind: "tgt", header: String(mn), tag: "target", vals: tm[i] }))
       const nextTotal = sumVals(tm)
       cols.push({ id: "next", kind: "next", header: nextLabel, vals: nextTotal })
-      cols.push({ id: "qoq-next", kind: "qoq", header: "Target +%QoQ", a: nextTotal, b: cur.total })
+      cols.push({ id: "qoq-next", kind: "qoq", header: "Target +%QoQ", a: nextTotal, b: curForCmp })
       // Cả năm: chỉ khi đã có đủ quý (≥ Q3) — Q4 đang xem = đủ 4 quý; Q3 = Q1+Q2+Q3+target Q4.
       if (q >= 3) {
         let year: Vals = cur.total
         for (const { d } of prevData) year = addVals(year, d.total)
         if (q < 4) year = addVals(year, nextTotal)
-        const complete = q === 4 || METRICS.every(k => nextTotal[k] != null)
-        cols.push({ id: "year", kind: "year", header: String(selYear), tag: complete ? undefined : "chưa đủ target", vals: complete ? year : {} })
+        const complete = reliable && (q === 4 || METRICS.every(k => nextTotal[k] != null))
+        cols.push({ id: "year", kind: "year", header: String(selYear), tag: complete ? undefined : reliable ? "chưa đủ target" : "chưa đủ dữ liệu", vals: complete ? year : {} })
       }
       out[seg] = cols
     }
@@ -174,7 +177,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
 
   const fmtVal = (isPct: boolean, x: number | undefined) => (x == null ? "—" : isPct ? `${x.toFixed(1)}%` : fc(x))
 
-  const th = "px-3 py-2 text-center text-[11px] font-bold whitespace-nowrap"
+  const th = "px-2 py-2 text-center text-[11px] font-bold whitespace-nowrap"
   const headTone = (k: Col["kind"]) =>
     k === "month" || k === "tgt" ? "bg-amber-50 text-slate-700"
       : k === "qoq" ? "bg-slate-50 text-slate-500"
@@ -264,7 +267,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
                           : (
                             <th key={c.id} className={cn(th, headTone(c.kind))}>
                               {c.header}
-                              {c.tag && <span className={cn("ml-1 text-[9px] font-semibold", c.kind === "tgt" ? "text-amber-600" : "text-blue-600")}>({c.tag})</span>}
+                              {c.tag && <span className={cn("ml-1 text-[9px] font-semibold", c.kind === "tgt" || c.tag.startsWith("chưa") ? "text-amber-600" : "text-blue-600")}>({c.tag})</span>}
                             </th>
                           ))}
                       </tr>
@@ -282,7 +285,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
                               if (c.kind === "qoq") {
                                 const v = relChange(cellOf(row, c.a ?? {}), cellOf(row, c.b ?? {}))
                                 return (
-                                  <td key={c.id} className={cn("px-3 py-2 text-right tabular-nums whitespace-nowrap font-semibold",
+                                  <td key={c.id} className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap font-semibold",
                                     v == null ? "text-slate-300" : v >= 0 ? "text-emerald-700 bg-emerald-50/60" : "text-orange-700 bg-orange-50/70")}>
                                     {v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`}
                                   </td>
@@ -291,7 +294,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
                               const v = c.vals ? cellOf(row, c.vals) : undefined
                               const strong = c.kind === "cur" || c.kind === "next" || c.kind === "year"
                               return (
-                                <td key={c.id} className={cn("px-3 py-2 text-right tabular-nums whitespace-nowrap",
+                                <td key={c.id} className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap",
                                   strong && "font-bold bg-[#0f4c81]/5",
                                   v == null ? "text-slate-300" : isCm1 && v < 0 ? "text-red-600" : isPct ? "text-slate-600 text-[11px]" : "text-slate-800")}>
                                   {fmtVal(isPct, v)}

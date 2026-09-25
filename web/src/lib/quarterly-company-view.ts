@@ -25,10 +25,10 @@ export interface QuarterData {
   total: Vals
 }
 
-/** Rút số liệu của 1 segment từ QReport: từng tháng + tổng quý (Σ các tháng đã có). */
+/** Rút số liệu của 1 segment từ QReport: từng tháng + tổng quý (Σ các tháng đã có). Chưa có tháng nào → total = {} (KHÔNG phải 0). */
 export function extractQuarter(report: QReport | null | undefined, seg: Segment): QuarterData {
   const months: Record<string, Vals> = {}
-  const total: Vals = { rev: 0, gp: 0, cm1: 0, hk3: 0 }
+  const total: Vals = {}
   for (const m of report?.summary ?? []) {
     const s = statsOf(m, seg)
     const v: Vals = { rev: s.revenue, gp: s.gp, cm1: s.cm1, hk3: hk3Of(s) }
@@ -36,6 +36,14 @@ export function extractQuarter(report: QReport | null | undefined, seg: Segment)
     for (const k of METRICS) total[k] = (total[k] ?? 0) + (v[k] ?? 0)
   }
   return { months, total }
+}
+
+/** Quý đang xem đủ tin cậy để so QoQ/cộng cả năm: đủ 3 tháng có số liệu và mỗi tháng hoặc đã xong hoặc đã được chiếu Pro-rata. */
+export function isQuarterReliable(report: QReport | null | undefined, monthKeys: string[]): boolean {
+  return monthKeys.every(k => {
+    const sm = report?.summary?.find(x => x.month === k)
+    return !!sm && (sm.elapsed >= sm.dim || sm.isProjected)
+  })
 }
 
 /** Target 3 tháng của 1 segment → Vals theo tháng (0 → undefined = chưa nhập). */
