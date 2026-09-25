@@ -10473,3 +10473,9 @@ Nguyên nhân client-side: list tin không memo (gõ phím/elapsed/token đều 
 localStorage mỗi token, scroll smooth mỗi token, setMessages mỗi delta. Fix trong creator/ai/page.tsx: MessageRow memo,
 persist localStorage chỉ khi hết stream, scroll auto lúc stream, gộp delta bằng rAF. tsc PASS. Chưa QA sống trên
 staging (Hiếu thử lại). Chi tiết: wiki analytics-creator-ai.md §s207.
+
+## s208 (2026-09-25) — Squad Progress: thẻ GP + summary KH + bảng Performance theo tháng
+Hiếu yêu cầu: (1) thẻ GP mỗi squad + nhập target GP; (2) summary mỗi squad (số KH theo tier, KH mới trong quý, KH cũ quay lại, chưa quay lại); (3) bảng performance theo tháng từng squad như ảnh (T7/T8/T9(PR) + quý | target T10-12 + quý sau + Target +%QoQ; dòng Revenue/GP/GP%/CM1/CM1%/3HK/3HK%).
+Hiếu chốt qua AskUserQuestion: "chưa quay lại" = có mua quý trước, quý này chưa mua (không đếm toàn lịch sử ~112.000 KH); "quay lại" tách 2 nhóm (tiếp tục mua / quay lại sau gián đoạn); target quý sau nhập từng tháng, quý = tổng 3 tháng.
+Sửa: squad-progress/route.ts (GP, tier_counts, lifecycle tách, monthly, next_targets, group cost theo tháng), squad-targets/route.ts (merge theo squad + `next`), components/quarterly/squad-monthly-table.tsx (mới), quarterly/page.tsx. Chi tiết: wiki analytics-quarterly.md §s208.
+Verify: tsc + next build + vitest 386/386 PASS; lint không thêm cảnh báo mới. QA sống trên staging: xem bên dưới nếu có.

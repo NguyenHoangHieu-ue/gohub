@@ -20,7 +20,15 @@ import { B2BTierSection } from "@/components/quarterly/b2b-tier-section"
 import { CustomerLifecycleSection } from "@/components/quarterly/customer-lifecycle-section"
 import { QtVsTargetPanel } from "@/components/quarterly/qt-vs-target-bullets"
 import { MonthlyTrendChart } from "@/components/quarterly/monthly-trend-chart"
+import { SquadMonthlyTable } from "@/components/quarterly/squad-monthly-table"
 import { LogicNote, StatTile } from "@/components/dashboard-kit"
+
+// Metric có target theo tháng của quý sau (panel "Target Squad") — khớp field `next_targets` route squad-progress.
+const NEXT_METRICS = ["rev", "gp", "cm1", "hk3rev"] as const
+type NextMetric = typeof NEXT_METRICS[number]
+const NEXT_METRIC_LABEL: Record<NextMetric, string> = { rev: "Revenue", gp: "GP", cm1: "CM1", hk3rev: "3HK Rev" }
+const digitsOnly = (v: string) => v.replace(/[^0-9]/g, "")
+const showDigits = (v: string) => (v ? Number(v).toLocaleString("vi-VN") : "")
 
 // s183 Phase 5: Types/format helpers/component con (KpiCard, TableHead, ColInfo, MomBadge, MonthSubRow,
 // QtSummaryRow, QtTargetRow, PivotTable, B2BTierSection) đã tách sang lib/quarterly-types.ts,
@@ -132,7 +140,9 @@ function QuarterlyContent() {
   const [sqSortDir,      setSqSortDir]      = useState<"asc"|"desc">("asc")
   // Squad targets (theo quý)
   const [editingTargets, setEditingTargets] = useState(false)
-  const [draftTargets,   setDraftTargets]   = useState<Record<string, { rev: string; cm1: string; hk3rev: string }>>({})
+  const [draftTargets,   setDraftTargets]   = useState<Record<string, { rev: string; cm1: string; hk3rev: string; gp: string }>>({})
+  // Target từng tháng của quý SAU (3 ô/metric/squad) — hiện ở bảng "Performance theo tháng"
+  const [draftNext,      setDraftNext]      = useState<Record<string, Record<NextMetric, string[]>>>({})
   const [savingTargets,  setSavingTargets]  = useState(false)
 
   const RISK_ORDER = ["danger_high","danger_low","safe_low","safe","very_safe","no_target"]
@@ -160,6 +170,8 @@ function QuarterlyContent() {
       Squad: sq.name, Leader: sq.leader || "", "Số KH": sq.customer_count,
       "Revenue Actual": sq.revenue, "Revenue PR": sq.revenue_pr, "Target Revenue": sq.target_rev || "",
       "%TGT Rev": sq.rev_pct != null ? `${sq.rev_pct}%` : "",
+      "GP Actual": sq.gp, "GP PR": sq.gp_pr, "GP%": `${sq.gp_pct}%`, "Target GP": sq.target_gp || "",
+      "%TGT GP": sq.gp_tgt_pct != null ? `${sq.gp_tgt_pct}%` : "",
       "CM1 Actual": sq.cm1, "CM1 PR": sq.cm1_pr, "CM1%": sq.cm1_pct != null ? `${sq.cm1_pct}%` : "", "Target CM1": sq.target_cm1 || "",
       "%TGT CM1": sq.cm1_tgt_pct != null ? `${sq.cm1_tgt_pct}%` : "",
       "3HK Rev": sq.hk3, "3HK%": `${sq.hk3_pct}%`, "Target 3HK Rev": sq.target_hk3 || "",
@@ -236,33 +248,49 @@ function QuarterlyContent() {
 
   // Mở form nhập target: seed draft từ manual_target hiện có của mỗi squad
   const openEditTargets = () => {
-    const seed: Record<string, { rev: string; cm1: string; hk3rev: string }> = {}
+    const seed: Record<string, { rev: string; cm1: string; hk3rev: string; gp: string }> = {}
+    const seedNext: Record<string, Record<NextMetric, string[]>> = {}
     for (const sq of (squadData?.squads ?? [])) {
       const mt = sq.manual_target ?? {}
       seed[sq.name] = {
         rev:    mt.rev    > 0 ? String(mt.rev)    : "",
         cm1:    mt.cm1    > 0 ? String(mt.cm1)    : "",
         hk3rev: mt.hk3rev > 0 ? String(mt.hk3rev) : "",
+        gp:     mt.gp     > 0 ? String(mt.gp)     : "",
       }
+      const nt = sq.next_targets ?? {}
+      seedNext[sq.name] = Object.fromEntries(NEXT_METRICS.map(f =>
+        [f, [0, 1, 2].map(i => (nt[f]?.[i] > 0 ? String(nt[f][i]) : ""))])) as Record<NextMetric, string[]>
     }
     setDraftTargets(seed)
+    setDraftNext(seedNext)
     setEditingTargets(true)
   }
 
   const saveSquadTargets = async () => {
     setSavingTargets(true)
     try {
-      const targets: Record<string, { rev: number; cm1: number; hk3rev: number }> = {}
+      const targets: Record<string, { rev: number; cm1: number; hk3rev: number; gp: number }> = {}
       for (const [name, t] of Object.entries(draftTargets)) {
         targets[name] = {
           rev:    Math.round(Number(t.rev)    || 0),
           cm1:    Math.round(Number(t.cm1)    || 0),
           hk3rev: Math.round(Number(t.hk3rev) || 0),
+          gp:     Math.round(Number(t.gp)     || 0),
         }
+      }
+      const nq = squadData?.next_quarter
+      const nextTargets: Record<string, { months: Record<NextMetric, number[]> }> = {}
+      for (const [name, t] of Object.entries(draftNext)) {
+        nextTargets[name] = { months: Object.fromEntries(NEXT_METRICS.map(f =>
+          [f, t[f].map(v => Math.round(Number(v) || 0))])) as Record<NextMetric, number[]> }
       }
       const r = await fetch("/api/analytics/squad-targets", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quarter: selQ, year: selYear, targets }),
+        body: JSON.stringify({
+          quarter: selQ, year: selYear, targets,
+          ...(nq ? { next: { quarter: nq.quarter, year: nq.year, targets: nextTargets } } : {}),
+        }),
       })
       let d: any = {}
       try { d = await r.json() } catch {}
@@ -1192,28 +1220,29 @@ function QuarterlyContent() {
           {/* ── Target Squad panel (collapsible) ── */}
           {canEditSettings && editingTargets && squadData?.squads?.length > 0 && (
             <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3 shadow-sm">
-              <p className="text-xs font-semibold text-slate-500">Nhập Revenue / CM1 / 3HK Revenue mục tiêu cho từng squad — {selQ} {selYear}</p>
+              <p className="text-xs font-semibold text-slate-500">Nhập Revenue / GP / CM1 / 3HK Revenue mục tiêu cho từng squad — {selQ} {selYear}</p>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-slate-500 border-b border-slate-100 uppercase text-[10px]">
                       <th className="px-3 py-2 text-left font-semibold">Squad</th>
                       <th className="px-3 py-2 text-right font-semibold">Target Revenue (VND)</th>
+                      <th className="px-3 py-2 text-right font-semibold">Target GP (VND)</th>
                       <th className="px-3 py-2 text-right font-semibold">Target CM1 (VND)</th>
                       <th className="px-3 py-2 text-right font-semibold">Target 3HK Rev (VND)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {squadData.squads.map((sq: any) => {
-                      const t = draftTargets[sq.name] ?? { rev: "", cm1: "", hk3rev: "" }
-                      const upd = (field: "rev"|"cm1"|"hk3rev", v: string) =>
-                        setDraftTargets(prev => ({ ...prev, [sq.name]: { ...(prev[sq.name] ?? { rev:"", cm1:"", hk3rev:"" }), [field]: v.replace(/[^0-9]/g, "") } }))
+                      const t = draftTargets[sq.name] ?? { rev: "", cm1: "", hk3rev: "", gp: "" }
+                      const upd = (field: "rev"|"gp"|"cm1"|"hk3rev", v: string) =>
+                        setDraftTargets(prev => ({ ...prev, [sq.name]: { ...(prev[sq.name] ?? { rev:"", cm1:"", hk3rev:"", gp:"" }), [field]: digitsOnly(v) } }))
                       return (
                         <tr key={sq.name}>
                           <td className="px-3 py-2 font-medium text-slate-700">{sq.name}</td>
-                          {(["rev","cm1","hk3rev"] as const).map(f => (
+                          {(["rev","gp","cm1","hk3rev"] as const).map(f => (
                             <td key={f} className="px-3 py-2 text-right">
-                              <input value={t[f]} onChange={e => upd(f, e.target.value)} placeholder="0"
+                              <input value={showDigits(t[f])} onChange={e => upd(f, e.target.value)} placeholder="0"
                                 className="w-36 px-2 py-1 text-right tabular-nums border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0f4c81]" />
                             </td>
                           ))}
@@ -1223,6 +1252,51 @@ function QuarterlyContent() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Target từng tháng của quý SAU — hiện ở bảng "Performance theo tháng"; quý = tổng 3 tháng */}
+              {squadData.next_quarter && (
+                <div className="pt-3 border-t border-slate-100 space-y-2">
+                  <p className="text-xs font-semibold text-slate-500">
+                    Target từng tháng — {squadData.next_quarter.label}
+                    <span className="ml-2 font-normal text-slate-400">Target quý = tổng 3 tháng; tự dùng làm target quý khi sang {squadData.next_quarter.label} nếu chưa nhập target quý riêng.</span>
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-slate-500 border-b border-slate-100 uppercase text-[10px]">
+                          <th className="px-3 py-2 text-left font-semibold">Squad</th>
+                          <th className="px-3 py-2 text-left font-semibold">Chỉ số</th>
+                          {squadData.next_quarter.months.map((m: string) => (
+                            <th key={m} className="px-3 py-2 text-right font-semibold">T{parseInt(m.split("-")[1], 10)} (VND)</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {squadData.squads.flatMap((sq: any) => NEXT_METRICS.map((f, fi) => {
+                          const vals = draftNext[sq.name]?.[f] ?? ["", "", ""]
+                          const setMonth = (i: number, v: string) =>
+                            setDraftNext(prev => {
+                              const cur = prev[sq.name] ?? { rev: ["","",""], gp: ["","",""], cm1: ["","",""], hk3rev: ["","",""] }
+                              return { ...prev, [sq.name]: { ...cur, [f]: cur[f].map((x, j) => (j === i ? digitsOnly(v) : x)) } }
+                            })
+                          return (
+                            <tr key={`${sq.name}-${f}`} className={fi === 0 ? "border-t-2 border-slate-100" : ""}>
+                              <td className="px-3 py-1.5 font-medium text-slate-700">{fi === 0 ? sq.name : ""}</td>
+                              <td className="px-3 py-1.5 text-slate-500">{NEXT_METRIC_LABEL[f]}</td>
+                              {vals.map((v, i) => (
+                                <td key={i} className="px-3 py-1.5 text-right">
+                                  <input value={showDigits(v)} onChange={e => setMonth(i, e.target.value)} placeholder="0"
+                                    className="w-36 px-2 py-1 text-right tabular-nums border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0f4c81]" />
+                                </td>
+                              ))}
+                            </tr>
+                          )
+                        }))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2 items-center">
                 <button onClick={saveSquadTargets} disabled={savingTargets}
                   className="flex items-center gap-1.5 px-5 py-2 text-sm bg-[#0f4c81] text-white rounded-lg hover:bg-[#0a3560] disabled:opacity-50 transition-colors">
@@ -1230,7 +1304,7 @@ function QuarterlyContent() {
                   {savingTargets ? "Đang lưu…" : "Lưu target"}
                 </button>
                 <button onClick={() => setEditingTargets(false)} className="px-4 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">Huỷ</button>
-                <p className="text-[10px] text-slate-400 ml-2">Để trống / 0 = dùng tổng target per-customer. Target squad được ưu tiên.</p>
+                <p className="text-[10px] text-slate-400 ml-2">Để trống / 0 = dùng tổng target 3 tháng, rồi tổng target per-customer (GP không có per-customer). Target squad được ưu tiên.</p>
               </div>
             </div>
           )}
@@ -1511,26 +1585,6 @@ function QuarterlyContent() {
                                     <span className="text-[11px] text-slate-400 shrink-0">{sq.customer_count} KH</span>
                                   </button>
                                   <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-                                    {sq.lifecycle && (
-                                      <>
-                                        {sq.lifecycle.new.count > 0 && (
-                                          <span title="KH mới trong quý" className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200">
-                                            🆕 {sq.lifecycle.new.count}
-                                          </span>
-                                        )}
-                                        {sq.lifecycle.recurring.count > 0 && (
-                                          <span title="KH quay lại mua trong quý" className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200">
-                                            🔁 {sq.lifecycle.recurring.count}
-                                          </span>
-                                        )}
-                                        {sq.lifecycle.inactive.count > 0 && (
-                                          <span title={`KH cũ quý này chưa mua lại — mất ~${fc(sq.lifecycle.inactive.lostRevenue)} (quý trước)`}
-                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-300">
-                                            😴 {sq.lifecycle.inactive.count}
-                                          </span>
-                                        )}
-                                      </>
-                                    )}
                                     {(["danger_high","danger_low","safe_low","safe","very_safe"] as const).map(k => {
                                       const cnt = sq.risk_counts?.[k] ?? 0
                                       if (!cnt) return null
@@ -1546,10 +1600,13 @@ function QuarterlyContent() {
                                   </div>
                                 </div>
 
-                                {/* Row 2: stat tiles — Doanh thu / CM1 / 3HK, cùng bố cục để so sánh nhanh */}
-                                <div className="ml-6 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                {/* Row 2: stat tiles — Doanh thu / GP / CM1 / 3HK, cùng bố cục để so sánh nhanh */}
+                                <div className="ml-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
                                   <StatTile label="Doanh thu" actual={sq.revenue} pr={sq.revenue_pr}
                                     target={sq.target_rev > 0 ? sq.target_rev : undefined} pct={sq.rev_pct} />
+                                  <StatTile label="GP" actual={sq.gp} pr={sq.gp_pr}
+                                    target={sq.target_gp > 0 ? sq.target_gp : undefined} pct={sq.gp_tgt_pct}
+                                    actualNote={`GP ${sq.gp_pct}%`} />
                                   <StatTile label="CM1" actual={sq.cm1} pr={sq.cm1_pr}
                                     target={sq.target_cm1 > 0 ? sq.target_cm1 : undefined} pct={sq.cm1_tgt_pct} />
                                   <StatTile label="3HK Revenue" actual={sq.hk3} pr={sq.hk3_pr}
@@ -1557,11 +1614,46 @@ function QuarterlyContent() {
                                     actualNote={`${sq.hk3_pct}% doanh thu`} />
                                 </div>
 
-                                {/* Danh sách KH rời bỏ (Inactive) — top 10 theo doanh thu quý trước, để leader biết ai cần gọi lại */}
+                                {/* Summary khách hàng của squad: cơ cấu tier (KH có doanh thu trong quý) + vòng đời KH */}
+                                {sq.lifecycle && (
+                                  <div className="ml-6 mt-2.5 rounded-lg border border-slate-200 bg-white p-3 space-y-2.5">
+                                    <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap text-[11px]">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">KH đang mua · {sq.customer_count}</span>
+                                      {(["Strategic","VIP","Gold","Silver"] as const).map(t => (
+                                        <span key={t} className={cn("inline-flex items-center gap-1.5", (sq.tier_counts?.[t] ?? 0) === 0 && "opacity-40")}>
+                                          <span className="text-slate-500">{t}</span>
+                                          <span className="font-bold text-slate-800 tabular-nums">{sq.tier_counts?.[t] ?? 0}</span>
+                                        </span>
+                                      ))}
+                                    </div>
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                                      {([
+                                        { k: "new",       icon: "🆕", label: "KH mới trong quý",         tip: "Đơn đầu tiên rơi trong quý này",
+                                          count: sq.lifecycle.new.count,        rev: sq.lifecycle.new.revenue,        cls: "bg-sky-50 border-sky-200 text-sky-700",      revLabel: "Doanh thu" },
+                                        { k: "continuing", icon: "🔁", label: "KH cũ tiếp tục mua",      tip: "Đã mua trước quý này và cũng có mua ở quý trước",
+                                          count: sq.lifecycle.continuing.count,  rev: sq.lifecycle.continuing.revenue, cls: "bg-indigo-50 border-indigo-200 text-indigo-700", revLabel: "Doanh thu" },
+                                        { k: "returning",  icon: "↩️", label: "KH cũ quay lại sau gián đoạn", tip: "Đã mua trước quý này, quý trước KHÔNG mua, quý này mua lại",
+                                          count: sq.lifecycle.returning.count,  rev: sq.lifecycle.returning.revenue,  cls: "bg-emerald-50 border-emerald-200 text-emerald-700", revLabel: "Doanh thu" },
+                                        { k: "inactive",   icon: "😴", label: "KH cũ chưa quay lại",      tip: "Có mua ở quý trước nhưng quý này chưa có đơn nào",
+                                          count: sq.lifecycle.inactive.count,   rev: sq.lifecycle.inactive.lostRevenue, cls: "bg-slate-50 border-slate-300 text-slate-600", revLabel: "Quý trước" },
+                                      ]).map(x => (
+                                        <div key={x.k} title={x.tip} className={cn("rounded-md border px-2.5 py-2", x.cls)}>
+                                          <div className="text-[10px] font-semibold leading-tight">{x.icon} {x.label}</div>
+                                          <div className="flex items-baseline gap-1.5 mt-1">
+                                            <span className="text-base font-bold tabular-nums leading-none">{x.count}</span>
+                                            <span className="text-[10px] opacity-70 tabular-nums">{x.revLabel} {formatCompactNumber(x.rev)}</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Danh sách KH cũ chưa quay lại — theo doanh thu quý trước, để leader biết ai cần gọi lại */}
                                 {sq.lifecycle?.inactive?.list?.length > 0 && (
                                   <details className="ml-6 mt-2.5 text-[11px]">
                                     <summary className="cursor-pointer text-slate-500 hover:text-slate-800 font-semibold">
-                                      😴 Xem {sq.lifecycle.inactive.list.length} KH rời bỏ (cần gọi lại)
+                                      😴 Xem {sq.lifecycle.inactive.list.length}{sq.lifecycle.inactive.count > sq.lifecycle.inactive.list.length ? `/${sq.lifecycle.inactive.count}` : ""} KH cũ chưa quay lại (cần gọi lại)
                                     </summary>
                                     <ul className="mt-1.5 space-y-1">
                                       {sq.lifecycle.inactive.list.map((c: { code: string; name: string; lastRevenue: number }) => (
@@ -1647,6 +1739,12 @@ function QuarterlyContent() {
                             </div>
                             <div className="w-px h-4 bg-white/20 shrink-0" />
                             <div className="flex items-baseline gap-1.5">
+                              <span className="text-[10px] text-white/50 uppercase font-semibold">GP PR</span>
+                              <span className="text-base font-bold text-white tabular-nums">{formatCompactNumber(squadData.totals.gp_pr)}</span>
+                              <span className="text-[10px] text-white/40 tabular-nums">(TT {formatCompactNumber(squadData.totals.gp)})</span>
+                            </div>
+                            <div className="w-px h-4 bg-white/20 shrink-0" />
+                            <div className="flex items-baseline gap-1.5">
                               <span className="text-[10px] text-white/50 uppercase font-semibold">CM1 PR</span>
                               <span className="text-base font-bold text-white tabular-nums">{formatCompactNumber(squadData.totals.cm1_pr)}</span>
                               <span className="text-[10px] text-white/40 tabular-nums">(TT {formatCompactNumber(squadData.totals.cm1)}{squadData.totals.cm1_pct != null ? ` · ${squadData.totals.cm1_pct}%` : ""})</span>
@@ -1669,6 +1767,17 @@ function QuarterlyContent() {
               )
             })()}
           </div>
+
+          {/* Performance theo tháng của từng squad (thực tế quý này + target quý sau) */}
+          {!squadLoading && squadData?.squads?.length > 0 && squadData.quarter_months && squadData.next_quarter && (
+            <SquadMonthlyTable
+              squads={squadData.squads}
+              quarterLabel={`${selQ}-${selYear}`}
+              quarterMonths={squadData.quarter_months}
+              nextQuarter={squadData.next_quarter}
+              leaderName={u => squadUsers.find(x => x.username === u)?.name}
+            />
+          )}
         </div>
       )}
     </div>

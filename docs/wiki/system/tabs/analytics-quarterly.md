@@ -507,3 +507,34 @@ PASS. **Chưa verify số thật qua API live** (máy dev thiếu `ANALYTICS_DB_
   ⚠️ Lưu ý nghiệp vụ (chưa sửa, không thuộc đợt tốc độ): "KH Rời bỏ" đếm mọi KH B2B từng mua mà quý này không có doanh thu → ~112.000,
   con số này khó có ý nghĩa quản trị — nên hỏi Hiếu có muốn giới hạn (vd chỉ KH có doanh thu ở quý liền trước).
 - **JOIN dim_customer**: bỏ `TRIM()` phía dim (`TRIM(f.customer_code) = c.code`) — join 355k dòng từ ~10s còn ~1s (xem analytics-data-model §10).
+
+## s203 (2026-09-21) — Tổng quan: KH Mới / Quay lại / Rời bỏ tách B2B & B2C, bấm ô xem danh sách từng KH
+
+Hiếu: ô tổng quan chỉ có tổng số, cần xem **KH nào** và tách **B2B / B2C**. Thay 3 ô cũ bằng `components/quarterly/customer-lifecycle-section.tsx`: 2 hàng (B2B, B2C) × 3 ô; bấm ô → bảng
+danh sách (tìm kiếm, CSV, sắp theo doanh thu). API mới `GET /api/analytics/quarterly-customer-lifecycle?segment=b2b|b2c&mode=summary|detail&quarter&year&companyCode[&includeShip&includeInternalOps]`.
+Logic thuần + test: `lib/analytics-engine/lifecycle-detail.ts` (`lifecycle-detail.test.ts`).
+
+- **B2B** (gohub_dw): cùng định nghĩa ô cũ (`classifyB2BLifecycle`) và cùng bộ lọc INACTIVE/exclude/ship/company nên số khớp ô tổng quan. Mỗi dòng: tên, mã KH, tier (theo cấu hình tier), PIC (tên nhân viên),
+  doanh thu quý này / quý trước, ngày đơn đầu tiên. **Rời bỏ**: số đếm vẫn là TOÀN BỘ lịch sử (~112.000 KH) nhưng bảng chỉ LIỆT KÊ KH có doanh thu ở quý liền trước (KH cần theo dõi).
+- **B2C**: bảng doanh thu `fact_fulfillment_revenue` chỉ có **3 mã KH B2C chung** (VN B2C Customer, US B2C Customer, B2C Sponsor — Q3/2026) nên KHÔNG dựng được từng khách từ gohub_dw.
+  Nguồn = **Admin GoHub API** `/v1/internal/customers/revenue` (trường thật: `customerId, name, email, phone, tenantId, preferredCurrency, totalOrders, firstOrderAt, lastOrderAt, userType, revenueByCurrency`;
+  **`limit` tối đa 100** — vượt là 400). Mới/Quay lại theo `userType` của API; **Rời bỏ = có mua quý trước nhưng không có trong danh sách quý này** (so `customerId`).
+  Ô B2C mới/quay lại lấy từ 1 request `summary` (nhanh, cache 60'); ô Rời bỏ + bảng cần cả 2 danh sách (Q3 ~6.700 KH = 67 trang, Q2 ~7.800 KH = 78 trang) — tải song song 8 luồng, **lần đầu ~1-2 phút**, cache 6h
+  (`qlife_b2c_detail:v1`), UI hiện "đang tải". Email che (`a***@domain`), không đưa số điện thoại ra trình duyệt; chỉ vai trò admin/creator/bod/b2c (`B2C_READ_ROLES` trong route) thấy phần B2C.
+- Gotcha: danh sách bị cắt 500 dòng/nhóm (số đếm vẫn đúng, có ghi chú "hiển thị X trên tổng Y"); đổi kỳ/bộ lọc → bỏ kết quả request cũ (`gen` ref).
+
+
+## s208 (2026-09-25) — Squad Progress: thẻ GP, summary KH, bảng Performance theo tháng
+
+Hiếu yêu cầu 3 việc trong tab Squad Progress. Route `squad-progress` + `squad-targets`, component mới `components/quarterly/squad-monthly-table.tsx`.
+
+- **Thẻ GP** (4 thẻ/squad: Doanh thu · GP · CM1 · 3HK): `gp` (actual) / `gp_pr` (Σ tháng × kpiFactor × futureScale, cùng công thức Revenue) / `gp_pct` / `target_gp` / `gp_tgt_pct`. Target GP nhập ở panel **Target Squad** (cột mới). GP KHÔNG có target per-customer nên không có fallback ở tầng KH.
+  Thứ tự chọn target hiệu lực (Rev/CM1/3HK/GP): **target quý nhập tay > tổng target 3 tháng > tổng target per-customer** (GP chỉ 2 bậc đầu). Totals + Export Excel có thêm GP.
+- **Summary KH mỗi squad** (`tier_counts`, `lifecycle`): số KH đang mua theo tier (Strategic/VIP/Gold/Silver, đếm KH có doanh thu quý này) + 4 ô vòng đời, mỗi ô kèm doanh thu:
+  🆕 mới (đơn đầu trong quý) · 🔁 cũ tiếp tục mua (`lifecycle.continuing`: có doanh thu quý trước) · ↩️ cũ quay lại sau gián đoạn (`lifecycle.returning`: đã mua trước quý, quý trước KHÔNG mua) · 😴 cũ chưa quay lại.
+  `recurring` cũ = continuing + returning (giữ nguyên field). **Định nghĩa "chưa quay lại" ĐỔI (Hiếu chốt)**: chỉ đếm KH **có doanh thu quý liền trước** mà quý này chưa mua (trước đây đếm mọi KH từng mua toàn lịch sử ~112.000 → vô nghĩa). `lostRevenue` = doanh thu quý trước của nhóm đó; danh sách xổ ra tối đa 30 KH/squad (trước 10). 3 chip 🆕/🔁/😴 cũ ở hàng tên squad đã bỏ (thay bằng khối này). ⚠️ `totals.lifecycle` (không FE nào đọc) VẪN dùng định nghĩa cũ. Ô lifecycle ở tab Tổng quan (`quarterly-customer-lifecycle`) cũng chưa đổi.
+- **Bảng "Performance theo tháng"** (dưới card Squad Progress, mỗi squad 1 bảng đúng cấu trúc ảnh Hiếu gửi): cột trái T7/T8/T9 + tổng quý, cột phải target T10/T11/T12 + tổng quý sau + **Target +%QoQ**; dòng Revenue/GP/GP%/CM1/CM1%/3HK/3HK%. Tháng đang chạy hiện **Pro-rata** (kèm "TT" thực tế bên dưới); tháng chưa bắt đầu "—"; cột tổng quý = số PR của card (khớp thẻ). %QoQ = (target − quý này PR)/|quý này PR|, dòng % là chênh lệch điểm % (pp).
+  - Route trả `squads[].monthly[]` (`rev/gp/cm1/hk3` actual + `*_pr` = × kpiFactor), `quarter_months`, `next_quarter {label,quarter,year,months}`, `squads[].next_targets {rev,gp,cm1,hk3rev}` (mỗi cái 3 phần tử).
+  - `mData` (số từng tháng của squad) là nguồn CHUNG cho PR cả quý và bảng tháng nên không lệch nhau. CM1 tháng = GP − chi phí KH − **group cost B2B phân bổ theo tỷ trọng doanh thu CẢ QUÝ của squad** (không theo tỷ trọng từng tháng) → Σ tháng khớp CM1 card; `gcActByMonth/gcPrByMonth` trong route.
+- **Target tháng quý sau**: panel Target Squad thêm lưới 4 chỉ số × 3 tháng/squad. Lưu trong `app_settings.squad_targets` dưới khoá **quý đó** (`Q4_2026`) ở field `months: {rev,gp,cm1,hk3rev: number[3]}`. `POST /api/analytics/squad-targets` giờ **MERGE theo từng squad** (trước ghi đè cả quý) và nhận thêm `next: {quarter,year,targets}` để ghi target quý sau cùng 1 lần upsert. Khi sang quý đó, nếu chưa nhập target quý riêng thì tự dùng Σ 3 tháng làm target quý.
+- Chưa QA số thật bằng mắt (xem session_summary s208).

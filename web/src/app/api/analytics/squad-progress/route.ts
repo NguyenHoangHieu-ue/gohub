@@ -99,6 +99,13 @@ export async function GET(req: NextRequest) {
   const prevQStartDate = `${prevQYear}-${String(prevQFirst).padStart(2, "0")}-01`
   const prevQEndDate = new Date(prevQYear, prevQNum * 3, 0).toISOString().split("T")[0]
 
+  // Quý SAU — bảng "Performance theo tháng" hiện target 3 tháng của quý kế tiếp (nhập ở panel Target squad).
+  const nextQNum = q === 4 ? 1 : q + 1
+  const nextQYear = q === 4 ? year + 1 : year
+  const nextQFirst = (nextQNum - 1) * 3 + 1
+  const nextQuarterMonths = [0, 1, 2].map(i => `${nextQYear}-${String(nextQFirst + i).padStart(2, "0")}`)
+  const quarterMonths = [0, 1, 2].map(i => `${year}-${String(qStartM + i).padStart(2, "0")}`)
+
   try {
     // Load song song: squad config, squad targets, excluded customers (quarterly-settings)
     const [cfgRes, tgtRes, { excludedCustomers }] = await Promise.all([
@@ -108,11 +115,17 @@ export async function GET(req: NextRequest) {
     ])
     const squadsConfig: { name: string; leader?: string; sales_pics: string[] }[] =
       cfgRes.data?.value ? (JSON.parse(cfgRes.data.value).squads ?? []) : []
-    let squadTargets: Record<string, { rev?: number; cm1?: number; hk3rev?: number }> = {}
+    // months = target từng tháng của CHÍNH quý đó (mảng 3 phần tử); quý = tổng 3 tháng khi chưa nhập target quý riêng.
+    type SquadTarget = { rev?: number; cm1?: number; hk3rev?: number; gp?: number; months?: Partial<Record<"rev" | "gp" | "cm1" | "hk3rev", number[]>> }
+    let squadTargets: Record<string, SquadTarget> = {}
+    let nextSquadTargets: Record<string, SquadTarget> = {}
     try {
       const allTgt = tgtRes.data?.value ? JSON.parse(tgtRes.data.value) : {}
       squadTargets = allTgt[`${quarter}_${year}`] ?? {}
-    } catch { squadTargets = {} }
+      nextSquadTargets = allTgt[`Q${nextQNum}_${nextQYear}`] ?? {}
+    } catch { squadTargets = {}; nextSquadTargets = {} }
+    const sumMonths = (a?: number[]) => (Array.isArray(a) ? a.reduce((s, v) => s + (Number(v) || 0), 0) : 0)
+    const month3 = (a?: number[]) => [0, 1, 2].map(i => Math.round(Number(a?.[i]) || 0))
 
     // EXCLUDE_CUST: dùng cùng nguồn với quarterly-report (dynamic từ Supabase quarterly-settings)
     const EXCLUDE_CUST_SQL = makeExcludeSql(excludedCustomers)
@@ -291,14 +304,19 @@ export async function GET(req: NextRequest) {
     const grandTotalRevAct = custRows.reduce((s, r) => s + (Number(r.revenue) || 0), 0)
     const grandTotalRevPr  = custRows.reduce((s, r) => s + calcPrByMonth(r, "rev"), 0)
     let totalB2BGCAct = 0, totalB2BGCPr = 0
+    // Group cost từng tháng (chưa nhân futureScale) — bảng "Performance theo tháng" phân bổ theo đúng tỷ trọng quý của squad
+    // nên Σ các tháng khớp đúng số CM1 của card.
+    const gcActByMonth: number[] = [], gcPrByMonth: number[] = []
     months.forEach((m, i) => {
       const budget = groupCosts.filter((g: any) => g.group_name === "B2B" && g.month === m).reduce((s: number, g: any) => s + (g.amount || 0), 0)
       const mr = monthMeta[i]
       const gcRatio = (mr.elapsed > 0 && mr.elapsed < mr.dim) ? mr.elapsed / mr.dim : 1
-      totalB2BGCAct += budget * gcRatio
+      gcActByMonth[i] = budget * gcRatio
       // gcRatio × kpiFactorOf(i) = 1 cho mọi tháng đã bắt đầu (2 tỉ lệ triệt tiêu nhau: elapsed/dim ×
       // dim/elapsed) → PR group cost = full budget tháng, khớp cách Tổng quan luôn chiếu ngay (ungated).
-      totalB2BGCPr  += budget * gcRatio * kpiFactorOf(i)
+      gcPrByMonth[i] = budget * gcRatio * kpiFactorOf(i)
+      totalB2BGCAct += gcActByMonth[i]
+      totalB2BGCPr  += gcPrByMonth[i]
     })
     totalB2BGCPr *= futureScale  // ước tính group cost tháng chưa tới, khớp cách revPr/cm1Pr được nới
 
@@ -309,15 +327,27 @@ export async function GET(req: NextRequest) {
 
       // customerLifecycle per-squad (s200) — New/Recurring từ members ĐANG hoạt động quý này;
       // Inactive lấy từ lifecycleRows (KH cũ gán PIC squad này nhưng KHÔNG có đơn quý này → không có trong members).
-      const lifecycle = emptyLifecycle()
+      // Recurring tách 2: continuing (có mua quý trước → tiếp tục) / returning (KH cũ, quý trước KHÔNG mua → quay lại sau gián đoạn).
+      // Inactive CHỈ đếm KH có doanh thu quý trước mà quý này chưa mua (KH cần gọi lại) — không đếm toàn lịch sử (~112.000 KH).
+      const lifecycle = {
+        ...emptyLifecycle(),
+        continuing: { count: 0, revenue: 0 },
+        returning: { count: 0, revenue: 0 },
+      }
       members.forEach(r => {
         const st = lifecycleMap.get(r.customer_code) ?? "new"
         const revenue = Number(r.revenue) || 0
         if (st === "new") { lifecycle.new.count++; lifecycle.new.revenue += revenue }
-        else if (st === "recurring") { lifecycle.recurring.count++; lifecycle.recurring.revenue += revenue }
+        else if (st === "recurring") {
+          lifecycle.recurring.count++; lifecycle.recurring.revenue += revenue
+          const bucket = (prevRevByCode.get(r.customer_code) || 0) > 0 ? lifecycle.continuing : lifecycle.returning
+          bucket.count++; bucket.revenue += revenue
+        }
       })
       lifecycleRows
-        .filter(row => sq.sales_pics.includes(row.sales_pic_code || "") && lifecycleMap.get(row.customer_code) === "inactive")
+        .filter(row => sq.sales_pics.includes(row.sales_pic_code || "")
+          && lifecycleMap.get(row.customer_code) === "inactive"
+          && (prevRevByCode.get(row.customer_code) || 0) > 0)
         .forEach(row => {
           lifecycle.inactive.count++
           const lastRevenue = prevRevByCode.get(row.customer_code) || 0
@@ -325,9 +355,11 @@ export async function GET(req: NextRequest) {
           lifecycle.inactive.list.push({ code: row.customer_code, name: row.customer_name, lastRevenue })
         })
       lifecycle.inactive.list.sort((a, b) => b.lastRevenue - a.lastRevenue)
-      lifecycle.inactive.list = lifecycle.inactive.list.slice(0, 10).map(x => ({ ...x, lastRevenue: Math.round(x.lastRevenue) }))
+      lifecycle.inactive.list = lifecycle.inactive.list.slice(0, 30).map(x => ({ ...x, lastRevenue: Math.round(x.lastRevenue) }))
       lifecycle.new.revenue = Math.round(lifecycle.new.revenue)
       lifecycle.recurring.revenue = Math.round(lifecycle.recurring.revenue)
+      lifecycle.continuing.revenue = Math.round(lifecycle.continuing.revenue)
+      lifecycle.returning.revenue = Math.round(lifecycle.returning.revenue)
       lifecycle.inactive.lostRevenue = Math.round(lifecycle.inactive.lostRevenue)
 
       let rev = 0, cm1 = 0, hk3 = 0, hk3Pr = 0, tgtRev = 0, tgtCm1 = 0, tgtHk3 = 0
@@ -378,28 +410,56 @@ export async function GET(req: NextRequest) {
       }).filter(Boolean) as any[]
 
       // Squad-level projected values: dùng per-month factors × futureScale (khớp Tổng quan, ước tính tháng chưa tới)
-      const revPr = Math.round(months.reduce((s, _, i) =>
-        s + members.reduce((ms, r) => ms + (Number(r[`rev_m${i}`]) || 0), 0) * kpiFactorOf(i), 0) * futureScale)
-      let cm1Pr = 0
-      for (let i = 0; i < months.length; i++) {
+      // Số liệu từng tháng của squad (actual, CM1 chưa trừ group cost) — nguồn chung cho PR cả quý VÀ bảng "Performance theo tháng"
+      // → 2 nơi luôn khớp nhau. Công thức PR giữ nguyên: Σ tháng × kpiFactor × futureScale.
+      const mData = months.map((m, i) => {
+        let mRevAct = 0, mGp = 0, mHk3 = 0, mCm1Pre = 0
         for (const r of members) {
           const mRev = Number(r[`rev_m${i}`]) || 0
           const mGm  = Number(r[`gm_m${i}`])  || 0
-          const rec  = costMap.get(`${months[i]}_${r.customer_code}`)
+          const rec  = costMap.get(`${m}_${r.customer_code}`)
           const mCost = rec && mRev !== 0 ? calcRecordCostProjected(rec, mRev, 1, elapsedRatioOf(i)) : 0
-          cm1Pr += (mGm - mCost) * kpiFactorOf(i)
+          mRevAct += mRev; mGp += mGm; mHk3 += Number(r[`hk3_m${i}`]) || 0; mCm1Pre += mGm - mCost
         }
-      }
-      cm1Pr *= futureScale
-      const groupShareAct = grandTotalRevAct > 0 ? (rev / grandTotalRevAct) * totalB2BGCAct : 0
-      const groupSharePr  = grandTotalRevPr  > 0 ? (revPr / grandTotalRevPr)  * totalB2BGCPr  : 0
+        return { rev: mRevAct, gp: mGp, hk3: mHk3, cm1Pre: mCm1Pre }
+      })
+      const sumPr = (pick: (d: typeof mData[number]) => number) =>
+        mData.reduce((s, d, i) => s + pick(d) * kpiFactorOf(i), 0) * futureScale
+      const revPr = Math.round(sumPr(d => d.rev))
+      const gpAct = Math.round(mData.reduce((s, d) => s + d.gp, 0))
+      const gpPr  = Math.round(sumPr(d => d.gp))
+      let cm1Pr = sumPr(d => d.cm1Pre)
+      const shareAct = grandTotalRevAct > 0 ? rev / grandTotalRevAct : 0
+      const sharePr  = grandTotalRevPr  > 0 ? revPr / grandTotalRevPr : 0
+      const groupShareAct = shareAct * totalB2BGCAct
+      const groupSharePr  = sharePr  * totalB2BGCPr  // totalB2BGCPr đã nhân futureScale ở trên
       cm1 = Math.round(cm1 - groupShareAct)
       cm1Pr = Math.round(cm1Pr - groupSharePr)
 
+      const monthly = mData.map((d, i) => {
+        const k = kpiFactorOf(i)
+        return {
+          month: months[i],
+          status: monthMeta[i].elapsed < monthMeta[i].dim ? "current" : "done",
+          rev: Math.round(d.rev), gp: Math.round(d.gp), hk3: Math.round(d.hk3),
+          cm1: Math.round(d.cm1Pre - shareAct * gcActByMonth[i]),
+          rev_pr: Math.round(d.rev * k), gp_pr: Math.round(d.gp * k), hk3_pr: Math.round(d.hk3 * k),
+          cm1_pr: Math.round(d.cm1Pre * k - sharePr * gcPrByMonth[i]),
+        }
+      })
+
+      const tierCounts = { Strategic: 0, VIP: 0, Gold: 0, Silver: 0 }
+      customers.forEach(c => { if (c?.tier in tierCounts) tierCounts[c.tier as keyof typeof tierCounts]++ })
+
       const mt = squadTargets[sq.name] ?? {}
-      const effTgtRev = Number(mt.rev)    > 0 ? Number(mt.rev)    : tgtRev
-      const effTgtCm1 = Number(mt.cm1)    > 0 ? Number(mt.cm1)    : tgtCm1
-      const effTgtHk3 = Number(mt.hk3rev) > 0 ? Number(mt.hk3rev) : tgtHk3
+      // Ưu tiên: target quý nhập tay > tổng target 3 tháng > tổng target per-customer (GP không có per-customer).
+      const pickTarget = (manual: unknown, monthsArr: number[] | undefined, fallback: number) =>
+        Number(manual) > 0 ? Number(manual) : sumMonths(monthsArr) > 0 ? sumMonths(monthsArr) : fallback
+      const effTgtRev = pickTarget(mt.rev,    mt.months?.rev,    tgtRev)
+      const effTgtCm1 = pickTarget(mt.cm1,    mt.months?.cm1,    tgtCm1)
+      const effTgtHk3 = pickTarget(mt.hk3rev, mt.months?.hk3rev, tgtHk3)
+      const effTgtGp  = pickTarget(mt.gp,     mt.months?.gp,     0)
+      const nt = nextSquadTargets[sq.name]?.months
 
       const riskCounts: Record<RiskLevel, number> = {
         very_safe: 0, safe: 0, safe_low: 0, danger_low: 0, danger_high: 0, no_target: 0,
@@ -409,9 +469,13 @@ export async function GET(req: NextRequest) {
       return {
         name: sq.name, leader: sq.leader, sales_pics: sq.sales_pics,
         customer_count: codes.length,
-        manual_target: { rev: Number(mt.rev) || 0, cm1: Number(mt.cm1) || 0, hk3rev: Number(mt.hk3rev) || 0 },
+        manual_target: { rev: Number(mt.rev) || 0, cm1: Number(mt.cm1) || 0, hk3rev: Number(mt.hk3rev) || 0, gp: Number(mt.gp) || 0 },
+        next_targets: { rev: month3(nt?.rev), gp: month3(nt?.gp), cm1: month3(nt?.cm1), hk3rev: month3(nt?.hk3rev) },
         revenue: rev,  revenue_pr: revPr,  target_rev: effTgtRev,
         rev_pct: effTgtRev > 0 ? Math.round(revPr / effTgtRev * 100) : null,
+        gp: gpAct, gp_pr: gpPr, target_gp: effTgtGp,
+        gp_pct: rev > 0 ? Math.round(gpAct / rev * 1000) / 10 : 0,
+        gp_tgt_pct: effTgtGp > 0 ? Math.round(gpPr / effTgtGp * 100) : null,
         cm1,           cm1_pr: cm1Pr,      target_cm1: effTgtCm1,
         cm1_pct: rev > 0 ? Math.round(cm1 / rev * 1000) / 10 : 0,
         cm1_tgt_pct: effTgtCm1 > 0 ? Math.round(cm1Pr / effTgtCm1 * 100) : null,
@@ -419,8 +483,10 @@ export async function GET(req: NextRequest) {
         target_hk3: effTgtHk3,
         hk3_tgt_pct: effTgtHk3 > 0 ? Math.round(hk3Pr / effTgtHk3 * 100) : null,
         risk_counts: riskCounts,
+        tier_counts: tierCounts,
         customers,
         lifecycle,
+        monthly,
       }
     })
 
@@ -436,12 +502,17 @@ export async function GET(req: NextRequest) {
     const totHk3 = squads.reduce((s, sq) => s + sq.hk3,     0)
     const totRevPr = squads.reduce((s, sq) => s + sq.revenue_pr, 0)
     const totCm1Pr = squads.reduce((s, sq) => s + sq.cm1_pr,    0)
+    const totGp    = squads.reduce((s, sq) => s + sq.gp,        0)
+    const totGpPr  = squads.reduce((s, sq) => s + sq.gp_pr,     0)
 
     return NextResponse.json({
       quarter, year, elapsed_days: elapsedDays, quarter_days: qTotalDays, pr_factor: kpiFactorOf(monthMeta.length - 1),
+      quarter_months: quarterMonths,
+      next_quarter: { label: `Q${nextQNum}-${nextQYear}`, quarter: `Q${nextQNum}`, year: nextQYear, months: nextQuarterMonths },
       squads,
       totals: {
         revenue: totRev, revenue_pr: totRevPr,
+        gp: totGp, gp_pr: totGpPr,
         cm1: totCm1, cm1_pr: totCm1Pr,
         cm1_pct: totRev > 0 ? Math.round(totCm1 / totRev * 1000) / 10 : 0,
         hk3: totHk3, hk3_pct: totRev > 0 ? Math.round(totHk3 / totRev * 1000) / 10 : 0,
