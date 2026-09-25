@@ -130,8 +130,7 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
                     let qoq: string | null = null
                     let qoqUp: boolean | null = null
                     if (totalCur != null && totalNext != null) {
-                      if (isPct) { const d = totalNext - totalCur; qoq = `${signed(d)} pp`; qoqUp = d >= 0 }
-                      else if (totalCur !== 0) { const d = ((totalNext - totalCur) / Math.abs(totalCur)) * 100; qoq = `${signed(d)}%`; qoqUp = d >= 0 }
+                      if (totalCur !== 0) { const d = ((totalNext - totalCur) / Math.abs(totalCur)) * 100; qoq = `${signed(d)}%`; qoqUp = d >= 0 }
                     }
                     return (
                       <tr key={row.key} className={cn("border-b border-slate-100", isPct && "bg-slate-50/60")}>
@@ -182,7 +181,7 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
 
       <p className="px-5 py-2 text-[10px] text-slate-400 border-t border-slate-100">
         CM1 = GP − chi phí KH − group cost B2B (phân bổ theo tỷ trọng doanh thu quý). Cột {quarterLabel} = tổng Pro-rata cả quý, khớp thẻ Squad Progress.
-        Target {nextQuarter.label} nhập ở nút <b className="text-slate-500">Target Squad</b> (admin/creator); %QoQ = (target − {quarterLabel}) / {quarterLabel}, riêng các dòng % tính chênh lệch điểm % (pp).
+        Target {nextQuarter.label} nhập ở nút <b className="text-slate-500">Target Squad</b> (admin/creator); %QoQ = (target − {quarterLabel}) / |{quarterLabel}|, tính tương đối cả với dòng %.
       </p>
     </div>
   )

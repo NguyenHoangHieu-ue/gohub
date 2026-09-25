@@ -10479,3 +10479,8 @@ Hiếu yêu cầu: (1) thẻ GP mỗi squad + nhập target GP; (2) summary mỗ
 Hiếu chốt qua AskUserQuestion: "chưa quay lại" = có mua quý trước, quý này chưa mua (không đếm toàn lịch sử ~112.000 KH); "quay lại" tách 2 nhóm (tiếp tục mua / quay lại sau gián đoạn); target quý sau nhập từng tháng, quý = tổng 3 tháng.
 Sửa: squad-progress/route.ts (GP, tier_counts, lifecycle tách, monthly, next_targets, group cost theo tháng), squad-targets/route.ts (merge theo squad + `next`), components/quarterly/squad-monthly-table.tsx (mới), quarterly/page.tsx. Chi tiết: wiki analytics-quarterly.md §s208.
 Verify: tsc + next build + vitest 386/386 PASS; lint không thêm cảnh báo mới. QA sống trên staging (Chrome, acc Creator): số liệu khớp (Σ tháng = PR quý, 128+4=132 KH cũ, 56+132=188 KH, Σ tier=188, chưa quay lại 90→59); card GP + summary + bảng tháng + panel Target render đúng; vòng lưu target Q4 (POST next) đọc lại đúng, đã dọn. Chưa nhập target thật (GP/Q4) — Hiếu nhập.
+
+## s209 (2026-09-25) — Bấm ô KH xem danh sách + tab Performance
+Hiếu: (1) ô KH đang mua/mới/quay lại/chưa quay lại ở card squad — bấm vào phải hiện luôn danh sách khách; (2) thêm view cạnh Tổng quan/Squad Progress theo mẫu Excel (Q1,Q2,%QoQ | T7,T8,T9(PR),Q3,%QoQ | T10-12 target,Q4,Target +%QoQ | cả năm; ALL/B2B/B2C).
+Làm: squad-customer-summary.tsx (+ route squad-progress: lifecycle_group, prev_revenue, list chưa quay lại ≤300), tab "Performance" (company-performance-view.tsx, lib/quarterly-company-view.ts + test 12 ca, API company-monthly-targets, quarterly-report row() thêm hk3Rev). %QoQ tương đối kể cả dòng % (đổi luôn bảng Squad). Wiki analytics-quarterly.md §s209.
+Verify: tsc + next build + vitest 398/398 PASS, lint file mới sạch. QA sống: xem bên dưới.

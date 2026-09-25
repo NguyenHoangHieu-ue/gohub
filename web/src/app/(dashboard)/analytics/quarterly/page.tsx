@@ -21,6 +21,8 @@ import { CustomerLifecycleSection } from "@/components/quarterly/customer-lifecy
 import { QtVsTargetPanel } from "@/components/quarterly/qt-vs-target-bullets"
 import { MonthlyTrendChart } from "@/components/quarterly/monthly-trend-chart"
 import { SquadMonthlyTable } from "@/components/quarterly/squad-monthly-table"
+import { SquadCustomerSummary } from "@/components/quarterly/squad-customer-summary"
+import { CompanyPerformanceView } from "@/components/quarterly/company-performance-view"
 import { LogicNote, StatTile } from "@/components/dashboard-kit"
 
 // Metric có target theo tháng của quý sau (panel "Target Squad") — khớp field `next_targets` route squad-progress.
@@ -119,7 +121,7 @@ function QuarterlyContent() {
   const [loadingSugg, setLoadingSugg] = useState(false)
 
   // ── Squad Progress ──
-  const [activeSection, setActiveSection]  = useState<"overview" | "squad">("overview")
+  const [activeSection, setActiveSection]  = useState<"overview" | "squad" | "performance">("overview")
   const [squadData,     setSquadData]      = useState<any>(null)
   const [squadLoading,  setSquadLoading]   = useState(false)
   const [squadConfig,   setSquadConfig]    = useState<{ squads: { name: string; leader?: string; sales_pics: string[] }[] } | null>(null)
@@ -628,7 +630,7 @@ function QuarterlyContent() {
 
       {/* ── Tab bar ── */}
       <div className="flex gap-1 border-b border-slate-200 -mb-4">
-        {([["overview", Building2, "Tổng quan"], ["squad", Users, "Squad Progress"]] as const).map(([id, Icon, label]) => (
+        {([["overview", Building2, "Tổng quan"], ["squad", Users, "Squad Progress"], ["performance", TrendingUp, "Performance"]] as const).map(([id, Icon, label]) => (
           <button key={id} onClick={() => setActiveSection(id as any)}
             className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
               activeSection === id
@@ -640,7 +642,7 @@ function QuarterlyContent() {
       </div>
 
       {/* ── Overview content (ẩn khi tab = squad) ── */}
-      <div className={activeSection === "squad" ? "hidden" : ""}>
+      <div className={activeSection !== "overview" ? "hidden" : ""}>
 
       {/* Đề xuất K (P2, roadmap UI/UX audit s196+20 — finding #9) — trang nhiều filter/tầng, chưa có
           hướng dẫn cho người lần đầu dùng. Dùng LogicNote collapsible có sẵn (không tự vẽ pattern mới). */}
@@ -1614,57 +1616,9 @@ function QuarterlyContent() {
                                     actualNote={`${sq.hk3_pct}% doanh thu`} />
                                 </div>
 
-                                {/* Summary khách hàng của squad: cơ cấu tier (KH có doanh thu trong quý) + vòng đời KH */}
-                                {sq.lifecycle && (
-                                  <div className="ml-6 mt-2.5 rounded-lg border border-slate-200 bg-white p-3 space-y-2.5">
-                                    <div className="flex items-center gap-x-4 gap-y-1.5 flex-wrap text-[11px]">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">KH đang mua · {sq.customer_count}</span>
-                                      {(["Strategic","VIP","Gold","Silver"] as const).map(t => (
-                                        <span key={t} className={cn("inline-flex items-center gap-1.5", (sq.tier_counts?.[t] ?? 0) === 0 && "opacity-40")}>
-                                          <span className="text-slate-500">{t}</span>
-                                          <span className="font-bold text-slate-800 tabular-nums">{sq.tier_counts?.[t] ?? 0}</span>
-                                        </span>
-                                      ))}
-                                    </div>
-                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                                      {([
-                                        { k: "new",       icon: "🆕", label: "KH mới trong quý",         tip: "Đơn đầu tiên rơi trong quý này",
-                                          count: sq.lifecycle.new.count,        rev: sq.lifecycle.new.revenue,        cls: "bg-sky-50 border-sky-200 text-sky-700",      revLabel: "Doanh thu" },
-                                        { k: "continuing", icon: "🔁", label: "KH cũ tiếp tục mua",      tip: "Đã mua trước quý này và cũng có mua ở quý trước",
-                                          count: sq.lifecycle.continuing.count,  rev: sq.lifecycle.continuing.revenue, cls: "bg-indigo-50 border-indigo-200 text-indigo-700", revLabel: "Doanh thu" },
-                                        { k: "returning",  icon: "↩️", label: "KH cũ quay lại sau gián đoạn", tip: "Đã mua trước quý này, quý trước KHÔNG mua, quý này mua lại",
-                                          count: sq.lifecycle.returning.count,  rev: sq.lifecycle.returning.revenue,  cls: "bg-emerald-50 border-emerald-200 text-emerald-700", revLabel: "Doanh thu" },
-                                        { k: "inactive",   icon: "😴", label: "KH cũ chưa quay lại",      tip: "Có mua ở quý trước nhưng quý này chưa có đơn nào",
-                                          count: sq.lifecycle.inactive.count,   rev: sq.lifecycle.inactive.lostRevenue, cls: "bg-slate-50 border-slate-300 text-slate-600", revLabel: "Quý trước" },
-                                      ]).map(x => (
-                                        <div key={x.k} title={x.tip} className={cn("rounded-md border px-2.5 py-2", x.cls)}>
-                                          <div className="text-[10px] font-semibold leading-tight">{x.icon} {x.label}</div>
-                                          <div className="flex items-baseline gap-1.5 mt-1">
-                                            <span className="text-base font-bold tabular-nums leading-none">{x.count}</span>
-                                            <span className="text-[10px] opacity-70 tabular-nums">{x.revLabel} {formatCompactNumber(x.rev)}</span>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Danh sách KH cũ chưa quay lại — theo doanh thu quý trước, để leader biết ai cần gọi lại */}
-                                {sq.lifecycle?.inactive?.list?.length > 0 && (
-                                  <details className="ml-6 mt-2.5 text-[11px]">
-                                    <summary className="cursor-pointer text-slate-500 hover:text-slate-800 font-semibold">
-                                      😴 Xem {sq.lifecycle.inactive.list.length}{sq.lifecycle.inactive.count > sq.lifecycle.inactive.list.length ? `/${sq.lifecycle.inactive.count}` : ""} KH cũ chưa quay lại (cần gọi lại)
-                                    </summary>
-                                    <ul className="mt-1.5 space-y-1">
-                                      {sq.lifecycle.inactive.list.map((c: { code: string; name: string; lastRevenue: number }) => (
-                                        <li key={c.code} className="flex items-center justify-between px-2 py-1 rounded bg-slate-50 text-slate-600">
-                                          <span>{c.name}</span>
-                                          <span className="tabular-nums text-slate-400">Quý trước: {fc(c.lastRevenue)}</span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </details>
-                                )}
+                                {/* Summary KH của squad — bấm ô/tier để xổ danh sách khách hàng ngay bên dưới */}
+                                <SquadCustomerSummary sq={sq}
+                                  picName={(code: string) => squadData.available_pics?.find((p: any) => p.code === code)?.name ?? code} />
                               </div>
 
                               {/* S4: Expanded customer table — 9 cột */}
@@ -1779,6 +1733,12 @@ function QuarterlyContent() {
             />
           )}
         </div>
+      )}
+
+      {/* ── Performance: Q trước | tháng + quý này | target quý sau | cả năm — ALL / B2B / B2C ── */}
+      {activeSection === "performance" && (
+        <CompanyPerformanceView selQ={selQ} selYear={selYear} companyCode={companyCode}
+          includeShip={includeShip} includeInternalOps={includeInternalOps} report={report} canEdit={canEditSettings} />
       )}
     </div>
   )

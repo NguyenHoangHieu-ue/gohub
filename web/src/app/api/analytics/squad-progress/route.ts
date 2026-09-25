@@ -290,7 +290,12 @@ export async function GET(req: NextRequest) {
       [...custAgg.entries()].filter(([, r]) => (Number(r.revenue) || 0) !== 0).map(([code]) => code),
     )
     const lifecycleMap = classifyB2BLifecycle(lifecycleRows, activeCodesThisQuarter, qStart, qEnd)
-    const emptyLifecycle = () => ({ new: { count: 0, revenue: 0 }, recurring: { count: 0, revenue: 0 }, inactive: { count: 0, lostRevenue: 0, list: [] as { code: string; name: string; lastRevenue: number }[] } })
+    const lifecycleGroupOf = (code: string): "new" | "continuing" | "returning" => {
+      const st = lifecycleMap.get(code) ?? "new"
+      if (st === "recurring") return (prevRevByCode.get(code) || 0) > 0 ? "continuing" : "returning"
+      return "new"
+    }
+    const emptyLifecycle = () => ({ new: { count: 0, revenue: 0 }, recurring: { count: 0, revenue: 0 }, inactive: { count: 0, lostRevenue: 0, list: [] as { code: string; name: string; lastRevenue: number; sales_pic?: string; first_order_date?: string }[] } })
     // Tổng công ty (KHÔNG chỉ cộng squad — gồm cả KH không gán PIC/squad nào), tính thẳng từ lifecycleMap.
     const totalsLifecycle = emptyLifecycle()
     lifecycleMap.forEach((st, code) => {
@@ -352,10 +357,10 @@ export async function GET(req: NextRequest) {
           lifecycle.inactive.count++
           const lastRevenue = prevRevByCode.get(row.customer_code) || 0
           lifecycle.inactive.lostRevenue += lastRevenue
-          lifecycle.inactive.list.push({ code: row.customer_code, name: row.customer_name, lastRevenue })
+          lifecycle.inactive.list.push({ code: row.customer_code, name: row.customer_name, lastRevenue, sales_pic: row.sales_pic_code || "", first_order_date: row.first_order_date })
         })
       lifecycle.inactive.list.sort((a, b) => b.lastRevenue - a.lastRevenue)
-      lifecycle.inactive.list = lifecycle.inactive.list.slice(0, 30).map(x => ({ ...x, lastRevenue: Math.round(x.lastRevenue) }))
+      lifecycle.inactive.list = lifecycle.inactive.list.slice(0, 300).map(x => ({ ...x, lastRevenue: Math.round(x.lastRevenue) }))
       lifecycle.new.revenue = Math.round(lifecycle.new.revenue)
       lifecycle.recurring.revenue = Math.round(lifecycle.recurring.revenue)
       lifecycle.continuing.revenue = Math.round(lifecycle.continuing.revenue)
@@ -398,6 +403,9 @@ export async function GET(req: NextRequest) {
           tier:   classifyTier(r.price_list_name),
           region: classifyRegion(r.price_list_name, r.currency_code),
           lifecycle_state: lifecycleMap.get(code) ?? "new",
+          // Nhóm hiển thị khi bấm ô KH ở card squad: new / continuing (có mua quý trước) / returning (quý trước không mua).
+          lifecycle_group: lifecycleGroupOf(code),
+          prev_revenue: Math.round(prevRevByCode.get(code) || 0),
           revenue, revenue_pr: revPr, target_rev: tgt.rev,
           rev_pct: tgt.rev > 0 ? Math.round(revPr / tgt.rev * 100) : null,
           cm1: cm1Act, cm1_pr: cm1Pr, target_cm1: tgt.cm1,

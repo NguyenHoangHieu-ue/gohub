@@ -326,6 +326,7 @@ export async function GET(req: NextRequest) {
         channelCost: cc, groupCost: gc,
         cm1, cm1Pct: pct(cm1, rev),
         hk3Pct: pct(hk3, rev),
+        hk3Rev: hk3,
         actualRevenue: r(isProjected ? revAct : rev),
         actualGp: r(isProjected ? gpAct : gp),
         actualCc: r(isProjected ? ccAct : cc),
