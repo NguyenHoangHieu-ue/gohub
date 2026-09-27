@@ -117,3 +117,8 @@ Từ s132, tất cả tab analytics có 3 filter:
 
 UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
 
+
+## s211d (2026-09-27) — CM1 Dashboard thấp hơn Quarter Report/BOD/B2B/B2C do gộp cả nhóm INTERNAL-TRANSACTION
+
+Hiếu yêu cầu soi lại toàn bộ tab dùng công thức khác Quarter Report. Root cause đo được (T8/2026): `monthly-kpis` Query 1 (Revenue/GP/3HK) **KHÔNG JOIN `dim_order_source`, KHÔNG lọc `group_name`** → cộng cả nhóm `INTERNAL-TRANSACTION` (revenue=0, GP luôn ÂM do hoàn/huỷ SIM nội bộ — đo T8: -13.541.857đ, 90 dòng) vào GP công ty. Quarter Report/BOD/B2B/B2C KPI **LUÔN CHỈ cộng `total = b2bRev + b2cRev`** (không có bucket nào khác lọt vào tổng), nên Dashboard thấp hơn nhóm kia đúng bằng GP âm đó.
+**Fix**: JOIN `dim_order_source` + `WHERE UPPER(COALESCE(s.group_name,'')) IN ('B2B','B2C')` cho Query 1. Cache key `monthly-kpis` → `monthly-kpis2`. Không đổi phần group cost/Turso cost (đã đúng, chỉ thiếu vế loại trừ nhóm khác). Verify sau deploy: `monthly-kpis` T8 khớp `bod-summary`/`quarterly-report` tuyệt đối.

@@ -34,10 +34,17 @@ export async function GET(req: NextRequest) {
   const staffKey = `COALESCE(NULLIF(TRIM(dc.sales_pic_code),''), NULLIF(TRIM(f.staff_code),''))`
 
   const params: unknown[] = [startDate, endDate]
+  // s211d: giới hạn nhóm B2B + B2C (khớp Quarter Report/BOD — total LUÔN = b2bRev + b2cRev, không bao giờ
+  // cộng nhóm khác). Trước không lọc group_name → đơn INTERNAL-TRANSACTION (revenue=0, GP ÂM do hoàn/huỷ
+  // SIM nội bộ, CÓ gán sales_pic/staff_code thật) lẫn vào GP của nhân viên → CM1 nhân viên thấp hơn thật.
+  // `internalOpsFilter` giữ nguyên cho toggle UI, nhưng riêng nhóm INTERNAL-TRANSACTION đã bị loại khỏi
+  // tổng theo restriction này bất kể toggle — đúng hành vi Quarter Report (toggle không hiện nhóm này ở
+  // tổng công ty).
   let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2
     AND COALESCE(st.name, ${staffKey}) != 'Auto ESIM'
     ${shipFilter(includeShip)}
     ${internalOpsFilter(includeInternalOps)}
+    AND UPPER(COALESCE(s.group_name,'')) IN ('B2B','B2C')
     AND ${staffKey} IS NOT NULL`
 
   if (companyCode && companyCode !== "ALL") {
@@ -126,7 +133,7 @@ export async function GET(req: NextRequest) {
     // (pool max=3, chỗ nghẽn thật) chạy lại tươi mỗi lượt đổi filter/xem trang — cache riêng nhóm này.
     // groupCosts/customerCosts (Supabase/Turso, ngoài pool gohub_dw) giữ nguyên không cache — customerCosts
     // là Map, JSON-serialize qua L2 (Supabase JSONB) sẽ hỏng shape nên không đưa vào cachedQuery.
-    const cacheKey = `staff-report:v1:${startDate}:${endDate}:${channelGroup}:${channel}:${companyCode}:${dataSource}:${includeShip}:${includeInternalOps}`
+    const cacheKey = `staff-report:v2:${startDate}:${endDate}:${channelGroup}:${channel}:${companyCode}:${dataSource}:${includeShip}:${includeInternalOps}`
     const [[summaryRows, monthlyRows, groupTotalRows, custBreakdownRows], groupCostsRaw, customerCosts] = await Promise.all([
       cachedQuery(
         cacheKey,

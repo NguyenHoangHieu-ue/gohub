@@ -56,11 +56,14 @@ export async function GET(req: NextRequest) {
   // excludedCustomers fetch TRƯỚC cacheKey (thay vì trong callback) để hash vào key — đổi danh sách loại
   // trừ ở Quarter Report Settings phải tự làm mới cache route này (xem cache-architecture audit).
   const { excludedCustomers } = await fetchQuarterlySettings()
-  const cacheKey = `monthly-kpis:${companyCode}:${dateColumn}:${startDate}:${endDate}:${exclHash(excludedCustomers)}`
+  const cacheKey = `monthly-kpis2:${companyCode}:${dateColumn}:${startDate}:${endDate}:${exclHash(excludedCustomers)}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
-      // Query 1: Revenue, GP, 3HK revenue per month
+      // Query 1: Revenue, GP, 3HK revenue per month — CHỈ nhóm B2B + B2C (khớp Quarter Report/BOD, s211d).
+      // Trước SUM mọi dòng không lọc group_name → gộp cả nhóm INTERNAL-TRANSACTION (revenue=0, GP ÂM do
+      // hoàn/huỷ SIM nội bộ) vào GP công ty, trong khi Quarter Report/BOD chỉ cộng total = b2bRev + b2cRev
+      // (không bao giờ tính nhóm khác) → Dashboard thấp hơn các tab kia đúng bằng GP âm đó (đo T8: 13,5tr).
       const rows = await queryAnalytics<{ month: string; revenue: string; gp: string; hk3: string }>(`
         SELECT
           TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
@@ -71,8 +74,10 @@ export async function GET(req: NextRequest) {
                 WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
               ) THEN f.${source.revenueCol} ELSE 0 END) as hk3
         FROM ${source.mainTable} f
+        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
         WHERE f.${source.dateCol}::date >= '${startDate}'
           AND f.${source.dateCol}::date <= '${endDate}'
+          AND UPPER(COALESCE(s.group_name,'')) IN ('B2B','B2C')
           ${companyFilter}
         GROUP BY 1 ORDER BY 1
       `)

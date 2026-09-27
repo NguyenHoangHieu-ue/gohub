@@ -35,10 +35,13 @@ export async function GET(req: NextRequest) {
   const staffKey = `COALESCE(NULLIF(TRIM(dc.sales_pic_code),''), NULLIF(TRIM(f.staff_code),''))`
 
   const params: unknown[] = [startDate, endDate, staffCode]
+  // s211d: giới hạn B2B + B2C — khớp route.ts cha (Staff Report) và Quarter Report, loại nhóm
+  // INTERNAL-TRANSACTION (GP âm) khỏi tổng theo nhân viên.
   let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2
     AND ${staffKey} = $3
     ${shipFilter(includeShip)}
     ${internalOpsFilter(includeInternalOps)}
+    AND UPPER(COALESCE(s.group_name,'')) IN ('B2B','B2C')
     AND f.customer_code IS NOT NULL`
 
   if (companyCode && companyCode !== "ALL") {

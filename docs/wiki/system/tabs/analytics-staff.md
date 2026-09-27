@@ -159,3 +159,8 @@ thống. Không đổi số liệu/UI.
 ## s210 (2026-09-25) — Filter Phí ship / Đơn nội bộ / KH Ops MẶC ĐỊNH TICK (gồm hết)
 
 Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm phí ship + đơn nội bộ, và KH Ops ở B2B/B2C) — số mặc định khớp raw `gohub_dw`; bỏ tick để về "doanh thu SP thuần". **Thay thế** cột "Default = Off" của bảng "Filter Chuẩn" cũ ở trang này (bản chép ở các wiki tab khác cũng vậy). Áp cho 8 nơi: B2B, B2C (`b2c-performance.tsx`), BOD, Quarter Report (kéo theo tab Performance), Quarter Report (Organization), Staff, All-Time, Orders (dropdown Yes/No mặc định Yes). API KHÔNG đổi: thiếu tham số vẫn = loại (chỉ FE truyền cờ). Tab không có bộ lọc (Channels, Vendors, Customers, Dashboard, Squad Progress...) vẫn cố định loại ship/nội bộ → số không còn khớp tab đã tick mặc định.
+
+## s211d (2026-09-27) — CM1 nhân viên thấp hơn thật do gộp đơn INTERNAL-TRANSACTION
+
+Cùng root cause với Dashboard (`analytics-dashboard.md` §s211d): đơn `INTERNAL-TRANSACTION` (GP âm, revenue=0) **CÓ gán `sales_pic_code`/`staff_code` thật** (không bị lọc bởi `staffKey IS NOT NULL`) nên lẫn vào GP của nhân viên phụ trách khách đó. Kể từ s210 (mặc định tick "Đơn nội bộ") lỗi này lộ rõ hơn vì `internalOpsFilter` không còn loại nhóm này theo mặc định.
+**Fix**: thêm `AND UPPER(COALESCE(s.group_name,'')) IN ('B2B','B2C')` vào `where` dùng chung cho cả 4 query (`route.ts` + `customers/route.ts` drill-down theo KH) — khớp quy ước Quarter Report "total = b2bRev + b2cRev, không cộng nhóm khác bất kể toggle". Cache key `staff-report:v1` → `v2`.

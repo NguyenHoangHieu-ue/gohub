@@ -159,3 +159,11 @@ Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm 
 
 **s211 (2026-09-27) — Loại trừ KH phải theo TÊN HOẶC MÃ**: cài đặt `quarterly_excluded_customers` chứa cả tên lẫn mã KH. Mọi SQL loại KH dùng `customerExcludedSql()` (`lib/analytics-helpers.ts`) hoặc `makeExcludeSql()` (`lib/quarterly-settings.ts`, có bọc `NOT (B2B AND ...)`) — KHÔNG tự viết `COALESCE(c.name, mã) IN (...)` (bỏ sót KH loại bằng mã, lệch số giữa các tab).
   Đã sửa cả `excludeOpsByCode()` (b2b/b2c routes, monthly-kpis, weekly report) — trước cũng chỉ so tên. `exclHash()` giờ là sha1 thật của cả danh sách.
+
+**s211d (2026-09-27) — "Total công ty" LUÔN = B2B + B2C, không bao giờ cộng nhóm khác (INTERNAL-TRANSACTION...).**
+Quarter Report/BOD/B2B/B2C KPI đều tính `total = b2bRev + b2cRev` — không có phép cộng "mọi dòng không lọc group".
+Route nào SUM(revenue)/SUM(margin) không JOIN `dim_order_source` + lọc `group_name IN ('B2B','B2C')` sẽ vô tình cộng cả
+nhóm `INTERNAL-TRANSACTION` (revenue=0, GP luôn ÂM) vào tổng công ty → CM1 thấp hơn thật. Đã sửa `monthly-kpis`
+(Dashboard) và `staff-report`/`staff-report/customers` (s211d) theo quy ước này — xem `analytics-dashboard.md`/
+`analytics-staff.md` §s211d. Khi viết route "tổng công ty" mới: LUÔN JOIN `dim_order_source` + lọc group, không
+SUM thẳng mọi dòng của `fact_fulfillment_revenue`.

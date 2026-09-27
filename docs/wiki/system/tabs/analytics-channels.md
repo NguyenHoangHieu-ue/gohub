@@ -165,3 +165,8 @@ Từ s132, tất cả tab analytics có 3 filter:
 
 UI: checkbox nhỏ bên cạnh nút Apply Filters / Lọc trong filter bar.
 
+
+## s211d (2026-09-27) — CM1 tổng quan Channels (không chọn kênh cụ thể) cao hơn thật nhiều lần
+
+`channels/kpis` (KPI card đầu trang, gọi với `channel=""` khi chưa chọn kênh — mặc định của tab) tính `isB2BScope` từ `channelGroup`/tên kênh đơn lẻ — khi xem TOÀN BỘ (không chọn kênh), `isB2BScope=false` nên **không hề trừ chi phí theo khách B2B (Turso)**; đồng thời `tursoGroup` chỉ khác `null` khi `channelGroup` đúng bằng `"B2B"`/`"B2C"` — nhưng trang Channels **không bao giờ truyền `channelGroup` cho `channels/kpis`** (chỉ truyền `channel`) nên **group cost không bao giờ được trừ** dù ở chế độ nào. Đo T8: CM1 hiện 3,09 tỷ so với đúng 2,17 tỷ (Quarter Report/BOD).
+**Fix**: bỏ khái niệm `isB2BScope`/`tursoGroup` nhị phân — LUÔN tách doanh thu B2B/B2C thật trong scope đang xem (`b2b_revenue`/`b2c_revenue` từ query chính), cộng CẢ chi phí Turso B2B (tính trên đúng phần doanh thu B2B của scope) LẪN chi phí kênh B2C (Supabase, như cũ) LẪN group cost B2B+B2C — group cost phân bổ theo tỷ trọng `doanh thu scope / doanh thu TOÀN CÔNG TY cùng kỳ` (query mới, không lọc theo kênh) — đúng công thức `finalizeGroupMargin` (`bod-data.ts`). Khi scope = toàn công ty (không chọn kênh), tỷ trọng = 1 → khớp tuyệt đối BOD/Quarter Report. `channels/performance` (bảng theo từng kênh, đã cộng cả 2 nguồn + group cost per-channel) đã đúng từ trước, không sửa. Cache key `ch-kpis` → `ch-kpis2`.
