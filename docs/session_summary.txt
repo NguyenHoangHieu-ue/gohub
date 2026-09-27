@@ -10514,3 +10514,24 @@ Hiếu chốt thứ tự ưu tiên vendor mới, thay hẳn quy tắc cũ "thử
 Ngoại lệ thực tế đang áp dụng (tạm thời, do giá — không phải đổi thứ tự gốc): Đài Loan/Hong Kong 3HK yêu cầu KYC, WM/BC-Singtel (W1) thì không; giá WM hiện rẻ hơn BC-Singtel nên team đang dùng WM. Khi BC Datapool được đưa vào target thì áp đúng thứ tự 3HK → BC-Datapool → sản phẩm khác, bỏ ngoại lệ WM.
 Hỏi Hiếu qua AskUserQuestion về phạm vi áp dụng — chốt: quy tắc chung, thay hẳn "thử WM trước" cho mọi nước (trừ Nhật).
 Sửa 4 bài wiki: chon-vendor.md (thêm mục "Thứ tự ưu tiên chung" đầu bài, sửa sơ đồ quyết định + bảng tham chiếu + 3 trường hợp "không có"), vendor-worldmove.md (đổi mở bài "WM là vendor chính" → trỏ sang chon-vendor, ghi rõ ngoại lệ TW/HK), vendor-3hk.md (ghi rõ 3HK ưu tiên cao nhất), gioi-thieu-gohub.md (đổi đoạn giới thiệu vendor theo thứ tự mới). Chỉ sửa nội dung nghiệp vụ, không đụng code.
+
+## s213 (2026-09-27) — QA "Tài liệu" Tổ Gấu: fix lỗi thật (Wiki không bao giờ vào context AI)
+Hiếu: "QA Tài liệu trong Tổ Gấu đi, đang rất không đúng". Đọc code toàn bộ 4 phần dưới tab "Tài liệu": Chính thức
+(WikiPanel, /api/kb/wiki), Của nhóm → Docs/Notes/Câu hỏi (DocsPanel/NotesPanel/QuestionsPanel), và AI trả lời
+(groups/[id]/ai/route.ts, searchKB() trong lib/to-gau-ai-helpers.ts).
+Tìm & verify qua REST thật (/api/config/db/table?name=kb_wiki_pages): bảng KHÔNG có cột `status` (chỉ có
+is_hidden) — searchKB() lọc `.eq("status","active")` khiến phần Wiki trong context gửi Gemini LUÔN RỖNG âm
+thầm, mọi câu hỏi, từ khi tính năng ra đời (s194+6) — dù prompt Gấu Tổ bắt buộc trích nguồn Wiki. Docs/Notes
+không dính (cột đúng). Fix: bỏ dòng lọc, thêm test khoá lại (to-gau-ai-helpers.test.ts).
+Verify sống trên staging (Chrome, group "Test"): hỏi "Gói WM có cần KYC không?" → Gấu Tổ trả lời đúng + trích
+"(Nguồn: [Wiki] Chọn Vendor Nào? — Hướng Dẫn Nhanh)" — TRƯỚC fix chắc chắn không trích được vì query lỗi.
+Cũng QA Docs/Notes/Câu hỏi (upload, thêm note, đặt câu hỏi, đổi trạng thái) — hoạt động đúng, không lỗi.
+Dọn sạch dữ liệu test sau QA (xoá doc/note/question, thu hồi 2 tin nhắn AI test).
+Ghi nhận thêm 2 điểm nhỏ CHƯA sửa (không phải "rất không đúng", chỉ ghi để Hiếu cân nhắc):
+- GET /api/kb/wiki/[id] (mở 1 trang theo ID trực tiếp) không kiểm visibility_mode='groups' — 1 trang "Riêng
+  nhóm" (không ẩn) có thể mở được bởi bất kỳ ai biết UUID dù không thuộc nhóm được gán. Có thể chấp nhận được
+  theo triết lý Guardian hiện tại ("ai cũng như nhau" trừ system_internal) — không phải lỗ hổng bảo mật rõ ràng,
+  chỉ là gán nhóm không phải hàng rào cứng.
+- DELETE tài liệu nhóm (docs route) chỉ xoá dòng Supabase, không xoá file trong Storage bucket to-gau-files →
+  file rác tích luỹ theo thời gian, không lỗi hiển thị nhưng tốn dung lượng.
+tsc + next build + vitest 419/419 PASS.
