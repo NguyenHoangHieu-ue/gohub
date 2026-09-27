@@ -11,6 +11,7 @@ import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { cn } from "@/lib/utils"
 import { exportRawRows } from "@/lib/export-excel"
+import { allTimeKpis } from "@/lib/all-time-kpi"
 import { CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel AllTimeReport. Backend /api/analytics/all-time-performance (CM1 = margin − op-cost,
@@ -181,8 +182,8 @@ export default function AllTimeReport() {
     )
   }
 
-  const totalSum = chartData.reduce((sum, d) => sum + d.total, 0)
-  const avgSum = totalSum / (chartData.length || 1)
+  // 3 ô KPI tính từ số liệu thô cả khoảng lọc — độc lập metric đang chọn (chartData.total đổi theo metric nên không dùng được).
+  const kpis = allTimeKpis(data?.[activeView])
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
@@ -282,21 +283,21 @@ export default function AllTimeReport() {
             <div className={cn("p-2 rounded-xl", metricView === "revenue" ? "bg-brand-500" : "bg-brand-50")}><DollarSign className={cn("w-5 h-5", metricView === "revenue" ? "text-white" : "text-brand-600")} /></div>
           </div>
           <p className={cn("text-sm font-medium", metricView === "revenue" ? "text-brand-100" : "text-slate-500")}>Total Revenue</p>
-          <p className="text-xl font-bold">{formatCurrency(totalSum)}</p>
+          <p className="text-xl font-bold">{formatCurrency(kpis.revenue)}</p>
         </button>
         <button onClick={() => setMetricView("gpm")} className={cn("p-4 rounded-2xl border transition-all text-left", metricView === "gpm" ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" : "bg-white border-slate-200 text-slate-600 hover:border-indigo-300")}>
           <div className="flex items-center justify-between mb-2">
             <div className={cn("p-2 rounded-xl", metricView === "gpm" ? "bg-indigo-500" : "bg-indigo-50")}><PieChart className={cn("w-5 h-5", metricView === "gpm" ? "text-white" : "text-indigo-600")} /></div>
           </div>
           <p className={cn("text-sm font-medium", metricView === "gpm" ? "text-indigo-100" : "text-slate-500")}>Avg. GPM %</p>
-          <p className="text-xl font-bold">{avgSum.toFixed(2)}%</p>
+          <p className="text-xl font-bold">{kpis.gpmPct.toFixed(2)}%</p>
         </button>
         <button onClick={() => setMetricView("gpm2")} className={cn("p-4 rounded-2xl border transition-all text-left", metricView === "gpm2" ? "bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-200" : "bg-white border-slate-200 text-slate-600 hover:border-emerald-300")}>
           <div className="flex items-center justify-between mb-2">
             <div className={cn("p-2 rounded-xl", metricView === "gpm2" ? "bg-emerald-500" : "bg-emerald-50")}><TrendingUp className={cn("w-5 h-5", metricView === "gpm2" ? "text-white" : "text-emerald-600")} /></div>
           </div>
           <p className={cn("text-sm font-medium", metricView === "gpm2" ? "text-emerald-100" : "text-slate-500")}>Avg. CM1 %</p>
-          <p className="text-xl font-bold">{avgSum.toFixed(2)}%</p>
+          <p className="text-xl font-bold">{kpis.cm1Pct.toFixed(2)}%</p>
         </button>
       </div>
 
