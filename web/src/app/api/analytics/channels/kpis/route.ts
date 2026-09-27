@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter, shipFilter, internalOpsFilter,
   getMonthsInRange, getChannelCostsForMonths, getGroupCostsForMonths, getDaysInRange, getDaysInMonth,
-  CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard,
+  CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { COST_KEYS, calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       : ""
 
   try {
-    const key = `ch-kpis2:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+    const key = `ch-kpis3:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
     const [cur, prv] = await Promise.all([
       queryAnalytics<Record<string, string>>(
@@ -179,7 +179,7 @@ export async function GET(req: NextRequest) {
       margin_change:  pct(cMar, pMar),
       orders_change:  pct(cOrd, pOrd),
     }
-    }, QUERY_TTL_MIN, undefined, ["b2b-cost"])
+    }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
