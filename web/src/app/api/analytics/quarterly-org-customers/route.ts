@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
+import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter, customerExcludedSql } from "@/lib/analytics-helpers"
 import { fetchCosts } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeClassifyTier, exclHash } from "@/lib/quarterly-settings"
 import { buildQuarterMonthMeta } from "@/lib/analytics-engine/quarter-projection"
@@ -19,7 +19,7 @@ import { buildQuarterMonthMeta } from "@/lib/analytics-engine/quarter-projection
 export const maxDuration = 60
 export const dynamic = "force-dynamic"
 
-const ORG_CACHE_PREFIX = "qorg_raw_v1:"
+const ORG_CACHE_PREFIX = "qorg_raw_v2:"
 
 function classifyRegion(priceListName: string | null, currencyCode: string | null): string {
   const p = (priceListName || "").toUpperCase()
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
   const { excludedCustomers, tierKeywords } = await fetchQuarterlySettings()
   const classifyTier = makeClassifyTier(tierKeywords)
   const exclFilter = excludedCustomers.length > 0
-    ? `AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(",")})`
+    ? `AND NOT ${customerExcludedSql(excludedCustomers)}`
     : ""
 
   const rawCacheKey = `${ORG_CACHE_PREFIX}${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`

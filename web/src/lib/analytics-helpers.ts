@@ -469,11 +469,21 @@ export function buildIsStrategicSql(tierKeywords: Record<string, string[]>): str
 export function buildCustomerExcludeSql(excludedCustomers: string[]): string {
   return excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(",")
 }
+/**
+ * Điều kiện SQL "KH nằm trong danh sách loại trừ" — khớp theo TÊN **hoặc MÃ** khách (cài đặt quarterly_excluded_customers
+ * chứa cả hai; Quarter Report `makeExcludeSql` đã hiểu cả mã). Trước đây các route chỉ so `COALESCE(c.name, code) IN (...)`
+ * nên KH loại bằng mã (vd 3tOAkFoh0j, có tên "[INACTIVE] ...") vẫn lọt vào All-Time/BOD/B2B tier → lệch Quarter Report.
+ * Cần alias `f` (fact) và `c` (dim_customer). Danh sách rỗng → FALSE.
+ */
+export function customerExcludedSql(excludedCustomers: string[]): string {
+  const list = buildCustomerExcludeSql(excludedCustomers)
+  if (!list) return "FALSE"
+  return `(COALESCE(c.name, TRIM(f.customer_code)) IN (${list}) OR TRIM(f.customer_code) IN (${list}))`
+}
 // Row bị loại (ops/B2C-in-B2B) → 'Excluded' (caller lọc khỏi groupNames).
 export function buildGroupCaseByCustomerSql(tierKeywords: Record<string, string[]>, excludedCustomers: string[]): string {
   const isStrat = buildIsStrategicSql(tierKeywords)
-  const excl = buildCustomerExcludeSql(excludedCustomers)
-  const exclLine = excl ? `WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND COALESCE(c.name, TRIM(f.customer_code)) IN (${excl}) THEN 'Excluded'` : ""
+  const exclLine = excludedCustomers.length > 0 ? `WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${customerExcludedSql(excludedCustomers)} THEN 'Excluded'` : ""
   return `CASE
     ${exclLine}
     WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${isStrat} THEN 'B2B-Strategic'
@@ -484,18 +494,19 @@ export function buildGroupCaseByCustomerSql(tierKeywords: Record<string, string[
 }
 
 // Fetch settings 1 lần → trả các mảnh SQL + hash (để nhét vào cache key, auto-invalidate khi đổi tier/exclude).
-export async function getCustomerStrategicSql(): Promise<{ isStrategicSql: string; excludeSql: string; groupCaseSql: string; hash: string }> {
+export async function getCustomerStrategicSql(): Promise<{ isStrategicSql: string; excludeSql: string; excludedSql: string; groupCaseSql: string; hash: string }> {
   const { tierKeywords, excludedCustomers } = await fetchQuarterlySettings()
   return {
     isStrategicSql: buildIsStrategicSql(tierKeywords),
     excludeSql: buildCustomerExcludeSql(excludedCustomers),
+    excludedSql: customerExcludedSql(excludedCustomers),  // điều kiện boolean (tên HOẶC mã) — dùng thay `COALESCE(c.name,code) IN (excludeSql)`
     groupCaseSql: buildGroupCaseByCustomerSql(tierKeywords, excludedCustomers),
     hash: strategicSettingsHash(tierKeywords, excludedCustomers),
   }
 }
 function strategicSettingsHash(tierKeywords: Record<string, string[]>, excludedCustomers: string[]): string {
   const tierStr = Object.entries(tierKeywords).map(([t, k]) => `${t}=${[...k].sort().join("|")}`).sort().join(";")
-  return createHash("sha1").update(`${tierStr}::${exclHash(excludedCustomers)}`).digest("hex").slice(0, 10)
+  return createHash("sha1").update(`${tierStr}::${exclHash(excludedCustomers)}::excl-name-or-code-v2`).digest("hex").slice(0, 10)
 }
 // Chỉ lấy hash (cho route chỉ cần cache key, không build SQL — vd bod-group-margin/bod-summary).
 export async function getStrategicSettingsHash(): Promise<string> {

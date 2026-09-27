@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, getAnalyticsSource, shipFilter, internalOpsFilter, excludeInactiveCustomers } from "@/lib/analytics-helpers"
+import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, getAnalyticsSource, shipFilter, internalOpsFilter, excludeInactiveCustomers, customerExcludedSql } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 
 // Phân loại tier từ price_list_name (nhất quán với quarterly-b2b-customers)
@@ -50,9 +50,9 @@ export async function GET(req: NextRequest) {
   // (b2b/kpis/performance/trend dùng cả 4: shipFilter+internalOpsFilter+excludeOpsByCode(dynamic)+
   // excludeInactiveCustomers). Route này dùng ở Dashboard nên đổi sang danh sách exclude ĐỘNG.
   const { excludedCustomers } = await fetchQuarterlySettings()
-  const excludeList = excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(",") || "''"
+  const excludedSql = customerExcludedSql(excludedCustomers)
   const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeInactiveCustomers()}`
-  const cacheKey = `b2b_tier2:${startDate}:${endDate}:${dateColumn}:${companyCode}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${excludedCustomers.sort().join("|")}`
+  const cacheKey = `b2b_tier3:${startDate}:${endDate}:${dateColumn}:${companyCode}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${excludedCustomers.sort().join("|")}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
           AND f.${source.dateCol}::date <= '${endDate}'
           ${companyFilter}
           AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
-          AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})
+          AND NOT ${excludedSql}
           ${sfx}
         GROUP BY c.price_list_name, c.currency_code
       `)

@@ -21,11 +21,11 @@ export async function GET(req: NextRequest) {
 
   const source = getAnalyticsSource(dateColumn)
   const filter = getDateFilter(startDate, endDate, source.dateCol, "30 days", companyCode)
-  const { isStrategicSql, excludeSql, hash } = await getCustomerStrategicSql()
+  const { isStrategicSql, excludedSql, hash } = await getCustomerStrategicSql()
   const sfxCte = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)}`
   // hash = tier keywords + excluded (quarterly-settings) → cache tự tươi khi Hiếu đổi cấu hình.
-  const cacheKey = `revenue-chart2:${startDate}:${endDate}:${dateColumn}:${companyCode}:${hash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
-  const b2bReal = `UPPER(COALESCE(s.group_name,'')) = 'B2B' AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeSql})`
+  const cacheKey = `revenue-chart3:${startDate}:${endDate}:${dateColumn}:${companyCode}:${hash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  const b2bReal = `UPPER(COALESCE(s.group_name,'')) = 'B2B' AND NOT ${excludedSql}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {

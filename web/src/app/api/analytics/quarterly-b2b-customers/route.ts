@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
+import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter, customerExcludedSql } from "@/lib/analytics-helpers"
 import { getDaysInMonth, getDaysInRange, fetchCosts } from "@/lib/bod-data"
 import { fetchCustomerCosts, calcRecordCost, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash, QB2B_CACHE_PREFIX } from "@/lib/quarterly-settings"
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
       cachedQuery(rawCacheKey, async () => {
         // SQL fragment: loại KH khỏi B2B (an toàn khi list rỗng)
         const exclFilter = excludedCustomers.length > 0
-          ? `AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(",")})`
+          ? `AND NOT ${customerExcludedSql(excludedCustomers)}`
           : ""
 
         const [customerRows, prevQuarterRows, prevMonthRows] = await Promise.all([

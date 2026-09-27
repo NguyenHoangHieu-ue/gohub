@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
   // Strategic/Non theo KHÁCH (price_list_name), cấu hình chung quarterly-settings (ISSUE-DASH-4, s131).
   const includeShip        = p.get("includeShip")        === "1"
   const includeInternalOps = p.get("includeInternalOps") === "1"
-  const { isStrategicSql, excludeSql: excludeList, hash } = await getCustomerStrategicSql()
-  const cacheKey = `all-time2:${startDate}:${endDate}:${channelGroup}:${customerTier}:${channel}:${hash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  const { isStrategicSql, excludedSql, hash } = await getCustomerStrategicSql()
+  const cacheKey = `all-time3:${startDate}:${endDate}:${channelGroup}:${customerTier}:${channel}:${hash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -37,9 +37,9 @@ export async function GET(req: NextRequest) {
         if (grp === "B2B" && customerTier) {
           const tier = customerTier.toLowerCase()
           if (tier === "strategic") {
-            whereClause += ` AND ${isStrategicSql} AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})`
+            whereClause += ` AND ${isStrategicSql} AND NOT ${excludedSql}`
           } else if (tier.includes("non")) {
-            whereClause += ` AND NOT ${isStrategicSql} AND COALESCE(c.name, TRIM(f.customer_code)) NOT IN (${excludeList})`
+            whereClause += ` AND NOT ${isStrategicSql} AND NOT ${excludedSql}`
           }
         }
       }
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
            TRIM(COALESCE(s.channel_name, 'Unknown')) as channel_name,
            UPPER(COALESCE(s.group_name, 'Other')) as group_name,
            CASE
-             WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND COALESCE(c.name, TRIM(f.customer_code)) IN (${excludeList}) THEN 'Excluded'
+             WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${excludedSql} THEN 'Excluded'
              WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${isStrategicSql} THEN 'B2B-Strategic'
              WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' THEN 'B2B-Non-Strategic'
              WHEN UPPER(COALESCE(s.group_name,'')) = 'B2C' THEN 'B2C'
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
         const custRevRows = await queryAnalytics<{ customer_code: string; period: string; derived_group: string; revenue: string }>(
           `SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') as period,
                   CASE
-                    WHEN COALESCE(c.name, TRIM(f.customer_code)) IN (${excludeList}) THEN 'Excluded'
+                    WHEN ${excludedSql} THEN 'Excluded'
                     WHEN ${isStrategicSql} THEN 'B2B-Strategic'
                     ELSE 'B2B-Non-Strategic'
                   END as derived_group,
