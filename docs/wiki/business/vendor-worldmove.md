@@ -9,20 +9,25 @@ aliases: ["WorldMove", "WM", "WORLDMOVE"]
 last_edited_by: ""
 last_edited_at: ""
 created: 2026-06-13
-updated: 2026-09-22
+updated: 2026-09-27
 status: active
 ---
 
 # Vendor WorldMove (WM) — Hướng Dẫn Tư Vấn
 
-WM là vendor chính của GoHub, có hơn 8.900 gói, phủ sóng hầu hết các nước, và không cần KYC. Luôn thử WM
-trước khi xét vendor khác. CS chỉ cần nắm năm loại gói WM và cách giải thích chúng cho khách hàng.
+WM có hơn 8.900 gói, phủ sóng hầu hết các nước, và không cần KYC. **Cập nhật 2026-09-27**: thứ tự ưu tiên
+vendor chung của GoHub nay là 3HK → BC Datapool → sản phẩm có SĐT local → các sản phẩm khác (WM nằm trong
+nhóm cuối) — xem đầy đủ ở [[chon-vendor|Chọn Vendor Nào?]]. WM vẫn là catalog lớn nhất và hay dùng khi 3
+nhóm ưu tiên trên không đáp ứng được, và đang là ngoại lệ tạm thời cho Đài Loan/Hong Kong (xem dưới). CS
+vẫn cần nắm năm loại gói WM và cách giải thích cho khách hàng.
 
-## WM là lựa chọn đầu tiên khi nào
+## WM dùng khi nào
 
-Dùng WM trước cho tất cả các nước, trừ ba trường hợp: đi Nhật Bản thì dùng KDDI (nhờ partnership riêng,
-chất lượng cao hơn); nước không có trong catalog WM thì chuyển sang 3HK; và khi WM có gói nhưng giá kém
-cạnh tranh hơn 3HK thì cũng chuyển sang 3HK.
+Theo thứ tự ưu tiên chung, WM dùng khi 3HK không có vùng phủ, BC Datapool không có, và khách không cần SĐT
+local. Ba ngoại lệ: đi Nhật Bản luôn dùng KDDI (partnership riêng, chất lượng cao hơn), không xét WM/3HK;
+**Đài Loan và Hong Kong hiện đang dùng WM thay vì theo đúng thứ tự** — 3HK yêu cầu KYC ở hai nước này còn
+WM/BC-Singtel thì không, và giá WM hiện rẻ hơn BC-Singtel nên team chọn WM (ngoại lệ do giá, tạm thời —
+sẽ đổi sang đúng thứ tự 3HK → BC Datapool khi BC Datapool được đưa vào target).
 
 ## Năm loại gói WM
 
@@ -86,5 +91,5 @@ Format file báo giá là GoHub Standard XLSX, sheet "Goi co san" — tải temp
 Chính sách hạn dùng mã QR, số lần cài lại/đổi thiết bị của WM xem ở bài
 [[chinh-sach-vendor|Chính Sách Vendor]].
 
-Xem thêm bài [[chon-vendor|Khi nào WM vs 3HK vs KDDI?]], [[ma-sku|Đọc mã SKU]],
+Xem thêm bài [[chon-vendor|Thứ tự ưu tiên vendor: 3HK → BC Datapool → SĐT local → WM/khác]], [[ma-sku|Đọc mã SKU]],
 [[loai-data-policy|Các mã data policy]], và [[quy-trinh-import-ncc|Quy trình import báo giá WM]].

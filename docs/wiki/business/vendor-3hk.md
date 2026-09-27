@@ -9,22 +9,27 @@ aliases: ["3HK", "3 Hong Kong", "3HK Datapool"]
 last_edited_by: ""
 last_edited_at: ""
 created: 2026-06-13
-updated: 2026-09-22
+updated: 2026-09-27
 status: active
 ---
 
 # Vendor 3HK — Hướng Dẫn Tư Vấn
 
-3HK là vendor data quốc tế; GoHub mua theo GB rồi tạo gói bán lại. Dùng 3HK khi nước khách hỏi không có
-trong WM, hoặc khi WM kém cạnh tranh hơn. CS không cần tra 3HK nếu GoHub đã có sẵn SKU — chỉ cần bán SKU
-đã có.
+3HK là vendor data quốc tế; GoHub mua theo GB rồi tạo gói bán lại. **3HK là vendor ưu tiên cao nhất của
+GoHub** (chốt 2026-09-27, xem đầy đủ thứ tự ở [[chon-vendor|Chọn Vendor Nào?]]) — kiểm 3HK trước khi xét
+BC Datapool, sản phẩm có SĐT local, hay WM/vendor khác. CS không cần tra 3HK nếu GoHub đã có sẵn SKU — chỉ
+cần bán SKU đã có.
 
 ## Khi nào CS cần biết đến 3HK
 
 Nếu khách hỏi một nước đã có SKU GoHub thì bán bình thường, không cần tra 3HK. Nếu khách hỏi một nước
-chưa có SKU thì kiểm tra xem 3HK có vùng phủ đó không rồi báo team Product tạo thêm. Nếu khách hỏi "dùng
-mạng gì ở nước X" thì tra tab NCC, mục 3HK, xem vùng tương ứng. Khi team Product tạo gói mới thì dùng giá
-3HK cùng công thức tính COGS để tạo SKU.
+chưa có SKU thì kiểm tra 3HK có vùng phủ đó không TRƯỚC TIÊN (ưu tiên cao nhất) — có thì báo team Product
+tạo SKU từ 3HK; không có mới xét đến BC Datapool rồi các vendor khác. Nếu khách hỏi "dùng mạng gì ở nước
+X" thì tra tab NCC, mục 3HK, xem vùng tương ứng. Khi team Product tạo gói mới thì dùng giá 3HK cùng công
+thức tính COGS để tạo SKU.
+
+**Ngoại lệ**: một số nước 3HK yêu cầu KYC (vd Đài Loan, Hong Kong) — khách ngại KYC thì hiện đang dùng WM
+thay vì 3HK do giá WM rẻ hơn BC-Singtel (ngoại lệ tạm thời, xem chi tiết ở [[chon-vendor|Chọn Vendor Nào?]]).
 
 ## Vùng phủ sóng và giá
 
