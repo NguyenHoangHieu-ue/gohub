@@ -53,6 +53,10 @@ Data/*.md
 
 # ─── Internal docs (không public) ───────────────────────────────────────────
 # Quy tắc: trong docs/ CHỈ commit docs/wiki/** — mọi file rời khác (.md/.txt/.xlsx/.docx) bỏ qua.
+# CLAUDE.md (2026-09-27, Hiếu yêu cầu): local-only từ đây, KHÔNG qua git nữa — auto-load vẫn hoạt động
+# bình thường trên máy có sẵn file, nhưng máy mới clone/checkout sẽ KHÔNG có file này (giống Bug.txt/
+# new_info.txt bên dưới) — xem mục "Multi-machine" trong chính CLAUDE.md.
+/CLAUDE.md
 Bug.txt
 WORK.md
 .ai/
