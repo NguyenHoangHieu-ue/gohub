@@ -67,6 +67,7 @@ làm bất cứ việc gì liên quan SaaS/tenant. **File TẠM: khi mọi mốc
 xoá dòng này**, chuyển kiến thức còn giá trị sang wiki `docs/wiki/system/`.
 
 **Ưu tiên gần nhất (s209):**
+- [x] s213 (2026-09-27): fix lỗi thật — Gấu Tổ (Tổ Gấu) không bao giờ lấy được Wiki để trả lời (`searchKB()` lọc cột `status` không tồn tại trên `kb_wiki_pages`). Verify sống: trích nguồn Wiki đúng sau fix. 2 điểm nhỏ ghi nhận thêm (không sửa): xem `docs/session_summary.txt` §s213.
 - [x] s211 (2026-09-27): sửa 3 ô KPI All-Time (Total Revenue / Avg GPM % / Avg CM1 %) — tính từ số liệu thô, có trọng số doanh thu (`lib/all-time-kpi.ts`). Đã QA sống (khớp API/SQL). Kèm sửa lỗi loại trừ KH theo MÃ ở 6 route (`customerExcludedSql`), All-Time nay khớp Quarter Report ≤1đ.
 - [x] s211b (2026-09-27): All-Time CM1 tính chi phí THEO SỐ NGÀY trong khoảng lọc (`rangeDayRatio`) — khớp Quarter Report/BOD/B2B/B2C. Chỉ ảnh hưởng tab All-Time.
 - [x] s211d (2026-09-27): Dashboard/Staff/Channels áp đúng công thức Quarter Report — verify BOD/Channels/Dashboard/Staff cùng ra 2.167.498.795đ (T8, 0 lệch). Xem `docs/session_summary.txt` §s211d.
