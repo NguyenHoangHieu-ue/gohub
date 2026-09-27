@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { cachedQuery, CACHE_HEADERS, getCustomerStrategicSql, safeDate, noCache, analyticsGuard, shipFilter, internalOpsFilter, excludeInactiveCustomers } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
-import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
 const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const includeShip        = p.get("includeShip")        === "1"
   const includeInternalOps = p.get("includeInternalOps") === "1"
   const { isStrategicSql, excludedSql, hash } = await getCustomerStrategicSql()
-  const cacheKey = `all-time3:${startDate}:${endDate}:${channelGroup}:${customerTier}:${channel}:${hash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  const cacheKey = `all-time4:${startDate}:${endDate}:${channelGroup}:${customerTier}:${channel}:${hash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -72,7 +72,14 @@ export async function GET(req: NextRequest) {
          ORDER BY 1 ASC`
       )
 
-      // Op-cost (CM1) — port intel: channel_costs full-month + group_costs theo nhóm (KHÔNG prorate; period là tháng đủ).
+      // Op-cost (CM1) — channel_costs + group_costs + Turso per-customer. Chi phí dạng "amount" × tỷ lệ ngày của tháng nằm trong
+      // khoảng lọc (s211, công thức chuẩn s133 như Quarter Report/BOD/B2B/B2C): tháng đủ = 1, tháng dở (mặc định = tháng này đến
+      // hôm qua, hoặc khoảng chọn tay) chỉ chịu phần theo số ngày. Trước đây trừ NGUYÊN THÁNG → CM1% tháng dở thấp hơn thật.
+      // Ngày cuối hiệu lực = min(endDate, hôm qua) — khớp `LEAST(endDate, CURRENT_DATE - 1)` của SQL doanh thu ở trên.
+      const yesterdayD = new Date(); yesterdayD.setDate(yesterdayD.getDate() - 1)
+      const yesterday = yesterdayD.toISOString().split("T")[0]
+      const effEnd = endDate < yesterday ? endDate : yesterday
+      const ratioOf = (month: string) => rangeDayRatio(startDate, effEnd, month)
       const months = Array.from(new Set(rows.map(r => r.period)))
       let channelCosts: any[] = []
       let groupCosts: any[] = []
@@ -125,7 +132,7 @@ export async function GET(req: NextRequest) {
           if (custRev === 0) return
           const dg = custGroupMap.get(`${month}_${code}`)
           if (dg !== "B2B-Strategic" && dg !== "B2B-Non-Strategic") return
-          const cost = calcChCostForPeriod(rec, custRev, 1)  // period là tháng đủ (như channel/group cost khác) — KHÔNG prorate
+          const cost = calcChCostForPeriod(rec, custRev, ratioOf(month))  // amount × tỷ lệ ngày; percent × doanh thu kỳ
           const bucket = `${month}_${dg}`
           b2bTursoCostByMonthGroup[bucket] = (b2bTursoCostByMonthGroup[bucket] || 0) + cost
         })
@@ -157,7 +164,7 @@ export async function GET(req: NextRequest) {
               COST_KEYS.forEach(k => {
                 const v = c[k]
                 if (!v) return
-                item.op_costs += v.type === "amount" ? (v.value || 0) * chShare : (rowRev * (v.value || 0)) / 100
+                item.op_costs += v.type === "amount" ? (v.value || 0) * chShare * ratioOf(row.period) : (rowRev * (v.value || 0)) / 100
               })
             })
           }
@@ -186,7 +193,7 @@ export async function GET(req: NextRequest) {
               const costGroupName = dg === "B2C" ? "B2C" : (dg.startsWith("B2B") ? "B2B" : "Other")
               const monthCost = groupCosts.filter(c => c.group_name === costGroupName && c.month === m).reduce((s, c) => s + c.amount, 0)
               const share = dg.startsWith("B2B") ? (b2bTotalRev > 0 ? item.revenue / b2bTotalRev : 0) : 1
-              item.op_costs += monthCost * share
+              item.op_costs += monthCost * share * ratioOf(m)
             }
           })
         })

@@ -29,3 +29,27 @@ describe("allTimeKpis", () => {
     expect(allTimeKpis([row("B2C", "200" as any, "50" as any, "20" as any)]).gpmPct).toBeCloseTo(25)
   })
 })
+
+import { rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
+
+describe("rangeDayRatio — chi phí amount theo số ngày trong khoảng lọc", () => {
+  it("tháng phủ đủ → 1", () => {
+    expect(rangeDayRatio("2026-08-01", "2026-08-31", "2026-08")).toBe(1)
+    expect(rangeDayRatio("2026-01-01", "2026-09-26", "2026-03")).toBe(1)
+  })
+  it("tháng dở: 26/30 ngày (01–26/09)", () => {
+    expect(rangeDayRatio("2026-09-01", "2026-09-26", "2026-09")).toBeCloseTo(26 / 30, 10)
+  })
+  it("khoảng bắt đầu giữa tháng: 15–31/08 = 17/31", () => {
+    expect(rangeDayRatio("2026-08-15", "2026-08-31", "2026-08")).toBeCloseTo(17 / 31, 10)
+  })
+  it("khoảng không chạm tháng → 0; khoảng vắt 2 tháng chia đúng theo từng tháng", () => {
+    expect(rangeDayRatio("2026-09-01", "2026-09-26", "2026-08")).toBe(0)
+    expect(rangeDayRatio("2026-08-20", "2026-09-10", "2026-08")).toBeCloseTo(12 / 31, 10)
+    expect(rangeDayRatio("2026-08-20", "2026-09-10", "2026-09")).toBeCloseTo(10 / 30, 10)
+  })
+  it("tháng 2 nhuận / không nhuận", () => {
+    expect(rangeDayRatio("2028-02-01", "2028-02-10", "2028-02")).toBeCloseTo(10 / 29, 10)
+    expect(rangeDayRatio("2026-02-01", "2026-02-10", "2026-02")).toBeCloseTo(10 / 28, 10)
+  })
+})

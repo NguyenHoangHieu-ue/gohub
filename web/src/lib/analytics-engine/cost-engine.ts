@@ -18,6 +18,16 @@ import type { ChannelCostRow } from "@/lib/analytics-helpers"
 import type { CostRecord, CostLine } from "@/lib/b2b-customer-cost"
 
 export type { CostRecord, CostLine }
+
+/**
+ * Tỷ lệ ngày của tháng `month` (YYYY-MM) nằm trong khoảng lọc [startDate, endDate] = ngày overlap / số ngày của tháng.
+ * Nhân với chi phí dạng "amount" (tiền cố định/tháng) để tháng dở chỉ chịu phần chi phí tương ứng số ngày đã qua — công thức
+ * chuẩn hệ thống (s133), cùng Quarter Report / BOD / B2B / B2C. Tháng phủ đủ → 1; khoảng không chạm tháng → 0.
+ */
+export function rangeDayRatio(startDate: string, endDate: string, month: string): number {
+  const dim = getDaysInMonth(month)
+  return dim > 0 ? getDaysInRange(startDate, endDate, month) / dim : 0
+}
 export const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
 /**

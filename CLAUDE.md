@@ -68,7 +68,8 @@ xoá dòng này**, chuyển kiến thức còn giá trị sang wiki `docs/wiki/s
 
 **Ưu tiên gần nhất (s209):**
 - [x] s211 (2026-09-27): sửa 3 ô KPI All-Time (Total Revenue / Avg GPM % / Avg CM1 %) — tính từ số liệu thô, có trọng số doanh thu (`lib/all-time-kpi.ts`). Đã QA sống (khớp API/SQL). Kèm sửa lỗi loại trừ KH theo MÃ ở 6 route (`customerExcludedSql`), All-Time nay khớp Quarter Report ≤1đ.
-- [ ] All-Time: CM1% của tháng dở (khoảng lọc không phủ đủ tháng, mặc định = tháng này) đang trừ chi phí NGUYÊN THÁNG → thấp hơn thật; Quarter Report thì pro-rate. Cần Hiếu chốt có pro-rate theo số ngày trong khoảng lọc không.
+- [x] s211b (2026-09-27): All-Time CM1 tính chi phí THEO SỐ NGÀY trong khoảng lọc (`rangeDayRatio`) — khớp Quarter Report/BOD/B2B/B2C. Chỉ ảnh hưởng tab All-Time.
+- [ ] Chốt định nghĩa CM1 chuẩn: Dashboard (`monthly-kpis`) + Staff đang thấp hơn Quarter/BOD/B2B/B2C/All-Time 13,54tr ở T8 (trừ thêm chi phí kênh Supabase cho B2B), Channels tab "CM1" = GP − chi phí kênh (khác hẳn). Cần thống nhất 1 định nghĩa rồi sửa các tab lệch.
 - [x] s210 (2026-09-25): filter **Phí ship / Đơn nội bộ / KH Ops mặc định TICK** ở 8 tab (B2B, B2C, BOD, Quarter Report + Organization, Staff, All-Time, Orders) — Hiếu chốt. Tab không có filter (Channels, Vendors, Customers, Dashboard, Squad Progress) vẫn loại ship/nội bộ nên số KHÔNG khớp tab đã tick. Wiki: ghi chú §s210 ở `analytics-data-model.md` + các tab.
 - [ ] Merge `main` s209 khi Hiếu yêu cầu (tab Performance + bấm ô KH xem danh sách).
 - [ ] Nhập **target tháng Q4** (ALL/B2B/B2C × Revenue/GP/CM1/3HK) ở tab Performance › "Target Q4-2026" — độc lập với target quý B2B/B2C (Turso) và target squad, chưa tự đồng bộ; quyết định có cần fallback Σ3 tháng → target quý không.
