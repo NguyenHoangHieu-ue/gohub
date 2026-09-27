@@ -122,19 +122,24 @@ export async function GET(req: NextRequest) {
         totalB2BTursoCost += calcChCostForPeriod(rec, custRev, dayRatio)
       })
 
-      // B2C: channel-level costs (theo channelName hoặc tất cả channels nếu không filter).
-      const relevantChannelCosts = channelName
-        ? channelCosts.filter(cc => cc.channel === channelName)
-        : channelCosts  // all channels (group aggregate)
-      relevantChannelCosts.forEach(cc => {
-        const dayRatio = getDaysInMonth(cc.month) > 0
-          ? getDaysInRange(startDate || "", endDate || "", cc.month) / getDaysInMonth(cc.month) : 0
-        COST_KEYS.forEach(key => {
-          const cv = cc[key]
-          // percent type: dùng cB2CRev (doanh thu B2C thực trong scope) — B2B đã tính riêng ở trên.
-          if (cv?.value) opCost += cv.type === "amount" ? cv.value * dayRatio : (cB2CRev * cv.value) / 100
+      // B2C: channel-level costs (theo channelName hoặc tất cả channels nếu không filter). Bỏ qua hoàn
+      // toàn khi scope không có doanh thu B2C (channel/kênh 100% B2B) — B2B đã tính qua Turso ở trên, cộng
+      // thêm channel-cost Supabase (nếu lỡ có config cùng tên channel) sẽ DOUBLE-COUNT (đo thực tế: 3 kênh
+      // B2B lệch 166-208tr so với channels/performance trước khi thêm guard này).
+      if (cB2CRev !== 0) {
+        const relevantChannelCosts = channelName
+          ? channelCosts.filter(cc => cc.channel === channelName)
+          : channelCosts  // all channels (group aggregate)
+        relevantChannelCosts.forEach(cc => {
+          const dayRatio = getDaysInMonth(cc.month) > 0
+            ? getDaysInRange(startDate || "", endDate || "", cc.month) / getDaysInMonth(cc.month) : 0
+          COST_KEYS.forEach(key => {
+            const cv = cc[key]
+            // percent type: dùng cB2CRev (doanh thu B2C thực trong scope) — B2B đã tính riêng ở trên.
+            if (cv?.value) opCost += cv.type === "amount" ? cv.value * dayRatio : (cB2CRev * cv.value) / 100
+          })
         })
-      })
+      }
 
       // Group-level costs (B2B / B2C) — phân bổ theo tỷ trọng doanh thu scope/toàn công ty cùng kỳ
       // (revShare=1 khi scope = toàn công ty, đúng công thức bod-data.ts `finalizeGroupMargin`).
