@@ -10500,3 +10500,11 @@ monthly-kpis, cron, weekly-report) chỉ so TÊN nên KH loại bằng mã lọt
 (đổi cache không tin cậy) nay sha1 thật.
 Verify cuối (staging, Chrome): All-Time vs BOD/B2B KPI/B2C KPI khớp tuyệt đối (0 lệch) ở: T8 đủ tháng, 15–31/08,
 20/08–10/09 (vắt 2 tháng), 01/07–26/09 (quý), 01/09–26/09 (tháng dở, trước lệch 25tr). tsc + next build + vitest 422/422 PASS.
+
+## s211d (2026-09-27) — Soi công thức Quarter Report, áp cho Dashboard/Staff/Channels
+Hiếu: "xem logic công thức Quarter Report rồi áp dụng cho tab đang sai hoặc khác". Root cause từng tab (đo T8/2026, GP -13.541.857đ = 90 dòng nhóm INTERNAL-TRANSACTION, revenue=0 do hoàn/huỷ SIM nội bộ):
+- monthly-kpis (Dashboard): Query 1 không JOIN dim_order_source, không lọc group_name → cộng cả GP âm đó vào tổng công ty. Fix: lọc group_name IN ('B2B','B2C') — khớp quy ước Quarter Report "total = b2bRev + b2cRev, không cộng nhóm khác".
+- staff-report + staff-report/customers: đơn INTERNAL-TRANSACTION CÓ gán sales_pic/staff_code thật → lẫn vào GP nhân viên (lộ rõ hơn từ s210 khi mặc định tick "Đơn nội bộ"). Fix: thêm cùng điều kiện lọc group vào WHERE dùng chung.
+- channels/kpis (KPI card đầu tab Channels, gọi mặc định channel="" khi chưa chọn kênh): isB2BScope/tursoGroup chỉ đúng khi channelGroup param = "B2B"/"B2C" — trang thực tế KHÔNG BAO GIỜ truyền channelGroup cho endpoint này → không bao giờ trừ Turso B2B lẫn group cost (CM1 T8 lỗi 3,09 tỷ vs đúng 2,17 tỷ). Fix qua 3 lần (đúng cách): (1) luôn tách B2B/B2C thật + cộng cả Turso+group cost theo revShare; (2) Turso phải tính TỔNG công ty rồi phân bổ theo revShare (không tính trực tiếp theo doanh thu 1 kênh — sai vì 1 khách có thể trải nhiều kênh, lệch 166-208tr/kênh lần đầu); (3) phát hiện route không đọc `nocache=1` (cachedQuery truyền `undefined` thay `noCache(req)`) nên 2 lần sửa trước KHÔNG kiểm được gì — sau khi sửa mới thấy đúng.
+Verify cuối (staging, Chrome, T8/2026): BOD/Channels(All)/Dashboard/Staff/Channels(5 kênh top doanh thu) đều = 2.167.498.795đ, 0 lệch. channels/performance (bảng theo kênh) vốn đã đúng từ trước, không sửa. Cache key bump: monthly-kpis2, staff-report:v2, ch-kpis3.
+tsc + next build + vitest 418/418 PASS mọi commit.
