@@ -6,7 +6,8 @@ vi.mock("@/lib/supabase", () => ({ supabaseAdmin: {} }))
 vi.mock("@/lib/analytics-db", () => ({ queryAnalytics: vi.fn() }))
 vi.mock("@/lib/turso", () => ({ tursoQuery: vi.fn() }))
 
-import { customerExcludedSql, buildGroupCaseByCustomerSql } from "@/lib/analytics-helpers"
+import { customerExcludedSql, buildGroupCaseByCustomerSql, excludeOpsByCode } from "@/lib/analytics-helpers"
+import { exclHash } from "@/lib/quarterly-settings"
 
 describe("customerExcludedSql — loại KH theo tên HOẶC mã", () => {
   it("khớp cả tên (đã fallback mã khi thiếu tên) lẫn mã KH", () => {
@@ -26,5 +27,25 @@ describe("customerExcludedSql — loại KH theo tên HOẶC mã", () => {
     expect(withEx).toContain("THEN 'Excluded'")
     expect(withEx).toContain("TRIM(f.customer_code) IN ('3tOAkFoh0j')")
     expect(buildGroupCaseByCustomerSql({ Strategic: ["x"] } as any, [])).not.toContain("Excluded")
+  })
+})
+
+describe("excludeOpsByCode — cũng loại theo MÃ (không chỉ tên)", () => {
+  it("sinh cả điều kiện theo tên (qua dim_customer) và theo mã trực tiếp", () => {
+    const sql = excludeOpsByCode(["B2B Ops", "3tOAkFoh0j"])
+    expect(sql).toContain("FROM dim_customer WHERE name IN ('B2B Ops', '3tOAkFoh0j')")
+    expect(sql).toMatch(/NOT IN \('B2B Ops', '3tOAkFoh0j'\)$/)
+  })
+  it("danh sách rỗng → không thêm điều kiện", () => {
+    expect(excludeOpsByCode([])).toBe("")
+  })
+})
+
+describe("exclHash — hash thật của cả danh sách", () => {
+  it("đổi mục ở cuối danh sách dài (>24 ký tự) VẪN đổi key; thứ tự đầu vào không ảnh hưởng", () => {
+    const a = ["Alpha customer name long", "Beta customer name long", "Zeta"]
+    const b = ["Alpha customer name long", "Beta customer name long", "Zulu"]
+    expect(exclHash(a)).not.toBe(exclHash(b))
+    expect(exclHash(a)).toBe(exclHash([...a].reverse()))
   })
 })

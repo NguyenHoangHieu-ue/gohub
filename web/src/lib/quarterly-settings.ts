@@ -1,6 +1,7 @@
 // Shared settings cho Quarter Report: excluded customers + tier keyword mapping.
 // Lưu trong Supabase app_settings. Dùng chung bởi quarterly-report + quarterly-b2b-customers.
 
+import { createHash } from "node:crypto"
 import { supabaseAdmin } from "@/lib/supabase"
 import { memo } from "@/lib/memo"
 
@@ -83,7 +84,9 @@ export function excludedForB2C(excludedCustomers: string[]): string[] {
 
 /** Hash ngắn của exclusion list để đưa vào cache key (auto-invalidate khi list thay đổi). */
 export function exclHash(excludedCustomers: string[]): string {
-  return [...excludedCustomers].sort().join("|").slice(0, 24)
+  // Hash THẬT của cả danh sách (trước đây chỉ nối tên rồi cắt 24 ký tự → đổi mục phía sau không làm mới cache).
+  // Hậu tố "name-or-code-v2" = đổi ngữ nghĩa loại trừ (tên HOẶC mã, s211) → mọi cache key dùng hàm này tự làm mới.
+  return createHash("sha1").update([...excludedCustomers].sort().join("|") + "::name-or-code-v2").digest("hex").slice(0, 12)
 }
 
 /** Tạo hàm classifyTier động theo tierKeywords config. */

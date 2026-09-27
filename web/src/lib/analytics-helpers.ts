@@ -580,7 +580,9 @@ export function internalOpsFilterByCode(include: boolean): string {
 export function excludeOpsByCode(excludedCustomers: string[]): string {
   if (excludedCustomers.length === 0) return ""
   const esc = excludedCustomers.map(n => `'${n.replace(/'/g, "''")}'`).join(", ")
-  return `AND COALESCE(TRIM(f.customer_code), '') NOT IN (SELECT TRIM(code) FROM dim_customer WHERE name IN (${esc}))`
+  // Danh sách chứa cả TÊN lẫn MÃ KH: loại KH có tên trong danh sách VÀ KH có mã trong danh sách (trước chỉ theo tên → KH loại
+  // bằng mã như 3tOAkFoh0j vẫn lọt vào B2B/B2C/Channels/Staff, lệch Quarter Report).
+  return `AND COALESCE(TRIM(f.customer_code), '') NOT IN (SELECT TRIM(code) FROM dim_customer WHERE name IN (${esc})) AND COALESCE(TRIM(f.customer_code), '') NOT IN (${esc})`
 }
 
 /**
