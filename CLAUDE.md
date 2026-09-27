@@ -8,41 +8,37 @@
 
 ---
 
-## Trạng thái hiện tại (2026-09-25)
+## Trạng thái hiện tại (2026-09-27)
 
 Branch làm việc: `staging` → merge `main` **CHỈ khi Hiếu yêu cầu RÕ RÀNG**. tsc + `next build` + `next lint` + vitest phải PASS trước khi push.
 
-**Đang trên `staging`, CHƯA merge `main` — s209 (2026-09-25, `bf386674`):** Quarter Report.
-- **Squad Progress**: bấm ô "KH đang mua"/tier/4 ô vòng đời → xổ danh sách khách hàng ngay dưới (`squad-customer-summary.tsx`;
-  route thêm `lifecycle_group`, `prev_revenue`, danh sách "chưa quay lại" đủ ≤300).
-- **Tab mới "Performance"** (cạnh Tổng quan/Squad Progress): bảng ALL/B2B/B2C theo mẫu Excel của Hiếu — Q trước+%QoQ | tháng+quý (PR) |
-  target tháng quý sau+"Target +%QoQ" | cột cả năm (chỉ Q3/Q4). Số thực tế = route `quarterly-report` (thêm `hk3Rev` cho B2B/B2C);
-  target tháng lưu `app_settings.company_monthly_targets` (API `company-monthly-targets`); ALL trống = B2B+B2C. %QoQ TƯƠNG ĐỐI kể cả
-  dòng % (đổi cả bảng Squad). Logic thuần + test: `lib/quarterly-company-view.ts`. Wiki `analytics-quarterly.md` §s209.
+**Đang trên `staging`, CHƯA merge `main` — s212/s213 (2026-09-27, `b6a82dcb`):**
+- **s212 — wiki nghiệp vụ**: đổi thứ tự ưu tiên vendor, thay hẳn "thử WM trước" cũ → **3HK → BC Datapool →
+  sản phẩm có SĐT local → sản phẩm khác** (Nhật vẫn luôn KDDI). Ngoại lệ tạm thời (giá): Đài Loan/HK đang
+  dùng WM thay BC-Singtel vì 3HK cần KYC còn WM/BC-Singtel thì không, WM đang rẻ hơn — hết ngoại lệ khi BC
+  Datapool vào target. Sửa 4 bài: `chon-vendor.md`, `vendor-worldmove.md`, `vendor-3hk.md`, `gioi-thieu-gohub.md`.
+- **s213 — fix lỗi thật Tổ Gấu**: `searchKB()` (Gấu Tổ, AI trả lời trong group chat) lọc `kb_wiki_pages` bằng
+  cột `status` KHÔNG TỒN TẠI (verify `/api/config/db/table`) → phần Wiki trong context AI luôn rỗng âm thầm,
+  mọi câu hỏi, từ khi tính năng ra đời — Gấu Tổ không bao giờ trích được nguồn Wiki dù prompt bắt buộc. Đã bỏ
+  filter sai + test khoá lại + verify sống (hỏi thật, trích đúng nguồn sau fix). Wiki `analytics-to-gau.md` §s213.
 
-**Mốc gần nhất trên `main` — s208 (2026-09-25, `c92b3440`)** (merge theo yêu cầu Hiếu 2026-09-25). Gồm:
-- **s208 — Quarter Report › Squad Progress**: thẻ **GP** mỗi squad + Target GP; summary KH mỗi squad (số KH theo tier,
-  mới / cũ tiếp tục / cũ quay lại sau gián đoạn / cũ chưa quay lại — "chưa quay lại" = có mua QUÝ TRƯỚC, quý này chưa mua);
-  bảng **Performance theo tháng** từng squad (T7–T9 PR + quý | target T10–12 + quý sau + %QoQ). `POST squad-targets`
-  giờ MERGE theo squad + nhận `next` (target tháng quý sau). Wiki `analytics-quarterly.md` §s208, session_summary s208.
-- **s207 — Gấu Pro giảm lag UI** khi hội thoại dài (memo list tin, persist localStorage khi hết stream, gộp delta bằng rAF).
-  Chưa QA sống — Hiếu thử lại. Wiki `analytics-creator-ai.md` §s207.
-- **Plan đang chạy (tạm)**: `docs/plans/saas-be-gau.md` — Bé Gấu SaaS đa khách hàng, chưa bắt đầu code (xem mục dưới).
+**Mốc gần nhất trên `main` — s211d (2026-09-27, `071018da`)** (merge theo yêu cầu Hiếu). Gồm s209→s211d:
+- **s209 — Quarter Report**: Squad Progress bấm ô KH xem danh sách; tab mới **"Performance"** (ALL/B2B/B2C
+  theo mẫu Excel, Q trước+%QoQ | tháng+quý PR | target tháng quý sau | cột cả năm).
+- **s210 — filter Phí ship/Đơn nội bộ/KH Ops mặc định TICK** ở 8 tab (B2B, B2C, BOD, Quarter Report+Organization,
+  Staff, All-Time, Orders).
+- **s211/s211b/s211c/s211d — audit công thức CM1 toàn hệ thống, dùng Quarter Report làm chuẩn**: fix 3 ô KPI
+  All-Time; fix loại KH theo MÃ (không chỉ tên) ở 8 route (`customerExcludedSql`/`excludeOpsByCode`); All-Time
+  tính chi phí THEO SỐ NGÀY trong khoảng lọc (`rangeDayRatio`, hết trừ nguyên tháng); Dashboard/Staff/Channels
+  sửa để tổng công ty LUÔN = B2B+B2C (loại nhóm INTERNAL-TRANSACTION) — verify BOD/Channels/Dashboard/Staff/
+  All-Time cùng ra 1 số, 0 lệch. Wiki: `analytics-all-time.md`, `analytics-dashboard.md`, `analytics-staff.md`,
+  `analytics-channels.md`, `analytics-data-model.md` (đều có §s211x). Chi tiết đầy đủ: `docs/session_summary.txt`.
+- **Plan đang chạy (tạm)**: `docs/plans/saas-be-gau.md` — Bé Gấu SaaS đa khách hàng, chưa bắt đầu code.
 
-**Mốc s206 (2026-09-23, `c46f7b47`).** Toàn bộ s204/s205 (3HK sub-variant,
-VN Ecom CH.Cost/CM1, wiki business, v62) đã merge. s206 = **trợ lý toàn diện (Gấu Pro)** + vài fix:
-- Scheduled message: Lark 11310 "card table number over limit" (≤5 bảng/card) → tách nhiều card.
-- B2C Advanced MKT Profit Report mất T9 (Meta/Google hardcode) → Total MKT lấy Manage Cost; KPI Units Sold hiện %.
-- Model Gemini tập trung `lib/ai-models.ts` (`GEMINI_MODEL`/`GEMINI_MODEL_PRO`, env override) + digest DM khi
-  Google mở model mới. Hiếu chốt KHÔNG dùng Claude API (gói Pro không gồm API).
-- Gấu Pro (creator-only): `localFiles` (daemon `local-agent/`, autostart Windows) · Kết nối Google + `googleWorkspace`
-  · `larkDocs` (Lark Drive/Docs/Sheets/Wiki) · `assistantMemory` (bảng `assistant_memory`, v63) · DM Lark creator →
-  Gấu Pro · tự tạo task khi bị @giao việc trong group · nhắc deadline (ké cron scheduled-messages) · digest thêm task.
-- Fix Lark OAuth: redirect theo origin (không NEXTAUTH_URL) + xin scope tường minh (bỏ trống = không cấp quyền mới).
-  Bug cũ: `createLarkTask` gửi hạn theo giây (Lark dùng ms) → hạn về 1970.
-- QA sống đủ: file local, Google, Lark Task/Docs, trí nhớ, nhắc deadline. **Chưa QA**: DM bot + giao việc qua group.
-- Chi tiết: wiki `analytics-creator-ai.md` §s206..s206+7, `analytics-scheduled.md` §E, `analytics-b2c.md` s206,
-  `docs/session_summary.txt` s206.
+**Mốc s206 (2026-09-23).** Trợ lý toàn diện Gấu Pro: `localFiles`, `googleWorkspace`, `larkDocs`,
+`assistantMemory`, DM Lark, tự tạo task khi bị @giao việc, nhắc deadline. Model Gemini tập trung
+`lib/ai-models.ts`. **Chưa QA**: DM bot + giao việc qua group. Chi tiết: wiki `analytics-creator-ai.md`
+§s206..s206+7, `docs/session_summary.txt` s206.
 
 **Kiến trúc & agent hiện tại** (xem `docs/wiki/system/kien-truc-he-thong.md` để biết đầy đủ + diagram):
 - Chatbot chính = **Bé Gấu** (`be-gau.ts`, 1 agent function-calling, model `gemini-3.8-flash`
@@ -66,17 +62,11 @@ VN Ecom CH.Cost/CM1, wiki business, v62) đã merge. s206 = **trợ lý toàn di
 làm bất cứ việc gì liên quan SaaS/tenant. **File TẠM: khi mọi mốc xong (hoặc Hiếu bỏ plan) phải xoá file +
 xoá dòng này**, chuyển kiến thức còn giá trị sang wiki `docs/wiki/system/`.
 
-**Ưu tiên gần nhất (s209):**
-- [x] s213 (2026-09-27): fix lỗi thật — Gấu Tổ (Tổ Gấu) không bao giờ lấy được Wiki để trả lời (`searchKB()` lọc cột `status` không tồn tại trên `kb_wiki_pages`). Verify sống: trích nguồn Wiki đúng sau fix. 2 điểm nhỏ ghi nhận thêm (không sửa): xem `docs/session_summary.txt` §s213.
-- [x] s211 (2026-09-27): sửa 3 ô KPI All-Time (Total Revenue / Avg GPM % / Avg CM1 %) — tính từ số liệu thô, có trọng số doanh thu (`lib/all-time-kpi.ts`). Đã QA sống (khớp API/SQL). Kèm sửa lỗi loại trừ KH theo MÃ ở 6 route (`customerExcludedSql`), All-Time nay khớp Quarter Report ≤1đ.
-- [x] s211b (2026-09-27): All-Time CM1 tính chi phí THEO SỐ NGÀY trong khoảng lọc (`rangeDayRatio`) — khớp Quarter Report/BOD/B2B/B2C. Chỉ ảnh hưởng tab All-Time.
-- [x] s211d (2026-09-27): Dashboard/Staff/Channels áp đúng công thức Quarter Report — verify BOD/Channels/Dashboard/Staff cùng ra 2.167.498.795đ (T8, 0 lệch). Xem `docs/session_summary.txt` §s211d.
-- [x] s210 (2026-09-25): filter **Phí ship / Đơn nội bộ / KH Ops mặc định TICK** ở 8 tab (B2B, B2C, BOD, Quarter Report + Organization, Staff, All-Time, Orders) — Hiếu chốt. Tab không có filter (Channels, Vendors, Customers, Dashboard, Squad Progress) vẫn loại ship/nội bộ nên số KHÔNG khớp tab đã tick. Wiki: ghi chú §s210 ở `analytics-data-model.md` + các tab.
-- [ ] Merge `main` s209 khi Hiếu yêu cầu (tab Performance + bấm ô KH xem danh sách).
+**Ưu tiên gần nhất (s209-s213, xem chi tiết ở "Trạng thái hiện tại" trên):**
+- [ ] Merge `main` s212/s213 khi Hiếu yêu cầu (vendor priority wiki + fix Gấu Tổ đọc Wiki).
 - [ ] Nhập **target tháng Q4** (ALL/B2B/B2C × Revenue/GP/CM1/3HK) ở tab Performance › "Target Q4-2026" — độc lập với target quý B2B/B2C (Turso) và target squad, chưa tự đồng bộ; quyết định có cần fallback Σ3 tháng → target quý không.
-
-**Ưu tiên gần nhất (s208):**
-- [ ] Quarter Report › Squad Progress: nhập **Target GP** từng squad + **target T10/T11/T12** (Revenue/GP/CM1/3HK Rev) ở nút "Target Squad" để bảng Performance theo tháng có cột target.
+- [ ] Quarter Report › Squad Progress: nhập **Target GP** từng squad + **target T10/T11/T12** để bảng Performance theo tháng có cột target.
+- [ ] Chốt định nghĩa CM1 chuẩn còn treo: Channels tab "CM1" hiển thị = GP − chi phí kênh (không trừ chi phí KH/group cost) — có đổi tên nhãn hay đổi công thức không?
 - [ ] Quyết định có đổi định nghĩa "KH cũ chưa quay lại" ở tab Tổng quan (`quarterly-customer-lifecycle`, hiện đếm toàn lịch sử ~112.000 KH) cho khớp Squad Progress (chỉ KH có mua quý trước) không.
 - [ ] Thử lại Gấu Pro nhắn nhiều tin xem hết lag (s207).
 - [ ] Trả lời 3 câu mở trong `docs/plans/saas-be-gau.md` (module SaaS cùng repo? Vercel/Supabase Pro khi nào? tên sản phẩm).
