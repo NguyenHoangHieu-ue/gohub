@@ -87,10 +87,15 @@ export async function GET(req: NextRequest) {
         getGroupCostsForMonths(months),
         cB2BRev !== 0
           ? queryAnalytics<{ customer_code: string; month: string; revenue: string }>(
+              // KHÔNG lọc theo chFilter — Turso cost gắn với KHÁCH HÀNG, không có dimension channel (1 khách
+              // có thể mua qua nhiều kênh trong kỳ). Cần tổng doanh thu TOÀN CÔNG TY của khách để tính đúng
+              // % phí, sau đó phân bổ TỔNG chi phí B2B vào scope theo tỷ trọng doanh thu (giống channels/
+              // performance + bod-data.ts `finalizeGroupMargin` — KHÔNG tính trực tiếp theo doanh thu trong
+              // phạm vi kênh, sẽ sai khi 1 khách trải nhiều kênh).
               `SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
                       SUM(f.${source.revenueCol}) as revenue
                FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-               WHERE ${filter} ${chFilter} ${sfx} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
+               WHERE ${filter} ${sfx} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
                GROUP BY 1, 2`
             )
           : Promise.resolve([] as { customer_code: string; month: string; revenue: string }[]),
@@ -105,15 +110,16 @@ export async function GET(req: NextRequest) {
       const groupCosts = groupCostsRaw as Array<{ group_name: string; month: string; amount: string }>
       let opCost = 0
 
-      // B2B: Turso per-customer cost thay analytics_channel_costs (tránh double-count, khớp Quarter Report).
+      // B2B: TỔNG chi phí Turso toàn công ty, rồi phân bổ vào scope theo revShare (cùng cách group cost bên dưới).
       const custRevMap = new Map<string, number>()
       custRevRows.forEach(r => custRevMap.set(`${r.month}_${r.customer_code}`, parseFloat(r.revenue || "0")))
+      let totalB2BTursoCost = 0
       customerCostMap.forEach((rec, ckey) => {
         const mo = ckey.slice(0, 7); const code = ckey.slice(8)
         const custRev = custRevMap.get(`${mo}_${code}`) || 0
         if (custRev === 0) return
         const dayRatio = getDaysInMonth(mo) > 0 ? getDaysInRange(startDate || "", endDate || "", mo) / getDaysInMonth(mo) : 0
-        opCost += calcChCostForPeriod(rec, custRev, dayRatio)
+        totalB2BTursoCost += calcChCostForPeriod(rec, custRev, dayRatio)
       })
 
       // B2C: channel-level costs (theo channelName hoặc tất cả channels nếu không filter).
@@ -136,6 +142,7 @@ export async function GET(req: NextRequest) {
       for (const r of companyGroupRows) companyRevByGroup[r.grp] = parseFloat(r.rev || "0")
       const revShareOf = (scopeRev: number, grp: "B2B" | "B2C") =>
         (companyRevByGroup[grp] || 0) > 0 ? scopeRev / companyRevByGroup[grp] : 0
+      opCost += totalB2BTursoCost * revShareOf(cB2BRev, "B2B")
       groupCosts.forEach(gc => {
         const share = gc.group_name === "B2B" ? revShareOf(cB2BRev, "B2B") : gc.group_name === "B2C" ? revShareOf(cB2CRev, "B2C") : 0
         if (share === 0) return
