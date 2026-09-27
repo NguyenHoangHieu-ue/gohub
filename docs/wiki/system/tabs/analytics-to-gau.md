@@ -659,3 +659,18 @@ staging cả trước lẫn sau khi tách, không chỉ tin code sạch.
 s196+17) — giờ Realtime đã phủ cả 4 bảng, poll chỉ còn vai trò lưới an toàn dự phòng (bắt trường hợp
 publication lỗi/mất kết nối WebSocket), không cần chạy nhanh như khi nó còn là đường CHÍNH. Không đổi cơ
 chế reconcile/merge, chỉ đổi 4 con số interval. tsc PASS. Không cần Hiếu làm gì thêm.
+
+## s213 (2026-09-27) — Fix lỗi thật: Gấu Tổ không bao giờ lấy được Wiki để trả lời
+
+Hiếu báo "Tài liệu trong Tổ Gấu đang rất không đúng" — QA phát hiện `searchKB()` (`lib/to-gau-ai-helpers.ts`)
+lọc `kb_wiki_pages` bằng `.eq("status", "active")`. Verify qua `/api/config/db/table?name=kb_wiki_pages`:
+bảng KHÔNG CÓ cột `status` (chỉ có `is_hidden`) — PostgREST lỗi âm thầm, `wikiRows` luôn `undefined` →
+phần Wiki trong "TÀI LIỆU THAM KHẢO NỘI BỘ" gửi cho Gemini **luôn rỗng, mọi câu hỏi, từ khi tính năng ra
+đời (s194+6)** — dù system prompt Gấu Tổ bắt buộc trích nguồn `(Nguồn: [Wiki] ...)`. Docs/Notes của group
+(`chat_docs`/`chat_notes`) không dính lỗi này (cột đúng, đã verify). Test cũ (`to-gau-ai-helpers.test.ts`)
+mock Supabase trả `{data: [], error: null}` cho MỌI bảng bất kể query — không bắt được lỗi loại này.
+
+**Fix**: bỏ `.eq("status", "active")` — `is_hidden=false` (áp cho non-privileged) đã đóng đúng vai trò
+"active". Thêm test khoá lại: wiki query không được lọc theo cột `status`. Bài học lặp lại cùng lớp
+`data_policy_code`/`organization_code` (CLAUDE.md coding rule "verify field DB qua SQL/REST trước khi
+dùng") — nay áp thêm cho filter, không chỉ khoá chính.

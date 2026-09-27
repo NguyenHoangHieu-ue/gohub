@@ -39,10 +39,14 @@ export async function searchKB(question: string, privileged: boolean, groupId: s
   const keywords = question.slice(0, 200).replace(/[^a-zA-Z0-9À-ỹ ]/g, " ")
   const words = keywords.trim().split(/\s+/).filter(w => w.length > 2).slice(0, 4)
 
+  // BUG THẬT (tìm thấy 2026-09-27, QA "Tài liệu Tổ Gấu đang rất không đúng"): `.eq("status","active")` lọc
+  // theo cột KHÔNG TỒN TẠI trên kb_wiki_pages (verify qua /api/config/db/table — bảng chỉ có is_hidden,
+  // không có status) → PostgREST trả lỗi, wikiRows luôn undefined → phần Wiki trong TÀI LIỆU THAM KHẢO
+  // NỘI BỘ của Gấu Tổ LUÔN RỖNG, im lặng, mọi câu hỏi, từ khi tính năng ra đời (s194+6) — dù prompt bắt
+  // buộc trích nguồn Wiki. is_hidden đã đóng đúng vai trò "active" cho non-privileged ở nhánh dưới.
   let wikiQuery = supabaseAdmin
     .from("kb_wiki_pages")
     .select("title, content, page_type, is_hidden")
-    .eq("status", "active")
     .limit(4)
 
   // User thường không thấy system/tab_guide docs

@@ -109,4 +109,12 @@ describe("searchKB — group-scoping (chat_docs/chat_notes PHẢI lọc đúng g
     await searchKB("cấu trúc mã SKU", true, "group-A")
     expect(fromCalls["kb_wiki_pages"].find(c => c[0] === "eq" && c[1] === "is_hidden")).toBeUndefined()
   })
+
+  // Lỗi thật (2026-09-27): kb_wiki_pages KHÔNG CÓ cột `status` (verify /api/config/db/table) — .eq("status",
+  // "active") khiến PostgREST lỗi, wiki luôn rỗng im lặng mọi câu hỏi từ khi có tính năng. Khoá lại để
+  // không viết nhầm filter lên cột ảo lần nữa (đúng bài học data_policy_code/organization_code).
+  it("wiki query KHÔNG lọc theo cột 'status' (cột không tồn tại trên kb_wiki_pages)", async () => {
+    await searchKB("cấu trúc mã SKU", true, "group-A")
+    expect(fromCalls["kb_wiki_pages"].find(c => (c[0] === "eq" || c[0] === "neq") && c[1] === "status")).toBeUndefined()
+  })
 })
