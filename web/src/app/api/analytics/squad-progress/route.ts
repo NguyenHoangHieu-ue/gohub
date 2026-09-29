@@ -141,7 +141,9 @@ export async function GET(req: NextRequest) {
     // s203: route này TRƯỚC KHÔNG cache → mỗi lần mở Quarter Report chạy lại 3 query fact/dim (9-17s khi nguội). Nay khối
     // DOANH THU thô được cache SWR (khoá theo quý/năm/công ty/ngày/bộ loại trừ); chi phí, target, squad config vẫn đọc
     // tươi mỗi request (nhập xong hiện ngay, không cần flush).
-    const rawKey = `squad_raw_v1:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
+    // v2 (s214b): thêm org_key/org_name vào SELECT/GROUP BY (gộp bảng KH theo Organization) — bump để tránh
+    // đọc cache cũ thiếu 2 cột này (custRows.org_key sẽ undefined → fallback về mã lẻ, không gộp được gì).
+    const rawKey = `squad_raw_v2:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
     const [raw, { groupCosts }, lifecycleRows] = await Promise.all([
       cachedQuery(rawKey, async () => {
         const [custRows, picRows, prevCustRevRows] = await Promise.all([
