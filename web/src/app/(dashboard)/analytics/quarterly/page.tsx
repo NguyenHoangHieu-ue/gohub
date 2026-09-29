@@ -1623,7 +1623,7 @@ function QuarterlyContent() {
                               </div>
 
                               {/* S4: Expanded customer table — 9 cột */}
-                              {expanded && sq.customers?.length > 0 && (
+                              {expanded && sq.customer_orgs?.length > 0 && (
                                 <div className="overflow-x-auto border-t border-slate-100 bg-slate-50/50">
                                   <table className="w-full text-[11px] border-collapse">
                                     <thead>
@@ -1641,7 +1641,7 @@ function QuarterlyContent() {
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                      {sq.customers.map((c: any, ci: number) => {
+                                      {sq.customer_orgs.map((c: any, ci: number) => {
                                         const rm = RISK_META[c.risk_level] ?? RISK_META["no_target"]
                                         const picInfo = squadData.available_pics?.find((p: any) => p.code === c.sales_pic)
                                         const custKey = `${si}-${c.customer_code}`
@@ -1685,7 +1685,7 @@ function QuarterlyContent() {
                                             <tr>
                                               <td colSpan={10} className="p-0 border-l-[3px] border-transparent">
                                                 <PivotTable title={c.customer_name} icon={Users}
-                                                  channels={[{ name: c.customer_name, totalRevenue: c.revenue_pr, months: c.monthly }]}
+                                                  channels={[{ name: c.customer_name, totalRevenue: c.revenue_pr, months: c.monthly, ...(c.members && { members: c.members }) }]}
                                                   months={squadData.quarter_months} expanded
                                                   onToggle={() => setExpandedSqCustomers(prev => { const next = new Set(prev); next.delete(custKey); return next })} />
                                               </td>

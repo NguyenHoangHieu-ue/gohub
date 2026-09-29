@@ -152,6 +152,8 @@ export async function GET(req: NextRequest) {
             TRIM(c.sales_pic_code)                              AS sales_pic_code,
             c.price_list_name,
             c.currency_code,
+            COALESCE(NULLIF(TRIM(c.organization), ''), TRIM(f.customer_code)) AS org_key,
+            COALESCE(NULLIF(TRIM(c.organization), ''), COALESCE(c.name, TRIM(f.customer_code))) AS org_name,
             SUM(f.fulfilled_revenue_amount_vnd)                 AS revenue,
             SUM(f.gross_profit_vnd)                             AS gm,
             SUM(CASE WHEN sk.sku IS NOT NULL
@@ -171,7 +173,7 @@ export async function GET(req: NextRequest) {
             AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
             AND NOT (UPPER(COALESCE(c.price_list_name,'')) LIKE '%INACTIVE%')
             ${EXCLUDE_CUST_SQL}
-          GROUP BY 1, 2, 3, c.price_list_name, c.currency_code
+          GROUP BY 1, 2, 3, c.price_list_name, c.currency_code, 6, 7
         `),
         queryAnalytics<{ code: string; name: string }>(`
           SELECT DISTINCT
@@ -430,6 +432,8 @@ export async function GET(req: NextRequest) {
         return {
           customer_code: code,
           customer_name: r.customer_name,
+          org_key: r.org_key || code,
+          org_name: r.org_name || r.customer_name,
           sales_pic: r.sales_pic_code || "",
           tier:   classifyTier(r.price_list_name),
           region: classifyRegion(r.price_list_name, r.currency_code),
@@ -448,6 +452,75 @@ export async function GET(req: NextRequest) {
           monthly,
         }
       }).filter(Boolean) as any[]
+
+      // s214(b): Hiếu chốt "phải phân theo Organization giống Quarter Report (Organization)" — bảng KH
+      // xổ ra khi bấm 1 squad gộp `customer_code` cùng `organization` (dim_customer) thành 1 dòng, CHỈ
+      // trong phạm vi squad đó (KHÔNG đụng `customers` gốc — search/filter/export/tier/lifecycle vẫn đọc
+      // đúng per-customer_code như cũ, tránh lặp lại bug s169 "2 nơi tính khác nhau"). Số lượng (revenue/
+      // CM1/target/3HK) CỘNG DỒN từ member — không "chọn đại diện" như Tier/PIC/Region (đại diện lấy từ
+      // mã có revenue_pr lớn nhất, đúng quy ước Quarter Report Organization). `monthly` gộp theo tháng từ
+      // member.monthly (cùng shape ChannelMonth) — org có >1 mã mới gắn `members[]` để PivotTable render
+      // nút bấm xổ mã con (member.monthly giữ nguyên, KHÔNG tính lại).
+      const orgGroups = new Map<string, any[]>()
+      customers.forEach(c => {
+        const arr = orgGroups.get(c.org_key) ?? []
+        arr.push(c); orgGroups.set(c.org_key, arr)
+      })
+      const customerOrgs = [...orgGroups.entries()].map(([orgKey, group]) => {
+        if (group.length === 1) return group[0]
+        const rep = group.reduce((a, b) => b.revenue_pr > a.revenue_pr ? b : a)
+        const sum = (f: string) => group.reduce((s, m) => s + (Number((m as any)[f]) || 0), 0)
+        const revenue = sum("revenue"), revenuePr = sum("revenue_pr")
+        const cm1Act = sum("cm1"), cm1Pr = sum("cm1_pr")
+        const targetRev = sum("target_rev"), targetCm1 = sum("target_cm1"), targetHk3rev = sum("target_hk3rev")
+        const hk3Act = sum("hk3"), hk3Pr = sum("hk3_pr")
+        const cm1TgtPct: number | null = targetCm1 > 0 ? Math.round(cm1Pr / targetCm1 * 100) : null
+        const hk3TgtPct: number | null = targetHk3rev > 0 ? Math.round(hk3Pr / targetHk3rev * 100) : null
+        const orgMonths = rep.monthly.map((_: any, i: number) => {
+          let revenue = 0, gp = 0, channelCost = 0, cm1 = 0, hk3rev = 0
+          let anyProjected = false, actualRevenue = 0, actualGp = 0, actualCc = 0, actualCm1 = 0
+          group.forEach(m => {
+            const md = m.monthly[i]
+            revenue += md.revenue; gp += md.gp; channelCost += md.channelCost; cm1 += md.cm1; hk3rev += md.three_hk_rev
+            if (md.isProjected) {
+              anyProjected = true
+              actualRevenue += md.actualRevenue ?? md.revenue; actualGp += md.actualGp ?? md.gp
+              actualCc += md.actualCc ?? md.channelCost; actualCm1 += md.actualCm1 ?? md.cm1
+            }
+          })
+          const base: Record<string, any> = {
+            month: rep.monthly[i].month, revenue, gp, channelCost, cm1,
+            cm1Pct: revenue > 0 ? Math.round(cm1 / revenue * 1000) / 10 : 0,
+            momPct: null as number | null,
+            three_hk_rev: hk3rev, three_hk_pct: revenue > 0 ? Math.round(hk3rev / revenue * 1000) / 10 : 0,
+            isProjected: anyProjected,
+          }
+          if (anyProjected) Object.assign(base, { actualRevenue, actualGp, actualCc, actualCm1 })
+          return base
+        })
+        const orgMonthly = orgMonths.map((mm: any, i: number) => {
+          const prev = orgMonths[i - 1]
+          const momPct = prev && prev.revenue > 0 ? Math.round((mm.revenue - prev.revenue) / prev.revenue * 1000) / 10 : null
+          return { ...mm, momPct }
+        })
+        return {
+          ...rep,
+          customer_code: orgKey, customer_name: `${rep.org_name} · ${group.length} mã KH`,
+          member_count: group.length,
+          members: group.map(m => ({ name: m.customer_name, totalRevenue: m.revenue_pr, months: m.monthly })),
+          prev_revenue: Math.round(sum("prev_revenue")),
+          revenue, revenue_pr: revenuePr, target_rev: targetRev,
+          rev_pct: targetRev > 0 ? Math.round(revenuePr / targetRev * 100) : null,
+          cm1: cm1Act, cm1_pr: cm1Pr, target_cm1: targetCm1,
+          cm1_pct: revenue > 0 ? Math.round(cm1Act / revenue * 1000) / 10 : 0,
+          cm1_tgt_pct: cm1TgtPct,
+          hk3: hk3Act, hk3_pct: revenue > 0 ? Math.round(hk3Act / revenue * 1000) / 10 : 0, hk3_pr: hk3Pr,
+          target_hk3rev: targetHk3rev,
+          hk3_tgt_pct: hk3TgtPct,
+          risk_level: getRiskLevel(cm1TgtPct, hk3TgtPct),
+          monthly: orgMonthly,
+        }
+      }).sort((a, b) => b.revenue_pr - a.revenue_pr)
 
       // Squad-level projected values: dùng per-month factors × futureScale (khớp Tổng quan, ước tính tháng chưa tới)
       // Số liệu từng tháng của squad (actual, CM1 chưa trừ group cost) — nguồn chung cho PR cả quý VÀ bảng "Performance theo tháng"
@@ -525,6 +598,7 @@ export async function GET(req: NextRequest) {
         risk_counts: riskCounts,
         tier_counts: tierCounts,
         customers,
+        customer_orgs: customerOrgs,
         lifecycle,
         monthly,
       }
