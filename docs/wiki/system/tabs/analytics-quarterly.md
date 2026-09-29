@@ -635,6 +635,39 @@ phạm vi squad đó (2 mã cùng org nhưng khác PIC/khác squad KHÔNG gộp)
   sạch không còn "VN_Org". API kiểm thêm: Σ `members[].totalRevenue` = Σ `monthly[].revenue` =
   `revenue_pr` của dòng Organization, khớp tuyệt đối. tsc + vitest 419/419 PASS.
 
+**s214(c) (2026-09-29, cùng ngày) — Áp tiếp cho tab Tổng quan, bảng "B2B — Chi tiết theo Nhóm (Hàng) ×
+Tháng (Cột)".** Hiếu yêu cầu áp cơ chế gộp Organization luôn cho bảng này (ban đầu đề nghị đổi tên bảng
+thành "theo Organization" — hỏi lại xác nhận: **"Nhóm" ở đây = Tier** (Strategic/VIP/Gold/Silver), KHÔNG
+phải Organization, nên **giữ nguyên tên bảng**, chỉ thêm cấp Organization GIỮA Tier và mã KH: Tier →
+Organization → mã KH con.
+- Đây là component phức tạp nhất trang (`b2b-tier-section.tsx`, ~1080 dòng) — có Sửa CH.Cost/Sửa Target
+  per-`customer_code`, drill Tháng/Ngày/Sản phẩm + chart, Export, tất cả thao tác ở mức mã KH lẻ. Hỏi kỹ
+  trước khi làm vì gộp sai chỗ này đụng tới thao tác sửa dữ liệu thật (chi phí/target).
+  **Quyết định (Hiếu chốt qua AskUserQuestion)**: org-header CHỈ là dòng tổng hợp đọc-only để thu gọn danh
+  sách; Sửa CH.Cost/Sửa Target/Chi tiết Tháng-Ngày-Sản phẩm/Export **VẪN thao tác ở mã KH lẻ, không đổi
+  gì** — org-header chỉ ẩn/hiện các mã KH con (là các hàng KH y hệt trước giờ, đầy đủ chức năng).
+- **Cách làm tối thiểu rủi ro**: KHÔNG viết lại khối render ~450 dòng của 1 hàng KH. Thêm hàm thuần
+  `buildDisplayList(custs)` (gộp theo `orgKey`, org header thu gọn mặc định) chạy TRƯỚC vòng lặp render;
+  đổi nguồn lặp từ `custs.map((c,i)=>{...})` sang `buildDisplayList(custs).map((item,i)=>{ if (org-header)
+  return <tr aggregate/>; if (item.hidden) return null; const c = item.c; ...(phần thân giữ nguyên 100%,
+  chỉ thêm `const c = item.c` đầu callback)... })`. Org có 1 mã (đa số) hiện y hệt trước — 0 thay đổi hành
+  vi cho KH không thuộc org nhiều mã.
+- Org-header row (nền vàng nhạt, phân biệt rõ với hàng KH thật): tên + badge "N mã KH", Revenue/GM/GM%/
+  Ch.Cost/CM1/%CM1/3HK = **Σ `custPr()`** của member (đọc đúng số đã hiện ở hàng chính mỗi KH, không tính
+  lại công thức); %TgtCM1/%QoQ/3HK Rev TGT/%TGT3HK để **"—"** — target nhập theo `customer_code` lẻ, cộng
+  dồn không có ý nghĩa rõ ràng ở mức org (ghi rõ quyết định, không phải thiếu sót).
+- Backend `quarterly-b2b-customers/route.ts`: thêm `org_key`/`org_name` (cùng công thức
+  `quarterly-org-customers`/`squad-progress`) vào query customer + GROUP BY, propagate qua
+  `CustomerAgg`/`CustRow`. Bump `QB2B_CACHE_PREFIX` v10→v11 (rút kinh nghiệm bug cache v1 ở
+  squad-progress s214(b) — bump ngay khi đổi SELECT/GROUP BY, không đợi phát hiện lỗi rồi mới sửa).
+  `stripOrgPrefix()` bản sao (như 2 chỗ trước) cắt "VN_Org "/"US_Org " ở tên org-header.
+- Verify sống staging (Chrome, acc Creator, Q3-2026, tier Strategic): API xác nhận gộp đúng ở cả 4 tier
+  (Strategic: Apec Travel/Goodsim/Yến Thư/Anh Hiển/Vũ Đình Khải/Hico 2 mã, SHOPEEPAY 4 mã; Gold: Vietravel
+  9 mã, SGT 7 mã...). UI: mở Strategic → bấm "Apec Travel · 2 mã KH" → xổ đúng 2 mã con (APEC TRAVEL,
+  B2B - Tina - Phương Nam D - Mức III), tên sạch không còn "VN_Org". tsc + vitest 419/419 (1 lần flake
+  timeout `be-gau.test.ts` không liên quan — import chậm khi chạy full suite, PASS riêng lẻ và PASS lại ở
+  lần chạy sau) + lint (0 warning mới) PASS.
+
 ## s209 (2026-09-25) — Bấm ô KH xem danh sách + tab "Performance" (ALL / B2B / B2C)
 
 **1. Squad Progress — bấm ô KH xổ danh sách khách hàng** (`components/quarterly/squad-customer-summary.tsx`, state riêng từng squad):
