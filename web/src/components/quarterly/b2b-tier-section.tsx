@@ -199,6 +199,11 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
 
   // ── Per-customer expand + target + creator orders ──
   const [expandedCusts, setExpandedCusts] = useState<Set<string>>(new Set())
+  // s214(c): gộp KH cùng organization (chỉ trong phạm vi tier×region đang lặp, xem buildDisplayList) —
+  // mặc định thu gọn (chevron), bấm mới xổ ra các mã KH con — mỗi mã con vẫn dùng ĐÚNG render/state hiện
+  // có (Sửa CH.Cost/Target/Chi tiết Tháng-Ngày-Sản phẩm không đổi gì, vẫn thao tác ở mức customer_code lẻ).
+  const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set())
+  const toggleOrg = (orgKey: string) => setExpandedOrgs(prev => { const s = new Set(prev); s.has(orgKey) ? s.delete(orgKey) : s.add(orgKey); return s })
   const [customerTargets, setCustomerTargets] = useState<Record<string, { cm1: number; thk: number; rev: number; hk3rev: number }>>({})
   const [editingTargetCode, setEditingTargetCode] = useState<string | null>(null)
   const [targetInputs, setTargetInputs] = useState<Record<string, { cm1: string; thk: string; rev: string; hk3rev: string }>>({})
@@ -368,6 +373,37 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
   const selectedTierData = allTiers.find((t: any) => t.tier === selectedTier)
   // Các region cần hiển thị trong panel chi tiết
   const regionsToShow: ("VN" | "US")[] = region === "ALL" ? ["VN", "US"] : [region as "VN" | "US"]
+
+  // s214(c): gộp `custs` (đã lọc theo tier×region×search) theo `orgKey` — chỉ gộp mã KH CÙNG organization
+  // TRONG bảng đang lặp (tier×region đó), giống hệt cách Squad Progress gộp trong phạm vi squad. Org có
+  // >1 mã mới thành 1 "org-header" (thu gọn mặc định); org 1 mã hiện y hệt hàng KH đơn lẻ như trước.
+  type DisplayItem =
+    | { kind: "org-header"; orgKey: string; orgName: string; members: any[] }
+    | { kind: "customer"; c: any; hidden: boolean }
+  const buildDisplayList = (list: any[]): DisplayItem[] => {
+    const orgMap = new Map<string, any[]>()
+    list.forEach(c => {
+      const key = c.orgKey || c.code
+      const arr = orgMap.get(key) ?? []
+      arr.push(c); orgMap.set(key, arr)
+    })
+    const groups = [...orgMap.entries()].map(([orgKey, members]) => ({
+      orgKey, orgName: members[0].orgName || members[0].name,
+      members: [...members].sort((a, b) => b.revenue - a.revenue),
+      totalRevenue: members.reduce((s, m) => s + m.revenue, 0),
+    })).sort((a, b) => b.totalRevenue - a.totalRevenue)
+    const out: DisplayItem[] = []
+    groups.forEach(g => {
+      if (g.members.length > 1) {
+        out.push({ kind: "org-header", orgKey: g.orgKey, orgName: g.orgName, members: g.members })
+        const isOpen = expandedOrgs.has(g.orgKey)
+        g.members.forEach(c => out.push({ kind: "customer", c, hidden: !isOpen }))
+      } else {
+        out.push({ kind: "customer", c: g.members[0], hidden: false })
+      }
+    })
+    return out
+  }
   const matchSearch = (c: any) => !custSearch || c.name?.toLowerCase().includes(custSearch.toLowerCase()) || c.code?.toLowerCase().includes(custSearch.toLowerCase())
 
   // ── Chi phí KH: mở/sửa/lưu ──
@@ -786,7 +822,41 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                           </tr>
                         </thead>
                         <tbody>
-                          {custs.map((c: any, i: number) => {
+                          {buildDisplayList(custs).map((item: DisplayItem, i: number) => {
+                            if (item.kind === "org-header") {
+                              const isOpen = expandedOrgs.has(item.orgKey)
+                              const prs = item.members.map((m: any) => custPr(m))
+                              const oRev = prs.reduce((s, p) => s + p.prRev, 0)
+                              const oGm  = prs.reduce((s, p) => s + p.prGm, 0)
+                              const oCc  = prs.reduce((s, p) => s + (p.prGm - p.prCm1), 0)
+                              const oCm1 = prs.reduce((s, p) => s + p.prCm1, 0)
+                              const oHk3 = prs.reduce((s, p) => s + p.prHk3, 0)
+                              return (
+                                <tr key={`org-${item.orgKey}`} className="border-t border-slate-100 bg-amber-50/40 hover:bg-amber-50/70 cursor-pointer" onClick={() => toggleOrg(item.orgKey)}>
+                                  <td colSpan={isCreator ? 2 : 1} className="px-1.5 py-1.5">
+                                    <div className="flex items-center gap-1">
+                                      <ChevronRight className={cn("w-3 h-3 text-amber-600 flex-shrink-0 transition-transform", isOpen && "rotate-90")} />
+                                      <span className="truncate text-[10px] font-bold text-amber-800" title={item.orgName}>{item.orgName}</span>
+                                      <span className="text-[9px] px-1 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 flex-shrink-0">{item.members.length} mã KH</span>
+                                    </div>
+                                  </td>
+                                  {isCreator && <td />}
+                                  <td className="px-1.5 py-1.5 text-right text-slate-700 tabular-nums font-semibold text-[10px] whitespace-nowrap">{fc(oRev)}</td>
+                                  <td className="px-1.5 py-1.5 text-right text-slate-600 tabular-nums text-[10px] whitespace-nowrap">{fc(oGm)}</td>
+                                  <td className="px-1.5 py-1.5 text-right text-slate-500 text-[10px]">{pct(oRev > 0 ? oGm / oRev * 100 : 0)}</td>
+                                  <td className="px-1.5 py-1.5 text-right text-slate-500 tabular-nums text-[10px] whitespace-nowrap">{oCc > 0 ? fc(oCc) : "—"}</td>
+                                  <td className={cn("px-1.5 py-1.5 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(oCm1))}>{fc(oCm1)}</td>
+                                  <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-300">—</td>
+                                  <td className={cn("px-1.5 py-1.5 text-right text-[10px]", cm1Color(oCm1))}>{pct(oRev > 0 ? oCm1 / oRev * 100 : 0)}</td>
+                                  <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-300">—</td>
+                                  <td className="px-1.5 py-1.5 text-right text-slate-500 text-[10px] whitespace-nowrap">{fc(oHk3)} <span className="text-[9px] text-slate-400">({pct(oRev > 0 ? oHk3 / oRev * 100 : 0)})</span></td>
+                                  <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-300">—</td>
+                                  <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-300">—</td>
+                                </tr>
+                              )
+                            }
+                            if (item.hidden) return null
+                            const c = item.c
                             const isExpanded = expandedCusts.has(c.code)
                             const toggleExpand = () => setExpandedCusts(prev => { const s = new Set(prev); s.has(c.code) ? s.delete(c.code) : s.add(c.code); return s })
                             const hp = c.hasProjected === true

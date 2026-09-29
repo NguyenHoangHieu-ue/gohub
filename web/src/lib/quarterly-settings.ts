@@ -11,7 +11,7 @@ import { memo } from "@/lib/memo"
 // này thay vì hardcode string — nhớ đổi CẢ 2 chỗ (đây + rawCacheKey trong route.ts tương ứng) khi bump
 // version (bài học s169: prefix list hardcode ở nơi khác quên bump theo → nút "Tải lại mới" thành no-op).
 export const QREPORT_CACHE_PREFIX = "qreport_raw_v11:" // v11 (s214): thêm srcRows (mã nguồn đơn × tháng, B2C) cho drill-down PivotTable
-export const QB2B_CACHE_PREFIX    = "qb2b_raw_v10:"  // v10 (s211): loại trừ KH theo cả MÃ (customerExcludedSql); v9 (s199+4): thêm prevMonthRows cho %MoM tháng đầu quý
+export const QB2B_CACHE_PREFIX    = "qb2b_raw_v11:"  // v11 (s214c): thêm org_key/org_name (gộp Organization); v10 (s211): loại trừ KH theo cả MÃ (customerExcludedSql); v9 (s199+4): thêm prevMonthRows cho %MoM tháng đầu quý
 
 export const DEFAULT_EXCLUDED_CUSTOMERS = ["B2C Customer US", "B2C Customer VN", "B2B Ops"]
 

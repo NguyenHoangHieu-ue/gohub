@@ -103,6 +103,7 @@ export async function GET(req: NextRequest) {
           queryAnalytics<{
             month: string; customer_code: string; customer_name: string
             price_list_name: string | null; currency_code: string | null; channel_name: string
+            org_key: string; org_name: string
             revenue: string; gm: string; hk3: string
           }>(`
           SELECT
@@ -111,6 +112,8 @@ export async function GET(req: NextRequest) {
             COALESCE(c.name, TRIM(f.customer_code)) as customer_name,
             c.price_list_name, c.currency_code,
             COALESCE(TRIM(s.channel_name), '') as channel_name,
+            COALESCE(NULLIF(TRIM(c.organization), ''), TRIM(f.customer_code)) as org_key,
+            COALESCE(NULLIF(TRIM(c.organization), ''), COALESCE(c.name, TRIM(f.customer_code))) as org_name,
             SUM(f.fulfilled_revenue_amount_vnd) as revenue,
             SUM(f.gross_profit_vnd) as gm,
             SUM(CASE WHEN sk.sku IS NOT NULL THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as hk3
@@ -128,7 +131,7 @@ export async function GET(req: NextRequest) {
             AND NOT (UPPER(COALESCE(c.price_list_name, '')) LIKE '%INACTIVE%')
             ${exclFilter}
             ${sfx}
-          GROUP BY 1, 2, 3, 4, 5, 6
+          GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
           ORDER BY 1, 2
         `),
           queryAnalytics<{ customer_code: string; gm: string; revenue: string }>(`
@@ -218,7 +221,7 @@ export async function GET(req: NextRequest) {
     interface CustMonth { revenue: number; gm: number; hk3: number; rawRevenue: number; rawGm: number; factor: number }
     interface CustomerAgg {
       code: string; name: string; priceListName: string | null; currencyCode: string | null
-      tier: string; region: string
+      tier: string; region: string; orgKey: string; orgName: string
       months: Map<string, CustMonth>
     }
     const customerMap = new Map<string, CustomerAgg>()
@@ -235,6 +238,7 @@ export async function GET(req: NextRequest) {
           priceListName: pln, currencyCode: cur,
           tier: classifyTier(pln),
           region: classifyRegion(pln, cur),
+          orgKey: row.org_key || code, orgName: row.org_name || row.customer_name,
           months: new Map(),
         })
       }
@@ -279,6 +283,7 @@ export async function GET(req: NextRequest) {
     }
     interface CustRow {
       code: string; name: string; region: string; priceListName: string | null
+      orgKey: string; orgName: string
       revenue: number; gm: number; gmPct: number; cc: number; cm1: number
       cm1Pct: number; qoqPct: number | null; hk3Rev: number; hk3Pct: number
       prevCm1: number   // CM1 quý trước (để FE recompute QoQ với CM1 gồm ước tính T9)
@@ -389,6 +394,7 @@ export async function GET(req: NextRequest) {
       tier.custList.push({
         code: cust.code, name: cust.name,
         region: reg, priceListName: cust.priceListName,
+        orgKey: cust.orgKey, orgName: cust.orgName,
         revenue: r2(totRev), gm: r2(totGm), gmPct: pct(totGm, totRev),
         cc: r2(ccForSummary), cm1: r2(cm1ForSummary), cm1Pct: pct(cm1ForSummary, totRev),
         qoqPct, hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
