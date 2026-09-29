@@ -14,8 +14,7 @@ export const dynamic = "force-dynamic"
 
 type RiskLevel = "very_safe" | "safe" | "safe_low" | "danger_low" | "danger_high" | "no_target"
 
-// s214(b): backend giữ nguyên "VN_Org "/"US_Org " (phân biệt company code, khớp quarterly-org-customers)
-// — chỉ cắt ở tầng hiển thị, giống stripOrgPrefix() bên quarterly-org/page.tsx.
+// s214(b): backend giữ nguyên "VN_Org "/"US_Org " (phân biệt company code) — chỉ cắt ở tầng hiển thị.
 function stripOrgPrefix(name: string): string {
   return name.replace(/^(VN|US)_Org\s*/i, "")
 }

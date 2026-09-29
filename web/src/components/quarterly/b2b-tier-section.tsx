@@ -48,8 +48,8 @@ function lineTotal(lines: CostLine[], revenue: number): number {
   return lines.reduce((s, l) => s + (l.type === "percent" ? ((Number(l.value) || 0) / 100) * revenue : (Number(l.value) || 0)), 0)
 }
 const mLabel = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
-// s214(c): nhất quán với quarterly-org/page.tsx + squad-progress/route.ts — backend giữ nguyên
-// "VN_Org "/"US_Org ", chỉ cắt ở tầng hiển thị.
+// s214(c): nhất quán với squad-progress/route.ts — backend giữ nguyên "VN_Org "/"US_Org ", chỉ cắt ở
+// tầng hiển thị.
 function stripOrgPrefix(name: string): string {
   return name.replace(/^(VN|US)_Org\s*/i, "")
 }
