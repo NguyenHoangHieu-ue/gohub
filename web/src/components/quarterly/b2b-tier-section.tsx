@@ -48,6 +48,11 @@ function lineTotal(lines: CostLine[], revenue: number): number {
   return lines.reduce((s, l) => s + (l.type === "percent" ? ((Number(l.value) || 0) / 100) * revenue : (Number(l.value) || 0)), 0)
 }
 const mLabel = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
+// s214(c): nhất quán với quarterly-org/page.tsx + squad-progress/route.ts — backend giữ nguyên
+// "VN_Org "/"US_Org ", chỉ cắt ở tầng hiển thị.
+function stripOrgPrefix(name: string): string {
+  return name.replace(/^(VN|US)_Org\s*/i, "")
+}
 
 export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify, quarterLabel, qFactor = 1, summary = [], futureScale = 1 }:
   { b2bTiers: any; loading: boolean; months: string[]; allMonths?: string[]; region: string; onRegionChange: (r: string) => void; expanded: boolean; onToggle: () => void
@@ -836,7 +841,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                   <td colSpan={isCreator ? 2 : 1} className="px-1.5 py-1.5">
                                     <div className="flex items-center gap-1">
                                       <ChevronRight className={cn("w-3 h-3 text-amber-600 flex-shrink-0 transition-transform", isOpen && "rotate-90")} />
-                                      <span className="truncate text-[10px] font-bold text-amber-800" title={item.orgName}>{item.orgName}</span>
+                                      <span className="truncate text-[10px] font-bold text-amber-800" title={item.orgName}>{stripOrgPrefix(item.orgName)}</span>
                                       <span className="text-[9px] px-1 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 flex-shrink-0">{item.members.length} mã KH</span>
                                     </div>
                                   </td>
