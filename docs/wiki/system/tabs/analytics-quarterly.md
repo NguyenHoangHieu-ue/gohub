@@ -161,12 +161,28 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
     danh sách + doanh thu từng mã KH.
   - **s214 (2026-09-29)** — Hiếu: (1) bỏ prefix `VN_Org `/`US_Org ` khỏi tên hiển thị; (2) bỏ hẳn khối
     drill-down "Tổ chức gồm nhiều mã KH" riêng bên dưới bảng, thay bằng bấm thẳng vào tên tổ chức TRONG
-    bảng pivot để xổ danh sách mã KH con + doanh thu. `stripOrgPrefix()` (`quarterly-org/page.tsx`) chỉ
-    cắt ở tầng hiển thị, KHÔNG đổi `orgName` gốc trả về từ API. `PivotTable` (dùng chung B2B/B2C/Org)
-    thêm state `expandedRows` nội bộ + field optional `Channel.members` (`quarterly-types.ts`) — hàng nào
-    có `members` thì tên trong cột "Kênh" trở thành nút bấm (chevron xoay + underline chấm), bấm mở 1
-    dòng phụ ngay dưới liệt kê tên/mã/doanh thu từng mã con. Field optional nên B2B/B2C tier (không set
-    `members`) không đổi hành vi.
+    bảng pivot để xổ danh sách mã KH con — MỖI mã con hiện ĐẦY ĐỦ 7 cột × từng tháng (Revenue/Gross
+    Margin/Ch.Cost/CM1/%CM1/%MoM/3HK Rev(%)) y hệt hàng Organization, không phải 1 số tổng quý.
+    `stripOrgPrefix()` (`quarterly-org/page.tsx`) chỉ cắt ở tầng hiển thị, KHÔNG đổi `orgName` gốc từ API.
+    `Channel.members` (`quarterly-types.ts`) đổi thành `Channel[]` LỒNG (cùng shape `months: ChannelMonth[]`)
+    thay vì `{code,name,revenue}[]` — tái dùng nguyên hàm dựng cột tháng cho cả org và member.
+    `PivotTable` thêm state `expandedRows` nội bộ + hàm `monthCells()` dùng chung cho hàng chính lẫn hàng
+    member (indent `pl-9`, nền `#f1f5f9` phân biệt cấp). Field `members` optional nên B2B/B2C tier
+    (không set) không đổi hành vi.
+    - **Backend** (`quarterly-org-customers/route.ts`): thêm `custMonthMap` tính per-customer_code THEO
+      THÁNG — cùng công thức/factor với `org.months` (accumulate theo `mr.factor`, tách `rawRevenue`/`rawGm`
+      cho tháng đang chiếu). `members[]` trả `monthSummary` đầy đủ (revenue/gm/hk3Pct/isProjected/actual*)
+      thay vì chỉ `revenue` tổng quý. CM1/Ch.Cost per-member giữ đúng quy ước cũ: `channelCost=0`,
+      `CM1=GM thuần` (không có CH.Cost/Group Cost ở granularity mã KH lẻ trong org, xem gotcha bên trên).
+    - **Bug đã gặp + tự fix trong đợt trước khi tới bản đủ cột này**: bản đầu dùng `<td colSpan>` render 1
+      dòng chi tiết đơn giản (chỉ tên + 1 số revenue) — `justify-between` trong `colSpan` rộng bằng cả bảng
+      nhiều tháng đẩy số ra tận rìa phải colSpan, ngoài vùng nhìn thấy khi chưa cuộn ngang hết cỡ (Hiếu báo
+      "chưa thấy số liệu"). Đã bỏ cách dựng đó, chuyển hẳn sang render TABLE ROW thật với cell riêng từng
+      cột/tháng (`monthCells()`) — vừa fix bug vừa đáp ứng luôn yêu cầu "đủ cột như Organization".
+    - **Verify sống trên staging** (Chrome, acc Creator, Q3-2026): SHOPEEPAY (4 mã KH) — Σ Revenue PR T9
+      4 mã con (337,8+154,4+126,9+55,4 = 674,5tr) khớp tuyệt đối số Organization (674,5tr); Σ GM PR
+      (76,0+26,1+22,9+9,5=134,5tr) khớp GM Organization (134,5tr); %MoM/3HK% mỗi mã con khác nhau đúng
+      thực tế (không bị copy từ org). tsc + vitest 419/419 + lint 4 file đổi đều PASS.
 - **s200 (2026-09-17) — New/Recurring/Inactive B2B Customers** (Hiếu yêu cầu vòng đời KH). Module dùng
   chung `lib/analytics-engine/b2b-lifecycle.ts`: `fetchB2BLifecycleRows()` quét MIN(ngày mua) toàn bộ
   lịch sử `fact_fulfillment_revenue` cho mỗi KH B2B (1 query GROUP BY, không loop) — cache TTL RIÊNG 6 giờ
