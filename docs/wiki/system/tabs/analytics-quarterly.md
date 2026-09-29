@@ -65,8 +65,8 @@ không dùng `PivotTable` ở trang này — có `B2BTierSection` riêng với d
 | Trang | `web/src/app/(dashboard)/analytics/quarterly/page.tsx` |
 | API báo cáo | `web/src/app/api/analytics/quarterly-report/route.ts` |
 | API B2B customers | `web/src/app/api/analytics/quarterly-b2b-customers/route.ts` |
-| Trang Organization (s200) | `web/src/app/(dashboard)/analytics/quarterly-org/page.tsx` — id phân quyền `quarterly-org`. **TẠM THỜI chỉ admin/creator xem được** (Hiếu yêu cầu 2026-09-17) — đã bỏ khỏi `DEFAULT_ROLE_PERMISSIONS.bod`/`.b2b` trong `lib/analytics-roles.ts`, vẫn giữ trong `ALL_ANALYTICS_IDS` để cấp riêng qua `allowed_analytics` per-user nếu cần. |
-| API Organization (s200) | `web/src/app/api/analytics/quarterly-org-customers/route.ts` |
+| ~~Trang Organization (s200)~~ | ⚠️ **ĐÃ XOÁ s214(d), 2026-09-29** — Hiếu yêu cầu bỏ hẳn trang `/analytics/quarterly-org` vì group-by-Organization đã gộp thẳng vào bảng "B2B — Chi tiết theo Nhóm × Tháng" ở Quarter Report gốc (xem §s214(c)). Đã xoá `page.tsx`, xoá id `quarterly-org` khỏi `ALL_ANALYTICS_IDS`, bỏ nav item ở `nav.ts`/`sidebar.tsx`. |
+| ~~API Organization (s200)~~ | ⚠️ **ĐÃ XOÁ s214(d)** — `quarterly-org-customers/route.ts` xoá cùng đợt, không còn consumer nào. |
 | Lifecycle KH B2B (s200) | `web/src/lib/analytics-engine/b2b-lifecycle.ts` — dùng chung `quarterly-report`+`squad-progress` |
 | API B2B customer cost | `web/src/app/api/analytics/b2b-customer-costs/route.ts` |
 | API target | `web/src/app/api/analytics/quarterly-targets/route.ts` |
@@ -139,6 +139,12 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
 | **Biểu đồ** (cạnh 3 nút trên) | Bật/tắt bar chart revenue theo đúng chế độ đang chọn — Tháng/Ngày cộng dồn theo kỳ (nhiều dòng/kênh gộp lại), Sản phẩm lấy top 10 SKU theo revenue |
 
 ## 7. Gotchas
+> ⚠️ **s214(d) (2026-09-29) — Trang riêng `/analytics/quarterly-org` mô tả trong mục s200 dưới đây ĐÃ BỊ
+> XOÁ.** Toàn bộ đoạn s200→s214(a) dưới đây giữ lại làm LỊCH SỬ (giải thích vì sao có field `org_key`/
+> `org_name`/`stripOrgPrefix()` rải rác trong code — chúng bắt nguồn từ trang này) — KHÔNG còn đúng hiện
+> trạng route/trang thực tế. Hiện trạng thật: group-by-Organization đã gộp thẳng vào bảng "B2B — Chi tiết
+> theo Nhóm × Tháng" ở Quarter Report gốc (§s214(c) bên dưới) + Squad Progress (§s214(b)) — không còn
+> trang/route riêng cho Organization.
 - **s200 (2026-09-17) — Quarter Report (Organization), trang mới `/analytics/quarterly-org`.** Hiếu yêu
   cầu "duplicate Quarter Report, dùng data organization để format lại" — bản group B2B theo tổ chức thay
   vì `customer_code` lẻ (1 công ty mẹ có nhiều mã KH chi nhánh). Route mới `quarterly-org-customers`
@@ -667,6 +673,23 @@ Organization → mã KH con.
   B2B - Tina - Phương Nam D - Mức III), tên sạch không còn "VN_Org". tsc + vitest 419/419 (1 lần flake
   timeout `be-gau.test.ts` không liên quan — import chậm khi chạy full suite, PASS riêng lẻ và PASS lại ở
   lần chạy sau) + lint (0 warning mới) PASS.
+
+**s214(d) (2026-09-29, cùng ngày) — Xoá hẳn trang `/analytics/quarterly-org`.** Sau khi s214(c) gộp
+Organization thẳng vào bảng chính, Hiếu yêu cầu bỏ trang riêng vì đã trùng chức năng — trang Organization
+(s200) chỉ còn khác bản chính ở chỗ KHÔNG có Tier làm trục chính (gộp org trực tiếp không qua tier), nhưng
+sau s214(c) bản chính CŨNG gộp org (trong từng tier) nên không còn lý do giữ 2 trang.
+- Xoá `web/src/app/(dashboard)/analytics/quarterly-org/page.tsx` + API
+  `web/src/app/api/analytics/quarterly-org-customers/route.ts` (không còn consumer nào khác gọi route
+  này — đã grep xác nhận trước khi xoá).
+- Bỏ nav item ở `lib/nav.ts` + `components/sidebar.tsx` (2 nơi phải sửa đồng bộ, xem comment đầu
+  `nav.ts`: "GIỮ ĐỒNG BỘ với sidebar.tsx"). Bỏ id `"quarterly-org"` khỏi `ALL_ANALYTICS_IDS`
+  (`lib/analytics-roles.ts`) — dọn theo luôn biến `BOD_ANALYTICS_IDS` (chỉ tồn tại để lọc id này ra,
+  không còn cần khi id đã xoá khỏi mảng gốc), `bod: ALL_ANALYTICS_IDS` thẳng.
+- 2 comment code còn trỏ tới `quarterly-org/page.tsx` (đã xoá) trong `b2b-tier-section.tsx` +
+  `squad-progress/route.ts` — sửa lại không còn tham chiếu file không tồn tại.
+- **Không đổi** `Channel.members`/cơ chế click-mở-member trong `PivotTable` (component dùng chung,
+  KHÔNG phải riêng của trang đã xoá — B2C Channel pivot + Squad Progress vẫn dùng).
+- tsc + vitest 419/419 + `next lint` (toàn dự án, không có lỗi/warning mới) PASS.
 
 ## s209 (2026-09-25) — Bấm ô KH xem danh sách + tab "Performance" (ALL / B2B / B2C)
 
