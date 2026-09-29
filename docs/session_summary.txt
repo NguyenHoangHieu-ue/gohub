@@ -10535,3 +10535,52 @@ Ghi nhận thêm 2 điểm nhỏ CHƯA sửa (không phải "rất không đúng
 - DELETE tài liệu nhóm (docs route) chỉ xoá dòng Supabase, không xoá file trong Storage bucket to-gau-files →
   file rác tích luỹ theo thời gian, không lỗi hiển thị nhưng tốn dung lượng.
 tsc + next build + vitest 419/419 PASS.
+
+## s214 (2026-09-29) — Drill-down Organization lan toả qua 4 tab + dọn tab thừa
+Bắt đầu từ yêu cầu nhỏ ở Quarter Report (Organization): "bỏ prefix VN_Org/US_Org khỏi tên + đổi khối
+drill-down rời thành bấm-tên-trong-bảng-để-xổ-mã-con". Sau khi làm xong 1 tab, Hiếu yêu cầu lan rộng
+cơ chế này qua lần lượt B2C, Squad Progress, B2B tier — rồi cuối cùng nhận ra tab gốc dư thừa nên xoá.
+
+**s214(a) — Quarter Report (Organization), `quarterly-org/page.tsx` + `quarterly-org-customers/route.ts`:**
+- Bỏ prefix "VN_Org "/"US_Org " khỏi tên hiển thị (`stripOrgPrefix()`, chỉ tầng FE, backend giữ nguyên).
+- Đổi khối "Tổ chức gồm nhiều mã KH" (bảng riêng bên dưới) thành bấm thẳng tên tổ chức TRONG bảng pivot
+  để xổ mã con — thêm field `Channel.members?: Channel[]` (`quarterly-types.ts`, lồng đệ quy cùng shape)
+  + state `expandedRows` trong `PivotTable` (component dùng chung, không viết mới).
+- Bug thật gặp giữa chừng: bản đầu dùng `<td colSpan>` render dòng chi tiết đơn giản — `justify-between`
+  trong colSpan rộng bằng cả bảng đẩy số ra tận rìa phải, ngoài vùng nhìn thấy nếu chưa cuộn ngang hết cỡ.
+  Fix: bỏ cách dựng đó, chuyển hẳn sang TABLE ROW thật với cell riêng từng cột/tháng — vừa fix bug vừa đáp
+  ứng luôn yêu cầu tiếp theo "đủ cột như Organization" (Revenue/GM/Ch.Cost/CM1/%CM1/%MoM/3HK Rev%).
+- Backend `custMonthMap` tính per-customer_code THEO THÁNG (trước chỉ có tổng quý).
+- Verify: SHOPEEPAY 4 mã con Σ = số dòng Organization khớp tuyệt đối (T9 PR 674,5tr = 337,8+154,4+126,9+55,4).
+
+**s214(b) — Squad Progress (`squad-progress/route.ts` + `quarterly/page.tsx`):**
+Hiếu hỏi nhầm bảng B2B tier trước, chỉnh lại đúng ý qua AskUserQuestion: bảng KH xổ ra khi bấm 1 squad
+(đã có sẵn từ trước) phải GỘP theo Organization (Squad → Organization → mã KH con), không phải liệt kê
+customer_code lẻ. Field mới `customer_orgs` (KHÔNG đụng `customers` gốc — search/filter/export/lifecycle
+vẫn đọc đúng per-customer_code như cũ). Revenue/CM1/Target/3HK CỘNG DỒN từ member; Tier/PIC/Region lấy
+đại diện theo mã revenue_pr lớn nhất.
+Bug thật: đổi SELECT/GROUP BY nhưng quên bump `rawKey` cache (`squad_raw_v1`) → request thường đọc phải
+cache cũ thiếu org_key/org_name → 0 org nào gộp được dù logic đúng (verify bằng `nocache=1` thấy đúng ngay
+trong khi request thường vẫn sai → xác nhận đúng nguyên nhân cache). Fix bump `squad_raw_v1`→`v2`.
+
+**s214(c) — Tổng quan, bảng "B2B — Chi tiết theo Nhóm (Hàng) × Tháng" (`b2b-tier-section.tsx`, ~1080 dòng,
+component phức tạp nhất trang — Sửa CH.Cost/Target per-customer_code, drill Tháng/Ngày/Sản phẩm+chart,
+Export).** Hỏi kỹ trước khi làm vì đụng thao tác sửa dữ liệu thật: chốt "Nhóm" = Tier (không đổi tên
+bảng), chỉ thêm cấp GIỮA Tier và mã KH: Tier → Organization → mã KH con. Org-header là dòng tổng hợp
+đọc-only (Σ custPr() member); Sửa CH.Cost/Target/drill Tháng-Ngày-Sản phẩm VẪN thao tác ở customer_code
+lẻ, không đổi gì. Cách làm tối thiểu rủi ro: KHÔNG viết lại khối render ~450 dòng/1 hàng KH — thêm hàm
+`buildDisplayList(custs)` gộp theo orgKey chạy TRƯỚC vòng lặp, đổi nguồn lặp `custs.map()` →
+`buildDisplayList(custs).map()`, phần thân giữ nguyên 100%. Backend thêm org_key/org_name (cùng công
+thức quarterly-org-customers), bump `QB2B_CACHE_PREFIX` v10→v11 NGAY (rút kinh nghiệm bug s214(b)).
+
+**s214(d) — Xoá hẳn trang `/analytics/quarterly-org`.** Sau s214(c), Organization đã gộp thẳng vào bảng
+chính — trang riêng trùng chức năng. Xoá `page.tsx` + API `quarterly-org-customers/route.ts`; bỏ nav item
+(`nav.ts` + `sidebar.tsx`, 2 nơi phải sửa đồng bộ); bỏ id `"quarterly-org"` khỏi `ALL_ANALYTICS_IDS`
+(`analytics-roles.ts`, dọn theo biến `BOD_ANALYTICS_IDS` không còn cần). `Channel.members`/PivotTable
+KHÔNG đụng (dùng chung, không riêng trang đã xoá — B2C + Squad Progress vẫn dùng).
+Verify sống: `/analytics/quarterly-org` → 404, sidebar hết nhắc tên.
+
+Toàn bộ s214(a)-(d): tsc + vitest 419/419 + `next lint` (toàn dự án) PASS mọi commit. Deploy staging nhiều
+lần dính edge-cache/rollout-lag khi verify ngay sau push (số liệu tưởng sai hoá ra do request đầu ăn bản
+cũ) — bài học: đợi build xong + thử lại trước khi kết luận có bug. Wiki `analytics-quarterly.md` cập nhật
+đủ §s214(a)-(d), đánh dấu rõ đoạn s200 cũ (mô tả trang đã xoá) là LỊCH SỬ không còn đúng hiện trạng.
