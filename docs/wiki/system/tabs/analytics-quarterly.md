@@ -602,6 +602,39 @@ Margin/Ch.Cost/CM1/%CM1/%MoM/3HK Rev(%) theo T7/T8/T9, khớp đúng cột với
   Gọi API kiểm KH nhiều tháng: Σ monthly.revenue = revenue_pr, Σ monthly.cm1 = cm1_pr, khớp tuyệt đối.
   tsc + vitest 419/419 + lint (0 warning mới, đã diff với bản trước khi sửa) PASS.
 
+**s214(b) (2026-09-29, cùng ngày) — Hiếu chỉnh lại: bảng KH này PHẢI gộp theo Organization giống Quarter
+Report (Organization), không phải liệt kê `customer_code` lẻ.** Đổi cấu trúc thành **Squad → Organization →
+mã KH con** — mỗi Organization gộp các `customer_code` cùng `dim_customer.organization`, CHỈ gộp trong
+phạm vi squad đó (2 mã cùng org nhưng khác PIC/khác squad KHÔNG gộp).
+- Backend: query gốc thêm `org_key`/`org_name` (cùng công thức `COALESCE(NULLIF(TRIM(c.organization),''),
+  TRIM(f.customer_code))` như `quarterly-org-customers/route.ts`) vào SELECT + GROUP BY. Sau khi build
+  `customers` (không đổi, giữ nguyên mọi consumer khác — search/filter/export/tier/lifecycle vẫn đọc đúng
+  per-`customer_code`, tránh lặp bug s169 "2 nơi tính khác nhau"), gộp riêng thành field MỚI
+  `customer_orgs`: Revenue/CM1/Target/3HK **CỘNG DỒN** từ member (không "chọn đại diện" — khác Tier/PIC/
+  Region lấy từ mã có `revenue_pr` lớn nhất, đúng quy ước Quarter Report Organization); %TGT CM1/%TGT 3HK/
+  risk_level tính lại từ số đã cộng dồn (không lấy risk của mã đại diện). `monthly` của Organization = tổng
+  `monthly` từng member theo tháng (cùng convention `channelCost=0`/CM1=GM thuần khi cần, nhưng ở đây cost
+  per-customer CÓ tính nên cộng thẳng `channelCost` thật từ member, không zero-hoá). Org có >1 mã mới gắn
+  `members: Channel[]` (tái dùng nguyên `monthly` đã build sẵn per-customer, không tính lại).
+- **Bug thật gặp ngay sau deploy đầu — cache cũ thiếu cột mới**: đổi SELECT/GROUP BY nhưng quên bump
+  `rawKey` (cache raw SQL rows, key cũ `squad_raw_v1`) → request thường (không `nocache=1`) đọc phải
+  `custRows` cache TỪ TRƯỚC KHI DEPLOY (thiếu `org_key`/`org_name`) → mọi org_key rơi về fallback
+  `customer_code` → 0 org nào gộp được (189 mã = 189 dòng, y hệt trước khi sửa). Verify bằng `nocache=1`
+  thấy gộp đúng ngay (189→159 dòng, "US_Org SHOPEEPAY · 4 mã KH") trong khi request thường vẫn sai → xác
+  nhận đúng nguyên nhân cache, không phải lỗi logic gộp. Fix: bump `squad_raw_v1` → `squad_raw_v2`.
+- FE: bảng 10 cột đổi nguồn từ `sq.customers` → `sq.customer_orgs` (chỉ 1 dòng đổi); mini `<PivotTable>`
+  khi bấm tên gắn thêm `...(c.members && { members: c.members })` — PivotTable **không sửa gì thêm**, cơ
+  chế click-mở-member đã có sẵn từ Organization/B2C tự động hoạt động cho cấp thứ 2 này (Squad → Org → mã
+  KH con, y hệt Tier → Organization → Customer bên Quarter Report Organization).
+- Prefix `VN_Org `/`US_Org ` cũng bị lộ ra ở tên hiển thị (backend build thẳng `customer_name` từ
+  `org_name` gốc) — thêm `stripOrgPrefix()` bản sao trong `squad-progress/route.ts` (cùng regex với
+  `quarterly-org/page.tsx`, chỉ cắt tầng hiển thị).
+- Verify sống staging sau cả 2 fix (Chrome, acc Creator, Squad 1, Q3-2026): Squad 1 189 mã → 159
+  Organization (Apec Travel 3 mã, Vietravel 9 mã, SGT 7 mã...); bấm "Vietravel · 9 mã KH" → mini-table T7
+  Revenue 93.065.000 khớp Σ 4 mã con có phát sinh T7 (1.199.000+68.745.600+5.004.800+18.115.600); tên hiện
+  sạch không còn "VN_Org". API kiểm thêm: Σ `members[].totalRevenue` = Σ `monthly[].revenue` =
+  `revenue_pr` của dòng Organization, khớp tuyệt đối. tsc + vitest 419/419 PASS.
+
 ## s209 (2026-09-25) — Bấm ô KH xem danh sách + tab "Performance" (ALL / B2B / B2C)
 
 **1. Squad Progress — bấm ô KH xổ danh sách khách hàng** (`components/quarterly/squad-customer-summary.tsx`, state riêng từng squad):
