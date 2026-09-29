@@ -583,6 +583,25 @@ Hiếu yêu cầu 3 việc trong tab Squad Progress. Route `squad-progress` + `s
 - **Target tháng quý sau**: panel Target Squad thêm lưới 4 chỉ số × 3 tháng/squad. Lưu trong `app_settings.squad_targets` dưới khoá **quý đó** (`Q4_2026`) ở field `months: {rev,gp,cm1,hk3rev: number[3]}`. `POST /api/analytics/squad-targets` giờ **MERGE theo từng squad** (trước ghi đè cả quý) và nhận thêm `next: {quarter,year,targets}` để ghi target quý sau cùng 1 lần upsert. Khi sang quý đó, nếu chưa nhập target quý riêng thì tự dùng Σ 3 tháng làm target quý.
 - **QA sống staging (2026-09-25, Chrome, acc Creator)**: Σ tháng = PR quý (lệch ±1 do làm tròn); continuing+returning = recurring (128+4=132), new+recurring = customer_count (56+132=188), Σ tier = customer_count; "chưa quay lại" Squad 1 giảm 90 → 59 (lostRevenue giữ 702,1tr). Vòng lưu target tháng quý sau (POST `next`) → GET đọc lại đúng, target Q3 không bị đổi; đã dọn về 0. Hiếu vẫn cần tự nhìn UI + nhập target GP/Q4 thật.
 
+**s214 (2026-09-29) — Bấm tên KH trong bảng xổ (mở từ card squad) → breakdown theo tháng.** Áp tiếp cơ
+chế drill-down vừa làm ở Quarter Report (Organization) và B2C Channel pivot — Hiếu ban đầu hỏi nhầm bảng
+B2B tier ở Tổng quan, sau chỉnh lại đúng ý: bảng 10 cột khi bấm mở 1 squad (Squad → danh sách KH của mọi
+PIC trong squad, ĐÃ có sẵn từ trước) — nay bấm tiếp **tên KH** trong bảng đó xổ breakdown Revenue/Gross
+Margin/Ch.Cost/CM1/%CM1/%MoM/3HK Rev(%) theo T7/T8/T9, khớp đúng cột với Organization/B2C.
+- Backend `squad-progress/route.ts`: dữ liệu thô `rev_m{i}`/`gm_m{i}`/`hk3_m{i}` **đã có sẵn** trong query
+  gốc (chỉ tổng hợp cả quý ở `calcCustCm1AndPr`) — thêm field `monthly` mỗi customer, tách theo tháng thay
+  vì cộng dồn, dùng ĐÚNG `elapsedRatioOf`/`kpiFactorOf`/`costMap` như phần tính `revenue_pr`/`cm1_pr` nên
+  Σ tháng khớp tuyệt đối số quý đã hiện (verify: 6.377.321 = 1.438.300+1.490.200+3.448.821). KHÔNG cần
+  query DB thêm, KHÔNG cần bump cache (route này không cache kết quả tính, chỉ cache raw SQL rows ở
+  `squad_raw_v1`, shape rows không đổi).
+- FE `quarterly/page.tsx`: tên KH có `monthly` → nút bấm (chevron xoay), xổ 1 hàng `colSpan={10}` chứa
+  **tái dùng thẳng `<PivotTable>`** (`channels=[{name, totalRevenue: revenue_pr, months: monthly}]`) — 0
+  code render mới, cùng style/format dual PR-Act với Organization/B2C.
+- Verify sống staging (Chrome, acc Creator, Squad 1): mở "B2B Nụ Cười Mê Kông" → mini-table T7 khớp đúng
+  số dòng KH (Revenue 97.500/GM 52.631/CM1 52.631/%CM1 54,0%/3HK 74,4%), T8 "—" (KH chỉ phát sinh T7).
+  Gọi API kiểm KH nhiều tháng: Σ monthly.revenue = revenue_pr, Σ monthly.cm1 = cm1_pr, khớp tuyệt đối.
+  tsc + vitest 419/419 + lint (0 warning mới, đã diff với bản trước khi sửa) PASS.
+
 ## s209 (2026-09-25) — Bấm ô KH xem danh sách + tab "Performance" (ALL / B2B / B2C)
 
 **1. Squad Progress — bấm ô KH xổ danh sách khách hàng** (`components/quarterly/squad-customer-summary.tsx`, state riêng từng squad):
