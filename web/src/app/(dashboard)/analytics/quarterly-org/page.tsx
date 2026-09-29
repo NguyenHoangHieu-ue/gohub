@@ -15,11 +15,16 @@ import { LogicNote, StatTile } from "@/components/dashboard-kit"
 // là chủ — chỉ ai được GHI NHẬN đổi). Phần khác biệt duy nhất là bảng breakdown B2B, lấy từ route
 // riêng `quarterly-org-customers`. Xem docs/wiki/system/tabs/analytics-quarterly.md mục "s200".
 
+type OrgMonthSummary = Record<string, { revenue: number; gm: number; hk3Pct: number; isProjected: boolean; actualRevenue?: number; actualGm?: number }>
+interface MemberRow {
+  code: string; name: string; revenue: number; gm: number; gmPct: number; hk3Rev: number; hk3Pct: number
+  monthSummary: OrgMonthSummary
+}
 interface OrgRow {
   orgKey: string; orgName: string; region: string; memberCodes: string[]; memberCount: number
-  members: { code: string; name: string; revenue: number }[]
+  members: MemberRow[]
   revenue: number; gm: number; gmPct: number; hk3Rev: number; hk3Pct: number
-  monthSummary: Record<string, { revenue: number; gm: number; hk3Pct: number; isProjected: boolean; actualRevenue?: number; actualGm?: number }>
+  monthSummary: OrgMonthSummary
 }
 interface OrgTier {
   tier: string; totalRevenue: number; totalGm: number; totalGmPct: number
@@ -33,26 +38,36 @@ function stripOrgPrefix(name: string): string {
   return name.replace(/^(VN|US)_Org\s*/i, "")
 }
 
+// Dùng chung cho org VÀ member (mã KH con) — cùng công thức cột tháng (channelCost=0, CM1=GM thuần,
+// xem Gotchas §s200: không có CH.Cost/Group Cost ở granularity này).
+function monthSummaryToChannelMonths(summary: OrgMonthSummary, months: string[]) {
+  return months.map((m, i) => {
+    const d = summary[m]
+    if (!d) return { month: m, revenue: 0, gp: 0, channelCost: 0, cm1: 0, cm1Pct: 0, momPct: null }
+    const prevM = i > 0 ? months[i - 1] : null
+    const prevD = prevM ? summary[prevM] : undefined
+    const momPct = prevD && prevD.revenue > 0 ? Math.round((d.revenue - prevD.revenue) / prevD.revenue * 1000) / 10 : null
+    return {
+      month: m, revenue: d.revenue, gp: d.gm, channelCost: 0,
+      cm1: d.gm, cm1Pct: d.revenue > 0 ? Math.round(d.gm / d.revenue * 1000) / 10 : 0,
+      momPct, three_hk_pct: d.hk3Pct,
+      isProjected: d.isProjected,
+      ...(d.isProjected && { actualRevenue: d.actualRevenue, actualGp: d.actualGm, actualCm1: d.actualGm }),
+    }
+  })
+}
+
 function orgsToChannels(orgs: OrgRow[], months: string[]): Channel[] {
   return orgs.map(o => {
-    const monthsArr = months.map((m, i) => {
-      const d = o.monthSummary[m]
-      if (!d) return { month: m, revenue: 0, gp: 0, channelCost: 0, cm1: 0, cm1Pct: 0, momPct: null }
-      const prevM = i > 0 ? months[i - 1] : null
-      const prevD = prevM ? o.monthSummary[prevM] : undefined
-      const momPct = prevD && prevD.revenue > 0 ? Math.round((d.revenue - prevD.revenue) / prevD.revenue * 1000) / 10 : null
-      return {
-        month: m, revenue: d.revenue, gp: d.gm, channelCost: 0,
-        cm1: d.gm, cm1Pct: d.revenue > 0 ? Math.round(d.gm / d.revenue * 1000) / 10 : 0,
-        momPct, three_hk_pct: d.hk3Pct,
-        isProjected: d.isProjected,
-        ...(d.isProjected && { actualRevenue: d.actualRevenue, actualGp: d.actualGm, actualCm1: d.actualGm }),
-      }
-    })
     const name = `${stripOrgPrefix(o.orgName)}${o.memberCount > 1 ? ` · ${o.memberCount} mã KH` : ""} [${o.region}]`
     return {
-      name, totalRevenue: o.revenue, months: monthsArr,
-      ...(o.memberCount > 1 && { members: o.members.map(m => ({ code: m.code, name: m.name, revenue: m.revenue })) }),
+      name, totalRevenue: o.revenue, months: monthSummaryToChannelMonths(o.monthSummary, months),
+      ...(o.memberCount > 1 && {
+        members: o.members.map(m => ({
+          name: `${m.name} (${m.code})`, totalRevenue: m.revenue,
+          months: monthSummaryToChannelMonths(m.monthSummary, months),
+        })),
+      }),
     }
   }).filter(c => c.totalRevenue > 0)
 }

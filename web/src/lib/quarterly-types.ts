@@ -25,7 +25,7 @@ export interface ChannelMonth {
 
 export interface Channel {
   name: string; totalRevenue: number; months: ChannelMonth[]
-  members?: { code: string; name: string; revenue: number }[]
+  members?: Channel[] // drill-down 1 cấp (vd Organization -> mã KH con) — cùng shape để tái dùng render cột tháng
 }
 
 export interface QReport {

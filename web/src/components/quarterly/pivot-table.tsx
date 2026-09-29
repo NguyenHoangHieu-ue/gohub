@@ -13,6 +13,37 @@ export function PivotTable({ title, icon: Icon, channels, months, expanded, onTo
   const toggleRow = (name: string) => setExpandedRows(prev => {
     const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next
   })
+
+  // Dùng chung cho hàng Channel chính VÀ hàng member (drill-down) — cùng bộ cột/công thức mỗi tháng.
+  const monthCells = (ch: Channel) => months.flatMap(m => {
+    const d = ch.months.find((x: any) => x.month === m)
+    if (!d || d.revenue === 0) {
+      return SUB.map((_, i) => (
+        <td key={`${m}-${i}`} className={cn("px-2 py-2.5 text-right text-slate-300", i === 0 && "border-l border-slate-100")}>—</td>
+      ))
+    }
+    const pr = (d as any).isProjected
+    const dualC = (prVal: number, actVal: number | undefined, cls = "text-slate-700") => actVal != null ? (
+      <div className="flex flex-col items-end leading-snug">
+        <span className={cn("tabular-nums font-semibold text-[11px]", cls)}>{fck(prVal)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">PR</sup></span>
+        <span className="tabular-nums font-semibold text-[10px] text-blue-600">{fck(actVal)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">Act</sup></span>
+      </div>
+    ) : <span className={cn("tabular-nums", cls)}>{fc(prVal)}</span>
+    return [
+      <td key="rev" className="px-2 py-2.5 text-right border-l border-slate-100">{dualC(d.revenue, pr ? (d as any).actualRevenue : undefined, "text-slate-700")}</td>,
+      <td key="gm"  className="px-2 py-2.5 text-right">{dualC(d.gp, pr ? (d as any).actualGp : undefined, "text-slate-600")}</td>,
+      <td key="cc"  className="px-2 py-2.5 text-right text-slate-500 tabular-nums">{d.channelCost > 0 ? (pr && (d as any).actualCc != null ? dualC(d.channelCost, (d as any).actualCc, "text-slate-500") : fc(d.channelCost)) : "—"}</td>,
+      <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold", cm1Color(d.cm1))}>{dualC(d.cm1, pr ? (d as any).actualCm1 : undefined, cm1Color(d.cm1))}</td>,
+      <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
+      <td key="mom" className={cn("px-2 py-2.5 text-right font-medium", momColor(d.momPct))}>
+        {d.momPct != null ? `${d.momPct >= 0 ? "+" : ""}${d.momPct.toFixed(1)}%` : "—"}
+      </td>,
+      <td key="3hk" className="px-2 py-2.5 text-right text-slate-500">
+        {d.three_hk_pct != null ? pct(d.three_hk_pct) : "—"}
+      </td>,
+    ]
+  })
+
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <button className="w-full px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between hover:bg-slate-100 transition-colors" onClick={onToggle}>
@@ -51,61 +82,29 @@ export function PivotTable({ title, icon: Icon, channels, months, expanded, onTo
               {channels.map((ch, ri) => {
                 const hasMembers = !!ch.members && ch.members.length > 0
                 const rowExpanded = hasMembers && expandedRows.has(ch.name)
+                const rowBg = ri % 2 === 0 ? "#ffffff" : "#f8fafc"
                 return (
-                <React.Fragment key={ch.name}>
-                <tr className={cn("border-b border-slate-100", ri % 2 === 0 ? "bg-white" : "bg-slate-50/60", "hover:bg-blue-50/30 transition-colors")}>
-                  <td className="px-4 py-2.5 font-medium text-slate-700 sticky left-0 border-r border-slate-100" style={{ backgroundColor: ri % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
-                    {hasMembers ? (
-                      <button type="button" onClick={() => toggleRow(ch.name)} className="flex items-center gap-1 text-left hover:text-[#0f4c81]">
-                        <ChevronRight className={cn("w-3 h-3 text-slate-400 transition-transform shrink-0", rowExpanded && "rotate-90")} />
-                        <span className="underline decoration-dotted decoration-slate-300 underline-offset-2">{ch.name}</span>
-                      </button>
-                    ) : ch.name}
-                  </td>
-                  {months.flatMap(m => {
-                    const d = ch.months.find((x: any) => x.month === m)
-                    if (!d || d.revenue === 0) {
-                      return SUB.map((_, i) => (
-                        <td key={`${m}-${i}`} className={cn("px-2 py-2.5 text-right text-slate-300", i === 0 && "border-l border-slate-100")}>—</td>
-                      ))
-                    }
-                    const pr = (d as any).isProjected
-                    const dualC = (prVal: number, actVal: number | undefined, cls = "text-slate-700") => actVal != null ? (
-                      <div className="flex flex-col items-end leading-snug">
-                        <span className={cn("tabular-nums font-semibold text-[11px]", cls)}>{fck(prVal)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">PR</sup></span>
-                        <span className="tabular-nums font-semibold text-[10px] text-blue-600">{fck(actVal)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">Act</sup></span>
-                      </div>
-                    ) : <span className={cn("tabular-nums", cls)}>{fc(prVal)}</span>
-                    return [
-                      <td key="rev" className="px-2 py-2.5 text-right border-l border-slate-100">{dualC(d.revenue, pr ? (d as any).actualRevenue : undefined, "text-slate-700")}</td>,
-                      <td key="gm"  className="px-2 py-2.5 text-right">{dualC(d.gp, pr ? (d as any).actualGp : undefined, "text-slate-600")}</td>,
-                      <td key="cc"  className="px-2 py-2.5 text-right text-slate-500 tabular-nums">{d.channelCost > 0 ? (pr && (d as any).actualCc != null ? dualC(d.channelCost, (d as any).actualCc, "text-slate-500") : fc(d.channelCost)) : "—"}</td>,
-                      <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold", cm1Color(d.cm1))}>{dualC(d.cm1, pr ? (d as any).actualCm1 : undefined, cm1Color(d.cm1))}</td>,
-                      <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
-                      <td key="mom" className={cn("px-2 py-2.5 text-right font-medium", momColor(d.momPct))}>
-                        {d.momPct != null ? `${d.momPct >= 0 ? "+" : ""}${d.momPct.toFixed(1)}%` : "—"}
-                      </td>,
-                      <td key="3hk" className="px-2 py-2.5 text-right text-slate-500">
-                        {d.three_hk_pct != null ? pct(d.three_hk_pct) : "—"}
-                      </td>,
-                    ]
-                  })}
-                </tr>
-                {rowExpanded && (
-                  <tr className="border-b border-slate-100 bg-slate-50/80">
-                    <td colSpan={1 + months.length * colCount} className="px-4 py-2.5">
-                      <div className="pl-4 space-y-1 max-w-sm">
-                        {ch.members!.map(m => (
-                          <div key={m.code} className="flex items-center justify-between gap-4 text-[11px] text-slate-600 py-0.5">
-                            <span className="truncate">{m.name} <span className="text-slate-400">({m.code})</span></span>
-                            <span className="tabular-nums text-slate-500 shrink-0">{fc(m.revenue)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-                </React.Fragment>
+                  <React.Fragment key={ch.name}>
+                    <tr className={cn("border-b border-slate-100", ri % 2 === 0 ? "bg-white" : "bg-slate-50/60", "hover:bg-blue-50/30 transition-colors")}>
+                      <td className="px-4 py-2.5 font-medium text-slate-700 sticky left-0 border-r border-slate-100" style={{ backgroundColor: rowBg }}>
+                        {hasMembers ? (
+                          <button type="button" onClick={() => toggleRow(ch.name)} className="flex items-center gap-1 text-left hover:text-[#0f4c81]">
+                            <ChevronRight className={cn("w-3 h-3 text-slate-400 transition-transform shrink-0", rowExpanded && "rotate-90")} />
+                            <span className="underline decoration-dotted decoration-slate-300 underline-offset-2">{ch.name}</span>
+                          </button>
+                        ) : ch.name}
+                      </td>
+                      {monthCells(ch)}
+                    </tr>
+                    {rowExpanded && ch.members!.map(member => (
+                      <tr key={member.name} className="border-b border-slate-100 bg-slate-50/70 hover:bg-blue-50/20 transition-colors">
+                        <td className="pl-9 pr-4 py-1.5 text-[10px] text-slate-500 sticky left-0 border-r border-slate-100 truncate" style={{ backgroundColor: "#f1f5f9" }}>
+                          {member.name}
+                        </td>
+                        {monthCells(member)}
+                      </tr>
+                    ))}
+                  </React.Fragment>
                 )
               })}
             </tbody>

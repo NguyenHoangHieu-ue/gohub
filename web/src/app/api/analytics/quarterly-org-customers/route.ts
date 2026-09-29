@@ -129,6 +129,9 @@ export async function GET(req: NextRequest) {
       custTotalRevenue.set(row.customer_code, (custTotalRevenue.get(row.customer_code) || 0) + rev)
       custNameMap.set(row.customer_code, row.customer_name)
     })
+    // Theo THÁNG per customer_code (cùng công thức/factor với org.months) — để drill-down Organization ->
+    // mã KH con có đủ cột Revenue/GM/3HK/%MoM từng tháng như hàng Organization, không chỉ 1 số tổng quý.
+    const custMonthMap = new Map<string, Map<string, OrgMonth>>()
 
     rows.forEach(row => {
       if (row.price_list_name?.toUpperCase().includes("INACTIVE")) return
@@ -150,21 +153,35 @@ export async function GET(req: NextRequest) {
       const revAct = parseFloat(row.revenue || "0")
       const gmAct = parseFloat(row.gm || "0")
       const hk3Act = parseFloat(row.hk3 || "0")
-      const existing = org.months.get(row.month)
       const factor = mr.factor
+      const existing = org.months.get(row.month)
       if (existing) {
         existing.revenue += revAct * factor; existing.gm += gmAct * factor; existing.hk3 += hk3Act * factor
         existing.rawRevenue += revAct; existing.rawGm += gmAct
       } else {
         org.months.set(row.month, { revenue: revAct * factor, gm: gmAct * factor, hk3: hk3Act * factor, rawRevenue: revAct, rawGm: gmAct })
       }
+
+      let cm = custMonthMap.get(row.customer_code)
+      if (!cm) { cm = new Map(); custMonthMap.set(row.customer_code, cm) }
+      const cExisting = cm.get(row.month)
+      if (cExisting) {
+        cExisting.revenue += revAct * factor; cExisting.gm += gmAct * factor; cExisting.hk3 += hk3Act * factor
+        cExisting.rawRevenue += revAct; cExisting.rawGm += gmAct
+      } else {
+        cm.set(row.month, { revenue: revAct * factor, gm: gmAct * factor, hk3: hk3Act * factor, rawRevenue: revAct, rawGm: gmAct })
+      }
     })
 
     const TIER_ORDER = ["Strategic", "VIP", "Gold", "Silver"]
     interface OrgMonthSummary { revenue: number; gm: number; hk3Pct: number; isProjected: boolean; actualRevenue?: number; actualGm?: number }
+    interface MemberRow {
+      code: string; name: string; revenue: number; gm: number; gmPct: number; hk3Rev: number; hk3Pct: number
+      monthSummary: Record<string, OrgMonthSummary>
+    }
     interface OrgRow {
       orgKey: string; orgName: string; region: string; memberCodes: string[]; memberCount: number
-      members: { code: string; name: string; revenue: number }[]
+      members: MemberRow[]
       revenue: number; gm: number; gmPct: number; hk3Rev: number; hk3Pct: number
       qoqPct: number | null
       monthSummary: Record<string, OrgMonthSummary>
@@ -199,8 +216,29 @@ export async function GET(req: NextRequest) {
         acc(tier.monthAgg); acc(tier.monthAggR[region])
       })
 
-      const members = [...org.memberCodes]
-        .map(code => ({ code, name: custNameMap.get(code) || code, revenue: r2(custTotalRevenue.get(code) || 0) }))
+      const members: MemberRow[] = [...org.memberCodes]
+        .map(code => {
+          const cMonths = custMonthMap.get(code)
+          const mSummary: Record<string, OrgMonthSummary> = {}
+          let mRev = 0, mGm = 0, mHk3 = 0
+          months.forEach(m => {
+            const md = cMonths?.get(m)
+            const meta = monthMeta.find(x => x.month === m)
+            const isProj = meta?.isProjected ?? false
+            if (!md) return
+            mSummary[m] = {
+              revenue: r2(md.revenue), gm: r2(md.gm), hk3Pct: pct(md.hk3, md.revenue), isProjected: isProj,
+              ...(isProj && { actualRevenue: r2(md.rawRevenue), actualGm: r2(md.rawGm) }),
+            }
+            mRev += md.revenue; mGm += md.gm; mHk3 += md.hk3
+          })
+          return {
+            code, name: custNameMap.get(code) || code,
+            revenue: r2(mRev), gm: r2(mGm), gmPct: pct(mGm, mRev),
+            hk3Rev: r2(mHk3), hk3Pct: pct(mHk3, mRev),
+            monthSummary: mSummary,
+          }
+        })
         .sort((a, b) => b.revenue - a.revenue)
 
       tier.orgList.push({
