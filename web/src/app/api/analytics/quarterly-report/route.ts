@@ -133,7 +133,8 @@ export async function GET(req: NextRequest) {
         const rangeStart = prevQStartDate
         const rangeEnd   = qEndDate
         type BaseRow = { month: string; bg: string; channel: string | null; source_code: string | null; revenue: string; gp: string; hk3: string }
-        const [baseRows, custRows] = await runLimited(2, [
+        type SourceRow = { month: string; channel: string | null; source_code: string | null; sapo_name: string | null; revenue: string; gp: string; hk3: string }
+        const [baseRows, custRows, srcRows] = await runLimited(3, [
           // Hạt (tháng × nhóm × kênh) — đủ để dựng groupRows / channelRows / hk3Rows / prevGroupRows / prevChannelRows.
           () => queryAnalytics<BaseRow>(`
           ${CTE_PREAMBLE}
@@ -172,9 +173,37 @@ export async function GET(req: NextRequest) {
             ${sfx}
           GROUP BY 1, 2
         `),
+          // s214: doanh thu B2C theo MÃ NGUỒN ĐƠN × tháng (chỉ quý này, không cần QoQ) — cho drill-down
+          // "Kênh → mã nguồn" ở PivotTable B2C. channel_name là rollup của nhiều dim_order_source.code
+          // (verify SQL thật 2026-09-29: VN-Social 12 mã, Global-Web 7 mã, Misc. 18 mã...). Query RIÊNG,
+          // KHÔNG đụng baseRows/channelRows ở trên — tránh double-count chi phí "amount" (matchChannelCost
+          // khớp theo TÊN KÊNH, gọi nhiều lần cho từng mã nguồn con sẽ cộng đúp). Vì vậy dòng con dùng quy
+          // ước channelCost=0/CM1=GM thuần (giống member Organization), KHÔNG gọi lại computeChannelCost.
+          () => queryAnalytics<SourceRow>(`
+          ${CTE_PREAMBLE}
+          SELECT
+            LEFT(f.${DATE_COL}, 7) as month,
+            TRIM(s.channel_name) as channel,
+            TRIM(s.code) as source_code,
+            MIN(s.sapo_name) as sapo_name,
+            SUM(f.${REV_COL}) as revenue,
+            SUM(f.${GP_COL}) as gp,
+            SUM(CASE WHEN hk.sku IS NOT NULL THEN f.${REV_COL} ELSE 0 END) as hk3
+          FROM ${MAIN_TABLE} f
+          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+          LEFT JOIN hk3_skus hk ON hk.sku = TRIM(f.sku)
+          WHERE f.${DATE_COL} >= '${qStartDate}' AND f.${DATE_COL} <= '${qEndDate}'
+            ${companyFilter}
+            AND UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2C'
+            AND s.channel_name IS NOT NULL AND TRIM(s.channel_name) <> ''
+            ${INACTIVE_FILTER}
+            ${EXCLUDE_CUST_SQL}
+            ${sfx}
+          GROUP BY 1, 2, 3
+        `),
         ])
 
-        return splitQuarterRows(baseRows, custRows, months, prevQMonths)
+        return { ...splitQuarterRows(baseRows, custRows, months, prevQMonths), srcRows }
       }, QUERY_TTL_MIN, refresh),
       fetchCosts(months),
       fetchCosts(prevQMonths),
@@ -183,7 +212,7 @@ export async function GET(req: NextRequest) {
       fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)).catch(() => [] as import("@/lib/analytics-engine/b2b-lifecycle").B2BLifecycleRow[]), // s200
     ])
 
-    const { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows, prevCustRevRows } = rawData
+    const { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows, prevCustRevRows, srcRows } = rawData
 
     // Index revenue B2B theo `${month}_${code}` để áp chi phí per-customer đúng (percent × revenue KH đó).
     const custRevMap = new Map<string, number>()
@@ -388,6 +417,18 @@ export async function GET(req: NextRequest) {
       b2c: { revenue: qtotals.b2cRevenue, gp: qtotals.b2cGp, gpPct: pct(qtotals.b2cGp, qtotals.b2cRevenue), channelCost: qtotals.b2cCC, groupCost: qtotals.b2cGC, cm1: qtotals.b2cCm1, cm1Pct: pct(qtotals.b2cCm1, qtotals.b2cRevenue) },
     }
 
+    // s214: gộp srcRows (mã nguồn đơn × tháng) theo channel → source_code, để buildChannels() gắn "members"
+    // drill-down cho dòng channel nào có >1 mã nguồn PHÁT SINH DOANH THU trong quý đang xem.
+    const srcByChannel = new Map<string, Map<string, { label: string; months: Map<string, { revenue: number; gp: number; hk3: number }> }>>()
+    ;(srcRows as Array<{ month: string; channel: string | null; source_code: string | null; sapo_name: string | null; revenue: string; gp: string; hk3: string }>).forEach(row => {
+      if (!row.channel || !row.source_code) return
+      let chMap = srcByChannel.get(row.channel)
+      if (!chMap) { chMap = new Map(); srcByChannel.set(row.channel, chMap) }
+      let entry = chMap.get(row.source_code)
+      if (!entry) { entry = { label: row.sapo_name || row.source_code, months: new Map() }; chMap.set(row.source_code, entry) }
+      entry.months.set(row.month, { revenue: parseFloat(row.revenue || "0"), gp: parseFloat(row.gp || "0"), hk3: parseFloat(row.hk3 || "0") })
+    })
+
     const buildChannels = (bg: "B2B" | "B2C") => {
       const chs = [...new Set(channelRows.filter(r => r.bg === bg).map(r => r.channel))].filter(Boolean)
       return chs.map(ch => {
@@ -421,7 +462,42 @@ export async function GET(req: NextRequest) {
           const { _i, ...rest } = m
           return { ...rest, momPct }
         })
-        return { name: ch, totalRevenue, months: withMom }
+
+        // s214: drill-down mã nguồn đơn (chỉ B2C, xem srcByChannel ở trên) — CM1/%CM1 dòng con dùng quy
+        // ước channelCost=0/CM1=GM thuần (KHÔNG gọi lại computeChannelCost per-source, xem comment ở query).
+        let members: { name: string; totalRevenue: number; months: typeof withMom }[] | undefined
+        if (bg === "B2C") {
+          const srcMap = srcByChannel.get(ch)
+          if (srcMap) {
+            const built = [...srcMap.values()].map(entry => {
+              let mRevenue = 0
+              const mMonths = monthMeta.filter(mr => !mr.isFuture).map(mr => {
+                const { month, isProjected, factor } = mr
+                const md = entry.months.get(month)
+                if (!md) return { month, revenue: 0, gp: 0, channelCost: 0, cm1: 0, cm1Pct: 0, three_hk_rev: 0, three_hk_pct: 0, momPct: null as number | null, isProjected }
+                const rev = r(md.revenue * factor)
+                const gp = r(md.gp * factor)
+                const hk3 = r(md.hk3 * factor)
+                mRevenue += rev
+                return {
+                  month, revenue: rev, gp, channelCost: 0, cm1: gp, cm1Pct: pct(gp, rev),
+                  three_hk_rev: hk3, three_hk_pct: pct(hk3, rev), momPct: null as number | null,
+                  isProjected,
+                  ...(isProjected && { actualRevenue: r(md.revenue), actualGp: r(md.gp), actualCc: 0, actualCm1: r(md.gp) }),
+                }
+              })
+              const mWithMom = mMonths.map((m, i) => {
+                const prev = mMonths[i - 1]
+                const momPct = prev && prev.revenue > 0 ? Math.round((m.revenue - prev.revenue) / prev.revenue * 1000) / 10 : null
+                return { ...m, momPct }
+              })
+              return { name: entry.label, totalRevenue: mRevenue, months: mWithMom }
+            }).filter(m => m.totalRevenue > 0).sort((a, b) => b.totalRevenue - a.totalRevenue)
+            if (built.length > 1) members = built
+          }
+        }
+
+        return { name: ch, totalRevenue, months: withMom, ...(members && { members }) }
       })
         .filter(ch => ch.totalRevenue > 0)
         .sort((a, b) => b.totalRevenue - a.totalRevenue)
