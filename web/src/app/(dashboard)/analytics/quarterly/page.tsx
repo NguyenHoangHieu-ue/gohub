@@ -131,6 +131,7 @@ function QuarterlyContent() {
   const [savingSquad,   setSavingSquad]    = useState(false)
   const [squadMsg,      setSquadMsg]       = useState<{ ok: boolean; text: string } | null>(null)
   const [expandedSquads, setExpandedSquads] = useState<Set<number>>(new Set())
+  const [expandedSqCustomers, setExpandedSqCustomers] = useState<Set<string>>(new Set()) // s214: bấm tên KH xổ breakdown theo tháng
   // Filters
   const [sqSearch,       setSqSearch]       = useState("")
   const [sqFilterRegion, setSqFilterRegion] = useState<"ALL"|"VN"|"US">("ALL")
@@ -1643,10 +1644,20 @@ function QuarterlyContent() {
                                       {sq.customers.map((c: any, ci: number) => {
                                         const rm = RISK_META[c.risk_level] ?? RISK_META["no_target"]
                                         const picInfo = squadData.available_pics?.find((p: any) => p.code === c.sales_pic)
+                                        const custKey = `${si}-${c.customer_code}`
+                                        const custExpanded = expandedSqCustomers.has(custKey)
                                         return (
-                                          <tr key={ci} className={cn("border-l-[3px]", rm.border, ci % 2 === 0 ? "bg-white" : "bg-slate-50/50")}>
+                                        <React.Fragment key={ci}>
+                                          <tr className={cn("border-l-[3px]", rm.border, ci % 2 === 0 ? "bg-white" : "bg-slate-50/50")}>
                                             <td className="px-4 py-2.5 font-medium text-slate-700">
-                                              {c.customer_name}
+                                              {c.monthly?.length > 0 ? (
+                                                <button type="button"
+                                                  onClick={() => setExpandedSqCustomers(prev => { const next = new Set(prev); next.has(custKey) ? next.delete(custKey) : next.add(custKey); return next })}
+                                                  className="inline-flex items-center gap-1 text-left hover:text-[#0f4c81]">
+                                                  <ChevronRight className={cn("w-3 h-3 text-slate-400 transition-transform shrink-0", custExpanded && "rotate-90")} />
+                                                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-2">{c.customer_name}</span>
+                                                </button>
+                                              ) : c.customer_name}
                                               <span className={cn("ml-1.5 text-[9px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
                                               {c.lifecycle_state === "new" && <span title="KH mới trong quý" className="ml-1 text-[9px] px-1 py-0.5 rounded font-bold bg-sky-100 text-sky-600">🆕 Mới</span>}
                                             </td>
@@ -1670,6 +1681,17 @@ function QuarterlyContent() {
                                               <RiskBadge level={c.risk_level} dense />
                                             </td>
                                           </tr>
+                                          {custExpanded && c.monthly?.length > 0 && (
+                                            <tr>
+                                              <td colSpan={10} className="p-0 border-l-[3px] border-transparent">
+                                                <PivotTable title={c.customer_name} icon={Users}
+                                                  channels={[{ name: c.customer_name, totalRevenue: c.revenue_pr, months: c.monthly }]}
+                                                  months={squadData.quarter_months} expanded
+                                                  onToggle={() => setExpandedSqCustomers(prev => { const next = new Set(prev); next.delete(custKey); return next })} />
+                                              </td>
+                                            </tr>
+                                          )}
+                                        </React.Fragment>
                                         )
                                       })}
                                     </tbody>

@@ -396,6 +396,37 @@ export async function GET(req: NextRequest) {
         const cm1TgtPct: number | null  = tgt.cm1 > 0 ? Math.round(cm1Pr / tgt.cm1 * 100) : null
         const hk3TgtPct: number | null  = tgt3hk > 0 ? Math.round(custHk3Pr / tgt3hk * 100) : null
 
+        // s214: breakdown theo tháng cho KH này — bấm tên KH trong bảng xổ ra (áp cùng shape ChannelMonth
+        // dùng ở Organization/B2C, tái dùng thẳng <PivotTable>). Dữ liệu thô rev_m{i}/gm_m{i}/hk3_m{i} đã
+        // có sẵn trong `r` (query gốc SELECT theo tháng) — KHÔNG cần query thêm, chỉ tách ra thay vì chỉ
+        // cộng tổng như `calcCustCm1AndPr`. Cùng công thức cost/factor (elapsedRatioOf/kpiFactorOf) nên
+        // Σ tháng khớp đúng revenue_pr/cm1_pr/hk3_pr ở trên.
+        const custMonths = months.map((m, i) => {
+          const mRevAct = Number(r[`rev_m${i}`]) || 0
+          const mGmAct  = Number(r[`gm_m${i}`])  || 0
+          const mHk3Act = Number(r[`hk3_m${i}`]) || 0
+          const rec = costMap.get(`${m}_${code}`)
+          const mCcAct = rec && mRevAct !== 0 ? calcRecordCostProjected(rec, mRevAct, 1, elapsedRatioOf(i)) : 0
+          const mCm1Act = mGmAct - mCcAct
+          const k = kpiFactorOf(i)
+          const isProjected = monthMeta[i].isProjected
+          const mRev = Math.round(mRevAct * k), mGp = Math.round(mGmAct * k)
+          const mCc = Math.round(mCcAct * k), mCm1 = Math.round(mCm1Act * k), mHk3 = Math.round(mHk3Act * k)
+          return {
+            month: m, revenue: mRev, gp: mGp, channelCost: mCc, cm1: mCm1,
+            cm1Pct: mRev > 0 ? Math.round(mCm1 / mRev * 1000) / 10 : 0,
+            momPct: null as number | null,
+            three_hk_rev: mHk3, three_hk_pct: mRev > 0 ? Math.round(mHk3 / mRev * 1000) / 10 : 0,
+            isProjected,
+            ...(isProjected && { actualRevenue: Math.round(mRevAct), actualGp: Math.round(mGmAct), actualCc: Math.round(mCcAct), actualCm1: Math.round(mCm1Act) }),
+          }
+        })
+        const monthly = custMonths.map((mm, i) => {
+          const prev = custMonths[i - 1]
+          const momPct = prev && prev.revenue > 0 ? Math.round((mm.revenue - prev.revenue) / prev.revenue * 1000) / 10 : null
+          return { ...mm, momPct }
+        })
+
         return {
           customer_code: code,
           customer_name: r.customer_name,
@@ -414,6 +445,7 @@ export async function GET(req: NextRequest) {
           hk3: hk3Act, hk3_pct: hk3ActPct, hk3_pr: custHk3Pr, target_hk3pct: tgt.hk3pct, target_hk3rev: tgt3hk,
           hk3_tgt_pct: hk3TgtPct,
           risk_level: getRiskLevel(cm1TgtPct, hk3TgtPct),
+          monthly,
         }
       }).filter(Boolean) as any[]
 
