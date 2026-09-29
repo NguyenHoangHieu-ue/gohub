@@ -37,6 +37,26 @@ KH đó) — không chỉ Supabase. **Chi phí B2C** = channel cost (Supabase) +
 🟡 CÒN TREO: B2C pivot "Chi tiết theo Kênh" CM1 chưa gồm B2C group cost (per-channel không chứa group) → không khớp
    summary nếu cộng kênh (chờ quyết phân bổ như B2B tier).
 
+**s214 (2026-09-29) — Drill-down mã nguồn đơn cho bảng "B2C — Chi tiết theo Kênh × Tháng".** Hiếu yêu cầu áp
+lại cơ chế drill-down vừa làm ở Quarter Report (Organization) (bấm tên → xổ dòng con đủ cột tháng), KHÔNG đổi
+format/công thức dòng cha. `dim_order_source.channel_name` là rollup của nhiều `code` (mã nguồn đơn) — verify
+SQL thật trước khi làm: VN-Social 12 mã, Global-Web 7 mã, Misc. 18 mã, VN-Web SIM 5 mã... Chỉ áp cho B2C (B2B
+không dùng `PivotTable` ở trang này — có `B2BTierSection` riêng với drill-down khác kiểu, ngoài phạm vi).
+- `quarterly-report/route.ts`: thêm 1 query RIÊNG (thunk thứ 3 trong `runLimited`) lấy revenue/gp/hk3 theo
+  `(month, channel, source_code)` chỉ B2C, chỉ quý hiện tại (không cần QoQ) + `sapo_name` làm tên hiển thị đẹp
+  (vd "Zalo"/"Facebook" thay vì mã thô "S0011"). **KHÔNG đụng** `baseRows`/`channelRows`/`computeChannelCost`
+  hiện có — lý do: `matchChannelCost` khớp theo TÊN KÊNH, nếu gọi lại per mã nguồn con thì chi phí dạng
+  "amount" (tiền cố định) sẽ bị CỘNG ĐÚP theo số mã nguồn. Vì vậy dòng con dùng đúng quy ước đã lập cho member
+  Organization: `channelCost=0`, `CM1=GM thuần`. Dòng cha (channel) giữ nguyên 100% công thức/số đang chạy.
+  `members` chỉ gắn khi channel có >1 mã nguồn PHÁT SINH DOANH THU trong quý đang xem (giống gate `memberCount>1`
+  bên Organization). Bump `QREPORT_CACHE_PREFIX` v10→v11 (raw cache đổi shape, thêm `srcRows`).
+- FE **không cần sửa gì** — `b2cChannels` trả thẳng đúng shape `Channel[]` (đã có field `members?: Channel[]`
+  từ đợt Organization), `PivotTable` đã có sẵn cơ chế render/click/expand dùng chung.
+- Verify sống trên staging (Chrome, acc Creator, Q3-2026): VN-Social T7 908.540.600 = Zalo 742.467.000 +
+  Facebook 162.853.600 + Instagram 2.101.000 + VN B2C WhatsApp 1.119.000 (khớp tuyệt đối); CM1 T7 524.966.515
+  = 428.509.099+94.571.758+1.208.962+676.696 (khớp tuyệt đối); T8 cũng khớp. tsc + vitest 419/419 + lint
+  (2 warning `prevQEndDate`/`_i` PRE-EXISTING, không phải do đợt này) PASS.
+
 ---
 
 ## 1. Đường dẫn & File
