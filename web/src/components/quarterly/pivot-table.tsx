@@ -94,11 +94,11 @@ export function PivotTable({ title, icon: Icon, channels, months, expanded, onTo
                 {rowExpanded && (
                   <tr className="border-b border-slate-100 bg-slate-50/80">
                     <td colSpan={1 + months.length * colCount} className="px-4 py-2.5">
-                      <div className="pl-4 space-y-1">
+                      <div className="pl-4 space-y-1 max-w-sm">
                         {ch.members!.map(m => (
-                          <div key={m.code} className="flex items-center justify-between text-[11px] text-slate-600 py-0.5">
-                            <span>{m.name} <span className="text-slate-400">({m.code})</span></span>
-                            <span className="tabular-nums text-slate-500">{fc(m.revenue)}</span>
+                          <div key={m.code} className="flex items-center justify-between gap-4 text-[11px] text-slate-600 py-0.5">
+                            <span className="truncate">{m.name} <span className="text-slate-400">({m.code})</span></span>
+                            <span className="tabular-nums text-slate-500 shrink-0">{fc(m.revenue)}</span>
                           </div>
                         ))}
                       </div>
