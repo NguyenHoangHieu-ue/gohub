@@ -14,6 +14,12 @@ export const dynamic = "force-dynamic"
 
 type RiskLevel = "very_safe" | "safe" | "safe_low" | "danger_low" | "danger_high" | "no_target"
 
+// s214(b): backend giữ nguyên "VN_Org "/"US_Org " (phân biệt company code, khớp quarterly-org-customers)
+// — chỉ cắt ở tầng hiển thị, giống stripOrgPrefix() bên quarterly-org/page.tsx.
+function stripOrgPrefix(name: string): string {
+  return name.replace(/^(VN|US)_Org\s*/i, "")
+}
+
 function classifyTier(priceListName: string | null): string {
   const p = (priceListName || "").toUpperCase()
   if (p.includes("VIP"))    return "VIP"
@@ -507,7 +513,7 @@ export async function GET(req: NextRequest) {
         })
         return {
           ...rep,
-          customer_code: orgKey, customer_name: `${rep.org_name} · ${group.length} mã KH`,
+          customer_code: orgKey, customer_name: `${stripOrgPrefix(rep.org_name)} · ${group.length} mã KH`,
           member_count: group.length,
           members: group.map(m => ({ name: m.customer_name, totalRevenue: m.revenue_pr, months: m.monthly })),
           prev_revenue: Math.round(sum("prev_revenue")),
