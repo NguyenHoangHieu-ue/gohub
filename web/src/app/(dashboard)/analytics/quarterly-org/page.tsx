@@ -28,6 +28,11 @@ interface OrgTier {
 }
 interface OrgData { quarter: string; year: number; months: string[]; tiers: OrgTier[] }
 
+// Backend giữ nguyên "VN_Org "/"US_Org " để phân biệt company code — FE bỏ phần này khi hiển thị, chỉ để tên tổ chức.
+function stripOrgPrefix(name: string): string {
+  return name.replace(/^(VN|US)_Org\s*/i, "")
+}
+
 function orgsToChannels(orgs: OrgRow[], months: string[]): Channel[] {
   return orgs.map(o => {
     const monthsArr = months.map((m, i) => {
@@ -44,8 +49,11 @@ function orgsToChannels(orgs: OrgRow[], months: string[]): Channel[] {
         ...(d.isProjected && { actualRevenue: d.actualRevenue, actualGp: d.actualGm, actualCm1: d.actualGm }),
       }
     })
-    const name = `${o.orgName}${o.memberCount > 1 ? ` · ${o.memberCount} mã KH` : ""} [${o.region}]`
-    return { name, totalRevenue: o.revenue, months: monthsArr }
+    const name = `${stripOrgPrefix(o.orgName)}${o.memberCount > 1 ? ` · ${o.memberCount} mã KH` : ""} [${o.region}]`
+    return {
+      name, totalRevenue: o.revenue, months: monthsArr,
+      ...(o.memberCount > 1 && { members: o.members.map(m => ({ code: m.code, name: m.name, revenue: m.revenue })) }),
+    }
   }).filter(c => c.totalRevenue > 0)
 }
 
@@ -164,46 +172,14 @@ function QuarterlyOrgContent() {
       )}
 
       <div className={cn("space-y-4 transition-opacity", loading && "opacity-50 pointer-events-none")}>
-        {orgData?.tiers.map(tier => {
-          const multiCustOrgs = tier.organizations.filter(o => o.memberCount > 1)
-          return (
-            <React.Fragment key={tier.tier}>
-              <PivotTable title={`${tier.tier} — ${tier.organizationCount} Organization × Tháng (CM1 quý ${fc(tier.totalCm1)}, ${pct(tier.totalCm1Pct)})`}
-                icon={Building2}
-                channels={orgsToChannels(tier.organizations, orgData.months)}
-                months={orgData.months}
-                expanded={expandedTiers.has(tier.tier)}
-                onToggle={() => setExpandedTiers(prev => { const next = new Set(prev); next.has(tier.tier) ? next.delete(tier.tier) : next.add(tier.tier); return next })} />
-
-              {/* Drill-down Organization → Khách hàng — chỉ hiện tổ chức gộp ≥2 mã KH */}
-              {expandedTiers.has(tier.tier) && multiCustOrgs.length > 0 && (
-                <div className="bg-white border border-slate-200 rounded-xl p-4">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    {tier.tier} — Tổ chức gồm nhiều mã KH ({multiCustOrgs.length})
-                  </p>
-                  <div className="space-y-1.5">
-                    {multiCustOrgs.map(o => (
-                      <details key={o.orgKey} className="border border-slate-100 rounded-lg">
-                        <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center justify-between">
-                          <span>{o.orgName} <span className="text-slate-400 font-normal">[{o.region}]</span></span>
-                          <span className="text-slate-400 font-normal">{o.memberCount} mã KH · {fc(o.revenue)}</span>
-                        </summary>
-                        <ul className="px-3 pb-2 space-y-0.5">
-                          {o.members.map(m => (
-                            <li key={m.code} className="flex items-center justify-between text-[11px] text-slate-600 py-0.5">
-                              <span>{m.name} <span className="text-slate-400">({m.code})</span></span>
-                              <span className="tabular-nums text-slate-500">{fc(m.revenue)}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </React.Fragment>
-          )
-        })}
+        {orgData?.tiers.map(tier => (
+          <PivotTable key={tier.tier} title={`${tier.tier} — ${tier.organizationCount} Organization × Tháng (CM1 quý ${fc(tier.totalCm1)}, ${pct(tier.totalCm1Pct)})`}
+            icon={Building2}
+            channels={orgsToChannels(tier.organizations, orgData.months)}
+            months={orgData.months}
+            expanded={expandedTiers.has(tier.tier)}
+            onToggle={() => setExpandedTiers(prev => { const next = new Set(prev); next.has(tier.tier) ? next.delete(tier.tier) : next.add(tier.tier); return next })} />
+        ))}
       </div>
     </div>
   )

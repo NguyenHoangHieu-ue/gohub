@@ -23,7 +23,10 @@ export interface ChannelMonth {
   actualRevenue?: number; actualGp?: number; actualCc?: number; actualCm1?: number
 }
 
-export interface Channel { name: string; totalRevenue: number; months: ChannelMonth[] }
+export interface Channel {
+  name: string; totalRevenue: number; months: ChannelMonth[]
+  members?: { code: string; name: string; revenue: number }[]
+}
 
 export interface QReport {
   quarter: string; year: number; months: string[]

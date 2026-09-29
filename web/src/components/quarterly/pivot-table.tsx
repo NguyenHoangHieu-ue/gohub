@@ -9,6 +9,10 @@ export function PivotTable({ title, icon: Icon, channels, months, expanded, onTo
   { title: string; icon: React.ElementType; channels: Channel[]; months: string[]; expanded: boolean; onToggle: () => void }) {
   const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK Rev (%)"]
   const colCount = SUB.length
+  const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set())
+  const toggleRow = (name: string) => setExpandedRows(prev => {
+    const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next
+  })
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <button className="w-full px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between hover:bg-slate-100 transition-colors" onClick={onToggle}>
@@ -44,9 +48,20 @@ export function PivotTable({ title, icon: Icon, channels, months, expanded, onTo
               </tr>
             </thead>
             <tbody>
-              {channels.map((ch, ri) => (
-                <tr key={ch.name} className={cn("border-b border-slate-100", ri % 2 === 0 ? "bg-white" : "bg-slate-50/60", "hover:bg-blue-50/30 transition-colors")}>
-                  <td className="px-4 py-2.5 font-medium text-slate-700 sticky left-0 border-r border-slate-100" style={{ backgroundColor: ri % 2 === 0 ? "#ffffff" : "#f8fafc" }}>{ch.name}</td>
+              {channels.map((ch, ri) => {
+                const hasMembers = !!ch.members && ch.members.length > 0
+                const rowExpanded = hasMembers && expandedRows.has(ch.name)
+                return (
+                <React.Fragment key={ch.name}>
+                <tr className={cn("border-b border-slate-100", ri % 2 === 0 ? "bg-white" : "bg-slate-50/60", "hover:bg-blue-50/30 transition-colors")}>
+                  <td className="px-4 py-2.5 font-medium text-slate-700 sticky left-0 border-r border-slate-100" style={{ backgroundColor: ri % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
+                    {hasMembers ? (
+                      <button type="button" onClick={() => toggleRow(ch.name)} className="flex items-center gap-1 text-left hover:text-[#0f4c81]">
+                        <ChevronRight className={cn("w-3 h-3 text-slate-400 transition-transform shrink-0", rowExpanded && "rotate-90")} />
+                        <span className="underline decoration-dotted decoration-slate-300 underline-offset-2">{ch.name}</span>
+                      </button>
+                    ) : ch.name}
+                  </td>
                   {months.flatMap(m => {
                     const d = ch.months.find((x: any) => x.month === m)
                     if (!d || d.revenue === 0) {
@@ -76,7 +91,23 @@ export function PivotTable({ title, icon: Icon, channels, months, expanded, onTo
                     ]
                   })}
                 </tr>
-              ))}
+                {rowExpanded && (
+                  <tr className="border-b border-slate-100 bg-slate-50/80">
+                    <td colSpan={1 + months.length * colCount} className="px-4 py-2.5">
+                      <div className="pl-4 space-y-1">
+                        {ch.members!.map(m => (
+                          <div key={m.code} className="flex items-center justify-between text-[11px] text-slate-600 py-0.5">
+                            <span>{m.name} <span className="text-slate-400">({m.code})</span></span>
+                            <span className="tabular-nums text-slate-500">{fc(m.revenue)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -159,6 +159,14 @@ Nút **Cài đặt** trong header Quarter Report (chỉ admin/creator):
   - **Đã tự verify sống trên staging sau deploy** (gọi thẳng API qua Dev Tools, không chỉ tin code sạch):
     tổ chức nhiều chi nhánh gộp đúng số liệu thật, khối drill-down Organization → Khách hàng hiện đúng
     danh sách + doanh thu từng mã KH.
+  - **s214 (2026-09-29)** — Hiếu: (1) bỏ prefix `VN_Org `/`US_Org ` khỏi tên hiển thị; (2) bỏ hẳn khối
+    drill-down "Tổ chức gồm nhiều mã KH" riêng bên dưới bảng, thay bằng bấm thẳng vào tên tổ chức TRONG
+    bảng pivot để xổ danh sách mã KH con + doanh thu. `stripOrgPrefix()` (`quarterly-org/page.tsx`) chỉ
+    cắt ở tầng hiển thị, KHÔNG đổi `orgName` gốc trả về từ API. `PivotTable` (dùng chung B2B/B2C/Org)
+    thêm state `expandedRows` nội bộ + field optional `Channel.members` (`quarterly-types.ts`) — hàng nào
+    có `members` thì tên trong cột "Kênh" trở thành nút bấm (chevron xoay + underline chấm), bấm mở 1
+    dòng phụ ngay dưới liệt kê tên/mã/doanh thu từng mã con. Field optional nên B2B/B2C tier (không set
+    `members`) không đổi hành vi.
 - **s200 (2026-09-17) — New/Recurring/Inactive B2B Customers** (Hiếu yêu cầu vòng đời KH). Module dùng
   chung `lib/analytics-engine/b2b-lifecycle.ts`: `fetchB2BLifecycleRows()` quét MIN(ngày mua) toàn bộ
   lịch sử `fact_fulfillment_revenue` cho mỗi KH B2B (1 query GROUP BY, không loop) — cache TTL RIÊNG 6 giờ
