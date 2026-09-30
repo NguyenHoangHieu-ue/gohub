@@ -96,12 +96,14 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
 
     // eSIM: chỉ eSIM full (C). SIM: gói data rời (A) + SIM full (E, ghép khung SIM + datapack).
     const types: ProductTypeChar[] = p.simType === "eSIM" ? ["C"] : ["A", "E"]
-    const typeLabel = (t: ProductTypeChar) => (t === "C" ? "eSIM full" : t === "A" ? "SIM datapack (A)" : "SIM full (E)")
+    const typeLabel = (t: ProductTypeChar) => (t === "C" ? "eSIM full" : t === "A" ? "SIM datapack (A)" : "SIM full (E, chỉ VN)")
 
     const kinds = Array.from(new Set(p.plans.map(pl => pl.kind)))
     for (const kind of kinds) {
       const dataType = kind === "Fixed" ? "Fixed Data" : "Daily Data"
       for (const type of types) {
+        // SIM full (E) chỉ bán ở đầu VN; datapack (A) vẫn cần bản US vì SKU VN trỏ về mã US (vendorSkuSim)
+        const tenants: ("US" | "VN")[] = type === "E" ? ["VN"] : ["US", "VN"]
         const rowFor = (tenant: "US" | "VN"): (string | number)[] => {
           const us = tenant === "US"
           return [
@@ -111,10 +113,10 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
             productCode(tenant, p.simType, p.supportCountryCode, p.pool, kind, type),
           ]
         }
-        const pcUS = productCode("US", p.simType, p.supportCountryCode, p.pool, kind, type)
-        if (seenProduct.has(pcUS)) out.warnings.push(`${label}: trùng Product Code ${pcUS} với sản phẩm khác trong cùng lần xuất`)
-        seenProduct.add(pcUS)
-        out.sheets.productUS.push(rowFor("US"))
+        const pcKey = productCode(tenants[0], p.simType, p.supportCountryCode, p.pool, kind, type)
+        if (seenProduct.has(pcKey)) out.warnings.push(`${label}: trùng Product Code ${pcKey} với sản phẩm khác trong cùng lần xuất`)
+        seenProduct.add(pcKey)
+        if (tenants.includes("US")) out.sheets.productUS.push(rowFor("US"))
         out.sheets.productVN.push(rowFor("VN"))
       }
     }
@@ -142,10 +144,11 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
         const push = (type: ProductTypeChar, cogsUsd: number, feeUsd: number) => {
           const cUS = code("US", type)!, cVN = code("VN", type)!
           const cogsVnd = usdToVnd(cogsUsd, fx)
+          const vnOnly = type === "E"
           const row = (tenant: "US" | "VN", sku: string, cogs: number, cur: string) => {
             const us = tenant === "US"
             const link = us ? "" : cUS   // VN trỏ về mã US tương ứng
-            const frame = type === "E" ? FRAME_SKU[tenant] : ""
+            const frame = type === "E" ? FRAME_SKU.VN : ""
             const datapack = type === "E" ? code(tenant, "A")! : ""
             return [
               tenant, productCode(tenant, p.simType, p.supportCountryCode, p.pool, pl.kind, type), pl.dataAmount, pl.unit, d, "Day(s)", nm.vn, nm.en, frame, datapack, cogs, cur,
@@ -154,9 +157,9 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
               type === "C" ? (us ? pid : link) : "", type === "A" ? (us ? pid : link) : "", sku,
             ]
           }
-          out.sheets.skuUS.push(row("US", cUS, cogsUsd, "USD"))
+          if (!vnOnly) out.sheets.skuUS.push(row("US", cUS, cogsUsd, "USD"))
           out.sheets.skuVN.push(row("VN", cVN, cogsVnd, "VND"))
-          out.costRows.push({ type: typeLabel(type), skuUS: cUS, skuVN: cVN, productId: pid, pool: p.pool, operator: `${top.operator} (${top.coverage})`, pricePerGb: top.pricePerGb, currency: pool.currency, dataUsd, feeUsd, cogsUsd, cogsVnd })
+          out.costRows.push({ type: typeLabel(type), skuUS: vnOnly ? "—" : cUS, skuVN: cVN, productId: pid, pool: p.pool, operator: `${top.operator} (${top.coverage})`, pricePerGb: top.pricePerGb, currency: pool.currency, dataUsd, feeUsd, cogsUsd, cogsVnd })
         }
         const full = Math.round((dataUsd + fee) * 100) / 100
         if (p.simType === "eSIM") push("C", full, fee)

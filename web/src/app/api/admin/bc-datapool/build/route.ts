@@ -29,9 +29,8 @@ export async function POST(req: NextRequest) {
     const whiteSimVnd = hasSim ? await loadWhiteSimVnd() : null
     const result = build(resolved.products, list, fx, a, { whiteSimVnd: whiteSimVnd ?? undefined })
     if (hasSim) {
-      const frames = await findExisting("skus", "sku_code", [FRAME_SKU.VN, FRAME_SKU.US])
-      const missing = [FRAME_SKU.VN, FRAME_SKU.US].filter(c => !frames.has(c))
-      if (missing.length) result.warnings.push(`Khung SIM chưa có trong hệ thống: ${missing.join(", ")} — tạo trước khi import SKU SIM full`)
+      const frames = await findExisting("skus", "sku_code", [FRAME_SKU.VN])
+      if (!frames.has(FRAME_SKU.VN)) result.warnings.push(`Khung SIM chưa có trong hệ thống: ${FRAME_SKU.VN} — tạo trước khi import SKU SIM full`)
     }
     result.warnings.unshift(...resolved.warnings)
 

@@ -9,8 +9,8 @@ export const TENANT_CHAR = { US: "E", VN: "3" } as const
 export type ProductTypeChar = "A" | "C" | "E"
 export const PRODUCT_TYPE_CHAR: Record<SimType, ProductTypeChar> = { eSIM: "C", SIM: "E" }
 
-/** Mã khung SIM trắng của BC Datapool — dùng chung cả CMHK và Singtel (VN có trong DB; mã US theo quy ước CD000…K00000). */
-export const FRAME_SKU = { VN: "1D000WDK00000", US: "CD000WDK00000" } as const
+/** Mã khung SIM trắng của BC Datapool — dùng chung cả CMHK và Singtel. Hiện chỉ bán SIM full ở đầu VN nên không có mã khung US. */
+export const FRAME_SKU = { VN: "1D000WDK00000" } as const
 
 export function productCode(tenant: "US" | "VN", sim: SimType, country3: string, pool: Pool, kind: PlanKind, type: ProductTypeChar = PRODUCT_TYPE_CHAR[sim]): string {
   return `${TENANT_CHAR[tenant]}${type}${country3}${VENDOR_CODE[pool]}${POLICY_CODE[kind]}`

@@ -123,22 +123,24 @@ describe("build()", () => {
     expect(r.sheets.productVN.map(x => x[17])).toEqual(["GMT+8", "Count 24h", "GMT+8"])
   })
 
-  test("SIM: sinh datapack (A) + SIM full (E), khung 1D000WDK00000, phí = giá SIM trắng DB + IMSI", () => {
+  test("SIM: datapack (A) cho cả US/VN, SIM full (E) chỉ VN; khung 1D000WDK00000; phí = giá SIM trắng DB + IMSI", () => {
     const p = product({ simType: "SIM", plans: [plan({ productId: "777" })] })
     const r = build([p], list, FX_JP, A, { whiteSimVnd: 16028 })
     expect(r.warnings).toEqual([])
-    // Product: A rồi E, mỗi tenant
-    expect(r.sheets.productUS.map(x => [x[2], x[13], x[35]])).toEqual([["A", "Datapack", "EAJPNWDT"], ["E", "Base + Datapack", "EEJPNWDT"]])
-    expect(r.sheets.productVN.map(x => x[35])).toEqual(["3AJPNWDT", "3EJPNWDT"])
-    const [aUS, eUS] = r.sheets.skuUS, [aVN, eVN] = r.sheets.skuVN
-    expect(aUS[18]).toBe("EAJPNWDT5HM01"); expect(eUS[18]).toBe("EEJPNWDT5HM01")
-    expect(eUS[8]).toBe("CD000WDK00000"); expect(eVN[8]).toBe("1D000WDK00000")
-    expect(eUS[9]).toBe("EAJPNWDT5HM01"); expect(eVN[9]).toBe("3AJPNWDT5HM01")
-    // ProductID nằm ở vendorSkuSim của datapack (tiền lệ 3AAS8WDT/EAAS8WDT); VN datapack trỏ SKU US
-    expect([aUS[16], aUS[17], eUS[16], eUS[17]]).toEqual(["", "777", "", ""])
+    // Product: US chỉ có A; VN có A + E
+    expect(r.sheets.productUS.map(x => [x[2], x[13], x[35]])).toEqual([["A", "Datapack", "EAJPNWDT"]])
+    expect(r.sheets.productVN.map(x => [x[2], x[13], x[35]])).toEqual([["A", "Datapack", "3AJPNWDT"], ["E", "Base + Datapack", "3EJPNWDT"]])
+    expect(r.sheets.skuUS).toHaveLength(1)
+    expect(r.sheets.skuVN).toHaveLength(2)
+    const [aUS] = r.sheets.skuUS, [aVN, eVN] = r.sheets.skuVN
+    expect(aUS[18]).toBe("EAJPNWDT5HM01"); expect(aVN[18]).toBe("3AJPNWDT5HM01"); expect(eVN[18]).toBe("3EJPNWDT5HM01")
+    expect(eVN[8]).toBe("1D000WDK00000"); expect(eVN[9]).toBe("3AJPNWDT5HM01")
+    // ProductID nằm ở vendorSkuSim của datapack (tiền lệ 3AAS8WDT/EAAS8WDT); VN datapack trỏ SKU US; SIM full trống
+    expect([aUS[16], aUS[17]]).toEqual(["", "777"])
     expect([aVN[16], aVN[17]]).toEqual(["", "EAJPNWDT5HM01"])
-    // datapack = chỉ data (0.13); full = data + round2(16028/26490 + 0.5/7.802) = 0.13 + 0.67
-    expect(aUS[10]).toBe(0.13); expect(eUS[10]).toBe(0.8)
+    expect([eVN[16], eVN[17]]).toEqual(["", ""])
+    // datapack = chỉ data (0.13); full = data + round2(16028/26490 + 0.5/7.802 = 0.6695) = 0.13 + 0.67 = 0.80
+    expect(aUS[10]).toBe(0.13)
     expect(aVN[10]).toBe(usdToVnd(0.13, FX_JP)); expect(eVN[10]).toBe(usdToVnd(0.8, FX_JP))
   })
 
