@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
 
     const [list, fx, catalog] = await Promise.all([loadPriceList(), loadFx(), loadPlanCatalog()])
     if (!list) return NextResponse.json({ error: "Chưa upload bảng báo giá BC Datapool" }, { status: 400 })
+    // Portal là nguồn sự thật về gói BC thực sự bán — chưa có file Portal thì KHÔNG cho tạo (tránh tạo gói BC không bán)
+    if (!catalog) return NextResponse.json({ error: "Chưa upload file Portal (Purchase information) — không thể tạo sản phẩm khi chưa biết BC đang bán gói nào" }, { status: 400 })
 
     const resolved = resolvePlans(products, catalog)
     const hasSim = resolved.products.some(p => p.simType === "SIM")
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest) {
 
     if (req.nextUrl.searchParams.get("format") === "xlsx") {
       if (nothingNew) return NextResponse.json({ error: "Tất cả SKU đã có trong hệ thống — không còn gì để tạo mới", skipped }, { status: 422 })
-      if (result.warnings.some(w => /chưa nhập ProductID|không mã hoá được|trùng|thiếu|phải đúng|chưa có gói|chưa chọn|Portal không bán|không tìm thấy gói|Plan ID cho gói/.test(w)) && body.force !== true)
+      if (result.warnings.some(w => /chưa nhập ProductID|không mã hoá được|trùng|thiếu|phải đúng|chưa có gói|chưa chọn|Portal không bán|không tìm thấy gói|Plan ID cho gói|không có trong file Portal|không khớp cấu hình/.test(w)) && body.force !== true)
         return NextResponse.json({ error: "Còn lỗi cần sửa trước khi xuất", warnings: result.warnings }, { status: 422 })
       // Ô giá là công thức Excel (trỏ sheet "Tính giá") để người dùng soát lại cách tính
       const wb = buildWorkbook(result, { fx, a, list, whiteSimVnd })

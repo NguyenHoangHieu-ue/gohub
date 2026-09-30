@@ -11,7 +11,9 @@ export async function GET() {
     const [priceList, supportCountries, catalog] = await Promise.all([loadPriceList(), loadSupportCountries(), loadPlanCatalog()])
     let fx = null, fxError: string | null = null
     try { fx = await loadFx() } catch (e) { fxError = (e as Error).message }
-    return NextResponse.json({ priceList, planCatalog: catalogSummary(catalog), supportCountries, fx, fxError, assumptions: DEFAULT_ASSUMPTIONS })
+    // Gửi kèm các gói Portal (bỏ tên, ~100KB) để form chỉ cho chọn đúng khu vực/dung lượng/ngày BC thực sự bán
+    const portalPlans = catalog?.plans.map(p => ({ id: p.id, sim: p.sim, kind: p.kind, countries: p.countries, amount: p.amount, unit: p.unit, pool: p.pool, throttleKbps: p.throttleKbps, days: p.days })) ?? null
+    return NextResponse.json({ priceList, planCatalog: catalogSummary(catalog), portalPlans, supportCountries, fx, fxError, assumptions: DEFAULT_ASSUMPTIONS })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }

@@ -6,31 +6,31 @@ import { PRODUCT_HEADERS, SKU_HEADERS, pickOperatorPrice, type BuildResult } fro
 import { pickSupportCountry } from "@/lib/bc-datapool/iso"
 import type { Skipped } from "@/lib/bc-datapool/dedupe"
 import type { CatalogDiff, PriceDiff } from "@/lib/bc-datapool/diff"
-import type { PlanInfo } from "@/lib/bc-datapool/plan-catalog"
+import { availableKinds, canonCountry, choosePlan, findPlans, manualMismatches, offers, sellableCountries, type CatalogPlan, type PlanCatalog, type PlanInfo } from "@/lib/bc-datapool/plan-lookup"
 import { DEFAULT_ASSUMPTIONS, type Assumptions, type Fx, type PlanKind, type Pool, type PriceList, type ProductInput } from "@/lib/bc-datapool/types"
 
 type Notify = (type: "success" | "error", text: string) => void
 interface SupportCountry { code: string; en: string; vn: string; iso: string }
 interface CatalogSummary { uploadedAt: string; files: string[]; esim: number; sim: number; lastDiff: CatalogDiff | null }
-interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | null; supportCountries: SupportCountry[]; fx: Fx | null; fxError: string | null; assumptions: Assumptions }
+interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | null; portalPlans: CatalogPlan[] | null; supportCountries: SupportCountry[]; fx: Fx | null; fxError: string | null; assumptions: Assumptions }
 interface PreviewResult extends BuildResult { fx: Fx; skipped: Skipped; nothingNew: boolean; planInfo: PlanInfo[]; whiteSimVnd: number | null }
 
-// Dòng gói trên form: `daysText` là chuỗi người dùng gõ ("1,2,3,7"), chuyển thành số khi gửi lên server.
-interface PlanForm { kind: PlanKind; dataAmount: string; unit: "MB" | "GB"; daysText: string; productId: string }
+// Dòng gói trên form: dung lượng chọn từ các gói Portal thật (amountKey = "500|MB"), số ngày chỉ bật được ngày Portal bán.
+interface PlanForm { kind: PlanKind; amountKey: string; days: number[]; productId: string }
 interface ProductForm { pool: Pool; simType: "eSIM" | "SIM"; coverage: string; operators: string[]; code: string; codeHint?: string; iso: string; en: string; vn: string; plans: PlanForm[] }
 
-const DAYS_JAPAN = "1,2,3,4,5,6,7,10,15,20,25,30"
-const DAYS_TAIWAN = "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,20,25,30"
+/** Bộ ngày phổ biến — mặc định bật sẵn phần giao với số ngày Portal bán */
+const COMMON_DAYS = [1, 2, 3, 4, 5, 6, 7, 10, 15, 20, 25, 30]
 const KIND_LABEL: Record<PlanKind, string> = { Daily: "Daily (theo ngày)", Fixed: "Fixed (cố định)", Unlimited: "Unlimited (mã X)" }
 const POOL_LABEL: Record<Pool, string> = { CMHK: "CMHK (WD · HKD)", SINGTEL: "Singtel (W1 · USD)" }
 
 const input = "px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white dark:bg-slate-800 dark:border-slate-600"
 const label = "block text-[11px] font-semibold text-gray-500 mb-1"
 
-const parseDays = (t: string) => Array.from(new Set(t.split(/[,\s;]+/).map(x => parseInt(x, 10)).filter(n => Number.isFinite(n) && n > 0))).sort((a, b) => a - b)
-
-const newPlan = (kind: PlanKind = "Daily"): PlanForm => ({ kind, dataAmount: kind === "Fixed" ? "5" : kind === "Unlimited" ? "3" : "500", unit: kind === "Daily" ? "MB" : "GB", daysText: DAYS_JAPAN, productId: "" })
-const newProduct = (): ProductForm => ({ pool: "CMHK", simType: "eSIM", coverage: "", operators: [], code: "", iso: "", en: "", vn: "", plans: [newPlan()] })
+const newProduct = (): ProductForm => ({ pool: "CMHK", simType: "eSIM", coverage: "", operators: [], code: "", iso: "", en: "", vn: "", plans: [] })
+const keyOf = (amount: number, unit: string) => `${amount}|${unit}`
+const labelOf = (key: string) => key.replace("|", " ")
+const commonOf = (offered: number[]) => COMMON_DAYS.filter(d => offered.includes(d))
 
 interface DiffGroup { label: string; tone: "red" | "green" | "amber"; total: number; items: string[] }
 const TONE = { red: "text-red-700", green: "text-emerald-700", amber: "text-amber-700" }
@@ -82,32 +82,57 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const catRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    fetch("/api/admin/bc-datapool").then(async r => {
+  const load = async (first: boolean) => {
+    try {
+      const r = await fetch("/api/admin/bc-datapool")
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || "Lỗi tải dữ liệu")
-      setOpts(j); setAssumptions(j.assumptions)
-    }).catch(e => setLoadErr((e as Error).message))
-  }, [])
+      setOpts(j); if (first) setAssumptions(j.assumptions)
+    } catch (e) { setLoadErr((e as Error).message) }
+  }
+  useEffect(() => { load(true) }, [])
 
   const list = opts?.priceList ?? null
+  // Danh mục gói Portal = nguồn sự thật về gói BC thực sự bán (chưa có thì chặn tạo)
+  const catalog: PlanCatalog | null = useMemo(() => (opts?.portalPlans ? { uploadedAt: "", files: [], plans: opts.portalPlans.map(p => ({ ...p, name: "", operators: [], timing: "" })) } : null), [opts?.portalPlans])
   const touch = () => setPreviewStale(true)
   const patchProduct = (i: number, p: Partial<ProductForm>) => { setProducts(prev => prev.map((x, k) => (k === i ? { ...x, ...p } : x))); touch() }
   const patchPlan = (i: number, j: number, p: Partial<PlanForm>) => {
     setProducts(prev => prev.map((x, k) => (k === i ? { ...x, plans: x.plans.map((pl, m) => (m === j ? { ...pl, ...p } : pl)) } : x))); touch()
   }
 
-  const coveragesOf = (pool: Pool) => (list ? Array.from(new Set(list.pools[pool].rows.map(r => r.coverage))).sort() : [])
+  // Khu vực: chỉ hiện khu vực CÓ trong bảng giá VÀ Portal có bán ở đúng pool + loại SIM (khu vực BC không bán bị ẩn hẳn)
+  const coveragesOf = (pool: Pool, sim: "eSIM" | "SIM") => {
+    if (!list || !catalog) return []
+    const ok = sellableCountries(catalog, sim, pool)
+    return Array.from(new Set(list.pools[pool].rows.map(r => r.coverage))).filter(c => ok.has(canonCountry(c))).sort()
+  }
 
-  const pickCoverage = (i: number, pool: Pool, coverage: string) => {
+  const offersOf = (p: ProductForm, kind: PlanKind) => offers(catalog, { sim: p.simType, pool: p.pool, coverage: p.coverage, kind })
+  const kindsOf = (p: ProductForm) => availableKinds(catalog, { sim: p.simType, pool: p.pool, coverage: p.coverage })
+
+  /** Dòng gói mặc định: dung lượng đầu tiên Portal bán, bật sẵn bộ ngày phổ biến giao với số ngày Portal bán */
+  const defaultPlan = (p: ProductForm, kind?: PlanKind): PlanForm | null => {
+    const k = kind ?? kindsOf(p)[0]
+    const o = k ? offersOf(p, k)[0] : undefined
+    if (!k || !o) return null
+    const c = commonOf(o.plan.days)
+    return { kind: k, amountKey: keyOf(o.amount, o.unit), days: c.length ? c : o.plan.days.slice(0, 1), productId: "" }
+  }
+  const offerDays = (p: ProductForm, pl: PlanForm) => offersOf(p, pl.kind).find(o => keyOf(o.amount, o.unit) === pl.amountKey)?.plan.days ?? []
+
+  const pickCoverage = (i: number, pool: Pool, sim: "eSIM" | "SIM", coverage: string) => {
     const rows = list?.pools[pool].rows.filter(r => r.coverage === coverage) ?? []
     // Mặc định chọn hết nhà mạng của khu vực; giá áp dụng luôn là nhà mạng đắt nhất trong số được chọn.
     // Có nhiều mã cùng tên nước (Japan: JPN + JKD...) → lấy mã ISO alpha-3, không chắc thì để trống và gợi ý
     const { match: sc, code, candidates } = pickSupportCountry(opts?.supportCountries ?? [], coverage)
+    const base: ProductForm = { ...products[i], pool, simType: sim, coverage }
+    const first = coverage ? defaultPlan(base) : null
     patchProduct(i, {
-      pool, coverage, operators: rows.map(r => `${r.coverage}|${r.operator}`),
+      pool, simType: sim, coverage, operators: rows.map(r => `${r.coverage}|${r.operator}`),
       code, iso: sc?.iso ?? "", en: sc?.en ?? coverage, vn: sc?.vn ?? "",
       codeHint: candidates.length ? `Có nhiều mã cho ${coverage}: ${candidates.join(", ")} — chọn mã đúng` : "",
+      plans: first ? [first] : [],
     })
   }
 
@@ -115,7 +140,10 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
     pool: p.pool, simType: p.simType, coverages: p.coverage ? [p.coverage] : [], operators: p.operators,
     supportCountryCode: p.code.trim().toUpperCase(), isoCodes: p.iso.trim().toUpperCase(),
     countryNameEn: p.en.trim(), countryNameVn: p.vn.trim(),
-    plans: p.plans.map(pl => ({ kind: pl.kind, dataAmount: parseFloat(pl.dataAmount.replace(",", ".")) || 0, unit: pl.unit, days: parseDays(pl.daysText), productId: pl.productId.trim() })),
+    plans: p.plans.map(pl => {
+      const [amount, unit] = pl.amountKey.split("|")
+      return { kind: pl.kind, dataAmount: Number(amount) || 0, unit: (unit as "MB" | "GB") || "GB", days: [...pl.days].sort((a, b) => a - b), productId: pl.productId.trim() }
+    }),
   }))
 
   const upload = async (file: File) => {
@@ -136,7 +164,7 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
     const r = await fetch("/api/admin/bc-datapool/plan-catalog", { method: "POST", body: fd })
     const j = await r.json(); setBusy("")
     if (!r.ok) return onNotify("error", j.error || "Không đọc được file Portal")
-    setOpts(o => (o ? { ...o, planCatalog: j.planCatalog } : o)); touch()
+    await load(false); touch()
     const c = j.planCatalog.lastDiff?.counts
     onNotify("success", `Đã lưu danh mục gói Portal: ${j.planCatalog.esim} gói eSIM, ${j.planCatalog.sim} gói SIM` + (j.planCatalog.lastDiff?.compared ? (c && c.added + c.removed + c.changed ? ` — ${c.added} gói mới, ${c.removed} bị bỏ, ${c.changed} đổi ngày/tốc độ (xem bên dưới)` : " — không có thay đổi so với bản trước") : ""))
   }
@@ -249,21 +277,21 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className={label}>Pool</label>
-                <select className={`${input} w-full`} value={p.pool} onChange={e => { const pool = e.target.value as Pool; patchProduct(i, { pool, coverage: "", operators: [] }) }}>
+                <select className={`${input} w-full`} value={p.pool} onChange={e => { const pool = e.target.value as Pool; patchProduct(i, { pool, coverage: "", operators: [], plans: [] }) }}>
                   {(Object.keys(POOL_LABEL) as Pool[]).map(k => <option key={k} value={k}>{POOL_LABEL[k]}</option>)}
                 </select>
               </div>
               <div>
                 <label className={label}>Loại SIM</label>
-                <select className={`${input} w-full`} value={p.simType} onChange={e => patchProduct(i, { simType: e.target.value as "eSIM" | "SIM" })}>
+                <select className={`${input} w-full`} value={p.simType} onChange={e => { const simType = e.target.value as "eSIM" | "SIM"; if (coveragesOf(p.pool, simType).includes(p.coverage)) pickCoverage(i, p.pool, simType, p.coverage); else patchProduct(i, { simType, coverage: "", operators: [], plans: [] }) }}>
                   <option value="eSIM">eSIM</option><option value="SIM">SIM</option>
                 </select>
               </div>
               <div className="sm:col-span-2">
-                <label className={label}>Khu vực trong bảng giá (mỗi sản phẩm 1 nước, 1 pool)</label>
-                <select className={`${input} w-full`} value={p.coverage} onChange={e => pickCoverage(i, p.pool, e.target.value)}>
-                  <option value="">— chọn —</option>
-                  {coveragesOf(p.pool).map(c => <option key={c} value={c}>{c}</option>)}
+                <label className={label}>Khu vực (chỉ hiện nơi BC Portal có bán ở pool + loại SIM này · mỗi sản phẩm 1 nước, 1 pool)</label>
+                <select className={`${input} w-full`} value={p.coverage} disabled={!catalog} onChange={e => pickCoverage(i, p.pool, p.simType, e.target.value)}>
+                  <option value="">{catalog ? `— chọn (${coveragesOf(p.pool, p.simType).length} khu vực) —` : "— chưa có file Portal —"}</option>
+                  {coveragesOf(p.pool, p.simType).map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
             </div>
@@ -294,35 +322,68 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
             </div>
 
             <div className="space-y-2">
-              <label className={label}>Gói (mỗi dòng = 1 loại × 1 dung lượng, kèm danh sách số ngày; ProductID dùng chung cho mọi ngày)</label>
-              {p.plans.map((pl, j) => (
-                <div key={j} className="grid gap-2 items-end sm:grid-cols-[150px_90px_70px_1fr_180px_28px]">
-                  <select className={input} value={pl.kind} onChange={e => { const kind = e.target.value as PlanKind; patchPlan(i, j, { kind, unit: kind === "Daily" ? pl.unit : "GB" }) }}>
-                    {(Object.keys(KIND_LABEL) as PlanKind[]).map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
-                  </select>
-                  <input className={input} value={pl.dataAmount} onChange={e => patchPlan(i, j, { dataAmount: e.target.value })} placeholder={pl.kind === "Unlimited" ? "GB tốc độ cao/ngày" : "Dung lượng"} title={pl.kind === "Unlimited" ? "Dung lượng tốc độ cao mỗi ngày (chỉ dùng đặt tên/mã, giá tính theo 1.7GB/ngày)" : "Dung lượng"} />
-                  <select className={input} value={pl.unit} onChange={e => patchPlan(i, j, { unit: e.target.value as "MB" | "GB" })}><option>MB</option><option>GB</option></select>
-                  <div className="flex gap-1">
-                    <input className={`${input} flex-1 min-w-0`} value={pl.daysText} onChange={e => patchPlan(i, j, { daysText: e.target.value })} placeholder="Số ngày: 1,2,3,7,30" />
-                    <button type="button" className="px-2 text-[11px] border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { daysText: DAYS_JAPAN })} title="1–7, 10, 15, 20, 25, 30">12 mức</button>
-                    <button type="button" className="px-2 text-[11px] border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { daysText: DAYS_TAIWAN })} title="1–15, 20, 25, 30">18 mức</button>
+              <label className={label}>Gói (chỉ chọn được gói BC Portal đang bán · mỗi dòng = 1 loại × 1 dung lượng · ProductID tự điền từ Portal)</label>
+              {!p.coverage && <div className="text-xs text-gray-400">Chọn khu vực để hiện các gói Portal có bán.</div>}
+              {p.plans.map((pl, j) => {
+                const offs = offersOf(p, pl.kind)
+                const offered = offerDays(p, pl)
+                const inputs = toInputs()[i]
+                const auto = (() => {
+                  const [amount, unit] = pl.amountKey.split("|")
+                  const c = catalog && p.coverage ? choosePlan(findPlans(catalog, { sim: p.simType, kind: pl.kind, pool: p.pool, coverage: p.coverage, amount: Number(amount), unit: unit as "MB" | "GB" })) : null
+                  return c
+                })()
+                const manual = pl.productId.trim()
+                const manualPlan = manual ? catalog?.plans.find(x => x.id === manual) : undefined
+                const manualBad = manual ? (manualPlan ? manualMismatches(manualPlan, inputs, inputs.plans[j]) : ["không có trong file Portal"]) : []
+                return (
+                  <div key={j} className="border border-gray-100 dark:border-slate-800 rounded-lg p-2 space-y-2">
+                    <div className="grid gap-2 items-end sm:grid-cols-[170px_180px_1fr_28px]">
+                      <select className={input} value={pl.kind} onChange={e => {
+                        const kind = e.target.value as PlanKind
+                        const np = defaultPlan(p, kind)
+                        if (np) patchPlan(i, j, np)
+                      }}>
+                        {kindsOf(p).map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+                      </select>
+                      <select className={input} value={pl.amountKey} onChange={e => {
+                        const key = e.target.value
+                        const o = offs.find(x => keyOf(x.amount, x.unit) === key)
+                        const od = o?.plan.days ?? []
+                        const keep = pl.days.filter(d => od.includes(d))
+                        patchPlan(i, j, { amountKey: key, days: keep.length ? keep : commonOf(od), productId: "" })
+                      }} title={pl.kind === "Unlimited" ? "Dung lượng tốc độ cao mỗi ngày (BC bán dưới dạng Daily gấp đôi, throttle 1Mbps)" : "Dung lượng gói Portal đang bán"}>
+                        {offs.map(o => <option key={keyOf(o.amount, o.unit)} value={keyOf(o.amount, o.unit)}>{labelOf(keyOf(o.amount, o.unit))}{pl.kind === "Daily" ? "/ngày" : pl.kind === "Unlimited" ? " tốc độ cao/ngày" : ""}</option>)}
+                      </select>
+                      <input className={input} value={pl.productId} onChange={e => patchPlan(i, j, { productId: e.target.value })}
+                        placeholder={auto ? `ProductID tự động: ${auto.plan.id} (chỉ nhập nếu muốn chọn ID khác)` : "ProductID (không có gói khớp trong Portal)"} />
+                      <button onClick={() => patchProduct(i, { plans: p.plans.filter((_, m) => m !== j) })} className="pb-2 text-gray-400 hover:text-red-600" title="Xoá dòng"><Trash2 size={14} /></button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] text-gray-500 mr-1">Số ngày (chỉ ngày Portal bán):</span>
+                      {offered.map(d => {
+                        const on = pl.days.includes(d)
+                        return <button key={d} type="button" onClick={() => patchPlan(i, j, { days: on ? pl.days.filter(x => x !== d) : [...pl.days, d] })}
+                          className={`min-w-[32px] px-1.5 py-0.5 text-xs border rounded-md ${on ? "bg-brand-600 border-brand-600 text-white" : "border-gray-300 text-gray-600 hover:bg-gray-50 dark:hover:bg-slate-800"}`}>{d}</button>
+                      })}
+                      <button type="button" className="ml-1 px-2 py-0.5 text-[11px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { days: commonOf(offered) })} title="1–7, 10, 15, 20, 25, 30 (giao với ngày Portal bán)">Bộ phổ biến</button>
+                      <button type="button" className="px-2 py-0.5 text-[11px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { days: [...offered] })}>Chọn hết</button>
+                      <button type="button" className="px-2 py-0.5 text-[11px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { days: [] })}>Bỏ hết</button>
+                      <span className="text-[11px] text-gray-400">đã chọn {pl.days.length}/{offered.length}</span>
+                    </div>
+                    {manual && manualBad.length > 0 && <div className="text-[11px] text-red-600">ProductID nhập tay {manual} {manualPlan ? `không khớp: ${manualBad.join("; ")}` : "không có trong file Portal"} — xoá ô này để dùng ProductID tự động.</div>}
+                    {!manual && auto && auto.duplicates.length > 1 && <div className="text-[11px] text-amber-700">⚠ Portal có {auto.duplicates.length} Plan ID giống hệt nhau ({auto.duplicates.map(x => x.id).join(", ")}) — đã chọn ID mới nhất ({auto.plan.id}).</div>}
+                    {!manual && auto && auto.duplicates.length <= 1 && <div className="text-[11px] text-emerald-700">ProductID từ Portal: {auto.plan.id}</div>}
+                    {!previewStale && (() => {
+                      const pi = preview?.planInfo.find(x => x.product === i && x.line === j)
+                      return pi?.planName ? <div className="text-[11px] text-gray-500">{pi.planName}</div> : null
+                    })()}
                   </div>
-                  <input className={input} value={pl.productId} onChange={e => patchPlan(i, j, { productId: e.target.value })} placeholder="ProductID (trống = tự lấy từ Portal)" />
-                  <button onClick={() => patchProduct(i, { plans: p.plans.filter((_, m) => m !== j) })} className="pb-2 text-gray-400 hover:text-red-600" title="Xoá dòng"><Trash2 size={14} /></button>
-                  {!previewStale && (() => {
-                    const pi = preview?.planInfo.find(x => x.product === i && x.line === j)
-                    if (!pi || pi.status === "none") return null
-                    const txt = pi.status === "portal" ? `ProductID từ Portal: ${pi.productId} — ${pi.planName ?? ""}${pi.note ? ` ⚠ ${pi.note}` : ""}`
-                      : pi.status === "manual" ? `ProductID nhập tay: ${pi.productId}${pi.planName ? ` (Portal: ${pi.planName})` : " (không có trong file Portal)"}`
-                      : pi.status === "ambiguous" ? `Portal có nhiều Plan ID: ${pi.candidates?.join(", ")} — nhập ProductID để chọn`
-                      : "Không tìm thấy gói này trong file Portal"
-                    return <div className={`sm:col-span-6 text-[11px] ${pi.status === "portal" || pi.status === "manual" ? "text-emerald-700" : "text-red-600"}`}>{txt}{pi.offeredDays ? ` · Portal bán ${pi.offeredDays.length} mức ngày (${pi.offeredDays[0]}–${pi.offeredDays[pi.offeredDays.length - 1]})` : ""}</div>
-                  })()}
-                </div>
-              ))}
+                )
+              })}
               <div className="flex gap-2">
-                {(["Daily", "Fixed", "Unlimited"] as PlanKind[]).map(k => (
-                  <button key={k} onClick={() => patchProduct(i, { plans: [...p.plans, newPlan(k)] })} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800">
+                {kindsOf(p).map(k => (
+                  <button key={k} onClick={() => { const np = defaultPlan(p, k); if (np) patchProduct(i, { plans: [...p.plans, np] }) }} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800">
                     <Plus size={12} /> {k}
                   </button>
                 ))}
@@ -333,9 +394,10 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
       })}
 
       <div className="flex flex-wrap items-center gap-3">
+        {!catalog && <span className="text-xs text-red-600 font-semibold">Chưa upload file Portal — chưa thể tạo sản phẩm (Portal cho biết BC đang bán gói nào).</span>}
         <button onClick={() => { setProducts(prev => [...prev, newProduct()]); touch() }} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800"><Plus size={14} /> Thêm sản phẩm</button>
-        <button onClick={runPreview} disabled={!list || !opts.fx || busy === "preview"} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-600 hover:bg-brand-700 text-white rounded-xl disabled:opacity-50"><Eye size={14} /> {busy === "preview" ? "Đang tính..." : "Xem trước"}</button>
-        <button onClick={() => runExport()} disabled={!preview || previewStale || busy === "export"} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-50"><Download size={14} /> {busy === "export" ? "Đang xuất..." : "Xuất file Excel"}</button>
+        <button onClick={runPreview} disabled={!list || !catalog || !opts.fx || busy === "preview"} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-600 hover:bg-brand-700 text-white rounded-xl disabled:opacity-50"><Eye size={14} /> {busy === "preview" ? "Đang tính..." : "Xem trước"}</button>
+        <button onClick={() => runExport()} disabled={!preview || previewStale || !catalog || busy === "export"} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-50"><Download size={14} /> {busy === "export" ? "Đang xuất..." : "Xuất file Excel"}</button>
         {previewStale && preview && <span className="text-xs text-amber-700">Form đã đổi — bấm &quot;Xem trước&quot; lại trước khi xuất.</span>}
       </div>
 
