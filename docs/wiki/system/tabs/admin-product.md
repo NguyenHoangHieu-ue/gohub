@@ -117,3 +117,13 @@ Upload ở thẻ "Danh mục gói Portal" (lưu `app_settings` key `bcdp.plan_ca
 - Top-Up: tạm thời KHÔNG tạo.
 
 **s215+3 (Hiếu chốt)**: SIM full (E) CHỈ bán ở đầu VN → chỉ sinh SKU/Product `3E…` (frameSku `1D000WDK00000`, datapackSku `3A…`); KHÔNG có khung US, KHÔNG có `EE…`. Datapack (A) vẫn sinh cả `EA…` (US) lẫn `3A…` (VN) vì SKU VN trỏ về mã US ở `vendorSkuSim`. Giá SIM trắng (`latest_cogs` của `1D000WDK00000`, hiện 16.028 VND) là giá CHƯA gồm IMSI → phí SIM = giá SIM trắng + IMSI (đúng như tool đang tính, không cộng đôi).
+
+### s215+4 — File xuất giữ CÔNG THỨC + báo thay đổi khi upload
+
+**File xuất (Excel)**: 4 sheet template + thêm sheet **"Tính giá"** (như file mẫu của Hiếu có sheet tính riêng). Ô `latestCogs` ở `Template_sku_US`/`Template_sku_VN` là **công thức** `='Tính giá'!P{n}` / `Q{n}` (kèm giá trị đã tính sẵn nên importer đọc giá trị vẫn được). Sheet "Tính giá" mỗi dòng 1 SKU, từng bước là công thức Excel: Data tiền pool `ROUNDUP(giá/GB × GB × ngày × %,2)` → Data USD `IF(HKD, ROUNDUP(/HKD-USD,2), giữ)` → Phí khung → COGS US `ROUND(data+phí,2)` → COGS VN `ROUNDUP(×VND-USD,0)`. Tham số dùng chung ở cột S:T (HKD/USD, CNY/USD, VND/USD, Fixed %, Daily %, Unlimited GB/ngày, giá SIM trắng, IMSI/phí eSIM từng pool, 4 ô phí khung) — sửa tham số là mọi giá tự đổi. Test `bc-datapool-export.test.ts` có bộ tính công thức mini tính lại TOÀN BỘ công thức trong file và so với giá trị ghi sẵn (khớp 1e-9), và đọc lại file .xlsx đã ghi vẫn còn công thức.
+
+**Báo thay đổi khi upload** (`lib/bc-datapool/diff.ts`): mỗi lần upload bảng giá / file Portal, server so với bản đang lưu và trả `lastDiff` (lưu kèm trong `app_settings` nên mở lại vẫn thấy):
+- **Bảng giá**: nhà mạng đổi giá (từ→đến), nhà mạng/khu vực mới, bị bỏ, đổi phí IMSI/eSIM/SIM (CNY), đổi tiền tệ pool.
+- **File Portal**: gói mới (Plan ID mới), gói bị bỏ, gói đổi số ngày bán/tốc độ sau ngưỡng/nhà mạng/timing. Chỉ so trong loại SIM có upload (chỉ upload eSIM thì gói SIM cũ không bị coi là bỏ; bản cũ chưa lưu throttle không tính là đổi).
+- Hiển thị: thông báo ngay sau upload + hộp "Thay đổi so với bản trước" (bấm từng nhóm xem chi tiết) dưới từng thẻ upload; lần upload đầu ghi rõ chưa có bản cũ. Có thay đổi thì tạo thêm **thông báo chuông** cho admin/manager (`price_change` cho bảng giá, `sync` cho Portal).
+- **Không tự sửa** sản phẩm/giá đã tạo trước đó: hộp nhắc "sản phẩm/giá đã tạo có thể cần cập nhật" — người dùng tự quyết.

@@ -1,6 +1,6 @@
 import { FRAME_SKU, POLICY_CODE, VENDOR_CODE, productCode, skuCode, type ProductTypeChar } from "./codes"
-import { dataCostUsd, frameFeeUsd, usdToVnd } from "./pricing"
-import type { Assumptions, BuiltSheets, Fx, PlanKind, PriceList, ProductInput } from "./types"
+import { dataCostPool, dataCostUsd, frameFeeUsd, usdToVnd } from "./pricing"
+import type { Assumptions, BuiltSheets, Fx, PlanKind, Pool, PriceList, ProductInput } from "./types"
 
 /** Tên sheet + tiêu đề cột PHẢI y hệt Format_add_new_packages.xlsx (template bắt buộc). */
 export const SKU_HEADERS = ["tenant*", "productCode*", "dataAmount*", "dataAmountUnit*", "dayAmount*", "dayAmountUnit*", "nameVn*", "nameEn*", "frameSku", "datapackSku", "latestCogs", "latestCogsCurrency", "throttleSpeed", "call", "callSmsDetails", "expirations", "vendorSku", "vendorSkuSim", "SKU CODE"]
@@ -26,6 +26,14 @@ export interface CostRow {
   operator: string
   pricePerGb: number
   currency: string
+  /** Thông số dòng tính giá — để file xuất dựng lại công thức Excel */
+  kind: PlanKind
+  dataAmount: number
+  unit: string
+  days: number
+  feeKind: "esim" | "sim" | "none"
+  poolKey: Pool
+  dataPool: number
   dataUsd: number
   feeUsd: number
   cogsUsd: number
@@ -37,6 +45,9 @@ export interface BuildResult {
   warnings: string[]
   /** Bảng tính giá cho người soát: 1 dòng / SKU. */
   costRows: CostRow[]
+  /** Chỉ số dòng costRows tương ứng với từng dòng của sheet SKU US / SKU VN (cùng thứ tự) */
+  usCost: number[]
+  vnCost: number[]
 }
 
 function names(p: ProductInput, kind: PlanKind, amount: number, unit: string, days: number) {
@@ -70,7 +81,7 @@ export interface BuildOptions {
 const dailyReset = (kind: PlanKind) => (kind === "Fixed" ? "Count 24h" : "GMT+8")
 
 export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assumptions, opt: BuildOptions = {}): BuildResult {
-  const out: BuildResult = { sheets: { skuUS: [], skuVN: [], productUS: [], productVN: [] }, warnings: [], costRows: [] }
+  const out: BuildResult = { sheets: { skuUS: [], skuVN: [], productUS: [], productVN: [] }, warnings: [], costRows: [], usCost: [], vnCost: [] }
   const seenSku = new Set<string>()
   const seenProduct = new Set<string>()
 
@@ -157,9 +168,15 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
               type === "C" ? (us ? pid : link) : "", type === "A" ? (us ? pid : link) : "", sku,
             ]
           }
-          if (!vnOnly) out.sheets.skuUS.push(row("US", cUS, cogsUsd, "USD"))
-          out.sheets.skuVN.push(row("VN", cVN, cogsVnd, "VND"))
-          out.costRows.push({ type: typeLabel(type), skuUS: vnOnly ? "—" : cUS, skuVN: cVN, productId: pid, pool: p.pool, operator: `${top.operator} (${top.coverage})`, pricePerGb: top.pricePerGb, currency: pool.currency, dataUsd, feeUsd, cogsUsd, cogsVnd })
+          const ci = out.costRows.length
+          if (!vnOnly) { out.sheets.skuUS.push(row("US", cUS, cogsUsd, "USD")); out.usCost.push(ci) }
+          out.sheets.skuVN.push(row("VN", cVN, cogsVnd, "VND")); out.vnCost.push(ci)
+          out.costRows.push({
+            type: typeLabel(type), skuUS: vnOnly ? "—" : cUS, skuVN: cVN, productId: pid, pool: p.pool, operator: `${top.operator} (${top.coverage})`,
+            pricePerGb: top.pricePerGb, currency: pool.currency, kind: pl.kind, dataAmount: pl.dataAmount, unit: pl.unit, days: d,
+            feeKind: feeUsd === 0 ? "none" : p.simType === "eSIM" ? "esim" : "sim", poolKey: p.pool,
+            dataPool: dataCostPool(pl, d, top.pricePerGb, a), dataUsd, feeUsd, cogsUsd, cogsVnd,
+          })
         }
         const full = Math.round((dataUsd + fee) * 100) / 100
         if (p.simType === "eSIM") push("C", full, fee)

@@ -10,12 +10,16 @@ const toGb = (amount: number, unit: "MB" | "GB") => (unit === "MB" ? amount / 10
  *  Fixed = tổng GB × giá/GB × 55% · Daily = GB/ngày × số ngày × giá/GB × 38% · Unlimited = 1.7GB × số ngày × giá/GB.
  * Làm tròn lên 2 số lẻ ở tiền của pool, rồi quy USD (pool HKD) và làm tròn lên lần nữa — đúng như file mẫu.
  */
-export function dataCostUsd(plan: PlanLine, days: number, pricePerGb: number, currency: "HKD" | "USD", fx: Fx, a: Assumptions): number {
+export function dataCostPool(plan: PlanLine, days: number, pricePerGb: number, a: Assumptions): number {
   let raw: number
   if (plan.kind === "Fixed") raw = pricePerGb * toGb(plan.dataAmount, plan.unit) * a.fixedPct
   else if (plan.kind === "Daily") raw = pricePerGb * toGb(plan.dataAmount, plan.unit) * days * a.dailyPct
   else raw = pricePerGb * a.unlimitedGbPerDay * days
-  const inPoolCurrency = ceil2(raw)
+  return ceil2(raw)
+}
+
+export function dataCostUsd(plan: PlanLine, days: number, pricePerGb: number, currency: "HKD" | "USD", fx: Fx, a: Assumptions): number {
+  const inPoolCurrency = dataCostPool(plan, days, pricePerGb, a)
   return currency === "HKD" ? ceil2(inPoolCurrency / fx.hkdPerUsd) : inPoolCurrency
 }
 

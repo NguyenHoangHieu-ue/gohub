@@ -24,6 +24,8 @@ export interface PoolPriceList {
 export interface PriceList {
   fileName: string
   uploadedAt: string
+  /** Thay đổi so với bảng giá trước (gắn khi upload để xem lại sau) */
+  lastDiff?: import("./diff").PriceDiff
   pools: Record<Pool, PoolPriceList>
 }
 

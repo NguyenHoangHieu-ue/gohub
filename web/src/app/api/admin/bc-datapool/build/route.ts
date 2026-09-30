@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import * as XLSX from "xlsx"
-import { build, withHeaders } from "@/lib/bc-datapool/builder"
+import { build } from "@/lib/bc-datapool/builder"
+import { buildWorkbook } from "@/lib/bc-datapool/export"
 import { DEFAULT_ASSUMPTIONS, type Assumptions, type ProductInput } from "@/lib/bc-datapool/types"
 import { resolvePlans } from "@/lib/bc-datapool/plan-catalog"
 import { FRAME_SKU } from "@/lib/bc-datapool/codes"
@@ -45,9 +46,8 @@ export async function POST(req: NextRequest) {
     if (req.nextUrl.searchParams.get("format") === "xlsx") {
       if (result.warnings.some(w => /chưa nhập ProductID|không mã hoá được|trùng|thiếu|phải đúng|chưa có gói|chưa chọn|Portal không bán|không tìm thấy gói|Plan ID cho gói/.test(w)) && body.force !== true)
         return NextResponse.json({ error: "Còn lỗi cần sửa trước khi xuất", warnings: result.warnings }, { status: 422 })
-      const wb = XLSX.utils.book_new()
-      for (const [name, rows] of Object.entries(withHeaders(result.sheets)))
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name)
+      // Ô giá là công thức Excel (trỏ sheet "Tính giá") để người dùng soát lại cách tính
+      const wb = buildWorkbook(result, { fx, a, list, whiteSimVnd })
       const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
       return new NextResponse(new Uint8Array(buf), {
         headers: {

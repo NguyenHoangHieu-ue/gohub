@@ -23,6 +23,7 @@ export interface CatalogPlan {
 export interface PlanCatalog {
   uploadedAt: string
   files: string[]
+  lastDiff?: import("./diff").CatalogDiff
   plans: CatalogPlan[]
 }
 

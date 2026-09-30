@@ -65,7 +65,7 @@ export async function loadPlanCatalog(): Promise<PlanCatalog | null> {
 }
 
 export const catalogSummary = (c: PlanCatalog | null) =>
-  c ? { uploadedAt: c.uploadedAt, files: c.files, esim: c.plans.filter(p => p.sim === "eSIM").length, sim: c.plans.filter(p => p.sim === "SIM").length } : null
+  c ? { uploadedAt: c.uploadedAt, files: c.files, lastDiff: c.lastDiff ?? null, esim: c.plans.filter(p => p.sim === "eSIM").length, sim: c.plans.filter(p => p.sim === "SIM").length } : null
 
 /** Giá SIM trắng (VND) = latest_cogs của SKU khung SIM BC Datapool trong hệ thống. null nếu chưa có / khác VND. */
 export async function loadWhiteSimVnd(): Promise<number | null> {

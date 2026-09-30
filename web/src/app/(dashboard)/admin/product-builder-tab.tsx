@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Download, Eye, Plus, Trash2, Upload } from "lucide-react"
 import { PRODUCT_HEADERS, SKU_HEADERS, pickOperatorPrice, type BuildResult } from "@/lib/bc-datapool/builder"
+import type { CatalogDiff, PriceDiff } from "@/lib/bc-datapool/diff"
 import type { PlanInfo } from "@/lib/bc-datapool/plan-catalog"
 import { DEFAULT_ASSUMPTIONS, type Assumptions, type Fx, type PlanKind, type Pool, type PriceList, type ProductInput } from "@/lib/bc-datapool/types"
 
 type Notify = (type: "success" | "error", text: string) => void
 interface SupportCountry { code: string; en: string; vn: string; iso: string }
-interface CatalogSummary { uploadedAt: string; files: string[]; esim: number; sim: number }
+interface CatalogSummary { uploadedAt: string; files: string[]; esim: number; sim: number; lastDiff: CatalogDiff | null }
 interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | null; supportCountries: SupportCountry[]; fx: Fx | null; fxError: string | null; assumptions: Assumptions }
 interface PreviewResult extends BuildResult { fx: Fx; existing: { products: string[]; skus: string[] }; planInfo: PlanInfo[]; whiteSimVnd: number | null }
 
@@ -29,6 +30,44 @@ const parseDays = (t: string) => Array.from(new Set(t.split(/[,\s;]+/).map(x => 
 
 const newPlan = (kind: PlanKind = "Daily"): PlanForm => ({ kind, dataAmount: kind === "Fixed" ? "5" : kind === "Unlimited" ? "3" : "500", unit: kind === "Daily" ? "MB" : "GB", daysText: DAYS_JAPAN, productId: "" })
 const newProduct = (): ProductForm => ({ pool: "CMHK", simType: "eSIM", coverage: "", operators: [], code: "", iso: "", en: "", vn: "", plans: [newPlan()] })
+
+interface DiffGroup { label: string; tone: "red" | "green" | "amber"; total: number; items: string[] }
+const TONE = { red: "text-red-700", green: "text-emerald-700", amber: "text-amber-700" }
+
+/** Báo cáo thay đổi sau khi upload: nhóm có số lượng, bấm mở xem chi tiết. */
+function DiffBox({ diff, groups }: { diff: { at: string; compared: boolean } | null | undefined; groups: DiffGroup[] }) {
+  if (!diff) return null
+  const when = new Date(diff.at).toLocaleString("vi-VN")
+  if (!diff.compared) return <div className="text-[11px] text-gray-400">Lần upload đầu tiên ({when}) — chưa có bản cũ để so sánh.</div>
+  const active = groups.filter(g => g.total > 0)
+  if (!active.length) return <div className="text-[11px] text-emerald-700">✓ Không có thay đổi so với bản trước ({when}).</div>
+  return (
+    <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-2 space-y-1">
+      <div className="text-[11px] font-semibold text-amber-900 dark:text-amber-200">Thay đổi so với bản trước ({when}) — sản phẩm/giá đã tạo trước đó có thể cần cập nhật</div>
+      {active.map(g => (
+        <details key={g.label} className="text-[11px]">
+          <summary className={`cursor-pointer font-semibold ${TONE[g.tone]}`}>{g.label}: {g.total}</summary>
+          <ul className="mt-1 ml-4 list-disc max-h-48 overflow-auto space-y-0.5 text-gray-700 dark:text-slate-300">
+            {g.items.map((t, k) => <li key={k}>{t}</li>)}
+            {g.total > g.items.length && <li className="text-gray-400">… và {g.total - g.items.length} dòng nữa</li>}
+          </ul>
+        </details>
+      ))}
+    </div>
+  )
+}
+
+const priceGroups = (d?: PriceDiff | null): DiffGroup[] => !d ? [] : [
+  { label: "Đổi giá", tone: "amber", total: d.counts.changed, items: d.changed.map(c => `${c.pool} · ${c.coverage} · ${c.operator}: ${c.from} → ${c.to} ${c.currency}/GB`) },
+  { label: "Nhà mạng/khu vực mới", tone: "green", total: d.counts.added, items: d.added.map(c => `${c.pool} · ${c.coverage} · ${c.operator}: ${c.to} ${c.currency}/GB`) },
+  { label: "Nhà mạng/khu vực bị bỏ", tone: "red", total: d.counts.removed, items: d.removed.map(c => `${c.pool} · ${c.coverage} · ${c.operator} (trước: ${c.from} ${c.currency}/GB)`) },
+  { label: "Đổi phí (IMSI/eSIM/SIM)", tone: "amber", total: d.counts.fees, items: d.fees.map(f => `${f.pool} · ${f.field}: ${f.from} → ${f.to}`) },
+]
+const catalogGroups = (d?: CatalogDiff | null): DiffGroup[] => !d ? [] : [
+  { label: "Gói mới", tone: "green", total: d.counts.added, items: d.added.map(p => `${p.label} — ${p.id}`) },
+  { label: "Gói bị bỏ", tone: "red", total: d.counts.removed, items: d.removed.map(p => `${p.label} — ${p.id}`) },
+  { label: "Gói đổi số ngày/tốc độ/nhà mạng", tone: "amber", total: d.counts.changed, items: d.changed.map(p => `${p.label} — ${p.id}: ${p.detail}`) },
+]
 
 export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
   const [opts, setOpts] = useState<Options | null>(null)
@@ -83,7 +122,9 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
     const j = await r.json(); setBusy("")
     if (!r.ok) return onNotify("error", j.error || "Không đọc được file báo giá")
     setOpts(o => (o ? { ...o, priceList: j.priceList } : o)); touch()
-    onNotify("success", `Đã lưu bảng báo giá: ${j.priceList.fileName}`)
+    const c = j.priceList.lastDiff?.counts
+    const changed = c ? c.changed + c.added + c.removed + c.fees : 0
+    onNotify("success", `Đã lưu bảng báo giá: ${j.priceList.fileName}` + (j.priceList.lastDiff?.compared ? (changed ? ` — có ${c.changed} nhà mạng đổi giá, ${c.added} mới, ${c.removed} bị bỏ, ${c.fees} phí đổi (xem bên dưới)` : " — không có thay đổi so với bản trước") : ""))
   }
 
   const uploadCatalog = async (files: FileList) => {
@@ -93,7 +134,8 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
     const j = await r.json(); setBusy("")
     if (!r.ok) return onNotify("error", j.error || "Không đọc được file Portal")
     setOpts(o => (o ? { ...o, planCatalog: j.planCatalog } : o)); touch()
-    onNotify("success", `Đã lưu danh mục gói Portal: ${j.planCatalog.esim} gói eSIM, ${j.planCatalog.sim} gói SIM`)
+    const c = j.planCatalog.lastDiff?.counts
+    onNotify("success", `Đã lưu danh mục gói Portal: ${j.planCatalog.esim} gói eSIM, ${j.planCatalog.sim} gói SIM` + (j.planCatalog.lastDiff?.compared ? (c && c.added + c.removed + c.changed ? ` — ${c.added} gói mới, ${c.removed} bị bỏ, ${c.changed} đổi ngày/tốc độ (xem bên dưới)` : " — không có thay đổi so với bản trước") : ""))
   }
 
   const runPreview = async () => {
@@ -147,6 +189,7 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
             <Upload size={14} /> {list ? "Upload bảng giá mới" : "Upload bảng giá"}
           </button>
+          <DiffBox diff={list?.lastDiff} groups={priceGroups(list?.lastDiff)} />
         </div>
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-2">
           <div className="text-sm font-semibold">Danh mục gói Portal (lấy ProductID)</div>
@@ -161,6 +204,7 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
             <Upload size={14} /> {busy === "catalog" ? "Đang đọc file..." : opts.planCatalog ? "Upload file Portal mới" : "Upload file Portal"}
           </button>
+          <DiffBox diff={opts.planCatalog?.lastDiff} groups={catalogGroups(opts.planCatalog?.lastDiff)} />
         </div>
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-1 text-sm">
           <div className="font-semibold">Tỷ giá nội bộ (đọc từ Cài đặt)</div>

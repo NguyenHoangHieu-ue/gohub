@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { diffCatalog, hasCatalogChanges } from "@/lib/bc-datapool/diff"
+import { createNotification } from "@/lib/notifications"
 import { parsePlanFile, type CatalogPlan, type PlanCatalog } from "@/lib/bc-datapool/plan-catalog"
 import { PLAN_CATALOG_KEY, catalogSummary, loadPlanCatalog, requireAdmin } from "@/lib/bc-datapool/server"
 
@@ -28,6 +30,7 @@ export async function POST(req: NextRequest) {
     uploadedAt: new Date().toISOString(),
     files: [...(old?.files ?? []).filter(n => !files.some(f => f.name === n)), ...files.map(f => f.name)].slice(-6),
     plans: [...(old?.plans ?? []).filter(p => !replaced.has(p.sim)), ...uploaded],
+    lastDiff: diffCatalog(old, uploaded),
   }
 
   const { error } = await supabaseAdmin.from("app_settings").upsert({
@@ -38,5 +41,10 @@ export async function POST(req: NextRequest) {
     updated_at: catalog.uploadedAt,
   }, { onConflict: "key" })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const d = catalog.lastDiff!
+  if (hasCatalogChanges(d)) {
+    await createNotification("sync", `BC Datapool Portal: ${d.counts.added} gói mới, ${d.counts.removed} gói bị bỏ, ${d.counts.changed} gói đổi ngày/tốc độ`,
+      files.map(f => f.name).join(", ") + ". Xem chi tiết ở Admin › Tạo sản phẩm.", { summary: d.counts }, "admin_manager")
+  }
   return NextResponse.json({ planCatalog: catalogSummary(catalog) })
 }
