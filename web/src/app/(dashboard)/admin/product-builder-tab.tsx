@@ -12,7 +12,7 @@ import { DEFAULT_ASSUMPTIONS, type Assumptions, type Fx, type PlanKind, type Poo
 type Notify = (type: "success" | "error", text: string) => void
 interface SupportCountry { code: string; en: string; vn: string; iso: string }
 interface CatalogSummary { uploadedAt: string; files: string[]; esim: number; sim: number; lastDiff: CatalogDiff | null }
-interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | null; portalPlans: CatalogPlan[] | null; supportCountries: SupportCountry[]; fx: Fx | null; fxError: string | null; assumptions: Assumptions }
+interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | null; portalPlans: CatalogPlan[] | null; supportCountries: SupportCountry[]; fx: (Fx & { month?: string }) | null; fxError: string | null; assumptions: Assumptions }
 interface PreviewResult extends BuildResult { fx: Fx; skipped: Skipped; nothingNew: boolean; planInfo: PlanInfo[]; whiteSimVnd: number | null }
 
 // Dòng gói trên form: dung lượng chọn từ các gói Portal thật (amountKey = "500|MB"), số ngày chỉ bật được ngày Portal bán.
@@ -241,8 +241,12 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
           <div className="font-semibold">Tỷ giá nội bộ (đọc từ Cài đặt)</div>
           {opts.fx ? (
             <>
-              <div className="text-xs text-gray-600 dark:text-slate-300">1 USD = <b>{opts.fx.hkdPerUsd}</b> HKD · <b>{opts.fx.cnyPerUsd}</b> CNY · <b>{opts.fx.vndPerUsd.toLocaleString("vi-VN")}</b> VND</div>
-              <div className="text-[11px] text-gray-400">Muốn đổi tỷ giá: Cài đặt › Tỷ Giá Nội Bộ.</div>
+              <div className="text-xs text-gray-600 dark:text-slate-300 space-y-0.5">
+                <div>USD → VND (JSC): 1 USD = <b>{opts.fx.vndPerUsd.toLocaleString("vi-VN")}</b> VND</div>
+                <div>VND → USD (Inc): 1 USD = <b>{opts.fx.vndPerUsdInc.toLocaleString("vi-VN")}</b> VND</div>
+                <div>1 USD = <b>{opts.fx.hkdPerUsd}</b> HKD · <b>{opts.fx.cnyPerUsd}</b> CNY (Inc)</div>
+              </div>
+              <div className="text-[11px] text-gray-400">Tháng {opts.fx.month ? opts.fx.month.slice(5) + "/" + opts.fx.month.slice(0, 4) : "hiện tại"} · muốn đổi: Cài đặt › Tỷ Giá Nội Bộ.</div>
             </>
           ) : <div className="text-xs text-red-600">{opts.fxError}</div>}
         </div>

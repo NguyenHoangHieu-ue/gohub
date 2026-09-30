@@ -3,24 +3,12 @@
 import { useEffect, useState } from "react"
 import { Save } from "lucide-react"
 import type { AppSetting } from "./admin-types"
+import FxTable from "./fx-table"
 
 // Tách khỏi page.tsx (s196+21, tách admin/page.tsx 2120 dòng — cùng nguyên tắc Phase 5: chỉ move
 // nguyên khung JSX/logic, KHÔNG đổi hành vi). Nạp qua next/dynamic ở page.tsx.
 
 const SETTING_UNITS: Record<string, string> = {
-  // Tỷ giá — Gohub JSC (VND)
-  "fx.usd_vnd":              "VND / 1 USD",
-  "fx.vnd_cny":              "VND / 1 CNY (JSC)",
-  "fx.vnd_gbp":              "VND / 1 GBP (JSC)",
-  // Tỷ giá — Gohub Inc (1 USD = X)
-  "fx.hkd_usd":              "USD / 1 HKD  (= 1 / HKD/USD)",
-  "fx.twd_usd":              "USD / 1 TWD  (= 1 / TWD/USD)",
-  "fx.usd_jpy":              "JPY / 1 USD",
-  "fx.usd_thb":              "THB / 1 USD",
-  "fx.usd_cny":              "CNY / 1 USD (Inc)",
-  "fx.usd_eur":              "EUR / 1 USD",
-  "fx.usd_gbp":              "GBP / 1 USD (Inc)",
-  "fx.usd_sgd":              "SGD / 1 USD",
   // 3HK formula
   "3hk.fixed_factor":        "(0 – 1)",
   "3hk.daily_factor":        "(0 – 1)",
@@ -76,7 +64,6 @@ export default function SettingsTab({ onNotify }: {
 
   if (loading) return <div className="text-sm text-gray-400 py-4">Đang tải...</div>
 
-  const fxSettings      = settings.filter(s => s.category === "fx_rate")
   const formulaSettings = settings.filter(s => s.category === "formula")
 
   const renderSection = (title: string, rows: AppSetting[]) => (
@@ -115,8 +102,8 @@ export default function SettingsTab({ onNotify }: {
   )
 
   return (
-    <div className="space-y-4 max-w-2xl">
-      {renderSection("Tỷ Giá Nội Bộ", fxSettings)}
+    <div className="space-y-4 max-w-6xl">
+      <FxTable onNotify={onNotify} />
       {renderSection("Công Thức 3HK Datapool", formulaSettings)}
       <div className="flex items-center gap-3">
         <button

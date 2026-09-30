@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import type { RefCache } from "./cache"
+import { convertCogsFlat } from "@/lib/fx/flat"
 
 const FULL_TYPES = new Set(["C", "E", "1", "2"])
 
@@ -671,19 +672,9 @@ export async function searchSkusByGroupCode(
       : s.data_amount != null ? `${s.data_amount}${s.data_amount_unit ?? "GB"}${s.is_daily ? "/ngày" : ""}` : null
     let cogsVnd: string | null = null, cogsUsd: string | null = null
     if (isCost && s.latest_cogs != null) {
-      const usdVnd = fx["fx.usd_vnd"] ?? 26000
-      const hkdUsd = fx["fx.hkd_usd"] ?? 0.128
-      const twdUsd = fx["fx.twd_usd"] ?? 0.031
-      let usd = 0
-      switch ((s.latest_cogs_currency ?? "").toUpperCase()) {
-        case "USD": usd = s.latest_cogs; break
-        case "VND": usd = s.latest_cogs / usdVnd; break
-        case "HKD": usd = s.latest_cogs * hkdUsd; break
-        case "TWD": usd = s.latest_cogs * twdUsd; break
-        default:    usd = s.latest_cogs; break
-      }
-      cogsVnd = Math.round(usd * usdVnd).toLocaleString("en-US")
-      cogsUsd = `$${Math.round(usd * 10000) / 10000}`
+      const c = convertCogsFlat(s.latest_cogs, s.latest_cogs_currency ?? "", fx)
+      cogsVnd = c.vnd.toLocaleString("en-US")
+      cogsUsd = `$${c.usd}`
     }
     return [s.sku_code, s.tenant, s.sim_esim, dataStr, `${s.day_amount}d`,
       s.throttle_speed ? `throttle:${s.throttle_speed}` : null,

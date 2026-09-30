@@ -56,3 +56,9 @@ Tỷ giá tháng 3/2026 và tháng 6/2026 giữ nguyên như nhau: 1 USD = 26.39
 31.452 TWD. Từ 04/09/2026, tỷ giá đổi sang 1 USD = 26.266 VND, 1 USD = 7.801 HKD, 1 USD = 31.666 TWD. Bảng
 này cập nhật mỗi khi có thay đổi tỷ giá mới — nhưng luôn ưu tiên tin theo Admin → Cài đặt nếu có chênh
 lệch, vì đó là nơi hệ thống thật sự đọc số để tính toán.
+
+## Quy tắc chiều đổi và tỷ giá theo tháng (cập nhật 30/09/2026)
+
+Từ tháng 9/2026, tỷ giá nội bộ được quản lý theo THÁNG và theo PHÁP NHÂN (Gohub JSC và Gohub Inc), và chiều đổi tiền quyết định dùng tỷ giá của pháp nhân nào. Đổi từ USD sang VND thì dùng tỷ giá của Gohub JSC (ví dụ tháng 9/2026 là 26.266 VND cho 1 USD). Đổi từ VND sang USD thì dùng tỷ giá của Gohub Inc (ví dụ tháng 9/2026 là 25.731,22 VND cho 1 USD). Đổi giữa USD và các ngoại tệ khác như HKD, CNY, JPY, THB, EUR, GBP, SGD, TWD thì dùng tỷ giá của Gohub Inc cho cả hai chiều. Đổi giữa VND và CNY, HKD, GBP thì dùng tỷ giá của Gohub JSC. Các cặp còn lại đổi qua USD.
+
+Tháng áp dụng là tháng hiện tại; nếu tháng đó chưa nhập tỷ giá thì lấy tháng gần nhất trước đó đã nhập, không bao giờ lấy tháng tương lai. Bảng tỷ giá nằm ở Admin, mục Cài đặt, phần Tỷ Giá Nội Bộ theo tháng; người quản trị sửa từng ô hoặc nhập lại từ file Excel tỷ giá hàng tháng.

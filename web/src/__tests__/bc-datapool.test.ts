@@ -11,8 +11,8 @@ import { DEFAULT_ASSUMPTIONS, type PlanKind, type PlanLine, type PriceList, type
 const A = DEFAULT_ASSUMPTIONS
 const KIND_OF: Record<string, PlanKind> = { T: "Daily", F: "Fixed", X: "Unlimited" }
 // Tỷ giá đúng như lúc làm file mẫu Taiwan (Singtel) và Japan (CMHK)
-const FX_TW = { hkdPerUsd: 7.801, cnyPerUsd: 6.687, vndPerUsd: 26266 }
-const FX_JP = { hkdPerUsd: 7.802, cnyPerUsd: 6.687, vndPerUsd: 26490 }
+const FX_TW = { hkdPerUsd: 7.801, cnyPerUsd: 6.687, vndPerUsd: 26266, vndPerUsdInc: 26266 }
+const FX_JP = { hkdPerUsd: 7.802, cnyPerUsd: 6.687, vndPerUsd: 26490, vndPerUsdInc: 26490 }
 const plan = (p: Partial<PlanLine>): PlanLine => ({ kind: "Daily", dataAmount: 500, unit: "MB", days: [1], productId: "1", ...p })
 
 const list: PriceList = {

@@ -25,11 +25,11 @@ export function dataCostUsd(plan: PlanLine, days: number, pricePerGb: number, cu
 /**
  * Phí khung (USD), ROUNDUP 2 số lẻ (mọi công thức đều ROUNDUP — quy định của Hiếu):
  *  eSIM = phí eSIM (CNY) quy USD + phí IMSI (tiền tệ của pool) quy USD.
- *  SIM  = giá SIM trắng (lấy từ DB, VND) quy USD + phí IMSI quy USD.
+ *  SIM  = giá SIM trắng (lấy từ DB, VND) quy USD theo tỷ giá Inc (VND→USD) + phí IMSI quy USD.
  */
 export function frameFeeUsd(sim: SimType, list: PoolPriceList, fx: Fx, whiteSimVnd = 0): number {
   const imsiUsd = list.currency === "HKD" ? list.imsiFee / fx.hkdPerUsd : list.imsiFee
-  const carrierUsd = sim === "eSIM" ? list.esimFeeCny / fx.cnyPerUsd : whiteSimVnd / fx.vndPerUsd
+  const carrierUsd = sim === "eSIM" ? list.esimFeeCny / fx.cnyPerUsd : whiteSimVnd / fx.vndPerUsdInc
   return ceil2(carrierUsd + imsiUsd)
 }
 

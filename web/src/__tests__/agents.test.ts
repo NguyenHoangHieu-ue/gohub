@@ -45,8 +45,9 @@ describe("AI Agent Helper Functions (Unit Tests)", () => {
   describe("convertCogs()", () => {
     const mockFxRates = {
       "fx.usd_vnd": 26000,
-      "fx.hkd_usd": 0.128,
-      "fx.twd_usd": 0.031
+      "fx.hkd_usd": 7.8,      // số HKD cho 1 USD (đúng như DB lưu)
+      "fx.twd_usd": 31.5,
+      "fx.vnd_usd_inc": 25731.22
     };
 
     test("should convert USD cost correctly", () => {
@@ -56,9 +57,19 @@ describe("AI Agent Helper Functions (Unit Tests)", () => {
     });
 
     test("should convert HKD cost correctly", () => {
-      const result = convertCogs(78, "HKD", mockFxRates);
-      expect(result.usd).toBeCloseTo(9.98, 1);
-      expect(result.vnd).toBeCloseTo(259584, 1);
+      const result = convertCogs(78, "HKD", mockFxRates);   // 78 HKD ÷ 7.8 = 10 USD (không phải nhân)
+      expect(result.usd).toBeCloseTo(10, 4);
+      expect(result.vnd).toBeCloseTo(260000, 1);
+    });
+
+    test("VND → USD dùng tỷ giá Inc, giữ nguyên số VND gốc", () => {
+      const result = convertCogs(25731.22, "VND", mockFxRates);
+      expect(result.usd).toBeCloseTo(1, 4);
+      expect(result.vnd).toBe(25731);
+    });
+
+    test("TWD chia cho số TWD/USD", () => {
+      expect(convertCogs(315, "TWD", mockFxRates).usd).toBeCloseTo(10, 4);
     });
   });
 

@@ -3,6 +3,8 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWrite } from "@/lib/writable-tabs"
 import { countryNameVn } from "@/lib/catalogue/country-index"
+import { loadEffectiveTable } from "@/lib/fx/server"
+import { currentMonth, monthLabel, rateAt } from "@/lib/fx/table"
 import { FRAME_SKU } from "./codes"
 import type { PlanCatalog } from "./plan-catalog"
 import type { Fx, PriceList } from "./types"
@@ -21,15 +23,25 @@ export async function loadPriceList(): Promise<PriceList | null> {
   try { return JSON.parse(data.value) as PriceList } catch { return null }
 }
 
-/** Tỷ giá lấy từ "Tỷ giá nội bộ" (app_settings fx.*) — không có thì báo lỗi rõ, không tự đoán. */
-export async function loadFx(): Promise<Fx> {
-  const { data, error } = await supabaseAdmin.from("app_settings").select("key,value").in("key", ["fx.hkd_usd", "fx.usd_cny", "fx.usd_vnd"])
-  if (error) throw new Error(error.message)
-  const m = new Map((data ?? []).map(r => [r.key as string, parseFloat(String(r.value))]))
-  const fx = { hkdPerUsd: m.get("fx.hkd_usd"), cnyPerUsd: m.get("fx.usd_cny"), vndPerUsd: m.get("fx.usd_vnd") }
-  for (const [k, v] of Object.entries(fx))
-    if (!v || !Number.isFinite(v) || v <= 0) throw new Error(`Thiếu/sai tỷ giá nội bộ (${k}) — vào Admin › Cài đặt › Tỷ Giá Nội Bộ`)
-  return fx as Fx
+/**
+ * Tỷ giá lấy từ bảng "Tỷ giá nội bộ theo tháng" (Admin › Cài đặt) theo THÁNG HIỆN TẠI (chưa nhập thì lấy tháng gần nhất trước đó):
+ * USD→VND = JSC · VND→USD = Inc · HKD/CNY↔USD = Inc. Thiếu tỷ giá thì báo rõ, không tự đoán.
+ */
+export async function loadFx(): Promise<Fx & { month: string; source: string }> {
+  const { table, source } = await loadEffectiveTable()
+  const month = currentMonth()
+  const pick = (id: string, name: string) => {
+    const hit = rateAt(table, id, month)
+    if (!hit) throw new Error(`Thiếu tỷ giá nội bộ ${name} cho ${monthLabel(month)} — vào Admin › Cài đặt › Tỷ Giá Nội Bộ`)
+    return hit.rate
+  }
+  return {
+    hkdPerUsd: pick("INC:HKD/USD", "HKD/USD (Gohub Inc)"),
+    cnyPerUsd: pick("INC:CNY/USD", "CNY/USD (Gohub Inc)"),
+    vndPerUsd: pick("JSC:VND/USD", "VND/USD (Gohub JSC)"),
+    vndPerUsdInc: pick("INC:VND/USD", "VNĐ/USD (Gohub Inc)"),
+    month, source,
+  }
 }
 
 export interface SupportCountry { code: string; en: string; vn: string; iso: string }

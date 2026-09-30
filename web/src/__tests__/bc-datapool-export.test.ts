@@ -8,7 +8,7 @@ import type { CatalogPlan, PlanCatalog } from "@/lib/bc-datapool/plan-catalog"
 import { DEFAULT_ASSUMPTIONS, type PlanLine, type PriceList, type ProductInput } from "@/lib/bc-datapool/types"
 
 const A = DEFAULT_ASSUMPTIONS
-const FX = { hkdPerUsd: 7.801, cnyPerUsd: 6.687, vndPerUsd: 26266 }
+const FX = { hkdPerUsd: 7.801, cnyPerUsd: 6.687, vndPerUsd: 26266, vndPerUsdInc: 26266 }
 const plan = (p: Partial<PlanLine>): PlanLine => ({ kind: "Daily", dataAmount: 500, unit: "MB", days: [1, 30], productId: "1", ...p })
 
 const list: PriceList = {
@@ -169,6 +169,35 @@ describe("file xuất: ô giá là công thức", () => {
     expect(e.feeUsd).toBeGreaterThan(0.6)
     expect(a.feeUsd).toBe(0)
     expect(e.cogsUsd).toBeCloseTo(a.cogsUsd + e.feeUsd, 2)
+  })
+})
+
+describe("tỷ giá theo chiều đổi (JSC / Inc)", () => {
+  const fx = { hkdPerUsd: 7.801, cnyPerUsd: 6.687, vndPerUsd: 26266, vndPerUsdInc: 25731.22 }
+  const sim = () => build([jp({ simType: "SIM", plans: [plan({ productId: "9", days: [1] })] })], list, fx, A, { whiteSimVnd: 16028 })
+
+  test("giá SIM trắng VND→USD dùng tỷ giá Inc (25731.22); COGS VN USD→VND dùng tỷ giá JSC (26266)", () => {
+    const e = sim().costRows.find(c => c.type.startsWith("SIM full"))!
+    expect(e.feeUsd).toBe(0.69)   // ROUNDUP(16028/25731.22 + 0.5/7.801) = ROUNDUP(0.6870) — nếu dùng 26266 sẽ là 0.67
+    expect(e.cogsVnd).toBe(Math.ceil(e.cogsUsd * 26266 - 1e-9))
+    expect(e.explain.fee).toContain("25.731,22")
+    expect(e.explain.fee).toContain("Inc")
+    expect(e.explain.cogsVnd).toContain("JSC")
+  })
+
+  test("file xuất: tham số riêng cho 2 chiều VND/USD; công thức SIM dùng ô Inc và tính lại khớp", () => {
+    const rs = sim()
+    const wb = buildWorkbook(rs, { fx, a: A, list, whiteSimVnd: 16028 })
+    const calc = wb.Sheets[CALC_SHEET]
+    expect((calc.T4 as XLSX.CellObject).v).toBe(26266)
+    expect((calc.T9 as XLSX.CellObject).v).toBe(25731.22)
+    expect((calc.T17 as XLSX.CellObject).f).toBe("ROUNDUP($T$8/$T$9+T10/$T$2,2)")
+    const { run } = evaluator(wb)
+    for (const [addr, c] of Object.entries(calc)) {
+      const cell = c as XLSX.CellObject
+      if (addr.startsWith("!") || !cell.f) continue
+      expect(run(CALC_SHEET, cell.f), addr).toBeCloseTo(Number(cell.v), 9)
+    }
   })
 })
 

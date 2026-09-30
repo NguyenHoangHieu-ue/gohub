@@ -140,3 +140,15 @@ Khi Xem trước/Xuất, server tra hệ thống (`skus.sku_code`, `products.pro
 - Product đã có → không tạo lại dòng Product, vẫn thêm SKU mới.
 - Đây là thông báo, KHÔNG còn chặn xuất. Chỉ khi TẤT CẢ SKU đã có thì xuất trả lỗi "không còn gì để tạo mới".
 - Dòng "Tính giá" / công thức Excel được đánh lại chỉ số sau khi bỏ, test kiểm công thức vẫn trỏ đúng dòng và tính lại khớp.
+
+### s215+8 — Bảng "Tỷ Giá Nội Bộ" theo THÁNG × PHÁP NHÂN + quy tắc chiều đổi
+
+**Trước**: chỉ có 1 bộ khoá phẳng `fx.*` (nhãn ghi "T06/2026" dù giá đã T09; nhãn `fx.hkd_usd` ghi "USD / 1 HKD" nhưng giá trị 7.801 thật ra là HKD cho 1 USD). Hệ quả **lỗi thật ở chatbot**: `convertCogs`/`tools.ts` nhân COGS HKD/TWD với `fx.hkd_usd`/`fx.twd_usd` (mặc định kiểu 0.128) trong khi DB lưu 7.801/31.666 → COGS HKD/TWD đổi USD sai ~60 lần; VND→USD cũng dùng chung 1 tỷ giá.
+
+**Nay**: Admin › Cài đặt › "Tỷ Giá Nội Bộ theo tháng" = lưới **13 dòng × 24 tháng (T01/2026…T12/2027)** đúng file `Tỷ giá nội bộ theo tháng.xlsx` (2 pháp nhân: **Gohub JSC** — VND/USD, VND/CNY, VND/HKD, VND/GBP; **Gohub Inc** — VNĐ/USD, HKD/USD, JPY/USD, THB/USD, CNY/USD, EUR/USD, GBP/USD, SGD/USD, TWD/USD). Sửa từng ô (ô sửa tô vàng, nút Lưu N ô) hoặc **Nhập từ Excel** (ô có trong file ghi đè, ô không có giữ nguyên; báo danh sách ô đổi + thông báo chuông). Rê chuột vào ô xem % biến động MoM. Dữ liệu: `app_settings` key `fx.monthly` (JSON, category `fx_monthly`); API `/api/admin/fx` (GET/PUT/POST); code `lib/fx/table.ts` (thuần), `parse.ts` (đọc Excel — nhận diện dòng theo cột A vì file có nhãn B gõ nhầm "VND/GBP" ở dòng HKD), `server.ts`.
+
+**Quy tắc chiều đổi (Hiếu chốt)**: **USD→VND dùng tỷ giá JSC** (VD 26.266); **VND→USD dùng tỷ giá Inc** (VD 25.731,22); USD↔HKD/CNY/JPY/THB/EUR/GBP/SGD/TWD dùng tỷ giá Inc (cả 2 chiều); VND↔CNY/HKD/GBP dùng tỷ giá JSC (chưa có dòng đó thì đổi qua USD); cặp khác đổi qua USD. **Tháng áp dụng** = tháng hiện tại; chưa nhập thì lấy tháng gần nhất TRƯỚC đó (không lấy tương lai). Hàm `convert()` trả kèm các bước (dòng, tỷ giá, tháng, phép tính).
+
+**Tương thích ngược**: mỗi lần lưu, bảng tự ghi xuôi sang khoá phẳng `fx.*` (giá tháng hiện tại) — chatbot/MCP/`admin-gohub` đọc `fx.*` chạy như cũ; thêm `fx.vnd_usd_inc` (VND→USD, Inc) và `fx.vnd_hkd`. **Quy ước khoá phẳng chốt lại: "số đơn vị ngoại tệ cho 1 USD"** (fx.hkd_usd=7.801) → ngoại tệ→USD là CHIA; `lib/fx/flat.ts` `convertCogsFlat()` dùng chung cho `context.convertCogs` và `tools.ts` (VND gốc giữ nguyên số VND, VND→USD dùng `fx.vnd_usd_inc`). Chưa nhập bảng theo tháng thì `loadEffectiveTable()` dựng tạm từ khoá phẳng cũ (VND→USD dùng chung tỷ giá JSC).
+
+**Tab Tạo sản phẩm (BC Datapool)** dùng đúng quy tắc trên: COGS VN = USD × VND/USD **JSC**; giá SIM trắng (VND) → USD ÷ VND/USD **Inc**; phí eSIM/IMSI quy USD bằng CNY/USD, HKD/USD **Inc**. File xuất có 2 ô tham số riêng (T4 = JSC, T9 = Inc). Thẻ "Tỷ giá" hiển thị từng chiều + tháng đang dùng.

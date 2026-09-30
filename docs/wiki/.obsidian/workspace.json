@@ -11,10 +11,14 @@
             "id": "067ab7af99c980b0",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "type": "markdown",
+              "state": {
+                "file": "business/vendor-3hk.md",
+                "mode": "preview",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "vendor-3hk"
             }
           }
         ]
@@ -37,7 +41,9 @@
               "type": "file-explorer",
               "state": {
                 "sortOrder": "alphabetical",
-                "autoReveal": false
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
               },
               "icon": "lucide-folder-closed",
               "title": "Files"
@@ -181,6 +187,19 @@
   },
   "active": "067ab7af99c980b0",
   "lastOpenFiles": [
+    "business/ty-gia.md",
+    "business/thuat-ngu-kinh-doanh.md",
+    "business/quy-trinh-import-ncc.md",
+    "business/ma-sku.md",
+    "business/ma-item-alias.md",
+    "business/loai-data-policy.md",
+    "business/goi-fup-tuy-chinh-3hk.md",
+    "business/gioi-thieu-gohub.md",
+    "business/cong-thuc-gia-3hk.md",
+    "business/combo-chuan.md",
+    "business/chon-vendor.md",
+    "system/tabs/analytics-all-time.md",
+    "HOME.md",
     "2026-07-14.md",
     "Untitled.base",
     "system/Chatbot-Agents-Guardian.md",
@@ -192,7 +211,6 @@
     "Tab/ACcbsAu8",
     "HOME.md.tmp.9252.e3e79f385a9d",
     "HOME.md.tmp.9252.8e90619cfa3e",
-    "HOME.md",
     "company/GoHub-Overview.md"
   ]
 }

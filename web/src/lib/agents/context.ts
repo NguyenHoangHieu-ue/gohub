@@ -13,20 +13,10 @@ import {
   getChannelPrices, getChannelTypes,
 } from "@/lib/agents/tools"
 import { getPartnerTiers } from "@/lib/analytics-helpers"
+import { convertCogsFlat } from "@/lib/fx/flat"
 
 export function convertCogs(cogs: number, currency: string, fx: Record<string, number>): { usd: number; vnd: number } {
-  const usdVnd = fx["fx.usd_vnd"] ?? 26000
-  const hkdUsd = fx["fx.hkd_usd"] ?? 0.128
-  const twdUsd = fx["fx.twd_usd"] ?? 0.031
-  let usd = 0
-  switch (currency?.toUpperCase()) {
-    case "USD": usd = cogs; break
-    case "VND": usd = cogs / usdVnd; break
-    case "HKD": usd = cogs * hkdUsd; break
-    case "TWD": usd = cogs * twdUsd; break
-    default:    usd = cogs; break
-  }
-  return { usd: Math.round(usd * 10000) / 10000, vnd: Math.round(usd * usdVnd) }
+  return convertCogsFlat(cogs, currency, fx)   // quy tắc chiều đổi + đơn vị "cho 1 USD": xem lib/fx/flat.ts
 }
 
 export async function buildToolContext(

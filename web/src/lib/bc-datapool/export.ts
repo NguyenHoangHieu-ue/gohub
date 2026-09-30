@@ -7,7 +7,7 @@ import type { Assumptions, Fx, Pool, PriceList } from "./types"
 export const CALC_SHEET = "Tính giá"
 
 // Ô tham số (cột S:T của sheet Tính giá)
-const P = { hkd: "$T$2", cny: "$T$3", vnd: "$T$4", fixed: "$T$5", daily: "$T$6", unl: "$T$7", white: "$T$8" } as const
+const P = { hkd: "$T$2", cny: "$T$3", vnd: "$T$4", fixed: "$T$5", daily: "$T$6", unl: "$T$7", white: "$T$8", vndInc: "$T$9" } as const
 const FEE_CELL = {
   "esim:CMHK": "$T$15", "esim:SINGTEL": "$T$16", "sim:CMHK": "$T$17", "sim:SINGTEL": "$T$18",
 } as const
@@ -37,9 +37,9 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
   const pl = ctx.list.pools
   put("S1", str("THAM SỐ (tỷ giá nội bộ + bảng báo giá — sửa ở đây, giá tự đổi)"))
   const params: [number, string, number][] = [
-    [2, "HKD/USD", ctx.fx.hkdPerUsd], [3, "CNY/USD", ctx.fx.cnyPerUsd], [4, "VND/USD", ctx.fx.vndPerUsd],
+    [2, "HKD/USD (Inc)", ctx.fx.hkdPerUsd], [3, "CNY/USD (Inc)", ctx.fx.cnyPerUsd], [4, "VND/USD (JSC — đổi USD→VND)", ctx.fx.vndPerUsd],
     [5, "Fixed % (data thực dùng)", ctx.a.fixedPct], [6, "Daily % (data thực dùng)", ctx.a.dailyPct], [7, "Unlimited GB/ngày", ctx.a.unlimitedGbPerDay],
-    [8, "Giá SIM trắng (VND, từ hệ thống)", white],
+    [8, "Giá SIM trắng (VND, từ hệ thống)", white], [9, "VND/USD (Inc — đổi VND→USD)", ctx.fx.vndPerUsdInc],
     [10, "CMHK — phí IMSI (HKD)", pl.CMHK.imsiFee], [11, "CMHK — phí eSIM (CNY)", pl.CMHK.esimFeeCny],
     [12, "Singtel — phí IMSI (USD)", pl.SINGTEL.imsiFee], [13, "Singtel — phí eSIM (CNY)", pl.SINGTEL.esimFeeCny],
   ]
@@ -47,8 +47,8 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
   const fee = (sim: "eSIM" | "SIM", pool: Pool) => frameFeeUsd(sim, pl[pool], ctx.fx, white)
   put("S15", str("Phí khung eSIM CMHK (USD) = eSIM CNY/CNY-USD + IMSI HKD/HKD-USD"));  put("T15", num(fee("eSIM", "CMHK"), "ROUNDUP(T11/$T$3+T10/$T$2,2)"))
   put("S16", str("Phí khung eSIM Singtel (USD) = eSIM CNY/CNY-USD + IMSI USD"));        put("T16", num(fee("eSIM", "SINGTEL"), "ROUNDUP(T13/$T$3+T12,2)"))
-  put("S17", str("Phí khung SIM CMHK (USD) = giá SIM trắng/VND-USD + IMSI HKD/HKD-USD")); put("T17", num(fee("SIM", "CMHK"), "ROUNDUP($T$8/$T$4+T10/$T$2,2)"))
-  put("S18", str("Phí khung SIM Singtel (USD) = giá SIM trắng/VND-USD + IMSI USD"));    put("T18", num(fee("SIM", "SINGTEL"), "ROUNDUP($T$8/$T$4+T12,2)"))
+  put("S17", str("Phí khung SIM CMHK (USD) = giá SIM trắng/VND-USD(Inc) + IMSI HKD/HKD-USD")); put("T17", num(fee("SIM", "CMHK"), "ROUNDUP($T$8/$T$9+T10/$T$2,2)"))
+  put("S18", str("Phí khung SIM Singtel (USD) = giá SIM trắng/VND-USD(Inc) + IMSI USD"));    put("T18", num(fee("SIM", "SINGTEL"), "ROUNDUP($T$8/$T$9+T12,2)"))
 
   // ── Bảng tính giá: 1 dòng / SKU ──
   CALC_HEADERS.forEach((h, i) => put(XLSX.utils.encode_cell({ r: 0, c: i }), str(h)))

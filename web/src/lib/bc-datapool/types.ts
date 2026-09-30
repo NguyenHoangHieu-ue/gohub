@@ -29,10 +29,14 @@ export interface PriceList {
   pools: Record<Pool, PoolPriceList>
 }
 
+/** Tỷ giá theo quy tắc chiều đổi (lib/fx/table.ts): USD→VND dùng JSC, VND→USD dùng Inc, HKD/CNY↔USD dùng Inc. */
 export interface Fx {
   hkdPerUsd: number
   cnyPerUsd: number
+  /** VND cho 1 USD — tỷ giá Gohub JSC, dùng khi đổi USD → VND */
   vndPerUsd: number
+  /** VND cho 1 USD — tỷ giá Gohub Inc, dùng khi đổi VND → USD (VD giá SIM trắng) */
+  vndPerUsdInc: number
 }
 
 /** Giả định % data thực dùng — nhập được trên UI, mặc định theo bảng COGS BC Datapool. */
