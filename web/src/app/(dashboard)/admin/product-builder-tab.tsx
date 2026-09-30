@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Download, Eye, Plus, Trash2, Upload } from "lucide-react"
 import { PRODUCT_HEADERS, SKU_HEADERS, pickOperatorPrice, type BuildResult } from "@/lib/bc-datapool/builder"
+import { pickSupportCountry } from "@/lib/bc-datapool/iso"
 import type { Skipped } from "@/lib/bc-datapool/dedupe"
 import type { CatalogDiff, PriceDiff } from "@/lib/bc-datapool/diff"
 import type { PlanInfo } from "@/lib/bc-datapool/plan-catalog"
@@ -16,7 +17,7 @@ interface PreviewResult extends BuildResult { fx: Fx; skipped: Skipped; nothingN
 
 // Dòng gói trên form: `daysText` là chuỗi người dùng gõ ("1,2,3,7"), chuyển thành số khi gửi lên server.
 interface PlanForm { kind: PlanKind; dataAmount: string; unit: "MB" | "GB"; daysText: string; productId: string }
-interface ProductForm { pool: Pool; simType: "eSIM" | "SIM"; coverage: string; operators: string[]; code: string; iso: string; en: string; vn: string; plans: PlanForm[] }
+interface ProductForm { pool: Pool; simType: "eSIM" | "SIM"; coverage: string; operators: string[]; code: string; codeHint?: string; iso: string; en: string; vn: string; plans: PlanForm[] }
 
 const DAYS_JAPAN = "1,2,3,4,5,6,7,10,15,20,25,30"
 const DAYS_TAIWAN = "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,20,25,30"
@@ -26,7 +27,6 @@ const POOL_LABEL: Record<Pool, string> = { CMHK: "CMHK (WD · HKD)", SINGTEL: "S
 const input = "px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white dark:bg-slate-800 dark:border-slate-600"
 const label = "block text-[11px] font-semibold text-gray-500 mb-1"
 
-const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim()
 const parseDays = (t: string) => Array.from(new Set(t.split(/[,\s;]+/).map(x => parseInt(x, 10)).filter(n => Number.isFinite(n) && n > 0))).sort((a, b) => a - b)
 
 const newPlan = (kind: PlanKind = "Daily"): PlanForm => ({ kind, dataAmount: kind === "Fixed" ? "5" : kind === "Unlimited" ? "3" : "500", unit: kind === "Daily" ? "MB" : "GB", daysText: DAYS_JAPAN, productId: "" })
@@ -102,10 +102,12 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
   const pickCoverage = (i: number, pool: Pool, coverage: string) => {
     const rows = list?.pools[pool].rows.filter(r => r.coverage === coverage) ?? []
     // Mặc định chọn hết nhà mạng của khu vực; giá áp dụng luôn là nhà mạng đắt nhất trong số được chọn.
-    const sc = opts?.supportCountries.find(c => norm(c.en) === norm(coverage))
+    // Có nhiều mã cùng tên nước (Japan: JPN + JKD...) → lấy mã ISO alpha-3, không chắc thì để trống và gợi ý
+    const { match: sc, code, candidates } = pickSupportCountry(opts?.supportCountries ?? [], coverage)
     patchProduct(i, {
       pool, coverage, operators: rows.map(r => `${r.coverage}|${r.operator}`),
-      code: sc?.code ?? "", iso: sc?.iso ?? "", en: sc?.en ?? coverage, vn: sc?.vn ?? "",
+      code, iso: sc?.iso ?? "", en: sc?.en ?? coverage, vn: sc?.vn ?? "",
+      codeHint: candidates.length ? `Có nhiều mã cho ${coverage}: ${candidates.join(", ")} — chọn mã đúng` : "",
     })
   }
 
@@ -285,7 +287,7 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
             )}
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div><label className={label}>Mã nước/nhóm nước (3 ký tự)</label><input className={`${input} w-full uppercase`} maxLength={3} value={p.code} onChange={e => patchProduct(i, { code: e.target.value })} placeholder="JPN" /></div>
+              <div><label className={label}>Mã nước/nhóm nước (3 ký tự)</label><input className={`${input} w-full uppercase`} maxLength={3} value={p.code} onChange={e => patchProduct(i, { code: e.target.value, codeHint: "" })} placeholder="JPN" />{p.codeHint && <div className="mt-1 text-[11px] text-amber-700">{p.codeHint}</div>}</div>
               <div><label className={label}>supportedCountries (ISO 2)</label><input className={`${input} w-full uppercase`} value={p.iso} onChange={e => patchProduct(i, { iso: e.target.value })} placeholder="JP" /></div>
               <div><label className={label}>Tên nước (EN)</label><input className={`${input} w-full`} value={p.en} onChange={e => patchProduct(i, { en: e.target.value })} placeholder="Japan" /></div>
               <div><label className={label}>Tên nước (VN)</label><input className={`${input} w-full`} value={p.vn} onChange={e => patchProduct(i, { vn: e.target.value })} placeholder="Nhật Bản" /></div>
