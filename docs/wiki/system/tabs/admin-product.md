@@ -84,3 +84,18 @@ manager tự xây) đọc catalog sản phẩm/SKU — bao gồm **giá vốn/CO
   `search_products`/`get_sku_detail` nhưng dùng 1 secret tĩnh chung cho mục đích khác (Claude Code dev
   tool), không tách theo từng bên nhận — cố ý KHÔNG dùng lại cho manager, tránh trộn 2 mục đích vào 1
   secret không revoke riêng được.
+
+
+## Tab "Tạo sản phẩm" (BC Datapool) — s215, 2026-09-30
+
+Thay tab "Tạo template" đã xoá. Hiện chỉ có vendor **BC Datapool** (2 pool: CMHK = `WD` tính HKD, Singtel = `W1` tính USD); vendor khác làm sau.
+
+**Luồng**: upload bảng báo giá (sheet `cmhk` + `Singtel`, lưu `app_settings` key `bcdp.price_list`, dùng lại lần sau) → chọn pool/SIM/khu vực/nhà mạng → nhập gói (loại Daily/Fixed/Unlimited, dung lượng, danh sách ngày, ProductID) → **Xem trước** (5 tab: Tính giá, SKU US, SKU VN, Product US, Product VN + cảnh báo) → **Xuất file Excel** (đúng 4 sheet `Template_sku_US/VN`, `Template_product_US/VN` của `Format_add_new_packages.xlsx`).
+
+**Công thức COGS** (bảng COGS BC Datapool, dùng chung 2 pool, chỉ khác tỷ giá): Fixed = tổng GB × giá/GB × 55% · Daily = GB/ngày × ngày × giá/GB × 38% · Unlimited = 1.7GB × ngày × giá/GB (không nhân %). Nhiều nhà mạng → lấy nhà mạng ĐẮT NHẤT đã chọn. Phí khung = phí eSIM 2 CNY (SIM: phí thẻ SIM) + IMSI 0.5 (HKD với CMHK, USD với Singtel), làm tròn gần nhất 2 số lẻ. COGS eSIM full = data + phí khung; VN = USD × tỷ giá VND, làm tròn lên. Làm tròn lên 2 số lẻ ở tiền của pool rồi quy USD rồi làm tròn lên lần nữa (đúng file mẫu). Tỷ giá HKD/CNY/VND lấy từ **Tỷ giá nội bộ** (`app_settings` `fx.hkd_usd`, `fx.usd_cny`, `fx.usd_vnd`).
+
+**Mã**: Product = ký tự1 (US=`E`, VN=`3`) + loại (eSIM `C`, SIM `E`) + mã nước 3 ký tự + vendor (`WD`/`W1`) + policy (Daily `T`, Fixed `F`, Unlimited `X`). SKU = Product + dung lượng 3 ký tự (500MB→`5HM`, 1.5GB→`1D5`, 5GB→`005`) + ngày 2 ký tự. `vendorSku` US = ProductID BC (1 ProductID/gói dung lượng, dùng chung mọi ngày), `vendorSku` VN = mã SKU US. Unlimited: dung lượng nhập = GB tốc độ cao/ngày (chỉ để đặt tên/mã, giá tính theo 1.7GB).
+
+**Code**: `lib/bc-datapool/` (`pricing.ts`, `codes.ts`, `builder.ts`, `price-list.ts`, `server.ts`), API `/api/admin/bc-datapool` (+ `/price-list`, `/build`, `?format=xlsx`), UI `admin/product-builder-tab.tsx`. Test `__tests__/bc-datapool.test.ts` đối chiếu TOÀN BỘ SKU 2 file mẫu (Taiwan/Cambodia/Laos 343 SKU + Japan) — khớp COGS US/VN từng dòng (chỉ chạy khi file mẫu có ở repo root).
+
+**Gotchas**: file mẫu Taiwan định dạng tên `500MB`, Japan `500 MB` — tool dùng kiểu Japan (có khoảng trắng). Không xuất cột `sync GC`/`tên VAT`; `Purchase Formula*` để trống.

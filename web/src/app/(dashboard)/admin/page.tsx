@@ -2,16 +2,17 @@
 
 import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
-import { Key, Settings, FileSpreadsheet, Gift, Clock, Shield } from "lucide-react"
+import { Key, Settings, FileSpreadsheet, Gift, Clock, Shield, PackagePlus } from "lucide-react"
 import { useRoleGuard } from "@/lib/use-role-guard"
 
-type Tab = "settings" | "promotions" | "scheduled" | "ref-import" | "api-keys"
+type Tab = "settings" | "product-builder" | "promotions" | "scheduled" | "ref-import" | "api-keys"
 
 // Tách khỏi 1 file 2120 dòng (s196+21, quyết định Hiếu 2026-09-14 — cùng nguyên tắc Phase 5: chỉ move
 // nguyên khung JSX/logic, KHÔNG đổi hành vi) — mỗi tab đã tự thân là 1 component riêng biệt trong file cũ,
 // chỉ cần tách file + nạp qua next/dynamic (code-split, giống pattern recharts s196+21).
 const tabLoading = () => <div className="text-sm text-gray-400 py-4">Đang tải...</div>
 const SettingsTab   = dynamic(() => import("./settings-tab"),    { loading: tabLoading })
+const ProductBuilderTab = dynamic(() => import("./product-builder-tab"), { loading: tabLoading })
 const PromotionsTab = dynamic(() => import("./promotions-tab"),  { loading: tabLoading })
 const ScheduledTab  = dynamic(() => import("./scheduled-tab"),   { loading: tabLoading })
 const RefImportTab  = dynamic(() => import("./ref-import-tab"),  { loading: tabLoading })
@@ -25,11 +26,11 @@ export default function AdminPage() {
   return <AdminPanel />
 }
 
-const VALID_TABS: Tab[] = ["settings", "promotions", "scheduled", "ref-import", "api-keys"]
+const VALID_TABS: Tab[] = ["settings", "product-builder", "promotions", "scheduled", "ref-import", "api-keys"]
 
 function AdminPanel() {
   const [tab, setTab]       = useState<Tab>("settings")
-  // Cho phép deep-link tab qua URL (?tab=promotions)
+  // Cho phép deep-link tab qua URL (?tab=product-builder)
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab")
     if (t && VALID_TABS.includes(t as Tab)) setTab(t as Tab)
@@ -43,6 +44,7 @@ function AdminPanel() {
 
   const TAB_META: Record<Tab, { label: string; icon: React.ReactNode }> = {
     settings:    { label: "Cài đặt",        icon: <Settings        size={15} /> },
+    "product-builder": { label: "Tạo sản phẩm", icon: <PackagePlus size={15} /> },
     promotions:  { label: "Khuyến mãi",   icon: <Gift            size={15} /> },
     scheduled:   { label: "Lịch Lark",    icon: <Clock           size={15} /> },
     "ref-import": { label: "Cập nhật dữ liệu", icon: <FileSpreadsheet size={15} /> },
@@ -51,7 +53,7 @@ function AdminPanel() {
   // Nhóm tab — mỗi tab 1-click, gọn + responsive (icon-only trên mobile)
   const TAB_GROUPS: { label: string; tabs: Tab[] }[] = [
     { label: "Hệ thống", tabs: ["settings", "api-keys"] },
-    { label: "Công cụ",  tabs: ["promotions", "scheduled"] },
+    { label: "Công cụ",  tabs: ["product-builder", "promotions", "scheduled"] },
     { label: "Dữ liệu",  tabs: ["ref-import"] },
   ]
 
@@ -104,6 +106,7 @@ function AdminPanel() {
       </div>
 
       {tab === "settings"     && <SettingsTab     onNotify={notify} />}
+      {tab === "product-builder" && <ProductBuilderTab onNotify={notify} />}
       {tab === "promotions"   && <PromotionsTab   onNotify={notify} />}
       {tab === "scheduled"    && <ScheduledTab    onNotify={notify} />}
       {tab === "ref-import"   && <RefImportTab    onNotify={notify} />}
