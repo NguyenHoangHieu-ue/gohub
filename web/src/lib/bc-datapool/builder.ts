@@ -1,5 +1,6 @@
 import { FRAME_SKU, POLICY_CODE, VENDOR_CODE, productCode, skuCode, type ProductTypeChar } from "./codes"
-import { dataCostPool, dataCostUsd, frameFeeUsd, usdToVnd } from "./pricing"
+import { explainCost, type CostExplain } from "./explain"
+import { ceil2, dataCostPool, dataCostUsd, frameFeeUsd, usdToVnd } from "./pricing"
 import type { Assumptions, BuiltSheets, Fx, PlanKind, Pool, PriceList, ProductInput } from "./types"
 
 /** Tên sheet + tiêu đề cột PHẢI y hệt Format_add_new_packages.xlsx (template bắt buộc). */
@@ -34,6 +35,8 @@ export interface CostRow {
   feeKind: "esim" | "sim" | "none"
   poolKey: Pool
   dataPool: number
+  /** Công thức đã thế số cho từng giá (hiện khi rê chuột ở bản xem trước) */
+  explain: CostExplain
   dataUsd: number
   feeUsd: number
   cogsUsd: number
@@ -176,9 +179,14 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
             pricePerGb: top.pricePerGb, currency: pool.currency, kind: pl.kind, dataAmount: pl.dataAmount, unit: pl.unit, days: d,
             feeKind: feeUsd === 0 ? "none" : p.simType === "eSIM" ? "esim" : "sim", poolKey: p.pool,
             dataPool: dataCostPool(pl, d, top.pricePerGb, a), dataUsd, feeUsd, cogsUsd, cogsVnd,
+            explain: explainCost({
+              kind: pl.kind, dataAmount: pl.dataAmount, unit: pl.unit, days: d, pricePerGb: top.pricePerGb, currency: pool.currency,
+              dataPool: dataCostPool(pl, d, top.pricePerGb, a), dataUsd, feeKind: feeUsd === 0 ? "none" : p.simType === "eSIM" ? "esim" : "sim",
+              feeUsd, cogsUsd, cogsVnd, fx, a, imsiFee: pool.imsiFee, esimFeeCny: pool.esimFeeCny, whiteSimVnd: opt.whiteSimVnd ?? 0,
+            }),
           })
         }
-        const full = Math.round((dataUsd + fee) * 100) / 100
+        const full = ceil2(dataUsd + fee)
         if (p.simType === "eSIM") push("C", full, fee)
         else { push("A", dataUsd, 0); push("E", full, fee) }
       }

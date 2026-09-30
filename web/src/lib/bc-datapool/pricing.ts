@@ -2,7 +2,6 @@ import type { Assumptions, Fx, PlanLine, PoolPriceList, SimType } from "./types"
 
 /** ROUNDUP kiểu Excel (2 số lẻ), chống sai số dấu phẩy động. */
 export const ceil2 = (x: number) => Math.ceil(x * 100 - 1e-9) / 100
-export const round2 = (x: number) => Math.round(x * 100 + 1e-9) / 100
 const toGb = (amount: number, unit: "MB" | "GB") => (unit === "MB" ? amount / 1024 : amount)
 
 /**
@@ -24,14 +23,14 @@ export function dataCostUsd(plan: PlanLine, days: number, pricePerGb: number, cu
 }
 
 /**
- * Phí khung (USD), làm tròn gần nhất 2 số lẻ (khớp 2 file mẫu: Singtel 0.80, CMHK 0.36):
+ * Phí khung (USD), ROUNDUP 2 số lẻ (mọi công thức đều ROUNDUP — quy định của Hiếu):
  *  eSIM = phí eSIM (CNY) quy USD + phí IMSI (tiền tệ của pool) quy USD.
  *  SIM  = giá SIM trắng (lấy từ DB, VND) quy USD + phí IMSI quy USD.
  */
 export function frameFeeUsd(sim: SimType, list: PoolPriceList, fx: Fx, whiteSimVnd = 0): number {
   const imsiUsd = list.currency === "HKD" ? list.imsiFee / fx.hkdPerUsd : list.imsiFee
   const carrierUsd = sim === "eSIM" ? list.esimFeeCny / fx.cnyPerUsd : whiteSimVnd / fx.vndPerUsd
-  return round2(carrierUsd + imsiUsd)
+  return ceil2(carrierUsd + imsiUsd)
 }
 
 export const usdToVnd = (usd: number, fx: Fx) => Math.ceil(usd * fx.vndPerUsd - 1e-9)

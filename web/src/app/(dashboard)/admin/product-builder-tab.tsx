@@ -360,18 +360,31 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
                 <tbody>{preview.costRows.slice(0, 1000).map((r, k) => (
                   <tr key={k} className="border-t border-gray-100 dark:border-slate-800">
                     <td className="px-2 py-1 whitespace-nowrap">{r.type}</td><td className="px-2 py-1 font-mono">{r.skuUS}</td><td className="px-2 py-1 font-mono">{r.skuVN}</td><td className="px-2 py-1 font-mono">{r.productId}</td><td className="px-2 py-1">{r.pool}</td><td className="px-2 py-1">{r.operator}</td>
-                    <td className="px-2 py-1">{r.pricePerGb} {r.currency}</td><td className="px-2 py-1">{r.dataUsd}</td><td className="px-2 py-1">{r.feeUsd}</td><td className="px-2 py-1 font-semibold">{r.cogsUsd}</td><td className="px-2 py-1 font-semibold">{r.cogsVnd.toLocaleString("vi-VN")}</td>
+                    <td className="px-2 py-1" title={r.explain.dataPool}>{r.pricePerGb} {r.currency}</td>
+                    <td className="px-2 py-1 cursor-help underline decoration-dotted" title={`${r.explain.dataPool}\n${r.explain.dataUsd}`}>{r.dataUsd}</td>
+                    <td className="px-2 py-1 cursor-help underline decoration-dotted" title={r.explain.fee}>{r.feeUsd}</td>
+                    <td className="px-2 py-1 font-semibold cursor-help underline decoration-dotted" title={r.explain.cogsUsd}>{r.cogsUsd}</td>
+                    <td className="px-2 py-1 font-semibold cursor-help underline decoration-dotted" title={`${r.explain.cogsUsd}\n${r.explain.cogsVnd}`}>{r.cogsVnd.toLocaleString("vi-VN")}</td>
                   </tr>))}</tbody>
               </table>
             ) : (
               <table className="min-w-full text-xs">
                 <thead className="sticky top-0 bg-gray-50 dark:bg-slate-800"><tr>{sheets[sheet].head.map(h => <th key={h} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
-                <tbody>{sheets[sheet].rows.slice(0, 1000).map((row, k) => (
-                  <tr key={k} className="border-t border-gray-100 dark:border-slate-800">{row.map((c, m) => <td key={m} className="px-2 py-1 whitespace-nowrap">{String(c)}</td>)}</tr>))}</tbody>
+                <tbody>{sheets[sheet].rows.slice(0, 1000).map((row, k) => {
+                  // Ô latestCogs (cột K) của sheet SKU: rê chuột hiện công thức tính giá của dòng đó
+                  const ci = sheet === "skuUS" ? preview.usCost[k] : sheet === "skuVN" ? preview.vnCost[k] : undefined
+                  const ex = ci != null ? preview.costRows[ci].explain : null
+                  const tip = ex ? (sheet === "skuUS" ? `${ex.dataPool}\n${ex.dataUsd}\n${ex.fee}\n${ex.cogsUsd}` : `${ex.cogsUsd}\n${ex.cogsVnd}`) : undefined
+                  return (
+                    <tr key={k} className="border-t border-gray-100 dark:border-slate-800">
+                      {row.map((c, m) => <td key={m} title={m === 10 ? tip : undefined} className={`px-2 py-1 whitespace-nowrap ${m === 10 && tip ? "cursor-help underline decoration-dotted font-semibold" : ""}`}>{String(c)}</td>)}
+                    </tr>
+                  )
+                })}</tbody>
               </table>
             )}
           </div>
-          <div className="text-[11px] text-gray-400">Bản xem trước tính bằng tỷ giá nội bộ hiện tại; file xuất sẽ tính lại y hệt. Hiển thị tối đa 1000 dòng/sheet, file xuất đủ tất cả.</div>
+          <div className="text-[11px] text-gray-400">Rê chuột vào giá (gạch chấm) để xem công thức đã thế số — mọi công thức dùng ROUNDUP. Bản xem trước tính bằng tỷ giá nội bộ hiện tại; file xuất sẽ tính lại y hệt. Hiển thị tối đa 1000 dòng/sheet, file xuất đủ tất cả.</div>
         </div>
       )}
     </div>

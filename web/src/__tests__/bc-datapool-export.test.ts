@@ -96,7 +96,38 @@ describe("file xuất: ô giá là công thức", () => {
     // Kiểm ngược vài số đã biết: Singtel Taiwan Daily 1.5GB × 1 ngày và CMHK Japan Daily 500MB × 1 ngày
     const row = (sku: string) => r.costRows.findIndex(c => c.skuUS === sku) + 2
     expect(val(CALC_SHEET, `P${row("ECTWNW1T1D501")}`)).toBe(r.costRows.find(c => c.skuUS === "ECTWNW1T1D501")!.cogsUsd)
-    expect(val(CALC_SHEET, `P${row("ECJPNWDT5HM01")}`)).toBe(0.5)   // SoftBank 5.5 HKD/GB là nhà mạng đắt nhất đã chọn
+    expect(val(CALC_SHEET, `P${row("ECJPNWDT5HM01")}`)).toBe(0.51)   // SoftBank 5.5 HKD/GB là nhà mạng đắt nhất đã chọn; phí khung ROUNDUP 0.37
+  })
+
+  test("MỌI công thức trong file chỉ dùng ROUNDUP — không có ROUND", () => {
+    let seen = 0
+    for (const sheet of wb.SheetNames)
+      for (const [addr, cell] of Object.entries(wb.Sheets[sheet])) {
+        if (addr.startsWith("!")) continue
+        const f = (cell as XLSX.CellObject).f
+        if (!f) continue
+        seen++
+        expect(f, `${sheet}!${addr}`).not.toMatch(/\bROUND\(/)
+        if (/ROUND/.test(f)) expect(f).toMatch(/ROUNDUP\(/)
+      }
+    expect(seen).toBeGreaterThan(60)
+  })
+
+  test("xem trước: mỗi dòng giá có chuỗi công thức đã thế số (rê chuột), toàn ROUNDUP", () => {
+    for (const c of r.costRows) {
+      for (const t of [c.explain.dataPool, c.explain.dataUsd, c.explain.fee, c.explain.cogsUsd, c.explain.cogsVnd]) {
+        expect(t.length).toBeGreaterThan(10)
+        expect(t).not.toMatch(/\bROUND\(/)
+      }
+      expect(c.explain.dataPool).toContain("ROUNDUP(")
+      expect(c.explain.cogsVnd).toContain(`${c.cogsVnd.toLocaleString("vi-VN")} VND`)
+    }
+    const jp = r.costRows.find(c => c.skuUS === "ECJPNWDT5HM01")!
+    expect(jp.explain.dataPool).toBe("ROUNDUP(giá/GB 5.5 × (500/1024) GB × 1 ngày × 38%, 2) = 1.03 HKD")
+    expect(jp.explain.dataUsd).toBe("ROUNDUP(1.03 HKD ÷ 7.801, 2) = 0.14 USD")
+    expect(jp.explain.fee).toBe("ROUNDUP(phí eSIM 2 CNY ÷ 6.687 + IMSI 0.5 HKD ÷ 7.801, 2) = 0.37 USD")
+    expect(jp.explain.cogsUsd).toBe("ROUNDUP(data 0.14 + phí khung 0.37, 2) = 0.51 USD")
+    expect(r.costRows.find(c => c.skuUS === "ECTWNW1F01001")!.explain.dataUsd).toContain("Pool tính bằng USD")
   })
 
   test("ghi ra .xlsx rồi đọc lại vẫn còn công thức + giá trị (đúng như người dùng sẽ mở trong Excel)", () => {
@@ -107,7 +138,7 @@ describe("file xuất: ô giá là công thức", () => {
     expect(typeof k2.v).toBe("number")
     const m2 = back.Sheets["Tính giá"].M2 as XLSX.CellObject
     expect(m2.f).toContain("ROUNDUP(")
-    expect(back.Sheets["Tính giá"].T15.f).toBe("ROUND(T11/$T$3+T10/$T$2,2)")
+    expect(back.Sheets["Tính giá"].T15.f).toBe("ROUNDUP(T11/$T$3+T10/$T$2,2)")
   })
 
   test("đổi tham số (tỷ giá VND) thì giá VN đổi theo — chứng minh không phải số chết", () => {

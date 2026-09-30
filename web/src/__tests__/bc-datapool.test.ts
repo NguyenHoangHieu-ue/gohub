@@ -66,25 +66,26 @@ describe("giá vốn — khớp số trong file mẫu", () => {
     expect(ceil2(d1 + fee)).toBe(0.93)
     expect(usdToVnd(0.93, FX_TW)).toBe(24428)
     const fixed = dataCostUsd(plan({ kind: "Fixed", dataAmount: 5, unit: "GB" }), 30, 0.68, "USD", FX_TW, A)
-    expect(Math.round((fixed + fee) * 100) / 100).toBe(2.67)
+    expect(ceil2(fixed + fee)).toBe(2.67)
   })
   test("Singtel Taiwan Daily 3GB×30 = 24.06", () => {
     const fee = frameFeeUsd("eSIM", list.pools.SINGTEL, FX_TW)
     const d = dataCostUsd(plan({ dataAmount: 3, unit: "GB" }), 30, 0.68, "USD", FX_TW, A)
-    expect(Math.round((d + fee) * 100) / 100).toBe(24.06)
+    expect(ceil2(d + fee)).toBe(24.06)
   })
-  test("CMHK Japan (HKD): phí khung 0.36, Daily 500MB×1 = 0.49, VND 12981", () => {
+  // File mẫu Japan gõ tay phí khung 0.36 (làm tròn gần nhất); quy định mới: mọi công thức ROUNDUP → 0.3632 lên 0.37
+  test("CMHK Japan (HKD): phí khung ROUNDUP 0.37, Daily 500MB×1 = 0.50", () => {
     const fee = frameFeeUsd("eSIM", list.pools.CMHK, FX_JP)
-    expect(fee).toBe(0.36)
+    expect(fee).toBe(0.37)
     const d = dataCostUsd(plan({}), 1, 5.3, "HKD", FX_JP, A)
     expect(d).toBe(0.13)
-    expect(Math.round((d + fee) * 100) / 100).toBe(0.49)
-    expect(usdToVnd(0.49, FX_JP)).toBe(12981)
+    expect(ceil2(d + fee)).toBe(0.5)
+    expect(usdToVnd(0.5, FX_JP)).toBe(13245)
   })
-  test("CMHK Japan Unlimited 1 ngày = 1.52 (1.7GB/ngày, không nhân %)", () => {
+  test("CMHK Japan Unlimited 1 ngày = 1.53 (1.7GB/ngày, không nhân %)", () => {
     const fee = frameFeeUsd("eSIM", list.pools.CMHK, FX_JP)
     const d = dataCostUsd(plan({ kind: "Unlimited", dataAmount: 3, unit: "GB" }), 1, 5.3, "HKD", FX_JP, A)
-    expect(Math.round((d + fee) * 100) / 100).toBe(1.52)
+    expect(ceil2(d + fee)).toBe(1.53)
   })
 })
 
@@ -108,8 +109,8 @@ describe("build()", () => {
     expect(r.sheets.skuUS[0][16]).toBe("111")
     expect(r.sheets.skuVN[0][18]).toBe("3CJPNWDT5HM01")
     expect(r.sheets.skuVN[0][16]).toBe("ECJPNWDT5HM01")
-    expect(r.sheets.skuUS[0][10]).toBe(0.49)
-    expect(r.sheets.skuVN[0][10]).toBe(12981)
+    expect(r.sheets.skuUS[0][10]).toBe(0.5)
+    expect(r.sheets.skuVN[0][10]).toBe(13245)
     expect(r.sheets.skuUS[1][6]).toBe("eSIM Nhật Bản Unlimited 10mbps 1 ngày")
     expect(r.sheets.skuUS[1][12]).toBe("3GB of high-speed data per day, then unlimited data at 10Mbps")
     expect(r.sheets.productUS.map(x => x[35])).toEqual(["ECJPNWDT", "ECJPNWDX"])
@@ -139,7 +140,7 @@ describe("build()", () => {
     expect([aUS[16], aUS[17]]).toEqual(["", "777"])
     expect([aVN[16], aVN[17]]).toEqual(["", "EAJPNWDT5HM01"])
     expect([eVN[16], eVN[17]]).toEqual(["", ""])
-    // datapack = chỉ data (0.13); full = data + round2(16028/26490 + 0.5/7.802 = 0.6695) = 0.13 + 0.67 = 0.80
+    // datapack = chỉ data (0.13); full = data + ROUNDUP(16028/26490 + 0.5/7.802 = 0.6691) = 0.13 + 0.67 = 0.80
     expect(aUS[10]).toBe(0.13)
     expect(aVN[10]).toBe(usdToVnd(0.13, FX_JP)); expect(eVN[10]).toBe(usdToVnd(0.8, FX_JP))
   })
@@ -206,7 +207,7 @@ describe("đối chiếu file mẫu thật", () => {
     }
     return Array.from(by.values())
   }
-  const check = (file: string, fx: typeof FX_TW, defs: { pool: "CMHK" | "SINGTEL"; coverage: string; operators: string[]; code: string; en: string; vn: string; iso: string }[]) => {
+  const check = (file: string, fx: typeof FX_TW, allow: { usMax: number; vnMax: number }, defs: { pool: "CMHK" | "SINGTEL"; coverage: string; operators: string[]; code: string; en: string; vn: string; iso: string }[]) => {
     const us = sheetRows(file, "SKU US"), vn = sheetRows(file, "SKU VN")
     const plans = plansFrom(us)
     const products: ProductInput[] = defs.map(d => ({
@@ -222,7 +223,10 @@ describe("đối chiếu file mẫu thật", () => {
     const cmp = (tag: string, want: Row[], got: (string | number)[][]) => want.forEach((row, i) => {
       const m = got[i]
       const codeOk = row[18] == null || m[18] === String(row[18])
-      if (!m || Math.abs(Number(m[10]) - Number(row[10])) > 0.004 || m[16] !== String(row[16]) || !codeOk) bad.push(`${tag} #${i + 2} ${row[18] ?? m?.[18]}: mẫu ${row[10]} ↔ ${m?.[10]}`)
+      const diff = m ? Number(m[10]) - Number(row[10]) : NaN
+      const max = tag === "US" ? allow.usMax : allow.vnMax
+      // mine >= mẫu, chênh không quá `max` (0 với Taiwan/Singtel; Japan: phí khung mẫu 0.36 → ROUNDUP 0.37)
+      if (!m || !(diff > -0.004 && diff <= max + 0.004) || m[16] !== String(row[16]) || !codeOk) bad.push(`${tag} #${i + 2} ${row[18] ?? m?.[18]}: mẫu ${row[10]} ↔ ${m?.[10]}`)
     })
     cmp("US", us, r.sheets.skuUS)
     cmp("VN", vn, r.sheets.skuVN)
@@ -240,14 +244,14 @@ describe("đối chiếu file mẫu thật", () => {
     },
   }
   test.skipIf(!existsSync(path.join(ROOT, "eSIM_Taiwan_BCDatapool.xlsx")))("Taiwan + Cambodia + Laos: 345 SKU × 2 tenant khớp COGS", () => {
-    check("eSIM_Taiwan_BCDatapool.xlsx", FX_TW, [
+    check("eSIM_Taiwan_BCDatapool.xlsx", FX_TW, { usMax: 0, vnMax: 0 }, [
       { pool: "SINGTEL", coverage: "Taiwan", operators: ["Taiwan Mobile"], code: "TWN", en: "Taiwan", vn: "Đài Loan", iso: "TW" },
       { pool: "SINGTEL", coverage: "Cambodia", operators: ["Cellcard"], code: "KHM", en: "Cambodia", vn: "Campuchia", iso: "KH" },
       { pool: "SINGTEL", coverage: "Laos", operators: ["LaoTel"], code: "LAO", en: "Laos", vn: "Lào", iso: "LA" },
     ])
   })
   test.skipIf(!existsSync(path.join(ROOT, "eSIM_BCDatapool_Japan.xlsx")))("Japan (Daily + Unlimited): khớp COGS", () => {
-    check("eSIM_BCDatapool_Japan.xlsx", FX_JP, [
+    check("eSIM_BCDatapool_Japan.xlsx", FX_JP, { usMax: 0.01, vnMax: 0.011 * 26490 + 2 }, [
       { pool: "CMHK", coverage: "Japan", operators: ["KDDI", "SoftBank"], code: "JPN", en: "Japan", vn: "Nhật Bản", iso: "JP" },
     ])
   })

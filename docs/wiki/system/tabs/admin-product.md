@@ -127,3 +127,8 @@ Upload ở thẻ "Danh mục gói Portal" (lưu `app_settings` key `bcdp.plan_ca
 - **File Portal**: gói mới (Plan ID mới), gói bị bỏ, gói đổi số ngày bán/tốc độ sau ngưỡng/nhà mạng/timing. Chỉ so trong loại SIM có upload (chỉ upload eSIM thì gói SIM cũ không bị coi là bỏ; bản cũ chưa lưu throttle không tính là đổi).
 - Hiển thị: thông báo ngay sau upload + hộp "Thay đổi so với bản trước" (bấm từng nhóm xem chi tiết) dưới từng thẻ upload; lần upload đầu ghi rõ chưa có bản cũ. Có thay đổi thì tạo thêm **thông báo chuông** cho admin/manager (`price_change` cho bảng giá, `sync` cho Portal).
 - **Không tự sửa** sản phẩm/giá đã tạo trước đó: hộp nhắc "sản phẩm/giá đã tạo có thể cần cập nhật" — người dùng tự quyết.
+
+### s215+5 — Mọi công thức chỉ ROUNDUP + rê chuột xem công thức
+
+- **Quy định (Hiếu 2026-09-30): mọi công thức dùng ROUNDUP, không dùng ROUND.** Phí khung trước đây làm tròn gần nhất (0.36 cho CMHK) → nay ROUNDUP: CMHK eSIM `2/6.687 + 0.5/7.801 = 0.3632 → 0.37`; Singtel `2/6.687 + 0.5 = 0.7991 → 0.80` (không đổi). Hệ quả: mọi giá CMHK cao hơn file mẫu Japan (gõ tay 0.36) đúng **0.01 USD** (VN ≈ +265 VND); Singtel/Taiwan/Cambodia/Laos vẫn khớp file mẫu tuyệt đối (test `bc-datapool.test.ts` cho phép Japan chênh đúng 0..+0.01). COGS US = `ROUNDUP(data + phí khung, 2)`.
+- **Xem trước**: rê chuột vào giá (gạch chấm) hiện công thức đã thế số — tab "Tính giá": giá/GB, Data (USD), Phí khung, COGS US, COGS VN; tab SKU US/SKU VN: ô `latestCogs`. Chuỗi sinh ở `lib/bc-datapool/explain.ts`, cùng công thức với sheet "Tính giá" của file xuất. Test khoá: không công thức nào (file xuất lẫn chuỗi tooltip) chứa `ROUND(` trần.
