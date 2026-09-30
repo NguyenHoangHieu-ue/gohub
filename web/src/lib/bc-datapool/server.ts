@@ -93,6 +93,6 @@ export async function loadAssumptions(): Promise<Assumptions> {
   const f = resolveFormula(data ?? [])
   return {
     fixedPct: f[FORMULA_KEYS.fixed], dailyPct: f[FORMULA_KEYS.daily],
-    unl500mb5: f[FORMULA_KEYS.unl500mb5], unl500mb10: f[FORMULA_KEYS.unl500mb10], unl3gb10: f[FORMULA_KEYS.unl3gb10],
+    unl3gb10: f[FORMULA_KEYS.unl3gb10],
   }
 }

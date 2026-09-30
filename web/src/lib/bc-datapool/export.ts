@@ -8,7 +8,7 @@ export const CALC_SHEET = "Tính giá"
 
 // Ô tham số (cột S:T của sheet Tính giá)
 const P = { hkd: "$T$2", cny: "$T$3", vnd: "$T$4", fixed: "$T$5", daily: "$T$6", white: "$T$8", vndInc: "$T$9" } as const
-const UNL_CELL = { unl3gb10: "$T$7", unl500mb5: "$T$20", unl500mb10: "$T$21" } as const
+const UNL_CELL = { unl3gb10: "$T$7" } as const
 const FEE_CELL = {
   "esim:CMHK": "$T$15", "esim:SINGTEL": "$T$16", "sim:CMHK": "$T$17", "sim:SINGTEL": "$T$18",
 } as const
@@ -39,7 +39,7 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
   put("S1", str("THAM SỐ (tỷ giá nội bộ + bảng báo giá — sửa ở đây, giá tự đổi)"))
   const params: [number, string, number][] = [
     [2, "HKD/USD (Inc)", ctx.fx.hkdPerUsd], [3, "CNY/USD (Inc)", ctx.fx.cnyPerUsd], [4, "VND/USD (JSC — đổi USD→VND)", ctx.fx.vndPerUsd],
-    [5, "Fixed % (data thực dùng)", ctx.a.fixedPct], [6, "Daily % (data thực dùng)", ctx.a.dailyPct], [7, "Unlimited 3GB tốc độ cao + 10Mbps — GB/ngày", ctx.a.unl3gb10], [20, "Unlimited 500MB tốc độ cao + 5Mbps — GB/ngày", ctx.a.unl500mb5], [21, "Unlimited 500MB tốc độ cao + 10Mbps — GB/ngày", ctx.a.unl500mb10],
+    [5, "Fixed % (data thực dùng)", ctx.a.fixedPct], [6, "Daily % (data thực dùng)", ctx.a.dailyPct], [7, "Unlimited 3GB tốc độ cao + 3GB 10Mbps + Unlimited 1Mbps — GB/ngày", ctx.a.unl3gb10],
     [8, "Giá SIM trắng (VND, từ hệ thống)", white], [9, "VND/USD (Inc — đổi VND→USD)", ctx.fx.vndPerUsdInc],
     [10, "CMHK — phí IMSI (HKD)", pl.CMHK.imsiFee], [11, "CMHK — phí eSIM (CNY)", pl.CMHK.esimFeeCny],
     [12, "Singtel — phí IMSI (USD)", pl.SINGTEL.imsiFee], [13, "Singtel — phí eSIM (CNY)", pl.SINGTEL.esimFeeCny],

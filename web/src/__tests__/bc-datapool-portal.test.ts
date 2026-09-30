@@ -68,7 +68,7 @@ describe("Portal quyết định gói nào được tạo (dữ liệu thật)",
     expect(run({ kind: "Unlimited", dataAmount: 3, unit: "GB", productId: "1786346622038926" })).toContain("không khớp cấu hình")
   })
 
-  test.skipIf(!both)("Unlimited 500MB tốc độ cao + 10Mbps vẫn tra đúng gói BC Daily 6GB Throttle 1Mbps (dataMB không dùng để tra gói)", () => {
+  test.skipIf(!both)("Tra ProductID Unlimited chỉ theo gói BC Daily {tổng} Throttle 1Mbps (dung lượng tốc độ cao/tốc độ không dùng để tra gói)", () => {
     const c = real()
     const r = resolvePlans([product({ plans: [plan({ kind: "Unlimited", dataAmount: 500, unit: "MB", speedMbps: 10, bcAmount: 6, bcUnit: "GB" })] })], c)
     expect(r.info[0].status).toBe("portal")

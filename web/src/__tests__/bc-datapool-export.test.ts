@@ -324,77 +324,51 @@ describe("thông báo thay đổi khi upload", () => {
   })
 })
 
-describe("Unlimited: dataMB / speedMbps / tốc độ cao khác nhau", () => {
+describe("Unlimited: dataMB / speedMbps, 1 mức throttle (3GB + 10Mbps = 1.7), chỉ mã X, tên cũ", () => {
   const fx = { hkdPerUsd: 7.801, cnyPerUsd: 6.687, vndPerUsd: 26266, vndPerUsdInc: 26266 }
   const unl = (over: Partial<PlanLine>) => plan({ kind: "Unlimited", dataAmount: 3, unit: "GB", days: [1, 2], productId: "9", ...over })
   const run = (over: Partial<PlanLine>) => build([jp({ plans: [unl(over)] })], list, fx, A)
 
-  test("mặc định 3GB tốc độ cao + Unlimited 10Mbps: dataMB 3072, speedMbps 10, mã X, tên cũ, hệ số 1.7", () => {
+  test("mặc định 3GB tốc độ cao + 10Mbps: dataMB 3072, speedMbps 10, mã X, tên cũ, hệ số 1.7", () => {
     const r = run({})
     expect(r.warnings).toEqual([])
     expect(r.sheets.skuUS[0].slice(12, 15)).toEqual(["3GB of high-speed data per day, then unlimited data at 10Mbps", 3072, 10])
     expect(r.sheets.skuUS[0][20]).toBe("ECJPNWDX00301")
     expect(r.sheets.skuUS[0][6]).toBe("eSIM Nhật Bản Unlimited 10mbps 1 ngày")
-    expect(r.sheets.productUS.map(x => x[35])).toEqual(["ECJPNWDX"])
+    expect(r.sheets.skuUS[0][7]).toBe("eSIM Japan Unlimited 10mbps 1 Day(s)")
+    expect(r.sheets.productUS.map(x => [x[6], x[35]])).toEqual([["X", "ECJPNWDX"]])
     expect(r.costRows[0].unlKey).toBe("unl3gb10")
+    expect(r.costRows[0].explain.dataPool).toContain("1.7 GB/ngày")
   })
 
-  test("500MB tốc độ cao + Unlimited 10Mbps: dataMB 500, mã X, hệ số 1.8, tên có '500 MB tốc độ cao'", () => {
-    const r = run({ dataAmount: 500, unit: "MB", bcAmount: 6, bcUnit: "GB" })
-    expect(r.warnings).toEqual([])
-    expect(r.sheets.skuUS[0].slice(12, 15)).toEqual(["500MB of high-speed data per day, then unlimited data at 10Mbps", 500, 10])
-    expect(r.sheets.skuUS[0][20]).toBe("ECJPNWDX5HM01")
-    expect(r.sheets.skuUS[0][6]).toBe("eSIM Nhật Bản 500 MB tốc độ cao Unlimited 10mbps 1 ngày")
-    expect(r.sheets.skuUS[0][7]).toBe("eSIM Japan 500 MB high-speed Unlimited 10mbps 1 Day(s)")
-    expect(r.costRows[0].unlKey).toBe("unl500mb10")
-    expect(r.costRows[0].explain.dataPool).toContain("1.8 GB/ngày")
-  })
-
-  test("500MB tốc độ cao + Unlimited 5Mbps: speedMbps 5, mã A (Daily Unlimited 5mbps), hệ số 1.6, text 5Mbps", () => {
-    const r = run({ dataAmount: 500, unit: "MB", speedMbps: 5 })
-    expect(r.warnings).toEqual([])
-    expect(r.sheets.skuUS[0].slice(12, 15)).toEqual(["500MB of high-speed data per day, then unlimited data at 5Mbps", 500, 5])
-    expect(r.sheets.skuUS[0][20]).toBe("ECJPNWDA5HM01")
-    expect(r.sheets.productUS.map(x => [x[6], x[35]])).toEqual([["A", "ECJPNWDA"]])
-    expect(r.costRows[0].unlKey).toBe("unl500mb5")
-    expect(r.costRows[0].explain.dataPool).toContain("1.6 GB/ngày")
-  })
-
-  test("giá khác nhau theo hệ số: 1.6 < 1.7 < 1.8 GB/ngày", () => {
-    const c = (o: Partial<PlanLine>) => run({ days: [10], ...o }).costRows[0].dataPool
-    const a5 = c({ dataAmount: 500, unit: "MB", speedMbps: 5 }), a3 = c({}), a10 = c({ dataAmount: 500, unit: "MB" })
-    expect(a5).toBeLessThan(a3)
-    expect(a3).toBeLessThan(a10)
-    expect(a5).toBeCloseTo(Math.ceil(5.5 * 1.6 * 10 * 100 - 1e-9) / 100, 6)
-  })
-
-  test("tổ hợp chưa có hệ số (3GB + 5Mbps, 1GB + 10Mbps) → cảnh báo, không sinh SKU (không đoán)", () => {
-    for (const o of [{ speedMbps: 5 }, { dataAmount: 1 }]) {
+  test("kiểu cũ 1 mốc tốc độ cao + Unlimited (500MB + 5/10Mbps, hệ số 1.6/1.8) KHÔNG còn dùng cho BC → chặn, không sinh SKU", () => {
+    for (const o of [{ dataAmount: 500, unit: "MB" as const }, { dataAmount: 500, unit: "MB" as const, speedMbps: 5 }, { speedMbps: 5 }, { dataAmount: 1 }]) {
       const r = run(o)
       expect(r.warnings.join()).toContain("chưa có hệ số GB/ngày")
+      expect(r.warnings.join()).toContain("3GB tốc độ cao + 3GB 10Mbps + Unlimited 1Mbps")   // báo rõ mức duy nhất đang có
       expect(r.sheets.skuUS).toHaveLength(0)
     }
-    expect(run({ speedMbps: 7 }).warnings.join()).toContain("tốc độ Unlimited phải là 5 hoặc 10")
-    expect(run({ dataAmount: 8, bcAmount: 6, bcUnit: "GB" }).warnings.join()).toMatch(/chưa có hệ số|lớn hơn tổng gói/)
   })
 
-  test("1 Product cho mỗi tốc độ: 10Mbps = X, 5Mbps = A; Daily/Fixed để trống dataMB/speedMbps", () => {
-    const r = build([jp({ plans: [unl({ dataAmount: 500, unit: "MB", days: [1] }), unl({ dataAmount: 500, unit: "MB", speedMbps: 5, days: [1] }), plan({ productId: "1", days: [1] })] })], list, fx, A)
+  test("dung lượng tốc độ cao lớn hơn tổng gói BC → chặn", () => {
+    expect(run({ bcAmount: 2, bcUnit: "GB" }).warnings.join()).toContain("lớn hơn tổng gói BC")
+  })
+
+  test("Unlimited luôn 1 Product mã X; Daily/Fixed để trống dataMB/speedMbps", () => {
+    const r = build([jp({ plans: [unl({ days: [1] }), unl({ days: [2], productId: "8" }), plan({ productId: "1", days: [1] })] })], list, fx, A)
     expect(r.warnings).toEqual([])
-    expect(r.sheets.productUS.map(x => x[35]).sort()).toEqual(["ECJPNWDA", "ECJPNWDT", "ECJPNWDX"])
-    expect(r.sheets.skuUS.map(x => x[13])).toEqual([500, 500, ""])
-    expect(r.sheets.skuUS.map(x => x[14])).toEqual([10, 5, ""])
+    expect(r.sheets.productUS.map(x => x[35]).sort()).toEqual(["ECJPNWDT", "ECJPNWDX"])
+    expect(r.sheets.skuUS.map(x => x[13])).toEqual([3072, 3072, ""])
+    expect(r.sheets.skuUS.map(x => x[14])).toEqual([10, 10, ""])
   })
 
-  test("file xuất: 3 ô hệ số Unlimited riêng (T7, T20, T21); công thức từng dòng dùng đúng ô và tính lại khớp", () => {
-    const r = build([jp({ plans: [unl({ days: [1] }), unl({ dataAmount: 500, unit: "MB", days: [1] }), unl({ dataAmount: 500, unit: "MB", speedMbps: 5, days: [1] })] })], list, fx, A)
+  test("file xuất: ô hệ số Unlimited T7 = 1.7, công thức dùng đúng ô và tính lại khớp", () => {
+    const r = build([jp({ plans: [unl({ days: [1, 30] })] })], list, fx, A)
     const wb = buildWorkbook(r, { fx, a: A, list, whiteSimVnd: null })
     const calc = wb.Sheets[CALC_SHEET]
-    expect([calc.T7, calc.T20, calc.T21].map(c => (c as XLSX.CellObject).v)).toEqual([1.7, 1.6, 1.8])
-    const fm = (i: number) => (calc[`M${i + 2}`] as XLSX.CellObject).f
-    expect(fm(0)).toContain("$T$7")
-    expect(fm(1)).toContain("$T$21")
-    expect(fm(2)).toContain("$T$20")
+    expect((calc.T7 as XLSX.CellObject).v).toBe(1.7)
+    expect((calc.M2 as XLSX.CellObject).f).toContain("$T$7")
+    expect(calc.T20).toBeUndefined()   // không còn ô hệ số 500MB
     const { run } = evaluator(wb)
     for (const [addr, c] of Object.entries(calc)) {
       const cell = c as XLSX.CellObject
@@ -403,4 +377,3 @@ describe("Unlimited: dataMB / speedMbps / tốc độ cao khác nhau", () => {
     }
   })
 })
-

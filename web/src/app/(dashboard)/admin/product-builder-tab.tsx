@@ -7,7 +7,8 @@ import { pickSupportCountry } from "@/lib/bc-datapool/iso"
 import type { Skipped } from "@/lib/bc-datapool/dedupe"
 import type { CatalogDiff, PriceDiff } from "@/lib/bc-datapool/diff"
 import { availableKinds, canonCountry, choosePlan, findPlans, manualMismatches, offers, sellableCountries, type CatalogPlan, type PlanCatalog, type PlanInfo } from "@/lib/bc-datapool/plan-lookup"
-import { DEFAULT_ASSUMPTIONS, type Assumptions, type Fx, type PlanKind, type Pool, type PriceList, type ProductInput } from "@/lib/bc-datapool/types"
+import { unlimitedFactor } from "@/lib/bc-datapool/pricing"
+import { DEFAULT_ASSUMPTIONS, UNLIMITED_PROFILES, type Assumptions, type Fx, type PlanKind, type Pool, type PriceList, type ProductInput } from "@/lib/bc-datapool/types"
 
 type Notify = (type: "success" | "error", text: string) => void
 interface SupportCountry { code: string; en: string; vn: string; iso: string }
@@ -261,8 +262,8 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
         </div>
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-2">
           <div className="text-sm font-semibold">Giả định COGS</div>
-          <div className="grid grid-cols-2 gap-2">
-            {([["fixedPct", "Fixed %", 100], ["dailyPct", "Daily %", 100], ["unl3gb10", "Unl 3GB+10Mbps (GB/ngày)", 1], ["unl500mb10", "Unl 500MB+10Mbps", 1], ["unl500mb5", "Unl 500MB+5Mbps", 1]] as const).map(([k, l, mul]) => (
+          <div className="grid grid-cols-3 gap-2">
+            {([["fixedPct", "Fixed %", 100], ["dailyPct", "Daily %", 100], ["unl3gb10", "Unlimited GB/ngày (2 mức throttle)", 1]] as const).map(([k, l, mul]) => (
               <div key={k}>
                 <label className={label}>{l}</label>
                 <input className={`${input} w-full`} type="number" step="any" value={Number((assumptions[k] * mul).toFixed(4))}
@@ -391,6 +392,11 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
                           Hiển thị cho khách: <b>{pl.hs || "?"} {pl.hsUnit} tốc độ cao, Unlimited {pl.speed}Mbps</b> · dataMB = <b>{Math.round((parseFloat(pl.hs.replace(",", ".")) || 0) * (pl.hsUnit === "GB" ? 1024 : 1))}</b> · speedMbps = <b>{pl.speed}</b><br />
                           Bản chất: {pl.hs || "?"} {pl.hsUnit} tốc độ cao + phần còn lại của gói BC ở {pl.speed}Mbps + Unlimited 1Mbps (tổng = gói BC đã chọn).
                         </div>
+                        {!unlimitedFactor(assumptions, parseFloat(pl.hs.replace(",", ".")) || 0, pl.hsUnit, pl.speed) && (
+                          <div className="w-full text-[11px] text-red-600">
+                            Tổ hợp này chưa có hệ số GB/ngày — hiện chỉ có mức: {UNLIMITED_PROFILES.map(x => x.label).join(" · ")}. Mức mới thêm ở Công Thức Datapool; chưa xuất được.
+                          </div>
+                        )}
                       </div>
                     )}
                     <div className="flex flex-wrap items-center gap-1.5">

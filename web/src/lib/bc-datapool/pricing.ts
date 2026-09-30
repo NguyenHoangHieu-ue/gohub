@@ -1,20 +1,18 @@
-import type { Assumptions, Fx, PlanLine, PoolPriceList, SimType } from "./types"
+import { UNLIMITED_PROFILES, type Assumptions, type Fx, type PlanLine, type PoolPriceList, type SimType, type UnlimitedKey } from "./types"
 
 /** ROUNDUP kiểu Excel (2 số lẻ), chống sai số dấu phẩy động. */
 export const ceil2 = (x: number) => Math.ceil(x * 100 - 1e-9) / 100
 const toGb = (amount: number, unit: "MB" | "GB") => (unit === "MB" ? amount / 1024 : amount)
 export const toMb = (amount: number, unit: "MB" | "GB") => (unit === "GB" ? amount * 1024 : amount)
 
-export type UnlimitedKey = "unl500mb5" | "unl500mb10" | "unl3gb10"
-
 /**
- * GB/ngày dùng để tính giá gói Unlimited theo tổ hợp (data tốc độ cao, tốc độ Unlimited):
- * 500MB + 5Mbps → 1.6 · 500MB + 10Mbps → 1.8 · 3GB + 10Mbps → 1.7 (Công Thức Datapool). Tổ hợp khác chưa có hệ số → null (không đoán).
+ * GB/ngày dùng để tính giá gói Unlimited theo mức throttle (data tốc độ cao, tốc độ): hiện chỉ 3GB + 10Mbps → 1.7 (Công Thức Datapool).
+ * Tổ hợp khác chưa có mức trong UNLIMITED_PROFILES → null (không đoán).
  */
-export function unlimitedFactor(a: Assumptions, amount: number, unit: "MB" | "GB", speedMbps = 10): { key: UnlimitedKey; gbPerDay: number } | null {
+export function unlimitedFactor(a: Assumptions, amount: number, unit: "MB" | "GB", speedMbps = 10): { key: UnlimitedKey; gbPerDay: number; label: string } | null {
   const mb = toMb(amount, unit)
-  const key: UnlimitedKey | null = mb === 500 && speedMbps === 5 ? "unl500mb5" : mb === 500 && speedMbps === 10 ? "unl500mb10" : mb === 3072 && speedMbps === 10 ? "unl3gb10" : null
-  return key ? { key, gbPerDay: a[key] } : null
+  const prof = UNLIMITED_PROFILES.find(p => p.dataMb === mb && p.speedMbps === speedMbps)
+  return prof ? { key: prof.key, gbPerDay: a[prof.key], label: prof.label } : null
 }
 
 /**
