@@ -10584,3 +10584,30 @@ Toàn bộ s214(a)-(d): tsc + vitest 419/419 + `next lint` (toàn dự án) PASS
 lần dính edge-cache/rollout-lag khi verify ngay sau push (số liệu tưởng sai hoá ra do request đầu ăn bản
 cũ) — bài học: đợi build xong + thử lại trước khi kết luận có bug. Wiki `analytics-quarterly.md` cập nhật
 đủ §s214(a)-(d), đánh dấu rõ đoạn s200 cũ (mô tả trang đã xoá) là LỊCH SỬ không còn đúng hiện trạng.
+
+## s215 (2026-09-30) — Xoá "Tạo Template" cũ, làm tab "Tạo sản phẩm" BC Datapool, bảng tỷ giá theo tháng, công thức Datapool dùng chung
+Chi tiết kỹ thuật + công thức + gotchas: wiki `docs/wiki/system/tabs/admin-product.md` §s215+…; `docs/wiki/business/ty-gia.md`,
+`cong-thuc-gia-3hk.md`. Tóm tắt:
+- **Xoá Tạo Template**: tab Admin + API `/api/admin/template` + agent chatbot `tao-template` (−1062 dòng). Hiếu làm lại bản mới.
+- **Tab Admin › Công cụ › "Tạo sản phẩm" (BC Datapool, CMHK=WD/HKD, Singtel=W1/USD)**: upload bảng báo giá (`app_settings`
+  `bcdp.price_list`) + 2 file Portal "Purchase information" (Plan ID = ProductID BC, pool nhận diện qua APN cmhk/e-ideas,
+  `bcdp.plan_catalog`); chọn khu vực → chỉ hiện nơi Portal bán ở pool+SIM, dung lượng/ngày chọn từ gói Portal thật (bật ngày
+  phổ biến giao Portal), ProductID tự điền (nhập tay phải khớp Portal), chưa có Portal thì chặn tạo; Xem trước (5 tab, rê chuột
+  xem công thức đã thế số, mọi công thức ROUNDUP) → Xuất Excel đúng 4 sheet template + sheet "Tính giá", ô latestCogs là CÔNG THỨC.
+  SKU/Product đã có trong hệ thống được báo kèm mã và bỏ khỏi file (chỉ tạo phần còn lại). Upload mới báo thay đổi (đổi giá, gói
+  mới/bỏ/đổi ngày) + chuông. Nghiệp vụ chốt: Unlimited (X) = gói BC "Daily 2N GB Throttle 1Mbps"; reset Daily/X `GMT+8`, Fixed
+  `Count 24h`; SIM full chỉ VN (khung `1D000WDK00000`, phí SIM = giá SIM trắng DB + IMSI), datapack A cả US/VN; Plan ID trùng hệt
+  nhau (Indonesia) tự lấy ID mới nhất. Test khớp toàn bộ SKU 2 file mẫu (Taiwan/Cambodia/Laos/Japan).
+- **Bảng "Tỷ Giá Nội Bộ theo tháng"** (Admin › Cài đặt): 13 dòng × 24 tháng, 2 pháp nhân (JSC/Inc), nhập Excel hoặc sửa ô;
+  quy tắc chiều đổi: USD→VND dùng JSC, VND→USD dùng Inc, ngoại tệ↔USD dùng Inc, VND↔CNY/HKD/GBP dùng JSC; tháng thiếu lấy tháng
+  gần nhất trước đó; ghi xuôi khoá phẳng `fx.*` cho nơi cũ. **Sửa lỗi thật**: chatbot (`convertCogs`, `calculate_3hk_cogs`) nhân thay
+  vì chia tỷ giá HKD/TWD (lưu "số đơn vị cho 1 USD") → COGS HKD/TWD sai ~60 lần.
+- **Công Thức Datapool dùng chung** (thay "Công Thức 3HK Datapool"): 5 hệ số `datapool.*` (Fixed 0.55, Daily 0.38, 500MB+Unlimited
+  5Mbps 1.6, 500MB+Unlimited 10Mbps 1.8, MỚI 3GB+Unlimited 10Mbps 1.7); key cũ `3hk.*` đọc dự phòng.
+- **Lark release**: chỉ báo push `main` (bỏ staging); tin production vẫn kèm backlog commit còn trên staging.
+- Sửa: tự điền mã nước (JPN thay vì JKD khi nhiều mã cùng tên nước — ưu tiên ISO alpha-3).
+tsc + `next build` + `next lint` (0 lỗi mới) + vitest 488/488 PASS. Đã merge `main` 2026-09-30 theo yêu cầu Hiếu.
+**Việc còn cho Hiếu**: nhập file `Tỷ giá nội bộ theo tháng.xlsx` ở Admin › Cài đặt (khi chưa nhập, bảng dùng tạm bộ cũ, JSC=Inc);
+thử làm 1 sản phẩm BC bằng tab mới; xác nhận dòng HKD trong file tỷ giá (B9 gõ nhầm "VND/GBP"; đã đọc theo cột A = HKD, T09=3427);
+Product 1D000WDK00000 đang ở trạng thái Preparing — Active trước khi import SKU SIM full; các tab/mã còn lại của vendor khác làm sau.
+
