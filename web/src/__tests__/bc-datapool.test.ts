@@ -117,6 +117,37 @@ describe("build()", () => {
     expect(r.sheets.productVN[0][1]).toBe(3)
   })
 
+  test("dailyResetTime: Daily/Unlimited = GMT+8, Fixed = Count 24h", () => {
+    const r = build([product({ plans: [plan({ productId: "1" }), plan({ kind: "Fixed", dataAmount: 5, unit: "GB", productId: "2" }), plan({ kind: "Unlimited", dataAmount: 3, unit: "GB", productId: "3" })] })], list, FX_JP, A)
+    expect(r.sheets.productUS.map(x => [x[6], x[17]])).toEqual([["T", "GMT+8"], ["F", "Count 24h"], ["X", "GMT+8"]])
+    expect(r.sheets.productVN.map(x => x[17])).toEqual(["GMT+8", "Count 24h", "GMT+8"])
+  })
+
+  test("SIM: sinh datapack (A) + SIM full (E), khung 1D000WDK00000, phí = giá SIM trắng DB + IMSI", () => {
+    const p = product({ simType: "SIM", plans: [plan({ productId: "777" })] })
+    const r = build([p], list, FX_JP, A, { whiteSimVnd: 16028 })
+    expect(r.warnings).toEqual([])
+    // Product: A rồi E, mỗi tenant
+    expect(r.sheets.productUS.map(x => [x[2], x[13], x[35]])).toEqual([["A", "Datapack", "EAJPNWDT"], ["E", "Base + Datapack", "EEJPNWDT"]])
+    expect(r.sheets.productVN.map(x => x[35])).toEqual(["3AJPNWDT", "3EJPNWDT"])
+    const [aUS, eUS] = r.sheets.skuUS, [aVN, eVN] = r.sheets.skuVN
+    expect(aUS[18]).toBe("EAJPNWDT5HM01"); expect(eUS[18]).toBe("EEJPNWDT5HM01")
+    expect(eUS[8]).toBe("CD000WDK00000"); expect(eVN[8]).toBe("1D000WDK00000")
+    expect(eUS[9]).toBe("EAJPNWDT5HM01"); expect(eVN[9]).toBe("3AJPNWDT5HM01")
+    // ProductID nằm ở vendorSkuSim của datapack (tiền lệ 3AAS8WDT/EAAS8WDT); VN datapack trỏ SKU US
+    expect([aUS[16], aUS[17], eUS[16], eUS[17]]).toEqual(["", "777", "", ""])
+    expect([aVN[16], aVN[17]]).toEqual(["", "EAJPNWDT5HM01"])
+    // datapack = chỉ data (0.13); full = data + round2(16028/26490 + 0.5/7.802) = 0.13 + 0.67
+    expect(aUS[10]).toBe(0.13); expect(eUS[10]).toBe(0.8)
+    expect(aVN[10]).toBe(usdToVnd(0.13, FX_JP)); expect(eVN[10]).toBe(usdToVnd(0.8, FX_JP))
+  })
+
+  test("SIM mà thiếu giá SIM trắng → cảnh báo, không sinh dòng", () => {
+    const r = build([product({ simType: "SIM" })], list, FX_JP, A)
+    expect(r.warnings.join()).toContain("thiếu giá SIM trắng")
+    expect(r.sheets.skuUS).toHaveLength(0)
+  })
+
   test("nhiều nhà mạng → lấy giá cao nhất đã chọn", () => {
     const p = product({ pool: "SINGTEL", coverages: ["Taiwan"], supportCountryCode: "TWN", isoCodes: "TW",
       operators: ["Taiwan|Taiwan Mobile", "Taiwan|Chunghwa Telecom"], plans: [plan({ kind: "Fixed", dataAmount: 5, unit: "GB", productId: "9" })] })
@@ -245,7 +276,20 @@ describe("danh mục gói Portal", () => {
     expect(jp[0].operators).toContain("KDDI")
     expect(jp[0].days).toHaveLength(30)
     expect(findPlans(c, { sim: "eSIM", kind: "Fixed", pool: "SINGTEL", coverage: "Taiwan", amount: 5, unit: "GB" }).map(p => p.id)).toEqual(["1786608158998198"])
-    expect(findPlans(c, { sim: "eSIM", kind: "Unlimited", pool: "CMHK", coverage: "Japan", amount: 3, unit: "GB" })).toEqual([])
+    // Unlimited (X) = gói Daily gấp đôi dung lượng, throttle 1Mbps (Japan 3GB → "Daily 6GB Throttle to 1Mbps")
+    expect(findPlans(c, { sim: "eSIM", kind: "Unlimited", pool: "CMHK", coverage: "Japan", amount: 3, unit: "GB" }).map(p => p.id)).toEqual(["1786346622046927"])
+    // Daily 6GB thường không lẫn gói throttle 1Mbps
+    expect(findPlans(c, { sim: "eSIM", kind: "Daily", pool: "CMHK", coverage: "Japan", amount: 6, unit: "GB" })).toEqual([])
+  })
+
+  test.skipIf(!both)("Indonesia W1 có 2 Plan ID giống hệt nhau → tự chọn ID mới nhất + ghi chú", () => {
+    const c = catalog()
+    const p: ProductInput = { pool: "SINGTEL", simType: "eSIM", coverages: ["Indonesia"], operators: [], supportCountryCode: "IDN", isoCodes: "ID", countryNameEn: "Indonesia", countryNameVn: "Indonesia",
+      plans: [plan({ dataAmount: 500, unit: "MB", days: [1], productId: "" })] }
+    const r = resolvePlans([p], c)
+    expect(r.info[0].status).toBe("portal")
+    expect(r.info[0].productId).toBe("1790671064942479")
+    expect(r.info[0].note).toContain("giống hệt nhau")
   })
 
   test.skipIf(!both)("tự tra đúng ProductID cho toàn bộ SKU trong 2 file mẫu (Taiwan/Cambodia/Laos/Japan Daily+Fixed)", () => {

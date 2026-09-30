@@ -3,7 +3,8 @@ import * as XLSX from "xlsx"
 import { build, withHeaders } from "@/lib/bc-datapool/builder"
 import { DEFAULT_ASSUMPTIONS, type Assumptions, type ProductInput } from "@/lib/bc-datapool/types"
 import { resolvePlans } from "@/lib/bc-datapool/plan-catalog"
-import { findExisting, loadFx, loadPlanCatalog, loadPriceList, requireAdmin } from "@/lib/bc-datapool/server"
+import { FRAME_SKU } from "@/lib/bc-datapool/codes"
+import { findExisting, loadFx, loadPlanCatalog, loadPriceList, loadWhiteSimVnd, requireAdmin } from "@/lib/bc-datapool/server"
 
 export const dynamic = "force-dynamic"
 
@@ -24,7 +25,14 @@ export async function POST(req: NextRequest) {
     if (!list) return NextResponse.json({ error: "Chưa upload bảng báo giá BC Datapool" }, { status: 400 })
 
     const resolved = resolvePlans(products, catalog)
-    const result = build(resolved.products, list, fx, a)
+    const hasSim = resolved.products.some(p => p.simType === "SIM")
+    const whiteSimVnd = hasSim ? await loadWhiteSimVnd() : null
+    const result = build(resolved.products, list, fx, a, { whiteSimVnd: whiteSimVnd ?? undefined })
+    if (hasSim) {
+      const frames = await findExisting("skus", "sku_code", [FRAME_SKU.VN, FRAME_SKU.US])
+      const missing = [FRAME_SKU.VN, FRAME_SKU.US].filter(c => !frames.has(c))
+      if (missing.length) result.warnings.push(`Khung SIM chưa có trong hệ thống: ${missing.join(", ")} — tạo trước khi import SKU SIM full`)
+    }
     result.warnings.unshift(...resolved.warnings)
 
     const [existProducts, existSkus] = await Promise.all([
@@ -50,7 +58,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return NextResponse.json({ ...result, fx, existing, planInfo: resolved.info })
+    return NextResponse.json({ ...result, fx, existing, planInfo: resolved.info, whiteSimVnd })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }

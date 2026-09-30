@@ -5,10 +5,15 @@ export const POLICY_CODE: Record<PlanKind, string> = { Daily: "T", Fixed: "F", U
 
 /** Ký tự 1 mã SKU/Product: US = E (US Datapool), VN = 3 (VN Monthly Invoice Internal GHI) — theo file mẫu. */
 export const TENANT_CHAR = { US: "E", VN: "3" } as const
-export const PRODUCT_TYPE_CHAR: Record<SimType, string> = { eSIM: "C", SIM: "E" }
+/** Ký tự 2: C = eSIM full · E = SIM full · A = gói data rời (datapack) của SIM. */
+export type ProductTypeChar = "A" | "C" | "E"
+export const PRODUCT_TYPE_CHAR: Record<SimType, ProductTypeChar> = { eSIM: "C", SIM: "E" }
 
-export function productCode(tenant: "US" | "VN", sim: SimType, country3: string, pool: Pool, kind: PlanKind): string {
-  return `${TENANT_CHAR[tenant]}${PRODUCT_TYPE_CHAR[sim]}${country3}${VENDOR_CODE[pool]}${POLICY_CODE[kind]}`
+/** Mã khung SIM trắng của BC Datapool — dùng chung cả CMHK và Singtel (VN có trong DB; mã US theo quy ước CD000…K00000). */
+export const FRAME_SKU = { VN: "1D000WDK00000", US: "CD000WDK00000" } as const
+
+export function productCode(tenant: "US" | "VN", sim: SimType, country3: string, pool: Pool, kind: PlanKind, type: ProductTypeChar = PRODUCT_TYPE_CHAR[sim]): string {
+  return `${TENANT_CHAR[tenant]}${type}${country3}${VENDOR_CODE[pool]}${POLICY_CODE[kind]}`
 }
 
 /** 3 ký tự dung lượng: 500MB→5HM, 1.5GB→1D5, 5GB→005. Trả null nếu không mã hoá được. */

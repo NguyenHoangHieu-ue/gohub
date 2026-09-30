@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWrite } from "@/lib/writable-tabs"
 import { countryNameVn } from "@/lib/catalogue/country-index"
+import { FRAME_SKU } from "./codes"
 import type { PlanCatalog } from "./plan-catalog"
 import type { Fx, PriceList } from "./types"
 
@@ -65,3 +66,10 @@ export async function loadPlanCatalog(): Promise<PlanCatalog | null> {
 
 export const catalogSummary = (c: PlanCatalog | null) =>
   c ? { uploadedAt: c.uploadedAt, files: c.files, esim: c.plans.filter(p => p.sim === "eSIM").length, sim: c.plans.filter(p => p.sim === "SIM").length } : null
+
+/** Giá SIM trắng (VND) = latest_cogs của SKU khung SIM BC Datapool trong hệ thống. null nếu chưa có / khác VND. */
+export async function loadWhiteSimVnd(): Promise<number | null> {
+  const { data } = await supabaseAdmin.from("skus").select("latest_cogs,latest_cogs_currency").eq("sku_code", FRAME_SKU.VN).maybeSingle()
+  const v = Number(data?.latest_cogs)
+  return data && data.latest_cogs_currency === "VND" && v > 0 ? v : null
+}

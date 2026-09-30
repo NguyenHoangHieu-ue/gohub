@@ -20,13 +20,14 @@ export function dataCostUsd(plan: PlanLine, days: number, pricePerGb: number, cu
 }
 
 /**
- * Phí khung (USD) = phí eSIM/SIM (CNY) quy USD + phí IMSI (tiền tệ của pool) quy USD. Làm tròn gần nhất 2 số lẻ
- * (khớp 2 file mẫu: Singtel 0.80, CMHK 0.36).
+ * Phí khung (USD), làm tròn gần nhất 2 số lẻ (khớp 2 file mẫu: Singtel 0.80, CMHK 0.36):
+ *  eSIM = phí eSIM (CNY) quy USD + phí IMSI (tiền tệ của pool) quy USD.
+ *  SIM  = giá SIM trắng (lấy từ DB, VND) quy USD + phí IMSI quy USD.
  */
-export function frameFeeUsd(sim: SimType, list: PoolPriceList, fx: Fx): number {
-  const carrierCny = sim === "eSIM" ? list.esimFeeCny : list.simFeeCny
+export function frameFeeUsd(sim: SimType, list: PoolPriceList, fx: Fx, whiteSimVnd = 0): number {
   const imsiUsd = list.currency === "HKD" ? list.imsiFee / fx.hkdPerUsd : list.imsiFee
-  return round2(carrierCny / fx.cnyPerUsd + imsiUsd)
+  const carrierUsd = sim === "eSIM" ? list.esimFeeCny / fx.cnyPerUsd : whiteSimVnd / fx.vndPerUsd
+  return round2(carrierUsd + imsiUsd)
 }
 
 export const usdToVnd = (usd: number, fx: Fx) => Math.ceil(usd * fx.vndPerUsd - 1e-9)

@@ -1,4 +1,4 @@
-import { POLICY_CODE, VENDOR_CODE, productCode, skuCode } from "./codes"
+import { FRAME_SKU, POLICY_CODE, VENDOR_CODE, productCode, skuCode, type ProductTypeChar } from "./codes"
 import { dataCostUsd, frameFeeUsd, usdToVnd } from "./pricing"
 import type { Assumptions, BuiltSheets, Fx, PlanKind, PriceList, ProductInput } from "./types"
 
@@ -17,6 +17,8 @@ const fmt = (n: number) => String(Number(n.toFixed(2)))
 const amountText = (n: number, unit: string) => `${fmt(n)} ${unit}`
 
 export interface CostRow {
+  /** eSIM full · SIM datapack (A) · SIM full (E) */
+  type: string
   skuUS: string
   skuVN: string
   productId: string
@@ -60,7 +62,14 @@ export function pickOperatorPrice(p: ProductInput, list: PriceList) {
   return chosen.reduce((m, r) => (r.pricePerGb > m.pricePerGb ? r : m))
 }
 
-export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assumptions): BuildResult {
+export interface BuildOptions {
+  /** Giá SIM trắng (VND) lấy từ DB — bắt buộc khi có sản phẩm SIM. */
+  whiteSimVnd?: number
+}
+
+const dailyReset = (kind: PlanKind) => (kind === "Fixed" ? "Count 24h" : "GMT+8")
+
+export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assumptions, opt: BuildOptions = {}): BuildResult {
   const out: BuildResult = { sheets: { skuUS: [], skuVN: [], productUS: [], productVN: [] }, warnings: [], costRows: [] }
   const seenSku = new Set<string>()
   const seenProduct = new Set<string>()
@@ -74,30 +83,40 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
     const top = pickOperatorPrice(p, list)
     if (!top) { out.warnings.push(`${label}: chưa chọn nhà mạng nào có giá trong pool ${p.pool}`); return }
     if (!p.plans.length) { out.warnings.push(`${label}: chưa có gói nào`); return }
+    if (p.simType === "SIM" && !(opt.whiteSimVnd && opt.whiteSimVnd > 0)) {
+      out.warnings.push(`${label}: thiếu giá SIM trắng (SKU ${FRAME_SKU.VN} trong hệ thống chưa có latest_cogs) — không tính được COGS SIM`)
+      return
+    }
 
     const chosen = pool.rows.filter(r => p.operators.includes(`${r.coverage}|${r.operator}`))
     const onsite = Array.from(new Set(chosen.map(r => r.operator))).join("/")
-    const fee = frameFeeUsd(p.simType, pool, fx)
+    const fee = frameFeeUsd(p.simType, pool, fx, opt.whiteSimVnd)
     const kycOps = chosen.filter(r => r.kyc)
     if (kycOps.length) out.warnings.push(`${label}: nhà mạng ${kycOps.map(r => r.operator).join(", ")} có KYC trong bảng giá — kiểm tra kycNeeded/kycCode`)
+
+    // eSIM: chỉ eSIM full (C). SIM: gói data rời (A) + SIM full (E, ghép khung SIM + datapack).
+    const types: ProductTypeChar[] = p.simType === "eSIM" ? ["C"] : ["A", "E"]
+    const typeLabel = (t: ProductTypeChar) => (t === "C" ? "eSIM full" : t === "A" ? "SIM datapack (A)" : "SIM full (E)")
 
     const kinds = Array.from(new Set(p.plans.map(pl => pl.kind)))
     for (const kind of kinds) {
       const dataType = kind === "Fixed" ? "Fixed Data" : "Daily Data"
-      const rowFor = (tenant: "US" | "VN"): (string | number)[] => {
-        const us = tenant === "US"
-        return [
-          tenant, us ? "E" : 3, p.simType === "eSIM" ? "C" : "E", p.supportCountryCode, p.isoCodes, VENDOR_CODE[p.pool], POLICY_CODE[kind], "",
-          `${p.simType} ${p.countryNameEn}`, `${p.simType} ${p.countryNameVn}`, p.simType, "BCDATAPOOL", "API Purchase", "Base + Datapack", dataType, "",
-          "Official", "GMT+8", us ? ACTIVATION_EN : ACTIVATION_VN, "4G/5G", APN[p.pool], APN[p.pool], onsite, "No", "", "Yes", 1, "No", "", "", "", "", "", "", "",
-          productCode(tenant, p.simType, p.supportCountryCode, p.pool, kind),
-        ]
+      for (const type of types) {
+        const rowFor = (tenant: "US" | "VN"): (string | number)[] => {
+          const us = tenant === "US"
+          return [
+            tenant, us ? "E" : 3, type, p.supportCountryCode, p.isoCodes, VENDOR_CODE[p.pool], POLICY_CODE[kind], "",
+            `${p.simType} ${p.countryNameEn}`, `${p.simType} ${p.countryNameVn}`, p.simType, "BCDATAPOOL", "API Purchase", type === "A" ? "Datapack" : "Base + Datapack", dataType, "",
+            "Official", dailyReset(kind), us ? ACTIVATION_EN : ACTIVATION_VN, "4G/5G", APN[p.pool], APN[p.pool], onsite, "No", "", "Yes", 1, "No", "", "", "", "", "", "", "",
+            productCode(tenant, p.simType, p.supportCountryCode, p.pool, kind, type),
+          ]
+        }
+        const pcUS = productCode("US", p.simType, p.supportCountryCode, p.pool, kind, type)
+        if (seenProduct.has(pcUS)) out.warnings.push(`${label}: trùng Product Code ${pcUS} với sản phẩm khác trong cùng lần xuất`)
+        seenProduct.add(pcUS)
+        out.sheets.productUS.push(rowFor("US"))
+        out.sheets.productVN.push(rowFor("VN"))
       }
-      const pcUS = productCode("US", p.simType, p.supportCountryCode, p.pool, kind)
-      if (seenProduct.has(pcUS)) out.warnings.push(`${label}: trùng Product Code ${pcUS} với sản phẩm khác trong cùng lần xuất`)
-      seenProduct.add(pcUS)
-      out.sheets.productUS.push(rowFor("US"))
-      out.sheets.productVN.push(rowFor("VN"))
     }
 
     p.plans.forEach((pl, li) => {
@@ -105,8 +124,10 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
       if (!pl.productId.trim()) out.warnings.push(`${pname}: chưa nhập ProductID`)
       if (!pl.days.length) out.warnings.push(`${pname}: chưa nhập số ngày`)
       for (const d of pl.days) {
-        const sUS = skuCode(productCode("US", p.simType, p.supportCountryCode, p.pool, pl.kind), pl.dataAmount, pl.unit, d)
-        const sVN = skuCode(productCode("VN", p.simType, p.supportCountryCode, p.pool, pl.kind), pl.dataAmount, pl.unit, d)
+        const code = (tenant: "US" | "VN", type: ProductTypeChar) =>
+          skuCode(productCode(tenant, p.simType, p.supportCountryCode, p.pool, pl.kind, type), pl.dataAmount, pl.unit, d)
+        const main = p.simType === "eSIM" ? "C" : "E"
+        const sUS = code("US", main), sVN = code("VN", main)
         if (!sUS || !sVN) {
           out.warnings.push(`${pname}: không mã hoá được ${pl.dataAmount}${pl.unit} × ${d} ngày (MB phải là bội của 100 và ≤ 900; GB nguyên ≤ 999 hoặc dạng x.5 ≤ 9.5; ngày 1–99)`)
           continue
@@ -115,16 +136,31 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
         seenSku.add(sUS)
 
         const dataUsd = dataCostUsd(pl, d, top.pricePerGb, pool.currency, fx, a)
-        const cogsUsd = Math.round((dataUsd + fee) * 100) / 100
-        const cogsVnd = usdToVnd(cogsUsd, fx)
         const nm = names(p, pl.kind, pl.dataAmount, pl.unit, d)
-        const row = (tenant: "US" | "VN", code: string, vendorSku: string, cogs: number, cur: string) => [
-          tenant, productCode(tenant, p.simType, p.supportCountryCode, p.pool, pl.kind), pl.dataAmount, pl.unit, d, "Day(s)", nm.vn, nm.en, "", "", cogs, cur,
-          throttle(pl.kind, pl.dataAmount, pl.unit), "No", "", EXPIRATION_DAYS, vendorSku, "", code,
-        ]
-        out.sheets.skuUS.push(row("US", sUS, pl.productId.trim(), cogsUsd, "USD"))
-        out.sheets.skuVN.push(row("VN", sVN, sUS, cogsVnd, "VND"))
-        out.costRows.push({ skuUS: sUS, skuVN: sVN, productId: pl.productId.trim(), pool: p.pool, operator: `${top.operator} (${top.coverage})`, pricePerGb: top.pricePerGb, currency: pool.currency, dataUsd, feeUsd: fee, cogsUsd, cogsVnd })
+        const th = throttle(pl.kind, pl.dataAmount, pl.unit)
+        const pid = pl.productId.trim()
+        const push = (type: ProductTypeChar, cogsUsd: number, feeUsd: number) => {
+          const cUS = code("US", type)!, cVN = code("VN", type)!
+          const cogsVnd = usdToVnd(cogsUsd, fx)
+          const row = (tenant: "US" | "VN", sku: string, cogs: number, cur: string) => {
+            const us = tenant === "US"
+            const link = us ? "" : cUS   // VN trỏ về mã US tương ứng
+            const frame = type === "E" ? FRAME_SKU[tenant] : ""
+            const datapack = type === "E" ? code(tenant, "A")! : ""
+            return [
+              tenant, productCode(tenant, p.simType, p.supportCountryCode, p.pool, pl.kind, type), pl.dataAmount, pl.unit, d, "Day(s)", nm.vn, nm.en, frame, datapack, cogs, cur,
+              th, "No", "", EXPIRATION_DAYS,
+              // eSIM full: vendorSku = ProductID (US) / SKU US (VN). SIM datapack: theo tiền lệ DB (3AAS8WDT/EAAS8WDT) ProductID nằm ở vendorSkuSim. SIM full: để trống.
+              type === "C" ? (us ? pid : link) : "", type === "A" ? (us ? pid : link) : "", sku,
+            ]
+          }
+          out.sheets.skuUS.push(row("US", cUS, cogsUsd, "USD"))
+          out.sheets.skuVN.push(row("VN", cVN, cogsVnd, "VND"))
+          out.costRows.push({ type: typeLabel(type), skuUS: cUS, skuVN: cVN, productId: pid, pool: p.pool, operator: `${top.operator} (${top.coverage})`, pricePerGb: top.pricePerGb, currency: pool.currency, dataUsd, feeUsd, cogsUsd, cogsVnd })
+        }
+        const full = Math.round((dataUsd + fee) * 100) / 100
+        if (p.simType === "eSIM") push("C", full, fee)
+        else { push("A", dataUsd, 0); push("E", full, fee) }
       }
     })
   })

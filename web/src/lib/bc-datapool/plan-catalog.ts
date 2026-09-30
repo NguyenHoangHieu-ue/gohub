@@ -13,6 +13,8 @@ export interface CatalogPlan {
   operators: string[]
   /** "Natural Day" (reset 00:00 UTC+8) hoặc "24-Hour" */
   timing: string
+  /** Tốc độ sau khi hết data tốc độ cao: 384 (thường), 1024 = "Throttle to 1Mbps" (dùng cho Unlimited), 128... */
+  throttleKbps?: number
   name: string
   /** Các số ngày Portal thực sự bán cho gói này */
   days: number[]
@@ -52,10 +54,11 @@ function parseSheet(name: string, ws: XLSX.WorkSheet): CatalogPlan[] {
       const apn = /APN-([^；;<]*)/.exec(desc)?.[1]?.trim().toLowerCase() ?? ""
       const operators = Array.from(desc.matchAll(/(?:^|<br>)\s*[^<]*?-([^，<]+)，Network-/g)).map(m => m[1].trim())
       const pool = APN_POOL[apn]
+      const throttleKbps = Number(/throttled into (\d+)kbps/i.exec(desc)?.[1]) || undefined
       cur = null
       if (data && pool) {
         cur = {
-          id, sim: isEsim ? "eSIM" : "SIM", kind, pool, timing: cell(r[iTiming]), name: cell(r[iName]),
+          id, sim: isEsim ? "eSIM" : "SIM", kind, pool, timing: cell(r[iTiming]), throttleKbps, name: cell(r[iName]),
           countries: cell(r[iCountry]).split(",").map(s => s.trim()).filter(Boolean),
           amount: Number(data[1]), unit: data[2].toUpperCase() as DataUnit, operators: Array.from(new Set(operators)), days: [],
         }
@@ -91,20 +94,33 @@ export function canonCountry(s: string): string {
 
 export interface PlanQuery { sim: SimType; kind: PlanKind; pool: Pool; coverage: string; amount: number; unit: DataUnit }
 
-/** Gói Portal khớp (nước đơn, cùng pool/loại/SIM/dung lượng). Unlimited không có trong Portal → luôn rỗng. */
+/**
+ * Gói Portal khớp (nước đơn, cùng pool/SIM/dung lượng).
+ * Unlimited (mã X) KHÔNG có gói riêng ở BC: nội bộ = 3GB tốc độ cao + 3GB @10Mbps + không giới hạn @1Mbps, phía BC gộp thành
+ * "Daily {2×N}GB — Throttle to 1Mbps" → tra gói Daily có dung lượng gấp đôi và tốc độ sau ngưỡng 1024kbps.
+ */
 export function findPlans(cat: PlanCatalog, q: PlanQuery): CatalogPlan[] {
-  if (q.kind === "Unlimited") return []
   const want = canonCountry(q.coverage)
+  const unl = q.kind === "Unlimited"
+  const kind = unl ? "Daily" : q.kind
+  const amount = unl ? q.amount * 2 : q.amount
   return cat.plans.filter(p =>
-    p.sim === q.sim && p.kind === q.kind && p.pool === q.pool && p.amount === q.amount && p.unit === q.unit &&
+    p.sim === q.sim && p.kind === kind && p.pool === q.pool && p.amount === amount && p.unit === q.unit &&
+    (unl ? p.throttleKbps === 1024 : (p.throttleKbps ?? 384) !== 1024) &&
     p.countries.length === 1 && canonCountry(p.countries[0]) === want)
 }
+
+const newerId = (a: string, b: string) => (a.length !== b.length ? a.length - b.length : a.localeCompare(b))
+const sameSpec = (a: CatalogPlan, b: CatalogPlan) =>
+  a.timing === b.timing && a.throttleKbps === b.throttleKbps && a.operators.join() === b.operators.join() && a.days.join() === b.days.join()
 
 export interface PlanInfo {
   product: number
   line: number
   /** manual = người dùng tự nhập · portal = tự lấy từ file Portal · missing/ambiguous = không tự lấy được · none = chưa upload file Portal / Unlimited */
   status: "manual" | "portal" | "missing" | "ambiguous" | "none"
+  /** Ghi chú khi tự chọn giữa các Plan ID giống hệt nhau */
+  note?: string
   productId: string
   planName?: string
   offeredDays?: number[]
@@ -126,25 +142,31 @@ export function resolvePlans(products: ProductInput[], cat: PlanCatalog | null):
       const cands = cat && p.coverages[0] ? findPlans(cat, { sim: p.simType, kind: pl.kind, pool: p.pool, coverage: p.coverages[0], amount: pl.dataAmount, unit: pl.unit }) : []
       let chosen: CatalogPlan | undefined
       let status: PlanInfo["status"] = "none"
+      let note: string | undefined
       let productId = manual
       if (manual) {
         status = "manual"
         chosen = cat?.plans.find(x => x.id === manual)
-      } else if (cat && pl.kind !== "Unlimited") {
+      } else if (cat) {
         if (cands.length === 1) { chosen = cands[0]; status = "portal"; productId = chosen.id }
-        else if (cands.length > 1) {
+        else if (cands.length > 1 && cands.every(c => sameSpec(c, cands[0]))) {
+          // Portal có nhiều Plan ID GIỐNG HỆT nhau (chỉ khác ID/viết hoa tên) → lấy ID mới nhất, ghi chú để người dùng biết
+          chosen = [...cands].sort((x, y) => newerId(y.id, x.id))[0]; status = "portal"; productId = chosen.id
+          note = `Portal có ${cands.length} Plan ID giống hệt nhau (${cands.map(c => c.id).join(", ")}) — đã chọn ID mới nhất; muốn dùng ID khác thì nhập tay`
+        } else if (cands.length > 1) {
           status = "ambiguous"
           warnings.push(`${label} · dòng ${li + 1}: Portal có ${cands.length} Plan ID cho gói này (${cands.map(c => c.id).join(", ")}) — chọn 1 và nhập ProductID`)
         } else {
           status = "missing"
-          warnings.push(`${label} · dòng ${li + 1}: không tìm thấy gói ${pl.kind} ${pl.dataAmount}${pl.unit} ${p.simType} của ${p.coverages[0] || "?"} (${p.pool}) trong file Portal — kiểm tra hoặc nhập ProductID`)
+          const want = pl.kind === "Unlimited" ? `Daily ${pl.dataAmount * 2}${pl.unit} Throttle to 1Mbps (cho Unlimited ${pl.dataAmount}${pl.unit})` : `${pl.kind} ${pl.dataAmount}${pl.unit}`
+          warnings.push(`${label} · dòng ${li + 1}: không tìm thấy gói ${want} ${p.simType} của ${p.coverages[0] || "?"} (${p.pool}) trong file Portal — kiểm tra, upload lại file Portal mới nhất, hoặc nhập ProductID`)
         }
       }
       if (chosen) {
         const bad = pl.days.filter(d => !chosen!.days.includes(d))
         if (bad.length) warnings.push(`${label} · dòng ${li + 1}: Portal không bán ${bad.join(", ")} ngày cho gói này (Portal có: ${chosen.days.join(", ")})`)
       }
-      info.push({ ...base, status, productId, planName: chosen?.name.trim(), offeredDays: chosen?.days, candidates: cands.length > 1 ? cands.map(c => c.id) : undefined })
+      info.push({ ...base, status, note, productId, planName: chosen?.name.trim(), offeredDays: chosen?.days, candidates: cands.length > 1 ? cands.map(c => c.id) : undefined })
       return { ...pl, productId }
     })
     return { ...p, plans }

@@ -10,7 +10,7 @@ type Notify = (type: "success" | "error", text: string) => void
 interface SupportCountry { code: string; en: string; vn: string; iso: string }
 interface CatalogSummary { uploadedAt: string; files: string[]; esim: number; sim: number }
 interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | null; supportCountries: SupportCountry[]; fx: Fx | null; fxError: string | null; assumptions: Assumptions }
-interface PreviewResult extends BuildResult { fx: Fx; existing: { products: string[]; skus: string[] }; planInfo: PlanInfo[] }
+interface PreviewResult extends BuildResult { fx: Fx; existing: { products: string[]; skus: string[] }; planInfo: PlanInfo[]; whiteSimVnd: number | null }
 
 // Dòng gói trên form: `daysText` là chuỗi người dùng gõ ("1,2,3,7"), chuyển thành số khi gửi lên server.
 interface PlanForm { kind: PlanKind; dataAmount: string; unit: "MB" | "GB"; daysText: string; productId: string }
@@ -265,7 +265,7 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
                   {!previewStale && (() => {
                     const pi = preview?.planInfo.find(x => x.product === i && x.line === j)
                     if (!pi || pi.status === "none") return null
-                    const txt = pi.status === "portal" ? `ProductID từ Portal: ${pi.productId} — ${pi.planName ?? ""}`
+                    const txt = pi.status === "portal" ? `ProductID từ Portal: ${pi.productId} — ${pi.planName ?? ""}${pi.note ? ` ⚠ ${pi.note}` : ""}`
                       : pi.status === "manual" ? `ProductID nhập tay: ${pi.productId}${pi.planName ? ` (Portal: ${pi.planName})` : " (không có trong file Portal)"}`
                       : pi.status === "ambiguous" ? `Portal có nhiều Plan ID: ${pi.candidates?.join(", ")} — nhập ProductID để chọn`
                       : "Không tìm thấy gói này trong file Portal"
@@ -295,6 +295,9 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
       {/* Xem trước */}
       {preview && sheets && (
         <div className="space-y-3">
+          {preview.whiteSimVnd && (
+            <div className="text-xs text-gray-600 dark:text-slate-300">Giá SIM trắng lấy từ hệ thống (SKU 1D000WDK00000): <b>{preview.whiteSimVnd.toLocaleString("vi-VN")} VND</b> — phí SIM = giá SIM trắng + phí IMSI.</div>
+          )}
           {preview.warnings.length > 0 && (
             <div className="p-3 border border-amber-300 bg-amber-50 rounded-xl text-sm text-amber-900">
               <div className="font-semibold mb-1">{preview.warnings.length} cảnh báo / lỗi cần xem</div>
@@ -309,10 +312,10 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
           <div className="overflow-auto max-h-[520px] border border-gray-200 dark:border-slate-700 rounded-xl">
             {sheet === "cost" ? (
               <table className="min-w-full text-xs">
-                <thead className="sticky top-0 bg-gray-50 dark:bg-slate-800"><tr>{["SKU US", "SKU VN", "ProductID", "Pool", "Nhà mạng áp dụng", "Giá/GB", "Data (USD)", "Phí khung (USD)", "COGS US (USD)", "COGS VN (VND)"].map(h => <th key={h} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
+                <thead className="sticky top-0 bg-gray-50 dark:bg-slate-800"><tr>{["Loại", "SKU US", "SKU VN", "ProductID", "Pool", "Nhà mạng áp dụng", "Giá/GB", "Data (USD)", "Phí khung (USD)", "COGS US (USD)", "COGS VN (VND)"].map(h => <th key={h} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
                 <tbody>{preview.costRows.slice(0, 1000).map((r, k) => (
                   <tr key={k} className="border-t border-gray-100 dark:border-slate-800">
-                    <td className="px-2 py-1 font-mono">{r.skuUS}</td><td className="px-2 py-1 font-mono">{r.skuVN}</td><td className="px-2 py-1 font-mono">{r.productId}</td><td className="px-2 py-1">{r.pool}</td><td className="px-2 py-1">{r.operator}</td>
+                    <td className="px-2 py-1 whitespace-nowrap">{r.type}</td><td className="px-2 py-1 font-mono">{r.skuUS}</td><td className="px-2 py-1 font-mono">{r.skuVN}</td><td className="px-2 py-1 font-mono">{r.productId}</td><td className="px-2 py-1">{r.pool}</td><td className="px-2 py-1">{r.operator}</td>
                     <td className="px-2 py-1">{r.pricePerGb} {r.currency}</td><td className="px-2 py-1">{r.dataUsd}</td><td className="px-2 py-1">{r.feeUsd}</td><td className="px-2 py-1 font-semibold">{r.cogsUsd}</td><td className="px-2 py-1 font-semibold">{r.cogsVnd.toLocaleString("vi-VN")}</td>
                   </tr>))}</tbody>
               </table>
