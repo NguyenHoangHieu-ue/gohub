@@ -144,7 +144,11 @@ export default function FxTable({ onNotify }: { onNotify: Notify }) {
 function FragmentGroup({ title, colSpan, children }: { title: string; colSpan: number; children: React.ReactNode }) {
   return (
     <>
-      <tr><td colSpan={colSpan} className="sticky left-0 bg-gray-100 dark:bg-slate-900 px-3 py-1 font-semibold text-gray-600 dark:text-slate-300">{title}</td></tr>
+      <tr>
+        {/* Ô tiêu đề riêng (dính trái) + ô nền phủ phần còn lại — nếu gộp 1 ô colSpan thì chữ trôi mất khi cuộn ngang */}
+        <td className="sticky left-0 z-10 bg-gray-100 dark:bg-slate-900 px-3 py-1 font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">{title}</td>
+        <td colSpan={colSpan - 1} className="bg-gray-100 dark:bg-slate-900" />
+      </tr>
       {children}
     </>
   )
