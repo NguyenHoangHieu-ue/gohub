@@ -16,7 +16,7 @@ Trang cấu hình kỹ thuật sâu dành riêng cho quản trị viên bao gồ
 ---
 
 ## 1. Tổng quan & Đường dẫn
-- **Giao diện Web**: `/admin` (`web/src/app/(dashboard)/admin/page.tsx`) — gồm các tab: Cài đặt, Tạo template, Khuyến mãi, Lịch Lark.
+- **Giao diện Web**: `/admin` (`web/src/app/(dashboard)/admin/page.tsx`) — gồm các tab: Cài đặt, Khuyến mãi, Lịch Lark (tab "Tạo template" đã xoá 2026-09-30, Hiếu sẽ làm lại bản mới).
 - **s196+21 (2026-09-14) — tách file 2120 dòng (file lớn nhất repo) thành 7 file, quyết định Hiếu**:
   6 tab vốn đã tự thân là 1 component riêng trong file cũ — chỉ cần tách mỗi tab ra 1 file + nạp qua
   `next/dynamic` (code-split, cùng pattern recharts s196+21), KHÔNG đổi logic/UI (cùng nguyên tắc Phase 5
@@ -52,7 +52,7 @@ Trang cấu hình kỹ thuật sâu dành riêng cho quản trị viên bao gồ
 
 ### C. Nút Kiểm soát Đồng bộ (Manual Triggers)
 - Kích hoạt sync Lark/Turso hoặc **xoá cache** (`/api/admin/flush-analytics-cache` → bảng `analytics_query_cache`).
-- **Tạo template** SP (WM/3HK, eSIM/SIM): `/api/admin/template`.
+- **Tạo template** SP: tab Admin đã xoá 2026-09-30 (`template-tab.tsx`). API `/api/admin/template` GIỮ LẠI vì `chatbot/page.tsx` (agent `tao-template`) vẫn gọi.
 
 ### D. Nơi lưu cấu hình (Supabase `app_settings`)
 Mọi config admin/settings lưu ở **`app_settings`** dạng key→value: `fx.usd_vnd`/`fx.hkd_usd`/`fx.twd_usd` (tỷ giá — nguồn cho tỷ giá B2C + COGS chatbot), `3hk.*` (công thức 3HK), `partner_tiers`, `sku_destination_rules`, `role_permissions`, `b2c_kpi_targets`. → sửa 1 chỗ, cả hệ dùng chung.
