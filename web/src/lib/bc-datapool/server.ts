@@ -3,9 +3,11 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWrite } from "@/lib/writable-tabs"
 import { countryNameVn } from "@/lib/catalogue/country-index"
+import type { PlanCatalog } from "./plan-catalog"
 import type { Fx, PriceList } from "./types"
 
 export const PRICE_LIST_KEY = "bcdp.price_list"
+export const PLAN_CATALOG_KEY = "bcdp.plan_catalog"
 
 export async function requireAdmin(): Promise<boolean> {
   const session = await getServerSession(authOptions)
@@ -54,3 +56,12 @@ export async function findExisting(table: "products" | "skus", column: "product_
   }
   return found
 }
+
+export async function loadPlanCatalog(): Promise<PlanCatalog | null> {
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", PLAN_CATALOG_KEY).maybeSingle()
+  if (!data?.value) return null
+  try { return JSON.parse(data.value) as PlanCatalog } catch { return null }
+}
+
+export const catalogSummary = (c: PlanCatalog | null) =>
+  c ? { uploadedAt: c.uploadedAt, files: c.files, esim: c.plans.filter(p => p.sim === "eSIM").length, sim: c.plans.filter(p => p.sim === "SIM").length } : null

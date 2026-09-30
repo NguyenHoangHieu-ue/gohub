@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Download, Eye, Plus, Trash2, Upload } from "lucide-react"
 import { PRODUCT_HEADERS, SKU_HEADERS, pickOperatorPrice, type BuildResult } from "@/lib/bc-datapool/builder"
+import type { PlanInfo } from "@/lib/bc-datapool/plan-catalog"
 import { DEFAULT_ASSUMPTIONS, type Assumptions, type Fx, type PlanKind, type Pool, type PriceList, type ProductInput } from "@/lib/bc-datapool/types"
 
 type Notify = (type: "success" | "error", text: string) => void
 interface SupportCountry { code: string; en: string; vn: string; iso: string }
-interface Options { priceList: PriceList | null; supportCountries: SupportCountry[]; fx: Fx | null; fxError: string | null; assumptions: Assumptions }
-interface PreviewResult extends BuildResult { fx: Fx; existing: { products: string[]; skus: string[] } }
+interface CatalogSummary { uploadedAt: string; files: string[]; esim: number; sim: number }
+interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | null; supportCountries: SupportCountry[]; fx: Fx | null; fxError: string | null; assumptions: Assumptions }
+interface PreviewResult extends BuildResult { fx: Fx; existing: { products: string[]; skus: string[] }; planInfo: PlanInfo[] }
 
 // Dòng gói trên form: `daysText` là chuỗi người dùng gõ ("1,2,3,7"), chuyển thành số khi gửi lên server.
 interface PlanForm { kind: PlanKind; dataAmount: string; unit: "MB" | "GB"; daysText: string; productId: string }
@@ -36,8 +38,9 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [previewStale, setPreviewStale] = useState(false)
   const [sheet, setSheet] = useState<"skuUS" | "skuVN" | "productUS" | "productVN" | "cost">("cost")
-  const [busy, setBusy] = useState<"" | "upload" | "preview" | "export">("")
+  const [busy, setBusy] = useState<"" | "upload" | "catalog" | "preview" | "export">("")
   const fileRef = useRef<HTMLInputElement>(null)
+  const catRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch("/api/admin/bc-datapool").then(async r => {
@@ -83,6 +86,16 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
     onNotify("success", `Đã lưu bảng báo giá: ${j.priceList.fileName}`)
   }
 
+  const uploadCatalog = async (files: FileList) => {
+    setBusy("catalog")
+    const fd = new FormData(); Array.from(files).forEach(f => fd.append("files", f))
+    const r = await fetch("/api/admin/bc-datapool/plan-catalog", { method: "POST", body: fd })
+    const j = await r.json(); setBusy("")
+    if (!r.ok) return onNotify("error", j.error || "Không đọc được file Portal")
+    setOpts(o => (o ? { ...o, planCatalog: j.planCatalog } : o)); touch()
+    onNotify("success", `Đã lưu danh mục gói Portal: ${j.planCatalog.esim} gói eSIM, ${j.planCatalog.sim} gói SIM`)
+  }
+
   const runPreview = async () => {
     setBusy("preview")
     const r = await fetch("/api/admin/bc-datapool/build", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ products: toInputs(), assumptions }) })
@@ -119,7 +132,7 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
   return (
     <div className="space-y-5">
       {/* Nền: bảng báo giá + tỷ giá + giả định */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-2">
           <div className="text-sm font-semibold">Bảng báo giá BC Datapool</div>
           {list ? (
@@ -133,6 +146,20 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
           <button onClick={() => fileRef.current?.click()} disabled={busy === "upload"}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
             <Upload size={14} /> {list ? "Upload bảng giá mới" : "Upload bảng giá"}
+          </button>
+        </div>
+        <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-2">
+          <div className="text-sm font-semibold">Danh mục gói Portal (lấy ProductID)</div>
+          {opts.planCatalog ? (
+            <div className="text-xs text-gray-600 dark:text-slate-300 space-y-0.5">
+              <div>{opts.planCatalog.esim} gói eSIM · {opts.planCatalog.sim} gói SIM</div>
+              <div>Cập nhật {new Date(opts.planCatalog.uploadedAt).toLocaleString("vi-VN")}</div>
+            </div>
+          ) : <div className="text-xs text-amber-700">Chưa có — upload 2 file &quot;Purchase information&quot; (eSIM và SIM) để tự điền ProductID.</div>}
+          <input ref={catRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={e => { if (e.target.files?.length) uploadCatalog(e.target.files); e.target.value = "" }} />
+          <button onClick={() => catRef.current?.click()} disabled={busy === "catalog"}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
+            <Upload size={14} /> {busy === "catalog" ? "Đang đọc file..." : opts.planCatalog ? "Upload file Portal mới" : "Upload file Portal"}
           </button>
         </div>
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-1 text-sm">
@@ -233,8 +260,17 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
                     <button type="button" className="px-2 text-[11px] border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { daysText: DAYS_JAPAN })} title="1–7, 10, 15, 20, 25, 30">12 mức</button>
                     <button type="button" className="px-2 text-[11px] border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { daysText: DAYS_TAIWAN })} title="1–15, 20, 25, 30">18 mức</button>
                   </div>
-                  <input className={input} value={pl.productId} onChange={e => patchPlan(i, j, { productId: e.target.value })} placeholder="ProductID (BC)" />
+                  <input className={input} value={pl.productId} onChange={e => patchPlan(i, j, { productId: e.target.value })} placeholder="ProductID (trống = tự lấy từ Portal)" />
                   <button onClick={() => patchProduct(i, { plans: p.plans.filter((_, m) => m !== j) })} className="pb-2 text-gray-400 hover:text-red-600" title="Xoá dòng"><Trash2 size={14} /></button>
+                  {!previewStale && (() => {
+                    const pi = preview?.planInfo.find(x => x.product === i && x.line === j)
+                    if (!pi || pi.status === "none") return null
+                    const txt = pi.status === "portal" ? `ProductID từ Portal: ${pi.productId} — ${pi.planName ?? ""}`
+                      : pi.status === "manual" ? `ProductID nhập tay: ${pi.productId}${pi.planName ? ` (Portal: ${pi.planName})` : " (không có trong file Portal)"}`
+                      : pi.status === "ambiguous" ? `Portal có nhiều Plan ID: ${pi.candidates?.join(", ")} — nhập ProductID để chọn`
+                      : "Không tìm thấy gói này trong file Portal"
+                    return <div className={`sm:col-span-6 text-[11px] ${pi.status === "portal" || pi.status === "manual" ? "text-emerald-700" : "text-red-600"}`}>{txt}{pi.offeredDays ? ` · Portal bán ${pi.offeredDays.length} mức ngày (${pi.offeredDays[0]}–${pi.offeredDays[pi.offeredDays.length - 1]})` : ""}</div>
+                  })()}
                 </div>
               ))}
               <div className="flex gap-2">
@@ -273,10 +309,10 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
           <div className="overflow-auto max-h-[520px] border border-gray-200 dark:border-slate-700 rounded-xl">
             {sheet === "cost" ? (
               <table className="min-w-full text-xs">
-                <thead className="sticky top-0 bg-gray-50 dark:bg-slate-800"><tr>{["SKU US", "SKU VN", "Pool", "Nhà mạng áp dụng", "Giá/GB", "Data (USD)", "Phí khung (USD)", "COGS US (USD)", "COGS VN (VND)"].map(h => <th key={h} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
+                <thead className="sticky top-0 bg-gray-50 dark:bg-slate-800"><tr>{["SKU US", "SKU VN", "ProductID", "Pool", "Nhà mạng áp dụng", "Giá/GB", "Data (USD)", "Phí khung (USD)", "COGS US (USD)", "COGS VN (VND)"].map(h => <th key={h} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
                 <tbody>{preview.costRows.slice(0, 1000).map((r, k) => (
                   <tr key={k} className="border-t border-gray-100 dark:border-slate-800">
-                    <td className="px-2 py-1 font-mono">{r.skuUS}</td><td className="px-2 py-1 font-mono">{r.skuVN}</td><td className="px-2 py-1">{r.pool}</td><td className="px-2 py-1">{r.operator}</td>
+                    <td className="px-2 py-1 font-mono">{r.skuUS}</td><td className="px-2 py-1 font-mono">{r.skuVN}</td><td className="px-2 py-1 font-mono">{r.productId}</td><td className="px-2 py-1">{r.pool}</td><td className="px-2 py-1">{r.operator}</td>
                     <td className="px-2 py-1">{r.pricePerGb} {r.currency}</td><td className="px-2 py-1">{r.dataUsd}</td><td className="px-2 py-1">{r.feeUsd}</td><td className="px-2 py-1 font-semibold">{r.cogsUsd}</td><td className="px-2 py-1 font-semibold">{r.cogsVnd.toLocaleString("vi-VN")}</td>
                   </tr>))}</tbody>
               </table>

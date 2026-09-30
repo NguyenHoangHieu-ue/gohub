@@ -19,6 +19,7 @@ const amountText = (n: number, unit: string) => `${fmt(n)} ${unit}`
 export interface CostRow {
   skuUS: string
   skuVN: string
+  productId: string
   pool: string
   operator: string
   pricePerGb: number
@@ -123,7 +124,7 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
         ]
         out.sheets.skuUS.push(row("US", sUS, pl.productId.trim(), cogsUsd, "USD"))
         out.sheets.skuVN.push(row("VN", sVN, sUS, cogsVnd, "VND"))
-        out.costRows.push({ skuUS: sUS, skuVN: sVN, pool: p.pool, operator: `${top.operator} (${top.coverage})`, pricePerGb: top.pricePerGb, currency: pool.currency, dataUsd, feeUsd: fee, cogsUsd, cogsVnd })
+        out.costRows.push({ skuUS: sUS, skuVN: sVN, productId: pl.productId.trim(), pool: p.pool, operator: `${top.operator} (${top.coverage})`, pricePerGb: top.pricePerGb, currency: pool.currency, dataUsd, feeUsd: fee, cogsUsd, cogsVnd })
       }
     })
   })

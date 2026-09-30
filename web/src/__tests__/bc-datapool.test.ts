@@ -9,6 +9,7 @@ import { ceil2, dataCostUsd, frameFeeUsd, usdToVnd } from "@/lib/bc-datapool/pri
 import { DEFAULT_ASSUMPTIONS, type PlanKind, type PlanLine, type PriceList, type ProductInput } from "@/lib/bc-datapool/types"
 
 const A = DEFAULT_ASSUMPTIONS
+const KIND_OF: Record<string, PlanKind> = { T: "Daily", F: "Fixed", X: "Unlimited" }
 // Tỷ giá đúng như lúc làm file mẫu Taiwan (Singtel) và Japan (CMHK)
 const FX_TW = { hkdPerUsd: 7.801, cnyPerUsd: 6.687, vndPerUsd: 26266 }
 const FX_JP = { hkdPerUsd: 7.802, cnyPerUsd: 6.687, vndPerUsd: 26490 }
@@ -216,5 +217,69 @@ describe("đối chiếu file mẫu thật", () => {
     check("eSIM_BCDatapool_Japan.xlsx", FX_JP, [
       { pool: "CMHK", coverage: "Japan", operators: ["KDDI", "SoftBank"], code: "JPN", en: "Japan", vn: "Nhật Bản", iso: "JP" },
     ])
+  })
+})
+
+// ── Danh mục gói Portal (Purchase information) ────────────────────────────────
+import { canonCountry, findPlans, parsePlanFile, resolvePlans, type PlanCatalog } from "@/lib/bc-datapool/plan-catalog"
+
+describe("danh mục gói Portal", () => {
+  test("canonCountry gộp tên Portal ↔ bảng giá", () => {
+    expect(canonCountry("Taiwan (China)")).toBe(canonCountry("Taiwan"))
+    expect(canonCountry("U.S.A")).toBe(canonCountry("United States"))
+    expect(canonCountry("Columbia")).toBe(canonCountry("Colombia"))
+    expect(canonCountry("Macau (China)")).toBe(canonCountry("Macao"))
+  })
+
+  const esimFile = path.join(ROOT, "Purchase information.xlsx")
+  const simFile = path.join(ROOT, "Purchase information (1).xlsx")
+  const both = existsSync(esimFile) && existsSync(simFile)
+  const catalog = (): PlanCatalog => ({ uploadedAt: "", files: [], plans: [...parsePlanFile(readFileSync(esimFile)), ...parsePlanFile(readFileSync(simFile))] })
+
+  test.skipIf(!both)("đọc 2 file Portal thật: có gói eSIM + SIM, pool theo APN, số ngày đúng", () => {
+    const c = catalog()
+    expect(c.plans.filter(p => p.sim === "eSIM").length).toBeGreaterThan(300)
+    expect(c.plans.filter(p => p.sim === "SIM").length).toBeGreaterThan(300)
+    const jp = findPlans(c, { sim: "eSIM", kind: "Daily", pool: "CMHK", coverage: "Japan", amount: 500, unit: "MB" })
+    expect(jp.map(p => p.id)).toEqual(["1786346622061929"])
+    expect(jp[0].operators).toContain("KDDI")
+    expect(jp[0].days).toHaveLength(30)
+    expect(findPlans(c, { sim: "eSIM", kind: "Fixed", pool: "SINGTEL", coverage: "Taiwan", amount: 5, unit: "GB" }).map(p => p.id)).toEqual(["1786608158998198"])
+    expect(findPlans(c, { sim: "eSIM", kind: "Unlimited", pool: "CMHK", coverage: "Japan", amount: 3, unit: "GB" })).toEqual([])
+  })
+
+  test.skipIf(!both)("tự tra đúng ProductID cho toàn bộ SKU trong 2 file mẫu (Taiwan/Cambodia/Laos/Japan Daily+Fixed)", () => {
+    const c = catalog()
+    const cases: [string, "CMHK" | "SINGTEL", string, string][] = [
+      ["eSIM_Taiwan_BCDatapool.xlsx", "SINGTEL", "Taiwan", "TWN"], ["eSIM_Taiwan_BCDatapool.xlsx", "SINGTEL", "Cambodia", "KHM"],
+      ["eSIM_Taiwan_BCDatapool.xlsx", "SINGTEL", "Laos", "LAO"], ["eSIM_BCDatapool_Japan.xlsx", "CMHK", "Japan", "JPN"],
+    ]
+    let checked = 0
+    for (const [file, pool, coverage, code] of cases) {
+      const wb = XLSX.readFile(path.join(ROOT, file))
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets["SKU US"], { header: 1, defval: null }).slice(1).filter(r => r[0] && r[1] && String(r[1]).slice(2, 5) === code)
+      const seen = new Map<string, { kind: PlanKind; amount: number; unit: "MB" | "GB"; id: string }>()
+      for (const r of rows) seen.set(`${r[1]}|${r[2]}|${r[3]}`, { kind: KIND_OF[String(r[1]).slice(-1)], amount: Number(r[2]), unit: r[3] as "MB" | "GB", id: String(r[16]) })
+      for (const w of seen.values()) {
+        if (w.kind === "Unlimited") continue   // Unlimited không có trong Portal
+        const got = findPlans(c, { sim: "eSIM", kind: w.kind, pool, coverage, amount: w.amount, unit: w.unit })
+        expect(got.map(p => p.id), `${coverage} ${w.kind} ${w.amount}${w.unit}`).toEqual([w.id]); checked++
+      }
+    }
+    expect(checked).toBeGreaterThan(15)
+  })
+
+  test("resolvePlans: tự điền, giữ ProductID tay, báo ngày Portal không bán, báo thiếu", () => {
+    const cat: PlanCatalog = { uploadedAt: "", files: [], plans: [
+      { id: "A1", sim: "eSIM", kind: "Fixed", countries: ["Japan"], amount: 5, unit: "GB", pool: "CMHK", operators: ["KDDI"], timing: "24-Hour", name: "Japan-Fixed 5GB", days: [1, 2, 3] },
+    ] }
+    const p: ProductInput = { pool: "CMHK", simType: "eSIM", coverages: ["Japan"], operators: [], supportCountryCode: "JPN", isoCodes: "JP", countryNameEn: "Japan", countryNameVn: "Nhật Bản",
+      plans: [plan({ kind: "Fixed", dataAmount: 5, unit: "GB", days: [1, 2, 30], productId: "" }), plan({ kind: "Fixed", dataAmount: 9, unit: "GB", productId: "" }), plan({ kind: "Fixed", dataAmount: 5, unit: "GB", productId: "MAN" })] }
+    const r = resolvePlans([p], cat)
+    expect(r.products[0].plans.map(x => x.productId)).toEqual(["A1", "", "MAN"])
+    expect(r.info.map(x => x.status)).toEqual(["portal", "missing", "manual"])
+    expect(r.warnings.join("\n")).toContain("Portal không bán 30 ngày")
+    expect(r.warnings.join("\n")).toContain("không tìm thấy gói Fixed 9GB")
+    expect(resolvePlans([p], null).info.every(x => x.status === "none" || x.status === "manual")).toBe(true)
   })
 })

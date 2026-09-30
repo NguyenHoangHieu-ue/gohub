@@ -99,3 +99,11 @@ Thay tab "Tạo template" đã xoá. Hiện chỉ có vendor **BC Datapool** (2 
 **Code**: `lib/bc-datapool/` (`pricing.ts`, `codes.ts`, `builder.ts`, `price-list.ts`, `server.ts`), API `/api/admin/bc-datapool` (+ `/price-list`, `/build`, `?format=xlsx`), UI `admin/product-builder-tab.tsx`. Test `__tests__/bc-datapool.test.ts` đối chiếu TOÀN BỘ SKU 2 file mẫu (Taiwan/Cambodia/Laos 343 SKU + Japan) — khớp COGS US/VN từng dòng (chỉ chạy khi file mẫu có ở repo root).
 
 **Gotchas**: file mẫu Taiwan định dạng tên `500MB`, Japan `500 MB` — tool dùng kiểu Japan (có khoảng trắng). Không xuất cột `sync GC`/`tên VAT`; `Purchase Formula*` để trống.
+
+### s215+1 — Tự lấy ProductID từ file Portal "Purchase information"
+
+2 file `Purchase information.xlsx` (eSIM) và `Purchase information (1).xlsx` (SIM) xuất từ Portal BC Datapool: **`Plan ID` = ProductID** (đã đối chiếu 25/25 ID trong file mẫu Taiwan/Japan đều có). Mỗi sheet `Daily Data eSIM/SIM`, `Fixed Data eSIM/SIM` (+ `Top-Up eSIM` — bỏ qua) liệt kê Plan ID × các số ngày Portal thực sự bán. **Pool nhận diện qua APN trong mô tả**: `cmhk` = CMHK (WD), `e-ideas` = Singtel (W1).
+
+Upload ở thẻ "Danh mục gói Portal" (lưu `app_settings` key `bcdp.plan_catalog`, ~190KB/712 gói, loại SIM nào có trong file upload thì thay hẳn loại đó). Khi Xem trước/Xuất, ô ProductID để trống → server tự tra theo (eSIM/SIM, Daily/Fixed, nước, pool, dung lượng); nhập tay vẫn được ưu tiên. Cảnh báo (chặn xuất): không tìm thấy gói; Portal có >1 Plan ID cho cùng gói (VD Indonesia Daily — KHÔNG tự đoán); **Portal không bán số ngày đã chọn**. Unlimited không có trong Portal → luôn nhập tay. Gói đa vùng ("Global 12 Destinations"...) chưa hỗ trợ. Tên nước Portal ↔ bảng giá được gộp qua `canonCountry()` (Taiwan (China)=Taiwan, U.S.A=United States, Columbia=Colombia, Macau=Macao...). Code: `lib/bc-datapool/plan-catalog.ts`, API `/api/admin/bc-datapool/plan-catalog`.
+
+**Điểm lệch phát hiện khi đối chiếu (chưa sửa, đã hỏi Hiếu)**: (1) file Japan mẫu dùng ProductID `1786346622046927` cho SKU "Unlimited 10mbps 3GB" nhưng Portal ghi gói đó là "Japan-Daily 6GB — Throttle to 1Mbps" (1024kbps); (2) Portal ghi Timing Rule `Natural Day` (reset 00:00 UTC+8) cho Japan nhưng `24-Hour` cho Taiwan/Cambodia..., trong khi file mẫu dùng policy `T` (reset nửa đêm) cho cả hai — theo wiki `ma-sku` thì `T`=reset nửa đêm, `P`=không reset nửa đêm.
