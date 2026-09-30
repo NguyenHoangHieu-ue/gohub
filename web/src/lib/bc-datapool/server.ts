@@ -7,7 +7,8 @@ import { loadEffectiveTable } from "@/lib/fx/server"
 import { currentMonth, monthLabel, rateAt } from "@/lib/fx/table"
 import { FRAME_SKU } from "./codes"
 import type { PlanCatalog } from "./plan-catalog"
-import type { Fx, PriceList } from "./types"
+import { FORMULA_KEYS, resolveFormula } from "@/lib/datapool-formula"
+import type { Assumptions, Fx, PriceList } from "./types"
 
 export const PRICE_LIST_KEY = "bcdp.price_list"
 export const PLAN_CATALOG_KEY = "bcdp.plan_catalog"
@@ -84,4 +85,11 @@ export async function loadWhiteSimVnd(): Promise<number | null> {
   const { data } = await supabaseAdmin.from("skus").select("latest_cogs,latest_cogs_currency").eq("sku_code", FRAME_SKU.VN).maybeSingle()
   const v = Number(data?.latest_cogs)
   return data && data.latest_cogs_currency === "VND" && v > 0 ? v : null
+}
+
+/** Giả định COGS lấy từ Admin › Cài đặt › Công thức Datapool (BC Datapool Unlimited = gói 3GB tốc độ cao + Unlimited 10Mbps → 1.7 GB/ngày). */
+export async function loadAssumptions(): Promise<Assumptions> {
+  const { data } = await supabaseAdmin.from("app_settings").select("key,value").or("key.like.datapool.%,key.like.3hk.%")
+  const f = resolveFormula(data ?? [])
+  return { fixedPct: f[FORMULA_KEYS.fixed], dailyPct: f[FORMULA_KEYS.daily], unlimitedGbPerDay: f[FORMULA_KEYS.unl3gb10] }
 }

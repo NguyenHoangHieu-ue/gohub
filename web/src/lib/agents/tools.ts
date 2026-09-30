@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import type { RefCache } from "./cache"
 import { convertCogsFlat } from "@/lib/fx/flat"
+import { FORMULA_KEYS, resolveFormula } from "@/lib/datapool-formula"
 
 const FULL_TYPES = new Set(["C", "E", "1", "2"])
 
@@ -946,7 +947,7 @@ export async function getSkuCogs(sku_code: string): Promise<any> {
 export async function calculate3hkCogs(params: {
   zone: string
   days: number
-  data_type: "fixed" | "daily" | "unlim_10mbps" | "unlim_5mbps"
+  data_type: "fixed" | "daily" | "unlim_10mbps" | "unlim_5mbps" | "unlim_3gb_10mbps"
   data_gb?: number
 }): Promise<any> {
   const [{ data: zone3hk }, { data: settings }] = await Promise.all([
@@ -959,22 +960,24 @@ export async function calculate3hkCogs(params: {
   for (const row of settings ?? []) s[row.key] = parseFloat(row.value)
 
   const hkdPerGb = zone3hk.price_per_gb_hkd
-  const hkdToUsd = s["fx.hkd_usd"] ?? 0.12824
-  const vndPerUsd = s["fx.usd_vnd"] ?? 26394
+  // Công thức Datapool dùng chung (Admin › Cài đặt): key datapool.*, dự phòng key cũ 3hk.*
+  const f = resolveFormula(settings ?? [])
 
   let gbUsed = 0
   if (params.data_type === "fixed")
-    gbUsed = (params.data_gb ?? 0) * (s["3hk.fixed_factor"] ?? 0.55)
+    gbUsed = (params.data_gb ?? 0) * f[FORMULA_KEYS.fixed]
   else if (params.data_type === "daily")
-    gbUsed = (params.data_gb ?? 0) * params.days * (s["3hk.daily_factor"] ?? 0.40)
+    gbUsed = (params.data_gb ?? 0) * params.days * f[FORMULA_KEYS.daily]
   else if (params.data_type === "unlim_10mbps")
-    gbUsed = (s["3hk.unlim_10mbps_gb_day"] ?? 1.8) * params.days
+    gbUsed = f[FORMULA_KEYS.unl500mb10] * params.days
+  else if (params.data_type === "unlim_3gb_10mbps")
+    gbUsed = f[FORMULA_KEYS.unl3gb10] * params.days
   else
-    gbUsed = (s["3hk.unlim_5mbps_gb_day"] ?? 1.6) * params.days
+    gbUsed = f[FORMULA_KEYS.unl500mb5] * params.days
 
   const cogsHkd = gbUsed * hkdPerGb
-  const cogsUsd = cogsHkd * hkdToUsd
-  const cogsVnd = cogsUsd * vndPerUsd
+  // HKD → USD là CHIA cho "HKD/USD" (khoá fx.hkd_usd = số HKD cho 1 USD); USD → VND theo tỷ giá JSC
+  const { usd: cogsUsd, vnd: cogsVnd } = convertCogsFlat(cogsHkd, "HKD", s)
 
   return {
     zone: params.zone, data_type: params.data_type, days: params.days,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { DEFAULT_ASSUMPTIONS } from "@/lib/bc-datapool/types"
+import { loadAssumptions } from "@/lib/bc-datapool/server"
 import { catalogSummary, loadFx, loadPlanCatalog, loadPriceList, loadSupportCountries, requireAdmin } from "@/lib/bc-datapool/server"
 
 export const dynamic = "force-dynamic"
@@ -13,7 +13,7 @@ export async function GET() {
     try { fx = await loadFx() } catch (e) { fxError = (e as Error).message }
     // Gửi kèm các gói Portal (bỏ tên, ~100KB) để form chỉ cho chọn đúng khu vực/dung lượng/ngày BC thực sự bán
     const portalPlans = catalog?.plans.map(p => ({ id: p.id, sim: p.sim, kind: p.kind, countries: p.countries, amount: p.amount, unit: p.unit, pool: p.pool, throttleKbps: p.throttleKbps, days: p.days })) ?? null
-    return NextResponse.json({ priceList, planCatalog: catalogSummary(catalog), portalPlans, supportCountries, fx, fxError, assumptions: DEFAULT_ASSUMPTIONS })
+    return NextResponse.json({ priceList, planCatalog: catalogSummary(catalog), portalPlans, supportCountries, fx, fxError, assumptions: await loadAssumptions() })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }

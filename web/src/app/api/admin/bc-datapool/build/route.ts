@@ -3,10 +3,10 @@ import * as XLSX from "xlsx"
 import { build } from "@/lib/bc-datapool/builder"
 import { dropExisting } from "@/lib/bc-datapool/dedupe"
 import { buildWorkbook } from "@/lib/bc-datapool/export"
-import { DEFAULT_ASSUMPTIONS, type Assumptions, type ProductInput } from "@/lib/bc-datapool/types"
+import type { Assumptions, ProductInput } from "@/lib/bc-datapool/types"
 import { resolvePlans } from "@/lib/bc-datapool/plan-catalog"
 import { FRAME_SKU } from "@/lib/bc-datapool/codes"
-import { findExisting, loadFx, loadPlanCatalog, loadPriceList, loadWhiteSimVnd, requireAdmin } from "@/lib/bc-datapool/server"
+import { findExisting, loadAssumptions, loadFx, loadPlanCatalog, loadPriceList, loadWhiteSimVnd, requireAdmin } from "@/lib/bc-datapool/server"
 
 export const dynamic = "force-dynamic"
 
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const products: ProductInput[] = Array.isArray(body.products) ? body.products : []
-    const a: Assumptions = { ...DEFAULT_ASSUMPTIONS, ...(body.assumptions ?? {}) }
+    const a: Assumptions = { ...(await loadAssumptions()), ...(body.assumptions ?? {}) }
     if (!products.length) return NextResponse.json({ error: "Chưa có sản phẩm nào" }, { status: 400 })
 
     const [list, fx, catalog] = await Promise.all([loadPriceList(), loadFx(), loadPlanCatalog()])

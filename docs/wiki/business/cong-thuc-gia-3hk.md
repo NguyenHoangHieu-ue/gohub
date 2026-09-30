@@ -68,3 +68,7 @@ sản phẩm lên kênh bán.
 
 Hai hệ số 55% và 38%, cùng hai mức 1.8 và 1.6 GB, có thể chỉnh trực tiếp tại web mục Admin, Cài đặt, phần
 Công thức 3HK Datapool. Thay đổi có hiệu lực ngay khi lưu.
+
+## Công thức Datapool dùng chung (cập nhật 30/09/2026)
+
+Các hệ số "khách thực dùng bao nhiêu data" không chỉ dành riêng cho 3HK mà áp dụng cho Datapool nói chung (3HK Datapool, BC Datapool...). Có năm hệ số, chỉnh trong Admin, mục Cài đặt, phần Công Thức Datapool. Gói Fixed dùng hệ số 0.55 (GB tính giá bằng tổng GB gói nhân 0.55). Gói Daily dùng hệ số 0.38 (GB tính giá bằng GB mỗi ngày nhân số ngày nhân 0.38). Gói 500MB tốc độ cao cộng Unlimited tốc độ 5Mbps coi như dùng 1.6 GB mỗi ngày. Gói 500MB tốc độ cao cộng Unlimited tốc độ 10Mbps coi như dùng 1.8 GB mỗi ngày. Gói 3GB tốc độ cao cộng Unlimited tốc độ 10Mbps coi như dùng 1.7 GB mỗi ngày; bản chất của gói này là 3GB tốc độ cao, cộng 3GB tốc độ 10Mbps, cộng Unlimited tốc độ 1Mbps (BC Datapool bán dưới dạng gói Daily 6GB giảm tốc còn 1Mbps). Với các gói Unlimited, GB tính giá bằng số GB mỗi ngày tương ứng nhân số ngày và không nhân thêm hệ số phần trăm nào.
