@@ -39,14 +39,19 @@ export interface Fx {
   vndPerUsdInc: number
 }
 
-/** Giả định % data thực dùng — nhập được trên UI, mặc định theo bảng COGS BC Datapool. */
+/**
+ * Giả định data thực dùng — lấy từ Admin › Cài đặt › Công Thức Datapool, nhập được trên UI.
+ * Unlimited: GB/ngày phụ thuộc tổ hợp (data tốc độ cao, tốc độ Unlimited): 500MB+5Mbps · 500MB+10Mbps · 3GB+10Mbps.
+ */
 export interface Assumptions {
   fixedPct: number
   dailyPct: number
-  unlimitedGbPerDay: number
+  unl500mb5: number
+  unl500mb10: number
+  unl3gb10: number
 }
 
-export const DEFAULT_ASSUMPTIONS: Assumptions = { fixedPct: 0.55, dailyPct: 0.38, unlimitedGbPerDay: 1.7 }
+export const DEFAULT_ASSUMPTIONS: Assumptions = { fixedPct: 0.55, dailyPct: 0.38, unl500mb5: 1.6, unl500mb10: 1.8, unl3gb10: 1.7 }
 
 export interface PlanLine {
   kind: PlanKind
@@ -55,6 +60,14 @@ export interface PlanLine {
   unit: DataUnit
   days: number[]
   productId: string
+  /** Chỉ Unlimited: tốc độ (Mbps) sau khi hết data tốc độ cao — 10 (mặc định) hoặc 5. */
+  speedMbps?: number
+  /**
+   * Chỉ Unlimited: gói BC thật = "Daily {bcAmount}{bcUnit} Throttle to 1Mbps" (tổng, thường 6GB = tốc độ cao + tốc độ N Mbps + Unlimited 1Mbps).
+   * Không có thì mặc định bằng 2× dung lượng tốc độ cao (kiểu 3GB → gói 6GB).
+   */
+  bcAmount?: number
+  bcUnit?: DataUnit
 }
 
 export interface ProductInput {

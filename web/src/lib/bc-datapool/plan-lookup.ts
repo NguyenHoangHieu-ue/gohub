@@ -41,20 +41,22 @@ export function canonCountry(s: string): string {
   return ALIAS[c] ?? c
 }
 
+/** Unlimited: `amount`/`unit` = dung lượng gói BC thật (VD 6GB), KHÔNG phải dung lượng tốc độ cao khách thấy. */
 export interface PlanQuery { sim: SimType; kind: PlanKind; pool: Pool; coverage: string; amount: number; unit: DataUnit }
 
 const isThrottle1M = (p: CatalogPlan) => p.throttleKbps === 1024
 
 /**
  * Gói Portal khớp (nước đơn, cùng pool/SIM/dung lượng).
- * Unlimited (mã X) KHÔNG có gói riêng ở BC: nội bộ = 3GB tốc độ cao + 3GB @10Mbps + không giới hạn @1Mbps, phía BC gộp thành
- * "Daily {2×N}GB — Throttle to 1Mbps" → tra gói Daily có dung lượng gấp đôi và tốc độ sau ngưỡng 1024kbps.
+ * Unlimited KHÔNG có gói riêng ở BC: nội bộ = N tốc độ cao + phần còn lại @5/10Mbps + không giới hạn @1Mbps (tổng thường 6GB), phía BC gộp
+ * thành "Daily {tổng}GB — Throttle to 1Mbps" → tra gói Daily có tốc độ sau ngưỡng 1024kbps. Dung lượng tốc độ cao khách thấy (dataMB)
+ * và tốc độ (speedMbps) là thông tin nội bộ, KHÔNG dùng để tra gói.
  */
 export function findPlans(cat: PlanCatalog, q: PlanQuery): CatalogPlan[] {
   const want = canonCountry(q.coverage)
   const unl = q.kind === "Unlimited"
   const kind = unl ? "Daily" : q.kind
-  const amount = unl ? q.amount * 2 : q.amount
+  const amount = q.amount
   return cat.plans.filter(p =>
     p.sim === q.sim && p.kind === kind && p.pool === q.pool && p.amount === amount && p.unit === q.unit &&
     (unl ? isThrottle1M(p) : !isThrottle1M(p)) &&
@@ -93,8 +95,8 @@ export interface Offer {
 const mb = (amount: number, unit: DataUnit) => (unit === "GB" ? amount * 1024 : amount)
 
 /**
- * Các dung lượng Portal bán cho (SIM, pool, nước, loại), sắp tăng dần. Unlimited: dung lượng = N GB tốc độ cao mỗi ngày
- * = một nửa dung lượng gói "Daily 2N GB Throttle to 1Mbps" của BC.
+ * Các dung lượng Portal bán cho (SIM, pool, nước, loại), sắp tăng dần. Unlimited: liệt kê các gói BC "Daily {tổng}GB Throttle to 1Mbps"
+ * (amount = TỔNG của gói BC, VD 6GB).
  */
 export function offers(cat: PlanCatalog | null, q: { sim: SimType; pool: Pool; coverage: string; kind: PlanKind }): Offer[] {
   if (!cat || !q.coverage) return []
@@ -112,7 +114,7 @@ export function offers(cat: PlanCatalog | null, q: { sim: SimType; pool: Pool; c
   for (const g of groups.values()) {
     const c = choosePlan(g)
     const plan = c?.plan ?? g[0]
-    out.push(unl ? { amount: plan.amount / 2, unit: plan.unit, plan } : { amount: plan.amount, unit: plan.unit, plan })
+    out.push({ amount: plan.amount, unit: plan.unit, plan })
   }
   return out.sort((a, b) => mb(a.amount, a.unit) - mb(b.amount, b.unit))
 }
@@ -135,6 +137,10 @@ export interface PlanInfo {
   candidates?: string[]
 }
 
+/** Gói BC thật của 1 dòng: Unlimited dùng bcAmount/bcUnit (mặc định 2× dung lượng tốc độ cao); Daily/Fixed dùng chính dung lượng gói. */
+export const bcAmountOf = (pl: ProductInput["plans"][number]) => (pl.kind === "Unlimited" ? pl.bcAmount ?? pl.dataAmount * 2 : pl.dataAmount)
+export const bcUnitOf = (pl: ProductInput["plans"][number]) => (pl.kind === "Unlimited" ? pl.bcUnit ?? pl.unit : pl.unit)
+
 /** Các điểm KHÔNG khớp giữa gói Portal (tra theo ProductID nhập tay) và cấu hình người dùng khai báo. */
 export function manualMismatches(plan: CatalogPlan, p: ProductInput, pl: ProductInput["plans"][number]): string[] {
   const bits: string[] = []
@@ -145,8 +151,8 @@ export function manualMismatches(plan: CatalogPlan, p: ProductInput, pl: Product
   const wantKind = unl ? "Daily" : pl.kind
   if (plan.kind !== wantKind) bits.push(`loại ${plan.kind}, khai báo ${pl.kind}`)
   if (unl !== isThrottle1M(plan)) bits.push(unl ? "không phải gói Throttle to 1Mbps (dùng cho Unlimited)" : "là gói Throttle to 1Mbps (chỉ dùng cho Unlimited)")
-  const wantAmount = unl ? pl.dataAmount * 2 : pl.dataAmount
-  if (plan.amount !== wantAmount || plan.unit !== pl.unit) bits.push(`dung lượng ${plan.amount}${plan.unit}, cần ${wantAmount}${pl.unit}${unl ? ` (Unlimited ${pl.dataAmount}${pl.unit} = Daily ${wantAmount}${pl.unit})` : ""}`)
+  const wantAmount = bcAmountOf(pl), wantUnit = bcUnitOf(pl)
+  if (plan.amount !== wantAmount || plan.unit !== wantUnit) bits.push(`dung lượng ${plan.amount}${plan.unit}, cần ${wantAmount}${wantUnit}${unl ? ` (gói BC cho Unlimited ${pl.dataAmount}${pl.unit} tốc độ cao)` : ""}`)
   return bits
 }
 
@@ -164,7 +170,7 @@ export function resolvePlans(products: ProductInput[], cat: PlanCatalog | null):
     const plans = p.plans.map((pl, li) => {
       const where = `${label} · dòng ${li + 1}`
       const manual = pl.productId.trim()
-      const cands = cat && p.coverages[0] ? findPlans(cat, { sim: p.simType, kind: pl.kind, pool: p.pool, coverage: p.coverages[0], amount: pl.dataAmount, unit: pl.unit }) : []
+      const cands = cat && p.coverages[0] ? findPlans(cat, { sim: p.simType, kind: pl.kind, pool: p.pool, coverage: p.coverages[0], amount: bcAmountOf(pl), unit: bcUnitOf(pl) }) : []
       let chosen: CatalogPlan | undefined
       let status: PlanInfo["status"] = "none"
       let note: string | undefined
@@ -187,7 +193,7 @@ export function resolvePlans(products: ProductInput[], cat: PlanCatalog | null):
           warnings.push(`${where}: Portal có ${cands.length} Plan ID cho gói này (${cands.map(x => x.id).join(", ")}) — chọn 1 và nhập ProductID`)
         } else {
           status = "missing"
-          const want = pl.kind === "Unlimited" ? `Daily ${pl.dataAmount * 2}${pl.unit} Throttle to 1Mbps (cho Unlimited ${pl.dataAmount}${pl.unit})` : `${pl.kind} ${pl.dataAmount}${pl.unit}`
+          const want = pl.kind === "Unlimited" ? `Daily ${bcAmountOf(pl)}${bcUnitOf(pl)} Throttle to 1Mbps (cho Unlimited ${pl.dataAmount}${pl.unit} tốc độ cao)` : `${pl.kind} ${pl.dataAmount}${pl.unit}`
           warnings.push(`${where}: không tìm thấy gói ${want} ${p.simType} của ${p.coverages[0] || "?"} (${p.pool}) trong file Portal — BC không bán gói này (hoặc file Portal cũ, hãy upload lại)`)
         }
       }

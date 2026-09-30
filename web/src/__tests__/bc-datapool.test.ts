@@ -105,10 +105,15 @@ describe("build()", () => {
     expect(r.sheets.productUS).toHaveLength(2)
     for (const row of [...r.sheets.skuUS, ...r.sheets.skuVN]) expect(row).toHaveLength(SKU_HEADERS.length)
     for (const row of [...r.sheets.productUS, ...r.sheets.productVN]) expect(row).toHaveLength(PRODUCT_HEADERS.length)
-    expect(r.sheets.skuUS[0][18]).toBe("ECJPNWDT5HM01")
-    expect(r.sheets.skuUS[0][16]).toBe("111")
-    expect(r.sheets.skuVN[0][18]).toBe("3CJPNWDT5HM01")
-    expect(r.sheets.skuVN[0][16]).toBe("ECJPNWDT5HM01")
+    // Cột SKU: ... throttleSpeed[12] dataMB[13] speedMbps[14] call[15] callSmsDetails[16] expirations[17] vendorSku[18] vendorSkuSim[19] SKU CODE[20]
+    expect(r.sheets.skuUS[0][20]).toBe("ECJPNWDT5HM01")
+    expect(r.sheets.skuUS[0][18]).toBe("111")
+    expect(r.sheets.skuVN[0][20]).toBe("3CJPNWDT5HM01")
+    expect(r.sheets.skuVN[0][18]).toBe("ECJPNWDT5HM01")
+    // dataMB / speedMbps chỉ có ở gói Unlimited: 3GB tốc độ cao → 3072, Unlimited 10Mbps → 10; Daily/Fixed để trống
+    expect(r.sheets.skuUS[0].slice(13, 15)).toEqual(["", ""])
+    expect(r.sheets.skuUS[1].slice(13, 15)).toEqual([3072, 10])
+    expect(r.sheets.skuVN[2].slice(13, 15)).toEqual([3072, 10])
     expect(r.sheets.skuUS[0][10]).toBe(0.5)
     expect(r.sheets.skuVN[0][10]).toBe(13245)
     expect(r.sheets.skuUS[1][6]).toBe("eSIM Nhật Bản Unlimited 10mbps 1 ngày")
@@ -134,12 +139,12 @@ describe("build()", () => {
     expect(r.sheets.skuUS).toHaveLength(1)
     expect(r.sheets.skuVN).toHaveLength(2)
     const [aUS] = r.sheets.skuUS, [aVN, eVN] = r.sheets.skuVN
-    expect(aUS[18]).toBe("EAJPNWDT5HM01"); expect(aVN[18]).toBe("3AJPNWDT5HM01"); expect(eVN[18]).toBe("3EJPNWDT5HM01")
+    expect(aUS[20]).toBe("EAJPNWDT5HM01"); expect(aVN[20]).toBe("3AJPNWDT5HM01"); expect(eVN[20]).toBe("3EJPNWDT5HM01")
     expect(eVN[8]).toBe("1D000WDK00000"); expect(eVN[9]).toBe("3AJPNWDT5HM01")
     // ProductID nằm ở vendorSkuSim của datapack (tiền lệ 3AAS8WDT/EAAS8WDT); VN datapack trỏ SKU US; SIM full trống
-    expect([aUS[16], aUS[17]]).toEqual(["", "777"])
-    expect([aVN[16], aVN[17]]).toEqual(["", "EAJPNWDT5HM01"])
-    expect([eVN[16], eVN[17]]).toEqual(["", ""])
+    expect([aUS[18], aUS[19]]).toEqual(["", "777"])
+    expect([aVN[18], aVN[19]]).toEqual(["", "EAJPNWDT5HM01"])
+    expect([eVN[18], eVN[19]]).toEqual(["", ""])
     // datapack = chỉ data (0.13); full = data + ROUNDUP(16028/26490 + 0.5/7.802 = 0.6691) = 0.13 + 0.67 = 0.80
     expect(aUS[10]).toBe(0.13)
     expect(aVN[10]).toBe(usdToVnd(0.13, FX_JP)); expect(eVN[10]).toBe(usdToVnd(0.8, FX_JP))
@@ -173,8 +178,12 @@ describe("template bắt buộc & bảng báo giá thật (chỉ chạy khi file
   test.skipIf(!existsSync(tpl))("tiêu đề cột khớp Format_add_new_packages.xlsx", () => {
     const wb = XLSX.readFile(tpl)
     const head = (n: string) => (XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[n], { header: 1 })[0] ?? []).filter(x => x != null)
-    expect(head("Template_sku_US")).toEqual(SKU_HEADERS)
-    expect(head("Template_sku_VN")).toEqual(SKU_HEADERS)
+    // SKU: template gốc + 2 cột mới dataMB, speedMbps ngay bên phải throttleSpeed (Hiếu thêm 2026-09-30)
+    const NEW = ["dataMB", "speedMbps"]
+    const base = SKU_HEADERS.filter(h => !NEW.includes(h))
+    expect(SKU_HEADERS.slice(SKU_HEADERS.indexOf("throttleSpeed"), SKU_HEADERS.indexOf("throttleSpeed") + 3)).toEqual(["throttleSpeed", "dataMB", "speedMbps"])
+    expect(head("Template_sku_US").filter(h => !NEW.includes(String(h)))).toEqual(base)
+    expect(head("Template_sku_VN").filter(h => !NEW.includes(String(h)))).toEqual(base)
     expect(head("Template_product_US")).toEqual(PRODUCT_HEADERS)
     expect(head("Template_product_VN")).toEqual(PRODUCT_HEADERS)
   })
@@ -222,11 +231,11 @@ describe("đối chiếu file mẫu thật", () => {
     // So từng dòng theo thứ tự (một số ô SKU CODE của file mẫu là công thức không có giá trị lưu sẵn nên không dùng làm khoá)
     const cmp = (tag: string, want: Row[], got: (string | number)[][]) => want.forEach((row, i) => {
       const m = got[i]
-      const codeOk = row[18] == null || m[18] === String(row[18])
+      const codeOk = row[18] == null || m[20] === String(row[18])   // mẫu: SKU CODE ở cột 18; bản mới ở 20
       const diff = m ? Number(m[10]) - Number(row[10]) : NaN
       const max = tag === "US" ? allow.usMax : allow.vnMax
       // mine >= mẫu, chênh không quá `max` (0 với Taiwan/Singtel; Japan: phí khung mẫu 0.36 → ROUNDUP 0.37)
-      if (!m || !(diff > -0.004 && diff <= max + 0.004) || m[16] !== String(row[16]) || !codeOk) bad.push(`${tag} #${i + 2} ${row[18] ?? m?.[18]}: mẫu ${row[10]} ↔ ${m?.[10]}`)
+      if (!m || !(diff > -0.004 && diff <= max + 0.004) || m[18] !== String(row[16]) || !codeOk) bad.push(`${tag} #${i + 2} ${row[18] ?? m?.[20]}: mẫu ${row[10]} ↔ ${m?.[10]}`)
     })
     cmp("US", us, r.sheets.skuUS)
     cmp("VN", vn, r.sheets.skuVN)
@@ -283,7 +292,7 @@ describe("danh mục gói Portal", () => {
     expect(jp[0].days).toHaveLength(30)
     expect(findPlans(c, { sim: "eSIM", kind: "Fixed", pool: "SINGTEL", coverage: "Taiwan", amount: 5, unit: "GB" }).map(p => p.id)).toEqual(["1786608158998198"])
     // Unlimited (X) = gói Daily gấp đôi dung lượng, throttle 1Mbps (Japan 3GB → "Daily 6GB Throttle to 1Mbps")
-    expect(findPlans(c, { sim: "eSIM", kind: "Unlimited", pool: "CMHK", coverage: "Japan", amount: 3, unit: "GB" }).map(p => p.id)).toEqual(["1786346622046927"])
+    expect(findPlans(c, { sim: "eSIM", kind: "Unlimited", pool: "CMHK", coverage: "Japan", amount: 6, unit: "GB" }).map(p => p.id)).toEqual(["1786346622046927"])
     // Daily 6GB thường không lẫn gói throttle 1Mbps
     expect(findPlans(c, { sim: "eSIM", kind: "Daily", pool: "CMHK", coverage: "Japan", amount: 6, unit: "GB" })).toEqual([])
   })

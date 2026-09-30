@@ -12,8 +12,14 @@ export const PRODUCT_TYPE_CHAR: Record<SimType, ProductTypeChar> = { eSIM: "C", 
 /** Mã khung SIM trắng của BC Datapool — dùng chung cả CMHK và Singtel. Hiện chỉ bán SIM full ở đầu VN nên không có mã khung US. */
 export const FRAME_SKU = { VN: "1D000WDK00000" } as const
 
-export function productCode(tenant: "US" | "VN", sim: SimType, country3: string, pool: Pool, kind: PlanKind, type: ProductTypeChar = PRODUCT_TYPE_CHAR[sim]): string {
-  return `${TENANT_CHAR[tenant]}${type}${country3}${VENDOR_CODE[pool]}${POLICY_CODE[kind]}`
+/**
+ * Mã data policy: Daily T · Fixed F · Unlimited theo tốc độ sau ngưỡng: 10Mbps = X (Daily Unlimited 10mbps, reset nửa đêm),
+ * 5Mbps = A (Daily Unlimited 5mbps) — theo wiki ma-sku.
+ */
+export const policyOf = (kind: PlanKind, speedMbps?: number): string => (kind === "Unlimited" ? (speedMbps === 5 ? "A" : "X") : POLICY_CODE[kind])
+
+export function productCode(tenant: "US" | "VN", sim: SimType, country3: string, pool: Pool, kind: PlanKind, type: ProductTypeChar = PRODUCT_TYPE_CHAR[sim], speedMbps?: number): string {
+  return `${TENANT_CHAR[tenant]}${type}${country3}${VENDOR_CODE[pool]}${policyOf(kind, speedMbps)}`
 }
 
 /** 3 ký tự dung lượng: 500MB→5HM, 1.5GB→1D5, 5GB→005. Trả null nếu không mã hoá được. */

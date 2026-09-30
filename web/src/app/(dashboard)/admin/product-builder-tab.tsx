@@ -16,7 +16,11 @@ interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | n
 interface PreviewResult extends BuildResult { fx: Fx; skipped: Skipped; nothingNew: boolean; planInfo: PlanInfo[]; whiteSimVnd: number | null }
 
 // Dòng gói trên form: dung lượng chọn từ các gói Portal thật (amountKey = "500|MB"), số ngày chỉ bật được ngày Portal bán.
-interface PlanForm { kind: PlanKind; amountKey: string; days: number[]; productId: string }
+/**
+ * Daily/Fixed: `amountKey` = dung lượng gói Portal. Unlimited: `amountKey` = gói BC thật ("Daily {tổng} Throttle to 1Mbps"),
+ * còn `hs` + `hsUnit` = dung lượng TỐC ĐỘ CAO khách thấy (cột dataMB) và `speed` = tốc độ Unlimited (cột speedMbps) — mặc định 3GB + 10Mbps.
+ */
+interface PlanForm { kind: PlanKind; amountKey: string; days: number[]; productId: string; hs: string; hsUnit: "MB" | "GB"; speed: 5 | 10 }
 interface ProductForm { pool: Pool; simType: "eSIM" | "SIM"; coverage: string; operators: string[]; code: string; codeHint?: string; iso: string; en: string; vn: string; plans: PlanForm[] }
 
 /** Bộ ngày phổ biến — mặc định bật sẵn phần giao với số ngày Portal bán */
@@ -27,6 +31,7 @@ const POOL_LABEL: Record<Pool, string> = { CMHK: "CMHK (WD · HKD)", SINGTEL: "S
 const input = "px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white dark:bg-slate-800 dark:border-slate-600"
 const label = "block text-[11px] font-semibold text-gray-500 mb-1"
 
+const HS_DEFAULT = { hs: "3", hsUnit: "GB" as const, speed: 10 as const }
 const newProduct = (): ProductForm => ({ pool: "CMHK", simType: "eSIM", coverage: "", operators: [], code: "", iso: "", en: "", vn: "", plans: [] })
 const keyOf = (amount: number, unit: string) => `${amount}|${unit}`
 const labelOf = (key: string) => key.replace("|", " ")
@@ -117,7 +122,7 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
     const o = k ? offersOf(p, k)[0] : undefined
     if (!k || !o) return null
     const c = commonOf(o.plan.days)
-    return { kind: k, amountKey: keyOf(o.amount, o.unit), days: c.length ? c : o.plan.days.slice(0, 1), productId: "" }
+    return { kind: k, amountKey: keyOf(o.amount, o.unit), days: c.length ? c : o.plan.days.slice(0, 1), productId: "", ...HS_DEFAULT }
   }
   const offerDays = (p: ProductForm, pl: PlanForm) => offersOf(p, pl.kind).find(o => keyOf(o.amount, o.unit) === pl.amountKey)?.plan.days ?? []
 
@@ -142,7 +147,11 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
     countryNameEn: p.en.trim(), countryNameVn: p.vn.trim(),
     plans: p.plans.map(pl => {
       const [amount, unit] = pl.amountKey.split("|")
-      return { kind: pl.kind, dataAmount: Number(amount) || 0, unit: (unit as "MB" | "GB") || "GB", days: [...pl.days].sort((a, b) => a - b), productId: pl.productId.trim() }
+      const base = { kind: pl.kind, days: [...pl.days].sort((a, b) => a - b), productId: pl.productId.trim() }
+      // Unlimited: dataAmount = dung lượng tốc độ cao (dataMB), bcAmount = gói BC thật, speedMbps = tốc độ Unlimited
+      if (pl.kind === "Unlimited")
+        return { ...base, dataAmount: parseFloat(pl.hs.replace(",", ".")) || 0, unit: pl.hsUnit, speedMbps: pl.speed, bcAmount: Number(amount) || 0, bcUnit: (unit as "MB" | "GB") || "GB" }
+      return { ...base, dataAmount: Number(amount) || 0, unit: (unit as "MB" | "GB") || "GB" }
     }),
   }))
 
@@ -252,8 +261,8 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
         </div>
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-2">
           <div className="text-sm font-semibold">Giả định COGS</div>
-          <div className="grid grid-cols-3 gap-2">
-            {([["fixedPct", "Fixed %", 100], ["dailyPct", "Daily %", 100], ["unlimitedGbPerDay", "Unlimited GB/ngày", 1]] as const).map(([k, l, mul]) => (
+          <div className="grid grid-cols-2 gap-2">
+            {([["fixedPct", "Fixed %", 100], ["dailyPct", "Daily %", 100], ["unl3gb10", "Unl 3GB+10Mbps (GB/ngày)", 1], ["unl500mb10", "Unl 500MB+10Mbps", 1], ["unl500mb5", "Unl 500MB+5Mbps", 1]] as const).map(([k, l, mul]) => (
               <div key={k}>
                 <label className={label}>{l}</label>
                 <input className={`${input} w-full`} type="number" step="any" value={Number((assumptions[k] * mul).toFixed(4))}
@@ -356,13 +365,34 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
                         const od = o?.plan.days ?? []
                         const keep = pl.days.filter(d => od.includes(d))
                         patchPlan(i, j, { amountKey: key, days: keep.length ? keep : commonOf(od), productId: "" })
-                      }} title={pl.kind === "Unlimited" ? "Dung lượng tốc độ cao mỗi ngày (BC bán dưới dạng Daily gấp đôi, throttle 1Mbps)" : "Dung lượng gói Portal đang bán"}>
-                        {offs.map(o => <option key={keyOf(o.amount, o.unit)} value={keyOf(o.amount, o.unit)}>{labelOf(keyOf(o.amount, o.unit))}{pl.kind === "Daily" ? "/ngày" : pl.kind === "Unlimited" ? " tốc độ cao/ngày" : ""}</option>)}
+                      }} title={pl.kind === "Unlimited" ? "Gói BC thật: Daily {tổng} Throttle to 1Mbps (tốc độ cao + tốc độ 5/10Mbps + Unlimited 1Mbps)" : "Dung lượng gói Portal đang bán"}>
+                        {offs.map(o => <option key={keyOf(o.amount, o.unit)} value={keyOf(o.amount, o.unit)}>{pl.kind === "Unlimited" ? `Gói BC: Daily ${labelOf(keyOf(o.amount, o.unit))} Throttle 1Mbps` : `${labelOf(keyOf(o.amount, o.unit))}${pl.kind === "Daily" ? "/ngày" : ""}`}</option>)}
                       </select>
                       <input className={input} value={pl.productId} onChange={e => patchPlan(i, j, { productId: e.target.value })}
                         placeholder={auto ? `ProductID tự động: ${auto.plan.id} (chỉ nhập nếu muốn chọn ID khác)` : "ProductID (không có gói khớp trong Portal)"} />
                       <button onClick={() => patchProduct(i, { plans: p.plans.filter((_, m) => m !== j) })} className="pb-2 text-gray-400 hover:text-red-600" title="Xoá dòng"><Trash2 size={14} /></button>
                     </div>
+                    {pl.kind === "Unlimited" && (
+                      <div className="flex flex-wrap items-end gap-3 bg-gray-50 dark:bg-slate-900/40 rounded-lg p-2">
+                        <div>
+                          <label className={label}>Dung lượng TỐC ĐỘ CAO khách thấy (→ cột dataMB)</label>
+                          <div className="flex gap-1">
+                            <input className={`${input} w-24`} value={pl.hs} inputMode="decimal" onChange={e => patchPlan(i, j, { hs: e.target.value })} />
+                            <select className={input} value={pl.hsUnit} onChange={e => patchPlan(i, j, { hsUnit: e.target.value as "MB" | "GB" })}><option>MB</option><option>GB</option></select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className={label}>Tốc độ Unlimited (→ cột speedMbps)</label>
+                          <select className={input} value={pl.speed} onChange={e => patchPlan(i, j, { speed: Number(e.target.value) as 5 | 10 })}>
+                            <option value={10}>10 Mbps</option><option value={5}>5 Mbps</option>
+                          </select>
+                        </div>
+                        <div className="text-[11px] text-gray-500 pb-1.5">
+                          Hiển thị cho khách: <b>{pl.hs || "?"} {pl.hsUnit} tốc độ cao, Unlimited {pl.speed}Mbps</b> · dataMB = <b>{Math.round((parseFloat(pl.hs.replace(",", ".")) || 0) * (pl.hsUnit === "GB" ? 1024 : 1))}</b> · speedMbps = <b>{pl.speed}</b><br />
+                          Bản chất: {pl.hs || "?"} {pl.hsUnit} tốc độ cao + phần còn lại của gói BC ở {pl.speed}Mbps + Unlimited 1Mbps (tổng = gói BC đã chọn).
+                        </div>
+                      </div>
+                    )}
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-[11px] text-gray-500 mr-1">Số ngày (chỉ ngày Portal bán):</span>
                       {offered.map(d => {
