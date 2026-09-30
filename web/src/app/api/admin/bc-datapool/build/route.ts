@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import * as XLSX from "xlsx"
 import { build } from "@/lib/bc-datapool/builder"
+import { dropExisting } from "@/lib/bc-datapool/dedupe"
 import { buildWorkbook } from "@/lib/bc-datapool/export"
 import { DEFAULT_ASSUMPTIONS, type Assumptions, type ProductInput } from "@/lib/bc-datapool/types"
 import { resolvePlans } from "@/lib/bc-datapool/plan-catalog"
@@ -28,22 +29,25 @@ export async function POST(req: NextRequest) {
     const resolved = resolvePlans(products, catalog)
     const hasSim = resolved.products.some(p => p.simType === "SIM")
     const whiteSimVnd = hasSim ? await loadWhiteSimVnd() : null
-    const result = build(resolved.products, list, fx, a, { whiteSimVnd: whiteSimVnd ?? undefined })
+    const built = build(resolved.products, list, fx, a, { whiteSimVnd: whiteSimVnd ?? undefined })
+    const warnings = built.warnings
     if (hasSim) {
       const frames = await findExisting("skus", "sku_code", [FRAME_SKU.VN])
-      if (!frames.has(FRAME_SKU.VN)) result.warnings.push(`Khung SIM chưa có trong hệ thống: ${FRAME_SKU.VN} — tạo trước khi import SKU SIM full`)
+      if (!frames.has(FRAME_SKU.VN)) warnings.push(`Khung SIM chưa có trong hệ thống: ${FRAME_SKU.VN} — tạo trước khi import SKU SIM full`)
     }
-    result.warnings.unshift(...resolved.warnings)
+    warnings.unshift(...resolved.warnings)
 
     const [existProducts, existSkus] = await Promise.all([
-      findExisting("products", "product_code", [...result.sheets.productUS, ...result.sheets.productVN].map(r => String(r[35]))),
-      findExisting("skus", "sku_code", [...result.sheets.skuUS, ...result.sheets.skuVN].map(r => String(r[18]))),
+      findExisting("products", "product_code", [...built.sheets.productUS, ...built.sheets.productVN].map(r => String(r[35]))),
+      findExisting("skus", "sku_code", [...built.sheets.skuUS, ...built.sheets.skuVN].map(r => String(r[18]))),
     ])
-    const existing = { products: Array.from(existProducts), skus: Array.from(existSkus) }
-    if (existing.products.length) result.warnings.push(`Product Code đã có trong hệ thống: ${existing.products.join(", ")}`)
-    if (existing.skus.length) result.warnings.push(`${existing.skus.length} SKU đã có trong hệ thống (ví dụ ${existing.skus.slice(0, 3).join(", ")}) — xuất lên sẽ bị trùng`)
+    // SKU/Product đã có trong hệ thống: báo (kèm mã) và BỎ khỏi kết quả, phần còn lại tạo bình thường
+    const { result: deduped, skipped } = dropExisting(built, existSkus, existProducts)
+    const result = { ...deduped, warnings }
+    const nothingNew = !result.sheets.skuUS.length && !result.sheets.skuVN.length
 
     if (req.nextUrl.searchParams.get("format") === "xlsx") {
+      if (nothingNew) return NextResponse.json({ error: "Tất cả SKU đã có trong hệ thống — không còn gì để tạo mới", skipped }, { status: 422 })
       if (result.warnings.some(w => /chưa nhập ProductID|không mã hoá được|trùng|thiếu|phải đúng|chưa có gói|chưa chọn|Portal không bán|không tìm thấy gói|Plan ID cho gói/.test(w)) && body.force !== true)
         return NextResponse.json({ error: "Còn lỗi cần sửa trước khi xuất", warnings: result.warnings }, { status: 422 })
       // Ô giá là công thức Excel (trỏ sheet "Tính giá") để người dùng soát lại cách tính
@@ -57,7 +61,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return NextResponse.json({ ...result, fx, existing, planInfo: resolved.info, whiteSimVnd })
+    return NextResponse.json({ ...result, fx, skipped, nothingNew, planInfo: resolved.info, whiteSimVnd })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }

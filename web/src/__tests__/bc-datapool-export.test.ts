@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import * as XLSX from "xlsx"
 import { build, SKU_HEADERS } from "@/lib/bc-datapool/builder"
+import { dropExisting } from "@/lib/bc-datapool/dedupe"
 import { diffCatalog, diffPriceList, hasCatalogChanges, hasPriceChanges } from "@/lib/bc-datapool/diff"
 import { buildWorkbook, CALC_SHEET } from "@/lib/bc-datapool/export"
 import type { CatalogPlan, PlanCatalog } from "@/lib/bc-datapool/plan-catalog"
@@ -168,6 +169,78 @@ describe("file xuất: ô giá là công thức", () => {
     expect(e.feeUsd).toBeGreaterThan(0.6)
     expect(a.feeUsd).toBe(0)
     expect(e.cogsUsd).toBeCloseTo(a.cogsUsd + e.feeUsd, 2)
+  })
+})
+
+describe("SKU/Product đã có trong hệ thống → báo kèm mã, bỏ đi, tạo phần còn lại", () => {
+  const china = (): ProductInput => ({
+    pool: "CMHK", simType: "eSIM", coverages: ["China"], operators: ["China|China Mobile"], supportCountryCode: "CHN", isoCodes: "CN", countryNameEn: "China", countryNameVn: "Trung Quốc",
+    plans: [plan({ dataAmount: 1, unit: "GB", days: [10, 11, 12], productId: "999" })],
+  })
+  const l2: PriceList = { ...list, pools: { ...list.pools, CMHK: { ...list.pools.CMHK, rows: [{ coverage: "China", operator: "China Mobile", plmn: "1", pricePerGb: 4.6, kyc: false }] } } }
+
+  test("China CMHK Daily 1GB × 10,11,12 ngày mà 10 ngày đã có: báo SKU 10 ngày, chỉ tạo 11 và 12", () => {
+    const built = build([china()], l2, FX, A)
+    expect(built.sheets.skuUS.map(x => x[18])).toEqual(["ECCHNWDT00110", "ECCHNWDT00111", "ECCHNWDT00112"])
+    const skus = new Map([["ECCHNWDT00110", "Active"], ["3CCHNWDT00110", "Inactive"]])
+    const { result, skipped } = dropExisting(built, skus, new Map())
+    expect(skipped.skus).toEqual([
+      { sku: "ECCHNWDT00110", tenant: "US", status: "Active", label: "eSIM full · Daily 1GB × 10 ngày" },
+      { sku: "3CCHNWDT00110", tenant: "VN", status: "Inactive", label: "eSIM full · Daily 1GB × 10 ngày" },
+    ])
+    expect(result.sheets.skuUS.map(x => x[18])).toEqual(["ECCHNWDT00111", "ECCHNWDT00112"])
+    expect(result.sheets.skuVN.map(x => x[18])).toEqual(["3CCHNWDT00111", "3CCHNWDT00112"])
+    expect(result.costRows.map(c => c.days)).toEqual([11, 12])
+    expect(result.usCost).toEqual([0, 1])
+    expect(result.vnCost).toEqual([0, 1])
+    expect(result.sheets.productUS).toHaveLength(1)   // Product chưa có → vẫn tạo
+    expect(skipped.products).toEqual([])
+  })
+
+  test("Product đã có thì không tạo lại dòng Product, vẫn thêm SKU mới", () => {
+    const built = build([china()], l2, FX, A)
+    const { result, skipped } = dropExisting(built, new Map(), new Map([["ECCHNWDT", "Active"], ["3CCHNWDT", "Active"]]))
+    expect(result.sheets.productUS).toHaveLength(0)
+    expect(result.sheets.productVN).toHaveLength(0)
+    expect(result.sheets.skuUS).toHaveLength(3)
+    expect(skipped.products.map(p => p.code)).toEqual(["ECCHNWDT", "3CCHNWDT"])
+  })
+
+  test("chỉ 1 bên (US) đã có: bỏ bên đó, bên VN vẫn tạo; dòng tính giá được giữ", () => {
+    const built = build([china()], l2, FX, A)
+    const { result, skipped } = dropExisting(built, new Map([["ECCHNWDT00111", "Active"]]), new Map())
+    expect(skipped.skus).toHaveLength(1)
+    expect(result.sheets.skuUS).toHaveLength(2)
+    expect(result.sheets.skuVN).toHaveLength(3)
+    expect(result.costRows).toHaveLength(3)
+  })
+
+  test("tất cả đã có: không còn SKU nào", () => {
+    const built = build([china()], l2, FX, A)
+    const all = new Map([...built.sheets.skuUS, ...built.sheets.skuVN].map(r => [String(r[18]), "Active"] as [string, string]))
+    const { result } = dropExisting(built, all, new Map())
+    expect(result.sheets.skuUS).toHaveLength(0)
+    expect(result.sheets.skuVN).toHaveLength(0)
+    expect(result.costRows).toHaveLength(0)
+  })
+
+  test("file xuất sau khi bỏ SKU đã có: công thức vẫn trỏ ĐÚNG dòng tính giá và tính lại khớp", () => {
+    const built = build([china()], l2, FX, A)
+    const { result } = dropExisting(built, new Map([["ECCHNWDT00110", "Active"], ["3CCHNWDT00110", "Active"]]), new Map())
+    const wb = buildWorkbook(result, { fx: FX, a: A, list: l2, whiteSimVnd: null })
+    const { run, val } = evaluator(wb)
+    for (const sheet of ["Template_sku_US", "Template_sku_VN", CALC_SHEET])
+      for (const [addr, cell] of Object.entries(wb.Sheets[sheet])) {
+        const c = cell as XLSX.CellObject
+        if (addr.startsWith("!") || !c.f) continue
+        expect(run(sheet, c.f), `${sheet}!${addr}`).toBeCloseTo(Number(c.v), 9)
+      }
+    // SKU 11 ngày (dòng 2 của sheet SKU) lấy đúng giá của dòng tính giá 11 ngày
+    const us = wb.Sheets.Template_sku_US
+    expect(us.B2.v).toBe("ECCHNWDT")
+    expect(us.S2.v).toBe("ECCHNWDT00111")
+    expect(val("Template_sku_US", "K2")).toBe(result.costRows.find(c => c.days === 11)!.cogsUsd)
+    expect(val("Template_sku_VN", "K3")).toBe(result.costRows.find(c => c.days === 12)!.cogsVnd)
   })
 })
 

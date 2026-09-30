@@ -48,12 +48,12 @@ export async function loadSupportCountries(): Promise<SupportCountry[]> {
 }
 
 /** Mã đã có trong hệ thống — gom theo lô (không N+1) để cảnh báo trùng trước khi xuất. */
-export async function findExisting(table: "products" | "skus", column: "product_code" | "sku_code", codes: string[]): Promise<Set<string>> {
-  const found = new Set<string>()
+export async function findExisting(table: "products" | "skus", column: "product_code" | "sku_code", codes: string[]): Promise<Map<string, string>> {
+  const found = new Map<string, string>()
   const uniq = Array.from(new Set(codes))
   for (let i = 0; i < uniq.length; i += 100) {
-    const { data } = await supabaseAdmin.from(table).select(column).in(column, uniq.slice(i, i + 100))
-    for (const r of (data ?? []) as unknown as Record<string, string>[]) found.add(r[column])
+    const { data } = await supabaseAdmin.from(table).select(`${column},status`).in(column, uniq.slice(i, i + 100))
+    for (const r of (data ?? []) as unknown as Record<string, string>[]) found.set(r[column], r.status ?? "?")
   }
   return found
 }

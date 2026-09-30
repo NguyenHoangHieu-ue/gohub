@@ -132,3 +132,11 @@ Upload ở thẻ "Danh mục gói Portal" (lưu `app_settings` key `bcdp.plan_ca
 
 - **Quy định (Hiếu 2026-09-30): mọi công thức dùng ROUNDUP, không dùng ROUND.** Phí khung trước đây làm tròn gần nhất (0.36 cho CMHK) → nay ROUNDUP: CMHK eSIM `2/6.687 + 0.5/7.801 = 0.3632 → 0.37`; Singtel `2/6.687 + 0.5 = 0.7991 → 0.80` (không đổi). Hệ quả: mọi giá CMHK cao hơn file mẫu Japan (gõ tay 0.36) đúng **0.01 USD** (VN ≈ +265 VND); Singtel/Taiwan/Cambodia/Laos vẫn khớp file mẫu tuyệt đối (test `bc-datapool.test.ts` cho phép Japan chênh đúng 0..+0.01). COGS US = `ROUNDUP(data + phí khung, 2)`.
 - **Xem trước**: rê chuột vào giá (gạch chấm) hiện công thức đã thế số — tab "Tính giá": giá/GB, Data (USD), Phí khung, COGS US, COGS VN; tab SKU US/SKU VN: ô `latestCogs`. Chuỗi sinh ở `lib/bc-datapool/explain.ts`, cùng công thức với sheet "Tính giá" của file xuất. Test khoá: không công thức nào (file xuất lẫn chuỗi tooltip) chứa `ROUND(` trần.
+
+### s215+6 — SKU/Product đã có trong hệ thống: báo kèm mã, bỏ đi, tạo phần còn lại
+
+Khi Xem trước/Xuất, server tra hệ thống (`skus.sku_code`, `products.product_code`, gom theo lô 100 — không N+1, kèm `status`) rồi `dropExisting()` (`lib/bc-datapool/dedupe.ts`):
+- SKU đã có (từng tenant US/VN riêng) → **bỏ khỏi bản xem trước và file xuất**, hiện hộp xanh "Đã có trong hệ thống — sẽ KHÔNG tạo lại" liệt kê từng mã + tenant + trạng thái (Active/Inactive/Deleted…) + gói (VD `ECCHNWDT00110 (US, Active) — eSIM full · Daily 1GB × 10 ngày`), kèm số SKU sẽ tạo mới. Chọn 10,11,12 ngày mà 10 đã có → chỉ tạo 11 và 12.
+- Product đã có → không tạo lại dòng Product, vẫn thêm SKU mới.
+- Đây là thông báo, KHÔNG còn chặn xuất. Chỉ khi TẤT CẢ SKU đã có thì xuất trả lỗi "không còn gì để tạo mới".
+- Dòng "Tính giá" / công thức Excel được đánh lại chỉ số sau khi bỏ, test kiểm công thức vẫn trỏ đúng dòng và tính lại khớp.

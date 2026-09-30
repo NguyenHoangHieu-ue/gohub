@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Download, Eye, Plus, Trash2, Upload } from "lucide-react"
 import { PRODUCT_HEADERS, SKU_HEADERS, pickOperatorPrice, type BuildResult } from "@/lib/bc-datapool/builder"
+import type { Skipped } from "@/lib/bc-datapool/dedupe"
 import type { CatalogDiff, PriceDiff } from "@/lib/bc-datapool/diff"
 import type { PlanInfo } from "@/lib/bc-datapool/plan-catalog"
 import { DEFAULT_ASSUMPTIONS, type Assumptions, type Fx, type PlanKind, type Pool, type PriceList, type ProductInput } from "@/lib/bc-datapool/types"
@@ -11,7 +12,7 @@ type Notify = (type: "success" | "error", text: string) => void
 interface SupportCountry { code: string; en: string; vn: string; iso: string }
 interface CatalogSummary { uploadedAt: string; files: string[]; esim: number; sim: number; lastDiff: CatalogDiff | null }
 interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | null; supportCountries: SupportCountry[]; fx: Fx | null; fxError: string | null; assumptions: Assumptions }
-interface PreviewResult extends BuildResult { fx: Fx; existing: { products: string[]; skus: string[] }; planInfo: PlanInfo[]; whiteSimVnd: number | null }
+interface PreviewResult extends BuildResult { fx: Fx; skipped: Skipped; nothingNew: boolean; planInfo: PlanInfo[]; whiteSimVnd: number | null }
 
 // Dòng gói trên form: `daysText` là chuỗi người dùng gõ ("1,2,3,7"), chuyển thành số khi gửi lên server.
 interface PlanForm { kind: PlanKind; dataAmount: string; unit: "MB" | "GB"; daysText: string; productId: string }
@@ -152,7 +153,7 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
     setBusy("")
     if (!r.ok) {
       const j = await r.json().catch(() => ({}))
-      if (r.status === 422 && !force && window.confirm(`Còn ${j.warnings?.length ?? 0} cảnh báo/lỗi. Vẫn xuất file?`)) return runExport(true)
+      if (r.status === 422 && j.warnings && !force && window.confirm(`Còn ${j.warnings?.length ?? 0} cảnh báo/lỗi. Vẫn xuất file?`)) return runExport(true)
       return onNotify("error", j.error || "Không xuất được file")
     }
     const url = URL.createObjectURL(await r.blob())
@@ -339,6 +340,18 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
       {/* Xem trước */}
       {preview && sheets && (
         <div className="space-y-3">
+          {(preview.skipped.skus.length > 0 || preview.skipped.products.length > 0) && (
+            <div className="p-3 border border-sky-300 bg-sky-50 dark:bg-sky-950/30 rounded-xl text-sm text-sky-900 dark:text-sky-200">
+              <div className="font-semibold mb-1">
+                Đã có trong hệ thống — sẽ KHÔNG tạo lại: {preview.skipped.skus.length} SKU{preview.skipped.products.length ? `, ${preview.skipped.products.length} Product` : ""}
+                {preview.nothingNew ? " · không còn SKU nào để tạo mới" : ` · sẽ tạo mới ${preview.sheets.skuUS.length} SKU US + ${preview.sheets.skuVN.length} SKU VN`}
+              </div>
+              <ul className="list-disc pl-5 space-y-0.5 text-xs max-h-56 overflow-auto">
+                {preview.skipped.skus.map(s => <li key={`${s.tenant}${s.sku}`}><span className="font-mono">{s.sku}</span> ({s.tenant}, trạng thái {s.status}) — {s.label}</li>)}
+                {preview.skipped.products.map(p => <li key={`${p.tenant}${p.code}`}>Product <span className="font-mono">{p.code}</span> ({p.tenant}, {p.status}) đã có — không tạo lại dòng Product, chỉ thêm SKU mới nếu có</li>)}
+              </ul>
+            </div>
+          )}
           {preview.whiteSimVnd && (
             <div className="text-xs text-gray-600 dark:text-slate-300">Giá SIM trắng lấy từ hệ thống (SKU 1D000WDK00000): <b>{preview.whiteSimVnd.toLocaleString("vi-VN")} VND</b> — phí SIM = giá SIM trắng + phí IMSI.</div>
           )}
