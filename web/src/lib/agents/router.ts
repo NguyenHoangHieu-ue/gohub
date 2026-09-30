@@ -440,7 +440,6 @@ const AGENT_NAMES: Record<AgentId, string> = {
   "tra-cuu":       "Tra Cứu",
   "giai-dap":      "Giải Đáp",
   "gap-analysis":  "NCC & Gap",
-  "tao-template":  "Tạo Template",
   "bi-analyst":    "BI Analyst",
   "data-explorer": "Kho Dữ Liệu",
 }
@@ -482,11 +481,11 @@ export async function route(message: string, history: Message[], role: UserRole)
   //   · phiếu LLM chỉ là tier-1 → không thể lật primary khi primary.tier ≥ 4;
   //   · không có liên từ ⇒ LLM cũng không thể thêm agent phụ (đa-agent cần liên từ).
   // Giữ slow-path (LLM) cho câu mơ hồ cần enrichment (country/sim/data_source) hoặc
-  // cần hỏi lại (tu-van/gap/template thiếu mục tiêu).
+  // cần hỏi lại (tu-van/gap thiếu mục tiêu).
   if (!hasConjunction(nrm)) {
     const fast = scoreAndSelect(nrm, toFlags(params))   // KHÔNG kèm phiếu LLM
     const fa   = fast.primary.agent
-    const needsTarget = fa === "tu-van" || fa === "gap-analysis" || fa === "tao-template"
+    const needsTarget = fa === "tu-van" || fa === "gap-analysis"
     const hasSearchSignal = !!(
       params.country || params.region || params.groupCode ||
       params.skuCodes?.length || params.productCodes?.length || params.listingCodes?.length ||
@@ -525,7 +524,7 @@ export async function route(message: string, history: Message[], role: UserRole)
     params.vendor || params.isUnlimited
   )
   const intentNeedsTarget =
-    agentId === "tu-van" || agentId === "gap-analysis" || agentId === "tao-template"
+    agentId === "tu-van" || agentId === "gap-analysis"
 
   const needsClarification =
     !multi &&

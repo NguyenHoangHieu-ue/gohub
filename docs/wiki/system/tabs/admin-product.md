@@ -52,7 +52,7 @@ Trang cấu hình kỹ thuật sâu dành riêng cho quản trị viên bao gồ
 
 ### C. Nút Kiểm soát Đồng bộ (Manual Triggers)
 - Kích hoạt sync Lark/Turso hoặc **xoá cache** (`/api/admin/flush-analytics-cache` → bảng `analytics_query_cache`).
-- **Tạo template** SP: tab Admin đã xoá 2026-09-30 (`template-tab.tsx`). API `/api/admin/template` GIỮ LẠI vì `chatbot/page.tsx` (agent `tao-template`) vẫn gọi.
+- **Tạo template** SP: đã xoá hẳn 2026-09-30 (tab Admin `template-tab.tsx`, API `/api/admin/template`, agent chatbot `tao-template`) — Hiếu làm lại bản mới.
 
 ### D. Nơi lưu cấu hình (Supabase `app_settings`)
 Mọi config admin/settings lưu ở **`app_settings`** dạng key→value: `fx.usd_vnd`/`fx.hkd_usd`/`fx.twd_usd` (tỷ giá — nguồn cho tỷ giá B2C + COGS chatbot), `3hk.*` (công thức 3HK), `partner_tiers`, `sku_destination_rules`, `role_permissions`, `b2c_kpi_targets`. → sửa 1 chỗ, cả hệ dùng chung.

@@ -547,29 +547,6 @@ export async function buildToolContext(
     }
   }
 
-  if (agentId === "tao-template") {
-    // Inject WM products for the requested country (to auto-fill APN, network type)
-    if (params.country) {
-      const wmProducts = searchNccWm({ country: params.country, sim_type: params.simType }, ref)
-      const notInSys   = wmProducts.filter((p: any) => !p.in_system).slice(0, 30)
-      sections.push(
-        `=== WM CATALOG CHO ${params.country} (${wmProducts.length} SP, ${notInSys.length} chưa tạo GoHub) ===`,
-        `Format: vendor_id | product_name | days | data_gb | is_daily | is_unlimited | throttle_kbps | sim_type | apn`,
-        ...notInSys.map((p: any) =>
-          `${p.vendor_product_id}|${p.product_name}|${p.days}|${p.data_gb ?? "UNL"}|${p.is_daily}|${p.is_unlimited}|${p.throttle_kbps ?? ""}|${p.sim_type}|${p.apn ?? ""}`
-        )
-      )
-      // 3HK zones for this country
-      const hkZones = searchNcc3hk(params.country, ref)
-      if (hkZones.length)
-        sections.push(`=== 3HK ZONES CHO ${params.country} ===`, JSON.stringify(hkZones.slice(0, 5), null, 2))
-    } else {
-      // No country yet: inject zone list so agent can suggest
-      const zonesSummary = ref.ncc3hk.slice(0, 10).map((z: any) => `Zone ${z.zone}: ${z.country} (${z.price_per_gb_hkd ?? "?"} HKD/GB)`)
-      sections.push(`=== DANH SÁCH ZONE 3HK ===`, ...zonesSummary)
-    }
-  }
-
   const filtered = sections.filter(Boolean)
   return filtered.length ? filtered.join("\n") : ""
 }

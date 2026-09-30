@@ -131,7 +131,7 @@ describe("capability graph — đa-agent (tune ngưỡng bằng câu thực tế
     // "WM có gói Nhật ... doanh thu 3HK" — dù có cả gap + product_search (đều catalog) → chỉ 1 catalog agent
     const r = pick("WorldMove có gói nào cho Nhật và doanh thu vendor 3HK tháng này?")
     const all = [r.primary.agent, ...r.extraAgents]
-    const catalog = all.filter(a => ["tu-van", "tra-cuu", "gap-analysis", "tao-template"].includes(a))
+    const catalog = all.filter(a => ["tu-van", "tra-cuu", "gap-analysis"].includes(a))
     expect(catalog.length).toBeLessThanOrEqual(1)
   })
 })

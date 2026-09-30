@@ -43,7 +43,6 @@ Mô tả chi tiết kỹ thuật, cơ chế định tuyến, bảo mật và ph�
 | **NCC & Gap** | `gap-analysis` | Bảng `ncc_worldmove`, `ncc_datapool` (3HK) | Duyệt catalog của nhà cung cấp và phát hiện khoảng trống sản phẩm (`exist=No`). |
 | **BI Analyst** | `bi-analyst` | Kho dữ liệu PostgreSQL `gohub_dw` | Tự động sinh mã SQL, thực thi truy vấn và trả về kết quả số liệu kèm biểu đồ. |
 | **Kho Dữ Liệu** | `data-explorer` | **CẢ HAI**: `gohub_dw` (SQL) + Supabase (REST 38 bảng catalog/config) | Truy xuất DỮ LIỆU THÔ toàn hệ thống — đếm/liệt kê/tra bảng nhanh (SKU active, số nước, thống kê catalog, usage theo nước…). |
-| **Tạo Template** | `tao-template` | Catalog NCC | Tạo file Excel template sản phẩm cho Admin/Manager xuất bản nhanh. |
 
 > **Agent `data-explorer` (🗄️ Kho Dữ Liệu, thêm s95)** — dùng cho câu hỏi cần đọc NHIỀU bảng / đếm-liệt kê nhanh mà không phải mở đúng tab.
 > - **Tool**: `executeSQL` (gohub_dw, chỉ SELECT/WITH) · `querySupabase` (select có cấu trúc: `table/columns/filters[eq,neq,gt,gte,lt,lte,like,ilike,in,is]/order/limit≤200/countOnly`) · `listSupabaseTables`. File: `web/src/lib/agents/data-explorer.ts` (`runDataExplorer`, Gemini function-calling temp0, ≤10 vòng). **Đếm theo nhóm**: querySupabase KHÔNG có GROUP BY → agent lấy giá trị nhóm rồi `countOnly` từng nhóm (hoặc dùng executeSQL nếu bảng ở gohub_dw).
@@ -148,7 +147,6 @@ với Gấu Pro, không chép lại logic) và chia 2 nhóm:
 ## 5. Phân Quyền Truy Cập
 - **Standard**: Chỉ được dùng các agent `tu-van`, `tra-cuu`, `giai-dap`, `gap-analysis` theo phòng ban. Không được xem giá vốn (COGS), không được dùng BI Analyst.
 - **Staff / BOD / Manager / Admin**: Có quyền kích hoạt Agent `bi-analyst` để truy vấn dữ liệu kinh doanh gohub_dw (đối với Staff/BOD thì bị giới hạn phạm vi dữ liệu theo quyền được phân).
-- **Admin / Manager**: Có quyền sử dụng agent `tao-template` để sinh tệp tải lên.
 
 ---
 

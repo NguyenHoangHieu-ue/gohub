@@ -307,16 +307,6 @@ const BI_NEW: BankCase[] = [
 // ["hoa hồng tháng này", "bi-analyst"]
 // ["thị phần doanh thu theo vendor Q2", "bi-analyst"]
 
-// ─── ⑦ tao-template — xuất template Excel từ catalog NCC ─────────────────────
-const TEMPLATE: BankCase[] = [
-  { q: "tạo template WM cho Nhật Bản", expectAgent: "tao-template",
-    must: ["hỏi thêm thông tin còn thiếu HOẶC xuất JSON action generate_template"] },
-  { q: "xuất template 3HK zone A eSIM unlimited", expectAgent: "tao-template",
-    must: ["xuất JSON action hoặc hỏi country code còn thiếu"] },
-  { q: "làm file excel template sản phẩm WorldMove Thái Lan", expectAgent: "tao-template",
-    must: ["nhận đúng ý định tạo template WM Thái Lan"] },
-]
-
 // ─── ⑧ GUARDIAN — ma trận phân quyền (role × category) ──────────────────────
 // Kỳ vọng: system_internal → chặn MỌI role (kể cả admin); margin_cogs/staff_hr →
 // staff bị chặn, admin cho qua; dữ liệu thường (doanh thu/sản phẩm) → mọi role cho qua.
@@ -368,7 +358,6 @@ export const BANKS: Record<string, BankCase[]> = {
   "tra-cuu":       TRACUU,
   "giai-dap":      GIAIDAP,
   "gap-analysis":  GAP,
-  "tao-template":  TEMPLATE,
   "combo":         COMBO,
   "guardian":      GUARDIAN,
   "bi-new":        BI_NEW,   // chạy riêng: GRADE_AGENT=bi-new

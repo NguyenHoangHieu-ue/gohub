@@ -30,7 +30,6 @@ Chatbot GoHub dùng kiến trúc **multi-agent**: 1 router phân loại câu h�
 | **Tra Cứu** | `tra-cuu` | Tra mã cụ thể (SKU/Product/Item/Listing), COGS, tỷ giá | products/skus/items + FX |
 | **Giải Đáp** | `giai-dap` | Giải thích thuật ngữ, cấu trúc mã, chính sách, mã nhóm nước | KB + Wiki + vendor info |
 | **NCC & Gap** | `gap-analysis` | Chủ sở hữu catalog NCC (WM/3HK); browse + so sánh gap với hệ thống | ncc_worldmove · ncc_3hk |
-| **Tạo Template** | `tao-template` | Xuất file Excel template sản phẩm từ catalog WM/3HK | catalog NCC theo nước |
 | **BI Analyst** (Bé Gấu Bi-Ai) | `bi-analyst` | Phân tích kinh doanh: doanh thu, đơn hàng, nhân viên, B2B/B2C, top SKU, traffic website, SEO | `executeSQL` → gohub_dw (GCP Postgres) · `queryGA4` → Google Analytics 4 · `queryGSC` → Search Console |
 | **Kho Dữ Liệu** (🗄️, s95) | `data-explorer` | Truy xuất DỮ LIỆU THÔ toàn hệ thống — đếm/liệt kê/tra bảng nhanh | `executeSQL` gohub_dw + `querySupabase` (38 bảng catalog/config) + `listSupabaseTables` |
 
@@ -242,3 +241,5 @@ Bộ E2E kiểm chất lượng **câu trả lời** (không chỉ routing), ch�
 - **Fix routing lớn**: câu "đếm/liệt kê/có bao nhiêu/cấu hình \<bảng\>" TRƯỚC rơi về giai-dap/tra-cuu/tu-van rồi bị các agent đó từ chối "thông tin nội bộ" (KHÔNG phải guardian chặn — đó là prompt agent tự từ chối). Mở rộng mạnh `RE.dataExplore` (nhiều noun catalog/config/KB/internal) + thêm `RE.dataTable` nhận diện TÊN BẢNG tường minh → route đúng data-explorer. Mở rộng `RE.usage` (bắt "lượng data tiêu thụ"). Yêu cầu mã SKU có ≥1 chữ số (tránh "notifications" 13 ký tự thành mã).
 - Prompt data-explorer: cấm "punt" (hứa truy vấn rồi dừng) + hint JSON cột chi phí `analytics_channel_costs`. giai-dap: "trong hệ thống" + thuật ngữ nghiệp vụ (KYC…) → vẫn trả lời (không coi là nội bộ).
 - **Kết quả grade cuối (s111): 98/98** — bi 21/21 · data-explorer 36/36 · tu-van 7/7 · tra-cuu 5/5 · giai-dap 8/8 · gap 5/5 · tao-template 3/3 · combo 5/5 · guardian 8/8. Unit 64/64 · routing E2E 37/37 · tsc · build PASS. Chạy: `GRADE_AGENT="all" npx vitest run --config vitest.audit.config.ts src/__e2e__/agent-grade.test.ts --disableConsoleIntercept`.
+
+> **2026-09-30**: agent `tao-template` (Tạo Template) + tab Admin + API `/api/admin/template` đã XOÁ HẲN để làm lại bản mới. Các dòng "tao-template" ở mục grade/audit phía trên là lịch sử.

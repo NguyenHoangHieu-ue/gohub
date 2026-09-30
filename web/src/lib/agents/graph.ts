@@ -27,7 +27,6 @@ export type IntentId =
   | "system_explain"   // giải thích thuật ngữ / cấu trúc / chính sách → giai-dap
   | "ncc_catalog"      // xem catalog NCC (WM/3HK) → gap-analysis
   | "gap_analysis"     // NCC có mà GoHub chưa tạo → gap-analysis
-  | "template_create"  // tạo/xuất template Excel → tao-template
   | "bi_analytics"     // doanh thu/đơn/kênh/nhân viên → bi-analyst
   | "usage_3hk"        // lượng tiêu thụ data 3HK → bi-analyst
   | "data_explore"     // đếm/liệt kê/thống kê dữ liệu thô nhiều bảng → data-explorer
@@ -41,7 +40,6 @@ export const INTENT_AGENT: Record<IntentId, AgentId> = {
   system_explain:  "giai-dap",
   ncc_catalog:     "gap-analysis",
   gap_analysis:    "gap-analysis",
-  template_create: "tao-template",
   bi_analytics:    "bi-analyst",
   usage_3hk:       "bi-analyst",
   data_explore:    "data-explorer",
@@ -53,16 +51,15 @@ const DOMAIN: Record<AgentId, string> = {
   "tu-van":        "catalog",
   "tra-cuu":       "catalog",
   "gap-analysis":  "catalog",
-  "tao-template":  "catalog",
   "bi-analyst":    "analytics",
   "data-explorer": "analytics",
   "giai-dap":      "knowledge",
 }
 
 // Thứ tự ưu tiên tie-break (index 0 = thắng khi cùng tier). Mô phỏng cascade cũ:
-// template > explain-group > data_explore > usage/BI > gap > code-lookup > ncc > pricing/cogs > explain > product > greeting.
+// explain-group > data_explore > usage/BI > gap > code-lookup > ncc > pricing/cogs > explain > product > greeting.
 const PRECEDENCE: IntentId[] = [
-  "template_create", "explain_group", "data_explore", "usage_3hk", "bi_analytics",
+  "explain_group", "data_explore", "usage_3hk", "bi_analytics",
   "gap_analysis", "product_lookup", "ncc_catalog", "price_cogs", "system_explain",
   "product_search", "greeting",
 ]
@@ -80,7 +77,6 @@ export interface SignalFlags {
 
 // ─── Từ khoá (chuẩn hoá: bỏ dấu, lowercase) — port từ router cũ để giữ hành vi ─
 const RE = {
-  template:  /\b(tao|xuat|tai|lam|generate)\b[^.!?]*template|template[^.!?]*\b(wm|3hk|wordmove|worldmove)\b|tao file excel|xuat file excel/,
   explainGroup: /\bla gi\b|nghia la|giai thich|(gom|bao gom)[^.!?]{0,14}(nuoc|quoc gia)/,
   // Data-explorer = ĐẾM / LIỆT KÊ / THỐNG KÊ / CẤU HÌNH dữ liệu thô (catalog/config/KB/internal).
   // Noun-anchored để KHÔNG cướp câu BI tài chính ("doanh thu bao nhiêu" — không có noun catalog).
@@ -105,7 +101,6 @@ const RE = {
 
 // ─── Rule/edge model ──────────────────────────────────────────────────────────
 // Mỗi rule = 1 edge signal→intent với `tier`. tier càng cao càng mạnh.
-//   6 = action tuyệt đối (template)
 //   5 = tín hiệu XÁC ĐỊNH mạnh (definite-BI / usage / data-explore / explain-group)
 //   4 = mã cụ thể / gap / BI ranking
 //   3 = tín hiệu vừa (BI chung / ncc / pricing / cogs / explain)
@@ -114,8 +109,6 @@ const RE = {
 interface Rule { intent: IntentId; tier: number; test: (t: string, f: SignalFlags) => boolean }
 
 const RULES: Rule[] = [
-  { intent: "template_create", tier: 6, test: (t) => RE.template.test(t) },
-
   { intent: "explain_group",   tier: 5, test: (t, f) => f.hasGroupCode && RE.explainGroup.test(t) },
   { intent: "data_explore",    tier: 5, test: (t, f) => RE.dataExplore.test(t) && !f.hasCode },
   { intent: "data_explore",    tier: 5, test: (t, f) => RE.dataTable.test(t) && !f.hasCode },
@@ -167,7 +160,6 @@ const LLM_TO_INTENT: Record<string, IntentId> = {
   system_explain: "system_explain",
   ncc_catalog:    "ncc_catalog",
   gap_analysis:   "gap_analysis",
-  template_create:"template_create",
   bi_analytics:   "bi_analytics",
   data_explore:   "data_explore",
   unclear:        "system_explain",
@@ -333,13 +325,6 @@ export const AGENT_EXAMPLES: Record<AgentId, { role: string; examples: string[] 
       "WorldMove có gói nào cho Nhật?",
       "WM có bao nhiêu gói chưa tạo SKU?",
       "3HK có zone nào cho Hàn Quốc?",
-    ],
-  },
-  "tao-template": {
-    role: "tạo/xuất file Excel template sản phẩm từ catalog NCC",
-    examples: [
-      "Tạo template WM cho Nhật Bản",
-      "Xuất template 3HK cho Thái Lan",
     ],
   },
   "bi-analyst": {
