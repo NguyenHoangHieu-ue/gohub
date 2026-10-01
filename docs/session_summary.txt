@@ -10628,3 +10628,13 @@ tsc + `next build` + `next lint` (0 lỗi mới) + vitest 494/494 PASS. Đã pus
 **Việc còn cho Hiếu**: thêm `dataMB`, `speedMbps` vào template import nếu cần; thử tạo 1 gói Unlimited (Japan CMHK) xem cột/tên đúng;
 xác nhận merge `main` khi muốn; các mức throttle/giả định mới báo để thêm vào `UNLIMITED_PROFILES`.
 
+
+## s217 (2026-10-01) — Fix "Lỗi tải dữ liệu squad" đầu quý + UI hàng con Organization/Channel
+Chi tiết: wiki `docs/wiki/system/tabs/analytics-quarterly.md` §s217, §s217(b). Tóm tắt:
+- **Fix lỗi thật**: `squad-progress` trả 500 `syntax error at or near "FROM"` khi xem quý vừa bắt đầu (ngày 1/10, Q4). Gốc: route lọc `months` theo `asOf` (hôm qua = 30/9 < đầu Q4)
+  → `months` rỗng → `monthCols` rỗng → SQL `... AS hk3, FROM`. Fix: luôn giữ tháng đầu quý (`i === 0 ||`), thành tháng `isFuture`. Q4 sau fix trả 200 nhưng toàn 0 — ĐÚNG
+  (chưa có dữ liệu 1/10, chưa nhập target Q4); tự có số từ 2/10. Phát hiện bằng cách gọi API thật qua Chrome (log Vercel không in message vì catch chỉ trả JSON — cân nhắc
+  `console.error(e)` trong catch route này).
+- **UI (Hiếu yêu cầu)**: hàng con khi breakdown Organization/Channel nền `sky-100` + vạch trái `sky-400` + hover `sky-200` (đã tăng đậm 1 nấc theo yêu cầu); hàng tổng Organization giữ vàng nhạt.
+  Áp `b2b-tier-section.tsx` (mã KH con) + `pivot-table.tsx` (B2C kênh, Squad Progress). Chỉ đổi class.
+Merge `main` cùng s216 theo yêu cầu Hiếu 2026-10-01.
