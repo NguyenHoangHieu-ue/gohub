@@ -10638,3 +10638,15 @@ Chi tiết: wiki `docs/wiki/system/tabs/analytics-quarterly.md` §s217, §s217(b
 - **UI (Hiếu yêu cầu)**: hàng con khi breakdown Organization/Channel nền `sky-100` + vạch trái `sky-400` + hover `sky-200` (đã tăng đậm 1 nấc theo yêu cầu); hàng tổng Organization giữ vàng nhạt.
   Áp `b2b-tier-section.tsx` (mã KH con) + `pivot-table.tsx` (B2C kênh, Squad Progress). Chỉ đổi class.
 Merge `main` cùng s216 theo yêu cầu Hiếu 2026-10-01.
+
+## s218 (2026-10-01) — Trang "VN Ecom — Theo thời gian" (Tháng · Tuần · Quý) trong B2B
+Chi tiết: wiki `docs/wiki/system/tabs/analytics-b2b.md` §s218. Tóm tắt:
+- Hiếu muốn VN Ecom Breakdown xem theo thời gian (mặc định T1→tháng hiện tại, tháng đang chạy hiện Actual + Est.; xem theo Tuần trong tháng; xem theo Quý). Để không đụng bảng cũ (nằm trong `b2b/page.tsx` ~1250 dòng, lọc khoảng ngày + modal Cost) → làm TRANG RIÊNG `/analytics/b2b/ecom`
+  + nút cyan "Xem theo thời gian" ở header bảng cũ. Quyền = id `b2b` (layout lấy segment đầu).
+- API mới `b2b/ecom-timeline`: 1 SQL theo NGÀY (cache `b2b-ecom-tl1`, dep `b2b-ecom`), gom kỳ/Est./CH.Cost ở `lib/b2b-ecom-timeline.ts` (thuần, test 10 ca). CH.Cost đọc tươi Turso → sửa cost lên ngay. `SHOP_STAFF` dùng chung với `ecom-breakdown`.
+- Tuần = Thứ 2–CN cắt theo tháng. Est. = actual × ngày cả kỳ/ngày đã qua, chỉ khi ≥7 ngày (tháng/quý) hoặc ≥3 (tuần).
+- UI: chọn Tháng/Tuần/Quý, năm/tháng, chỉ số (Doanh thu/GP/CM1/Đơn/Units), đơn vị Triệu/Đầy đủ, Phí ship (mặc định tick), KPI, biểu đồ cột chồng theo KH, pivot Customer→Shop→Sub-shop (sub-shop nền sky-100), cột Tổng, TOTAL kèm ▲/▼, Export Excel.
+- QA sống staging (Chrome, acc Creator): T9 3 KH khớp tuyệt đối bảng cũ (Revenue/GP/CH.Cost/CM1); Σ 5 tuần = T9 = 660.489.001; Q3 = T7+T8+T9 = 2.672.843.834; T1→T9 = 7.477.947.775.
+  CHƯA verify sống: cột Est. (hôm nay dữ liệu đủ hết T9 nên chưa có kỳ đang chạy) và CH.Cost/CM1 có chi phí thật (chưa ai nhập chi phí VN Ecom) — chỉ có unit test. Chưa xem UI chế độ Quý/Export.
+- Chưa làm (cố ý): sửa CH.Cost ngay trên trang mới, so cùng kỳ năm trước, tuần 7 ngày cố định.
+Merge `main` theo yêu cầu Hiếu 2026-10-01.
