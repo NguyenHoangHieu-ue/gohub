@@ -74,6 +74,14 @@ export function buildDistribution(raw: RawDistRow[], view: DistView): DistRow[] 
     if (r.revenue > cur._best) { cur._best = r.revenue; cur.group = r.group; cur.name = r.name }
   }
   customers.forEach(c => { const { _best, ...row } = c; void _best; out.push(row) })
+  // 2 Organization khác nước nhưng cùng tên sau khi bỏ tiền tố (vd VN_Org SHOPEEPAY / US_Org SHOPEEPAY) → gắn lại (VN)/(US) để phân biệt.
+  const count = new Map<string, number>()
+  out.forEach(r => { if (r.kind === "customer") count.set(r.name, (count.get(r.name) ?? 0) + 1) })
+  out.forEach(r => {
+    if (r.kind !== "customer" || (count.get(r.name) ?? 0) < 2) return
+    const m = r.key.match(/^(VN|US)_Org\s/i)
+    if (m) r.name = `${r.name} (${m[1].toUpperCase()})`
+  })
   return out.sort((a, b) => b.revenue - a.revenue)
 }
 

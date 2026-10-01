@@ -17,6 +17,15 @@ describe("buildDistribution", () => {
     expect(rows[0].channels.sort()).toEqual(["Momo", "VN-Ecom", "VN-Wholesales"])
   })
 
+  it("2 Organization cùng tên khác nước → gắn hậu tố (VN)/(US); không trùng thì giữ nguyên", () => {
+    const rows = buildDistribution([
+      raw({ unit_key: "US_Org SHOPEEPAY", unit_name: "US_Org SHOPEEPAY", revenue: "500" }),
+      raw({ unit_key: "VN_Org SHOPEEPAY", unit_name: "VN_Org SHOPEEPAY", revenue: "100" }),
+      raw({ unit_key: "VN_Org Momo", unit_name: "VN_Org Momo", revenue: "50" }),
+    ], "customer")
+    expect(rows.map(r => r.name)).toEqual(["SHOPEEPAY (US)", "SHOPEEPAY (VN)", "Momo"])
+  })
+
   it("xem theo khách hàng: B2C giữ nguyên theo kênh", () => {
     const rows = buildDistribution([raw({ biz: "B2C", unit_key: "Misc.", unit_name: "Misc.", revenue: "50" })], "customer")
     expect(rows[0]).toMatchObject({ group: "B2C", kind: "channel", key: "Misc.", name: "Misc." })
