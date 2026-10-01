@@ -210,15 +210,15 @@ describe("SKU/Product đã có trong hệ thống → báo kèm mã, bỏ đi, t
 
   test("China CMHK Daily 1GB × 10,11,12 ngày mà 10 ngày đã có: báo SKU 10 ngày, chỉ tạo 11 và 12", () => {
     const built = build([china()], l2, FX, A)
-    expect(built.sheets.skuUS.map(x => x[18])).toEqual(["ECCHNWDT00110", "ECCHNWDT00111", "ECCHNWDT00112"])
+    expect(built.sheets.skuUS.map(x => x[20])).toEqual(["ECCHNWDT00110", "ECCHNWDT00111", "ECCHNWDT00112"])
     const skus = new Map([["ECCHNWDT00110", "Active"], ["3CCHNWDT00110", "Inactive"]])
     const { result, skipped } = dropExisting(built, skus, new Map())
     expect(skipped.skus).toEqual([
       { sku: "ECCHNWDT00110", tenant: "US", status: "Active", label: "eSIM full · Daily 1GB × 10 ngày" },
       { sku: "3CCHNWDT00110", tenant: "VN", status: "Inactive", label: "eSIM full · Daily 1GB × 10 ngày" },
     ])
-    expect(result.sheets.skuUS.map(x => x[18])).toEqual(["ECCHNWDT00111", "ECCHNWDT00112"])
-    expect(result.sheets.skuVN.map(x => x[18])).toEqual(["3CCHNWDT00111", "3CCHNWDT00112"])
+    expect(result.sheets.skuUS.map(x => x[20])).toEqual(["ECCHNWDT00111", "ECCHNWDT00112"])
+    expect(result.sheets.skuVN.map(x => x[20])).toEqual(["3CCHNWDT00111", "3CCHNWDT00112"])
     expect(result.costRows.map(c => c.days)).toEqual([11, 12])
     expect(result.usCost).toEqual([0, 1])
     expect(result.vnCost).toEqual([0, 1])
@@ -246,7 +246,7 @@ describe("SKU/Product đã có trong hệ thống → báo kèm mã, bỏ đi, t
 
   test("tất cả đã có: không còn SKU nào", () => {
     const built = build([china()], l2, FX, A)
-    const all = new Map([...built.sheets.skuUS, ...built.sheets.skuVN].map(r => [String(r[18]), "Active"] as [string, string]))
+    const all = new Map([...built.sheets.skuUS, ...built.sheets.skuVN].map(r => [String(r[20]), "Active"] as [string, string]))
     const { result } = dropExisting(built, all, new Map())
     expect(result.sheets.skuUS).toHaveLength(0)
     expect(result.sheets.skuVN).toHaveLength(0)
@@ -267,7 +267,7 @@ describe("SKU/Product đã có trong hệ thống → báo kèm mã, bỏ đi, t
     // SKU 11 ngày (dòng 2 của sheet SKU) lấy đúng giá của dòng tính giá 11 ngày
     const us = wb.Sheets.Template_sku_US
     expect(us.B2.v).toBe("ECCHNWDT")
-    expect(us.S2.v).toBe("ECCHNWDT00111")
+    expect(us.U2.v).toBe("ECCHNWDT00111")   // SKU CODE = cột U (thứ 21)
     expect(val("Template_sku_US", "K2")).toBe(result.costRows.find(c => c.days === 11)!.cogsUsd)
     expect(val("Template_sku_VN", "K3")).toBe(result.costRows.find(c => c.days === 12)!.cogsVnd)
   })
@@ -321,5 +321,59 @@ describe("thông báo thay đổi khi upload", () => {
     const old = cat([cp("A", [1], { throttleKbps: undefined }), cp("S1", [1], { sim: "SIM" })])
     const d = diffCatalog(old, [cp("A", [1])])
     expect(d.counts).toEqual({ added: 0, removed: 0, changed: 0 })
+  })
+})
+
+describe("Unlimited: dataMB / speedMbps, 1 mức throttle (3GB + 10Mbps = 1.7), chỉ mã X, tên cũ", () => {
+  const fx = { hkdPerUsd: 7.801, cnyPerUsd: 6.687, vndPerUsd: 26266, vndPerUsdInc: 26266 }
+  const unl = (over: Partial<PlanLine>) => plan({ kind: "Unlimited", dataAmount: 3, unit: "GB", days: [1, 2], productId: "9", ...over })
+  const run = (over: Partial<PlanLine>) => build([jp({ plans: [unl(over)] })], list, fx, A)
+
+  test("mặc định 3GB tốc độ cao + 10Mbps: dataMB 3072, speedMbps 10, mã X, tên cũ, hệ số 1.7", () => {
+    const r = run({})
+    expect(r.warnings).toEqual([])
+    expect(r.sheets.skuUS[0].slice(12, 15)).toEqual(["3GB of high-speed data per day, then unlimited data at 10Mbps", 3072, 10])
+    expect(r.sheets.skuUS[0][20]).toBe("ECJPNWDX00301")
+    expect(r.sheets.skuUS[0][6]).toBe("eSIM Nhật Bản Unlimited 10mbps 1 ngày")
+    expect(r.sheets.skuUS[0][7]).toBe("eSIM Japan Unlimited 10mbps 1 Day(s)")
+    expect(r.sheets.productUS.map(x => [x[6], x[35]])).toEqual([["X", "ECJPNWDX"]])
+    expect(r.costRows[0].unlKey).toBe("unl3gb10")
+    expect(r.costRows[0].explain.dataPool).toContain("1.7 GB/ngày")
+  })
+
+  test("kiểu cũ 1 mốc tốc độ cao + Unlimited (500MB + 5/10Mbps, hệ số 1.6/1.8) KHÔNG còn dùng cho BC → chặn, không sinh SKU", () => {
+    for (const o of [{ dataAmount: 500, unit: "MB" as const }, { dataAmount: 500, unit: "MB" as const, speedMbps: 5 }, { speedMbps: 5 }, { dataAmount: 1 }]) {
+      const r = run(o)
+      expect(r.warnings.join()).toContain("chưa có hệ số GB/ngày")
+      expect(r.warnings.join()).toContain("3GB tốc độ cao + 3GB 10Mbps + Unlimited 1Mbps")   // báo rõ mức duy nhất đang có
+      expect(r.sheets.skuUS).toHaveLength(0)
+    }
+  })
+
+  test("dung lượng tốc độ cao lớn hơn tổng gói BC → chặn", () => {
+    expect(run({ bcAmount: 2, bcUnit: "GB" }).warnings.join()).toContain("lớn hơn tổng gói BC")
+  })
+
+  test("Unlimited luôn 1 Product mã X; Daily/Fixed để trống dataMB/speedMbps", () => {
+    const r = build([jp({ plans: [unl({ days: [1] }), unl({ days: [2], productId: "8" }), plan({ productId: "1", days: [1] })] })], list, fx, A)
+    expect(r.warnings).toEqual([])
+    expect(r.sheets.productUS.map(x => x[35]).sort()).toEqual(["ECJPNWDT", "ECJPNWDX"])
+    expect(r.sheets.skuUS.map(x => x[13])).toEqual([3072, 3072, ""])
+    expect(r.sheets.skuUS.map(x => x[14])).toEqual([10, 10, ""])
+  })
+
+  test("file xuất: ô hệ số Unlimited T7 = 1.7, công thức dùng đúng ô và tính lại khớp", () => {
+    const r = build([jp({ plans: [unl({ days: [1, 30] })] })], list, fx, A)
+    const wb = buildWorkbook(r, { fx, a: A, list, whiteSimVnd: null })
+    const calc = wb.Sheets[CALC_SHEET]
+    expect((calc.T7 as XLSX.CellObject).v).toBe(1.7)
+    expect((calc.M2 as XLSX.CellObject).f).toContain("$T$7")
+    expect(calc.T20).toBeUndefined()   // không còn ô hệ số 500MB
+    const { run } = evaluator(wb)
+    for (const [addr, c] of Object.entries(calc)) {
+      const cell = c as XLSX.CellObject
+      if (addr.startsWith("!") || !cell.f) continue
+      expect(run(CALC_SHEET, cell.f), addr).toBeCloseTo(Number(cell.v), 9)
+    }
   })
 })

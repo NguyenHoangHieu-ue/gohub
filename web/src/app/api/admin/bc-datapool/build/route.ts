@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     const [existProducts, existSkus] = await Promise.all([
       findExisting("products", "product_code", [...built.sheets.productUS, ...built.sheets.productVN].map(r => String(r[35]))),
-      findExisting("skus", "sku_code", [...built.sheets.skuUS, ...built.sheets.skuVN].map(r => String(r[18]))),
+      findExisting("skus", "sku_code", [...built.sheets.skuUS, ...built.sheets.skuVN].map(r => String(r[20]))),
     ])
     // SKU/Product đã có trong hệ thống: báo (kèm mã) và BỎ khỏi kết quả, phần còn lại tạo bình thường
     const { result: deduped, skipped } = dropExisting(built, existSkus, existProducts)
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
     if (req.nextUrl.searchParams.get("format") === "xlsx") {
       if (nothingNew) return NextResponse.json({ error: "Tất cả SKU đã có trong hệ thống — không còn gì để tạo mới", skipped }, { status: 422 })
-      if (result.warnings.some(w => /chưa nhập ProductID|không mã hoá được|trùng|thiếu|phải đúng|chưa có gói|chưa chọn|Portal không bán|không tìm thấy gói|Plan ID cho gói|không có trong file Portal|không khớp cấu hình/.test(w)) && body.force !== true)
+      if (result.warnings.some(w => /chưa nhập ProductID|không mã hoá được|trùng|thiếu|phải đúng|chưa có gói|chưa chọn|Portal không bán|không tìm thấy gói|Plan ID cho gói|không có trong file Portal|không khớp cấu hình|chưa có hệ số|tốc độ Unlimited phải|lớn hơn tổng gói/.test(w)) && body.force !== true)
         return NextResponse.json({ error: "Còn lỗi cần sửa trước khi xuất", warnings: result.warnings }, { status: 422 })
       // Ô giá là công thức Excel (trỏ sheet "Tính giá") để người dùng soát lại cách tính
       const wb = buildWorkbook(result, { fx, a, list, whiteSimVnd })

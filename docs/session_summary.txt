@@ -10611,3 +10611,30 @@ tsc + `next build` + `next lint` (0 lỗi mới) + vitest 488/488 PASS. Đã mer
 thử làm 1 sản phẩm BC bằng tab mới; xác nhận dòng HKD trong file tỷ giá (B9 gõ nhầm "VND/GBP"; đã đọc theo cột A = HKD, T09=3427);
 Product 1D000WDK00000 đang ở trạng thái Preparing — Active trước khi import SKU SIM full; các tab/mã còn lại của vendor khác làm sau.
 
+## s216 (2026-09-30, sau merge main s215) — cột dataMB/speedMbps + chốt lại Unlimited BC Datapool
+Chi tiết: wiki `docs/wiki/system/tabs/admin-product.md` §s216; `docs/wiki/business/cong-thuc-gia-3hk.md`. Tóm tắt:
+- **2 cột mới `dataMB` + `speedMbps`** ở 2 sheet SKU (US/VN), ngay bên phải `throttleSpeed` (M→ N, O; SKU CODE dịch S→U, vendorSku S,
+  vendorSkuSim T, expirations R; latestCogs vẫn K). Chỉ gói Unlimited: dataMB = MB tốc độ cao khách thấy (3GB → 3072), speedMbps = 10.
+  Template gốc `Format_add_new_packages.xlsx` CHƯA có 2 cột này (Hiếu tự thêm vào template nếu hệ thống import bắt đúng cấu trúc).
+- **Form dòng Unlimited**: thêm ô "Dung lượng TỐC ĐỘ CAO khách thấy" + "Tốc độ" (mặc định 3GB + 10Mbps) và ô "Gói BC" riêng
+  (`bcAmount/bcUnit`): ProductID luôn tra theo gói BC "Daily {tổng} Throttle to 1Mbps" (tổng thường 6GB), dung lượng tốc độ cao/tốc độ là thông tin nội bộ.
+- **Chốt lại (Hiếu)**: BC Datapool KHÔNG dùng 1.6/1.8 nữa (kiểu cũ 1 mốc tốc độ cao + Unlimited, chỉ còn 3HK); Unlimited chuyển sang
+  kiểu 2 mức throttle — hiện 1 mức duy nhất 3GB+3GB@10Mbps+Unlimited 1Mbps = **1.7** (`UNLIMITED_PROFILES` trong `lib/bc-datapool/types.ts`, thêm
+  mức mới = thêm 1 dòng + 1 giả định); tổ hợp khác bị chặn + báo đỏ trên form. **Chỉ dùng mã `X`** (bỏ ý 5Mbps = `A`). **Giữ tên cũ**
+  "Unlimited 10mbps". Công Thức Datapool: 1.6/1.8 gắn nhãn "(kiểu cũ)".
+- Bài học: đổi vị trí cột ở file xuất kéo theo nhiều chỉ số cứng (dedupe/route/test/so file mẫu) → gom index cột vào 1 chỗ nếu còn đổi tiếp.
+tsc + `next build` + `next lint` (0 lỗi mới) + vitest 494/494 PASS. Đã push `staging` (`b585ad7b`); **CHƯA merge `main`** cho phần s216
+(`main` đang ở `18407531`).
+**Việc còn cho Hiếu**: thêm `dataMB`, `speedMbps` vào template import nếu cần; thử tạo 1 gói Unlimited (Japan CMHK) xem cột/tên đúng;
+xác nhận merge `main` khi muốn; các mức throttle/giả định mới báo để thêm vào `UNLIMITED_PROFILES`.
+
+
+## s217 (2026-10-01) — Fix "Lỗi tải dữ liệu squad" đầu quý + UI hàng con Organization/Channel
+Chi tiết: wiki `docs/wiki/system/tabs/analytics-quarterly.md` §s217, §s217(b). Tóm tắt:
+- **Fix lỗi thật**: `squad-progress` trả 500 `syntax error at or near "FROM"` khi xem quý vừa bắt đầu (ngày 1/10, Q4). Gốc: route lọc `months` theo `asOf` (hôm qua = 30/9 < đầu Q4)
+  → `months` rỗng → `monthCols` rỗng → SQL `... AS hk3, FROM`. Fix: luôn giữ tháng đầu quý (`i === 0 ||`), thành tháng `isFuture`. Q4 sau fix trả 200 nhưng toàn 0 — ĐÚNG
+  (chưa có dữ liệu 1/10, chưa nhập target Q4); tự có số từ 2/10. Phát hiện bằng cách gọi API thật qua Chrome (log Vercel không in message vì catch chỉ trả JSON — cân nhắc
+  `console.error(e)` trong catch route này).
+- **UI (Hiếu yêu cầu)**: hàng con khi breakdown Organization/Channel nền `sky-100` + vạch trái `sky-400` + hover `sky-200` (đã tăng đậm 1 nấc theo yêu cầu); hàng tổng Organization giữ vàng nhạt.
+  Áp `b2b-tier-section.tsx` (mã KH con) + `pivot-table.tsx` (B2C kênh, Squad Progress). Chỉ đổi class.
+Merge `main` cùng s216 theo yêu cầu Hiếu 2026-10-01.

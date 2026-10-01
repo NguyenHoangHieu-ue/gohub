@@ -19,7 +19,7 @@ export function dropExisting(r: BuildResult, existingSkus: Map<string, string>, 
   const keepRows = (rows: (string | number)[][], cost: number[], tenant: "US" | "VN") => {
     const kept: (string | number)[][] = [], keptCost: number[] = []
     rows.forEach((row, i) => {
-      const code = String(row[18])
+      const code = String(row[20])
       const status = existingSkus.get(code)
       if (status !== undefined) skipped.skus.push({ sku: code, tenant, status, label: labelOf(cost[i]) })
       else { kept.push(row); keptCost.push(cost[i]) }

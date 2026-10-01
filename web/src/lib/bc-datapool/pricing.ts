@@ -1,8 +1,19 @@
-import type { Assumptions, Fx, PlanLine, PoolPriceList, SimType } from "./types"
+import { UNLIMITED_PROFILES, type Assumptions, type Fx, type PlanLine, type PoolPriceList, type SimType, type UnlimitedKey } from "./types"
 
 /** ROUNDUP kiểu Excel (2 số lẻ), chống sai số dấu phẩy động. */
 export const ceil2 = (x: number) => Math.ceil(x * 100 - 1e-9) / 100
 const toGb = (amount: number, unit: "MB" | "GB") => (unit === "MB" ? amount / 1024 : amount)
+export const toMb = (amount: number, unit: "MB" | "GB") => (unit === "GB" ? amount * 1024 : amount)
+
+/**
+ * GB/ngày dùng để tính giá gói Unlimited theo mức throttle (data tốc độ cao, tốc độ): hiện chỉ 3GB + 10Mbps → 1.7 (Công Thức Datapool).
+ * Tổ hợp khác chưa có mức trong UNLIMITED_PROFILES → null (không đoán).
+ */
+export function unlimitedFactor(a: Assumptions, amount: number, unit: "MB" | "GB", speedMbps = 10): { key: UnlimitedKey; gbPerDay: number; label: string } | null {
+  const mb = toMb(amount, unit)
+  const prof = UNLIMITED_PROFILES.find(p => p.dataMb === mb && p.speedMbps === speedMbps)
+  return prof ? { key: prof.key, gbPerDay: a[prof.key], label: prof.label } : null
+}
 
 /**
  * COGS data (USD) của 1 SKU theo bảng COGS BC Datapool:
@@ -13,7 +24,7 @@ export function dataCostPool(plan: PlanLine, days: number, pricePerGb: number, a
   let raw: number
   if (plan.kind === "Fixed") raw = pricePerGb * toGb(plan.dataAmount, plan.unit) * a.fixedPct
   else if (plan.kind === "Daily") raw = pricePerGb * toGb(plan.dataAmount, plan.unit) * days * a.dailyPct
-  else raw = pricePerGb * a.unlimitedGbPerDay * days
+  else raw = pricePerGb * (unlimitedFactor(a, plan.dataAmount, plan.unit, plan.speedMbps ?? 10)?.gbPerDay ?? 0) * days
   return ceil2(raw)
 }
 

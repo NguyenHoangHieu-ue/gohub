@@ -34,8 +34,8 @@ describe("Portal quyết định gói nào được tạo (dữ liệu thật)",
     expect(am({ sim: "eSIM", pool: "CMHK", coverage: "Japan", kind: "Daily" })).toEqual(["500MB", "1GB", "1.5GB", "2GB", "3GB"])
     expect(am({ sim: "eSIM", pool: "CMHK", coverage: "Japan", kind: "Fixed" })).toEqual(["3GB", "5GB", "10GB", "20GB"])
     expect(am({ sim: "SIM", pool: "CMHK", coverage: "Japan", kind: "Fixed" })).toEqual(["3GB", "5GB", "10GB", "15GB", "20GB", "30GB", "50GB"])
-    // Unlimited = N GB tốc độ cao, BC bán dưới dạng Daily 2N GB throttle 1Mbps → 6GB ↔ 3GB
-    expect(am({ sim: "eSIM", pool: "CMHK", coverage: "Japan", kind: "Unlimited" })).toEqual(["3GB"])
+    // Unlimited: liệt kê gói BC thật "Daily {tổng} Throttle to 1Mbps" → 6GB (dung lượng tốc độ cao khách thấy là thông tin nội bộ, nhập riêng)
+    expect(am({ sim: "eSIM", pool: "CMHK", coverage: "Japan", kind: "Unlimited" })).toEqual(["6GB"])
     // Khu vực Portal không bán → không có dung lượng nào
     expect(am({ sim: "eSIM", pool: "SINGTEL", coverage: "Japan", kind: "Daily" })).toEqual([])
   })
@@ -66,6 +66,16 @@ describe("Portal quyết định gói nào được tạo (dữ liệu thật)",
     expect(run({ dataAmount: 3, unit: "GB", productId: "1786346622038926" }, { coverages: ["China"] })).toContain("nước")
     // Unlimited khai báo nhưng ID là Daily thường
     expect(run({ kind: "Unlimited", dataAmount: 3, unit: "GB", productId: "1786346622038926" })).toContain("không khớp cấu hình")
+  })
+
+  test.skipIf(!both)("Tra ProductID Unlimited chỉ theo gói BC Daily {tổng} Throttle 1Mbps (dung lượng tốc độ cao/tốc độ không dùng để tra gói)", () => {
+    const c = real()
+    const r = resolvePlans([product({ plans: [plan({ kind: "Unlimited", dataAmount: 500, unit: "MB", speedMbps: 10, bcAmount: 6, bcUnit: "GB" })] })], c)
+    expect(r.info[0].status).toBe("portal")
+    expect(r.info[0].productId).toBe("1786346622046927")
+    expect(r.warnings).toEqual([])
+    // Nhập tay đúng ID BC cho tổ hợp khác cũng khớp
+    expect(resolvePlans([product({ plans: [plan({ kind: "Unlimited", dataAmount: 500, unit: "MB", speedMbps: 5, bcAmount: 6, bcUnit: "GB", productId: "1786346622046927" })] })], c).warnings).toEqual([])
   })
 
   test.skipIf(!both)("để trống ProductID mà BC không bán gói này → lỗi; không đoán", () => {

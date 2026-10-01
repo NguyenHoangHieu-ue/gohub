@@ -7,7 +7,8 @@ import type { Assumptions, Fx, Pool, PriceList } from "./types"
 export const CALC_SHEET = "Tính giá"
 
 // Ô tham số (cột S:T của sheet Tính giá)
-const P = { hkd: "$T$2", cny: "$T$3", vnd: "$T$4", fixed: "$T$5", daily: "$T$6", unl: "$T$7", white: "$T$8", vndInc: "$T$9" } as const
+const P = { hkd: "$T$2", cny: "$T$3", vnd: "$T$4", fixed: "$T$5", daily: "$T$6", white: "$T$8", vndInc: "$T$9" } as const
+const UNL_CELL = { unl3gb10: "$T$7" } as const
 const FEE_CELL = {
   "esim:CMHK": "$T$15", "esim:SINGTEL": "$T$16", "sim:CMHK": "$T$17", "sim:SINGTEL": "$T$18",
 } as const
@@ -38,7 +39,7 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
   put("S1", str("THAM SỐ (tỷ giá nội bộ + bảng báo giá — sửa ở đây, giá tự đổi)"))
   const params: [number, string, number][] = [
     [2, "HKD/USD (Inc)", ctx.fx.hkdPerUsd], [3, "CNY/USD (Inc)", ctx.fx.cnyPerUsd], [4, "VND/USD (JSC — đổi USD→VND)", ctx.fx.vndPerUsd],
-    [5, "Fixed % (data thực dùng)", ctx.a.fixedPct], [6, "Daily % (data thực dùng)", ctx.a.dailyPct], [7, "Unlimited GB/ngày", ctx.a.unlimitedGbPerDay],
+    [5, "Fixed % (data thực dùng)", ctx.a.fixedPct], [6, "Daily % (data thực dùng)", ctx.a.dailyPct], [7, "Unlimited 3GB tốc độ cao + 3GB 10Mbps + Unlimited 1Mbps — GB/ngày", ctx.a.unl3gb10],
     [8, "Giá SIM trắng (VND, từ hệ thống)", white], [9, "VND/USD (Inc — đổi VND→USD)", ctx.fx.vndPerUsdInc],
     [10, "CMHK — phí IMSI (HKD)", pl.CMHK.imsiFee], [11, "CMHK — phí eSIM (CNY)", pl.CMHK.esimFeeCny],
     [12, "Singtel — phí IMSI (USD)", pl.SINGTEL.imsiFee], [13, "Singtel — phí eSIM (CNY)", pl.SINGTEL.esimFeeCny],
@@ -57,9 +58,9 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
     const gb = `IF(I${r}="MB",H${r}/1024,H${r})`
     const dataF = c.kind === "Daily" ? `ROUNDUP(K${r}*${gb}*J${r}*${P.daily},2)`
       : c.kind === "Fixed" ? `ROUNDUP(K${r}*${gb}*${P.fixed},2)`
-      : `ROUNDUP(K${r}*${P.unl}*J${r},2)`
+      : `ROUNDUP(K${r}*${UNL_CELL[c.unlKey ?? "unl3gb10"]}*J${r},2)`   // ô hệ số theo (dung lượng tốc độ cao, tốc độ Unlimited)
     put(at("A", r), str(c.type)); put(at("B", r), str(c.skuUS)); put(at("C", r), str(c.skuVN)); put(at("D", r), str(c.productId))
-    put(at("E", r), str(c.pool)); put(at("F", r), str(c.operator)); put(at("G", r), str(c.kind))
+    put(at("E", r), str(c.pool)); put(at("F", r), str(c.operator)); put(at("G", r), str(c.kind === "Unlimited" ? `Unlimited ${c.speedMbps}Mbps` : c.kind))
     put(at("H", r), num(c.dataAmount)); put(at("I", r), str(c.unit)); put(at("J", r), num(c.days))
     put(at("K", r), num(c.pricePerGb)); put(at("L", r), str(c.currency))
     put(at("M", r), num(c.dataPool, dataF))

@@ -22,6 +22,8 @@ export interface ExplainInput {
   cogsVnd: number
   fx: Fx
   a: Assumptions
+  /** Unlimited: hệ số GB/ngày đã chọn theo (data tốc độ cao, tốc độ) + nhãn tổ hợp */
+  unl?: { gbPerDay: number; label: string }
   imsiFee: number
   esimFeeCny: number
   whiteSimVnd: number
@@ -35,7 +37,7 @@ export function explainCost(i: ExplainInput): CostExplain {
   const dataPool =
     i.kind === "Daily" ? `ROUNDUP(giá/GB ${n(i.pricePerGb)} × ${gb} GB × ${i.days} ngày × ${pct(i.a.dailyPct)}, 2) = ${n(i.dataPool)} ${i.currency}`
     : i.kind === "Fixed" ? `ROUNDUP(giá/GB ${n(i.pricePerGb)} × ${gb} GB × ${pct(i.a.fixedPct)}, 2) = ${n(i.dataPool)} ${i.currency}`
-    : `ROUNDUP(giá/GB ${n(i.pricePerGb)} × ${n(i.a.unlimitedGbPerDay)} GB/ngày × ${i.days} ngày, 2) = ${n(i.dataPool)} ${i.currency}`
+    : `ROUNDUP(giá/GB ${n(i.pricePerGb)} × ${n(i.unl?.gbPerDay ?? 0)} GB/ngày (${i.unl?.label ?? "?"}) × ${i.days} ngày, 2) = ${n(i.dataPool)} ${i.currency}`
   const dataUsd = i.currency === "HKD"
     ? `ROUNDUP(${n(i.dataPool)} HKD ÷ ${n(i.fx.hkdPerUsd)}, 2) = ${n(i.dataUsd)} USD`
     : `Pool tính bằng USD nên giữ nguyên = ${n(i.dataUsd)} USD`
