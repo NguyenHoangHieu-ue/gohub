@@ -863,7 +863,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                             if (item.hidden) return null
                             const c = item.c
                             // Mã KH con trong Organization: nền xanh nhạt + vạch trái để tách khỏi hàng tổng Organization/KH đơn lẻ
-                            const rowBgCls = item.member ? "bg-sky-50 border-l-4 border-l-sky-300" : i % 2 === 0 ? "bg-white" : "bg-slate-50/50"
+                            const rowBgCls = item.member ? "bg-sky-100 border-l-4 border-l-sky-400" : i % 2 === 0 ? "bg-white" : "bg-slate-50/50"
                             const isExpanded = expandedCusts.has(c.code)
                             const toggleExpand = () => setExpandedCusts(prev => { const s = new Set(prev); s.has(c.code) ? s.delete(c.code) : s.add(c.code); return s })
                             const hp = c.hasProjected === true
@@ -912,7 +912,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                             return (
                               <React.Fragment key={c.code}>
                                 {/* ── Main row: Pro-rata values (mặc định) — bấm tên để expand xem chi tiết ── */}
-                                <tr className={cn("border-t border-slate-50 cursor-pointer", rowBgCls, item.member ? "hover:bg-sky-100/70" : "hover:bg-blue-50/10")}>
+                                <tr className={cn("border-t border-slate-50 cursor-pointer", rowBgCls, item.member ? "hover:bg-sky-200/70" : "hover:bg-blue-50/10")}>
                                   {isCreator && <td className="px-1.5 py-1 font-mono text-slate-500 whitespace-nowrap text-[9px]">{c.code}</td>}
                                   <td className="px-1.5 py-1 text-slate-700 font-medium max-w-[130px]" onClick={toggleExpand}>
                                     <div className="flex items-center gap-1">
