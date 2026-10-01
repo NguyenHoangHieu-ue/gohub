@@ -97,8 +97,8 @@ export function PivotTable({ title, icon: Icon, channels, months, expanded, onTo
                       {monthCells(ch)}
                     </tr>
                     {rowExpanded && ch.members!.map(member => (
-                      <tr key={member.name} className="border-b border-slate-100 bg-slate-50/70 hover:bg-blue-50/20 transition-colors">
-                        <td className="pl-9 pr-4 py-1.5 text-[10px] text-slate-500 sticky left-0 border-r border-slate-100 truncate" style={{ backgroundColor: "#f1f5f9" }}>
+                      <tr key={member.name} className="border-b border-sky-100 bg-sky-50 hover:bg-sky-100/70 transition-colors">
+                        <td className="pl-9 pr-4 py-1.5 text-[10px] text-slate-600 sticky left-0 border-r border-sky-100 border-l-4 border-l-sky-300 truncate" style={{ backgroundColor: "#f0f9ff" }}>
                           {member.name}
                         </td>
                         {monthCells(member)}

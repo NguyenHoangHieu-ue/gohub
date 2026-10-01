@@ -384,7 +384,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
   // >1 mã mới thành 1 "org-header" (thu gọn mặc định); org 1 mã hiện y hệt hàng KH đơn lẻ như trước.
   type DisplayItem =
     | { kind: "org-header"; orgKey: string; orgName: string; members: any[] }
-    | { kind: "customer"; c: any; hidden: boolean }
+    | { kind: "customer"; c: any; hidden: boolean; member?: boolean }
   const buildDisplayList = (list: any[]): DisplayItem[] => {
     const orgMap = new Map<string, any[]>()
     list.forEach(c => {
@@ -402,7 +402,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       if (g.members.length > 1) {
         out.push({ kind: "org-header", orgKey: g.orgKey, orgName: g.orgName, members: g.members })
         const isOpen = expandedOrgs.has(g.orgKey)
-        g.members.forEach(c => out.push({ kind: "customer", c, hidden: !isOpen }))
+        g.members.forEach(c => out.push({ kind: "customer", c, hidden: !isOpen, member: true }))
       } else {
         out.push({ kind: "customer", c: g.members[0], hidden: false })
       }
@@ -862,6 +862,8 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                             }
                             if (item.hidden) return null
                             const c = item.c
+                            // Mã KH con trong Organization: nền xanh nhạt + vạch trái để tách khỏi hàng tổng Organization/KH đơn lẻ
+                            const rowBgCls = item.member ? "bg-sky-50 border-l-4 border-l-sky-300" : i % 2 === 0 ? "bg-white" : "bg-slate-50/50"
                             const isExpanded = expandedCusts.has(c.code)
                             const toggleExpand = () => setExpandedCusts(prev => { const s = new Set(prev); s.has(c.code) ? s.delete(c.code) : s.add(c.code); return s })
                             const hp = c.hasProjected === true
@@ -897,7 +899,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                               // KH không phát sinh trong đúng tháng đang chọn — hiện dòng "—" (giống dòng Nhóm
                               // khi !d.hasData), KHÔNG ẩn hẳn (vẫn cần thấy KH tồn tại, chỉ tháng này không có).
                               return (
-                                <tr key={c.code} className={cn("border-t border-slate-50", i % 2 === 0 ? "bg-white" : "bg-slate-50/50")}>
+                                <tr key={c.code} className={cn("border-t border-slate-50", rowBgCls)}>
                                   {isCreator && <td className="px-1.5 py-1 font-mono text-slate-400 whitespace-nowrap text-[9px]">{c.code}</td>}
                                   <td className="px-1.5 py-1 text-slate-500 max-w-[130px]"><span className="truncate text-[10px]" title={c.name}>{c.name}</span></td>
                                   {isCreator && <td className="px-1.5 py-1" />}
@@ -910,7 +912,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                             return (
                               <React.Fragment key={c.code}>
                                 {/* ── Main row: Pro-rata values (mặc định) — bấm tên để expand xem chi tiết ── */}
-                                <tr className={cn("border-t border-slate-50 cursor-pointer", i % 2 === 0 ? "bg-white" : "bg-slate-50/50", "hover:bg-blue-50/10")}>
+                                <tr className={cn("border-t border-slate-50 cursor-pointer", rowBgCls, item.member ? "hover:bg-sky-100/70" : "hover:bg-blue-50/10")}>
                                   {isCreator && <td className="px-1.5 py-1 font-mono text-slate-500 whitespace-nowrap text-[9px]">{c.code}</td>}
                                   <td className="px-1.5 py-1 text-slate-700 font-medium max-w-[130px]" onClick={toggleExpand}>
                                     <div className="flex items-center gap-1">
