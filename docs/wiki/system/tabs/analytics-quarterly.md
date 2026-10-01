@@ -714,3 +714,7 @@ bảng cho **ALL / B2B / B2C** theo mẫu Excel của Hiếu — Q trước tron
 ## s210 (2026-09-25) — Filter Phí ship / Đơn nội bộ / KH Ops MẶC ĐỊNH TICK (gồm hết)
 
 Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm phí ship + đơn nội bộ, và KH Ops ở B2B/B2C) — số mặc định khớp raw `gohub_dw`; bỏ tick để về "doanh thu SP thuần". **Thay thế** cột "Default = Off" của bảng "Filter Chuẩn" cũ ở trang này (bản chép ở các wiki tab khác cũng vậy). Áp cho 8 nơi: B2B, B2C (`b2c-performance.tsx`), BOD, Quarter Report (kéo theo tab Performance), Quarter Report (Organization), Staff, All-Time, Orders (dropdown Yes/No mặc định Yes). API KHÔNG đổi: thiếu tham số vẫn = loại (chỉ FE truyền cờ). Tab không có bộ lọc (Channels, Vendors, Customers, Dashboard, Squad Progress...) vẫn cố định loại ship/nội bộ → số không còn khớp tab đã tick mặc định.
+
+## s217 (2026-10-01) — Fix "Lỗi tải dữ liệu squad" khi xem quý vừa mới bắt đầu
+
+Nguyên nhân: `squad-progress/route.ts` chỉ giữ tháng đã bắt đầu theo `asOf` (= HÔM QUA). Ngày 1 của quý mới, `asOf` còn thuộc quý trước → `months` rỗng → `monthCols` rỗng → SQL `... AS hk3,\n FROM ...` → 500 `syntax error at or near "FROM"` (FE chỉ hiện "Lỗi tải dữ liệu squad"; Q3 vẫn OK nên khó thấy). Trang mặc định mở quý hiện tại nên lỗi lộ ngay đầu quý. Fix: luôn giữ tháng đầu quý (`i === 0 ||`), tháng đó thành `isFuture` (elapsed 0, factor 1). Bài học: 2 route kia dùng đủ 3 tháng; route nào tự lọc tháng phải chịu được mảng rỗng.

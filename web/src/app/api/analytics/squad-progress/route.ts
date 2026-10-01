@@ -81,7 +81,8 @@ export async function GET(req: NextRequest) {
   for (let i = 0; i < 3; i++) {
     const m = `${year}-${String(qStartM + i).padStart(2, "0")}`
     const mStart = new Date(year, qStartM - 1 + i, 1)
-    if (mStart <= asOf) months.push(m)
+    // i === 0: ngày đầu quý (asOf = hôm qua còn thuộc quý trước) vẫn giữ tháng đầu — months rỗng làm monthCols rỗng → SQL "hk3, FROM" lỗi cú pháp.
+    if (i === 0 || mStart <= asOf) months.push(m)
   }
 
   // Per-month projection metadata — CÙNG logic với quarterly-report (buildQuarterMonthMeta).
