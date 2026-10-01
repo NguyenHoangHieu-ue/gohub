@@ -9,15 +9,13 @@ import {
 import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
 import { calcChCostForPeriod, type CostLine } from "@/lib/analytics-engine/cost-engine"
 import { fetchEcomCosts, ecomCostKey } from "@/lib/b2b-ecom-cost"
+import { SHOP_STAFF } from "@/lib/b2b-ecom-timeline"
 
 // VN Ecom → 3 KH (Lazada/Shopee/Tiktokshop) mỗi KH tách shop SIM/eSIM. Riêng Shopee-SIM tách thêm
 // 2 shop con theo người tạo đơn (Hiếu chốt 2026-09-22, verify sống qua Dev Tools SQL trước khi code):
 // HUỲNH LÊ MINH = Gohub, Kieu Anh = Nobrand. KHÔNG áp cho Lazada/Tiktokshop/eSIM — verify không có field
 // nào khác (company_code/location_id/order_source_code) tách được 2 shop con này, chỉ staff_code khớp.
-const SHOP_STAFF: Record<string, "Gohub" | "Nobrand"> = {
-  "HUỲNH LÊ MINH": "Gohub",
-  "KIEU ANH": "Nobrand",
-}
+// SHOP_STAFF (map người tạo đơn → shop con) dùng chung với ecom-timeline: lib/b2b-ecom-timeline.ts
 
 type Bucket = { revenue: number; margin: number; units: number; orders: number }
 const emptyBucket = (): Bucket => ({ revenue: 0, margin: 0, units: 0, orders: 0 })

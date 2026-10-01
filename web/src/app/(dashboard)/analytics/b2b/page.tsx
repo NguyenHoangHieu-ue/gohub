@@ -1,6 +1,7 @@
 ﻿"use client"
 
 import React, { useState, useEffect, useRef, useMemo } from "react"
+import Link from "next/link"
 import {
   Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart,
 } from "recharts"
@@ -8,7 +9,7 @@ import {
   TrendingUp, DollarSign, PieChart as PieChartIcon,
   AlertCircle, ArrowUpRight, ArrowDownRight, Filter,
   Calendar, Download, ChevronDown, Globe, Search, X,
-  ArrowUpDown, ShoppingBag, Check, Zap, Building2, Shield, FileText, RefreshCw, Smartphone,
+  ArrowUpDown, ShoppingBag, Check, Zap, Building2, Shield, FileText, RefreshCw, Smartphone, CalendarRange,
 } from "lucide-react"
 import { domToCanvas } from "modern-screenshot"
 import { cn } from "@/lib/utils"
@@ -995,6 +996,10 @@ export default function B2BPerformance() {
                         <p className="text-xs text-slate-500 font-medium">Lazada · Shopee · Tiktokshop — mỗi KH tách shop SIM/eSIM. Shopee-SIM tách thêm Gohub / Nobrand theo người tạo đơn.</p>
                       </div>
                     </div>
+                    <div className="flex items-center gap-2">
+                    <Link href="/analytics/b2b/ecom" className="flex items-center gap-2 px-3 py-1.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-all font-bold text-[10px]">
+                      <CalendarRange className="w-3 h-3" />Xem theo thời gian (Tháng · Tuần · Quý)
+                    </Link>
                     <button onClick={() => {
                       const columns = [
                         { label: "Customer", key: "customer" }, { label: "Shop", key: "shop" }, { label: "Sub-shop", key: "subshop" },
@@ -1016,6 +1021,7 @@ export default function B2BPerformance() {
                     }} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
                       <Download className="w-3 h-3" />Export
                     </button>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
