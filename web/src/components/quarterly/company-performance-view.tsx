@@ -59,6 +59,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
   const nextQ = q === 4 ? 1 : q + 1
   const nextYear = q === 4 ? selYear + 1 : selYear
   const nextLabel = `Q${nextQ}-${nextYear}`
+  const hasNext = q < 4
   const curLabel = `${selQ}-${selYear}`
 
   // Kết quả các quý trước kèm khoá bộ lọc đã dùng — chỉ dùng khi khoá còn khớp (tránh hiện số của bộ lọc cũ).
@@ -134,11 +135,14 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
       if (prevData.length > 0) cols.push({ id: "qoq-cur", kind: "qoq", header: "%QoQ", a: curForCmp, b: prevData[prevData.length - 1].d.total })
       cols.push({ id: "gap2", kind: "gap", header: "" })
       const tm = eff[seg]
-      const nextMonths = [0, 1, 2].map(i => (nextQ - 1) * 3 + i + 1)
-      nextMonths.forEach((mn, i) => cols.push({ id: `t${mn}`, kind: "tgt", header: String(mn), tag: "target", vals: tm[i] }))
       const nextTotal = sumVals(tm)
-      cols.push({ id: "next", kind: "next", header: nextLabel, vals: nextTotal })
-      cols.push({ id: "qoq-next", kind: "qoq", header: "Target +%QoQ", a: nextTotal, b: curForCmp })
+      // Q4: không hiện Q1 của năm sau (mỗi năm tách riêng)
+      if (hasNext) {
+        const nextMonths = [0, 1, 2].map(i => (nextQ - 1) * 3 + i + 1)
+        nextMonths.forEach((mn, i) => cols.push({ id: `t${mn}`, kind: "tgt", header: String(mn), tag: "target", vals: tm[i] }))
+        cols.push({ id: "next", kind: "next", header: nextLabel, vals: nextTotal })
+        cols.push({ id: "qoq-next", kind: "qoq", header: "Target +%QoQ", a: nextTotal, b: curForCmp })
+      }
       // Cả năm: chỉ khi đã có đủ quý (≥ Q3) — Q4 đang xem = đủ 4 quý; Q3 = Q1+Q2+Q3+target Q4.
       if (q >= 3) {
         let year: Vals = cur.total
@@ -150,7 +154,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
       out[seg] = cols
     }
     return out
-  }, [prevReports, report, eff, q, selYear, curLabel, nextLabel, nextQ, prevQs])
+  }, [prevReports, report, eff, q, selYear, curLabel, nextLabel, nextQ, prevQs, hasNext])
 
   const openEdit = async (which: "cur" | "next") => {
     const tq = which === "cur" ? { q, year: selYear } : { q: nextQ, year: nextYear }
@@ -201,11 +205,11 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
         <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="text-base font-bold text-slate-900">Performance — {curLabel} <span className="text-slate-400 font-semibold">· {companyCode === "ALL" ? "Toàn công ty" : companyCode}</span></h2>
-            <p className="text-xs text-slate-400 mt-0.5">Quý trước · từng tháng (tháng đang chạy hiện Pro-rata) · target {nextLabel} · cả năm</p>
+            <p className="text-xs text-slate-400 mt-0.5">Quý trước · từng tháng (tháng đang chạy hiện Pro-rata) {hasNext ? ` · target ${nextLabel}` : ""} · cả năm</p>
           </div>
           <div className="flex items-center gap-2">
             {loading && <RefreshCw className="w-4 h-4 animate-spin text-[#0f4c81]" />}
-            {canEdit && ([["cur", q, selYear, curLabel], ["next", nextQ, nextYear, nextLabel]] as const).map(([which, tq, ty, lbl]) => {
+            {canEdit && ([["cur", q, selYear, curLabel], ...(hasNext ? [["next", nextQ, nextYear, nextLabel] as const] : [])] as const).map(([which, tq, ty, lbl]) => {
               const active = editing && editQ.q === tq && editQ.year === ty
               return (
                 <button key={which} onClick={() => (active ? setEditing(false) : openEdit(which))}
@@ -330,7 +334,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
         <p className="px-5 py-2 text-[10px] text-slate-400 border-t border-slate-100">
           Số thực tế = báo cáo Quarter Report (cùng bộ lọc VN/US, Phí ship, Đơn nội bộ). Tháng đang chạy hiện Pro-rata; cột quý = tổng các tháng.
           CM1 gồm chi phí KH B2B + group cost + chi phí kênh B2C. %QoQ = thay đổi tương đối (mới − cũ)/|cũ|, cả dòng %.
-          Cột {selYear} = các quý trước + quý đang xem + target {nextLabel}{q === 4 ? "" : " (cần nhập đủ target mới hiện)"}; chỉ hiện từ Q3.
+          Cột {selYear} = các quý trước + quý đang xem{hasNext ? ` + target ${nextLabel} (cần nhập đủ target mới hiện)` : ""}; chỉ hiện từ Q3.
         </p>
       </div>
     </div>
