@@ -10666,3 +10666,9 @@ Chi tiết: wiki `docs/wiki/system/tabs/ncc.md` §s220. Tóm tắt:
 - Bài học: lệnh ghi DB chạy qua vitest bị hệ thống chặn lần đầu (DB dùng chung) → phải được Hiếu cho phép rõ ràng; luôn dry-run + sao lưu bảng trước khi ghi hàng loạt. Heredoc Python trong Bash làm hỏng `
 `/`\s` trong code TS → dùng Edit/Write cho file code.
 **Việc còn cho Hiếu**: soát nhanh APN các nhóm đổi nhà mạng (xem wiki); 153 sản phẩm mới + 41 cũ còn trống APN (đa số "Singapore, Malaysia, Indonesia" — hỏi WM bổ sung vào file APN); cron `sync.py` tự tính lại `exist` ở lần chạy tới (hiện 750 Yes).
+
+## s221 (2026-10-02) — Performance nhập được target quý đang xem + nhập target Q4-2026 từ bảng Lark
+Chi tiết: wiki `docs/wiki/system/tabs/analytics-quarterly.md` §s221. Commit `695be77a`, `ac5e07d8` (staging, CHƯA merge `main`). Tóm tắt:
+- Lỗi logic: nút target tab Performance chỉ nhập cho quý SAU quý đang xem (xem Q4-2026 → "Target Q1-2027"). Sửa: 2 nút (quý đang xem + quý sau), `editQ` quyết định quý tải/lưu; API không đổi.
+- Nhập dữ liệu theo bảng Lark "Q4-Planning" (đọc bằng Chrome, đối chiếu tổng quý): `company_monthly_targets.Q4_2026` ALL + B2B từ bảng, B2C = ALL − B2B (Hiếu yêu cầu); `squad_targets.Q4_2026` Squad 1/2 (`months`). Ghi trực tiếp Supabase `app_settings` theo yêu cầu của Hiếu.
+**Việc còn cho Hiếu**: xem UI tab Performance (2 nút target) + Squad Progress sau khi staging build; xem Q4 chưa có khối so thực tế với target Q4 (chưa làm); bảng Lark còn 2 tab B2B-Breakdown-Squad1/2 (target theo từng KH?) chưa đọc.
