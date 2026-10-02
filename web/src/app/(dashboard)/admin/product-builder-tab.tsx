@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Download, Eye, Plus, Trash2, Upload } from "lucide-react"
 import { PRODUCT_HEADERS, SKU_HEADERS, pickOperatorPrice, type BuildResult } from "@/lib/bc-datapool/builder"
-import { pickSupportCountry } from "@/lib/bc-datapool/iso"
+import { pickSupportCountry, pickSupportGroup } from "@/lib/bc-datapool/iso"
 import type { Skipped } from "@/lib/bc-datapool/dedupe"
 import type { CatalogDiff, PriceDiff } from "@/lib/bc-datapool/diff"
 import { availableKinds, canonCountry, choosePlan, findPlans, manualMismatches, multiRegions, offers, sellableCountries, type CatalogPlan, type PlanCatalog, type PlanInfo } from "@/lib/bc-datapool/plan-lookup"
@@ -13,7 +13,7 @@ import { DEFAULT_ASSUMPTIONS, UNLIMITED_PROFILES, type Assumptions, type Fx, typ
 type Notify = (type: "success" | "error", text: string) => void
 interface SupportCountry { code: string; en: string; vn: string; iso: string }
 interface CatalogSummary { uploadedAt: string; files: string[]; esim: number; sim: number; lastDiff: CatalogDiff | null }
-interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | null; portalPlans: CatalogPlan[] | null; supportCountries: SupportCountry[]; fx: (Fx & { month?: string }) | null; fxError: string | null; assumptions: Assumptions }
+interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | null; portalPlans: CatalogPlan[] | null; supportCountries: SupportCountry[]; refCountries: { code: string; name: string }[]; fx: (Fx & { month?: string }) | null; fxError: string | null; assumptions: Assumptions }
 interface PreviewResult extends BuildResult { fx: Fx; skipped: Skipped; nothingNew: boolean; planInfo: PlanInfo[]; whiteSimVnd: number | null }
 
 // Dòng gói trên form: dung lượng chọn từ các gói Portal thật (amountKey = "500|MB"), số ngày chỉ bật được ngày Portal bán.
@@ -149,10 +149,16 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
     const first = coverage ? defaultPlan(base) : null
     const common = { pool, simType: sim, coverage, covs, operators: rows.map(r => `${r.coverage}|${r.operator}`), plans: first ? [first] : [] }
     if (region) {
-      // Gói đa vùng: mã nhóm = chữ cái đầu của 3 nước đầu theo Portal (ME4 Saudi/Turkey/Egypt → STE); iso/tên = các nước nối bằng ", " — sửa tay được
+      // Gói đa vùng: tìm nhóm nước hỗ trợ có tập mã nước KHỚP ĐÚNG các nước của gói (không thừa, không thiếu). Không có thì để trống — không tự đặt mã.
+      const g = pickSupportGroup(opts?.supportCountries ?? [], region.countries, opts?.refCountries ?? [])
+      const first = g.matches[0]
+      const codeHint = g.unresolved.length ? `Không nhận ra nước: ${g.unresolved.join(", ")} — không tự tìm được nhóm nước hỗ trợ`
+        : g.matches.length === 0 ? `Chưa có nhóm nước hỗ trợ nào gồm đúng ${g.iso.join(", ")} (không thừa, không thiếu) — tạo nhóm ở Nhóm Nước Hỗ Trợ trước, hoặc tự nhập mã`
+        : g.matches.length > 1 ? `Có ${g.matches.length} nhóm cùng đúng các nước này: ${g.matches.map(m => m.code).join(", ")} — nhập mã đúng`
+        : `Khớp nhóm ${first.code} (${first.iso})`
       patchProduct(i, {
-        ...common, code: covs.slice(0, 3).map(c => c[0]).join("").toUpperCase(), codeHint: "Mã nhóm nước tự đặt (chữ cái đầu 3 nước đầu) — kiểm tra không trùng nhóm khác",
-        iso: found.map(f => f.match?.iso).filter(Boolean).join(", "), en: found.map((f, k) => f.match?.en ?? covs[k]).join(", "), vn: found.map(f => f.match?.vn ?? "").filter(Boolean).join(", "),
+        ...common, code: g.matches.length === 1 ? first.code : "", codeHint,
+        iso: first?.iso ?? g.iso.join(", "), en: first?.en ?? region.countries.join(", "), vn: first?.vn ?? "",
       })
       return
     }

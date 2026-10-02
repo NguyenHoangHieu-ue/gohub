@@ -47,6 +47,12 @@ export async function loadFx(): Promise<Fx & { month: string; source: string }> 
 
 export interface SupportCountry { code: string; en: string; vn: string; iso: string }
 
+export async function loadRefCountries(): Promise<{ code: string; name: string }[]> {
+  const { data, error } = await supabaseAdmin.from("ref_countries").select("code,name")
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(r => ({ code: String(r.code), name: String(r.name ?? "") }))
+}
+
 export async function loadSupportCountries(): Promise<SupportCountry[]> {
   const { data, error } = await supabaseAdmin.from("ref_support_countries").select("code,support_country,support_country_vn,country_codes").order("code")
   if (error) throw new Error(error.message)
@@ -55,7 +61,7 @@ export async function loadSupportCountries(): Promise<SupportCountry[]> {
     .map(r => {
       const iso = String(r.country_codes ?? "").trim()
       const first = iso.split(/[,\s]+/)[0] ?? ""
-      const vn = r.support_country_vn || (/^[A-Za-z]{2}$/.test(first) && !iso.includes(",") ? countryNameVn(first) : String(r.support_country ?? ""))
+      const vn = r.support_country_vn || (/^[A-Za-z]{2}$/.test(first) && !iso.includes(",") ? countryNameVn(first) : String(r.support_country ?? ""))   // nhóm nhiều nước chưa có tên VN → dùng tên EN
       return { code: String(r.code), en: String(r.support_country ?? ""), vn, iso }
     })
 }
