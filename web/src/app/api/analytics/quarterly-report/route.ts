@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
   const prevQEndDate = new Date(prevQYear, prevQNum * 3, 0).toISOString().split("T")[0]
   const prevQMonths = [0, 1, 2].map(i => `${prevQYear}-${String(prevQFirst + i).padStart(2, "0")}`)
 
-  const rawCacheKey = `${QREPORT_CACHE_PREFIX}${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  const rawCacheKey = `${QREPORT_CACHE_PREFIX}${quarter}:${year}:${companyCode}:${qEndDate}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   // CTE TỐI ƯU: Dùng JOIN thay NOT IN subquery — query planner hiệu quả hơn với dữ liệu lớn.
   // inactive_cust: LEFT JOIN + IS NULL thay NOT IN. hk3_skus: JOIN trực tiếp.

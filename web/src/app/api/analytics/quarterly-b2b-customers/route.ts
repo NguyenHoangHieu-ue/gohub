@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
 
   // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
   // v8: cộng ước tính T9 CH.Cost (dùng T8 record làm fallback)
-  const rawCacheKey = `${QB2B_CACHE_PREFIX}${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  const rawCacheKey = `${QB2B_CACHE_PREFIX}${quarter}:${year}:${companyCode}:${qEndDate}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
     // ── Phần 1+2+3+4: gohub_dw (cache), Turso customer costs, prev costs, Supabase group costs — SONG SONG ──

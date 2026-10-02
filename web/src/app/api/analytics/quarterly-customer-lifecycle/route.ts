@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
 
       if (mode === "summary") {
         const summary = await cachedQuery(
-          `qlife_b2c_summary:v1:${quarter}:${year}:${r.todayStr}`,
+          `qlife_b2c_summary:v1:${quarter}:${year}:${r.qEnd}`,
           () => adminGohubCustomerRangeSummary(from(r.qStart), to(r.qEnd)),
           QUERY_TTL_MIN, refresh,
         )
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
       }
 
       const detail = await cachedQuery<LifecycleDetail>(
-        `qlife_b2c_detail:v1:${quarter}:${year}:${r.todayStr}`,
+        `qlife_b2c_detail:v1:${quarter}:${year}:${r.qEnd}`,
         async () => {
           // Tuần tự 2 danh sách (mỗi cái 8 luồng) — tránh dồn ~16 request đồng thời lên API ngoài.
           const cur = await adminGohubCustomerList(from(r.qStart), to(r.qEnd), { concurrency: 8 })
@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)}`
 
     const detail = await cachedQuery<LifecycleDetail>(
-      `qlife_b2b_detail:v1:${quarter}:${year}:${companyCode}:${r.todayStr}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${createHash("sha1").update(JSON.stringify(tierKeywords)).digest("hex").slice(0, 8)}`,
+      `qlife_b2b_detail:v1:${quarter}:${year}:${companyCode}:${r.qEnd}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${createHash("sha1").update(JSON.stringify(tierKeywords)).digest("hex").slice(0, 8)}`,
       async () => {
         // Doanh thu B2B theo KH × tháng cho [quý trước → quý này] — CÙNG bộ lọc INACTIVE/exclude/ship/company với Quarter Report
         // nên "đang hoạt động quý này" khớp đúng ô tổng quan.
