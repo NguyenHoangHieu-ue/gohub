@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, test } from "vitest"
 import { parsePlanFile } from "@/lib/bc-datapool/plan-catalog"
-import { availableKinds, canonCountry, choosePlan, offers, resolvePlans, sellableCountries, type CatalogPlan, type PlanCatalog } from "@/lib/bc-datapool/plan-lookup"
+import { availableKinds, canonCountry, choosePlan, multiRegions, offers, regionKey, resolvePlans, sellableCountries, type CatalogPlan, type PlanCatalog } from "@/lib/bc-datapool/plan-lookup"
 import type { PlanLine, ProductInput } from "@/lib/bc-datapool/types"
 
 const ROOT = path.resolve(__dirname, "../../..")
@@ -14,6 +14,37 @@ const real = (): PlanCatalog => ({ uploadedAt: "", files: [], plans: [...parsePl
 const plan = (p: Partial<PlanLine>): PlanLine => ({ kind: "Daily", dataAmount: 500, unit: "MB", days: [1], productId: "", ...p })
 const product = (over: Partial<ProductInput> = {}): ProductInput => ({
   pool: "CMHK", simType: "eSIM", coverages: ["Japan"], operators: [], supportCountryCode: "JPN", isoCodes: "JP", countryNameEn: "Japan", countryNameVn: "Nhật Bản", plans: [plan({})], ...over,
+})
+
+describe("Gói đa vùng (nhiều nước trong 1 gói)", () => {
+  const ME4 = ["Saudi Arabia", "Turkey", "Egypt", "UAE"]
+  test("khoá vùng không phụ thuộc thứ tự nước; nước đơn giữ nguyên tên chuẩn hoá", () => {
+    expect(regionKey(["UAE", "Egypt", "Turkey", "Saudi Arabia"])).toBe(regionKey(ME4))
+    expect(regionKey("Japan")).toBe("japan")
+    expect(regionKey(regionKey(ME4))).toBe(regionKey(ME4))
+    expect(regionKey(["Hong Kong (China)", "Macau (China)"])).toBe("hong kong+macao")
+  })
+
+  test.skipIf(!both)("Portal thật: liệt kê gói đa vùng, tra ProductID và dung lượng theo cả nhóm nước; nước đơn không lẫn", () => {
+    const c = real()
+    const me = multiRegions(c, "eSIM", "CMHK").find(m => m.key === regionKey(ME4))
+    expect(me?.label).toBe("ME 4 — Saudi Arabia, Turkey, Egypt, UAE")
+    expect(multiRegions(c, "eSIM", "SINGTEL").some(m => m.countries.includes("Taiwan (China)"))).toBe(true)
+    // Nước đơn vẫn không bị gói đa vùng làm lẫn
+    const solo = offers(c, { sim: "eSIM", pool: "CMHK", coverage: "Saudi Arabia", kind: "Daily" })
+    expect(solo.every(o => o.plan.countries.length === 1)).toBe(true)
+    const am = (kind: "Daily" | "Fixed" | "Unlimited") => offers(c, { sim: "eSIM", pool: "CMHK", coverage: ME4, kind }).map(o => `${o.amount}${o.unit}`)
+    expect(am("Daily")).toEqual(["500MB", "1GB", "2GB", "3GB"])
+    expect(am("Unlimited")).toEqual(["6GB"])
+    expect(availableKinds(c, { sim: "eSIM", pool: "CMHK", coverage: regionKey(ME4) })).toEqual(["Daily", "Unlimited"])
+    // ProductID ME4 Daily 500MB eSIM (khớp file Saudi mẫu)
+    const r = resolvePlans([product({ coverages: ME4, plans: [plan({ productId: "" })] })], c)
+    expect(r.info[0].status).toBe("portal")
+    expect(r.info[0].productId).toBe("1786607344338184")
+    expect(r.warnings).toEqual([])
+    // ProductID của ME4 dùng cho riêng Saudi Arabia → báo không khớp nước
+    expect(resolvePlans([product({ coverages: ["Saudi Arabia"], plans: [plan({ productId: "1786607344338184" })] })], c).warnings.join(" ")).toContain("nước")
+  })
 })
 
 describe("Portal quyết định gói nào được tạo (dữ liệu thật)", () => {

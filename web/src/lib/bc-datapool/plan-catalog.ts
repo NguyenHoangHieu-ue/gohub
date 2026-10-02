@@ -20,7 +20,7 @@ function parseSheet(name: string, ws: XLSX.WorkSheet): CatalogPlan[] {
   const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null, blankrows: false })
   const head = (rows[0] ?? []).map(cell)
   const ix = (h: string) => head.indexOf(h)
-  const [iId, iName, iRegion, iCountry, iData, iDays, iTiming, iDesc] =
+  const [iId, iName, , iCountry, iData, iDays, iTiming, iDesc] =
     ["Plan ID", "Plan Name", "Single or Multiple Region", "Country/Region", "Data", "Days", "Timing Rule", "Product Description"].map(ix)
   if ([iId, iCountry, iData, iDays, iDesc].some(i => i < 0)) throw new Error(`Sheet "${name}": thiếu cột bắt buộc (Plan ID, Country/Region, Data, Days, Product Description)`)
 
@@ -42,8 +42,8 @@ function parseSheet(name: string, ws: XLSX.WorkSheet): CatalogPlan[] {
           countries: cell(r[iCountry]).split(",").map(s => s.trim()).filter(Boolean),
           amount: Number(data[1]), unit: data[2].toUpperCase() as DataUnit, operators: Array.from(new Set(operators)), days: [],
         }
-        if (cell(r[iRegion]).toLowerCase() === "single" || cur.countries.length === 1) plans.push(cur)
-        else cur = null   // gói đa vùng: chưa hỗ trợ
+        if (cur.countries.length) plans.push(cur)   // nước đơn hoặc gói đa vùng (countries = toàn bộ nước của gói)
+        else cur = null
       }
     }
     // Ô Plan ID có thể bị gộp (merged) → dòng tiếp theo trống nhưng vẫn là số ngày của gói hiện tại

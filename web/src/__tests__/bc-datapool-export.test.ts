@@ -377,3 +377,38 @@ describe("Unlimited: dataMB / speedMbps, 1 mức throttle (3GB + 10Mbps = 1.7), 
     }
   })
 })
+
+describe("Sản phẩm đa vùng", () => {
+  const multiList: PriceList = {
+    ...list,
+    pools: { ...list.pools, CMHK: { ...list.pools.CMHK, rows: [
+      { coverage: "Saudi Arabia", operator: "Mobily", plmn: "1", pricePerGb: 4, kyc: false },
+      { coverage: "Turkey", operator: "Turkcell", plmn: "2", pricePerGb: 6, kyc: false },
+      { coverage: "Egypt", operator: "Orange", plmn: "3", pricePerGb: 5, kyc: false },
+      { coverage: "Egypt", operator: "Vodafone", plmn: "4", pricePerGb: 5.5, kyc: false },
+    ] } },
+  }
+  const ME: ProductInput = {
+    pool: "CMHK", simType: "eSIM", coverages: ["Saudi Arabia", "Turkey", "Egypt"],
+    operators: ["Saudi Arabia|Mobily", "Turkey|Turkcell", "Egypt|Orange", "Egypt|Vodafone"],
+    supportCountryCode: "STE", isoCodes: "SA, TR, EG", countryNameEn: "Saudi Arabia, Turkey, Egypt", countryNameVn: "Ả Rập Xê Út, Thổ Nhĩ Kỳ, Ai Cập",
+    plans: [plan({ productId: "1786607344338184", days: [1] })],
+  }
+
+  test("giá = nhà mạng đắt nhất trong TOÀN BỘ nước; onsiteCarrier mỗi nước 1 dòng; mã/iso/tên nhóm đi thẳng vào Product", () => {
+    const r = build([ME], multiList, FX, A)
+    expect(r.warnings).toEqual([])
+    expect(r.costRows[0].pricePerGb).toBe(6)
+    expect(r.costRows[0].operator).toContain("Turkcell")
+    const prod = r.sheets.productUS[0]
+    expect(prod[3]).toBe("STE")
+    expect(prod[4]).toBe("SA, TR, EG")
+    expect(prod[8]).toBe("eSIM Saudi Arabia, Turkey, Egypt")
+    expect(prod[22]).toBe("Saudi Arabia: Mobily\nTurkey: Turkcell\nEgypt: Orange/Vodafone")
+    expect(prod[35]).toBe("ECSTEWDT")
+  })
+
+  test("nước đơn giữ onsiteCarrier cũ (nhà mạng nối bằng /)", () => {
+    expect(build([jp()], list, FX, A).sheets.productUS[0][22]).toBe("KDDI/SoftBank")
+  })
+})

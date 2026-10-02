@@ -41,26 +41,35 @@ export function canonCountry(s: string): string {
   return ALIAS[c] ?? c
 }
 
-/** Unlimited: `amount`/`unit` = dung lượng gói BC thật (VD 6GB), KHÔNG phải dung lượng tốc độ cao khách thấy. */
-export interface PlanQuery { sim: SimType; kind: PlanKind; pool: Pool; coverage: string; amount: number; unit: DataUnit }
+/**
+ * Khoá vùng của 1 gói: nước đơn = tên chuẩn hoá ("japan"); gói đa vùng = các nước chuẩn hoá, sắp xếp, nối "+" (không phụ thuộc thứ tự).
+ * Chuỗi đã có "+" coi như đã là khoá (canonCountry bỏ mọi ký tự không chữ/số nên nước đơn không bao giờ chứa "+").
+ */
+export function regionKey(x: string | string[]): string {
+  if (Array.isArray(x)) return Array.from(new Set(x.map(canonCountry))).sort().join("+")
+  return x.includes("+") ? x : canonCountry(x)
+}
+
+/** Unlimited: `amount`/`unit` = dung lượng gói BC thật (VD 6GB), KHÔNG phải dung lượng tốc độ cao khách thấy. `coverage`: tên nước, danh sách nước, hoặc khoá vùng. */
+export interface PlanQuery { sim: SimType; kind: PlanKind; pool: Pool; coverage: string | string[]; amount: number; unit: DataUnit }
 
 const isThrottle1M = (p: CatalogPlan) => p.throttleKbps === 1024
 
 /**
- * Gói Portal khớp (nước đơn, cùng pool/SIM/dung lượng).
+ * Gói Portal khớp (cùng vùng nước đơn/đa vùng, pool, SIM, dung lượng).
  * Unlimited KHÔNG có gói riêng ở BC: nội bộ = N tốc độ cao + phần còn lại @5/10Mbps + không giới hạn @1Mbps (tổng thường 6GB), phía BC gộp
  * thành "Daily {tổng}GB — Throttle to 1Mbps" → tra gói Daily có tốc độ sau ngưỡng 1024kbps. Dung lượng tốc độ cao khách thấy (dataMB)
  * và tốc độ (speedMbps) là thông tin nội bộ, KHÔNG dùng để tra gói.
  */
 export function findPlans(cat: PlanCatalog, q: PlanQuery): CatalogPlan[] {
-  const want = canonCountry(q.coverage)
+  const want = regionKey(q.coverage)
   const unl = q.kind === "Unlimited"
   const kind = unl ? "Daily" : q.kind
   const amount = q.amount
   return cat.plans.filter(p =>
     p.sim === q.sim && p.kind === kind && p.pool === q.pool && p.amount === amount && p.unit === q.unit &&
     (unl ? isThrottle1M(p) : !isThrottle1M(p)) &&
-    p.countries.length === 1 && canonCountry(p.countries[0]) === want)
+    regionKey(p.countries) === want)
 }
 
 const newerId = (a: string, b: string) => (a.length !== b.length ? a.length - b.length : a.localeCompare(b))
@@ -77,12 +86,39 @@ export function choosePlan(cands: CatalogPlan[]): { plan: CatalogPlan; duplicate
   return null
 }
 
-/** Các nước (chuẩn hoá tên) mà Portal có bán ở pool + loại SIM này (bất kể Daily/Fixed) — dùng để ẩn khu vực BC không bán. */
+/** Các nước (chuẩn hoá tên) mà Portal có bán GÓI NƯỚC ĐƠN ở pool + loại SIM này (bất kể Daily/Fixed) — dùng để ẩn khu vực BC không bán. */
 export function sellableCountries(cat: PlanCatalog | null, sim: SimType, pool: Pool): Set<string> {
   const out = new Set<string>()
   if (!cat) return out
   for (const p of cat.plans) if (p.sim === sim && p.pool === pool && p.countries.length === 1) out.add(canonCountry(p.countries[0]))
   return out
+}
+
+export interface MultiRegion {
+  /** Khoá vùng (dùng làm giá trị ô chọn + truyền vào `coverage` của findPlans/offers) */
+  key: string
+  /** Tên hiển thị: tên nhóm Portal ("ME 4") kèm danh sách nước */
+  label: string
+  /** Các nước theo thứ tự Portal liệt kê (tên Portal) */
+  countries: string[]
+}
+
+/** Tên nhóm trong tên gói Portal: "ME 4-Daily 500MB-eSIM…" → "ME 4". */
+const groupName = (planName: string) => /^\s*(.*?)\s*-\s*(?:daily|fixed)\b/i.exec(planName)?.[1]?.trim() ?? ""
+
+/** Các gói ĐA VÙNG (nhiều nước trong 1 gói) mà Portal bán ở pool + loại SIM này. */
+export function multiRegions(cat: PlanCatalog | null, sim: SimType, pool: Pool): MultiRegion[] {
+  const out = new Map<string, MultiRegion>()
+  if (!cat) return []
+  for (const p of cat.plans) {
+    if (p.sim !== sim || p.pool !== pool || p.countries.length < 2) continue
+    const key = regionKey(p.countries)
+    const cur = out.get(key)
+    const g = groupName(p.name)
+    if (!cur) out.set(key, { key, countries: p.countries, label: `${g ? g + " — " : ""}${p.countries.join(", ")}` })
+    else if (g && !cur.label.includes(" — ")) cur.label = `${g} — ${p.countries.join(", ")}`   // bản đầu chưa có tên nhóm (catalog rút gọn không có name)
+  }
+  return Array.from(out.values()).sort((a, b) => a.label.localeCompare(b.label))
 }
 
 export interface Offer {
@@ -98,14 +134,14 @@ const mb = (amount: number, unit: DataUnit) => (unit === "GB" ? amount * 1024 : 
  * Các dung lượng Portal bán cho (SIM, pool, nước, loại), sắp tăng dần. Unlimited: liệt kê các gói BC "Daily {tổng}GB Throttle to 1Mbps"
  * (amount = TỔNG của gói BC, VD 6GB).
  */
-export function offers(cat: PlanCatalog | null, q: { sim: SimType; pool: Pool; coverage: string; kind: PlanKind }): Offer[] {
-  if (!cat || !q.coverage) return []
-  const want = canonCountry(q.coverage)
+export function offers(cat: PlanCatalog | null, q: { sim: SimType; pool: Pool; coverage: string | string[]; kind: PlanKind }): Offer[] {
+  if (!cat || !q.coverage.length) return []
+  const want = regionKey(q.coverage)
   const unl = q.kind === "Unlimited"
   const kind = unl ? "Daily" : q.kind
   const groups = new Map<string, CatalogPlan[]>()
   for (const p of cat.plans) {
-    if (p.sim !== q.sim || p.pool !== q.pool || p.kind !== kind || p.countries.length !== 1 || canonCountry(p.countries[0]) !== want) continue
+    if (p.sim !== q.sim || p.pool !== q.pool || p.kind !== kind || regionKey(p.countries) !== want) continue
     if (unl ? !isThrottle1M(p) : isThrottle1M(p)) continue
     const k = `${p.amount}|${p.unit}`
     groups.set(k, [...(groups.get(k) ?? []), p])
@@ -120,7 +156,7 @@ export function offers(cat: PlanCatalog | null, q: { sim: SimType; pool: Pool; c
 }
 
 /** Loại gói (Daily/Fixed/Unlimited) mà Portal có bán cho khu vực này. */
-export function availableKinds(cat: PlanCatalog | null, q: { sim: SimType; pool: Pool; coverage: string }): PlanKind[] {
+export function availableKinds(cat: PlanCatalog | null, q: { sim: SimType; pool: Pool; coverage: string | string[] }): PlanKind[] {
   return (["Daily", "Fixed", "Unlimited"] as PlanKind[]).filter(kind => offers(cat, { ...q, kind }).length > 0)
 }
 
@@ -147,7 +183,7 @@ export function manualMismatches(plan: CatalogPlan, p: ProductInput, pl: Product
   const unl = pl.kind === "Unlimited"
   if (plan.sim !== p.simType) bits.push(`là gói ${plan.sim}, khai báo ${p.simType}`)
   if (plan.pool !== p.pool) bits.push(`thuộc pool ${plan.pool}, khai báo ${p.pool}`)
-  if (plan.countries.length !== 1 || canonCountry(plan.countries[0]) !== canonCountry(p.coverages[0] ?? "")) bits.push(`nước ${plan.countries.join("+")}, khai báo ${p.coverages[0] || "?"}`)
+  if (regionKey(plan.countries) !== regionKey(p.coverages)) bits.push(`nước ${plan.countries.join("+")}, khai báo ${p.coverages.join("+") || "?"}`)
   const wantKind = unl ? "Daily" : pl.kind
   if (plan.kind !== wantKind) bits.push(`loại ${plan.kind}, khai báo ${pl.kind}`)
   if (unl !== isThrottle1M(plan)) bits.push(unl ? "không phải gói Throttle to 1Mbps (dùng cho Unlimited)" : "là gói Throttle to 1Mbps (chỉ dùng cho Unlimited)")
@@ -170,7 +206,7 @@ export function resolvePlans(products: ProductInput[], cat: PlanCatalog | null):
     const plans = p.plans.map((pl, li) => {
       const where = `${label} · dòng ${li + 1}`
       const manual = pl.productId.trim()
-      const cands = cat && p.coverages[0] ? findPlans(cat, { sim: p.simType, kind: pl.kind, pool: p.pool, coverage: p.coverages[0], amount: bcAmountOf(pl), unit: bcUnitOf(pl) }) : []
+      const cands = cat && p.coverages.length ? findPlans(cat, { sim: p.simType, kind: pl.kind, pool: p.pool, coverage: p.coverages, amount: bcAmountOf(pl), unit: bcUnitOf(pl) }) : []
       let chosen: CatalogPlan | undefined
       let status: PlanInfo["status"] = "none"
       let note: string | undefined
@@ -194,7 +230,7 @@ export function resolvePlans(products: ProductInput[], cat: PlanCatalog | null):
         } else {
           status = "missing"
           const want = pl.kind === "Unlimited" ? `Daily ${bcAmountOf(pl)}${bcUnitOf(pl)} Throttle to 1Mbps (cho Unlimited ${pl.dataAmount}${pl.unit} tốc độ cao)` : `${pl.kind} ${pl.dataAmount}${pl.unit}`
-          warnings.push(`${where}: không tìm thấy gói ${want} ${p.simType} của ${p.coverages[0] || "?"} (${p.pool}) trong file Portal — BC không bán gói này (hoặc file Portal cũ, hãy upload lại)`)
+          warnings.push(`${where}: không tìm thấy gói ${want} ${p.simType} của ${p.coverages.join(" + ") || "?"} (${p.pool}) trong file Portal — BC không bán gói này (hoặc file Portal cũ, hãy upload lại)`)
         }
       }
       if (chosen) {

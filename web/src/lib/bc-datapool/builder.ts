@@ -108,7 +108,10 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
     }
 
     const chosen = pool.rows.filter(r => p.operators.includes(`${r.coverage}|${r.operator}`))
-    const onsite = Array.from(new Set(chosen.map(r => r.operator))).join("/")
+    // Gói đa vùng: mỗi nước 1 dòng "Nước: nhà mạng/nhà mạng" (như file Saudi/ME4 mẫu); nước đơn: "nhà mạng/nhà mạng"
+    const covs = Array.from(new Set(chosen.map(r => r.coverage)))
+    const opsOf = (rows: typeof chosen) => Array.from(new Set(rows.map(r => r.operator))).join("/")
+    const onsite = covs.length > 1 ? covs.map(c => `${c}: ${opsOf(chosen.filter(r => r.coverage === c))}`).join("\n") : opsOf(chosen)
     const fee = frameFeeUsd(p.simType, pool, fx, opt.whiteSimVnd)
     const kycOps = chosen.filter(r => r.kyc)
     if (kycOps.length) out.warnings.push(`${label}: nhà mạng ${kycOps.map(r => r.operator).join(", ")} có KYC trong bảng giá — kiểm tra kycNeeded/kycCode`)
