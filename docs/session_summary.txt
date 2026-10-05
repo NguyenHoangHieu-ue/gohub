@@ -10682,3 +10682,9 @@ Chi tiết: wiki `docs/wiki/system/analytics-data-model.md` §s222, s222(b)-(f).
 - Việc 4: prewarm không ép `nocache=1` với `quarterly-report` quý đã đóng.
 - Không làm: cache theo tháng (việc 5). Chưa đo với người dùng thật; lint/build/tsc PASS lúc việc 3, vitest còn 2 file e2e fail sẵn (agent-audit/agent-grade).
 **Việc còn cho Hiếu**: xác nhận mức trễ 48h quý đã đóng; kiểm cron-job.org gọi `prewarm-analytics`/`etl-cache-sync` đúng URL production; mở Performance Q4 ở ngày hôm sau xem còn MISS không.
+
+## s223 (2026-10-05) — Gấu Pro: tính vào My Metrics (trừ Creator) + plan nâng cấp thành trợ lý agent
+Chi tiết: wiki `docs/wiki/system/tabs/analytics-my-metrics.md` §s223, plan `docs/plans/gau-pro-assistant.md`. Tóm tắt:
+- Gấu Pro ghi `app_usage_events` từ s196+7 nhưng thiếu `tools_used`/`used_db_tool` → không bao giờ được tính task. Nay `runCreatorAI` trả `toolsUsed`; route web ghi `tools_used` + `used_db_tool = !isCreator && usedDbTaskTool(toolsUsed)`. Lọc ở phía ghi, các route đọc không đổi; không backfill dữ liệu cũ. Lark DM Gấu Pro (chỉ creator) vẫn không tính (đúng yêu cầu). Commit `ddfaa209`.
+- Đọc toàn bộ Gấu Pro, đối chiếu ChatGPT agent/Memory/Scheduled Tasks, Gemini Agent/Scheduled Actions, Project Astra, Gemini Live API, Agent Skills, "lethal trifecta". 9 nhược điểm (nặng nhất: đủ điều kiện prompt injection rò dữ liệu — dữ liệu riêng tư + nội dung web/browser/portal + kênh gửi ra ngoài, cổng duyệt chỉ nằm trong prompt; `sendLarkMessage` mở cả cho non-creator tới group bất kỳ). 12 đề xuất, lộ trình G0 (an toàn) → G1 (skills + SDK `@google/genai`) → G2 (kế hoạch + việc nền) → G3 (trí nhớ) → G4 (việc theo lịch + trigger) → G5 (Live API kiểu Astra).
+**Việc còn cho Hiếu**: trả lời 4 câu ở mục 8 của plan; xem My Metrics có thêm task Gấu Pro của user được cấp quyền sau khi staging build.
