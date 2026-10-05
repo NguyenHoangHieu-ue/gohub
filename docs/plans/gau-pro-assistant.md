@@ -150,7 +150,8 @@ Tiến độ (2026-10-05): G0 xong (cần chạy migration v64) · G1 xong (skil
 nút Dừng; trace `gp_runs`; việc nền `gp_jobs` theo chặng; panel Việc & duyệt — cần chạy migration v65). Chưa QA sống trên staging phần cần
 migration. G3 xong (tự rút trí nhớ, tóm tắt + tìm hội thoại cũ, panel Trí nhớ, cờ `gp_personal_features` — cần migration v66).
 G4 xong (việc theo lịch + canh chừng `only_if_notable`/NO_ALERT thay trigger viết cứng — cần migration v67).
-G5 (Live API kiểu Astra) CHƯA làm: theo đúng điều kiện ở mục 5 ("chỉ làm khi G0–G3 ổn định") — cần Hiếu chạy v64–v67 + QA sống trước.
+v64–v68 đã chạy, QA sống G0–G4 đạt. G5 xong 2026-10-05 (phiên giọng nói + màn hình/camera, token tạm, chỉ tool đọc) — còn Hiếu tự thử
+nói/nghe thật + chia sẻ màn hình. Mọi giai đoạn G0–G5 đã làm; plan còn giữ tới khi Hiếu QA G5 + quyết merge `main`, sau đó xoá file.
 
 ## 8b. Câu hỏi ban đầu (đã trả lời ở trên)
 

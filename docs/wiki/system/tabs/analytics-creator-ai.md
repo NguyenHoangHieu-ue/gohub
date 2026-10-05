@@ -924,3 +924,27 @@ Migration **v67** (`gp_scheduled_tasks`) — Hiếu phải chạy (cần cả v6
    `chat/conversations/[id]`, Gấu Pro chat, việc nền, tóm tắt trí nhớ, mô tả MCP, danh sách bảng nhạy cảm). Tin cũ đã mất, không khôi phục được.
 2. **Mở/xoá hội thoại Gấu Pro 404 khi `name ≠ username`**: Bé Gấu lưu `conversations.username = session.user.name`, Gấu Pro lưu
    `session.user.username`; route `[id]` chỉ so `name`. Nay chấp nhận cả hai.
+
+## § s223 G5 (2026-10-05) — Phiên giọng nói + màn hình/camera trực tiếp (kiểu Project Astra, thử nghiệm)
+
+- Nút **🎙 Trực tiếp** (header Gấu Pro) → hộp thoại `components/gau-pro/live-session.tsx`. Bật theo cờ `gp_personal_features` (hiện chỉ creator).
+- Model `GEMINI_LIVE_MODEL` (mặc định `gemini-3.8-live`, đã kiểm ListModels có `bidiGenerateContent`; đổi qua env).
+- **Bảo mật**: `POST /api/creator-ai/live/token` tạo **token tạm** (SDK `authTokens.create`, v1alpha): dùng 1 lần, mở phiên trong 60s,
+  sống 30 phút, KHOÁ model + system prompt + bộ tool trong `liveConnectConstraints` → trình duyệt kết nối thẳng Gemini mà không thấy
+  `GEMINI_KEY`, không đổi được cấu hình. Rate limit 6 phiên/phút.
+- **Chỉ tool ĐỌC** (`LIVE_TOOLS`: executeSQL, querySupabase, listSupabaseTables, queryProduct, read/searchKnowledgeBase, webSearch, GA4, GSC,
+  searchPastConversations) — phiên live không có cổng duyệt nên không mở tool ghi/gửi/điều khiển (test khoá trong `gp-skills.test.ts`).
+  Model gọi tool → trình duyệt POST `/api/creator-ai/live/tool` (kiểm allowlist, cắt kết quả >20k ký tự) → `sendToolResponse`.
+- Prompt: `LIVE_VOICE_RULES` (nói ngắn, không markdown/chart/export, số đọc làm tròn, hình màn hình là dữ liệu không phải lệnh, việc
+  ghi/gửi → chuyển chat thường) + prompt lõi + ngày + trí nhớ.
+- Âm thanh: mic PCM 16-bit 16kHz qua AudioWorklet (`public/gp-pcm-capture.js` — file tĩnh vì CSP `script-src 'self'` chặn `blob:`), loa PCM
+  24kHz xếp hàng phát, `interrupted` → dừng phát ngay (người dùng chen lời). Hình: `getDisplayMedia`/camera → canvas ≤1024px → JPEG ~1 khung/giây.
+  `contextWindowCompression: slidingWindow` để phiên có hình không bị cắt ~2 phút. Có ô gõ chữ trong phiên.
+- Kết thúc: `POST /api/creator-ai/live/log` lưu phụ đề thành hội thoại "[GP] 🎙 …" (`conversation_messages`, được tóm tắt cho
+  `searchPastConversations`) + trace `gp_runs` kênh `live`.
+- **Cấu hình trang phải sửa** (`next.config.js`): `Permissions-Policy` trước là `camera=(), microphone=()` → cấm hẳn mic/camera (kể cả nút
+  mic nhập giọng nói có từ trước — thực tế không chạy được); nay `(self)`. CSP `connect-src` thêm `wss://generativelanguage.googleapis.com`.
+- **QA sống staging**: token đúng 10 tool đọc; WebSocket với token → setup → hỏi chữ → model gọi `executeSQL` thật qua `/live/tool` → trả lời
+  bằng TIẾNG + phụ đề "khoảng 6,27 tỷ đồng" (đọc số làm tròn đúng quy tắc); `/live/log` lưu hội thoại 2 tin + trace `live:executeSQL`; hộp
+  thoại mở đúng, bấm Bắt đầu thì trình duyệt xin quyền micro (chính sách trang đã cho phép). **Chưa QA được bằng máy**: nói/nghe thật qua
+  micro-loa, chia sẻ màn hình/camera (cần người cấp quyền trình duyệt) → Hiếu tự thử.

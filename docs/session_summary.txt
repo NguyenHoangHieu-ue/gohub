@@ -10708,3 +10708,10 @@ Chi tiết từng phần: wiki `analytics-creator-ai.md` §s223 G0, G1a, G1b, G2
 - CHƯA QA được (chờ v68): tóm tắt hội thoại + `searchPastConversations` (kho tóm tắt trống vì không đọc được tin), "Mở kết quả" việc nền, mở hội thoại cũ qua `?c=`.
 **Việc còn cho Hiếu**: chạy `v68_conversation_messages.sql` + Reload schema; báo để QA nốt.
 - (sau v68, 2026-10-05) QA nốt ĐẠT: hội thoại Gấu Pro 2 lượt lưu đủ 4 tin vào `conversation_messages` + mở lại được; hỏi ở cuộc mới "lần trước chốt eSIM Hàn nào" → `searchPastConversations` trả đúng (KT qua 3HK 1,4 USD/GB) + link `?c=`; link mở đúng hội thoại trên giao diện; việc nền mới lưu kết quả thành hội thoại mở được (5.158 đơn B2C T9); Bé Gấu web: tạo hội thoại → lưu tin → đọc lại → xoá đều OK. Toàn bộ s223 đã QA, chờ Hiếu quyết merge `main`.
+
+## s223 G5 (2026-10-05) — Phiên giọng nói + màn hình/camera trực tiếp
+Chi tiết: wiki `analytics-creator-ai.md` §s223 G5. Commit `79c89951` (G5), `d8f0d2f0` (CSP/Permissions-Policy + worklet tĩnh) + commit xin mic trước khi mở phiên.
+- Gemini Live (`gemini-3.8-live`, kiểm ListModels), token tạm 1 lần/30 phút khoá model+prompt+tool, chỉ tool đọc qua `/live/tool`, mic 16kHz/loa 24kHz, màn hình/camera 1 khung/giây, lưu phụ đề thành hội thoại + trace kênh live.
+- Lỗi cấu hình có sẵn: `Permissions-Policy: microphone=()` cấm mic → nút mic nhập giọng nói cũ cũng không chạy; CSP thiếu `wss://` Gemini. Đã mở `(self)` + thêm wss.
+- QA sống: token + WebSocket + tool thật + tiếng/phụ đề "khoảng 6,27 tỷ đồng" + lưu phiên + trace + hộp thoại xin quyền mic đều đạt. Chưa thử nói/nghe thật + chia sẻ màn hình (cần người cấp quyền trình duyệt).
+**Việc còn cho Hiếu**: mở Gấu Pro → 🎙 Trực tiếp → cho phép micro → nói thử; bấm Màn hình chia sẻ 1 tab bảng giá rồi hỏi; báo lỗi nếu có. Quyết merge `main`.

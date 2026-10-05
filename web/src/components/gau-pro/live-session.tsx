@@ -163,6 +163,9 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
     setErr(""); setStatus("connecting")
     turnsRef.current = []; toolsRef.current = []; setTurns([])
     try {
+      // Xin quyền micro TRƯỚC khi mở phiên — không giữ phiên Gemini (tính phí, token 1 lần) mở trong lúc người dùng còn đang quyết định.
+      const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } })
+      micStreamRef.current = mic
       const tok = await fetch("/api/creator-ai/live/token", { method: "POST" }).then(async r => ({ ok: r.ok, ...(await r.json()) }))
       if (!tok.ok || !tok.token) throw new Error(tok.error || "Không lấy được token phiên")
       const { GoogleGenAI } = await import("@google/genai")
@@ -179,8 +182,6 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
         },
       })
       // Mic → PCM 16kHz → Live
-      const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } })
-      micStreamRef.current = mic
       const inCtx = new AudioContext({ sampleRate: 16000 })
       inCtxRef.current = inCtx
       await inCtx.audioWorklet.addModule(WORKLET_URL)
