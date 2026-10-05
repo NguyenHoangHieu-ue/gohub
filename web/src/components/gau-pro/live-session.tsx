@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Mic, MicOff, Monitor, Camera, PhoneOff, Loader2, X, Send } from "lucide-react"
+import { Mic, MicOff, Monitor, Camera, PhoneOff, Loader2, X, Send, MousePointerClick } from "lucide-react"
 
 // G5 (docs/plans/gau-pro-assistant.md): phiên giọng nói + màn hình/camera trực tiếp với Gấu Pro qua Gemini Live API.
 // Trình duyệt kết nối THẲNG Gemini bằng token tạm (server cấp, khoá model + prompt + bộ tool CHỈ ĐỌC); tool chạy qua
@@ -28,6 +28,9 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
   const [share, setShare] = useState<Share>("none")
   const [text, setText] = useState("")
   const [speaking, setSpeaking] = useState(false)
+  // Cách 2 (Hiếu chốt): công tắc cho phép Gấu thao tác Chrome của chính người dùng trong phiên, mặc định TẮT.
+  const [control, setControl] = useState(false)
+  const controlRef = useRef(false)
 
   const sessionRef = useRef<any>(null)
   const inCtxRef = useRef<AudioContext | null>(null)
@@ -88,11 +91,14 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
 
   const runTool = async (fc: { id?: string; name: string; args?: unknown }) => {
     const ts = Date.now()
-    pushText("tool", `🔎 ${fc.name}`, true)
+    const a: any = fc.args ?? {}
+    pushText("tool", fc.name === "controlMyBrowser"
+      ? `🖱 ${a.action} ${String(a.selector ?? a.url ?? "").slice(0, 60)}${a.value ? ` = "${String(a.value).slice(0, 40)}"` : ""}`
+      : fc.name === "readMyBrowser" ? `👀 đọc Chrome (${a.action})` : `🔎 ${fc.name}`, true)
     let response: unknown
     try {
       const d = await fetch("/api/creator-ai/live/tool", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fc.name, args: fc.args ?? {} }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fc.name, args: fc.args ?? {}, control: controlRef.current }),
       }).then(r => r.json())
       response = d.response ?? { error: d.error || "Lỗi" }
     } catch (e: any) { response = { error: e.message } }
@@ -228,6 +234,7 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
   }
 
   useEffect(() => { micOnRef.current = micOn }, [micOn])
+  useEffect(() => { controlRef.current = control }, [control])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }) }, [turns])
   useEffect(() => () => cleanup(), [cleanup])
 
@@ -270,6 +277,11 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
         )}
         {share === "none" && <video ref={videoRef} muted playsInline className="hidden" />}
 
+        {live && control && (
+          <div className="mx-4 mb-2 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 text-[11px] text-amber-800 dark:text-amber-300">
+            🖱 Gấu đang được phép thao tác trên Chrome của bạn (qua extension Bridge). Mọi thao tác hiện ở trên và được ghi nhật ký — tắt công tắc bất cứ lúc nào.
+          </div>
+        )}
         {err && <div className="px-4 pb-2 text-xs text-rose-500">{err}</div>}
 
         <div className="border-t border-gray-100 dark:border-slate-800 px-4 py-3 flex items-center gap-2">
@@ -292,6 +304,11 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
               <button onClick={() => share === "camera" ? stopShare() : startShare("camera")} title="Camera"
                 className={`w-10 h-10 rounded-xl flex items-center justify-center border ${share === "camera" ? "bg-violet-600 text-white border-violet-600" : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300"}`}>
                 <Camera size={15} />
+              </button>
+              <button onClick={() => setControl(v => !v)}
+                title={control ? "Đang cho Gấu thao tác Chrome — bấm để TẮT" : "Cho Gấu thao tác trên Chrome của bạn (cần extension Bridge)"}
+                className={`h-10 px-2.5 rounded-xl flex items-center gap-1 border text-xs ${control ? "bg-amber-500 text-white border-amber-500" : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300"}`}>
+                <MousePointerClick size={15} />{control && <span>Đang bật</span>}
               </button>
               <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") sendText() }}
                 placeholder="Hoặc gõ..." className="flex-1 min-w-0 px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-slate-700 bg-transparent" />

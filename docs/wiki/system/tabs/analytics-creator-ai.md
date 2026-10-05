@@ -948,3 +948,37 @@ Migration **v67** (`gp_scheduled_tasks`) — Hiếu phải chạy (cần cả v6
   bằng TIẾNG + phụ đề "khoảng 6,27 tỷ đồng" (đọc số làm tròn đúng quy tắc); `/live/log` lưu hội thoại 2 tin + trace `live:executeSQL`; hộp
   thoại mở đúng, bấm Bắt đầu thì trình duyệt xin quyền micro (chính sách trang đã cho phép). **Chưa QA được bằng máy**: nói/nghe thật qua
   micro-loa, chia sẻ màn hình/camera (cần người cấp quyền trình duyệt) → Hiếu tự thử.
+
+## § s223 trí nhớ (2026-10-05) — Gấu Pro "hay quên": 4 nguyên nhân thật + sửa
+
+Đo trên dữ liệu thật (staging, dùng chung Supabase):
+1. KB 79 mục ≈219.000 ký tự nhưng mỗi hội thoại chỉ nạp **8.000 ký tự đầu (≈3,6%)**, chỉ ở **lượt đầu**, xếp theo category (sku_rules…) →
+   mục `vendors`/`notes` mới lưu gần như không bao giờ được thấy.
+2. Embedding KB dùng `text-embedding-004` đã bị Google **gỡ (404)** → **0/79 mục có embedding**, `searchKnowledgeBase` luôn lỗi, lưu mục mới
+   không báo gì.
+3. Prompt bắt "đề xuất → CHỜ xác nhận" kể cả khi người dùng đã nói rõ "lưu lại" → lượt sau không gõ "ok" là không bao giờ lưu.
+4. Trí nhớ cá nhân 13 mục ≈3.400/4.000 ký tự trần → sắp bị cắt mục cũ không báo.
+
+Sửa (`lib/agents/creator/kb-recall.ts`, commit `71911e9f`):
+- MỖI lượt nạp **danh mục tiêu đề toàn KB** (cache 5') + **nguyên văn các mục liên quan** tới câu hỏi (tìm theo ý nghĩa, top 6, ≥0,55 và
+  không kém mục tốt nhất quá 0,15, tối đa 12k ký tự; câu ngắn kiểu "cái đó" ghép đoạn cuối câu trả lời trước để tìm).
+- Embedding `gemini-embedding-001` cắt **768 chiều** (khớp cột `vector(768)` + index HNSW của v33 — không cần migration). Ghi KB / duyệt học
+  liệu đều có embedding; `POST /api/creator-ai/knowledge/reembed` (creator) tạo lại cho mục thiếu — đã chạy: 79/79.
+- `readKnowledgeBase(keys=[...])` đọc đúng mục; prompt cấm đọc toàn KB không tham số.
+- Prompt: người dùng bảo lưu → LƯU NGAY (nghiệp vụ → `writeKnowledgeBase`, trùng chủ đề dùng lại key; cá nhân → `assistantMemory`), báo đã
+  lưu gì vào đâu; chỉ HỎI trước khi chính Gấu tự gợi ý lưu.
+- Trần trí nhớ cá nhân 4.000 → 8.000 ký tự.
+- QA sống: cuộc mới hỏi "3HK có cho nạp thêm data vào gói Fixed?" → đúng nội dung mục KB 02/10, KHÔNG gọi tool; "tuần sau mình phụ trách gì?"
+  → "sourcing eSIM EU từ ~12/10", KHÔNG gọi tool.
+- ⚠️ Bé Gấu (`be-gau.ts`) vẫn nạp KB kiểu cũ (8.000 ký tự đầu ở lượt đầu) — chưa sửa (ngoài phạm vi).
+
+## § s223 G5 cách 2 (2026-10-05) — Công tắc "Cho Gấu thao tác" trong phiên Trực tiếp
+
+- Nút 🖱 trong hộp thoại Trực tiếp, mặc định TẮT; bật → banner vàng cảnh báo. `readMyBrowser` + `controlMyBrowser` (`LIVE_CONTROL_TOOLS`)
+  luôn khai báo trong phiên (đổi công tắc không cần mở lại phiên) nhưng `/api/creator-ai/live/tool` chỉ chạy khi client gửi `control: true`;
+  tắt → trả lỗi "CHƯA bật", model nhắc người dùng. Tool gửi/ghi khác KHÔNG bao giờ chạy trong phiên (test `gp-live-tool.test.ts`).
+- Chạy qua extension Bridge trên Chrome của chính người dùng (multi-tenant theo username); `controlMyBrowser` có audit log như cũ. Thao tác
+  theo selector trang (đọc `read_tab` trước), không bấm theo toạ độ trên hình chia sẻ.
+- Prompt phiên: nói trước mỗi thao tác, làm từng bước + đọc lại kiểm tra, cấm điền mật khẩu/OTP/thanh toán, thao tác không hoàn tác được
+  phải hỏi bằng lời và chỉ làm khi người dùng đồng ý rõ.
+- Rủi ro chấp nhận (Hiếu chọn): trong lúc bật, trang độc có thể khiến Gấu thao tác sai trên tab đó — giới hạn trong trình duyệt của chính người dùng.
