@@ -10,20 +10,8 @@ import { Mic, MicOff, Monitor, Camera, PhoneOff, Loader2, X, Send } from "lucide
 interface Turn { role: "user" | "assistant" | "tool"; text: string; done?: boolean }
 type Share = "none" | "screen" | "camera"
 
-const WORKLET = `
-class PcmCapture extends AudioWorkletProcessor {
-  constructor() { super(); this.buf = new Int16Array(1600); this.n = 0 }
-  process(inputs) {
-    const ch = inputs[0] && inputs[0][0]
-    if (ch) for (let i = 0; i < ch.length; i++) {
-      const s = Math.max(-1, Math.min(1, ch[i]))
-      this.buf[this.n++] = s < 0 ? s * 0x8000 : s * 0x7fff
-      if (this.n === this.buf.length) { this.port.postMessage(this.buf.buffer, [this.buf.buffer]); this.buf = new Int16Array(1600); this.n = 0 }
-    }
-    return true
-  }
-}
-registerProcessor("pcm-capture", PcmCapture)`
+// AudioWorklet: file tĩnh public/gp-pcm-capture.js (CSP script-src 'self' chặn nạp từ blob:).
+const WORKLET_URL = "/gp-pcm-capture.js"
 
 function toBase64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf)
@@ -195,7 +183,7 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
       micStreamRef.current = mic
       const inCtx = new AudioContext({ sampleRate: 16000 })
       inCtxRef.current = inCtx
-      await inCtx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" })))
+      await inCtx.audioWorklet.addModule(WORKLET_URL)
       const node = new AudioWorkletNode(inCtx, "pcm-capture")
       node.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
         if (!micOnRef.current || !sessionRef.current) return
