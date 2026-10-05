@@ -16,6 +16,7 @@ import glob
 import hashlib
 import io
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 
@@ -85,6 +86,16 @@ def embed(text):
     return r.json()["embedding"]["values"]
 
 
+def last_commit(rel):
+    # Thời điểm commit cuối của file (cần checkout fetch-depth: 0) — để cảnh báo khi bản trên web mới hơn bản repo.
+    try:
+        out = subprocess.run(["git", "log", "-1", "--format=%cI", "--", os.path.join("docs", "wiki", rel)],
+                             cwd=ROOT, capture_output=True, text=True, timeout=30).stdout.strip()
+        return datetime.fromisoformat(out) if out else None
+    except Exception:
+        return None
+
+
 def norm(s):
     return hashlib.sha1((s or "").replace("\r\n", "\n").strip().encode("utf-8")).hexdigest()
 
@@ -131,7 +142,11 @@ def main():
                     skipped += 1
                     continue
                 content_changed = norm(row.get("content")) != norm(p["content"])
-                print(f"↻ {'CẬP NHẬT' if content_changed else 'meta'}: {p['rel']} → '{p['title']}' (v{row.get('version')})")
+                warn = ""
+                committed, web_at = last_commit(p["rel"]), row.get("updated_at")
+                if content_changed and committed and web_at and datetime.fromisoformat(web_at.replace("Z", "+00:00")) > committed:
+                    warn = f"  ⚠️ bản trên web sửa {web_at[:16]} SAU commit cuối của file ({committed.isoformat()[:16]}) — bản web lưu vào kb_wiki_versions"
+                print(f"↻ {'CẬP NHẬT' if content_changed else 'meta'}: {p['rel']} → '{p['title']}' (v{row.get('version')}){warn}")
                 if DRY:
                     updated += 1
                     continue
