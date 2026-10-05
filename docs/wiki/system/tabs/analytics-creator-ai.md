@@ -1007,3 +1007,18 @@ Sửa (`lib/agents/creator/kb-recall.ts`, commit `71911e9f`):
   người dùng tự dán) + hướng dẫn cài vào thư mục CỐ ĐỊNH và cách cập nhật (giải nén ĐÈ → ↻).
 - `bridge/next` trả `latest_version`; extension lưu lại; popup hiện phiên bản đang dùng + khung "⬆️ Có bản mới …" kèm link tải khi cũ hơn.
   Người dùng phải lên 1.2.2 THỦ CÔNG 1 lần (bản có tính năng báo) — từ đó về sau popup tự báo.
+
+## § s223 Chốt plan "Gấu Pro → trợ lý agent" (2026-10-05, đã xoá `docs/plans/gau-pro-assistant.md`)
+
+Đã làm G0–G5 + sửa trí nhớ + Bridge 1.2.2 (chi tiết các mục §s223 ở trên). Quyết định đã chốt: mức duyệt "gửi Lark người khác luôn hỏi,
+tool ghi/gửi khác chỉ hỏi khi lượt đã đọc nội dung ngoài"; không lên Vercel Pro (việc nền chạy theo chặng tự gọi tiếp); trí nhớ + việc theo
+lịch + phiên Trực tiếp là khung đa người dùng, bật theo `app_settings.gp_personal_features` (hiện chỉ creator); phiên Trực tiếp có công tắc
+"Cho Gấu thao tác" (cách 2).
+**Còn mở (ai làm tiếp đọc đây):**
+- Bé Gấu (`be-gau.ts`) vẫn nạp KB kiểu cũ (8.000 ký tự đầu, lượt đầu) + SDK cũ `@google/generative-ai` — nên áp `kb-recall.ts` + chuyển SDK.
+- "Nhiễm" (cổng duyệt) chỉ tính trong 1 lượt — nội dung ngoài đọc ở lượt trước không làm lượt sau phải duyệt.
+- Lark DM chưa hiện kế hoạch (`plan`), chưa có phiên giọng nói; hội thoại Lark DM chưa được tóm tắt cho `searchPastConversations`.
+- Việc theo lịch phụ thuộc cron-job.org gọi `scheduled-messages` mỗi giờ (đang trỏ STAGING) → giờ chạy trễ tới ~1h.
+- Phiên Trực tiếp: chưa có người thật thử nói/nghe qua mic-loa + chia sẻ màn hình/camera trên production; mỗi bước thao tác Bridge 3–4s
+  (lần đầu ≤15s chờ nhịp poll).
+- Mọi người dùng Bridge phải cài 1.2.2 thủ công 1 lần (trang Bridge → Tải extension → giải nén đè → ↻).
