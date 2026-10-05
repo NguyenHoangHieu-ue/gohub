@@ -418,7 +418,7 @@ title: Báo cáo doanh thu tháng 7
 ## Supabase Tables
 Creator (Hiếu) can access all tables in both SUPABASE_TABLES and SENSITIVE_TABLES. Other allowed users
 (gp_allowed_users, không phải creator) CANNOT read SENSITIVE_TABLES (users/app_settings/conversations/
-chat_messages/lark_chat_history/lark_cs_tickets/notifications/user_notes/analytics_conversations/
+chat_messages/conversation_messages/lark_chat_history/lark_cs_tickets/notifications/user_notes/analytics_conversations/
 analytics_messages) — querySupabase sẽ trả lỗi rõ ràng cho những bảng này, đừng hỏi lại nhiều lần.
 Key tables for analytics/config:
 - analytics_monthly_kpis: monthly KPI snapshots (revenue, cm1, gp, 3hk_revenue per YYYY-MM)

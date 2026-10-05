@@ -159,10 +159,11 @@ export async function POST(req: NextRequest) {
           if (savedConvId) {
             waitUntil((async () => {
               try {
-                await supabaseAdmin.from("chat_messages").insert([
+                const { error: insErr } = await supabaseAdmin.from("conversation_messages").insert([
                   { conversation_id: savedConvId, role: "user",      content: lastMsg, agent_id: "gau_pro", agent_name: "Gấu Pro" },
                   { conversation_id: savedConvId, role: "assistant", content: text,    agent_id: "gau_pro", agent_name: "Gấu Pro" },
                 ])
+                if (insErr) console.error("[CreatorAI] save messages:", insErr.message)   // supabase không throw — phải tự kiểm
                 await supabaseAdmin.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", savedConvId!)
               } catch (e: any) { console.error("[CreatorAI] save messages:", e) }
               // G3: trí nhớ — rút điều đáng nhớ (bỏ qua nếu model đã tự lưu lượt này) + tóm tắt hội thoại để tìm lại sau.

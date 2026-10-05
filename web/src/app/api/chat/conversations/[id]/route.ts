@@ -28,7 +28,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
   if (!conv) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   const { data: messages, error } = await supabaseAdmin
-    .from("chat_messages")
+    .from("conversation_messages")
     .select("id,role,content,agent_id,agent_name,created_at")
     .eq("conversation_id", params.id)
     .order("created_at", { ascending: true })
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   }
 
   const { error } = await supabaseAdmin
-    .from("chat_messages")
+    .from("conversation_messages")
     .insert({ conversation_id: params.id, role, content, agent_id: agent_id ?? null, agent_name: agent_name ?? null })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

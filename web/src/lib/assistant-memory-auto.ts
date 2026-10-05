@@ -81,7 +81,7 @@ ${assistantMsg.slice(0, 1500)}`)
 /** Tóm tắt + embedding 1 hội thoại web. Chỉ làm lại khi có thêm ≥4 tin so với lần trước (đỡ gọi model mỗi lượt). */
 export async function summarizeConversation(username: string, conversationId: string): Promise<void> {
   const [{ data: msgs }, { data: prev }, { data: conv }] = await Promise.all([
-    supabaseAdmin.from("chat_messages").select("role,content").eq("conversation_id", conversationId)
+    supabaseAdmin.from("conversation_messages").select("role,content").eq("conversation_id", conversationId)
       .order("created_at", { ascending: true }).limit(80),
     supabaseAdmin.from("gp_conversation_memory").select("message_count").eq("conversation_id", conversationId).maybeSingle(),
     supabaseAdmin.from("conversations").select("title").eq("id", conversationId).maybeSingle(),

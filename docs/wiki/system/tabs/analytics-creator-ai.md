@@ -913,3 +913,14 @@ Migration **v67** (`gp_scheduled_tasks`) — Hiếu phải chạy (cần cả v6
 - Test `gp-schedules.test.ts` (lịch theo giờ VN qua ranh giới ngày UTC, tuần, cuối tháng, once). Thử thật (giả lập lưu DB): "thứ 2 8h tóm tắt
   doanh thu tuần B2B/B2C" → weekly [1] 08:00 + prompt đầy đủ; "báo nếu doanh thu hôm qua giảm >20% so TB 7 ngày, 9h mỗi ngày" → daily 09:00
   + `only_if_notable: true`.
+
+## § s223 QA (2026-10-05) — 2 lỗi gốc có sẵn tìm ra khi QA sống
+
+1. **Tin nhắn hội thoại chatbot KHÔNG được lưu từ migration v34**: v34 (Tổ Gấu) `DROP TABLE chat_messages` rồi tạo lại CÙNG TÊN cho chat
+   nhóm (`group_id/sender_email…`, không có `conversation_id/role`). Từ đó Bé Gấu web (`POST /api/chat/conversations/[id]`) và Gấu Pro ghi
+   tin đều lỗi (supabase trả `{error}`, không throw → bị bỏ qua); `conversations` có ~506 dòng không tin nào; mở lại hội thoại cũ chỉ còn
+   nhờ localStorage. Verify sống: `chat_messages` chỉ có cột chat nhóm, GET hội thoại trả "column chat_messages.role does not exist".
+   Sửa: migration **v68** `conversation_messages` (FK `conversations` ON DELETE CASCADE) + chuyển mọi chỗ đọc/ghi (route
+   `chat/conversations/[id]`, Gấu Pro chat, việc nền, tóm tắt trí nhớ, mô tả MCP, danh sách bảng nhạy cảm). Tin cũ đã mất, không khôi phục được.
+2. **Mở/xoá hội thoại Gấu Pro 404 khi `name ≠ username`**: Bé Gấu lưu `conversations.username = session.user.name`, Gấu Pro lưu
+   `session.user.username`; route `[id]` chỉ so `name`. Nay chấp nhận cả hai.

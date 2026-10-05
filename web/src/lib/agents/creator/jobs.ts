@@ -103,7 +103,7 @@ export async function runJobChunk(id: string): Promise<"continue" | "finished" |
       const { data: conv } = await supabaseAdmin.from("conversations")
         .insert({ username: j.username, title: "[GP] ⏳ " + j.title.slice(0, 44) }).select("id").single()
       convId = (conv?.id as string) ?? null
-      if (convId) await supabaseAdmin.from("chat_messages").insert([
+      if (convId) await supabaseAdmin.from("conversation_messages").insert([
         { conversation_id: convId, role: "user",      content: j.prompt, agent_id: "gau_pro", agent_name: "Gấu Pro" },
         { conversation_id: convId, role: "assistant", content: text,     agent_id: "gau_pro", agent_name: "Gấu Pro" },
       ])
