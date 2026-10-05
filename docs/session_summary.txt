@@ -10715,3 +10715,10 @@ Chi tiết: wiki `analytics-creator-ai.md` §s223 G5. Commit `79c89951` (G5), `d
 - Lỗi cấu hình có sẵn: `Permissions-Policy: microphone=()` cấm mic → nút mic nhập giọng nói cũ cũng không chạy; CSP thiếu `wss://` Gemini. Đã mở `(self)` + thêm wss.
 - QA sống: token + WebSocket + tool thật + tiếng/phụ đề "khoảng 6,27 tỷ đồng" + lưu phiên + trace + hộp thoại xin quyền mic đều đạt. Chưa thử nói/nghe thật + chia sẻ màn hình (cần người cấp quyền trình duyệt).
 **Việc còn cho Hiếu**: mở Gấu Pro → 🎙 Trực tiếp → cho phép micro → nói thử; bấm Màn hình chia sẻ 1 tab bảng giá rồi hỏi; báo lỗi nếu có. Quyết merge `main`.
+
+## s223 (tiếp) — Sửa Gấu Pro hay quên + công tắc "Cho Gấu thao tác" trong phiên Trực tiếp
+Chi tiết: wiki `analytics-creator-ai.md` §s223 trí nhớ, §s223 G5 cách 2. Commit `71911e9f`, `3804e291`.
+- Trí nhớ — 4 nguyên nhân đo thật: KB chỉ nạp 8.000/219.000 ký tự ở lượt đầu; `text-embedding-004` bị gỡ → 0/79 mục có embedding, tìm KB luôn lỗi; prompt bắt chờ xác nhận kể cả khi đã bảo lưu; trí nhớ cá nhân sát trần 4.000. Sửa: tra KB theo câu hỏi MỖI lượt + danh mục tiêu đề, embedding `gemini-embedding-001` 768 chiều (đã tạo lại 79/79 trên DB dùng chung — chỉ cột embedding), đọc KB theo key, lưu ngay khi được bảo, trần 8.000. QA sống: nhớ đúng top-up 3HK + "sourcing EU" mà không cần gọi tool.
+- Công tắc 🖱 trong phiên Trực tiếp (mặc định tắt): server chỉ chạy readMyBrowser/controlMyBrowser khi bật; tool gửi/ghi khác luôn chặn. QA sống: tắt → chặn; bật → đọc đúng tab Chrome thật qua Bridge; gửi Lark → chặn. Chưa thử click/điền thật (tránh đụng tab đang mở của Hiếu).
+- Còn lại: Bé Gấu vẫn nạp KB kiểu cũ (8.000 ký tự đầu) — chưa sửa.
+**Việc còn cho Hiếu**: thử phiên Trực tiếp: bật 🖱, nhờ Gấu thao tác 1 việc nhỏ trên 1 tab thử; báo nếu muốn sửa Bé Gấu cùng kiểu trí nhớ KB; quyết merge `main`.
