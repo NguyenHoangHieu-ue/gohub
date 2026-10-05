@@ -824,3 +824,13 @@ làm lượt sau nhiễm. Test: `gp-tool-policy.test.ts` (7 ca).
   câu không cần DB trước 6/6, sau 6/6; thêm 3 câu skill (clip ngắn KHÔNG có từ khoá → model tự `loadSkill`; lên sản phẩm; portal SPA)
   đều 10/10. Câu cần DB phải chạy lại ở môi trường đủ key.
 - Thêm skill: thêm 1 phần tử `SKILLS` (tool phải có khai báo; test `gp-skills.test.ts` kiểm không trùng/không thiếu).
+
+## § s223 G1b (2026-10-05) — Gấu Pro chuyển sang SDK `@google/genai`
+
+- SDK cũ `@google/generative-ai` 0.21 hết hỗ trợ từ 30/11/2025 (phải ép `as any` cho `thinkingConfig`, từng rớt `thoughtSignature`
+  khi gộp stream). Vòng lặp chính `runCreatorAI` nay dùng `lib/agents/genai-stream.ts` (`streamTurn`: tự gom nguyên part từng chunk,
+  giữ `thoughtSignature`, bỏ part `thought` khỏi chữ hiện ra, retry lỗi tạm thời khi chưa đẩy chữ nào; `ThinkingLevel.LOW` có type).
+- `declarations.ts` giữ nguyên (Bé Gấu + test dùng chung); `toGenaiSchema()` đổi `type` sang chữ hoa khi đưa vào SDK mới.
+- CHƯA chuyển: Bé Gấu (`be-gau.ts` + `gemini-stream.ts`), `compress.ts`, tool phụ (self-review, search, image...) — vẫn SDK cũ, chạy bình
+  thường; chuyển dần khi đụng tới.
+- Eval sau khi chuyển: 9/13 giống hệt trước (4 câu cần DB không chấm được trên máy dev) — vòng nhiều lượt gọi tool chạy đúng.

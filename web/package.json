@@ -11,6 +11,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@google/genai": "^2.27.0",
     "@google/generative-ai": "^0.21.0",
     "@supabase/supabase-js": "^2.49.0",
     "@tanstack/react-table": "^8.21.0",

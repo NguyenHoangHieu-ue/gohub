@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { ThinkingLevel, type Content } from "@google/genai"
 import { supabaseAdmin }      from "@/lib/supabase"
 import { ga4Sites }           from "@/lib/ga4"
 import { getPartnerTiers }    from "@/lib/analytics-helpers"
@@ -10,7 +10,7 @@ export type { FileContext }  from "./file-parser"
 // ─── Phase 2: import từ creator/ modules ─────────────────────────────────────
 import { ALL_TOOL_DECLARATIONS } from "./creator/declarations"
 import { dispatchTool }          from "./creator/tools/dispatch"
-import { genWithRetryStream }    from "./gemini-stream"
+import { streamTurn, toGenaiSchema, type TurnResult } from "./genai-stream"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { newTurnSafety, recordToolResult, approvalReason, describeAction } from "./creator/tool-policy"
@@ -494,19 +494,17 @@ export async function runCreatorAI(
   // Business date context — auto-inject để Gấu tự biết "tháng này"/"hôm nay" mà không hỏi lại
   const dateContext = buildDateContext()
 
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-  // thinkingLevel "low": cân bằng lợi ích tool-orchestration/reasoning nhiều bước của 3.8-flash (đúng lợi
-  // ích cho pipeline product-onboarding/BI nhiều bước) với latency budget — vòng lặp tới 20 iteration,
-  // KHÔNG để mặc định "medium" (billable, latency ẩn mỗi vòng). "as any": SDK v0.21.0 chưa có type field
-  // này (ra đời sau SDK).
+  // thinkingLevel LOW: cân bằng lợi ích tool-orchestration/reasoning nhiều bước của 3.8-flash với latency budget — vòng lặp
+  // tới 20 iteration, KHÔNG để mặc định "medium" (billable, latency ẩn mỗi vòng). G1b: SDK mới có type sẵn, hết "as any".
   // Skill nạp sẵn: do nơi gọi chỉ định (Lark DM, cron) + đoán từ tin nhắn mới và câu trả lời gần nhất.
   const lastModelText = geminiHistory.length ? (geminiHistory[geminiHistory.length - 1]?.parts?.[0]?.text ?? "") : ""
   const loadedSkills = new Set<string>([...(opts.preloadSkills ?? []), ...preloadSkills(`${lastMsg}\n${String(lastModelText).slice(0, 1500)}`)])
-  const makeModel = () => genAI.getGenerativeModel({
-    model: GEMINI_MODEL,
-    systemInstruction: (isCreator ? CREATOR_INTRO + CREATOR_PROFILE : MEMBER_INTRO) + SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject + memoryBlock,
-    tools: [{ functionDeclarations: activeDeclarations(isCreator, loadedSkills) }],
-    generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
+  const systemInstruction = (isCreator ? CREATOR_INTRO + CREATOR_PROFILE : MEMBER_INTRO) + SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject + memoryBlock
+  const makeConfig = () => ({
+    systemInstruction,
+    tools: [{ functionDeclarations: toGenaiSchema(activeDeclarations(isCreator, loadedSkills)) as any }],
+    temperature: 0,
+    thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
   })
 
   // Build user message parts — support multiple files (text + binary)
@@ -538,39 +536,33 @@ export async function runCreatorAI(
     userParts = [{ text: msgText }]
   }
 
-  const contents: any[] = [
+  const contents: Content[] = [
     ...geminiHistory,
     { role: "user", parts: userParts },
   ]
 
   // Tích luỹ token qua MỌI vòng gọi model (mỗi vòng là 1 request Gemini riêng, tính phí riêng dù
-  // contents chồng lấn) — dùng cho cost dashboard (s196+7). usageMetadata nằm sẵn trên response,
-  // không cần sửa gemini-stream.ts.
+  // contents chồng lấn) — dùng cho cost dashboard (s196+7).
   let tokensIn = 0, tokensOut = 0
-  const addUsage = (r: any) => {
-    const u = r?.response?.usageMetadata
-    if (u) { tokensIn += u.promptTokenCount || 0; tokensOut += u.candidatesTokenCount || 0 }
-  }
-
   const onChunk = (delta: string) => onEvent?.({ type: "delta", content: delta })
-  let model = makeModel()
-  let genResult = await genWithRetryStream(model, { contents }, onChunk)
-  addUsage(genResult)
+  let config = makeConfig()
+  const turn = async (): Promise<TurnResult> => {
+    const r = await streamTurn(GEMINI_MODEL, contents, config, onChunk)
+    tokensIn += r.tokensIn; tokensOut += r.tokensOut
+    if (r.content.parts?.length) contents.push(r.content)
+    return r
+  }
+  let genResult = await turn()
   const collectedSources: WebSource[] = []
   const toolsUsed = new Set<string>()
   const safety = newTurnSafety(lastMsg, files.length > 0)
   const pendingActions: PendingAction[] = []
 
-  function appendModelContent() {
-    const content = genResult.response.candidates?.[0]?.content
-    if (content) contents.push(content)
-  }
-  appendModelContent()
 
   // Function calling loop — max 20 iterations. Tools run in parallel per turn.
   for (let i = 0; i < 20; i++) {
-    const calls = genResult.response.functionCalls()
-    if (!calls || calls.length === 0) break
+    const calls = genResult.functionCalls
+    if (calls.length === 0) break
 
     // Mỗi tool bọc try/catch RIÊNG — 1 tool lỗi (network timeout portal/video API/...) trước đây làm
     // Promise.all reject cả round, sập TOÀN BỘ câu trả lời dù các tool khác đã chạy xong. Nay tool lỗi chỉ
@@ -611,22 +603,19 @@ export async function runCreatorAI(
       }
     }))
 
-    // Send function responses as role "user" — required by this Gemini SDK's content format
-    contents.push({ role: "user", parts: fnParts })
-    if (skillsChanged) model = makeModel()
-    genResult = await genWithRetryStream(model, { contents }, onChunk)
-    addUsage(genResult)
-    appendModelContent()
+    // Kết quả tool gửi lại với role "user" (định dạng Gemini API cho functionResponse).
+    contents.push({ role: "user", parts: fnParts as any })
+    if (skillsChanged) config = makeConfig()
+    genResult = await turn()
   }
 
   // Ensure non-empty response
-  let text = genResult.response.text()
+  let text = genResult.text
   if (!text.trim()) {
     try {
       contents.push({ role: "user", parts: [{ text: "Based on the data retrieved above, write a complete, detailed answer in Vietnamese. Include a markdown table or chart if the data is tabular. DO NOT call any more tools." }] })
-      genResult = await genWithRetryStream(model, { contents }, onChunk)
-      addUsage(genResult)
-      text = genResult.response.text()
+      genResult = await turn()
+      text = genResult.text
     } catch { /* keep empty */ }
   }
 
