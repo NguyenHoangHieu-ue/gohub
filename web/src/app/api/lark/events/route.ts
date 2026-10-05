@@ -396,7 +396,7 @@ async function replyCreatorDM(openId: string, messageId: string, threadId: strin
   const history = await getLarkHistory(openId, threadId)
   const geminiHistory = history.map(m => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] }))
   const now = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 16).replace("T", " ")
-  const gp = await runCreatorAI(geminiHistory, agentInput + CREATOR_DM_DIRECTIVE.replace("{NOW}", now), undefined, undefined, true, username, "lark_dm")
+  const gp = await runCreatorAI(geminiHistory, agentInput + CREATOR_DM_DIRECTIVE.replace("{NOW}", now), undefined, undefined, true, username, "lark_dm", { preloadSkills: ["workspace"] })
   let response = gp.text.replace(/```chart[\s\S]*?```/g, "").trim() || "(Gấu Pro không có câu trả lời)"
   // Mã duyệt ghép bằng code (không trông vào model nhắc lại cho đúng).
   if (gp.pendingActions.length) response += "\n\n" + gp.pendingActions.map(a =>

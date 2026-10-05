@@ -809,3 +809,18 @@ dữ liệu cũ chưa sửa).
 
 **Giới hạn đã biết**: "nhiễm" tính trong 1 lượt — nội dung ngoài đã đọc ở lượt TRƯỚC (nằm trong lịch sử dạng văn bản trả lời) không
 làm lượt sau nhiễm. Test: `gp-tool-policy.test.ts` (7 ca).
+
+## § s223 G1a (2026-10-05) — Skills: prompt lõi + hướng dẫn/tool nạp khi cần
+
+- `lib/agents/creator/skills.ts`: 5 skill (`product-ncc`, `content-creative`, `workspace`, `browser-files`, `kb-learning`). Mỗi skill:
+  tên + mô tả 1 dòng (luôn nằm trong prompt lõi qua `skillCatalog()`), nhóm tool, hướng dẫn đầy đủ (chép NGUYÊN VĂN các mục cũ:
+  Portal, Product Onboarding, Product Intelligence Tools, Image Generation, Content Creator, Image Style Presets, sendLarkMessage),
+  regex từ khoá để nạp sẵn.
+- Tool `loadSkill(name)`: trả hướng dẫn + bật tool của skill; vòng lặp dựng lại model với bộ tool mới (`activeDeclarations`).
+  Nạp sẵn: `preloadSkills(tin mới + câu trả lời gần nhất)` (từ khoá hoặc có nhắc tên tool — câu nối sau khi duyệt hành động tự
+  nạp lại skill của tool đó); Lark DM + cron digest nạp sẵn `workspace`, cron quét báo giá nạp sẵn `product-ncc`.
+- Đo (ký tự gửi mỗi vòng, chưa nạp skill): prompt 35,5k → ~23k; khai báo tool 28,8k → 7,5k (37 → 13 tool lõi). Tổng ≈ −53%.
+- Eval `gau-pro-grade` (máy dev, `.env.local` thiếu mật khẩu DB + key Supabase lỗi → 4 câu cần DB không chấm được ở cả 2 lần):
+  câu không cần DB trước 6/6, sau 6/6; thêm 3 câu skill (clip ngắn KHÔNG có từ khoá → model tự `loadSkill`; lên sản phẩm; portal SPA)
+  đều 10/10. Câu cần DB phải chạy lại ở môi trường đủ key.
+- Thêm skill: thêm 1 phần tử `SKILLS` (tool phải có khai báo; test `gp-skills.test.ts` kiểm không trùng/không thiếu).

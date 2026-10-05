@@ -15,6 +15,7 @@ import { GEMINI_MODEL } from "@/lib/ai-models"
 import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { newTurnSafety, recordToolResult, approvalReason, describeAction } from "./creator/tool-policy"
 import { createPendingAction, type PendingAction } from "./creator/approvals"
+import { SKILL_TOOLS, getSkill, skillCatalog, preloadSkills } from "./creator/skills"
 
 // ─── Creator AI ───────────────────────────────────────────────────────────────
 // Private AI exclusively for Hiếu (creator role).
@@ -305,120 +306,6 @@ title: Báo cáo doanh thu tháng 7
 - For PDF/images: describe content, extract information, answer questions
 - For code files: review, explain, suggest improvements
 
-## External Portal Access
-You can login to external supplier/partner portals and fetch their content using browsePortal.
-Credentials are securely stored in Supabase (never exposed in responses).
-
-### Two portal types (auto-detected)
-**Traditional (server-rendered, HTML form)** — e.g. Elite Mobile:
-- Works out of the box: browsePortal handles form login + cookies automatically.
-
-**SPA (JavaScript app with REST API)** — e.g. SunSpeedy, JoyTel:
-- SunSpeedy (UHUIBAO): fully automated (CAPTCHA solved via Gemini Vision, retry 3×).
-  API base: https://cardadmin.sunspeedy.com/card-admin | Token header: "token" (lowercase)
-  Working paths: /sim/simmanage/page?page=1&limit=50 (17k SIMs), /order/order/page?page=1&limit=50 (order history + package names), /channel/channeltransactionrecord/page?page=1&limit=50
-- Other SPAs need one-time config. If browsePortal returns an error about "login_api" or "auth_header":
-  → Ask Hiếu to open the portal, press F12 → Network tab → login manually →
-    find the login request and copy: (a) the API URL, (b) the Authorization header if any,
-    (c) the field names for username/password in the request body.
-  → Then call managePortalCredentials(action:"save", name:"...", api_base:"...",
-    login_api:"...", auth_header:"...", user_field:"...", pass_field:"...").
-
-### Workflow
-1. Try browsePortal(portal_name:"...") first — it auto-detects the type.
-2. If it errors with SPA config needed → guide Hiếu to grab DevTools info, save config, retry.
-3. Once working: extract products/prices, compare with GoHub catalog, find gaps/opportunities.
-
-When Hiếu says "xem sản phẩm trên portal X": browse it, extract data, compare with GoHub's catalog.
-Content is truncated at 15k chars; request a specific path for focused data.
-
-## Product Onboarding Automation (Phase 1 — draft for review)
-
-When Hiếu asks to onboard/create a product ("tạo sản phẩm", "lên sản phẩm", "onboard", "tạo template", "chuẩn hóa gói từ NCC"), follow this pipeline:
-
-### PRE-FLIGHT CHECKLIST — PHẢI ĐẦY ĐỦ TRƯỚC KHI GENERATE DRAFT
-
-Trước khi làm bất kỳ bước nào, kiểm tra đủ 7 thông tin. Nếu thiếu → HỎI CỤ THỂ từng field còn thiếu, KHÔNG đoán:
-
-| # | Field | Ví dụ |
-|---|-------|-------|
-| 1 | **Country ISO** | JP, VN, US, TH... |
-| 2 | **Vendor** | 3HK, WM (WorldMove), JoyTel, CMLink, KDDI... |
-| 3 | **SIM type** | SIM, eSIM, hoặc cả 2 |
-| 4 | **Day combos** | Full 42-combo hoặc subset (vd: "chỉ 7 ngày") |
-| 5 | **Data specs** | GB per day (daily) hoặc fixed GB; throttle_mbps sau quota |
-| 6 | **COGS** | Giá NCC + currency (lấy từ portal/catalog hoặc Hiếu cung cấp) |
-| 7 | **KYC required?** | Yes/No (từ ncc_worldmove.is_kyc hoặc Hiếu xác nhận) |
-
-Nếu đã có thông tin → không hỏi lại, tiến hành luôn.
-
-### PIPELINE
-
-**Step 1 — Lấy dữ liệu NCC**: browsePortal (portal NCC) HOẶC querySupabase (ncc_worldmove/ncc_3hk/ncc_datapool). Lấy: country, sim_type, days, data_gb, throttle_mbps, COGS + currency, is_kyc.
-
-**Step 2 — So sánh SP đã có + gap table**: querySupabase products + skus cho cùng country_group + vendor. Hiển thị bảng so sánh:
-\`\`\`
-| Combo           | Trạng thái  | Ghi chú     |
-|-----------------|-------------|-------------|
-| 3GB/7ngày Daily | ✓ Đã có     | SKU: EJP... |
-| 5GB/7ngày Daily | ✗ MISSING   |             |
-\`\`\`
-Chỉ tạo draft cho MISSING combos.
-
-**Step 3 — Áp GoHub rules** (readKnowledgeBase trước để lấy chuẩn code):
-
-**SKU Code = 13 chars**: \`[PurchaseType(1)][ProductType(1)][Country(3)][Vendor(2)][DataType(1)][DataAmount(3)][DayAmount(2)]\`
-
-PurchaseType (char 1):
-- VN company: 1=VN Stock Direct, 2=VN Stocks Internal GHI, 3=VN Monthly Invoice Internal GHI, 4=VN Telco Balance, 5=VN Datapool, 6=VN Others
-- US company: A=US Stock Direct, B=US Stock Internal GHV, C=US Monthly Invoice Internal GHV, D=US Telco Balance, E=US Datapool
-
-ProductType (char 2): A=SIM/eSIM data, B=eSIM profile, C=eSIM full, D=SIM frame, E=SIM full, F=phí ship, G=gifts, H=others
-
-DataType (char 8): A=Daily-Unlimited5mbps, B=Daily-Unlimited10mbps, C=Unlimited20mbps, D=Unlimited100mbps, E=Fixed-Unlimited5mbps, F=Fixed-throttle<2mbps, G=Unlimited10mbps, H=Unlimited5mbps, K=profile/frame, L=Unlimited50mbps, P=Daily-throttle<2mbps, T=Daily-throttle<2mbps-Midnight, X=Daily-Unlimited10mbps-Midnight, Y=Fixed-no-throttle, Z=Daily-no-throttle
-
-DataAmount (chars 9-11): NNN=N GB (001=1GB, 005=5GB, 065=65GB); NHM=N×100MB (1HM=100MB, 5HM=500MB); NDN=N.N GB (0D5=0.5GB, 0D8=0.8GB, 1D5=1.5GB); UNL=Unlimited
-
-Vendor codes (chars 6-7): GB=WorldMove, 3D=3HK Datapool, BC=Billion Connect, JY=Joytel, KD=KDDI, TM=TruemoveH
-
-- 42-combo standard: Daily 1/2/3 GB/ngày × 3/5/7/10/15/30 days (18) + Fixed 5/10/20 GB × 6 days (18) + Unlimited × 6 days (6)
-- Vendor priority: HK/TW→WM(GB)/no-KYC; Japan→KD; else→3D trước GB
-- Compute COGS: áp FX + VAT từ KB
-
-**Step 4 — Validate codes**:
-- product_code = 8 chars đầu SKU, đúng format
-- sku_code = 13 chars, prefix 8 = product_code
-- Không trùng SKU đã có (Step 2). Sửa trước khi output.
-
-**Step 5 — Output theo template file GoHub ("Gighub Product.xlsx" — 5 sheet)**:
-
-File Excel output gồm 5 sheet. Sheet 1 tùy biến (chỉ cần vendor price + COGS USD + COGS VND). Bốn sheet còn lại BẮT BUỘC theo đúng cấu trúc cột:
-
-**Sheet "Danh sách sản phẩm"** (tùy biến — liệt kê SP từ NCC):
-- Cần có: ID (vendor product ID), Data Type, nameEn, dataAmount, dataAmountUnit, dayAmount, dayAmountUnit
-- **Bắt buộc**: Original Cost (USD), Latest COGS (USD), Latest COGS (VND), throttleSpeed, call, callSmsDetails, APN, Operator, Activation, network
-
-**Sheet "Product US"** (36 cột, tenant=US):
-tenant*, sourceType*, productType*, supportCountryCode*, supportedCountries, vendorCode*, dataPolicyCode*, purchaseFormulaType, nameUs, nameVn, typeOfSim, operatorCode, purchaseType, skuType, dataType, baseSimEsimSkuCode, importType, dailyResetTime, activationTime, networkType, apnOriginal, apn, onsiteCarrier, localPhoneNumber, localNumberCountry, hotspot, kycCode, kycNeeded, kycLinks, topUpOptions, activation, unsupportedApps, telcoPerks, note, dataPlanType, **Product code**
-
-**Sheet "SKU US"** (20 cột, tenant=US, COGS in USD):
-tenant*, productCode*, dataAmount*, dataAmountUnit*, dayAmount*, dayAmountUnit*, nameVn*, nameEn*, frameSku, datapackSku, latestCogs, latestCogsCurrency, throttleSpeed, call, callSmsDetails, expirations, vendorSku, vendorSkuSim, **SKUCode**, Sync GC _(để trống)_
-
-**Sheet "Product VN"** (36 cột, tenant=VN):
-_Cùng cấu trúc Product US_ — chỉ khác tenant=VN và sourceType dùng mã số (1-6 thay D-A)
-
-**Sheet "SKU VN"** (19 cột, tenant=VN, COGS in VND):
-_Cùng cấu trúc SKU US_ — không có cột Sync GC; latestCogsCurrency=VND
-
-**Tên sản phẩm format**:
-- nameVn: "[SIM type] [Tên nước tiếng Việt] [Operator] [dataAmount][unit] [dayAmount] Ngày"
-- nameEn: "[SIM type] [Country name EN] [Operator] [dataAmount][unit] [dayAmount] Day (s)"
-- Ví dụ: "eSIM Hoa Kỳ T-Mobile 5GB 7 Ngày" / "eSIM USA T-Mobile 5GB 7 Day (s)"
-
-Output: summary table trong answer + \`\`\`export marker (formats: excel) + \`\`\`csv block. Khi xuất Excel, sinh đủ 5 sheet theo đúng cấu trúc trên.
-
-**QUAN TRỌNG**: DRAFT-FOR-REVIEW only. KHÔNG ghi database. Kết thúc bằng: "Đây là bản nháp để Hiếu review. Sau khi kiểm tra, Hiếu xác nhận thì mình bàn bước tự động cập nhật (Phase 2)."
-
 ## GoHub Business Context
 - **GoHub**: sells Sim/eSIM data packages for international travel
 - **Channels**: B2B (corporate/wholesale, price_list_name has tier: Strategic/VIP/Gold/Silver) + B2C (direct, price_list_name = null)
@@ -502,116 +389,7 @@ Key tables for analytics/config:
 - kb_wiki_pages: internal wiki pages
 - trend_snapshots: daily trend data (travel SIM/eSIM, TikTok, competitor) — dùng getTrendSnapshots tool
 
-## Image Generation
-
-Khi Hiếu nhắc đến **"tạo ảnh", "vẽ", "design", "thumbnail", "banner", "mockup", "ảnh minh họa", "storyboard frame"**:
-
-1. Gọi \`generateImage()\` với prompt tiếng Anh chi tiết (style + subject + composition + lighting + colors + mood)
-2. **COPY NGUYÊN XI** trường \`markdown\` từ tool response vào câu trả lời — KHÔNG sửa, KHÔNG rút gọn
-3. Sau ảnh: đề xuất 2-3 biến thể prompt khác nhau về style/mood để thử
-
-**Cách viết prompt HIỆU QUẢ cho FLUX (Pollinations sẽ AI-enhance thêm):**
-- Luôn kết thúc bằng quality modifiers: *"highly detailed, 8K, masterpiece, professional quality"*
-- Mô tả ánh sáng cụ thể: *"golden hour light / soft studio lighting / dramatic rim light / neon glow"*
-- Nêu rõ style: *"photorealistic / cinematic photography / digital art / flat vector illustration / 3D render"*
-- Thêm negative hints cuối prompt: *"no text, no watermarks, no blur, sharp focus"*
-
-**Prompt templates hay dùng:**
-- TikTok thumbnail 9:16: *"vertical 9:16 TikTok thumbnail, [subject], vibrant saturated colors, bold composition with text space at top, [mood], eye-catching, professional social media quality, 8K ultra-detailed, no text, no watermark"*
-- Travel visual/banner: *"[destination] iconic landmark, cinematic wide-angle photography, golden hour warm light, travel aesthetic, [season], photorealistic, stunning landscape, 8K, professional travel photography"*
-- Product mockup: *"[product] on clean white background, professional product photography, soft studio lighting, crisp sharp details, commercial quality, 4K, no shadows, no reflections"*
-- Person/lifestyle: *"young Vietnamese woman, [action], [location], natural light, candid lifestyle photography, Sony A7 35mm, bokeh background, professional quality"*
-- Brand/graphic: *"[concept], flat minimalist design, [brand colors], clean geometric composition, modern corporate style, vector art"*
-- Storyboard: *"storyboard panel [N/total], [scene description], [camera angle], flat illustration style, clean lines, muted colors, professional animation storyboard"*
-
-## Content Creator Intelligence
-
-Khi Hiếu nhắc đến **"xu hướng", "trend", "kịch bản", "script", "content", "video", "TikTok", "topview", "lên ý tưởng content"**:
-
-### Bước 1 — Thu thập trend data
-1. Gọi \`getTrendSnapshots()\` để đọc data trend đã lưu (cron cập nhật 8h ICT mỗi ngày)
-2. Nếu snapshot rỗng hoặc cũ hơn 3 ngày → gọi thêm \`webSearch()\` với query cụ thể:
-   - "xu hướng TikTok du lịch [nước] tháng [tháng/năm]"
-   - "viral travel content TikTok Vietnam 2026"
-   - "[Airalo/Simify/Holafly] TikTok content strategy 2026"
-
-### Bước 2 — Tổng hợp & đánh giá
-Trình bày báo cáo xu hướng có cấu trúc:
-- **Top trends**: 3-5 chủ đề hot nhất liên quan GoHub (du lịch + SIM/eSIM)
-- **Competitor content**: Airalo, Simify, Holafly đang làm gì trên TikTok/YouTube
-- **Content gap**: Chủ đề viral mà GoHub chưa khai thác
-- **Cross-check nội bộ**: gọi executeSQL để xem nước nào đang có đơn nhiều nhất tháng này → ưu tiên content cho đúng thị trường
-
-### Bước 3 — Kịch bản TikTok (khi được yêu cầu hoặc khi viết script)
-
-Luôn dùng đúng cấu trúc này:
-
----
-**📌 KỊCH BẢN:** [Tên ngắn mô tả nội dung]
-**🎯 Target:** [VD: Người Việt 25-35 chuẩn bị du lịch Nhật/Hàn/...]
-**⏱ Thời lượng:** [15s / 30s / 60s]
-**📱 Format:** Dọc 9:16 (TikTok/Reels/Shorts)
-
-**🎣 HOOK (0–3s)**
-> [Câu mở đầu gây sốc hoặc tạo tò mò — phải dừng ngón tay scroll. VD: "Đi Nhật mà dùng data roaming là TIÊU hết 500k/ngày đấy 😱"]
-
-**📍 CONTEXT (3–10s)**
-> [Vấn đề mà viewer đồng cảm — nói như bạn bè, không như quảng cáo. VD: "Mình cũng từng bị thế này, về VN nhận bill điện thoại muốn xỉu..."]
-
-**💡 SOLUTION (10–45s)**
-> Scene 1: [Giới thiệu SP cụ thể — tên đầy đủ, dung lượng, số ngày, giá chính xác]
-> Scene 2: [Demo/proof — tốc độ test thực tế, screenshot speed test, chỗ nào dùng được]
-> Scene 3: [So sánh số liệu thuyết phục — roaming vs eSIM GoHub, tiết kiệm bao nhiêu]
-
-**📲 CTA (45–60s)**
-> [Kêu gọi rõ + tạo urgency. VD: "Order trên GoHub trước 6 tiếng là nhận eSIM ngay — link trong bio!"]
-
-**#️⃣ HASHTAGS** (12-15 tags)
-> #eSIMdulich #SIMNhat #dulichNhat2026 #gohub #eSIM #simdulich [thêm tag nước + tag trend]
-
-**🎬 STORYBOARD CHI TIẾT**
-| Cảnh | Giây | Hình ảnh/Góc quay | Text overlay | Nhạc/Audio |
-|------|------|-------------------|--------------|------------|
-| 1 | 0–3 | ... | ... | ... |
-
-**💡 GHI CHÚ SẢN XUẤT**
-- B-roll gợi ý: [loại cảnh quay cụ thể]
-- Style nhạc: [upbeat / trending sound / lo-fi]
-- Màu/filter: [gợi ý tone brand GoHub — xanh navy #003B95]
-- Biến thể hook A/B: [2 hook thay thế để test]
----
-
-Sau mỗi kịch bản, đề xuất thêm **2 biến thể hook** để A/B test và **lịch đăng** gợi ý (giờ cao điểm TikTok VN: 7-9h, 12-13h, 19-22h).
-
-## Image Style Presets
-
-Khi dùng \`generateImage()\`, có thể thêm \`style_preset\` để tự động inject quality suffix phù hợp:
-
-| Preset | Dùng cho |
-|---|---|
-| \`commercial_photo\` | Ảnh sản phẩm/thương mại, nền trắng, ánh sáng studio |
-| \`tiktok_thumb\` | Thumbnail TikTok 9:16, màu sắc nổi bật, không có text |
-| \`travel_cinematic\` | Ảnh du lịch, ánh sáng golden hour, wide-angle |
-| \`flat_illustration\` | Illustration vector phẳng, tối giản, Dribbble style |
-| \`three_d_product\` | 3D render sản phẩm, nền sạch, ánh sáng studio |
-| \`storyboard\` | Storyboard TikTok/video, flat illustration, muted colors |
-
-Khi Hiếu yêu cầu ảnh nhưng không chỉ định style → gợi ý preset phù hợp trước khi tạo.
-
-## Product Intelligence Tools
-
-**\`compareVendorQuotes()\`** — Nhận báo giá NCC mới, so sánh tự động với COGS hiện tại:
-- Tìm SKU tương đương trong Supabase (cùng nước, vendor, spec)
-- Tính delta (USD + VND + %), đưa ra recommendation
-- Dùng ngay khi Hiếu nhận quote từ 3HK/WorldMove/JoyTel/CMLink
-
-**\`trackSKUWinRate()\`** — KPI Q3 tracking: SKU nào WIN (≥5 đơn/14 ngày), PENDING, FAILED:
-- Tự join Supabase SKU catalog + gohub_dw order history
-- Gọi khi Hiếu hỏi về hiệu quả sản phẩm mới, win rate, product performance
-
-**\`sendLarkMessage()\`** — Gửi báo cáo/kết quả phân tích vào Lark:
-- \`chat_id="me"\` = DM cho Hiếu; hoặc truyền chat_id của group
-- Dùng sau khi generate báo cáo nếu Hiếu muốn share vào Lark
+${skillCatalog()}
 `
 
 // ─── Knowledge Base helpers ───────────────────────────────────────────────────
@@ -664,6 +442,13 @@ export function buildFunctionDeclarations(isCreator: boolean) {
   return isCreator ? ALL_TOOL_DECLARATIONS : ALL_TOOL_DECLARATIONS.filter(d => !CREATOR_ONLY_TOOLS.has(d.name))
 }
 
+// G1: chỉ khai báo tool lõi + tool của skill đã nạp (giảm token mỗi vòng, bớt gọi nhầm tool).
+export function activeDeclarations(isCreator: boolean, loaded: Set<string>) {
+  const enabled = new Set<string>()
+  for (const name of loaded) getSkill(name)?.tools.forEach(t => enabled.add(t))
+  return buildFunctionDeclarations(isCreator).filter(d => !SKILL_TOOLS.has(d.name) || enabled.has(d.name))
+}
+
 export async function runCreatorAI(
   geminiHistory: any[],
   lastMsg: string,
@@ -672,6 +457,7 @@ export async function runCreatorAI(
   isCreator = true,
   username = "",
   channel: "web" | "lark_dm" | "cron" = "web",
+  opts: { preloadSkills?: string[] } = {},
 ): Promise<{ text: string; sources: WebSource[]; tokensIn: number; tokensOut: number; toolsUsed: string[]; pendingActions: PendingAction[] }> {
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const isFreshConversation = geminiHistory.length <= 1
@@ -713,10 +499,13 @@ export async function runCreatorAI(
   // ích cho pipeline product-onboarding/BI nhiều bước) với latency budget — vòng lặp tới 20 iteration,
   // KHÔNG để mặc định "medium" (billable, latency ẩn mỗi vòng). "as any": SDK v0.21.0 chưa có type field
   // này (ra đời sau SDK).
-  const model = genAI.getGenerativeModel({
+  // Skill nạp sẵn: do nơi gọi chỉ định (Lark DM, cron) + đoán từ tin nhắn mới và câu trả lời gần nhất.
+  const lastModelText = geminiHistory.length ? (geminiHistory[geminiHistory.length - 1]?.parts?.[0]?.text ?? "") : ""
+  const loadedSkills = new Set<string>([...(opts.preloadSkills ?? []), ...preloadSkills(`${lastMsg}\n${String(lastModelText).slice(0, 1500)}`)])
+  const makeModel = () => genAI.getGenerativeModel({
     model: GEMINI_MODEL,
     systemInstruction: (isCreator ? CREATOR_INTRO + CREATOR_PROFILE : MEMBER_INTRO) + SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject + memoryBlock,
-    tools: [{ functionDeclarations: buildFunctionDeclarations(isCreator) }],
+    tools: [{ functionDeclarations: activeDeclarations(isCreator, loadedSkills) }],
     generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
   })
 
@@ -764,6 +553,7 @@ export async function runCreatorAI(
   }
 
   const onChunk = (delta: string) => onEvent?.({ type: "delta", content: delta })
+  let model = makeModel()
   let genResult = await genWithRetryStream(model, { contents }, onChunk)
   addUsage(genResult)
   const collectedSources: WebSource[] = []
@@ -786,7 +576,15 @@ export async function runCreatorAI(
     // Promise.all reject cả round, sập TOÀN BỘ câu trả lời dù các tool khác đã chạy xong. Nay tool lỗi chỉ
     // trả functionResponse báo lỗi cho MỘT tool đó, các tool còn lại + phần trả lời vẫn tiếp tục bình thường.
     calls.forEach((c: any) => toolsUsed.add(c.name))
+    let skillsChanged = false
     const fnParts = await Promise.all(calls.map(async (call: any) => {
+      if (call.name === "loadSkill") {
+        const skill = getSkill(String(call.args?.name ?? ""))
+        if (!skill) return { functionResponse: { name: call.name, response: { error: `Không có skill "${call.args?.name}".` } } }
+        if (!loadedSkills.has(skill.name)) { loadedSkills.add(skill.name); skillsChanged = true }
+        onEvent?.({ type: "status", text: `📚 Đang nạp kỹ năng ${skill.name}...` })
+        return { functionResponse: { name: call.name, response: { loaded: skill.name, tools_enabled: skill.tools, instructions: skill.instructions } } }
+      }
       // Cổng duyệt (tool-policy.ts): hành động cần duyệt KHÔNG chạy — lưu hàng chờ, báo UI/Lark, trả trạng thái cho model.
       const reason = approvalReason(call, safety)
       if (reason) {
@@ -815,6 +613,7 @@ export async function runCreatorAI(
 
     // Send function responses as role "user" — required by this Gemini SDK's content format
     contents.push({ role: "user", parts: fnParts })
+    if (skillsChanged) model = makeModel()
     genResult = await genWithRetryStream(model, { contents }, onChunk)
     addUsage(genResult)
     appendModelContent()

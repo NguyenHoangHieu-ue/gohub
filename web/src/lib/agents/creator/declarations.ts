@@ -611,6 +611,19 @@ export const verifyReportNumbersDecl = {
   },
 }
 
+// G1: nạp hướng dẫn + nhóm tool của 1 skill (lib/agents/creator/skills.ts).
+export const loadSkillDecl = {
+  name: "loadSkill",
+  description: "Nạp hướng dẫn chi tiết + bật nhóm tool của 1 skill (xem mục 'Skills' trong system prompt). Gọi khi việc thuộc skill đó mà tool cần dùng chưa có.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      name: { type: SchemaType.STRING, description: "product-ncc | content-creative | workspace | browser-files | kb-learning" },
+    },
+    required: ["name"],
+  },
+}
+
 // Ordered list used to initialize the Gemini model tools
 export const ALL_TOOL_DECLARATIONS = [
   readKBDecl, writeKBDecl, searchKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
@@ -625,5 +638,5 @@ export const ALL_TOOL_DECLARATIONS = [
   // Phase 2 (s195+1) — Extension điều khiển browser cá nhân Hiếu
   readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl, googleWorkspaceDecl, assistantMemoryDecl, larkDocsDecl,
   // s196+12 — second-opinion pass (roadmap audit s196+5, ý tưởng #7)
-  verifyReportNumbersDecl,
+  verifyReportNumbersDecl, loadSkillDecl,
 ]
