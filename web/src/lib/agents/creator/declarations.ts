@@ -269,7 +269,8 @@ export const readKBDecl = {
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      category: { type: SchemaType.STRING, description: "Filter by category: product_codes | sku_rules | exchange_rates | cogs | vendors | processes | notes. Omit to get all entries." },
+      keys:     { type: SchemaType.ARRAY, items: { type: SchemaType.STRING }, description: "Đọc ĐÚNG các mục theo key (lấy từ DANH MỤC KB trong prompt) — cách nên dùng." },
+      category: { type: SchemaType.STRING, description: "Đọc cả 1 category: product_codes | sku_rules | exchange_rates | cogs | vendors | processes | notes | wiki. Không truyền gì = đọc TOÀN BỘ KB (rất lớn, tránh)." },
     },
   },
 }
@@ -341,7 +342,7 @@ export const browseWebDecl = {
 
 export const readMyBrowserDecl = {
   name: "readMyBrowser",
-  description: "Đọc tab Chrome THẬT đang mở trên máy của người dùng hiện tại (dùng session đăng nhập sẵn Lark/Sapo/portal của họ) qua Extension đã pair — action=list_tabs liệt kê tab đang mở (id/title/url), action=read_tab đọc nội dung text 1 tab. Nếu lỗi 'Bridge chưa phản hồi' → báo người dùng kiểm tra đã bật extension + toggle Bridge ON + dán đúng token của CHÍNH HỌ chưa (mỗi người 1 token riêng, không dùng chung).",
+  description: "Đọc tab Chrome THẬT đang mở trên máy của người dùng hiện tại (dùng session đăng nhập sẵn Lark/Sapo/portal của họ) qua Extension đã pair — action=list_tabs liệt kê tab đang mở (id/title/url), action=read_tab đọc nội dung text 1 tab + `elements` (ô nhập/nút/link kèm `sel` là CSS selector đã kiểm duy nhất — extension 1.2.0+). Nếu lỗi 'Bridge chưa phản hồi' → báo người dùng kiểm tra đã bật extension + toggle Bridge ON + dán đúng token của CHÍNH HỌ chưa (mỗi người 1 token riêng, không dùng chung).",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
@@ -360,7 +361,7 @@ export const controlMyBrowserDecl = {
     properties: {
       action:      { type: SchemaType.STRING, description: "click | fill | navigate | scroll" },
       tab_id:      { type: SchemaType.NUMBER, description: "ID tab cần thao tác (từ list_tabs)." },
-      selector:    { type: SchemaType.STRING, description: "CSS selector (cho click/fill)." },
+      selector:    { type: SchemaType.STRING, description: "CSS selector (cho click/fill) — LẤY NGUYÊN `sel` từ elements của readMyBrowser read_tab, KHÔNG tự đoán theo trí nhớ (giao diện web thay đổi thường xuyên)." },
       value:       { type: SchemaType.STRING, description: "Giá trị điền (cho fill)." },
       url:         { type: SchemaType.STRING, description: "URL điều hướng tới (cho navigate)." },
       press_enter: { type: SchemaType.BOOLEAN, description: "true = sau khi fill xong, gửi thêm phím Enter — cần cho ô nhập nhanh (sheet cell, quick-add) mà chỉ set giá trị KHÔNG tự lưu, phải Enter mới commit." },
@@ -611,6 +612,82 @@ export const verifyReportNumbersDecl = {
   },
 }
 
+// G1: nạp hướng dẫn + nhóm tool của 1 skill (lib/agents/creator/skills.ts).
+export const loadSkillDecl = {
+  name: "loadSkill",
+  description: "Nạp hướng dẫn chi tiết + bật nhóm tool của 1 skill (xem mục 'Skills' trong system prompt). Gọi khi việc thuộc skill đó mà tool cần dùng chưa có.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      name: { type: SchemaType.STRING, description: "product-ncc | content-creative | workspace | browser-files | kb-learning" },
+    },
+    required: ["name"],
+  },
+}
+
+// G2: kế hoạch hiển thị cho việc nhiều bước (UI hiện checklist, không chạy gì).
+export const updatePlanDecl = {
+  name: "updatePlan",
+  description: "Hiện/cập nhật kế hoạch các bước cho người dùng thấy tiến độ. Chỉ dùng cho việc ≥3 bước. Gửi LẠI TOÀN BỘ danh sách mỗi lần cập nhật.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      steps: {
+        type: SchemaType.ARRAY,
+        description: "Danh sách bước (≤7), theo thứ tự.",
+        items: {
+          type: SchemaType.OBJECT,
+          properties: {
+            title:  { type: SchemaType.STRING, description: "Tên bước ngắn, bắt đầu bằng động từ." },
+            status: { type: SchemaType.STRING, description: "pending | in_progress | done" },
+          },
+          required: ["title", "status"],
+        },
+      },
+    },
+    required: ["steps"],
+  },
+}
+
+// G3: tìm lại hội thoại cũ theo ý nghĩa (tóm tắt + embedding, bảng gp_conversation_memory).
+export const searchPastConversationsDecl = {
+  name: "searchPastConversations",
+  description: "Tìm lại các hội thoại Gấu Pro TRƯỚC ĐÂY của người dùng theo chủ đề (vd 'lần trước bàn gì về JoyTel', 'tuần trước kết luận gì về giá Nhật'). Trả tóm tắt + ngày + link mở lại.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: { query: { type: SchemaType.STRING, description: "Chủ đề/câu hỏi cần tìm, tiếng Việt." } },
+    required: ["query"],
+  },
+}
+
+// G4: việc theo lịch do người dùng đặt (gp_scheduled_tasks) — chạy thành việc nền, kết quả nhắn Lark DM.
+export const scheduleTaskDecl = {
+  name: "scheduleTask",
+  description: "Đặt/xem/huỷ việc Gấu Pro tự chạy theo lịch (vd 'mỗi sáng thứ 2 8h tóm tắt doanh thu tuần', 'báo tôi nếu doanh thu hôm qua giảm >20%'). Kết quả gửi Lark DM. Cron chạy theo giờ nên có thể trễ tới ~1 giờ. Xác nhận lại lịch + nội dung với người dùng sau khi tạo.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      action: { type: SchemaType.STRING, description: "create | list | cancel" },
+      title:  { type: SchemaType.STRING, description: "create: tên ngắn." },
+      prompt: { type: SchemaType.STRING, description: "create: yêu cầu ĐẦY ĐỦ, TỰ ĐỦ NGỮ CẢNH (sẽ chạy độc lập, không thấy hội thoại này): việc gì, phạm vi/khoảng thời gian tương đối ('hôm qua', 'tuần trước'), định dạng kết quả." },
+      schedule: {
+        type: SchemaType.OBJECT,
+        description: "create: lịch theo giờ VN.",
+        properties: {
+          kind:     { type: SchemaType.STRING, description: "daily | weekly | monthly | once" },
+          time:     { type: SchemaType.STRING, description: "HH:mm giờ VN" },
+          weekdays: { type: SchemaType.ARRAY, items: { type: SchemaType.NUMBER }, description: "weekly: 1=Thứ 2 … 7=Chủ nhật" },
+          day:      { type: SchemaType.NUMBER, description: "monthly: ngày 1–31" },
+          date:     { type: SchemaType.STRING, description: "once: YYYY-MM-DD" },
+        },
+      },
+      only_if_notable: { type: SchemaType.BOOLEAN, description: "create: true = việc CANH CHỪNG, chỉ nhắn khi điều kiện trong prompt xảy ra." },
+      id: { type: SchemaType.STRING, description: "cancel: id việc (từ action=list)." },
+    },
+    required: ["action"],
+  },
+}
+
 // Ordered list used to initialize the Gemini model tools
 export const ALL_TOOL_DECLARATIONS = [
   readKBDecl, writeKBDecl, searchKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
@@ -625,5 +702,5 @@ export const ALL_TOOL_DECLARATIONS = [
   // Phase 2 (s195+1) — Extension điều khiển browser cá nhân Hiếu
   readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl, googleWorkspaceDecl, assistantMemoryDecl, larkDocsDecl,
   // s196+12 — second-opinion pass (roadmap audit s196+5, ý tưởng #7)
-  verifyReportNumbersDecl,
+  verifyReportNumbersDecl, loadSkillDecl, updatePlanDecl, searchPastConversationsDecl, scheduleTaskDecl,
 ]

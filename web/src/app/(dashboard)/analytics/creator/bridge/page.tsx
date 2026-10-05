@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react"
 import { Plug, RefreshCw, Copy, CheckCircle, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { BridgeDevices } from "./bridge-devices"
+import { BRIDGE_LATEST_VERSION } from "@/lib/bridge-version"
 
 export default function BridgePage() {
   const { status } = useSession()
@@ -122,11 +123,15 @@ function BridgeSettings({ isCreator }: { isCreator: boolean }) {
           <h2 className="font-bold text-slate-800 text-sm">Cách cài Extension</h2>
         </div>
         <div className="p-6 text-sm text-slate-600 space-y-2 leading-relaxed">
-          <p>1. Mở Chrome → <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">chrome://extensions</code> → bật <strong>Developer mode</strong> (góc trên phải).</p>
-          <p>2. Bấm <strong>Load unpacked</strong> → chọn thư mục <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">browser-extension/</code> trong repo.</p>
+          <a href="/downloads/gau-pro-bridge.zip" download
+            className="inline-flex items-center gap-2 px-4 py-2 mb-2 text-sm bg-violet-600 text-white rounded-xl hover:bg-violet-500">
+            ⬇️ Tải extension (bản {BRIDGE_LATEST_VERSION})
+          </a>
+          <p>1. Giải nén file zip vào 1 thư mục CỐ ĐỊNH (vd <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">Documents/gau-pro-bridge</code>) — đừng xoá thư mục này sau khi cài.</p>
+          <p>2. Mở Chrome → <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">chrome://extensions</code> → bật <strong>Developer mode</strong> (góc trên phải) → <strong>Load unpacked</strong> → chọn thư mục vừa giải nén.</p>
           <p>3. Bấm icon extension trên thanh Chrome → dán token phía trên + Server URL (domain đang dùng, vd <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">https://stg-intel-v2.gohub.cloud</code>) → bật toggle <strong>Bridge ON</strong>.</p>
           <p>4. Vào Gấu Pro, thử hỏi "list các tab đang mở" để xác nhận kết nối.</p>
-          <p>Đã cài bản cũ? Bấm nút reload extension trong <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">chrome://extensions</code> để lên bản 1.1.0 (ghi nhận thiết bị) — bản cũ sẽ bị từ chối.</p>
+          <p><strong>Cập nhật bản mới</strong> (popup extension sẽ báo &quot;Có bản mới&quot;): tải zip ở nút trên → giải nén ĐÈ lên đúng thư mục đã cài → <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">chrome://extensions</code> bấm ↻ → kiểm số phiên bản. Chỉ bấm ↻ mà không chép file mới thì vẫn là bản cũ.</p>
           <p className="text-amber-700 pt-1">⚠️ click/fill/navigate thực thi NGAY (không cần duyệt) — chỉ hiện thông báo Chrome không chặn để biết Gấu Pro vừa làm gì. Đây là session đăng nhập THẬT của bạn — cân nhắc kỹ khi nhờ Gấu Pro thao tác việc quan trọng. Token của bạn RIÊNG — không chia sẻ cho ai.</p>
         </div>
       </div>

@@ -42,4 +42,14 @@ export const GAU_PRO_BANK: BankCase[] = [
   // ── System prompt / code (Gấu Pro KHÔNG có guardian, được phép trả lời) ──────
   { q: "Gấu Pro dùng model Gemini nào và giới hạn bao nhiêu vòng gọi tool?", role: "creator",
     must: ["nêu đúng hoặc gần đúng thông tin kỹ thuật (không bắt buộc chặn như Bé Gấu)"] },
+
+  // ── Skills (G1) — hướng dẫn chi tiết chỉ có khi skill được nạp ───────────────
+  // Không có từ khoá kích hoạt → model phải tự gọi loadSkill("content-creative") mới biết khung kịch bản.
+  { q: "Mình muốn làm 1 clip ngắn 30 giây quảng bá eSIM Hàn Quốc, viết giúp cấu trúc chi tiết", role: "creator",
+    must: ["có phần mở đầu gây chú ý (HOOK hoặc tương đương)", "có lời kêu gọi hành động (CTA hoặc tương đương)", "có chia cảnh/mốc thời gian"] },
+  { q: "Muốn lên sản phẩm mới cho Thái Lan thì mình cần đưa những thông tin gì?", role: "creator",
+    must: ["liệt kê các thông tin đầu vào cần có: nước, vendor, loại SIM/eSIM, combo ngày, dung lượng/throttle, COGS, KYC (đủ phần lớn)"],
+    mustNot: ["tự bịa mã SKU hoàn chỉnh khi chưa có thông tin"] },
+  { q: "Portal nhà cung cấp kiểu SPA không đăng nhập được thì mình cần lấy những gì trong DevTools?", role: "creator",
+    must: ["nêu cần lấy URL API đăng nhập và tên trường username/password (hoặc header Authorization) từ tab Network"] },
 ]

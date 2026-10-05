@@ -9,6 +9,9 @@ import { parseUploadedFile }          from "@/lib/agents/file-parser"
 import { loadGpAllowed }              from "@/lib/gp-access"
 import { compressHistory, stripBase64Images } from "@/lib/agents/creator/compress"
 import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
+import { usedDbTaskTool }             from "@/lib/okr-helpers"
+import { waitUntil }                  from "@vercel/functions"
+import { personalFeaturesEnabled, extractMemoriesFromTurn, summarizeConversation } from "@/lib/assistant-memory-auto"
 
 export const maxDuration = 300
 
@@ -115,12 +118,14 @@ export async function POST(req: NextRequest) {
         try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`)) } catch {}
       }
       try {
-        const { text, sources, tokensIn, tokensOut } = await runCreatorAI(
+        const { text, sources, tokensIn, tokensOut, toolsUsed } = await runCreatorAI(
           history, lastMsg,
           fileContexts.length > 0 ? fileContexts : undefined,
           emit,
           isCreator,
           username,
+          "web",
+          { signal: req.signal },   // G2: người dùng bấm Dừng → client huỷ request → dừng vòng lặp
         )
 
         // Cost dashboard (s196+7) — Gấu Pro trước đây không ghi app_usage_events gì cả (khác Bé Gấu).
@@ -133,6 +138,9 @@ export async function POST(req: NextRequest) {
             user_role:  session.user.role  || null,
             user_message: lastMsg.slice(0, 500),
             ai_response:  text ? text.slice(0, 3000) : null,
+            tools_used: toolsUsed.length > 0 ? toolsUsed : null,
+            // Tính task My Metrics như Bé Gấu (đã gọi tool đọc DB), TRỪ câu hỏi của Creator (Hiếu tự hỏi/thử).
+            used_db_tool: !isCreator && usedDbTaskTool(toolsUsed),
             tokens_in: tokensIn, tokens_out: tokensOut,
             est_cost_usd: estimateCostUsd(tokensIn, tokensOut),
           })
@@ -149,15 +157,23 @@ export async function POST(req: NextRequest) {
             savedConvId = conv?.id ?? null
           }
           if (savedConvId) {
-            void (async () => {
+            waitUntil((async () => {
               try {
-                await supabaseAdmin.from("chat_messages").insert([
+                const { error: insErr } = await supabaseAdmin.from("conversation_messages").insert([
                   { conversation_id: savedConvId, role: "user",      content: lastMsg, agent_id: "gau_pro", agent_name: "Gấu Pro" },
                   { conversation_id: savedConvId, role: "assistant", content: text,    agent_id: "gau_pro", agent_name: "Gấu Pro" },
                 ])
+                if (insErr) console.error("[CreatorAI] save messages:", insErr.message)   // supabase không throw — phải tự kiểm
                 await supabaseAdmin.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", savedConvId!)
               } catch (e: any) { console.error("[CreatorAI] save messages:", e) }
-            })()
+              // G3: trí nhớ — rút điều đáng nhớ (bỏ qua nếu model đã tự lưu lượt này) + tóm tắt hội thoại để tìm lại sau.
+              if (await personalFeaturesEnabled(isCreator).catch(() => false)) {
+                await Promise.all([
+                  toolsUsed.includes("assistantMemory") ? 0 : extractMemoriesFromTurn(username, lastMsg, text, "web").catch(() => 0),
+                  summarizeConversation(username, savedConvId!).catch(e => console.error("[gp_conv_mem]", e?.message)),
+                ])
+              }
+            })())
           }
         } catch (e) { console.error("[CreatorAI] save conversation:", e) }
 

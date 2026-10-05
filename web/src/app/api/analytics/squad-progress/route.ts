@@ -149,7 +149,7 @@ export async function GET(req: NextRequest) {
     // tươi mỗi request (nhập xong hiện ngay, không cần flush).
     // v2 (s214b): thêm org_key/org_name vào SELECT/GROUP BY (gộp bảng KH theo Organization) — bump để tránh
     // đọc cache cũ thiếu 2 cột này (custRows.org_key sẽ undefined → fallback về mã lẻ, không gộp được gì).
-    const rawKey = `squad_raw_v2:${quarter}:${year}:${companyCode}:${todayStr}:${exclHash(excludedCustomers)}`
+    const rawKey = `squad_raw_v2:${quarter}:${year}:${companyCode}:${qEnd}:${exclHash(excludedCustomers)}`
     const [raw, { groupCosts }, lifecycleRows] = await Promise.all([
       cachedQuery(rawKey, async () => {
         const [custRows, picRows, prevCustRevRows] = await Promise.all([

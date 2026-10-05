@@ -7,7 +7,8 @@ const securityHeaders = [
   { key: "X-Frame-Options",           value: "SAMEORIGIN" },
   { key: "X-XSS-Protection",          value: "1; mode=block" },
   { key: "Referrer-Policy",           value: "strict-origin-when-cross-origin" },
-  { key: "Permissions-Policy",        value: "camera=(), microphone=(), geolocation=()" },
+  // microphone/camera = chỉ chính trang (self): mic nhập giọng nói + phiên trực tiếp Gấu Pro (G5). Trước là () → cấm hẳn.
+  { key: "Permissions-Policy",        value: "camera=(self), microphone=(self), geolocation=()" },
   {
     key: "Content-Security-Policy",
     value: [
@@ -16,7 +17,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",            // Tailwind inline styles
       "img-src 'self' data: blob: https:",           // avatars, chart images
       "font-src 'self'",
-      "connect-src 'self' https://*.supabase.co https://generativelanguage.googleapis.com https://open.larksuite.com https://image.pollinations.ai",
+      "connect-src 'self' https://*.supabase.co https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com https://open.larksuite.com https://image.pollinations.ai",
       "frame-ancestors 'none'",
     ].join("; "),
   },

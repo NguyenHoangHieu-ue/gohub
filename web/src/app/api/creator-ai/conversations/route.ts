@@ -3,7 +3,7 @@ import { getServerSession }         from "next-auth"
 import { authOptions }              from "@/lib/auth"
 import { supabaseAdmin }            from "@/lib/supabase"
 
-// Gấu Pro conversations — dùng cùng bảng conversations + chat_messages như Bé Gấu,
+// Gấu Pro conversations — dùng cùng bảng conversations + conversation_messages (v68) như Bé Gấu,
 // phân biệt bằng agent_id = 'gau_pro'. Title prefix "[GP] " để query hiệu quả.
 
 const GP_PREFIX = "[GP] "

@@ -6,7 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 export const MEMORY_KINDS = ["profile", "preference", "project", "person", "decision", "other"] as const
 export type MemoryKind = typeof MEMORY_KINDS[number]
 
-const MAX_INJECT_CHARS = 4000
+const MAX_INJECT_CHARS = 8000   // s223: 4.000 sắp đầy (13 mục ~3.400) → mục cũ bị bỏ không báo; nâng gấp đôi
 const MAX_CONTENT = 500
 const KIND_LABEL: Record<MemoryKind, string> = {
   profile: "Hồ sơ", preference: "Sở thích/cách làm việc", project: "Dự án/việc đang theo",

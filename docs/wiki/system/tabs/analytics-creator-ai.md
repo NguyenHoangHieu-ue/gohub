@@ -777,3 +777,248 @@ Fix: `MessageRow = memo(...)` (tin cũ giữ reference nên không render lại;
 nội dung cuối). Không đổi UI/giao diện.
 Gotcha: tin ĐANG stream vẫn parse markdown lại mỗi frame — câu trả lời rất dài vẫn có thể nặng; nếu còn giật thì
 chỉ render markdown khi stream xong. Lag phía server (chờ chữ đầu) là vấn đề khác, đã có `compressHistory`.
+
+## § s223 G0 (2026-10-05) — Cổng duyệt hành động + chống prompt injection (plan `docs/plans/gau-pro-assistant.md`)
+
+**Vì sao**: cùng 1 lượt Gấu Pro vừa có dữ liệu riêng (SQL, Supabase, Drive, file máy), vừa đọc nội dung không tin cậy (web,
+tab Chrome, portal, file tải lên, tài liệu Lark/Google), vừa có kênh gửi ra ngoài ("lethal trifecta"). Trước đây chỉ có lời dặn
+trong prompt; `controlMyBrowser` chạy ngay; `sendLarkMessage` mở cho cả user không phải creator, gửi được tới group bất kỳ.
+
+**Mức duyệt (Hiếu giao tự chốt: an toàn + tiện)** — `lib/agents/creator/tool-policy.ts`, chạy TRONG CODE:
+- Tool chỉ đọc: chạy luôn.
+- `sendLarkMessage` tới group/người khác: LUÔN hỏi. Gửi `me`: chỉ hỏi khi lượt đã "nhiễm".
+- Tool ghi/gửi khác (task Lark, KB, trí nhớ, portal credentials, điều khiển browser trừ scroll, ghi file máy, ghi Google/Lark Docs,
+  tạo ảnh/video): chạy luôn khi lượt CHƯA nhiễm; đã nhiễm → hỏi.
+- "Nhiễm" = trong lượt đã gọi `webSearch`, `browseWeb`, `browsePortal`, `queryLarkBase`, `getTrendSnapshots`, `readMyBrowser read_tab`,
+  `larkDocs/googleWorkspace read`, hoặc có file tải lên.
+- `browseWeb` sau khi nhiễm chỉ mở URL đã xuất hiện NGUYÊN VĂN trong tin người dùng/kết quả tool trước (chặn nhét dữ liệu vào URL);
+  URL mới → hỏi.
+
+**Luồng**: tool cần duyệt KHÔNG chạy → lưu `gp_pending_actions` (migration **v64**, mã ngắn 6 ký tự) → SSE `approval_required`
+→ thẻ Duyệt/Từ chối dưới câu trả lời (web) hoặc dòng "🔐 Chờ duyệt #abc123 … gõ 'duyệt abc123'" (Lark DM, ghép bằng code) → model
+được báo "đang chờ duyệt, không gọi lại". Người dùng duyệt → `POST /api/creator-ai/approve` (hoặc lệnh Lark) chuyển trạng thái
+nguyên tử `pending→approved`, chạy đúng tool + tham số đã lưu qua `dispatchTool` (có audit log), lưu kết quả, rồi gửi câu nối
+`[Đã DUYỆT …] Kết quả: …` để Gấu Pro làm tiếp. Hết hạn sau 24h. Chỉ chủ hành động duyệt được.
+- **Fail-closed**: chưa chạy v64 → hành động cần duyệt báo lỗi, KHÔNG chạy (gửi Lark tới group sẽ không dùng được tới khi chạy migration).
+- Cron (`digest`, `vendor-quote-scan`, kênh `cron`) không có người duyệt → hành động cần duyệt bị từ chối.
+- `sendLarkMessage` thêm vào `CREATOR_ONLY_TOOLS` + chặn trong `dispatchTool`.
+
+**Persona theo người dùng (D9)**: phần mở đầu "dành riêng cho Hiếu" + "About Hiếu / mục tiêu Q3" tách ra `CREATOR_INTRO`/
+`CREATOR_PROFILE`, chỉ nạp cho creator; user được cấp quyền nhận `MEMBER_INTRO`. Lark DM ghi `agent_id` = `gau_pro` (trước `gau-pro`;
+dữ liệu cũ chưa sửa).
+
+**Giới hạn đã biết**: "nhiễm" tính trong 1 lượt — nội dung ngoài đã đọc ở lượt TRƯỚC (nằm trong lịch sử dạng văn bản trả lời) không
+làm lượt sau nhiễm. Test: `gp-tool-policy.test.ts` (7 ca).
+
+## § s223 G1a (2026-10-05) — Skills: prompt lõi + hướng dẫn/tool nạp khi cần
+
+- `lib/agents/creator/skills.ts`: 5 skill (`product-ncc`, `content-creative`, `workspace`, `browser-files`, `kb-learning`). Mỗi skill:
+  tên + mô tả 1 dòng (luôn nằm trong prompt lõi qua `skillCatalog()`), nhóm tool, hướng dẫn đầy đủ (chép NGUYÊN VĂN các mục cũ:
+  Portal, Product Onboarding, Product Intelligence Tools, Image Generation, Content Creator, Image Style Presets, sendLarkMessage),
+  regex từ khoá để nạp sẵn.
+- Tool `loadSkill(name)`: trả hướng dẫn + bật tool của skill; vòng lặp dựng lại model với bộ tool mới (`activeDeclarations`).
+  Nạp sẵn: `preloadSkills(tin mới + câu trả lời gần nhất)` (từ khoá hoặc có nhắc tên tool — câu nối sau khi duyệt hành động tự
+  nạp lại skill của tool đó); Lark DM + cron digest nạp sẵn `workspace`, cron quét báo giá nạp sẵn `product-ncc`.
+- Đo (ký tự gửi mỗi vòng, chưa nạp skill): prompt 35,5k → ~23k; khai báo tool 28,8k → 7,5k (37 → 13 tool lõi). Tổng ≈ −53%.
+- Eval `gau-pro-grade` (máy dev, `.env.local` thiếu mật khẩu DB + key Supabase lỗi → 4 câu cần DB không chấm được ở cả 2 lần):
+  câu không cần DB trước 6/6, sau 6/6; thêm 3 câu skill (clip ngắn KHÔNG có từ khoá → model tự `loadSkill`; lên sản phẩm; portal SPA)
+  đều 10/10. Câu cần DB phải chạy lại ở môi trường đủ key.
+- Thêm skill: thêm 1 phần tử `SKILLS` (tool phải có khai báo; test `gp-skills.test.ts` kiểm không trùng/không thiếu).
+
+## § s223 G1b (2026-10-05) — Gấu Pro chuyển sang SDK `@google/genai`
+
+- SDK cũ `@google/generative-ai` 0.21 hết hỗ trợ từ 30/11/2025 (phải ép `as any` cho `thinkingConfig`, từng rớt `thoughtSignature`
+  khi gộp stream). Vòng lặp chính `runCreatorAI` nay dùng `lib/agents/genai-stream.ts` (`streamTurn`: tự gom nguyên part từng chunk,
+  giữ `thoughtSignature`, bỏ part `thought` khỏi chữ hiện ra, retry lỗi tạm thời khi chưa đẩy chữ nào; `ThinkingLevel.LOW` có type).
+- `declarations.ts` giữ nguyên (Bé Gấu + test dùng chung); `toGenaiSchema()` đổi `type` sang chữ hoa khi đưa vào SDK mới.
+- CHƯA chuyển: Bé Gấu (`be-gau.ts` + `gemini-stream.ts`), `compress.ts`, tool phụ (self-review, search, image...) — vẫn SDK cũ, chạy bình
+  thường; chuyển dần khi đụng tới.
+- Eval sau khi chuyển: 9/13 giống hệt trước (4 câu cần DB không chấm được trên máy dev) — vòng nhiều lượt gọi tool chạy đúng.
+
+## § s223 G2a (2026-10-05) — Kế hoạch hiển thị + nút Dừng
+
+- Tool lõi `updatePlan(steps[{title,status}])` (không chạy gì, không qua dispatch): vòng lặp phát SSE `plan`; web hiện checklist "Kế hoạch
+  (x/y)" đầu bubble (`PlanChecklist`, lưu trong `msg.plan`). Prompt lõi: chỉ dùng cho việc ≥3 bước, cập nhật cùng lượt với tool bước sau.
+  Thử thật (máy dev): "3 kịch bản TikTok Nhật/Hàn/Thái" → plan 3 bước in_progress → done.
+- Nút Dừng (thay nút gửi khi đang chạy): `AbortController` huỷ fetch → route truyền `req.signal` vào `runCreatorAI` → dừng giữa các vòng
+  + huỷ request Gemini đang chạy (`abortSignal` của SDK mới); câu trả lời thêm "⏹ Đã dừng theo yêu cầu.". Chưa xác minh trên Vercel việc
+  client ngắt có làm `req.signal` abort ngay không (nếu không, server chạy nốt vòng lặp như trước — không hại).
+- Lark DM chưa hiện kế hoạch (bỏ qua sự kiện `plan`).
+
+## § s223 G2b+G2c (2026-10-05) — Trace lượt chạy + việc chạy nền + panel "Việc & duyệt"
+
+Migration **v65** (`gp_runs`, `gp_jobs`) — Hiếu phải chạy; chưa chạy thì trace bỏ qua im lặng, giao việc nền báo lỗi kèm hướng dẫn.
+
+**Trace (`gp_runs`)**: mỗi lần `runCreatorAI` ghi 1 dòng cuối lượt (1 insert, không N+1): câu hỏi, kênh, skill đã nạp, `steps`
+(mỗi vòng model: thời gian + token + tool được gọi; mỗi tool: thời gian, tham số rút gọn che password/token, lỗi, mã chờ duyệt), tổng
+token, thời lượng, kết quả (done/stopped/unfinished). Xem: panel 🗂 Nhật ký → tab "Lượt chạy (trace)" (chỉ creator, `GET /api/creator-ai/runs`).
+
+**Việc chạy nền (`gp_jobs`)** — không dùng Vercel Workflow (gói Hobby, Hiếu chốt không lên Pro):
+- Bật nút ⏱ "Nền" cạnh ô nhập → tin gửi đi thành việc (`POST /api/creator-ai/jobs`), KHÔNG kèm lịch sử chat/file.
+- Chạy theo chặng: `POST /api/creator-ai/jobs/run` (Bearer CRON_SECRET, trả 202 ngay, làm trong `waitUntil`, maxDuration 300) →
+  `runJobChunk`: chiếm việc nguyên tử (khớp `updated_at`), `runCreatorAI(..., "job", { timeBudgetMs: 200s, resume })`. Hết ngân sách →
+  dừng TRƯỚC lượt model kế tiếp, trả `checkpoint` (contents rút gọn: kết quả tool >20k ký tự cắt, file nhị phân bỏ; kèm trạng thái
+  "nhiễm" + skill) → lưu, xếp hàng lại, tự gọi chặng sau. Tối đa 6 chặng (~20 phút).
+- Xong: lưu thành hội thoại "[GP] ⏳ …", DM Lark người giao (creator: `getCreatorLarkOpenId`; người khác: `users.lark_open_id`).
+  Chuông thông báo KHÔNG dùng (bảng `notifications` là thông báo chung, không theo người).
+- Cron `scheduled-messages` (cron-job.org, mỗi giờ) gọi `sweepStuckJobs`: chạy lại việc "queued" >2' hoặc "running" >6' (mất lượt gọi).
+- Hành động cần duyệt trong việc nền → hàng chờ (kênh `job`), kết quả cuối liệt kê mã; duyệt ở panel hoặc Lark DM.
+- Thử thật (máy dev): ngân sách 1ms → dừng sau vòng `readKnowledgeBase`, checkpoint qua JSON (như lưu jsonb) → chặng 2 trả lời đúng
+  (thoughtSignature giữ nguyên).
+
+**Panel "⏳ Việc & duyệt"** (mọi user Gấu Pro, `components/gau-pro/tasks-panel.tsx`): hành động chờ duyệt ≤24h (`GET /api/creator-ai/approve`,
+duyệt/từ chối được kể cả sau khi tải lại trang — chỉ hiện kết quả, không tự gửi câu nối vào hội thoại đang mở) + danh sách việc nền
+(trạng thái, số chặng, Mở kết quả, Huỷ; tự làm mới 15s khi có việc đang chạy).
+
+**Chưa QA sống**: cần chạy v64 + v65 rồi thử trên staging: (1) giao 1 việc nền dài, (2) gửi Lark tới group → duyệt từ panel, (3) xem trace.
+
+## § s223 fix (2026-10-05) — `thinkingLevel: "minimal"` làm hỏng âm thầm 3 tính năng
+
+Gọi API thật: `gemini-3.8-flash` trả 400 "Thinking level MINIMAL is not supported for this model" (cả SDK cũ lẫn mới). 3 chỗ dùng
+"minimal" đều nuốt lỗi trong catch nên KHÔNG ai thấy: `compress.ts` (nén lịch sử Gấu Pro khi hội thoại dài → luôn gửi nguyên lịch sử),
+`learning.ts` (Bé Gấu tự học từ người dùng → không phân loại được gì), `task-assistant.ts` (tạo task khi có người @Hiếu giao việc trong
+group → không tạo). Đổi sang "low"; thử thật: nén 24 tin → `summarized=true`. Bài học: đổi model thì thử lại mọi mức `thinkingLevel`
+đang dùng; lỗi gọi model trong catch nên `console.error` thay vì nuốt im.
+
+## § s223 G3 (2026-10-05) — Trí nhớ 2 tầng + panel "🧠 Trí nhớ"
+
+Migration **v66** (`gp_conversation_memory` + RPC `match_gp_conversations`) — Hiếu phải chạy; chưa chạy thì tóm tắt bỏ qua, tool báo cách sửa.
+- **Cờ bật** `app_settings.gp_personal_features`: `all` = mọi user Gấu Pro; khác/không có = chỉ creator (mặc định — đúng chốt "khung
+  đa người dùng, hiện chỉ creator"). `personalFeaturesEnabled()` (cache 60s) quyết định: khối trí nhớ trong prompt, tool `assistantMemory`
+  + `searchPastConversations` (tách khỏi `CREATOR_ONLY_TOOLS` sang `PERSONAL_TOOLS`), tự rút trí nhớ, tóm tắt hội thoại, panel.
+- **Tự rút trí nhớ** (`lib/assistant-memory-auto.ts` `extractMemoriesFromTurn`): sau mỗi lượt web (trong `waitUntil`) và Lark DM, 1 lượt
+  Gemini JSON đọc CHỈ tin nhắn người dùng (câu trả lời bot chỉ làm ngữ cảnh — tránh đầu độc trí nhớ bằng nội dung web/tài liệu), so với
+  trí nhớ hiện có → tối đa 2 mục save/update, nguồn `auto-web`/`auto-lark_dm`. Bỏ qua câu <25 ký tự, câu nối sau duyệt, lượt model đã tự
+  gọi `assistantMemory`. Thử thật: "anh Tuấn thay chị Lan + muốn cột CM1%" → 2 mục; câu hỏi doanh thu → 0; "Minh chuyển sang B2B Customer
+  Report" → update đúng mục cũ.
+- **Trí nhớ hội thoại**: `summarizeConversation` (sau mỗi lượt web, chỉ làm lại khi thêm ≥4 tin) tóm tắt ≤120 từ + embedding 3072 →
+  upsert. Tool lõi `searchPastConversations(query)` → RPC (lọc username, ngưỡng 0,45) → tóm tắt + ngày + link `/analytics/creator/ai?c=<id>`
+  (trang tự mở hội thoại theo `?c=`). Hội thoại Lark DM chưa được tóm tắt (lưu ở bảng khác).
+- **Panel 🧠 Trí nhớ** (`components/gau-pro/memory-panel.tsx`, `GET/POST /api/creator-ai/memory`): xem, thêm tay, bấm để sửa, ghim, quên;
+  đánh dấu "Gấu tự nhớ".
+
+## § s223 G4 (2026-10-05) — Việc theo lịch + canh chừng (đặt bằng chat)
+
+Migration **v67** (`gp_scheduled_tasks`) — Hiếu phải chạy (cần cả v65 vì chạy qua `gp_jobs`).
+- Tool `scheduleTask` (create/list/cancel, thuộc `PERSONAL_TOOLS` → theo cờ `gp_personal_features`, hiện chỉ creator; audit log; tạo khi
+  lượt đã "nhiễm" thì cần duyệt). Lịch giờ VN: `daily | weekly (1=T2…7=CN) | monthly (ngày 31 → cuối tháng) | once`; tối đa 10 việc
+  đang bật/người. Prompt lưu phải TỰ ĐỦ (chạy độc lập, không thấy hội thoại — bài học ChatGPT Scheduled Tasks).
+- `only_if_notable` = **canh chừng** (thay cho trigger viết cứng bằng code): prompt chạy kèm hướng dẫn "không có gì → trả đúng NO_ALERT";
+  `runJobChunk` gặp NO_ALERT thì ghi nhận, không lưu hội thoại, không nhắn. Ngưỡng do người dùng nói bằng lời (vd "giảm >20% so TB 7 ngày").
+  Doanh thu hằng ngày đã có digest 09:45 lo — không thêm trigger cứng trùng việc.
+- Chạy: cron `scheduled-messages` (cron-job.org, hiện MỖI GIỜ, đang trỏ staging) → `runDueSchedules`: lấy ≤5 việc đến hạn, chiếm
+  nguyên tử (dời `next_run_at` theo `nextRunAt`, khớp giá trị cũ), tạo việc nền `gp_jobs` → chặng chạy → DM Lark. Nên giờ chạy trễ tối đa
+  ~1 giờ; muốn sát giờ thì tăng tần suất job ở cron-job.org.
+- Panel "Việc & duyệt": mục "Việc theo lịch" (⏰ thường / 👀 canh chừng, lần tới, số lần đã chạy, Huỷ) — `GET/DELETE /api/creator-ai/schedules`.
+- Test `gp-schedules.test.ts` (lịch theo giờ VN qua ranh giới ngày UTC, tuần, cuối tháng, once). Thử thật (giả lập lưu DB): "thứ 2 8h tóm tắt
+  doanh thu tuần B2B/B2C" → weekly [1] 08:00 + prompt đầy đủ; "báo nếu doanh thu hôm qua giảm >20% so TB 7 ngày, 9h mỗi ngày" → daily 09:00
+  + `only_if_notable: true`.
+
+## § s223 QA (2026-10-05) — 2 lỗi gốc có sẵn tìm ra khi QA sống
+
+1. **Tin nhắn hội thoại chatbot KHÔNG được lưu từ migration v34**: v34 (Tổ Gấu) `DROP TABLE chat_messages` rồi tạo lại CÙNG TÊN cho chat
+   nhóm (`group_id/sender_email…`, không có `conversation_id/role`). Từ đó Bé Gấu web (`POST /api/chat/conversations/[id]`) và Gấu Pro ghi
+   tin đều lỗi (supabase trả `{error}`, không throw → bị bỏ qua); `conversations` có ~506 dòng không tin nào; mở lại hội thoại cũ chỉ còn
+   nhờ localStorage. Verify sống: `chat_messages` chỉ có cột chat nhóm, GET hội thoại trả "column chat_messages.role does not exist".
+   Sửa: migration **v68** `conversation_messages` (FK `conversations` ON DELETE CASCADE) + chuyển mọi chỗ đọc/ghi (route
+   `chat/conversations/[id]`, Gấu Pro chat, việc nền, tóm tắt trí nhớ, mô tả MCP, danh sách bảng nhạy cảm). Tin cũ đã mất, không khôi phục được.
+2. **Mở/xoá hội thoại Gấu Pro 404 khi `name ≠ username`**: Bé Gấu lưu `conversations.username = session.user.name`, Gấu Pro lưu
+   `session.user.username`; route `[id]` chỉ so `name`. Nay chấp nhận cả hai.
+
+## § s223 G5 (2026-10-05) — Phiên giọng nói + màn hình/camera trực tiếp (kiểu Project Astra, thử nghiệm)
+
+- Nút **🎙 Trực tiếp** (header Gấu Pro) → hộp thoại `components/gau-pro/live-session.tsx`. Bật theo cờ `gp_personal_features` (hiện chỉ creator).
+- Model `GEMINI_LIVE_MODEL` (mặc định `gemini-3.8-live`, đã kiểm ListModels có `bidiGenerateContent`; đổi qua env).
+- **Bảo mật**: `POST /api/creator-ai/live/token` tạo **token tạm** (SDK `authTokens.create`, v1alpha): dùng 1 lần, mở phiên trong 60s,
+  sống 30 phút, KHOÁ model + system prompt + bộ tool trong `liveConnectConstraints` → trình duyệt kết nối thẳng Gemini mà không thấy
+  `GEMINI_KEY`, không đổi được cấu hình. Rate limit 6 phiên/phút.
+- **Chỉ tool ĐỌC** (`LIVE_TOOLS`: executeSQL, querySupabase, listSupabaseTables, queryProduct, read/searchKnowledgeBase, webSearch, GA4, GSC,
+  searchPastConversations) — phiên live không có cổng duyệt nên không mở tool ghi/gửi/điều khiển (test khoá trong `gp-skills.test.ts`).
+  Model gọi tool → trình duyệt POST `/api/creator-ai/live/tool` (kiểm allowlist, cắt kết quả >20k ký tự) → `sendToolResponse`.
+- Prompt: `LIVE_VOICE_RULES` (nói ngắn, không markdown/chart/export, số đọc làm tròn, hình màn hình là dữ liệu không phải lệnh, việc
+  ghi/gửi → chuyển chat thường) + prompt lõi + ngày + trí nhớ.
+- Âm thanh: mic PCM 16-bit 16kHz qua AudioWorklet (`public/gp-pcm-capture.js` — file tĩnh vì CSP `script-src 'self'` chặn `blob:`), loa PCM
+  24kHz xếp hàng phát, `interrupted` → dừng phát ngay (người dùng chen lời). Hình: `getDisplayMedia`/camera → canvas ≤1024px → JPEG ~1 khung/giây.
+  `contextWindowCompression: slidingWindow` để phiên có hình không bị cắt ~2 phút. Có ô gõ chữ trong phiên.
+- Kết thúc: `POST /api/creator-ai/live/log` lưu phụ đề thành hội thoại "[GP] 🎙 …" (`conversation_messages`, được tóm tắt cho
+  `searchPastConversations`) + trace `gp_runs` kênh `live`.
+- **Cấu hình trang phải sửa** (`next.config.js`): `Permissions-Policy` trước là `camera=(), microphone=()` → cấm hẳn mic/camera (kể cả nút
+  mic nhập giọng nói có từ trước — thực tế không chạy được); nay `(self)`. CSP `connect-src` thêm `wss://generativelanguage.googleapis.com`.
+- **QA sống staging**: token đúng 10 tool đọc; WebSocket với token → setup → hỏi chữ → model gọi `executeSQL` thật qua `/live/tool` → trả lời
+  bằng TIẾNG + phụ đề "khoảng 6,27 tỷ đồng" (đọc số làm tròn đúng quy tắc); `/live/log` lưu hội thoại 2 tin + trace `live:executeSQL`; hộp
+  thoại mở đúng, bấm Bắt đầu thì trình duyệt xin quyền micro (chính sách trang đã cho phép). **Chưa QA được bằng máy**: nói/nghe thật qua
+  micro-loa, chia sẻ màn hình/camera (cần người cấp quyền trình duyệt) → Hiếu tự thử.
+
+## § s223 trí nhớ (2026-10-05) — Gấu Pro "hay quên": 4 nguyên nhân thật + sửa
+
+Đo trên dữ liệu thật (staging, dùng chung Supabase):
+1. KB 79 mục ≈219.000 ký tự nhưng mỗi hội thoại chỉ nạp **8.000 ký tự đầu (≈3,6%)**, chỉ ở **lượt đầu**, xếp theo category (sku_rules…) →
+   mục `vendors`/`notes` mới lưu gần như không bao giờ được thấy.
+2. Embedding KB dùng `text-embedding-004` đã bị Google **gỡ (404)** → **0/79 mục có embedding**, `searchKnowledgeBase` luôn lỗi, lưu mục mới
+   không báo gì.
+3. Prompt bắt "đề xuất → CHỜ xác nhận" kể cả khi người dùng đã nói rõ "lưu lại" → lượt sau không gõ "ok" là không bao giờ lưu.
+4. Trí nhớ cá nhân 13 mục ≈3.400/4.000 ký tự trần → sắp bị cắt mục cũ không báo.
+
+Sửa (`lib/agents/creator/kb-recall.ts`, commit `71911e9f`):
+- MỖI lượt nạp **danh mục tiêu đề toàn KB** (cache 5') + **nguyên văn các mục liên quan** tới câu hỏi (tìm theo ý nghĩa, top 6, ≥0,55 và
+  không kém mục tốt nhất quá 0,15, tối đa 12k ký tự; câu ngắn kiểu "cái đó" ghép đoạn cuối câu trả lời trước để tìm).
+- Embedding `gemini-embedding-001` cắt **768 chiều** (khớp cột `vector(768)` + index HNSW của v33 — không cần migration). Ghi KB / duyệt học
+  liệu đều có embedding; `POST /api/creator-ai/knowledge/reembed` (creator) tạo lại cho mục thiếu — đã chạy: 79/79.
+- `readKnowledgeBase(keys=[...])` đọc đúng mục; prompt cấm đọc toàn KB không tham số.
+- Prompt: người dùng bảo lưu → LƯU NGAY (nghiệp vụ → `writeKnowledgeBase`, trùng chủ đề dùng lại key; cá nhân → `assistantMemory`), báo đã
+  lưu gì vào đâu; chỉ HỎI trước khi chính Gấu tự gợi ý lưu.
+- Trần trí nhớ cá nhân 4.000 → 8.000 ký tự.
+- QA sống: cuộc mới hỏi "3HK có cho nạp thêm data vào gói Fixed?" → đúng nội dung mục KB 02/10, KHÔNG gọi tool; "tuần sau mình phụ trách gì?"
+  → "sourcing eSIM EU từ ~12/10", KHÔNG gọi tool.
+- ⚠️ Bé Gấu (`be-gau.ts`) vẫn nạp KB kiểu cũ (8.000 ký tự đầu ở lượt đầu) — chưa sửa (ngoài phạm vi).
+
+## § s223 G5 cách 2 (2026-10-05) — Công tắc "Cho Gấu thao tác" trong phiên Trực tiếp
+
+- Nút 🖱 trong hộp thoại Trực tiếp, mặc định TẮT; bật → banner vàng cảnh báo. `readMyBrowser` + `controlMyBrowser` (`LIVE_CONTROL_TOOLS`)
+  luôn khai báo trong phiên (đổi công tắc không cần mở lại phiên) nhưng `/api/creator-ai/live/tool` chỉ chạy khi client gửi `control: true`;
+  tắt → trả lỗi "CHƯA bật", model nhắc người dùng. Tool gửi/ghi khác KHÔNG bao giờ chạy trong phiên (test `gp-live-tool.test.ts`).
+- Chạy qua extension Bridge trên Chrome của chính người dùng (multi-tenant theo username); `controlMyBrowser` có audit log như cũ. Thao tác
+  theo selector trang (đọc `read_tab` trước), không bấm theo toạ độ trên hình chia sẻ.
+- Prompt phiên: nói trước mỗi thao tác, làm từng bước + đọc lại kiểm tra, cấm điền mật khẩu/OTP/thanh toán, thao tác không hoàn tác được
+  phải hỏi bằng lời và chỉ làm khi người dùng đồng ý rõ.
+- Rủi ro chấp nhận (Hiếu chọn): trong lúc bật, trang độc có thể khiến Gấu thao tác sai trên tab đó — giới hạn trong trình duyệt của chính người dùng.
+
+## § s223 QA thao tác thật + extension Bridge 1.2.x (2026-10-05)
+
+- QA lần 1 (tab DuckDuckGo, công tắc bật): Gấu đúng trình tự list_tabs → read_tab → fill nhưng ĐOÁN selector `#search_form_input_homepage` (id cũ)
+  → "Không tìm thấy selector". Gốc: `read_tab` chỉ trả innerText.
+- **Extension 1.2.0**: `read_tab` trả thêm `elements[{sel, tag, label}]` ≤150 phần tử tương tác (ô nhập/chọn trước, nút, link sau), `sel` = CSS
+  selector đã kiểm DUY NHẤT (id → name/aria-label/placeholder/data-testid/title → đường nth-of-type). Mô tả tool + prompt phiên bắt dùng
+  nguyên `sel`. **1.2.1**: chế độ dồn dập — vừa có lệnh thì poll 1s/lần trong 60s (trước 15s/lần → mỗi bước chờ ~7–15s), rảnh về 15s;
+  server chờ kết quả 2s → 1s; route Live cắt `content` read_tab còn 6.000 ký tự trước khi cắt JSON (lần 2 kết quả >20k bị cắt thành chuỗi,
+  danh sách selector có nguy cơ mất).
+- QA lần 2 (sau khi Hiếu tải lại 1.2.0): Gấu dùng đúng `textarea[name="q"]` → ô có "eSIM Nhật Bản", URL không đổi (không Enter), đọc lại tab
+  rồi nói xác nhận; audit log ghi `controlMyBrowser` ok. Mỗi bước còn chậm (~20–40s) → lý do làm 1.2.1.
+- ⚠️ Mọi người dùng Bridge phải tải lại extension (`chrome://extensions` → ↻) để có 1.2.x.
+
+## § s223 Bridge — tải bản mới + tự báo cập nhật (extension 1.2.2)
+
+- Extension cài kiểu "Load unpacked" → Chrome đọc file từ THƯ MỤC TRÊN MÁY từng người; bấm ↻ chỉ đọc lại thư mục đó. Người không có repo
+  phải nhận file mới mới lên bản mới được.
+- `web/scripts/pack_bridge_extension.py` (chạy MỖI LẦN sửa `browser-extension/` + tăng version): sinh `web/public/downloads/gau-pro-bridge.zip`
+  (thư mục `gau-pro-bridge/`, không nén) + `web/src/lib/bridge-version.ts` (`BRIDGE_LATEST_VERSION`). Test `bridge-version.test.ts` đỏ nếu
+  manifest ≠ hằng số ≠ zip (quên chạy script).
+- Trang Bridge: nút "⬇️ Tải extension (bản x.y.z)" (`/downloads/…` không qua middleware đăng nhập — mã extension không có bí mật, token
+  người dùng tự dán) + hướng dẫn cài vào thư mục CỐ ĐỊNH và cách cập nhật (giải nén ĐÈ → ↻).
+- `bridge/next` trả `latest_version`; extension lưu lại; popup hiện phiên bản đang dùng + khung "⬆️ Có bản mới …" kèm link tải khi cũ hơn.
+  Người dùng phải lên 1.2.2 THỦ CÔNG 1 lần (bản có tính năng báo) — từ đó về sau popup tự báo.
+
+## § s223 Chốt plan "Gấu Pro → trợ lý agent" (2026-10-05, đã xoá `docs/plans/gau-pro-assistant.md`)
+
+Đã làm G0–G5 + sửa trí nhớ + Bridge 1.2.2 (chi tiết các mục §s223 ở trên). Quyết định đã chốt: mức duyệt "gửi Lark người khác luôn hỏi,
+tool ghi/gửi khác chỉ hỏi khi lượt đã đọc nội dung ngoài"; không lên Vercel Pro (việc nền chạy theo chặng tự gọi tiếp); trí nhớ + việc theo
+lịch + phiên Trực tiếp là khung đa người dùng, bật theo `app_settings.gp_personal_features` (hiện chỉ creator); phiên Trực tiếp có công tắc
+"Cho Gấu thao tác" (cách 2).
+**Còn mở (ai làm tiếp đọc đây):**
+- Bé Gấu (`be-gau.ts`) vẫn nạp KB kiểu cũ (8.000 ký tự đầu, lượt đầu) + SDK cũ `@google/generative-ai` — nên áp `kb-recall.ts` + chuyển SDK.
+- "Nhiễm" (cổng duyệt) chỉ tính trong 1 lượt — nội dung ngoài đọc ở lượt trước không làm lượt sau phải duyệt.
+- Lark DM chưa hiện kế hoạch (`plan`), chưa có phiên giọng nói; hội thoại Lark DM chưa được tóm tắt cho `searchPastConversations`.
+- Việc theo lịch phụ thuộc cron-job.org gọi `scheduled-messages` mỗi giờ (đang trỏ STAGING) → giờ chạy trễ tới ~1h.
+- Phiên Trực tiếp: chưa có người thật thử nói/nghe qua mic-loa + chia sẻ màn hình/camera trên production; mỗi bước thao tác Bridge 3–4s
+  (lần đầu ≤15s chờ nhịp poll).
+- Mọi người dùng Bridge phải cài 1.2.2 thủ công 1 lần (trang Bridge → Tải extension → giải nén đè → ↻).

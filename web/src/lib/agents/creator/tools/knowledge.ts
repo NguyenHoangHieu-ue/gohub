@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { embedKbOne, invalidateKbIndex } from "../kb-recall"
 
 const CATEGORY_LABELS: Record<string, string> = {
   product_codes:  "Mã Sản Phẩm & Cấu Trúc",
@@ -11,24 +11,17 @@ const CATEGORY_LABELS: Record<string, string> = {
   notes:          "Ghi Chú Khác",
 }
 
-async function generateEmbedding(text: string): Promise<number[] | null> {
-  try {
-    // s190: sửa lệch tên env — mọi nơi khác trong repo dùng GEMINI_KEY, chỗ này lỡ viết GEMINI_API_KEY
-    // (Hiếu chưa từng set biến này trên Vercel) → searchKnowledgeBase luôn lỗi "GEMINI_API_KEY chưa set"
-    // dù GEMINI_KEY đã có. Phát hiện qua audit env s190 — tool này giờ mở cho MỌI role nên đáng fix ngay.
-    const genai  = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    const model  = genai.getGenerativeModel({ model: "text-embedding-004" })
-    const result = await model.embedContent(text)
-    return result.embedding.values
-  } catch { return null }
-}
+// s223: `text-embedding-004` đã bị Google gỡ (404) → mọi mục KB lưu KHÔNG có embedding, searchKnowledgeBase luôn lỗi. Nay dùng
+// gemini-embedding-001 cắt 768 chiều (kb-recall.ts) — khớp cột vector(768) sẵn có.
+const generateEmbedding = embedKbOne
 
-export async function runReadKnowledgeBase(category?: string): Promise<any> {
+export async function runReadKnowledgeBase(category?: string, keys?: string[]): Promise<any> {
   try {
     let q = supabaseAdmin.from("creator_kb").select("key,category,title,content,updated_at")
       .neq("category", "_system")
       .order("category").order("updated_at", { ascending: false })
-    if (category) q = q.eq("category", category)
+    if (keys?.length) q = q.in("key", keys.slice(0, 20))
+    else if (category) q = q.eq("category", category)
     const { data, error } = await q
     if (error) return { error: error.message }
     if (!data?.length) return { message: "Knowledge base is empty. No entries found.", entries: [] }
@@ -94,6 +87,7 @@ export async function runWriteKnowledgeBase(args: {
     }
   }
 
+  invalidateKbIndex()
   return { results, summary: `Updated ${args.entries.length} KB entry(ies) + master note.` }
 }
 
@@ -109,7 +103,9 @@ export async function runReviewPendingLearning(limit = 20): Promise<any> {
 
 export async function runApproveLearning(a: any): Promise<any> {
   try {
-    const kbUpsert  = await supabaseAdmin.from("creator_kb").upsert({ key: a.kb_key, category: a.kb_category, title: a.kb_title, content: a.kb_content, updated_at: new Date().toISOString() })
+    const embedding = await generateEmbedding(`${a.kb_title} ${a.kb_content}`)
+    const kbUpsert  = await supabaseAdmin.from("creator_kb").upsert({ key: a.kb_key, category: a.kb_category, title: a.kb_title, content: a.kb_content, updated_at: new Date().toISOString(), ...(embedding ? { embedding: `[${embedding.join(",")}]` } : {}) })
+    invalidateKbIndex()
     const logUpdate = await supabaseAdmin.from("chatbot_learning_log").update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: "creator" }).eq("id", a.id)
     return { ok: !kbUpsert.error && !logUpdate.error, kb_key: a.kb_key }
   } catch (e: any) {

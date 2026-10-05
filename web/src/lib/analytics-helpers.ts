@@ -89,12 +89,12 @@ function decodeEntry<T>(stored: StoredEntry | undefined | null): CacheEntry<T> |
   return stored as CacheEntry<T>
 }
 
-export async function persistCacheEntry<T>(key: string, data: T, deps: string[] = []): Promise<void> {
+export async function persistCacheEntry<T>(key: string, data: T, deps: string[] = [], ttlSeconds = L2_TTL_S): Promise<void> {
   const entry: CacheEntry<T> = { data, cachedAt: Date.now() }
   l1Set(key, entry, deps)
   try {
     await runtimeCache().set(key, encodeEntry(entry), {
-      ttl: L2_TTL_S, name: "analytics-query",
+      ttl: ttlSeconds, name: "analytics-query",
       tags: [TAG_ALL, prefixTag(key), ...deps.map(depTag)],
     })
   } catch (e: any) {
@@ -123,8 +123,12 @@ export async function cachedQuery<T>(
   ttlMinutes = TTL_L2,
   bypass = false,   // true → bỏ qua ĐỌC cache, tính lại tươi ĐỒNG BỘ; VẪN ghi cache mới (re-warm).
   deps: string[] = [],
+  // Dữ liệu gần như bất biến (vd quý đã đóng): giữ bản cũ lâu hơn MAX_STALE_MS + không bị ETL hằng giờ (softExpireAll)
+  // coi là hết TTL. Mốc hard (admin xoá cache) và bypass vẫn tính lại.
+  opts: { maxStaleMs?: number; ignoreSoftExpiry?: boolean } = {},
 ): Promise<T> {
   const freshMs = ttlMinutes * 60_000
+  const maxStaleMs = opts.maxStaleMs ?? MAX_STALE_MS
 
   const compute = (): Promise<T> => {
     const running = _inflight.get(key) as Promise<T> | undefined
@@ -132,7 +136,7 @@ export async function cachedQuery<T>(
     const p = (async () => {
       const data = await fn()
       // Ghi cache KHÔNG chặn response (waitUntil giữ function sống tới khi ghi xong).
-      waitUntil(persistCacheEntry(key, data, deps))
+      waitUntil(persistCacheEntry(key, data, deps, Math.ceil(maxStaleMs / 1000)))
       return data
     })().finally(() => { _inflight.delete(key) })
     _inflight.set(key, p)
@@ -144,8 +148,8 @@ export async function cachedQuery<T>(
   const epoch = await getEpoch()
   const now   = Date.now()
   const usable = (e: CacheEntry | undefined | null): e is CacheEntry =>
-    !!e && typeof e.cachedAt === "number" && e.cachedAt >= epoch.hard && now - e.cachedAt < MAX_STALE_MS
-  const isFresh = (e: CacheEntry) => now - e.cachedAt < freshMs && e.cachedAt >= epoch.soft
+    !!e && typeof e.cachedAt === "number" && e.cachedAt >= epoch.hard && now - e.cachedAt < maxStaleMs
+  const isFresh = (e: CacheEntry) => now - e.cachedAt < freshMs && (opts.ignoreSoftExpiry || e.cachedAt >= epoch.soft)
 
   // L1 chỉ dùng khi còn tươi và chưa quá L1_TTL_MS (tránh giữ bản cũ ở instance này khi flush đã xảy ra ở instance khác).
   const l1 = _cache.get(key) as CacheEntry<T> | undefined
@@ -305,6 +309,16 @@ export function analyticsGuard(req: NextRequest, session: unknown): NextResponse
   return null
 }
 
+// quarterly-report của quý ĐÃ ĐÓNG có cache dài (xem route) → prewarm KHÔNG ép tính lại (nocache) mỗi ngày, chỉ cần gọi để nạp nếu còn trống.
+function isClosedQuarterReportUrl(url: string): boolean {
+  if (!url.startsWith("/api/analytics/quarterly-report")) return false
+  const sp = new URL(url, "http://x").searchParams
+  const q = parseInt((sp.get("quarter") ?? "").replace("Q", ""), 10)
+  const y = parseInt(sp.get("year") ?? "", 10)
+  if (!(q >= 1 && q <= 4) || !y) return false
+  return new Date(y, q * 3, 0) < new Date(Date.now() - 86_400_000)
+}
+
 // Cron prewarm cho endpoint chuyên dụng: xoá key dedicated (force tươi) rồi re-fetch URL đã đăng ký.
 export async function prewarmAnalyticsUrls(baseUrl: string, limit = 50, concurrency = 3): Promise<{ prewarmed: number; failed: number }> {
   const regs = await readCacheByPrefix("urlreg:")
@@ -324,7 +338,7 @@ export async function prewarmAnalyticsUrls(baseUrl: string, limit = 50, concurre
       const u = urls[next++]
       try {
         const sep = u.url.includes("?") ? "&" : "?"
-        const target = u.url.includes("nocache=") ? u.url : `${u.url}${sep}nocache=1`
+        const target = u.url.includes("nocache=") || isClosedQuarterReportUrl(u.url) ? u.url : `${u.url}${sep}nocache=1`
         const res = await fetch(`${baseUrl}${target}`, { headers: { authorization: auth }, cache: "no-store" })
         res.ok ? prewarmed++ : failed++
       } catch { failed++ }

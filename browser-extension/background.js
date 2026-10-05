@@ -6,6 +6,10 @@
 const TINY_ICON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 const WRITE_ACTIONS = new Set(["click", "fill", "navigate"])
 const POLL_INTERVAL_MS = 15000
+// 1.2.0: vừa có lệnh → hỏi 1s/lần trong 60s (Gấu thường làm nhiều bước liên tiếp; 15s/lần làm mỗi bước chờ ~7-15s), rồi về 15s.
+const BURST_INTERVAL_MS = 1000
+const BURST_WINDOW_MS = 60000
+let lastCommandAt = 0
 const EXT_VERSION = chrome.runtime.getManifest().version
 
 let pollTimer = null
@@ -59,9 +63,44 @@ async function apiFetch(path, opts = {}) {
 async function readTab(tabId) {
   const [{ result }] = await chrome.scripting.executeScript({
     target: { tabId },
-    func: () => ({ title: document.title, text: document.body ? document.body.innerText : "" }),
+    // 1.2.0: kèm danh sách phần tử tương tác + selector DÙNG ĐƯỢC — trước chỉ trả innerText nên Gấu phải đoán selector
+    // (QA s223: đoán id cũ của DuckDuckGo → "Không tìm thấy selector").
+    func: () => {
+      const q = (v) => (window.CSS && CSS.escape ? CSS.escape(v) : v.replace(/"/g, '\\"'))
+      const visible = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none" }
+      const unique = (sel) => { try { return document.querySelectorAll(sel).length === 1 } catch { return false } }
+      const selectorOf = (el) => {
+        const tag = el.tagName.toLowerCase()
+        if (el.id && unique(`#${q(el.id)}`)) return `#${q(el.id)}`
+        for (const attr of ["name", "aria-label", "placeholder", "data-testid", "title"]) {
+          const v = el.getAttribute(attr)
+          if (v) { const s = `${tag}[${attr}="${v.replace(/"/g, '\\"')}"]`; if (unique(s)) return s }
+        }
+        const parts = []
+        let cur = el
+        while (cur && cur.nodeType === 1 && parts.length < 6) {
+          if (cur.id && unique(`#${q(cur.id)}`)) { parts.unshift(`#${q(cur.id)}`); break }
+          const t = cur.tagName.toLowerCase()
+          const sib = cur.parentElement ? [...cur.parentElement.children].filter(c => c.tagName === cur.tagName) : []
+          parts.unshift(sib.length > 1 ? `${t}:nth-of-type(${sib.indexOf(cur) + 1})` : t)
+          cur = cur.parentElement
+        }
+        return parts.join(" > ")
+      }
+      const els = [...document.querySelectorAll('input:not([type=hidden]), textarea, select, button, a[href], [role=button], [role=textbox], [contenteditable=""], [contenteditable=true]')]
+        .filter(visible)
+        // Ô nhập/chọn trước, rồi nút, link sau cùng — trang nhiều link không đẩy mất ô nhập khỏi giới hạn 150.
+        .map(el => [el, /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable || el.getAttribute("role") === "textbox" ? 0 : el.tagName === "A" ? 2 : 1])
+        .sort((a, b) => a[1] - b[1]).map(([el]) => el).slice(0, 150)
+        .map(el => ({
+          sel: selectorOf(el),
+          tag: el.tagName.toLowerCase() + (el.type ? `:${el.type}` : ""),
+          label: (el.getAttribute("aria-label") || el.getAttribute("placeholder") || el.innerText || el.value || el.getAttribute("title") || "").trim().replace(/\s+/g, " ").slice(0, 60),
+        }))
+      return { title: document.title, url: location.href, text: document.body ? document.body.innerText : "", elements: els }
+    },
   })
-  return { title: result.title, content: (result.text || "").slice(0, 15000) }
+  return { title: result.title, url: result.url, content: (result.text || "").slice(0, 12000), elements: result.elements || [] }
 }
 
 async function execAction(action, payload) {
@@ -181,7 +220,9 @@ async function pollOnce() {
     const res = await apiFetch("/api/creator-ai/bridge/next")
     if (!res.ok) return
     const data = await res.json()
-    if (data.command) await processCommand(data.command)
+    // 1.2.2: server báo bản mới nhất → popup hiện "Có bản mới" + link tải.
+    if (data.latest_version) chrome.storage.local.set({ latestVersion: data.latest_version })
+    if (data.command) { lastCommandAt = Date.now(); await processCommand(data.command) }
   } catch {
     // im lặng — thử lại ở lần poll kế tiếp (chưa cấu hình / mất mạng tạm thời)
   }
@@ -189,7 +230,8 @@ async function pollOnce() {
 
 function scheduleNext() {
   if (pollTimer) clearTimeout(pollTimer)
-  pollTimer = setTimeout(async () => { await pollOnce(); scheduleNext() }, POLL_INTERVAL_MS)
+  const delay = Date.now() - lastCommandAt < BURST_WINDOW_MS ? BURST_INTERVAL_MS : POLL_INTERVAL_MS
+  pollTimer = setTimeout(async () => { await pollOnce(); scheduleNext() }, delay)
 }
 
 // setTimeout đệ quy ~15s giữ service worker "sống" — mỗi fetch tính là hoạt động nên Chrome không

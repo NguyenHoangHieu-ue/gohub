@@ -7,12 +7,16 @@ import {
   Send, Cpu, User, Plus, Trash2, ExternalLink, Loader2,
   Database, Globe, BarChart2, Code2, Lightbulb,
   Paperclip, X, FileText, Image as ImageIcon, FileSpreadsheet,
-  FileJson, FileType, Package, Mic, Volume2, VolumeX,
+  FileJson, FileType, Package, Mic, Volume2, VolumeX, ShieldAlert, Square, CheckCircle2, Circle, Timer,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm     from "remark-gfm"
 import ChatChart      from "@/components/chat-chart"
 import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
+import { TasksPanel } from "@/components/gau-pro/tasks-panel"
+import { RunsList } from "@/components/gau-pro/runs-list"
+import { MemoryPanel } from "@/components/gau-pro/memory-panel"
+import { LiveSession } from "@/components/gau-pro/live-session"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +28,60 @@ interface Message {
   sources?: WebSource[]
   fileName?: string  // attached file name shown in user bubble
   summarized?: boolean  // server nén lịch sử cũ cho lượt này
+  approvals?: Approval[]  // G0: hành động Gấu Pro chờ duyệt trong lượt này
+  plan?: PlanStep[]       // G2: checklist kế hoạch việc nhiều bước
+}
+
+interface PlanStep { title: string; status: "pending" | "in_progress" | "done" }
+
+function PlanChecklist({ steps }: { steps: PlanStep[] }) {
+  const done = steps.filter(s => s.status === "done").length
+  return (
+    <div className="mb-2 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50/60 dark:bg-violet-900/10 px-3 py-2 text-xs">
+      <div className="font-semibold text-violet-700 dark:text-violet-300 mb-1">Kế hoạch ({done}/{steps.length})</div>
+      {steps.map((s, i) => (
+        <div key={i} className={`flex items-center gap-1.5 py-0.5 ${s.status === "done" ? "text-gray-400 dark:text-slate-500 line-through" : "text-gray-700 dark:text-slate-200"}`}>
+          {s.status === "done" ? <CheckCircle2 size={12} className="text-emerald-500 flex-shrink-0" />
+            : s.status === "in_progress" ? <Loader2 size={12} className="animate-spin text-violet-500 flex-shrink-0" />
+            : <Circle size={12} className="text-gray-300 flex-shrink-0" />}
+          <span>{s.title}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+interface Approval {
+  id: string; code: string; tool: string; summary: string; reason: string
+  state: "pending" | "working" | "executed" | "failed" | "rejected" | "error"
+  note?: string
+}
+
+const APPROVAL_STATE_LABEL: Record<Approval["state"], string> = {
+  pending: "", working: "Đang xử lý...", executed: "✅ Đã duyệt và chạy", failed: "⚠️ Đã duyệt nhưng lỗi",
+  rejected: "Đã từ chối", error: "⚠️ Lỗi",
+}
+
+function ApprovalCard({ a, onDecide }: { a: Approval; onDecide: (id: string, approve: boolean) => void }) {
+  return (
+    <div className="mt-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs">
+      <div className="flex items-center gap-1.5 font-semibold text-amber-800 dark:text-amber-300">
+        <ShieldAlert size={13} /> Cần bạn duyệt #{a.code}
+      </div>
+      <div className="mt-1 text-gray-800 dark:text-slate-100 break-words">{a.summary}</div>
+      <div className="mt-0.5 text-gray-500 dark:text-slate-400">{a.reason}</div>
+      {a.state === "pending" ? (
+        <div className="flex gap-2 mt-2">
+          <button onClick={() => onDecide(a.id, true)}
+            className="px-3 py-1 rounded-lg bg-violet-600 text-white font-medium hover:bg-violet-700">Duyệt</button>
+          <button onClick={() => onDecide(a.id, false)}
+            className="px-3 py-1 rounded-lg border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700">Từ chối</button>
+        </div>
+      ) : (
+        <div className="mt-1.5 font-medium text-gray-600 dark:text-slate-300">{APPROVAL_STATE_LABEL[a.state]}{a.note ? ` — ${a.note}` : ""}</div>
+      )}
+    </div>
+  )
 }
 
 // ─── LaTeX → Unicode converter ───────────────────────────────────────────────
@@ -261,13 +319,14 @@ function MsgContent({ msg, onFollowup, speaking, ttsSupported, onToggleSpeak }: 
 
 // Memo: gõ phím / đồng hồ elapsed / stream token chỉ render lại bubble thật sự đổi (msg giữ nguyên
 // reference với các tin cũ), thay vì parse lại markdown toàn bộ hội thoại mỗi lần.
-const MessageRow = memo(function MessageRow({ msg, index, speaking, ttsSupported, onFollowup, onToggleSpeak }: {
+const MessageRow = memo(function MessageRow({ msg, index, speaking, ttsSupported, onFollowup, onToggleSpeak, onDecide }: {
   msg: Message
   index: number
   speaking: boolean
   ttsSupported: boolean
   onFollowup: (q: string) => void
   onToggleSpeak: (index: number, content: string) => void
+  onDecide: (msgIndex: number, id: string, approve: boolean) => void
 }) {
   return (
     <div className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -295,12 +354,16 @@ const MessageRow = memo(function MessageRow({ msg, index, speaking, ttsSupported
             <span className="whitespace-pre-wrap">{msg.content}</span>
           ) : (
             <>
+              {msg.plan && msg.plan.length > 0 && <PlanChecklist steps={msg.plan} />}
               {msg.summarized && (
                 <div className="text-[10px] text-slate-400 dark:text-slate-500 mb-1.5 italic">🗜️ Lịch sử cũ đã được tóm tắt để tối ưu</div>
               )}
               <MsgContent msg={msg} onFollowup={onFollowup}
                 speaking={speaking} ttsSupported={ttsSupported}
                 onToggleSpeak={() => onToggleSpeak(index, msg.content)} />
+              {msg.approvals?.map(a => (
+                <ApprovalCard key={a.id} a={a} onDecide={(id, approve) => onDecide(index, id, approve)} />
+              ))}
             </>
           )}
         </div>
@@ -389,6 +452,13 @@ export default function CreatorAIPage() {
   const [showActionLog, setShowActionLog] = useState(false)
   const [actionLog,     setActionLog]     = useState<{ id: number; username: string; tool_name: string; ok: boolean; summary: string; created_at: string }[]>([])
   const [actionLogLoading, setActionLogLoading] = useState(false)
+  const [logTab,        setLogTab]        = useState<"actions" | "runs">("actions")
+  // G2: panel "Việc & duyệt" + chế độ giao việc chạy nền
+  const [showTasks,     setShowTasks]     = useState(false)
+  const [tasksRefresh,  setTasksRefresh]  = useState(0)
+  const [bgMode,        setBgMode]        = useState(false)
+  const [showMemory,    setShowMemory]    = useState(false)
+  const [showLive,      setShowLive]      = useState(false)   // G5: phiên giọng nói/màn hình trực tiếp
   const isCreatorRole = session?.user?.role === "creator"
 
   const toggleActionLog = async () => {
@@ -566,6 +636,14 @@ export default function CreatorAIPage() {
     } catch {}
   }, [LS_KEY])
 
+  // G3: link "?c=<id>" (tool searchPastConversations trả về) → mở đúng hội thoại cũ.
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get("c")
+    if (!c) return
+    loadConversation(c)
+    window.history.replaceState({}, "", window.location.pathname)
+  }, [loadConversation])
+
   const clearConversation = useCallback(() => {
     userActedRef.current = true
     setMessages([])
@@ -638,6 +716,23 @@ export default function CreatorAIPage() {
     const next = [...messages, userMsg]
     setMessages(next)
     setInput("")
+
+    // G2: giao việc chạy nền — không giữ kết nối, xong báo Lark + panel "Việc & duyệt". Việc nền KHÔNG kèm lịch sử chat/file.
+    if (bgMode && attachedFiles.length === 0) {
+      try {
+        const res = await fetch("/api/creator-ai/jobs", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: text }),
+        })
+        const d = await res.json().catch(() => ({}))
+        setMessages([...next, { role: "assistant", content: res.ok
+          ? `⏳ Đã giao việc chạy nền: "${d.job?.title ?? text.slice(0, 80)}". Gấu Pro làm xong sẽ nhắn Lark; theo dõi/mở kết quả ở mục **Việc & duyệt** (góc trên).`
+          : `Lỗi giao việc nền: ${d.error || `HTTP ${res.status}`}` }])
+        setTasksRefresh(k => k + 1)
+      } catch (e: any) {
+        setMessages([...next, { role: "assistant", content: `Lỗi giao việc nền: ${e.message}` }])
+      }
+      return
+    }
     const filesToSend = [...attachedFiles]
     setAttachedFiles([])
     setImgPreviews(new Map())
@@ -645,6 +740,8 @@ export default function CreatorAIPage() {
     let placeholderAdded = false
     let rafId = 0
 
+    const controller = new AbortController()
+    abortRef.current = controller
     try {
       const serializedMsgs = next.map(m => ({ role: m.role, content: m.content }))
       let res: Response
@@ -653,11 +750,12 @@ export default function CreatorAIPage() {
         form.append("messages", JSON.stringify(serializedMsgs))
         if (convId) form.append("conversation_id", convId)
         filesToSend.forEach((f, i) => form.append(`file_${i}`, f))
-        res = await fetch("/api/creator-ai/chat", { method: "POST", body: form })
+        res = await fetch("/api/creator-ai/chat", { method: "POST", body: form, signal: controller.signal })
       } else {
         res = await fetch("/api/creator-ai/chat", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messages: serializedMsgs, conversation_id: convId }),
+          signal: controller.signal,
         })
       }
 
@@ -675,11 +773,13 @@ export default function CreatorAIPage() {
       let finalSources:   WebSource[]  = []
       let finalSummarized = false
       let newConvId:      string | null = null
+      const approvals:    Approval[]   = []
+      let plan:           PlanStep[] | undefined
 
       const updateBubble = (content: string, extra?: Partial<Message>) => {
         setMessages(prev => {
           const u = [...prev]
-          u[u.length - 1] = { role: "assistant", content, ...extra }
+          u[u.length - 1] = { role: "assistant", content, ...(approvals.length ? { approvals: [...approvals] } : {}), ...(plan ? { plan } : {}), ...extra }
           return u
         })
       }
@@ -705,6 +805,14 @@ export default function CreatorAIPage() {
               if (!rafId) rafId = requestAnimationFrame(() => { rafId = 0; updateBubble(assistantContent) })
             }
             else if (ev.type === "text")   assistantContent = ev.content
+            else if (ev.type === "plan" && Array.isArray(ev.steps)) {
+              plan = ev.steps
+              updateBubble(assistantContent)
+            }
+            else if (ev.type === "approval_required" && ev.action) {
+              approvals.push({ ...ev.action, state: "pending" })
+              updateBubble(assistantContent)
+            }
             else if (ev.type === "done") {
               newConvId       = ev.conversationId
               finalSources    = Array.isArray(ev.sources) ? ev.sources : []
@@ -729,6 +837,7 @@ export default function CreatorAIPage() {
     } catch (e: any) {
       setStatusText("")
       if (rafId) { cancelAnimationFrame(rafId); rafId = 0 }
+      if (e?.name === "AbortError") e = new Error("Đã dừng theo yêu cầu.")
       // Nếu đã stream được phần nào trước khi lỗi → giữ lại, nối thêm lỗi thay vì xoá trắng thay thế.
       if (placeholderAdded) {
         setMessages(prev => {
@@ -741,14 +850,37 @@ export default function CreatorAIPage() {
         setMessages([...next, { role: "assistant", content: `Lỗi: ${e.message}` }])
       }
     } finally {
+      abortRef.current = null
       setLoading(false)
       setTimeout(() => inputRef.current?.focus(), 100)
     }
-  }, [messages, loading, attachedFiles, addFiles, imgPreviews])
+  }, [messages, loading, attachedFiles, addFiles, imgPreviews, bgMode])
 
+  const abortRef = useRef<AbortController | null>(null)
   const sendRef = useRef(send)
   sendRef.current = send
   const handleFollowup = useCallback((q: string) => { sendRef.current(q) }, [])
+
+  // Duyệt/từ chối hành động chờ (G0) → server chạy tool → gửi câu nối cho Gấu Pro làm tiếp.
+  const handleDecide = useCallback(async (msgIndex: number, id: string, approve: boolean) => {
+    const setState = (state: Approval["state"], note?: string) => setMessages(prev => prev.map((m, i) =>
+      i !== msgIndex || !m.approvals ? m : { ...m, approvals: m.approvals.map(a => a.id === id ? { ...a, state, note } : a) }))
+    setState("working")
+    try {
+      const res = await fetch("/api/creator-ai/approve", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, approve }),
+      })
+      const d = await res.json().catch(() => ({}))
+      const st = d.status as Approval["state"] | undefined
+      if (st === "executed" || st === "failed" || st === "rejected") {
+        setState(st, st === "failed" ? d.error : undefined)
+        if (d.followup) sendRef.current(d.followup)
+      } else setState("error", d.error || `HTTP ${res.status}`)
+    } catch (e: any) {
+      setState("error", e.message)
+    }
+  }, [])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -842,6 +974,41 @@ export default function CreatorAIPage() {
               Cuộc trò chuyện mới
             </button>
           )}
+          <button
+            onClick={() => setShowLive(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:hover:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg transition-colors"
+            title="Nói chuyện bằng giọng + chia sẻ màn hình/camera với Gấu Pro (thử nghiệm)"
+          >
+            🎙 Trực tiếp
+          </button>
+          {showLive && (
+            <LiveSession onClose={() => setShowLive(false)} onSaved={() => {
+              fetch("/api/creator-ai/conversations").then(r => r.ok ? r.json() : []).then(list => { if (Array.isArray(list)) setPastConvs(list) }).catch(() => {})
+            }} />
+          )}
+          <div className="relative">
+            <button
+              onClick={() => setShowMemory(v => !v)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
+              title="Xem/sửa những gì Gấu Pro nhớ về bạn"
+            >
+              🧠 Trí nhớ
+            </button>
+            {showMemory && <MemoryPanel onClose={() => setShowMemory(false)} />}
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => setShowTasks(v => !v)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
+              title="Hành động chờ duyệt + việc chạy nền"
+            >
+              ⏳ Việc & duyệt
+            </button>
+            {showTasks && (
+              <TasksPanel refreshKey={tasksRefresh} onClose={() => setShowTasks(false)}
+                onOpenConversation={id => { setShowTasks(false); loadConversation(id) }} />
+            )}
+          </div>
           {isCreatorRole && (
             <div className="relative">
               <button
@@ -853,10 +1020,11 @@ export default function CreatorAIPage() {
               </button>
               {showActionLog && (
                 <div className="absolute right-0 top-full mt-1 w-96 max-h-96 overflow-y-auto bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50">
-                  <div className="p-2 border-b border-gray-100 dark:border-slate-800 text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-3 sticky top-0 bg-white dark:bg-slate-900">
-                    Nhật ký hành động (100 gần nhất)
+                  <div className="p-2 border-b border-gray-100 dark:border-slate-800 text-[10px] font-semibold uppercase tracking-wide px-3 sticky top-0 bg-white dark:bg-slate-900 flex gap-3">
+                    <button onClick={() => setLogTab("actions")} className={logTab === "actions" ? "text-violet-600" : "text-gray-400"}>Hành động</button>
+                    <button onClick={() => setLogTab("runs")} className={logTab === "runs" ? "text-violet-600" : "text-gray-400"}>Lượt chạy (trace)</button>
                   </div>
-                  {actionLogLoading ? (
+                  {logTab === "runs" ? <RunsList /> : actionLogLoading ? (
                     <div className="p-4 text-center text-xs text-gray-400">Đang tải...</div>
                   ) : actionLog.length === 0 ? (
                     <div className="p-4 text-center text-xs text-gray-400">Chưa có hành động nào được ghi.</div>
@@ -965,7 +1133,7 @@ export default function CreatorAIPage() {
           {messages.map((msg, i) => (
             <MessageRow key={i} msg={msg} index={i}
               speaking={speakingIdx === i} ttsSupported={ttsSupported}
-              onFollowup={handleFollowup} onToggleSpeak={toggleSpeak} />
+              onFollowup={handleFollowup} onToggleSpeak={toggleSpeak} onDecide={handleDecide} />
           ))}
 
           {/* Loading */}
@@ -1036,6 +1204,17 @@ export default function CreatorAIPage() {
           )}
 
           <div className="flex gap-2 items-end">
+            {/* G2: giao việc chạy nền */}
+            <button
+              onClick={() => setBgMode(v => !v)}
+              disabled={loading}
+              title={bgMode ? "Đang ở chế độ Chạy nền: tin gửi đi thành việc nền (xong báo Lark). Bấm để tắt." : "Chạy nền: giao việc dài, không cần giữ trang mở"}
+              className={`flex-shrink-0 h-10 px-2.5 flex items-center gap-1 text-xs border rounded-xl transition-colors disabled:opacity-40 ${
+                bgMode ? "bg-violet-600 text-white border-violet-600" : "text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 border-gray-200 dark:border-slate-700"
+              }`}
+            >
+              <Timer size={15} />{bgMode && <span>Nền</span>}
+            </button>
             {/* Attach file button */}
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -1081,13 +1260,23 @@ export default function CreatorAIPage() {
                 <Mic size={16} />
               </button>
             )}
-            <button
-              onClick={() => send(input)}
-              disabled={(!input.trim() && attachedFiles.length === 0) || loading}
-              className="flex-shrink-0 w-10 h-10 bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
-            >
-              {loading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-            </button>
+            {loading ? (
+              <button
+                onClick={() => abortRef.current?.abort()}
+                title="Dừng"
+                className="flex-shrink-0 w-10 h-10 bg-gray-700 text-white rounded-xl hover:bg-gray-600 transition-colors shadow-sm flex items-center justify-center"
+              >
+                <Square size={13} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                onClick={() => send(input)}
+                disabled={!input.trim() && attachedFiles.length === 0}
+                className="flex-shrink-0 w-10 h-10 bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
+              >
+                <Send size={15} />
+              </button>
+            )}
           </div>
 
           <p className="text-[10px] text-gray-400 mt-1.5 text-center">

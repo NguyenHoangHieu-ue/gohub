@@ -10,7 +10,7 @@ const WRITE_ACTIONS = new Set(["click", "fill", "navigate"])
 export const LOCAL_PREFIX = "fs_"
 const LOCAL_WRITE_ACTIONS = new Set(["fs_write", "fs_edit"])
 
-const POLL_MS = 2000
+const POLL_MS = 1000   // s223: 2s → 1s — extension 1.2.0 chạy lệnh trong ~1s khi đang dồn dập
 const TTL_SECONDS = 60
 
 type OnEvent = ((e: { type: "status"; text: string }) => void) | undefined

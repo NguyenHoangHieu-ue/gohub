@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { text } = await runCreatorAI([], SCAN_PROMPT, undefined, undefined, true, "cron")
+    const { text } = await runCreatorAI([], SCAN_PROMPT, undefined, undefined, true, "cron", "cron", { preloadSkills: ["product-ncc"] })
     const skipped = SKIP_MARKERS.some(m => text.toLowerCase().includes(m))
     if (skipped) return NextResponse.json({ ok: true, skipped: true, at: new Date().toISOString() })
 

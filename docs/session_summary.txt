@@ -10650,3 +10650,78 @@ Chi tiết: wiki `docs/wiki/system/tabs/analytics-b2b.md` §s218. Tóm tắt:
   CHƯA verify sống: cột Est. (hôm nay dữ liệu đủ hết T9 nên chưa có kỳ đang chạy) và CH.Cost/CM1 có chi phí thật (chưa ai nhập chi phí VN Ecom) — chỉ có unit test. Chưa xem UI chế độ Quý/Export.
 - Chưa làm (cố ý): sửa CH.Cost ngay trên trang mới, so cùng kỳ năm trước, tuần 7 ngày cố định.
 Merge `main` theo yêu cầu Hiếu 2026-10-01.
+
+## s219 (2026-10-02) — Tạo sản phẩm BC Datapool: hỗ trợ gói ĐA VÙNG (nhiều nước trong 1 gói Portal)
+Chi tiết: wiki `docs/wiki/system/tabs/admin-product.md` §s219. Commit `d7d30d42`, `63c629c2` (staging, CHƯA merge `main`). Tóm tắt:
+- Hiếu báo: file Portal có nhiều gói đa vùng (ME 4, Asia 5/8, Global 12...) nhưng web không có. Gốc: `parseSheet` bỏ gói không phải Single + mọi hàm tra cứu bắt `countries.length === 1`.
+- Sửa: danh mục giữ gói đa vùng; `regionKey()` (nước chuẩn hoá, sắp xếp, nối `+`) thay so sánh 1 nước; `findPlans/offers/availableKinds/manualMismatches/resolvePlans` nhận `string | string[]`; `multiRegions()` liệt kê gói (nhãn = tên nhóm Portal + các nước). Ô Khu vực có thêm nhóm "Gói đa vùng" (chỉ hiện khi MỌI nước có giá trong bảng giá của pool). Giá = nhà mạng đắt nhất trong toàn bộ nước. `onsiteCarrier` đa vùng mỗi nước 1 dòng `Nước: nhà mạng/nhà mạng` (như file mẫu `eSIM_BCDatapool_Saudi_ME4_SPP.xlsx`). API `/api/admin/bc-datapool` trả thêm `name` của gói và `refCountries`.
+- Mã nhóm 3 ký tự: lúc đầu tôi tự đặt (chữ cái đầu 3 nước), Hiếu chỉnh lại theo cách làm tay → nay tra `ref_support_countries` theo `country_codes` KHỚP ĐÚNG tập nước (không thừa, không thiếu), qua ISO2 + bảng alias (Macau/Macao, UAE, East Timor, Columbia...). `pickSupportGroup()` ở `lib/bc-datapool/iso.ts`. 1 nhóm → tự điền mã/ISO/tên; nhiều nhóm cùng tập (SG-MY-ID-TH → AS4/AS5/SEA) → để trống, báo danh sách; không nhóm → để trống, báo cần tạo nhóm. Kiểm dữ liệu thật: ME 4=`STE`, Asia 8=`AS8`, China HK Macau=`CHM`; South America 4, Asia 5, China HK Macau Taiwan, Global 12 CHƯA có nhóm trong hệ thống.
+- tsc + `next build` + eslint PASS; vitest 511 qua, 1 fail có sẵn (test đọc `eSIM_Taiwan_BCDatapool.xlsx` ở root, file không còn). Chưa xem UI thật.
+**Việc còn cho Hiếu**: QA form ở staging với 1 gói đa vùng (ME 4 Daily); tạo nhóm nước hỗ trợ cho 4 gói chưa có nhóm nếu muốn bán; quyết định tên SKU gói đa vùng (hiện nối tất cả nước, Global 12 rất dài); nước không có trong bảng giá của pool làm gói bị ẩn không báo lý do.
+
+## s220 (2026-10-02) — Cập nhật catalog WorldMove (tab NCC Catalog) từ 2 file WM gửi
+Chi tiết: wiki `docs/wiki/system/tabs/ncc.md` §s220. Tóm tắt:
+- Hiếu đưa `firm_import_c.xlsx` (giá/sản phẩm, 10.763 dòng) + `apn_WM.xlsx` (APN/nhà mạng, 132 gói) → ghi trực tiếp Supabase `ncc_worldmove` bằng script một lần (Hiếu cho phép sau khi tôi chạy thử + nêu rủi ro). 8.921 → 11.025 dòng: +2.104 mới, 8.575 dòng cập nhật (giá/tên/loại gói/lesim/APN), 262 gói không còn → inactive. Verify: file vs DB khớp giá + tên 100%.
+- Code: tách parser file giá WM khỏi `import-preview/route.ts` thành `lib/ncc-wm-parse.ts` (hành vi route không đổi); thêm `lib/ncc-wm-apn.ts` (parse file APN theo khối + khớp tên gói) + test `ncc-wm-apn.test.ts`. Luồng import web vẫn KHÔNG điền APN cho sản phẩm mới.
+- Bài học: lệnh ghi DB chạy qua vitest bị hệ thống chặn lần đầu (DB dùng chung) → phải được Hiếu cho phép rõ ràng; luôn dry-run + sao lưu bảng trước khi ghi hàng loạt. Heredoc Python trong Bash làm hỏng `
+`/`\s` trong code TS → dùng Edit/Write cho file code.
+**Việc còn cho Hiếu**: soát nhanh APN các nhóm đổi nhà mạng (xem wiki); 153 sản phẩm mới + 41 cũ còn trống APN (đa số "Singapore, Malaysia, Indonesia" — hỏi WM bổ sung vào file APN); cron `sync.py` tự tính lại `exist` ở lần chạy tới (hiện 750 Yes).
+
+## s221 (2026-10-02) — Performance nhập được target quý đang xem + nhập target Q4-2026 từ bảng Lark
+Chi tiết: wiki `docs/wiki/system/tabs/analytics-quarterly.md` §s221. Commit `695be77a`, `ac5e07d8` (staging, CHƯA merge `main`). Tóm tắt:
+- Lỗi logic: nút target tab Performance chỉ nhập cho quý SAU quý đang xem (xem Q4-2026 → "Target Q1-2027"). Sửa: 2 nút (quý đang xem + quý sau), `editQ` quyết định quý tải/lưu; API không đổi.
+- Nhập dữ liệu theo bảng Lark "Q4-Planning" (đọc bằng Chrome, đối chiếu tổng quý): `company_monthly_targets.Q4_2026` ALL + B2B từ bảng, B2C = ALL − B2B (Hiếu yêu cầu); `squad_targets.Q4_2026` Squad 1/2 (`months`). Ghi trực tiếp Supabase `app_settings` theo yêu cầu của Hiếu.
+**Việc còn cho Hiếu**: xem UI tab Performance (2 nút target) + Squad Progress sau khi staging build; xem Q4 chưa có khối so thực tế với target Q4 (chưa làm); bảng Lark còn 2 tab B2B-Breakdown-Squad1/2 (target theo từng KH?) chưa đọc.
+- (s221, bổ sung) Hiếu: chọn Q4 trong Performance thì không hiện Q1 năm sau → bỏ khối target quý sau + cột "Target +%QoQ" + nút Target Q1 khi q=4 (`hasNext = q < 4`, commit `03686466`); Q1–Q3 giữ nguyên.
+
+## s222 (2026-10-02 → 10-05) — Tối ưu tốc độ load (plan perf-load-todo, đã chốt + xoá)
+Chi tiết: wiki `docs/wiki/system/analytics-data-model.md` §s222, s222(b)-(f). Commit trên `staging`: `3917018c` (khoá cache quý dùng ngày cuối khoảng), `3666068a`, `a79713be`, `33d1d050`, `1dc521f3`, `b93bdc53`. CHƯA merge `main`. Tóm tắt:
+- Việc 1: `cachedQuery` thêm `opts {maxStaleMs, ignoreSoftExpiry}`; `quarterly-report` quý đã đóng cache 24h, stale 48h, không bị ETL softExpire (Hiếu chưa xác nhận mức 48h — chỉnh `CLOSED_QUARTER_*` ở route).
+- Việc 2: đo staging Q1-2026: nguội 26,3s → hit ~60ms → sau deploy rỗng lần đầu 2,7s ⇒ Runtime Cache sống qua deploy.
+- Việc 3 (một phần): heartbeat 30s→2 phút + dừng khi tab ẩn; chuông thông báo bỏ poll khi tab ẩn. Chưa đổi `bridge/next` (extension), `auth/session`, `user/me`.
+- Việc 4: prewarm không ép `nocache=1` với `quarterly-report` quý đã đóng.
+- Không làm: cache theo tháng (việc 5). Chưa đo với người dùng thật; lint/build/tsc PASS lúc việc 3, vitest còn 2 file e2e fail sẵn (agent-audit/agent-grade).
+**Việc còn cho Hiếu**: xác nhận mức trễ 48h quý đã đóng; kiểm cron-job.org gọi `prewarm-analytics`/`etl-cache-sync` đúng URL production; mở Performance Q4 ở ngày hôm sau xem còn MISS không.
+
+## s223 (2026-10-05) — Gấu Pro: tính vào My Metrics (trừ Creator) + plan nâng cấp thành trợ lý agent
+Chi tiết: wiki `docs/wiki/system/tabs/analytics-my-metrics.md` §s223, plan `docs/plans/gau-pro-assistant.md`. Tóm tắt:
+- Gấu Pro ghi `app_usage_events` từ s196+7 nhưng thiếu `tools_used`/`used_db_tool` → không bao giờ được tính task. Nay `runCreatorAI` trả `toolsUsed`; route web ghi `tools_used` + `used_db_tool = !isCreator && usedDbTaskTool(toolsUsed)`. Lọc ở phía ghi, các route đọc không đổi; không backfill dữ liệu cũ. Lark DM Gấu Pro (chỉ creator) vẫn không tính (đúng yêu cầu). Commit `ddfaa209`.
+- Đọc toàn bộ Gấu Pro, đối chiếu ChatGPT agent/Memory/Scheduled Tasks, Gemini Agent/Scheduled Actions, Project Astra, Gemini Live API, Agent Skills, "lethal trifecta". 9 nhược điểm (nặng nhất: đủ điều kiện prompt injection rò dữ liệu — dữ liệu riêng tư + nội dung web/browser/portal + kênh gửi ra ngoài, cổng duyệt chỉ nằm trong prompt; `sendLarkMessage` mở cả cho non-creator tới group bất kỳ). 12 đề xuất, lộ trình G0 (an toàn) → G1 (skills + SDK `@google/genai`) → G2 (kế hoạch + việc nền) → G3 (trí nhớ) → G4 (việc theo lịch + trigger) → G5 (Live API kiểu Astra).
+**Việc còn cho Hiếu**: trả lời 4 câu ở mục 8 của plan; xem My Metrics có thêm task Gấu Pro của user được cấp quyền sau khi staging build.
+
+## s223 (tiếp, 2026-10-05) — Gấu Pro G0→G4 theo plan `docs/plans/gau-pro-assistant.md`
+Quyết định Hiếu: mức duyệt tôi tự chốt (an toàn + tiện); KHÔNG lên Vercel Pro; trí nhớ + việc theo lịch làm khung đa người dùng, hiện chỉ creator; làm lần lượt.
+Chi tiết từng phần: wiki `analytics-creator-ai.md` §s223 G0, G1a, G1b, G2a, G2b+G2c, fix, G3, G4. Commit (staging, CHƯA merge main):
+`aa78f34a` G0 · `25b4a4e9` G1a · `e8c893b1` G1b · `846df3f7` G2a · `c8037798` G2b/c · `58c8d7c0` fix minimal · `39fa0eb0` G3 · `42bddb00` G4.
+- G0 cổng duyệt trong code (`tool-policy.ts`): gửi Lark tới người khác luôn hỏi; tool ghi/gửi khác chỉ hỏi khi lượt đã đọc nội dung ngoài; browseWeb sau khi nhiễm chỉ mở URL đã thấy. Hàng chờ `gp_pending_actions` (v64), thẻ duyệt web, "duyệt <mã>" trên Lark DM. sendLarkMessage chỉ creator. Persona Hiếu chỉ nạp cho creator. QA sống staging: fail-closed đúng khi chưa có v64.
+- G1 skills: prompt lõi + 5 skill nạp khi cần (`loadSkill` + đoán từ khoá) → ngữ cảnh mỗi vòng −53%; vòng lặp chuyển SDK `@google/genai`. Eval không giảm (câu không cần DB 6/6; +3 câu skill 10/10); staging trả số thật tháng 9 bình thường.
+- G2: `updatePlan` (checklist) + nút Dừng; trace `gp_runs`; việc nền `gp_jobs` chạy từng chặng 200s tự gọi tiếp + cron quét kẹt (v65); panel "Việc & duyệt".
+- Fix lỗi có sẵn: `thinkingLevel "minimal"` bị gemini-3.8-flash từ chối (400) → nén lịch sử Gấu Pro, Bé Gấu tự học, tạo task từ group đều hỏng âm thầm. Đổi "low".
+- G3: tự rút trí nhớ (chỉ từ lời người dùng), tóm tắt + embedding hội thoại → `searchPastConversations` có link `?c=` (v66), panel 🧠 Trí nhớ, cờ `gp_personal_features` (all | mặc định creator).
+- G4: `scheduleTask` (daily/weekly/monthly/once giờ VN, tối đa 10) + canh chừng `only_if_notable` (NO_ALERT thì im), chạy qua việc nền, cron mỗi giờ (v67).
+- G5 (Live API kiểu Astra) chưa làm — đúng điều kiện plan: chờ G0–G3 chạy ổn trên môi trường thật.
+**Việc còn cho Hiếu**: chạy migration v64, v65, v66, v67 (+ Reload schema) rồi QA staging: gửi Lark tới group → duyệt; giao 1 việc nền; xem trace; hỏi "lần trước bàn gì về X"; đặt 1 việc theo lịch. Muốn mở trí nhớ/lịch cho user được cấp quyền: `app_settings.gp_personal_features = all`.
+
+## s223 QA sống staging (2026-10-05, sau khi Hiếu chạy v64–v67)
+- ĐẠT: (1) gửi Lark vào group → chờ duyệt #mã; danh sách chờ duyệt; Từ chối → không gửi. (2) lượt đã đọc web + gửi DM "me" → chờ duyệt → Duyệt → DM thật tới Hiếu (261 ký tự) → câu nối, Gấu Pro báo xong. (3) việc nền: xong 1 chặng, kết quả đúng; Huỷ → cancelled, không chạy. (4) trace gp_runs đủ kênh web/job, bước tool, mã duyệt, skill, token. (5) trí nhớ: model tự lưu "phụ trách sourcing eSIM châu Âu từ ~12/10/2026", "chốt KDDI cho eSIM Nhật Q4"; panel đọc được. (6) việc theo lịch 1 lần 13:55 → gọi cron → việc nền → 6.272.109.104 VND (khớp), lịch tự tắt. Panel Việc & duyệt hiển thị đúng 3 mục.
+- Lỗi tìm ra + đã sửa: (a) duyệt lặp lại hành động đã xử lý vẫn trả câu nối (`e6d3c8a3`, thêm `decided`); (b) mở/xoá hội thoại Gấu Pro 404 khi name ≠ username (`4e98864b`); (c) LỖI GỐC CÓ SẴN: v34 Tổ Gấu drop + tạo lại `chat_messages` cho chat nhóm → tin nhắn hội thoại Bé Gấu web + Gấu Pro không lưu được từ đó (506 hội thoại rỗng) → bảng mới `conversation_messages` migration **v68** (`8a96e331`); tin cũ mất hẳn.
+- CHƯA QA được (chờ v68): tóm tắt hội thoại + `searchPastConversations` (kho tóm tắt trống vì không đọc được tin), "Mở kết quả" việc nền, mở hội thoại cũ qua `?c=`.
+**Việc còn cho Hiếu**: chạy `v68_conversation_messages.sql` + Reload schema; báo để QA nốt.
+- (sau v68, 2026-10-05) QA nốt ĐẠT: hội thoại Gấu Pro 2 lượt lưu đủ 4 tin vào `conversation_messages` + mở lại được; hỏi ở cuộc mới "lần trước chốt eSIM Hàn nào" → `searchPastConversations` trả đúng (KT qua 3HK 1,4 USD/GB) + link `?c=`; link mở đúng hội thoại trên giao diện; việc nền mới lưu kết quả thành hội thoại mở được (5.158 đơn B2C T9); Bé Gấu web: tạo hội thoại → lưu tin → đọc lại → xoá đều OK. Toàn bộ s223 đã QA, chờ Hiếu quyết merge `main`.
+
+## s223 G5 (2026-10-05) — Phiên giọng nói + màn hình/camera trực tiếp
+Chi tiết: wiki `analytics-creator-ai.md` §s223 G5. Commit `79c89951` (G5), `d8f0d2f0` (CSP/Permissions-Policy + worklet tĩnh) + commit xin mic trước khi mở phiên.
+- Gemini Live (`gemini-3.8-live`, kiểm ListModels), token tạm 1 lần/30 phút khoá model+prompt+tool, chỉ tool đọc qua `/live/tool`, mic 16kHz/loa 24kHz, màn hình/camera 1 khung/giây, lưu phụ đề thành hội thoại + trace kênh live.
+- Lỗi cấu hình có sẵn: `Permissions-Policy: microphone=()` cấm mic → nút mic nhập giọng nói cũ cũng không chạy; CSP thiếu `wss://` Gemini. Đã mở `(self)` + thêm wss.
+- QA sống: token + WebSocket + tool thật + tiếng/phụ đề "khoảng 6,27 tỷ đồng" + lưu phiên + trace + hộp thoại xin quyền mic đều đạt. Chưa thử nói/nghe thật + chia sẻ màn hình (cần người cấp quyền trình duyệt).
+**Việc còn cho Hiếu**: mở Gấu Pro → 🎙 Trực tiếp → cho phép micro → nói thử; bấm Màn hình chia sẻ 1 tab bảng giá rồi hỏi; báo lỗi nếu có. Quyết merge `main`.
+
+## s223 (tiếp) — Sửa Gấu Pro hay quên + công tắc "Cho Gấu thao tác" trong phiên Trực tiếp
+Chi tiết: wiki `analytics-creator-ai.md` §s223 trí nhớ, §s223 G5 cách 2. Commit `71911e9f`, `3804e291`.
+- Trí nhớ — 4 nguyên nhân đo thật: KB chỉ nạp 8.000/219.000 ký tự ở lượt đầu; `text-embedding-004` bị gỡ → 0/79 mục có embedding, tìm KB luôn lỗi; prompt bắt chờ xác nhận kể cả khi đã bảo lưu; trí nhớ cá nhân sát trần 4.000. Sửa: tra KB theo câu hỏi MỖI lượt + danh mục tiêu đề, embedding `gemini-embedding-001` 768 chiều (đã tạo lại 79/79 trên DB dùng chung — chỉ cột embedding), đọc KB theo key, lưu ngay khi được bảo, trần 8.000. QA sống: nhớ đúng top-up 3HK + "sourcing EU" mà không cần gọi tool.
+- Công tắc 🖱 trong phiên Trực tiếp (mặc định tắt): server chỉ chạy readMyBrowser/controlMyBrowser khi bật; tool gửi/ghi khác luôn chặn. QA sống: tắt → chặn; bật → đọc đúng tab Chrome thật qua Bridge; gửi Lark → chặn. Chưa thử click/điền thật (tránh đụng tab đang mở của Hiếu).
+- Còn lại: Bé Gấu vẫn nạp KB kiểu cũ (8.000 ký tự đầu) — chưa sửa.
+**Việc còn cho Hiếu**: thử phiên Trực tiếp: bật 🖱, nhờ Gấu thao tác 1 việc nhỏ trên 1 tab thử; báo nếu muốn sửa Bé Gấu cùng kiểu trí nhớ KB; quyết merge `main`.
+- (QA thao tác thật) Lần 1: Gấu đoán selector cũ của DuckDuckGo → lỗi; gốc `read_tab` chỉ trả chữ. Extension 1.2.0 trả `elements` + selector duy nhất (`3556ddac`, fix cú pháp `754c14cd`). Lần 2 sau khi Hiếu tải lại: gõ đúng "eSIM Nhật Bản" vào `textarea[name="q"]`, không Enter, đọc lại + nói xác nhận, audit ghi nhận → ĐẠT. Chậm ~20–40s/bước → 1.2.1 poll dồn dập 1s trong 60s sau lệnh + server chờ 1s + giữ selector khi cắt read_tab (`21d70300`). **Hiếu**: tải lại extension lần nữa để có 1.2.1 (nhanh hơn); báo mọi người dùng Bridge tải lại.
+- (Bridge 1.2.1 đo sống) đọc danh sách tab: lần đầu 9,9s (chờ nhịp 15s), lần sau 3,2s / 4,4s (dồn dập) — trước ~20–40s.
+- (Bridge 1.2.2, `dc149e3b`) nút "⬇️ Tải extension (bản 1.2.2)" trên trang Bridge (`/downloads/gau-pro-bridge.zip`, đã tải thử: zip hợp lệ 4 file, v1.2.2) + popup tự báo "Có bản mới" (server trả `latest_version`). Script `web/scripts/pack_bridge_extension.py` phải chạy mỗi lần sửa extension (test khoá). Mọi người phải lên 1.2.2 thủ công 1 lần (tải zip → giải nén đè → ↻), sau đó popup tự báo.

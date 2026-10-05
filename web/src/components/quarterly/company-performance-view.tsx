@@ -59,6 +59,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
   const nextQ = q === 4 ? 1 : q + 1
   const nextYear = q === 4 ? selYear + 1 : selYear
   const nextLabel = `Q${nextQ}-${nextYear}`
+  const hasNext = q < 4
   const curLabel = `${selQ}-${selYear}`
 
   // Kết quả các quý trước kèm khoá bộ lọc đã dùng — chỉ dùng khi khoá còn khớp (tránh hiện số của bộ lọc cũ).
@@ -69,6 +70,9 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
   const [err, setErr] = useState<string | null>(null)
   const [targets, setTargets] = useState<CompanyTargets>({})
   const [editing, setEditing] = useState(false)
+  // Quý đang nhập target: quý đang xem (VD Q4-2026) hoặc quý sau (Q1-2027) — trước đây chỉ nhập được quý sau nên Q4 đang chạy không có chỗ nhập.
+  const [editQ, setEditQ] = useState<{ q: number; year: number }>({ q: 0, year: 0 })
+  const editLabel = `Q${editQ.q}-${editQ.year}`
   const [draft, setDraft] = useState<Draft>(emptyDraft())
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -131,11 +135,14 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
       if (prevData.length > 0) cols.push({ id: "qoq-cur", kind: "qoq", header: "%QoQ", a: curForCmp, b: prevData[prevData.length - 1].d.total })
       cols.push({ id: "gap2", kind: "gap", header: "" })
       const tm = eff[seg]
-      const nextMonths = [0, 1, 2].map(i => (nextQ - 1) * 3 + i + 1)
-      nextMonths.forEach((mn, i) => cols.push({ id: `t${mn}`, kind: "tgt", header: String(mn), tag: "target", vals: tm[i] }))
       const nextTotal = sumVals(tm)
-      cols.push({ id: "next", kind: "next", header: nextLabel, vals: nextTotal })
-      cols.push({ id: "qoq-next", kind: "qoq", header: "Target +%QoQ", a: nextTotal, b: curForCmp })
+      // Q4: không hiện Q1 của năm sau (mỗi năm tách riêng)
+      if (hasNext) {
+        const nextMonths = [0, 1, 2].map(i => (nextQ - 1) * 3 + i + 1)
+        nextMonths.forEach((mn, i) => cols.push({ id: `t${mn}`, kind: "tgt", header: String(mn), tag: "target", vals: tm[i] }))
+        cols.push({ id: "next", kind: "next", header: nextLabel, vals: nextTotal })
+        cols.push({ id: "qoq-next", kind: "qoq", header: "Target +%QoQ", a: nextTotal, b: curForCmp })
+      }
       // Cả năm: chỉ khi đã có đủ quý (≥ Q3) — Q4 đang xem = đủ 4 quý; Q3 = Q1+Q2+Q3+target Q4.
       if (q >= 3) {
         let year: Vals = cur.total
@@ -147,13 +154,21 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
       out[seg] = cols
     }
     return out
-  }, [prevReports, report, eff, q, selYear, curLabel, nextLabel, nextQ, prevQs])
+  }, [prevReports, report, eff, q, selYear, curLabel, nextLabel, nextQ, prevQs, hasNext])
 
-  const openEdit = () => {
+  const openEdit = async (which: "cur" | "next") => {
+    const tq = which === "cur" ? { q, year: selYear } : { q: nextQ, year: nextYear }
+    let t: CompanyTargets = which === "next" ? targets : {}
+    if (which === "cur") {
+      try {
+        const res = await fetch(`/api/analytics/company-monthly-targets?quarter=Q${tq.q}&year=${tq.year}`)
+        if (res.ok) t = (await res.json()).targets ?? {}
+      } catch { /* để trống */ }
+    }
     const d = emptyDraft()
     for (const seg of SEGMENTS) for (const f of NEXT_FIELDS)
-      d[seg][f] = [0, 1, 2].map(i => { const v = targets[seg]?.[f]?.[i] ?? 0; return v > 0 ? String(v) : "" })
-    setDraft(d); setEditing(true)
+      d[seg][f] = [0, 1, 2].map(i => { const v = t[seg]?.[f]?.[i] ?? 0; return v > 0 ? String(v) : "" })
+    setEditQ(tq); setDraft(d); setEditing(true)
   }
 
   const save = async () => {
@@ -163,11 +178,11 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
         [f, draft[s][f].map(v => Math.round(Number(v) || 0))]))]))
       const r = await fetch("/api/analytics/company-monthly-targets", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quarter: `Q${nextQ}`, year: nextYear, targets: body }),
+        body: JSON.stringify({ quarter: `Q${editQ.q}`, year: editQ.year, targets: body }),
       })
       let d: any = {}
       try { d = await r.json() } catch { /* non-JSON */ }
-      if (r.ok) { setEditing(false); setMsg({ ok: true, text: `Đã lưu target ${nextLabel}` }); await loadTargets() }
+      if (r.ok) { setEditing(false); setMsg({ ok: true, text: `Đã lưu target ${editLabel}` }); await loadTargets() }
       else setMsg({ ok: false, text: d.error || `Lỗi ${r.status}` })
     } catch (e: any) { setMsg({ ok: false, text: `Lỗi kết nối: ${e.message}` }) }
     finally { setSaving(false); setTimeout(() => setMsg(null), 3000) }
@@ -190,17 +205,20 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
         <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="text-base font-bold text-slate-900">Performance — {curLabel} <span className="text-slate-400 font-semibold">· {companyCode === "ALL" ? "Toàn công ty" : companyCode}</span></h2>
-            <p className="text-xs text-slate-400 mt-0.5">Quý trước · từng tháng (tháng đang chạy hiện Pro-rata) · target {nextLabel} · cả năm</p>
+            <p className="text-xs text-slate-400 mt-0.5">Quý trước · từng tháng (tháng đang chạy hiện Pro-rata) {hasNext ? ` · target ${nextLabel}` : ""} · cả năm</p>
           </div>
           <div className="flex items-center gap-2">
             {loading && <RefreshCw className="w-4 h-4 animate-spin text-[#0f4c81]" />}
-            {canEdit && (
-              <button onClick={() => (editing ? setEditing(false) : openEdit())}
-                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all",
-                  editing ? "bg-amber-500 text-white border-amber-500" : "bg-white text-slate-600 border-slate-200 hover:border-amber-400 hover:text-amber-600")}>
-                <Pencil className="w-3.5 h-3.5" />Target {nextLabel}
-              </button>
-            )}
+            {canEdit && ([["cur", q, selYear, curLabel], ...(hasNext ? [["next", nextQ, nextYear, nextLabel] as const] : [])] as const).map(([which, tq, ty, lbl]) => {
+              const active = editing && editQ.q === tq && editQ.year === ty
+              return (
+                <button key={which} onClick={() => (active ? setEditing(false) : openEdit(which))}
+                  className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all",
+                    active ? "bg-amber-500 text-white border-amber-500" : "bg-white text-slate-600 border-slate-200 hover:border-amber-400 hover:text-amber-600")}>
+                  <Pencil className="w-3.5 h-3.5" />Target {lbl}
+                </button>
+              )
+            })}
           </div>
         </div>
         {msg && <div className={cn("px-5 py-2 text-xs", msg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700")}>{msg.text}</div>}
@@ -209,7 +227,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
         {editing && (
           <div className="px-5 py-4 border-b border-slate-100 space-y-3">
             <p className="text-xs text-slate-500">
-              Nhập target từng tháng của {nextLabel} (VND). Để trống ALL = tự cộng B2B + B2C.
+              Nhập target từng tháng của {editLabel} (VND). Để trống ALL = tự cộng B2B + B2C.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -217,7 +235,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
                   <tr className="text-slate-500 border-b border-slate-100 uppercase text-[10px]">
                     <th className="px-3 py-2 text-left font-semibold">Nhóm</th>
                     <th className="px-3 py-2 text-left font-semibold">Chỉ số</th>
-                    {[0, 1, 2].map(i => <th key={i} className="px-3 py-2 text-right font-semibold">T{(nextQ - 1) * 3 + i + 1} (VND)</th>)}
+                    {[0, 1, 2].map(i => <th key={i} className="px-3 py-2 text-right font-semibold">T{(editQ.q - 1) * 3 + i + 1} (VND)</th>)}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -316,7 +334,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
         <p className="px-5 py-2 text-[10px] text-slate-400 border-t border-slate-100">
           Số thực tế = báo cáo Quarter Report (cùng bộ lọc VN/US, Phí ship, Đơn nội bộ). Tháng đang chạy hiện Pro-rata; cột quý = tổng các tháng.
           CM1 gồm chi phí KH B2B + group cost + chi phí kênh B2C. %QoQ = thay đổi tương đối (mới − cũ)/|cũ|, cả dòng %.
-          Cột {selYear} = các quý trước + quý đang xem + target {nextLabel}{q === 4 ? "" : " (cần nhập đủ target mới hiện)"}; chỉ hiện từ Q3.
+          Cột {selYear} = các quý trước + quý đang xem{hasNext ? ` + target ${nextLabel} (cần nhập đủ target mới hiện)` : ""}; chỉ hiện từ Q3.
         </p>
       </div>
     </div>

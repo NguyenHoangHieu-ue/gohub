@@ -1,20 +1,21 @@
 ﻿"use client"
 
-import React, { useState, useEffect, useMemo } from "react"
+import React, { useState, useEffect, useMemo, useRef } from "react"
 import dynamic from "next/dynamic"
 import {
   TrendingUp, TrendingDown, DollarSign, ShoppingCart, ArrowUpRight, ArrowDownRight,
-  Filter, Calendar, Download, RefreshCw, Truck, Package, Globe, LayoutDashboard,
-  AlertCircle, Search, ArrowUpDown, ChevronUp, ChevronDown, Check,
+  Filter, Calendar, RefreshCw, Truck, Package, Globe, LayoutDashboard,
+  AlertCircle, Search, ArrowUpDown, ChevronUp, ChevronDown, Check, X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { formatCurrency, formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
+import { formatNumber, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
-import { exportAOA } from "@/lib/export-excel"
+import { focusSql, type DistFocus, type DistRow, type DistView } from "@/lib/vendor-distribution"
 import { StatTile, type MetricAccent, CHART_PALETTE } from "@/components/dashboard-kit"
+import { VendorDistribution } from "./vendors-distribution"
 
-// Port "y hệt" gohub-intel VendorPerformance. Data qua /api/analytics/query (SELECT-only) +
-// /api/config/partner-tiers + /api/analytics/b2b/strategic-performance. Inline getDefaultDateRange/formatDateToISO.
+// Port "y hệt" gohub-intel VendorPerformance. KPI/Trend/SKU qua /api/analytics/query (SELECT-only); bảng phân bổ theo
+// Khách hàng/Kênh qua /api/analytics/vendors/distribution (s219). Inline getDefaultDateRange/formatDateToISO.
 
 // Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu (s196+21, roadmap performance s196+20).
 const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
@@ -56,14 +57,17 @@ export default function VendorPerformancePage() {
     margin: 0, marginChange: 0, units: 0, unitsChange: 0,
   })
 
-  const [allVendorsTotalRevenue, setAllVendorsTotalRevenue] = useState(0)
   const [prevMonthMetrics, setPrevMonthMetrics] = useState<any>(null)
 
   const [trendData, setTrendData] = useState<any[]>([])
   const [productPerformance, setProductPerformance] = useState<any[]>([])
-  const [channelDistribution, setChannelDistribution] = useState<any[]>([])
-  const [strategicPerformance, setStrategicPerformance] = useState<any[]>([])
-  const [partnerTiers, setPartnerTiers] = useState<Record<string, string[]>>({ Strategic: [] })
+  // Bảng phân bổ theo Khách hàng / Kênh (server tính) + khách/kênh đang chọn để lọc SKU
+  const [distRows, setDistRows] = useState<DistRow[]>([])
+  const [distView, setDistView] = useState<DistView>("customer")
+  const [distLoading, setDistLoading] = useState(false)
+  const [focus, setFocus] = useState<DistFocus | null>(null)
+  const [productsLoading, setProductsLoading] = useState(false)
+  const productsRef = useRef<HTMLDivElement>(null)
   const [channels, setChannels] = useState<string[]>([])
   const [selectedChannel, setSelectedChannel] = useState<string>("All Channels")
   const [selectedChannelGroup, setSelectedChannelGroup] = useState<string>("All Groups")
@@ -225,64 +229,98 @@ export default function VendorPerformancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateColumn])
 
+  // Bộ lọc dùng chung cho mọi truy vấn của trang (fetchData + lọc SKU theo khách/kênh) — 1 nơi build để không lệch nhau.
+  const getPrevRange = () => {
+    const start = new Date(startDate), end = new Date(endDate)
+    if (comparisonType === "previous_period") {
+      const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      const ps = new Date(start); ps.setDate(ps.getDate() - diffDays)
+      const pe = new Date(end); pe.setDate(pe.getDate() - diffDays)
+      return { ps: ps.toISOString().split("T")[0], pe: pe.toISOString().split("T")[0] }
+    }
+    if (comparisonType === "previous_year") {
+      const ps = new Date(start); ps.setFullYear(ps.getFullYear() - 1)
+      const pe = new Date(end); pe.setFullYear(pe.getFullYear() - 1)
+      return { ps: ps.toISOString().split("T")[0], pe: pe.toISOString().split("T")[0] }
+    }
+    return null
+  }
+
+  const buildFilters = () => {
+    const isSales = dateColumn === "created_date"
+    const mainTable = isSales ? "fact_sales_revenue" : "fact_fulfillment_revenue"
+    const dateCol = isSales ? "created_date" : "fulfiled_date"
+    const revCol = isSales ? "sales_revenue_amount_vnd" : "fulfilled_revenue_amount_vnd"
+    const qtyCol = isSales ? "quantity" : "fulfilled_quantity"
+    const marginCol = isSales ? "0" : "gross_profit_vnd"
+
+    const dateFilter = `${dateCol}::date >= '${startDate}' AND ${dateCol}::date <= '${endDate}'`
+
+    // Chuẩn "doanh thu SP thuần" toàn hệ thống (loại phí ship + đơn nội bộ) — trang này không có
+    // toggle riêng, trước đây 0 chỗ nào áp filter này (audit s197 toàn hệ thống logic dữ liệu).
+    const stdFilter = `AND sku != 'SHIPPINGFEE0' AND order_source_code NOT IN (SELECT code FROM dim_order_source WHERE UPPER(COALESCE(group_name,'')) = 'INTERNAL-TRANSACTION')`
+
+    const prev = getPrevRange()
+    const prevDateFilter = prev ? `${dateCol}::date >= '${prev.ps}' AND ${dateCol}::date <= '${prev.pe}'` : ""
+
+    let channelFilter = selectedChannel !== "All Channels"
+      ? `AND order_source_code IN (SELECT code FROM dim_order_source WHERE channel_name = '${selectedChannel.replace(/'/g, "''")}')`
+      : ""
+    if (selectedChannelGroup !== "All Groups") {
+      channelFilter += ` AND order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${selectedChannelGroup}')`
+    }
+
+    const vendorList = selectedVendors.map(v => `'${v.replace(/'/g, "''")}'`).join(",")
+    const vendorFilter = `TRIM(sku) IN (SELECT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) IN (${vendorList}))`
+    return { mainTable, dateCol, revCol, qtyCol, marginCol, dateFilter, stdFilter, prevDateFilter, prev, channelFilter, vendorFilter }
+  }
+
+  const q = (sql: string) => fetch("/api/analytics/query", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql }),
+  })
+
+  // SKU bán được của vendor — lọc theo khách hàng/kênh đang chọn ở bảng phân bổ (focus), rỗng = toàn bộ.
+  const loadProducts = async (f: ReturnType<typeof buildFilters>, focusNow: DistFocus | null) => {
+    const fc = focusSql(focusNow)
+    const productsSql = `SELECT TRIM(sku) as sku, SUM(${f.revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${f.marginCol}) as margin FROM ${f.mainTable} f WHERE ${f.vendorFilter} AND ${f.dateFilter} ${f.channelFilter} ${f.stdFilter} ${fc} GROUP BY TRIM(sku) ORDER BY revenue DESC`
+    const prevProductsSql = comparisonType !== "none"
+      ? `SELECT TRIM(sku) as sku, SUM(${f.revCol}) as revenue FROM ${f.mainTable} f WHERE ${f.vendorFilter} AND ${f.prevDateFilter} ${f.channelFilter} ${f.stdFilter} ${fc} GROUP BY TRIM(sku)`
+      : null
+    const [productsRes, prevProductsRes] = await Promise.all([q(productsSql), prevProductsSql ? q(prevProductsSql) : Promise.resolve(null)])
+    if (!productsRes.ok) throw new Error("Failed to fetch product performance")
+    const currProds = await productsRes.json()
+    if (prevProductsRes) {
+      const prevProds = await prevProductsRes.json()
+      const prevProdMap = prevProds.reduce((acc: any, p: any) => { acc[p.sku] = parseFloat(p.revenue || 0); return acc }, {})
+      setProductPerformance(currProds.map((p: any) => ({ ...p, prevRevenue: prevProdMap[p.sku] || 0 })))
+    } else {
+      setProductPerformance(currProds)
+    }
+  }
+
+  // Bảng phân bổ theo Khách hàng / Kênh — tính ở server (api/analytics/vendors/distribution).
+  const loadDistribution = async (f: ReturnType<typeof buildFilters>, view: DistView) => {
+    const params = new URLSearchParams({ startDate, endDate, dateColumn, view, channel: selectedChannel, channelGroup: selectedChannelGroup === "All Groups" ? "" : selectedChannelGroup })
+    selectedVendors.forEach(v => params.append("vendors", v))
+    if (f.prev) { params.set("prevStart", f.prev.ps); params.set("prevEnd", f.prev.pe) }
+    const res = await fetch(`/api/analytics/vendors/distribution?${params}`)
+    if (!res.ok) throw new Error("Failed to fetch distribution")
+    const data = await res.json()
+    setDistRows(Array.isArray(data) ? data : [])
+  }
+
   const fetchData = async () => {
     setLoading(true)
     setError(null)
     try {
-      const isSales = dateColumn === "created_date"
-      const mainTable = isSales ? "fact_sales_revenue" : "fact_fulfillment_revenue"
-      const dateCol = isSales ? "created_date" : "fulfiled_date"
-      const revCol = isSales ? "sales_revenue_amount_vnd" : "fulfilled_revenue_amount_vnd"
-      const qtyCol = isSales ? "quantity" : "fulfilled_quantity"
-      const marginCol = isSales ? "0" : "gross_profit_vnd"
-
-      const dateFilter = `${dateCol}::date >= '${startDate}' AND ${dateCol}::date <= '${endDate}'`
-      const fDateFilter = `f.${dateCol}::date >= '${startDate}' AND f.${dateCol}::date <= '${endDate}'`
-
-      // Chuẩn "doanh thu SP thuần" toàn hệ thống (loại phí ship + đơn nội bộ) — trang này không có
-      // toggle riêng, trước đây 0 chỗ nào áp filter này (audit s197 toàn hệ thống logic dữ liệu).
-      const stdFilter = `AND sku != 'SHIPPINGFEE0' AND order_source_code NOT IN (SELECT code FROM dim_order_source WHERE UPPER(COALESCE(group_name,'')) = 'INTERNAL-TRANSACTION')`
-      const fStdFilter = `AND f.sku != 'SHIPPINGFEE0' AND f.order_source_code NOT IN (SELECT code FROM dim_order_source WHERE UPPER(COALESCE(group_name,'')) = 'INTERNAL-TRANSACTION')`
-
-      let prevDateFilter = ""
-      let fPrevDateFilter = ""
-      if (comparisonType === "previous_period") {
-        const start = new Date(startDate), end = new Date(endDate)
-        const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
-        const ps = new Date(start); ps.setDate(ps.getDate() - diffDays)
-        const pe = new Date(end); pe.setDate(pe.getDate() - diffDays)
-        prevDateFilter = `${dateCol}::date >= '${ps.toISOString().split("T")[0]}' AND ${dateCol}::date <= '${pe.toISOString().split("T")[0]}'`
-        fPrevDateFilter = `f.${dateCol}::date >= '${ps.toISOString().split("T")[0]}' AND f.${dateCol}::date <= '${pe.toISOString().split("T")[0]}'`
-      } else if (comparisonType === "previous_year") {
-        const start = new Date(startDate), end = new Date(endDate)
-        const ps = new Date(start); ps.setFullYear(ps.getFullYear() - 1)
-        const pe = new Date(end); pe.setFullYear(pe.getFullYear() - 1)
-        prevDateFilter = `${dateCol}::date >= '${ps.toISOString().split("T")[0]}' AND ${dateCol}::date <= '${pe.toISOString().split("T")[0]}'`
-        fPrevDateFilter = `f.${dateCol}::date >= '${ps.toISOString().split("T")[0]}' AND f.${dateCol}::date <= '${pe.toISOString().split("T")[0]}'`
-      }
-
-      let channelFilter = selectedChannel !== "All Channels"
-        ? `AND order_source_code IN (SELECT code FROM dim_order_source WHERE channel_name = '${selectedChannel.replace(/'/g, "''")}')`
-        : ""
-      let fChannelFilter = selectedChannel !== "All Channels"
-        ? `AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE channel_name = '${selectedChannel.replace(/'/g, "''")}')`
-        : ""
-      if (selectedChannelGroup !== "All Groups") {
-        channelFilter += ` AND order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${selectedChannelGroup}')`
-        fChannelFilter += ` AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${selectedChannelGroup}')`
-      }
-
-      const vendorList = selectedVendors.map(v => `'${v.replace(/'/g, "''")}'`).join(",")
-      const vendorFilter = `TRIM(sku) IN (SELECT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) IN (${vendorList}))`
-      const fVendorFilter = `TRIM(f.sku) IN (SELECT TRIM(sku) FROM dim_sku WHERE TRIM(vendor) IN (${vendorList}))`
+      const f = buildFilters()
+      const { mainTable, dateCol, revCol, qtyCol, marginCol, dateFilter, stdFilter, prevDateFilter, channelFilter, vendorFilter } = f
 
       // prev-month range for projection
       const pmDate = new Date(startDate)
       const pmStart = formatDateToISO(new Date(pmDate.getFullYear(), pmDate.getMonth() - 1, 1))
       const pmEnd   = formatDateToISO(new Date(pmDate.getFullYear(), pmDate.getMonth(), 0))
 
-      // Build ALL SQL strings upfront
-      const allVendorsSql = `SELECT SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${dateFilter} ${channelFilter} ${stdFilter}`
       const summarySql    = `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter} ${stdFilter}`
       const prevSummarySql = comparisonType !== "none"
         ? `SELECT SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${qtyCol}) as units, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} ${stdFilter}`
@@ -292,69 +330,15 @@ export default function VendorPerformancePage() {
       const prevTrendSql = comparisonType !== "none"
         ? `SELECT TO_CHAR(${dateCol}::date, 'YYYY-MM-DD') as date, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} ${stdFilter} GROUP BY ${dateCol}::date ORDER BY ${dateCol}::date`
         : null
-      const productsSql = `SELECT TRIM(sku) as sku, SUM(${revCol}) as revenue, COUNT(DISTINCT order_code) as orders, SUM(${marginCol}) as margin FROM ${mainTable} WHERE ${vendorFilter} AND ${dateFilter} ${channelFilter} ${stdFilter} GROUP BY TRIM(sku) ORDER BY revenue DESC`
-      const prevProductsSql = comparisonType !== "none"
-        ? `SELECT TRIM(sku) as sku, SUM(${revCol}) as revenue FROM ${mainTable} WHERE ${vendorFilter} AND ${prevDateFilter} ${channelFilter} ${stdFilter} GROUP BY TRIM(sku)`
-        : null
-      const prevChannelSql = comparisonType !== "none"
-        ? `SELECT s.channel_name, SUM(f.${revCol}) as revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fVendorFilter} AND ${fPrevDateFilter} ${fChannelFilter} ${fStdFilter} GROUP BY s.channel_name`
-        : null
-
-      const vendorParams = selectedVendors.map(v => `vendorCodes=${encodeURIComponent(v)}`).join("&")
-      const strategicUrl = `/api/analytics/b2b/strategic-performance?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}&${vendorParams}`
-
-      // Helper: POST query or resolve null for optional prev-period queries
-      const q = (sql: string) => fetch("/api/analytics/query", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sql }),
-      })
       const qOpt = (sql: string | null): Promise<Response | null> => sql ? q(sql) : Promise.resolve(null)
 
-      // Phân loại B2B-Strategic/Non-Strategic THEO KHÁCH (price_list_name) — CÙNG 1 định nghĩa dùng chung
-      // với Quarter Report/Dashboard/BOD/All-Time (xem buildGroupCaseByCustomerSql trong
-      // lib/analytics-helpers.ts). Trước đây trang này tự phân loại theo channel_name khớp danh sách
-      // "partner_tiers" (Supabase, phải tay thêm từng kênh) → kênh Strategic mới/chưa kịp thêm bị rơi
-      // nhầm Non-Strategic (báo cáo 2026-09-08). quarterly-settings mặc định MỌI KH B2B là Strategic TRỪ
-      // KHI price_list_name khớp keyword VIP/Gold/Silver → không cần duy trì 2 danh sách song song nữa.
-      const qSettingsRaw = await fetch("/api/analytics/quarterly-settings")
-      const qSettings: { tierKeywords: Record<string, string[]>; excludedCustomers: string[] } =
-        qSettingsRaw.ok ? await qSettingsRaw.json() : { tierKeywords: {}, excludedCustomers: [] }
-      setPartnerTiers(Object.keys(qSettings.tierKeywords || {}).length ? qSettings.tierKeywords : { Strategic: [] })
-      const nonStratKws = Object.entries(qSettings.tierKeywords || {})
-        .filter(([tier]) => tier !== "Strategic")
-        .flatMap(([, kws]) => kws)
-        .map((kw: string) => kw.toUpperCase().replace(/'/g, "''"))
-      // KHÔNG áp exclusion list (quarterly_excluded_customers) ở đây — khác Quarter Report, trang này
-      // không loại trừ KH nào khỏi KPI summary/Revenue Trend/Products phía trên, nếu Channel Distribution
-      // tự loại riêng sẽ làm tổng bảng lệch khỏi KPI card cùng trang. Chỉ mượn phần phân loại
-      // Strategic/Non-Strategic, không mượn phần exclude.
-      const isStrategicSql = nonStratKws.length === 0
-        ? "(TRUE)"
-        : `(c.price_list_name IS NULL OR (${nonStratKws.map(kw => `UPPER(c.price_list_name) NOT LIKE '%${kw}%'`).join(" AND ")}))`
-      const bizGroupSQL = `CASE WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' AND ${isStrategicSql} THEN 'B2B-Strategic' WHEN UPPER(COALESCE(s.group_name,'')) = 'B2B' THEN 'B2B-Non-Strategic' WHEN UPPER(COALESCE(s.group_name,'')) = 'B2C' THEN 'B2C' ELSE 'B2C' END`
-
-      // business_group phụ thuộc c.price_list_name (không aggregate được) → phân loại từng dòng trong CTE
-      // "classified" TRƯỚC, rồi mới GROUP BY (channel_name, business_group) ở outer query. Project cột
-      // tường minh (không f.*) — marginCol có thể là literal "0" (chế độ Created, bảng sales không có
-      // margin), f.0 sẽ không hợp lệ nếu lỡ prefix bằng alias.
-      const marginExpr = marginCol === "0" ? "0" : `f.${marginCol}`
-      const channelSql = `WITH channel_totals AS (SELECT s.channel_name, SUM(f.${revCol}) as total_revenue FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code WHERE ${fDateFilter} ${fChannelFilter} ${fStdFilter} GROUP BY s.channel_name), classified AS (SELECT f.order_code as order_code, f.${revCol} as rev, f.${qtyCol} as qty, ${marginExpr} as mgn, s.channel_name as channel_name, ${bizGroupSQL} as business_group FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code WHERE ${fVendorFilter} AND ${fDateFilter} ${fChannelFilter} ${fStdFilter}) SELECT cl.channel_name, SUM(cl.rev) as revenue, COUNT(DISTINCT cl.order_code) as orders, SUM(cl.qty) as units_sold, SUM(cl.mgn) as margin, MAX(t.total_revenue) as total_channel_revenue, cl.business_group FROM classified cl LEFT JOIN channel_totals t ON COALESCE(cl.channel_name, '') = COALESCE(t.channel_name, '') GROUP BY cl.channel_name, cl.business_group ORDER BY revenue DESC`
-
-      // Tất cả query độc lập → bắn song song, thời gian = query chậm nhất
-      const [
-        allVendorsRes, summaryRes, prevSummaryRes, pmRes,
-        trendRes, prevTrendRes, productsRes, prevProductsRes,
-        chanRes, strategicPerfRes, prevChanRes,
-      ] = await Promise.all([
-        q(allVendorsSql), q(summarySql), qOpt(prevSummarySql), q(pmSql),
-        q(trendSql), qOpt(prevTrendSql), q(productsSql), qOpt(prevProductsSql),
-        q(channelSql), fetch(strategicUrl), qOpt(prevChannelSql),
+      // Tất cả truy vấn độc lập → bắn song song, thời gian = truy vấn chậm nhất.
+      // (Trước: thêm 2 request chờ nối tiếp — quarterly-settings rồi strategic-performance — để dựng bảng kênh ở client.)
+      const [summaryRes, prevSummaryRes, pmRes, trendRes, prevTrendRes] = await Promise.all([
+        q(summarySql), qOpt(prevSummarySql), q(pmSql), q(trendSql), qOpt(prevTrendSql),
+        loadProducts(f, focus),
+        loadDistribution(f, distView),
       ])
-
-      // Process: allVendors
-      if (allVendorsRes.ok) {
-        const d = await allVendorsRes.json()
-        setAllVendorsTotalRevenue(parseFloat(d[0]?.revenue || 0))
-      }
 
       // Process: summary metrics
       if (!summaryRes.ok) throw new Error("Failed to fetch summary metrics")
@@ -419,188 +403,32 @@ export default function VendorPerformancePage() {
           revenue: parseFloat(d.revenue || 0),
         })))
       }
-
-      // Process: products
-      if (!productsRes.ok) throw new Error("Failed to fetch product performance")
-      const currProds = await productsRes.json()
-      if (prevProductsRes) {
-        const prevProds = await (prevProductsRes as Response).json()
-        const prevProdMap = prevProds.reduce((acc: any, p: any) => { acc[p.sku] = parseFloat(p.revenue || 0); return acc }, {})
-        setProductPerformance(currProds.map((p: any) => ({ ...p, prevRevenue: prevProdMap[p.sku] || 0 })))
-      } else {
-        setProductPerformance(currProds)
-      }
-
-      // Process: channels + strategic (partner_tiers đã set từ pre-fetch)
-      if (!chanRes.ok) throw new Error("Failed to fetch channel distribution")
-      const currChans = await chanRes.json()
-      if (strategicPerfRes.ok) setStrategicPerformance(await strategicPerfRes.json())
-      if (prevChanRes) {
-        const prevChans = await (prevChanRes as Response).json()
-        const prevChanMap = prevChans.reduce((acc: any, c: any) => { acc[c.channel_name] = parseFloat(c.revenue || 0); return acc }, {})
-        setChannelDistribution(currChans.map((c: any) => ({ ...c, prevRevenue: prevChanMap[c.channel_name] || 0 })))
-      } else {
-        setChannelDistribution(currChans)
-      }
     } catch (err) {
       console.error("Error fetching vendor performance:", err)
+      setError("Không tải được dữ liệu — Hiếu đang fix, vui lòng đợi")
     } finally {
       setLoading(false)
     }
   }
 
-  const exportChannelCSV = () => {
-    const headers = ["Business Group", "Channel", "Total Order", "Unit Sold", "Gross Revenue", "Projected Revenue", "Total Channel Rev (All Vendors)", "%Contrib (vs Others)", "%MoM"]
-    const rows: (string | number)[][] = []
+  // Bấm khách/kênh ở bảng phân bổ → chỉ tải lại bảng SKU (không chạy lại cả trang), rồi cuộn xuống bảng đó.
+  const applyFocus = async (next: DistFocus | null) => {
+    setFocus(next)
+    setProductPage(1)
+    setProductsLoading(true)
+    try { await loadProducts(buildFilters(), next) }
+    catch (err) { console.error("Error fetching products:", err); setError("Không tải được SKU — Hiếu đang fix, vui lòng đợi") }
+    finally { setProductsLoading(false) }
+    if (next) productsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
 
-    const claimedByChannel: Record<string, { revenue: number, orders: number, units: number, prevRevenue: number }> = {}
-    strategicPerformance.forEach((s: any) => {
-      if (s.channel_contributions) {
-        Object.entries(s.channel_contributions).forEach(([chan, contrib]: [string, any]) => {
-          if (!claimedByChannel[chan]) claimedByChannel[chan] = { revenue: 0, orders: 0, units: 0, prevRevenue: 0 }
-          claimedByChannel[chan].revenue += (contrib.revenue || 0)
-          claimedByChannel[chan].orders += (contrib.orders || 0)
-          claimedByChannel[chan].units += (contrib.units || 0)
-          claimedByChannel[chan].prevRevenue += (contrib.prev_revenue || 0)
-        })
-      }
-    })
-
-    let grandTotalRevenue = 0
-    let grandTotalOrders = 0
-    let grandTotalUnits = 0
-    let grandTotalPrevRevenue = 0
-    const allUniqueChannels = new Set<string>()
-
-    ;(["B2B-Strategic", "B2B-Non-Strategic", "B2C"]).forEach((groupName) => {
-      let groupChannels: any[] = []
-      const uniqueChannelNamesInGroup = new Set<string>()
-
-      if (groupName === "B2B-Strategic") {
-        groupChannels = strategicPerformance.map((s: any) => {
-          let totalChanRev = 0
-          let hasFoundChannel = false
-          if (s.channel_contributions) {
-            Object.keys(s.channel_contributions).forEach(chan => {
-              uniqueChannelNamesInGroup.add(chan)
-              allUniqueChannels.add(chan)
-              const chanData = channelDistribution.find((c: any) => c.channel_name === chan)
-              if (chanData) { totalChanRev += parseFloat(chanData.total_channel_revenue || 0); hasFoundChannel = true }
-            })
-          }
-          return {
-            channel_name: s.name, orders: s.orders || 0, units_sold: s.units, revenue: s.revenue,
-            prevRevenue: s.prev_revenue, total_channel_revenue: hasFoundChannel ? totalChanRev : (s.revenue > 0 ? s.revenue : 1),
-          }
-        })
-
-        const strategicChannelsInDist = channelDistribution.filter((c: any) => c.business_group === "B2B-Strategic")
-        strategicChannelsInDist.forEach((c: any) => {
-          const claimed = claimedByChannel[c.channel_name] || { revenue: 0, orders: 0, units: 0, prevRevenue: 0 }
-          const resRev = Math.max(0, parseFloat(c.revenue || 0) - claimed.revenue)
-          const resOrders = Math.max(0, parseInt(c.orders || 0) - claimed.orders)
-          const resUnits = Math.max(0, parseInt(c.units_sold || 0) - claimed.units)
-          const resPrevRev = Math.max(0, parseFloat(c.prevRevenue || 0) - claimed.prevRevenue)
-
-          if (resRev > 1 || resOrders > 0) {
-            uniqueChannelNamesInGroup.add(c.channel_name)
-            allUniqueChannels.add(c.channel_name)
-            groupChannels.push({
-              channel_name: `Other ${c.channel_name}`, orders: resOrders, units_sold: resUnits,
-              revenue: resRev, prevRevenue: resPrevRev, total_channel_revenue: parseFloat(c.total_channel_revenue || 0),
-            })
-          }
-        })
-
-        groupChannels.sort((a: any, b: any) => (b.revenue || 0) - (a.revenue || 0))
-      } else {
-        groupChannels = channelDistribution
-          .filter((c: any) => {
-            if (groupName === "B2B-Non-Strategic") return c.business_group === "B2B-Non-Strategic"
-            return c.business_group === "B2C" || !c.business_group
-          })
-          .map((c: any) => {
-            let adjRevenue = parseFloat(c.revenue || 0)
-            let adjUnits = parseInt(c.units_sold || 0)
-            let adjOrders = parseInt(c.orders || 0)
-            let adjPrevRevenue = parseFloat(c.prevRevenue || 0)
-
-            const claimed = claimedByChannel[c.channel_name]
-            if (claimed) {
-              adjRevenue -= claimed.revenue; adjUnits -= claimed.units; adjOrders -= claimed.orders; adjPrevRevenue -= claimed.prevRevenue
-            }
-
-            if (adjRevenue < 1000 && adjOrders < 1) return null
-
-            uniqueChannelNamesInGroup.add(c.channel_name)
-            allUniqueChannels.add(c.channel_name)
-
-            return { ...c, revenue: Math.max(0, adjRevenue), units_sold: Math.max(0, adjUnits), orders: Math.max(0, adjOrders), prevRevenue: Math.max(0, adjPrevRevenue) }
-          })
-          .filter(Boolean)
-          .sort((a: any, b: any) => (b.revenue || 0) - (a.revenue || 0))
-      }
-
-      if (groupChannels.length > 0) {
-        let groupRevenue = 0
-        let groupOrders = 0
-        let groupUnits = 0
-        let groupPrevRevenue = 0
-
-        groupChannels.forEach((channel: any) => {
-          const rev = parseFloat(channel.revenue || 0)
-          const mom = channel.prevRevenue > 0 ? ((rev - channel.prevRevenue) / channel.prevRevenue) * 100 : 0
-          const contribution = channel.total_channel_revenue > 0 ? ((rev / channel.total_channel_revenue) * 100) : 0
-
-          groupRevenue += rev
-          groupOrders += channel.orders
-          groupUnits += channel.units_sold
-          groupPrevRevenue += (channel.prevRevenue || 0)
-
-          rows.push([
-            groupName, channel.channel_name || "Unknown", channel.orders, channel.units_sold,
-            Number(rev.toFixed(0)), projection ? Number((rev * projection.factor).toFixed(0)) : "-",
-            Number(parseFloat(channel.total_channel_revenue || 0).toFixed(0)),
-            contribution ? contribution.toFixed(2) + "%" : "-", mom ? mom.toFixed(2) + "%" : "0%",
-          ])
-        })
-
-        const correctGroupAllVendorsChannelRevenue = Array.from(uniqueChannelNamesInGroup).reduce((acc, name) => {
-          const chan = channelDistribution.find((c: any) => c.channel_name === name)
-          return acc + parseFloat(chan?.total_channel_revenue || 0)
-        }, 0)
-
-        const groupMom = groupPrevRevenue > 0 ? ((groupRevenue - groupPrevRevenue) / groupPrevRevenue) * 100 : 0
-        const groupContrib = correctGroupAllVendorsChannelRevenue > 0 ? (groupRevenue / correctGroupAllVendorsChannelRevenue * 100) : 0
-
-        rows.push([
-          `Total ${groupName}`, "", groupOrders, groupUnits, Number(groupRevenue.toFixed(0)),
-          projection ? Number((groupRevenue * projection.factor).toFixed(0)) : "-",
-          Number(correctGroupAllVendorsChannelRevenue.toFixed(0)), groupContrib.toFixed(2) + "%",
-          groupMom ? groupMom.toFixed(2) + "%" : "0%",
-        ])
-
-        grandTotalRevenue += groupRevenue
-        grandTotalOrders += groupOrders
-        grandTotalUnits += groupUnits
-        grandTotalPrevRevenue += groupPrevRevenue
-      }
-    })
-
-    const finalGrandTotalAllVendorsChannelRevenue = Array.from(allUniqueChannels).reduce((acc, name) => {
-      const chan = channelDistribution.find((c: any) => c.channel_name === name)
-      return acc + parseFloat(chan?.total_channel_revenue || 0)
-    }, 0)
-
-    rows.push([
-      "GRAND TOTAL", "", grandTotalOrders, grandTotalUnits, Number(grandTotalRevenue.toFixed(0)),
-      projection ? Number((grandTotalRevenue * projection.factor).toFixed(0)) : "-",
-      Number(finalGrandTotalAllVendorsChannelRevenue.toFixed(0)),
-      finalGrandTotalAllVendorsChannelRevenue > 0 ? (grandTotalRevenue / finalGrandTotalAllVendorsChannelRevenue * 100).toFixed(2) + "%" : "-",
-      grandTotalPrevRevenue > 0 ? ((grandTotalRevenue - grandTotalPrevRevenue) / grandTotalPrevRevenue * 100).toFixed(2) + "%" : "0%",
-    ])
-
-    exportAOA(headers, rows, `Channel_Distribution_${startDate}_to_${endDate}`, "Channels")
+  // Đổi cách xem (Khách hàng ⇄ Kênh) → chỉ tải lại bảng phân bổ.
+  const changeView = async (v: DistView) => {
+    setDistView(v)
+    setDistLoading(true)
+    try { await loadDistribution(buildFilters(), v) }
+    catch (err) { console.error("Error fetching distribution:", err); setError("Không tải được bảng phân bổ — Hiếu đang fix, vui lòng đợi") }
+    finally { setDistLoading(false) }
   }
 
   const Skeleton = ({ className }: { className?: string }) => (
@@ -797,7 +625,7 @@ export default function VendorPerformancePage() {
           </div>
           <div className="flex items-center justify-between sm:justify-start gap-4">
             <div className="flex items-center gap-3 w-full sm:w-auto">
-              <button onClick={() => { setStartDate("2026-03-01"); setEndDate("2026-03-31"); setSelectedChannel("All Channels"); setComparisonType("none") }}
+              <button onClick={() => { const d = getDefaultDateRange(); setStartDate(d.startDate); setEndDate(d.endDate); setSelectedChannel("All Channels"); setSelectedChannelGroup("All Groups"); setComparisonType("none") }}
                 className="px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors shrink-0">
                 Reset
               </button>
@@ -862,275 +690,25 @@ export default function VendorPerformancePage() {
           </div>
         </div>
 
-        {/* Channel Distribution */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <h2 className="text-lg font-bold text-slate-900">Channel Distribution</h2>
-            <button onClick={exportChannelCSV}
-              className="flex items-center gap-2 text-sm font-medium text-brand-600 hover:text-brand-700 h-[38px] px-3 bg-brand-50/50 hover:bg-brand-50 rounded-lg transition-all">
-              <Download className="w-4 h-4" />
-              Export
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-50 text-slate-500 font-medium">
-                <tr>
-                  <th className="px-4 py-3">Channel</th>
-                  <th className="px-4 py-3 text-right">Total Order</th>
-                  <th className="px-4 py-3 text-right">Unit Sold</th>
-                  <th className="px-4 py-3 text-right">Gross Revenue</th>
-                  <th className="px-4 py-3 text-right">Doanh thu dự phóng</th>
-                  <th className="px-4 py-3 text-right">Total Revenue (All Vendors)</th>
-                  <th className="px-4 py-3 text-right">%Contrib (vs Others)</th>
-                  <th className="px-4 py-3 text-right">%MoM</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {loading ? (
-                  Array(6).fill(0).map((_, i) => (
-                    <tr key={i}>
-                      {Array(8).fill(0).map((_, j) => <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-20 ml-auto" /></td>)}
-                    </tr>
-                  ))
-                ) : (
-                  (() => {
-                    let grandTotalOrders = 0
-                    let grandTotalUnits = 0
-                    let grandTotalRevenue = 0
-                    let grandTotalPrevRevenue = 0
-
-                    let b2bTotalOrders = 0
-                    let b2bTotalUnits = 0
-                    let b2bTotalRevenue = 0
-                    let b2bTotalPrevRevenue = 0
-                    const b2bUniqueChannels = new Set<string>()
-
-                    const claimedByChannel: Record<string, { revenue: number, orders: number, units: number, prevRevenue: number }> = {}
-                    strategicPerformance.forEach((s: any) => {
-                      if (s.channel_contributions) {
-                        Object.entries(s.channel_contributions).forEach(([chan, contrib]: [string, any]) => {
-                          if (!claimedByChannel[chan]) claimedByChannel[chan] = { revenue: 0, orders: 0, units: 0, prevRevenue: 0 }
-                          claimedByChannel[chan].revenue += (contrib.revenue || 0)
-                          claimedByChannel[chan].orders += (contrib.orders || 0)
-                          claimedByChannel[chan].units += (contrib.units || 0)
-                          claimedByChannel[chan].prevRevenue += (contrib.prev_revenue || 0)
-                        })
-                      }
-                    })
-
-                    const groupFragments = (["B2B-Strategic", "B2B-Non-Strategic", "B2C"]).map((groupName) => {
-                      let groupChannels: any[] = []
-                      const uniqueChannelNamesInGroup = new Set<string>()
-
-                      if (groupName === "B2B-Strategic") {
-                        groupChannels = strategicPerformance.map((s: any) => {
-                          let totalChanRev = 0
-                          let hasFoundChannel = false
-                          if (s.channel_contributions) {
-                            Object.keys(s.channel_contributions).forEach(chan => {
-                              uniqueChannelNamesInGroup.add(chan)
-                              if (groupName.startsWith("B2B")) b2bUniqueChannels.add(chan)
-                              const chanData = channelDistribution.find((c: any) => c.channel_name === chan)
-                              if (chanData) { totalChanRev += parseFloat(chanData.total_channel_revenue || 0); hasFoundChannel = true }
-                            })
-                          }
-                          return {
-                            channel_name: s.name, orders: s.orders || 0, units_sold: s.units, revenue: s.revenue,
-                            prevRevenue: s.prev_revenue, total_channel_revenue: hasFoundChannel ? totalChanRev : (s.revenue > 0 ? s.revenue : 1),
-                          }
-                        })
-
-                        const strategicChannelsInDist = channelDistribution.filter((c: any) => c.business_group === "B2B-Strategic")
-                        strategicChannelsInDist.forEach((c: any) => {
-                          const claimed = claimedByChannel[c.channel_name] || { revenue: 0, orders: 0, units: 0, prevRevenue: 0 }
-                          const resRev = Math.max(0, parseFloat(c.revenue || 0) - claimed.revenue)
-                          const resOrders = Math.max(0, parseInt(c.orders || 0) - claimed.orders)
-                          const resUnits = Math.max(0, parseInt(c.units_sold || 0) - claimed.units)
-                          const resPrevRev = Math.max(0, parseFloat(c.prevRevenue || 0) - claimed.prevRevenue)
-
-                          if (resRev > 1 || resOrders > 0) {
-                            uniqueChannelNamesInGroup.add(c.channel_name)
-                            if (groupName.startsWith("B2B")) b2bUniqueChannels.add(c.channel_name)
-                            groupChannels.push({
-                              channel_name: `Other ${c.channel_name}`, orders: resOrders, units_sold: resUnits,
-                              revenue: resRev, prevRevenue: resPrevRev, total_channel_revenue: parseFloat(c.total_channel_revenue || 0),
-                            })
-                          }
-                        })
-
-                        groupChannels.sort((a: any, b: any) => (b.revenue || 0) - (a.revenue || 0))
-                      } else {
-                        groupChannels = channelDistribution
-                          .filter((c: any) => {
-                            if (groupName === "B2B-Non-Strategic") return c.business_group === "B2B-Non-Strategic"
-                            return c.business_group === "B2C" || !c.business_group
-                          })
-                          .map((c: any) => {
-                            let adjRevenue = parseFloat(c.revenue || 0)
-                            let adjUnits = parseInt(c.units_sold || 0)
-                            let adjOrders = parseInt(c.orders || 0)
-                            let adjPrevRevenue = parseFloat(c.prevRevenue || 0)
-
-                            const claimed = claimedByChannel[c.channel_name]
-                            if (claimed) {
-                              adjRevenue -= claimed.revenue; adjUnits -= claimed.units; adjOrders -= claimed.orders; adjPrevRevenue -= claimed.prevRevenue
-                            }
-
-                            if (adjRevenue < 1000 && adjOrders < 1) return null
-
-                            uniqueChannelNamesInGroup.add(c.channel_name)
-                            if (groupName.startsWith("B2B")) b2bUniqueChannels.add(c.channel_name)
-
-                            return { ...c, revenue: Math.max(0, adjRevenue), units_sold: Math.max(0, adjUnits), orders: Math.max(0, adjOrders), prevRevenue: Math.max(0, adjPrevRevenue) }
-                          })
-                          .filter(Boolean)
-                          .sort((a: any, b: any) => (b.revenue || 0) - (a.revenue || 0))
-                      }
-
-                      if (groupChannels.length === 0) return null
-
-                      let groupRevenue = 0
-                      let groupOrders = 0
-                      let groupUnits = 0
-                      let groupPrevRevenue = 0
-
-                      const groupAllVendorsChannelRevenue = Array.from(uniqueChannelNamesInGroup).reduce((acc, name) => {
-                        const chan = channelDistribution.find((c: any) => c.channel_name === name)
-                        return acc + parseFloat(chan?.total_channel_revenue || 0)
-                      }, 0)
-
-                      groupChannels.forEach((c: any) => {
-                        groupRevenue += c.revenue; groupOrders += c.orders; groupUnits += c.units_sold; groupPrevRevenue += (c.prevRevenue || 0)
-                      })
-
-                      grandTotalRevenue += groupRevenue
-                      grandTotalOrders += groupOrders
-                      grandTotalUnits += groupUnits
-                      grandTotalPrevRevenue += groupPrevRevenue
-
-                      if (groupName.startsWith("B2B")) {
-                        b2bTotalRevenue += groupRevenue; b2bTotalOrders += groupOrders; b2bTotalUnits += groupUnits; b2bTotalPrevRevenue += groupPrevRevenue
-                      }
-
-                      const b2bTotalAllVendorsChannelRevenue = Array.from(b2bUniqueChannels).reduce((acc, name) => {
-                        const chan = channelDistribution.find((c: any) => c.channel_name === name)
-                        return acc + parseFloat(chan?.total_channel_revenue || 0)
-                      }, 0)
-
-                      return (
-                        <React.Fragment key={groupName}>
-                          <tr className="bg-slate-50/80">
-                            <td colSpan={8} className="px-4 py-2 font-bold text-slate-700 text-[10px] uppercase tracking-wider">{groupName}</td>
-                          </tr>
-                          {groupChannels.map((channel: any, idx: number) => {
-                            const rev = parseFloat(channel.revenue || 0)
-                            const mom = channel.prevRevenue > 0 ? ((rev - channel.prevRevenue) / channel.prevRevenue) * 100 : 0
-                            const contribution = channel.total_channel_revenue > 0 ? ((rev / channel.total_channel_revenue) * 100) : null
-
-                            return (
-                              <tr key={idx} className="hover:bg-slate-50 transition-colors group text-xs">
-                                <td className="px-4 py-3 font-medium text-slate-700 border-l-2 border-transparent group-hover:border-brand-400">
-                                  {channel.channel_name || "Unknown"}
-                                </td>
-                                <td className="px-4 py-3 text-right text-slate-600">{formatNumber(channel.orders)}</td>
-                                <td className="px-4 py-3 text-right text-slate-600">{formatNumber(channel.units_sold)}</td>
-                                <td className="px-4 py-3 text-right text-slate-600 font-medium">{formatCurrency(rev)}</td>
-                                <td className="px-4 py-3 text-right text-brand-600 font-medium">{projection ? formatCurrency(rev * projection.factor) : "-"}</td>
-                                <td className="px-4 py-3 text-right text-slate-500 italic">{formatCurrency(channel.total_channel_revenue)}</td>
-                                <td className="px-4 py-3 text-right">
-                                  {contribution !== null ? (
-                                    <span className={cn("font-bold", contribution > 50 ? "text-emerald-600" : "text-slate-600")}>{contribution.toFixed(1)}%</span>
-                                  ) : "-"}
-                                </td>
-                                <td className={cn("px-4 py-3 text-right font-bold", mom >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                                  {mom > 0 ? "+" : ""}{mom.toFixed(1)}%
-                                </td>
-                              </tr>
-                            )
-                          })}
-                          <tr className="bg-slate-50 font-bold text-xs border-y border-slate-200">
-                            <td className="px-4 py-2 text-slate-900 bg-slate-100">Total {groupName}</td>
-                            <td className="px-4 py-2 text-right">{formatNumber(groupOrders)}</td>
-                            <td className="px-4 py-2 text-right">{formatNumber(groupUnits)}</td>
-                            <td className="px-4 py-2 text-right">{formatCurrency(groupRevenue)}</td>
-                            <td className="px-4 py-2 text-right text-brand-600">{projection ? formatCurrency(groupRevenue * projection.factor) : "-"}</td>
-                            <td className="px-4 py-2 text-right text-slate-500 italic">{formatCurrency(groupAllVendorsChannelRevenue)}</td>
-                            <td className="px-4 py-2 text-right">
-                              {groupAllVendorsChannelRevenue > 0 ? (
-                                <span className="font-bold text-slate-700">{(groupRevenue / groupAllVendorsChannelRevenue * 100).toFixed(1)}%</span>
-                              ) : "-"}
-                            </td>
-                            <td className={cn("px-4 py-2 text-right font-bold border-r-2 border-slate-200",
-                              (groupRevenue - groupPrevRevenue) >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                              {groupPrevRevenue > 0 ? (groupRevenue >= groupPrevRevenue ? "+" : "") + ((groupRevenue - groupPrevRevenue) / groupPrevRevenue * 100).toFixed(1) + "%" : "-"}
-                            </td>
-                          </tr>
-                          {groupName === "B2B-Non-Strategic" && (
-                            <tr className="bg-brand-50 font-bold text-xs border-y-2 border-brand-100">
-                              <td className="px-4 py-3 text-brand-800 bg-brand-100/50">Total B2B (Combined)</td>
-                              <td className="px-4 py-3 text-right">{formatNumber(b2bTotalOrders)}</td>
-                              <td className="px-4 py-3 text-right">{formatNumber(b2bTotalUnits)}</td>
-                              <td className="px-4 py-3 text-right">{formatCurrency(b2bTotalRevenue)}</td>
-                              <td className="px-4 py-3 text-right text-brand-600">{projection ? formatCurrency(b2bTotalRevenue * projection.factor) : "-"}</td>
-                              <td className="px-4 py-3 text-right text-slate-500 italic border-l border-brand-100">{formatCurrency(b2bTotalAllVendorsChannelRevenue)}</td>
-                              <td className="px-4 py-3 text-right">
-                                {b2bTotalAllVendorsChannelRevenue > 0 ? (
-                                  <span className="font-bold text-brand-700">{(b2bTotalRevenue / b2bTotalAllVendorsChannelRevenue * 100).toFixed(1)}%</span>
-                                ) : "-"}
-                              </td>
-                              <td className={cn("px-4 py-3 text-right font-black",
-                                (b2bTotalRevenue - b2bTotalPrevRevenue) >= 0 ? "text-emerald-700" : "text-rose-700")}>
-                                {b2bTotalPrevRevenue > 0 ? (b2bTotalRevenue >= b2bTotalPrevRevenue ? "+" : "") + ((b2bTotalRevenue - b2bTotalPrevRevenue) / b2bTotalPrevRevenue * 100).toFixed(1) + "%" : "-"}
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      )
-                    })
-
-                    const finalGrandTotalAllVendorsChannelRevenue = channelDistribution.reduce((acc: number, c: any) => acc + parseFloat(c.total_channel_revenue || 0), 0)
-
-                    return (
-                      <>
-                        {groupFragments}
-                        <tr className="bg-slate-200 font-bold text-sm border-t-2 border-slate-300">
-                          <td className="px-4 py-4 text-slate-900 font-black">GRAND TOTAL</td>
-                          <td className="px-4 py-4 text-right">{formatNumber(grandTotalOrders)}</td>
-                          <td className="px-4 py-4 text-right">{formatNumber(grandTotalUnits)}</td>
-                          <td className="px-4 py-4 text-right overflow-hidden truncate">{formatCurrency(grandTotalRevenue)}</td>
-                          <td className="px-4 py-4 text-right text-brand-700">{projection ? formatCurrency(grandTotalRevenue * projection.factor) : "-"}</td>
-                          <td className="px-4 py-4 text-right text-slate-500 italic">{formatCurrency(finalGrandTotalAllVendorsChannelRevenue)}</td>
-                          <td className="px-4 py-4 text-right text-slate-900">
-                            {finalGrandTotalAllVendorsChannelRevenue > 0 ? (
-                              <span>{(grandTotalRevenue / finalGrandTotalAllVendorsChannelRevenue * 100).toFixed(1)}%</span>
-                            ) : "-"}
-                          </td>
-                          <td className={cn("px-4 py-4 text-right font-black",
-                            (grandTotalRevenue - grandTotalPrevRevenue) >= 0 ? "text-emerald-700" : "text-rose-700")}>
-                            {grandTotalPrevRevenue > 0 ? (grandTotalRevenue >= grandTotalPrevRevenue ? "+" : "") + ((grandTotalRevenue - grandTotalPrevRevenue) / grandTotalPrevRevenue * 100).toFixed(1) + "%" : "-"}
-                          </td>
-                        </tr>
-                      </>
-                    )
-                  })()
-                )}
-                {channelDistribution.length === 0 && !loading && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-12 text-center text-slate-400 italic font-medium">No channel data available</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* Phân bổ theo Khách hàng / Kênh — bấm 1 dòng để lọc SKU bên dưới */}
+        <VendorDistribution
+          rows={distRows} loading={loading || distLoading} view={distView} onViewChange={changeView}
+          focus={focus} onFocus={applyFocus} projectionFactor={projection ? projection.factor : null}
+          comparison={comparisonType !== "none"} startDate={startDate} endDate={endDate}
+        />
       </div>
 
       {/* Product Performance Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div ref={productsRef} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden scroll-mt-4">
         <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <h2 className="text-lg font-bold text-slate-900">Product Performance</h2>
+            {focus && (
+              <span className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-brand-50 border border-brand-100 text-xs font-bold text-brand-700">
+                {focus.kind === "customer" ? "Khách hàng" : "Kênh"}: {focus.label}
+                <button onClick={() => applyFocus(null)} aria-label="Bỏ lọc" className="p-0.5 rounded-full hover:bg-brand-100"><X className="w-3 h-3" /></button>
+              </span>
+            )}
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input type="text" placeholder="Search SKU..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
@@ -1163,7 +741,7 @@ export default function VendorPerformancePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? Array(5).fill(0).map((_, i) => (
+              {loading || productsLoading ? Array(5).fill(0).map((_, i) => (
                 <tr key={i}>
                   {Array(5).fill(0).map((_, j) => <td key={j} className="px-6 py-4"><Skeleton className="h-4 w-20 ml-auto" /></td>)}
                 </tr>
@@ -1200,7 +778,7 @@ export default function VendorPerformancePage() {
               {filteredProducts.length === 0 && !loading && (
                 <tr>
                   <td colSpan={comparisonType !== "none" ? 6 : 5} className="px-6 py-12 text-center text-slate-400 italic">
-                    {searchTerm ? `No products matching "${searchTerm}"` : "No product data found for this vendor in the selected period."}
+                    {searchTerm ? `No products matching "${searchTerm}"` : focus ? `Vendor không bán SKU nào cho ${focus.label} trong kỳ này.` : "No product data found for this vendor in the selected period."}
                   </td>
                 </tr>
               )}

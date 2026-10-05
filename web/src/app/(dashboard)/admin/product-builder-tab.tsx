@@ -3,17 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Download, Eye, Plus, Trash2, Upload } from "lucide-react"
 import { PRODUCT_HEADERS, SKU_HEADERS, pickOperatorPrice, type BuildResult } from "@/lib/bc-datapool/builder"
-import { pickSupportCountry } from "@/lib/bc-datapool/iso"
+import { pickSupportCountry, pickSupportGroup } from "@/lib/bc-datapool/iso"
 import type { Skipped } from "@/lib/bc-datapool/dedupe"
 import type { CatalogDiff, PriceDiff } from "@/lib/bc-datapool/diff"
-import { availableKinds, canonCountry, choosePlan, findPlans, manualMismatches, offers, sellableCountries, type CatalogPlan, type PlanCatalog, type PlanInfo } from "@/lib/bc-datapool/plan-lookup"
+import { availableKinds, canonCountry, choosePlan, findPlans, manualMismatches, multiRegions, offers, sellableCountries, type CatalogPlan, type PlanCatalog, type PlanInfo } from "@/lib/bc-datapool/plan-lookup"
 import { unlimitedFactor } from "@/lib/bc-datapool/pricing"
 import { DEFAULT_ASSUMPTIONS, UNLIMITED_PROFILES, type Assumptions, type Fx, type PlanKind, type Pool, type PriceList, type ProductInput } from "@/lib/bc-datapool/types"
 
 type Notify = (type: "success" | "error", text: string) => void
 interface SupportCountry { code: string; en: string; vn: string; iso: string }
 interface CatalogSummary { uploadedAt: string; files: string[]; esim: number; sim: number; lastDiff: CatalogDiff | null }
-interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | null; portalPlans: CatalogPlan[] | null; supportCountries: SupportCountry[]; fx: (Fx & { month?: string }) | null; fxError: string | null; assumptions: Assumptions }
+interface Options { priceList: PriceList | null; planCatalog: CatalogSummary | null; portalPlans: CatalogPlan[] | null; supportCountries: SupportCountry[]; refCountries: { code: string; name: string }[]; fx: (Fx & { month?: string }) | null; fxError: string | null; assumptions: Assumptions }
 interface PreviewResult extends BuildResult { fx: Fx; skipped: Skipped; nothingNew: boolean; planInfo: PlanInfo[]; whiteSimVnd: number | null }
 
 // Dòng gói trên form: dung lượng chọn từ các gói Portal thật (amountKey = "500|MB"), số ngày chỉ bật được ngày Portal bán.
@@ -22,7 +22,8 @@ interface PreviewResult extends BuildResult { fx: Fx; skipped: Skipped; nothingN
  * còn `hs` + `hsUnit` = dung lượng TỐC ĐỘ CAO khách thấy (cột dataMB) và `speed` = tốc độ Unlimited (cột speedMbps) — mặc định 3GB + 10Mbps.
  */
 interface PlanForm { kind: PlanKind; amountKey: string; days: number[]; productId: string; hs: string; hsUnit: "MB" | "GB"; speed: 5 | 10 }
-interface ProductForm { pool: Pool; simType: "eSIM" | "SIM"; coverage: string; operators: string[]; code: string; codeHint?: string; iso: string; en: string; vn: string; plans: PlanForm[] }
+/** coverage: tên nước (nước đơn) hoặc khoá vùng (gói đa vùng, có "+"); covs: tên khu vực trong bảng giá dùng để lấy giá (nhiều phần tử = gói đa vùng) */
+interface ProductForm { pool: Pool; simType: "eSIM" | "SIM"; coverage: string; covs: string[]; operators: string[]; code: string; codeHint?: string; iso: string; en: string; vn: string; plans: PlanForm[] }
 
 /** Bộ ngày phổ biến — mặc định bật sẵn phần giao với số ngày Portal bán */
 const COMMON_DAYS = [1, 2, 3, 4, 5, 6, 7, 10, 15, 20, 25, 30]
@@ -33,7 +34,7 @@ const input = "px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:out
 const label = "block text-[11px] font-semibold text-gray-500 mb-1"
 
 const HS_DEFAULT = { hs: "3", hsUnit: "GB" as const, speed: 10 as const }
-const newProduct = (): ProductForm => ({ pool: "CMHK", simType: "eSIM", coverage: "", operators: [], code: "", iso: "", en: "", vn: "", plans: [] })
+const newProduct = (): ProductForm => ({ pool: "CMHK", simType: "eSIM", coverage: "", covs: [], operators: [], code: "", iso: "", en: "", vn: "", plans: [] })
 const keyOf = (amount: number, unit: string) => `${amount}|${unit}`
 const labelOf = (key: string) => key.replace("|", " ")
 const commonOf = (offered: number[]) => COMMON_DAYS.filter(d => offered.includes(d))
@@ -100,7 +101,7 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
 
   const list = opts?.priceList ?? null
   // Danh mục gói Portal = nguồn sự thật về gói BC thực sự bán (chưa có thì chặn tạo)
-  const catalog: PlanCatalog | null = useMemo(() => (opts?.portalPlans ? { uploadedAt: "", files: [], plans: opts.portalPlans.map(p => ({ ...p, name: "", operators: [], timing: "" })) } : null), [opts?.portalPlans])
+  const catalog: PlanCatalog | null = useMemo(() => (opts?.portalPlans ? { uploadedAt: "", files: [], plans: opts.portalPlans.map(p => ({ ...p, name: p.name ?? "", operators: [], timing: "" })) } : null), [opts?.portalPlans])
   const touch = () => setPreviewStale(true)
   const patchProduct = (i: number, p: Partial<ProductForm>) => { setProducts(prev => prev.map((x, k) => (k === i ? { ...x, ...p } : x))); touch() }
   const patchPlan = (i: number, j: number, p: Partial<PlanForm>) => {
@@ -113,6 +114,16 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
     const ok = sellableCountries(catalog, sim, pool)
     return Array.from(new Set(list.pools[pool].rows.map(r => r.coverage))).filter(c => ok.has(canonCountry(c))).sort()
   }
+  // Gói đa vùng: chỉ hiện khi MỌI nước của gói đều có giá trong bảng giá của pool (covs = tên khu vực trong bảng giá, theo thứ tự Portal)
+  const regionsOf = (pool: Pool, sim: "eSIM" | "SIM") => {
+    if (!list || !catalog) return []
+    const names = Array.from(new Set(list.pools[pool].rows.map(r => r.coverage)))
+    return multiRegions(catalog, sim, pool).flatMap(m => {
+      const covs = m.countries.map(c => names.find(n => canonCountry(n) === canonCountry(c)))
+      return covs.every(Boolean) ? [{ ...m, covs: covs as string[] }] : []
+    })
+  }
+  const hasCoverage = (pool: Pool, sim: "eSIM" | "SIM", c: string) => coveragesOf(pool, sim).includes(c) || regionsOf(pool, sim).some(m => m.key === c)
 
   const offersOf = (p: ProductForm, kind: PlanKind) => offers(catalog, { sim: p.simType, pool: p.pool, coverage: p.coverage, kind })
   const kindsOf = (p: ProductForm) => availableKinds(catalog, { sim: p.simType, pool: p.pool, coverage: p.coverage })
@@ -128,22 +139,38 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
   const offerDays = (p: ProductForm, pl: PlanForm) => offersOf(p, pl.kind).find(o => keyOf(o.amount, o.unit) === pl.amountKey)?.plan.days ?? []
 
   const pickCoverage = (i: number, pool: Pool, sim: "eSIM" | "SIM", coverage: string) => {
-    const rows = list?.pools[pool].rows.filter(r => r.coverage === coverage) ?? []
-    // Mặc định chọn hết nhà mạng của khu vực; giá áp dụng luôn là nhà mạng đắt nhất trong số được chọn.
+    const region = coverage.includes("+") ? regionsOf(pool, sim).find(m => m.key === coverage) : undefined
+    const covs = region ? region.covs : coverage ? [coverage] : []
+    const rows = list?.pools[pool].rows.filter(r => covs.includes(r.coverage)) ?? []
+    // Mặc định chọn hết nhà mạng của khu vực; giá áp dụng luôn là nhà mạng đắt nhất trong số được chọn (gói đa vùng: trong TẤT CẢ các nước).
     // Có nhiều mã cùng tên nước (Japan: JPN + JKD...) → lấy mã ISO alpha-3, không chắc thì để trống và gợi ý
-    const { match: sc, code, candidates } = pickSupportCountry(opts?.supportCountries ?? [], coverage)
-    const base: ProductForm = { ...products[i], pool, simType: sim, coverage }
+    const found = covs.map(c => pickSupportCountry(opts?.supportCountries ?? [], c))
+    const base: ProductForm = { ...products[i], pool, simType: sim, coverage, covs }
     const first = coverage ? defaultPlan(base) : null
+    const common = { pool, simType: sim, coverage, covs, operators: rows.map(r => `${r.coverage}|${r.operator}`), plans: first ? [first] : [] }
+    if (region) {
+      // Gói đa vùng: tìm nhóm nước hỗ trợ có tập mã nước KHỚP ĐÚNG các nước của gói (không thừa, không thiếu). Không có thì để trống — không tự đặt mã.
+      const g = pickSupportGroup(opts?.supportCountries ?? [], region.countries, opts?.refCountries ?? [])
+      const first = g.matches[0]
+      const codeHint = g.unresolved.length ? `Không nhận ra nước: ${g.unresolved.join(", ")} — không tự tìm được nhóm nước hỗ trợ`
+        : g.matches.length === 0 ? `Chưa có nhóm nước hỗ trợ nào gồm đúng ${g.iso.join(", ")} (không thừa, không thiếu) — tạo nhóm ở Nhóm Nước Hỗ Trợ trước, hoặc tự nhập mã`
+        : g.matches.length > 1 ? `Có ${g.matches.length} nhóm cùng đúng các nước này: ${g.matches.map(m => m.code).join(", ")} — nhập mã đúng`
+        : `Khớp nhóm ${first.code} (${first.iso})`
+      patchProduct(i, {
+        ...common, code: g.matches.length === 1 ? first.code : "", codeHint,
+        iso: first?.iso ?? g.iso.join(", "), en: first?.en ?? region.countries.join(", "), vn: first?.vn ?? "",
+      })
+      return
+    }
+    const { match: sc, code, candidates } = found[0] ?? { match: null, code: "", candidates: [] as string[] }
     patchProduct(i, {
-      pool, simType: sim, coverage, operators: rows.map(r => `${r.coverage}|${r.operator}`),
-      code, iso: sc?.iso ?? "", en: sc?.en ?? coverage, vn: sc?.vn ?? "",
+      ...common, code, iso: sc?.iso ?? "", en: sc?.en ?? coverage, vn: sc?.vn ?? "",
       codeHint: candidates.length ? `Có nhiều mã cho ${coverage}: ${candidates.join(", ")} — chọn mã đúng` : "",
-      plans: first ? [first] : [],
     })
   }
 
   const toInputs = (): ProductInput[] => products.map(p => ({
-    pool: p.pool, simType: p.simType, coverages: p.coverage ? [p.coverage] : [], operators: p.operators,
+    pool: p.pool, simType: p.simType, coverages: p.covs, operators: p.operators,
     supportCountryCode: p.code.trim().toUpperCase(), isoCodes: p.iso.trim().toUpperCase(),
     countryNameEn: p.en.trim(), countryNameVn: p.vn.trim(),
     plans: p.plans.map(pl => {
@@ -276,13 +303,14 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
 
       {/* Sản phẩm */}
       {products.map((p, i) => {
-        const rows = list?.pools[p.pool].rows.filter(r => r.coverage === p.coverage) ?? []
+        const rows = list?.pools[p.pool].rows.filter(r => p.covs.includes(r.coverage)) ?? []
+        const multi = p.covs.length > 1
         const top = list && p.coverage ? pickOperatorPrice({ ...toInputs()[i] }, list) : null
         const cur = list?.pools[p.pool].currency
         return (
           <div key={i} className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-4">
             <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold">Sản phẩm #{i + 1}{p.coverage && ` — ${p.coverage}`}</div>
+              <div className="text-sm font-semibold">Sản phẩm #{i + 1}{p.coverage && ` — ${multi ? p.en : p.coverage}`}</div>
               {products.length > 1 && (
                 <button onClick={() => { setProducts(prev => prev.filter((_, k) => k !== i)); touch() }} className="text-gray-400 hover:text-red-600" title="Xoá sản phẩm"><Trash2 size={15} /></button>
               )}
@@ -291,21 +319,22 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <label className={label}>Pool</label>
-                <select className={`${input} w-full`} value={p.pool} onChange={e => { const pool = e.target.value as Pool; patchProduct(i, { pool, coverage: "", operators: [], plans: [] }) }}>
+                <select className={`${input} w-full`} value={p.pool} onChange={e => { const pool = e.target.value as Pool; patchProduct(i, { pool, coverage: "", covs: [], operators: [], plans: [] }) }}>
                   {(Object.keys(POOL_LABEL) as Pool[]).map(k => <option key={k} value={k}>{POOL_LABEL[k]}</option>)}
                 </select>
               </div>
               <div>
                 <label className={label}>Loại SIM</label>
-                <select className={`${input} w-full`} value={p.simType} onChange={e => { const simType = e.target.value as "eSIM" | "SIM"; if (coveragesOf(p.pool, simType).includes(p.coverage)) pickCoverage(i, p.pool, simType, p.coverage); else patchProduct(i, { simType, coverage: "", operators: [], plans: [] }) }}>
+                <select className={`${input} w-full`} value={p.simType} onChange={e => { const simType = e.target.value as "eSIM" | "SIM"; if (hasCoverage(p.pool, simType, p.coverage)) pickCoverage(i, p.pool, simType, p.coverage); else patchProduct(i, { simType, coverage: "", covs: [], operators: [], plans: [] }) }}>
                   <option value="eSIM">eSIM</option><option value="SIM">SIM</option>
                 </select>
               </div>
               <div className="sm:col-span-2">
-                <label className={label}>Khu vực (chỉ hiện nơi BC Portal có bán ở pool + loại SIM này · mỗi sản phẩm 1 nước, 1 pool)</label>
+                <label className={label}>Khu vực (chỉ hiện nơi BC Portal có bán ở pool + loại SIM này · 1 nước hoặc 1 gói đa vùng, 1 pool)</label>
                 <select className={`${input} w-full`} value={p.coverage} disabled={!catalog} onChange={e => pickCoverage(i, p.pool, p.simType, e.target.value)}>
-                  <option value="">{catalog ? `— chọn (${coveragesOf(p.pool, p.simType).length} khu vực) —` : "— chưa có file Portal —"}</option>
-                  {coveragesOf(p.pool, p.simType).map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="">{catalog ? `— chọn (${coveragesOf(p.pool, p.simType).length} nước · ${regionsOf(p.pool, p.simType).length} gói đa vùng) —` : "— chưa có file Portal —"}</option>
+                  {regionsOf(p.pool, p.simType).length > 0 && <optgroup label="Gói đa vùng (nhiều nước trong 1 gói)">{regionsOf(p.pool, p.simType).map(m => <option key={m.key} value={m.key}>{m.label}</option>)}</optgroup>}
+                  <optgroup label="Nước đơn">{coveragesOf(p.pool, p.simType).map(c => <option key={c} value={c}>{c}</option>)}</optgroup>
                 </select>
               </div>
             </div>
@@ -319,7 +348,7 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
                     return (
                       <label key={key} className={`flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-lg cursor-pointer ${on ? "border-brand-400 bg-brand-50 text-brand-700" : "border-gray-300 text-gray-500"}`}>
                         <input type="checkbox" checked={on} onChange={() => patchProduct(i, { operators: on ? p.operators.filter(k => k !== key) : [...p.operators, key] })} />
-                        {r.operator} · {r.pricePerGb} {cur}/GB{r.kyc && <b className="text-red-600">KYC</b>}
+                        {multi && `${r.coverage}: `}{r.operator} · {r.pricePerGb} {cur}/GB{r.kyc && <b className="text-red-600">KYC</b>}
                       </label>
                     )
                   })}

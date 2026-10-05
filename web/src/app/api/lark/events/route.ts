@@ -14,6 +14,8 @@ import { captureForOkrLog }           from "@/lib/okr-lark-capture"
 import { usedDbTaskTool }             from "@/lib/okr-helpers"
 import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
 import { runCreatorAI }               from "@/lib/agents/creator-ai"
+import { decidePendingAction, followupMessage } from "@/lib/agents/creator/approvals"
+import { extractMemoriesFromTurn } from "@/lib/assistant-memory-auto"
 import { detectGroupTask }            from "@/lib/task-assistant"
 
 // Max history to pull per Lark user
@@ -378,19 +380,37 @@ const CREATOR_DM_DIRECTIVE = `
 - Muốn xem/hoàn thành/đổi hạn task → listLarkTasks / updateLarkTask.
 - Trả lời ngắn gọn kiểu tin nhắn, không bảng lớn, không khối chart.`
 
+// Duyệt/từ chối hành động Gấu Pro đang chờ (cổng duyệt G0): "duyệt a1b2c3" | "từ chối a1b2c3".
+const APPROVAL_CMD = /^\s*(duyệt|duyet|từ chối|tu choi|huỷ|hủy|huy)\s+#?([0-9a-f]{6})\s*$/i
+
 async function replyCreatorDM(openId: string, messageId: string, threadId: string, userText: string, name: string, username: string) {
+  let agentInput = userText
+  const cmd = userText.match(APPROVAL_CMD)
+  if (cmd) {
+    const r = await decidePendingAction({ username, isCreator: true, code: cmd[2], approve: /^duy/i.test(cmd[1]) })
+    if (!r.decided) {
+      await replyLarkMessage(messageId, `⚠️ ${r.error ?? "Không xử lý được yêu cầu duyệt."}`)
+      return
+    }
+    agentInput = followupMessage(r)
+  }
   const history = await getLarkHistory(openId, threadId)
   const geminiHistory = history.map(m => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] }))
   const now = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 16).replace("T", " ")
-  const gp = await runCreatorAI(geminiHistory, userText + CREATOR_DM_DIRECTIVE.replace("{NOW}", now), undefined, undefined, true, username)
-  const response = gp.text.replace(/```chart[\s\S]*?```/g, "").trim() || "(Gấu Pro không có câu trả lời)"
+  const gp = await runCreatorAI(geminiHistory, agentInput + CREATOR_DM_DIRECTIVE.replace("{NOW}", now), undefined, undefined, true, username, "lark_dm", { preloadSkills: ["workspace"] })
+  let response = gp.text.replace(/```chart[\s\S]*?```/g, "").trim() || "(Gấu Pro không có câu trả lời)"
+  // Mã duyệt ghép bằng code (không trông vào model nhắc lại cho đúng).
+  if (gp.pendingActions.length) response += "\n\n" + gp.pendingActions.map(a =>
+    `🔐 Chờ duyệt #${a.code}: ${a.summary}\nLý do: ${a.reason}\nGõ "duyệt ${a.code}" hoặc "từ chối ${a.code}".`).join("\n\n")
   await replyLarkMessage(messageId, stripMarkdown(response))
   saveLarkMessage(openId, threadId, "user", userText)
   saveLarkMessage(openId, threadId, "assistant", response)
+  // G3: tự rút trí nhớ từ tin DM của creator (chỉ lời người dùng; bỏ qua lệnh duyệt / khi model đã tự lưu).
+  if (!cmd && !gp.toolsUsed.includes("assistantMemory")) await extractMemoriesFromTurn(username, userText, response, "lark_dm").catch(() => 0)
   try {
     await supabaseAdmin.from("app_usage_events").insert({
       event_type: "chat", user_email: `lark:${openId}`, user_name: name || openId, user_role: "creator",
-      agent_id: "gau-pro", user_message: userText.slice(0, 500), ai_response: response.slice(0, 3000),
+      agent_id: "gau_pro", user_message: userText.slice(0, 500), ai_response: response.slice(0, 3000),
       tokens_in: gp.tokensIn, tokens_out: gp.tokensOut, est_cost_usd: estimateCostUsd(gp.tokensIn, gp.tokensOut),
     })
   } catch { /* tracking không được làm vỡ luồng trả lời */ }

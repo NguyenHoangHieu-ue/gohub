@@ -13,6 +13,12 @@ status: active
 
 # My Metrics — OKR Tracking
 
+## s223 (2026-10-05) — Câu hỏi Gấu Pro được tính task, trừ câu của Creator
+- Trước: Gấu Pro (`creator-ai/chat/route.ts`) ghi `app_usage_events` (agent `gau_pro`) nhưng KHÔNG ghi `tools_used`/`used_db_tool` → mọi route My Metrics (lọc `used_db_tool=true`) bỏ qua Gấu Pro.
+- Nay: `runCreatorAI` trả thêm `toolsUsed`; route ghi `tools_used` + `used_db_tool = !isCreator && usedDbTaskTool(toolsUsed)` — cùng định nghĩa task với Bé Gấu (`DB_TASK_TOOLS`), câu hỏi của user role `creator` luôn `false` (vẫn ghi log cho cost dashboard).
+- Lọc ở phía GHI: một chỗ, các route đọc (`my-metrics`, `conversations`, `begau-insights`, `topics-ai`) không phải sửa. Dữ liệu cũ của Gấu Pro (trước s223) vẫn không được tính (không backfill).
+- Đường Lark DM Gấu Pro và cron digest/vendor-scan không ghi `app_usage_events` (chỉ creator/cron) → không ảnh hưởng.
+
 ## s197 (2026-09-14) — Fix: danh sách "cuộc hội thoại được tính" đếm nhiều hơn KPI card
 Phát hiện qua audit toàn hệ thống logic dữ liệu. `api/analytics/my-metrics/conversations/route.ts` lọc
 `used_db_tool=true` nhưng thiếu `MIN_TASK_RESPONSE_LEN(15)` mà 2 route anh em (`my-metrics/route.ts`,

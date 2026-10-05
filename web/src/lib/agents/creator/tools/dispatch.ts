@@ -18,13 +18,15 @@ import { runGenerateVideo, runCheckVideoStatus } from "./video"
 import { runReadMyBrowser, runControlMyBrowser, runLocalFiles } from "./bridge"
 import { runGoogleWorkspace } from "./google"
 import { runAssistantMemory } from "@/lib/assistant-memory"
+import { searchPastConversations } from "@/lib/assistant-memory-auto"
+import { runScheduleTask } from "../schedules"
 import { runLarkDocs } from "./lark-docs"
 import { logGpAction }             from "./audit-log"
 import { runVerifyReportNumbers }  from "./self-review"
 
 // Tool có tác dụng phụ ra ngoài (ghi KB/Lark/portal/browser thật) — audit trail (s196+6).
 const AUDITED_TOOLS = new Set([
-  "writeKnowledgeBase", "approveLearning", "rejectLearning",
+  "scheduleTask", "writeKnowledgeBase", "approveLearning", "rejectLearning",
   "createLarkTask", "updateLarkTask", "sendLarkMessage",
   "controlMyBrowser", "managePortalCredentials", "localFiles", "googleWorkspace", "assistantMemory", "larkDocs",
 ])
@@ -33,7 +35,7 @@ export async function dispatchTool(
   call: { name: string; args: any },
   onEvent: ((e: GPEvent) => void) | undefined,
   collectedSources: WebSource[],
-  ctx?: { username?: string; isCreator?: boolean },
+  ctx?: { username?: string; isCreator?: boolean; personal?: boolean },
 ): Promise<{ functionResponse: { name: string; response: any } }> {
   const result = await dispatchToolCore(call, onEvent, collectedSources, ctx)
   if (AUDITED_TOOLS.has(call.name)) {
@@ -48,7 +50,7 @@ async function dispatchToolCore(
   call: { name: string; args: any },
   onEvent: ((e: GPEvent) => void) | undefined,
   collectedSources: WebSource[],
-  ctx?: { username?: string; isCreator?: boolean },
+  ctx?: { username?: string; isCreator?: boolean; personal?: boolean },
 ): Promise<{ functionResponse: { name: string; response: any } }> {
   const isCreator = ctx?.isCreator === true
   // Emit status event
@@ -68,7 +70,7 @@ async function dispatchToolCore(
   const wrap = (resp: any) => ({ functionResponse: { name: call.name, response: resp } })
 
   if (call.name === "readKnowledgeBase")
-    return wrap(await runReadKnowledgeBase(call.args?.category))
+    return wrap(await runReadKnowledgeBase(call.args?.category, Array.isArray(call.args?.keys) ? call.args.keys.map(String) : undefined))
 
   if (call.name === "writeKnowledgeBase")
     return wrap(await runWriteKnowledgeBase(call.args))
@@ -111,8 +113,16 @@ async function dispatchToolCore(
   if (call.name === "googleWorkspace")
     return wrap(ctx?.isCreator ? await runGoogleWorkspace(call.args) : { error: "googleWorkspace chỉ dành cho creator." })
 
+  // G3: trí nhớ cá nhân theo cờ gp_personal_features (ctx.personal); không truyền (vd duyệt hành động) thì như cũ = creator.
+  const personal = ctx?.personal ?? ctx?.isCreator === true
   if (call.name === "assistantMemory")
-    return wrap(ctx?.isCreator ? await runAssistantMemory(call.args, ctx?.username || "", "gau-pro") : { error: "assistantMemory chỉ dành cho creator." })
+    return wrap(personal ? await runAssistantMemory(call.args, ctx?.username || "", "gau-pro") : { error: "Trí nhớ cá nhân chưa bật cho tài khoản này." })
+
+  if (call.name === "scheduleTask")
+    return wrap(personal ? await runScheduleTask(call.args, ctx?.username || "", isCreator) : { error: "Việc theo lịch chưa bật cho tài khoản này." })
+
+  if (call.name === "searchPastConversations")
+    return wrap(personal ? await searchPastConversations(ctx?.username || "", String(call.args?.query ?? "")) : { error: "Trí nhớ cá nhân chưa bật cho tài khoản này." })
 
   if (call.name === "larkDocs")
     return wrap(ctx?.isCreator ? await runLarkDocs(call.args) : { error: "larkDocs chỉ dành cho creator." })
@@ -121,7 +131,7 @@ async function dispatchToolCore(
     return wrap(await runManagePortalCredentials(call.args))
 
   if (call.name === "sendLarkMessage")
-    return wrap(await runSendLarkMessage(call.args))
+    return wrap(ctx?.isCreator ? await runSendLarkMessage(call.args) : { error: "sendLarkMessage chỉ dành cho creator." })
 
   if (call.name === "compareVendorQuotes")
     return wrap(await runCompareVendorQuotes(call.args))
