@@ -6,6 +6,10 @@
 const TINY_ICON = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 const WRITE_ACTIONS = new Set(["click", "fill", "navigate"])
 const POLL_INTERVAL_MS = 15000
+// 1.2.0: vừa có lệnh → hỏi 1s/lần trong 60s (Gấu thường làm nhiều bước liên tiếp; 15s/lần làm mỗi bước chờ ~7-15s), rồi về 15s.
+const BURST_INTERVAL_MS = 1000
+const BURST_WINDOW_MS = 60000
+let lastCommandAt = 0
 const EXT_VERSION = chrome.runtime.getManifest().version
 
 let pollTimer = null
@@ -216,7 +220,7 @@ async function pollOnce() {
     const res = await apiFetch("/api/creator-ai/bridge/next")
     if (!res.ok) return
     const data = await res.json()
-    if (data.command) await processCommand(data.command)
+    if (data.command) { lastCommandAt = Date.now(); await processCommand(data.command) }
   } catch {
     // im lặng — thử lại ở lần poll kế tiếp (chưa cấu hình / mất mạng tạm thời)
   }
@@ -224,7 +228,8 @@ async function pollOnce() {
 
 function scheduleNext() {
   if (pollTimer) clearTimeout(pollTimer)
-  pollTimer = setTimeout(async () => { await pollOnce(); scheduleNext() }, POLL_INTERVAL_MS)
+  const delay = Date.now() - lastCommandAt < BURST_WINDOW_MS ? BURST_INTERVAL_MS : POLL_INTERVAL_MS
+  pollTimer = setTimeout(async () => { await pollOnce(); scheduleNext() }, delay)
 }
 
 // setTimeout đệ quy ~15s giữ service worker "sống" — mỗi fetch tính là hoạt động nên Chrome không

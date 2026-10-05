@@ -982,3 +982,16 @@ Sửa (`lib/agents/creator/kb-recall.ts`, commit `71911e9f`):
 - Prompt phiên: nói trước mỗi thao tác, làm từng bước + đọc lại kiểm tra, cấm điền mật khẩu/OTP/thanh toán, thao tác không hoàn tác được
   phải hỏi bằng lời và chỉ làm khi người dùng đồng ý rõ.
 - Rủi ro chấp nhận (Hiếu chọn): trong lúc bật, trang độc có thể khiến Gấu thao tác sai trên tab đó — giới hạn trong trình duyệt của chính người dùng.
+
+## § s223 QA thao tác thật + extension Bridge 1.2.x (2026-10-05)
+
+- QA lần 1 (tab DuckDuckGo, công tắc bật): Gấu đúng trình tự list_tabs → read_tab → fill nhưng ĐOÁN selector `#search_form_input_homepage` (id cũ)
+  → "Không tìm thấy selector". Gốc: `read_tab` chỉ trả innerText.
+- **Extension 1.2.0**: `read_tab` trả thêm `elements[{sel, tag, label}]` ≤150 phần tử tương tác (ô nhập/chọn trước, nút, link sau), `sel` = CSS
+  selector đã kiểm DUY NHẤT (id → name/aria-label/placeholder/data-testid/title → đường nth-of-type). Mô tả tool + prompt phiên bắt dùng
+  nguyên `sel`. **1.2.1**: chế độ dồn dập — vừa có lệnh thì poll 1s/lần trong 60s (trước 15s/lần → mỗi bước chờ ~7–15s), rảnh về 15s;
+  server chờ kết quả 2s → 1s; route Live cắt `content` read_tab còn 6.000 ký tự trước khi cắt JSON (lần 2 kết quả >20k bị cắt thành chuỗi,
+  danh sách selector có nguy cơ mất).
+- QA lần 2 (sau khi Hiếu tải lại 1.2.0): Gấu dùng đúng `textarea[name="q"]` → ô có "eSIM Nhật Bản", URL không đổi (không Enter), đọc lại tab
+  rồi nói xác nhận; audit log ghi `controlMyBrowser` ok. Mỗi bước còn chậm (~20–40s) → lý do làm 1.2.1.
+- ⚠️ Mọi người dùng Bridge phải tải lại extension (`chrome://extensions` → ↻) để có 1.2.x.

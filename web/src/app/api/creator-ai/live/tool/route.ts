@@ -23,8 +23,11 @@ export async function POST(req: NextRequest) {
   try {
     const out = await dispatchTool({ name, args: args ?? {} }, undefined, [], { username: u.username, isCreator: u.isCreator })
     let response = out.functionResponse.response
+    // read_tab (extension 1.2.0) = content + elements(selector). Cắt CONTENT trước để không mất danh sách selector ở cuối.
+    const r = response?.result
+    if (r && typeof r.content === "string" && Array.isArray(r.elements)) response = { ...response, result: { ...r, content: r.content.slice(0, 6000) } }
     const raw = JSON.stringify(response ?? null)
-    if (raw.length > 20_000) response = { truncated: true, preview: raw.slice(0, 20_000) }   // giữ phiên live nhẹ
+    if (raw.length > 24_000) response = { truncated: true, preview: raw.slice(0, 24_000) }   // giữ phiên live nhẹ
     return NextResponse.json({ response })
   } catch (e: any) {
     return NextResponse.json({ response: { error: e?.message || "Tool lỗi" } })
