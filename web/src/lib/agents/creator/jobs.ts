@@ -89,6 +89,11 @@ export async function runJobChunk(id: string): Promise<"continue" | "finished" |
     }
 
     let text = r.text || (r.checkpoint ? "⚠️ Việc quá dài, đã dừng sau nhiều chặng. Thu hẹp yêu cầu rồi giao lại." : "Không có nội dung.")
+    // G4 việc canh chừng: điều kiện không xảy ra → model trả NO_ALERT → ghi nhận, KHÔNG lưu hội thoại, KHÔNG nhắn.
+    if (text.trim().replace(/[.!*`]/g, "") === "NO_ALERT" && !r.pendingActions.length) {
+      await supabaseAdmin.from("gp_jobs").update({ status: "done", result: "NO_ALERT", checkpoint: null, updated_at: new Date().toISOString() }).eq("id", id)
+      return "finished"
+    }
     if (r.pendingActions.length) text += "\n\n" + r.pendingActions.map(a =>
       `🔐 Chờ duyệt #${a.code}: ${a.summary} — duyệt ở mục "Việc & duyệt" trên web hoặc gõ "duyệt ${a.code}" trong Lark DM.`).join("\n")
 

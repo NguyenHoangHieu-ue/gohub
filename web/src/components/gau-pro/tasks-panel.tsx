@@ -5,6 +5,7 @@ import { ShieldAlert, Loader2, RefreshCw, X } from "lucide-react"
 
 // Panel "Việc & duyệt" của Gấu Pro (G2): hành động đang chờ duyệt (G0) + việc chạy nền (gp_jobs).
 interface PendingRow { id: string; code: string; tool: string; summary: string; reason: string; channel: string; created_at: string }
+interface SchedRow { id: string; title: string; when: string; only_if_notable: boolean; next_run_at: string | null; run_count: number }
 interface JobRow { id: string; title: string; status: string; chunks: number; result: string | null; error: string | null; conversation_id: string | null; created_at: string; updated_at: string }
 
 const JOB_STATUS: Record<string, string> = {
@@ -18,6 +19,7 @@ export function TasksPanel({ onOpenConversation, onClose, refreshKey }: {
 }) {
   const [pending, setPending] = useState<PendingRow[]>([])
   const [jobs, setJobs] = useState<JobRow[]>([])
+  const [scheds, setScheds] = useState<SchedRow[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [note, setNote] = useState<Record<string, string>>({})
   const [err, setErr] = useState("")
@@ -25,10 +27,12 @@ export function TasksPanel({ onOpenConversation, onClose, refreshKey }: {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [p, j] = await Promise.all([
+      const [p, j, sc] = await Promise.all([
         fetch("/api/creator-ai/approve").then(r => r.json()).catch(() => ({ rows: [] })),
         fetch("/api/creator-ai/jobs").then(r => r.json()).catch(() => ({ jobs: [] })),
+        fetch("/api/creator-ai/schedules").then(r => r.json()).catch(() => ({ enabled: false })),
       ])
+      setScheds(sc.enabled ? (sc.tasks ?? []) : null)
       setPending(p.rows ?? [])
       setJobs(j.jobs ?? [])
       setErr(j.error || p.error || "")
@@ -50,6 +54,11 @@ export function TasksPanel({ onOpenConversation, onClose, refreshKey }: {
     }).then(r => r.json()).catch(e => ({ error: e.message }))
     setNote(n => ({ ...n, [id]: d.status === "executed" ? "✅ Đã duyệt và chạy" : d.status === "rejected" ? "Đã từ chối" : `⚠️ ${d.error || "Lỗi"}` }))
     setTimeout(load, 1500)
+  }
+
+  const cancelSched = async (id: string) => {
+    await fetch(`/api/creator-ai/schedules?id=${id}`, { method: "DELETE" }).catch(() => {})
+    load()
   }
 
   const cancel = async (id: string) => {
@@ -85,6 +94,22 @@ export function TasksPanel({ onOpenConversation, onClose, refreshKey }: {
           )}
         </div>
       ))}
+
+      {scheds && (
+        <>
+          <div className="px-3 pt-2 pb-1 font-semibold text-gray-600 dark:text-slate-300 border-t border-gray-100 dark:border-slate-800">Việc theo lịch ({scheds.length})</div>
+          {scheds.length === 0 && <div className="px-3 pb-2 text-gray-400">Chưa có. Nhắn Gấu Pro kiểu &quot;mỗi sáng thứ 2 8h tóm tắt doanh thu tuần cho tôi&quot;.</div>}
+          {scheds.map(t => (
+            <div key={t.id} className="px-3 py-1.5 flex items-start justify-between gap-2">
+              <div>
+                <div className="font-medium text-gray-700 dark:text-slate-200">{t.only_if_notable ? "👀 " : "⏰ "}{t.title}</div>
+                <div className="text-gray-500 dark:text-slate-400">{t.when}{t.next_run_at ? ` · lần tới ${new Date(t.next_run_at).toLocaleString("vi-VN")}` : ""}{t.run_count ? ` · đã chạy ${t.run_count}` : ""}</div>
+              </div>
+              <button onClick={() => cancelSched(t.id)} className="text-rose-500 hover:underline flex-shrink-0">Huỷ</button>
+            </div>
+          ))}
+        </>
+      )}
 
       <div className="px-3 pt-2 pb-1 font-semibold text-gray-600 dark:text-slate-300 border-t border-gray-100 dark:border-slate-800">Việc chạy nền</div>
       {jobs.length === 0 && <div className="px-3 pb-3 text-gray-400">Chưa có việc nào. Bật "Chạy nền" cạnh ô nhập để giao việc dài.</div>}

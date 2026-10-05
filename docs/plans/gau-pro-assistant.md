@@ -149,7 +149,8 @@ Thứ tự theo rủi ro trước, giá trị sau. Mỗi giai đoạn là 1–3 
 Tiến độ (2026-10-05): G0 xong (cần chạy migration v64) · G1 xong (skills −53% ngữ cảnh; SDK `@google/genai`) · G2 xong (kế hoạch +
 nút Dừng; trace `gp_runs`; việc nền `gp_jobs` theo chặng; panel Việc & duyệt — cần chạy migration v65). Chưa QA sống trên staging phần cần
 migration. G3 xong (tự rút trí nhớ, tóm tắt + tìm hội thoại cũ, panel Trí nhớ, cờ `gp_personal_features` — cần migration v66).
-Tiếp: G4 việc theo lịch + trigger sự kiện.
+G4 xong (việc theo lịch + canh chừng `only_if_notable`/NO_ALERT thay trigger viết cứng — cần migration v67).
+G5 (Live API kiểu Astra) CHƯA làm: theo đúng điều kiện ở mục 5 ("chỉ làm khi G0–G3 ổn định") — cần Hiếu chạy v64–v67 + QA sống trước.
 
 ## 8b. Câu hỏi ban đầu (đã trả lời ở trên)
 

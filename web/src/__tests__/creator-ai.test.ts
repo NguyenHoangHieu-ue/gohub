@@ -37,8 +37,8 @@ describe("TOOL_STATUS", () => {
 // ─── Declarations ─────────────────────────────────────────────────────────────
 
 describe("ALL_TOOL_DECLARATIONS", () => {
-  it("có đúng 40 declarations (22 gốc + 3 Phase 4 + 4 Phase 3+KB + browseWeb s195 + readMyBrowser/controlMyBrowser s195+1 + verifyReportNumbers s196+12 + localFiles s206 + googleWorkspace s206+2 + assistantMemory s206+4 + larkDocs s206+7 + loadSkill + updatePlan + searchPastConversations s223)", () => {
-    expect(ALL_TOOL_DECLARATIONS).toHaveLength(40)
+  it("có đúng 41 declarations (22 gốc + 3 Phase 4 + 4 Phase 3+KB + browseWeb s195 + readMyBrowser/controlMyBrowser s195+1 + verifyReportNumbers s196+12 + localFiles s206 + googleWorkspace s206+2 + assistantMemory s206+4 + larkDocs s206+7 + loadSkill + updatePlan + searchPastConversations + scheduleTask s223)", () => {
+    expect(ALL_TOOL_DECLARATIONS).toHaveLength(41)
   })
 
   it("mỗi declaration có name, description, parameters", () => {
@@ -116,11 +116,11 @@ describe("buildFunctionDeclarations", () => {
   it("localFiles + googleWorkspace + assistantMemory + larkDocs + sendLarkMessage chỉ có với creator, các tool khác như nhau", () => {
     const all = buildFunctionDeclarations(true)
     const restricted = buildFunctionDeclarations(false)
-    for (const name of ["localFiles", "googleWorkspace", "assistantMemory", "larkDocs", "sendLarkMessage", "searchPastConversations"]) {
+    for (const name of ["localFiles", "googleWorkspace", "assistantMemory", "larkDocs", "sendLarkMessage", "searchPastConversations", "scheduleTask"]) {
       expect(all.map(d => d.name)).toContain(name)
       expect(restricted.map(d => d.name)).not.toContain(name)
     }
-    expect(restricted.length).toBe(all.length - 6)
+    expect(restricted.length).toBe(all.length - 7)
   })
 })
 

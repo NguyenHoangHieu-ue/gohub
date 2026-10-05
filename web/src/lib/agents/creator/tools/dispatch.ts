@@ -19,13 +19,14 @@ import { runReadMyBrowser, runControlMyBrowser, runLocalFiles } from "./bridge"
 import { runGoogleWorkspace } from "./google"
 import { runAssistantMemory } from "@/lib/assistant-memory"
 import { searchPastConversations } from "@/lib/assistant-memory-auto"
+import { runScheduleTask } from "../schedules"
 import { runLarkDocs } from "./lark-docs"
 import { logGpAction }             from "./audit-log"
 import { runVerifyReportNumbers }  from "./self-review"
 
 // Tool có tác dụng phụ ra ngoài (ghi KB/Lark/portal/browser thật) — audit trail (s196+6).
 const AUDITED_TOOLS = new Set([
-  "writeKnowledgeBase", "approveLearning", "rejectLearning",
+  "scheduleTask", "writeKnowledgeBase", "approveLearning", "rejectLearning",
   "createLarkTask", "updateLarkTask", "sendLarkMessage",
   "controlMyBrowser", "managePortalCredentials", "localFiles", "googleWorkspace", "assistantMemory", "larkDocs",
 ])
@@ -116,6 +117,9 @@ async function dispatchToolCore(
   const personal = ctx?.personal ?? ctx?.isCreator === true
   if (call.name === "assistantMemory")
     return wrap(personal ? await runAssistantMemory(call.args, ctx?.username || "", "gau-pro") : { error: "Trí nhớ cá nhân chưa bật cho tài khoản này." })
+
+  if (call.name === "scheduleTask")
+    return wrap(personal ? await runScheduleTask(call.args, ctx?.username || "", isCreator) : { error: "Việc theo lịch chưa bật cho tài khoản này." })
 
   if (call.name === "searchPastConversations")
     return wrap(personal ? await searchPastConversations(ctx?.username || "", String(call.args?.query ?? "")) : { error: "Trí nhớ cá nhân chưa bật cho tài khoản này." })

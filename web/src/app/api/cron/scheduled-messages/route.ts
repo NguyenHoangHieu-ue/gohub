@@ -5,6 +5,7 @@ import { alertCronFailure } from "@/lib/cron-alert"
 import { waitUntil } from "@vercel/functions"
 import { runTaskReminders } from "@/lib/task-assistant"
 import { sweepStuckJobs } from "@/lib/agents/creator/jobs"
+import { runDueSchedules } from "@/lib/agents/creator/schedules"
 
 // Scheduler (GitHub Actions mỗi 15' + Vercel Cron backstop) gọi endpoint này định kỳ. Tìm các scheduled
 // message ĐANG active + ĐẾN HẠN kể từ lần chạy cuối (so cron_expression theo ICT/UTC+7, catch-up chịu được
@@ -134,6 +135,8 @@ export async function GET(req: NextRequest) {
   waitUntil(runTaskReminders().catch(e => console.error("[task-reminders]", (e as Error).message)))
   // Gấu Pro việc nền (G2): chạy lại việc bị kẹt (mất lượt gọi chặng tiếp / request chết giữa chừng).
   waitUntil(sweepStuckJobs(req.nextUrl.origin).then(() => {}, e => console.error("[gp_jobs] sweep:", (e as Error).message)))
+  // Gấu Pro việc theo lịch (G4): việc đến hạn → việc nền → DM Lark.
+  waitUntil(runDueSchedules(req.nextUrl.origin).then(() => {}, e => console.error("[gp_sched]", (e as Error).message)))
 
   const started = results.filter(r => r.started).length
   return NextResponse.json({ checked: messages?.length || 0, started, results })

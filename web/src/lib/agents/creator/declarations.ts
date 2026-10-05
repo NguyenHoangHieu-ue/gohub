@@ -659,6 +659,34 @@ export const searchPastConversationsDecl = {
   },
 }
 
+// G4: việc theo lịch do người dùng đặt (gp_scheduled_tasks) — chạy thành việc nền, kết quả nhắn Lark DM.
+export const scheduleTaskDecl = {
+  name: "scheduleTask",
+  description: "Đặt/xem/huỷ việc Gấu Pro tự chạy theo lịch (vd 'mỗi sáng thứ 2 8h tóm tắt doanh thu tuần', 'báo tôi nếu doanh thu hôm qua giảm >20%'). Kết quả gửi Lark DM. Cron chạy theo giờ nên có thể trễ tới ~1 giờ. Xác nhận lại lịch + nội dung với người dùng sau khi tạo.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      action: { type: SchemaType.STRING, description: "create | list | cancel" },
+      title:  { type: SchemaType.STRING, description: "create: tên ngắn." },
+      prompt: { type: SchemaType.STRING, description: "create: yêu cầu ĐẦY ĐỦ, TỰ ĐỦ NGỮ CẢNH (sẽ chạy độc lập, không thấy hội thoại này): việc gì, phạm vi/khoảng thời gian tương đối ('hôm qua', 'tuần trước'), định dạng kết quả." },
+      schedule: {
+        type: SchemaType.OBJECT,
+        description: "create: lịch theo giờ VN.",
+        properties: {
+          kind:     { type: SchemaType.STRING, description: "daily | weekly | monthly | once" },
+          time:     { type: SchemaType.STRING, description: "HH:mm giờ VN" },
+          weekdays: { type: SchemaType.ARRAY, items: { type: SchemaType.NUMBER }, description: "weekly: 1=Thứ 2 … 7=Chủ nhật" },
+          day:      { type: SchemaType.NUMBER, description: "monthly: ngày 1–31" },
+          date:     { type: SchemaType.STRING, description: "once: YYYY-MM-DD" },
+        },
+      },
+      only_if_notable: { type: SchemaType.BOOLEAN, description: "create: true = việc CANH CHỪNG, chỉ nhắn khi điều kiện trong prompt xảy ra." },
+      id: { type: SchemaType.STRING, description: "cancel: id việc (từ action=list)." },
+    },
+    required: ["action"],
+  },
+}
+
 // Ordered list used to initialize the Gemini model tools
 export const ALL_TOOL_DECLARATIONS = [
   readKBDecl, writeKBDecl, searchKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
@@ -673,5 +701,5 @@ export const ALL_TOOL_DECLARATIONS = [
   // Phase 2 (s195+1) — Extension điều khiển browser cá nhân Hiếu
   readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl, googleWorkspaceDecl, assistantMemoryDecl, larkDocsDecl,
   // s196+12 — second-opinion pass (roadmap audit s196+5, ý tưởng #7)
-  verifyReportNumbersDecl, loadSkillDecl, updatePlanDecl, searchPastConversationsDecl,
+  verifyReportNumbersDecl, loadSkillDecl, updatePlanDecl, searchPastConversationsDecl, scheduleTaskDecl,
 ]

@@ -61,7 +61,7 @@ function ruleFor(name: string, args: any): Rule {
     case "writeKnowledgeBase": case "approveLearning": case "rejectLearning":
     case "generateImage": case "generateImageStability": case "generateVideo":
       return "when_tainted"
-    case "assistantMemory": case "managePortalCredentials":
+    case "assistantMemory": case "managePortalCredentials": case "scheduleTask":
       return action === "list" ? "never" : "when_tainted"
     case "controlMyBrowser":
       return action === "scroll" ? "never" : "when_tainted"

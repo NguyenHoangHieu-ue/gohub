@@ -896,3 +896,20 @@ Migration **v66** (`gp_conversation_memory` + RPC `match_gp_conversations`) — 
   (trang tự mở hội thoại theo `?c=`). Hội thoại Lark DM chưa được tóm tắt (lưu ở bảng khác).
 - **Panel 🧠 Trí nhớ** (`components/gau-pro/memory-panel.tsx`, `GET/POST /api/creator-ai/memory`): xem, thêm tay, bấm để sửa, ghim, quên;
   đánh dấu "Gấu tự nhớ".
+
+## § s223 G4 (2026-10-05) — Việc theo lịch + canh chừng (đặt bằng chat)
+
+Migration **v67** (`gp_scheduled_tasks`) — Hiếu phải chạy (cần cả v65 vì chạy qua `gp_jobs`).
+- Tool `scheduleTask` (create/list/cancel, thuộc `PERSONAL_TOOLS` → theo cờ `gp_personal_features`, hiện chỉ creator; audit log; tạo khi
+  lượt đã "nhiễm" thì cần duyệt). Lịch giờ VN: `daily | weekly (1=T2…7=CN) | monthly (ngày 31 → cuối tháng) | once`; tối đa 10 việc
+  đang bật/người. Prompt lưu phải TỰ ĐỦ (chạy độc lập, không thấy hội thoại — bài học ChatGPT Scheduled Tasks).
+- `only_if_notable` = **canh chừng** (thay cho trigger viết cứng bằng code): prompt chạy kèm hướng dẫn "không có gì → trả đúng NO_ALERT";
+  `runJobChunk` gặp NO_ALERT thì ghi nhận, không lưu hội thoại, không nhắn. Ngưỡng do người dùng nói bằng lời (vd "giảm >20% so TB 7 ngày").
+  Doanh thu hằng ngày đã có digest 09:45 lo — không thêm trigger cứng trùng việc.
+- Chạy: cron `scheduled-messages` (cron-job.org, hiện MỖI GIỜ, đang trỏ staging) → `runDueSchedules`: lấy ≤5 việc đến hạn, chiếm
+  nguyên tử (dời `next_run_at` theo `nextRunAt`, khớp giá trị cũ), tạo việc nền `gp_jobs` → chặng chạy → DM Lark. Nên giờ chạy trễ tối đa
+  ~1 giờ; muốn sát giờ thì tăng tần suất job ở cron-job.org.
+- Panel "Việc & duyệt": mục "Việc theo lịch" (⏰ thường / 👀 canh chừng, lần tới, số lần đã chạy, Huỷ) — `GET/DELETE /api/creator-ai/schedules`.
+- Test `gp-schedules.test.ts` (lịch theo giờ VN qua ranh giới ngày UTC, tuần, cuối tháng, once). Thử thật (giả lập lưu DB): "thứ 2 8h tóm tắt
+  doanh thu tuần B2B/B2C" → weekly [1] 08:00 + prompt đầy đủ; "báo nếu doanh thu hôm qua giảm >20% so TB 7 ngày, 9h mỗi ngày" → daily 09:00
+  + `only_if_notable: true`.
