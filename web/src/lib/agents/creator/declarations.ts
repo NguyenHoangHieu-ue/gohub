@@ -342,7 +342,7 @@ export const browseWebDecl = {
 
 export const readMyBrowserDecl = {
   name: "readMyBrowser",
-  description: "Đọc tab Chrome THẬT đang mở trên máy của người dùng hiện tại (dùng session đăng nhập sẵn Lark/Sapo/portal của họ) qua Extension đã pair — action=list_tabs liệt kê tab đang mở (id/title/url), action=read_tab đọc nội dung text 1 tab. Nếu lỗi 'Bridge chưa phản hồi' → báo người dùng kiểm tra đã bật extension + toggle Bridge ON + dán đúng token của CHÍNH HỌ chưa (mỗi người 1 token riêng, không dùng chung).",
+  description: "Đọc tab Chrome THẬT đang mở trên máy của người dùng hiện tại (dùng session đăng nhập sẵn Lark/Sapo/portal của họ) qua Extension đã pair — action=list_tabs liệt kê tab đang mở (id/title/url), action=read_tab đọc nội dung text 1 tab + `elements` (ô nhập/nút/link kèm `sel` là CSS selector đã kiểm duy nhất — extension 1.2.0+). Nếu lỗi 'Bridge chưa phản hồi' → báo người dùng kiểm tra đã bật extension + toggle Bridge ON + dán đúng token của CHÍNH HỌ chưa (mỗi người 1 token riêng, không dùng chung).",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
@@ -361,7 +361,7 @@ export const controlMyBrowserDecl = {
     properties: {
       action:      { type: SchemaType.STRING, description: "click | fill | navigate | scroll" },
       tab_id:      { type: SchemaType.NUMBER, description: "ID tab cần thao tác (từ list_tabs)." },
-      selector:    { type: SchemaType.STRING, description: "CSS selector (cho click/fill)." },
+      selector:    { type: SchemaType.STRING, description: "CSS selector (cho click/fill) — LẤY NGUYÊN `sel` từ elements của readMyBrowser read_tab, KHÔNG tự đoán theo trí nhớ (giao diện web thay đổi thường xuyên)." },
       value:       { type: SchemaType.STRING, description: "Giá trị điền (cho fill)." },
       url:         { type: SchemaType.STRING, description: "URL điều hướng tới (cho navigate)." },
       press_enter: { type: SchemaType.BOOLEAN, description: "true = sau khi fill xong, gửi thêm phím Enter — cần cho ô nhập nhanh (sheet cell, quick-add) mà chỉ set giá trị KHÔNG tự lưu, phải Enter mới commit." },
