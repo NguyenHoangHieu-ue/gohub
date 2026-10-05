@@ -9,6 +9,7 @@ Quy ước làm: đo trước/sau bằng log Vercel (`[analytics-db] SLOW wait=�
 - CHƯA đo lại trên staging sau deploy → việc đầu tiên: mở Quarter Report / Performance (Q4) / Squad Progress lần 1 và lần 2 ở ngày hôm sau, xem log còn `cache=MISS` cho quý Q1-Q3 không.
 
 - (2026-10-05) Việc 1 làm theo hướng (b): quý đã đóng TTL 24h + maxStale 48h + bỏ qua softExpire (wiki `analytics-data-model.md` §s222(b)). Hiếu chưa xác nhận mức 48h → chỉnh `CLOSED_QUARTER_*` trong `quarterly-report/route.ts` nếu muốn khác. Chưa đo lại staging.
+- (2026-10-05) Việc 3 làm một phần: heartbeat 30s→2 phút + dừng khi tab ẩn (ping bù khi hiện lại), poll chuông thông báo bỏ qua khi tab ẩn. CÒN: `creator-ai/bridge/next` (poll nằm ở `browser-extension/background.js`, đổi phải bắt mọi người reload extension), `auth/session`, `user/me`.
 
 ## Việc còn lại (theo thứ tự ưu tiên)
 

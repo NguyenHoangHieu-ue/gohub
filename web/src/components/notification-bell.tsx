@@ -126,7 +126,8 @@ export function NotificationBell({ collapsed }: { collapsed: boolean }) {
 
   useEffect(() => {
     fetchNotifs()
-    const t = setInterval(fetchNotifs, 5 * 60 * 1000) // refresh every 5 min
+    // refresh mỗi 5 phút, bỏ qua khi tab ẩn
+    const t = setInterval(() => { if (document.visibilityState === "visible") fetchNotifs() }, 5 * 60 * 1000)
     return () => clearInterval(t)
   }, [fetchNotifs])
 
