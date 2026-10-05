@@ -269,7 +269,8 @@ export const readKBDecl = {
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      category: { type: SchemaType.STRING, description: "Filter by category: product_codes | sku_rules | exchange_rates | cogs | vendors | processes | notes. Omit to get all entries." },
+      keys:     { type: SchemaType.ARRAY, items: { type: SchemaType.STRING }, description: "Đọc ĐÚNG các mục theo key (lấy từ DANH MỤC KB trong prompt) — cách nên dùng." },
+      category: { type: SchemaType.STRING, description: "Đọc cả 1 category: product_codes | sku_rules | exchange_rates | cogs | vendors | processes | notes | wiki. Không truyền gì = đọc TOÀN BỘ KB (rất lớn, tránh)." },
     },
   },
 }

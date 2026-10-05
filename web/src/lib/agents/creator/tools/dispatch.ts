@@ -70,7 +70,7 @@ async function dispatchToolCore(
   const wrap = (resp: any) => ({ functionResponse: { name: call.name, response: resp } })
 
   if (call.name === "readKnowledgeBase")
-    return wrap(await runReadKnowledgeBase(call.args?.category))
+    return wrap(await runReadKnowledgeBase(call.args?.category, Array.isArray(call.args?.keys) ? call.args.keys.map(String) : undefined))
 
   if (call.name === "writeKnowledgeBase")
     return wrap(await runWriteKnowledgeBase(call.args))

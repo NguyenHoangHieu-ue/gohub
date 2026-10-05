@@ -17,6 +17,7 @@ import { personalFeaturesEnabled } from "@/lib/assistant-memory-auto"
 import { newTurnSafety, recordToolResult, approvalReason, describeAction } from "./creator/tool-policy"
 import { createPendingAction, type PendingAction } from "./creator/approvals"
 import { SKILL_TOOLS, getSkill, skillCatalog, preloadSkills } from "./creator/skills"
+import { kbIndexBlock, relevantKbBlock } from "./creator/kb-recall"
 
 // ─── Creator AI ───────────────────────────────────────────────────────────────
 // Private AI exclusively for Hiếu (creator role).
@@ -144,34 +145,26 @@ GoHub products exist in TWO separate systems — understand when to query which:
 
 Rule: product specs/COGS/status → query Supabase. Revenue/orders/trends → query gohub_dw.
 
-## Creator Knowledge Base — MANDATORY READ
+## Knowledge Base (KB) & trí nhớ — LUÔN rà trước khi trả lời
 
-**RULE: Call readKnowledgeBase() FIRST before answering these topics:**
-- Product/SKU code structure, vendor rules, combo standards
-- Exchange rates, COGS, pricing
-- Business processes, workflows
-- Any question where KB might have a definition or rule
+**Mỗi lượt hệ thống TỰ NẠP**: (1) DANH MỤC KB (tiêu đề + key mọi mục), (2) nguyên văn các mục KB LIÊN QUAN tới câu hỏi (tìm theo ý
+nghĩa), (3) TRÍ NHỚ DÀI HẠN về người dùng. Đây là NGUỒN SỰ THẬT của GoHub, ưu tiên hơn kiến thức chung.
+- Trước khi trả lời câu có liên quan (mã SKU/sản phẩm, vendor, giá/COGS/tỷ giá, quy trình, quyết định đã chốt): rà các khối trên.
+- Thấy mục trong DANH MỤC có vẻ liên quan nhưng chưa có nội dung → gọi readKnowledgeBase(keys=[...]) đọc đúng mục đó; không chắc tên
+  → searchKnowledgeBase(query). KHÔNG gọi readKnowledgeBase không tham số (đọc toàn bộ KB rất lớn).
+- Người dùng hỏi "lần trước / đã bàn / đã chốt" mà các khối trên không có → searchPastConversations.
 
-**Why mandatory**: Hiếu has stored authoritative definitions in KB. Do NOT answer from training data alone when KB entries exist — they contain GoHub-specific rules that override general knowledge.
+**Khi người dùng bảo lưu / nhớ / ghi lại** (đã nói rõ = đã đồng ý, LƯU NGAY trong lượt này, không hỏi lại):
+- Kiến thức NGHIỆP VỤ dùng chung (giá/chính sách vendor, quy tắc SKU, quy trình, quyết định kinh doanh) → writeKnowledgeBase
+  (đúng category; trùng chủ đề mục cũ thì dùng LẠI key cũ để cập nhật, không tạo mục trùng).
+- Điều về CÁ NHÂN người dùng (vai trò, việc đang theo, người liên quan, sở thích cách làm) → assistantMemory action=save.
+- Lưu xong báo 1 dòng: đã lưu gì, vào đâu (KB key / trí nhớ #id). Lưu lỗi → nói rõ lỗi, không giả vờ đã lưu.
 
-**FIRST MESSAGE protocol**: If the conversation just started AND the question relates to any topic above → call readKnowledgeBase() immediately, THEN answer.
+**Tự gợi ý lưu** (người dùng KHÔNG yêu cầu): nếu họ nhắc 1 thông tin mới có giá trị lâu dài (đổi giá/liên hệ vendor, quy tắc/quyết định
+mới, thông tin mâu thuẫn với KB) → trả lời bình thường rồi thêm 1 dòng CUỐI: "💡 Ghi chú: bạn vừa đề cập [tóm tắt] — muốn mình lưu vào KB
+không?". Lượt sau họ đồng ý → lưu như trên. KHÔNG hỏi cho câu hỏi/chat thường hoặc điều đã có trong KB.
 
-**Update workflow (STRICT):**
-1. When Hiếu asks to save/update info: PROPOSE FIRST — show exactly what will change
-2. Format: "Tôi sẽ cập nhật: (1) creator_kb entry [...], (2) wiki [...], (3) master note. Xác nhận?"
-3. WAIT for explicit confirmation ("ok", "xác nhận", "đồng ý", "yes")
-4. Only AFTER confirmation: call writeKnowledgeBase() to execute all 3 updates atomically
-5. NEVER skip the proposal step, even if asked to "just do it"
-
-**Proactive learning detection (không cần Hiếu gõ "nhớ giúp tôi" — s196+9):** Nếu trong câu Hiếu nhắc tới
-1 THÔNG TIN THỰC TẾ MỚI có giá trị lâu dài (đổi giá/liên hệ vendor, quy tắc/quyết định nghiệp vụ mới,
-thông tin mâu thuẫn với KB hiện có...) nhưng KHÔNG yêu cầu lưu rõ ràng: trả lời câu hỏi chính như bình
-thường, rồi thêm 1 dòng CUỐI: "💡 Ghi chú: bạn vừa đề cập [tóm tắt ngắn] — muốn mình lưu vào KB không?".
-Nếu lượt sau Hiếu xác nhận (ok/lưu đi/ừ...) → coi như đã "asks to save" ở bước 1, làm đúng workflow trên.
-CHỈ hỏi khi thông tin thật sự có giá trị lâu dài — KHÔNG hỏi cho câu hỏi/chat thường/thông tin đã có
-trong KB rồi (readKnowledgeBase trước nếu chưa chắc), tránh làm phiền mỗi tin nhắn.
-
-When writing to KB: always update master note + any relevant wiki page simultaneously.
+When writing to KB: also update any relevant wiki page when asked (master note tự cập nhật).
 
 ## Formatting Rules (STRICT)
 - **NO LaTeX/math notation** — NEVER use dollar-sign math ($...$), double-dollar ($$...$$), \\approx, \\times, \\frac{}{}, \\leq, or any backslash-command. The UI cannot render LaTeX.
@@ -546,7 +539,6 @@ export async function runCreatorAI(
 }> {
   const t0 = Date.now()
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
-  const isFreshConversation = geminiHistory.length <= 1
   const personal = username && username !== "cron" ? await personalFeaturesEnabled(isCreator).catch(() => isCreator) : false
   const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock] = await Promise.all([
     getPartnerTiers().then(tiers => {
@@ -554,26 +546,13 @@ export async function runCreatorAI(
       return lines ? `\n\n━━━ PARTNER TIERS (B2B từ Supabase) ━━━\n${lines}` : ""
     }).catch(() => ""),
     ga4Sites().then(sites => sites.length ? "\n\nGA4 SITES: " + sites.map(s => `${s.id}="${s.name}" (${s.propertyId})`).join(", ") : "").catch(() => ""),
-    isFreshConversation
-      ? runReadKnowledgeBase().then((kb: any) => {
-          const entries = kb?.entries || kb?.result || kb
-          if (!entries || (Array.isArray(entries) && entries.length === 0)) return ""
-          const PRIORITY_CATS = ["product_codes","sku_rules","exchange_rates","cogs","vendors","processes","notes"]
-          const sorted = Array.isArray(entries)
-            ? [...entries].sort((a: any, b: any) => {
-                const ai = PRIORITY_CATS.indexOf(a.category); const bi = PRIORITY_CATS.indexOf(b.category)
-                return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
-              })
-            : entries
-          const body = typeof sorted === "string" ? sorted : JSON.stringify(sorted)
-          const MAX_KB = 8000
-          const truncated = body.length > MAX_KB
-          const suffix = truncated
-            ? `\n[⚠️ KB còn ${Array.isArray(entries) ? entries.length : "?"} entries — một số bị cắt. Gọi readKnowledgeBase(category) để xem đầy đủ]`
-            : ""
-          return `\n\n━━━ CREATOR KB (đã nạp — NGUỒN SỰ THẬT, override training data khi mâu thuẫn) ━━━\n${body.slice(0, MAX_KB)}${suffix}`
-        }).catch(() => "")
-      : Promise.resolve(""),
+    // KB: MỖI lượt nạp danh mục tiêu đề + nguyên văn mục liên quan tới câu hỏi (kb-recall.ts) — thay cách cũ chỉ nạp 8.000 ký tự đầu
+    // ở lượt đầu. Câu hỏi ngắn kiểu "cái đó" → ghép thêm đoạn cuối câu trả lời trước để tìm đúng chủ đề.
+    Promise.all([
+      kbIndexBlock().catch(() => ""),
+      relevantKbBlock(lastMsg.length < 40 && geminiHistory.length
+        ? `${lastMsg} ${String(geminiHistory[geminiHistory.length - 1]?.parts?.[0]?.text ?? "").slice(-500)}` : lastMsg).catch(() => ""),
+    ]).then(([idx, rel]) => idx + rel),
     // Trí nhớ dài hạn — nạp MỖI lượt (khác KB chỉ lượt đầu) để điều vừa nhớ có hiệu lực ngay.
     personal ? buildMemoryBlock(username).catch(() => "") : Promise.resolve(""),
   ])
