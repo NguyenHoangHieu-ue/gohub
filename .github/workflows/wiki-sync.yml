@@ -6,6 +6,11 @@ on:
     paths:
       - "docs/wiki/**"
   workflow_dispatch:  # cho phép trigger thủ công từ GitHub Actions UI để test
+    inputs:
+      dry_run:
+        description: "Chỉ in kế hoạch, KHÔNG ghi Supabase"
+        type: boolean
+        default: true
 
 jobs:
   sync:
@@ -20,10 +25,11 @@ jobs:
           python-version: "3.11"
 
       - name: Install Python dependencies
-        run: pip install pyyaml requests supabase
+        run: pip install pyyaml requests
 
       - name: Sync wiki to Supabase
-        run: python backend/seeding/import/import_wiki.py
+        # Script cũ backend/seeding/import/import_wiki.py chưa từng được commit (.gitignore bỏ backend/) → 40/40 lần lỗi. Viết lại s223.
+        run: python .github/scripts/wiki_sync.py ${{ inputs.dry_run && '--dry-run' || '' }}
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
