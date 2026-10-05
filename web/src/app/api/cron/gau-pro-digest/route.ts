@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { text } = await runCreatorAI([], DIGEST_PROMPT, undefined, undefined, true, "cron")
+    const { text } = await runCreatorAI([], DIGEST_PROMPT, undefined, undefined, true, "cron", "cron")
     const openId = await getCreatorLarkOpenId()
     if (!openId) return NextResponse.json({ ok: false, error: "Không tìm được Lark open_id của creator" }, { status: 500 })
 

@@ -7,7 +7,7 @@ import {
   Send, Cpu, User, Plus, Trash2, ExternalLink, Loader2,
   Database, Globe, BarChart2, Code2, Lightbulb,
   Paperclip, X, FileText, Image as ImageIcon, FileSpreadsheet,
-  FileJson, FileType, Package, Mic, Volume2, VolumeX,
+  FileJson, FileType, Package, Mic, Volume2, VolumeX, ShieldAlert,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm     from "remark-gfm"
@@ -24,6 +24,40 @@ interface Message {
   sources?: WebSource[]
   fileName?: string  // attached file name shown in user bubble
   summarized?: boolean  // server nén lịch sử cũ cho lượt này
+  approvals?: Approval[]  // G0: hành động Gấu Pro chờ duyệt trong lượt này
+}
+
+interface Approval {
+  id: string; code: string; tool: string; summary: string; reason: string
+  state: "pending" | "working" | "executed" | "failed" | "rejected" | "error"
+  note?: string
+}
+
+const APPROVAL_STATE_LABEL: Record<Approval["state"], string> = {
+  pending: "", working: "Đang xử lý...", executed: "✅ Đã duyệt và chạy", failed: "⚠️ Đã duyệt nhưng lỗi",
+  rejected: "Đã từ chối", error: "⚠️ Lỗi",
+}
+
+function ApprovalCard({ a, onDecide }: { a: Approval; onDecide: (id: string, approve: boolean) => void }) {
+  return (
+    <div className="mt-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs">
+      <div className="flex items-center gap-1.5 font-semibold text-amber-800 dark:text-amber-300">
+        <ShieldAlert size={13} /> Cần bạn duyệt #{a.code}
+      </div>
+      <div className="mt-1 text-gray-800 dark:text-slate-100 break-words">{a.summary}</div>
+      <div className="mt-0.5 text-gray-500 dark:text-slate-400">{a.reason}</div>
+      {a.state === "pending" ? (
+        <div className="flex gap-2 mt-2">
+          <button onClick={() => onDecide(a.id, true)}
+            className="px-3 py-1 rounded-lg bg-violet-600 text-white font-medium hover:bg-violet-700">Duyệt</button>
+          <button onClick={() => onDecide(a.id, false)}
+            className="px-3 py-1 rounded-lg border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700">Từ chối</button>
+        </div>
+      ) : (
+        <div className="mt-1.5 font-medium text-gray-600 dark:text-slate-300">{APPROVAL_STATE_LABEL[a.state]}{a.note ? ` — ${a.note}` : ""}</div>
+      )}
+    </div>
+  )
 }
 
 // ─── LaTeX → Unicode converter ───────────────────────────────────────────────
@@ -261,13 +295,14 @@ function MsgContent({ msg, onFollowup, speaking, ttsSupported, onToggleSpeak }: 
 
 // Memo: gõ phím / đồng hồ elapsed / stream token chỉ render lại bubble thật sự đổi (msg giữ nguyên
 // reference với các tin cũ), thay vì parse lại markdown toàn bộ hội thoại mỗi lần.
-const MessageRow = memo(function MessageRow({ msg, index, speaking, ttsSupported, onFollowup, onToggleSpeak }: {
+const MessageRow = memo(function MessageRow({ msg, index, speaking, ttsSupported, onFollowup, onToggleSpeak, onDecide }: {
   msg: Message
   index: number
   speaking: boolean
   ttsSupported: boolean
   onFollowup: (q: string) => void
   onToggleSpeak: (index: number, content: string) => void
+  onDecide: (msgIndex: number, id: string, approve: boolean) => void
 }) {
   return (
     <div className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -301,6 +336,9 @@ const MessageRow = memo(function MessageRow({ msg, index, speaking, ttsSupported
               <MsgContent msg={msg} onFollowup={onFollowup}
                 speaking={speaking} ttsSupported={ttsSupported}
                 onToggleSpeak={() => onToggleSpeak(index, msg.content)} />
+              {msg.approvals?.map(a => (
+                <ApprovalCard key={a.id} a={a} onDecide={(id, approve) => onDecide(index, id, approve)} />
+              ))}
             </>
           )}
         </div>
@@ -675,11 +713,12 @@ export default function CreatorAIPage() {
       let finalSources:   WebSource[]  = []
       let finalSummarized = false
       let newConvId:      string | null = null
+      const approvals:    Approval[]   = []
 
       const updateBubble = (content: string, extra?: Partial<Message>) => {
         setMessages(prev => {
           const u = [...prev]
-          u[u.length - 1] = { role: "assistant", content, ...extra }
+          u[u.length - 1] = { role: "assistant", content, ...(approvals.length ? { approvals: [...approvals] } : {}), ...extra }
           return u
         })
       }
@@ -705,6 +744,10 @@ export default function CreatorAIPage() {
               if (!rafId) rafId = requestAnimationFrame(() => { rafId = 0; updateBubble(assistantContent) })
             }
             else if (ev.type === "text")   assistantContent = ev.content
+            else if (ev.type === "approval_required" && ev.action) {
+              approvals.push({ ...ev.action, state: "pending" })
+              updateBubble(assistantContent)
+            }
             else if (ev.type === "done") {
               newConvId       = ev.conversationId
               finalSources    = Array.isArray(ev.sources) ? ev.sources : []
@@ -749,6 +792,27 @@ export default function CreatorAIPage() {
   const sendRef = useRef(send)
   sendRef.current = send
   const handleFollowup = useCallback((q: string) => { sendRef.current(q) }, [])
+
+  // Duyệt/từ chối hành động chờ (G0) → server chạy tool → gửi câu nối cho Gấu Pro làm tiếp.
+  const handleDecide = useCallback(async (msgIndex: number, id: string, approve: boolean) => {
+    const setState = (state: Approval["state"], note?: string) => setMessages(prev => prev.map((m, i) =>
+      i !== msgIndex || !m.approvals ? m : { ...m, approvals: m.approvals.map(a => a.id === id ? { ...a, state, note } : a) }))
+    setState("working")
+    try {
+      const res = await fetch("/api/creator-ai/approve", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, approve }),
+      })
+      const d = await res.json().catch(() => ({}))
+      const st = d.status as Approval["state"] | undefined
+      if (st === "executed" || st === "failed" || st === "rejected") {
+        setState(st, st === "failed" ? d.error : undefined)
+        if (d.followup) sendRef.current(d.followup)
+      } else setState("error", d.error || `HTTP ${res.status}`)
+    } catch (e: any) {
+      setState("error", e.message)
+    }
+  }, [])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -965,7 +1029,7 @@ export default function CreatorAIPage() {
           {messages.map((msg, i) => (
             <MessageRow key={i} msg={msg} index={i}
               speaking={speakingIdx === i} ttsSupported={ttsSupported}
-              onFollowup={handleFollowup} onToggleSpeak={toggleSpeak} />
+              onFollowup={handleFollowup} onToggleSpeak={toggleSpeak} onDecide={handleDecide} />
           ))}
 
           {/* Loading */}

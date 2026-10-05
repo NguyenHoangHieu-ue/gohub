@@ -113,14 +113,14 @@ describe("buildFunctionDeclarations", () => {
     expect(names).toContain("controlMyBrowser")
   })
 
-  it("localFiles + googleWorkspace + assistantMemory + larkDocs chỉ có với creator, các tool khác như nhau", () => {
+  it("localFiles + googleWorkspace + assistantMemory + larkDocs + sendLarkMessage chỉ có với creator, các tool khác như nhau", () => {
     const all = buildFunctionDeclarations(true)
     const restricted = buildFunctionDeclarations(false)
-    for (const name of ["localFiles", "googleWorkspace", "assistantMemory", "larkDocs"]) {
+    for (const name of ["localFiles", "googleWorkspace", "assistantMemory", "larkDocs", "sendLarkMessage"]) {
       expect(all.map(d => d.name)).toContain(name)
       expect(restricted.map(d => d.name)).not.toContain(name)
     }
-    expect(restricted.length).toBe(all.length - 4)
+    expect(restricted.length).toBe(all.length - 5)
   })
 })
 

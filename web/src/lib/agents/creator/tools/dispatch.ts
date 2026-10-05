@@ -121,7 +121,7 @@ async function dispatchToolCore(
     return wrap(await runManagePortalCredentials(call.args))
 
   if (call.name === "sendLarkMessage")
-    return wrap(await runSendLarkMessage(call.args))
+    return wrap(ctx?.isCreator ? await runSendLarkMessage(call.args) : { error: "sendLarkMessage chỉ dành cho creator." })
 
   if (call.name === "compareVendorQuotes")
     return wrap(await runCompareVendorQuotes(call.args))

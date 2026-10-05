@@ -777,3 +777,35 @@ Fix: `MessageRow = memo(...)` (tin cũ giữ reference nên không render lại;
 nội dung cuối). Không đổi UI/giao diện.
 Gotcha: tin ĐANG stream vẫn parse markdown lại mỗi frame — câu trả lời rất dài vẫn có thể nặng; nếu còn giật thì
 chỉ render markdown khi stream xong. Lag phía server (chờ chữ đầu) là vấn đề khác, đã có `compressHistory`.
+
+## § s223 G0 (2026-10-05) — Cổng duyệt hành động + chống prompt injection (plan `docs/plans/gau-pro-assistant.md`)
+
+**Vì sao**: cùng 1 lượt Gấu Pro vừa có dữ liệu riêng (SQL, Supabase, Drive, file máy), vừa đọc nội dung không tin cậy (web,
+tab Chrome, portal, file tải lên, tài liệu Lark/Google), vừa có kênh gửi ra ngoài ("lethal trifecta"). Trước đây chỉ có lời dặn
+trong prompt; `controlMyBrowser` chạy ngay; `sendLarkMessage` mở cho cả user không phải creator, gửi được tới group bất kỳ.
+
+**Mức duyệt (Hiếu giao tự chốt: an toàn + tiện)** — `lib/agents/creator/tool-policy.ts`, chạy TRONG CODE:
+- Tool chỉ đọc: chạy luôn.
+- `sendLarkMessage` tới group/người khác: LUÔN hỏi. Gửi `me`: chỉ hỏi khi lượt đã "nhiễm".
+- Tool ghi/gửi khác (task Lark, KB, trí nhớ, portal credentials, điều khiển browser trừ scroll, ghi file máy, ghi Google/Lark Docs,
+  tạo ảnh/video): chạy luôn khi lượt CHƯA nhiễm; đã nhiễm → hỏi.
+- "Nhiễm" = trong lượt đã gọi `webSearch`, `browseWeb`, `browsePortal`, `queryLarkBase`, `getTrendSnapshots`, `readMyBrowser read_tab`,
+  `larkDocs/googleWorkspace read`, hoặc có file tải lên.
+- `browseWeb` sau khi nhiễm chỉ mở URL đã xuất hiện NGUYÊN VĂN trong tin người dùng/kết quả tool trước (chặn nhét dữ liệu vào URL);
+  URL mới → hỏi.
+
+**Luồng**: tool cần duyệt KHÔNG chạy → lưu `gp_pending_actions` (migration **v64**, mã ngắn 6 ký tự) → SSE `approval_required`
+→ thẻ Duyệt/Từ chối dưới câu trả lời (web) hoặc dòng "🔐 Chờ duyệt #abc123 … gõ 'duyệt abc123'" (Lark DM, ghép bằng code) → model
+được báo "đang chờ duyệt, không gọi lại". Người dùng duyệt → `POST /api/creator-ai/approve` (hoặc lệnh Lark) chuyển trạng thái
+nguyên tử `pending→approved`, chạy đúng tool + tham số đã lưu qua `dispatchTool` (có audit log), lưu kết quả, rồi gửi câu nối
+`[Đã DUYỆT …] Kết quả: …` để Gấu Pro làm tiếp. Hết hạn sau 24h. Chỉ chủ hành động duyệt được.
+- **Fail-closed**: chưa chạy v64 → hành động cần duyệt báo lỗi, KHÔNG chạy (gửi Lark tới group sẽ không dùng được tới khi chạy migration).
+- Cron (`digest`, `vendor-quote-scan`, kênh `cron`) không có người duyệt → hành động cần duyệt bị từ chối.
+- `sendLarkMessage` thêm vào `CREATOR_ONLY_TOOLS` + chặn trong `dispatchTool`.
+
+**Persona theo người dùng (D9)**: phần mở đầu "dành riêng cho Hiếu" + "About Hiếu / mục tiêu Q3" tách ra `CREATOR_INTRO`/
+`CREATOR_PROFILE`, chỉ nạp cho creator; user được cấp quyền nhận `MEMBER_INTRO`. Lark DM ghi `agent_id` = `gau_pro` (trước `gau-pro`;
+dữ liệu cũ chưa sửa).
+
+**Giới hạn đã biết**: "nhiễm" tính trong 1 lượt — nội dung ngoài đã đọc ở lượt TRƯỚC (nằm trong lịch sử dạng văn bản trả lời) không
+làm lượt sau nhiễm. Test: `gp-tool-policy.test.ts` (7 ca).

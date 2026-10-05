@@ -138,7 +138,17 @@ Thứ tự theo rủi ro trước, giá trị sau. Mỗi giai đoạn là 1–3 
 - Hiệu năng: độ trễ chữ đầu p50/p90; token vào trung bình/lượt; cost/lượt (`app_usage_events.est_cost_usd`).
 - Hữu ích: số việc nền hoàn thành/tuần; số việc theo lịch đang chạy; tỉ lệ trí nhớ tự rút được giữ lại.
 
-## 8. Câu hỏi cần Hiếu chốt
+## 8. Quyết định của Hiếu (2026-10-05)
+
+1. Mức duyệt: tôi tự đề xuất, tiêu chí an toàn + tiện → đã chốt và làm ở G0 (xem wiki `analytics-creator-ai.md` §s223 G0).
+2. KHÔNG lên Vercel Pro → D5 dùng phương án hàng đợi tự chế (bảng + route tự gọi tiếp từng chặng), không phụ thuộc Workflow; cron
+   vẫn qua cron-job.org.
+3. Trí nhớ + việc theo lịch: làm KHUNG đa người dùng (theo username), hiện chỉ BẬT cho creator (1 cờ cấu hình để mở sau).
+4. Làm lần lượt G0 → G1 → G2 → G3 → G4 → G5.
+
+Tiến độ: G0 xong 2026-10-05 (cần chạy migration v64).
+
+## 8b. Câu hỏi ban đầu (đã trả lời ở trên)
 
 1. Mức độ duyệt: mọi `external_send` đều hỏi, hay chỉ khi lượt đã đọc nội dung ngoài (đề xuất: hỏi luôn với gửi Lark tới người
    khác + ghi Google/Lark Docs; chỉ hỏi khi "nhiễm" với browser)?

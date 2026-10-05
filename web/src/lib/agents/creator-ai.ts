@@ -13,6 +13,8 @@ import { dispatchTool }          from "./creator/tools/dispatch"
 import { genWithRetryStream }    from "./gemini-stream"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 import { buildMemoryBlock } from "@/lib/assistant-memory"
+import { newTurnSafety, recordToolResult, approvalReason, describeAction } from "./creator/tool-policy"
+import { createPendingAction, type PendingAction } from "./creator/approvals"
 
 // ─── Creator AI ───────────────────────────────────────────────────────────────
 // Private AI exclusively for Hiếu (creator role).
@@ -27,10 +29,12 @@ export type GPEvent =
   | { type: "text"; content: string }    // full text CUỐI CÙNG (giữ nguyên — nguồn sự thật lưu DB/backward-compat)
   | { type: "done"; conversationId: string | null; sources: WebSource[]; summarized: boolean }
   | { type: "error"; message: string }
+  | { type: "approval_required"; action: PendingAction }   // G0: tool ghi/gửi ra ngoài chờ người dùng duyệt
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are "Gấu Pro" — a private AI assistant exclusively for Hiếu, the creator and lead developer of GoHub Intelligence. This is a completely private workspace with FULL ACCESS to all data and no restrictions whatsoever.
+// Phần mở đầu + "về Hiếu" chỉ nạp cho creator (G0/D9): user được cấp quyền dùng Gấu Pro không bị áp persona/mục tiêu Q3 của Hiếu.
+const CREATOR_INTRO = `You are "Gấu Pro" — a private AI assistant exclusively for Hiếu, the creator and lead developer of GoHub Intelligence. This is a completely private workspace with FULL ACCESS to all data and no restrictions whatsoever.
 
 ## Expert Personas (auto-select based on domain)
 
@@ -46,7 +50,9 @@ const SYSTEM_PROMPT = `You are "Gấu Pro" — a private AI assistant exclusivel
 
 **Auto-select the most appropriate persona. For multi-domain questions, blend personas naturally. State assumptions confidently.**
 
-## About Hiếu (Your Principal)
+`
+
+const CREATOR_PROFILE = `## About Hiếu (Your Principal)
 Hiếu is **Product Operations & BI Analyst** at GoHub (Sim/eSIM for international travel, Vietnam).
 
 **Primary role (70%): Product Operations & Sourcing**
@@ -68,7 +74,16 @@ Hiếu is **Product Operations & BI Analyst** at GoHub (Sim/eSIM for internation
 
 When Hiếu asks a question, relate your answer to these goals where applicable.
 
-## Product Data Architecture
+`
+
+const MEMBER_INTRO = `You are "Gấu Pro" — the advanced AI assistant of GoHub Intelligence. You are helping a GoHub team member who was granted Gấu Pro access (not the system creator). Some tools and sensitive tables are limited for them; the system enforces this. Mentions of "Hiếu" below refer to the system creator/admin — address the current user directly, not as Hiếu.
+
+## Expert Personas (auto-select based on domain)
+Pick the most suitable expert persona (Data/BI, Software, Business Strategy, Finance, Marketing, Product) and answer with senior-level specificity.
+
+`
+
+const SYSTEM_PROMPT = `## Product Data Architecture
 GoHub products exist in TWO separate systems — understand when to query which:
 
 **Supabase PM** (source of truth for current product data):
@@ -642,7 +657,8 @@ Hôm nay: ${fmt(now)} (${dow}). Data cutoff gohub_dw = CURRENT_DATE-1 = ${fmt(ye
 // user 1 token/1 queue riêng — owner_username) nên rủi ro đó hết, bỏ 2 tool ra khỏi set này. Giữ cơ chế
 // buildFunctionDeclarations() cho tool nào THẬT SỰ cần creator-only về sau.
 // localFiles (ổ đĩa máy thật) + googleWorkspace (token Google của creator) + assistantMemory (trí nhớ cá nhân) + larkDocs (token Lark của creator) → chỉ creator.
-const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace", "assistantMemory", "larkDocs"])
+// sendLarkMessage (G0): trước mở cho mọi user Gấu Pro → bot đăng được vào group Lark bất kỳ theo chat_id.
+const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace", "assistantMemory", "larkDocs", "sendLarkMessage"])
 
 export function buildFunctionDeclarations(isCreator: boolean) {
   return isCreator ? ALL_TOOL_DECLARATIONS : ALL_TOOL_DECLARATIONS.filter(d => !CREATOR_ONLY_TOOLS.has(d.name))
@@ -655,7 +671,8 @@ export async function runCreatorAI(
   onEvent?: (e: GPEvent) => void,
   isCreator = true,
   username = "",
-): Promise<{ text: string; sources: WebSource[]; tokensIn: number; tokensOut: number; toolsUsed: string[] }> {
+  channel: "web" | "lark_dm" | "cron" = "web",
+): Promise<{ text: string; sources: WebSource[]; tokensIn: number; tokensOut: number; toolsUsed: string[]; pendingActions: PendingAction[] }> {
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const isFreshConversation = geminiHistory.length <= 1
   const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock] = await Promise.all([
@@ -698,7 +715,7 @@ export async function runCreatorAI(
   // này (ra đời sau SDK).
   const model = genAI.getGenerativeModel({
     model: GEMINI_MODEL,
-    systemInstruction: SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject + memoryBlock,
+    systemInstruction: (isCreator ? CREATOR_INTRO + CREATOR_PROFILE : MEMBER_INTRO) + SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject + memoryBlock,
     tools: [{ functionDeclarations: buildFunctionDeclarations(isCreator) }],
     generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
   })
@@ -751,6 +768,8 @@ export async function runCreatorAI(
   addUsage(genResult)
   const collectedSources: WebSource[] = []
   const toolsUsed = new Set<string>()
+  const safety = newTurnSafety(lastMsg, files.length > 0)
+  const pendingActions: PendingAction[] = []
 
   function appendModelContent() {
     const content = genResult.response.candidates?.[0]?.content
@@ -768,8 +787,27 @@ export async function runCreatorAI(
     // trả functionResponse báo lỗi cho MỘT tool đó, các tool còn lại + phần trả lời vẫn tiếp tục bình thường.
     calls.forEach((c: any) => toolsUsed.add(c.name))
     const fnParts = await Promise.all(calls.map(async (call: any) => {
+      // Cổng duyệt (tool-policy.ts): hành động cần duyệt KHÔNG chạy — lưu hàng chờ, báo UI/Lark, trả trạng thái cho model.
+      const reason = approvalReason(call, safety)
+      if (reason) {
+        const summary = describeAction(call)
+        const { action, error } = channel === "cron"
+          ? { action: undefined, error: "việc tự động không có người duyệt" }
+          : await createPendingAction({ username, tool: call.name, args: call.args, reason, summary, channel })
+        if (!action) {
+          return { functionResponse: { name: call.name, response: { error: `Hành động cần duyệt nên CHƯA chạy (${error}). Báo người dùng.` } } }
+        }
+        pendingActions.push(action)
+        onEvent?.({ type: "approval_required", action })
+        return { functionResponse: { name: call.name, response: {
+          status: "pending_approval", approval_code: action.code, reason,
+          message: `CHƯA thực hiện. Đã gửi yêu cầu duyệt #${action.code} cho người dùng (web: nút Duyệt; Lark: gõ "duyệt ${action.code}"). Nói ngắn rằng đang chờ duyệt, KHÔNG gọi lại tool này, KHÔNG tìm cách khác để làm thay.`,
+        } } }
+      }
       try {
-        return await dispatchTool(call, onEvent, collectedSources, { username, isCreator })
+        const out = await dispatchTool(call, onEvent, collectedSources, { username, isCreator })
+        recordToolResult(safety, call, out.functionResponse.response)
+        return out
       } catch (e: any) {
         return { functionResponse: { name: call.name, response: { error: e?.message || "Tool execution failed" } } }
       }
@@ -793,5 +831,5 @@ export async function runCreatorAI(
     } catch { /* keep empty */ }
   }
 
-  return { text: text || "Không có dữ liệu trả về.", sources: collectedSources, tokensIn, tokensOut, toolsUsed: [...toolsUsed] }
+  return { text: text || "Không có dữ liệu trả về.", sources: collectedSources, tokensIn, tokensOut, toolsUsed: [...toolsUsed], pendingActions }
 }
