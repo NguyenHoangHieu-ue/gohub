@@ -10730,3 +10730,9 @@ Chi tiết: wiki `analytics-creator-ai.md` §s223 trí nhớ, §s223 G5 cách 2.
 - Trước merge: tsc sạch, `next lint` 0 lỗi, `next build` OK, vitest 541 qua + 1 lỗi có sẵn (bc-datapool thiếu file mẫu Taiwan, từ s219). Plan `gau-pro-assistant.md` đã xoá, việc còn mở ở wiki `analytics-creator-ai.md` §s223 "Chốt plan".
 - Sau merge: Vercel production OK; CI xanh; Notify Lark gửi OK. Production sống: Gấu Pro trả đúng KB top-up 3HK (tra KB mỗi lượt chạy trên prod), token phiên Trực tiếp cấp OK (12 tool), `/downloads/gau-pro-bridge.zip` + `/gp-pcm-capture.js` 200, header `microphone=(self)` + CSP `wss://` có hiệu lực.
 - ⚠️ Phát hiện: workflow **Wiki Sync — docs/wiki → Supabase** thất bại 40/40 lần từ khi tạo — gọi `backend/seeding/import/import_wiki.py` nhưng file KHÔNG tồn tại (cả local lẫn git; `.gitignore` bỏ `backend/`). Wiki trong repo KHÔNG tự đồng bộ lên `kb_wiki_pages` (nguồn wiki của Bé Gấu/Gấu Tổ). Chưa sửa.
+
+## s224 (2026-10-05) — Viết lại Wiki Sync
+Chi tiết: wiki `operations-runbook.md` §13. Commit `51895cd0` + commit cảnh báo bản web mới hơn.
+- Script mới `.github/scripts/wiki_sync.py` (thay file `backend/...import_wiki.py` chưa từng commit — 40/40 lần workflow lỗi). Khớp theo title, bỏ qua trang không đổi, lưu bản cũ vào `kb_wiki_versions`, không xoá trang chỉ có trên web, cảnh báo nếu bản web mới hơn commit; workflow có `dry_run`.
+- Đã chạy thật từ staging (Hiếu yêu cầu viết lại): tạo 10, cập nhật 40, giữ 3, lỗi 0; chạy lại → giữ 53. Bé Gấu trả lời được nội dung trang mới (SIMPIN Gighub).
+- ⚠️ Workflow tự chạy theo `main` — `main` vẫn trỏ script cũ cho tới khi merge commit này.
