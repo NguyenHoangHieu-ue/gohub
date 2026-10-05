@@ -10736,3 +10736,4 @@ Chi tiết: wiki `operations-runbook.md` §13. Commit `51895cd0` + commit cảnh
 - Script mới `.github/scripts/wiki_sync.py` (thay file `backend/...import_wiki.py` chưa từng commit — 40/40 lần workflow lỗi). Khớp theo title, bỏ qua trang không đổi, lưu bản cũ vào `kb_wiki_versions`, không xoá trang chỉ có trên web, cảnh báo nếu bản web mới hơn commit; workflow có `dry_run`.
 - Đã chạy thật từ staging (Hiếu yêu cầu viết lại): tạo 10, cập nhật 40, giữ 3, lỗi 0; chạy lại → giữ 53. Bé Gấu trả lời được nội dung trang mới (SIMPIN Gighub).
 - ⚠️ Workflow tự chạy theo `main` — `main` vẫn trỏ script cũ cho tới khi merge commit này.
+- Merge `main` (`5da0b2e4`, theo yêu cầu Hiếu): Vercel OK, CI xanh, Notify Lark OK. Wiki Sync TỰ CHẠY lần đầu thành công trên `main` (push): cập nhật 1 (operations-runbook vừa sửa) · giữ nguyên 52 · lỗi 0.
