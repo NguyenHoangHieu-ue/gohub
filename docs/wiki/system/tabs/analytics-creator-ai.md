@@ -844,3 +844,30 @@ làm lượt sau nhiễm. Test: `gp-tool-policy.test.ts` (7 ca).
   + huỷ request Gemini đang chạy (`abortSignal` của SDK mới); câu trả lời thêm "⏹ Đã dừng theo yêu cầu.". Chưa xác minh trên Vercel việc
   client ngắt có làm `req.signal` abort ngay không (nếu không, server chạy nốt vòng lặp như trước — không hại).
 - Lark DM chưa hiện kế hoạch (bỏ qua sự kiện `plan`).
+
+## § s223 G2b+G2c (2026-10-05) — Trace lượt chạy + việc chạy nền + panel "Việc & duyệt"
+
+Migration **v65** (`gp_runs`, `gp_jobs`) — Hiếu phải chạy; chưa chạy thì trace bỏ qua im lặng, giao việc nền báo lỗi kèm hướng dẫn.
+
+**Trace (`gp_runs`)**: mỗi lần `runCreatorAI` ghi 1 dòng cuối lượt (1 insert, không N+1): câu hỏi, kênh, skill đã nạp, `steps`
+(mỗi vòng model: thời gian + token + tool được gọi; mỗi tool: thời gian, tham số rút gọn che password/token, lỗi, mã chờ duyệt), tổng
+token, thời lượng, kết quả (done/stopped/unfinished). Xem: panel 🗂 Nhật ký → tab "Lượt chạy (trace)" (chỉ creator, `GET /api/creator-ai/runs`).
+
+**Việc chạy nền (`gp_jobs`)** — không dùng Vercel Workflow (gói Hobby, Hiếu chốt không lên Pro):
+- Bật nút ⏱ "Nền" cạnh ô nhập → tin gửi đi thành việc (`POST /api/creator-ai/jobs`), KHÔNG kèm lịch sử chat/file.
+- Chạy theo chặng: `POST /api/creator-ai/jobs/run` (Bearer CRON_SECRET, trả 202 ngay, làm trong `waitUntil`, maxDuration 300) →
+  `runJobChunk`: chiếm việc nguyên tử (khớp `updated_at`), `runCreatorAI(..., "job", { timeBudgetMs: 200s, resume })`. Hết ngân sách →
+  dừng TRƯỚC lượt model kế tiếp, trả `checkpoint` (contents rút gọn: kết quả tool >20k ký tự cắt, file nhị phân bỏ; kèm trạng thái
+  "nhiễm" + skill) → lưu, xếp hàng lại, tự gọi chặng sau. Tối đa 6 chặng (~20 phút).
+- Xong: lưu thành hội thoại "[GP] ⏳ …", DM Lark người giao (creator: `getCreatorLarkOpenId`; người khác: `users.lark_open_id`).
+  Chuông thông báo KHÔNG dùng (bảng `notifications` là thông báo chung, không theo người).
+- Cron `scheduled-messages` (cron-job.org, mỗi giờ) gọi `sweepStuckJobs`: chạy lại việc "queued" >2' hoặc "running" >6' (mất lượt gọi).
+- Hành động cần duyệt trong việc nền → hàng chờ (kênh `job`), kết quả cuối liệt kê mã; duyệt ở panel hoặc Lark DM.
+- Thử thật (máy dev): ngân sách 1ms → dừng sau vòng `readKnowledgeBase`, checkpoint qua JSON (như lưu jsonb) → chặng 2 trả lời đúng
+  (thoughtSignature giữ nguyên).
+
+**Panel "⏳ Việc & duyệt"** (mọi user Gấu Pro, `components/gau-pro/tasks-panel.tsx`): hành động chờ duyệt ≤24h (`GET /api/creator-ai/approve`,
+duyệt/từ chối được kể cả sau khi tải lại trang — chỉ hiện kết quả, không tự gửi câu nối vào hội thoại đang mở) + danh sách việc nền
+(trạng thái, số chặng, Mở kết quả, Huỷ; tự làm mới 15s khi có việc đang chạy).
+
+**Chưa QA sống**: cần chạy v64 + v65 rồi thử trên staging: (1) giao 1 việc nền dài, (2) gửi Lark tới group → duyệt từ panel, (3) xem trace.

@@ -146,7 +146,9 @@ Thứ tự theo rủi ro trước, giá trị sau. Mỗi giai đoạn là 1–3 
 3. Trí nhớ + việc theo lịch: làm KHUNG đa người dùng (theo username), hiện chỉ BẬT cho creator (1 cờ cấu hình để mở sau).
 4. Làm lần lượt G0 → G1 → G2 → G3 → G4 → G5.
 
-Tiến độ: G0 xong 2026-10-05 (cần chạy migration v64).
+Tiến độ (2026-10-05): G0 xong (cần chạy migration v64) · G1 xong (skills −53% ngữ cảnh; SDK `@google/genai`) · G2 xong (kế hoạch +
+nút Dừng; trace `gp_runs`; việc nền `gp_jobs` theo chặng; panel Việc & duyệt — cần chạy migration v65). Chưa QA sống trên staging phần cần
+migration. Tiếp: G3 trí nhớ.
 
 ## 8b. Câu hỏi ban đầu (đã trả lời ở trên)
 

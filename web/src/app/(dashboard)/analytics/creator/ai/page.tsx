@@ -7,12 +7,14 @@ import {
   Send, Cpu, User, Plus, Trash2, ExternalLink, Loader2,
   Database, Globe, BarChart2, Code2, Lightbulb,
   Paperclip, X, FileText, Image as ImageIcon, FileSpreadsheet,
-  FileJson, FileType, Package, Mic, Volume2, VolumeX, ShieldAlert, Square, CheckCircle2, Circle,
+  FileJson, FileType, Package, Mic, Volume2, VolumeX, ShieldAlert, Square, CheckCircle2, Circle, Timer,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm     from "remark-gfm"
 import ChatChart      from "@/components/chat-chart"
 import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
+import { TasksPanel } from "@/components/gau-pro/tasks-panel"
+import { RunsList } from "@/components/gau-pro/runs-list"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -448,6 +450,11 @@ export default function CreatorAIPage() {
   const [showActionLog, setShowActionLog] = useState(false)
   const [actionLog,     setActionLog]     = useState<{ id: number; username: string; tool_name: string; ok: boolean; summary: string; created_at: string }[]>([])
   const [actionLogLoading, setActionLogLoading] = useState(false)
+  const [logTab,        setLogTab]        = useState<"actions" | "runs">("actions")
+  // G2: panel "Việc & duyệt" + chế độ giao việc chạy nền
+  const [showTasks,     setShowTasks]     = useState(false)
+  const [tasksRefresh,  setTasksRefresh]  = useState(0)
+  const [bgMode,        setBgMode]        = useState(false)
   const isCreatorRole = session?.user?.role === "creator"
 
   const toggleActionLog = async () => {
@@ -697,6 +704,23 @@ export default function CreatorAIPage() {
     const next = [...messages, userMsg]
     setMessages(next)
     setInput("")
+
+    // G2: giao việc chạy nền — không giữ kết nối, xong báo Lark + panel "Việc & duyệt". Việc nền KHÔNG kèm lịch sử chat/file.
+    if (bgMode && attachedFiles.length === 0) {
+      try {
+        const res = await fetch("/api/creator-ai/jobs", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: text }),
+        })
+        const d = await res.json().catch(() => ({}))
+        setMessages([...next, { role: "assistant", content: res.ok
+          ? `⏳ Đã giao việc chạy nền: "${d.job?.title ?? text.slice(0, 80)}". Gấu Pro làm xong sẽ nhắn Lark; theo dõi/mở kết quả ở mục **Việc & duyệt** (góc trên).`
+          : `Lỗi giao việc nền: ${d.error || `HTTP ${res.status}`}` }])
+        setTasksRefresh(k => k + 1)
+      } catch (e: any) {
+        setMessages([...next, { role: "assistant", content: `Lỗi giao việc nền: ${e.message}` }])
+      }
+      return
+    }
     const filesToSend = [...attachedFiles]
     setAttachedFiles([])
     setImgPreviews(new Map())
@@ -818,7 +842,7 @@ export default function CreatorAIPage() {
       setLoading(false)
       setTimeout(() => inputRef.current?.focus(), 100)
     }
-  }, [messages, loading, attachedFiles, addFiles, imgPreviews])
+  }, [messages, loading, attachedFiles, addFiles, imgPreviews, bgMode])
 
   const abortRef = useRef<AbortController | null>(null)
   const sendRef = useRef(send)
@@ -938,6 +962,19 @@ export default function CreatorAIPage() {
               Cuộc trò chuyện mới
             </button>
           )}
+          <div className="relative">
+            <button
+              onClick={() => setShowTasks(v => !v)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
+              title="Hành động chờ duyệt + việc chạy nền"
+            >
+              ⏳ Việc & duyệt
+            </button>
+            {showTasks && (
+              <TasksPanel refreshKey={tasksRefresh} onClose={() => setShowTasks(false)}
+                onOpenConversation={id => { setShowTasks(false); loadConversation(id) }} />
+            )}
+          </div>
           {isCreatorRole && (
             <div className="relative">
               <button
@@ -949,10 +986,11 @@ export default function CreatorAIPage() {
               </button>
               {showActionLog && (
                 <div className="absolute right-0 top-full mt-1 w-96 max-h-96 overflow-y-auto bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50">
-                  <div className="p-2 border-b border-gray-100 dark:border-slate-800 text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-3 sticky top-0 bg-white dark:bg-slate-900">
-                    Nhật ký hành động (100 gần nhất)
+                  <div className="p-2 border-b border-gray-100 dark:border-slate-800 text-[10px] font-semibold uppercase tracking-wide px-3 sticky top-0 bg-white dark:bg-slate-900 flex gap-3">
+                    <button onClick={() => setLogTab("actions")} className={logTab === "actions" ? "text-violet-600" : "text-gray-400"}>Hành động</button>
+                    <button onClick={() => setLogTab("runs")} className={logTab === "runs" ? "text-violet-600" : "text-gray-400"}>Lượt chạy (trace)</button>
                   </div>
-                  {actionLogLoading ? (
+                  {logTab === "runs" ? <RunsList /> : actionLogLoading ? (
                     <div className="p-4 text-center text-xs text-gray-400">Đang tải...</div>
                   ) : actionLog.length === 0 ? (
                     <div className="p-4 text-center text-xs text-gray-400">Chưa có hành động nào được ghi.</div>
@@ -1132,6 +1170,17 @@ export default function CreatorAIPage() {
           )}
 
           <div className="flex gap-2 items-end">
+            {/* G2: giao việc chạy nền */}
+            <button
+              onClick={() => setBgMode(v => !v)}
+              disabled={loading}
+              title={bgMode ? "Đang ở chế độ Chạy nền: tin gửi đi thành việc nền (xong báo Lark). Bấm để tắt." : "Chạy nền: giao việc dài, không cần giữ trang mở"}
+              className={`flex-shrink-0 h-10 px-2.5 flex items-center gap-1 text-xs border rounded-xl transition-colors disabled:opacity-40 ${
+                bgMode ? "bg-violet-600 text-white border-violet-600" : "text-gray-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 border-gray-200 dark:border-slate-700"
+              }`}
+            >
+              <Timer size={15} />{bgMode && <span>Nền</span>}
+            </button>
             {/* Attach file button */}
             <button
               onClick={() => fileInputRef.current?.click()}

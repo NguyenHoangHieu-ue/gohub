@@ -35,6 +35,36 @@ export type GPEvent =
 
 export interface PlanStep { title: string; status: "pending" | "in_progress" | "done" }
 
+export interface JobCheckpoint { contents: Content[]; tainted: boolean; taintSources: string[]; skills: string[] }
+
+// Rút gọn kết quả tool trong checkpoint (lưu jsonb) — giữ cấu trúc, cắt payload quá dài.
+function compactContents(contents: Content[]): Content[] {
+  return contents.map(c => ({
+    ...c,
+    parts: (c.parts ?? []).map((p: any) => {
+      if (p.inlineData) return { text: "[file nhị phân đã gửi ở chặng trước]" }
+      if (!p.functionResponse) return p
+      const raw = JSON.stringify(p.functionResponse.response ?? null)
+      return raw.length <= 20_000 ? p
+        : { functionResponse: { ...p.functionResponse, response: { truncated: true, preview: raw.slice(0, 20_000) } } }
+    }),
+  }))
+}
+
+// Trace 1 lượt (G2, bảng gp_runs migration v65): 1 insert/lượt, lỗi (chưa chạy migration...) bỏ qua — không làm hỏng chat.
+async function saveRunTrace(row: Record<string, unknown>) {
+  try {
+    const { error } = await supabaseAdmin.from("gp_runs").insert(row)
+    if (error && !/gp_runs/.test(error.message)) console.error("[gp_runs]", error.message)
+  } catch { /* bỏ qua */ }
+}
+
+const previewArgs = (args: unknown) => {
+  let s = ""
+  try { s = JSON.stringify(args ?? {}) } catch { /* bỏ qua */ }
+  return s.replace(/"(password|token|secret|api_key)"\s*:\s*"[^"]*"/gi, '"$1":"***"').slice(0, 300)
+}
+
 function normalizePlan(raw: unknown): PlanStep[] {
   if (!Array.isArray(raw)) return []
   return raw.slice(0, 10).map((s: any) => ({
@@ -472,9 +502,18 @@ export async function runCreatorAI(
   onEvent?: (e: GPEvent) => void,
   isCreator = true,
   username = "",
-  channel: "web" | "lark_dm" | "cron" = "web",
-  opts: { preloadSkills?: string[]; signal?: AbortSignal } = {},
-): Promise<{ text: string; sources: WebSource[]; tokensIn: number; tokensOut: number; toolsUsed: string[]; pendingActions: PendingAction[] }> {
+  channel: "web" | "lark_dm" | "cron" | "job" = "web",
+  opts: {
+    preloadSkills?: string[]
+    signal?: AbortSignal
+    timeBudgetMs?: number          // G2 việc nền: hết ngân sách thời gian → dừng giữa các vòng, trả checkpoint để chạy chặng sau
+    resume?: JobCheckpoint         // G2 việc nền: chạy tiếp từ checkpoint chặng trước
+  } = {},
+): Promise<{
+  text: string; sources: WebSource[]; tokensIn: number; tokensOut: number; toolsUsed: string[]
+  pendingActions: PendingAction[]; checkpoint?: JobCheckpoint
+}> {
+  const t0 = Date.now()
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const isFreshConversation = geminiHistory.length <= 1
   const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock] = await Promise.all([
@@ -514,7 +553,7 @@ export async function runCreatorAI(
   // tới 20 iteration, KHÔNG để mặc định "medium" (billable, latency ẩn mỗi vòng). G1b: SDK mới có type sẵn, hết "as any".
   // Skill nạp sẵn: do nơi gọi chỉ định (Lark DM, cron) + đoán từ tin nhắn mới và câu trả lời gần nhất.
   const lastModelText = geminiHistory.length ? (geminiHistory[geminiHistory.length - 1]?.parts?.[0]?.text ?? "") : ""
-  const loadedSkills = new Set<string>([...(opts.preloadSkills ?? []), ...preloadSkills(`${lastMsg}\n${String(lastModelText).slice(0, 1500)}`)])
+  const loadedSkills = new Set<string>([...(opts.resume?.skills ?? []), ...(opts.preloadSkills ?? []), ...preloadSkills(`${lastMsg}\n${String(lastModelText).slice(0, 1500)}`)])
   const systemInstruction = (isCreator ? CREATOR_INTRO + CREATOR_PROFILE : MEMBER_INTRO) + SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject + memoryBlock
   const makeConfig = () => ({
     systemInstruction,
@@ -553,10 +592,12 @@ export async function runCreatorAI(
     userParts = [{ text: msgText }]
   }
 
-  const contents: Content[] = [
+  const contents: Content[] = opts.resume ? [...opts.resume.contents] : [
     ...geminiHistory,
     { role: "user", parts: userParts },
   ]
+  const steps: Record<string, unknown>[] = []
+  let round = 0
 
   // Tích luỹ token qua MỌI vòng gọi model (mỗi vòng là 1 request Gemini riêng, tính phí riêng dù
   // contents chồng lấn) — dùng cho cost dashboard (s196+7).
@@ -564,7 +605,9 @@ export async function runCreatorAI(
   const onChunk = (delta: string) => onEvent?.({ type: "delta", content: delta })
   let config = makeConfig()
   const turn = async (): Promise<TurnResult> => {
+    const ts = Date.now()
     const r = await streamTurn(GEMINI_MODEL, contents, config, onChunk)
+    steps.push({ r: round, model_ms: Date.now() - ts, tin: r.tokensIn, tout: r.tokensOut, calls: r.functionCalls.map(c => c.name) })
     tokensIn += r.tokensIn; tokensOut += r.tokensOut
     if (r.content.parts?.length) contents.push(r.content)
     return r
@@ -573,12 +616,15 @@ export async function runCreatorAI(
   const collectedSources: WebSource[] = []
   const toolsUsed = new Set<string>()
   const safety = newTurnSafety(lastMsg, files.length > 0)
+  if (opts.resume?.tainted) { safety.tainted = true; safety.taintSources = [...opts.resume.taintSources] }
   const pendingActions: PendingAction[] = []
 
 
   // Function calling loop — max 20 iterations. Tools run in parallel per turn.
   let stopped = false
+  let unfinished = false
   for (let i = 0; i < 20; i++) {
+    round = i + 1
     if (opts.signal?.aborted) { stopped = true; break }   // G2: người dùng bấm Dừng
     const calls = genResult.functionCalls
     if (calls.length === 0) break
@@ -612,17 +658,22 @@ export async function runCreatorAI(
           return { functionResponse: { name: call.name, response: { error: `Hành động cần duyệt nên CHƯA chạy (${error}). Báo người dùng.` } } }
         }
         pendingActions.push(action)
+        steps.push({ r: round, tool: call.name, approval: action.code })
         onEvent?.({ type: "approval_required", action })
         return { functionResponse: { name: call.name, response: {
           status: "pending_approval", approval_code: action.code, reason,
           message: `CHƯA thực hiện. Đã gửi yêu cầu duyệt #${action.code} cho người dùng (web: nút Duyệt; Lark: gõ "duyệt ${action.code}"). Nói ngắn rằng đang chờ duyệt, KHÔNG gọi lại tool này, KHÔNG tìm cách khác để làm thay.`,
         } } }
       }
+      const ts = Date.now()
       try {
         const out = await dispatchTool(call, onEvent, collectedSources, { username, isCreator })
         recordToolResult(safety, call, out.functionResponse.response)
+        const err = out.functionResponse.response?.error
+        steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), ...(err ? { err: String(err).slice(0, 200) } : {}) })
         return out
       } catch (e: any) {
+        steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), err: String(e?.message || e).slice(0, 200) })
         return { functionResponse: { name: call.name, response: { error: e?.message || "Tool execution failed" } } }
       }
     }))
@@ -630,13 +681,15 @@ export async function runCreatorAI(
     // Kết quả tool gửi lại với role "user" (định dạng Gemini API cho functionResponse).
     contents.push({ role: "user", parts: fnParts as any })
     if (skillsChanged) config = makeConfig()
+    // Việc nền: hết ngân sách thời gian chặng → dừng TRƯỚC lượt model kế tiếp; chặng sau gọi lại model với contents này.
+    if (opts.timeBudgetMs && Date.now() - t0 > opts.timeBudgetMs) { unfinished = true; break }
     genResult = await turn()
   }
 
   // Ensure non-empty response
-  let text = genResult.text
+  let text = unfinished ? "" : genResult.text
   if (stopped) text = `${text}\n\n⏹ Đã dừng theo yêu cầu.`.trim()
-  else if (!text.trim()) {
+  else if (!unfinished && !text.trim()) {
     try {
       contents.push({ role: "user", parts: [{ text: "Based on the data retrieved above, write a complete, detailed answer in Vietnamese. Include a markdown table or chart if the data is tabular. DO NOT call any more tools." }] })
       genResult = await turn()
@@ -644,5 +697,16 @@ export async function runCreatorAI(
     } catch { /* keep empty */ }
   }
 
-  return { text: text || "Không có dữ liệu trả về.", sources: collectedSources, tokensIn, tokensOut, toolsUsed: [...toolsUsed], pendingActions }
+  await saveRunTrace({
+    username, channel, question: lastMsg.slice(0, 500), steps, skills: [...loadedSkills],
+    tokens_in: tokensIn, tokens_out: tokensOut, duration_ms: Date.now() - t0,
+    outcome: stopped ? "stopped" : unfinished ? "unfinished" : "done",
+  })
+  const checkpoint = unfinished
+    ? { contents: compactContents(contents), tainted: safety.tainted, taintSources: safety.taintSources, skills: [...loadedSkills] }
+    : undefined
+  return {
+    text: unfinished ? "" : (text || "Không có dữ liệu trả về."),
+    sources: collectedSources, tokensIn, tokensOut, toolsUsed: [...toolsUsed], pendingActions, checkpoint,
+  }
 }
