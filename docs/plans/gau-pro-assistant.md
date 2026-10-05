@@ -148,7 +148,8 @@ Thứ tự theo rủi ro trước, giá trị sau. Mỗi giai đoạn là 1–3 
 
 Tiến độ (2026-10-05): G0 xong (cần chạy migration v64) · G1 xong (skills −53% ngữ cảnh; SDK `@google/genai`) · G2 xong (kế hoạch +
 nút Dừng; trace `gp_runs`; việc nền `gp_jobs` theo chặng; panel Việc & duyệt — cần chạy migration v65). Chưa QA sống trên staging phần cần
-migration. Tiếp: G3 trí nhớ.
+migration. G3 xong (tự rút trí nhớ, tóm tắt + tìm hội thoại cũ, panel Trí nhớ, cờ `gp_personal_features` — cần migration v66).
+Tiếp: G4 việc theo lịch + trigger sự kiện.
 
 ## 8b. Câu hỏi ban đầu (đã trả lời ở trên)
 

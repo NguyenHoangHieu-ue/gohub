@@ -648,6 +648,17 @@ export const updatePlanDecl = {
   },
 }
 
+// G3: tìm lại hội thoại cũ theo ý nghĩa (tóm tắt + embedding, bảng gp_conversation_memory).
+export const searchPastConversationsDecl = {
+  name: "searchPastConversations",
+  description: "Tìm lại các hội thoại Gấu Pro TRƯỚC ĐÂY của người dùng theo chủ đề (vd 'lần trước bàn gì về JoyTel', 'tuần trước kết luận gì về giá Nhật'). Trả tóm tắt + ngày + link mở lại.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: { query: { type: SchemaType.STRING, description: "Chủ đề/câu hỏi cần tìm, tiếng Việt." } },
+    required: ["query"],
+  },
+}
+
 // Ordered list used to initialize the Gemini model tools
 export const ALL_TOOL_DECLARATIONS = [
   readKBDecl, writeKBDecl, searchKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
@@ -662,5 +673,5 @@ export const ALL_TOOL_DECLARATIONS = [
   // Phase 2 (s195+1) — Extension điều khiển browser cá nhân Hiếu
   readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl, googleWorkspaceDecl, assistantMemoryDecl, larkDocsDecl,
   // s196+12 — second-opinion pass (roadmap audit s196+5, ý tưởng #7)
-  verifyReportNumbersDecl, loadSkillDecl, updatePlanDecl,
+  verifyReportNumbersDecl, loadSkillDecl, updatePlanDecl, searchPastConversationsDecl,
 ]

@@ -15,6 +15,7 @@ import { usedDbTaskTool }             from "@/lib/okr-helpers"
 import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
 import { runCreatorAI }               from "@/lib/agents/creator-ai"
 import { decidePendingAction, followupMessage } from "@/lib/agents/creator/approvals"
+import { extractMemoriesFromTurn } from "@/lib/assistant-memory-auto"
 import { detectGroupTask }            from "@/lib/task-assistant"
 
 // Max history to pull per Lark user
@@ -404,6 +405,8 @@ async function replyCreatorDM(openId: string, messageId: string, threadId: strin
   await replyLarkMessage(messageId, stripMarkdown(response))
   saveLarkMessage(openId, threadId, "user", userText)
   saveLarkMessage(openId, threadId, "assistant", response)
+  // G3: tự rút trí nhớ từ tin DM của creator (chỉ lời người dùng; bỏ qua lệnh duyệt / khi model đã tự lưu).
+  if (!cmd && !gp.toolsUsed.includes("assistantMemory")) await extractMemoriesFromTurn(username, userText, response, "lark_dm").catch(() => 0)
   try {
     await supabaseAdmin.from("app_usage_events").insert({
       event_type: "chat", user_email: `lark:${openId}`, user_name: name || openId, user_role: "creator",

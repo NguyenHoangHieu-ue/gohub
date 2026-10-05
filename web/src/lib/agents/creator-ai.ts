@@ -13,6 +13,7 @@ import { dispatchTool }          from "./creator/tools/dispatch"
 import { streamTurn, toGenaiSchema, type TurnResult } from "./genai-stream"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 import { buildMemoryBlock } from "@/lib/assistant-memory"
+import { personalFeaturesEnabled } from "@/lib/assistant-memory-auto"
 import { newTurnSafety, recordToolResult, approvalReason, describeAction } from "./creator/tool-policy"
 import { createPendingAction, type PendingAction } from "./creator/approvals"
 import { SKILL_TOOLS, getSkill, skillCatalog, preloadSkills } from "./creator/skills"
@@ -482,17 +483,20 @@ Hôm nay: ${fmt(now)} (${dow}). Data cutoff gohub_dw = CURRENT_DATE-1 = ${fmt(ye
 // buildFunctionDeclarations() cho tool nào THẬT SỰ cần creator-only về sau.
 // localFiles (ổ đĩa máy thật) + googleWorkspace (token Google của creator) + assistantMemory (trí nhớ cá nhân) + larkDocs (token Lark của creator) → chỉ creator.
 // sendLarkMessage (G0): trước mở cho mọi user Gấu Pro → bot đăng được vào group Lark bất kỳ theo chat_id.
-const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace", "assistantMemory", "larkDocs", "sendLarkMessage"])
+const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace", "larkDocs", "sendLarkMessage"])
+// G3: trí nhớ cá nhân — bật theo cờ gp_personal_features (personalFeaturesEnabled), hiện mặc định chỉ creator.
+const PERSONAL_TOOLS = new Set<string>(["assistantMemory", "searchPastConversations"])
 
-export function buildFunctionDeclarations(isCreator: boolean) {
-  return isCreator ? ALL_TOOL_DECLARATIONS : ALL_TOOL_DECLARATIONS.filter(d => !CREATOR_ONLY_TOOLS.has(d.name))
+export function buildFunctionDeclarations(isCreator: boolean, personal = isCreator) {
+  return ALL_TOOL_DECLARATIONS.filter(d =>
+    (isCreator || !CREATOR_ONLY_TOOLS.has(d.name)) && (personal || !PERSONAL_TOOLS.has(d.name)))
 }
 
 // G1: chỉ khai báo tool lõi + tool của skill đã nạp (giảm token mỗi vòng, bớt gọi nhầm tool).
-export function activeDeclarations(isCreator: boolean, loaded: Set<string>) {
+export function activeDeclarations(isCreator: boolean, loaded: Set<string>, personal = isCreator) {
   const enabled = new Set<string>()
   for (const name of loaded) getSkill(name)?.tools.forEach(t => enabled.add(t))
-  return buildFunctionDeclarations(isCreator).filter(d => !SKILL_TOOLS.has(d.name) || enabled.has(d.name))
+  return buildFunctionDeclarations(isCreator, personal).filter(d => !SKILL_TOOLS.has(d.name) || enabled.has(d.name))
 }
 
 export async function runCreatorAI(
@@ -516,6 +520,7 @@ export async function runCreatorAI(
   const t0 = Date.now()
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const isFreshConversation = geminiHistory.length <= 1
+  const personal = username && username !== "cron" ? await personalFeaturesEnabled(isCreator).catch(() => isCreator) : false
   const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock] = await Promise.all([
     getPartnerTiers().then(tiers => {
       const lines = Object.entries(tiers).map(([tier, channels]) => `  ${tier}: ${(channels as string[]).join(", ")}`).join("\n")
@@ -543,7 +548,7 @@ export async function runCreatorAI(
         }).catch(() => "")
       : Promise.resolve(""),
     // Trí nhớ dài hạn — nạp MỖI lượt (khác KB chỉ lượt đầu) để điều vừa nhớ có hiệu lực ngay.
-    isCreator && username ? buildMemoryBlock(username).catch(() => "") : Promise.resolve(""),
+    personal ? buildMemoryBlock(username).catch(() => "") : Promise.resolve(""),
   ])
 
   // Business date context — auto-inject để Gấu tự biết "tháng này"/"hôm nay" mà không hỏi lại
@@ -557,7 +562,7 @@ export async function runCreatorAI(
   const systemInstruction = (isCreator ? CREATOR_INTRO + CREATOR_PROFILE : MEMBER_INTRO) + SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject + memoryBlock
   const makeConfig = () => ({
     systemInstruction,
-    tools: [{ functionDeclarations: toGenaiSchema(activeDeclarations(isCreator, loadedSkills)) as any }],
+    tools: [{ functionDeclarations: toGenaiSchema(activeDeclarations(isCreator, loadedSkills, personal)) as any }],
     temperature: 0,
     thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
     abortSignal: opts.signal,
@@ -667,7 +672,7 @@ export async function runCreatorAI(
       }
       const ts = Date.now()
       try {
-        const out = await dispatchTool(call, onEvent, collectedSources, { username, isCreator })
+        const out = await dispatchTool(call, onEvent, collectedSources, { username, isCreator, personal })
         recordToolResult(safety, call, out.functionResponse.response)
         const err = out.functionResponse.response?.error
         steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), ...(err ? { err: String(err).slice(0, 200) } : {}) })

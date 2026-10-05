@@ -871,3 +871,28 @@ duyệt/từ chối được kể cả sau khi tải lại trang — chỉ hiệ
 (trạng thái, số chặng, Mở kết quả, Huỷ; tự làm mới 15s khi có việc đang chạy).
 
 **Chưa QA sống**: cần chạy v64 + v65 rồi thử trên staging: (1) giao 1 việc nền dài, (2) gửi Lark tới group → duyệt từ panel, (3) xem trace.
+
+## § s223 fix (2026-10-05) — `thinkingLevel: "minimal"` làm hỏng âm thầm 3 tính năng
+
+Gọi API thật: `gemini-3.8-flash` trả 400 "Thinking level MINIMAL is not supported for this model" (cả SDK cũ lẫn mới). 3 chỗ dùng
+"minimal" đều nuốt lỗi trong catch nên KHÔNG ai thấy: `compress.ts` (nén lịch sử Gấu Pro khi hội thoại dài → luôn gửi nguyên lịch sử),
+`learning.ts` (Bé Gấu tự học từ người dùng → không phân loại được gì), `task-assistant.ts` (tạo task khi có người @Hiếu giao việc trong
+group → không tạo). Đổi sang "low"; thử thật: nén 24 tin → `summarized=true`. Bài học: đổi model thì thử lại mọi mức `thinkingLevel`
+đang dùng; lỗi gọi model trong catch nên `console.error` thay vì nuốt im.
+
+## § s223 G3 (2026-10-05) — Trí nhớ 2 tầng + panel "🧠 Trí nhớ"
+
+Migration **v66** (`gp_conversation_memory` + RPC `match_gp_conversations`) — Hiếu phải chạy; chưa chạy thì tóm tắt bỏ qua, tool báo cách sửa.
+- **Cờ bật** `app_settings.gp_personal_features`: `all` = mọi user Gấu Pro; khác/không có = chỉ creator (mặc định — đúng chốt "khung
+  đa người dùng, hiện chỉ creator"). `personalFeaturesEnabled()` (cache 60s) quyết định: khối trí nhớ trong prompt, tool `assistantMemory`
+  + `searchPastConversations` (tách khỏi `CREATOR_ONLY_TOOLS` sang `PERSONAL_TOOLS`), tự rút trí nhớ, tóm tắt hội thoại, panel.
+- **Tự rút trí nhớ** (`lib/assistant-memory-auto.ts` `extractMemoriesFromTurn`): sau mỗi lượt web (trong `waitUntil`) và Lark DM, 1 lượt
+  Gemini JSON đọc CHỈ tin nhắn người dùng (câu trả lời bot chỉ làm ngữ cảnh — tránh đầu độc trí nhớ bằng nội dung web/tài liệu), so với
+  trí nhớ hiện có → tối đa 2 mục save/update, nguồn `auto-web`/`auto-lark_dm`. Bỏ qua câu <25 ký tự, câu nối sau duyệt, lượt model đã tự
+  gọi `assistantMemory`. Thử thật: "anh Tuấn thay chị Lan + muốn cột CM1%" → 2 mục; câu hỏi doanh thu → 0; "Minh chuyển sang B2B Customer
+  Report" → update đúng mục cũ.
+- **Trí nhớ hội thoại**: `summarizeConversation` (sau mỗi lượt web, chỉ làm lại khi thêm ≥4 tin) tóm tắt ≤120 từ + embedding 3072 →
+  upsert. Tool lõi `searchPastConversations(query)` → RPC (lọc username, ngưỡng 0,45) → tóm tắt + ngày + link `/analytics/creator/ai?c=<id>`
+  (trang tự mở hội thoại theo `?c=`). Hội thoại Lark DM chưa được tóm tắt (lưu ở bảng khác).
+- **Panel 🧠 Trí nhớ** (`components/gau-pro/memory-panel.tsx`, `GET/POST /api/creator-ai/memory`): xem, thêm tay, bấm để sửa, ghim, quên;
+  đánh dấu "Gấu tự nhớ".

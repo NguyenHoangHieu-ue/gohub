@@ -10,6 +10,8 @@ import { loadGpAllowed }              from "@/lib/gp-access"
 import { compressHistory, stripBase64Images } from "@/lib/agents/creator/compress"
 import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
 import { usedDbTaskTool }             from "@/lib/okr-helpers"
+import { waitUntil }                  from "@vercel/functions"
+import { personalFeaturesEnabled, extractMemoriesFromTurn, summarizeConversation } from "@/lib/assistant-memory-auto"
 
 export const maxDuration = 300
 
@@ -155,7 +157,7 @@ export async function POST(req: NextRequest) {
             savedConvId = conv?.id ?? null
           }
           if (savedConvId) {
-            void (async () => {
+            waitUntil((async () => {
               try {
                 await supabaseAdmin.from("chat_messages").insert([
                   { conversation_id: savedConvId, role: "user",      content: lastMsg, agent_id: "gau_pro", agent_name: "Gấu Pro" },
@@ -163,7 +165,14 @@ export async function POST(req: NextRequest) {
                 ])
                 await supabaseAdmin.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", savedConvId!)
               } catch (e: any) { console.error("[CreatorAI] save messages:", e) }
-            })()
+              // G3: trí nhớ — rút điều đáng nhớ (bỏ qua nếu model đã tự lưu lượt này) + tóm tắt hội thoại để tìm lại sau.
+              if (await personalFeaturesEnabled(isCreator).catch(() => false)) {
+                await Promise.all([
+                  toolsUsed.includes("assistantMemory") ? 0 : extractMemoriesFromTurn(username, lastMsg, text, "web").catch(() => 0),
+                  summarizeConversation(username, savedConvId!).catch(e => console.error("[gp_conv_mem]", e?.message)),
+                ])
+              }
+            })())
           }
         } catch (e) { console.error("[CreatorAI] save conversation:", e) }
 

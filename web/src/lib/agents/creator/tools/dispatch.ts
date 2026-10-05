@@ -18,6 +18,7 @@ import { runGenerateVideo, runCheckVideoStatus } from "./video"
 import { runReadMyBrowser, runControlMyBrowser, runLocalFiles } from "./bridge"
 import { runGoogleWorkspace } from "./google"
 import { runAssistantMemory } from "@/lib/assistant-memory"
+import { searchPastConversations } from "@/lib/assistant-memory-auto"
 import { runLarkDocs } from "./lark-docs"
 import { logGpAction }             from "./audit-log"
 import { runVerifyReportNumbers }  from "./self-review"
@@ -33,7 +34,7 @@ export async function dispatchTool(
   call: { name: string; args: any },
   onEvent: ((e: GPEvent) => void) | undefined,
   collectedSources: WebSource[],
-  ctx?: { username?: string; isCreator?: boolean },
+  ctx?: { username?: string; isCreator?: boolean; personal?: boolean },
 ): Promise<{ functionResponse: { name: string; response: any } }> {
   const result = await dispatchToolCore(call, onEvent, collectedSources, ctx)
   if (AUDITED_TOOLS.has(call.name)) {
@@ -48,7 +49,7 @@ async function dispatchToolCore(
   call: { name: string; args: any },
   onEvent: ((e: GPEvent) => void) | undefined,
   collectedSources: WebSource[],
-  ctx?: { username?: string; isCreator?: boolean },
+  ctx?: { username?: string; isCreator?: boolean; personal?: boolean },
 ): Promise<{ functionResponse: { name: string; response: any } }> {
   const isCreator = ctx?.isCreator === true
   // Emit status event
@@ -111,8 +112,13 @@ async function dispatchToolCore(
   if (call.name === "googleWorkspace")
     return wrap(ctx?.isCreator ? await runGoogleWorkspace(call.args) : { error: "googleWorkspace chỉ dành cho creator." })
 
+  // G3: trí nhớ cá nhân theo cờ gp_personal_features (ctx.personal); không truyền (vd duyệt hành động) thì như cũ = creator.
+  const personal = ctx?.personal ?? ctx?.isCreator === true
   if (call.name === "assistantMemory")
-    return wrap(ctx?.isCreator ? await runAssistantMemory(call.args, ctx?.username || "", "gau-pro") : { error: "assistantMemory chỉ dành cho creator." })
+    return wrap(personal ? await runAssistantMemory(call.args, ctx?.username || "", "gau-pro") : { error: "Trí nhớ cá nhân chưa bật cho tài khoản này." })
+
+  if (call.name === "searchPastConversations")
+    return wrap(personal ? await searchPastConversations(ctx?.username || "", String(call.args?.query ?? "")) : { error: "Trí nhớ cá nhân chưa bật cho tài khoản này." })
 
   if (call.name === "larkDocs")
     return wrap(ctx?.isCreator ? await runLarkDocs(call.args) : { error: "larkDocs chỉ dành cho creator." })

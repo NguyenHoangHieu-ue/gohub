@@ -15,6 +15,7 @@ import ChatChart      from "@/components/chat-chart"
 import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
 import { TasksPanel } from "@/components/gau-pro/tasks-panel"
 import { RunsList } from "@/components/gau-pro/runs-list"
+import { MemoryPanel } from "@/components/gau-pro/memory-panel"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -455,6 +456,7 @@ export default function CreatorAIPage() {
   const [showTasks,     setShowTasks]     = useState(false)
   const [tasksRefresh,  setTasksRefresh]  = useState(0)
   const [bgMode,        setBgMode]        = useState(false)
+  const [showMemory,    setShowMemory]    = useState(false)
   const isCreatorRole = session?.user?.role === "creator"
 
   const toggleActionLog = async () => {
@@ -631,6 +633,14 @@ export default function CreatorAIPage() {
       try { localStorage.setItem(LS_KEY, JSON.stringify(converted)) } catch {}
     } catch {}
   }, [LS_KEY])
+
+  // G3: link "?c=<id>" (tool searchPastConversations trả về) → mở đúng hội thoại cũ.
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get("c")
+    if (!c) return
+    loadConversation(c)
+    window.history.replaceState({}, "", window.location.pathname)
+  }, [loadConversation])
 
   const clearConversation = useCallback(() => {
     userActedRef.current = true
@@ -962,6 +972,16 @@ export default function CreatorAIPage() {
               Cuộc trò chuyện mới
             </button>
           )}
+          <div className="relative">
+            <button
+              onClick={() => setShowMemory(v => !v)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
+              title="Xem/sửa những gì Gấu Pro nhớ về bạn"
+            >
+              🧠 Trí nhớ
+            </button>
+            {showMemory && <MemoryPanel onClose={() => setShowMemory(false)} />}
+          </div>
           <div className="relative">
             <button
               onClick={() => setShowTasks(v => !v)}

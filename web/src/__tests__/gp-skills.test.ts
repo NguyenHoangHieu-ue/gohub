@@ -44,3 +44,16 @@ describe("Gấu Pro skills (G1)", () => {
     for (const k of SKILLS) expect(c).toContain(k.name)
   })
 })
+
+describe("Gấu Pro trí nhớ cá nhân theo cờ (G3)", () => {
+  it("user được cấp quyền: mặc định KHÔNG có tool trí nhớ; bật cờ (personal=true) thì có, nhưng vẫn không có tool chỉ-creator", () => {
+    const off = buildFunctionDeclarations(false).map(d => d.name)
+    expect(off).not.toContain("assistantMemory")
+    expect(off).not.toContain("searchPastConversations")
+    const on = buildFunctionDeclarations(false, true).map(d => d.name)
+    expect(on).toContain("assistantMemory")
+    expect(on).toContain("searchPastConversations")
+    expect(on).not.toContain("localFiles")
+    expect(on).not.toContain("sendLarkMessage")
+  })
+})
