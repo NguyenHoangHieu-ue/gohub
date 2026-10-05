@@ -9,6 +9,7 @@ import { parseUploadedFile }          from "@/lib/agents/file-parser"
 import { loadGpAllowed }              from "@/lib/gp-access"
 import { compressHistory, stripBase64Images } from "@/lib/agents/creator/compress"
 import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
+import { usedDbTaskTool }             from "@/lib/okr-helpers"
 
 export const maxDuration = 300
 
@@ -115,7 +116,7 @@ export async function POST(req: NextRequest) {
         try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`)) } catch {}
       }
       try {
-        const { text, sources, tokensIn, tokensOut } = await runCreatorAI(
+        const { text, sources, tokensIn, tokensOut, toolsUsed } = await runCreatorAI(
           history, lastMsg,
           fileContexts.length > 0 ? fileContexts : undefined,
           emit,
@@ -133,6 +134,9 @@ export async function POST(req: NextRequest) {
             user_role:  session.user.role  || null,
             user_message: lastMsg.slice(0, 500),
             ai_response:  text ? text.slice(0, 3000) : null,
+            tools_used: toolsUsed.length > 0 ? toolsUsed : null,
+            // Tính task My Metrics như Bé Gấu (đã gọi tool đọc DB), TRỪ câu hỏi của Creator (Hiếu tự hỏi/thử).
+            used_db_tool: !isCreator && usedDbTaskTool(toolsUsed),
             tokens_in: tokensIn, tokens_out: tokensOut,
             est_cost_usd: estimateCostUsd(tokensIn, tokensOut),
           })

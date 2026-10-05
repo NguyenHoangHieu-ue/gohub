@@ -655,7 +655,7 @@ export async function runCreatorAI(
   onEvent?: (e: GPEvent) => void,
   isCreator = true,
   username = "",
-): Promise<{ text: string; sources: WebSource[]; tokensIn: number; tokensOut: number }> {
+): Promise<{ text: string; sources: WebSource[]; tokensIn: number; tokensOut: number; toolsUsed: string[] }> {
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const isFreshConversation = geminiHistory.length <= 1
   const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock] = await Promise.all([
@@ -750,6 +750,7 @@ export async function runCreatorAI(
   let genResult = await genWithRetryStream(model, { contents }, onChunk)
   addUsage(genResult)
   const collectedSources: WebSource[] = []
+  const toolsUsed = new Set<string>()
 
   function appendModelContent() {
     const content = genResult.response.candidates?.[0]?.content
@@ -765,6 +766,7 @@ export async function runCreatorAI(
     // Mỗi tool bọc try/catch RIÊNG — 1 tool lỗi (network timeout portal/video API/...) trước đây làm
     // Promise.all reject cả round, sập TOÀN BỘ câu trả lời dù các tool khác đã chạy xong. Nay tool lỗi chỉ
     // trả functionResponse báo lỗi cho MỘT tool đó, các tool còn lại + phần trả lời vẫn tiếp tục bình thường.
+    calls.forEach((c: any) => toolsUsed.add(c.name))
     const fnParts = await Promise.all(calls.map(async (call: any) => {
       try {
         return await dispatchTool(call, onEvent, collectedSources, { username, isCreator })
@@ -791,5 +793,5 @@ export async function runCreatorAI(
     } catch { /* keep empty */ }
   }
 
-  return { text: text || "Không có dữ liệu trả về.", sources: collectedSources, tokensIn, tokensOut }
+  return { text: text || "Không có dữ liệu trả về.", sources: collectedSources, tokensIn, tokensOut, toolsUsed: [...toolsUsed] }
 }
