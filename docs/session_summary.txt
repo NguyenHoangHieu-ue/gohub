@@ -10701,3 +10701,9 @@ Chi tiết từng phần: wiki `analytics-creator-ai.md` §s223 G0, G1a, G1b, G2
 - G4: `scheduleTask` (daily/weekly/monthly/once giờ VN, tối đa 10) + canh chừng `only_if_notable` (NO_ALERT thì im), chạy qua việc nền, cron mỗi giờ (v67).
 - G5 (Live API kiểu Astra) chưa làm — đúng điều kiện plan: chờ G0–G3 chạy ổn trên môi trường thật.
 **Việc còn cho Hiếu**: chạy migration v64, v65, v66, v67 (+ Reload schema) rồi QA staging: gửi Lark tới group → duyệt; giao 1 việc nền; xem trace; hỏi "lần trước bàn gì về X"; đặt 1 việc theo lịch. Muốn mở trí nhớ/lịch cho user được cấp quyền: `app_settings.gp_personal_features = all`.
+
+## s223 QA sống staging (2026-10-05, sau khi Hiếu chạy v64–v67)
+- ĐẠT: (1) gửi Lark vào group → chờ duyệt #mã; danh sách chờ duyệt; Từ chối → không gửi. (2) lượt đã đọc web + gửi DM "me" → chờ duyệt → Duyệt → DM thật tới Hiếu (261 ký tự) → câu nối, Gấu Pro báo xong. (3) việc nền: xong 1 chặng, kết quả đúng; Huỷ → cancelled, không chạy. (4) trace gp_runs đủ kênh web/job, bước tool, mã duyệt, skill, token. (5) trí nhớ: model tự lưu "phụ trách sourcing eSIM châu Âu từ ~12/10/2026", "chốt KDDI cho eSIM Nhật Q4"; panel đọc được. (6) việc theo lịch 1 lần 13:55 → gọi cron → việc nền → 6.272.109.104 VND (khớp), lịch tự tắt. Panel Việc & duyệt hiển thị đúng 3 mục.
+- Lỗi tìm ra + đã sửa: (a) duyệt lặp lại hành động đã xử lý vẫn trả câu nối (`e6d3c8a3`, thêm `decided`); (b) mở/xoá hội thoại Gấu Pro 404 khi name ≠ username (`4e98864b`); (c) LỖI GỐC CÓ SẴN: v34 Tổ Gấu drop + tạo lại `chat_messages` cho chat nhóm → tin nhắn hội thoại Bé Gấu web + Gấu Pro không lưu được từ đó (506 hội thoại rỗng) → bảng mới `conversation_messages` migration **v68** (`8a96e331`); tin cũ mất hẳn.
+- CHƯA QA được (chờ v68): tóm tắt hội thoại + `searchPastConversations` (kho tóm tắt trống vì không đọc được tin), "Mở kết quả" việc nền, mở hội thoại cũ qua `?c=`.
+**Việc còn cho Hiếu**: chạy `v68_conversation_messages.sql` + Reload schema; báo để QA nốt.
