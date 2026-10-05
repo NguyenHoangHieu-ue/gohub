@@ -29,7 +29,10 @@ async function jsonCall<T>(prompt: string): Promise<T | null> {
       config: { temperature: 0, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } },
     })
     return JSON.parse(r.text ?? "null") as T
-  } catch { return null }
+  } catch (e) {
+    console.error("[assistant-memory-auto] gọi model lỗi:", (e as Error).message)
+    return null
+  }
 }
 
 /**
@@ -84,7 +87,10 @@ export async function summarizeConversation(username: string, conversationId: st
     supabaseAdmin.from("conversations").select("title").eq("id", conversationId).maybeSingle(),
   ])
   const count = msgs?.length ?? 0
-  if (count < 4 || (prev && count - (prev.message_count as number) < 4)) return
+  if (count < 4 || (prev && count - (prev.message_count as number) < 4)) {
+    console.log(`[gp_conv_mem] bỏ qua ${conversationId}: ${count} tin (lần trước ${prev?.message_count ?? 0})`)
+    return
+  }
 
   const text = (msgs ?? []).map(m => `[${m.role}] ${String(m.content).slice(0, 1200)}`).join("\n").slice(0, 30_000)
   const out = await jsonCall<{ summary: string }>(
