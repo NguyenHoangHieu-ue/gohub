@@ -11,6 +11,7 @@ Quy ước làm: đo trước/sau bằng log Vercel (`[analytics-db] SLOW wait=�
 - (2026-10-05) Việc 1 làm theo hướng (b): quý đã đóng TTL 24h + maxStale 48h + bỏ qua softExpire (wiki `analytics-data-model.md` §s222(b)). Hiếu chưa xác nhận mức 48h → chỉnh `CLOSED_QUARTER_*` trong `quarterly-report/route.ts` nếu muốn khác. Chưa đo lại staging.
 - (2026-10-05) Việc 3 làm một phần: heartbeat 30s→2 phút + dừng khi tab ẩn (ping bù khi hiện lại), poll chuông thông báo bỏ qua khi tab ẩn. CÒN: `creator-ai/bridge/next` (poll nằm ở `browser-extension/background.js`, đổi phải bắt mọi người reload extension), `auth/session`, `user/me`.
 - (2026-10-05) Việc 4: registry `urlreg:` tự ghi MỌI URL qua `analyticsGuard` (kể cả Performance/quarterly-report các quý) nên không cần đăng ký thêm. Đã sửa `prewarmAnalyticsUrls`: URL `quarterly-report` quý đã đóng KHÔNG ép `nocache=1` nữa (tránh tính lại 10-14s/quý mỗi ngày, chỉ nạp nếu trống). CÒN: cron-job.org có gọi `etl-cache-sync`/`prewarm-analytics` không (ngoài code, Hiếu kiểm); prewarm giới hạn 50 URL/60s nên URL nặng cuối danh sách có thể không kịp.
+- (2026-10-05) Việc 2 ĐÃ ĐO (staging, Chrome, quarterly-report Q1-2026): nguội 26,3s → lần 2-3 ~60ms → SAU deploy rỗng lần đầu 2,7s, lần 2 59ms ⇒ Runtime Cache SỐNG qua deploy (2,7s = cold start function + đọc Turso/Supabase, không chạy lại query gohub_dw). Không cần prewarm sau deploy. Cái nguội lúc đầu là do khoá/entry hết hạn, không phải deploy.
 
 ## Việc còn lại (theo thứ tự ưu tiên)
 

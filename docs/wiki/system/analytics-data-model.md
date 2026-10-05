@@ -180,3 +180,5 @@ SUM thẳng mọi dòng của `fact_fulfillment_revenue`.
 **s222(c) (2026-10-05) — Giảm request nền (việc 3 plan perf)**: `heartbeat-provider.tsx` ping mỗi 2 phút (trước 30s; ONLINE_MS server 5 phút) và chỉ khi tab hiện, ping bù khi tab hiện lại; `notification-bell.tsx` bỏ poll 5 phút khi tab ẩn. Giảm ~4× request heartbeat (mỗi ping = đọc+ghi Supabase). Poll `bridge/next` ở extension chưa đổi.
 
 **s222(d) (2026-10-05) — Prewarm quý đã đóng (việc 4 plan perf)**: registry `urlreg:` tự ghi mọi URL qua `analyticsGuard`, nên Performance/quarterly-report các quý đã nằm trong đó khi từng được mở. `prewarmAnalyticsUrls` không còn ép `nocache=1` với `quarterly-report` quý đã đóng (hết ngày cuối quý) — cache dài của route đó giữ nguyên, prewarm chỉ nạp khi trống.
+
+**s222(e) (2026-10-05) — Runtime Cache sống qua deploy (đã đo)**: staging, `quarterly-report` Q1-2026: nguội 26,3s → hit ~60ms → sau deploy rỗng lần đầu 2,7s (cold start function + Turso/Supabase, gohub_dw không chạy lại), lần 2 59ms. Kết luận: L2 không mất khi deploy; "staging chậm lần đầu" là do hết TTL/maxStale, không phải do push.
