@@ -18,12 +18,12 @@ export async function compressHistory(
 
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    // thinkingLevel "minimal": tóm tắt hội thoại là tác vụ nén văn bản thẳng, không cần suy luận sâu —
-    // né mặc định "medium" của gemini-3.8-flash (billable, thêm latency ẩn). "as any": SDK v0.21.0 pin
+    // thinkingLevel "low": né mặc định "medium" của gemini-3.8-flash (billable, thêm latency ẩn). s223: model này TỪ CHỐI
+    // "minimal" (400 "Thinking level MINIMAL is not supported") → trước đây nén lịch sử luôn lỗi âm thầm (catch trả lịch sử gốc). "as any": SDK v0.21.0 pin
     // cứng chưa có type cho field này (ra đời sau SDK).
     const model = genAI.getGenerativeModel({
       model: GEMINI_MODEL,
-      generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "minimal" } } as any,
+      generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
     })
     const convText = toSummarize.map(m => `[${m.role}] ${m.parts[0]?.text || ""}`).join("\n").slice(0, 40000)
     const res = await model.generateContent(

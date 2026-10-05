@@ -36,13 +36,13 @@ export async function detectAndLogLearning(opts: {
 
     // 1-shot LLM classify
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-    // thinkingLevel "minimal": gemini-3.8-flash mặc định thinking=medium (tiêu hao token/latency ẩn) —
-    // call này chỉ cần JSON 1-shot xác định, không cần suy luận sâu. SDK v0.21.0 pin cứng chưa có type
+    // thinkingLevel "low": gemini-3.8-flash mặc định thinking=medium (tiêu hao token/latency ẩn) — call này chỉ cần JSON
+    // 1-shot. s223: model TỪ CHỐI "minimal" (400) → trước đây phân loại học liệu luôn lỗi âm thầm. SDK v0.21.0 pin cứng chưa có type
     // cho field này (ra đời sau SDK) → "as any". Xem chatbot-agents-guardian.md (bài học gemini-3.5-flash
     // thinking model cần thinkingBudget=0 mới ổn định JSON — né lặp lại đúng lớp sự cố).
     const model = genAI.getGenerativeModel({
       model: GEMINI_MODEL,
-      generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "minimal" } } as any,
+      generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
     })
     const prompt = `Phân tích xem câu sau của user có chứa THÔNG TIN THỰC TẾ có thể học không (không phải câu hỏi).
 
