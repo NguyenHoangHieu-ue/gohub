@@ -349,3 +349,21 @@ Triệu chứng: chat trả lỗi 429
 3. Check /api/lark/events Vercel function logs
 4. Check lark_chat_history bảng Supabase (có insert không?)
 ```
+
+## 13. Wiki Sync — `docs/wiki` → Supabase `kb_wiki_pages` (viết lại s223, 2026-10-05)
+
+- **Vì sao quan trọng**: `kb_wiki_pages` là nguồn wiki của Bé Gấu, Gấu Tổ và trang KB trên web. Sửa wiki trong repo mà không đồng bộ thì
+  chatbot vẫn dùng bản cũ.
+- **Lỗi cũ**: workflow `wiki-sync.yml` gọi `backend/seeding/import/import_wiki.py` — file chưa từng được commit (`.gitignore` bỏ cả `backend/`)
+  → **40/40 lần chạy thất bại** từ khi tạo; 10 trang trong repo chưa từng có trên DB, 40 trang DB là bản cũ.
+- **Script mới**: `.github/scripts/wiki_sync.py` (requests + pyyaml, REST PostgREST trực tiếp). Đọc frontmatter (title, page_type,
+  department, tags, is_hidden/visibility) → khớp trang theo `title` (bảng không có cột đường dẫn file):
+  - giống hệt → bỏ qua (không gọi embedding) · khác → lưu bản đang có vào `kb_wiki_versions`, cập nhật nội dung + embedding
+    `gemini-embedding-001` 3072 chiều (như web), `version+1`, `updated_by = wiki-sync` · chưa có → tạo mới.
+  - KHÔNG xoá trang chỉ có trên web. File không khai báo ẩn/hiện → giữ trạng thái đang có (trang mới: `system/` ẩn, còn lại hiện).
+  - Cảnh báo khi trang trên web được sửa SAU commit cuối của file (bản web vẫn còn trong `kb_wiki_versions`).
+- **Chạy**: tự động khi push `main` có đổi `docs/wiki/**`; tay: Actions → "Wiki Sync" → Run workflow (mặc định `dry_run = true` chỉ in kế
+  hoạch; bỏ tick để ghi thật). Local: `python .github/scripts/wiki_sync.py --dry-run` (không cần key → chỉ liệt kê file đọc được).
+- **Lần chạy đầu (2026-10-05, từ staging)**: tạo 10 · cập nhật 40 · giữ nguyên 3 · lỗi 0 · 15 trang chỉ có trên web không đụng; không trang
+  nào bị cảnh báo bản web mới hơn. Chạy lại → giữ nguyên 53 (không ghi lặp). Bé Gấu trả lời đúng quy trình SIMPIN Gighub từ trang vừa tạo.
+- Trùng `title` giữa 2 file → chỉ file đầu được đồng bộ (script in cảnh báo) — đổi title để khác nhau.
