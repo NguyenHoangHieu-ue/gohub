@@ -834,3 +834,13 @@ làm lượt sau nhiễm. Test: `gp-tool-policy.test.ts` (7 ca).
 - CHƯA chuyển: Bé Gấu (`be-gau.ts` + `gemini-stream.ts`), `compress.ts`, tool phụ (self-review, search, image...) — vẫn SDK cũ, chạy bình
   thường; chuyển dần khi đụng tới.
 - Eval sau khi chuyển: 9/13 giống hệt trước (4 câu cần DB không chấm được trên máy dev) — vòng nhiều lượt gọi tool chạy đúng.
+
+## § s223 G2a (2026-10-05) — Kế hoạch hiển thị + nút Dừng
+
+- Tool lõi `updatePlan(steps[{title,status}])` (không chạy gì, không qua dispatch): vòng lặp phát SSE `plan`; web hiện checklist "Kế hoạch
+  (x/y)" đầu bubble (`PlanChecklist`, lưu trong `msg.plan`). Prompt lõi: chỉ dùng cho việc ≥3 bước, cập nhật cùng lượt với tool bước sau.
+  Thử thật (máy dev): "3 kịch bản TikTok Nhật/Hàn/Thái" → plan 3 bước in_progress → done.
+- Nút Dừng (thay nút gửi khi đang chạy): `AbortController` huỷ fetch → route truyền `req.signal` vào `runCreatorAI` → dừng giữa các vòng
+  + huỷ request Gemini đang chạy (`abortSignal` của SDK mới); câu trả lời thêm "⏹ Đã dừng theo yêu cầu.". Chưa xác minh trên Vercel việc
+  client ngắt có làm `req.signal` abort ngay không (nếu không, server chạy nốt vòng lặp như trước — không hại).
+- Lark DM chưa hiện kế hoạch (bỏ qua sự kiện `plan`).

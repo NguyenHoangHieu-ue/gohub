@@ -7,7 +7,7 @@ import {
   Send, Cpu, User, Plus, Trash2, ExternalLink, Loader2,
   Database, Globe, BarChart2, Code2, Lightbulb,
   Paperclip, X, FileText, Image as ImageIcon, FileSpreadsheet,
-  FileJson, FileType, Package, Mic, Volume2, VolumeX, ShieldAlert,
+  FileJson, FileType, Package, Mic, Volume2, VolumeX, ShieldAlert, Square, CheckCircle2, Circle,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm     from "remark-gfm"
@@ -25,6 +25,26 @@ interface Message {
   fileName?: string  // attached file name shown in user bubble
   summarized?: boolean  // server nén lịch sử cũ cho lượt này
   approvals?: Approval[]  // G0: hành động Gấu Pro chờ duyệt trong lượt này
+  plan?: PlanStep[]       // G2: checklist kế hoạch việc nhiều bước
+}
+
+interface PlanStep { title: string; status: "pending" | "in_progress" | "done" }
+
+function PlanChecklist({ steps }: { steps: PlanStep[] }) {
+  const done = steps.filter(s => s.status === "done").length
+  return (
+    <div className="mb-2 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50/60 dark:bg-violet-900/10 px-3 py-2 text-xs">
+      <div className="font-semibold text-violet-700 dark:text-violet-300 mb-1">Kế hoạch ({done}/{steps.length})</div>
+      {steps.map((s, i) => (
+        <div key={i} className={`flex items-center gap-1.5 py-0.5 ${s.status === "done" ? "text-gray-400 dark:text-slate-500 line-through" : "text-gray-700 dark:text-slate-200"}`}>
+          {s.status === "done" ? <CheckCircle2 size={12} className="text-emerald-500 flex-shrink-0" />
+            : s.status === "in_progress" ? <Loader2 size={12} className="animate-spin text-violet-500 flex-shrink-0" />
+            : <Circle size={12} className="text-gray-300 flex-shrink-0" />}
+          <span>{s.title}</span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 interface Approval {
@@ -330,6 +350,7 @@ const MessageRow = memo(function MessageRow({ msg, index, speaking, ttsSupported
             <span className="whitespace-pre-wrap">{msg.content}</span>
           ) : (
             <>
+              {msg.plan && msg.plan.length > 0 && <PlanChecklist steps={msg.plan} />}
               {msg.summarized && (
                 <div className="text-[10px] text-slate-400 dark:text-slate-500 mb-1.5 italic">🗜️ Lịch sử cũ đã được tóm tắt để tối ưu</div>
               )}
@@ -683,6 +704,8 @@ export default function CreatorAIPage() {
     let placeholderAdded = false
     let rafId = 0
 
+    const controller = new AbortController()
+    abortRef.current = controller
     try {
       const serializedMsgs = next.map(m => ({ role: m.role, content: m.content }))
       let res: Response
@@ -691,11 +714,12 @@ export default function CreatorAIPage() {
         form.append("messages", JSON.stringify(serializedMsgs))
         if (convId) form.append("conversation_id", convId)
         filesToSend.forEach((f, i) => form.append(`file_${i}`, f))
-        res = await fetch("/api/creator-ai/chat", { method: "POST", body: form })
+        res = await fetch("/api/creator-ai/chat", { method: "POST", body: form, signal: controller.signal })
       } else {
         res = await fetch("/api/creator-ai/chat", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ messages: serializedMsgs, conversation_id: convId }),
+          signal: controller.signal,
         })
       }
 
@@ -714,11 +738,12 @@ export default function CreatorAIPage() {
       let finalSummarized = false
       let newConvId:      string | null = null
       const approvals:    Approval[]   = []
+      let plan:           PlanStep[] | undefined
 
       const updateBubble = (content: string, extra?: Partial<Message>) => {
         setMessages(prev => {
           const u = [...prev]
-          u[u.length - 1] = { role: "assistant", content, ...(approvals.length ? { approvals: [...approvals] } : {}), ...extra }
+          u[u.length - 1] = { role: "assistant", content, ...(approvals.length ? { approvals: [...approvals] } : {}), ...(plan ? { plan } : {}), ...extra }
           return u
         })
       }
@@ -744,6 +769,10 @@ export default function CreatorAIPage() {
               if (!rafId) rafId = requestAnimationFrame(() => { rafId = 0; updateBubble(assistantContent) })
             }
             else if (ev.type === "text")   assistantContent = ev.content
+            else if (ev.type === "plan" && Array.isArray(ev.steps)) {
+              plan = ev.steps
+              updateBubble(assistantContent)
+            }
             else if (ev.type === "approval_required" && ev.action) {
               approvals.push({ ...ev.action, state: "pending" })
               updateBubble(assistantContent)
@@ -772,6 +801,7 @@ export default function CreatorAIPage() {
     } catch (e: any) {
       setStatusText("")
       if (rafId) { cancelAnimationFrame(rafId); rafId = 0 }
+      if (e?.name === "AbortError") e = new Error("Đã dừng theo yêu cầu.")
       // Nếu đã stream được phần nào trước khi lỗi → giữ lại, nối thêm lỗi thay vì xoá trắng thay thế.
       if (placeholderAdded) {
         setMessages(prev => {
@@ -784,11 +814,13 @@ export default function CreatorAIPage() {
         setMessages([...next, { role: "assistant", content: `Lỗi: ${e.message}` }])
       }
     } finally {
+      abortRef.current = null
       setLoading(false)
       setTimeout(() => inputRef.current?.focus(), 100)
     }
   }, [messages, loading, attachedFiles, addFiles, imgPreviews])
 
+  const abortRef = useRef<AbortController | null>(null)
   const sendRef = useRef(send)
   sendRef.current = send
   const handleFollowup = useCallback((q: string) => { sendRef.current(q) }, [])
@@ -1145,13 +1177,23 @@ export default function CreatorAIPage() {
                 <Mic size={16} />
               </button>
             )}
-            <button
-              onClick={() => send(input)}
-              disabled={(!input.trim() && attachedFiles.length === 0) || loading}
-              className="flex-shrink-0 w-10 h-10 bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
-            >
-              {loading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-            </button>
+            {loading ? (
+              <button
+                onClick={() => abortRef.current?.abort()}
+                title="Dừng"
+                className="flex-shrink-0 w-10 h-10 bg-gray-700 text-white rounded-xl hover:bg-gray-600 transition-colors shadow-sm flex items-center justify-center"
+              >
+                <Square size={13} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                onClick={() => send(input)}
+                disabled={!input.trim() && attachedFiles.length === 0}
+                className="flex-shrink-0 w-10 h-10 bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
+              >
+                <Send size={15} />
+              </button>
+            )}
           </div>
 
           <p className="text-[10px] text-gray-400 mt-1.5 text-center">

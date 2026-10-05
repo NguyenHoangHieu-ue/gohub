@@ -624,6 +624,30 @@ export const loadSkillDecl = {
   },
 }
 
+// G2: kế hoạch hiển thị cho việc nhiều bước (UI hiện checklist, không chạy gì).
+export const updatePlanDecl = {
+  name: "updatePlan",
+  description: "Hiện/cập nhật kế hoạch các bước cho người dùng thấy tiến độ. Chỉ dùng cho việc ≥3 bước. Gửi LẠI TOÀN BỘ danh sách mỗi lần cập nhật.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      steps: {
+        type: SchemaType.ARRAY,
+        description: "Danh sách bước (≤7), theo thứ tự.",
+        items: {
+          type: SchemaType.OBJECT,
+          properties: {
+            title:  { type: SchemaType.STRING, description: "Tên bước ngắn, bắt đầu bằng động từ." },
+            status: { type: SchemaType.STRING, description: "pending | in_progress | done" },
+          },
+          required: ["title", "status"],
+        },
+      },
+    },
+    required: ["steps"],
+  },
+}
+
 // Ordered list used to initialize the Gemini model tools
 export const ALL_TOOL_DECLARATIONS = [
   readKBDecl, writeKBDecl, searchKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
@@ -638,5 +662,5 @@ export const ALL_TOOL_DECLARATIONS = [
   // Phase 2 (s195+1) — Extension điều khiển browser cá nhân Hiếu
   readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl, googleWorkspaceDecl, assistantMemoryDecl, larkDocsDecl,
   // s196+12 — second-opinion pass (roadmap audit s196+5, ý tưởng #7)
-  verifyReportNumbersDecl, loadSkillDecl,
+  verifyReportNumbersDecl, loadSkillDecl, updatePlanDecl,
 ]

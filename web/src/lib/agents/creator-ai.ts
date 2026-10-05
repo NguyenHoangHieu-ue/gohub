@@ -31,6 +31,17 @@ export type GPEvent =
   | { type: "done"; conversationId: string | null; sources: WebSource[]; summarized: boolean }
   | { type: "error"; message: string }
   | { type: "approval_required"; action: PendingAction }   // G0: tool ghi/gửi ra ngoài chờ người dùng duyệt
+  | { type: "plan"; steps: PlanStep[] }                     // G2: checklist kế hoạch việc nhiều bước
+
+export interface PlanStep { title: string; status: "pending" | "in_progress" | "done" }
+
+function normalizePlan(raw: unknown): PlanStep[] {
+  if (!Array.isArray(raw)) return []
+  return raw.slice(0, 10).map((s: any) => ({
+    title: String(s?.title ?? "").slice(0, 120),
+    status: s?.status === "done" || s?.status === "in_progress" ? s.status : "pending",
+  })).filter(s => s.title)
+}
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
@@ -389,6 +400,11 @@ Key tables for analytics/config:
 - kb_wiki_pages: internal wiki pages
 - trend_snapshots: daily trend data (travel SIM/eSIM, TikTok, competitor) — dùng getTrendSnapshots tool
 
+## Kế hoạch cho việc nhiều bước
+Việc cần ≥3 bước (nhiều truy vấn/nhiều tool, tạo sản phẩm, báo cáo lớn, thao tác tài liệu) → gọi updatePlan NGAY đầu với danh sách bước
+ngắn (≤7), rồi cập nhật status khi xong từng bước (gọi CÙNG lượt với tool của bước tiếp theo, không tốn lượt riêng). Câu hỏi 1–2 bước
+→ KHÔNG dùng updatePlan.
+
 ${skillCatalog()}
 `
 
@@ -457,7 +473,7 @@ export async function runCreatorAI(
   isCreator = true,
   username = "",
   channel: "web" | "lark_dm" | "cron" = "web",
-  opts: { preloadSkills?: string[] } = {},
+  opts: { preloadSkills?: string[]; signal?: AbortSignal } = {},
 ): Promise<{ text: string; sources: WebSource[]; tokensIn: number; tokensOut: number; toolsUsed: string[]; pendingActions: PendingAction[] }> {
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const isFreshConversation = geminiHistory.length <= 1
@@ -505,6 +521,7 @@ export async function runCreatorAI(
     tools: [{ functionDeclarations: toGenaiSchema(activeDeclarations(isCreator, loadedSkills)) as any }],
     temperature: 0,
     thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+    abortSignal: opts.signal,
   })
 
   // Build user message parts — support multiple files (text + binary)
@@ -560,7 +577,9 @@ export async function runCreatorAI(
 
 
   // Function calling loop — max 20 iterations. Tools run in parallel per turn.
+  let stopped = false
   for (let i = 0; i < 20; i++) {
+    if (opts.signal?.aborted) { stopped = true; break }   // G2: người dùng bấm Dừng
     const calls = genResult.functionCalls
     if (calls.length === 0) break
 
@@ -570,6 +589,11 @@ export async function runCreatorAI(
     calls.forEach((c: any) => toolsUsed.add(c.name))
     let skillsChanged = false
     const fnParts = await Promise.all(calls.map(async (call: any) => {
+      if (call.name === "updatePlan") {
+        const steps = normalizePlan(call.args?.steps)
+        onEvent?.({ type: "plan", steps })
+        return { functionResponse: { name: call.name, response: { ok: true, steps: steps.length } } }
+      }
       if (call.name === "loadSkill") {
         const skill = getSkill(String(call.args?.name ?? ""))
         if (!skill) return { functionResponse: { name: call.name, response: { error: `Không có skill "${call.args?.name}".` } } }
@@ -611,7 +635,8 @@ export async function runCreatorAI(
 
   // Ensure non-empty response
   let text = genResult.text
-  if (!text.trim()) {
+  if (stopped) text = `${text}\n\n⏹ Đã dừng theo yêu cầu.`.trim()
+  else if (!text.trim()) {
     try {
       contents.push({ role: "user", parts: [{ text: "Based on the data retrieved above, write a complete, detailed answer in Vietnamese. Include a markdown table or chart if the data is tabular. DO NOT call any more tools." }] })
       genResult = await turn()

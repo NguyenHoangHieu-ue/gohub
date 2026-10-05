@@ -122,6 +122,8 @@ export async function POST(req: NextRequest) {
           emit,
           isCreator,
           username,
+          "web",
+          { signal: req.signal },   // G2: người dùng bấm Dừng → client huỷ request → dừng vòng lặp
         )
 
         // Cost dashboard (s196+7) — Gấu Pro trước đây không ghi app_usage_events gì cả (khác Bé Gấu).
