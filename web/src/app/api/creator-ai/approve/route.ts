@@ -25,8 +25,7 @@ export async function POST(req: NextRequest) {
   }
 
   const r = await decidePendingAction({ username, isCreator, id: body.id, approve: body.approve })
-  const decided = ["executed", "failed", "rejected"].includes(r.status ?? "")
-  return NextResponse.json({ ...r, followup: decided ? followupMessage(r) : null }, { status: decided || r.status ? 200 : 400 })
+  return NextResponse.json({ ...r, followup: r.decided ? followupMessage(r) : null }, { status: r.decided || r.status ? 200 : 400 })
 }
 
 // GET — hành động đang chờ duyệt của tôi (≤24h) — panel "Việc & duyệt" (duyệt được cả sau khi tải lại trang / việc nền).

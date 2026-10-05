@@ -23,7 +23,8 @@ export async function createPendingAction(
   return { action: { id: data.id as string, code, tool: p.tool, summary: p.summary, reason: p.reason } }
 }
 
-export interface DecideResult { ok: boolean; status?: string; tool?: string; code?: string; result?: unknown; error?: string }
+// decided = CHÍNH lần gọi này vừa duyệt/từ chối (lần gọi lặp lại trên hành động đã xử lý → false, không gửi câu nối nữa).
+export interface DecideResult { ok: boolean; decided?: boolean; status?: string; tool?: string; code?: string; result?: unknown; error?: string }
 
 /** Duyệt/từ chối theo id (web) hoặc code (Lark). Chỉ chủ hành động; chuyển trạng thái nguyên tử để không chạy 2 lần. */
 export async function decidePendingAction(
@@ -47,7 +48,7 @@ export async function decidePendingAction(
   const { data: claimed } = await supabaseAdmin.from("gp_pending_actions")
     .update({ status: next, decided_at: now }).eq("id", row.id).eq("status", "pending").select("id")
   if (!claimed?.length) return { ok: false, error: "Hành động vừa được xử lý ở nơi khác." }
-  if (!p.approve) return { ok: true, status: "rejected", tool: row.tool, code: row.code }
+  if (!p.approve) return { ok: true, decided: true, status: "rejected", tool: row.tool, code: row.code }
 
   // Chạy đúng tool + tham số đã lưu (dispatchTool tự ghi audit log như mọi lần gọi tool ghi).
   let response: any
@@ -60,7 +61,7 @@ export async function decidePendingAction(
   const failed = !!response?.error
   await supabaseAdmin.from("gp_pending_actions")
     .update({ status: failed ? "failed" : "executed", result: response ?? null }).eq("id", row.id)
-  return { ok: !failed, status: failed ? "failed" : "executed", tool: row.tool, code: row.code, result: response, error: failed ? String(response.error) : undefined }
+  return { ok: !failed, decided: true, status: failed ? "failed" : "executed", tool: row.tool, code: row.code, result: response, error: failed ? String(response.error) : undefined }
 }
 
 /** Câu nối gửi lại cho Gấu Pro sau khi người dùng quyết định — để agent làm tiếp việc dở. */

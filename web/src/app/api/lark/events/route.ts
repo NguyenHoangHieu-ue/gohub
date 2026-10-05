@@ -388,7 +388,7 @@ async function replyCreatorDM(openId: string, messageId: string, threadId: strin
   const cmd = userText.match(APPROVAL_CMD)
   if (cmd) {
     const r = await decidePendingAction({ username, isCreator: true, code: cmd[2], approve: /^duy/i.test(cmd[1]) })
-    if (!["executed", "failed", "rejected"].includes(r.status ?? "")) {
+    if (!r.decided) {
       await replyLarkMessage(messageId, `⚠️ ${r.error ?? "Không xử lý được yêu cầu duyệt."}`)
       return
     }
