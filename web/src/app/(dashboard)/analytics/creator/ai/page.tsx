@@ -16,6 +16,7 @@ import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
 import { TasksPanel } from "@/components/gau-pro/tasks-panel"
 import { RunsList } from "@/components/gau-pro/runs-list"
 import { MemoryPanel } from "@/components/gau-pro/memory-panel"
+import { LiveSession } from "@/components/gau-pro/live-session"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -457,6 +458,7 @@ export default function CreatorAIPage() {
   const [tasksRefresh,  setTasksRefresh]  = useState(0)
   const [bgMode,        setBgMode]        = useState(false)
   const [showMemory,    setShowMemory]    = useState(false)
+  const [showLive,      setShowLive]      = useState(false)   // G5: phiên giọng nói/màn hình trực tiếp
   const isCreatorRole = session?.user?.role === "creator"
 
   const toggleActionLog = async () => {
@@ -971,6 +973,18 @@ export default function CreatorAIPage() {
               <Plus size={13} />
               Cuộc trò chuyện mới
             </button>
+          )}
+          <button
+            onClick={() => setShowLive(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:hover:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg transition-colors"
+            title="Nói chuyện bằng giọng + chia sẻ màn hình/camera với Gấu Pro (thử nghiệm)"
+          >
+            🎙 Trực tiếp
+          </button>
+          {showLive && (
+            <LiveSession onClose={() => setShowLive(false)} onSaved={() => {
+              fetch("/api/creator-ai/conversations").then(r => r.ok ? r.json() : []).then(list => { if (Array.isArray(list)) setPastConvs(list) }).catch(() => {})
+            }} />
           )}
           <div className="relative">
             <button

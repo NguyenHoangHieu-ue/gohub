@@ -57,3 +57,15 @@ describe("Gấu Pro trí nhớ cá nhân theo cờ (G3)", () => {
     expect(on).not.toContain("sendLarkMessage")
   })
 })
+
+describe("Gấu Pro phiên trực tiếp (G5) — chỉ tool đọc", () => {
+  it("LIVE_TOOLS không chứa tool ghi/gửi/điều khiển nào", async () => {
+    const { LIVE_TOOLS } = await import("@/lib/agents/creator-ai")
+    for (const w of ["sendLarkMessage", "createLarkTask", "updateLarkTask", "writeKnowledgeBase", "assistantMemory", "scheduleTask",
+      "controlMyBrowser", "localFiles", "googleWorkspace", "larkDocs", "managePortalCredentials", "browseWeb", "readMyBrowser", "loadSkill"]) {
+      expect(LIVE_TOOLS.has(w)).toBe(false)
+    }
+    const declared = new Set(buildFunctionDeclarations(true).map(d => d.name))
+    for (const t of LIVE_TOOLS) expect(declared.has(t)).toBe(true)
+  })
+})
