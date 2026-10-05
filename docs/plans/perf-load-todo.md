@@ -8,6 +8,8 @@ Quy ước làm: đo trước/sau bằng log Vercel (`[analytics-db] SLOW wait=�
 - Khoá cache 4 route quý (`quarterly-report`, `quarterly-b2b-customers`, `squad-progress`, `quarterly-customer-lifecycle`) dùng ngày cuối khoảng truy vấn thay cho "hôm qua" → quý đã đóng không nguội mỗi ngày.
 - CHƯA đo lại trên staging sau deploy → việc đầu tiên: mở Quarter Report / Performance (Q4) / Squad Progress lần 1 và lần 2 ở ngày hôm sau, xem log còn `cache=MISS` cho quý Q1-Q3 không.
 
+- (2026-10-05) Việc 1 làm theo hướng (b): quý đã đóng TTL 24h + maxStale 48h + bỏ qua softExpire (wiki `analytics-data-model.md` §s222(b)). Hiếu chưa xác nhận mức 48h → chỉnh `CLOSED_QUARTER_*` trong `quarterly-report/route.ts` nếu muốn khác. Chưa đo lại staging.
+
 ## Việc còn lại (theo thứ tự ưu tiên)
 
 1. **Tab Performance bắn 3 request `quarterly-report` song song cho quý trước** (xem Q4 → Q1, Q2, Q3 + báo cáo hiện tại = 4 request × ~6 query, pool chỉ 3 slot → `wait` 5-8s).

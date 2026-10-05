@@ -12,6 +12,9 @@ import { fetchB2BLifecycleRows, classifyB2BLifecycle } from "@/lib/analytics-eng
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
+const CLOSED_QUARTER_TTL_MIN = 24 * 60
+const CLOSED_QUARTER_MAX_STALE_MS = 48 * 60 * 60_000
+
 export const maxDuration = 60
 export const dynamic = "force-dynamic"
 
@@ -109,6 +112,8 @@ export async function GET(req: NextRequest) {
   const prevQEndDate = new Date(prevQYear, prevQNum * 3, 0).toISOString().split("T")[0]
   const prevQMonths = [0, 1, 2].map(i => `${prevQYear}-${String(prevQFirst + i).padStart(2, "0")}`)
 
+  // Quý đã đóng hết (tới hôm qua): số gần như bất biến → cache lâu, không nguội mỗi giờ khi ETL chạy (tab Performance bắn 1 request/quý trước).
+  const quarterClosed = lastMonthEndDate < asOf
   const rawCacheKey = `${QREPORT_CACHE_PREFIX}${quarter}:${year}:${companyCode}:${qEndDate}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   // CTE TỐI ƯU: Dùng JOIN thay NOT IN subquery — query planner hiệu quả hơn với dữ liệu lớn.
@@ -204,7 +209,7 @@ export async function GET(req: NextRequest) {
         ])
 
         return { ...splitQuarterRows(baseRows, custRows, months, prevQMonths), srcRows }
-      }, QUERY_TTL_MIN, refresh),
+      }, quarterClosed ? CLOSED_QUARTER_TTL_MIN : QUERY_TTL_MIN, refresh, [], quarterClosed ? { maxStaleMs: CLOSED_QUARTER_MAX_STALE_MS, ignoreSoftExpiry: true } : {}),
       fetchCosts(months),
       fetchCosts(prevQMonths),
       fetchCustomerCosts(months).catch(() => new Map<string, CostRecord>()),      // Turso B2B customer costs current Q
