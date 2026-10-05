@@ -309,6 +309,16 @@ export function analyticsGuard(req: NextRequest, session: unknown): NextResponse
   return null
 }
 
+// quarterly-report của quý ĐÃ ĐÓNG có cache dài (xem route) → prewarm KHÔNG ép tính lại (nocache) mỗi ngày, chỉ cần gọi để nạp nếu còn trống.
+function isClosedQuarterReportUrl(url: string): boolean {
+  if (!url.startsWith("/api/analytics/quarterly-report")) return false
+  const sp = new URL(url, "http://x").searchParams
+  const q = parseInt((sp.get("quarter") ?? "").replace("Q", ""), 10)
+  const y = parseInt(sp.get("year") ?? "", 10)
+  if (!(q >= 1 && q <= 4) || !y) return false
+  return new Date(y, q * 3, 0) < new Date(Date.now() - 86_400_000)
+}
+
 // Cron prewarm cho endpoint chuyên dụng: xoá key dedicated (force tươi) rồi re-fetch URL đã đăng ký.
 export async function prewarmAnalyticsUrls(baseUrl: string, limit = 50, concurrency = 3): Promise<{ prewarmed: number; failed: number }> {
   const regs = await readCacheByPrefix("urlreg:")
@@ -328,7 +338,7 @@ export async function prewarmAnalyticsUrls(baseUrl: string, limit = 50, concurre
       const u = urls[next++]
       try {
         const sep = u.url.includes("?") ? "&" : "?"
-        const target = u.url.includes("nocache=") ? u.url : `${u.url}${sep}nocache=1`
+        const target = u.url.includes("nocache=") || isClosedQuarterReportUrl(u.url) ? u.url : `${u.url}${sep}nocache=1`
         const res = await fetch(`${baseUrl}${target}`, { headers: { authorization: auth }, cache: "no-store" })
         res.ok ? prewarmed++ : failed++
       } catch { failed++ }
