@@ -995,3 +995,15 @@ Sửa (`lib/agents/creator/kb-recall.ts`, commit `71911e9f`):
 - QA lần 2 (sau khi Hiếu tải lại 1.2.0): Gấu dùng đúng `textarea[name="q"]` → ô có "eSIM Nhật Bản", URL không đổi (không Enter), đọc lại tab
   rồi nói xác nhận; audit log ghi `controlMyBrowser` ok. Mỗi bước còn chậm (~20–40s) → lý do làm 1.2.1.
 - ⚠️ Mọi người dùng Bridge phải tải lại extension (`chrome://extensions` → ↻) để có 1.2.x.
+
+## § s223 Bridge — tải bản mới + tự báo cập nhật (extension 1.2.2)
+
+- Extension cài kiểu "Load unpacked" → Chrome đọc file từ THƯ MỤC TRÊN MÁY từng người; bấm ↻ chỉ đọc lại thư mục đó. Người không có repo
+  phải nhận file mới mới lên bản mới được.
+- `web/scripts/pack_bridge_extension.py` (chạy MỖI LẦN sửa `browser-extension/` + tăng version): sinh `web/public/downloads/gau-pro-bridge.zip`
+  (thư mục `gau-pro-bridge/`, không nén) + `web/src/lib/bridge-version.ts` (`BRIDGE_LATEST_VERSION`). Test `bridge-version.test.ts` đỏ nếu
+  manifest ≠ hằng số ≠ zip (quên chạy script).
+- Trang Bridge: nút "⬇️ Tải extension (bản x.y.z)" (`/downloads/…` không qua middleware đăng nhập — mã extension không có bí mật, token
+  người dùng tự dán) + hướng dẫn cài vào thư mục CỐ ĐỊNH và cách cập nhật (giải nén ĐÈ → ↻).
+- `bridge/next` trả `latest_version`; extension lưu lại; popup hiện phiên bản đang dùng + khung "⬆️ Có bản mới …" kèm link tải khi cũ hơn.
+  Người dùng phải lên 1.2.2 THỦ CÔNG 1 lần (bản có tính năng báo) — từ đó về sau popup tự báo.

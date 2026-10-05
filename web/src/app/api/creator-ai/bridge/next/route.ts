@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { authBridge } from "@/lib/bridge-device"
+import { BRIDGE_LATEST_VERSION } from "@/lib/bridge-version"
 
 // s195+3: multi-tenant — token → username qua browser_bridge_pairings (mỗi user 1 hàng đợi riêng).
 // s202: extension gửi X-Device-Id (+ X-Device-Info) → ghi nhận thiết bị, gắn device/IP vào từng lệnh được nhận.
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
     .limit(1)
     .maybeSingle()
 
-  if (!row) return NextResponse.json({ command: null })
+  if (!row) return NextResponse.json({ command: null, latest_version: BRIDGE_LATEST_VERSION })
 
   const { error: claimErr } = await supabaseAdmin
     .from("browser_bridge_commands")
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
     .eq("id", row.id)
     .eq("status", "pending")
 
-  if (claimErr) return NextResponse.json({ command: null })
+  if (claimErr) return NextResponse.json({ command: null, latest_version: BRIDGE_LATEST_VERSION })
 
-  return NextResponse.json({ command: row })
+  return NextResponse.json({ command: row, latest_version: BRIDGE_LATEST_VERSION })
 }

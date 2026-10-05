@@ -220,6 +220,8 @@ async function pollOnce() {
     const res = await apiFetch("/api/creator-ai/bridge/next")
     if (!res.ok) return
     const data = await res.json()
+    // 1.2.2: server báo bản mới nhất → popup hiện "Có bản mới" + link tải.
+    if (data.latest_version) chrome.storage.local.set({ latestVersion: data.latest_version })
     if (data.command) { lastCommandAt = Date.now(); await processCommand(data.command) }
   } catch {
     // im lặng — thử lại ở lần poll kế tiếp (chưa cấu hình / mất mạng tạm thời)
