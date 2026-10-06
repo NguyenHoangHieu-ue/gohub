@@ -1,7 +1,14 @@
 # Plan — My Metrics: Kế hoạch quý tự đo + Duyệt case Lark tự động + Đánh giá hằng ngày
 
 > File TẠM (theo quy ước CLAUDE.md): xong hết mốc (hoặc Hiếu bỏ plan) thì xoá file, chuyển kiến thức còn giá trị sang wiki
-> `docs/wiki/system/tabs/analytics-my-metrics.md`. Tạo 2026-10-06 (s225). **Trạng thái: Hiếu đã chốt (2026-10-06) — M0 + M1 ĐÃ CODE (staging), M2–M5 chưa.**
+> `docs/wiki/system/tabs/analytics-my-metrics.md`. Tạo 2026-10-06 (s225). **Trạng thái (2026-10-06): M0 + M1 XONG, đã lên `main` (`913d95ee`). M2 bỏ. LẦN SAU: M3 → M4 → M5.**
+
+### Nhật ký chạy thật 2026-10-06
+- Quét lại 120 ngày lần 1: 0 case — tên group thật "Telecom Products (Private)" (có s), luật so đúng chữ → sửa so lỏng.
+- Quét lại lần 2 (bản cũ còn trả lời vào thread): nhắc vào 20 thread → Hiếu: spam → đổi sang 1 DM gộp; route tạm thu hồi 20/20 tin + DM Hiếu
+  danh sách (đã gỡ route). Kết quả: Q3 20 thread YES chưa Typing + 15 đang thảo luận, Q4 2 + 2; 0 case tự tính (chưa có Typing); 44 case
+  duyệt tay giữ nguyên.
+- Còn kiểm: link `thread/open` mở đúng thread trên Lark quốc tế chưa; mã emoji `YES`/`Typing` đúng chưa (lệnh "Note đi" liệt kê emoji).
 
 Yêu cầu Hiếu (2026-10-06):
 1. Kế hoạch quý: đổi vendor / giảm COGS ở 1 thị trường, mở sản phẩm hoặc nước mới, đạt KPI My Metrics, việc không đo bằng số, theo dõi báo
