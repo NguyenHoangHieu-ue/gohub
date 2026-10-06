@@ -86,8 +86,14 @@ Lộ trình (chốt với Hiếu 2026-10-06):
 - `lib/vendor-quote-extract.ts`: prompt + `normalizeExtracted` (không tin model: bỏ dòng thiếu giá/ngày/loại, mã nước/nhóm phải tồn tại,
   "78.000" → 78000, "£1.99" → 1.99). Thử thật 2026-10-06: VNPT PDF (8 gói, 8,8s — gói RU gắn đúng 16 nước + "Sim thoại") và ảnh email
   Roam Communication (15 gói, 13,7s — UK kèm gọi + roaming vào ghi chú, Europe → `EUR`, World → `GLB`, MOQ).
-- So giá: mỗi báo giá (trừ Từ chối) = 1 nguồn gói "Vendor (đang chào)". So khớp kiểu PHỦ: tập nước gói ⊇ nước của SKU, cùng loại +
-  dung lượng, số ngày gói dài hơn SKU tối đa 2 ngày (31 vs 30). SIM = giá SIM vendor báo (không cộng khung); không báo giá SIM thì không
+- So giá: mỗi báo giá (trừ Từ chối) = 1 nguồn gói "Vendor (đang chào)". So khớp kiểu PHỤC VỤ ĐỦ NHU CẦU (áp cả WorldMove): cùng loại
+  gói, dung lượng ≥ SKU, số ngày dài hơn SKU tối đa 2 ngày (31 vs 30), tập nước gói ⊇ nước SKU; lấy gói rẻ nhất, chi tiết ghi "gói lớn
+  hơn / gói phủ N nước / N ngày". QA s225 (2 báo giá thật × 16.561 SKU Active): khớp đúng dung lượng bỏ lỡ VNPT 5GB/ngày vs SKU Việt Nam
+  1–3GB/ngày; sau sửa VNPT rẻ hơn 104 SKU (VN Daily −35…−78%, Unlimited 15 ngày Mỹ/China −40…−50%), Roam rẻ hơn 49 SKU (gói World cho
+  Ấn Độ/UAE/Úc/Brazil).
+- Hạn chế đã biết: gói Unlimited không so tốc độ (gói vendor "không giới hạn tốc độ cao" vs SKU throttle 5/10Mbps là gói vendor TỐT hơn
+  → an toàn; nếu sau này vendor báo Unlimited có throttle thấp hơn SKU thì có thể báo tiết kiệm sai). Nhóm "World 94 countries" map tay
+  sang `WOR`/`GLB` là xấp xỉ — kiểm nước cụ thể trước khi quyết. Số "có giá cho N SKU" gồm cả gói World đắt hơn (chỉ số "rẻ hơn" là chính). SIM = giá SIM vendor báo (không cộng khung); không báo giá SIM thì không
   có phương án SIM. Destination chưa bán tính cả báo giá có ≤ 20 nước liệt kê (gói World/Europe bỏ để danh sách không loãng).
 - Bấm 1 báo giá → mọi biểu đồ/bảng dưới chuyển sang "báo giá này rẻ hơn mốc hiện tại ở SKU nào" (tiết kiệm/quý theo sản lượng thật).
 

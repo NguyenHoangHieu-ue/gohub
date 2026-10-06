@@ -59,6 +59,16 @@ describe("packageOffer", () => {
     expect(packageOffer(wm, { ...spec, days: 10 })).toBeNull()
     expect(packageOffer(wm, { ...spec, days: 5 })!.detail).toContain("7 ngày")   // gói dài hơn ≤ 2 ngày vẫn dùng được
     expect(packageOffer(wm, { ...spec, days: 4 })).toBeNull()
+    expect(packageOffer(wm, { ...spec, dataGb: 6 })).toBeNull()                    // gói nhỏ hơn nhu cầu
+    expect(packageOffer(wm, { ...spec, dataGb: 3 })!.detail).toContain("gói lớn hơn: 5GB")
+  })
+  test("gói lớn hơn nhu cầu vẫn thay được (VNPT 5GB/ngày cho SKU Việt Nam 1,5GB/ngày), chọn gói rẻ nhất", () => {
+    const vnpt: PackageSource = { id: "Q", label: "VNPT", offers: new Map(), simFrameUsd: null }
+    addPackage(vnpt, { iso: ["VN"], plan: "Daily", dataGb: 5, days: 7, priceUsd: 3.04, priceSimUsd: 2.54, name: "TR50N", kyc: false })
+    addPackage(vnpt, { iso: ["VN"], plan: "Daily", dataGb: 3.5, days: 7, priceUsd: 2.9, priceSimUsd: null, name: "Nhỏ hơn rẻ hơn", kyc: false })
+    const spec = { iso: ["VN"], plan: "Daily" as const, dataGb: 1.5, days: 7, speedMbps: null, form: "SIM" as const }
+    expect(packageOffer(vnpt, spec)).toMatchObject({ usd: 2.54, detail: expect.stringContaining("TR50N (gói lớn hơn: 5GB/ngày)") })
+    expect(packageOffer(vnpt, { ...spec, form: "eSIM" })!.usd).toBe(2.9)
   })
   test("gói phủ được thị trường (tập nước ⊇), giá SIM vendor báo riêng thay cho cộng khung", () => {
     const vnpt: PackageSource = { id: "Q", label: "VNPT", offers: new Map(), simFrameUsd: null }

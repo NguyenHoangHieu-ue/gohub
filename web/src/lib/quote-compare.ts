@@ -2,9 +2,10 @@
 // Logic thuần (không I/O). Quy tắc chốt với Hiếu (2026-10-06):
 //  - Vendor datapool (3HK, BC Datapool CMHK/Singtel): data = GB tính giá (công thức Datapool dùng chung) × giá/GB rẻ nhất trong nước;
 //    gói nhiều nước lấy giá của nước ĐẮT nhất (mỗi nước chọn nhà mạng rẻ nhất). Cộng phí khung eSIM/SIM của vendor.
-//  - Vendor gói (WorldMove, báo giá đang chào): gói khớp loại + dung lượng + số ngày và PHỦ được thị trường (tập nước của gói ⊇ nước
-//    của SKU — vd gói VNPT dùng được ở từng nước trong 16 nước). Số ngày của gói được dài hơn SKU tối đa 2 ngày (vendor hay bán
-//    31 ngày, SKU GoHub 30 ngày). SIM = giá SIM vendor báo; không báo thì giá eSIM + SKU khung SIM.
+//  - Vendor gói (WorldMove, báo giá đang chào): gói PHỤC VỤ ĐỦ nhu cầu SKU = cùng loại gói, dung lượng ≥ SKU, số ngày dài hơn SKU
+//    tối đa 2 ngày (vendor hay bán 31 ngày, SKU 30 ngày) và phủ được thị trường (tập nước của gói ⊇ nước của SKU — vd gói VNPT dùng ở
+//    từng nước trong 16 nước). QA s225: đòi khớp đúng dung lượng bỏ lỡ VNPT 5GB/ngày vs SKU Việt Nam 1,5GB/ngày. Chọn gói rẻ nhất.
+//    SIM = giá SIM vendor báo; không báo thì giá eSIM + SKU khung SIM.
 //  - Data pack (top-up, ký tự 2 = A): không cộng khung.
 import { ceil2 } from "@/lib/bc-datapool/pricing"
 
@@ -40,7 +41,7 @@ export interface PackageOffer {
 }
 export interface PackageSource {
   id: string; label: string
-  offers: Map<string, PackageOffer[]>   // khoá packageKey (loại|dung lượng) → các gói (mỗi tập nước + số ngày giữ gói rẻ nhất)
+  offers: Map<string, PackageOffer[]>   // khoá packageKey (loại gói) → các gói (mỗi tập nước + dung lượng + số ngày giữ gói rẻ nhất)
   simFrameUsd: number | null
 }
 
@@ -51,10 +52,8 @@ export interface Offer { source: string; label: string; usd: number; detail: str
 const round3 = (x: number) => Math.round(x * 1000) / 1000
 const fmtGb = (x: number) => `${+x.toFixed(2)}GB`
 
-/** Khoá so khớp gói: loại + dung lượng (Unlimited bỏ qua dung lượng). Nước và số ngày lọc riêng. */
-export function packageKey(plan: PlanKind, dataGb: number): string {
-  return `${plan}|${plan === "Unlimited" ? 0 : +dataGb.toFixed(3)}`
-}
+/** Khoá so khớp gói: loại gói. Dung lượng, số ngày, nước lọc riêng. */
+export const packageKey = (plan: PlanKind) => plan
 export const EXTRA_DAYS_OK = 2
 
 /** GB tính giá theo công thức Datapool dùng chung. null khi Unlimited không có mức GB/ngày tương ứng. */
@@ -89,14 +88,16 @@ export function poolOffer(src: PoolSource, spec: Spec, a: Assumptions): Offer | 
 export function packageOffer(src: PackageSource, spec: Spec): Offer | null {
   if (spec.form === "Data pack") return null
   let best: Offer | null = null
-  for (const o of src.offers.get(packageKey(spec.plan, spec.dataGb)) ?? []) {
+  for (const o of src.offers.get(packageKey(spec.plan)) ?? []) {
     if (o.days < spec.days || o.days > spec.days + EXTRA_DAYS_OK || !spec.iso.every(i => o.iso.includes(i))) continue
+    if (spec.plan !== "Unlimited" && o.dataGb < spec.dataGb - 1e-9) continue
     const sim = spec.form === "SIM"
     const viaFrame = sim && !(o.priceSimUsd! > 0)
     if (viaFrame && src.simFrameUsd === null) continue
     const usd = ceil2(sim ? (viaFrame ? o.priceUsd + src.simFrameUsd! : o.priceSimUsd!) : o.priceUsd)
     if (best && best.usd <= usd) continue
-    const cover = [o.iso.length > spec.iso.length ? `gói phủ ${o.iso.length} nước` : "", o.days > spec.days ? `${o.days} ngày` : ""].filter(Boolean).join(", ")
+    const bigger = spec.plan !== "Unlimited" && o.dataGb > spec.dataGb + 1e-9 ? `gói lớn hơn: ${+o.dataGb.toFixed(2)}GB${spec.plan === "Daily" ? "/ngày" : ""}` : ""
+    const cover = [bigger, o.iso.length > spec.iso.length ? `gói phủ ${o.iso.length} nước` : "", o.days > spec.days ? `${o.days} ngày` : ""].filter(Boolean).join(", ")
     best = {
       source: src.id, label: src.label, usd, kyc: o.kyc,
       detail: `${o.name}${cover ? ` (${cover})` : ""}: ${sim && !viaFrame ? `giá SIM ${round3(o.priceSimUsd!)}` : round3(o.priceUsd)} USD${viaFrame ? ` + khung SIM ${round3(src.simFrameUsd!)} USD` : ""}`,
@@ -107,10 +108,10 @@ export function packageOffer(src: PackageSource, spec: Spec): Offer | null {
 
 /** Thêm gói vào nguồn; cùng loại/dung lượng/số ngày VÀ cùng tập nước thì giữ gói eSIM rẻ hơn. */
 export function addPackage(src: PackageSource, o: PackageOffer) {
-  const k = packageKey(o.plan, o.dataGb)
+  const k = packageKey(o.plan)
   const list = src.offers.get(k) ?? []
-  const isoKey = `${[...o.iso].sort().join("+")}|${o.days}`
-  const i = list.findIndex(x => `${[...x.iso].sort().join("+")}|${x.days}` === isoKey)
+  const isoKey = `${[...o.iso].sort().join("+")}|${o.days}|${o.dataGb}`
+  const i = list.findIndex(x => `${[...x.iso].sort().join("+")}|${x.days}|${x.dataGb}` === isoKey)
   if (i < 0) list.push(o)
   else if (o.priceUsd < list[i].priceUsd) list[i] = o
   src.offers.set(k, list)

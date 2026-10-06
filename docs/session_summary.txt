@@ -10766,3 +10766,7 @@ full (datapool = giá data công thức chung + phí khung eSIM/SIM; vendor thư
   (migration **v69**, bucket riêng tư `vendor-quotes`) → tự thành nguồn so giá; bấm báo giá xem rẻ hơn ở SKU nào. So khớp gói kiểu phủ
   (tập nước ⊇), số ngày +≤2, giá SIM vendor báo riêng. Thử AI thật trên 2 mẫu Hiếu gửi: VNPT PDF 8 gói, Roam ảnh email 15 gói — đọc đúng.
   **Hiếu cần**: chạy `web/db/migrations/v69_vendor_quotes.sql` + Reload schema, rồi thử thêm 2 báo giá này trên staging.
+- (s225 tiếp) Hiếu chạy v69 + tự đưa 2 báo giá (VNPT, Roam) vào; **Hiếu: "vẫn còn thấy không ưng ý lắm"** — chưa nói cụ thể điểm nào
+  (cần hỏi tiếp: giao diện, độ chính xác hay luồng nhập). QA trên dữ liệu thật (Chrome mất kết nối → chạy engine với 16.561 SKU Active):
+  khớp đúng dung lượng bỏ lỡ VNPT 5GB/ngày vs SKU VN 1–3GB/ngày → đổi sang "gói phục vụ đủ nhu cầu" (data ≥, ngày +≤2, nước ⊇).
+  Sau sửa: VNPT rẻ hơn 104 SKU (VN Daily −35…−78%), Roam rẻ hơn 49 SKU. Chưa QA giao diện.
