@@ -10776,3 +10776,15 @@ full (datapool = giá data công thức chung + phí khung eSIM/SIM; vendor thư
   nước, "(mã khác)" lọt tóm tắt, nhãn trục bị cắt, WM Unlimited 5Mbps có thể được đề xuất thay SKU 10Mbps. Commit 3751c4fd → HEAD.
 - (s225 tiếp) Hiếu: chỉ so giá COGS mỗi gói, không nhân số bán → bỏ "tiết kiệm/quý" khỏi màn So giá; xếp theo số gói + % rẻ hơn.
 - (s225 tiếp) Hiếu: đưa tab Thị trường & Báo giá xuống nhóm Creator — chỉ creator + người được cấp (app_settings.market_users, Creator Settings). Bỏ khỏi ma trận quyền role; chặn sidebar/layout/trang/API.
+
+## s225 (treo, 2026-10-06) — My Metrics: xử lý plan quý + đánh giá tự động (CHỜ HIẾU LÀM RÕ)
+Yêu cầu Hiếu: "quay lại phần metric, để xử lý plan quý của tôi, cũng như xem đánh giá tự động mà không phải check tay quá nhiều".
+Hiếu muốn làm rõ trước khi làm — CHƯA code gì. Hiện trạng đo thật (Supabase):
+- Duyệt case Lark là phần tay nặng nhất: Q3 78 case bot đề xuất → 19 xác nhận, 25 từ chối, 34 TREO không ai duyệt (Q3 đã khoá → mất);
+  bot sai ~57% (25/44 đã xem). Q4 đã có 4 case chờ. Capture Lark vẫn chạy (bản ghi cuối 2026-10-06).
+- Target Q4 chưa nhập (`okr.*` trống → dùng mặc định code). Evidence ảnh: 0 bản ghi. Ghi chú SKU: 0.
+- Chưa có chỗ ghi kế hoạch quý (việc định làm) và tự đo tiến độ.
+Hướng đã đề xuất (Hiếu chưa chọn): (1) bớt duyệt tay — bot học từ 44 quyết định cũ, case chắc thì tự tính, case lưng chừng mới hỏi, case
+treo xử trước khi khoá quý; (2) kế hoạch quý tự đo — mỗi việc gắn 1 chỉ số (đổi nhà cung cấp/giảm COGS, mở destination mới, KPI My Metrics,
+việc không đo bằng số); (3) đánh giá tự động — thực tế vs mức lẽ ra phải đạt tới hôm nay + lời nhận xét, có thể Lark DM thứ Hai.
+3 câu cần Hiếu trả lời: loại việc trong kế hoạch quý; mức tự quyết case Lark; gửi đánh giá trên trang hay thêm Lark DM.
