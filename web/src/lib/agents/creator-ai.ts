@@ -470,20 +470,8 @@ export async function buildLiveSession(isCreator: boolean, username: string) {
 
 // ─── Knowledge Base helpers ───────────────────────────────────────────────────
 
-export async function runReadKnowledgeBase(category?: string): Promise<any> {
-  try {
-    let q = supabaseAdmin.from("creator_kb").select("key,category,title,content,updated_at")
-      .neq("category", "_system")
-      .order("category").order("updated_at", { ascending: false })
-    if (category) q = q.eq("category", category)
-    const { data, error } = await q
-    if (error) return { error: error.message }
-    if (!data?.length) return { message: "Knowledge base is empty. No entries found.", entries: [] }
-    return { entries: data, count: data.length }
-  } catch (e: any) {
-    return { error: e.message }
-  }
-}
+// Bé Gấu import từ đây — dùng chung bản có `keys` của Gấu Pro (đọc đúng mục theo danh mục KB).
+export { runReadKnowledgeBase } from "./creator/tools/knowledge"
 
 // ─── Main runner ──────────────────────────────────────────────────────────────
 // s195+18: genWithRetryStream (streaming thật, dùng chung với Bé Gấu) — xem lib/agents/gemini-stream.ts

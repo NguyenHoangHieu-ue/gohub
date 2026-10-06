@@ -8,6 +8,7 @@ import { getRoleDataFilter }             from "./bi-analyst"
 import { getCustomRules }                from "./guardian"
 import { runWebSearch, runReadKnowledgeBase, type WebSource, type FileContext } from "./creator-ai"
 import { compressHistory }              from "./creator/compress"
+import { kbIndexBlock, relevantKbBlock } from "./creator/kb-recall"
 import { genWithRetryStream }            from "./gemini-stream"
 import { detectAndLogLearning }          from "./learning"
 
@@ -167,7 +168,10 @@ const webSearchDecl = {
 const readKBDecl = {
   name: "readKnowledgeBase",
   description: "Read GoHub internal definitions/rules (product codes, SKU rules, exchange rates, vendors, processes). Call at the start when a question relates to product codes, rules, FX, vendors, or processes.",
-  parameters: { type: SchemaType.OBJECT, properties: { category: { type: SchemaType.STRING, description: "product_codes | sku_rules | exchange_rates | cogs | vendors | processes | notes" } } },
+  parameters: { type: SchemaType.OBJECT, properties: {
+    category: { type: SchemaType.STRING, description: "product_codes | sku_rules | exchange_rates | cogs | vendors | processes | notes" },
+    keys: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING }, description: "Exact entry keys from the KB index (max 20) — preferred over category" },
+  } },
 }
 
 // ─── System prompt — TEAM-FACING, TUYỆT MẬT nội bộ ─────────────────────────────
@@ -346,7 +350,7 @@ export async function runBeGau(opts: {
   const isPriv = priv(role)
   const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
 
-  const isFreshConv = geminiHistory.length <= 1
+  const kbOpts = isPriv ? {} : { excludeCategories: ["cogs"] }
 
   const [dataFilter, customRules, partnerTierInfo, ga4SiteList, kbInject, { history: compressedHistory }] = await Promise.all([
     getRoleDataFilter(role),
@@ -356,16 +360,13 @@ export async function runBeGau(opts: {
       return lines ? `\n\n━━━ PARTNER TIERS (B2B) ━━━\n${lines}` : ""
     }).catch(() => ""),
     ga4Sites().then(s => s.length ? "\n\nGA4 SITES: " + s.map(x => `${x.id}="${x.name}" (${x.propertyId})`).join(", ") : "").catch(() => ""),
-    // Fix #7: KB auto-inject lượt đầu (bỏ qua cogs nếu non-priv)
-    isFreshConv
-      ? runReadKnowledgeBase().then((kb: any) => {
-          let entries = (kb?.entries || []) as any[]
-          if (!isPriv) entries = entries.filter((e: any) => e.category !== "cogs")
-          if (!entries.length) return ""
-          const body = JSON.stringify(entries).slice(0, 5000)
-          return `\n\n━━━ KIẾN THỨC NỘI BỘ GoHub (NGUỒN SỰ THẬT — ưu tiên hơn training data) ━━━\n${body}`
-        }).catch(() => "")
-      : Promise.resolve(""),
+    // KB tra MỖI lượt như Gấu Pro (kb-recall.ts): danh mục tiêu đề + nguyên văn mục liên quan — thay cách cũ nạp 5.000 ký tự
+    // đầu ở lượt đầu. Câu ngắn kiểu "cái đó" → ghép đoạn cuối câu trả lời trước. Non-priv che "cogs".
+    Promise.all([
+      kbIndexBlock(kbOpts).catch(() => ""),
+      relevantKbBlock(lastMsg.length < 40 && geminiHistory.length
+        ? `${lastMsg} ${String(geminiHistory[geminiHistory.length - 1]?.parts?.[0]?.text ?? "").slice(-500)}` : lastMsg, kbOpts).catch(() => ""),
+    ]).then(([idx, rel]) => idx + rel),
     // Fix #8: nén history dài
     compressHistory(geminiHistory),
   ])
@@ -480,7 +481,7 @@ export async function runBeGau(opts: {
 
       if (call.name === "readKnowledgeBase") {
         const kbCategory = (!isPriv && (!a?.category || a.category === "cogs")) ? undefined : a?.category
-        const kbResult = await runReadKnowledgeBase(kbCategory)
+        const kbResult = await runReadKnowledgeBase(kbCategory, Array.isArray(a?.keys) ? a.keys.map(String) : undefined)
         if (!isPriv && kbResult?.entries)
           kbResult.entries = kbResult.entries.filter((e: any) => e.category !== "cogs")
         return wrap(kbResult)

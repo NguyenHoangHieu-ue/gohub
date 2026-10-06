@@ -26,28 +26,33 @@ export async function embedKbOne(text: string): Promise<number[] | null> {
   }
 }
 
-let _index: { text: string; at: number } | null = null
+// Bé Gấu dùng chung, che category theo quyền (vd "cogs" với role không xem giá vốn).
+export type KbRecallOpts = { excludeCategories?: string[] }
+
+let _index: { rows: { key: string; category: string; title: string }[]; at: number } | null = null
 /** Danh mục tiêu đề toàn KB (cache 5 phút) — model biết KB có gì để đọc đúng mục bằng readKnowledgeBase(keys). */
-export async function kbIndexBlock(): Promise<string> {
+export async function kbIndexBlock(opts: KbRecallOpts = {}): Promise<string> {
   if (!_index || Date.now() - _index.at > 5 * 60_000) {
     const { data } = await supabaseAdmin.from("creator_kb").select("key,category,title")
       .neq("category", "_system").order("category").order("title")
-    const lines = (data ?? []).map(r => `- [${r.category}] ${r.title} (key: ${r.key})`)
-    _index = { text: lines.join("\n"), at: Date.now() }
+    _index = { rows: data ?? [], at: Date.now() }
   }
-  return _index.text ? `\n\n━━━ DANH MỤC KB (tiêu đề — đọc nội dung bằng readKnowledgeBase(keys=[...]) khi cần) ━━━\n${_index.text}` : ""
+  const lines = _index.rows.filter(r => !opts.excludeCategories?.includes(r.category))
+    .map(r => `- [${r.category}] ${r.title} (key: ${r.key})`)
+  return lines.length ? `\n\n━━━ DANH MỤC KB (tiêu đề — đọc nội dung bằng readKnowledgeBase(keys=[...]) khi cần) ━━━\n${lines.join("\n")}` : ""
 }
 export function invalidateKbIndex() { _index = null }
 
 /** Nguyên văn các mục KB liên quan nhất tới câu hỏi (tìm theo ý nghĩa). "" khi không có gì đủ gần. */
-export async function relevantKbBlock(query: string): Promise<string> {
+export async function relevantKbBlock(query: string, opts: KbRecallOpts = {}): Promise<string> {
   const q = query.trim()
   if (q.length < 4) return ""
   const emb = await embedKbOne(q)
   if (!emb) return ""
   const { data, error } = await supabaseAdmin.rpc("search_creator_kb", { query_embedding: `[${emb.join(",")}]`, match_count: 6 })
   if (error) { console.error("[kb-recall] search:", error.message); return "" }
-  const all = (data ?? []) as { key: string; category: string; title: string; content: string; similarity: number }[]
+  const all = ((data ?? []) as { key: string; category: string; title: string; content: string; similarity: number }[])
+    .filter(r => !opts.excludeCategories?.includes(r.category))
   // Giữ mục đủ gần VÀ không kém mục tốt nhất quá 0,15 (đo: câu hỏi top-up 3HK → đúng mục 0,76; mục không liên quan 0,51–0,58).
   const top = all[0]?.similarity ?? 0
   const rows = all.filter(r => r.similarity >= 0.55 && r.similarity >= top - 0.15)

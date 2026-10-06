@@ -52,6 +52,13 @@ vi.mock("@/lib/agents/creator-ai", () => ({
   }),
 }))
 
+vi.mock("@/lib/agents/creator/kb-recall", () => ({
+  kbIndexBlock:    vi.fn().mockResolvedValue(""),
+  relevantKbBlock: vi.fn().mockResolvedValue(""),
+  embedKbOne: vi.fn().mockResolvedValue(null),
+  invalidateKbIndex: vi.fn(),
+}))
+
 // ─── Imports after mocks ──────────────────────────────────────────────────────
 import { runBeGau }          from "@/lib/agents/be-gau"
 import { queryAnalytics }    from "@/lib/analytics-db"
@@ -207,6 +214,21 @@ describe("runBeGau: KB COGS filter", () => {
     if (entries.length > 0) {
       expect(entries.some((e: any) => e.category === "cogs")).toBe(true)
     }
+  })
+})
+
+describe("runBeGau: KB tra mỗi lượt (kb-recall)", () => {
+  beforeEach(() => mockGenerateContent.mockReset().mockResolvedValue(noCall()))
+
+  test("staff che cogs, admin không; gọi cả ở lượt sau", async () => {
+    const { kbIndexBlock, relevantKbBlock } = await import("@/lib/agents/creator/kb-recall")
+    vi.mocked(kbIndexBlock).mockClear(); vi.mocked(relevantKbBlock).mockClear()
+    const history = [{ role: "user", parts: [{ text: "a" }] }, { role: "model", parts: [{ text: "b" }] }]
+    await runBeGau({ ...BASE, role: "staff", isCost: false, geminiHistory: history, lastMsg: "top-up 3HK thế nào" })
+    expect(vi.mocked(kbIndexBlock)).toHaveBeenLastCalledWith({ excludeCategories: ["cogs"] })
+    expect(vi.mocked(relevantKbBlock).mock.calls.at(-1)?.[1]).toEqual({ excludeCategories: ["cogs"] })
+    await runBeGau({ ...BASE, role: "admin", isCost: true })
+    expect(vi.mocked(kbIndexBlock)).toHaveBeenLastCalledWith({})
   })
 })
 
