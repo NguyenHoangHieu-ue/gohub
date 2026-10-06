@@ -110,6 +110,13 @@ Lộ trình (chốt với Hiếu 2026-10-06):
   ≥ 75% theo `ref_countries.continent`, không thì "Nhiều khu vực"). SKU không 13 ký tự = "Khác (mã cũ / phí)", bỏ khỏi tóm tắt.
 - Unlimited: không đề xuất gói bị bóp tốc độ thấp hơn gói đang bán (WM ghi `throttle_kbps` 5000/10000; SKU A/E/H = 5Mbps, B/G/X = 10).
 
+## 9. Chỉ so giá vốn mỗi gói (s225, Hiếu chốt)
+- Hiếu: "chỉ cần so sánh giá COGS của gói, không cần nhân với số bán". Giao diện So giá bỏ mọi chỉ số "tiết kiệm/quý" (= chênh × số lượng
+  bán). Giờ: số gói có nơi nhập rẻ hơn, % rẻ hơn mỗi gói (trung vị / nhiều nhất), chênh mỗi gói (đ). Việc nên làm xếp theo số gói rồi %
+  rẻ hơn trung bình; biểu đồ thị trường = số gói rẻ hơn theo nơi rẻ nhất; top 15 = % rẻ hơn. Báo giá gửi về: "rẻ hơn ở N gói, trung bình X%".
+- Danh sách gói đem so vẫn là gói CÓ BÁN trong quý đang chọn (số lượng chỉ dùng để chọn gói, không nhân). Server vẫn trả `saveQuarterVnd`
+  (không hiển thị).
+
 ## Verify (2026-10-06, staging)
 - Q3-2026 theo tháng khớp Quarter Report: T8/T9 khớp tới đồng; T7 lệch 161 nghìn / 8,05 tỷ (Quarter Report lọc thêm KH loại trừ).
 - Payload Q3 ALL ~1,4MB, 5.596 SKU, ~5s khi tính mới.

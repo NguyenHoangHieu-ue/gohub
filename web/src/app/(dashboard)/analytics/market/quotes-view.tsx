@@ -37,7 +37,7 @@ function Collapsible({ label, children, action }: { label: string; children: Rea
   )
 }
 
-interface Action { key: string; market: string; from: string; to: string; n: number; save: number; baseCost: number; examples: CompareRow[] }
+interface Action { key: string; market: string; from: string; to: string; n: number; avgPct: number; maxPct: number; examples: CompareRow[] }
 
 export default function QuotesView({ quarter, group, market, onMarket }: {
   quarter: string; group: string; market: string | null; onMarket: (m: string | null) => void
@@ -78,34 +78,36 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
       return [{ ...r, best: o, savePerUnitUsd: save, savePct: +(save / r.baseUsd * 100).toFixed(1), saveQuarterVnd: Math.round(save * r.units * data.vndPerUsd) }]
     })
   }, [data, quoteSrc])
-  const allCheaper = useMemo(() => base.filter(r => (r.savePerUnitUsd ?? 0) > 0 && r.best), [base])
+  // Chỉ so GIÁ VỐN MỖI GÓI (đang nhập vs nơi khác) — không nhân số lượng bán (Hiếu yêu cầu s225). Xếp theo % rẻ hơn.
+  const allCheaper = useMemo(() => base.filter(r => (r.savePerUnitUsd ?? 0) > 0 && r.best).sort((x, y) => (y.savePct ?? 0) - (x.savePct ?? 0)), [base])
 
-  // "Việc nên làm": gộp theo thị trường × (nhà cung cấp hiện tại → nhà cung cấp rẻ hơn), xếp theo tiền tiết kiệm.
+  // "Việc nên làm": gộp theo thị trường × (nhà cung cấp hiện tại → nhà cung cấp rẻ hơn): bao nhiêu gói, rẻ hơn trung bình bao nhiêu %.
+  // Xếp theo số gói rồi % rẻ hơn (không dùng số lượng bán).
   const actions = useMemo(() => {
-    const m = new Map<string, Action>()
+    const m = new Map<string, Action & { sum: number }>()
     for (const r of allCheaper) {
       const key = `${r.market}|${r.vendor}|${r.best!.label}`
-      const a = m.get(key) ?? { key, market: r.market, from: r.vendor, to: r.best!.label, n: 0, save: 0, baseCost: 0, examples: [] }
-      a.n++; a.save += r.saveQuarterVnd ?? 0; a.baseCost += (r.baseUsd ?? 0) * r.units * fx
+      const a = m.get(key) ?? { key, market: r.market, from: r.vendor, to: r.best!.label, n: 0, avgPct: 0, maxPct: 0, sum: 0, examples: [] }
+      a.n++; a.sum += r.savePct ?? 0; a.maxPct = Math.max(a.maxPct, r.savePct ?? 0)
       a.examples.push(r)
       m.set(key, a)
     }
-    return Array.from(m.values()).map(a => ({ ...a, examples: a.examples.sort((x, y) => (y.saveQuarterVnd ?? 0) - (x.saveQuarterVnd ?? 0)) }))
-      .sort((x, y) => y.save - x.save)
-  }, [allCheaper, fx])
+    return Array.from(m.values()).map(({ sum, ...a }) => ({ ...a, avgPct: sum / a.n }))
+      .sort((x, y) => y.n - x.n || y.avgPct - x.avgPct)
+  }, [allCheaper])
   const act = actions.find(a => a.key === action) ?? null
 
   const scoped = useMemo(() => base.filter(r => (!market || r.market === market)
     && (!act || (r.market === act.market && r.vendor === act.from && r.best?.label === act.to))), [base, market, act])
   const cheaper = scoped.filter(r => (r.savePerUnitUsd ?? 0) > 0)
-  const totalSave = cheaper.reduce((a, r) => a + (r.saveQuarterVnd ?? 0), 0)
-  const totalBase = cheaper.reduce((a, r) => a + (r.baseUsd ?? 0) * r.units * fx, 0)
+  const pcts = cheaper.map(r => r.savePct ?? 0).sort((x, y) => x - y)
+  const medianPct = pcts.length ? pcts[Math.floor(pcts.length / 2)] : 0
 
   const byMarket = useMemo(() => {
     const m = new Map<string, Record<string, number | string>>()
     for (const r of allCheaper) {
       const row = m.get(r.market) ?? { key: r.market }
-      row[r.best!.label] = (Number(row[r.best!.label]) || 0) + (r.saveQuarterVnd ?? 0)
+      row[r.best!.label] = (Number(row[r.best!.label]) || 0) + 1
       m.set(r.market, row)
     }
     const total = (x: Record<string, number | string>) => Object.values(x).reduce<number>((a, v) => a + (typeof v === "number" ? v : 0), 0)
@@ -120,20 +122,20 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
   const insights = useMemo(() => {
     if (!data) return []
     const out: React.ReactNode[] = []
-    const s = allCheaper.reduce((a, r) => a + (r.saveQuarterVnd ?? 0), 0)
-    const b = allCheaper.reduce((a, r) => a + (r.baseUsd ?? 0) * r.units * fx, 0)
-    if (!allCheaper.length) out.push(<>Chưa thấy nhà cung cấp nào rẻ hơn giá đang nhập cho các sản phẩm bán trong quý {data.quarter.replace("-", "/")}.</>)
+    const compared = data.rows.filter(r => r.offers.length).length
+    if (!allCheaper.length) out.push(<>Chưa thấy nhà cung cấp nào có giá vốn rẻ hơn cho các gói đang bán (quý {data.quarter.replace("-", "/")}).</>)
     else {
-      out.push(<>Nếu đổi sang nhà cung cấp rẻ hơn cho <b>{allCheaper.length} sản phẩm</b>, mỗi quý tiết kiệm khoảng <b>{vnd(s)}</b> ({b ? pctTxt(s / b * 100, 0) : "—"} tiền đang nhập của chính các sản phẩm đó), tính theo số lượng đã bán quý {data.quarter.replace("-", "/")}.</>)
+      const ps = allCheaper.map(r => r.savePct ?? 0).sort((x, y) => x - y)
+      out.push(<>Trong {compared} gói đang bán so được giá, <b>{allCheaper.length} gói</b> có nơi nhập rẻ hơn — giá vốn mỗi gói rẻ hơn trung bình <b>{pctTxt(ps[Math.floor(ps.length / 2)], 0)}</b>, nhiều nhất {pctTxt(ps[ps.length - 1], 0)}.</>)
       const top = actions.slice(0, 3)
-      out.push(<>Đáng làm trước: {top.map((a, i) => <span key={a.key}>{i > 0 && "; "}<b>{a.market}</b> — đổi {a.n} sản phẩm từ {a.from} sang {short(a.to)} (~{vnd(a.save)}/quý)</span>)}.</>)
+      out.push(<>Nhiều gói nhất: {top.map((a, i) => <span key={a.key}>{i > 0 && "; "}<b>{a.market}</b> — {a.n} gói đang nhập từ {a.from} rẻ hơn ở {short(a.to)} (trung bình {pctTxt(a.avgPct, 0)})</span>)}.</>)
     }
     const quotes = data.sources.filter(x => x.quoteId)
-    if (quotes.length) out.push(<>Báo giá nhà cung cấp gửi: {quotes.map((q, i) => { const w = quoteWins(data.rows, q.id); return <span key={q.id}>{i > 0 && "; "}<b>{q.label.replace(" (đang chào)", "")}</b> rẻ hơn ở {w.skus} sản phẩm (~{vnd(w.saveUsd * fx)}/quý)</span> })}.</>)
+    if (quotes.length) out.push(<>Báo giá nhà cung cấp gửi: {quotes.map((q, i) => { const w = quoteWins(data.rows, q.id); return <span key={q.id}>{i > 0 && "; "}<b>{q.label.replace(" (đang chào)", "")}</b> rẻ hơn ở {w.skus} gói (trung bình {pctTxt(w.avgPct, 0)})</span> })}.</>)
     if (data.gaps.length) out.push(<>Có <b>{data.gaps.length} nước</b> đã có nơi báo giá nhưng GoHub chưa bán gói riêng — xem cuối trang.</>)
     out.push(<span className="text-slate-500">Đây mới là so <b>giá nhập</b>. Trước khi đổi cần kiểm thêm chất lượng mạng, yêu cầu định danh (KYC), số lượng đặt tối thiểu (MOQ).</span>)
     return out
-  }, [data, allCheaper, actions, fx])
+  }, [data, allCheaper, actions])
 
   if (error) return <EmptyState message={`Hiếu đang fix, vui lòng đợi (${error})`} />
   if (loading || !data) return (
@@ -143,7 +145,7 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
     </div>
   )
 
-  const rows = onlyCheaper ? cheaper : scoped
+  const rows = onlyCheaper ? cheaper : [...scoped].sort((x, y) => (y.savePct ?? -1e9) - (x.savePct ?? -1e9))
   const priceChips = (r: CompareRow) => (
     <span className="flex flex-wrap gap-1">
       {r.offers.map(o => (
@@ -161,14 +163,13 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
     { key: "cur", label: "Giá đang nhập", align: "right" as const, render: (r: CompareRow) => vnd(toVnd(r.baseUsd)), sortValue: (r: CompareRow) => r.baseUsd ?? 0 },
     { key: "best", label: "Rẻ nhất tìm được", render: (r: CompareRow) => r.best ? <span title={r.best.detail}><b>{vnd(toVnd(r.best.usd))}</b> <span className="text-slate-500 text-xs">{short(r.best.label)}</span></span> : "—", sortValue: (r: CompareRow) => r.best?.usd ?? 1e9 },
     { key: "pct", label: "Rẻ hơn", align: "right" as const, render: (r: CompareRow) => r.savePct !== null && r.savePct > 0 ? pctTxt(r.savePct, 0) : "—", sortValue: (r: CompareRow) => r.savePct ?? -1e9 },
-    { key: "units", label: "Bán trong quý", align: "right" as const, render: (r: CompareRow) => r.units.toLocaleString("vi-VN"), sortValue: (r: CompareRow) => r.units },
-    { key: "save", label: "Tiết kiệm/quý", align: "right" as const, render: (r: CompareRow) => (r.saveQuarterVnd ?? 0) > 0 ? <b className="text-emerald-700">{vnd(r.saveQuarterVnd)}</b> : "—", sortValue: (r: CompareRow) => r.saveQuarterVnd ?? -1e15 },
+    { key: "diff", label: "Chênh mỗi gói", align: "right" as const, render: (r: CompareRow) => (r.savePerUnitUsd ?? 0) > 0 ? <b className="text-emerald-700">−{vnd(toVnd(r.savePerUnitUsd))}</b> : "—", sortValue: (r: CompareRow) => r.savePerUnitUsd ?? -1e9 },
     { key: "offers", label: "Giá các nơi (rê chuột xem cách tính)", render: priceChips },
   ]
   const exportRows = () => void exportAOA(
-    ["Sản phẩm (SKU)", "Mô tả", "Đang nhập từ", "Giá đang nhập (đ)", "Rẻ nhất tìm được", "Giá rẻ nhất (đ)", "Rẻ hơn (%)", "Bán trong quý", "Tiết kiệm/quý (đ)",
+    ["Sản phẩm (SKU)", "Mô tả", "Đang nhập từ", "Giá đang nhập (đ)", "Rẻ nhất tìm được", "Giá rẻ nhất (đ)", "Rẻ hơn (%)", "Chênh mỗi gói (đ)",
       ...data.sources.map(s => `Giá ${s.label} (đ)`)],
-    rows.map(r => [r.sku, describe(r), r.vendor, Math.round(toVnd(r.baseUsd) ?? 0), r.best?.label ?? "", Math.round(toVnd(r.best?.usd) ?? 0), r.savePct ?? "", r.units, r.saveQuarterVnd ?? "",
+    rows.map(r => [r.sku, describe(r), r.vendor, Math.round(toVnd(r.baseUsd) ?? 0), r.best?.label ?? "", Math.round(toVnd(r.best?.usd) ?? 0), r.savePct ?? "", Math.round(toVnd(r.savePerUnitUsd) ?? 0),
       ...data.sources.map(s => { const o = r.offers.find(x => x.source === s.id); return o ? Math.round(o.usd * fx) : "" })]),
     `so-gia-nha-cung-cap_${quarter}_${group}${market ? `_${market}` : ""}`,
   )
@@ -178,26 +179,26 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
       <InsightBox lines={insights} />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatTile icon={<BadgeDollarSign className="w-4 h-4" />} accent="margin" label={`Có thể tiết kiệm mỗi quý${market ? ` · ${market}` : ""}`}
-          value={vnd(totalSave)} deltas={[{ label: "so với tiền đang nhập các sản phẩm này", value: totalBase ? `−${pctTxt(totalSave / totalBase * 100, 0)}` : "—", kind: "up" }]} />
-        <StatTile icon={<ListChecks className="w-4 h-4" />} accent="positive" label="Sản phẩm nên xem lại giá nhập" value={cheaper.length}
-          deltas={[{ label: "có nhà cung cấp khác rẻ hơn", value: `${cheaper.length} / ${scoped.filter(r => r.offers.length).length}`, kind: "flat" }]} />
+        <StatTile icon={<ListChecks className="w-4 h-4" />} accent="positive" label={`Gói có nơi nhập rẻ hơn${market ? ` · ${market}` : ""}`} value={cheaper.length}
+          deltas={[{ label: "trên số gói so được giá", value: `${cheaper.length} / ${scoped.filter(r => r.offers.length).length}`, kind: "flat" }]} />
+        <StatTile icon={<BadgeDollarSign className="w-4 h-4" />} accent="margin" label="Giá vốn rẻ hơn (trung bình mỗi gói)" value={cheaper.length ? `−${pctTxt(medianPct, 0)}` : "—"}
+          deltas={[{ label: "gói rẻ hơn nhiều nhất", value: pcts.length ? `−${pctTxt(pcts[pcts.length - 1], 0)}` : "—", kind: "up" }]} />
         <StatTile icon={<MapPinned className="w-4 h-4" />} accent="neutral" label="Nước chưa có gói riêng" value={data.gaps.length}
           deltas={[{ label: "đã có nơi báo giá — xem cuối trang", value: `${data.gaps.filter(g => !g.regional.length).length} chưa bán dưới mọi hình thức`, kind: "flat" }]} />
       </div>
 
-      <Panel title="Việc nên làm — đổi nhà cung cấp ở đâu thì lợi nhất" desc="Mỗi dòng = 1 thị trường có nhiều sản phẩm nhập rẻ hơn được ở nơi khác. Bấm “Xem” để lọc biểu đồ và bảng bên dưới đúng nhóm đó.">
+      <Panel title="Việc nên làm — thị trường nào có nhiều gói nhập rẻ hơn được" desc="Mỗi dòng = 1 thị trường + nhà cung cấp đang dùng + nơi có giá vốn rẻ hơn. % = giá vốn mỗi gói rẻ hơn trung bình. Bấm “Xem” để lọc biểu đồ và bảng bên dưới.">
         {!actions.length ? <EmptyState message="Chưa có việc nào — không thấy giá rẻ hơn." /> : (
           <ol className="divide-y divide-slate-100">
             {actions.slice(0, 8).map((a, i) => (
               <li key={a.key} className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 py-2 px-1 rounded-md", action === a.key && "bg-brand-50")}>
                 <span className="w-5 text-xs font-bold text-slate-400">{i + 1}.</span>
                 <span className="flex-1 min-w-[260px] text-sm text-slate-700">
-                  <b>{a.market}</b>: {a.n} sản phẩm đang nhập từ <b>{a.from}</b> <ArrowRight className="inline w-3.5 h-3.5 text-slate-400" /> nhập từ <b>{short(a.to)}</b> rẻ hơn
-                  khoảng {a.baseCost ? pctTxt(a.save / a.baseCost * 100, 0) : "—"}
+                  <b>{a.market}</b>: {a.n} gói đang nhập từ <b>{a.from}</b> <ArrowRight className="inline w-3.5 h-3.5 text-slate-400" /> nhập từ <b>{short(a.to)}</b> rẻ hơn
+                  trung bình {pctTxt(a.avgPct, 0)} (nhiều nhất {pctTxt(a.maxPct, 0)})
                   <span className="block text-[11px] text-slate-400">Ví dụ: {a.examples.slice(0, 2).map(e => `${describe(e)} (${vnd(toVnd(e.baseUsd))} → ${vnd(toVnd(e.best?.usd))})`).join("; ")}</span>
                 </span>
-                <span className="text-sm font-semibold text-emerald-700 whitespace-nowrap">~{vnd(a.save)}/quý</span>
+                <span className="text-sm font-semibold text-emerald-700 whitespace-nowrap">{a.n} gói · −{pctTxt(a.avgPct, 0)}</span>
                 <button onClick={() => setAction(action === a.key ? null : a.key)} className="text-xs font-semibold text-brand-700 hover:underline">{action === a.key ? "Bỏ lọc" : "Xem"}</button>
               </li>
             ))}
@@ -206,7 +207,7 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
         {actions.length > 8 && <p className="mt-1 text-[11px] text-slate-400">Còn {actions.length - 8} nhóm nhỏ hơn — xem trong bảng chi tiết.</p>}
       </Panel>
 
-      <VendorQuotesPanel rows={data.rows} vndPerUsd={data.vndPerUsd} active={quoteSrc} onSelect={id => { setQuoteSrc(id); setAction(null) }} onChanged={() => setVer(v => v + 1)} />
+      <VendorQuotesPanel rows={data.rows} active={quoteSrc} onSelect={id => { setQuoteSrc(id); setAction(null) }} onChanged={() => setVer(v => v + 1)} />
       {(quoteSrc || act) && (
         <p className="text-xs rounded-lg bg-brand-50 border border-brand-100 px-3 py-2 text-brand-800">
           Đang lọc: {quoteSrc && <>chỉ báo giá <b>{data.sources.find(s => s.id === quoteSrc)?.label ?? "đã xoá"}</b> </>}{act && <>nhóm <b>{act.market}: {act.from} → {short(act.to)}</b></>}.{" "}
@@ -214,29 +215,30 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
         </p>
       )}
 
-      <Panel title="Thị trường nào tiết kiệm được nhiều nhất?" desc="Thanh càng dài = tiết kiệm mỗi quý càng nhiều. Màu = nhà cung cấp rẻ hơn. Bấm 1 thị trường để lọc phần dưới.">
+      <Panel title="Thị trường nào có nhiều gói nhập rẻ hơn được?" desc="Thanh = số gói có nơi nhập rẻ hơn giá đang nhập. Màu = nơi rẻ nhất. Bấm 1 thị trường để lọc phần dưới.">
         <div className="h-[420px]">
           {byMarket.length ? <StackedBars rows={byMarket} cols={data.sources.map(s => s.label).filter(l => byMarket.some(r => r[l]))} colorFor={sourceColor}
-            horizontal onSelect={k => onMarket(k === market ? null : k)} selected={market} labelWidth={180} /> : <EmptyState message="Không có sản phẩm nào có giá rẻ hơn." />}
+            horizontal onSelect={k => onMarket(k === market ? null : k)} selected={market} labelWidth={180} /> : <EmptyState message="Không có gói nào có giá rẻ hơn." />}
         </div>
         <LogicNote collapsible label="Cách tính (cho người cần kiểm)">
           Với mỗi sản phẩm bán trong quý, tính &quot;giá nhập đầy đủ&quot; ở từng nơi cho đúng gói đó (đã cộng phí khung SIM/eSIM, đổi ra tiền Việt theo tỷ giá nội bộ tháng {data.fxMonth}).
           Nhà cung cấp tính theo GB (3HK, BC Datapool): GB tính tiền = dung lượng × tỷ lệ khách dùng thực tế (trọn gói {data.assumptions.fixedPct}, theo ngày {data.assumptions.dailyPct}) × giá/GB của nhà mạng rẻ nhất trong nước.
           Nhà cung cấp bán theo gói (WorldMove, báo giá gửi về): lấy gói rẻ nhất đủ dùng — dung lượng bằng hoặc hơn, số ngày bằng hoặc hơn tối đa 2 ngày, dùng được ở nước đó.
-          Giá đang nhập = mức thấp hơn giữa giá vốn trong hệ thống và giá tính lại cùng cách ở nhà cung cấp hiện tại (để không thổi phồng tiết kiệm)
+          Chỉ so giá vốn mỗi gói, không nhân số lượng bán. Giá đang nhập = mức thấp hơn giữa giá vốn trong hệ thống và giá tính lại cùng cách ở nhà cung cấp hiện tại (để không thổi phồng chênh lệch)
           {check && <> — tính lại lệch trung bình {pctTxt(check.median)} so với giá vốn thật ({check.n} sản phẩm)</>}.
           {data.skipped.length > 0 && <> Không so được: {data.skipped.map(s => `${s.reason} (${s.count})`).join("; ")}.</>}
           {" "}Nguồn giá: {data.sources.map(s => `${s.label} — ${s.note}`).join(" · ")}.
         </LogicNote>
       </Panel>
 
-      <Panel title={`15 sản phẩm tiết kiệm nhiều nhất${market ? ` — ${market}` : ""}`} desc="Thanh = tiền tiết kiệm mỗi quý nếu đổi. Màu = nhà cung cấp rẻ hơn. Rê chuột xem là gói gì."
+      <Panel title={`15 gói chênh giá vốn nhiều nhất${market ? ` — ${market}` : ""}`} desc="Thanh = giá vốn mỗi gói rẻ hơn bao nhiêu % nếu nhập ở nơi khác. Màu = nơi rẻ nhất. Rê chuột xem giá cụ thể."
         action={market ? <button onClick={() => onMarket(null)} className="text-xs font-semibold text-brand-700 hover:underline">Bỏ lọc {market}</button> : undefined}>
         <div className="h-[380px]">
-          <RankBars rows={cheaper.slice(0, 15).map((r, i) => ({ key: `${i + 1}. ${describe(r)}`, value: r.saveQuarterVnd ?? 0, gm: r.savePct ?? 0, group: r.best?.label ?? "", desc: `mã ${r.sku}, đang nhập từ ${r.vendor}` }))}
-            colorFor={sourceColor} colorKey="Nhập rẻ hơn ở:" labelWidth={300} gmLabel="rẻ hơn" fmt={v => vnd(v)} />
+          <RankBars rows={cheaper.slice(0, 15).map((r, i) => ({ key: `${i + 1}. ${describe(r)}`, value: r.savePct ?? 0, gm: 0, group: r.best?.label ?? "",
+            desc: `mã ${r.sku}: ${r.vendor} ${vnd(toVnd(r.baseUsd))} → ${short(r.best?.label ?? "")} ${vnd(toVnd(r.best?.usd))}` }))}
+            colorFor={sourceColor} colorKey="Rẻ nhất ở:" labelWidth={300} gmLabel="" fmt={v => `−${pctTxt(v, 0)}`} />
         </div>
-        <Collapsible label={`Xem bảng chi tiết (${rows.length} sản phẩm)`} action={
+        <Collapsible label={`Xem bảng chi tiết (${rows.length} gói)`} action={
           <span className="flex items-center gap-3">
             <label className="flex items-center gap-1 text-xs text-slate-500"><input type="checkbox" checked={onlyCheaper} onChange={e => setOnlyCheaper(e.target.checked)} />Chỉ sản phẩm có nơi rẻ hơn</label>
             <button onClick={exportRows} className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-brand-700"><Download className="w-3.5 h-3.5" />Excel</button>

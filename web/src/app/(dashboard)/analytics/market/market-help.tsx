@@ -29,7 +29,7 @@ const TERMS: [string, string][] = [
   ["Gọi/SMS", "Gói chỉ có data, có kèm gọi/nhắn tin, hay có số điện thoại địa phương."],
   ["B2B / B2C", "B2B: bán cho doanh nghiệp, đại lý. B2C: bán lẻ cho khách (web, app, sàn TMĐT)."],
   ["Giá nhập đầy đủ", "Giá của nhà cung cấp đã cộng mọi phí (khung SIM/eSIM, phí kích hoạt…) và đổi ra tiền Việt theo tỷ giá nội bộ, để so ngang nhau."],
-  ["Tiết kiệm mỗi quý", "Nếu đổi sang nhà cung cấp rẻ hơn: (giá vốn hiện tại − giá rẻ hơn) × số lượng đã bán trong quý."],
+  ["Rẻ hơn %", "Giá vốn của 1 gói ở nơi khác thấp hơn giá đang nhập bao nhiêu phần trăm. Chỉ so giá từng gói, không nhân số lượng bán."],
 ]
 
 export function Glossary() {

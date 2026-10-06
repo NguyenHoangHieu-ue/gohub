@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from "react"
 import { Upload, Sparkles, Loader2, Trash2, X, Plus, FileText, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Panel, EmptyState } from "@/components/dashboard-kit"
-import { vnd } from "./market-help"
+import { pctTxt } from "./market-help"
 import type { CompareRow } from "@/lib/quote-compare"
 import type { QuoteItem, MarketGroupLite } from "@/lib/vendor-quote-extract"
 
@@ -22,11 +22,12 @@ const STATUS: Record<VendorQuote["status"], { label: string; cls: string }> = {
 
 /** Giá 1 báo giá rẻ hơn mốc hiện tại ở SKU nào (không cần là rẻ nhất trong mọi nguồn). */
 export function quoteWins(rows: CompareRow[], sourceId: string) {
-  const wins = rows.map(r => {
+  // Chỉ so giá vốn mỗi gói (không nhân số lượng bán): bao nhiêu gói rẻ hơn, rẻ hơn trung bình bao nhiêu %.
+  const pcts = rows.map(r => {
     const o = r.offers.find(x => x.source === sourceId)
-    return o && r.baseUsd !== null && o.usd < r.baseUsd ? { r, save: (r.baseUsd - o.usd) * r.units } : null
-  }).filter((x): x is { r: CompareRow; save: number } => !!x)
-  return { skus: wins.length, saveUsd: wins.reduce((a, w) => a + w.save, 0), covered: rows.filter(r => r.offers.some(x => x.source === sourceId)).length }
+    return o && r.baseUsd && o.usd < r.baseUsd ? (r.baseUsd - o.usd) / r.baseUsd * 100 : null
+  }).filter((x): x is number => x !== null)
+  return { skus: pcts.length, avgPct: pcts.length ? pcts.reduce((a, x) => a + x, 0) / pcts.length : 0, covered: rows.filter(r => r.offers.some(x => x.source === sourceId)).length }
 }
 
 const inputCls = "w-full rounded-md border border-slate-200 px-1.5 py-1 text-xs focus:outline-none focus:border-brand-400"
@@ -178,8 +179,8 @@ function AddQuoteModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   )
 }
 
-export default function VendorQuotesPanel({ rows, vndPerUsd, active, onSelect, onChanged }: {
-  rows: CompareRow[]; vndPerUsd: number; active: string | null
+export default function VendorQuotesPanel({ rows, active, onSelect, onChanged }: {
+  rows: CompareRow[]; active: string | null
   onSelect: (sourceId: string | null) => void; onChanged: () => void
 }) {
   const [quotes, setQuotes] = useState<VendorQuote[] | null>(null)
@@ -229,7 +230,7 @@ export default function VendorQuotesPanel({ rows, vndPerUsd, active, onSelect, o
                   </select>
                   <span className="text-xs text-slate-600">
                     {q.status === "rejected" ? "Không đưa vào so giá"
-                      : w.skus ? <>Rẻ hơn giá đang nhập ở <b>{w.skus}</b> sản phẩm · tiết kiệm khoảng <b>{vnd(w.saveUsd * vndPerUsd)}</b>/quý</>
+                      : w.skus ? <>Giá vốn rẻ hơn ở <b>{w.skus}</b> gói (trên {w.covered} gói có giá) · rẻ hơn trung bình <b>{pctTxt(w.avgPct, 0)}</b></>
                       : w.covered ? "Không rẻ hơn giá đang nhập ở sản phẩm nào"
                       : "Không có gói nào khớp sản phẩm đang bán (xem phần nước chưa có gói riêng)"}
                   </span>
