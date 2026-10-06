@@ -2,16 +2,16 @@
 
 import React from "react"
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell } from "recharts"
-import { CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
+import { CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
+import { makeColorFor, type ColorFor } from "./market-colors"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 
 // Nạp qua next/dynamic({ssr:false}) ở page.tsx (recharts tách khỏi bundle đầu, cùng pattern my-metrics-charts.tsx).
-const OTHER = "#94a3b8"
-export const colorOf = (cols: string[], c: string) => c === "Khác" ? OTHER : CHART_PALETTE[cols.indexOf(c) % CHART_PALETTE.length]
+// Màu CỐ ĐỊNH theo giá trị cho cả trang — xem market-colors.ts.
 
 /** Cột chồng theo nhóm. horizontal = thanh ngang (nhãn dài: tên nước/SKU). percent = chồng 100% (so tỷ trọng). */
-export const StackedBars = React.memo(function StackedBars({ rows, cols, horizontal, percent, grouped, onSelect, selected, labelWidth = 110 }: {
-  rows: Record<string, number | string>[]; cols: string[]
+export const StackedBars = React.memo(function StackedBars({ rows, cols, colorFor, horizontal, percent, grouped, onSelect, selected, labelWidth = 110 }: {
+  rows: Record<string, number | string>[]; cols: string[]; colorFor?: ColorFor
   horizontal?: boolean; percent?: boolean; grouped?: boolean  // grouped = cột cạnh nhau (so 2 kỳ), không chồng
   onSelect?: (key: string) => void; selected?: string | null; labelWidth?: number
 }) {
@@ -47,7 +47,7 @@ export const StackedBars = React.memo(function StackedBars({ rows, cols, horizon
           }} />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
         {cols.map((c, i) => (
-          <Bar key={c} dataKey={c} stackId={grouped ? undefined : "a"} fill={grouped ? (i === cols.length - 1 ? "#0f4c81" : "#cbd5e1") : colorOf(cols, c)} isAnimationActive={false}
+          <Bar key={c} dataKey={c} stackId={grouped ? undefined : "a"} fill={grouped ? (i === cols.length - 1 ? "#0f4c81" : "#cbd5e1") : (colorFor ?? makeColorFor(cols))(c)} isAnimationActive={false}
             cursor={onSelect ? "pointer" : undefined} />
         ))}
       </BarChart>
@@ -56,9 +56,9 @@ export const StackedBars = React.memo(function StackedBars({ rows, cols, horizon
 })
 
 /** Thanh ngang đơn (top SKU…) — màu theo nhóm (vd vendor), tooltip kèm GM%. */
-export const RankBars = React.memo(function RankBars({ rows, colorKey, colors, labelWidth = 120 }: {
+export const RankBars = React.memo(function RankBars({ rows, colorKey, colorFor, labelWidth = 120 }: {
   rows: { key: string; value: number; gm: number; group: string }[]
-  colorKey?: string; colors: string[]; labelWidth?: number
+  colorKey?: string; colorFor: ColorFor; labelWidth?: number
 }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -70,7 +70,7 @@ export const RankBars = React.memo(function RankBars({ rows, colorKey, colors, l
         <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: "rgba(15,76,129,0.06)" }}
           formatter={(v: number, _n: string, item: any) => [`${formatCompactNumber(v)} · GM ${item.payload.gm.toFixed(1)}%`, `${colorKey ?? ""} ${item.payload.group}`]} />
         <Bar dataKey="value" isAnimationActive={false} radius={[0, 4, 4, 0]}>
-          {rows.map(r => <Cell key={r.key} fill={colorOf(colors, colors.includes(r.group) ? r.group : "Khác")} />)}
+          {rows.map(r => <Cell key={r.key} fill={colorFor(r.group)} />)}
         </Bar>
       </BarChart>
     </ResponsiveContainer>

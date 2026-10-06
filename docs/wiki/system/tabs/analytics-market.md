@@ -50,7 +50,13 @@ Lộ trình (chốt với Hiếu 2026-10-06):
 - Khung chi tiết (drill Thị trường → Vendor → Dịch vụ → Hình thức → Loại gói → Product → SKU, breadcrumb quay lại):
   tỷ trọng quý trước vs quý này cho các chiều chưa lọc, xu hướng tháng, top 12 SKU (màu theo vendor, tooltip GM%), so 2 quý theo
   cấp hiện tại (bấm để đi sâu), bảng gập + xuất Excel.
+- Màu CỐ ĐỊNH theo giá trị cho cả trang (`market-colors.ts`, xếp theo thứ hạng toàn dữ liệu) — QA lần đầu thấy cùng 1 vendor mỗi biểu đồ 1 màu.
+- Quý mới chạy < 30 ngày → mặc định mở quý vừa đóng (dự phóng ngày 5 của quý là ×15, nhiễu).
 - %QoQ của quý đang chạy so dự phóng (thực tế × hệ số ngày) với quý trước đủ.
+
+## Verify (2026-10-06, staging)
+- Q3-2026 theo tháng khớp Quarter Report: T8/T9 khớp tới đồng; T7 lệch 161 nghìn / 8,05 tỷ (Quarter Report lọc thêm KH loại trừ).
+- Payload Q3 ALL ~1,4MB, 5.596 SKU, ~5s khi tính mới.
 
 ## Gotchas
 - Chế độ Fulfillment cố định (không có toggle Created — cần GP).

@@ -12,6 +12,7 @@ import {
   groupBy, crossTab, monthlyBy, gmPct, DIMENSION_LABEL,
   type MarketData, type MarketSku, type Dimension, type Metric, type GroupRow,
 } from "@/lib/market-breakdown"
+import { makeColorFor, type ColorFor } from "./market-colors"
 
 const chartLoading = () => <Skeleton className="w-full h-full" />
 const StackedBars = dynamic(() => import("./market-charts").then(m => m.StackedBars), { ssr: false, loading: chartLoading })
@@ -66,7 +67,11 @@ function Collapsible({ label, children, action }: { label: string; children: Rea
 
 export default function MarketPage() {
   const quarters = useMemo(quarterList, [])
-  const [quarter, setQuarter] = useState(quarters[quarters.length - 1])
+  // Quý mới chạy < 30 ngày: dự phóng còn nhiễu (vd ×15 ở ngày 5) → mặc định mở quý vừa đóng.
+  const [quarter, setQuarter] = useState(() => {
+    const d = new Date(), qStart = new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1)
+    return quarters[quarters.length - ((d.getTime() - qStart.getTime()) / 86_400_000 < 30 ? 2 : 1)]
+  })
   const [group, setGroup] = useState<Group>("ALL")
   const [metric, setMetric] = useState<Metric>("rev")
   const [stackDim, setStackDim] = useState<Dimension>("vendor")
@@ -94,6 +99,12 @@ export default function MarketPage() {
   const valPrev = (r: GroupRow) => metric === "rev" ? r.revPrev : r.gpPrev
   const metricLabel = metric === "rev" ? "Doanh thu" : "GP"
 
+  const colorFor = useMemo(() => {
+    const m = {} as Record<Dimension, ColorFor>
+    for (const d of DRILL) m[d] = makeColorFor(data ? groupBy(data, d).map(r => r.key) : [])
+    return m
+  }, [data])
+
   const filter = useMemo(() => {
     if (!path.length) return undefined
     return (s: MarketSku) => path.every(p => (p.dim === "country" ? s.country : s[p.dim]) === p.key)
@@ -117,7 +128,6 @@ export default function MarketPage() {
   const trend = useMemo(() => data && path.length ? monthlyBy(data, trendDim, TOP_COLS, metric, filter) : null, [data, trendDim, metric, filter, path.length])
   const topSkus = useMemo(() => data && path.length ? groupBy(data, "sku", filter, metric).slice(0, 12) : [], [data, filter, metric, path.length])
   const skuVendor = useMemo(() => new Map((data?.skus ?? []).map(s => [s.sku, s.vendor])), [data])
-  const vendorCols = useMemo(() => data && path.length ? groupBy(data, "vendor", filter, metric).slice(0, TOP_COLS).map(r => r.key) : [], [data, filter, metric, path.length])
 
   const shares = useMemo(() => {
     if (!data || !path.length) return []
@@ -230,7 +240,7 @@ export default function MarketPage() {
         action={<Segmented value={stackDim} onChange={setStackDim} items={STACK_DIMS.map(d => ({ key: d, label: DIMENSION_LABEL[d] }))} />}>
         <div className="h-[460px]">
           {loading || !marketStack ? <Skeleton className="w-full h-full" /> :
-            <StackedBars rows={marketStack.rows} cols={marketStack.cols} horizontal onSelect={selectMarket} selected={market} />}
+            <StackedBars rows={marketStack.rows} cols={marketStack.cols} colorFor={colorFor[stackDim]} horizontal onSelect={selectMarket} selected={market} />}
         </div>
         <LogicNote collapsible label="Cách tính">
           Doanh thu fulfilled B2B + B2C (bỏ phí ship, bỏ đơn nội bộ), tới hôm qua. Thị trường = mã nước trong SKU (ký tự 3–5; nhóm nước như EU1/Global là 1 thị trường riêng).
@@ -260,7 +270,7 @@ export default function MarketPage() {
               {shares.map(s => (
                 <div key={s.dim}>
                   <p className="text-xs font-semibold text-slate-500 mb-1">{DIMENSION_LABEL[s.dim]}</p>
-                  <div className="h-[140px]"><StackedBars rows={s.rows} cols={s.cols} horizontal percent labelWidth={70} /></div>
+                  <div className="h-[140px]"><StackedBars rows={s.rows} cols={s.cols} colorFor={colorFor[s.dim]} horizontal percent labelWidth={70} /></div>
                 </div>
               ))}
             </div>
@@ -268,13 +278,13 @@ export default function MarketPage() {
           <div className="grid lg:grid-cols-2 gap-4 mt-4">
             <div>
               <p className="text-xs font-semibold text-slate-500 mb-1">{metricLabel} theo tháng · chia theo {DIMENSION_LABEL[trendDim].toLowerCase()}</p>
-              <div className="h-[280px]">{trend && <StackedBars rows={trend.rows} cols={trend.cols} />}</div>
+              <div className="h-[280px]">{trend && <StackedBars rows={trend.rows} cols={trend.cols} colorFor={colorFor[trendDim]} />}</div>
             </div>
             <div>
               <p className="text-xs font-semibold text-slate-500 mb-1">Top 12 SKU {data.quarter} · màu theo vendor</p>
               <div className="h-[280px]">
                 <RankBars rows={topSkus.map(r => ({ key: r.key, value: val(r), gm: gmPct(r.gp, r.rev), group: skuVendor.get(r.key) ?? "" }))}
-                  colors={vendorCols} colorKey="Vendor" />
+                  colorFor={colorFor.vendor} colorKey="Vendor" />
               </div>
             </div>
           </div>
