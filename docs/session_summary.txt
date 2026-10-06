@@ -10775,3 +10775,4 @@ full (datapool = giá data công thức chung + phí khung eSIM/SIM; vendor thư
   mô tả gói, dòng báo đang tải (lần đầu 20–40s). QA trên staging qua Chrome (đã kết nối lại) tìm thêm & sửa: nhóm nước hiện cả chục tên
   nước, "(mã khác)" lọt tóm tắt, nhãn trục bị cắt, WM Unlimited 5Mbps có thể được đề xuất thay SKU 10Mbps. Commit 3751c4fd → HEAD.
 - (s225 tiếp) Hiếu: chỉ so giá COGS mỗi gói, không nhân số bán → bỏ "tiết kiệm/quý" khỏi màn So giá; xếp theo số gói + % rẻ hơn.
+- (s225 tiếp) Hiếu: đưa tab Thị trường & Báo giá xuống nhóm Creator — chỉ creator + người được cấp (app_settings.market_users, Creator Settings). Bỏ khỏi ma trận quyền role; chặn sidebar/layout/trang/API.

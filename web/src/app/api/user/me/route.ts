@@ -10,12 +10,13 @@ const WRITABLE_TABS_KEY = "permissions.writable_tabs"
 // Quyền vừa đổi hiện ra sau tối đa 20s (instance khác) — chấp nhận được cho cờ hiển thị menu/nút.
 async function loadMe(username: string, sessionRole: string) {
 
-  const [userRes, configRes, gpRes, portalRes, myMetricsRes] = await Promise.all([
+  const [userRes, configRes, gpRes, portalRes, myMetricsRes, marketRes] = await Promise.all([
     supabaseAdmin.from("users").select("role, department, allowed_analytics, allowed_tabs").eq("username", username).single(),
     supabaseAdmin.from("app_settings").select("value").eq("key", WRITABLE_TABS_KEY).maybeSingle(),
     supabaseAdmin.from("app_settings").select("value").eq("key", "gp_allowed_users").maybeSingle(),
     supabaseAdmin.from("app_settings").select("value").eq("key", "portal_access_users").maybeSingle(),
     supabaseAdmin.from("app_settings").select("value").eq("key", "my_metrics_users").maybeSingle(),
+    supabaseAdmin.from("app_settings").select("value").eq("key", "market_users").maybeSingle(),
   ])
 
   let writableTabs: string[] = []
@@ -57,6 +58,12 @@ async function loadMe(username: string, sessionRole: string) {
     } catch {}
   }
 
+  // Tab Thị trường & Báo giá: creator + người creator cấp (s225)
+  let marketEnabled = data?.role === "creator"
+  if (!marketEnabled && marketRes.data?.value) {
+    try { marketEnabled = (JSON.parse(marketRes.data.value) as string[]).includes(username) } catch {}
+  }
+
   return {
     role:                data?.role              ?? sessionRole,
     department:          data?.department        ?? "none",
@@ -66,6 +73,7 @@ async function loadMe(username: string, sessionRole: string) {
     gp_enabled:          gpEnabled,
     portal_enabled:      portalEnabled,
     my_metrics_enabled:  myMetricsEnabled,
+    market_enabled:      marketEnabled,
   }
 }
 

@@ -5,6 +5,7 @@ import { headers }          from "next/headers"
 import { supabaseAdmin }    from "@/lib/supabase"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 import { memo } from "@/lib/memo"
+import { hasCreatorGrant, MARKET_USERS_KEY } from "@/lib/creator-access"
 
 // /analytics → "dashboard"; /analytics/bod → "bod"
 function pathToAnalyticsId(pathname: string): string {
@@ -63,6 +64,11 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   // nên sẽ luôn bị granted.has() trả false → redirect nhầm về /chatbot cho MỌI role không phải
   // admin/creator dù đã là member group thật (bug phát hiện s194+8).
   if (id === "to-gau") return <>{children}</>
+  // Tab Creator cấp riêng từng người (không thuộc ma trận quyền role)
+  if (id === "market") {
+    if (await hasCreatorGrant(username, MARKET_USERS_KEY)) return <>{children}</>
+    redirect("/chatbot")
+  }
 
   if (!granted.has(id)) {
     // Ngoại lệ: /analytics/creator/* — user được cấp GP access trong gp_allowed_users

@@ -52,7 +52,6 @@ export const ANALYTICS_GROUPS: NavGroup[] = [
   { label: "Analytics & Planning", items: [
     { href: "/analytics/products",   label: "Products (BI)",      icon: BarChart3 },
     { href: "/analytics/catalogue",  label: "Product Catalogue",  icon: Layers    },
-    { href: "/analytics/market",     label: "Thị trường & Báo giá", icon: Globe2  },
     { href: "/analytics/targets",    label: "KPI / Target",       icon: Target    },
     { href: "/analytics/scheduled",  label: "Scheduled Messages", icon: Clock     },
   ]},
@@ -71,6 +70,7 @@ export const CREATOR_GROUP: NavGroup = { label: "Creator", items: [
   { href: "/analytics/creator/devtools",   label: "Dữ liệu & API",   icon: Terminal },
   { href: "/analytics/creator/usage",      label: "Usage Analytics",  icon: BarChart2},
   { href: "/analytics/creator/bridge",     label: "Bridge",           icon: Plug     },
+  { href: "/analytics/market",             label: "Thị trường & Báo giá", icon: Globe2 },
 ]}
 
 export const DEFAULT_STANDARD_TABS = new Set(["chatbot", "promotions", "countries"])

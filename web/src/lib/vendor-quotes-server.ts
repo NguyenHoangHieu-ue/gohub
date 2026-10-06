@@ -1,7 +1,5 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
-import { canWriteTab } from "@/lib/writable-tabs"
+import { requireCreatorGrant, MARKET_USERS_KEY } from "@/lib/creator-access"
 import { flushByDeps } from "@/lib/analytics-helpers"
 import { loadRefCountries, loadSupportCountries } from "@/lib/bc-datapool/server"
 import type { MarketGroupLite } from "@/lib/vendor-quote-extract"
@@ -9,13 +7,8 @@ import type { MarketGroupLite } from "@/lib/vendor-quote-extract"
 export const VENDOR_QUOTES_DEP = "vendor-quotes"
 export const BUCKET = "vendor-quotes"   // riêng tư — báo giá là thông tin mật, mở qua signed URL
 
-/** Ghi/đọc kho báo giá: admin/creator (hoặc user được cấp quyền ghi tab market). Trả username hoặc null. */
-export async function requireQuoteWriter(): Promise<string | null> {
-  const session = await getServerSession(authOptions)
-  if (!session) return null
-  const username = session.user.username
-  return (await canWriteTab(username, "market", ["admin", "creator"])) ? username : null
-}
+/** Ghi/đọc kho báo giá: creator + người được creator cấp tab Thị trường & Báo giá. Trả username hoặc null. */
+export const requireQuoteWriter = () => requireCreatorGrant(MARKET_USERS_KEY)
 
 /** Nhóm nhiều nước (để AI map vùng như "Europe") + tập ISO2 hợp lệ. */
 export async function loadQuoteGeo(): Promise<{ groups: MarketGroupLite[]; validIso: Set<string> }> {

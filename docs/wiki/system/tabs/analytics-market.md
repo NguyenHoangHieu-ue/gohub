@@ -24,7 +24,11 @@ Lộ trình (chốt với Hiếu 2026-10-06):
 - Web `/analytics/market` — `web/src/app/(dashboard)/analytics/market/page.tsx`, chart `market-charts.tsx` (dynamic, ssr:false).
 - API `GET /api/analytics/market?quarter=Q4-2026&group=ALL|B2B|B2C` (`nocache=1` = tải lại mới).
 - Logic thuần `web/src/lib/market-breakdown.ts` (test `__tests__/market-breakdown.test.ts`).
-- Quyền: id `market` (`ALL_ANALYTICS_IDS`), mặc định role `product` + `bod`; nav nhóm "Analytics & Planning".
+- Quyền (s225, Hiếu chốt): **tab của Creator** — chỉ creator + người creator cấp (danh sách `app_settings.market_users`, quản lý ở Creator
+  Settings › "Thị trường & Báo giá — Phân quyền xem", API `/api/creator/market-access`, helper `lib/creator-access.ts`). KHÔNG còn trong
+  `ALL_ANALYTICS_IDS`/ma trận role (admin, bod cũng không thấy nếu chưa được cấp). Creator thấy ở nhóm Creator; người được cấp thấy ở mục
+  Personal. Chặn 4 lớp: sidebar (`market_enabled` từ `/api/user/me`), layout analytics (vào thẳng URL), trang (client), mọi API
+  `market`, `market/quotes`, `vendor-quotes/*` (cron prewarm vẫn chạy được).
 
 ## 2. Dữ liệu
 - 1 query gohub_dw: `fact_fulfillment_revenue` × `dim_order_source` (B2B+B2C hoặc 1 nhóm — bỏ INTERNAL-TRANSACTION theo s211d) ×
