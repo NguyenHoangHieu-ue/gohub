@@ -17,6 +17,7 @@ import { makeColorFor, type ColorFor } from "./market-colors"
 const chartLoading = () => <Skeleton className="w-full h-full" />
 const StackedBars = dynamic(() => import("./market-charts").then(m => m.StackedBars), { ssr: false, loading: chartLoading })
 const RankBars = dynamic(() => import("./market-charts").then(m => m.RankBars), { ssr: false, loading: chartLoading })
+const QuotesView = dynamic(() => import("./quotes-view"), { ssr: false, loading: chartLoading })
 
 type Group = "ALL" | "B2B" | "B2C"
 type Step = { dim: Dimension; key: string }
@@ -74,6 +75,7 @@ export default function MarketPage() {
   })
   const [group, setGroup] = useState<Group>("ALL")
   const [metric, setMetric] = useState<Metric>("rev")
+  const [view, setView] = useState<"market" | "quotes">("market")
   const [stackDim, setStackDim] = useState<Dimension>("vendor")
   const [path, setPath] = useState<Step[]>([])
   const [data, setData] = useState<MarketData | null>(null)
@@ -206,15 +208,19 @@ export default function MarketPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Segmented value={view} onChange={setView} items={[{ key: "market", label: "Thị trường" }, { key: "quotes", label: "So giá vendor" }]} />
           <Segmented value={quarter} onChange={setQuarter} items={quarters.map(q => ({ key: q, label: q.replace("-", " ") }))} />
           <Segmented value={group} onChange={setGroup} items={[{ key: "ALL", label: "Tất cả" }, { key: "B2B", label: "B2B" }, { key: "B2C", label: "B2C" }]} />
-          <Segmented value={metric} onChange={setMetric} items={[{ key: "rev", label: "Doanh thu" }, { key: "gp", label: "GP" }]} />
+          {view === "market" && <Segmented value={metric} onChange={setMetric} items={[{ key: "rev", label: "Doanh thu" }, { key: "gp", label: "GP" }]} />}
           <button onClick={() => load(true)} aria-label="Tải lại mới" className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200">
             <RefreshCw className={cn("w-4 h-4 text-slate-500", loading && "animate-spin")} />
           </button>
         </div>
       </div>
 
+      {view === "quotes" ? (
+        <QuotesView quarter={quarter} group={group} market={market ?? null} onMarket={m => setPath(m ? [{ dim: "country", key: m }] : [])} />
+      ) : <>
       {error && <EmptyState message={`Hiếu đang fix, vui lòng đợi (${error})`} />}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -305,6 +311,7 @@ export default function MarketPage() {
           )}
         </Panel>
       )}
+      </>}
     </div>
   )
 }
