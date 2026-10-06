@@ -5,10 +5,23 @@ import React, { useState, useEffect } from "react"
 import { Info, ChevronUp, ChevronDown, BookOpen, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { NoteSection } from "@/lib/my-metrics-types"
+import { DataTable as KitDataTable } from "@/components/dashboard-kit"
 
-// DataTable giờ dùng chung mọi trang (s190+2) — nguồn thật chuyển sang dashboard-kit.tsx, re-export
-// lại đây để các file trong my-metrics/ đang import từ đường dẫn này không phải sửa.
-export { DataTable } from "@/components/dashboard-kit"
+// DataTable giờ dùng chung mọi trang (s190+2) — nguồn thật ở dashboard-kit.tsx. Trong My Metrics mọi bảng GẬP mặc định,
+// chỉ hiện biểu đồ, bấm mới mở (Hiếu yêu cầu s225) — bọc ở đây để 7 chỗ dùng trong my-metrics/ không phải sửa.
+export function DataTable<T>(props: React.ComponentProps<typeof KitDataTable<T>>) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div>
+      <button onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-brand-700 transition-colors">
+        {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        {open ? "Ẩn bảng" : `Xem bảng (${props.rows.length} dòng)`}
+      </button>
+      {open && <div className="mt-2"><KitDataTable<T> {...props} /></div>}
+    </div>
+  )
+}
 
 export function ProgressBar({ actual, target }: { actual: number; target: number }) {
   const p = target > 0 ? Math.min((actual / target) * 100, 100) : 0

@@ -72,6 +72,7 @@ export const TABS: TabNode[] = [
   { id: 'cs-troubleshoot', label: 'CS Troubleshoot', route: '/analytics/cs-troubleshoot', group: 'Operations', description: 'Tra cứu đơn hàng theo mã khách, hỗ trợ CS xử lý sự cố' },
   { id: 'feedback',      label: 'Feedback',         route: '/analytics/feedback',     group: 'Operations', description: 'Thu thập và xem phản hồi từ nội bộ và khách hàng' },
   { id: 'products',      label: 'Products',         route: '/analytics/products',     group: 'Planning',   description: 'Hiệu suất SKU: doanh thu, số lượng, vendor, destination country' },
+  { id: 'market',        label: 'Thị trường & Báo giá', route: '/analytics/market', group: 'Planning', description: 'Breakdown doanh thu theo thị trường → vendor / dịch vụ (data only, call/SMS, SĐT local) / hình thức / loại gói / SKU, so quý trước' },
   { id: 'targets',       label: 'KPI / Target',     route: '/analytics/targets',      group: 'Planning',   description: 'Quản lý KPI target: revenue, CM1 target theo tháng và quý' },
 ]
 

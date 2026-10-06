@@ -970,7 +970,7 @@ Sửa (`lib/agents/creator/kb-recall.ts`, commit `71911e9f`):
 - Trần trí nhớ cá nhân 4.000 → 8.000 ký tự.
 - QA sống: cuộc mới hỏi "3HK có cho nạp thêm data vào gói Fixed?" → đúng nội dung mục KB 02/10, KHÔNG gọi tool; "tuần sau mình phụ trách gì?"
   → "sourcing eSIM EU từ ~12/10", KHÔNG gọi tool.
-- ⚠️ Bé Gấu (`be-gau.ts`) vẫn nạp KB kiểu cũ (8.000 ký tự đầu ở lượt đầu) — chưa sửa (ngoài phạm vi).
+- ~~Bé Gấu vẫn nạp KB kiểu cũ~~ → đã sửa s225 (xem §s225 cuối file).
 
 ## § s223 G5 cách 2 (2026-10-05) — Công tắc "Cho Gấu thao tác" trong phiên Trực tiếp
 
@@ -1015,10 +1015,19 @@ tool ghi/gửi khác chỉ hỏi khi lượt đã đọc nội dung ngoài"; kh�
 lịch + phiên Trực tiếp là khung đa người dùng, bật theo `app_settings.gp_personal_features` (hiện chỉ creator); phiên Trực tiếp có công tắc
 "Cho Gấu thao tác" (cách 2).
 **Còn mở (ai làm tiếp đọc đây):**
-- Bé Gấu (`be-gau.ts`) vẫn nạp KB kiểu cũ (8.000 ký tự đầu, lượt đầu) + SDK cũ `@google/generative-ai` — nên áp `kb-recall.ts` + chuyển SDK.
+- Bé Gấu (`be-gau.ts`) còn dùng SDK cũ `@google/generative-ai` (KB đã chuyển sang `kb-recall.ts` ở s225).
 - "Nhiễm" (cổng duyệt) chỉ tính trong 1 lượt — nội dung ngoài đọc ở lượt trước không làm lượt sau phải duyệt.
 - Lark DM chưa hiện kế hoạch (`plan`), chưa có phiên giọng nói; hội thoại Lark DM chưa được tóm tắt cho `searchPastConversations`.
 - Việc theo lịch phụ thuộc cron-job.org gọi `scheduled-messages` mỗi giờ (đang trỏ STAGING) → giờ chạy trễ tới ~1h.
 - Phiên Trực tiếp: chưa có người thật thử nói/nghe qua mic-loa + chia sẻ màn hình/camera trên production; mỗi bước thao tác Bridge 3–4s
   (lần đầu ≤15s chờ nhịp poll).
 - Mọi người dùng Bridge phải cài 1.2.2 thủ công 1 lần (trang Bridge → Tải extension → giải nén đè → ↻).
+
+## s225 (2026-10-06) — Bé Gấu tra KB mỗi lượt (dùng chung `kb-recall.ts`)
+- Trước: Bé Gấu chỉ nạp `JSON.stringify(toàn KB).slice(0, 5000)` ở LƯỢT ĐẦU — cùng lỗi Gấu Pro đã sửa ở s223 (thấy ~2% KB, mục mới gần như không bao giờ thấy, lượt sau không có KB).
+- Nay: MỖI lượt nạp `kbIndexBlock()` (danh mục tiêu đề) + `relevantKbBlock(câu hỏi)` (nguyên văn mục gần nhất theo embedding); câu ngắn <40 ký tự ghép 500 ký tự cuối câu trả lời trước — y hệt Gấu Pro.
+- Phân quyền giá vốn: `kb-recall.ts` thêm `opts.excludeCategories`; role không priv truyền `["cogs"]` → mục cogs không có trong danh mục lẫn khối liên quan. Tool `readKnowledgeBase` vẫn lọc cogs sau khi đọc (kể cả khi model đưa key cogs).
+- Tool `readKnowledgeBase` của Bé Gấu có thêm tham số `keys` (đọc đúng mục từ danh mục). Bản trùng `runReadKnowledgeBase` trong `creator-ai.ts` (không có `keys`, chỉ Bé Gấu dùng) đổi thành re-export từ `creator/tools/knowledge.ts`.
+- Lọc cogs xảy ra SAU `match_count: 6` của RPC → với role không priv có thể còn ít mục hơn 6 nếu câu hỏi trúng mục cogs. Chấp nhận.
+- Test: `be-gau-runner.test.ts` khoá staff truyền `excludeCategories: ["cogs"]` (cả lượt sau), admin truyền `{}`.
+

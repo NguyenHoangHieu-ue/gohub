@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Crown, Save, RefreshCw, Eye, EyeOff, Shield, Cpu, Plus, Trash2, AlertTriangle, MessageSquare, CheckCircle, XCircle, Loader2, Send, ChevronDown, ChevronUp } from "lucide-react"
@@ -236,6 +236,8 @@ function CreatorSettings() {
 
       {/* My Metrics Access */}
       <MyMetricsAccessSection />
+      <MyMetricsAccessSection endpoint="/api/creator/market-access" title="Thị trường & Báo giá — Phân quyền xem"
+        desc="Ngoài Creator, chỉ user được thêm vào đây mới thấy tab Thị trường & Báo giá (gồm báo giá nhà cung cấp)" />
 
       {/* Audit Log */}
       <AuditLogSection />
@@ -454,7 +456,9 @@ function GpAccessSection() {
   )
 }
 
-function MyMetricsAccessSection() {
+function MyMetricsAccessSection({ endpoint = "/api/creator/my-metrics-access", title = "My Metrics — Phân quyền xem", desc = "Những user được thêm vào đây mới thấy tab My Metrics" }: {
+  endpoint?: string; title?: string; desc?: string
+}) {
   const [users, setUsers]       = useState<{ username: string; name: string; role: string }[]>([])
   const [newUsername, setNew]   = useState("")
   const [loading, setLoading]   = useState(true)
@@ -463,14 +467,14 @@ function MyMetricsAccessSection() {
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
 
-  const reload = () => fetch("/api/creator/my-metrics-access").then(r => r.ok ? r.json() : null).then(d => setUsers(d?.users ?? [])).finally(() => setLoading(false))
-  useEffect(() => { reload() }, [])
+  const reload = useCallback(() => fetch(endpoint).then(r => r.ok ? r.json() : null).then(d => setUsers(d?.users ?? [])).finally(() => setLoading(false)), [endpoint])
+  useEffect(() => { reload() }, [reload])
 
   const add = async () => {
     if (!newUsername.trim()) return
     setAdding(true)
     try {
-      const r = await fetch("/api/creator/my-metrics-access", {
+      const r = await fetch(endpoint, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "add", username: newUsername.trim() }),
       })
@@ -481,7 +485,7 @@ function MyMetricsAccessSection() {
   }
 
   const remove = async (username: string) => {
-    await fetch("/api/creator/my-metrics-access", {
+    await fetch(endpoint, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "remove", username }),
     })
@@ -496,8 +500,8 @@ function MyMetricsAccessSection() {
           <Shield className="w-4 h-4 text-white" />
         </div>
         <div>
-          <h2 className="font-bold text-slate-800">My Metrics — Phân quyền xem</h2>
-          <p className="text-xs text-slate-400">Những user được thêm vào đây mới thấy tab My Metrics</p>
+          <h2 className="font-bold text-slate-800">{title}</h2>
+          <p className="text-xs text-slate-400">{desc}</p>
         </div>
       </div>
       <div className="p-6 space-y-4">
@@ -535,7 +539,7 @@ function MyMetricsAccessSection() {
   )
 }
 
-const TARGET_LABEL: Record<string, string> = { gp_access: "Gấu Pro", my_metrics_access: "My Metrics" }
+const TARGET_LABEL: Record<string, string> = { gp_access: "Gấu Pro", my_metrics_access: "My Metrics", market_access: "Thị trường & Báo giá" }
 
 function AuditLogSection() {
   const [logs, setLogs]       = useState<any[] | null>(null)

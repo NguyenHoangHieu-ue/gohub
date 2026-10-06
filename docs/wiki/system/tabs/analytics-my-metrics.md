@@ -7,11 +7,22 @@ visibility: admin-only
 is_hidden: true
 tags: [my-metrics, okr, analytics, sla, sku, gm, begau, lark-bot]
 created: 2026-08-27
-updated: 2026-09-11
+updated: 2026-10-06
 status: active
 ---
 
 # My Metrics — OKR Tracking
+
+## s225 (2026-10-06) — Bảng gập mặc định + tab mới "Thị trường & Báo giá"
+- Mọi bảng My Metrics gập mặc định (chỉ hiện biểu đồ, bấm "Xem bảng (N dòng)"): bọc 1 chỗ ở `components/my-metrics/shared-ui.tsx`
+  (`DataTable` của tab = wrapper quanh `DataTable` dashboard-kit). Hàng chờ duyệt Lark không phải bảng dữ liệu → giữ nguyên.
+- Breakdown theo thị trường (toàn bộ vendor, loại dịch vụ, hình thức, loại gói) KHÔNG đặt ở đây — xem tab mới `analytics-market.md`.
+
+## s225 (2026-10-06) — Chọn quý không còn gắn cứng Q3/Q4
+- Lỗi: client gắn cứng `"Q3"|"Q4"` — `currentQuarter()` trả `m <= 9 ? Q3 : Q4` (tháng 1/2027 ra **Q3-2027**, quý tương lai rỗng), nút chọn chỉ Q3/Q4 của năm hiện tại, `DEFAULT_TARGETS[selQ]` không có Q1/Q2 → `undefined` làm vỡ trang. Server (`quarterRange`, `prevQuarterLabel`) vốn đã xử lý đủ Q1–Q4.
+- Sửa: `currentQuarter()` tính đúng theo tháng; `quarterOptions()` = từ Q3-2026 (bắt đầu OKR) tới quý hiện tại, tối đa 4 quý gần nhất, mỗi nút đổi cả quý lẫn năm. `DEFAULT_TARGETS` khoá theo nhãn `Q3-2026`/`Q4-2026`; `defaultTargetsFor(label)` — quý chưa có target offer letter thì TẠM dùng target quý gần nhất đã biết, header ghi "chưa có target …, tạm dùng target …" khi chưa nhập target ở `app_settings okr.<Q>-<year>`.
+- Test: `__tests__/my-metrics-quarter.test.ts`.
+- Ghi chú: sidebar ẩn mục My Metrics nhóm Analyst với creator (`!isCreatorUser`) là cố ý — creator thấy ở nhóm Creator.
 
 ## s223 (2026-10-05) — Câu hỏi Gấu Pro được tính task, trừ câu của Creator
 - Trước: Gấu Pro (`creator-ai/chat/route.ts`) ghi `app_usage_events` (agent `gau_pro`) nhưng KHÔNG ghi `tools_used`/`used_db_tool` → mọi route My Metrics (lọc `used_db_tool=true`) bỏ qua Gấu Pro.
@@ -237,7 +248,7 @@ Quyết định Hiếu chốt (không tự đoán):
 | Lark thread fetch (dùng chung) | `web/src/lib/lark-thread-scan.ts` | `fetchRecentThreads(chatId, daysBack, maxThreads)` — tách ra từ Cà Thread (`api/creator/ca-thread`) để My Metrics dùng lại, không chép logic |
 | Gemini classifier | `web/src/lib/okr-lark-classify.ts` | `classifyLarkThread(thread)` — JSON-mode, cùng convention `lib/agents/classifier.ts` (temperature 0, fallback an toàn) |
 
-## 5 KPI (Q3 target theo offer letter, Q4 hardcode `DEFAULT_TARGETS` trong `page.tsx`)
+## 5 KPI (target mặc định Q3/Q4-2026 theo offer letter ở `DEFAULT_TARGETS` — `lib/my-metrics-types.ts`; quý sau xem §s225)
 
 | # | KPI | Target Q3 | Cách tính chính thức |
 |---|---|---|---|

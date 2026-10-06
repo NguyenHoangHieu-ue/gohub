@@ -5,10 +5,23 @@ export const fck  = (n: number) => formatCompactNumber(n)
 export const pct  = (n: number) => `${n.toFixed(1)}%`
 export const hhmm = (iso: string) => iso ? new Date(iso).toLocaleString("vi-VN", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : "—"
 
-export function currentQuarter(): { q: "Q3" | "Q4"; year: number } {
-  const m = new Date().getMonth() + 1
-  const y = new Date().getFullYear()
-  return m <= 9 ? { q: "Q3", year: y } : { q: "Q4", year: y }
+export type QuarterKey = "Q1" | "Q2" | "Q3" | "Q4"
+
+export function currentQuarter(): { q: QuarterKey; year: number } {
+  const d = new Date()
+  return { q: `Q${Math.floor(d.getMonth() / 3) + 1}` as QuarterKey, year: d.getFullYear() }
+}
+
+// OKR bắt đầu Q3-2026 → nút chọn quý = từ Q3-2026 tới quý hiện tại, giữ tối đa 4 quý gần nhất.
+export function quarterOptions(): { q: QuarterKey; year: number }[] {
+  const cur = currentQuarter()
+  const out: { q: QuarterKey; year: number }[] = []
+  let year = 2026, n = 3
+  while (year < cur.year || (year === cur.year && n <= Number(cur.q[1]))) {
+    out.push({ q: `Q${n}` as QuarterKey, year })
+    if (++n > 4) { n = 1; year++ }
+  }
+  return out.slice(-4)
 }
 
 // Achievement 0-100, "cao hơn = tốt" (revenue%, task count, GM delta)

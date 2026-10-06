@@ -102,6 +102,7 @@ const CREATOR_GROUP = {
     { href: "/analytics/creator/usage",     label: "Usage Analytics",  icon: BarChart2},
     { href: "/analytics/creator/bridge",    label: "Bridge",           icon: Plug     },
     { href: "/analytics/my-metrics",        label: "My Metrics",       icon: Target   },
+    { href: "/analytics/market",            label: "Thị trường & Báo giá", icon: Globe2 },
   ],
 }
 
@@ -129,7 +130,8 @@ function useSidebarData(username: string, sessionRole: string) {
     hiddenTabs:        Set<string>
     gpEnabled:         boolean
     myMetricsEnabled:  boolean
-  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false, myMetricsEnabled: false })
+    marketEnabled:     boolean
+  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false, myMetricsEnabled: false, marketEnabled: false })
 
   useEffect(() => {
     if (!username) return
@@ -149,6 +151,7 @@ function useSidebarData(username: string, sessionRole: string) {
         hiddenTabs:       new Set<string>((vis as Record<string, string[]>)?.[role] ?? []),
         gpEnabled:        me?.gp_enabled         === true,
         myMetricsEnabled: me?.my_metrics_enabled  === true,
+        marketEnabled:    me?.market_enabled      === true,
       })
     })
   }, [username, sessionRole])
@@ -290,7 +293,7 @@ export function Sidebar() {
   const role       = session?.user?.role     || "staff"
   const username   = session?.user?.username || ""
 
-  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag, myMetricsEnabled: myMetricsEnabledFlag } = useSidebarData(username, role)
+  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag, myMetricsEnabled: myMetricsEnabledFlag, marketEnabled: marketEnabledFlag } = useSidebarData(username, role)
   const department = dbDept ?? "none"
   // Dùng dbRole (fresh từ DB) để tránh cần logout/login khi admin đổi role
   const effectiveRole = dbRole ?? role
@@ -304,6 +307,8 @@ export function Sidebar() {
   // gpEnabled: non-creator user được creator cấp quyền dùng Gấu Pro
   const gpEnabled         = !isCreatorUser && gpEnabledFlag
   const myMetricsEnabled  = !isCreatorUser && myMetricsEnabledFlag
+  // Thị trường & Báo giá: creator thấy trong nhóm Creator; người được cấp thấy ở mục Personal
+  const marketEnabled     = !isCreatorUser && marketEnabledFlag
 
   const analyticsGroups = (() => {
     let groups = ANALYTICS_GROUPS
@@ -427,6 +432,9 @@ export function Sidebar() {
             {myMetricsEnabled && (
               <NavRow href="/analytics/my-metrics" label="My Metrics" Icon={Target} active={isActive("/analytics/my-metrics")} collapsed accent="violet" />
             )}
+            {marketEnabled && (
+              <NavRow href="/analytics/market" label="Thị trường & Báo giá" Icon={Globe2} active={isActive("/analytics/market")} collapsed accent="violet" />
+            )}
           </>
         ) : (
           /* Chế độ mở rộng: Tổ Gấu → Bé Gấu/Promotion → Analytics → Product */
@@ -490,10 +498,11 @@ export function Sidebar() {
                     <NavRow href="/analytics/creator/bridge" label="Bridge" Icon={Plug} active={isActive("/analytics/creator/bridge")} collapsed={false} accent="violet" />
                   </div>
                 )}
-                {analystOpen && myMetricsEnabled && (
+                {analystOpen && (myMetricsEnabled || marketEnabled) && (
                   <div className="mt-0.5">
                     <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-violet-600/80 uppercase tracking-wider">Personal</p>
-                    <NavRow href="/analytics/my-metrics" label="My Metrics" Icon={Target} active={isActive("/analytics/my-metrics")} collapsed={false} accent="violet" />
+                    {myMetricsEnabled && <NavRow href="/analytics/my-metrics" label="My Metrics" Icon={Target} active={isActive("/analytics/my-metrics")} collapsed={false} accent="violet" />}
+                    {marketEnabled && <NavRow href="/analytics/market" label="Thị trường & Báo giá" Icon={Globe2} active={isActive("/analytics/market")} collapsed={false} accent="violet" />}
                   </div>
                 )}
               </div>
