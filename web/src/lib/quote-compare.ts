@@ -37,6 +37,7 @@ export interface PackageOffer {
   iso: string[]; plan: PlanKind; dataGb: number; days: number
   priceUsd: number                // eSIM
   priceSimUsd?: number | null     // SIM vật lý vendor báo riêng (VNPT, Roam...)
+  speedMbps?: number | null       // Unlimited: tốc độ sau ngưỡng (WM ghi rõ 5/10Mbps); null = chưa rõ
   name: string; kyc: boolean
 }
 export interface PackageSource {
@@ -91,13 +92,16 @@ export function packageOffer(src: PackageSource, spec: Spec): Offer | null {
   for (const o of src.offers.get(packageKey(spec.plan)) ?? []) {
     if (o.days < spec.days || o.days > spec.days + EXTRA_DAYS_OK || !spec.iso.every(i => o.iso.includes(i))) continue
     if (spec.plan !== "Unlimited" && o.dataGb < spec.dataGb - 1e-9) continue
+    // Unlimited: gói bị bóp tốc độ thấp hơn gói đang bán không phải phương án thay (QA s225: WM 5Mbps vs SKU 10Mbps).
+    if (spec.plan === "Unlimited" && spec.speedMbps && o.speedMbps && o.speedMbps < spec.speedMbps) continue
     const sim = spec.form === "SIM"
     const viaFrame = sim && !(o.priceSimUsd! > 0)
     if (viaFrame && src.simFrameUsd === null) continue
     const usd = ceil2(sim ? (viaFrame ? o.priceUsd + src.simFrameUsd! : o.priceSimUsd!) : o.priceUsd)
     if (best && best.usd <= usd) continue
     const bigger = spec.plan !== "Unlimited" && o.dataGb > spec.dataGb + 1e-9 ? `gói lớn hơn: ${+o.dataGb.toFixed(2)}GB${spec.plan === "Daily" ? "/ngày" : ""}` : ""
-    const cover = [bigger, o.iso.length > spec.iso.length ? `gói phủ ${o.iso.length} nước` : "", o.days > spec.days ? `${o.days} ngày` : ""].filter(Boolean).join(", ")
+    const speed = spec.plan !== "Unlimited" ? "" : o.speedMbps ? `sau ngưỡng ${o.speedMbps}Mbps` : "chưa rõ tốc độ sau ngưỡng"
+    const cover = [bigger, speed, o.iso.length > spec.iso.length ? `gói phủ ${o.iso.length} nước` : "", o.days > spec.days ? `${o.days} ngày` : ""].filter(Boolean).join(", ")
     best = {
       source: src.id, label: src.label, usd, kyc: o.kyc,
       detail: `${o.name}${cover ? ` (${cover})` : ""}: ${sim && !viaFrame ? `giá SIM ${round3(o.priceSimUsd!)}` : round3(o.priceUsd)} USD${viaFrame ? ` + khung SIM ${round3(src.simFrameUsd!)} USD` : ""}`,

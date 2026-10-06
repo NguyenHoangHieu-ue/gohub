@@ -30,7 +30,7 @@ export const StackedBars = React.memo(function StackedBars({ rows, cols, colorFo
               tick={(p: any) => (
                 <text x={p.x} y={p.y} dy={4} textAnchor="end" fontSize={11}
                   fontWeight={p.payload.value === selected ? 700 : 500} fill={p.payload.value === selected ? "#0f4c81" : "#475569"}>
-                  {String(p.payload.value).length > 18 ? String(p.payload.value).slice(0, 17) + "…" : p.payload.value}
+                  {String(p.payload.value).length > Math.floor(labelWidth / 6) ? String(p.payload.value).slice(0, Math.floor(labelWidth / 6) - 1) + "…" : p.payload.value}
                 </text>
               )} />
           </>
@@ -66,7 +66,11 @@ export const RankBars = React.memo(function RankBars({ rows, colorKey, colorFor,
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_COLOR} horizontal={false} />
         <XAxis type="number" tickFormatter={fmt} axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} />
         <YAxis type="category" dataKey="key" width={labelWidth} axisLine={false} tickLine={false} interval={0}
-          tick={{ fill: "#475569", fontSize: 11, fontFamily: "ui-monospace, monospace" }} />
+          tick={(p: any) => (
+            <text x={p.x} y={p.y} dy={4} textAnchor="end" fontSize={11} fill="#475569">
+              {String(p.payload.value).length > Math.floor(labelWidth / 6) ? String(p.payload.value).slice(0, Math.floor(labelWidth / 6) - 1) + "…" : p.payload.value}
+            </text>
+          )} />
         <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: "rgba(15,76,129,0.06)" }}
           labelFormatter={(l: string, p: any[]) => p?.[0]?.payload?.desc ? `${l} — ${p[0].payload.desc}` : l}
           formatter={(v: number, _n: string, item: any) => [`${fmt(v)}${gmLabel ? ` · ${gmLabel} ${item.payload.gm.toFixed(1)}%` : ""}`, `${colorKey ?? ""} ${item.payload.group}`]} />

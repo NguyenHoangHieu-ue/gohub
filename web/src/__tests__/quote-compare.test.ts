@@ -62,6 +62,14 @@ describe("packageOffer", () => {
     expect(packageOffer(wm, { ...spec, dataGb: 6 })).toBeNull()                    // gói nhỏ hơn nhu cầu
     expect(packageOffer(wm, { ...spec, dataGb: 3 })!.detail).toContain("gói lớn hơn: 5GB")
   })
+  test("Unlimited: không đề xuất gói bóp tốc độ thấp hơn gói đang bán", () => {
+    const wm2: PackageSource = { id: "WM", label: "WorldMove", offers: new Map(), simFrameUsd: null }
+    addPackage(wm2, { iso: ["SG"], plan: "Unlimited", dataGb: 2, days: 3, priceUsd: 1.5, name: "5Mbps", kyc: false, speedMbps: 5 })
+    const spec10 = specFromSku("3CSGP3DBUNL03", ["SG"], null, null, 3)!     // B = 10Mbps
+    expect(packageOffer(wm2, spec10)).toBeNull()
+    const spec5 = specFromSku("3CSGP3DAUNL03", ["SG"], null, null, 3)!      // A = 5Mbps
+    expect(packageOffer(wm2, spec5)!.detail).toContain("sau ngưỡng 5Mbps")
+  })
   test("gói lớn hơn nhu cầu vẫn thay được (VNPT 5GB/ngày cho SKU Việt Nam 1,5GB/ngày), chọn gói rẻ nhất", () => {
     const vnpt: PackageSource = { id: "Q", label: "VNPT", offers: new Map(), simFrameUsd: null }
     addPackage(vnpt, { iso: ["VN"], plan: "Daily", dataGb: 5, days: 7, priceUsd: 3.04, priceSimUsd: 2.54, name: "TR50N", kyc: false })

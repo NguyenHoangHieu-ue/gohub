@@ -136,7 +136,12 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
   }, [data, allCheaper, actions, fx])
 
   if (error) return <EmptyState message={`Hiếu đang fix, vui lòng đợi (${error})`} />
-  if (loading || !data) return <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>
+  if (loading || !data) return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">Đang so giá các nhà cung cấp cho từng sản phẩm đã bán… lần đầu mỗi quý có thể mất khoảng 20–40 giây.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>
+    </div>
+  )
 
   const rows = onlyCheaper ? cheaper : scoped
   const priceChips = (r: CompareRow) => (
@@ -178,7 +183,7 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
         <StatTile icon={<ListChecks className="w-4 h-4" />} accent="positive" label="Sản phẩm nên xem lại giá nhập" value={cheaper.length}
           deltas={[{ label: "có nhà cung cấp khác rẻ hơn", value: `${cheaper.length} / ${scoped.filter(r => r.offers.length).length}`, kind: "flat" }]} />
         <StatTile icon={<MapPinned className="w-4 h-4" />} accent="neutral" label="Nước chưa có gói riêng" value={data.gaps.length}
-          deltas={[{ label: "đã có nơi báo giá — xem cuối trang", value: "", kind: "flat" }]} />
+          deltas={[{ label: "đã có nơi báo giá — xem cuối trang", value: `${data.gaps.filter(g => !g.regional.length).length} chưa bán dưới mọi hình thức`, kind: "flat" }]} />
       </div>
 
       <Panel title="Việc nên làm — đổi nhà cung cấp ở đâu thì lợi nhất" desc="Mỗi dòng = 1 thị trường có nhiều sản phẩm nhập rẻ hơn được ở nơi khác. Bấm “Xem” để lọc biểu đồ và bảng bên dưới đúng nhóm đó.">
@@ -212,7 +217,7 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
       <Panel title="Thị trường nào tiết kiệm được nhiều nhất?" desc="Thanh càng dài = tiết kiệm mỗi quý càng nhiều. Màu = nhà cung cấp rẻ hơn. Bấm 1 thị trường để lọc phần dưới.">
         <div className="h-[420px]">
           {byMarket.length ? <StackedBars rows={byMarket} cols={data.sources.map(s => s.label).filter(l => byMarket.some(r => r[l]))} colorFor={sourceColor}
-            horizontal onSelect={k => onMarket(k === market ? null : k)} selected={market} labelWidth={150} /> : <EmptyState message="Không có sản phẩm nào có giá rẻ hơn." />}
+            horizontal onSelect={k => onMarket(k === market ? null : k)} selected={market} labelWidth={180} /> : <EmptyState message="Không có sản phẩm nào có giá rẻ hơn." />}
         </div>
         <LogicNote collapsible label="Cách tính (cho người cần kiểm)">
           Với mỗi sản phẩm bán trong quý, tính &quot;giá nhập đầy đủ&quot; ở từng nơi cho đúng gói đó (đã cộng phí khung SIM/eSIM, đổi ra tiền Việt theo tỷ giá nội bộ tháng {data.fxMonth}).
@@ -228,8 +233,8 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
       <Panel title={`15 sản phẩm tiết kiệm nhiều nhất${market ? ` — ${market}` : ""}`} desc="Thanh = tiền tiết kiệm mỗi quý nếu đổi. Màu = nhà cung cấp rẻ hơn. Rê chuột xem là gói gì."
         action={market ? <button onClick={() => onMarket(null)} className="text-xs font-semibold text-brand-700 hover:underline">Bỏ lọc {market}</button> : undefined}>
         <div className="h-[380px]">
-          <RankBars rows={cheaper.slice(0, 15).map(r => ({ key: r.sku, value: r.saveQuarterVnd ?? 0, gm: r.savePct ?? 0, group: r.best?.label ?? "", desc: describe(r) }))}
-            colorFor={sourceColor} colorKey="Nhập rẻ hơn ở:" labelWidth={120} gmLabel="rẻ hơn" fmt={v => vnd(v)} />
+          <RankBars rows={cheaper.slice(0, 15).map((r, i) => ({ key: `${i + 1}. ${describe(r)}`, value: r.saveQuarterVnd ?? 0, gm: r.savePct ?? 0, group: r.best?.label ?? "", desc: `mã ${r.sku}, đang nhập từ ${r.vendor}` }))}
+            colorFor={sourceColor} colorKey="Nhập rẻ hơn ở:" labelWidth={300} gmLabel="rẻ hơn" fmt={v => vnd(v)} />
         </div>
         <Collapsible label={`Xem bảng chi tiết (${rows.length} sản phẩm)`} action={
           <span className="flex items-center gap-3">

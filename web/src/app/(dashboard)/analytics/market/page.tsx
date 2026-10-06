@@ -274,7 +274,7 @@ export default function MarketPage() {
         action={<Segmented value={stackDim} onChange={setStackDim} items={STACK_DIMS.map(d => ({ key: d, label: DIMENSION_LABEL[d] }))} />}>
         <div className="h-[460px]">
           {loading || !marketStack ? <Skeleton className="w-full h-full" /> :
-            <StackedBars rows={marketStack.rows} cols={marketStack.cols} colorFor={colorFor[stackDim]} horizontal onSelect={selectMarket} selected={market} />}
+            <StackedBars rows={marketStack.rows} cols={marketStack.cols} colorFor={colorFor[stackDim]} horizontal onSelect={selectMarket} selected={market} labelWidth={180} />}
         </div>
         <LogicNote collapsible label="Cách tính">
           Doanh thu đã giao hàng, B2B + B2C (bỏ phí ship, bỏ đơn nội bộ), tính tới hôm qua. Thị trường = mã nước trong SKU (ký tự 3–5; nhóm nước như EU1/Global là 1 thị trường riêng).
@@ -317,8 +317,8 @@ export default function MarketPage() {
             <div>
               <p className="text-xs font-semibold text-slate-500 mb-1">12 sản phẩm bán nhiều nhất · màu = nhà cung cấp · rê chuột xem là gói gì</p>
               <div className="h-[280px]">
-                <RankBars rows={topSkus.map(r => ({ key: r.key, value: val(r), gm: gmPct(r.gp, r.rev), group: skuVendor.get(r.key) ?? "", desc: skuDesc.get(r.key) }))}
-                  colorFor={colorFor.vendor} colorKey="Nhà cung cấp:" gmLabel="biên lãi" />
+                <RankBars rows={topSkus.map((r, i) => ({ key: `${i + 1}. ${skuDesc.get(r.key) ?? r.key}`, value: val(r), gm: gmPct(r.gp, r.rev), group: skuVendor.get(r.key) ?? "", desc: `mã ${r.key}` }))}
+                  colorFor={colorFor.vendor} colorKey="Nhà cung cấp:" gmLabel="biên lãi" labelWidth={240} />
               </div>
             </div>
           </div>

@@ -66,7 +66,7 @@ function usd(t: FxTable, amount: number, ccy: string, month: string): number | n
 }
 
 export async function loadQuoteCompare(quarter: string, group: MarketData["group"], bypass = false): Promise<QuoteCompareData> {
-  return cachedQuery<QuoteCompareData>(`market-quotes:v6:${quarter}:${group}`, async () => {
+  return cachedQuery<QuoteCompareData>(`market-quotes:v7:${quarter}:${group}`, async () => {
     const month = currentMonth()
     const [market, fx, priceList, refs, groups, assumptionsBc, formulaRows, hk3, wm, frames] = await Promise.all([
       loadMarketData(quarter, group, bypass),
@@ -78,7 +78,7 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
       supabaseAdmin.from("app_settings").select("key,value").or("key.like.datapool.%,key.like.3hk.%").then(r => r.data ?? []),
       supabaseAdmin.from("ncc_3hk").select("country,network,price_per_gb_hkd,is_kyc").then(r => r.data ?? []),
       fetchAll<any>((a, b) => supabaseAdmin.from("ncc_worldmove")
-        .select("vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,cogs,cogs_currency,is_kyc,status")
+        .select("vendor_product_id,product_name,region,sim_type,days,data_gb,is_daily,is_unlimited,throttle_kbps,cogs,cogs_currency,is_kyc,status")
         .eq("status", "active").eq("sim_type", "eSIM").order("id").range(a, b)),
       supabaseAdmin.from("skus").select("sku_code,latest_cogs,latest_cogs_currency").like("sku_code", "__000__K00000").then(r => r.data ?? []),
     ])
@@ -174,7 +174,7 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
       const price = usd(t, Number(r.cogs), String(r.cogs_currency || "TWD"), month)
       if (!price || !r.days) continue
       const plan: PlanKind = r.is_unlimited ? "Unlimited" : r.is_daily ? "Daily" : "Fixed"
-      addPackage(wmSrc, { iso: Array.from(new Set(isos as string[])).sort(), plan, dataGb: Number(r.data_gb) || 0, days: Number(r.days), priceUsd: price, name: String(r.product_name ?? r.vendor_product_id), kyc: !!r.is_kyc })
+      addPackage(wmSrc, { iso: Array.from(new Set(isos as string[])).sort(), plan, dataGb: Number(r.data_gb) || 0, days: Number(r.days), priceUsd: price, name: String(r.product_name ?? r.vendor_product_id), kyc: !!r.is_kyc, speedMbps: r.throttle_kbps ? Number(r.throttle_kbps) / 1000 : null })
     }
 
     // ── SKU đang bán trong quý ──
