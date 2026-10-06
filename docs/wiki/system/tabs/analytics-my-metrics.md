@@ -758,3 +758,21 @@ tự so số trước/sau fix trên staging, số CHỈ đổi nếu `dim_sku` t
   My Metrics** — KPI "3HK Contribution %" ở BOD/Dashboard/Quarterly/Channels là chỉ số RIÊNG (chỉ 3HK, không
   có BC), cố ý KHÔNG đổi theo vì đó là số đã báo cáo lâu dài cho leadership, đổi định nghĩa ở đó cần Hiếu
   chốt riêng.
+
+## s225 (2026-10-06) — Bot Lark theo luật đánh dấu của Hiếu (thay AI tự quyết)
+- Lý do (đo dữ liệu thật): bot đề xuất sai ~57%; tin gốc mọi thread bị đọc RỖNG (`parseLarkContent` chỉ đọc rich-text bọc `zh_cn`, API
+  trả dạng `{title,content}` không bọc); emoji có lấy nhưng không dùng; tính giờ từ lúc mở thread; phân loại 1 lần rồi bỏ; tên hiện `ou_…`.
+- Luật (`lib/okr-lark-rules.ts`, test `okr-lark-rules.test.ts`): chỉ group trong `my_metrics_lark_scan_config.case_groups` (mặc định
+  "Telecom Product (Private)", so tên group); thread Hiếu đăng → không tính; bắt đầu = tin ĐẦU TIÊN tag Hiếu; Hiếu thả **YES** (bất kỳ tin
+  nào) → đóng, không tính (`status=rejected`, `reviewed_by=auto:yes`); câu trả lời của Hiếu sau mốc bắt đầu được Hiếu thả **Typing** →
+  xong, tự tính (`confirmed`, `auto:typing`, `duration_value` từ lúc được tag); chưa có → `pending_review` (case mở). Không phải case →
+  `not_matched`, `auto:rule`. AI (`okr-lark-classify`) chỉ còn chọn SLA hay Vendor Speed.
+- Case Hiếu đã duyệt tay (`reviewed_by` không bắt đầu `auto:`) KHÔNG bị ghi đè. Case mở được đọc lại mỗi lần quét (tối đa 45 ngày).
+- Lệnh **"Note đi"** (`api/lark/events`): Hiếu tag bot trong thread → bot trả "Đã note", đọc thread ngay (`evaluateThreadNow`), báo đã
+  ghi nhận (kèm số giờ) / đóng bằng YES / không tính (lý do) / chưa có Typing (liệt kê emoji Hiếu đã thả để soát mã emoji).
+- Đọc dữ liệu (`lark-thread-scan.ts`): rich-text không bọc, ảnh/file/thẻ ra chữ, emoji TỪNG tin kèm người thả (`allReactions`), tên
+  người gửi tra danh bạ. "Quét ngay" nhận `?days=N` (≤150) để quét lại. Thời gian chạy cron/quét ngay 300s (`vercel.json`).
+- Khoá quý (`okr-helpers.ts`): ân hạn `LOCK_GRACE_DAYS = 7` ngày sau cuối quý; `REOPENED_QUARTERS = ["Q3-2026"]` (Hiếu cho mở lại Q3 — xoá
+  khỏi danh sách khi xử lý xong). ⚠️ Mã emoji `YES`/`Typing` so không phân biệt hoa thường; chưa đối chiếu được trên Lark thật (máy dev không
+  có khoá Lark) — lệnh "Note đi" in ra emoji Hiếu đã thả để kiểm.
+- ⚠️ Webhook Lark trỏ production → lệnh "Note đi" chỉ chạy sau khi merge `main`.

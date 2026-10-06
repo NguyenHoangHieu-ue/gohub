@@ -1,25 +1,33 @@
-// Logic quét Lark thật — dùng chung giữa cron tự động (api/cron/my-metrics-lark-scan) và nút
-// "Quét ngay" thủ công (api/analytics/my-metrics/lark-config/scan-now) để Hiếu test được ngay
-// thay vì phải đợi cron chạy 1 lần/ngày mới biết fix có work không.
+// Logic quét Lark thật — dùng chung giữa cron tự động (api/cron/my-metrics-lark-scan), nút "Quét ngay"
+// (api/analytics/my-metrics/lark-config/scan-now), quét lịch sử 1 group và lệnh "Note đi" trong thread.
+//
+// s225 (Hiếu chốt): bỏ để AI tự quyết "có phải case / xong chưa" (sai ~57%, tin gốc còn bị đọc rỗng). Nay theo LUẬT đánh dấu
+// của Hiếu — xem lib/okr-lark-rules.ts: chỉ group Telecom Product (Private), thread người khác đăng, tính từ lúc tag Hiếu,
+// YES = đóng không tính, Typing trên câu trả lời của Hiếu = xong. AI chỉ còn phân loại SLA hay Vendor Speed.
+// Case đã được Hiếu duyệt tay (reviewed_by không bắt đầu bằng "auto:") thì KHÔNG đụng lại.
 import { supabaseAdmin } from "@/lib/supabase"
-import { fetchThreadsFromCapturedLog, fetchRecentThreads, getChatName, type LarkThread } from "@/lib/lark-thread-scan"
+import { fetchThreadsFromCapturedLog, fetchRecentThreads, fetchThreadByMessageId, getChatName, type LarkThread } from "@/lib/lark-thread-scan"
 import { classifyLarkThread, type LarkClassifyResult } from "@/lib/okr-lark-classify"
 import { sendLarkDM, getLarkUserOpenId, getLarkToken } from "@/lib/lark"
 import { quarterLabelForDate } from "@/lib/okr-helpers"
+import { evaluateThread, DEFAULT_CASE_GROUPS, type RuleMessage, type RuleOutcome } from "@/lib/okr-lark-rules"
 
 const CONFIG_KEY = "my_metrics_lark_scan_config"
-const MAX_NEW_THREADS_PER_RUN = 40
+const OPEN_RECHECK_DAYS = 45   // case còn mở được đọc lại tối đa ngần này ngày kể từ lúc được tag
 
-// s173: bỏ chat_id — nguồn phát hiện thread nay là capture log real-time (api/lark/events, MỌI
-// group bot có mặt), không còn giới hạn đúng 1 group cấu hình tay. Field chat_id giữ optional trong
-// type/parse để đọc được config cũ (không migration xoá cột Supabase) nhưng không dùng để lọc nữa.
-interface ScanConfig { enabled: boolean; days_back: number }
+interface ScanConfig { enabled: boolean; days_back: number; case_groups: string[] }
 
 function normalizeConfig(raw: any): ScanConfig {
   return {
     enabled: raw?.enabled === true,
     days_back: Number(raw?.days_back) > 0 ? Number(raw.days_back) : 3,
+    case_groups: Array.isArray(raw?.case_groups) && raw.case_groups.length ? raw.case_groups.map(String) : DEFAULT_CASE_GROUPS,
   }
+}
+
+async function loadConfig(): Promise<ScanConfig> {
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", CONFIG_KEY).maybeSingle()
+  return normalizeConfig(data?.value ? JSON.parse(data.value) : null)
 }
 
 export interface ScanRunResult {
@@ -29,116 +37,136 @@ export interface ScanRunResult {
   backlog_remaining: number
   groups: { chat_id: string; chat_name: string; thread_count: number }[]
   self_initiated: number
+  done?: number; open?: number; closed?: number
 }
 
-// ignoreEnabled=true cho nút "Quét ngay" (Hiếu bấm test dù chưa tick "Bật quét tự động").
-export async function runLarkScan(ignoreEnabled = false): Promise<ScanRunResult> {
-  const { data } = await supabaseAdmin
-    .from("app_settings").select("value").eq("key", CONFIG_KEY).maybeSingle()
-  const config = normalizeConfig(data?.value ? JSON.parse(data.value) : null)
+const empty = (skipped?: string): ScanRunResult => ({ skipped, scanned: 0, classified: 0, inserted: 0, not_matched: 0, classify_errors: 0, backlog_remaining: 0, groups: [], self_initiated: 0 })
 
-  if (!config.enabled && !ignoreEnabled) {
-    return { skipped: "chưa bật quét tự động", scanned: 0, classified: 0, inserted: 0, not_matched: 0, classify_errors: 0, backlog_remaining: 0, groups: [], self_initiated: 0 }
+const toRule = (t: LarkThread, chatName: string): { chat_name: string; root: RuleMessage; replies: RuleMessage[] } => ({
+  chat_name: chatName,
+  root: { message_id: t.message_id, sender_open_id: t.sender_open_id, create_time: t.create_time, content: t.content, mentionIds: t.mentions.map(m => m.id), reactions: t.reactions ?? [] },
+  replies: t.replies.map(r => ({ message_id: r.message_id, sender_open_id: r.open_id, create_time: r.create_time, content: r.content, mentionIds: r.mentions.map(m => m.id), reactions: r.reactions ?? [] })),
+})
+
+const isManual = (reviewedBy: string | null | undefined) => !!reviewedBy && !reviewedBy.startsWith("auto:")
+const nameOf = (t: LarkThread, openId: string) => openId === t.sender_open_id ? t.sender_name : (t.replies.find(r => r.open_id === openId)?.name ?? openId)
+
+/** Áp luật cho 1 thread rồi ghi okr_lark_events. Trả kết quả để báo lại (lệnh "Note đi"). */
+async function applyRules(t: LarkThread, chatName: string, hieuId: string, caseGroups: string[], existing: { metric: string; reviewed_by: string | null }[]):
+  Promise<{ outcome: RuleOutcome; wrote: boolean; classifyError: boolean }> {
+  const outcome = evaluateThread(toRule(t, chatName), hieuId, caseGroups)
+  if (existing.some(e => isManual(e.reviewed_by))) return { outcome, wrote: false, classifyError: false }   // Hiếu đã duyệt tay → giữ nguyên
+
+  const startMs = Number(outcome.kind === "skip" ? t.create_time : outcome.start.create_time)
+  const base = {
+    quarter: quarterLabelForDate(new Date(startMs)), chat_id: t.chat_id, thread_id: t.thread_id, message_id: t.message_id,
+    request_time: new Date(startMs).toISOString(), request_snippet: t.content.slice(0, 300), request_sender: t.sender_name,
+    is_self_initiated: t.sender_open_id === hieuId,
   }
 
-  // Bounded — mỗi thread tốn 2 call Lark để hydrate chi tiết (batch 15 tại 1 thời điểm, xem
-  // lark-thread-scan.ts); 200 thread là đủ tiến bộ mỗi lần chạy mà không dồn quá tải/rate-limit.
-  // Không cần thấy HẾT backlog trong 1 lần — not_matched dedupe (xem dưới) đảm bảo lần chạy sau
-  // tự tiến tới phần backlog cũ hơn, không giẫm chân tại chỗ.
-  const maxThreads = Math.min(200, config.days_back * 10)
-  const allThreads = await fetchThreadsFromCapturedLog(config.days_back, maxThreads)
-  // "Đã quét" = mọi thread capture log phát hiện, KỂ CẢ bị loại bởi filter replies bên dưới — Hiếu
-  // cần thấy group nào bot có chạm tới để đối chiếu, không chỉ nhóm lọt qua được tới bước phân loại.
+  if (outcome.kind === "skip") {
+    await supabaseAdmin.from("okr_lark_events").delete().eq("message_id", t.message_id).neq("metric", "none")
+    await supabaseAdmin.from("okr_lark_events").upsert({ ...base, metric: "none", ai_reason: outcome.reason, status: "not_matched",
+      completion_time: null, completion_snippet: null, completion_sender: null, duration_value: null, reviewed_by: "auto:rule", reviewed_at: new Date().toISOString() },
+      { onConflict: "message_id,metric" })
+    return { outcome, wrote: true, classifyError: false }
+  }
+
+  // Loại việc: giữ loại đã có, chưa có thì hỏi AI (chỉ phân loại SLA / Vendor Speed — mặc định SLA).
+  let metric = existing.find(e => e.metric !== "none")?.metric
+  let aiNote = ""
+  let classifyError = false
+  if (!metric) {
+    const r = await classifyLarkThread(t)
+    if (!r) classifyError = true
+    metric = r?.metric === "vendor_speed" ? "vendor_speed" : "sla"
+    aiNote = r?.reason ? ` · AI: ${r.reason}` : ""
+  }
+  const done = outcome.kind === "done" ? outcome.done : null
+  const durationUnit = metric === "sla" ? 3_600_000 : 60_000
+  await supabaseAdmin.from("okr_lark_events").delete().eq("message_id", t.message_id).neq("metric", metric)
+  await supabaseAdmin.from("okr_lark_events").upsert({
+    ...base, metric,
+    completion_time: done ? new Date(Number(done.create_time)).toISOString() : null,
+    completion_snippet: done ? done.content.slice(0, 300) : null,
+    completion_sender: done ? nameOf(t, done.sender_open_id) : null,
+    duration_value: done ? +((Number(done.create_time) - startMs) / durationUnit).toFixed(2) : null,
+    ai_reason: `${outcome.reason}${outcome.start.message_id !== t.message_id ? " · tính từ lúc được tag giữa thread" : ""}${aiNote}`,
+    status: outcome.kind === "done" ? "confirmed" : outcome.kind === "closed" ? "rejected" : "pending_review",
+    reviewed_by: outcome.kind === "done" ? "auto:typing" : outcome.kind === "closed" ? "auto:yes" : null,
+    reviewed_at: outcome.kind === "open" ? null : new Date().toISOString(),
+  }, { onConflict: "message_id,metric" })
+  return { outcome, wrote: true, classifyError }
+}
+
+async function processThreads(threads: LarkThread[], hieuId: string, caseGroups: string[]): Promise<ScanRunResult> {
+  const appToken = await getLarkToken()
+  const names = new Map<string, string>()
+  for (const id of Array.from(new Set(threads.map(t => t.chat_id)))) names.set(id, await getChatName(id, appToken))
+
+  const { data: rows } = threads.length
+    ? await supabaseAdmin.from("okr_lark_events").select("message_id,metric,reviewed_by").in("message_id", threads.map(t => t.message_id))
+    : { data: [] as any[] }
+  const byMsg = new Map<string, { metric: string; reviewed_by: string | null }[]>()
+  for (const r of rows ?? []) byMsg.set(r.message_id, [...(byMsg.get(r.message_id) ?? []), r])
+
+  const out: ScanRunResult = { ...empty(), done: 0, open: 0, closed: 0 }
   const groupCount = new Map<string, number>()
-  for (const t of allThreads) groupCount.set(t.chat_id, (groupCount.get(t.chat_id) ?? 0) + 1)
-  const groups: { chat_id: string; chat_name: string; thread_count: number }[] = []
-  if (groupCount.size > 0) {
-    const appToken = await getLarkToken()
-    for (const [chatId, count] of groupCount) {
-      groups.push({ chat_id: chatId, chat_name: await getChatName(chatId, appToken), thread_count: count })
-    }
-  }
-
-  // Thread không có reply nào — thường vì tin gửi KHÔNG dùng "Reply in Thread" của Lark (root_id
-  // không được set) nên Lark coi mỗi tin là 1 "thread" độc lập rỗng — bị loại TRƯỚC khi tới bước phân
-  // loại, không bao giờ ra case dù nội dung đúng ý. Đây là gotcha thật, không phải bug — xem wiki.
-  const threads = allThreads.filter(t => t.replies.length > 0)
-
-  if (threads.length === 0) return { scanned: 0, classified: 0, inserted: 0, not_matched: 0, classify_errors: 0, backlog_remaining: 0, groups, self_initiated: 0 }
-
-  const { data: existing } = await supabaseAdmin
-    .from("okr_lark_events").select("message_id")
-    .in("message_id", threads.map(t => t.message_id))
-  const seen = new Set((existing ?? []).map((r: any) => r.message_id))
-  const newThreads = threads.filter(t => !seen.has(t.message_id))
-
-  // Chỉ tính SLA/Vendor Speed cho request từ NGƯỜI KHÁC — thread do chính Hiếu đăng (dù có ai mention
-  // lại) không được đưa vào phân loại Gemini (tiết kiệm chi phí luôn), chỉ lưu marker để audit + cho
-  // phép "Vẫn tính case này" thủ công nếu có ngoại lệ thật (xem override route).
-  const myOpenId = await getLarkUserOpenId()
-  const selfThreads  = myOpenId ? newThreads.filter(t => t.sender_open_id === myOpenId) : []
-  const otherThreads = myOpenId ? newThreads.filter(t => t.sender_open_id !== myOpenId) : newThreads
-
-  const selfInitiated = await insertSelfInitiatedMarkers(selfThreads)
-
-  const toClassify = otherThreads.slice(0, MAX_NEW_THREADS_PER_RUN)
-  const { inserted, notMatched, classifyErrors } = await classifyAndInsertThreads(toClassify)
-
-  if (inserted > 0) {
-    if (myOpenId) {
-      await sendLarkDM(myOpenId, `🤖 Bé Gấu vừa phát hiện ${inserted} case SLA/Vendor Speed mới từ Lark — vào My Metrics duyệt nhé.`)
-    }
-  }
-
-  return {
-    scanned: threads.length, classified: toClassify.length, inserted, not_matched: notMatched,
-    classify_errors: classifyErrors,
-    backlog_remaining: otherThreads.length - toClassify.length,
-    groups, self_initiated: selfInitiated,
-  }
-}
-
-// Marker "tự đăng — không tính" — không tốn lượt gọi Gemini nào (loại trước khi phân loại). Dùng
-// metric='none' + status='not_matched' như case Gemini chấm không khớp (cùng cơ chế dedupe theo
-// message_id), phân biệt qua cột is_self_initiated để UI tách riêng thành 1 khối audit khác.
-async function insertSelfInitiatedMarkers(threads: LarkThread[]): Promise<number> {
-  let inserted = 0
   for (const t of threads) {
-    const quarter = quarterLabelForDate(new Date(parseInt(t.create_time)))
-    const { error } = await supabaseAdmin.from("okr_lark_events").upsert({
-      quarter, metric: "none", chat_id: t.chat_id,
-      thread_id: t.thread_id, message_id: t.message_id,
-      request_time: new Date(parseInt(t.create_time)).toISOString(),
-      request_snippet: t.content.slice(0, 300), request_sender: t.sender_name,
-      ai_reason: "Tự đăng bởi Hiếu — không tính SLA/Vendor Speed tự động. Bấm \"Vẫn tính case này\" nếu đây là ngoại lệ thật.",
-      status: "not_matched", is_self_initiated: true,
-    }, { onConflict: "message_id,metric" })
-    if (!error) inserted++
+    groupCount.set(t.chat_id, (groupCount.get(t.chat_id) ?? 0) + 1)
+    out.scanned++
+    const { outcome, wrote, classifyError } = await applyRules(t, names.get(t.chat_id) ?? t.chat_id, hieuId, caseGroups, byMsg.get(t.message_id) ?? [])
+    if (classifyError) out.classify_errors++
+    if (!wrote) continue
+    out.classified++
+    if (outcome.kind === "skip") { out.not_matched++; if (t.sender_open_id === hieuId) out.self_initiated++ }
+    else { out.inserted++; out[outcome.kind]! += 1 }
   }
-  return inserted
+  out.groups = Array.from(groupCount.entries()).map(([chat_id, thread_count]) => ({ chat_id, chat_name: names.get(chat_id) ?? chat_id, thread_count }))
+  return out
 }
 
-// Ghi 1 kết quả phân loại thật (match hoặc không match) vào okr_lark_events — tách riêng để dùng
-// chung giữa vòng quét hàng loạt (classifyAndInsertThreads) và route "Vẫn tính case này" (override 1
-// thread cụ thể vừa bị loại vì tự đăng, xem api/analytics/my-metrics/lark-events/[id]/override).
+// ignoreEnabled=true cho nút "Quét ngay". daysBack ghi đè cấu hình (vd quét lại cả Q3 sau khi mở lại quý).
+export async function runLarkScan(ignoreEnabled = false, daysBack?: number): Promise<ScanRunResult> {
+  const config = await loadConfig()
+  if (!config.enabled && !ignoreEnabled) return empty("chưa bật quét tự động")
+  const hieuId = await getLarkUserOpenId()
+  if (!hieuId) return empty("Chưa Kết nối Lark cá nhân (Creator Settings) — cần để biết tin nào của anh")
+
+  // Case còn mở (đã tag, chưa Typing/YES) → luôn đọc lại, kể cả cũ hơn daysBack.
+  const { data: openRows } = await supabaseAdmin.from("okr_lark_events").select("message_id")
+    .eq("status", "pending_review").is("reviewed_by", null)
+    .gte("request_time", new Date(Date.now() - OPEN_RECHECK_DAYS * 86_400_000).toISOString())
+  const days = daysBack ?? config.days_back
+  const threads = await fetchThreadsFromCapturedLog(days, Math.min(400, days * 10 + (openRows?.length ?? 0)), true, (openRows ?? []).map(r => r.message_id))
+  const result = await processThreads(threads, hieuId, config.case_groups)
+  if ((result.done ?? 0) + (result.open ?? 0) > 0) {
+    await sendLarkDM(hieuId, `🤖 Bé Gấu vừa đọc Lark: ${result.done} case anh đã đánh dấu Typing (tự tính), ${result.open} case đang mở chờ anh đánh dấu Typing/YES. Xem ở My Metrics.`)
+  }
+  return result
+}
+
+/** Lệnh "Note đi": đánh giá lại đúng 1 thread ngay lúc Hiếu tag bot. */
+export async function evaluateThreadNow(rootMessageId: string): Promise<{ outcome: RuleOutcome | null; emojis: string[] }> {
+  const config = await loadConfig()
+  const hieuId = await getLarkUserOpenId()
+  const t = await fetchThreadByMessageId(rootMessageId, true)
+  if (!hieuId || !t) return { outcome: null, emojis: [] }
+  const chatName = await getChatName(t.chat_id, await getLarkToken())
+  const { data: rows } = await supabaseAdmin.from("okr_lark_events").select("message_id,metric,reviewed_by").eq("message_id", t.message_id)
+  const { outcome } = await applyRules(t, chatName, hieuId, config.case_groups, rows ?? [])
+  const emojis = Array.from(new Set([...(t.reactions ?? []), ...t.replies.flatMap(r => r.reactions ?? [])].filter(r => r.operatorId === hieuId).map(r => r.emoji)))
+  return { outcome, emojis }
+}
+
+// Ghi 1 kết quả phân loại AI (luồng cũ) — chỉ còn dùng cho route "Vẫn tính case này" (override marker tự đăng).
 export async function insertClassifiedEvent(
   t: LarkThread,
   result: LarkClassifyResult,
   isSelfInitiated = false,
 ): Promise<{ ok: boolean; matched: boolean }> {
   const quarter = quarterLabelForDate(new Date(parseInt(t.create_time)))
-
-  if (!result.is_match || !result.metric) {
-    const { error } = await supabaseAdmin.from("okr_lark_events").upsert({
-      quarter, metric: "none", chat_id: t.chat_id,
-      thread_id: t.thread_id, message_id: t.message_id,
-      request_time: new Date(parseInt(t.create_time)).toISOString(),
-      request_snippet: t.content.slice(0, 300), request_sender: t.sender_name,
-      ai_reason: result.reason, status: "not_matched", is_self_initiated: isSelfInitiated,
-    }, { onConflict: "message_id,metric" })
-    return { ok: !error, matched: false }
-  }
-
+  if (!result.is_match || !result.metric) return { ok: true, matched: false }
   const completion = result.completion_reply_index !== null ? t.replies[result.completion_reply_index] : null
   const { error } = await supabaseAdmin.from("okr_lark_events").upsert({
     quarter, metric: result.metric, chat_id: t.chat_id,
@@ -156,78 +184,18 @@ export async function insertClassifiedEvent(
   return { ok: !error, matched: true }
 }
 
-// Dùng chung giữa quét real-time (quarter luôn = hôm nay) và quét lịch sử (thread có thể rơi vào
-// quý TRƯỚC nếu quét ngược nhiều tháng) — quarter gắn theo NGÀY THẬT của từng thread, không phải
-// ngày chạy scan.
-async function classifyAndInsertThreads(threads: LarkThread[]): Promise<{ inserted: number; notMatched: number; classifyErrors: number }> {
-  let inserted = 0
-  let notMatched = 0
-  let classifyErrors = 0
-
-  for (const t of threads) {
-    const result = await classifyLarkThread(t)
-    if (!result) { classifyErrors++; continue }
-    const { ok, matched } = await insertClassifiedEvent(t, result)
-    if (matched && ok) inserted++
-    else if (!matched) notMatched++
-  }
-
-  return { inserted, notMatched, classifyErrors }
-}
-
-// Thread có "liên quan" 1 open_id không — chính mình gửi HOẶC được @mention, ở tin gốc HOẶC bất kỳ
-// reply nào. Cùng tiêu chí "chỉ tin liên quan tôi" đang áp cho capture real-time (quyết định giữ
-// nguyên s177/178) — quét lịch sử áp lại y hệt, không mở rộng phạm vi hơn.
-function threadInvolvesUser(t: LarkThread, myOpenId: string): boolean {
-  if (t.sender_open_id === myOpenId || t.mentions.some(m => m.id === myOpenId)) return true
-  return t.replies.some(r => r.open_id === myOpenId || r.mentions.some(m => m.id === myOpenId))
-}
-
 const MAX_HISTORY_DAYS = 120
 
-// Quét lịch sử 1 LẦN cho 1 group cụ thể — bù cho hạn chế "real-time capture không thấy được thread
-// trước khi bot bắt đầu sống" (chỉ capture từ lúc deploy s173, KHÔNG backfill tự động). Dùng lại
-// fetchRecentThreads (REST list toàn group, giống Cà Thread) thay vì capture log — chỉ nguồn phát
-// hiện thread khác nhau, pipeline phân loại/lưu dùng chung 100% với quét real-time.
+// Quét lịch sử 1 LẦN cho 1 group cụ thể (thread trước khi capture real-time chạy) — cùng bộ luật với quét thường.
 export async function runLarkHistoryScan(chatId: string, daysBack: number): Promise<ScanRunResult> {
   const bounded = Math.min(MAX_HISTORY_DAYS, Math.max(1, Math.floor(daysBack) || 30))
-  const myOpenId = await getLarkUserOpenId()
-  if (!myOpenId) {
-    return { skipped: "Chưa Kết nối Lark cá nhân (Creator Settings) — cần để biết thread nào liên quan Hiếu", scanned: 0, classified: 0, inserted: 0, not_matched: 0, classify_errors: 0, backlog_remaining: 0, groups: [], self_initiated: 0 }
-  }
-
-  const maxThreads = Math.min(150, bounded * 5)
-  const allThreads = await fetchRecentThreads(chatId, bounded, maxThreads)
-  const appToken = await getLarkToken()
-  const chatName = await getChatName(chatId, appToken)
-  const groups = [{ chat_id: chatId, chat_name: chatName, thread_count: allThreads.length }]
-
-  const relevant = allThreads.filter(t => t.replies.length > 0 && threadInvolvesUser(t, myOpenId))
-  if (relevant.length === 0) return { scanned: 0, classified: 0, inserted: 0, not_matched: 0, classify_errors: 0, backlog_remaining: 0, groups, self_initiated: 0 }
-
-  const { data: existing } = await supabaseAdmin
-    .from("okr_lark_events").select("message_id")
-    .in("message_id", relevant.map(t => t.message_id))
-  const seen = new Set((existing ?? []).map((r: any) => r.message_id))
-  const newRelevant = relevant.filter(t => !seen.has(t.message_id))
-
-  // Cùng policy quét real-time (s195+18-A): chỉ tính request từ NGƯỜI KHÁC — thread Hiếu tự đăng
-  // (dù mình bị mention lại sau đó) chỉ lưu marker audit, không phân loại Gemini.
-  const selfThreads  = newRelevant.filter(t => t.sender_open_id === myOpenId)
-  const otherThreads = newRelevant.filter(t => t.sender_open_id !== myOpenId)
-  const selfInitiated = await insertSelfInitiatedMarkers(selfThreads)
-
-  const toClassify = otherThreads.slice(0, MAX_NEW_THREADS_PER_RUN)
-  const { inserted, notMatched, classifyErrors } = await classifyAndInsertThreads(toClassify)
-
-  if (inserted > 0) {
-    await sendLarkDM(myOpenId, `🤖 Quét lịch sử "${chatName}" xong — phát hiện ${inserted} case SLA/Vendor Speed mới, vào My Metrics duyệt nhé.`)
-  }
-
-  return {
-    scanned: relevant.length, classified: toClassify.length, inserted, not_matched: notMatched,
-    classify_errors: classifyErrors,
-    backlog_remaining: otherThreads.length - toClassify.length,
-    groups, self_initiated: selfInitiated,
-  }
+  const config = await loadConfig()
+  const hieuId = await getLarkUserOpenId()
+  if (!hieuId) return empty("Chưa Kết nối Lark cá nhân (Creator Settings) — cần để biết thread nào liên quan anh")
+  const all = await fetchRecentThreads(chatId, bounded, Math.min(150, bounded * 5))
+  // fetchRecentThreads không lấy emoji từng reply → hydrate lại thread có liên quan anh với đủ emoji.
+  const relevant = all.filter(t => t.mentions.some(m => m.id === hieuId) || t.replies.some(r => r.mentions.some(m => m.id === hieuId)))
+  const full: LarkThread[] = []
+  for (const t of relevant) { const f = await fetchThreadByMessageId(t.message_id, true); if (f) full.push(f) }
+  return processThreads(full, hieuId, config.case_groups)
 }

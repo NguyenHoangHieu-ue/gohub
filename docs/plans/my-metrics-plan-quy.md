@@ -1,7 +1,7 @@
 # Plan — My Metrics: Kế hoạch quý tự đo + Duyệt case Lark tự động + Đánh giá hằng ngày
 
 > File TẠM (theo quy ước CLAUDE.md): xong hết mốc (hoặc Hiếu bỏ plan) thì xoá file, chuyển kiến thức còn giá trị sang wiki
-> `docs/wiki/system/tabs/analytics-my-metrics.md`. Tạo 2026-10-06 (s225). **Trạng thái: CHỜ HIẾU DUYỆT — chưa code.**
+> `docs/wiki/system/tabs/analytics-my-metrics.md`. Tạo 2026-10-06 (s225). **Trạng thái: Hiếu đã chốt (2026-10-06) — M0 + M1 ĐÃ CODE (staging), M2–M5 chưa.**
 
 Yêu cầu Hiếu (2026-10-06):
 1. Kế hoạch quý: đổi vendor / giảm COGS ở 1 thị trường, mở sản phẩm hoặc nước mới, đạt KPI My Metrics, việc không đo bằng số, theo dõi báo
@@ -89,7 +89,16 @@ Ngoài kế hoạch, thêm **cảnh báo tự động** (không cần anh đặt
 
 ---
 
-## C. Câu hỏi cần Hiếu chốt (trước khi code)
+## C0. Hiếu đã chốt (2026-10-06) — THAY phần B1 ở các điểm khác
+1. **YES** = đóng thread, không tính; chỉ YES do Hiếu thả; chỉ tính case trong group **Telecom Product (Private)**.
+2. Thread Hiếu đăng → không tính. Thread người khác đăng → bắt đầu tính khi Hiếu được tag (lần đầu, có thể giữa thread).
+3. **Xong** = câu trả lời của Hiếu có emoji **Typing** do Hiếu thả (bot đọc tới khi gặp). Quên đánh dấu → Hiếu tag bot "Note đi" →
+   bot trả "Đã note", đọc thread: có Typing thì ghi nhận, chưa thì nhắc; Hiếu đánh dấu rồi tag bot lại.
+4. KHÔNG để AI tự quyết case/xong — theo đúng ký hiệu của Hiếu (AI chỉ phân loại SLA hay Vendor Speed). ⇒ M2 (tự quyết theo ngưỡng) BỎ;
+   thay bằng nhắc case còn mở trong DM hằng ngày (M4).
+5. Mở lại Q3. 6. Lark DM đúng 8:30 hằng ngày. 7. Danh mục việc + ngưỡng cảnh báo: Claude tự đề xuất (giữ B2).
+
+## C. Câu hỏi cần Hiếu chốt (trước khi code) — ĐÃ TRẢ LỜI, xem C0
 1. **Emoji YES nghĩa là gì?** (a) "đã xong" — lấy làm mốc hoàn thành; (b) "không tính case này"; (c) khác. Ai thả mới có hiệu lực — chỉ anh, hay
    cả người hỏi?
 2. **Ai trả lời thì tính cho KPI của anh?** Hiện có case xong bởi Thanh My, Tri Trong, Bao, Buck… — anh xác nhận một số, từ chối một số. Chốt: chỉ
@@ -106,9 +115,9 @@ Ngoài kế hoạch, thêm **cảnh báo tự động** (không cần anh đặt
 ## D. Lộ trình (mỗi mốc commit + QA trên staging, xong mốc nào báo mốc đó)
 | Mốc | Nội dung | Cần migration | Ước lượng |
 |---|---|---|---|
-| **M0** | Sửa dữ liệu bot: đọc chữ tin gốc, tên người, kiểm "tự đăng", emoji mọi tin; ân hạn khoá quý 7 ngày | không | nhỏ |
-| **M1** | Bot v2: ngữ cảnh đầy đủ (HIẾU/giờ/tag/emoji), mốc bắt đầu = lúc được tag, ký hiệu ✅/👀/#done/#skip, đọc lại thread đang mở, độ chắc chắn | v70: thêm cột `start_reason`, `confidence`, `auto_decided`, `last_checked_at` vào `okr_lark_events` | vừa |
-| **M2** | Học từ quyết định cũ + tự quyết theo ngưỡng + duyệt nhanh qua Lark DM | không | vừa |
+| **M0** ✅ | Sửa dữ liệu bot: đọc chữ tin gốc, tên người, kiểm "tự đăng", emoji mọi tin; ân hạn khoá quý 7 ngày | không | nhỏ |
+| **M1** ✅ | Bot theo luật C0: group Telecom Product, tính từ lúc tag, YES/Typing, lệnh "Note đi", đọc lại case đang mở, mở lại Q3 | không (dùng `reviewed_by = auto:typing/auto:yes/auto:rule`) | vừa |
+| ~~M2~~ | BỎ (Hiếu chọn đánh dấu bằng emoji thay cho AI tự quyết) | — | — |
 | **M3** | Kế hoạch quý: bảng `okr_plan_items`, mẫu việc ở B2, tự tính tiến độ từ tab Thị trường/So giá/sản phẩm | v71: `okr_plan_items` | lớn |
 | **M4** | Đánh giá hôm nay + cảnh báo tự động + Lark DM hằng ngày | không (dùng `app_settings`) | vừa |
 | **M5** | Đối chiếu sau 2 tuần chạy thật: tỷ lệ bot đúng, số case anh còn phải duyệt, chỉnh ngưỡng | không | nhỏ |

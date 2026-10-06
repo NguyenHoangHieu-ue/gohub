@@ -1,6 +1,6 @@
 // Quét thread gần đây trong 1 group Lark — logic dùng chung, tách ra từ Cà Thread
 // (api/creator/ca-thread/route.ts) để My Metrics Lark auto-scan (cron) dùng lại thay vì chép logic.
-import { getLarkToken } from "@/lib/lark"
+import { getLarkToken, getLarkUserInfo } from "@/lib/lark"
 import { supabaseAdmin } from "@/lib/supabase"
 
 const LARK = "https://open.larksuite.com/open-apis"
@@ -15,21 +15,36 @@ export function parseLarkContent(msg: any): string {
     const body = JSON.parse(msg.body?.content ?? '"[trống]"')
     if (msg.msg_type === "text") return String(body?.text ?? "")
     if (msg.msg_type === "post") {
-      const c = body?.zh_cn?.content ?? body?.en_us?.content ?? []
-      return c.flat().map((el: any) => {
+      // API trả rich-text dạng {"title","content"} KHÔNG bọc zh_cn/en_us (webhook cũng ghi chú dạng này) — trước chỉ đọc bản có bọc
+      // nên tin gốc của mọi thread ra RỖNG, bot Lark My Metrics phải đoán từ reply (QA s225).
+      const post = body?.zh_cn ?? body?.en_us ?? body
+      const c = post?.content ?? []
+      const text = c.flat().map((el: any) => {
         if (el.tag === "text") return el.text ?? ""
         if (el.tag === "at") return `@${el.user_name ?? el.user_id}`
         if (el.tag === "a") return el.text ?? el.href ?? ""
+        if (el.tag === "img") return "[ảnh]"
+        if (el.tag === "media") return "[video]"
+        if (el.tag === "emotion") return `:${el.emoji_type ?? ""}:`
         return ""
       }).join("").trim()
+      return [post?.title, text].filter(Boolean).join(" — ")
     }
+    if (msg.msg_type === "image") return "[ảnh]"
+    if (msg.msg_type === "file") return `[file ${body?.file_name ?? ""}]`.trim()
+    if (msg.msg_type === "media") return "[video]"
+    if (msg.msg_type === "sticker") return "[sticker]"
+    if (msg.msg_type === "interactive") return "[thẻ]"
     return ""
   } catch { return "" }
 }
 
 export interface LarkMention { id: string; id_type?: string; name: string }
+export interface LarkReaction { emoji: string; operatorId: string }
 export interface LarkThreadReply {
+  message_id: string
   open_id: string; name: string; content: string; create_time: string
+  reactions?: LarkReaction[]   // chỉ có khi hydrate với allReactions (bot My Metrics)
   sender_type: string       // "user" | "app" | ... — Lark's sender.sender_type
   mentions: LarkMention[]
 }
@@ -44,6 +59,7 @@ export interface LarkThread {
   sender_type: string
   mentions: LarkMention[]   // người được @ trong tin gốc
   reaction_emojis: string[] // emoji_type trên root message (vd ["THUMBSUP"])
+  reactions: LarkReaction[] // emoji trên root kèm người thả (open_id)
   replies: LarkThreadReply[]
 }
 
@@ -110,7 +126,11 @@ export async function fetchRecentThreads(
   return threads
 }
 
-async function hydrateThread(msg: any, appToken: string, nameMap: Record<string, string>): Promise<LarkThread> {
+const reactionsOf = (items: any[]): LarkReaction[] =>
+  items.map((r: any) => ({ emoji: String(r.reaction_type?.emoji_type ?? ""), operatorId: String(r.operator?.operator_id ?? "") })).filter(r => r.emoji)
+
+// allReactions: lấy emoji của TỪNG reply (bot My Metrics cần YES/Typing ở mọi tin) — tốn thêm 1 call/reply nên mặc định tắt (Cà Thread).
+async function hydrateThread(msg: any, appToken: string, nameMap: Record<string, string>, allReactions = false): Promise<LarkThread> {
     const msgId: string = msg.message_id
     const containerId: string = msg.thread_id || msgId
 
@@ -124,6 +144,17 @@ async function hydrateThread(msg: any, appToken: string, nameMap: Record<string,
 
     const threadMsgs: any[] = threadData.data?.items ?? []
     const replies = threadMsgs.filter((m: any) => m.message_id !== msgId)
+    const replyReactions = new Map<string, LarkReaction[]>()
+    if (allReactions) {
+      for (let i = 0; i < replies.length; i += 10) {
+        const part = replies.slice(i, i + 10)
+        const got = await Promise.all(part.map((r: any) => larkGet(`/im/v1/messages/${r.message_id}/reactions?page_size=50`, appToken)))
+        part.forEach((r: any, k: number) => replyReactions.set(r.message_id, reactionsOf(got[k].data?.items ?? [])))
+      }
+      // Tên người gửi không bị @ ở đâu thì nameMap không có → tra danh bạ (trước hiện mã ou_…)
+      const unknown = Array.from(new Set([msg, ...replies].map((m: any) => m.sender?.id).filter((id: string) => id && !nameMap[id])))
+      await Promise.all(unknown.map(async (id: string) => { const u = await getLarkUserInfo(id); if (u?.name) nameMap[id] = u.name }))
+    }
 
     for (const m of [msg, ...replies]) {
       for (const mention of (m.mentions ?? [])) {
@@ -145,7 +176,10 @@ async function hydrateThread(msg: any, appToken: string, nameMap: Record<string,
       sender_type:    msg.sender?.sender_type ?? "",
       mentions:   mentionsOf(msg),
       reaction_emojis,
+      reactions: reactionsOf(reactions),
       replies: replies.map((r: any) => ({
+        message_id: r.message_id,
+        reactions: allReactions ? replyReactions.get(r.message_id) ?? [] : undefined,
         open_id: r.sender?.id ?? "",
         name:    nameMap[r.sender?.id ?? ""] ?? (r.sender?.id ?? "?"),
         content: parseLarkContent(r),
@@ -166,11 +200,11 @@ async function fetchMessageById(messageId: string, appToken: string): Promise<an
 
 // Hydrate lại đúng 1 thread theo message_id gốc — dùng cho nút "Vẫn tính case này" (override case tự
 // đăng bị loại tự động): cần phân loại lại 1 thread cụ thể ngoài luồng quét hàng loạt.
-export async function fetchThreadByMessageId(messageId: string): Promise<LarkThread | null> {
+export async function fetchThreadByMessageId(messageId: string, allReactions = false): Promise<LarkThread | null> {
   const appToken = await getLarkToken()
   const rootMsg = await fetchMessageById(messageId, appToken)
   if (!rootMsg) return null
-  return hydrateThread(rootMsg, appToken, {})
+  return hydrateThread(rootMsg, appToken, {}, allReactions)
 }
 
 // Tên hiển thị 1 group Lark theo chat_id — dùng để hiện "đã quét group nào" cho Hiếu đối chiếu, KHÔNG
@@ -204,7 +238,7 @@ export async function listBotChats(appToken: string): Promise<{ chat_id: string;
  * "thread_id" trong log = message_id gốc của thread → hydrate lại ĐẦY ĐỦ (root + mọi reply + reaction)
  * qua REST giống fetchRecentThreads, chỉ khác NGUỒN phát hiện "thread nào đáng xem".
  */
-export async function fetchThreadsFromCapturedLog(daysBack = 7, maxThreads = 40): Promise<LarkThread[]> {
+export async function fetchThreadsFromCapturedLog(daysBack = 7, maxThreads = 40, allReactions = false, extraThreadIds: string[] = []): Promise<LarkThread[]> {
   const since = Date.now() - daysBack * 86400 * 1000
   const { data, error } = await supabaseAdmin
     .from("okr_lark_message_log")
@@ -216,6 +250,8 @@ export async function fetchThreadsFromCapturedLog(daysBack = 7, maxThreads = 40)
 
   const threadIds: string[] = []
   const seen = new Set<string>()
+  // Thread đang mở (chưa có Typing/YES) phải đọc lại dù đã cũ hơn daysBack — trước đây phân loại 1 lần rồi bỏ.
+  for (const id of extraThreadIds) if (!seen.has(id)) { seen.add(id); threadIds.push(id) }
   for (const row of (data ?? []) as { thread_id: string }[]) {
     if (seen.has(row.thread_id)) continue
     seen.add(row.thread_id)
@@ -233,7 +269,7 @@ export async function fetchThreadsFromCapturedLog(daysBack = 7, maxThreads = 40)
     const hydrated = await Promise.all(batch.map(async id => {
       const rootMsg = await fetchMessageById(id, appToken)
       if (!rootMsg) return null
-      return hydrateThread(rootMsg, appToken, nameMap)
+      return hydrateThread(rootMsg, appToken, nameMap, allReactions)
     }))
     threads.push(...hydrated.filter((t): t is LarkThread => t !== null))
   }

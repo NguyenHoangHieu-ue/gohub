@@ -10793,3 +10793,4 @@ việc không đo bằng số); (3) đánh giá tự động — thực tế vs 
 ## Merge `main` 2026-10-06 — s225 (`81ae5f27`, theo yêu cầu Hiếu)
 - Trước merge: tsc sạch, lint 0 lỗi, `next build` OK, vitest 567 qua + 2 lỗi chỉ trên máy Windows/cũ (bc-datapool thiếu file mẫu; bridge-version do autocrlf — CI Linux xanh). Sau merge: Vercel production OK, CI xanh, Notify Lark OK, Wiki Sync OK; prod `/api/analytics/market` 401 khi chưa đăng nhập (đúng).
 - (s225 tiếp) Hiếu làm rõ yêu cầu My Metrics → viết plan `docs/plans/my-metrics-plan-quy.md` (vấn đề đo thật, hướng giải, 7 câu hỏi, lộ trình M0–M5). Chưa code, chờ duyệt.
+- (s225 tiếp) Hiếu chốt luật bot Lark (YES đóng, Typing xong, tính từ lúc tag, chỉ Telecom Product, lệnh Note đi, mở lại Q3, DM 8:30) → làm M0+M1 (plan `my-metrics-plan-quy.md`). Gốc 'tin gốc rỗng': parseLarkContent không đọc post không bọc zh_cn.

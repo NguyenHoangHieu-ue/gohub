@@ -20,10 +20,17 @@ export function parseQuarterLabel(label: string) {
   return { q: q || "Q3", year, start, end }
 }
 
+// Hiếu chốt s225: có 7 ngày ân hạn sau cuối quý để duyệt nốt case (Q3 mất 34 case treo vì khoá ngay ngày đầu quý sau);
+// quý trong REOPENED_QUARTERS được mở lại theo yêu cầu Hiếu — xoá khỏi danh sách khi đã xử lý xong.
+export const LOCK_GRACE_DAYS = 7
+export const REOPENED_QUARTERS = ["Q3-2026"]
+
 export function isQuarterLocked(label: string): boolean {
+  if (REOPENED_QUARTERS.includes(label)) return false
   const { end } = parseQuarterLabel(label)
+  const lockFrom = new Date(new Date(`${end}T00:00:00Z`).getTime() + LOCK_GRACE_DAYS * 86_400_000).toISOString().slice(0, 10)
   const todayISO = new Date().toISOString().slice(0, 10)
-  return todayISO > end
+  return todayISO > lockFrom
 }
 
 // "Q3-2026" -> "Q2-2026" (Q1 wraps to Q4 of previous year) — dùng để so sánh QoQ.
