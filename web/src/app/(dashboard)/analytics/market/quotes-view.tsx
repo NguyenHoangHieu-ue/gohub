@@ -10,6 +10,7 @@ import { exportAOA } from "@/lib/export-excel"
 import type { QuoteCompareData, GapRow } from "@/lib/quote-sources"
 import type { CompareRow } from "@/lib/quote-compare"
 import { makeColorFor } from "./market-colors"
+import VendorQuotesPanel from "./vendor-quotes-panel"
 
 const chartLoading = () => <Skeleton className="w-full h-full" />
 const StackedBars = dynamic(() => import("./market-charts").then(m => m.StackedBars), { ssr: false, loading: chartLoading })
@@ -39,22 +40,34 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [onlyCheaper, setOnlyCheaper] = useState(true)
+  const [ver, setVer] = useState(0)
+  const [quoteSrc, setQuoteSrc] = useState<string | null>(null)
   const [gapSpec, setGapSpec] = useState(0)
   const [onlyNoRegional, setOnlyNoRegional] = useState(false)
 
   useEffect(() => {
     let alive = true
     setLoading(true); setError(null)
-    fetch(`/api/analytics/market/quotes?quarter=${quarter}&group=${group}`)
+    fetch(`/api/analytics/market/quotes?quarter=${quarter}&group=${group}${ver ? `&nocache=1&v=${ver}` : ""}`)
       .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`); return d })
       .then(d => { if (alive) setData(d) })
       .catch(e => { if (alive) { setError(e.message); setData(null) } })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [quarter, group])
+  }, [quarter, group, ver])
 
   const sourceColor = useMemo(() => makeColorFor((data?.sources ?? []).map(s => s.label)), [data])
-  const scoped = useMemo(() => (data?.rows ?? []).filter(r => !market || r.market === market), [data, market])
+  // Chọn 1 báo giá đang chào → chỉ xét SKU báo giá đó rẻ hơn mốc hiện tại, coi báo giá đó là phương án đề xuất.
+  const scoped = useMemo(() => {
+    const base = (data?.rows ?? []).filter(r => !market || r.market === market)
+    if (!quoteSrc || !data) return base
+    return base.flatMap(r => {
+      const o = r.offers.find(x => x.source === quoteSrc)
+      if (!o || r.baseUsd === null || o.usd >= r.baseUsd) return []
+      const save = Math.round((r.baseUsd - o.usd) * 1000) / 1000
+      return [{ ...r, best: o, savePerUnitUsd: save, savePct: +(save / r.baseUsd * 100).toFixed(1), saveQuarterVnd: Math.round(save * r.units * data.vndPerUsd) }]
+    })
+  }, [data, market, quoteSrc])
   const cheaper = scoped.filter(r => (r.savePerUnitUsd ?? 0) > 0)
   const totalSave = cheaper.reduce((a, r) => a + (r.saveQuarterVnd ?? 0), 0)
 
@@ -68,7 +81,7 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
 
   const byMarket = useMemo(() => {
     const m = new Map<string, Record<string, number | string>>()
-    for (const r of data?.rows ?? []) {
+    for (const r of quoteSrc ? scoped : data?.rows ?? []) {
       if ((r.savePerUnitUsd ?? 0) <= 0 || !r.best) continue
       const row = m.get(r.market) ?? { key: r.market }
       row[r.best.label] = (Number(row[r.best.label]) || 0) + (r.saveQuarterVnd ?? 0)
@@ -76,7 +89,7 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
     }
     const total = (x: Record<string, number | string>) => Object.values(x).reduce<number>((a, v) => a + (typeof v === "number" ? v : 0), 0)
     return Array.from(m.values()).sort((x, y) => total(y) - total(x)).slice(0, 15)
-  }, [data])
+  }, [data, quoteSrc, scoped])
 
   if (error) return <EmptyState message={`Hiếu đang fix, vui lòng đợi (${error})`} />
   if (loading || !data) return <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>
@@ -113,6 +126,13 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
 
   return (
     <div className="space-y-4">
+      <VendorQuotesPanel rows={data.rows} vndPerUsd={data.vndPerUsd} active={quoteSrc} onSelect={setQuoteSrc} onChanged={() => setVer(v => v + 1)} />
+      {quoteSrc && (
+        <p className="text-xs rounded-lg bg-brand-50 border border-brand-100 px-3 py-2 text-brand-800">
+          Đang xem riêng báo giá <b>{data.sources.find(s => s.id === quoteSrc)?.label ?? "đã xoá"}</b>: các số dưới = SKU báo giá này rẻ hơn mốc hiện tại.{" "}
+          <button onClick={() => setQuoteSrc(null)} className="underline font-semibold">Xem tất cả nguồn</button>
+        </p>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile icon={<BadgeDollarSign className="w-4 h-4" />} accent="margin" label={`Tiết kiệm tiềm năng / quý${market ? ` · ${market}` : ""}`}
           value={formatCompactNumber(totalSave)} unit="VND"

@@ -16,9 +16,8 @@ loại sản phẩm / SKU phân bố ra sao, so quý trước. Theo yêu cầu: 
 
 Lộ trình (chốt với Hiếu 2026-10-06):
 1. **Thị trường** — đã làm (s225, mục dưới).
-2. **So giá vendor** — 2a ĐÃ LÀM (s225, mục 5): 3 nguồn đã có trong hệ thống. 2b CHƯA LÀM: kho upload báo giá vendor khác (KDDI,
-   Truemove, Joytel, Simstore…; đang dùng / vendor mới / đang được chào) — AI đề xuất ghép cột lần đầu → Hiếu duyệt → lưu mapping theo
-   vendor (cần migration Supabase).
+2. **So giá vendor** — 2a ĐÃ LÀM (s225, mục 5): 3 nguồn đã có trong hệ thống. 2b ĐÃ LÀM (mục 7): kho báo giá vendor gửi để đánh giá
+   (ảnh/PDF/Word/Excel/text → AI đọc → duyệt → tự vào so giá). Hiếu chốt: vendor khác (KDDI, Truemove…) CHƯA cần nhập bảng giá đầy đủ.
 3. **Destination chưa bán** — ĐÃ LÀM (s225, mục 6).
 
 ## 1. Đường dẫn & file
@@ -76,6 +75,21 @@ Lộ trình (chốt với Hiếu 2026-10-06):
 - Giá full rẻ nhất (eSIM) cho 3 gói tham chiếu: Fixed 3GB/7 ngày, Fixed 10GB/30 ngày, Daily 1GB × 7 ngày. Q3-2026: 42 nước, 1 nước
   (Timor-Leste) chưa có cả trong gói nhiều nước.
 - Tên vùng WM nhiều nước kiểu "Europe/Asia/Worldwide" không đổi được sang danh sách nước → bỏ qua (liệt kê ở ghi chú "chưa nhận ra").
+
+## 7. Báo giá vendor đang chào (mốc 2b) — cần migration `v69_vendor_quotes.sql`
+- Bảng `vendor_quotes` (1 dòng/lần vendor gửi): vendor, status `reviewing|accepted|rejected`, quote_date, currency, moq, note,
+  `items` JSONB (gói đã duyệt), `files` JSONB (đường dẫn file gốc). File gốc ở Storage bucket RIÊNG TƯ `vendor-quotes` (code tự tạo),
+  mở qua signed URL 10 phút. Quyền: admin/creator hoặc user được cấp ghi tab `market`.
+- Luồng: "Thêm báo giá" → thả file / dán ảnh (Ctrl+V) / dán text → `POST vendor-quotes/extract` (Gemini đọc, CHƯA lưu) → bảng sửa được
+  (nước ISO2, nhóm nước GoHub cho vùng như "Europe", loại, GB, ngày, giá eSIM, giá SIM, gọi) → `POST vendor-quotes` lưu. PATCH đổi trạng
+  thái, DELETE xoá cả file. Ghi xong `flushByDeps(["vendor-quotes"])` → cache `market-quotes:v3` tính lại.
+- `lib/vendor-quote-extract.ts`: prompt + `normalizeExtracted` (không tin model: bỏ dòng thiếu giá/ngày/loại, mã nước/nhóm phải tồn tại,
+  "78.000" → 78000, "£1.99" → 1.99). Thử thật 2026-10-06: VNPT PDF (8 gói, 8,8s — gói RU gắn đúng 16 nước + "Sim thoại") và ảnh email
+  Roam Communication (15 gói, 13,7s — UK kèm gọi + roaming vào ghi chú, Europe → `EUR`, World → `GLB`, MOQ).
+- So giá: mỗi báo giá (trừ Từ chối) = 1 nguồn gói "Vendor (đang chào)". So khớp kiểu PHỦ: tập nước gói ⊇ nước của SKU, cùng loại +
+  dung lượng, số ngày gói dài hơn SKU tối đa 2 ngày (31 vs 30). SIM = giá SIM vendor báo (không cộng khung); không báo giá SIM thì không
+  có phương án SIM. Destination chưa bán tính cả báo giá có ≤ 20 nước liệt kê (gói World/Europe bỏ để danh sách không loãng).
+- Bấm 1 báo giá → mọi biểu đồ/bảng dưới chuyển sang "báo giá này rẻ hơn mốc hiện tại ở SKU nào" (tiết kiệm/quý theo sản lượng thật).
 
 ## Verify (2026-10-06, staging)
 - Q3-2026 theo tháng khớp Quarter Report: T8/T9 khớp tới đồng; T7 lệch 161 nghìn / 8,05 tỷ (Quarter Report lọc thêm KH loại trừ).

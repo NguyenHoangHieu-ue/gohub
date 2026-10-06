@@ -2,7 +2,9 @@
 // Logic thuần (không I/O). Quy tắc chốt với Hiếu (2026-10-06):
 //  - Vendor datapool (3HK, BC Datapool CMHK/Singtel): data = GB tính giá (công thức Datapool dùng chung) × giá/GB rẻ nhất trong nước;
 //    gói nhiều nước lấy giá của nước ĐẮT nhất (mỗi nước chọn nhà mạng rẻ nhất). Cộng phí khung eSIM/SIM của vendor.
-//  - Vendor gói (WorldMove): giá gói eSIM khớp đúng nước + loại + dung lượng + số ngày; SIM = giá eSIM + giá SKU khung SIM của vendor.
+//  - Vendor gói (WorldMove, báo giá đang chào): gói khớp loại + dung lượng + số ngày và PHỦ được thị trường (tập nước của gói ⊇ nước
+//    của SKU — vd gói VNPT dùng được ở từng nước trong 16 nước). Số ngày của gói được dài hơn SKU tối đa 2 ngày (vendor hay bán
+//    31 ngày, SKU GoHub 30 ngày). SIM = giá SIM vendor báo; không báo thì giá eSIM + SKU khung SIM.
 //  - Data pack (top-up, ký tự 2 = A): không cộng khung.
 import { ceil2 } from "@/lib/bc-datapool/pricing"
 
@@ -30,10 +32,15 @@ export interface PoolSource {
   unlimitedNote?: string                // gói Unlimited của vendor khác cấu trúc gói đang so
 }
 
-export interface PackageOffer { iso: string[]; plan: PlanKind; dataGb: number; days: number; priceUsd: number; name: string; kyc: boolean }
+export interface PackageOffer {
+  iso: string[]; plan: PlanKind; dataGb: number; days: number
+  priceUsd: number                // eSIM
+  priceSimUsd?: number | null     // SIM vật lý vendor báo riêng (VNPT, Roam...)
+  name: string; kyc: boolean
+}
 export interface PackageSource {
   id: string; label: string
-  offers: Map<string, PackageOffer>     // khoá specKey → gói rẻ nhất
+  offers: Map<string, PackageOffer[]>   // khoá packageKey (loại|dung lượng) → các gói (mỗi tập nước + số ngày giữ gói rẻ nhất)
   simFrameUsd: number | null
 }
 
@@ -44,10 +51,11 @@ export interface Offer { source: string; label: string; usd: number; detail: str
 const round3 = (x: number) => Math.round(x * 1000) / 1000
 const fmtGb = (x: number) => `${+x.toFixed(2)}GB`
 
-/** Khoá so khớp gói: tập nước + loại + dung lượng + số ngày (Unlimited bỏ qua dung lượng). */
-export function specKey(iso: string[], plan: PlanKind, dataGb: number, days: number): string {
-  return `${[...iso].sort().join("+")}|${plan}|${plan === "Unlimited" ? 0 : +dataGb.toFixed(3)}|${days}`
+/** Khoá so khớp gói: loại + dung lượng (Unlimited bỏ qua dung lượng). Nước và số ngày lọc riêng. */
+export function packageKey(plan: PlanKind, dataGb: number): string {
+  return `${plan}|${plan === "Unlimited" ? 0 : +dataGb.toFixed(3)}`
 }
+export const EXTRA_DAYS_OK = 2
 
 /** GB tính giá theo công thức Datapool dùng chung. null khi Unlimited không có mức GB/ngày tương ứng. */
 export function billableGb(spec: Spec, a: Assumptions, unlimitedGbPerDay: number | null): number | null {
@@ -80,21 +88,32 @@ export function poolOffer(src: PoolSource, spec: Spec, a: Assumptions): Offer | 
 
 export function packageOffer(src: PackageSource, spec: Spec): Offer | null {
   if (spec.form === "Data pack") return null
-  const o = src.offers.get(specKey(spec.iso, spec.plan, spec.dataGb, spec.days))
-  if (!o) return null
-  const frame = spec.form === "SIM" ? src.simFrameUsd : 0
-  if (frame === null) return null
-  return {
-    source: src.id, label: src.label, usd: ceil2(o.priceUsd + frame), kyc: o.kyc,
-    detail: `${o.name}: ${round3(o.priceUsd)} USD${frame ? ` + khung SIM ${round3(frame)} USD` : ""}`,
+  let best: Offer | null = null
+  for (const o of src.offers.get(packageKey(spec.plan, spec.dataGb)) ?? []) {
+    if (o.days < spec.days || o.days > spec.days + EXTRA_DAYS_OK || !spec.iso.every(i => o.iso.includes(i))) continue
+    const sim = spec.form === "SIM"
+    const viaFrame = sim && !(o.priceSimUsd! > 0)
+    if (viaFrame && src.simFrameUsd === null) continue
+    const usd = ceil2(sim ? (viaFrame ? o.priceUsd + src.simFrameUsd! : o.priceSimUsd!) : o.priceUsd)
+    if (best && best.usd <= usd) continue
+    const cover = [o.iso.length > spec.iso.length ? `gói phủ ${o.iso.length} nước` : "", o.days > spec.days ? `${o.days} ngày` : ""].filter(Boolean).join(", ")
+    best = {
+      source: src.id, label: src.label, usd, kyc: o.kyc,
+      detail: `${o.name}${cover ? ` (${cover})` : ""}: ${sim && !viaFrame ? `giá SIM ${round3(o.priceSimUsd!)}` : round3(o.priceUsd)} USD${viaFrame ? ` + khung SIM ${round3(src.simFrameUsd!)} USD` : ""}`,
+    }
   }
+  return best
 }
 
-/** Thêm gói vào nguồn, giữ gói rẻ nhất cho mỗi khoá. */
+/** Thêm gói vào nguồn; cùng loại/dung lượng/số ngày VÀ cùng tập nước thì giữ gói eSIM rẻ hơn. */
 export function addPackage(src: PackageSource, o: PackageOffer) {
-  const k = specKey(o.iso, o.plan, o.dataGb, o.days)
-  const cur = src.offers.get(k)
-  if (!cur || o.priceUsd < cur.priceUsd) src.offers.set(k, o)
+  const k = packageKey(o.plan, o.dataGb)
+  const list = src.offers.get(k) ?? []
+  const isoKey = `${[...o.iso].sort().join("+")}|${o.days}`
+  const i = list.findIndex(x => `${[...x.iso].sort().join("+")}|${x.days}` === isoKey)
+  if (i < 0) list.push(o)
+  else if (o.priceUsd < list[i].priceUsd) list[i] = o
+  src.offers.set(k, list)
 }
 
 /** Nhà mạng rẻ nhất mỗi nước. */
@@ -129,13 +148,14 @@ export interface CompareRow {
   offers: Offer[]
   best: Offer | null
   ownUsd: number | null              // giá tính lại của CHÍNH vendor hiện tại — đối chiếu công thức với COGS thật
+  baseUsd: number | null             // mốc so = min(COGS thật, ownUsd)
   savePerUnitUsd: number | null      // > 0 = phương án rẻ hơn hiện tại
   savePct: number | null
   saveQuarterVnd: number | null      // tiết kiệm/quý theo sản lượng quý đang xem
 }
 
 /** Phương án rẻ nhất KHÁC vendor hiện tại để tính tiết kiệm; offers giữ đủ (kể cả vendor hiện tại — đối chiếu công thức). */
-export function compareRow(base: Omit<CompareRow, "offers" | "best" | "ownUsd" | "savePerUnitUsd" | "savePct" | "saveQuarterVnd">,
+export function compareRow(base: Omit<CompareRow, "offers" | "best" | "ownUsd" | "baseUsd" | "savePerUnitUsd" | "savePct" | "saveQuarterVnd">,
   offers: Offer[], currentSource: string | null, vndPerUsd: number): CompareRow {
   const sorted = [...offers].sort((x, y) => x.usd - y.usd)
   const best = sorted.find(o => o.source !== currentSource) ?? null
@@ -145,7 +165,7 @@ export function compareRow(base: Omit<CompareRow, "offers" | "best" | "ownUsd" |
   const baseUsd = base.currentUsd !== null && ownUsd !== null ? Math.min(base.currentUsd, ownUsd) : base.currentUsd
   const save = best && baseUsd !== null ? round3(baseUsd - best.usd) : null
   return {
-    ...base, offers: sorted, best, ownUsd,
+    ...base, offers: sorted, best, ownUsd, baseUsd,
     savePerUnitUsd: save,
     savePct: save !== null && baseUsd ? +(save / baseUsd * 100).toFixed(1) : null,
     saveQuarterVnd: save !== null ? Math.round(save * base.units * vndPerUsd) : null,

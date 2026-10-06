@@ -10,6 +10,8 @@ import { nameToIso2, type RefCountryLite, type SupportCountryLite } from "@/lib/
 import { FORMULA_KEYS, resolveFormula } from "@/lib/datapool-formula"
 import { loadMarketData } from "@/lib/market-data"
 import type { MarketData } from "@/lib/market-breakdown"
+import type { QuoteItem } from "@/lib/vendor-quote-extract"
+import { VENDOR_QUOTES_DEP } from "@/lib/vendor-quotes-server"
 import {
   addPackage, addPoolPrice, compareRow, packageOffer, poolOffer, specFromSku,
   type CompareRow, type Offer, type PackageSource, type PlanKind, type PoolPrice, type PoolSource,
@@ -33,7 +35,7 @@ export interface QuoteCompareData {
   quarter: string; group: MarketData["group"]
   fxMonth: string; vndPerUsd: number
   assumptions: { fixedPct: number; dailyPct: number }
-  sources: { id: string; label: string; note: string }[]
+  sources: { id: string; label: string; note: string; quoteId?: string; status?: string }[]
   rows: CompareRow[]
   skipped: { reason: string; count: number }[]
   gaps: GapRow[]                     // mốc 3: nước có báo giá nhưng GoHub chưa bán riêng nước đó
@@ -62,7 +64,7 @@ function usd(t: FxTable, amount: number, ccy: string, month: string): number | n
 }
 
 export async function loadQuoteCompare(quarter: string, group: MarketData["group"], bypass = false): Promise<QuoteCompareData> {
-  return cachedQuery<QuoteCompareData>(`market-quotes:v2:${quarter}:${group}`, async () => {
+  return cachedQuery<QuoteCompareData>(`market-quotes:v3:${quarter}:${group}`, async () => {
     const month = currentMonth()
     const [market, fx, priceList, refs, groups, assumptionsBc, formulaRows, hk3, wm, frames] = await Promise.all([
       loadMarketData(quarter, group, bypass),
@@ -78,7 +80,11 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
         .eq("status", "active").eq("sim_type", "eSIM").order("id").range(a, b)),
       supabaseAdmin.from("skus").select("sku_code,latest_cogs,latest_cogs_currency").like("sku_code", "__000__K00000").then(r => r.data ?? []),
     ])
-    const products = await supabaseAdmin.from("products").select("product_code,status").in("status", ["Active", "Temporary"]).then(r => r.data ?? [])
+    const [products, quotes] = await Promise.all([
+      supabaseAdmin.from("products").select("product_code,status").in("status", ["Active", "Temporary"]).then(r => r.data ?? []),
+      // Chưa chạy migration v69 → bảng chưa có → bỏ qua, phần còn lại vẫn chạy.
+      supabaseAdmin.from("vendor_quotes").select("id,vendor,status,currency,items").neq("status", "rejected").then(r => r.data ?? []),
+    ])
     const t = fx.table
     const vndPerUsd = convert(t, 1, "USD", "VND", month)?.value
     if (!vndPerUsd) throw new Error("Thiếu tỷ giá USD→VND (Admin › Cài đặt › Tỷ Giá Nội Bộ)")
@@ -133,6 +139,29 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
       }
     }
 
+    const isoOfMarket = new Map(groups.map(g => [g.code, g.iso.split(/[,\s]+/).map(x => x.trim().toUpperCase()).filter(x => /^[A-Z]{2}$/.test(x))]))
+
+    // ── Nguồn gói: báo giá vendor đang chào / đã chọn (vendor_quotes, nhập qua AI + duyệt) ──
+    const quoteSrcs: (PackageSource & { quoteId: string; status: string; note: string })[] = []
+    for (const qt of quotes) {
+      const src = { id: `Q:${qt.id}`, label: `${qt.vendor}${qt.status === "reviewing" ? " (đang chào)" : ""}`, offers: new Map(), simFrameUsd: null, quoteId: String(qt.id), status: String(qt.status), note: "" }
+      const ccy = String(qt.currency || "USD")
+      let n = 0, noFx = false
+      for (const it of (qt.items ?? []) as QuoteItem[]) {
+        const iso = Array.from(new Set([...(it.countries ?? []), ...(it.market_code ? isoOfMarket.get(it.market_code) ?? [] : [])])).sort()
+        if (!iso.length) continue
+        const esim = it.price_esim ? usd(t, it.price_esim, ccy, month) : null
+        const sim = it.price_sim ? usd(t, it.price_sim, ccy, month) : null
+        if ((it.price_esim && !esim) || (it.price_sim && !sim)) { noFx = true; continue }
+        if (!esim && !sim) continue
+        // Chỉ có giá SIM: vẫn đưa vào (eSIM = không bán → giá eSIM coi như vô cực để không bao giờ chọn).
+        addPackage(src, { iso, plan: it.plan, dataGb: it.data_gb, days: it.days, priceUsd: esim ?? Number.POSITIVE_INFINITY, priceSimUsd: sim, name: it.name, kyc: false })
+        n++
+      }
+      src.note = `${n} gói · ${ccy}${noFx ? ` · thiếu tỷ giá ${ccy}` : ""}`
+      quoteSrcs.push(src)
+    }
+
     // ── Nguồn gói: WorldMove ──
     const wmSrc: PackageSource = { id: "WM", label: "WorldMove", offers: new Map(), simFrameUsd: frameUsd("WM", "D", "VN") }
     for (const r of wm) {
@@ -161,7 +190,6 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
         .select("sku_code,tenant,data_amount,data_amount_unit,day_amount,latest_cogs,latest_cogs_currency").in("sku_code", codes.slice(i, i + 400))
       for (const r of data ?? []) catalog.set(String(r.sku_code), r)
     }
-    const isoOfMarket = new Map(groups.map(g => [g.code, g.iso.split(/[,\s]+/).map(x => x.trim().toUpperCase()).filter(x => /^[A-Z]{2}$/.test(x))]))
 
     const rows: CompareRow[] = []
     const skip = new Map<string, number>()
@@ -176,7 +204,7 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
       if (!spec) return bump("Không phải gói data so được (khung/profile, mã cũ, thiếu dung lượng)")
       const offers: Offer[] = []
       for (const p of pools) { const o = poolOffer(p, spec, a); if (o) offers.push(o) }
-      const w = packageOffer(wmSrc, spec); if (w) offers.push(w)
+      for (const ps of [wmSrc, ...quoteSrcs]) { const o = packageOffer(ps, spec); if (o && Number.isFinite(o.usd)) offers.push(o) }
       rows.push(compareRow({
         sku: s.sku, market: s.country, vendor: s.vendor, form: spec.form, plan: spec.plan, size: s.size, units, rev,
         currentUsd: usd(t, Number(c.latest_cogs), String(c.latest_cogs_currency || "VND"), month),
@@ -193,14 +221,17 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
     const quoted = new Map<string, Set<string>>()
     const mark = (iso: string, label: string) => { const set = quoted.get(iso) ?? new Set<string>(); set.add(label); quoted.set(iso, set) }
     for (const p of pools) p.byIso.forEach((_, iso) => mark(iso, p.label))
-    wmSrc.offers.forEach(o => { if (o.iso.length === 1) mark(o.iso[0], wmSrc.label) })
+    wmSrc.offers.forEach(list => list.forEach(o => { if (o.iso.length === 1) mark(o.iso[0], wmSrc.label) }))
+    // Báo giá đang chào: gói liệt kê ≤ 20 nước dùng được ở từng nước (vd VNPT 16 nước); gói "World/Europe" bỏ để danh sách không loãng.
+    for (const qs of quoteSrcs) qs.offers.forEach(list => list.forEach(o => { if (o.iso.length <= 20) o.iso.forEach(i => mark(i, qs.label)) }))
     const nameOf = new Map(refs.map(r => [r.code.toUpperCase(), r.name]))
     const gaps: GapRow[] = []
     quoted.forEach((labels, iso) => {
       if (soldSingle.has(iso)) return
       const ref = REF_SPECS.map(rs => {
         const spec = { iso: [iso], plan: rs.plan, dataGb: rs.dataGb, days: rs.days, speedMbps: null, form: "eSIM" as const }
-        const offers = [...pools.map(p => poolOffer(p, spec, a)), packageOffer(wmSrc, spec)].filter((o): o is Offer => !!o)
+        const offers = [...pools.map(p => poolOffer(p, spec, a)), ...[wmSrc, ...quoteSrcs].map(ps => packageOffer(ps, spec))]
+          .filter((o): o is Offer => !!o && Number.isFinite(o.usd))
         return { spec: rs.label, best: offers.sort((x, y) => x.usd - y.usd)[0] ?? null }
       })
       gaps.push({ iso, name: nameOf.get(iso) ?? iso, regional: Array.from(regionalOf.get(iso) ?? []).sort(), sources: Array.from(labels).sort(), ref })
@@ -213,12 +244,13 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
       quarter, group, fxMonth: month, vndPerUsd, assumptions: a,
       sources: [
         ...pools.map(p => ({ id: p.id, label: p.label, note: `${p.byIso.size} nước · ${p.currency}/GB` })),
-        { id: "WM", label: "WorldMove", note: `${wmSrc.offers.size} gói eSIM (nước đơn/nhóm nước khớp được)` },
+        { id: "WM", label: "WorldMove", note: `${Array.from(wmSrc.offers.values()).reduce((x, l) => x + l.length, 0)} gói eSIM (vùng đổi được ra danh sách nước)` },
+        ...quoteSrcs.map(q => ({ id: q.id, label: q.label, note: q.note, quoteId: q.quoteId, status: q.status })),
       ],
       rows,
       skipped: Array.from(skip.entries()).map(([reason, count]) => ({ reason, count })),
       gaps,
       unresolvedNames: Array.from(unresolved).slice(0, 50),
     }
-  }, QUERY_TTL_MIN, bypass)
+  }, QUERY_TTL_MIN, bypass, [VENDOR_QUOTES_DEP])
 }

@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest"
 import {
-  specFromSku, poolOffer, packageOffer, addPackage, addPoolPrice, compareRow, specKey,
+  specFromSku, poolOffer, packageOffer, addPackage, addPoolPrice, compareRow,
   type PoolSource, type PackageSource, type PoolPrice,
 } from "@/lib/quote-compare"
 
@@ -57,9 +57,18 @@ describe("packageOffer", () => {
     expect(packageOffer(wm, { ...spec, form: "SIM" })!.usd).toBe(3.1)
     expect(packageOffer(wm, { ...spec, form: "Data pack" })).toBeNull()
     expect(packageOffer(wm, { ...spec, days: 10 })).toBeNull()
+    expect(packageOffer(wm, { ...spec, days: 5 })!.detail).toContain("7 ngày")   // gói dài hơn ≤ 2 ngày vẫn dùng được
+    expect(packageOffer(wm, { ...spec, days: 4 })).toBeNull()
   })
-  test("specKey không phụ thuộc thứ tự nước", () => {
-    expect(specKey(["NZ", "AU"], "Fixed", 2, 7)).toBe(specKey(["AU", "NZ"], "Fixed", 2, 7))
+  test("gói phủ được thị trường (tập nước ⊇), giá SIM vendor báo riêng thay cho cộng khung", () => {
+    const vnpt: PackageSource = { id: "Q", label: "VNPT", offers: new Map(), simFrameUsd: null }
+    addPackage(vnpt, { iso: ["AU", "JP", "US"], plan: "Unlimited", dataGb: 0, days: 7, priceUsd: 10.4, priceSimUsd: 9.9, name: "RU290", kyc: false })
+    const spec = specFromSku("3CJPN3DBUNL07", ["JP"], null, null, 7)!
+    expect(packageOffer(vnpt, spec)).toMatchObject({ usd: 10.4, detail: expect.stringContaining("gói phủ 3 nước") })
+    expect(packageOffer(vnpt, { ...spec, form: "SIM" })!.usd).toBe(9.9)
+    expect(packageOffer(vnpt, { ...spec, iso: ["JP", "KR"] })).toBeNull()
+    addPackage(vnpt, { iso: ["KR"], plan: "Unlimited", dataGb: 0, days: 7, priceUsd: 12, name: "Chỉ KR, không giá SIM", kyc: false })
+    expect(packageOffer(vnpt, { ...spec, iso: ["KR"], form: "SIM" })).toBeNull()   // không giá SIM, vendor không có khung
   })
 })
 

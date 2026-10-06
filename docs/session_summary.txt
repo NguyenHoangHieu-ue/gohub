@@ -10762,3 +10762,7 @@ full (datapool = giá data công thức chung + phí khung eSIM/SIM; vendor thư
   so COGS thật → tiết kiệm/quý; "Destination chưa bán" (42 nước Q3). Kiểm chứng: công thức thấp hơn COGS thật (3HK trung vị −3,4%)
   → mốc so = min(COGS thật, giá tính lại). Q3: 2.157 SKU rẻ hơn, ~1,07 tỷ/quý. `ncc_datapool` trống (wiki NCC sửa).
   **Còn**: 2b kho upload báo giá vendor khác + AI ghép cột (cần migration); QA giao diện mục So giá (Chrome bị chặn); TL thiếu tên trong ref_countries.
+- (s225 tiếp) Mốc 2b: kho "Báo giá vendor đang chào" — thả ảnh/PDF/Word/Excel/text → Gemini đọc → bảng sửa được → lưu `vendor_quotes`
+  (migration **v69**, bucket riêng tư `vendor-quotes`) → tự thành nguồn so giá; bấm báo giá xem rẻ hơn ở SKU nào. So khớp gói kiểu phủ
+  (tập nước ⊇), số ngày +≤2, giá SIM vendor báo riêng. Thử AI thật trên 2 mẫu Hiếu gửi: VNPT PDF 8 gói, Roam ảnh email 15 gói — đọc đúng.
+  **Hiếu cần**: chạy `web/db/migrations/v69_vendor_quotes.sql` + Reload schema, rồi thử thêm 2 báo giá này trên staging.
