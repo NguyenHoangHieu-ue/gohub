@@ -23,6 +23,7 @@ const REPORTS: { id: string; label: string }[] = [
   { id: "products", label: "Products" }, { id: "targets", label: "Targets" },
   { id: "scheduled",  label: "Scheduled Messages" },
   { id: "my-metrics", label: "My Metrics" },
+  { id: "market", label: "Thị trường & Báo giá" },
 ]
 const PM_TABS = [
   { key: "skus", label: "SP Hệ Thống" },

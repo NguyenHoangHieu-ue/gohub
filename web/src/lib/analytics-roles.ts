@@ -6,7 +6,7 @@ export const ALL_ANALYTICS_IDS = [
   "dashboard", "quarterly", "bod", "all-time", "channels", "b2b", "b2c", "website",
   "staff", "customers", "vendors", "orders", "fulfillment", "3hk-usage",
   "cs-troubleshoot", "products", "catalogue", "targets", "scheduled",
-  "my-metrics",
+  "my-metrics", "market",
 ]
 
 // Quyền NỀN mặc định theo role (admin = toàn quyền, không liệt kê). Deny-by-default;
@@ -19,5 +19,5 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   saleb2c:    ["dashboard", "b2c", "channels", "website", "catalogue"],
   "ops-&-cs": ["dashboard", "orders", "fulfillment", "cs-troubleshoot", "3hk-usage"],
   hr:         ["dashboard", "staff", "orders"],
-  product:    ["dashboard", "products", "3hk-usage", "vendors", "all-time", "catalogue"],
+  product:    ["dashboard", "products", "3hk-usage", "vendors", "all-time", "catalogue", "market"],
 }

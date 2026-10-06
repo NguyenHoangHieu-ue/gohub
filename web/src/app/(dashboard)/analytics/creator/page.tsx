@@ -32,6 +32,7 @@ const ALL_TABS = [
   { id: "3hk-usage",       label: "3HK Usage" },
   { id: "cs-troubleshoot", label: "CS Troubleshoot" },
   { id: "products",        label: "Products (BI)" },
+  { id: "market",          label: "Thị trường & Báo giá" },
   { id: "targets",         label: "KPI / Targets" },
   { id: "scheduled",       label: "Scheduled Messages" },
   { id: "admin",           label: "Admin (Product)" },

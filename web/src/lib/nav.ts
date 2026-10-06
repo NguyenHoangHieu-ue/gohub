@@ -52,6 +52,7 @@ export const ANALYTICS_GROUPS: NavGroup[] = [
   { label: "Analytics & Planning", items: [
     { href: "/analytics/products",   label: "Products (BI)",      icon: BarChart3 },
     { href: "/analytics/catalogue",  label: "Product Catalogue",  icon: Layers    },
+    { href: "/analytics/market",     label: "Thị trường & Báo giá", icon: Globe2  },
     { href: "/analytics/targets",    label: "KPI / Target",       icon: Target    },
     { href: "/analytics/scheduled",  label: "Scheduled Messages", icon: Clock     },
   ]},

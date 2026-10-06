@@ -10746,3 +10746,14 @@ Chi tiết: wiki `docs/wiki/system/tabs/analytics-creator-ai.md` §s225.
 ## s225 (tiếp, 2026-10-06) — My Metrics: chọn quý Q1–Q4 thay vì gắn cứng Q3/Q4
 Chi tiết: wiki `analytics-my-metrics.md` §s225. `currentQuarter()` cũ cho tháng 1–9 ra Q3 (tháng 1/2027 → Q3-2027); nút chọn chỉ Q3/Q4; target mặc định không có Q1/Q2 → vỡ trang từ 2027. Nay quý tính đúng, nút = Q3-2026 → quý hiện tại (tối đa 4), target quý chưa có tạm dùng quý gần nhất + ghi chú trên header. tsc sạch, test mới 4/4.
 **Việc còn cho Hiếu**: nhập target Q1-2027 trở đi ở nút Target khi có (đang tạm dùng target Q4-2026).
+
+## s225 (tiếp, 2026-10-06) — Tab mới "Thị trường & Báo giá" (mốc 1: Thị trường) + gập bảng My Metrics
+Chi tiết: wiki `docs/wiki/system/tabs/analytics-market.md`. Hiếu cần breakdown kỹ cho plan action Q4: thị trường nào chiếm chủ yếu,
+trong thị trường vendor/SKU/loại SP (data only vs call/SMS) ra sao; chỉ hiện biểu đồ, bảng gập; về sau có kho báo giá vendor + giá full
++ destination chưa bán. Chốt qua AskUserQuestion: tab mới riêng; toàn bộ vendor; AI đọc báo giá + duyệt + nhớ mapping; công thức giá
+full (datapool = giá data công thức chung + phí khung eSIM/SIM; vendor thường = eSIM full, SIM = eSIM full + giá SKU khung SIM; tỷ giá tháng).
+- Mốc 1 xong: `/analytics/market` + `GET /api/analytics/market` + `lib/market-breakdown.ts`. Dữ liệu nén (thô ~2,1MB > trần cache).
+  Dịch vụ từ `skus.call`/`products.local_phone_number` (đã đếm thật trên Supabase). Query thử trên staging qua Chrome: ~5s, ~17k dòng.
+- My Metrics: mọi bảng gập mặc định (bọc `DataTable` ở `shared-ui.tsx`).
+- tsc sạch, lint không lỗi mới, `next build` OK, vitest 553 qua + 2 lỗi có sẵn.
+**Còn lại**: mốc 2 (kho báo giá), mốc 3 (destination chưa bán). QA UI trên staging.

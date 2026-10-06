@@ -34,7 +34,7 @@ const TAB_LABELS: Record<string, string> = {
   channels:"Channels",b2b:"B2B",b2c:"B2C",website:"Website",staff:"Staff",
   customers:"Customers",vendors:"Vendors",orders:"Orders",fulfillment:"Fulfillment",
   "3hk-usage":"3HK Usage","cs-troubleshoot":"CS Troubleshoot",feedback:"Feedback",
-  products:"Products BI",targets:"KPI/Target",sql:"SQL Explorer",scheduled:"Scheduled",
+  products:"Products BI",market:"Thị trường & Báo giá",targets:"KPI/Target",sql:"SQL Explorer",scheduled:"Scheduled",
   chatbot:"Bé Gấu",kb:"Knowledge Base",skus:"System SKUs",ncc:"NCC Catalog",
   countries:"Reference",promotions:"Promotions",info:"Note",
   "creator":"Creator","creator/ai":"Gấu Pro","creator/knowledge":"Own Info",
