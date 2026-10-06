@@ -15,8 +15,8 @@ import { DatapoolDetailTable } from "@/components/my-metrics/datapool-detail-tab
 import { SkuScanSection } from "@/components/my-metrics/sku-scan-section"
 import { BegauInsightsSection } from "@/components/my-metrics/begau-insights-section"
 import { LarkConfigModal } from "@/components/my-metrics/lark-config-modal"
-import { fck, pct, hhmm, currentQuarter, achHigherBetter, achLowerBetter } from "@/lib/my-metrics-format"
-import { DEFAULT_TARGETS, BASELINE_NOTE, WEIGHTS, OKR_GM_BASELINE_DISPLAY } from "@/lib/my-metrics-types"
+import { fck, pct, hhmm, currentQuarter, quarterOptions, achHigherBetter, achLowerBetter, type QuarterKey } from "@/lib/my-metrics-format"
+import { defaultTargetsFor, BASELINE_NOTE, WEIGHTS, OKR_GM_BASELINE_DISPLAY } from "@/lib/my-metrics-types"
 import type {
   AutoMetrics, MonthStat, MonthCount, Conversation, ManualMetrics, NoteSection,
 } from "@/lib/my-metrics-types"
@@ -30,7 +30,7 @@ const BegauTrendChart    = dynamic(() => import("./my-metrics-charts").then(m =>
 // s183 Phase 5 (tiếp): types (AutoMetrics/MonthStat/GmStat/MonthCount/EvidenceRecord/EvidenceData/
 // LarkEvent/Conversation/ManualMetrics/SkuScanItem/SkuScanData/SkuNote/DatapoolDetailItem/
 // DatapoolDetailData/TopUserRow/TopicRow/QualityItem/BegauInsightsData/LarkScanResult/NoteSection) +
-// hằng số (DEFAULT_TARGETS/BASELINE_NOTE/WEIGHTS/OKR_GM_BASELINE_DISPLAY) đã tách sang
+// hằng số (DEFAULT_TARGETS+defaultTargetsFor/BASELINE_NOTE/WEIGHTS/OKR_GM_BASELINE_DISPLAY) đã tách sang
 // lib/my-metrics-types.ts; format helpers (fck/pct/hhmm/currentQuarter/achHigherBetter/achLowerBetter/
 // uploadImage) sang lib/my-metrics-format.ts; UI dùng chung (ProgressBar/SourceBox/NotesDrawer/
 // DataTable) sang components/my-metrics/shared-ui.tsx; LarkReviewPanel/EvidenceCard/
@@ -41,7 +41,7 @@ const BegauTrendChart    = dynamic(() => import("./my-metrics-charts").then(m =>
 
 function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
   const def = currentQuarter()
-  const [selQ,    setSelQ]    = useState<"Q3"|"Q4">(def.q)
+  const [selQ,    setSelQ]    = useState<QuarterKey>(def.q)
   const [selYear, setSelYear] = useState(def.year)
   const [auto,    setAuto]    = useState<AutoMetrics | null>(null)
   const [loading, setLoading] = useState(true)
@@ -68,7 +68,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
   const [skuDelta,  setSkuDelta]  = useState<number | null>(null)
 
   const qLabel  = `${selQ}-${selYear}`
-  const defT    = DEFAULT_TARGETS[selQ]
+  const { targets: defT, isFallback: targetFallback, source: targetSource } = defaultTargetsFor(qLabel)
 
   const targets = {
     sla_hours:    manual?.target_sla_hours    || defT.sla_hours,
@@ -235,17 +235,18 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
           <div>
             <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">My OKR Metrics</h1>
             <p className="text-sm text-slate-500 font-medium italic">
-              Product Operations & BI Analyst · Q3/Q4 2026 · nguồn dữ liệu minh bạch, kiểm tra được từng số
+              Product Operations & BI Analyst · {selQ} {selYear} · nguồn dữ liệu minh bạch, kiểm tra được từng số
+              {targetFallback && !manual && <> · chưa có target {qLabel}, tạm dùng target {targetSource}</>}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-            {(["Q3","Q4"] as const).map(q => (
-              <button key={q} onClick={() => setSelQ(q)}
+            {quarterOptions().map(({ q, year }) => (
+              <button key={`${q}-${year}`} onClick={() => { setSelQ(q); setSelYear(year) }}
                 className={cn("px-4 py-1.5 text-xs font-black rounded-lg transition-all",
-                  selQ === q ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
-                {q} {selYear}
+                  selQ === q && selYear === year ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                {q} {year}
               </button>
             ))}
           </div>

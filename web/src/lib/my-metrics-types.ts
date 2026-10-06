@@ -105,9 +105,20 @@ export interface LarkScanResult {
 export interface NoteSection { id: string; title: string; body: React.ReactNode }
 
 // Fallback khi chưa lưu target vào DB
-export const DEFAULT_TARGETS = {
-  Q3: { sla_hours: 5, sla_pct: 80, vendor_speed: 15, gm_delta: 2.5, hk3_pct: 74, begau: 450 },
-  Q4: { sla_hours: 1, sla_pct: 90, vendor_speed: 5,  gm_delta: 5.0, hk3_pct: 80, begau: 650 },
+// Target theo offer letter chỉ có Q3/Q4-2026. Quý sau chưa có target chính thức → tạm dùng target quý gần nhất
+// đã biết (isFallback) cho tới khi nhập ở nút Target (app_settings okr.<Q>-<year>).
+export type OkrTargets = { sla_hours: number; sla_pct: number; vendor_speed: number; gm_delta: number; hk3_pct: number; begau: number }
+export const DEFAULT_TARGETS: Record<string, OkrTargets> = {
+  "Q3-2026": { sla_hours: 5, sla_pct: 80, vendor_speed: 15, gm_delta: 2.5, hk3_pct: 74, begau: 450 },
+  "Q4-2026": { sla_hours: 1, sla_pct: 90, vendor_speed: 5,  gm_delta: 5.0, hk3_pct: 80, begau: 650 },
+}
+export function defaultTargetsFor(label: string): { targets: OkrTargets; isFallback: boolean; source: string } {
+  if (DEFAULT_TARGETS[label]) return { targets: DEFAULT_TARGETS[label], isFallback: false, source: label }
+  const keys = Object.keys(DEFAULT_TARGETS)
+  const rank = (l: string) => { const [q, y] = l.split("-"); return Number(y) * 10 + Number(q.slice(1)) }
+  const before = keys.filter(k => rank(k) <= rank(label)).sort((a, b) => rank(a) - rank(b))
+  const source = before.at(-1) ?? keys[0]
+  return { targets: DEFAULT_TARGETS[source], isFallback: true, source }
 }
 export const BASELINE_NOTE = {
   sla:          "2–4 ngày/YC (TB 1–2 ngày thủ công)",
