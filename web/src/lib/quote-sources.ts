@@ -8,6 +8,7 @@ import { convert, currentMonth, type Ccy, type FxTable } from "@/lib/fx/table"
 import { loadPriceList, loadRefCountries, loadSupportCountries, loadAssumptions } from "@/lib/bc-datapool/server"
 import { nameToIso2, type RefCountryLite, type SupportCountryLite } from "@/lib/bc-datapool/iso"
 import { FORMULA_KEYS, resolveFormula } from "@/lib/datapool-formula"
+import { countryNameVn } from "@/lib/catalogue/country-index"
 import { loadMarketData } from "@/lib/market-data"
 import type { MarketData } from "@/lib/market-breakdown"
 import type { QuoteItem } from "@/lib/vendor-quote-extract"
@@ -19,16 +20,16 @@ import {
 
 export interface GapRow {
   iso: string; name: string
-  regional: string[]                 // mã nhóm nước GoHub đang bán có chứa nước này (vd EU1)
+  regional: string[]                 // tên nhóm nước GoHub đang bán có chứa nước này (vd Châu Âu 33 nước)
   sources: string[]                  // vendor có báo giá
   ref: { spec: string; best: Offer | null }[]
 }
 
 // Gói tham chiếu để so giá destination chưa bán (eSIM)
 const REF_SPECS: { label: string; plan: PlanKind; dataGb: number; days: number }[] = [
-  { label: "Fixed 3GB · 7 ngày", plan: "Fixed", dataGb: 3, days: 7 },
-  { label: "Fixed 10GB · 30 ngày", plan: "Fixed", dataGb: 10, days: 30 },
-  { label: "Daily 1GB · 7 ngày", plan: "Daily", dataGb: 1, days: 7 },
+  { label: "Gói 3GB dùng 7 ngày", plan: "Fixed", dataGb: 3, days: 7 },
+  { label: "Gói 10GB dùng 30 ngày", plan: "Fixed", dataGb: 10, days: 30 },
+  { label: "1GB mỗi ngày, 7 ngày", plan: "Daily", dataGb: 1, days: 7 },
 ]
 
 export interface QuoteCompareData {
@@ -64,7 +65,7 @@ function usd(t: FxTable, amount: number, ccy: string, month: string): number | n
 }
 
 export async function loadQuoteCompare(quarter: string, group: MarketData["group"], bypass = false): Promise<QuoteCompareData> {
-  return cachedQuery<QuoteCompareData>(`market-quotes:v3:${quarter}:${group}`, async () => {
+  return cachedQuery<QuoteCompareData>(`market-quotes:v5:${quarter}:${group}`, async () => {
     const month = currentMonth()
     const [market, fx, priceList, refs, groups, assumptionsBc, formulaRows, hk3, wm, frames] = await Promise.all([
       loadMarketData(quarter, group, bypass),
@@ -224,7 +225,7 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
     wmSrc.offers.forEach(list => list.forEach(o => { if (o.iso.length === 1) mark(o.iso[0], wmSrc.label) }))
     // Báo giá đang chào: gói liệt kê ≤ 20 nước dùng được ở từng nước (vd VNPT 16 nước); gói "World/Europe" bỏ để danh sách không loãng.
     for (const qs of quoteSrcs) qs.offers.forEach(list => list.forEach(o => { if (o.iso.length <= 20) o.iso.forEach(i => mark(i, qs.label)) }))
-    const nameOf = new Map(refs.map(r => [r.code.toUpperCase(), r.name]))
+    const nameOf = new Map(refs.map(r => [r.code.toUpperCase(), countryNameVn(r.code.toUpperCase()) || r.name]))
     const gaps: GapRow[] = []
     quoted.forEach((labels, iso) => {
       if (soldSingle.has(iso)) return
@@ -234,7 +235,8 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
           .filter((o): o is Offer => !!o && Number.isFinite(o.usd))
         return { spec: rs.label, best: offers.sort((x, y) => x.usd - y.usd)[0] ?? null }
       })
-      gaps.push({ iso, name: nameOf.get(iso) ?? iso, regional: Array.from(regionalOf.get(iso) ?? []).sort(), sources: Array.from(labels).sort(), ref })
+      const gName = new Map(groups.map(g => [g.code, g.vn || g.en]))
+      gaps.push({ iso, name: nameOf.get(iso) ?? iso, regional: Array.from(regionalOf.get(iso) ?? []).sort().map(c => gName.get(c) || c), sources: Array.from(labels).sort(), ref })
     })
     gaps.sort((x, y) => (x.regional.length - y.regional.length) || (y.sources.length - x.sources.length) || x.name.localeCompare(y.name))
 

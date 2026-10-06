@@ -29,28 +29,33 @@ export interface MarketData {
   cutoff: string
 }
 
+// Nhãn hiển thị bằng tiếng Việt dễ hiểu (người xem không rành mã SKU — Hiếu yêu cầu s225).
 const FORM: Record<string, string> = {
-  A: "Data pack (top-up)", B: "eSIM profile", C: "eSIM", D: "Khung SIM", E: "SIM",
-  "1": "eSIM nội địa VN", "2": "SIM nội địa VN",
+  A: "Nạp thêm data", B: "eSIM trắng", C: "eSIM", D: "Khung SIM", E: "SIM vật lý",
+  "1": "eSIM dùng ở VN", "2": "SIM dùng ở VN",
 }
+export const PLAN_DAILY = "Theo ngày"
+export const PLAN_FIXED = "Trọn gói"
+export const PLAN_UNLIMITED = "Không giới hạn"
 const UNLIMITED = new Set(["A", "B", "C", "D", "E", "G", "H", "L", "X"])
 const FIXED = new Set(["F", "Y"])
 const DAILY = new Set(["P", "Z", "T"])
 
-export const SERVICE_DATA_ONLY = "Data only"
-export const SERVICE_CALL = "Data + Call/SMS"
-export const SERVICE_LOCAL = "Data + SĐT local"
+export const SERVICE_DATA_ONLY = "Chỉ data"
+export const SERVICE_CALL = "Data + gọi/SMS"
+export const SERVICE_LOCAL = "Data + số điện thoại"
 export const SERVICE_UNKNOWN = "Chưa rõ"
 
 function decodeSize(sku: string): string {
   const cap = sku.slice(8, 11), days = sku.slice(11, 13)
   let data = ""
-  if (cap === "UNL") data = "Unlimited"
+  if (cap === "UNL") data = "Không giới hạn"
   else if (/^\d{3}$/.test(cap)) data = `${Number(cap)}GB`
   else if (/^\dHM$/.test(cap)) data = `${Number(cap[0]) * 100}MB`
   else if (/^\dD\d$/.test(cap)) data = `${cap[0]}.${cap[2]}GB`
   const d = /^\d{2}$/.test(days) ? `${Number(days)} ngày` : ""
-  return [data, d].filter(Boolean).join(" · ")
+  // Daily: dung lượng là mỗi ngày
+  return [data && sku[7] && DAILY.has(sku[7]) ? `${data}/ngày` : data, d].filter(Boolean).join(" · ")
 }
 
 /** Thuộc tính đọc thẳng từ mã SKU. Mã không phải 13 ký tự (mã cũ/phí) → "Khác". */
@@ -58,7 +63,7 @@ export function decodeSkuAttributes(sku: string): { form: string; plan: string; 
   const s = sku.toUpperCase()
   if (s.length !== 13) return { form: "Khác", plan: "Khác", size: "", product_code: s.slice(0, 8) }
   const p = s[7]
-  const plan = p === "K" ? "Khung/Profile" : UNLIMITED.has(p) ? "Unlimited" : FIXED.has(p) ? "Fixed" : DAILY.has(p) ? "Daily" : "Khác"
+  const plan = p === "K" ? "Khung/eSIM trắng" : UNLIMITED.has(p) ? PLAN_UNLIMITED : FIXED.has(p) ? PLAN_FIXED : DAILY.has(p) ? PLAN_DAILY : "Khác"
   return { form: FORM[s[1]] ?? "Khác", plan, size: decodeSize(s), product_code: s.slice(0, 8) }
 }
 
@@ -72,8 +77,8 @@ export function classifyService(call: string | null | undefined, localNumber: st
 
 export type Dimension = "country" | "vendor" | "form" | "plan" | "service" | "product_code" | "sku"
 export const DIMENSION_LABEL: Record<Dimension, string> = {
-  country: "Thị trường", vendor: "Vendor", form: "Hình thức", plan: "Loại gói", service: "Dịch vụ",
-  product_code: "Product Code", sku: "SKU",
+  country: "Thị trường", vendor: "Nhà cung cấp", form: "Loại SIM", plan: "Kiểu gói", service: "Gọi/SMS",
+  product_code: "Dòng sản phẩm", sku: "Sản phẩm (SKU)",
 }
 
 export interface Agg { rev: number; gp: number; units: number; revPrev: number; gpPrev: number; unitsPrev: number }

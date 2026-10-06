@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from "react"
 import { Upload, Sparkles, Loader2, Trash2, X, Plus, FileText, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Panel, EmptyState } from "@/components/dashboard-kit"
-import { formatCompactNumber } from "@/lib/analytics-formatters"
+import { vnd } from "./market-help"
 import type { CompareRow } from "@/lib/quote-compare"
 import type { QuoteItem, MarketGroupLite } from "@/lib/vendor-quote-extract"
 
@@ -124,11 +124,11 @@ function AddQuoteModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
                 {draft.warnings.map((w, i) => <p key={i} className="flex gap-1"><AlertTriangle className="w-3.5 h-3.5 shrink-0" />{w}</p>)}
               </div>
             )}
-            <p className="text-xs text-slate-500">AI có thể đọc nhầm số — soát với file gốc trước khi lưu. Nước: mã ISO2 cách nhau dấu phẩy; vùng không liệt kê nước thì chọn nhóm nước GoHub.</p>
+            <p className="text-xs text-slate-500">Máy đọc có thể nhầm số — so lại với file gốc trước khi lưu. Dòng tô vàng là chưa biết dùng ở nước nào: gõ mã nước (JP, KR…) hoặc chọn nhóm nước. Kiểu gói: theo ngày = mỗi ngày được bấy nhiêu GB; trọn gói = tổng GB cả kỳ.</p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="text-slate-500 text-left">
-                  <tr>{["Gói", "Vùng (nguyên văn)", "Nước ISO2", "Nhóm GoHub", "Loại", "GB", "Ngày", `eSIM (${draft.currency})`, `SIM (${draft.currency})`, "Gọi", "Ghi chú", ""].map(h => <th key={h} className="px-1 py-1 font-semibold">{h}</th>)}</tr>
+                  <tr>{["Tên gói", "Vùng ghi trong báo giá", "Nước dùng được (mã: JP, KR…)", "Hoặc chọn nhóm nước", "Kiểu gói", "GB", "Số ngày", `Giá eSIM (${draft.currency})`, `Giá SIM (${draft.currency})`, "Có gọi", "Ghi chú", ""].map(h => <th key={h} className="px-1 py-1 font-semibold">{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {draft.items.map((it, i) => (
@@ -144,7 +144,7 @@ function AddQuoteModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
                       </td>
                       <td className="px-1 py-0.5">
                         <select value={it.plan} onChange={e => setItem(i, { plan: e.target.value as QuoteItem["plan"] })} className={inputCls}>
-                          {["Daily", "Fixed", "Unlimited"].map(p => <option key={p}>{p}</option>)}
+                          {[["Daily", "Theo ngày"], ["Fixed", "Trọn gói"], ["Unlimited", "Không giới hạn"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                         </select>
                       </td>
                       <td className="px-1 py-0.5 w-16"><input type="number" value={it.data_gb} onChange={e => setItem(i, { data_gb: Number(e.target.value) })} className={inputCls} /></td>
@@ -207,7 +207,7 @@ export default function VendorQuotesPanel({ rows, vndPerUsd, active, onSelect, o
   }
 
   return (
-    <Panel title="Báo giá vendor đang chào" desc="Thả ảnh / PDF / Word / Excel vendor gửi → AI đọc → duyệt → tự vào bảng so giá. Bấm 1 báo giá để xem nó rẻ hơn ở SKU nào."
+    <Panel title="Báo giá nhà cung cấp gửi về" desc="Nhận được báo giá (ảnh, PDF, Word, Excel, email)? Bấm “Thêm báo giá” — máy tự đọc, bạn kiểm lại rồi lưu. Bấm tên 1 báo giá để xem nó rẻ hơn ở sản phẩm nào."
       action={<button onClick={() => setAdding(true)} className="flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white"><Plus className="w-3.5 h-3.5" />Thêm báo giá</button>}>
       {error ? <EmptyState message={/vendor_quotes/.test(error) ? "Chưa có bảng vendor_quotes — chạy migration v69 rồi Reload schema." : `Hiếu đang fix, vui lòng đợi (${error})`} />
         : !quotes ? <p className="text-xs text-slate-400">Đang tải…</p>
@@ -229,8 +229,9 @@ export default function VendorQuotesPanel({ rows, vndPerUsd, active, onSelect, o
                   </select>
                   <span className="text-xs text-slate-600">
                     {q.status === "rejected" ? "Không đưa vào so giá"
-                      : w.covered ? <>Có giá cho <b>{w.covered}</b> SKU đang bán · rẻ hơn ở <b>{w.skus}</b> SKU · tiết kiệm <b>{formatCompactNumber(Math.round(w.saveUsd * vndPerUsd))}</b>/quý</>
-                      : "Chưa khớp SKU đang bán nào (xem Destination chưa bán)"}
+                      : w.skus ? <>Rẻ hơn giá đang nhập ở <b>{w.skus}</b> sản phẩm · tiết kiệm khoảng <b>{vnd(w.saveUsd * vndPerUsd)}</b>/quý</>
+                      : w.covered ? "Không rẻ hơn giá đang nhập ở sản phẩm nào"
+                      : "Không có gói nào khớp sản phẩm đang bán (xem phần nước chưa có gói riêng)"}
                   </span>
                   <span className="flex gap-2 ml-auto">
                     {q.files.map(f => <a key={f.path} href={`/api/analytics/market/vendor-quotes/${q.id}?file=${encodeURIComponent(f.path)}`} target="_blank" rel="noreferrer"

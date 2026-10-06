@@ -6,12 +6,12 @@ import {
 
 describe("decodeSkuAttributes", () => {
   test("SKU 13 ký tự: hình thức, loại gói, dung lượng/ngày", () => {
-    expect(decodeSkuAttributes("3CUSAWMY00507")).toEqual({ form: "eSIM", plan: "Fixed", size: "5GB · 7 ngày", product_code: "3CUSAWMY" })
-    expect(decodeSkuAttributes("ECJPN3DBUNL01")).toMatchObject({ form: "eSIM", plan: "Unlimited", size: "Unlimited · 1 ngày" })
-    expect(decodeSkuAttributes("3EJPN3DF00507")).toMatchObject({ form: "SIM" })
-    expect(decodeSkuAttributes("2CTHACBP5HM10")).toMatchObject({ plan: "Daily", size: "500MB · 10 ngày" })
-    expect(decodeSkuAttributes("1D000WDK00000")).toMatchObject({ form: "Khung SIM", plan: "Khung/Profile" })
-    expect(decodeSkuAttributes("3AKOR3DF0D530")).toMatchObject({ form: "Data pack (top-up)", size: "0.5GB · 30 ngày" })
+    expect(decodeSkuAttributes("3CUSAWMY00507")).toEqual({ form: "eSIM", plan: "Trọn gói", size: "5GB · 7 ngày", product_code: "3CUSAWMY" })
+    expect(decodeSkuAttributes("ECJPN3DBUNL01")).toMatchObject({ form: "eSIM", plan: "Không giới hạn", size: "Không giới hạn · 1 ngày" })
+    expect(decodeSkuAttributes("3EJPN3DF00507")).toMatchObject({ form: "SIM vật lý" })
+    expect(decodeSkuAttributes("2CTHACBP5HM10")).toMatchObject({ plan: "Theo ngày", size: "500MB/ngày · 10 ngày" })
+    expect(decodeSkuAttributes("1D000WDK00000")).toMatchObject({ form: "Khung SIM", plan: "Khung/eSIM trắng" })
+    expect(decodeSkuAttributes("3AKOR3DF0D530")).toMatchObject({ form: "Nạp thêm data", size: "0.5GB · 30 ngày" })
   })
   test("mã không phải 13 ký tự → Khác", () => {
     expect(decodeSkuAttributes("CHN3D07GBFY05D")).toMatchObject({ form: "Khác", plan: "Khác" })

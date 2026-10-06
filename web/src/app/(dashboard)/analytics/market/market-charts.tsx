@@ -57,7 +57,7 @@ export const StackedBars = React.memo(function StackedBars({ rows, cols, colorFo
 
 /** Thanh ngang đơn (top SKU…) — màu theo nhóm (vd vendor), tooltip kèm GM%. */
 export const RankBars = React.memo(function RankBars({ rows, colorKey, colorFor, labelWidth = 120, gmLabel = "GM", fmt = formatCompactNumber }: {
-  rows: { key: string; value: number; gm: number; group: string }[]
+  rows: { key: string; value: number; gm: number; group: string; desc?: string }[]
   colorKey?: string; colorFor: ColorFor; labelWidth?: number; gmLabel?: string; fmt?: (v: number) => string
 }) {
   return (
@@ -68,6 +68,7 @@ export const RankBars = React.memo(function RankBars({ rows, colorKey, colorFor,
         <YAxis type="category" dataKey="key" width={labelWidth} axisLine={false} tickLine={false} interval={0}
           tick={{ fill: "#475569", fontSize: 11, fontFamily: "ui-monospace, monospace" }} />
         <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: "rgba(15,76,129,0.06)" }}
+          labelFormatter={(l: string, p: any[]) => p?.[0]?.payload?.desc ? `${l} — ${p[0].payload.desc}` : l}
           formatter={(v: number, _n: string, item: any) => [`${fmt(v)}${gmLabel ? ` · ${gmLabel} ${item.payload.gm.toFixed(1)}%` : ""}`, `${colorKey ?? ""} ${item.payload.group}`]} />
         <Bar dataKey="value" isAnimationActive={false} radius={[0, 4, 4, 0]}>
           {rows.map(r => <Cell key={r.key} fill={colorFor(r.group)} />)}

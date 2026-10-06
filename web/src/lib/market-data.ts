@@ -2,6 +2,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { cachedQuery, QUERY_TTL_MIN, decodeSkuDestinationCode, getCountryMappings, getMonthsInRange } from "@/lib/analytics-helpers"
 import { parseQuarterLabel, prevQuarterLabel, currentQuarterLabel } from "@/lib/okr-helpers"
+import { loadSupportCountries } from "@/lib/bc-datapool/server"
 import { decodeSkuAttributes, classifyService, type MarketData, type MarketCell, type MarketSku } from "@/lib/market-breakdown"
 
 export function parseMarketParams(sp: URLSearchParams): { quarter: string; group: MarketData["group"] } {
@@ -15,7 +16,7 @@ export async function loadMarketData(quarter: string, group: MarketData["group"]
   const { start: curStart, end: curEnd } = parseQuarterLabel(quarter)
   const prevQuarter = prevQuarterLabel(quarter)
   const { start: prevStart, end: prevEnd } = parseQuarterLabel(prevQuarter)
-  return cachedQuery<MarketData>(`market:v1:${quarter}:${group}`, async () => {
+  return cachedQuery<MarketData>(`market:v2:${quarter}:${group}`, async () => {
       const groupSql = group === "ALL" ? "IN ('B2B','B2C')" : `= '${group}'`
       const rows = await queryAnalytics<{ sku: string; m: string; vendor: string | null; rev: string; gp: string; units: string }>(
         `SELECT TRIM(f.sku) AS sku, TO_CHAR(f.fulfiled_date::date, 'YYYY-MM') AS m, MAX(v.vendor) AS vendor,
@@ -38,13 +39,16 @@ export async function loadMarketData(quarter: string, group: MarketData["group"]
       const productCodes = Array.from(new Set(codes.map(c => c.slice(0, 8))))
       const chunk = <T,>(a: T[], n: number) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n))
       // Catalog Supabase theo lô (không N+1): skus.call + products.local_phone_number → loại dịch vụ.
-      const [countryMap, skuRows, prodRows] = await Promise.all([
+      const [countryMap, support, skuRows, prodRows] = await Promise.all([
         getCountryMappings(),
+        loadSupportCountries().catch(() => []),
         Promise.all(chunk(codes, 400).map(c => supabaseAdmin.from("skus").select("sku_code,call").in("sku_code", c)))
           .then(rs => rs.flatMap(r => r.data ?? [])),
         Promise.all(chunk(productCodes, 400).map(c => supabaseAdmin.from("products").select("product_code,local_phone_number").in("product_code", c)))
           .then(rs => rs.flatMap(r => r.data ?? [])),
       ])
+      // Tên tiếng Việt của thị trường (mã nước/nhóm GoHub) — người xem không hiểu mã "MAL", "EU1"; thiếu thì dùng tên Turso/mã.
+      const vnName = new Map(support.map(s => [s.code, s.vn || s.en]))
       const callBy = new Map(skuRows.map(r => [String(r.sku_code), r.call as string | null]))
       const localBy = new Map(prodRows.map(r => [String(r.product_code), r.local_phone_number as string | null]))
 
@@ -61,7 +65,7 @@ export async function loadMarketData(quarter: string, group: MarketData["group"]
           const known = callBy.has(r.sku)
           skus.push({
             sku: r.sku, vendor: (r.vendor ?? "").trim() || "(không rõ)",
-            country_code: cc, country: r.sku.length === 13 ? (countryMap[cc] ?? cc) : "(mã khác)",
+            country_code: cc, country: r.sku.length === 13 ? (vnName.get(cc) || countryMap[cc] || cc) : "(mã khác)",
             ...attrs,
             service: classifyService(callBy.get(r.sku), localBy.get(attrs.product_code), known),
           })
