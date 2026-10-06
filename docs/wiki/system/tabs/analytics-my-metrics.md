@@ -767,7 +767,8 @@ tự so số trước/sau fix trên staging, số CHỈ đổi nếu `dim_sku` t
   **YES** do Hiếu thả = thảo luận XONG (Hiếu sửa lại nghĩa cùng ngày — không phải "không tính"):
   · YES + câu trả lời của Hiếu sau mốc bắt đầu được Hiếu thả **Typing** → xong, tự tính (`confirmed`, `reviewed_by=auto:typing`,
     `duration_value` từ lúc được tag);
-  · YES mà chưa Typing → `pending_review`; bot reply vào thread tag Hiếu nhắc 1 lần (`reviewed_by=auto:reminded`);
+  · YES mà chưa Typing → `pending_review`; nhắc Hiếu QUA LARK DM (gộp 1 tin/lượt quét, kèm link thread, mỗi thread 1 lần —
+    `reviewed_by=auto:reminded`). KHÔNG trả lời vào thread (Hiếu: gây spam mọi người — bản đầu 2026-10-06 có reply vào thread);
   · chưa YES = đang thảo luận → `pending_review`, `reviewed_by` null, quét lại hằng ngày; từ ngày 25 (giờ VN) cron DM danh sách thread
     trong tháng chưa chốt kèm link thẳng thread (`warnOpenThisMonth`).
   Không phải case → `not_matched`, `auto:rule`. AI (`okr-lark-classify`) chỉ còn chọn SLA hay Vendor Speed.

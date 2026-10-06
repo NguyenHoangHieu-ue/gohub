@@ -10796,3 +10796,4 @@ việc không đo bằng số); (3) đánh giá tự động — thực tế vs 
 - (s225 tiếp) Hiếu chốt luật bot Lark (YES đóng, Typing xong, tính từ lúc tag, chỉ Telecom Product, lệnh Note đi, mở lại Q3, DM 8:30) → làm M0+M1 (plan `my-metrics-plan-quy.md`). Gốc 'tin gốc rỗng': parseLarkContent không đọc post không bọc zh_cn.
 - (s225 tiếp) Hiếu sửa nghĩa YES = thảo luận xong (không phải không tính): YES+Typing → tự tính; YES chưa Typing → bot nhắc trong thread 1 lần; chưa YES → quét lại hằng ngày, từ ngày 25 DM cảnh báo; link thẳng thread.
 - (s225 tiếp) Merge main d62a1f81 + quét lại 120 ngày trên production: 0 case vì tên group thật 'Telecom Products (Private)' (có s) mà luật so đúng từng chữ → 81 thread bị ghi 'ngoài group' (case duyệt tay không đụng). Sửa so tên lỏng (hoa thường, dấu câu, s số nhiều), quét lại.
+- (s225 tiếp) Hiếu: nhắc vào thread gây spam → đổi sang 1 Lark DM gộp/lượt quét (link từng thread), không reply vào thread nữa.

@@ -3,13 +3,14 @@
 //
 // s225 (Hiếu chốt): bỏ để AI tự quyết "có phải case / xong chưa" (sai ~57%, tin gốc còn bị đọc rỗng). Nay theo LUẬT đánh dấu
 // của Hiếu — xem lib/okr-lark-rules.ts: chỉ group Telecom Product (Private), thread người khác đăng, tính từ lúc tag Hiếu,
-// YES = thảo luận xong; YES + Typing trên câu trả lời của Hiếu = xong (tự tính); YES mà chưa Typing = bot vào thread nhắc 1 lần;
+// YES = thảo luận xong; YES + Typing trên câu trả lời của Hiếu = xong (tự tính); YES mà chưa Typing = nhắc Hiếu QUA DM (gộp 1 tin/lượt
+// quét, mỗi thread 1 lần — Hiếu: nhắc vào thread gây spam mọi người);
 // chưa YES = đang thảo luận, quét lại hằng ngày, từ ngày 25 DM cảnh báo. AI chỉ còn phân loại SLA hay Vendor Speed.
 // Case đã được Hiếu duyệt tay (reviewed_by không bắt đầu bằng "auto:") thì KHÔNG đụng lại.
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchThreadsFromCapturedLog, fetchRecentThreads, fetchThreadByMessageId, getChatName, type LarkThread } from "@/lib/lark-thread-scan"
 import { classifyLarkThread, type LarkClassifyResult } from "@/lib/okr-lark-classify"
-import { sendLarkDM, getLarkUserOpenId, getLarkToken, replyLarkMessage } from "@/lib/lark"
+import { sendLarkDM, getLarkUserOpenId, getLarkToken } from "@/lib/lark"
 import { quarterLabelForDate } from "@/lib/okr-helpers"
 import { evaluateThread, isMonthEndWarning, larkThreadLink, DEFAULT_CASE_GROUPS, type RuleMessage, type RuleOutcome } from "@/lib/okr-lark-rules"
 
@@ -50,11 +51,11 @@ const toRule = (t: LarkThread, chatName: string): { chat_name: string; root: Rul
 })
 
 const isManual = (reviewedBy: string | null | undefined) => !!reviewedBy && !reviewedBy.startsWith("auto:")
-const REMINDED = "auto:reminded"   // đã vào thread nhắc đánh dấu Typing (chỉ nhắc 1 lần/thread)
+const REMINDED = "auto:reminded"   // đã nhắc Hiếu (DM) đánh dấu Typing cho thread này — chỉ nhắc 1 lần/thread
 const nameOf = (t: LarkThread, openId: string) => openId === t.sender_open_id ? t.sender_name : (t.replies.find(r => r.open_id === openId)?.name ?? openId)
 
 /** Áp luật cho 1 thread rồi ghi okr_lark_events. Trả kết quả để báo lại (lệnh "Note đi"). */
-async function applyRules(t: LarkThread, chatName: string, hieuId: string, caseGroups: string[], existing: { metric: string; reviewed_by: string | null }[], remind = true):
+async function applyRules(t: LarkThread, chatName: string, hieuId: string, caseGroups: string[], existing: { metric: string; reviewed_by: string | null }[], remindLines?: string[]):
   Promise<{ outcome: RuleOutcome; wrote: boolean; classifyError: boolean }> {
   const outcome = evaluateThread(toRule(t, chatName), hieuId, caseGroups)
   if (existing.some(e => isManual(e.reviewed_by))) return { outcome, wrote: false, classifyError: false }   // Hiếu đã duyệt tay → giữ nguyên
@@ -86,12 +87,12 @@ async function applyRules(t: LarkThread, chatName: string, hieuId: string, caseG
   }
   const done = outcome.kind === "done" ? outcome.done : null
   const durationUnit = metric === "sla" ? 3_600_000 : 60_000
-  // Đã YES mà chưa có Typing → vào thread tag Hiếu nhắc (1 lần); Hiếu thả Typing rồi tag bot "Note đi".
+  // Đã YES mà chưa có Typing → thêm vào DM nhắc Hiếu (gộp, 1 lần/thread); Hiếu thả Typing rồi tag bot "Note đi" trong thread.
   let reviewedBy: string | null = outcome.kind === "done" ? "auto:typing" : null
   if (outcome.kind === "needs_mark") {
     reviewedBy = existing.some(e => e.reviewed_by === REMINDED) ? REMINDED : null
-    if (!reviewedBy && remind) {
-      await replyLarkMessage(t.message_id, `<at user_id="${hieuId}"></at> Thread đã YES nhưng chưa có câu trả lời nào của anh được đánh dấu Typing. Anh thả Typing vào câu trả lời giải quyết rồi tag em "Note đi" nhé.`)
+    if (!reviewedBy && remindLines) {
+      remindLines.push(`${t.sender_name}: ${t.content.replace(/\s+/g, " ").slice(0, 70)} — ${larkThreadLink(t.chat_id, t.message_id)}`)
       reviewedBy = REMINDED
     }
   }
@@ -132,11 +133,12 @@ async function processThreads(threads: LarkThread[], hieuId: string, caseGroups:
   for (const r of rows ?? []) byMsg.set(r.message_id, [...(byMsg.get(r.message_id) ?? []), r])
 
   const out: ScanRunResult = { ...empty(), done: 0, open: 0, needs_mark: 0 }
+  const remindLines: string[] = []
   const groupCount = new Map<string, number>()
   for (const t of threads) {
     groupCount.set(t.chat_id, (groupCount.get(t.chat_id) ?? 0) + 1)
     out.scanned++
-    const { outcome, wrote, classifyError } = await applyRules(t, names.get(t.chat_id) ?? t.chat_id, hieuId, caseGroups, byMsg.get(t.message_id) ?? [])
+    const { outcome, wrote, classifyError } = await applyRules(t, names.get(t.chat_id) ?? t.chat_id, hieuId, caseGroups, byMsg.get(t.message_id) ?? [], remindLines)
     if (classifyError) out.classify_errors++
     if (!wrote) continue
     out.classified++
@@ -144,6 +146,10 @@ async function processThreads(threads: LarkThread[], hieuId: string, caseGroups:
     else { out.inserted++; out[outcome.kind]! += 1 }
   }
   out.groups = Array.from(groupCount.entries()).map(([chat_id, thread_count]) => ({ chat_id, chat_name: names.get(chat_id) ?? chat_id, thread_count }))
+  if (remindLines.length) {
+    const shown = remindLines.slice(0, 25).map((l, i) => `${i + 1}. ${l}`)
+    await sendLarkDM(hieuId, `🔖 ${remindLines.length} thread đã YES nhưng chưa có câu trả lời nào của anh được đánh dấu Typing:\n${shown.join("\n")}${remindLines.length > 25 ? `\n… và ${remindLines.length - 25} thread khác (xem My Metrics)` : ""}\nAnh thả Typing vào câu trả lời giải quyết rồi tag em "Note đi" trong thread nhé.`)
+  }
   return out
 }
 
@@ -174,7 +180,7 @@ export async function evaluateThreadNow(rootMessageId: string): Promise<{ outcom
   if (!hieuId || !t) return { outcome: null, emojis: [] }
   const chatName = await getChatName(t.chat_id, await getLarkToken())
   const { data: rows } = await supabaseAdmin.from("okr_lark_events").select("message_id,metric,reviewed_by").eq("message_id", t.message_id)
-  const { outcome } = await applyRules(t, chatName, hieuId, config.case_groups, rows ?? [], false)
+  const { outcome } = await applyRules(t, chatName, hieuId, config.case_groups, rows ?? [])
   const emojis = Array.from(new Set([...(t.reactions ?? []), ...t.replies.flatMap(r => r.reactions ?? [])].filter(r => r.operatorId === hieuId).map(r => r.emoji)))
   return { outcome, emojis }
 }
