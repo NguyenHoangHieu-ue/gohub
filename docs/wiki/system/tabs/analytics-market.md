@@ -97,6 +97,19 @@ Lộ trình (chốt với Hiếu 2026-10-06):
   có phương án SIM. Destination chưa bán tính cả báo giá có ≤ 20 nước liệt kê (gói World/Europe bỏ để danh sách không loãng).
 - Bấm 1 báo giá → mọi biểu đồ/bảng dưới chuyển sang "báo giá này rẻ hơn mốc hiện tại ở SKU nào" (tiết kiệm/quý theo sản lượng thật).
 
+## 8. Viết cho người không rành số (s225, Hiếu: "vai user khó tính, không hiểu nhiều vẫn xem là hiểu")
+- Mỗi màn có khung **Tóm tắt nhanh** (câu tự sinh): tình hình chung, thị trường chính, biến động lớn, nhà cung cấp chính; bên So giá:
+  tiết kiệm tổng, 3 việc làm trước, báo giá gửi về rẻ hơn ở đâu, số nước chưa có gói riêng, nhắc "mới là so giá nhập — còn chất lượng
+  mạng, KYC, MOQ". Nút **Giải thích từ ngữ** (`market-help.tsx`).
+- Màn So giá có khối **Việc nên làm**: gộp theo thị trường × (nhà cung cấp hiện tại → nhà cung cấp rẻ hơn), số sản phẩm, % rẻ hơn, ví
+  dụ 2 sản phẩm, tiền/quý; "Xem" lọc biểu đồ + bảng đúng nhóm. Bỏ thẻ kỹ thuật (kiểm chứng công thức, SKU so được) → vào "Cách tính".
+- Nhãn tiếng Việt: Lãi gộp/Biên lãi (thay GP/GM%), Ước cả quý (thay Dự phóng ×), So quý trước (thay %QoQ), Nhà cung cấp, Loại SIM
+  (eSIM / SIM vật lý / Nạp thêm data), Kiểu gói (Theo ngày / Trọn gói / Không giới hạn), Gọi/SMS. Tiền ở màn So giá thống nhất VND
+  (USD chỉ trong tooltip công thức). Trục biểu đồ xếp hạng là mô tả gói ("Nhật Bản · eSIM · Không giới hạn · 15 ngày"), mã SKU vào tooltip.
+- Tên thị trường `lib/market-names.ts`: 1 nước = tên tiếng Việt; 2–3 nước nối tên; ≥ 4 nước = "Châu Âu · 34 nước (E33)" (châu lục
+  ≥ 75% theo `ref_countries.continent`, không thì "Nhiều khu vực"). SKU không 13 ký tự = "Khác (mã cũ / phí)", bỏ khỏi tóm tắt.
+- Unlimited: không đề xuất gói bị bóp tốc độ thấp hơn gói đang bán (WM ghi `throttle_kbps` 5000/10000; SKU A/E/H = 5Mbps, B/G/X = 10).
+
 ## Verify (2026-10-06, staging)
 - Q3-2026 theo tháng khớp Quarter Report: T8/T9 khớp tới đồng; T7 lệch 161 nghìn / 8,05 tỷ (Quarter Report lọc thêm KH loại trừ).
 - Payload Q3 ALL ~1,4MB, 5.596 SKU, ~5s khi tính mới.
