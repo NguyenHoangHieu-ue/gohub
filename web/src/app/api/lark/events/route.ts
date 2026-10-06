@@ -565,10 +565,10 @@ async function noteResultText(rootId: string): Promise<string> {
   const { outcome, emojis } = await evaluateThreadNow(rootId)
   if (!outcome) return "⚠️ Chưa đọc được thread (kiểm Kết nối Lark cá nhân ở Creator Settings)."
   if (outcome.kind === "skip") return `ℹ️ Thread này không tính: ${outcome.reason}.`
-  if (outcome.kind === "closed") return "🔒 Thread đã đóng bằng YES — không tính."
+  if (outcome.kind === "open") return "💬 Thread chưa có YES — em coi là đang thảo luận, sẽ theo dõi tiếp. Thảo luận xong anh thả YES + Typing vào câu trả lời giải quyết rồi tag em lại nhé."
   if (outcome.kind === "done") {
     const h = (Number(outcome.done.create_time) - Number(outcome.start.create_time)) / 3_600_000
     return `✅ Đã ghi nhận: tính từ lúc tag anh (${vnTime(Number(outcome.start.create_time))}) đến câu trả lời có Typing (${vnTime(Number(outcome.done.create_time))}) — ${h.toFixed(1)} giờ.`
   }
-  return `⏳ Anh chưa đánh dấu Typing vào câu trả lời nào của anh trong thread này${emojis.length ? ` (emoji anh đã thả: ${emojis.join(", ")})` : ""}. Thả Typing vào câu trả lời giải quyết xong rồi tag em "Note đi" lại nhé.`
+  return `⏳ Thread đã YES nhưng anh chưa đánh dấu Typing vào câu trả lời nào của anh${emojis.length ? ` (emoji anh đã thả: ${emojis.join(", ")})` : ""}. Thả Typing vào câu trả lời giải quyết xong rồi tag em "Note đi" lại nhé.`
 }

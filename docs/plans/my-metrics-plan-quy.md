@@ -90,7 +90,10 @@ Ngoài kế hoạch, thêm **cảnh báo tự động** (không cần anh đặt
 ---
 
 ## C0. Hiếu đã chốt (2026-10-06) — THAY phần B1 ở các điểm khác
-1. **YES** = đóng thread, không tính; chỉ YES do Hiếu thả; chỉ tính case trong group **Telecom Product (Private)**.
+1. **YES** (chỉ YES do Hiếu thả) = thread ĐÃ THẢO LUẬN XONG (sửa lại cùng ngày — KHÔNG phải "không tính"). Chỉ tính case trong group
+   **Telecom Product (Private)**. YES + câu trả lời của Hiếu có Typing → xong; YES mà chưa Typing → bot vào thread tag Hiếu nhắc (1 lần),
+   Hiếu thả Typing rồi tag bot. Chưa YES = đang thảo luận → bỏ qua, quét lại hằng ngày; từ ~ngày 25 trong tháng DM cảnh báo.
+   Link trong DM/web dẫn THẲNG tới thread (không chỉ group).
 2. Thread Hiếu đăng → không tính. Thread người khác đăng → bắt đầu tính khi Hiếu được tag (lần đầu, có thể giữa thread).
 3. **Xong** = câu trả lời của Hiếu có emoji **Typing** do Hiếu thả (bot đọc tới khi gặp). Quên đánh dấu → Hiếu tag bot "Note đi" →
    bot trả "Đã note", đọc thread: có Typing thì ghi nhận, chưa thì nhắc; Hiếu đánh dấu rồi tag bot lại.
