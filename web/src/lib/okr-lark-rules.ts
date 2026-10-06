@@ -18,10 +18,12 @@ export type RuleOutcome =
   | { kind: "needs_mark"; reason: string; start: RuleMessage }            // đã YES, chưa có câu trả lời nào được đánh dấu Typing
   | { kind: "done"; reason: string; start: RuleMessage; done: RuleMessage }
 
-export const DEFAULT_CASE_GROUPS = ["Telecom Product (Private)"]
+export const DEFAULT_CASE_GROUPS = ["Telecom Products (Private)"]
 const isYes = (e: string) => /^yes$/i.test(e)
 const isTyping = (e: string) => /^typing$/i.test(e)
-const norm = (s: string) => s.trim().toLowerCase()
+// So tên group bỏ qua hoa thường, dấu câu và "s" số nhiều — tên thật là "Telecom Products (Private)", Hiếu gọi "Telecom Product
+// (Private)"; so đúng từng chữ đã làm lượt quét đầu (2026-10-06) loại hết 81 thread của group.
+const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/).map(w => w.replace(/s$/, "")).join(" ")
 
 export function evaluateThread(t: RuleThread, hieuId: string, caseGroups: string[] = DEFAULT_CASE_GROUPS): RuleOutcome {
   if (!caseGroups.some(g => norm(g) === norm(t.chat_name))) return { kind: "skip", reason: `Ngoài group tính case (${t.chat_name || "?"})` }

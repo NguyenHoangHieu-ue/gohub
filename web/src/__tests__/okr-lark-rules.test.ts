@@ -13,6 +13,12 @@ describe("evaluateThread — luật Hiếu chốt s225", () => {
     expect(evaluateThread({ chat_name: G, root: m("r", H, 1), replies: [m("x", A, 2, { mentionIds: [H] })] }, H)).toMatchObject({ kind: "skip", reason: expect.stringContaining("tự đăng") })
     expect(evaluateThread({ chat_name: G, root: m("r", A, 1), replies: [m("x", B, 2)] }, H)).toMatchObject({ kind: "skip", reason: expect.stringContaining("chưa tag") })
   })
+  test("tên group so lỏng: Telecom Product(s) (Private)", () => {
+    const th = (name: string) => ({ chat_name: name, root: m("r", A, 1, { mentionIds: [H] }), replies: [] })
+    expect(evaluateThread(th("Telecom Products (Private)"), H, ["Telecom Product (Private)"]).kind).toBe("open")
+    expect(evaluateThread(th("telecom product private"), H).kind).toBe("open")
+    expect(evaluateThread(th("Telecom Products"), H).kind).toBe("skip")
+  })
   test("chưa YES = đang thảo luận, kể cả đã có Typing", () => {
     expect(evaluateThread({ chat_name: G, root: m("r", A, 1, { mentionIds: [H] }), replies: [m("h", H, 2, { reactions: [TYPING] })] }, H).kind).toBe("open")
   })
