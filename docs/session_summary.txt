@@ -10788,3 +10788,4 @@ Hướng đã đề xuất (Hiếu chưa chọn): (1) bớt duyệt tay — bot 
 treo xử trước khi khoá quý; (2) kế hoạch quý tự đo — mỗi việc gắn 1 chỉ số (đổi nhà cung cấp/giảm COGS, mở destination mới, KPI My Metrics,
 việc không đo bằng số); (3) đánh giá tự động — thực tế vs mức lẽ ra phải đạt tới hôm nay + lời nhận xét, có thể Lark DM thứ Hai.
 3 câu cần Hiếu trả lời: loại việc trong kế hoạch quý; mức tự quyết case Lark; gửi đánh giá trên trang hay thêm Lark DM.
+- (s225 tiếp) Quarter Report › bảng B2B Nhóm × Tháng: nút Xuất Excel các KH khớp ô tìm kiếm (vd "ecom" → Lazada/Tiktokshop/Shopee), chi tiết từng tháng + dòng tổng; cùng công thức hàng mở rộng (Ch.Cost đúng như bảng).

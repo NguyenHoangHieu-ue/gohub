@@ -411,6 +411,64 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
   }
   const matchSearch = (c: any) => !custSearch || c.name?.toLowerCase().includes(custSearch.toLowerCase()) || c.code?.toLowerCase().includes(custSearch.toLowerCase())
 
+  // Xuất "Chi tiết theo Tháng" của các KH ĐANG HIỆN (đã lọc theo ô tìm kiếm) + dòng cộng gộp — vd tìm "ecom" ra Lazada/Tiktokshop/Shopee
+  // rồi xuất số 3 kênh (s225: user cần Ch.Cost đúng như bảng, Bé Gấu/Gấu Pro tính sai). Cùng công thức với hàng mở rộng bên dưới.
+  const exportCustomerDetail = async () => {
+    if (!selectedTierData) return
+    type Vals = { rev: number; gm: number; cc: number; cm1: number; hk3: number }
+    const custs: { c: any; reg: string }[] = []
+    regionsToShow.forEach(reg => (selectedTierData.byRegion?.[reg]?.customers ?? []).filter(matchSearch).forEach((c: any) => custs.push({ c, reg })))
+    if (!custs.length) { notify?.(false, "Không có khách hàng nào để xuất"); return }
+    const fmtM = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
+    const futRatio = (mk: string) => existingDaysFE > 0 ? daysInMonthFE(mk) / existingDaysFE : 0
+    const periods: { key: string; label: string; kind: string }[] = []
+    quarterMonths.forEach(m => {
+      if ((monthKpiFactor[m] ?? 1) > 1) periods.push({ key: `${m}|act`, label: fmtM(m), kind: "Thực tế (tới hôm qua)" }, { key: `${m}|pr`, label: fmtM(m), kind: "Pro-rata cả tháng" })
+      else periods.push({ key: `${m}|one`, label: fmtM(m), kind: futureMonthsFE.includes(m) ? "Ước tính" : "Thực tế" })
+    })
+    periods.push({ key: "Q|pr", label: "Tổng Quý", kind: "Pro-rata (gồm ước tính)" }, { key: "Q|act", label: "Tổng Quý", kind: "Thực tế" })
+
+    const valuesOf = (c: any): Record<string, Vals | null> => {
+      const ms: Record<string, any> = c.monthSummary ?? {}
+      const pr = custPr(c)
+      const out: Record<string, Vals | null> = {}
+      const act = (m: any): Vals => ({ rev: m.actualRevenue ?? m.revenue, gm: m.actualGm ?? m.gm, cc: m.actualCc ?? m.cc, cm1: m.actualCm1 ?? m.cm1, hk3: m.hk3Rev ?? 0 })
+      quarterMonths.forEach(m => {
+        const d = ms[m]
+        if ((monthKpiFactor[m] ?? 1) > 1) {
+          const f = monthKpiFactor[m]
+          out[`${m}|act`] = d ? act(d) : null
+          out[`${m}|pr`] = d ? { rev: act(d).rev * f, gm: act(d).gm * f, cc: act(d).cc * f, cm1: act(d).cm1 * f, hk3: d.hk3Rev ?? 0 } : null
+        } else if (d) out[`${m}|one`] = { rev: d.revenue, gm: d.gm, cc: d.actualCc ?? d.cc, cm1: d.actualCm1 ?? d.cm1, hk3: d.hk3Rev ?? 0 }
+        else out[`${m}|one`] = futureMonthsFE.includes(m)
+          ? { rev: pr.exRev * futRatio(m), gm: pr.exGm * futRatio(m), cc: pr.exCc * futRatio(m), cm1: pr.exCm1 * futRatio(m), hk3: 0 } : null
+      })
+      const hp = c.hasProjected === true
+      out["Q|pr"] = { rev: pr.prRev, gm: pr.prGm, cc: pr.prGm - pr.prCm1, cm1: pr.prCm1, hk3: c.hk3Rev ?? 0 }
+      out["Q|act"] = { rev: hp ? (c.actualRevenue ?? c.revenue) : c.revenue, gm: hp ? (c.actualGm ?? c.gm) : c.gm, cc: hp ? (c.actualCc ?? c.cc) : c.cc, cm1: hp ? (c.actualCm1 ?? c.cm1) : c.cm1, hk3: c.hk3Rev ?? 0 }
+      return out
+    }
+    const line = (who: (string | number)[], p: { label: string; kind: string }, v: Vals): (string | number)[] => [
+      ...who, p.label, p.kind, Math.round(v.rev), Math.round(v.gm), Math.round(v.cc), Math.round(v.cm1),
+      v.rev ? Number((v.cm1 / v.rev * 100).toFixed(1)) : "", Math.round(v.hk3), v.rev ? Number((v.hk3 / v.rev * 100).toFixed(1)) : "",
+    ]
+    const rows: (string | number)[][] = []
+    const sum: Record<string, Vals> = {}
+    custs.forEach(({ c, reg }) => {
+      const vals = valuesOf(c)
+      periods.forEach(p => {
+        const v = vals[p.key]
+        if (!v) return
+        rows.push(line([selectedTierData.tier, reg, c.code, c.name], p, v))
+        const s = sum[p.key] ?? (sum[p.key] = { rev: 0, gm: 0, cc: 0, cm1: 0, hk3: 0 })
+        s.rev += v.rev; s.gm += v.gm; s.cc += v.cc; s.cm1 += v.cm1; s.hk3 += v.hk3
+      })
+    })
+    if (custs.length > 1) periods.forEach(p => { if (sum[p.key]) rows.push(line([selectedTierData.tier, "", "", `TỔNG ${custs.length} KH${custSearch ? ` khớp "${custSearch}"` : ""}`], p, sum[p.key])) })
+    const name = `b2b_kh_chi_tiet_thang_${(quarterLabel || "quarter").replace(/[^A-Za-z0-9-]/g, "_")}_${selectedTierData.tier}${custSearch ? `_${custSearch}` : ""}`.replace(/[^\w-]+/g, "_")
+    await exportAOA(["Nhóm", "Region", "Mã KH", "Tên KH", "Kỳ", "Loại số", "Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "3HK Rev", "3HK%"], rows, name, "KH chi tiet thang")
+  }
+
   // ── Chi phí KH: mở/sửa/lưu ──
   const buildCostEditState = () => buildEditsFromTiers(allTiers, quarterMonths)
 
@@ -778,13 +836,20 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                     {tierViewMonth === "QUARTER" ? "Cả Quý" : `T${parseInt(tierViewMonth.split("-")[1])}/${tierViewMonth.split("-")[0]}`}
                   </span>
                 </div>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input
-                    type="text" placeholder="Tìm tên, mã KH..."
-                    value={custSearch} onChange={e => setCustSearch(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/40 w-56"
-                  />
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                    <input
+                      type="text" placeholder="Tìm tên, mã KH..."
+                      value={custSearch} onChange={e => setCustSearch(e.target.value)}
+                      className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f4c81]/40 w-56"
+                    />
+                  </div>
+                  <button onClick={exportCustomerDetail}
+                    title="Xuất Chi tiết theo Tháng của các khách hàng đang hiện (theo ô tìm kiếm), kèm dòng cộng gộp"
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#0f4c81] border border-[#0f4c81]/30 bg-white hover:bg-blue-50 rounded-lg whitespace-nowrap">
+                    <Download className="w-3.5 h-3.5" />Xuất Excel{custSearch ? ` (khớp "${custSearch}")` : ""}
+                  </button>
                 </div>
               </div>
               {editMode && (
