@@ -16,11 +16,10 @@ loại sản phẩm / SKU phân bố ra sao, so quý trước. Theo yêu cầu: 
 
 Lộ trình (chốt với Hiếu 2026-10-06):
 1. **Thị trường** — đã làm (s225, mục dưới).
-2. **Kho báo giá vendor** — chưa làm. Upload báo giá từng vendor (đang dùng / vendor mới / đang được chào), AI đề xuất ghép cột lần
-   đầu → Hiếu duyệt → lưu mapping theo vendor, lần sau tự ghép. Giá full: datapool = giá data (công thức `datapool.*` dùng chung) +
-   phí khung eSIM/SIM tuỳ loại; vendor thường = giá eSIM full, SIM = eSIM full + giá khung SIM (SKU khung trong hệ thống); quy đổi
-   tỷ giá theo tháng (`lib/fx`). Tự xếp vendor rẻ nhất theo thị trường + gói, so COGS SKU đang bán.
-3. **Destination chưa bán** — chưa làm. Nước có trong danh sách hỗ trợ/báo giá nhưng GoHub chưa có SKU active, kèm giá full rẻ nhất.
+2. **So giá vendor** — 2a ĐÃ LÀM (s225, mục 5): 3 nguồn đã có trong hệ thống. 2b CHƯA LÀM: kho upload báo giá vendor khác (KDDI,
+   Truemove, Joytel, Simstore…; đang dùng / vendor mới / đang được chào) — AI đề xuất ghép cột lần đầu → Hiếu duyệt → lưu mapping theo
+   vendor (cần migration Supabase).
+3. **Destination chưa bán** — ĐÃ LÀM (s225, mục 6).
 
 ## 1. Đường dẫn & file
 - Web `/analytics/market` — `web/src/app/(dashboard)/analytics/market/page.tsx`, chart `market-charts.tsx` (dynamic, ssr:false).
@@ -54,6 +53,30 @@ Lộ trình (chốt với Hiếu 2026-10-06):
 - Quý mới chạy < 30 ngày → mặc định mở quý vừa đóng (dự phóng ngày 5 của quý là ×15, nhiễu).
 - %QoQ của quý đang chạy so dự phóng (thực tế × hệ số ngày) với quý trước đủ.
 
+## 5. So giá vendor (mốc 2a) — `GET /api/analytics/market/quotes`
+- File: `lib/quote-compare.ts` (logic thuần, test `__tests__/quote-compare.test.ts`), `lib/quote-sources.ts` (nạp nguồn + tính, cache
+  `market-quotes:v2:<quarter>:<group>`), `lib/market-data.ts` (bộ nạp doanh thu dùng chung với route `market`), UI `quotes-view.tsx`.
+- Nguồn: **3HK** = Supabase `ncc_3hk` (47 nước, HKD/GB — `ncc_datapool` trống, wiki NCC cũ ghi sai) · **BC Datapool CMHK/Singtel** =
+  `app_settings.bcdp.price_list` (file "Gohub Updated Pool Offer (20260923)", CMHK HKD/GB, Singtel USD/GB, phí IMSI 0,5 + eSIM 2 CNY +
+  thẻ SIM 3 CNY ở dòng đầu) · **WorldMove** = `ncc_worldmove` active, eSIM, giá TWD (từ `firm_import_c.xlsx`, s220). File Portal BC
+  "Purchase information" có Settlement Price = 0 (BC tạo gói theo yêu cầu) → không dùng làm giá.
+- Giá full (USD): datapool = ROUNDUP(GB tính giá × giá/GB nhà mạng rẻ nhất) quy USD + phí khung. GB tính giá theo Công thức Datapool
+  (Fixed × fixed%, Daily × GB/ngày × ngày × daily%, Unlimited 3HK 5Mbps 1.6 / 10Mbps 1.8 GB/ngày, BC chỉ 10Mbps = 1.7 — khác cấu trúc
+  gói, có ghi chú). Gói nhiều nước: mỗi nước nhà mạng rẻ nhất, lấy nước đắt nhất; thiếu 1 nước = không có giá.
+  Phí khung: 3HK = SKU khung trong hệ thống (`AB0003DK00000` eSIM profile, `1D0003DK00000` SIM); BC = eSIM (CNY) + IMSI, SIM trắng
+  `1D000WDK00000` + IMSI; WM: SIM = eSIM + `1D000WMK00000`. Data pack (ký tự 2 = A) không cộng khung.
+- Kiểm chứng: SKU `3CJPN3DF00507` COGS 60.103đ ≈ tính lại 2,28 USD. Q3-2026, giá tính lại của chính vendor hiện tại so COGS thật:
+  3HK trung vị −3,4% (2.257 SKU), WM −0,6%, BC Singtel −2,2%, BC CMHK 0% ⇒ **mốc so = min(COGS thật, giá tính lại)** để không phóng đại.
+- Tiết kiệm/quý = (mốc − giá rẻ nhất của vendor KHÁC vendor hiện tại) × units quý. Q3-2026: 2.157 SKU rẻ hơn, ~1,07 tỷ/quý (chủ yếu
+  3HK → BC CMHK ở China, 3HK → WM). Đây là giá vốn — chưa tính chất lượng mạng, KYC (có đánh dấu), tồn kho.
+
+## 6. Destination chưa bán (mốc 3)
+- Nước (ISO2) có báo giá từ ≥1 nguồn mà KHÔNG có product Active/Temporary riêng cho nước đó (mã nước 3 ký tự → `ref_support_countries.
+  country_codes` đúng 1 nước). Cột "đang có trong gói nhiều nước" liệt kê mã nhóm (EU1, GLB…) đã phủ nước đó.
+- Giá full rẻ nhất (eSIM) cho 3 gói tham chiếu: Fixed 3GB/7 ngày, Fixed 10GB/30 ngày, Daily 1GB × 7 ngày. Q3-2026: 42 nước, 1 nước
+  (Timor-Leste) chưa có cả trong gói nhiều nước.
+- Tên vùng WM nhiều nước kiểu "Europe/Asia/Worldwide" không đổi được sang danh sách nước → bỏ qua (liệt kê ở ghi chú "chưa nhận ra").
+
 ## Verify (2026-10-06, staging)
 - Q3-2026 theo tháng khớp Quarter Report: T8/T9 khớp tới đồng; T7 lệch 161 nghìn / 8,05 tỷ (Quarter Report lọc thêm KH loại trừ).
 - Payload Q3 ALL ~1,4MB, 5.596 SKU, ~5s khi tính mới.
@@ -61,4 +84,5 @@ Lộ trình (chốt với Hiếu 2026-10-06):
 ## Gotchas
 - Chế độ Fulfillment cố định (không có toggle Created — cần GP).
 - `units` cộng theo SKU; không có số đơn ở cấp thị trường (COUNT DISTINCT theo SKU cộng lại sẽ đếm trùng).
+- QA giao diện mục So giá vendor CHƯA chụp được (Chrome bị extension khác chặn) — đã kiểm số qua API.
 - Bộ lọc KH Ops/KH loại trừ (`quarterly_excluded_customers`) CHƯA áp — số = doanh thu B2B+B2C thô trừ ship/nội bộ.
