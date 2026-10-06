@@ -9,7 +9,7 @@ import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { getRangeProjectionFactor } from "@/lib/analytics-engine/projection"
 import { exportAOA } from "@/lib/export-excel"
 import {
-  groupBy, crossTab, monthlyBy, gmPct, DIMENSION_LABEL,
+  groupBy, crossTab, monthlyBy, gmPct, DIMENSION_LABEL, OTHER_MARKET,
   type MarketData, type MarketSku, type Dimension, type Metric, type GroupRow,
 } from "@/lib/market-breakdown"
 import { makeColorFor, type ColorFor } from "./market-colors"
@@ -206,9 +206,9 @@ export default function MarketPage() {
     const d = qoq(total.rev, total.revPrev)
     out.push(<>Quý {data.quarter.replace("-", "/")} bán được <b>{vnd(total.rev)}</b>{running && <> (ước cả quý <b>{vnd(total.rev * factor)}</b>)</>}, lãi gộp <b>{vnd(total.gp)}</b> (biên {pctTxt(gmPct(total.gp, total.rev))}).
       {d !== null && <> {d >= 0 ? "Tăng" : "Giảm"} <b>{pctTxt(Math.abs(d))}</b> so với quý {data.prevQuarter.replace("-", "/")}{running ? " (so theo ước cả quý)" : ""}.</>}</>)
-    const top3 = markets.slice(0, 3)
+    const top3 = markets.filter(m => m.key !== OTHER_MARKET).slice(0, 3)
     out.push(<>Bán chủ yếu ở <b>{top3.map(m => `${m.key} (${pctTxt(m.rev / total.rev * 100, 0)})`).join(", ")}</b> — 3 thị trường này chiếm {pctTxt(top3.reduce((a, m) => a + m.rev, 0) / total.rev * 100, 0)} doanh thu; có {markets.filter(m => m.rev > 0).length} thị trường có bán.</>)
-    const big = markets.filter(m => Math.max(m.rev * factor, m.revPrev) >= total.rev * 0.02 && m.revPrev > 0)
+    const big = markets.filter(m => m.key !== OTHER_MARKET && Math.max(m.rev * factor, m.revPrev) >= total.rev * 0.02 && m.revPrev > 0)
       .map(m => ({ m, d: qoq(m.rev, m.revPrev)! })).sort((a, b) => b.d - a.d)
     if (big.length >= 2) out.push(<>Thay đổi đáng chú ý (thị trường chiếm từ 2% trở lên): tăng mạnh nhất <b>{big[0].m.key} ({big[0].d >= 0 ? "+" : ""}{pctTxt(big[0].d, 0)})</b>, giảm mạnh nhất <b>{big[big.length - 1].m.key} ({pctTxt(big[big.length - 1].d, 0)})</b>.</>)
     const vendors = groupBy(data, "vendor")

@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest"
+import { describe, test, expect, vi } from "vitest"
 import {
   decodeSkuAttributes, classifyService, groupBy, crossTab, monthlyBy,
   SERVICE_CALL, SERVICE_LOCAL, SERVICE_DATA_ONLY, SERVICE_UNKNOWN, type MarketData,
@@ -67,5 +67,17 @@ describe("groupBy / crossTab / monthlyBy", () => {
     expect(rows.map(r => r.key)).toEqual(data.months)
     expect(rows[3]).toEqual({ key: "2026-10", "3HK": 100 })
     expect(rows[4]).toEqual({ key: "2026-11", KDDI: 60 })
+  })
+})
+
+import { marketName } from "@/lib/market-names"
+vi.mock("@/lib/supabase", () => ({ supabaseAdmin: {} }))
+describe("marketName — tên thị trường đọc được", () => {
+  const cont = (i: string) => ({ GB: "Europe", FR: "Europe", DE: "Europe", IT: "Europe", JP: "Asia", US: "Americas" } as Record<string, string>)[i] ?? null
+  test("1 nước, 2–3 nước, nhóm lớn theo châu lục", () => {
+    expect(marketName("JPN", ["JP"], cont)).toBe("Nhật Bản")
+    expect(marketName("ANZ", ["AU", "NZ"], cont)).toBe("Úc – New Zealand")
+    expect(marketName("E33", ["GB", "FR", "DE", "IT"], cont)).toBe("Châu Âu · 4 nước (E33)")
+    expect(marketName("WOR", ["GB", "FR", "JP", "US"], cont)).toBe("Nhiều khu vực · 4 nước (WOR)")
   })
 })

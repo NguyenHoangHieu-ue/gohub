@@ -41,6 +41,9 @@ const UNLIMITED = new Set(["A", "B", "C", "D", "E", "G", "H", "L", "X"])
 const FIXED = new Set(["F", "Y"])
 const DAILY = new Set(["P", "Z", "T"])
 
+/** SKU không phải 13 ký tự (mã cũ, phí dịch vụ) — không có nước. Bỏ khỏi tóm tắt/biến động. */
+export const OTHER_MARKET = "Khác (mã cũ / phí)"
+
 export const SERVICE_DATA_ONLY = "Chỉ data"
 export const SERVICE_CALL = "Data + gọi/SMS"
 export const SERVICE_LOCAL = "Data + số điện thoại"
