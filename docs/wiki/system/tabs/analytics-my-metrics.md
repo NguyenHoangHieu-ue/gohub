@@ -13,6 +13,11 @@ status: active
 
 # My Metrics — OKR Tracking
 
+## s225 (2026-10-06) — Bảng gập mặc định + tab mới "Thị trường & Báo giá"
+- Mọi bảng My Metrics gập mặc định (chỉ hiện biểu đồ, bấm "Xem bảng (N dòng)"): bọc 1 chỗ ở `components/my-metrics/shared-ui.tsx`
+  (`DataTable` của tab = wrapper quanh `DataTable` dashboard-kit). Hàng chờ duyệt Lark không phải bảng dữ liệu → giữ nguyên.
+- Breakdown theo thị trường (toàn bộ vendor, loại dịch vụ, hình thức, loại gói) KHÔNG đặt ở đây — xem tab mới `analytics-market.md`.
+
 ## s225 (2026-10-06) — Chọn quý không còn gắn cứng Q3/Q4
 - Lỗi: client gắn cứng `"Q3"|"Q4"` — `currentQuarter()` trả `m <= 9 ? Q3 : Q4` (tháng 1/2027 ra **Q3-2027**, quý tương lai rỗng), nút chọn chỉ Q3/Q4 của năm hiện tại, `DEFAULT_TARGETS[selQ]` không có Q1/Q2 → `undefined` làm vỡ trang. Server (`quarterRange`, `prevQuarterLabel`) vốn đã xử lý đủ Q1–Q4.
 - Sửa: `currentQuarter()` tính đúng theo tháng; `quarterOptions()` = từ Q3-2026 (bắt đầu OKR) tới quý hiện tại, tối đa 4 quý gần nhất, mỗi nút đổi cả quý lẫn năm. `DEFAULT_TARGETS` khoá theo nhãn `Q3-2026`/`Q4-2026`; `defaultTargetsFor(label)` — quý chưa có target offer letter thì TẠM dùng target quý gần nhất đã biết, header ghi "chưa có target …, tạm dùng target …" khi chưa nhập target ở `app_settings okr.<Q>-<year>`.
