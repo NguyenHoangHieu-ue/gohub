@@ -17,6 +17,8 @@ import { runCreatorAI }               from "@/lib/agents/creator-ai"
 import { decidePendingAction, followupMessage } from "@/lib/agents/creator/approvals"
 import { extractMemoriesFromTurn } from "@/lib/assistant-memory-auto"
 import { detectGroupTask }            from "@/lib/task-assistant"
+import { isNoteCommand }              from "@/lib/okr-lark-rules"
+import { evaluateThreadNow }          from "@/lib/lark-scan-runner"
 
 // Max history to pull per Lark user
 const HISTORY_LIMIT = 10
@@ -268,6 +270,23 @@ export async function POST(req: NextRequest) {
       ...postMentions.map((m: any) => m?.id?.open_id).filter(Boolean),
     ],
   })
+
+  // s225 My Metrics: Hiếu tag bot "Note đi" trong 1 thread → bot trả "Đã note", đọc thread theo luật emoji (Typing = xong, YES = đóng)
+  // rồi báo kết quả; chưa đánh dấu Typing thì nhắc. Chỉ Hiếu dùng được; không chuyển sang Bé Gấu trả lời.
+  if (isInThread && rootId && userText && isNoteCommand(userText)) {
+    const creatorId = await getCreatorLarkOpenId()
+    if (creatorId && openId === creatorId) {
+      if (await alreadyHandled(`note:${messageId}`)) return NextResponse.json({ ok: true })
+      await replyLarkMessage(messageId, "Đã note")
+      try {
+        await replyLarkMessage(messageId, await noteResultText(rootId))
+      } catch (e) {
+        console.error("[Lark] note command:", (e as Error).message)
+        await replyLarkMessage(messageId, "⚠️ Chưa đọc được thread này, em sẽ thử lại ở lần quét tới.")
+      }
+      return NextResponse.json({ ok: true })
+    }
+  }
 
   // P1 trợ lý: có người @creator trong group → xét có phải giao việc không → tự tạo Lark Task + DM creator.
   // Cần scope im:message.group_msg để nhận cả tin KHÔNG @bot. await (không fire-and-forget) — serverless.
@@ -537,4 +556,19 @@ async function processAndReply(openId: string, chatId: string, messageId: string
       } catch {}
     }
   }
+}
+
+const vnTime = (ms: number) => new Date(ms).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })
+
+/** Kết quả lệnh "Note đi" bằng lời ngắn gọn (luật ở lib/okr-lark-rules.ts). */
+async function noteResultText(rootId: string): Promise<string> {
+  const { outcome, emojis } = await evaluateThreadNow(rootId)
+  if (!outcome) return "⚠️ Chưa đọc được thread (kiểm Kết nối Lark cá nhân ở Creator Settings)."
+  if (outcome.kind === "skip") return `ℹ️ Thread này không tính: ${outcome.reason}.`
+  if (outcome.kind === "open") return "💬 Thread chưa có YES — em coi là đang thảo luận, sẽ theo dõi tiếp. Thảo luận xong anh thả YES + Typing vào câu trả lời giải quyết rồi tag em lại nhé."
+  if (outcome.kind === "done") {
+    const h = (Number(outcome.done.create_time) - Number(outcome.start.create_time)) / 3_600_000
+    return `✅ Đã ghi nhận: tính từ lúc tag anh (${vnTime(Number(outcome.start.create_time))}) đến câu trả lời có Typing (${vnTime(Number(outcome.done.create_time))}) — ${h.toFixed(1)} giờ.`
+  }
+  return `⏳ Thread đã YES nhưng anh chưa đánh dấu Typing vào câu trả lời nào của anh${emojis.length ? ` (emoji anh đã thả: ${emojis.join(", ")})` : ""}. Thả Typing vào câu trả lời giải quyết xong rồi tag em "Note đi" lại nhé.`
 }

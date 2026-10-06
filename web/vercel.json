@@ -38,10 +38,10 @@
       "maxDuration": 30
     },
     "src/app/api/cron/my-metrics-lark-scan/route.ts": {
-      "maxDuration": 90
+      "maxDuration": 300
     },
     "src/app/api/analytics/my-metrics/lark-config/scan-now/route.ts": {
-      "maxDuration": 90
+      "maxDuration": 300
     },
     "src/app/api/cron/gau-pro-digest/route.ts": {
       "maxDuration": 120

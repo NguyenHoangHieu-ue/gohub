@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Sparkles, ChevronUp, ChevronDown, Check, Pencil, X, ExternalLink, StickyNote, Undo2 } from "lucide-react"
 import { hhmm } from "@/lib/my-metrics-format"
 import type { LarkEvent } from "@/lib/my-metrics-types"
+import { larkThreadLink, larkChatLink } from "@/lib/okr-lark-rules"
 
 // ─── Bé Gấu review queue (Lark auto-detect) ───────────────────────────────────
 export function LarkReviewPanel({ metric, quarter, unit, onReviewed }: {
@@ -120,11 +121,12 @@ export function LarkReviewPanel({ metric, quarter, unit, onReviewed }: {
             return (
               <div key={ev.id} className="bg-white border border-amber-200 rounded-lg p-2.5 text-[11px]">
                 <div className="flex items-center justify-between gap-2 mb-1">
-                  <a href={`https://applink.larksuite.com/client/chat/open?openChatId=${encodeURIComponent(ev.chat_id)}`}
+                  <a href={larkThreadLink(ev.chat_id, ev.message_id)}
                     target="_blank" rel="noreferrer"
                     className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 font-black hover:bg-brand-100">
-                    💬 {ev.chat_name} <ExternalLink className="w-2.5 h-2.5" />
+                    💬 Mở thread <ExternalLink className="w-2.5 h-2.5" />
                   </a>
+                  <a href={larkChatLink(ev.chat_id)} target="_blank" rel="noreferrer" className="text-[10px] text-slate-400 hover:text-brand-700">{ev.chat_name}</a>
                 </div>
                 <p className="text-slate-500 italic mb-1">"{ev.ai_reason || "(không có lý do)"}"</p>
                 {!isEditing ? (

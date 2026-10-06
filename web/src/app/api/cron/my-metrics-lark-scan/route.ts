@@ -1,8 +1,6 @@
-// Cron — quét 1 group Lark (config Hiếu tự nhập ở /analytics/my-metrics), tự đề xuất cặp
-// request/completion cho SLA (Product Request) và Vendor Selection Speed bằng Gemini, ghi vào
-// okr_lark_events với status='pending_review'. Hiếu duyệt tay trong My Metrics trước khi tính vào KPI
-// — bot KHÔNG tự quyết số báo cáo hiệu suất một mình. Logic thật nằm ở lib/lark-scan-runner.ts
-// (dùng chung với nút "Quét ngay" thủ công).
+// Cron — đọc thread Lark liên quan Hiếu (capture log) và áp luật đánh dấu của Hiếu (s225, lib/okr-lark-rules.ts): chỉ group
+// Telecom Product (Private), tính từ lúc tag Hiếu, YES = đóng không tính, Typing trên câu trả lời của Hiếu = xong (tự tính).
+// Case còn mở được đọc lại mỗi lần chạy. Logic thật ở lib/lark-scan-runner.ts (dùng chung "Quét ngay" + lệnh "Note đi").
 import { NextRequest, NextResponse } from "next/server"
 import { isCronReq } from "@/lib/analytics-helpers"
 import { alertCronFailure } from "@/lib/cron-alert"
