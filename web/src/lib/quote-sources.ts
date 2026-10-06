@@ -15,6 +15,20 @@ import {
   type CompareRow, type Offer, type PackageSource, type PlanKind, type PoolPrice, type PoolSource,
 } from "@/lib/quote-compare"
 
+export interface GapRow {
+  iso: string; name: string
+  regional: string[]                 // mã nhóm nước GoHub đang bán có chứa nước này (vd EU1)
+  sources: string[]                  // vendor có báo giá
+  ref: { spec: string; best: Offer | null }[]
+}
+
+// Gói tham chiếu để so giá destination chưa bán (eSIM)
+const REF_SPECS: { label: string; plan: PlanKind; dataGb: number; days: number }[] = [
+  { label: "Fixed 3GB · 7 ngày", plan: "Fixed", dataGb: 3, days: 7 },
+  { label: "Fixed 10GB · 30 ngày", plan: "Fixed", dataGb: 10, days: 30 },
+  { label: "Daily 1GB · 7 ngày", plan: "Daily", dataGb: 1, days: 7 },
+]
+
 export interface QuoteCompareData {
   quarter: string; group: MarketData["group"]
   fxMonth: string; vndPerUsd: number
@@ -22,6 +36,7 @@ export interface QuoteCompareData {
   sources: { id: string; label: string; note: string }[]
   rows: CompareRow[]
   skipped: { reason: string; count: number }[]
+  gaps: GapRow[]                     // mốc 3: nước có báo giá nhưng GoHub chưa bán riêng nước đó
   unresolvedNames: string[]          // tên nước trong báo giá không nhận ra (để bổ sung alias)
 }
 
@@ -47,7 +62,7 @@ function usd(t: FxTable, amount: number, ccy: string, month: string): number | n
 }
 
 export async function loadQuoteCompare(quarter: string, group: MarketData["group"], bypass = false): Promise<QuoteCompareData> {
-  return cachedQuery<QuoteCompareData>(`market-quotes:v1:${quarter}:${group}`, async () => {
+  return cachedQuery<QuoteCompareData>(`market-quotes:v2:${quarter}:${group}`, async () => {
     const month = currentMonth()
     const [market, fx, priceList, refs, groups, assumptionsBc, formulaRows, hk3, wm, frames] = await Promise.all([
       loadMarketData(quarter, group, bypass),
@@ -63,6 +78,7 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
         .eq("status", "active").eq("sim_type", "eSIM").order("id").range(a, b)),
       supabaseAdmin.from("skus").select("sku_code,latest_cogs,latest_cogs_currency").like("sku_code", "__000__K00000").then(r => r.data ?? []),
     ])
+    const products = await supabaseAdmin.from("products").select("product_code,status").in("status", ["Active", "Temporary"]).then(r => r.data ?? [])
     const t = fx.table
     const vndPerUsd = convert(t, 1, "USD", "VND", month)?.value
     if (!vndPerUsd) throw new Error("Thiếu tỷ giá USD→VND (Admin › Cài đặt › Tỷ Giá Nội Bộ)")
@@ -70,8 +86,10 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
     const a = { fixedPct: f[FORMULA_KEYS.fixed], dailyPct: f[FORMULA_KEYS.daily] }
 
     const unresolved = new Set<string>()
+    const EXTRA_ALIAS: Record<string, string> = { uk: "GB", brasil: "BR", saipan: "MP", "vatican city": "VA" }
     const iso2 = (name: string) => {
       const n = name.trim()
+      if (EXTRA_ALIAS[n.toLowerCase()]) return EXTRA_ALIAS[n.toLowerCase()]
       const hit = /^[A-Z]{2}$/.test(n) && refs.some(r => r.code.toUpperCase() === n) ? n : nameToIso2(n, refs as RefCountryLite[], groups as SupportCountryLite[])
       if (!hit) unresolved.add(n)
       return hit
@@ -110,6 +128,7 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
           id, label, currency: pl.currency, toUsd, byIso,
           frameUsd: { eSIM: pl.esimFeeCny * cnyToUsd + imsi, SIM: whiteSim === null ? null : whiteSim + imsi },
           unlimitedGbPerDay: s => s === 10 ? assumptionsBc.unl3gb10 : null,
+          unlimitedNote: "Unlimited BC = 3GB tốc độ cao + 3GB 10Mbps + 1Mbps, khác cấu trúc 500MB + 10Mbps",
         })
       }
     }
@@ -117,7 +136,7 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
     // ── Nguồn gói: WorldMove ──
     const wmSrc: PackageSource = { id: "WM", label: "WorldMove", offers: new Map(), simFrameUsd: frameUsd("WM", "D", "VN") }
     for (const r of wm) {
-      const names = String(r.region ?? "").split(",").map((s: string) => s.trim()).filter(Boolean)
+      const names = String(r.region ?? "").split(/,|&/).map((s: string) => s.trim()).filter(Boolean)
       const isos = names.map(iso2)
       if (!isos.length || isos.some(x => !x)) continue
       const price = usd(t, Number(r.cogs), String(r.cogs_currency || "TWD"), month)
@@ -163,6 +182,31 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
         currentUsd: usd(t, Number(c.latest_cogs), String(c.latest_cogs_currency || "VND"), month),
       }, offers, vendorSource(s.vendor), vndPerUsd))
     })
+    // ── Mốc 3: destination chưa bán ──
+    const soldSingle = new Set<string>()
+    const regionalOf = new Map<string, Set<string>>()
+    for (const p of products) {
+      const iso = isoOfMarket.get(String(p.product_code).slice(2, 5)) ?? []
+      if (iso.length === 1) soldSingle.add(iso[0])
+      else for (const i of iso) { const set = regionalOf.get(i) ?? new Set<string>(); set.add(String(p.product_code).slice(2, 5)); regionalOf.set(i, set) }
+    }
+    const quoted = new Map<string, Set<string>>()
+    const mark = (iso: string, label: string) => { const set = quoted.get(iso) ?? new Set<string>(); set.add(label); quoted.set(iso, set) }
+    for (const p of pools) p.byIso.forEach((_, iso) => mark(iso, p.label))
+    wmSrc.offers.forEach(o => { if (o.iso.length === 1) mark(o.iso[0], wmSrc.label) })
+    const nameOf = new Map(refs.map(r => [r.code.toUpperCase(), r.name]))
+    const gaps: GapRow[] = []
+    quoted.forEach((labels, iso) => {
+      if (soldSingle.has(iso)) return
+      const ref = REF_SPECS.map(rs => {
+        const spec = { iso: [iso], plan: rs.plan, dataGb: rs.dataGb, days: rs.days, speedMbps: null, form: "eSIM" as const }
+        const offers = [...pools.map(p => poolOffer(p, spec, a)), packageOffer(wmSrc, spec)].filter((o): o is Offer => !!o)
+        return { spec: rs.label, best: offers.sort((x, y) => x.usd - y.usd)[0] ?? null }
+      })
+      gaps.push({ iso, name: nameOf.get(iso) ?? iso, regional: Array.from(regionalOf.get(iso) ?? []).sort(), sources: Array.from(labels).sort(), ref })
+    })
+    gaps.sort((x, y) => (x.regional.length - y.regional.length) || (y.sources.length - x.sources.length) || x.name.localeCompare(y.name))
+
     rows.sort((x, y) => (y.saveQuarterVnd ?? -Infinity) - (x.saveQuarterVnd ?? -Infinity) || y.rev - x.rev)
 
     return {
@@ -173,6 +217,7 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
       ],
       rows,
       skipped: Array.from(skip.entries()).map(([reason, count]) => ({ reason, count })),
+      gaps,
       unresolvedNames: Array.from(unresolved).slice(0, 50),
     }
   }, QUERY_TTL_MIN, bypass)

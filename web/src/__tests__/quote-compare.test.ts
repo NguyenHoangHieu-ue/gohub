@@ -64,15 +64,24 @@ describe("packageOffer", () => {
 })
 
 describe("compareRow", () => {
+  test("mốc so = min(COGS thật, giá tính lại cùng công thức) — không phóng đại tiết kiệm", () => {
+    const base = { sku: "X", market: "China", vendor: "3HK DATAPOOL", form: "SIM" as const, plan: "Fixed" as const, size: "", units: 10, rev: 0, currentUsd: 4.79 }
+    const r = compareRow(base, [
+      { source: "3HK", label: "3HK", usd: 4.67, detail: "", kyc: false },
+      { source: "BC_CMHK", label: "BC", usd: 4.58, detail: "", kyc: false },
+    ], "3HK", 26000)
+    expect(r.ownUsd).toBe(4.67)
+    expect(r.savePerUnitUsd).toBe(0.09)
+  })
   test("tiết kiệm tính trên phương án rẻ nhất KHÁC vendor hiện tại", () => {
     const base = { sku: "X", market: "Japan", vendor: "3HK DATAPOOL", form: "eSIM" as const, plan: "Fixed" as const, size: "", units: 100, rev: 0, currentUsd: 3 }
     const r = compareRow(base, [
-      { source: "3HK", label: "3HK", usd: 2.28, detail: "", kyc: false },
+      { source: "3HK", label: "3HK", usd: 3.2, detail: "", kyc: false },
       { source: "WM", label: "WM", usd: 2.5, detail: "", kyc: false },
     ], "3HK", 26000)
     expect(r.best?.source).toBe("WM")
     expect(r.savePerUnitUsd).toBe(0.5)
     expect(r.saveQuarterVnd).toBe(1_300_000)
-    expect(r.offers[0].source).toBe("3HK")
+    expect(r.offers[0].source).toBe("WM")
   })
 })

@@ -27,6 +27,7 @@ export interface PoolSource {
   frameUsd: Record<"eSIM" | "SIM", number | null>
   /** GB/ngày cho Unlimited theo tốc độ; null = vendor không có mức này */
   unlimitedGbPerDay: (speedMbps: number | null) => number | null
+  unlimitedNote?: string                // gói Unlimited của vendor khác cấu trúc gói đang so
 }
 
 export interface PackageOffer { iso: string[]; plan: PlanKind; dataGb: number; days: number; priceUsd: number; name: string; kyc: boolean }
@@ -69,10 +70,11 @@ export function poolOffer(src: PoolSource, spec: Spec, a: Assumptions): Offer | 
   if (frame === null) return null
   const dataUsd = ceil2(ceil2(gb * worst.price) * src.toUsd)
   const usd = ceil2(dataUsd + frame)
+  const note = spec.plan === "Unlimited" && src.unlimitedNote ? ` (${src.unlimitedNote})` : ""
   const where = spec.iso.length > 1 ? `${worst.iso} (đắt nhất trong ${spec.iso.length} nước) ` : ""
   return {
     source: src.id, label: src.label, usd, kyc: spec.iso.some(i => src.byIso.get(i)?.kyc),
-    detail: `${where}${worst.operator} ${worst.price} ${src.currency}/GB × ${fmtGb(gb)} = ${dataUsd} USD${frame ? ` + khung ${spec.form} ${round3(frame)} USD` : ""}`,
+    detail: `${where}${worst.operator} ${worst.price} ${src.currency}/GB × ${fmtGb(gb)} = ${dataUsd} USD${frame ? ` + khung ${spec.form} ${round3(frame)} USD` : ""}${note}`,
   }
 }
 
@@ -137,12 +139,15 @@ export function compareRow(base: Omit<CompareRow, "offers" | "best" | "ownUsd" |
   offers: Offer[], currentSource: string | null, vndPerUsd: number): CompareRow {
   const sorted = [...offers].sort((x, y) => x.usd - y.usd)
   const best = sorted.find(o => o.source !== currentSource) ?? null
-  const save = best && base.currentUsd !== null ? round3(base.currentUsd - best.usd) : null
+  const ownUsd = sorted.find(o => o.source === currentSource)?.usd ?? null
+  // Mốc so = mức THẤP hơn giữa COGS thật và giá tính lại cùng công thức của vendor hiện tại: công thức hơi thấp hơn COGS thật
+  // (đo Q3-2026: 3HK trung vị −3,4%) nên so thẳng với COGS thật sẽ phóng đại tiết kiệm.
+  const baseUsd = base.currentUsd !== null && ownUsd !== null ? Math.min(base.currentUsd, ownUsd) : base.currentUsd
+  const save = best && baseUsd !== null ? round3(baseUsd - best.usd) : null
   return {
-    ...base, offers: sorted, best,
-    ownUsd: sorted.find(o => o.source === currentSource)?.usd ?? null,
+    ...base, offers: sorted, best, ownUsd,
     savePerUnitUsd: save,
-    savePct: save !== null && base.currentUsd ? +(save / base.currentUsd * 100).toFixed(1) : null,
+    savePct: save !== null && baseUsd ? +(save / baseUsd * 100).toFixed(1) : null,
     saveQuarterVnd: save !== null ? Math.round(save * base.units * vndPerUsd) : null,
   }
 }

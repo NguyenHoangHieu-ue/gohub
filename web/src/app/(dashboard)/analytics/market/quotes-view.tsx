@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { StatTile, Panel, DataTable, Skeleton, EmptyState, LogicNote } from "@/components/dashboard-kit"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { exportAOA } from "@/lib/export-excel"
-import type { QuoteCompareData } from "@/lib/quote-sources"
+import type { QuoteCompareData, GapRow } from "@/lib/quote-sources"
 import type { CompareRow } from "@/lib/quote-compare"
 import { makeColorFor } from "./market-colors"
 
@@ -39,6 +39,8 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [onlyCheaper, setOnlyCheaper] = useState(true)
+  const [gapSpec, setGapSpec] = useState(0)
+  const [onlyNoRegional, setOnlyNoRegional] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -152,6 +154,41 @@ export default function QuotesView({ quarter, group, market, onMarket }: {
           </span>}>
           <DataTable columns={columns} rows={rows} rowKey={r => r.sku} pageSize={20} searchBy={r => `${r.sku} ${r.market} ${r.vendor}`} searchPlaceholder="Tìm SKU / thị trường / vendor…" />
         </Collapsible>
+      </Panel>
+
+      <Panel title="Destination chưa bán — có báo giá nhưng GoHub chưa có sản phẩm riêng cho nước đó"
+        desc={`Giá full rẻ nhất (eSIM) cho gói tham chiếu, màu = vendor. ${data.gaps.filter(g => !g.regional.length).length}/${data.gaps.length} nước chưa nằm trong cả gói nhiều nước nào.`}
+        action={<span className="flex flex-wrap items-center gap-2">
+          <select value={gapSpec} onChange={e => setGapSpec(Number(e.target.value))} className="text-xs border border-slate-200 rounded-lg px-2 py-1">
+            {(data.gaps[0]?.ref ?? []).map((r, i) => <option key={r.spec} value={i}>{r.spec}</option>)}
+          </select>
+          <label className="flex items-center gap-1 text-xs text-slate-500"><input type="checkbox" checked={onlyNoRegional} onChange={e => setOnlyNoRegional(e.target.checked)} />Chưa có cả trong gói nhiều nước</label>
+        </span>}>
+        {(() => {
+          const gaps = data.gaps.filter(g => !onlyNoRegional || !g.regional.length)
+          const priced = gaps.filter(g => g.ref[gapSpec]?.best).sort((x, y) => x.ref[gapSpec].best!.usd - y.ref[gapSpec].best!.usd).slice(0, 40)
+          const gapCols = [
+            { key: "name", label: "Nước", render: (g: GapRow) => <span className="font-medium">{g.name} <span className="text-slate-400 text-xs">{g.iso}</span></span>, sortValue: (g: GapRow) => g.name },
+            { key: "regional", label: "Đang có trong gói nhiều nước", render: (g: GapRow) => g.regional.join(", ") || <span className="text-amber-600">Chưa có</span>, sortValue: (g: GapRow) => g.regional.length },
+            { key: "sources", label: "Vendor có báo giá", render: (g: GapRow) => g.sources.join(", "), sortValue: (g: GapRow) => g.sources.length },
+            ...(data.gaps[0]?.ref ?? []).map((r, i) => ({
+              key: `ref${i}`, label: r.spec, align: "right" as const, sortValue: (g: GapRow) => g.ref[i]?.best?.usd ?? 1e9,
+              render: (g: GapRow) => g.ref[i]?.best ? <span title={g.ref[i].best!.detail}>{usd(g.ref[i].best!.usd)} <span className="text-[10px] text-slate-400">{g.ref[i].best!.label.replace("BC Datapool ", "BC ")}</span></span> : "—",
+            })),
+          ]
+          return <>
+            <div style={{ height: Math.max(160, 40 + priced.length * 22) }}>
+              {priced.length ? <RankBars rows={priced.map(g => ({ key: g.name, value: g.ref[gapSpec].best!.usd, gm: 0, group: g.ref[gapSpec].best!.label }))}
+                colorFor={sourceColor} colorKey="Rẻ nhất:" labelWidth={150} gmLabel="" fmt={v => `$${v.toFixed(2)}`} /> : <EmptyState message="Không có nước nào." />}
+            </div>
+            <Collapsible label={`Xem bảng destination chưa bán (${gaps.length})`} action={
+              <button onClick={() => void exportAOA(["Nước", "ISO", "Gói nhiều nước đang có", "Vendor có báo giá", ...(data.gaps[0]?.ref ?? []).flatMap(r => [`${r.spec} (USD)`, `${r.spec} vendor`])],
+                gaps.map(g => [g.name, g.iso, g.regional.join(", "), g.sources.join(", "), ...g.ref.flatMap(r => [r.best?.usd ?? "", r.best?.label ?? ""])]), `destination-chua-ban_${quarter}`)}
+                className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-brand-700"><Download className="w-3.5 h-3.5" />Excel</button>}>
+              <DataTable columns={gapCols} rows={gaps} rowKey={g => g.iso} pageSize={20} searchBy={g => `${g.name} ${g.iso}`} searchPlaceholder="Tìm nước…" />
+            </Collapsible>
+          </>
+        })()}
       </Panel>
     </div>
   )
