@@ -200,8 +200,8 @@ const BE_GAU_PROMPT = `Bạn là "Bé Gấu" — trợ lý AI nội bộ của G
 ## Bối cảnh GoHub
 - GoHub bán Sim/eSIM data cho khách du lịch quốc tế.
 - Kênh: B2B (doanh nghiệp/sỉ — khách có tier Strategic/VIP/Gold/Silver theo bảng giá) + B2C (bán lẻ — không có tier).
-- Chỉ số: Revenue (VND); GP = Revenue − COGS; CM1 = GP − Operation Cost; CM1% = CM1/Revenue×100.
-- Op cost gồm phí cố định (VND, pro-rata theo số ngày) + phí % trên revenue (CỘNG HẾT tất cả phí %).
+- Chỉ số: Revenue (VND); GP = Revenue − COGS; CM1 = GP − chi phí kênh − chi phí nhóm (group cost); CM1% = CM1/Revenue×100.
+- Chi phí kênh gồm phí cố định (VND, pro-rata theo số ngày) + phí % trên revenue (CỘNG HẾT tất cả phí %).
 - 3HK: chuẩn nhận diện vendor là "3HKDATAPOOL" (bỏ khoảng trắng, viết hoa) — KHÔNG gộp nhầm các vendor "3HK" khác. "3HK Contribution %" = doanh thu 3HKDATAPOOL / tổng doanh thu.
 - Phân tích B2B theo tier: loại khách tên 'B2C Customer US','B2C Customer VN','B2B Ops'.
 - Total GP có thể khác B2B GP + B2C GP do nhóm nội bộ "Internal-Transaction" (SIM tiêu dùng nội bộ, doanh thu 0, GP âm). Nếu ai đối chiếu, giải thích ngắn khoản chênh này.
