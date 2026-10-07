@@ -10807,3 +10807,4 @@ Chi tiết: wiki `analytics-quarterly.md` §s226.
 - Kiểm số B2C Quarter Report: Revenue/GP T7–T10 khớp tuyệt đối SQL thô. Phát hiện ngoài code: từ 12/08 Zalo/FB → nguồn S0020 "Other" (Misc.); chi phí kênh B2C chỉ nhập T4.
 - Lỗi Hiếu báo (Performance chọn US, B2C âm): group cost cả công ty bị trừ nguyên vào VN và US. Sửa: tên khoản có "Global" → US, còn lại → VN (`filterGroupCostsByCompany`), áp 5 route có lọc công ty. tsc sạch, vitest 577 qua + 2 lỗi có sẵn.
 **Việc còn cho Hiếu**: xem lại Performance US/VN trên staging; nhập Group Cost sau này nhớ đặt tên "Global…" cho chi phí US; hỏi Sapo/ops vụ S0020; nhập chi phí kênh B2C T5–T10.
+- Merge `main` 2026-10-07 (`25987070`, theo yêu cầu Hiếu): trước merge tsc sạch, `next build` OK, vitest 577 qua + 2 lỗi có sẵn (Windows).
