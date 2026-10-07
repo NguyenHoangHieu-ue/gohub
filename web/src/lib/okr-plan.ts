@@ -13,26 +13,27 @@ export interface PlanKindDef {
   unit: "%" | "nước" | "SKU" | "báo giá" | ""
   needs: ("country" | "vendor")[]
   hint: string
+  dir: "up" | "down" | "auto"   // chiều tốt; auto = suy từ mục tiêu so với mốc (tăng hay giảm phụ thuộc vendor đều hợp lý)
 }
 
 // Danh mục việc mẫu (plan §B2, Hiếu để Claude tự đề xuất). Thứ tự = thứ tự hiện trong ô chọn.
 export const PLAN_KINDS: Record<PlanKind, PlanKindDef> = {
   vendor_share:      { group: "Giá vốn & vendor", label: "Chuyển doanh thu 1 thị trường sang vendor khác", unit: "%", needs: ["country", "vendor"],
-                       hint: "% doanh thu của thị trường đi qua vendor đã chọn" },
+                       hint: "% doanh thu của thị trường đi qua vendor đã chọn", dir: "up" },
   market_gm:         { group: "Giá vốn & vendor", label: "Tăng biên lãi (GM%) 1 thị trường", unit: "%", needs: ["country"],
-                       hint: "Lãi gộp / doanh thu của thị trường" },
+                       hint: "Lãi gộp / doanh thu của thị trường", dir: "up" },
   market_datapool:   { group: "Giá vốn & vendor", label: "Tăng tỷ trọng Datapool (3HK + BC) ở 1 thị trường", unit: "%", needs: ["country"],
-                       hint: "% doanh thu thị trường đi qua 3HK Datapool hoặc BC Datapool" },
+                       hint: "% doanh thu thị trường đi qua 3HK Datapool hoặc BC Datapool", dir: "up" },
   vendor_dependency: { group: "Giá vốn & vendor", label: "Giảm/tăng phụ thuộc 1 vendor", unit: "%", needs: ["vendor"],
-                       hint: "% doanh thu toàn công ty đi qua vendor đã chọn" },
+                       hint: "% doanh thu toàn công ty đi qua vendor đã chọn", dir: "auto" },
   new_markets:       { group: "Sản phẩm & destination", label: "Mở nước mới có doanh thu", unit: "nước", needs: [],
-                       hint: "Số nước có doanh thu quý này mà quý trước không có" },
+                       hint: "Số nước có doanh thu quý này mà quý trước không có", dir: "up" },
   new_skus:          { group: "Sản phẩm & destination", label: "Mở SKU mới có doanh thu", unit: "SKU", needs: [],
-                       hint: "Số SKU lần đầu có doanh thu trong quý này (chưa từng bán trước đó)" },
+                       hint: "Số SKU lần đầu có doanh thu trong quý này (chưa từng bán trước đó)", dir: "up" },
   quotes_review:     { group: "Báo giá vendor", label: "Xử lý hết báo giá vendor đang chờ", unit: "báo giá", needs: [],
-                       hint: "Số báo giá còn ở trạng thái đang xem (tab Thị trường & Báo giá)" },
+                       hint: "Số báo giá còn ở trạng thái đang xem (tab Thị trường & Báo giá)", dir: "down" },
   manual:            { group: "Không đo bằng số", label: "Việc khác (tick khi xong)", unit: "", needs: [],
-                       hint: "Quy trình, đào tạo, tài liệu… — tự tick khi xong" },
+                       hint: "Quy trình, đào tạo, tài liệu… — tự tick khi xong", dir: "up" },
 }
 
 export interface PlanItem {
@@ -144,14 +145,18 @@ export function evaluate(item: PlanItem, m: { value: number | null; prev: number
 
   // quotes_review: mục tiêu là còn ≤ target báo giá chờ; mốc = số lúc tạo việc (nếu chưa lưu thì không có tiến độ phần trăm).
   const b = baseline ?? m.value
-  const higher = item.target >= b
+  const dir = PLAN_KINDS[item.kind]?.dir ?? "auto"
+  const higher = dir === "auto" ? item.target >= b : dir === "up"
   const reached = higher ? m.value >= item.target : m.value <= item.target
-  const progress = item.target === b ? (reached ? 1 : 0) : (m.value - b) / (item.target - b)
+  // Mục tiêu nằm sai phía so với mốc (vd GM mục tiêu thấp hơn quý trước) → không có quãng đường để đo, chỉ xét đạt/chưa.
+  const wrongSide = higher ? item.target <= b : item.target >= b
+  const progress = wrongSide ? (reached ? 1 : 0) : (m.value - b) / (item.target - b)
   if (item.done || reached) return { ...base, baseline: b, progress: Math.max(progress, 1), status: "done", message: `Đã đạt ${fmtNum(m.value, unit)} (mục tiêu ${fmtNum(item.target, unit)})` }
   const gap = Math.abs(item.target - m.value)
   const need = `còn ${fmtNum(+gap.toFixed(2), unit)} nữa`
   if (overdue) return { ...base, baseline: b, progress, status: "overdue", message: `Quá hạn ${due}, ${need}` }
   const shouldBe = b + (item.target - b) * expected
+  if (wrongSide) return { ...base, baseline: b, progress, status: "behind", message: `Chưa đạt — ${need} (mục tiêu đang ${higher ? "thấp" : "cao"} hơn mốc ${fmtNum(b, unit)}, nên xem lại)` }
   if (progress >= expected - 0.1) return { ...base, baseline: b, progress, status: "on_track", message: `Đúng tiến độ — ${need}` }
   return { ...base, baseline: b, progress, status: "behind", message: `Chậm: lẽ ra hôm nay ~${fmtNum(+shouldBe.toFixed(2), unit)}, đang ${fmtNum(m.value, unit)} — ${need}` }
 }

@@ -66,6 +66,15 @@ describe("evaluate", () => {
     expect(evaluate(item({ kind: "manual", due_date: "2026-11-01" }), { value: null, prev: null }, ...Q, "2026-11-15").status).toBe("overdue")
     expect(evaluate(item({ kind: "manual", done: true }), { value: null, prev: null }, ...Q, "2026-11-15").status).toBe("done")
   })
+  it("chiều cố định: GM mục tiêu thấp hơn mốc mà chưa tới → không được báo Đạt", () => {
+    const e = evaluate(item({ kind: "market_gm", target: 42 }), { value: 41.9, prev: 44.5 }, ...Q, "2026-11-15")
+    expect(e.status).toBe("behind")
+    expect(evaluate(item({ kind: "market_gm", target: 42 }), { value: 43, prev: 44.5 }, ...Q, "2026-11-15").status).toBe("done")
+  })
+  it("báo giá chờ: càng ít càng tốt", () => {
+    expect(evaluate(item({ kind: "quotes_review", target: 0, baseline: 4 }), { value: 2, prev: null }, ...Q, "2026-11-15").progress).toBeCloseTo(0.5)
+    expect(evaluate(item({ kind: "quotes_review", target: 0, baseline: 4 }), { value: 0, prev: null }, ...Q, "2026-11-15").status).toBe("done")
+  })
   it("mốc nhập tay đè mốc quý trước", () => {
     const e = evaluate(item({ kind: "vendor_share", target: 100, baseline: 60 }), { value: 80, prev: 20 }, ...Q, "2026-11-15")
     expect(e.baseline).toBe(60)
