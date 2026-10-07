@@ -6,19 +6,21 @@ import { vi, describe, test, expect, beforeEach } from "vitest"
 
 // ─── Hoisted mock để thay đổi Gemini response từng test ──────────────────────
 const mockGenerateContent = vi.hoisted(() => vi.fn())
-// s195+18: code thật gọi generateContentStream() (streaming) thay vì generateContent() — mock stream
-// delegate vào mockGenerateContent (giữ nguyên mọi mockResolvedValueOnce nhiều vòng viết sẵn per-test).
-const mockGenerateContentStream = vi.hoisted(() => vi.fn(async (...args: any[]) => {
-  const { response } = await mockGenerateContent(...args)
-  return { stream: (async function* () { yield response })(), response: Promise.resolve(response) }
+// U1a: Bé Gấu chạy SDK mới qua streamTurn(model, contents, config) — lớp chuyển giữ nguyên kịch bản mockGenerateContent cũ
+// (trả { response: { text(), functionCalls(), candidates } }) và vẫn truyền { contents, config } để test đọc lại được.
+vi.mock("@/lib/agents/genai-stream", () => ({
+  toGenaiSchema: (x: any) => x,
+  streamTurn: async (_model: string, contents: any[], config: any) => {
+    const { response } = await mockGenerateContent({ contents: [...contents], config })
+    const calls = response.functionCalls?.() ?? []
+    const text = response.text?.() ?? ""
+    return {
+      content: { role: "model", parts: calls?.length ? calls.map((fc: any) => ({ functionCall: fc })) : [{ text }] },
+      functionCalls: calls ?? [], text, tokensIn: 0, tokensOut: 0,
+    }
+  },
 }))
-
-// ─── Mocks ────────────────────────────────────────────────────────────────────
 vi.mock("@google/generative-ai", () => ({
-  // regular function (not arrow) — arrow functions cannot be used with `new`
-  GoogleGenerativeAI: vi.fn(function() {
-    return { getGenerativeModel: vi.fn().mockReturnValue({ generateContent: mockGenerateContent, generateContentStream: mockGenerateContentStream }) }
-  }),
   SchemaType: { OBJECT: "object", STRING: "string", ARRAY: "array", NUMBER: "number", BOOLEAN: "boolean" },
 }))
 vi.mock("@/lib/analytics-db",      () => ({ queryAnalytics: vi.fn().mockResolvedValue([]) }))

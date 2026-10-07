@@ -10,39 +10,21 @@ vi.mock("@/lib/analytics-db",  () => ({ queryAnalytics: vi.fn().mockResolvedValu
 vi.mock("@/lib/ga4",           () => ({ runGA4Report: vi.fn(), runGSC: vi.fn(), ga4Sites: vi.fn().mockResolvedValue([]) }))
 vi.mock("@/lib/analytics-helpers", () => ({ getPartnerTiers: vi.fn().mockResolvedValue({}) }))
 vi.mock("@/lib/lark",          () => ({ sendLarkDM: vi.fn() }))
-const _mockGenerateContent = vi.fn().mockResolvedValue({
-  response: {
-    text: () => "Xin chào! Mình là Bé Gấu 🐻",
-    candidates: [],
-    functionCalls: () => [],
-  },
+// U1a: Bé Gấu chạy SDK mới qua streamTurn (genai-stream.ts) → mock thẳng streamTurn: (model, contents, config, onChunk).
+const turnOk = (text: string, functionCalls: any[] = []) => ({
+  content: { role: "model", parts: functionCalls.length ? functionCalls.map(fc => ({ functionCall: fc })) : [{ text }] },
+  functionCalls, text, tokensIn: 0, tokensOut: 0,
 })
-// s195+18: code thật giờ gọi generateContentStream() (streaming) thay vì generateContent(). Mock stream
-// bằng cách delegate vào _mockGenerateContent (giữ nguyên mọi chuỗi mockResolvedValueOnce nhiều vòng đã
-// viết sẵn trong các test) — 1 chunk duy nhất mang nguyên response, không cần mô phỏng delta thật.
-const _mockGenerateContentStream = vi.fn().mockImplementation(async (...args: any[]) => {
-  const { response } = await _mockGenerateContent(...args)
-  return { stream: (async function* () { yield response })(), response: Promise.resolve(response) }
-})
-const _mockGetModel = vi.fn().mockReturnValue({ generateContent: _mockGenerateContent, generateContentStream: _mockGenerateContentStream })
-
+const _mockTurn = vi.fn().mockResolvedValue(turnOk("Xin chào! Mình là Bé Gấu 🐻"))
+vi.mock("@/lib/agents/genai-stream", () => ({ streamTurn: (...a: any[]) => _mockTurn(...a), toGenaiSchema: (x: any) => x }))
 vi.mock("@google/generative-ai", () => ({
-  GoogleGenerativeAI: vi.fn().mockImplementation(function() {
-    return { getGenerativeModel: _mockGetModel }
-  }),
   SchemaType: { OBJECT: "object", STRING: "string", ARRAY: "array", NUMBER: "number", BOOLEAN: "boolean" },
 }))
-
-// Helper cho các test tự override _mockGetModel.mockImplementationOnce — cần cả generateContent lẫn
-// generateContentStream (s195+18) trỏ cùng 1 response, tránh lặp lại boilerplate mock stream mỗi chỗ.
-function streamableModel(genContentResult: { response: any }) {
-  return {
-    generateContent: vi.fn().mockResolvedValue(genContentResult),
-    generateContentStream: vi.fn().mockResolvedValue({
-      stream: (async function* () { yield genContentResult.response })(),
-      response: Promise.resolve(genContentResult.response),
-    }),
-  }
+// Bắt config (systemInstruction, tools) của lượt gọi kế tiếp.
+function captureConfig(): { config: any } {
+  const box: { config: any } = { config: null }
+  _mockTurn.mockImplementationOnce(async (_m: string, _c: any, config: any) => { box.config = config; return turnOk("ok") })
+  return box
 }
 
 import { classifySensitivity } from "../lib/agents/guardian-classify"
@@ -166,15 +148,10 @@ describe("be-gau: tool declarations & role filter", () => {
   })
 
   test("staff: 8 tool gốc + larkWorkspace (s227d) + 6 tool Gấu Pro mở-cho-all (s190), KHÔNG có tool admin-only", async () => {
-    let capturedArgs: any
-    _mockGetModel.mockImplementationOnce((args: any) => {
-      capturedArgs = args
-      return streamableModel({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } })
-    })
-
+    const box = captureConfig()
     await runBeGau({ geminiHistory: [], lastMsg: "test", role: "staff" })
 
-    const decls: any[] = capturedArgs?.tools?.[0]?.functionDeclarations ?? []
+    const decls: any[] = box.config?.tools?.[0]?.functionDeclarations ?? []
     const names = decls.map((d: any) => d.name)
     expect(decls).toHaveLength(15)
     for (const n of ["executeSQL", "querySupabase", "listSupabaseTables", "queryProduct", "queryGA4", "queryGSC", "webSearch", "readKnowledgeBase", "larkWorkspace"]) {
@@ -192,13 +169,9 @@ describe("be-gau: tool declarations & role filter", () => {
 
   test("admin/creator: có đủ tool admin-only (s190 gộp Gấu Pro)", async () => {
     for (const role of ["admin", "creator"]) {
-      let capturedArgs: any
-      _mockGetModel.mockImplementationOnce((args: any) => {
-        capturedArgs = args
-        return streamableModel({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } })
-      })
+      const box = captureConfig()
       await runBeGau({ geminiHistory: [], lastMsg: "test", role })
-      const decls: any[] = capturedArgs?.tools?.[0]?.functionDeclarations ?? []
+      const decls: any[] = box.config?.tools?.[0]?.functionDeclarations ?? []
       const names = decls.map((d: any) => d.name)
       expect(decls).toHaveLength(30)
       for (const n of ["writeKnowledgeBase", "browsePortal", "managePortalCredentials", "sendLarkMessage", "createLarkTask", "generateImageStability", "generateVideo"]) {
@@ -208,25 +181,15 @@ describe("be-gau: tool declarations & role filter", () => {
   })
 
   test("role staff + isCost=false → systemInstruction chứa giới hạn COGS", async () => {
-    let capturedSI = ""
-    _mockGetModel.mockImplementationOnce((args: any) => {
-      capturedSI = args.systemInstruction || ""
-      return streamableModel({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } })
-    })
-
+    const box = captureConfig()
     await runBeGau({ geminiHistory: [], lastMsg: "giá vốn?", role: "staff", isCost: false })
-    expect(capturedSI).toContain("KHÔNG được xem giá vốn")
+    expect(box.config.systemInstruction).toContain("KHÔNG được xem giá vốn")
   })
 
   test("role admin + isCost=true → systemInstruction KHÔNG có giới hạn COGS", async () => {
-    let capturedSI = ""
-    _mockGetModel.mockImplementationOnce((args: any) => {
-      capturedSI = args.systemInstruction || ""
-      return streamableModel({ response: { text: () => "ok", candidates: [], functionCalls: () => [] } })
-    })
-
+    const box = captureConfig()
     await runBeGau({ geminiHistory: [], lastMsg: "giá vốn?", role: "admin", isCost: true })
-    expect(capturedSI).not.toContain("KHÔNG được xem giá vốn")
+    expect(box.config.systemInstruction).not.toContain("KHÔNG được xem giá vốn")
   })
 })
 
@@ -239,23 +202,15 @@ describe("be-gau: executeSQL safety", () => {
     runBeGau = mod.runBeGau
   })
 
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => { vi.clearAllMocks(); _mockTurn.mockResolvedValue(turnOk("Xin chào! Mình là Bé Gấu 🐻")) })
 
   test("non-SELECT SQL → queryAnalytics KHÔNG được gọi", async () => {
     const { queryAnalytics: qa } = await import("@/lib/analytics-db") as any
     const qaMock = vi.mocked(qa)
 
-    _mockGenerateContent
-      .mockResolvedValueOnce({
-        response: {
-          text: () => "",
-          candidates: [{ content: { parts: [], role: "model" } }],
-          functionCalls: () => [{ name: "executeSQL", args: { sql: "DROP TABLE users" } }],
-        },
-      })
-      .mockResolvedValueOnce({
-        response: { text: () => "Xin lỗi không thực hiện được", candidates: [], functionCalls: () => [] },
-      })
+    _mockTurn
+      .mockResolvedValueOnce(turnOk("", [{ name: "executeSQL", args: { sql: "DROP TABLE users" } }]))
+      .mockResolvedValueOnce(turnOk("Xin lỗi không thực hiện được"))
 
     await runBeGau({ geminiHistory: [], lastMsg: "drop table users", role: "admin" })
     expect(qaMock).not.toHaveBeenCalled()
@@ -266,20 +221,36 @@ describe("be-gau: executeSQL safety", () => {
     const qaMock = vi.mocked(qa)
     qaMock.mockResolvedValue([{ total_revenue: 5_000_000_000 }])
 
-    _mockGenerateContent
-      .mockResolvedValueOnce({
-        response: {
-          text: () => "",
-          candidates: [{ content: { parts: [], role: "model" } }],
-          functionCalls: () => [{ name: "executeSQL", args: { sql: "SELECT SUM(fulfilled_revenue_amount_vnd) as total FROM fact_fulfillment_revenue" } }],
-        },
-      })
-      .mockResolvedValueOnce({
-        response: { text: () => "Doanh thu: 5,000,000,000 VND", candidates: [], functionCalls: () => [] },
-      })
+    _mockTurn
+      .mockResolvedValueOnce(turnOk("", [{ name: "executeSQL", args: { sql: "SELECT SUM(fulfilled_revenue_amount_vnd) as total FROM fact_fulfillment_revenue" } }]))
+      .mockResolvedValueOnce(turnOk("Doanh thu: 5,000,000,000 VND"))
 
     const result = await runBeGau({ geminiHistory: [], lastMsg: "tổng doanh thu?", role: "admin" })
     expect(qaMock).toHaveBeenCalledWith(expect.stringContaining("SELECT"))
     expect(result.text).toContain("VND")
+  })
+})
+
+describe("be-gau: chặn giá vốn / lãi gộp ở tầng SQL (U1a)", () => {
+  test("vai trò không có quyền giá vốn → SQL có gross_profit bị chặn, không chạy", async () => {
+    const { runBeGau } = await import("../lib/agents/be-gau")
+    const { queryAnalytics: qa } = await import("@/lib/analytics-db") as any
+    vi.mocked(qa).mockClear()
+    _mockTurn
+      .mockResolvedValueOnce(turnOk("", [{ name: "executeSQL", args: { sql: "SELECT SUM(gross_profit_vnd) FROM fact_fulfillment_revenue" } }]))
+      .mockResolvedValueOnce(turnOk("Phần lãi gộp không khả dụng với vai trò của bạn"))
+    await runBeGau({ geminiHistory: [], lastMsg: "lãi gộp tháng 9", role: "b2c", isCost: false })
+    expect(qa).not.toHaveBeenCalled()
+  })
+})
+
+describe("be-gau: chọn mức suy nghĩ theo độ khó (U1a)", () => {
+  test("câu phân tích / so sánh / đề xuất → sâu; tra cứu ngắn → nhanh", async () => {
+    const { deepQuestion } = await import("../lib/agents/be-gau")
+    expect(deepQuestion("so sánh doanh thu tháng 9 và tháng 8")).toBe(true)
+    expect(deepQuestion("vì sao Shopee tháng 8 giảm")).toBe(true)
+    expect(deepQuestion("Đề xuất 3 việc giảm giá vốn")).toBe(true)
+    expect(deepQuestion("đơn momo tháng 9 bao nhiêu đơn")).toBe(false)
+    expect(deepQuestion("có eSIM Monaco không", 1)).toBe(true)
   })
 })

@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai"
+import { SchemaType } from "@google/generative-ai"
+import { ThinkingLevel, type Content } from "@google/genai"
 import { queryAnalytics }                 from "@/lib/analytics-db"
 import { supabaseAdmin }                   from "@/lib/supabase"
 import { runGA4Report, runGSC, ga4Sites } from "@/lib/ga4"
@@ -9,9 +10,10 @@ import { getCustomRules }                from "./guardian"
 import { runWebSearch, runReadKnowledgeBase, type WebSource, type FileContext } from "./creator-ai"
 import { compressHistory }              from "./creator/compress"
 import { kbIndexBlock, relevantKbBlock } from "./creator/kb-recall"
-import { genWithRetryStream }            from "./gemini-stream"
+import { streamTurn, toGenaiSchema, type TurnResult } from "./genai-stream"
 import { detectAndLogLearning }          from "./learning"
 import { larkWorkspaceDecl, runLarkWorkspace } from "./lark-workspace"
+import { BUSINESS_FACTS, ANSWER_STYLE } from "./business-facts"
 
 // ─── s190: gộp Gấu Pro vào Bé Gấu ──────────────────────────────────────────────
 // Theo yêu cầu Hiếu: Bé Gấu nay có TẤT CẢ công cụ Gấu Pro (declarations/executor dùng CHUNG qua
@@ -274,9 +276,14 @@ sql: SELECT c.name, SUM(f.fulfilled_revenue_amount_vnd) AS revenue FROM fact_ful
 - Không rõ người dùng muốn gì với file → hỏi lại ngắn gọn thay vì đoán.`
 
 // ─── Executor: gohub_dw SQL ─────────────────────────────────────────────────────
-async function execSQL(sql: string): Promise<any> {
+// U1a: vai trò không được xem giá vốn → chặn ở tầng code mọi câu SQL đụng cột giá vốn/lãi gộp (baseline eval: vai trò b2c vẫn
+// thấy GP dù prompt cấm). CM1/biên lãi đều tính từ các cột này nên chặn tận gốc.
+const COST_COLS_RE = /gross_profit|cogs|unit_cost|cost_price/i
+async function execSQL(sql: string, canSeeCost = true): Promise<any> {
   const norm = (sql || "").trim().toLowerCase()
   if (!norm.startsWith("select") && !norm.startsWith("with")) return { error: "Only SELECT/WITH allowed." }
+  if (!canSeeCost && COST_COLS_RE.test(sql))
+    return { error: "Vai trò này không được xem giá vốn / lãi gộp / CM1 / biên lãi. Chỉ trả doanh thu, số đơn, số lượng; báo người dùng nhẹ nhàng rằng phần lãi/giá vốn không khả dụng với vai trò của họ." }
   if (sql.includes(";") && sql.split(";").filter(s => s.trim()).length > 1) return { error: "Multiple statements not allowed." }
   try {
     const rawRows = await queryAnalytics(sql)
@@ -340,6 +347,12 @@ async function execProduct(a: any): Promise<any> {
 
 // detectAndLogLearning() tách sang ./learning.ts (s196+4) — dùng chung cho Bé Gấu + Gấu Tổ.
 
+// U1a: câu phân tích / so sánh / lý do / đề xuất / báo cáo, câu dài hoặc có file → suy nghĩ sâu (HIGH); tra cứu nhanh → LOW.
+const DEEP_RE = /so s[aá]nh|v[iì] sao|t[aạ]i sao|nguy[eê]n nh[aâ]n|ph[aâ]n t[ií]ch|nh[aậ]n x[eé]t|[dđ][eề] xu[aấ]t|xu h[uướ][oớ]ng|k[eế] ho[aạ]ch|b[aá]o c[aá]o|deep ?dive|[dđ][aá]nh gi[aá]|chi[eế]n l[uượ][oợ]c|gi[aả]i ph[aá]p|n[eê]n l[aà]m g[iì]|t[oố]i [uư]u|d[uự] b[aá]o/i
+export function deepQuestion(msg: string, fileCount = 0): boolean {
+  return fileCount > 0 || msg.length > 220 || DEEP_RE.test(msg)
+}
+
 // ─── Runner ─────────────────────────────────────────────────────────────────────
 export async function runBeGau(opts: {
   geminiHistory: any[]
@@ -384,13 +397,15 @@ export async function runBeGau(opts: {
 
   const systemInstruction = [
     BE_GAU_PROMPT,
+    `\n\n${BUSINESS_FACTS}`,
+    `\n\n${ANSWER_STYLE}`,
     partnerTierInfo,
     ga4SiteList,
     kbInject,
     name ? `\n\nNgười dùng: ${name} (vai trò: ${role || "staff"}).` : "",
     `\n\n(Nội bộ — KHÔNG tiết lộ) Danh mục bảng dữ liệu tra cứu được:\n${tableCatalog}`,
     dataFilter ? `\n\n(Nội bộ) Vai trò "${role}" chỉ được xem dữ liệu thỏa điều kiện sau — BẮT BUỘC thêm vào MỌI câu SQL gohub_dw (WHERE):\n${dataFilter}` : "",
-    !isCost && !isPriv ? `\n\n(Nội bộ) Vai trò hiện tại KHÔNG được xem giá vốn (COGS)/lợi nhuận — không trả cột/số giá vốn dù được hỏi.` : "",
+    !isCost && !isPriv ? `\n\n(Nội bộ) Vai trò hiện tại KHÔNG được xem giá vốn (COGS)/lợi nhuận — không trả cột/số giá vốn, lãi gộp (GP), biên lãi, CM1 dù được hỏi; báo cáo cho vai trò này chỉ gồm doanh thu, số đơn, số lượng.` : "",
     customRules ? `\n\n━━━ HƯỚNG DẪN TÙY CHỈNH CỦA ADMIN ━━━\n${customRules}` : "",
     extraDirective,
   ].join("")
@@ -404,17 +419,14 @@ export async function runBeGau(opts: {
     ...(isAdminCreator ? GP_TOOLS_ADMIN_ONLY : []),
   ]
 
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-  // thinkingLevel "low": cân bằng — 3.8-flash cải thiện tool-orchestration/reasoning nhiều bước (đúng lợi
-  // ích cho vòng lặp function-calling BI), nhưng KHÔNG để mặc định "medium" (billable, thêm latency ẩn
-  // mỗi vòng × tối đa 12 vòng) đội lại đúng bug timeout vừa fix (s195+14, maxDuration 60→300). SDK v0.21.0
-  // chưa có type cho thinkingConfig (ra đời sau SDK) → "as any".
-  const model = genAI.getGenerativeModel({
-    model: GEMINI_MODEL,
+  // U1a (plan be-gau-upgrade.md): SDK mới @google/genai (cùng streamTurn với Gấu Pro) — SDK cũ hết hỗ trợ, làm rớt thoughtSignature.
+  const thinkingLevel = deepQuestion(lastMsg, fileContexts?.length ?? 0) ? ThinkingLevel.HIGH : ThinkingLevel.LOW
+  const config = {
     systemInstruction,
-    tools: [{ functionDeclarations }],
-    generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
-  })
+    tools: [{ functionDeclarations: toGenaiSchema(functionDeclarations) as any }],
+    temperature: 0,
+    thinkingConfig: { thinkingLevel },
+  }
 
   // File/ảnh đính kèm (s190+3) — mirror cách runCreatorAI build parts (text + inlineData), rút gọn.
   const files    = fileContexts || []
@@ -442,29 +454,27 @@ export async function runBeGau(opts: {
   }
 
   // Fix #8: dùng history đã nén
-  const contents: any[] = [...compressedHistory, { role: "user", parts: userParts }]
+  const contents: Content[] = [...compressedHistory, { role: "user", parts: userParts }]
   // Tích luỹ token qua MỌI vòng gọi model (đúng pattern creator-ai.ts s196+7) — cost dashboard.
   let tokensIn = 0, tokensOut = 0
-  const addUsage = (r: any) => {
-    const u = r?.response?.usageMetadata
-    if (u) { tokensIn += u.promptTokenCount || 0; tokensOut += u.candidatesTokenCount || 0 }
+  const turn = async (): Promise<TurnResult> => {
+    const r = await streamTurn(GEMINI_MODEL, contents, config, onChunk)
+    tokensIn += r.tokensIn; tokensOut += r.tokensOut
+    if (r.content.parts?.length) contents.push(r.content)
+    return r
   }
 
-  // s195+18: genWithRetryStream — stream token thật, thay genWithRetry (generateContent chờ hết mới trả)
-  let genResult = await genWithRetryStream(model, { contents }, onChunk)
-  addUsage(genResult)
+  let genResult = await turn()
   const sources: WebSource[] = []
   // Track tool nào được gọi trong cả vòng lặp — dùng để phân biệt "task tính KPI Bé Gấu" (đã thật sự
   // xuất dữ liệu từ DB) khỏi trả lời chay/chào hỏi (My Metrics my-metrics/route.ts, s195+18-B). Định
   // nghĩa "DB tool nào tính KPI" nằm ở lib/okr-helpers.ts (DB_TASK_TOOLS), không phải ở đây — be-gau.ts
   // chỉ ghi lại SỰ THẬT đã gọi tool gì, không tự quyết định ý nghĩa nghiệp vụ của việc đó.
   const toolsUsed = new Set<string>()
-  const appendModel = () => { const c = genResult.response.candidates?.[0]?.content; if (c) contents.push(c) }
-  appendModel()
 
   for (let i = 0; i < 12; i++) {
-    const calls = genResult.response.functionCalls()
-    if (!calls || calls.length === 0) break
+    const calls = genResult.functionCalls
+    if (!calls.length) break
 
     // Fix #1: parallel tool execution (Promise.all)
     // Toàn bộ nhánh bọc try/catch NGOÀI CÙNG — 1 tool lỗi (network/DB timeout) trước đây làm Promise.all
@@ -472,23 +482,24 @@ export async function runBeGau(opts: {
     // functionResponse báo lỗi cho MỘT tool đó, model tự quyết định retry/báo user thay vì mất trắng.
     const fnParts = await Promise.all(calls.map(async (call: any) => {
       const a = call.args as any
-      toolsUsed.add(call.name)
-      const wrap = (resp: any) => ({ functionResponse: { name: call.name, response: resp } })
+      const name = call.name ?? ""
+      toolsUsed.add(name)
+      const wrap = (resp: any) => ({ functionResponse: { name, response: resp } })
       try {
 
-      if (call.name === "listSupabaseTables")
+      if (name === "listSupabaseTables")
         return wrap({ tables: visibleTables })
 
-      if (call.name === "querySupabase")
+      if (name === "querySupabase")
         return wrap(await runQuerySupabase(a, role || "staff", isCost))
 
-      if (call.name === "executeSQL")
-        return wrap(await execSQL(a?.sql || ""))
+      if (name === "executeSQL")
+        return wrap(await execSQL(a?.sql || "", isCost || isPriv))
 
-      if (call.name === "queryProduct")
+      if (name === "queryProduct")
         return wrap(await execProduct(a))
 
-      if (call.name === "readKnowledgeBase") {
+      if (name === "readKnowledgeBase") {
         const kbCategory = (!isPriv && (!a?.category || a.category === "cogs")) ? undefined : a?.category
         const kbResult = await runReadKnowledgeBase(kbCategory, Array.isArray(a?.keys) ? a.keys.map(String) : undefined)
         if (!isPriv && kbResult?.entries)
@@ -496,17 +507,17 @@ export async function runBeGau(opts: {
         return wrap(kbResult)
       }
 
-      if (call.name === "webSearch") {
+      if (name === "webSearch") {
         const { result, sources: s } = await runWebSearch(a?.query || "")
         sources.push(...s)
         const srcText = s.length ? "\n\nSources:\n" + s.map((x: any, i: number) => `[${i + 1}] ${x.title}: ${x.url}`).join("\n") : ""
         return wrap({ result: result + srcText, instruction: "Cite the source URLs when using this info." })
       }
 
-      if (call.name === "larkWorkspace")
+      if (name === "larkWorkspace")
         return wrap(await runLarkWorkspace(a, larkOpenId))
 
-      if (call.name === "queryGA4") {
+      if (name === "queryGA4") {
         try {
           const report = await runGA4Report({ siteId: a.siteId, startDate: a.startDate, endDate: a.endDate, metrics: a.metrics || ["sessions"], dimensions: a.dimensions, limit: a.limit || 50 })
           const rows = (report.rows || []).slice(0, 100).map((r: any) => ({ dimensions: r.dimensionValues?.map((d: any) => d.value), metrics: r.metricValues?.map((m: any) => m.value) }))
@@ -514,7 +525,7 @@ export async function runBeGau(opts: {
         } catch (e: any) { return wrap({ error: e.message }) }
       }
 
-      if (call.name === "queryGSC") {
+      if (name === "queryGSC") {
         try {
           const rows = await runGSC(a.siteId, a.startDate, a.endDate, a.dimensions || ["query"], a.rowLimit || 20)
           return wrap({ rows: rows.slice(0, 100) })
@@ -523,11 +534,11 @@ export async function runBeGau(opts: {
 
       // s190: mọi công cụ Gấu Pro (mở cho all hoặc admin/creator-only, xem GP_TOOLS_* ở đầu file) — dùng
       // CHUNG executor có sẵn ở creator/tools/dispatch.ts, không chép lại logic.
-      if (GP_DISPATCH_NAMES.has(call.name)) {
-        const res = await dispatchTool({ name: call.name, args: a }, undefined, sources)
+      if (GP_DISPATCH_NAMES.has(name)) {
+        const res = await dispatchTool({ name: name, args: a }, undefined, sources)
         // searchKnowledgeBase đọc chung creator_kb với readKnowledgeBase — che category "cogs" cho
         // role không có quyền xem giá vốn, khớp đúng cách readKnowledgeBase xử lý ở trên.
-        if (call.name === "searchKnowledgeBase" && !isPriv) {
+        if (name === "searchKnowledgeBase" && !isPriv) {
           const resp = res.functionResponse.response
           if (resp?.results) resp.results = resp.results.filter((r: any) => r.category !== "cogs")
         }
@@ -541,18 +552,15 @@ export async function runBeGau(opts: {
     }))
 
     contents.push({ role: "user", parts: fnParts })
-    genResult = await genWithRetryStream(model, { contents }, onChunk)  // s195+18
-    addUsage(genResult)
-    appendModel()
+    genResult = await turn()
   }
 
-  let text = genResult.response.text()
+  let text = genResult.text
   if (!text.trim()) {
     try {
       contents.push({ role: "user", parts: [{ text: "Dựa trên dữ liệu ở trên, viết câu trả lời hoàn chỉnh bằng tiếng Việt cho người dùng (kèm bảng/chart nếu hợp lý). KHÔNG gọi thêm công cụ, KHÔNG lộ SQL/tên bảng." }] })
-      genResult = await genWithRetryStream(model, { contents }, onChunk)
-      addUsage(genResult)
-      text = genResult.response.text()
+      genResult = await turn()
+      text = genResult.text
     } catch { /* keep */ }
   }
   const finalText = text || "Mình chưa lấy được dữ liệu cho câu này, bạn thử hỏi lại cụ thể hơn nhé 😊"
