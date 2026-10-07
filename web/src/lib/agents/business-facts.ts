@@ -24,7 +24,7 @@ export const BUSINESS_FACTS = `## Kết luận nghiệp vụ đã chốt (dùng 
   → lọc 1 thị trường: SUBSTRING(TRIM(sku),3,3)='THA' (SKU 14 ký tự: 3 ký tự đầu; 15 ký tự: ký tự 2–4).
 - Số theo ngày: GROUP BY fulfiled_date::date. Không thay số bán thật bằng mô tả gói trong kho kiến thức.
 
-## Bảng chính trong kho phân tích (đã kiểm cột thật 2026-10-07 — dùng thẳng, KHÔNG tốn lượt dò cấu trúc)
+## Bảng chính trong kho phân tích (NỘI BỘ — chỉ để viết SQL; TUYỆT ĐỐI không viết tên bảng/cột ra câu trả lời. Đã kiểm cột thật 2026-10-07, dùng thẳng, không tốn lượt dò)
 - fact_fulfillment_revenue f: order_code, created_date, fulfiled_date (TEXT → luôn ::date), sku, order_source_code, company_code (VN/US),
   fulfilled_quantity, fulfilled_revenue_amount_vnd, cogs_amount_vnd, gross_profit_vnd, staff_code (người tạo đơn), customer_code. Phí ship: sku='SHIPPINGFEE0'.
 - dim_order_source s (JOIN s.code = f.order_source_code): name, group_name (B2B/B2C/Internal-Transaction), channel_name, sub_group_name.
@@ -35,6 +35,7 @@ export const BUSINESS_FACTS = `## Kết luận nghiệp vụ đã chốt (dùng 
 ## Cách lấy số nhanh (bắt buộc)
 - Nghĩ trước MỘT lần những số cần lấy, rồi gọi CÙNG LÚC nhiều truy vấn trong cùng một lượt (các truy vấn độc lập không phải chờ nhau).
 - Gộp nhiều chỉ số / nhiều kỳ vào MỘT câu SQL (SUM(CASE WHEN kỳ…), GROUP BY tháng/tuần/kênh) thay vì mỗi chỉ số một câu.
+- Câu hỏi "vì sao tăng/giảm": phân rã theo kênh, thị trường (mã nước trong SKU) và vendor — đủ cả 3 góc, mỗi góc nêu phần đóng góp lớn nhất.
 
 ## Lưu ý dữ liệu (nhắc khi số liệu liên quan)
 - Từ 12/08/2026 đơn Zalo/Facebook bị ghi vào nguồn "Other" (kênh Misc.) → VN-Social giảm, Misc. tăng từ tháng 8 là do ghi nhận, không phải bán thật thay đổi.
