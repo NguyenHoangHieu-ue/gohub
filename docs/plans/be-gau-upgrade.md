@@ -1,8 +1,8 @@
 # Plan — Nâng cấp toàn diện Bé Gấu, chuyển giao tính năng tốt nhất từ Gấu Pro
 
 > File TẠM (quy ước CLAUDE.md): xong hết mốc (hoặc Hiếu bỏ plan) thì xoá file, chuyển kiến thức còn giá trị sang wiki
-> `docs/wiki/system/tabs/chatbot.md` + `analytics-creator-ai.md`. Tạo 2026-10-07 (s227e). **Trạng thái: chờ Hiếu duyệt, chưa code mốc nào
-> (riêng Lark mức A + định dạng card Lark đã làm ở s227d, đã lên `main` `741e59d0`).**
+> `docs/wiki/system/tabs/chatbot.md` + `analytics-creator-ai.md`. Tạo 2026-10-07 (s227e). **Trạng thái (2026-10-07): Hiếu đã duyệt. Thứ tự làm: U1 → U3 → U2 → U4 → U0. Đang U1 (bộ câu hỏi eval chờ Hiếu duyệt).
+> Lark mức A + định dạng card Lark đã làm ở s227d (`main` `741e59d0`).**
 
 ## 0. Bối cảnh & quyết định đã chốt
 
@@ -17,6 +17,13 @@ khả năng đối đáp / phân tích / tóm tắt của cả hai còn hạn ch
 4. **Bỏ Pollinations, Stability, Kling** → chuyển hết tạo ảnh/video sang Google.
 5. **Thương hiệu** (lấy từ gohub.vn): logo chữ "gohub" xanh đậm + "travel like a local"; màu xanh chủ đạo `#1446A5`, xanh đậm
    `#003A93`, xanh nhạt `#009CE0`, chữ `#0F1012`, nền `#F7F8F8`; phong cách trắng sạch, khối xanh bo góc.
+
+Hiếu duyệt (2026-10-07):
+6. **Thứ tự mốc: U1 → U3 → U2 → U4 → U0.**
+7. **U3 có trang/bảng phân quyền tính năng theo vai trò, làm giao diện đẹp** (bật/tắt từng tính năng cho từng vai trò, xem nhanh ai dùng được gì).
+8. **Bộ câu hỏi eval: em soạn, gửi Hiếu duyệt** → `docs/plans/be-gau-eval-questions.md`.
+9. **Trò chuyện trực tiếp mở theo vai trò** (phải được phân quyền trong bảng ở U3).
+10. **U5 bàn sau khi xong U4.**
 
 ## 1. Hiện trạng (đo trong code + API, 2026-10-07)
 
@@ -88,8 +95,8 @@ cổng duyệt). Khác nhau chỉ ở **bộ tool theo vai trò** (1 bảng poli
 ### U3 — Chuyển tính năng Gấu Pro sang Bé Gấu
 | Mức | Tính năng |
 |---|---|
-| Mọi người | Kế hoạch từng bước + Dừng; trí nhớ hội thoại + tìm hội thoại cũ; chạy nền (báo cáo dài); Trò chuyện trực tiếp bằng giọng nói (Live); đọc câu trả lời (TTS); ghi âm cuộc họp → biên bản (transcribe); so giá vendor (che giá vốn theo quyền) |
-| Theo quyền (Hiếu bật từng người/vai trò) | Duyệt web; Deep Research; việc theo lịch; dịch trực tiếp (CS); video Veo |
+| Mọi người | Kế hoạch từng bước + Dừng; trí nhớ hội thoại + tìm hội thoại cũ; chạy nền (báo cáo dài); đọc câu trả lời (TTS); ghi âm cuộc họp → biên bản (transcribe); so giá vendor (che giá vốn theo quyền) |
+| Theo quyền (Hiếu bật theo vai trò trong bảng phân quyền) | Trò chuyện trực tiếp (Live); duyệt web; Deep Research; việc theo lịch; dịch trực tiếp (CS); video Veo |
 | Chỉ Creator | Bridge điều khiển trình duyệt cá nhân (+ computer-use), gửi Lark cho người khác, ghi KB/duyệt bài học, portal vendor, đọc file trên máy |
 - Sửa kèm các lỗi còn mở ở §1 (cổng duyệt nhớ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại, việc theo lịch chạy đúng giờ).
 - Trí nhớ cá nhân bật theo người (`gp_personal_features`), mặc định tắt cho tới khi Hiếu duyệt từng nhóm.
@@ -111,9 +118,8 @@ cổng duyệt). Khác nhau chỉ ở **bộ tool theo vai trò** (1 bảng poli
   Lark → Hiếu bảo merge. Ranh giới: chỉ chạy khi Hiếu duyệt từng phiếu, prompt không lấy từ nội dung ngoài, không khoá bí mật production,
   không push main, không chạy migration, giới hạn thời gian/chi phí.
 
-## 4. Thứ tự đề xuất
-U0 (nhỏ, thấy ngay) → U1 (lõi + chất lượng) → U2 (báo cáo) → U3 (chuyển tính năng) → U4 (giao diện) → U5 (chờ chốt).
-U1 phải xong trước U3/U4 vì U3/U4 dựng trên lõi chung.
+## 4. Thứ tự (Hiếu chốt)
+U1 (lõi + chất lượng) → U3 (chuyển tính năng + bảng phân quyền) → U2 (báo cáo) → U4 (giao diện) → U0 (ảnh/video Google) → U5 (bàn sau U4).
 
 ## 5. Rủi ro & chốt chặn
 - **Prompt injection** (nội dung web/file/tin nhắn chứa lệnh): giữ cổng duyệt cho mọi hành động gửi/ghi khi lượt đã đọc nội dung ngoài,
@@ -124,8 +130,5 @@ U1 phải xong trước U3/U4 vì U3/U4 dựng trên lõi chung.
 - **Model preview đổi/gỡ**: mọi model qua `lib/ai-models.ts` + env, cron `gemini-model-watch` báo model mới; eval trước khi đổi.
 - **Chi phí**: hạn mức thoải mái tới hết 2026 nhưng vẫn ghi token/chi phí theo người (`app_usage_events`) để xem trên dashboard.
 
-## 6. Còn cần Hiếu trả lời
-1. Duyệt thứ tự U0 → U5 và bảng phân quyền §U3?
-2. Bộ câu hỏi eval: em tự soạn 40 câu từ log hỏi đáp thật rồi anh duyệt đáp án, hay anh gửi danh sách?
-3. Trò chuyện trực tiếp (mic/màn hình) mở cho mọi người hay theo vai trò?
-4. U5 (khoá Gấu Pro, Claude Code) để sau khi U4 xong mới bàn tiếp — đồng ý?
+## 6. Còn cần Hiếu
+- Duyệt bộ câu hỏi eval `be-gau-eval-questions.md` (thêm/bớt/sửa tiêu chí) → em chạy baseline rồi mới đổi lõi.
