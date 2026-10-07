@@ -72,7 +72,7 @@ export function DatapoolDetailTable({ quarter }: { quarter: string }) {
           ]}
         />
         <SourceBox type="auto" table="gohub_dw · fact_fulfillment_revenue (GROUP BY sku, vendor)"
-          filter="REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')" />
+          filter="REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL' OR LIKE 'BCDATAPOOL%' (BC Datapool (CMHK)/(Singtel))" />
       </div>
 
       {data && (

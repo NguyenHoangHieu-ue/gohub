@@ -10,7 +10,7 @@ const data: MarketData = {
   quarter: "Q4-2026", prevQuarter: "Q3-2026", curStart: "2026-10-01", curEnd: "2026-12-31", prevStart: "2026-07-01", prevEnd: "2026-09-30",
   months: ["2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12"], curMonths: ["2026-10", "2026-11", "2026-12"],
   group: "ALL", cutoff: "2026-11-15",
-  skus: [sku("A1", "Trung Quốc", "3HK Datapool"), sku("A2", "Trung Quốc", "BC Datapool"), sku("B1", "Nhật Bản", "KDDI"), sku("C1", "Lào", "WM")],
+  skus: [sku("A1", "Trung Quốc", "3HK Datapool"), sku("A2", "Trung Quốc", "BC Datapool (CMHK)"), sku("B1", "Nhật Bản", "KDDI"), sku("C1", "Lào", "WM")],
   cells: [
     [0, 1, 800, 200, 1], [1, 1, 200, 80, 1], [2, 1, 1000, 300, 1],   // Q3: TQ 3HK 800, TQ BC 200, Nhật 1000
     [0, 3, 400, 100, 1], [1, 3, 600, 300, 1], [2, 3, 1000, 350, 1],   // Q4: TQ 3HK 400, TQ BC 600, Nhật 1000
@@ -25,7 +25,7 @@ const item = (p: Partial<PlanItem>): PlanItem => ({
 
 describe("measure", () => {
   it("vendor_share: % doanh thu thị trường qua vendor, quý này và quý trước", () => {
-    expect(measure(item({ kind: "vendor_share", scope: { country: "Trung Quốc", vendor: "BC Datapool" } }), ctx)).toEqual({ value: 60, prev: 20 })
+    expect(measure(item({ kind: "vendor_share", scope: { country: "Trung Quốc", vendor: "BC Datapool (CMHK)" } }), ctx)).toEqual({ value: 60, prev: 20 })
   })
   it("market_gm và market_datapool", () => {
     expect(measure(item({ kind: "market_gm", scope: { country: "Trung Quốc" } }), ctx)).toEqual({ value: 40, prev: 28 })

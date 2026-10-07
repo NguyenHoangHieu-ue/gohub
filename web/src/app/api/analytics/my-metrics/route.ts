@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
       `SELECT
          TO_CHAR(DATE_TRUNC('month', f.fulfiled_date::date), 'YYYY-MM') AS month,
          SUM(CASE WHEN v.vendor_norm = '3HKDATAPOOL' THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)::bigint AS hk3_rev,
-         SUM(CASE WHEN v.vendor_norm = 'BCDATAPOOL'  THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)::bigint AS bc_rev,
+         SUM(CASE WHEN v.vendor_norm LIKE 'BCDATAPOOL%' THEN f.fulfilled_revenue_amount_vnd ELSE 0 END)::bigint AS bc_rev,
          SUM(f.fulfilled_revenue_amount_vnd)::bigint AS total_rev
        FROM fact_fulfillment_revenue f
        LEFT JOIN (

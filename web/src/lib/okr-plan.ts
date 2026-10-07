@@ -42,8 +42,8 @@ export interface PlanItem {
   done: boolean; dropped: boolean; note: string | null; sort: number
 }
 
-const DATAPOOL = new Set(["3HKDATAPOOL", "BCDATAPOOL"])
-const normVendor = (v: string) => v.replace(/\s+/g, "").toUpperCase()
+// dim_sku.vendor thật: "3HK DATAPOOL", "BC Datapool (CMHK)", "BC Datapool (Singtel)" — BC phải so tiền tố.
+const isDatapool = (v: string) => { const n = v.replace(/\s+/g, "").toUpperCase(); return n === "3HKDATAPOOL" || n.startsWith("BCDATAPOOL") }
 
 interface Totals { rev: number; gp: number }
 interface PeriodSums {
@@ -66,7 +66,7 @@ function sums(data: MarketData, cur: boolean): PeriodSums {
     c.rev += rev; c.gp += gp
     s.byCountry.set(k.country, c)
     s.byCountryVendor.set(`${k.country}|${k.vendor}`, (s.byCountryVendor.get(`${k.country}|${k.vendor}`) ?? 0) + rev)
-    if (DATAPOOL.has(normVendor(k.vendor))) s.byCountryDatapool.set(k.country, (s.byCountryDatapool.get(k.country) ?? 0) + rev)
+    if (isDatapool(k.vendor)) s.byCountryDatapool.set(k.country, (s.byCountryDatapool.get(k.country) ?? 0) + rev)
     s.byVendor.set(k.vendor, (s.byVendor.get(k.vendor) ?? 0) + rev)
     s.total += rev
     if (rev > 0) {
