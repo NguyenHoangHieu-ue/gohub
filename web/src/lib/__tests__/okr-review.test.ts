@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { reviewKpis, marketAlerts, reviewText, type DailyReview } from "@/lib/okr-review"
-import { buildProposals, analysisQuarterFor } from "@/lib/okr-proposals"
+import { buildProposals, analysisQuarterFor, switchAllowed } from "@/lib/okr-proposals"
 import type { MarketData, MarketSku } from "@/lib/market-breakdown"
 import type { QuoteCompareData } from "@/lib/quote-sources"
 
@@ -72,8 +72,10 @@ describe("buildProposals", () => {
   const compare = {
     quarter: "Q3-2026", group: "ALL", fxMonth: "2026-09", vndPerUsd: 26000, assumptions: { fixedPct: 0.55, dailyPct: 0.38 },
     sources: [{ id: "q1", label: "VNPT (đang chào)", note: "", quoteId: "abc", status: "reviewing" }],
-    rows: [row("J1", "Nhật Bản", "3HK DATAPOOL", 500e6, 2, offer("BC_CMHK", "BC Datapool CMHK", 1.5)),
-           row("J2", "Nhật Bản", "3HK DATAPOOL", 300e6, 2, offer("BC_CMHK", "BC Datapool CMHK", 1.6)),
+    rows: [row("M1", "Malaysia", "Truemove", 500e6, 2, offer("BC_CMHK", "BC Datapool CMHK", 1.5)),
+           row("M2", "Malaysia", "Truemove", 300e6, 2, offer("BC_CMHK", "BC Datapool CMHK", 1.6)),
+           row("J1", "Nhật Bản", "3HK DATAPOOL", 500e6, 2, offer("WM", "WorldMove", 1.2)),
+           row("C1", "Trung Quốc", "3HK DATAPOOL", 500e6, 2, offer("BC_CMHK", "BC Datapool CMHK", 1.2)),
            { ...row("T1", "Thái Lan", "Truemove", 100e6, 1, offer("q1", "VNPT (đang chào)", 0.8)) }],
     skipped: [], unresolvedNames: [],
     gaps: [{ iso: "MN", name: "Mông Cổ", regional: [], sources: ["WorldMove"], ref: [{ spec: "Gói 3GB dùng 7 ngày", best: offer("WM", "WorldMove", 4) }] }],
@@ -82,10 +84,12 @@ describe("buildProposals", () => {
   const ps = buildProposals({ analysis, compare, current: null })
   const keys = ps.map(p => p.key)
   it("đủ các nhóm: đổi nguồn, báo giá chờ, GM giảm, phụ thuộc vendor, nước chưa bán", () => {
-    expect(keys).toContain("switch|Nhật Bản|3HK DATAPOOL|BC_CMHK")
+    expect(keys).toContain("switch|Malaysia|Truemove|BC_CMHK")
     expect(keys).toContain("quote|abc")
     expect(keys).toContain("gmdrop|Nhật Bản")
-    expect(keys).toContain("depend|3HK DATAPOOL")       // 3HK = 75% doanh thu
+    expect(keys).not.toContain("depend|3HK DATAPOOL")   // 3HK/BC Datapool ưu tiên 1–2 → không đề xuất giảm
+    expect(keys.some(k => k.startsWith("switch|Nhật Bản"))).toBe(false)      // Nhật luôn KDDI
+    expect(keys.some(k => k.startsWith("switch|Trung Quốc"))).toBe(false)    // 3HK → BC là đi xuống thứ tự ưu tiên
     expect(keys).toContain("gap|MN")
   })
   it("đề xuất GM giảm có chỉ số theo dõi; xếp theo doanh thu liên quan, nước chưa bán xếp cuối", () => {
@@ -94,6 +98,16 @@ describe("buildProposals", () => {
     expect(ps[ps.length - 1].key).toBe("gap|MN")
     expect(ps.find(p => p.key.startsWith("switch"))!.title).toContain("chuyển 2 gói")
   })
+})
+
+it("switchAllowed theo thứ tự ưu tiên vendor", () => {
+  expect(switchAllowed("Malaysia", "Truemove", "3HK")).toBe(true)
+  expect(switchAllowed("Malaysia", "Truemove", "WM")).toBe(true)          // cùng nhóm "vendor khác"
+  expect(switchAllowed("Malaysia", "BC Datapool (CMHK)", "3HK")).toBe(true)
+  expect(switchAllowed("Malaysia", "3HK DATAPOOL", "BC_CMHK")).toBe(false)
+  expect(switchAllowed("Malaysia", "3HK DATAPOOL", "WM")).toBe(false)
+  expect(switchAllowed("Đài Loan", "3HK DATAPOOL", "WM")).toBe(true)      // ngoại lệ tạm
+  expect(switchAllowed("Nhật Bản", "Truemove", "3HK")).toBe(false)
 })
 
 it("analysisQuarterFor: quý đang chạy/quý tới → quý trước quý hiện tại; quý đã qua → chính nó", () => {

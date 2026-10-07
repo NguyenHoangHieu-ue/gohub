@@ -18,6 +18,19 @@ export interface Proposal {
 }
 
 const DATAPOOL_SOURCES = new Set(["3HK", "BC_CMHK", "BC_SINGTEL"])
+
+// Thứ tự ưu tiên vendor (wiki business/chon-vendor.md, chốt 2026-09-27): 3HK → BC Datapool → (SĐT local) → vendor khác; KHÔNG dùng giá
+// để vượt thứ tự. Nhật Bản luôn KDDI. Ngoại lệ tạm: Đài Loan/Hong Kong đang dùng WM (3HK cần KYC). Số nhỏ = ưu tiên cao.
+const vendorTier = (v: string) => { const n = v.replace(/\s+/g, "").toUpperCase(); return n === "3HKDATAPOOL" ? 1 : n.startsWith("BCDATAPOOL") ? 2 : n === "KDDI" ? 0 : 4 }
+const sourceTier = (s: string) => s === "3HK" ? 1 : s.startsWith("BC_") ? 2 : 4
+const KDDI_MARKETS = new Set(["Nhật Bản"])
+const WM_EXCEPTION_MARKETS = new Set(["Đài Loan", "Hong Kong", "Hồng Kông"])
+export function switchAllowed(market: string, currentVendor: string, source: string): boolean {
+  const cur = vendorTier(currentVendor)
+  if (KDDI_MARKETS.has(market) || cur === 0) return false
+  if (source === "WM" && WM_EXCEPTION_MARKETS.has(market)) return true
+  return sourceTier(source) <= cur
+}
 const tr = (vnd: number) => vnd >= 1e9 ? `${(vnd / 1e9).toFixed(1)} tỷ` : `${Math.round(vnd / 1e6)}tr`
 const pct = (x: number) => `${x.toFixed(1)}%`
 const short = (label: string) => label.replace(" (đang chào)", "")
@@ -62,10 +75,14 @@ export function buildProposals({ analysis, compare, current, topMarkets = 15 }: 
   if (compare) {
     const groups = new Map<string, { market: string; from: string; to: string; toSource: string; n: number; sumPct: number; maxPct: number; rev: number }>()
     for (const r of compare.rows) {
-      if (!r.best || !((r.savePerUnitUsd ?? 0) > 0)) continue
-      const k = `${r.market}|${r.vendor}|${r.best.source}`
-      const g = groups.get(k) ?? { market: r.market, from: r.vendor, to: short(r.best.label), toSource: r.best.source, n: 0, sumPct: 0, maxPct: 0, rev: 0 }
-      g.n++; g.sumPct += r.savePct ?? 0; g.maxPct = Math.max(g.maxPct, r.savePct ?? 0); g.rev += r.rev
+      // Nơi rẻ hơn rẻ nhất mà KHÔNG đi ngược thứ tự ưu tiên vendor (best của bảng so giá có thể là WM rẻ nhất nhưng thấp ưu tiên hơn).
+      if (r.baseUsd === null) continue
+      const best = r.offers.filter(o => o.usd < r.baseUsd! && switchAllowed(r.market, r.vendor, o.source)).sort((x, y) => x.usd - y.usd)[0]
+      if (!best) continue
+      const savePct = (r.baseUsd - best.usd) / r.baseUsd * 100
+      const k = `${r.market}|${r.vendor}|${best.source}`
+      const g = groups.get(k) ?? { market: r.market, from: r.vendor, to: short(best.label), toSource: best.source, n: 0, sumPct: 0, maxPct: 0, rev: 0 }
+      g.n++; g.sumPct += savePct; g.maxPct = Math.max(g.maxPct, savePct); g.rev += r.rev
       groups.set(k, g)
     }
     ;[...groups.values()].filter(g => g.n >= 2 || g.rev >= 20e6).sort((a, b) => b.rev - a.rev).slice(0, 8).forEach(g => {
@@ -81,14 +98,14 @@ export function buildProposals({ analysis, compare, current, topMarkets = 15 }: 
 
     // Báo giá vendor gửi về đang chờ quyết: rẻ hơn ở bao nhiêu gói đang bán.
     for (const s of compare.sources.filter(x => x.quoteId && x.status === "reviewing")) {
-      const wins = compare.rows.filter(r => { const o = r.offers.find(x => x.source === s.id); return o && r.baseUsd !== null && o.usd < r.baseUsd })
+      const wins = compare.rows.filter(r => { const o = r.offers.find(x => x.source === s.id); return o && r.baseUsd !== null && o.usd < r.baseUsd && switchAllowed(r.market, r.vendor, s.id) })
       if (!wins.length) continue
       const rev = wins.reduce((a, r) => a + r.rev, 0)
       const avg = wins.reduce((a, r) => { const o = r.offers.find(x => x.source === s.id)!; return a + (r.baseUsd! - o.usd) / r.baseUsd! * 100 }, 0) / wins.length
       out.push({
         key: `quote|${s.quoteId}`, group: "Vendor & nguồn hàng",
         title: `Chốt báo giá ${short(s.label)}: rẻ hơn ở ${wins.length} gói đang bán`,
-        reason: `Rẻ hơn trung bình ${pct(avg)}; các gói đó bán ${tr(rev)} trong quý ${q}. Báo giá đang ở trạng thái "đang xem".`,
+        reason: `Rẻ hơn trung bình ${pct(avg)} ở các gói đang nhập từ vendor ưu tiên thấp hơn hoặc ngang; các gói đó bán ${tr(rev)} trong quý ${q}. Báo giá đang ở trạng thái "đang xem".`,
         action: "Đàm phán và thử mạng, rồi chuyển báo giá sang Chấp nhận / Từ chối ở tab Thị trường & Báo giá.",
         priority: rev,
       })
@@ -128,7 +145,7 @@ export function buildProposals({ analysis, compare, current, topMarkets = 15 }: 
   for (const [si, mi, rev] of analysis.cells) if (curSet.has(analysis.months[mi])) vendorRev.set(analysis.skus[si].vendor, (vendorRev.get(analysis.skus[si].vendor) ?? 0) + rev)
   for (const [vendor, rev] of vendorRev) {
     const share = totalRev > 0 ? rev / totalRev * 100 : 0
-    if (share < 60) continue
+    if (share < 60 || vendorTier(vendor) <= 2) continue       // 3HK/BC Datapool là ưu tiên số 1–2 + KPI %Datapool → không đề xuất giảm
     const target = +Math.floor(share - 3).toFixed(0)
     out.push({
       key: `depend|${vendor}`, group: "Vendor & nguồn hàng",
