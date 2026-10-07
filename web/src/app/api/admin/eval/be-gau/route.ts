@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
       lastMsg: question, role, name: `eval-${role}`,
       isCost: isCost ?? await canViewCogs(role),
     })
-    return NextResponse.json({ text: r.text, toolsUsed: r.toolsUsed, tokensIn: r.tokensIn, tokensOut: r.tokensOut, ms: Date.now() - t0 })
+    return NextResponse.json({ text: r.text, toolsUsed: r.toolsUsed, tokensIn: r.tokensIn, tokensOut: r.tokensOut, ms: Date.now() - t0, trace: r.trace })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message, ms: Date.now() - t0 }, { status: 500 })
   }

@@ -349,6 +349,12 @@ async function execProduct(a: any): Promise<any> {
 
 export const LARK_CREATE_RE = /(t[aạ]o|l[aà]m|xu[aấ]t|[dđ][uư]a|ghi|g[uử]i).{0,40}(t[aà]i li[eệ]u|\bdoc|sheet|b[aả]ng t[ií]nh|b[aá]o c[aá]o|task|vi[eệ]c|nh[aắ]c).{0,60}lark|lark.{0,40}(t[aà]i li[eệ]u|\bdoc|sheet|b[aả]ng t[ií]nh|task)/i
 
+export interface BeGauTrace {
+  promptChars: number; declChars: number; thinking: string
+  rounds: { ms: number; tin: number; tout: number; calls: string[] }[]
+  tools: { name: string; ms: number; chars: number }[]
+}
+
 // U1a: câu phân tích / so sánh / lý do / đề xuất / báo cáo, câu dài hoặc có file → suy nghĩ sâu (HIGH); tra cứu nhanh → LOW.
 const DEEP_RE = /so s[aá]nh|v[iì] sao|t[aạ]i sao|nguy[eê]n nh[aâ]n|ph[aâ]n t[ií]ch|nh[aậ]n x[eé]t|[dđ][eề] xu[aấ]t|xu h[uướ][oớ]ng|k[eế] ho[aạ]ch|b[aá]o c[aá]o|deep ?dive|[dđ][aá]nh gi[aá]|chi[eế]n l[uượ][oợ]c|gi[aả]i ph[aá]p|n[eê]n l[aà]m g[iì]|t[oố]i [uư]u|d[uự] b[aá]o/i
 export function deepQuestion(msg: string, fileCount = 0): boolean {
@@ -368,7 +374,7 @@ export async function runBeGau(opts: {
   extraDirective?: string   // vd quy tắc tạm thời
   fileContexts?: FileContext[]  // ảnh/PDF/file người dùng đính kèm (s190+3)
   onChunk?: (text: string) => void  // s195+18: stream token thật ra route — gọi mỗi khi Gemini sinh thêm đoạn text
-}): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number }> {
+}): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number; trace: BeGauTrace }> {
   const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, onChunk, larkOpenId = null } = opts
   const isPriv = priv(role)
   const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
@@ -464,8 +470,12 @@ export async function runBeGau(opts: {
   const contents: Content[] = [...compressedHistory, { role: "user", parts: userParts }]
   // Tích luỹ token qua MỌI vòng gọi model (đúng pattern creator-ai.ts s196+7) — cost dashboard.
   let tokensIn = 0, tokensOut = 0
+  // Số đo để tối ưu tốc độ (eval U1): thời gian/token từng lượt model, thời gian + độ lớn kết quả từng tool.
+  const trace: BeGauTrace = { promptChars: systemInstruction.length, declChars: JSON.stringify(functionDeclarations).length, thinking: String(thinkingLevel), rounds: [], tools: [] }
   const turn = async (): Promise<TurnResult> => {
+    const t0 = Date.now()
     const r = await streamTurn(GEMINI_MODEL, contents, config, onChunk)
+    trace.rounds.push({ ms: Date.now() - t0, tin: r.tokensIn, tout: r.tokensOut, calls: r.functionCalls.map(c => c.name ?? "") })
     tokensIn += r.tokensIn; tokensOut += r.tokensOut
     if (r.content.parts?.length) contents.push(r.content)
     return r
@@ -487,7 +497,13 @@ export async function runBeGau(opts: {
     // Toàn bộ nhánh bọc try/catch NGOÀI CÙNG — 1 tool lỗi (network/DB timeout) trước đây làm Promise.all
     // reject cả round, sập TOÀN BỘ câu trả lời dù tool khác đã chạy xong. Nay tool lỗi chỉ trả
     // functionResponse báo lỗi cho MỘT tool đó, model tự quyết định retry/báo user thay vì mất trắng.
-    const fnParts = await Promise.all(calls.map(async (call: any) => {
+    const timed = (fn: (call: any) => Promise<any>) => async (call: any) => {
+      const t0 = Date.now()
+      const out = await fn(call)
+      trace.tools.push({ name: call.name ?? "", ms: Date.now() - t0, chars: JSON.stringify(out).length })
+      return out
+    }
+    const fnParts = await Promise.all(calls.map(timed(async (call: any) => {
       const a = call.args as any
       const name = call.name ?? ""
       toolsUsed.add(name)
@@ -556,7 +572,7 @@ export async function runBeGau(opts: {
       } catch (e: any) {
         return wrap({ error: e?.message || "Tool execution failed" })
       }
-    }))
+    })))
 
     contents.push({ role: "user", parts: fnParts })
     genResult = await turn()
@@ -606,5 +622,5 @@ export async function runBeGau(opts: {
     })
   }
 
-  return { text: finalText, sources, toolsUsed: Array.from(toolsUsed), tokensIn, tokensOut }
+  return { text: finalText, sources, toolsUsed: Array.from(toolsUsed), tokensIn, tokensOut, trace }
 }

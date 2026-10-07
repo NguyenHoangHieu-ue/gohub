@@ -35,7 +35,7 @@ async function runCase(base, c) {
       history = [{ role: "user", text: c.setup }, { role: "model", text: s.text }]
     }
     const r = await ask(base, c, c.question, history)
-    return { id: c.id, answer: r.text, toolsUsed: r.toolsUsed, tokensIn: r.tokensIn, tokensOut: r.tokensOut, ms: r.ms, setupAnswer: history[1]?.text }
+    return { id: c.id, answer: r.text, toolsUsed: r.toolsUsed, tokensIn: r.tokensIn, tokensOut: r.tokensOut, ms: r.ms, trace: r.trace, setupAnswer: history[1]?.text }
   } catch (e) {
     return { id: c.id, error: e.message, ms: Date.now() - t0 }
   }
