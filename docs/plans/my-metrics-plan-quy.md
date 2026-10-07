@@ -1,7 +1,7 @@
 # Plan — My Metrics: Kế hoạch quý tự đo + Duyệt case Lark tự động + Đánh giá hằng ngày
 
 > File TẠM (theo quy ước CLAUDE.md): xong hết mốc (hoặc Hiếu bỏ plan) thì xoá file, chuyển kiến thức còn giá trị sang wiki
-> `docs/wiki/system/tabs/analytics-my-metrics.md`. Tạo 2026-10-06 (s225). **Trạng thái (2026-10-06): M0 + M1 XONG, đã lên `main` (`913d95ee`). M2 bỏ. LẦN SAU: M3 → M4 → M5.**
+> `docs/wiki/system/tabs/analytics-my-metrics.md`. Tạo 2026-10-06 (s225). **Trạng thái (2026-10-07): M0 + M1 XONG, đã lên `main` (`913d95ee`). M2 bỏ. M3 XONG trên staging (chờ chạy v70 + QA). LẦN SAU: M4 → M5.**
 
 ### Nhật ký chạy thật 2026-10-06
 - Quét lại 120 ngày lần 1: 0 case — tên group thật "Telecom Products (Private)" (có s), luật so đúng chữ → sửa so lỏng.
@@ -128,7 +128,7 @@ Ngoài kế hoạch, thêm **cảnh báo tự động** (không cần anh đặt
 | **M0** ✅ | Sửa dữ liệu bot: đọc chữ tin gốc, tên người, kiểm "tự đăng", emoji mọi tin; ân hạn khoá quý 7 ngày | không | nhỏ |
 | **M1** ✅ | Bot theo luật C0: group Telecom Product, tính từ lúc tag, YES/Typing, lệnh "Note đi", đọc lại case đang mở, mở lại Q3 | không (dùng `reviewed_by = auto:typing/auto:yes/auto:rule`) | vừa |
 | ~~M2~~ | BỎ (Hiếu chọn đánh dấu bằng emoji thay cho AI tự quyết) | — | — |
-| **M3** | Kế hoạch quý: bảng `okr_plan_items`, mẫu việc ở B2, tự tính tiến độ từ tab Thị trường/So giá/sản phẩm | v71: `okr_plan_items` | lớn |
+| **M3** ✅ | Kế hoạch quý: bảng `okr_plan_items`, 8 loại việc tự đo (wiki `analytics-my-metrics.md` §s227) | v70: `okr_plan_items` | lớn |
 | **M4** | Đánh giá hôm nay + cảnh báo tự động + Lark DM hằng ngày | không (dùng `app_settings`) | vừa |
 | **M5** | Đối chiếu sau 2 tuần chạy thật: tỷ lệ bot đúng, số case anh còn phải duyệt, chỉnh ngưỡng | không | nhỏ |
 
