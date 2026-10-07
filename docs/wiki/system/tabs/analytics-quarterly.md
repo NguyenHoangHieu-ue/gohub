@@ -739,3 +739,20 @@ Nguyên nhân: `squad-progress/route.ts` chỉ giữ tháng đã bắt đầu th
   "Thực tế". Có ≥ 2 KH → thêm dòng "TỔNG n KH khớp …" cho từng kỳ (%CM1, 3HK% tính lại từ tổng).
 - Số dùng CHÍNH công thức của hàng mở rộng "Chi tiết theo Tháng" (actualX ?? X, × `monthKpiFactor`, ước tính `pr.exX × số ngày tháng /
   số ngày đã có`, Tổng Quý = `custPr`) → khớp màn hình. Ch.Cost = chi phí KH nhập tay (Turso), KHÔNG gồm Group Cost.
+
+## s226 (2026-10-07) — Group Cost chia theo pháp nhân khi lọc VN/US
+
+Hiếu báo: tab Performance chọn US thì B2C âm rất nhiều. Gốc: `analytics_channel_group_costs` nhập 1 bảng cho cả công ty
+(không có cột pháp nhân) nhưng route trừ NGUYÊN bảng vào bất kỳ bộ lọc nào → US bị trừ 130–150tr/tháng (CM1 B2C US âm mọi
+tháng, T9 −115tr), VN cũng bị trừ đủ → VN + US ≠ ALL (trừ 2 lần). Đo sống production trước khi sửa.
+
+- Luật (Hiếu chốt): khoản có chữ **"Global"** trong `item_name` (không phân biệt hoa thường) → **US**; còn lại → **VN**,
+  kể cả dòng không tên (T1–T6/2026 là số gộp sync từ Turso 04/08, không tên, không ghi chú) và "Branding & media" T8.
+  ALL giữ nguyên toàn bộ.
+- Hàm chung `filterGroupCostsByCompany()` ở `lib/bod-data.ts`; `fetchCosts` đọc thêm `item_name`. Áp ở mọi route có lọc
+  công ty mà trừ group cost: `quarterly-report` (cả quý trước cho %QoQ), `squad-progress`, `quarterly-b2b-customers`,
+  `staff-report`, `monthly-kpis` (bump cache key `monthly-kpis3`). Test `lib/__tests__/group-cost-company.test.ts`.
+- ⚠️ Người nhập Group Cost phải ghi tên khoản có "Global" cho chi phí US; tên khác đều tính cho VN.
+- Cùng lúc kiểm (không sửa, do dữ liệu nguồn): từ 12/08/2026 đơn Zalo (S0028)/Facebook (S0018) chuyển hết sang
+  S0020 "VN B2C Other" (kênh Misc.) → bảng B2C theo kênh lệch VN-Social→Misc.; chi phí kênh (`analytics_channel_costs`)
+  cho kênh B2C chỉ có T4, T9–T10 không có dòng nào.

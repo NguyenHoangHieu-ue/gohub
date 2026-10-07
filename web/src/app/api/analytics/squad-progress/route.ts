@@ -5,7 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { analyticsGuard, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
-import { fetchCosts } from "@/lib/bod-data"
+import { fetchCosts, filterGroupCostsByCompany } from "@/lib/bod-data"
 import { buildQuarterMonthMeta, getKpiFactor, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 import { fetchB2BLifecycleRows, classifyB2BLifecycle, fetchCustomerNames, type B2BLifecycleRow } from "@/lib/analytics-engine/b2b-lifecycle"
@@ -150,7 +150,7 @@ export async function GET(req: NextRequest) {
     // v2 (s214b): thêm org_key/org_name vào SELECT/GROUP BY (gộp bảng KH theo Organization) — bump để tránh
     // đọc cache cũ thiếu 2 cột này (custRows.org_key sẽ undefined → fallback về mã lẻ, không gộp được gì).
     const rawKey = `squad_raw_v2:${quarter}:${year}:${companyCode}:${qEnd}:${exclHash(excludedCustomers)}`
-    const [raw, { groupCosts }, lifecycleRows] = await Promise.all([
+    const [raw, { groupCosts: allGroupCosts }, lifecycleRows] = await Promise.all([
       cachedQuery(rawKey, async () => {
         const [custRows, picRows, prevCustRevRows] = await Promise.all([
         queryAnalytics<Record<string, string>>(`
@@ -214,6 +214,7 @@ export async function GET(req: NextRequest) {
       fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)).catch(() => [] as B2BLifecycleRow[]),
     ])
     const { custRows, picRows, prevCustRevRows } = raw
+    const groupCosts = filterGroupCostsByCompany(allGroupCosts, companyCode)
 
     // Load targets + chi phí KH song song
     const custCodes = [...new Set(custRows.map(r => r.customer_code))]
