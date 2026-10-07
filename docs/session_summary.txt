@@ -10828,3 +10828,4 @@ Chi tiết: wiki `analytics-my-metrics.md` §s227b.
 
 ## s227c (2026-10-07) — Sửa quy tắc KDDI/Nhật Bản
 - Hiếu: Nhật KHÔNG "luôn KDDI" — áp dụng thứ tự chung (3HK trước hoặc nguồn rẻ hơn). KDDI chỉ có gói Unlimited; giữ lại vì KDDI trả tiền quảng cáo và các phí khác. Sửa wiki business `chon-vendor.md`, `vendor-worldmove.md`, `combo-chuan.md`, `gioi-thieu-gohub.md`; bộ đề xuất kế hoạch quý (`okr-proposals.ts`) coi KDDI là vendor khác, đề xuất chuyển từ KDDI có nhắc phí quảng cáo. Báo cáo Q4 (Artifact + docx) bỏ phát hiện "Nhật lệch chính sách" và việc B4.
+- (s227c) Hiếu sửa target %Datapool Q4 = 75% (app_settings okr.Q4-2026, Đánh giá hôm nay đã đọc đúng: 69,6%/75%). Báo cáo Q4 tính lại: cần +1,65 tỷ/quý; đạt ≈75,7% nếu chuyển vendor nhỏ chỉ data (≈1,06 tỷ) + Đài Loan/HK từ WorldMove sang BC Datapool (≈0,74 tỷ), không cần đụng Thái Lan. Bỏ việc "Chốt mục tiêu %Datapool" khỏi nhóm Cần sếp quyết.
