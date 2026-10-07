@@ -10836,3 +10836,7 @@ Chi tiết: wiki `analytics-my-metrics.md` §s227b.
 - Sửa lỗi DM hiện `**…**`: tin có markdown gửi dạng card Lark, có dự phòng text. Áp cho mọi tin bot.
 - Kế hoạch nâng cấp Bé Gấu tổng thể (gộp lõi, chất lượng trả lời, báo cáo/biểu đồ, model Google Nano Banana/Veo/TTS…) đang ở bước ý tưởng, Hiếu đã chốt: hạn mức API thoải mái, bỏ Pollinations/Stability/Kling chuyển sang Google, màu thương hiệu từ gohub.vn (#1446A5, #003A93, #009CE0, #0F1012, #F7F8F8), chưa khoá Gấu Pro.
 - (s227d QA staging) ĐẠT: DM đánh giá có `**…**` gửi dạng card, log không có cảnh báo `[lark]` (card được nhận). Bé Gấu web tạo được Lark Doc "[QA2] Top 5 thị trường Q3-2026" (bảng + 3 nhận xét) + Lark Task "[QA2] Xem lại báo giá VNPT" hạn 10/10 giao cho Hiếu, câu trả lời có link cả hai. Lần gọi đầu "[QA] …" (bị ngắt phía trình duyệt) có thể cũng đã tạo 1 Doc — Hiếu tự xoá các file/task [QA]. Ghi nhận chất lượng: nhận xét "tối ưu COGS Thái Lan / chuyển Datapool" sai với phân tích (Truemove đang rẻ nhất) → thuộc việc nâng chất lượng trả lời.
+- Merge `main` 2026-10-07 (`741e59d0`, theo yêu cầu Hiếu sau khi xem tin Lark + tài liệu Bé Gấu tạo): tsc/build OK, vitest 604 qua + 2 lỗi có sẵn.
+
+## s227e (2026-10-07) — Plan nâng cấp Bé Gấu tổng thể
+- Viết `docs/plans/be-gau-upgrade.md` theo các điểm Hiếu đã chốt (chưa khoá Gấu Pro, Lark mức A xong, hạn mức API thoải mái, bỏ Pollinations/Stability/Kling → Google, màu gohub.vn). Mốc U0 → U5, chờ Hiếu duyệt + trả lời 4 câu ở §6.
