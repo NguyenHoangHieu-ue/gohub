@@ -10849,3 +10849,4 @@ Chi tiết: wiki `analytics-my-metrics.md` §s227b.
 ## s227g (2026-10-07) — U1b lõi agent chung
 - Tạo `web/src/lib/agents/core/agent-loop.ts` (`runAgentLoop`); Bé Gấu + Gấu Pro chạy cùng vòng lặp, giữ nguyên hành vi (cổng duyệt, kế hoạch, kỹ năng, việc nền, trace, ép larkWorkspace, HIGH chỉ lượt đầu).
 - Gấu Pro dựng lại config mỗi lượt (bỏ cờ skillsChanged). tsc + lint PASS; vitest 608 pass, 2 fail có sẵn không liên quan (bc-datapool thiếu file mẫu ở root, bridge-version zip). Wiki chatbot.md §s227g.
+- Eval U1b (40 câu, staging, concurrency 2): **9,85/10** (U1c 9,75; baseline 8,72), TB 46,4s/câu, trung vị 42s, token vào ~158k, 0 lỗi. Câu dưới 10: #15 lộ `ref_countries`, #1 lộ `staff_code`, #2 thiếu so tuần trước, #20 tự gán nguyên nhân ngập lụt, #35 CM1 diễn qua "Operation Cost". Gấu Pro chưa thử sống sau U1b (Chrome treo). LẦN SAU: U3.
