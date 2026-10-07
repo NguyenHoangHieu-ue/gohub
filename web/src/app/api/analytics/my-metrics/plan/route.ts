@@ -93,7 +93,7 @@ function clean(b: Body) {
   return out
 }
 
-async function guardWrite(req: NextRequest) {
+async function guardWrite() {
   const session = await getServerSession(authOptions)
   if (!session) return { err: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
   if (!(await canWriteTab(session.user.username, "my-metrics", WRITE_ROLES)))
@@ -109,7 +109,7 @@ async function lockedErr(id: string | undefined, quarter: string | undefined) {
 
 // POST — tạo việc mới { quarter, kind, title, scope, baseline?, target?, due_date?, note? }
 export async function POST(req: NextRequest) {
-  const g = await guardWrite(req); if (g.err) return g.err
+  const g = await guardWrite(); if (g.err) return g.err
   const b = await req.json() as Body
   if (!validQuarter(b.quarter ?? null)) return NextResponse.json({ error: "quarter dạng Q4-2026" }, { status: 400 })
   if (!b.kind || !(b.kind in PLAN_KINDS)) return NextResponse.json({ error: "Loại việc không hợp lệ" }, { status: 400 })
@@ -129,19 +129,18 @@ export async function POST(req: NextRequest) {
 
 // PATCH { id, ...fields } — sửa/tick xong/bỏ việc
 export async function PATCH(req: NextRequest) {
-  const g = await guardWrite(req); if (g.err) return g.err
+  const g = await guardWrite(); if (g.err) return g.err
   const b = await req.json() as Body
   if (!b.id) return NextResponse.json({ error: "id required" }, { status: 400 })
   const locked = await lockedErr(b.id, undefined); if (locked) return locked
-  const { quarter: _q, ...rest } = b
-  const { error } = await supabaseAdmin.from("okr_plan_items").update({ ...clean(rest), updated_at: new Date().toISOString() }).eq("id", b.id)
+  const { error } = await supabaseAdmin.from("okr_plan_items").update({ ...clean(b), updated_at: new Date().toISOString() }).eq("id", b.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
 
 // DELETE ?id= — xoá hẳn (nhập nhầm). Muốn giữ lịch sử thì PATCH dropped=true.
 export async function DELETE(req: NextRequest) {
-  const g = await guardWrite(req); if (g.err) return g.err
+  const g = await guardWrite(); if (g.err) return g.err
   const id = req.nextUrl.searchParams.get("id")
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
   const locked = await lockedErr(id, undefined); if (locked) return locked
