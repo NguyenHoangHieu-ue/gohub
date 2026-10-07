@@ -10840,3 +10840,8 @@ Chi tiết: wiki `analytics-my-metrics.md` §s227b.
 
 ## s227e (2026-10-07) — Plan nâng cấp Bé Gấu tổng thể
 - Viết `docs/plans/be-gau-upgrade.md` theo các điểm Hiếu đã chốt (chưa khoá Gấu Pro, Lark mức A xong, hạn mức API thoải mái, bỏ Pollinations/Stability/Kling → Google, màu gohub.vn). Mốc U0 → U5, chờ Hiếu duyệt + trả lời 4 câu ở §6.
+
+## s227f (2026-10-07) — Eval Bé Gấu + U1a
+- Bộ chấm điểm: route `/api/admin/eval/be-gau` (CRON_SECRET) + `web/scripts/eval-be-gau.mjs` + 40 câu `web/eval/be-gau-cases.json` (Hiếu duyệt), giám khảo `gemini-pro-latest`, kết quả `web/eval/results/`.
+- Baseline 8,43/10 (nghiệp vụ 1,38/2 yếu nhất). U1a (`629d7d44`: SDK mới, thinking HIGH cho câu phân tích, khối kết luận nghiệp vụ + khung trả lời, chặn cột giá vốn khi vai trò không có quyền) → 8,80/10, TB 55s/câu (baseline 38s).
+- Phát hiện: `canViewCogs()` trả true cho MỌI vai trò (quyết định cũ "margin_cogs mở cho mọi role") → giám khảo trừ oan câu GP; câu 37 (b2c hỏi giá vốn phải từ chối) ngược chính sách — chờ Hiếu chốt. KB `vendor_priority_and_pricing` còn "Nhật ưu tiên KDDI" → đã sửa; trang wiki web-only "Quy Tắc Chọn Vendor" (kb_wiki_pages) còn quy tắc cũ, sync KB chép lại → chờ Hiếu cho xoá.
