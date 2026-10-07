@@ -11,6 +11,7 @@ import { compressHistory }              from "./creator/compress"
 import { kbIndexBlock, relevantKbBlock } from "./creator/kb-recall"
 import { genWithRetryStream }            from "./gemini-stream"
 import { detectAndLogLearning }          from "./learning"
+import { larkWorkspaceDecl, runLarkWorkspace } from "./lark-workspace"
 
 // ─── s190: gộp Gấu Pro vào Bé Gấu ──────────────────────────────────────────────
 // Theo yêu cầu Hiếu: Bé Gấu nay có TẤT CẢ công cụ Gấu Pro (declarations/executor dùng CHUNG qua
@@ -259,6 +260,12 @@ sql: SELECT c.name, SUM(f.fulfilled_revenue_amount_vnd) AS revenue FROM fact_ful
   Bảng ≤ 15 dòng thì thôi, trừ khi được yêu cầu riêng.
 - Số trong CSV: số thô, không dấu phân cách nghìn.
 
+## Tạo tài liệu / bảng tính / việc trong Lark của người hỏi
+- Khi người dùng nhờ làm báo cáo/tài liệu trong Lark, đưa bảng số vào Lark Sheets, hoặc tạo task/nhắc việc cho chính họ → dùng công cụ tạo trong Lark (tài liệu: nội dung markdown đầy đủ có tiêu đề, bảng, nhận xét; bảng tính: dòng đầu là tên cột, số để dạng số thô).
+- Lấy số liệu thật TRƯỚC, rồi mới tạo file. Người dùng sẽ nhận tin nhắn Lark báo trước và link khi xong.
+- Sau khi tạo: câu trả lời PHẢI có link mở file/task (dạng [Mở tài liệu](link)). Chỉ nói "đã tạo" khi công cụ trả về thành công; lỗi thì báo đúng lỗi.
+- Không tạo file khi người dùng chỉ hỏi số liệu bình thường.
+
 ## Phân tích file/ảnh người dùng gửi kèm
 - Đọc kỹ nội dung file/ảnh rồi trả lời đúng câu hỏi về nó.
 - Bảng tính/CSV: mô tả cấu trúc, đếm dòng, liệt kê cột, nêu số liệu chính nếu được hỏi.
@@ -342,11 +349,12 @@ export async function runBeGau(opts: {
   userId?: string
   sessionId?: string
   isCost?: boolean          // canViewCogs
+  larkOpenId?: string | null  // người hỏi trên Lark — để tạo Doc/Sheet/task cho họ (lark-workspace.ts)
   extraDirective?: string   // vd quy tắc tạm thời
   fileContexts?: FileContext[]  // ảnh/PDF/file người dùng đính kèm (s190+3)
   onChunk?: (text: string) => void  // s195+18: stream token thật ra route — gọi mỗi khi Gemini sinh thêm đoạn text
 }): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number }> {
-  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, onChunk } = opts
+  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, onChunk, larkOpenId = null } = opts
   const isPriv = priv(role)
   const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
 
@@ -391,6 +399,7 @@ export async function runBeGau(opts: {
   // Hiếu chỉ đăng ký cho admin/creator (GP_TOOLS_ADMIN_ONLY) — Gemini không thấy thì không gọi được.
   const functionDeclarations = [
     readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl, webSearchDecl,
+    larkWorkspaceDecl,
     ...GP_TOOLS_OPEN,
     ...(isAdminCreator ? GP_TOOLS_ADMIN_ONLY : []),
   ]
@@ -493,6 +502,9 @@ export async function runBeGau(opts: {
         const srcText = s.length ? "\n\nSources:\n" + s.map((x: any, i: number) => `[${i + 1}] ${x.title}: ${x.url}`).join("\n") : ""
         return wrap({ result: result + srcText, instruction: "Cite the source URLs when using this info." })
       }
+
+      if (call.name === "larkWorkspace")
+        return wrap(await runLarkWorkspace(a, larkOpenId))
 
       if (call.name === "queryGA4") {
         try {

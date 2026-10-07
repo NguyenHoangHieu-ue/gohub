@@ -7,7 +7,7 @@ import { runBeGau }                  from "@/lib/agents/be-gau"
 import {
   sendLarkMessage, replyLarkMessage, replyLarkTable,
   parseMarkdownTable, splitTextAndTable,
-  getLarkUserInfo, stripMarkdown, getCreatorLarkOpenId,
+  getLarkUserInfo, getCreatorLarkOpenId,
 } from "@/lib/lark"
 import type { Message, UserRole }    from "@/lib/agents/types"
 import { captureForOkrLog }           from "@/lib/okr-lark-capture"
@@ -421,7 +421,7 @@ async function replyCreatorDM(openId: string, messageId: string, threadId: strin
   // Mã duyệt ghép bằng code (không trông vào model nhắc lại cho đúng).
   if (gp.pendingActions.length) response += "\n\n" + gp.pendingActions.map(a =>
     `🔐 Chờ duyệt #${a.code}: ${a.summary}\nLý do: ${a.reason}\nGõ "duyệt ${a.code}" hoặc "từ chối ${a.code}".`).join("\n\n")
-  await replyLarkMessage(messageId, stripMarkdown(response))
+  await replyLarkMessage(messageId, response)
   saveLarkMessage(openId, threadId, "user", userText)
   saveLarkMessage(openId, threadId, "assistant", response)
   // G3: tự rút trí nhớ từ tin DM của creator (chỉ lời người dùng; bỏ qua lệnh duyệt / khi model đã tự lưu).
@@ -467,7 +467,7 @@ async function processAndReply(openId: string, chatId: string, messageId: string
 
     // Guardian: câu hỏi về nội bộ hệ thống → từ chối lịch sự ("hỏi Hiếu"), không gọi agent
     if (!guard.allowed) {
-      await replyLarkMessage(messageId, stripMarkdown(guard.reason))
+      await replyLarkMessage(messageId, guard.reason)
       responseSent = true
       saveLarkMessage(openId, threadId, "user",      userText)
       saveLarkMessage(openId, threadId, "assistant", guard.reason)
@@ -498,7 +498,7 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     // Bé Gấu: 1 agent function-calling (giống web) — Lark không render chart nên bỏ khối chart.
     const beGau = await runBeGau({
       geminiHistory: larkHistory, lastMsg: userText, role, name: name || openId,
-      userId: openId, isCost,
+      userId: openId, isCost, larkOpenId: openId ?? null,
       extraDirective: priceDirective + "\n\n(Nội bộ) Kênh trả lời: Lark — KHÔNG dùng khối \`\`\`chart (Lark không render được).",
     })
     let response = beGau.text.replace(/```chart[\s\S]*?```/g, "").trim()
@@ -512,11 +512,11 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     const table = split ? parseMarkdownTable(split.tableText) : null
 
     if (table) {
-      const preText = split!.preText ? stripMarkdown(split!.preText) : ""
+      const preText = split!.preText ?? ""
       await replyLarkTable(messageId, chatId, preText, table.headers, table.rows)
       responseSent = true  // card đã gửi (xlsx là optional, không throw)
     } else {
-      await replyLarkMessage(messageId, stripMarkdown(response))
+      await replyLarkMessage(messageId, response)
       responseSent = true
     }
 

@@ -109,7 +109,8 @@ async function appendMarkdown(token: string, documentId: string, markdown: strin
   return inserted
 }
 
-async function run(token: string, a: Args): Promise<any> {
+// Token truyền vào: user token (Gấu Pro, thao tác dưới tên creator) hoặc token bot (Bé Gấu mức A — lib/agents/lark-workspace.ts).
+export async function runLarkDocsWithToken(token: string, a: Args): Promise<any> {
   switch (a.action) {
     case "search": {
       if (!a.query) throw new Error("search cần query.")
@@ -187,7 +188,7 @@ export async function runLarkDocs(args: Args): Promise<{ result?: any; error?: s
   const token = await getLarkUserToken()
   if (!token) return { error: "Chưa kết nối Lark — bấm \"Kết nối Lark\" ở header Gấu Pro." }
   try {
-    return { result: await run(token, args) }
+    return { result: await runLarkDocsWithToken(token, args) }
   } catch (e) {
     const msg = (e as Error).message
     // 99991679 = token thiếu scope user — thường do app vừa thêm quyền nhưng chưa cấp quyền lại.

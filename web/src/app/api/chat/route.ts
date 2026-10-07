@@ -10,6 +10,7 @@ import { checkRateLimit }                      from "@/lib/rate-limit"
 import { parseUploadedFile, type FileContext } from "@/lib/agents/file-parser"
 import { usedDbTaskTool }                      from "@/lib/okr-helpers"
 import { estimateCostUsd }                     from "@/lib/agents/gemini-pricing"
+import { larkOpenIdOf }                        from "@/lib/agents/lark-workspace"
 
 // Hobby plan trần cứng 60s (Vercel Runtime Timeout Error thật, xem log s195+14) — nâng lên 300s (Hobby +
 // Fluid Compute cho phép tới 5 phút, không cần nâng gói). Giữ nguyên dù s195+18 đã thêm stream token thật
@@ -135,8 +136,9 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           controller.enqueue(encoder.encode(`__AGENT__:be-gau:Bé Gấu\n`))
+          const larkOpenId = await larkOpenIdOf((session.user as any).username) ?? await larkOpenIdOf(session.user.email)
           const { text, sources, toolsUsed, tokensIn, tokensOut } = await runBeGau({
-            geminiHistory, lastMsg, role, name,
+            geminiHistory, lastMsg, role, name, larkOpenId,
             userId: identity || session.user.email || undefined,
             sessionId: (session as any)?.sessionId || undefined,
             isCost, extraDirective: priceDirective,
