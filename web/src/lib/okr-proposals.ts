@@ -121,7 +121,7 @@ export function buildProposals({ analysis, compare, current, topMarkets = 15 }: 
       out.push({
         key: `gmdrop|${market}`, group: "Giá vốn",
         title: `${market}: biên lãi giảm từ ${pct(gmPrev)} xuống ${pct(gm)}`,
-        reason: `Doanh thu quý ${q} ${tr(a.rev)} (top ${topMarkets} thị trường); GM% giảm ${pct(gmPrev - gm)} so với quý trước.`,
+        reason: `Doanh thu quý ${q} ${tr(a.rev)} (top ${topMarkets} thị trường); GM% giảm ${(gmPrev - gm).toFixed(1)} điểm % so với quý trước.`,
         action: "Tìm gói/vendor kéo biên lãi xuống (giá vốn tăng hay chuyển sang gói lãi thấp), đàm phán lại hoặc đổi nguồn.",
         priority: a.rev,
         track: { kind: "market_gm", scope: { country: market }, target: +gmPrev.toFixed(1), label: `GM% ${market} về lại ${pct(gmPrev)}` },
