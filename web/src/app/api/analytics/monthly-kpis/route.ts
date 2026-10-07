@@ -8,6 +8,7 @@ import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 import { supabaseAdmin } from "@/lib/supabase"
+import { filterGroupCostsByCompany } from "@/lib/bod-data"
 
 function getMonthStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
   // excludedCustomers fetch TRƯỚC cacheKey (thay vì trong callback) để hash vào key — đổi danh sách loại
   // trừ ở Quarter Report Settings phải tự làm mới cache route này (xem cache-architecture audit).
   const { excludedCustomers } = await fetchQuarterlySettings()
-  const cacheKey = `monthly-kpis2:${companyCode}:${dateColumn}:${startDate}:${endDate}:${exclHash(excludedCustomers)}`
+  const cacheKey = `monthly-kpis3:${companyCode}:${dateColumn}:${startDate}:${endDate}:${exclHash(excludedCustomers)}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -104,9 +105,9 @@ export async function GET(req: NextRequest) {
       // Supabase: group costs per month (B2B + B2C — full month budget)
       const { data: gcData } = await supabaseAdmin
         .from("analytics_channel_group_costs")
-        .select("group_name, month, amount")
+        .select("group_name, month, amount, item_name")
         .in("month", months)
-      const groupCosts = (gcData || []) as { group_name: string; month: string; amount: string }[]
+      const groupCosts = filterGroupCostsByCompany((gcData || []) as { group_name: string; month: string; amount: string; item_name: string | null }[], companyCode)
 
       // B2B per-customer cost (Turso b2b_customer_cost_monthly) — khớp Quarter Report/b2b-kpis,
       // KHÔNG dùng analytics_channel_costs cho B2B (tránh double-count với Turso).

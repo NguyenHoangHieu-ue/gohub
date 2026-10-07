@@ -5,6 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, getMonthsInRange, getGroupCostsForMonths, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, cachedQuery } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { filterGroupCostsByCompany } from "@/lib/bod-data"
 
 export const maxDuration = 60
 
@@ -152,7 +153,7 @@ export async function GET(req: NextRequest) {
     ])
 
     // Tính tổng chi phí nhóm B2B / B2C theo kỳ (có pro-rata ratio)
-    const groupCosts = groupCostsRaw as Array<{ group_name: string; month: string; amount: number }>
+    const groupCosts = filterGroupCostsByCompany(groupCostsRaw as Array<{ group_name: string; month: string; amount: number; item_name?: string | null }>, companyCode)
     let totalB2BCost = 0, totalB2CCost = 0
     for (const gc of groupCosts) {
       const ratio = getDaysInMonth(gc.month) > 0

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
-import { fetchCosts, getDaysInMonth, getDaysInRange, matchChannelCost } from "@/lib/bod-data"
+import { fetchCosts, filterGroupCostsByCompany, getDaysInMonth, getDaysInRange, matchChannelCost } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash, QREPORT_CACHE_PREFIX } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts, type CostRecord } from "@/lib/b2b-customer-cost"
 import { splitQuarterRows } from "@/lib/analytics-engine/quarter-rows"
@@ -130,7 +130,7 @@ export async function GET(req: NextRequest) {
   const INACTIVE_FILTER = `AND NOT EXISTS (SELECT 1 FROM inactive_cust ic WHERE ic.code = TRIM(f.customer_code))`
 
   try {
-    const [rawData, { channelCosts, groupCosts }, { channelCosts: prevChannelCosts, groupCosts: prevGroupCosts }, customerCostMap, prevCustomerCostMap, lifecycleRows] = await Promise.all([
+    const [rawData, { channelCosts, groupCosts: allGroupCosts }, { channelCosts: prevChannelCosts, groupCosts: allPrevGroupCosts }, customerCostMap, prevCustomerCostMap, lifecycleRows] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
         // s203: GỘP 7 query (mỗi cái quét lại cả bảng fact ~2-4s) thành 2 query trên KHOẢNG [quý trước → quý này] rồi
         // tách theo tháng ở JS. Trước: 7 lần quét / 2 luồng ≈ 12-22s khi cache nguội. Cùng bộ lọc (INACTIVE/exclude/ship/
@@ -217,6 +217,8 @@ export async function GET(req: NextRequest) {
       fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)).catch(() => [] as import("@/lib/analytics-engine/b2b-lifecycle").B2BLifecycleRow[]), // s200
     ])
 
+    const groupCosts = filterGroupCostsByCompany(allGroupCosts, companyCode)
+    const prevGroupCosts = filterGroupCostsByCompany(allPrevGroupCosts, companyCode)
     const { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows, prevCustRevRows, srcRows } = rawData
 
     // Index revenue B2B theo `${month}_${code}` để áp chi phí per-customer đúng (percent × revenue KH đó).

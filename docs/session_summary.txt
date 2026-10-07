@@ -10798,3 +10798,12 @@ việc không đo bằng số); (3) đánh giá tự động — thực tế vs 
 - (s225 tiếp) Merge main d62a1f81 + quét lại 120 ngày trên production: 0 case vì tên group thật 'Telecom Products (Private)' (có s) mà luật so đúng từng chữ → 81 thread bị ghi 'ngoài group' (case duyệt tay không đụng). Sửa so tên lỏng (hoa thường, dấu câu, s số nhiều), quét lại.
 - (s225 tiếp) Hiếu: nhắc vào thread gây spam → đổi sang 1 Lark DM gộp/lượt quét (link từng thread), không reply vào thread nữa.
 - (s225 tiếp) Theo yêu cầu Hiếu: thu hồi 20/20 tin nhắc bot đã trả lời vào thread (route tạm cleanup-reminders, đã gỡ) + DM Hiếu danh sách 20 thread đã YES chưa Typing kèm link.
+- (s225 chốt phiên) Trạng thái: My Metrics M0+M1 xong trên `main` (913d95ee). Lần sau: M3 kế hoạch quý tự đo → M4 đánh giá hằng ngày + DM 8:30
+  → M5 (plan `docs/plans/my-metrics-plan-quy.md`). Hiếu cần: thử link thread trong DM, dùng "Note đi" lần đầu để soát mã emoji, thả Typing
+  cho 20 thread đã DM.
+
+## s226 (2026-10-07) — Quarter Report: B2C lọc US âm do Group Cost không chia theo pháp nhân
+Chi tiết: wiki `analytics-quarterly.md` §s226.
+- Kiểm số B2C Quarter Report: Revenue/GP T7–T10 khớp tuyệt đối SQL thô. Phát hiện ngoài code: từ 12/08 Zalo/FB → nguồn S0020 "Other" (Misc.); chi phí kênh B2C chỉ nhập T4.
+- Lỗi Hiếu báo (Performance chọn US, B2C âm): group cost cả công ty bị trừ nguyên vào VN và US. Sửa: tên khoản có "Global" → US, còn lại → VN (`filterGroupCostsByCompany`), áp 5 route có lọc công ty. tsc sạch, vitest 577 qua + 2 lỗi có sẵn.
+**Việc còn cho Hiếu**: xem lại Performance US/VN trên staging; nhập Group Cost sau này nhớ đặt tên "Global…" cho chi phí US; hỏi Sapo/ops vụ S0020; nhập chi phí kênh B2C T5–T10.

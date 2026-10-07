@@ -33,13 +33,20 @@ export async function fetchCosts(months: string[]): Promise<{ channelCosts: Chan
   if (months.length === 0) return { channelCosts: [], groupCosts: [] }
   const [{ data: ccData }, { data: gcData }] = await Promise.all([
     supabaseAdmin.from("analytics_channel_costs").select("channel, month, source_code, ads, platform_fee, sponsor_products, media").in("month", months),
-    supabaseAdmin.from("analytics_channel_group_costs").select("group_name, month, amount").in("month", months),
+    supabaseAdmin.from("analytics_channel_group_costs").select("group_name, month, amount, item_name").in("month", months),
   ])
   const channelCosts = (ccData || []).map((r: any) => ({
     channel: r.channel, month: String(r.month), source_code: r.source_code || undefined,
     ads: parseJson(r.ads), platformFee: parseJson(r.platform_fee), sponsorProducts: parseJson(r.sponsor_products), media: parseJson(r.media),
   }))
   return { channelCosts, groupCosts: (gcData || []).map((r: any) => ({ ...r, month: String(r.month), amount: parseFloat(r.amount || "0") })) }
+}
+
+// Group cost nhập 1 bảng cho cả công ty; tên khoản có "Global" là chi phí pháp nhân US, còn lại là VN
+// (Hiếu chốt 2026-10-07). Lọc VN/US mà trừ nguyên cả bảng thì CM1 US âm và VN + US ≠ ALL.
+export function filterGroupCostsByCompany<T extends { item_name?: string | null }>(groupCosts: T[], companyCode: string): T[] {
+  if (companyCode !== "VN" && companyCode !== "US") return groupCosts
+  return groupCosts.filter(c => (/global/i.test(c.item_name || "") ? "US" : "VN") === companyCode)
 }
 
 /** Match channel cost — permanent fix cho channel rename.

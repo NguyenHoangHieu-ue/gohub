@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter, customerExcludedSql } from "@/lib/analytics-helpers"
-import { getDaysInMonth, getDaysInRange, fetchCosts } from "@/lib/bod-data"
+import { getDaysInMonth, getDaysInRange, fetchCosts, filterGroupCostsByCompany } from "@/lib/bod-data"
 import { fetchCustomerCosts, calcRecordCost, calcRecordCostProjected } from "@/lib/b2b-customer-cost"
 import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash, QB2B_CACHE_PREFIX } from "@/lib/quarterly-settings"
 import { buildQuarterMonthMeta, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
 
   try {
     // ── Phần 1+2+3+4: gohub_dw (cache), Turso customer costs, prev costs, Supabase group costs — SONG SONG ──
-    const [rawData, costMap, prevCostMap, { groupCosts }] = await Promise.all([
+    const [rawData, costMap, prevCostMap, { groupCosts: allGroupCosts }] = await Promise.all([
       cachedQuery(rawCacheKey, async () => {
         // SQL fragment: loại KH khỏi B2B (an toàn khi list rỗng)
         const exclFilter = excludedCustomers.length > 0
@@ -172,8 +172,9 @@ export async function GET(req: NextRequest) {
       }, QUERY_TTL_MIN, refresh),
       fetchCustomerCosts(months),          // current quarter Turso costs
       fetchCustomerCosts(prevQMonths),     // prev quarter Turso costs (để tính QoQ CM1)
-      fetchCosts(months).catch(() => ({ channelCosts: [], groupCosts: [] as Array<{ group_name: string; month: string; amount: number }> })),  // Supabase group costs
+      fetchCosts(months).catch(() => ({ channelCosts: [], groupCosts: [] as Array<{ group_name: string; month: string; amount: number; item_name?: string | null }> })),  // Supabase group costs
     ])
+    const groupCosts = filterGroupCostsByCompany(allGroupCosts, companyCode)
 
     // ── Phần 3: Compute (pure, fast ~1ms) ────────────────────────────────────────
     const { customerRows, prevQuarterRows, prevMonthRows } = rawData
