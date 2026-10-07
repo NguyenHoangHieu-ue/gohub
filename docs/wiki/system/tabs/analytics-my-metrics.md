@@ -13,6 +13,27 @@ status: active
 
 # My Metrics — OKR Tracking
 
+## s227b (2026-10-07) — Kế hoạch quý = đề xuất tự động + M4 "Đánh giá hôm nay" / Lark DM 8:30
+Hiếu đổi hướng M3: không tự nhập chỉ số; **hệ thống tự phân tích thị trường và đề xuất** việc của Product (giá vốn, vendor/nguồn hàng,
+mở thị trường chưa có — không đề xuất việc bán hàng), Hiếu **Duyệt / Bỏ qua**; việc tự thêm chỉ là văn bản (+ hạn).
+- Đề xuất (`lib/okr-proposals.ts`, thuần; test `lib/__tests__/okr-review.test.ts`): quý phân tích = quý đủ 3 tháng gần nhất
+  (`analysisQuarterFor`), nguồn `loadMarketData` + `loadQuoteCompare` (tab Thị trường) + quý đang chạy. Loại đề xuất (khoá ổn định):
+  `switch|thị trường|vendor|nguồn` (gói đang bán có nơi nhập rẻ hơn, ≥2 gói hoặc ≥20tr) · `quote|id` (báo giá đang xem rẻ hơn ở gói đang bán)
+  · `gmdrop|thị trường` (top 15, GM giảm ≥3 điểm) / `lowgm|…` (thấp hơn GM công ty ≥5 điểm) · `depend|vendor` (≥60% doanh thu)
+  · `growth|…` (quý đang chạy ≥14 ngày, doanh thu/ngày +30%) · `gap|iso` (nước có báo giá mà chưa bán gói riêng, xếp cuối).
+  Xếp theo doanh thu liên quan. Đề xuất GM/phụ thuộc có `track` → duyệt thì thành việc đo số (market_gm / vendor_dependency).
+- Duyệt/Bỏ qua = `POST my-metrics/plan` với `scope.proposal = khoá`; bỏ qua lưu `dropped=true` → không hiện lại (xoá hẳn thì hiện lại).
+  KHÔNG cần migration mới. `GET …/plan?proposals=1` (lần đầu nguội 30–60s, `maxDuration` 120).
+- Đọc + đánh giá kế hoạch tách `lib/okr-plan-server.ts` (`loadPlan`). Tính KPI tách khỏi route (không đổi logic):
+  `lib/my-metrics-auto.ts` (%Datapool + Bé Gấu), `lib/my-metrics-sku-scan.ts`, `lib/my-metrics-evidence.ts` (SLA/Vendor Speed).
+- **M4** `lib/okr-review.ts` (thuần) + `lib/okr-review-server.ts`: KPI so mục tiêu (cùng `WEIGHTS`/ach như trang; Bé Gấu so mức lẽ ra
+  phải đạt tới hôm nay + "cần ~N task/tuần"), việc kế hoạch chậm/quá hạn, cảnh báo (top 10 thị trường doanh thu/ngày tháng này giảm ≥20%
+  so tháng trước — từ ngày 7; SKU top 30 GM giảm ≥5 điểm), báo giá đang chờ, thread Lark tháng này chưa chốt.
+  Khối "Đánh giá hôm nay" trên đầu trang (`components/my-metrics/review-section.tsx`, API `GET my-metrics/review?quarter=`).
+- **Lark DM**: `GET /api/cron/my-metrics-daily-review` (Bearer CRON_SECRET), 1 lần/ngày (khoá `app_settings.okr.daily_review_sent` =
+  ngày VN; `?force=1` gửi lại). Vercel cron `30 1 * * *` (Hobby chạy lệch trong khung 8:xx) — **muốn đúng 8:30 thêm job cron-job.org gọi
+  URL production lúc 08:30**. Cảnh báo cuối tháng (từ ngày 25) chuyển từ cron quét Lark sang DM này (`openThreadsThisMonth`).
+
 ## s227 (2026-10-07) — Tab "Kế hoạch quý" (M3: kế hoạch tự đo)
 - Tab thứ 4 trong `CategoryNav` (không có trọng số, không vào Weighted Score). Chỉ mount khi mở tab (lần đầu trong ngày đọc
   doanh thu theo SKU mất 20–40s). Sửa được: admin/creator (`canConfigLark`); bod chỉ xem. Quý đã khoá (`isQuarterLocked`) → chỉ xem.

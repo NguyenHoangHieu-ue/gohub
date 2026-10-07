@@ -38,7 +38,7 @@ export const PLAN_KINDS: Record<PlanKind, PlanKindDef> = {
 
 export interface PlanItem {
   id: string; quarter: string; kind: PlanKind; title: string
-  scope: { country?: string; vendor?: string }
+  scope: { country?: string; vendor?: string; proposal?: string }   // proposal = khoá đề xuất tự động đã duyệt/bỏ qua
   baseline: number | null; target: number | null; due_date: string | null
   done: boolean; dropped: boolean; note: string | null; sort: number
 }
@@ -159,16 +159,4 @@ export function evaluate(item: PlanItem, m: { value: number | null; prev: number
   if (wrongSide) return { ...base, baseline: b, progress, status: "behind", message: `Chưa đạt — ${need} (mục tiêu đang ${higher ? "thấp" : "cao"} hơn mốc ${fmtNum(b, unit)}, nên xem lại)` }
   if (progress >= expected - 0.1) return { ...base, baseline: b, progress, status: "on_track", message: `Đúng tiến độ — ${need}` }
   return { ...base, baseline: b, progress, status: "behind", message: `Chậm: lẽ ra hôm nay ~${fmtNum(+shouldBe.toFixed(2), unit)}, đang ${fmtNum(m.value, unit)} — ${need}` }
-}
-
-/** Danh sách lựa chọn cho form: thị trường + vendor xếp theo doanh thu quý này (fallback quý trước). */
-export function planOptions(ctx: MeasureContext | null, limit = 120): { countries: string[]; vendors: string[] } {
-  if (!ctx) return { countries: [], vendors: [] }
-  const rank = (cur: Map<string, number>, prev: Map<string, number>) =>
-    [...new Set([...cur.keys(), ...prev.keys()])].sort((a, b) => (cur.get(b) ?? prev.get(b) ?? 0) - (cur.get(a) ?? prev.get(a) ?? 0))
-  const revOf = (m: Map<string, Totals>) => new Map([...m].map(([k, v]) => [k, v.rev]))
-  return {
-    countries: rank(revOf(ctx.cur.byCountry), revOf(ctx.prev.byCountry)).filter(c => c !== OTHER_MARKET).slice(0, limit),
-    vendors: rank(ctx.cur.byVendor, ctx.prev.byVendor).filter(v => v !== "(không rõ)").slice(0, limit),
-  }
 }

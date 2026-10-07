@@ -40,6 +40,15 @@
     "src/app/api/cron/my-metrics-lark-scan/route.ts": {
       "maxDuration": 300
     },
+    "src/app/api/analytics/my-metrics/plan/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/analytics/my-metrics/review/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/cron/my-metrics-daily-review/route.ts": {
+      "maxDuration": 180
+    },
     "src/app/api/analytics/my-metrics/lark-config/scan-now/route.ts": {
       "maxDuration": 300
     },
@@ -98,6 +107,10 @@
     {
       "path": "/api/cron/my-metrics-lark-scan",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/my-metrics-daily-review",
+      "schedule": "30 1 * * *"
     },
     {
       "path": "/api/cron/gau-pro-digest",

@@ -10817,3 +10817,9 @@ Chi tiết: wiki `analytics-my-metrics.md` §s227, plan `my-metrics-plan-quy.md`
 - (s227 QA staging sau v70) ĐẠT: tạo 8 loại việc + chặn thiếu vendor/thiếu mục tiêu/sai loại/quý đã khoá; tick xong, bỏ việc, sửa hạn+mục tiêu, PATCH không đổi được quý, xoá; form trên giao diện (8 loại/4 nhóm, gợi ý 56 thị trường + 20 vendor) tạo được việc. Số đo khớp SQL độc lập (3HK 67,24%→66,24%; SKU mới 63).
   Lỗi tìm ra + đã sửa: (a) LỖI CÓ SẴN — KPI %Datapool + bảng chi tiết Datapool so `= 'BCDATAPOOL'` trong khi vendor thật là "BC Datapool (CMHK)/(Singtel)" → BC luôn 0 (Q3 bỏ sót 129tr; %Datapool Q3 nay 67,77%) `c9cc074a`; (b) "SKU mới" đếm cả SKU cũ bán lại (73 → 63) `7fdeff90`; (c) chiều tốt suy từ mục tiêu làm GM mục tiêu thấp hơn mốc bị báo Đạt sai `d093ef3f`. Dữ liệu [QA] đã xoá.
 - Merge `main` 2026-10-07 (`24239e5b`, theo yêu cầu Hiếu): trước merge tsc sạch, `next build` OK, vitest 590 qua + 2 lỗi có sẵn (Windows). Sau merge: Vercel production OK, CI/Notify Lark/Wiki Sync xanh; prod: API kế hoạch 200, %Datapool Q3 67,77% (BC 129tr), tab Kế hoạch quý hiện.
+
+## s227b (2026-10-07) — Kế hoạch quý = đề xuất tự động; M4 Đánh giá hôm nay + Lark DM 8:30
+Chi tiết: wiki `analytics-my-metrics.md` §s227b.
+- Hiếu: kế hoạch quý không tự nhập chỉ số; hệ thống tự phân tích (giá vốn, vendor/nguồn hàng, thị trường chưa có) → đề xuất, Hiếu duyệt; việc tự thêm = văn bản. Làm `lib/okr-proposals.ts` + giao diện Duyệt/Bỏ qua (không migration).
+- M4: khối "Đánh giá hôm nay" + cron Lark DM 1 lần/ngày (Vercel cron 01:30 UTC + nên thêm cron-job.org 08:30); cảnh báo cuối tháng của bot Lark gộp vào DM này. Tách hàm tính KPI ra lib (auto/sku-scan/evidence) — route giữ nguyên kết quả.
+- tsc sạch, lint sạch, `next build` OK, vitest 598 qua + 2 lỗi có sẵn.

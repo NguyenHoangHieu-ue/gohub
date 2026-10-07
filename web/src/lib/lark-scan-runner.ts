@@ -12,7 +12,7 @@ import { fetchThreadsFromCapturedLog, fetchRecentThreads, fetchThreadByMessageId
 import { classifyLarkThread, type LarkClassifyResult } from "@/lib/okr-lark-classify"
 import { sendLarkDM, getLarkUserOpenId, getLarkToken } from "@/lib/lark"
 import { quarterLabelForDate } from "@/lib/okr-helpers"
-import { evaluateThread, isMonthEndWarning, larkThreadLink, DEFAULT_CASE_GROUPS, type RuleMessage, type RuleOutcome } from "@/lib/okr-lark-rules"
+import { evaluateThread, larkThreadLink, DEFAULT_CASE_GROUPS, type RuleMessage, type RuleOutcome } from "@/lib/okr-lark-rules"
 
 const CONFIG_KEY = "my_metrics_lark_scan_config"
 const OPEN_RECHECK_DAYS = 45   // case còn mở được đọc lại tối đa ngần này ngày kể từ lúc được tag
@@ -51,7 +51,7 @@ const toRule = (t: LarkThread, chatName: string): { chat_name: string; root: Rul
 })
 
 const isManual = (reviewedBy: string | null | undefined) => !!reviewedBy && !reviewedBy.startsWith("auto:")
-const REMINDED = "auto:reminded"   // đã nhắc Hiếu (DM) đánh dấu Typing cho thread này — chỉ nhắc 1 lần/thread
+export const REMINDED = "auto:reminded"   // đã nhắc Hiếu (DM) đánh dấu Typing cho thread này — chỉ nhắc 1 lần/thread
 const nameOf = (t: LarkThread, openId: string) => openId === t.sender_open_id ? t.sender_name : (t.replies.find(r => r.open_id === openId)?.name ?? openId)
 
 /** Áp luật cho 1 thread rồi ghi okr_lark_events. Trả kết quả để báo lại (lệnh "Note đi"). */
@@ -111,14 +111,16 @@ async function applyRules(t: LarkThread, chatName: string, hieuId: string, caseG
   return { outcome, wrote: true, classifyError }
 }
 
-async function warnOpenThisMonth(hieuId: string) {
+/** Thread anh được tag trong tháng (giờ VN) còn chưa chốt — DM đánh giá 8:30 hằng ngày liệt kê từ ngày 25 (s227 gộp vào đó). */
+export async function openThreadsThisMonth(): Promise<{ line: string; yesNoTyping: boolean }[]> {
   const now = new Date()
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) - 7 * 3_600_000).toISOString()   // 00:00 giờ VN
   const { data } = await supabaseAdmin.from("okr_lark_events").select("chat_id,message_id,request_time,request_snippet,request_sender,reviewed_by")
     .eq("status", "pending_review").gte("request_time", monthStart).order("request_time")
-  if (!data?.length) return
-  const lines = data.slice(0, 20).map((r, i) => `${i + 1}. ${r.reviewed_by === REMINDED ? "[đã YES, chưa Typing] " : ""}${r.request_sender ?? ""}: ${String(r.request_snippet ?? "").slice(0, 60)} — ${larkThreadLink(r.chat_id, r.message_id)}`)
-  await sendLarkDM(hieuId, `⚠️ Gần hết tháng: còn ${data.length} thread anh được tag chưa chốt (chưa YES hoặc chưa Typing):\n${lines.join("\n")}${data.length > 20 ? `\n… và ${data.length - 20} thread khác (xem My Metrics)` : ""}`)
+  return (data ?? []).map(r => ({
+    yesNoTyping: r.reviewed_by === REMINDED,
+    line: `${r.reviewed_by === REMINDED ? "[đã YES, chưa Typing] " : ""}${r.request_sender ?? ""}: ${String(r.request_snippet ?? "").slice(0, 60)} — ${larkThreadLink(r.chat_id, r.message_id)}`,
+  }))
 }
 
 async function processThreads(threads: LarkThread[], hieuId: string, caseGroups: string[]): Promise<ScanRunResult> {
@@ -167,8 +169,7 @@ export async function runLarkScan(ignoreEnabled = false, daysBack?: number): Pro
   const days = daysBack ?? config.days_back
   const threads = await fetchThreadsFromCapturedLog(days, Math.min(400, days * 10 + (openRows?.length ?? 0)), true, (openRows ?? []).map(r => r.message_id))
   const result = await processThreads(threads, hieuId, config.case_groups)
-  // Từ ngày 25 (giờ VN): DM cảnh báo thread trong tháng còn chưa chốt, kèm link thẳng thread. Chỉ cron (1 lần/ngày).
-  if (!ignoreEnabled && isMonthEndWarning()) await warnOpenThisMonth(hieuId)
+  // Cảnh báo thread chưa chốt cuối tháng đã chuyển sang DM đánh giá 8:30 (lib/okr-review.ts, s227) — gộp 1 tin/ngày.
   return result
 }
 

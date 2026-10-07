@@ -16,6 +16,7 @@ import { SkuScanSection } from "@/components/my-metrics/sku-scan-section"
 import { BegauInsightsSection } from "@/components/my-metrics/begau-insights-section"
 import { LarkConfigModal } from "@/components/my-metrics/lark-config-modal"
 import { PlanSection } from "@/components/my-metrics/plan-section"
+import { ReviewSection } from "@/components/my-metrics/review-section"
 import { fck, pct, hhmm, currentQuarter, quarterOptions, achHigherBetter, achLowerBetter, type QuarterKey } from "@/lib/my-metrics-format"
 import { defaultTargetsFor, BASELINE_NOTE, WEIGHTS, OKR_GM_BASELINE_DISPLAY } from "@/lib/my-metrics-types"
 import type {
@@ -322,6 +323,9 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
         <span>📌 <strong className="text-slate-600">Baseline T8/2026:</strong> SLA {BASELINE_NOTE.sla} · Vendor Speed {BASELINE_NOTE.vendor_speed} · SKU GM {OKR_GM_BASELINE_DISPLAY}% · Datapool {auto?.hk3.baseline ?? "…"}%</span>
         {auto && <span className="text-slate-400">🕐 {auto.data_cutoff} · tải lúc {new Date(auto.generated_at).toLocaleString("vi-VN")}</span>}
       </div>
+
+      {/* Đánh giá hôm nay (M4) — cùng nội dung Lark DM 8:30 */}
+      <ReviewSection quarter={qLabel} onOpenPlan={() => setCat("plan")} />
 
       {/* Tab phân đoạn — thay 3 khối xếp chồng bằng 1 bộ chọn, chỉ hiện đúng 1 nhóm/lần (đỡ trang dài) */}
       <CategoryNav
