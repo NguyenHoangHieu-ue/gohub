@@ -3,24 +3,19 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWriteTab } from "@/lib/writable-tabs"
-import { noCache, cachedQuery } from "@/lib/analytics-helpers"
-import { queryAnalytics } from "@/lib/analytics-db"
-import { isQuarterLocked, parseQuarterLabel } from "@/lib/okr-helpers"
+import { noCache } from "@/lib/analytics-helpers"
+import { isQuarterLocked, prevQuarterLabel, currentQuarterLabel } from "@/lib/okr-helpers"
 import { loadMarketData } from "@/lib/market-data"
-import { PLAN_KINDS, buildMeasureContext, evaluate, measure, newSkuCandidates, planOptions, type PlanItem, type PlanKind } from "@/lib/okr-plan"
+import { loadQuoteCompare } from "@/lib/quote-sources"
+import { buildProposals, analysisQuarterFor } from "@/lib/okr-proposals"
+import { loadPlan, pendingQuotes } from "@/lib/okr-plan-server"
+import { PLAN_KINDS, type PlanItem } from "@/lib/okr-plan"
 
 const READ_ROLES  = ["admin", "creator", "bod"]
 const WRITE_ROLES = ["admin", "creator"]
-const MARKET_KINDS: PlanKind[] = ["vendor_share", "market_gm", "market_datapool", "vendor_dependency", "new_markets", "new_skus"]
 const validQuarter = (q: string | null) => !!q && /^Q[1-4]-\d{4}$/.test(q)
 
-async function pendingQuotes(): Promise<number | null> {
-  const { count, error } = await supabaseAdmin.from("vendor_quotes").select("id", { count: "exact", head: true }).eq("status", "reviewing")
-  return error ? null : count ?? 0
-}
-
-// GET ?quarter=Q4-2026[&options=1] — việc trong kế hoạch quý + số tự đo + đánh giá tiến độ.
-// Doanh thu theo SKU chỉ nạp khi có việc cần đo (hoặc form cần danh sách thị trường/vendor) — lần đầu nguội 20–40s, sau đó cache chung tab Thị trường.
+// GET ?quarter=Q4-2026[&proposals=1] — kế hoạch quý + số tự đo + đánh giá; proposals=1 kèm đề xuất tự động (lần đầu nguội 20–60s).
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -29,50 +24,34 @@ export async function GET(req: NextRequest) {
 
   const quarter = req.nextUrl.searchParams.get("quarter")
   if (!validQuarter(quarter)) return NextResponse.json({ error: "quarter dạng Q4-2026" }, { status: 400 })
-  const wantOptions = req.nextUrl.searchParams.get("options") === "1"
+  const bypass = noCache(req)
+  try {
+    const plan = await loadPlan(quarter!, bypass)
 
-  const { data: rows, error } = await supabaseAdmin
-    .from("okr_plan_items").select("*").eq("quarter", quarter).order("sort").order("created_at")
-  if (error) {
-    const missing = error.code === "42P01" || error.code === "PGRST205" || /okr_plan_items/.test(error.message)
-    return NextResponse.json({ error: missing ? "Chưa chạy migration v70_okr_plan_items.sql (Supabase) — chạy xong nhớ Reload schema." : error.message }, { status: 500 })
-  }
-  const items = (rows ?? []) as PlanItem[]
-
-  const needMarket = wantOptions || items.some(i => !i.dropped && MARKET_KINDS.includes(i.kind))
-  const needQuotes = items.some(i => !i.dropped && i.kind === "quotes_review")
-  const [market, quotes] = await Promise.all([
-    needMarket ? loadMarketData(quarter!, "ALL", noCache(req)).catch(() => null) : Promise.resolve(null),
-    needQuotes ? pendingQuotes() : Promise.resolve(null),
-  ])
-  const ctx = buildMeasureContext(market)
-
-  // "SKU mới" = lần đầu có doanh thu: ứng viên (quý này có, quý trước không) còn phải chưa từng bán trước quý trước.
-  let soldBefore = new Set<string>()
-  if (ctx && market && items.some(i => !i.dropped && i.kind === "new_skus")) {
-    const cand = newSkuCandidates(ctx)
-    if (cand.length) {
-      const rows = await cachedQuery(`okr_plan_sold_before:v1:${quarter}:${market.cutoff}:${cand.length}`, () =>
-        queryAnalytics<{ sku: string }>(
-          `SELECT DISTINCT TRIM(sku) AS sku FROM fact_fulfillment_revenue
-           WHERE TRIM(sku) = ANY($1::text[]) AND fulfiled_date::date < $2::date AND fulfilled_revenue_amount_vnd > 0`,
-          [cand, market.prevStart]), 720).catch(() => [] as { sku: string }[])
-      soldBefore = new Set(rows.map(r => r.sku))
+    // Đề xuất tự động: phân tích quý đủ dữ liệu gần nhất + so giá vendor; bỏ đề xuất đã duyệt/bỏ qua (khoá trong scope.proposal).
+    let proposals: ReturnType<typeof buildProposals> | undefined
+    let analysisQuarter: string | undefined
+    if (req.nextUrl.searchParams.get("proposals") === "1") {
+      const curQ = currentQuarterLabel()
+      analysisQuarter = analysisQuarterFor(quarter!, curQ, prevQuarterLabel)
+      const [analysis, compare, current] = await Promise.all([
+        loadMarketData(analysisQuarter, "ALL", bypass),
+        loadQuoteCompare(analysisQuarter, "ALL", bypass).catch(() => null),
+        curQ !== analysisQuarter ? loadMarketData(curQ, "ALL", bypass).catch(() => null) : Promise.resolve(null),
+      ])
+      const decided = new Set(plan.items.map(i => i.scope?.proposal).filter(Boolean))
+      proposals = buildProposals({ analysis, compare, current }).filter(p => !decided.has(p.key))
     }
+
+    return NextResponse.json({
+      quarter, start: plan.start, end: plan.end, today: plan.today, analysis_quarter: analysisQuarter, proposals,
+      locked: isQuarterLocked(quarter!),
+      items: plan.items,
+      kinds: PLAN_KINDS,
+    })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
   }
-
-  const { start, end } = parseQuarterLabel(quarter!)
-  const today = market?.cutoff ?? new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
-  const evaluated = items.map(i => ({ ...i, eval: evaluate(i, measure(i, ctx, quotes, soldBefore), start, end, today) }))
-
-  return NextResponse.json({
-    quarter, start, end, today,
-    locked: isQuarterLocked(quarter!),
-    market_loaded: !!market,
-    items: evaluated,
-    kinds: PLAN_KINDS,
-    options: wantOptions ? planOptions(ctx) : undefined,
-  })
 }
 
 type Body = Partial<Omit<PlanItem, "id">> & { id?: string }
@@ -82,7 +61,7 @@ function clean(b: Body) {
   const out: Record<string, unknown> = {}
   if (b.kind !== undefined) out.kind = b.kind
   if (b.title !== undefined) out.title = String(b.title).trim().slice(0, 300)
-  if (b.scope !== undefined) out.scope = { country: b.scope?.country || undefined, vendor: b.scope?.vendor || undefined }
+  if (b.scope !== undefined) out.scope = { country: b.scope?.country || undefined, vendor: b.scope?.vendor || undefined, proposal: b.scope?.proposal || undefined }
   if (b.baseline !== undefined) out.baseline = num(b.baseline)
   if (b.target !== undefined) out.target = num(b.target)
   if (b.due_date !== undefined) out.due_date = b.due_date || null
@@ -115,7 +94,7 @@ export async function POST(req: NextRequest) {
   if (!b.kind || !(b.kind in PLAN_KINDS)) return NextResponse.json({ error: "Loại việc không hợp lệ" }, { status: 400 })
   const missing = PLAN_KINDS[b.kind].needs.filter(n => !b.scope?.[n])
   if (missing.length) return NextResponse.json({ error: `Thiếu ${missing.map(n => n === "country" ? "thị trường" : "vendor").join(", ")}` }, { status: 400 })
-  if (b.kind !== "manual" && (b.target === null || b.target === undefined || (b.target as unknown) === ""))
+  if (b.kind !== "manual" && !b.dropped && (b.target === null || b.target === undefined || (b.target as unknown) === ""))
     return NextResponse.json({ error: "Cần nhập mục tiêu" }, { status: 400 })
   const locked = await lockedErr(undefined, b.quarter); if (locked) return locked
 

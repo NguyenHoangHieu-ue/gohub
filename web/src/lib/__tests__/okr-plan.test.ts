@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { buildMeasureContext, evaluate, measure, planOptions, type PlanItem } from "@/lib/okr-plan"
+import { buildMeasureContext, evaluate, measure, type PlanItem } from "@/lib/okr-plan"
 import type { MarketData, MarketSku } from "@/lib/market-breakdown"
 
 const sku = (s: string, country: string, vendor: string): MarketSku =>
@@ -80,10 +80,4 @@ describe("evaluate", () => {
     expect(e.baseline).toBe(60)
     expect(e.progress).toBeCloseTo(0.5)
   })
-})
-
-it("planOptions xếp thị trường/vendor theo doanh thu", () => {
-  const o = planOptions(ctx)
-  expect(o.countries[0]).toBe("Trung Quốc")
-  expect(o.vendors).toContain("WM")
 })
