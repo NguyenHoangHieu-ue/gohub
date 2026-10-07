@@ -9,7 +9,7 @@ aliases: ["Vendor Priority", "Chọn Vendor", "Ưu tiên vendor", "Dùng vendor 
 last_edited_by: ""
 last_edited_at: ""
 created: 2026-06-13
-updated: 2026-09-27
+updated: 2026-10-07
 status: active
 ---
 
@@ -24,8 +24,8 @@ status: active
 4. **Các sản phẩm khác** (WM, BC thường, SimStore, TruemoveH, Joytel, Elite...) — dùng khi ba nhóm trên
    không đáp ứng được.
 
-Riêng **Nhật Bản luôn dùng KDDI** (partnership riêng, chất lượng mạng cao nhất) — không nằm trong thứ tự
-trên, xét trước tiên khi khách hỏi Nhật.
+**Nhật Bản cũng theo thứ tự chung** (Hiếu chốt 2026-10-07, thay quy tắc cũ "Nhật luôn dùng KDDI"): 3HK trước,
+hoặc nguồn nào rẻ hơn. KDDI chỉ có gói Unlimited; GoHub giữ KDDI vì KDDI trả tiền quảng cáo và các khoản phí khác cho GoHub, không phải vì chất lượng hay ưu tiên riêng. Khi khách cần gói không giới hạn ở Nhật, KDDI vẫn là một lựa chọn.
 
 **Ngoại lệ đang áp dụng thực tế (tạm thời, do giá — không phải đổi thứ tự ưu tiên gốc)**: một số nước 3HK
 yêu cầu KYC còn WM/BC-Singtel (`W1`) thì không — ví dụ Đài Loan, Hong Kong. Hiện giá WM đang rẻ hơn
@@ -36,8 +36,7 @@ ngoại lệ WM này.
 
 ## Sơ đồ quyết định nhanh
 
-Khi khách hỏi về một nước, trước tiên kiểm tra có phải Nhật Bản không — nếu đúng thì dùng KDDI. Với các
-nước khác, kiểm tra GoHub đã có SKU sẵn chưa: nếu đã có thì bán SKU đó luôn, không cần tra vendor. Nếu
+Khi khách hỏi về một nước, kiểm tra GoHub đã có SKU sẵn chưa: nếu đã có thì bán SKU đó luôn, không cần tra vendor. Nếu
 chưa có SKU thì kiểm tra theo đúng thứ tự ưu tiên ở trên — 3HK có phủ vùng đó không, rồi đến BC Datapool,
 rồi đến sản phẩm có SĐT local nếu khách cần, cuối cùng mới xét WM/BC thường/vendor phụ khác; nếu không nhóm
 nào có thì báo team Product tạo sản phẩm mới. Với Đài Loan/Hong Kong, áp dụng ngoại lệ giá ở trên (dùng WM)
@@ -45,7 +44,8 @@ cho đến khi BC Datapool vào target.
 
 ## Bảng tham chiếu nhanh theo nước
 
-Nhật Bản ưu tiên KDDI nhờ partnership riêng và chất lượng mạng cao nhất, không theo thứ tự chung. Đài Loan
+Nhật Bản theo thứ tự chung (3HK trước hoặc nguồn rẻ hơn); KDDI chỉ có gói Unlimited, giữ lại vì KDDI trả phí
+quảng cáo và các phí khác. Đài Loan
 và Hong Kong: 3HK cần KYC nên hiện đang dùng WM (ngoại lệ giá, xem trên) thay vì theo đúng thứ tự 3HK → BC
 Datapool. Các nước khác áp dụng đúng thứ tự chung: 3HK trước, không có thì BC Datapool, không có thì xét
 sản phẩm có SĐT local nếu khách cần, cuối cùng mới đến WM hoặc vendor phụ khác.
@@ -70,7 +70,7 @@ hoàn toàn khác nhau.
 ## Trạng thái từng vendor
 
 WorldMove (mã SKU `WM`) đang hoạt động đầy đủ với 8.921 gói. 3HK Datapool (mã SKU `3D`) đang hoạt động đầy
-đủ với 45 vùng giá. KDDI (mã SKU `KD`) hoạt động cho Nhật Bản theo partnership, phạm vi giới hạn.
+đủ với 45 vùng giá. KDDI (mã SKU `KD`) chỉ có gói Unlimited cho Nhật Bản; giữ lại vì KDDI trả tiền quảng cáo và các phí khác.
 BillionConnect (mã `BC`), SimStore (mã `SS`), TruemoveH (mã `TM`), Joytel (mã `JY`), và Elite (mã `EL`)
 đều là vendor phụ, dùng khi WM/3HK/KDDI không đáp ứng được.
 

@@ -21,20 +21,20 @@ export interface Proposal {
 const DATAPOOL_SOURCES = new Set(["3HK", "BC_CMHK", "BC_SINGTEL"])
 
 // Thứ tự ưu tiên vendor (wiki business/chon-vendor.md, chốt 2026-09-27): 3HK → BC Datapool → (SĐT local) → vendor khác; KHÔNG dùng giá
-// để vượt thứ tự. Nhật Bản luôn KDDI. Ngoại lệ tạm: Đài Loan/Hong Kong đang dùng WM (3HK cần KYC). Số nhỏ = ưu tiên cao.
-const vendorTier = (v: string) => { const n = v.replace(/\s+/g, "").toUpperCase(); return n === "3HKDATAPOOL" ? 1 : n.startsWith("BCDATAPOOL") ? 2 : n === "KDDI" ? 0 : 4 }
+// để vượt thứ tự. Nhật Bản cũng theo thứ tự chung (Hiếu chốt 2026-10-07): KDDI chỉ có gói Unlimited, là "vendor khác" — giữ lại vì
+// KDDI trả phí quảng cáo/phí khác. Ngoại lệ tạm: Đài Loan/Hong Kong đang dùng WM (3HK cần KYC). Số nhỏ = ưu tiên cao.
+const vendorTier = (v: string) => { const n = v.replace(/\s+/g, "").toUpperCase(); return n === "3HKDATAPOOL" ? 1 : n.startsWith("BCDATAPOOL") ? 2 : 4 }
 const sourceTier = (s: string) => s === "3HK" ? 1 : s.startsWith("BC_") ? 2 : 4
-const KDDI_MARKETS = new Set(["Nhật Bản"])
+const isKddi = (v: string) => v.replace(/\s+/g, "").toUpperCase() === "KDDI"
 const WM_EXCEPTION_MARKETS = new Set(["Đài Loan", "Hong Kong", "Hồng Kông"])
 export function switchAllowed(market: string, currentVendor: string, source: string): boolean {
   const cur = vendorTier(currentVendor)
-  if (KDDI_MARKETS.has(market) || cur === 0) return false
   if (source === "WM" && WM_EXCEPTION_MARKETS.has(market)) return true
   return sourceTier(source) <= cur
 }
 // Hiếu (s227b): vẫn hiện 3HK → BC Datapool (cùng là Datapool, rẻ hơn) nhưng gắn nhãn ngoài thứ tự; 3HK → vendor khác thì không.
-const offPriorityAllowed = (market: string, currentVendor: string, source: string) =>
-  !KDDI_MARKETS.has(market) && vendorTier(currentVendor) === 1 && sourceTier(source) === 2
+const offPriorityAllowed = (_market: string, currentVendor: string, source: string) =>
+  vendorTier(currentVendor) === 1 && sourceTier(source) === 2
 const tr = (vnd: number) => vnd >= 1e9 ? `${(vnd / 1e9).toFixed(1)} tỷ` : `${Math.round(vnd / 1e6)}tr`
 const pct = (x: number) => `${x.toFixed(1)}%`
 const short = (label: string) => label.replace(" (đang chào)", "")
@@ -100,7 +100,7 @@ export function buildProposals({ analysis, compare, current, topMarkets = 15 }: 
         reason: `Giá vốn mỗi gói rẻ hơn trung bình ${pct(g.sumPct / g.n)} (nhiều nhất ${pct(g.maxPct)}); các gói này bán ${tr(g.rev)} trong quý ${q}.`,
         action: g.off
           ? `Ngoài thứ tự ưu tiên vendor (3HK đứng trước BC Datapool) — chỉ chuyển nếu chênh giá đáng kể và ${g.to} đạt chất lượng mạng/KYC/MOQ; vẫn tính vào %Datapool.`
-          : `Kiểm chất lượng mạng, yêu cầu định danh (KYC), số lượng tối thiểu (MOQ) của ${g.to}; đạt thì làm SKU mới và chuyển dần.${datapool ? " Đồng thời tăng tỷ trọng Datapool." : ""}`,
+          : `Kiểm chất lượng mạng, yêu cầu định danh (KYC), số lượng tối thiểu (MOQ) của ${g.to}; đạt thì làm SKU mới và chuyển dần.${datapool ? " Đồng thời tăng tỷ trọng Datapool." : ""}${isKddi(g.from) ? " Lưu ý KDDI đang trả phí quảng cáo/phí khác cho GoHub — tính khoản này trước khi chuyển." : ""}`,
         priority: g.off ? g.rev * 0.7 : g.rev,
         offPriority: g.off || undefined,
       })

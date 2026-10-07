@@ -42,8 +42,8 @@ CS nên tham khảo thêm bài [[chon-vendor|Chọn Vendor Nào?]] để biết 
 **Thứ tự ưu tiên vendor (chốt 2026-09-27)**: 3HK Datapool ưu tiên cao nhất — tính giá theo GB trên 45 vùng
 địa lý, linh hoạt cho việc tạo gói mới; sau đó đến BC Datapool; rồi đến sản phẩm có SĐT local; cuối cùng
 mới đến WorldMove (WM, hơn 8.900 gói, phủ sóng rộng, không yêu cầu KYC) và các vendor khác — xem đầy đủ ở
-[[chon-vendor|Chọn Vendor Nào?]]. KDDI được dùng hạn chế, chỉ cho Nhật Bản, nhưng chất lượng cao, không
-theo thứ tự trên. Ngoài các vendor này, GoHub còn dùng một số vendor phụ cho các trường hợp đặc thù:
+[[chon-vendor|Chọn Vendor Nào?]]. KDDI chỉ có gói Unlimited cho Nhật Bản; GoHub giữ
+KDDI vì họ trả tiền quảng cáo và các phí khác, Nhật vẫn theo thứ tự ưu tiên chung. Ngoài các vendor này, GoHub còn dùng một số vendor phụ cho các trường hợp đặc thù:
 Billion Connect (BC, gồm cả dòng Datapool linh hoạt), Joytel, Elite (chỉ bán SIM
 vật lý, không có eSIM), SimStore, TruemoveH, và Gighub/Airhub — mỗi vendor có chính sách QR/đổi thiết bị/
 hoàn tiền riêng, xem đầy đủ ở bài [[chinh-sach-vendor|Chính Sách Vendor]].
