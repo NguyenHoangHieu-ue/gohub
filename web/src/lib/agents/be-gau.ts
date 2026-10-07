@@ -10,7 +10,8 @@ import { getCustomRules }                from "./guardian"
 import { runWebSearch, runReadKnowledgeBase, type WebSource, type FileContext } from "./creator-ai"
 import { compressHistory }              from "./creator/compress"
 import { kbIndexBlock, relevantKbBlock } from "./creator/kb-recall"
-import { streamTurn, toGenaiSchema, type TurnResult } from "./genai-stream"
+import { toGenaiSchema } from "./genai-stream"
+import { runAgentLoop } from "./core/agent-loop"
 import { detectAndLogLearning }          from "./learning"
 import { larkWorkspaceDecl, runLarkWorkspace } from "./lark-workspace"
 import { BUSINESS_FACTS, ANSWER_STYLE } from "./business-facts"
@@ -468,128 +469,100 @@ export async function runBeGau(opts: {
 
   // Fix #8: dùng history đã nén
   const contents: Content[] = [...compressedHistory, { role: "user", parts: userParts }]
-  // Tích luỹ token qua MỌI vòng gọi model (đúng pattern creator-ai.ts s196+7) — cost dashboard.
-  let tokensIn = 0, tokensOut = 0
   // Số đo để tối ưu tốc độ (eval U1): thời gian/token từng lượt model, thời gian + độ lớn kết quả từng tool.
   const trace: BeGauTrace = { promptChars: systemInstruction.length, declChars: JSON.stringify(functionDeclarations).length, thinking: String(thinkingLevel), rounds: [], tools: [] }
   // Suy nghĩ sâu chỉ ở lượt ĐẦU (lên kế hoạch); các lượt sau chủ yếu gọi SQL → LOW (eval trace: 14 lượt × ~10s khi HIGH mọi lượt).
   const lowConfig = { ...config, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
-  const turn = async (): Promise<TurnResult> => {
-    const t0 = Date.now()
-    const r = await streamTurn(GEMINI_MODEL, contents, trace.rounds.length === 0 ? config : lowConfig, onChunk)
-    trace.rounds.push({ ms: Date.now() - t0, tin: r.tokensIn, tout: r.tokensOut, calls: r.functionCalls.map(c => c.name ?? "") })
-    tokensIn += r.tokensIn; tokensOut += r.tokensOut
-    if (r.content.parts?.length) contents.push(r.content)
-    return r
-  }
-
-  let genResult = await turn()
   const sources: WebSource[] = []
-  // Track tool nào được gọi trong cả vòng lặp — dùng để phân biệt "task tính KPI Bé Gấu" (đã thật sự
-  // xuất dữ liệu từ DB) khỏi trả lời chay/chào hỏi (My Metrics my-metrics/route.ts, s195+18-B). Định
-  // nghĩa "DB tool nào tính KPI" nằm ở lib/okr-helpers.ts (DB_TASK_TOOLS), không phải ở đây — be-gau.ts
-  // chỉ ghi lại SỰ THẬT đã gọi tool gì, không tự quyết định ý nghĩa nghiệp vụ của việc đó.
-  const toolsUsed = new Set<string>()
 
-  for (let i = 0; i < 12; i++) {
-    const calls = genResult.functionCalls
-    if (!calls.length) break
+  // Mỗi tool bọc try/catch riêng — 1 tool lỗi (network/DB timeout) chỉ trả functionResponse báo lỗi cho MỘT tool đó,
+  // model tự quyết định retry/báo user thay vì mất trắng cả lượt.
+  const runTool = async (call: any): Promise<any> => {
+    const a = call.args as any
+    const name = call.name ?? ""
+    const wrap = (resp: any) => ({ functionResponse: { name, response: resp } })
+    try {
 
-    // Fix #1: parallel tool execution (Promise.all)
-    // Toàn bộ nhánh bọc try/catch NGOÀI CÙNG — 1 tool lỗi (network/DB timeout) trước đây làm Promise.all
-    // reject cả round, sập TOÀN BỘ câu trả lời dù tool khác đã chạy xong. Nay tool lỗi chỉ trả
-    // functionResponse báo lỗi cho MỘT tool đó, model tự quyết định retry/báo user thay vì mất trắng.
-    const timed = (fn: (call: any) => Promise<any>) => async (call: any) => {
-      const t0 = Date.now()
-      const out = await fn(call)
-      trace.tools.push({ name: call.name ?? "", ms: Date.now() - t0, chars: JSON.stringify(out).length })
-      return out
+    if (name === "listSupabaseTables")
+      return wrap({ tables: visibleTables })
+
+    if (name === "querySupabase")
+      return wrap(await runQuerySupabase(a, role || "staff", isCost))
+
+    if (name === "executeSQL")
+      return wrap(await execSQL(a?.sql || "", isCost || isPriv))
+
+    if (name === "queryProduct")
+      return wrap(await execProduct(a))
+
+    if (name === "readKnowledgeBase") {
+      const kbCategory = (!seeCost && (!a?.category || a.category === "cogs")) ? undefined : a?.category
+      const kbResult = await runReadKnowledgeBase(kbCategory, Array.isArray(a?.keys) ? a.keys.map(String) : undefined)
+      if (!seeCost && kbResult?.entries)
+        kbResult.entries = kbResult.entries.filter((e: any) => e.category !== "cogs")
+      return wrap(kbResult)
     }
-    const fnParts = await Promise.all(calls.map(timed(async (call: any) => {
-      const a = call.args as any
-      const name = call.name ?? ""
-      toolsUsed.add(name)
-      const wrap = (resp: any) => ({ functionResponse: { name, response: resp } })
+
+    if (name === "webSearch") {
+      const { result, sources: s } = await runWebSearch(a?.query || "")
+      sources.push(...s)
+      const srcText = s.length ? "\n\nSources:\n" + s.map((x: any, i: number) => `[${i + 1}] ${x.title}: ${x.url}`).join("\n") : ""
+      return wrap({ result: result + srcText, instruction: "Cite the source URLs when using this info." })
+    }
+
+    if (name === "larkWorkspace")
+      return wrap(await runLarkWorkspace(a, larkOpenId))
+
+    if (name === "queryGA4") {
       try {
+        const report = await runGA4Report({ siteId: a.siteId, startDate: a.startDate, endDate: a.endDate, metrics: a.metrics || ["sessions"], dimensions: a.dimensions, limit: a.limit || 50 })
+        const rows = (report.rows || []).slice(0, 100).map((r: any) => ({ dimensions: r.dimensionValues?.map((d: any) => d.value), metrics: r.metricValues?.map((m: any) => m.value) }))
+        return wrap({ rows, rowCount: report.rowCount })
+      } catch (e: any) { return wrap({ error: e.message }) }
+    }
 
-      if (name === "listSupabaseTables")
-        return wrap({ tables: visibleTables })
+    if (name === "queryGSC") {
+      try {
+        const rows = await runGSC(a.siteId, a.startDate, a.endDate, a.dimensions || ["query"], a.rowLimit || 20)
+        return wrap({ rows: rows.slice(0, 100) })
+      } catch (e: any) { return wrap({ error: e.message }) }
+    }
 
-      if (name === "querySupabase")
-        return wrap(await runQuerySupabase(a, role || "staff", isCost))
-
-      if (name === "executeSQL")
-        return wrap(await execSQL(a?.sql || "", isCost || isPriv))
-
-      if (name === "queryProduct")
-        return wrap(await execProduct(a))
-
-      if (name === "readKnowledgeBase") {
-        const kbCategory = (!seeCost && (!a?.category || a.category === "cogs")) ? undefined : a?.category
-        const kbResult = await runReadKnowledgeBase(kbCategory, Array.isArray(a?.keys) ? a.keys.map(String) : undefined)
-        if (!seeCost && kbResult?.entries)
-          kbResult.entries = kbResult.entries.filter((e: any) => e.category !== "cogs")
-        return wrap(kbResult)
+    // s190: mọi công cụ Gấu Pro (mở cho all hoặc admin/creator-only, xem GP_TOOLS_* ở đầu file) — dùng
+    // CHUNG executor có sẵn ở creator/tools/dispatch.ts, không chép lại logic.
+    if (GP_DISPATCH_NAMES.has(name)) {
+      const res = await dispatchTool({ name: name, args: a }, undefined, sources)
+      // searchKnowledgeBase đọc chung creator_kb với readKnowledgeBase — che category "cogs" cho
+      // role không có quyền xem giá vốn, khớp đúng cách readKnowledgeBase xử lý ở trên.
+      if (name === "searchKnowledgeBase" && !seeCost) {
+        const resp = res.functionResponse.response
+        if (resp?.results) resp.results = resp.results.filter((r: any) => r.category !== "cogs")
       }
+      return res
+    }
 
-      if (name === "webSearch") {
-        const { result, sources: s } = await runWebSearch(a?.query || "")
-        sources.push(...s)
-        const srcText = s.length ? "\n\nSources:\n" + s.map((x: any, i: number) => `[${i + 1}] ${x.title}: ${x.url}`).join("\n") : ""
-        return wrap({ result: result + srcText, instruction: "Cite the source URLs when using this info." })
-      }
-
-      if (name === "larkWorkspace")
-        return wrap(await runLarkWorkspace(a, larkOpenId))
-
-      if (name === "queryGA4") {
-        try {
-          const report = await runGA4Report({ siteId: a.siteId, startDate: a.startDate, endDate: a.endDate, metrics: a.metrics || ["sessions"], dimensions: a.dimensions, limit: a.limit || 50 })
-          const rows = (report.rows || []).slice(0, 100).map((r: any) => ({ dimensions: r.dimensionValues?.map((d: any) => d.value), metrics: r.metricValues?.map((m: any) => m.value) }))
-          return wrap({ rows, rowCount: report.rowCount })
-        } catch (e: any) { return wrap({ error: e.message }) }
-      }
-
-      if (name === "queryGSC") {
-        try {
-          const rows = await runGSC(a.siteId, a.startDate, a.endDate, a.dimensions || ["query"], a.rowLimit || 20)
-          return wrap({ rows: rows.slice(0, 100) })
-        } catch (e: any) { return wrap({ error: e.message }) }
-      }
-
-      // s190: mọi công cụ Gấu Pro (mở cho all hoặc admin/creator-only, xem GP_TOOLS_* ở đầu file) — dùng
-      // CHUNG executor có sẵn ở creator/tools/dispatch.ts, không chép lại logic.
-      if (GP_DISPATCH_NAMES.has(name)) {
-        const res = await dispatchTool({ name: name, args: a }, undefined, sources)
-        // searchKnowledgeBase đọc chung creator_kb với readKnowledgeBase — che category "cogs" cho
-        // role không có quyền xem giá vốn, khớp đúng cách readKnowledgeBase xử lý ở trên.
-        if (name === "searchKnowledgeBase" && !seeCost) {
-          const resp = res.functionResponse.response
-          if (resp?.results) resp.results = resp.results.filter((r: any) => r.category !== "cogs")
-        }
-        return res
-      }
-
-      return wrap({ error: "Unknown tool" })
-      } catch (e: any) {
-        return wrap({ error: e?.message || "Tool execution failed" })
-      }
-    })))
-
-    contents.push({ role: "user", parts: fnParts })
-    genResult = await turn()
+    return wrap({ error: "Unknown tool" })
+    } catch (e: any) {
+      return wrap({ error: e?.message || "Tool execution failed" })
+    }
   }
+
+  // U1b: vòng lặp chạy ở lõi chung core/agent-loop.ts (cùng Gấu Pro), tool song song mỗi lượt, tối đa 12 lượt.
+  // toolsUsed = SỰ THẬT đã gọi tool gì — My Metrics dùng để phân biệt task tính KPI (DB_TASK_TOOLS ở lib/okr-helpers.ts) với trả lời chay.
+  const loop = await runAgentLoop({
+    model: GEMINI_MODEL, contents, configFor: r => r === 0 ? config : lowConfig, runTool, maxRounds: 12, onChunk,
+  })
+  let genResult = loop.last
+  const toolsUsed = loop.toolsUsed
 
   // Nhờ tạo trong Lark mà model chưa gọi công cụ (eval U1a2–U1a3: 3 lần bỏ qua dù đã dặn) → 1 lượt BẮT BUỘC gọi larkWorkspace.
   if (LARK_CREATE_RE.test(lastMsg) && !toolsUsed.has("larkWorkspace")) {
     const before = genResult.text
     try {
       contents.push({ role: "user", parts: [{ text: "(Hệ thống) Gọi larkWorkspace ngay để tạo đúng thứ người dùng nhờ trong Lark, dùng số liệu/nội dung vừa trả lời (tài liệu: nội dung markdown đầy đủ)." }] })
-      const forced = await streamTurn(GEMINI_MODEL, contents, {
+      const forced = await loop.next({
         ...config, toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.ANY, allowedFunctionNames: ["larkWorkspace"] } },
-      })
-      tokensIn += forced.tokensIn; tokensOut += forced.tokensOut
-      if (forced.content.parts?.length) contents.push(forced.content)
+      }, () => {})
       const parts: any[] = []
       for (const fc of forced.functionCalls.filter(f => f.name === "larkWorkspace")) {
         toolsUsed.add("larkWorkspace")
@@ -598,7 +571,7 @@ export async function runBeGau(opts: {
       if (parts.length) {
         contents.push({ role: "user", parts: [...parts, { text: "Viết 1–2 câu báo kết quả tạo trong Lark (kèm link nếu có, hoặc báo đúng lỗi). Không lặp lại báo cáo." }] })
         onChunk?.("\n\n")
-        genResult = await turn()
+        genResult = await loop.next(lowConfig)
         genResult = { ...genResult, text: `${before}\n\n${genResult.text}` }
       }
     } catch { /* giữ câu trả lời đã có */ }
@@ -608,7 +581,7 @@ export async function runBeGau(opts: {
   if (!text.trim()) {
     try {
       contents.push({ role: "user", parts: [{ text: "Dựa trên dữ liệu ở trên, viết câu trả lời hoàn chỉnh bằng tiếng Việt cho người dùng (kèm bảng/chart nếu hợp lý). KHÔNG gọi thêm công cụ, KHÔNG lộ SQL/tên bảng." }] })
-      genResult = await turn()
+      genResult = await loop.next(lowConfig)
       text = genResult.text
     } catch { /* keep */ }
   }
@@ -624,5 +597,7 @@ export async function runBeGau(opts: {
     })
   }
 
-  return { text: finalText, sources, toolsUsed: Array.from(toolsUsed), tokensIn, tokensOut, trace }
+  trace.rounds = loop.rounds.map(({ ms, tin, tout, calls }) => ({ ms, tin, tout, calls }))
+  trace.tools = loop.tools.map(({ name, ms, chars }) => ({ name, ms, chars }))
+  return { text: finalText, sources, toolsUsed: Array.from(toolsUsed), tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, trace }
 }

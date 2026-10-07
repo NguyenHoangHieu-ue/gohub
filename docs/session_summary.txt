@@ -10845,3 +10845,7 @@ Chi tiết: wiki `analytics-my-metrics.md` §s227b.
 - Bộ chấm điểm: route `/api/admin/eval/be-gau` (CRON_SECRET) + `web/scripts/eval-be-gau.mjs` + 40 câu `web/eval/be-gau-cases.json` (Hiếu duyệt), giám khảo `gemini-pro-latest`, kết quả `web/eval/results/`.
 - Baseline 8,43/10 (nghiệp vụ 1,38/2 yếu nhất). U1a (`629d7d44`: SDK mới, thinking HIGH cho câu phân tích, khối kết luận nghiệp vụ + khung trả lời, chặn cột giá vốn khi vai trò không có quyền) → 8,80/10, TB 55s/câu (baseline 38s).
 - Phát hiện: `canViewCogs()` trả true cho MỌI vai trò (quyết định cũ "margin_cogs mở cho mọi role") → giám khảo trừ oan câu GP; câu 37 (b2c hỏi giá vốn phải từ chối) ngược chính sách — chờ Hiếu chốt. KB `vendor_priority_and_pricing` còn "Nhật ưu tiên KDDI" → đã sửa; trang wiki web-only "Quy Tắc Chọn Vendor" (kb_wiki_pages) còn quy tắc cũ, sync KB chép lại → chờ Hiếu cho xoá.
+
+## s227g (2026-10-07) — U1b lõi agent chung
+- Tạo `web/src/lib/agents/core/agent-loop.ts` (`runAgentLoop`); Bé Gấu + Gấu Pro chạy cùng vòng lặp, giữ nguyên hành vi (cổng duyệt, kế hoạch, kỹ năng, việc nền, trace, ép larkWorkspace, HIGH chỉ lượt đầu).
+- Gấu Pro dựng lại config mỗi lượt (bỏ cờ skillsChanged). tsc + lint PASS; vitest 608 pass, 2 fail có sẵn không liên quan (bc-datapool thiếu file mẫu ở root, bridge-version zip). Wiki chatbot.md §s227g.

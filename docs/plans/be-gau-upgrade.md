@@ -69,7 +69,7 @@ cổng duyệt). Khác nhau chỉ ở **bộ tool theo vai trò** (1 bảng poli
 - Xong khi: tạo ảnh/sửa ảnh/video chạy trên staging, không còn gọi dịch vụ cũ.
 
 ### U1 — Lõi chung + nâng chất lượng trả lời (quan trọng nhất)
-- Gộp lõi: Bé Gấu chuyển sang lõi của Gấu Pro (SDK mới), tool theo bảng policy vai trò.
+- Gộp lõi: Bé Gấu chuyển sang lõi của Gấu Pro (SDK mới), tool theo bảng policy vai trò. ✅ U1b (2026-10-07): vòng lặp chung `lib/agents/core/agent-loop.ts`; bảng policy vai trò làm ở U3.
 - **Chia theo độ khó**: tra cứu → flash/low; phân tích, so sánh, lập kế hoạch → thinking high hoặc Pro; báo cáo dài/nghiên cứu → chạy nền
   (Deep Research khi cần nguồn ngoài). Chọn model bằng eval, không đoán.
 - **Quy trình trả lời**: hiểu câu hỏi → lấy số → tính bằng code (U2) → tự kiểm số → trả lời theo khung: **kết luận trước** (1–3 câu),

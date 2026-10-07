@@ -17,6 +17,17 @@ Mô tả chi tiết kỹ thuật, cơ chế định tuyến, bảo mật và ph�
 
 ---
 
+## s227g (2026-10-07) — U1b: lõi agent chung Bé Gấu + Gấu Pro
+- `lib/agents/core/agent-loop.ts` → `runAgentLoop({ model, contents, configFor(round), runTool(call, round), maxRounds, onChunk, signal,
+  timeBudgetMs, startedAt, onRound })`: gọi model → chạy mọi tool của lượt song song → lặp; dừng khi hết tool / bấm Dừng (`stopped`) /
+  hết ngân sách thời gian việc nền (`unfinished`). Trả `last`, `toolsUsed`, token cộng dồn, `rounds`/`tools` (số đo) và `next(config?, onChunk?)`
+  để persona gọi thêm 1 lượt (ép gọi tool, viết lại câu trả lời rỗng).
+- **Bé Gấu** (`be-gau.ts`): `configFor = lượt 0 ? config (HIGH nếu câu phân tích) : lowConfig`, tối đa 12 lượt; `runTool` = switch tool cũ.
+  Lượt ép `larkWorkspace` dùng `loop.next(cfg ANY, () => {})` (không stream). `trace.rounds/tools` lấy từ `loop`.
+- **Gấu Pro** (`creator-ai.ts`): `configFor = () => makeConfig()` dựng lại mỗi lượt → kỹ năng vừa `loadSkill` có tool ngay lượt sau (bỏ cờ
+  `skillsChanged`). `runTool` giữ nguyên updatePlan/loadSkill/cổng duyệt/dispatchTool/steps; `onRound` ghi steps cho `gp_runs`.
+- Sửa vòng lặp/streaming/đo đạc thì sửa 1 chỗ ở `core/`, cả hai cùng có. Persona chỉ giữ prompt, tool theo vai trò, cách chạy 1 tool.
+
 ## s227d (2026-10-07) — Bé Gấu tạo Doc/Sheet/task trong Lark cho người hỏi ("mức A") + sửa định dạng tin Lark
 - **Tool `larkWorkspace`** (mọi vai trò, `lib/agents/lark-workspace.ts`): `create_doc` (markdown → Lark Docs), `create_sheet` (mảng 2 chiều →
   Lark Sheets), `create_task` (Lark Task giao cho người hỏi). Dùng **token của bot** — người dùng không cần kết nối thêm, chỉ cần
