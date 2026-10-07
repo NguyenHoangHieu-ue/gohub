@@ -3,10 +3,11 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWriteTab } from "@/lib/writable-tabs"
-import { noCache } from "@/lib/analytics-helpers"
+import { noCache, cachedQuery } from "@/lib/analytics-helpers"
+import { queryAnalytics } from "@/lib/analytics-db"
 import { isQuarterLocked, parseQuarterLabel } from "@/lib/okr-helpers"
 import { loadMarketData } from "@/lib/market-data"
-import { PLAN_KINDS, buildMeasureContext, evaluate, measure, planOptions, type PlanItem, type PlanKind } from "@/lib/okr-plan"
+import { PLAN_KINDS, buildMeasureContext, evaluate, measure, newSkuCandidates, planOptions, type PlanItem, type PlanKind } from "@/lib/okr-plan"
 
 const READ_ROLES  = ["admin", "creator", "bod"]
 const WRITE_ROLES = ["admin", "creator"]
@@ -46,9 +47,23 @@ export async function GET(req: NextRequest) {
   ])
   const ctx = buildMeasureContext(market)
 
+  // "SKU mới" = lần đầu có doanh thu: ứng viên (quý này có, quý trước không) còn phải chưa từng bán trước quý trước.
+  let soldBefore = new Set<string>()
+  if (ctx && market && items.some(i => !i.dropped && i.kind === "new_skus")) {
+    const cand = newSkuCandidates(ctx)
+    if (cand.length) {
+      const rows = await cachedQuery(`okr_plan_sold_before:v1:${quarter}:${market.cutoff}:${cand.length}`, () =>
+        queryAnalytics<{ sku: string }>(
+          `SELECT DISTINCT TRIM(sku) AS sku FROM fact_fulfillment_revenue
+           WHERE TRIM(sku) = ANY($1::text[]) AND fulfiled_date::date < $2::date AND fulfilled_revenue_amount_vnd > 0`,
+          [cand, market.prevStart]), 720).catch(() => [] as { sku: string }[])
+      soldBefore = new Set(rows.map(r => r.sku))
+    }
+  }
+
   const { start, end } = parseQuarterLabel(quarter!)
   const today = market?.cutoff ?? new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
-  const evaluated = items.map(i => ({ ...i, eval: evaluate(i, measure(i, ctx, quotes), start, end, today) }))
+  const evaluated = items.map(i => ({ ...i, eval: evaluate(i, measure(i, ctx, quotes, soldBefore), start, end, today) }))
 
   return NextResponse.json({
     quarter, start, end, today,

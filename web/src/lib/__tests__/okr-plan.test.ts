@@ -37,6 +37,7 @@ describe("measure", () => {
   it("new_markets / new_skus đếm thứ có doanh thu quý này mà quý trước không có", () => {
     expect(measure(item({ kind: "new_markets" }), ctx).value).toBe(1)
     expect(measure(item({ kind: "new_skus" }), ctx).value).toBe(1)
+    expect(measure(item({ kind: "new_skus" }), ctx, null, new Set(["C1"])).value).toBe(0)  // C1 từng bán trước quý trước → không mới
   })
   it("quotes_review dùng số báo giá đang chờ", () => {
     expect(measure(item({ kind: "quotes_review" }), null, 3)).toEqual({ value: 3, prev: null })

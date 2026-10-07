@@ -28,7 +28,7 @@ export const PLAN_KINDS: Record<PlanKind, PlanKindDef> = {
   new_markets:       { group: "Sản phẩm & destination", label: "Mở nước mới có doanh thu", unit: "nước", needs: [],
                        hint: "Số nước có doanh thu quý này mà quý trước không có" },
   new_skus:          { group: "Sản phẩm & destination", label: "Mở SKU mới có doanh thu", unit: "SKU", needs: [],
-                       hint: "Số SKU có doanh thu quý này mà quý trước không có" },
+                       hint: "Số SKU lần đầu có doanh thu trong quý này (chưa từng bán trước đó)" },
   quotes_review:     { group: "Báo giá vendor", label: "Xử lý hết báo giá vendor đang chờ", unit: "báo giá", needs: [],
                        hint: "Số báo giá còn ở trạng thái đang xem (tab Thị trường & Báo giá)" },
   manual:            { group: "Không đo bằng số", label: "Việc khác (tick khi xong)", unit: "", needs: [],
@@ -86,7 +86,13 @@ export function buildMeasureContext(data: MarketData | null): MeasureContext | n
 }
 
 /** Số thực tế (quý này tới hôm qua) và mốc quý trước của 1 việc. null = không đo được (thiếu dữ liệu/phạm vi). */
-export function measure(item: Pick<PlanItem, "kind" | "scope">, ctx: MeasureContext | null, pendingQuotes: number | null = null): { value: number | null; prev: number | null } {
+/** SKU có doanh thu quý này mà quý trước không có — route kiểm tiếp lịch sử để loại SKU cũ bán lại. */
+export function newSkuCandidates(ctx: MeasureContext): string[] {
+  return [...ctx.cur.skus].filter(s => !ctx.prev.skus.has(s))
+}
+
+export function measure(item: Pick<PlanItem, "kind" | "scope">, ctx: MeasureContext | null, pendingQuotes: number | null = null,
+  soldBefore: Set<string> = new Set()): { value: number | null; prev: number | null } {
   const { country = "", vendor = "" } = item.scope ?? {}
   if (item.kind === "manual") return { value: null, prev: null }
   if (item.kind === "quotes_review") return { value: pendingQuotes, prev: null }
@@ -101,7 +107,7 @@ export function measure(item: Pick<PlanItem, "kind" | "scope">, ctx: MeasureCont
     }
   }
   if (item.kind === "new_markets") return { value: [...ctx.cur.countries].filter(c => !ctx.prev.countries.has(c)).length, prev: 0 }
-  if (item.kind === "new_skus")    return { value: [...ctx.cur.skus].filter(c => !ctx.prev.skus.has(c)).length, prev: 0 }
+  if (item.kind === "new_skus")    return { value: newSkuCandidates(ctx).filter(s => !soldBefore.has(s)).length, prev: 0 }
   return { value: pick(ctx.cur), prev: pick(ctx.prev) }
 }
 
