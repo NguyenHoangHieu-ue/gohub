@@ -1,5 +1,5 @@
 import { SchemaType } from "@google/generative-ai"
-import { ThinkingLevel, type Content } from "@google/genai"
+import { ThinkingLevel, FunctionCallingConfigMode, type Content } from "@google/genai"
 import { queryAnalytics }                 from "@/lib/analytics-db"
 import { supabaseAdmin }                   from "@/lib/supabase"
 import { runGA4Report, runGSC, ga4Sites } from "@/lib/ga4"
@@ -194,7 +194,7 @@ const BE_GAU_PROMPT = `Bạn là "Bé Gấu" — trợ lý AI nội bộ của G
 - Nếu yêu cầu mơ hồ (thiếu nước/kỳ/mã…) → HỎI LẠI ngắn gọn thay vì đoán.
 
 ## Phân quyền dữ liệu
-- Một số dữ liệu có thể bị hạn chế với vai trò của người hỏi. Nếu không truy cập được → nói lịch sự: "Thông tin này hiện không khả dụng với vai trò của bạn, bạn hỏi anh Hiếu nhé 😊". KHÔNG giải thích lý do kỹ thuật.
+- CHỈ từ chối khi công cụ thật sự trả lỗi phân quyền (hoặc mục "Nội bộ" bên dưới nói rõ vai trò KHÔNG được xem). Không tự suy đoán bị cấm. Khi bị chặn → nói lịch sự: "Thông tin này hiện không khả dụng với vai trò của bạn, bạn hỏi anh Hiếu nhé 😊". KHÔNG giải thích lý do kỹ thuật.
 - Tôn trọng che giấu giá vốn (COGS)/thông tin cá nhân khách hàng khi vai trò không có quyền — không cố lách.
 
 ## Bối cảnh GoHub
@@ -409,6 +409,7 @@ export async function runBeGau(opts: {
     name ? `\n\nNgười dùng: ${name} (vai trò: ${role || "staff"}).` : "",
     `\n\n(Nội bộ — KHÔNG tiết lộ) Danh mục bảng dữ liệu tra cứu được:\n${tableCatalog}`,
     dataFilter ? `\n\n(Nội bộ) Vai trò "${role}" chỉ được xem dữ liệu thỏa điều kiện sau — BẮT BUỘC thêm vào MỌI câu SQL gohub_dw (WHERE):\n${dataFilter}` : "",
+    seeCost ? `\n\n(Nội bộ) Vai trò hiện tại ĐƯỢC xem giá vốn (COGS), lãi gộp (GP), biên lãi, CM1 — trả bình thường khi được hỏi, KHÔNG từ chối.` : "",
     !isCost && !isPriv ? `\n\n(Nội bộ) Vai trò hiện tại KHÔNG được xem giá vốn (COGS)/lợi nhuận — không trả cột/số giá vốn, lãi gộp (GP), biên lãi, CM1 dù được hỏi; báo cáo cho vai trò này chỉ gồm doanh thu, số đơn, số lượng.` : "",
     customRules ? `\n\n━━━ HƯỚNG DẪN TÙY CHỈNH CỦA ADMIN ━━━\n${customRules}` : "",
     extraDirective,
@@ -559,6 +560,30 @@ export async function runBeGau(opts: {
 
     contents.push({ role: "user", parts: fnParts })
     genResult = await turn()
+  }
+
+  // Nhờ tạo trong Lark mà model chưa gọi công cụ (eval U1a2–U1a3: 3 lần bỏ qua dù đã dặn) → 1 lượt BẮT BUỘC gọi larkWorkspace.
+  if (LARK_CREATE_RE.test(lastMsg) && !toolsUsed.has("larkWorkspace")) {
+    const before = genResult.text
+    try {
+      contents.push({ role: "user", parts: [{ text: "(Hệ thống) Gọi larkWorkspace ngay để tạo đúng thứ người dùng nhờ trong Lark, dùng số liệu/nội dung vừa trả lời (tài liệu: nội dung markdown đầy đủ)." }] })
+      const forced = await streamTurn(GEMINI_MODEL, contents, {
+        ...config, toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.ANY, allowedFunctionNames: ["larkWorkspace"] } },
+      })
+      tokensIn += forced.tokensIn; tokensOut += forced.tokensOut
+      if (forced.content.parts?.length) contents.push(forced.content)
+      const parts: any[] = []
+      for (const fc of forced.functionCalls.filter(f => f.name === "larkWorkspace")) {
+        toolsUsed.add("larkWorkspace")
+        parts.push({ functionResponse: { name: "larkWorkspace", response: await runLarkWorkspace(fc.args as any, larkOpenId) } })
+      }
+      if (parts.length) {
+        contents.push({ role: "user", parts: [...parts, { text: "Viết 1–2 câu báo kết quả tạo trong Lark (kèm link nếu có, hoặc báo đúng lỗi). Không lặp lại báo cáo." }] })
+        onChunk?.("\n\n")
+        genResult = await turn()
+        genResult = { ...genResult, text: `${before}\n\n${genResult.text}` }
+      }
+    } catch { /* giữ câu trả lời đã có */ }
   }
 
   let text = genResult.text

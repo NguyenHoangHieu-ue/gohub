@@ -264,3 +264,21 @@ describe("be-gau: nhận diện yêu cầu tạo trong Lark", () => {
     expect(LARK_CREATE_RE.test("doanh thu momo tháng 9")).toBe(false)
   })
 })
+
+describe("be-gau: nhờ tạo trong Lark mà model chưa gọi công cụ → lượt bắt buộc", () => {
+  test("gọi thêm 1 lượt với larkWorkspace và nối câu báo kết quả", async () => {
+    const { runBeGau } = await import("../lib/agents/be-gau")
+    _mockTurn.mockReset()
+    _mockTurn
+      .mockResolvedValueOnce(turnOk("Báo cáo top 5 thị trường…"))
+      .mockResolvedValueOnce(turnOk("", [{ name: "larkWorkspace", args: { action: "create_doc", title: "Top 5", content: "# Top 5" } }]))
+      .mockResolvedValueOnce(turnOk("Chưa tạo được: tài khoản chưa liên kết Lark."))
+    const r = await runBeGau({ geminiHistory: [], lastMsg: "Tạo giúp em tài liệu Lark báo cáo top 5 thị trường", role: "staff", larkOpenId: null })
+    expect(r.toolsUsed).toContain("larkWorkspace")
+    expect(r.text).toContain("Báo cáo top 5 thị trường")
+    expect(r.text).toContain("chưa liên kết Lark")
+    const forcedCfg = _mockTurn.mock.calls[1][2]
+    expect(forcedCfg.toolConfig.functionCallingConfig.allowedFunctionNames).toEqual(["larkWorkspace"])
+    _mockTurn.mockResolvedValue(turnOk("Xin chào! Mình là Bé Gấu 🐻"))
+  })
+})
