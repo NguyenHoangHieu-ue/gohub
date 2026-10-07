@@ -106,37 +106,40 @@ export async function getLarkToken(): Promise<string> {
   return _token!
 }
 
-// Send a text message to a Lark chat
+// Tin "text" của Lark KHÔNG hiểu markdown → `**Điểm lưu ý**` hiện nguyên dấu sao (Hiếu báo s227d). Có markdown thì gửi
+// interactive card (markdown + bảng thật, link bấm được); card lỗi (quá dài, cú pháp lạ) → gửi lại text đã bỏ dấu.
+const MD_RE = /\*\*[^*\n]+\*\*|^#{1,6}\s|\[[^\]]+\]\([^)]+\)|^\s*\|.+\|\s*$|^\s*[-*]\s+\S|`[^`\n]+`/m
+const CARD_MAX_CHARS = 20000
+export function larkMessageBodies(text: string): { msg_type: string; content: string }[] {
+  const plain = { msg_type: "text", content: JSON.stringify({ text: stripMarkdown(text) }) }
+  if (!MD_RE.test(text) || text.length > CARD_MAX_CHARS) return [plain]
+  const card = { schema: "2.0", body: { elements: markdownToLarkElements(text).slice(0, 50) } }
+  return [{ msg_type: "interactive", content: JSON.stringify(card) }, plain]
+}
+
+async function postLark(url: string, token: string, extra: Record<string, unknown>, text: string) {
+  for (const body of larkMessageBodies(text)) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ ...extra, ...body }),
+    })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok && (d.code === 0 || d.code === undefined)) return d
+    console.warn("[lark] gửi", body.msg_type, "lỗi", d.code, d.msg)
+  }
+}
+
+// Send a message to a Lark chat (markdown → card, xem larkMessageBodies)
 export async function sendLarkMessage(receiveId: string, receiveIdType: string, text: string) {
   const token = await getLarkToken()
-  await fetch(`${LARK_API}/im/v1/messages?receive_id_type=${receiveIdType}`, {
-    method:  "POST",
-    headers: {
-      "Content-Type":  "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      receive_id: receiveId,
-      msg_type:   "text",
-      content:    JSON.stringify({ text }),
-    }),
-  })
+  return postLark(`${LARK_API}/im/v1/messages?receive_id_type=${receiveIdType}`, token, { receive_id: receiveId }, text)
 }
 
 // Reply to a specific message (shows threading)
 export async function replyLarkMessage(messageId: string, text: string) {
   const token = await getLarkToken()
-  await fetch(`${LARK_API}/im/v1/messages/${messageId}/reply`, {
-    method:  "POST",
-    headers: {
-      "Content-Type":  "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      msg_type: "text",
-      content:  JSON.stringify({ text }),
-    }),
-  })
+  return postLark(`${LARK_API}/im/v1/messages/${messageId}/reply`, token, {}, text)
 }
 
 // Tìm open_id Lark của creator — chuỗi fallback dùng chung (trước đây chép lại y hệt ở learning.ts/

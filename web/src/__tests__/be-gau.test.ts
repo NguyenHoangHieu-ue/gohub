@@ -165,7 +165,7 @@ describe("be-gau: tool declarations & role filter", () => {
     runBeGau = mod.runBeGau
   })
 
-  test("staff: 8 tool gốc + 6 tool Gấu Pro mở-cho-all (s190), KHÔNG có tool admin-only", async () => {
+  test("staff: 8 tool gốc + larkWorkspace (s227d) + 6 tool Gấu Pro mở-cho-all (s190), KHÔNG có tool admin-only", async () => {
     let capturedArgs: any
     _mockGetModel.mockImplementationOnce((args: any) => {
       capturedArgs = args
@@ -176,8 +176,8 @@ describe("be-gau: tool declarations & role filter", () => {
 
     const decls: any[] = capturedArgs?.tools?.[0]?.functionDeclarations ?? []
     const names = decls.map((d: any) => d.name)
-    expect(decls).toHaveLength(14)
-    for (const n of ["executeSQL", "querySupabase", "listSupabaseTables", "queryProduct", "queryGA4", "queryGSC", "webSearch", "readKnowledgeBase"]) {
+    expect(decls).toHaveLength(15)
+    for (const n of ["executeSQL", "querySupabase", "listSupabaseTables", "queryProduct", "queryGA4", "queryGSC", "webSearch", "readKnowledgeBase", "larkWorkspace"]) {
       expect(names).toContain(n)
     }
     // Mở cho mọi role (s190 gộp Gấu Pro — business/productivity, không nhạy cảm/trả phí).
@@ -200,7 +200,7 @@ describe("be-gau: tool declarations & role filter", () => {
       await runBeGau({ geminiHistory: [], lastMsg: "test", role })
       const decls: any[] = capturedArgs?.tools?.[0]?.functionDeclarations ?? []
       const names = decls.map((d: any) => d.name)
-      expect(decls).toHaveLength(29)
+      expect(decls).toHaveLength(30)
       for (const n of ["writeKnowledgeBase", "browsePortal", "managePortalCredentials", "sendLarkMessage", "createLarkTask", "generateImageStability", "generateVideo"]) {
         expect(names).toContain(n)
       }

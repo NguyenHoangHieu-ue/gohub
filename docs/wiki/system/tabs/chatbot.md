@@ -17,6 +17,18 @@ Mô tả chi tiết kỹ thuật, cơ chế định tuyến, bảo mật và ph�
 
 ---
 
+## s227d (2026-10-07) — Bé Gấu tạo Doc/Sheet/task trong Lark cho người hỏi ("mức A") + sửa định dạng tin Lark
+- **Tool `larkWorkspace`** (mọi vai trò, `lib/agents/lark-workspace.ts`): `create_doc` (markdown → Lark Docs), `create_sheet` (mảng 2 chiều →
+  Lark Sheets), `create_task` (Lark Task giao cho người hỏi). Dùng **token của bot** — người dùng không cần kết nối thêm, chỉ cần
+  `users.lark_open_id` (lưu khi đăng nhập bằng Lark; web tra theo username rồi email, Lark lấy open_id người nhắn). Doc/Sheet xong thì
+  **chuyển quyền sở hữu** cho người hỏi (file nằm trong Lark của họ), lỗi thì cấp `full_access`. Bot KHÔNG đọc/sửa file riêng của họ.
+- Thứ tự (Hiếu chốt): **DM báo trước** → làm → **DM kèm link**; câu trả lời cũng phải có link. Lỗi → DM báo lỗi. Tài khoản chưa có
+  `lark_open_id` → báo "đăng nhập bằng Lark một lần". Hàm dựng Doc/Sheet dùng chung với Gấu Pro: `runLarkDocsWithToken` (`lark-docs.ts`).
+- **Định dạng tin Lark** (`lib/lark.ts` `larkMessageBodies`): tin "text" của Lark không hiểu markdown (`**Điểm lưu ý**` hiện nguyên).
+  Nay `sendLarkMessage` / `replyLarkMessage` / `sendLarkDM`: có markdown → **interactive card** (markdown + bảng thật, link bấm được);
+  không có → text; card bị từ chối hoặc >20.000 ký tự → text đã bỏ dấu. Áp cho MỌI tin bot (Bé Gấu, Gấu Pro, cron DM). Route Lark bỏ
+  `stripMarkdown` trước khi trả lời. Test `__tests__/lark-message-format.test.ts`.
+
 ## 1. Tổng quan & Đường dẫn
 - **Giao diện Web**: `/chatbot` (`web/src/app/(dashboard)/chatbot/page.tsx`)
 - **API Backend**: `/api/chat` (`web/src/app/api/chat/route.ts`)
