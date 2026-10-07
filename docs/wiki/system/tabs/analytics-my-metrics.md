@@ -22,7 +22,7 @@ mở thị trường chưa có — không đề xuất việc bán hàng), Hiế
   · `gmdrop|thị trường` (top 15, GM giảm ≥3 điểm) / `lowgm|…` (thấp hơn GM công ty ≥5 điểm) · `depend|vendor` (≥60% doanh thu)
   · `growth|…` (quý đang chạy ≥14 ngày, doanh thu/ngày +30%) · `gap|iso` (nước có báo giá mà chưa bán gói riêng, xếp cuối).
   Thứ tự ưu tiên vendor (wiki business/chon-vendor.md): chỉ đề xuất chuyển sang nguồn ngang/cao hơn ưu tiên (`switchAllowed`);
-  Nhật (KDDI) bỏ; ngoại lệ Đài Loan/Hồng Kông được WM; không đề xuất "giảm phụ thuộc" 3HK/BC Datapool. Riêng 3HK → BC Datapool vẫn
+  Nhật theo thứ tự chung từ 2026-10-07 (KDDI = vendor khác, chỉ có gói Unlimited, giữ vì trả phí quảng cáo — đề xuất chuyển từ KDDI có nhắc khoản này); ngoại lệ Đài Loan/Hồng Kông được WM; không đề xuất "giảm phụ thuộc" 3HK/BC Datapool. Riêng 3HK → BC Datapool vẫn
   hiện nhưng gắn nhãn "Ngoài thứ tự ưu tiên vendor" (`offPriority`, Hiếu chốt s227b), xếp sau (×0,7); 3HK → vendor khác không hiện.
   Xếp theo doanh thu liên quan. Đề xuất GM/phụ thuộc có `track` → duyệt thì thành việc đo số (market_gm / vendor_dependency).
 - Duyệt/Bỏ qua = `POST my-metrics/plan` với `scope.proposal = khoá`; bỏ qua lưu `dropped=true` → không hiện lại (xoá hẳn thì hiện lại).

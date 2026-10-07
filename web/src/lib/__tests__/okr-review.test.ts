@@ -88,7 +88,7 @@ describe("buildProposals", () => {
     expect(keys).toContain("quote|abc")
     expect(keys).toContain("gmdrop|Nhật Bản")
     expect(keys).not.toContain("depend|3HK DATAPOOL")   // 3HK/BC Datapool ưu tiên 1–2 → không đề xuất giảm
-    expect(keys.some(k => k.startsWith("switch|Nhật Bản"))).toBe(false)      // Nhật luôn KDDI
+    expect(keys.some(k => k.startsWith("switch|Nhật Bản"))).toBe(false)      // 3HK → WorldMove: đi xuống thứ tự ưu tiên
     const cn = ps.find(p => p.key === "switch|Trung Quốc|3HK DATAPOOL|BC_CMHK")   // 3HK → BC: vẫn hiện, gắn nhãn ngoài thứ tự
     expect(cn?.offPriority).toBe(true)
     expect(keys).toContain("gap|MN")
@@ -108,7 +108,8 @@ it("switchAllowed theo thứ tự ưu tiên vendor", () => {
   expect(switchAllowed("Malaysia", "3HK DATAPOOL", "BC_CMHK")).toBe(false)
   expect(switchAllowed("Malaysia", "3HK DATAPOOL", "WM")).toBe(false)
   expect(switchAllowed("Đài Loan", "3HK DATAPOOL", "WM")).toBe(true)      // ngoại lệ tạm
-  expect(switchAllowed("Nhật Bản", "Truemove", "3HK")).toBe(false)
+  expect(switchAllowed("Nhật Bản", "KDDI", "3HK")).toBe(true)              // Nhật theo thứ tự chung (2026-10-07)
+  expect(switchAllowed("Nhật Bản", "3HK DATAPOOL", "WM")).toBe(false)
 })
 
 it("analysisQuarterFor: quý đang chạy/quý tới → quý trước quý hiện tại; quý đã qua → chính nó", () => {

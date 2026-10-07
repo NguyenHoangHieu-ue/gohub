@@ -24,7 +24,7 @@ vẫn cần nắm năm loại gói WM và cách giải thích cho khách hàng.
 ## WM dùng khi nào
 
 Theo thứ tự ưu tiên chung, WM dùng khi 3HK không có vùng phủ, BC Datapool không có, và khách không cần SĐT
-local. Ba ngoại lệ: đi Nhật Bản luôn dùng KDDI (partnership riêng, chất lượng cao hơn), không xét WM/3HK;
+local. Nhật Bản cũng theo thứ tự chung (KDDI chỉ có gói Unlimited, giữ vì trả phí quảng cáo — xem bài Chọn Vendor). Ngoại lệ:
 **Đài Loan và Hong Kong hiện đang dùng WM thay vì theo đúng thứ tự** — 3HK yêu cầu KYC ở hai nước này còn
 WM/BC-Singtel thì không, và giá WM hiện rẻ hơn BC-Singtel nên team chọn WM (ngoại lệ do giá, tạm thời —
 sẽ đổi sang đúng thứ tự 3HK → BC Datapool khi BC Datapool được đưa vào target).
@@ -76,8 +76,8 @@ từng gói và từng nước, luôn tra trong hệ thống thay vì nhớ cứ
 
 WM không yêu cầu KYC, đây là lợi thế lớn nên nhấn mạnh với khách. Catalog có 8.921 gói nên hầu hết nước
 đều có sẵn, kèm thông tin APN đầy đủ cho từng gói. Luôn kiểm tra gói đang chọn có cả eSIM và SIM vật lý
-hay không trước khi chốt đơn — không phải gói nào cũng có cả hai. Và nhớ WM mạnh về độ phủ rộng; nếu khách
-cần chất lượng cao nhất ở Nhật thì chuyển sang KDDI.
+hay không trước khi chốt đơn — không phải gói nào cũng có cả hai. Và nhớ WM mạnh về độ phủ rộng; khách cần
+gói không giới hạn ở Nhật thì có thể xét thêm KDDI.
 
 ## Thông tin kỹ thuật cho team Product/BD
 

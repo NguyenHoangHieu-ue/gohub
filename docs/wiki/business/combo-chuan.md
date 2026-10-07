@@ -41,8 +41,8 @@ tạo SKU, ghi rõ "WM có, GoHub chưa tạo".
 ## Ưu tiên vendor theo nước
 
 Chi tiết đầy đủ xem ở bài [[chon-vendor|Chọn Vendor Nào?]]. Tóm tắt nhanh: Hồng Kông ưu tiên WM vì không
-cần KYC và giá tốt. Đài Loan ưu tiên WM vì không cần KYC và phủ sóng tốt. Nhật Bản ưu tiên KDDI nhờ
-partnership riêng. Các nước khác ưu tiên 3HK trước. BC và JY chỉ dùng khi hết lựa chọn khác (last resort).
+cần KYC và giá tốt. Đài Loan ưu tiên WM vì không cần KYC và phủ sóng tốt. Nhật Bản theo thứ tự chung
+(KDDI chỉ có gói Unlimited, giữ vì trả phí quảng cáo). Các nước khác ưu tiên 3HK trước. BC và JY chỉ dùng khi hết lựa chọn khác (last resort).
 
 ## Quy trình gap analysis
 
