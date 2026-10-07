@@ -14,6 +14,7 @@ export interface Proposal {
   reason: string                  // số liệu làm căn cứ
   action: string                  // nên làm gì
   priority: number                // lớn = quan trọng hơn (doanh thu liên quan, VND)
+  offPriority?: boolean           // đi ngược thứ tự ưu tiên vendor (3HK → BC Datapool) — Hiếu muốn vẫn thấy để tự cân nhắc
   track?: { kind: PlanKind; scope: { country?: string; vendor?: string }; target: number; label: string }
 }
 
@@ -31,6 +32,9 @@ export function switchAllowed(market: string, currentVendor: string, source: str
   if (source === "WM" && WM_EXCEPTION_MARKETS.has(market)) return true
   return sourceTier(source) <= cur
 }
+// Hiếu (s227b): vẫn hiện 3HK → BC Datapool (cùng là Datapool, rẻ hơn) nhưng gắn nhãn ngoài thứ tự; 3HK → vendor khác thì không.
+const offPriorityAllowed = (market: string, currentVendor: string, source: string) =>
+  !KDDI_MARKETS.has(market) && vendorTier(currentVendor) === 1 && sourceTier(source) === 2
 const tr = (vnd: number) => vnd >= 1e9 ? `${(vnd / 1e9).toFixed(1)} tỷ` : `${Math.round(vnd / 1e6)}tr`
 const pct = (x: number) => `${x.toFixed(1)}%`
 const short = (label: string) => label.replace(" (đang chào)", "")
@@ -73,15 +77,18 @@ export function buildProposals({ analysis, compare, current, topMarkets = 15 }: 
 
   // 1. Giá vốn: gói đang bán có nơi nhập rẻ hơn — gộp theo thị trường × (vendor đang dùng → nơi rẻ hơn), xếp theo doanh thu các gói đó.
   if (compare) {
-    const groups = new Map<string, { market: string; from: string; to: string; toSource: string; n: number; sumPct: number; maxPct: number; rev: number }>()
+    const groups = new Map<string, { market: string; from: string; to: string; toSource: string; off: boolean; n: number; sumPct: number; maxPct: number; rev: number }>()
     for (const r of compare.rows) {
       // Nơi rẻ hơn rẻ nhất mà KHÔNG đi ngược thứ tự ưu tiên vendor (best của bảng so giá có thể là WM rẻ nhất nhưng thấp ưu tiên hơn).
       if (r.baseUsd === null) continue
-      const best = r.offers.filter(o => o.usd < r.baseUsd! && switchAllowed(r.market, r.vendor, o.source)).sort((x, y) => x.usd - y.usd)[0]
+      const cheaper = r.offers.filter(o => o.usd < r.baseUsd!).sort((x, y) => x.usd - y.usd)
+      const inOrder = cheaper.find(o => switchAllowed(r.market, r.vendor, o.source))
+      const best = inOrder ?? cheaper.find(o => offPriorityAllowed(r.market, r.vendor, o.source))
       if (!best) continue
+      const off = !inOrder
       const savePct = (r.baseUsd - best.usd) / r.baseUsd * 100
       const k = `${r.market}|${r.vendor}|${best.source}`
-      const g = groups.get(k) ?? { market: r.market, from: r.vendor, to: short(best.label), toSource: best.source, n: 0, sumPct: 0, maxPct: 0, rev: 0 }
+      const g = groups.get(k) ?? { market: r.market, from: r.vendor, to: short(best.label), toSource: best.source, off, n: 0, sumPct: 0, maxPct: 0, rev: 0 }
       g.n++; g.sumPct += savePct; g.maxPct = Math.max(g.maxPct, savePct); g.rev += r.rev
       groups.set(k, g)
     }
@@ -91,8 +98,11 @@ export function buildProposals({ analysis, compare, current, topMarkets = 15 }: 
         key: `switch|${g.market}|${g.from}|${g.toSource}`, group: "Giá vốn",
         title: `${g.market}: chuyển ${g.n} gói từ ${g.from} sang ${g.to}`,
         reason: `Giá vốn mỗi gói rẻ hơn trung bình ${pct(g.sumPct / g.n)} (nhiều nhất ${pct(g.maxPct)}); các gói này bán ${tr(g.rev)} trong quý ${q}.`,
-        action: `Kiểm chất lượng mạng, yêu cầu định danh (KYC), số lượng tối thiểu (MOQ) của ${g.to}; đạt thì làm SKU mới và chuyển dần.${datapool ? " Đồng thời tăng tỷ trọng Datapool." : ""}`,
-        priority: g.rev,
+        action: g.off
+          ? `Ngoài thứ tự ưu tiên vendor (3HK đứng trước BC Datapool) — chỉ chuyển nếu chênh giá đáng kể và ${g.to} đạt chất lượng mạng/KYC/MOQ; vẫn tính vào %Datapool.`
+          : `Kiểm chất lượng mạng, yêu cầu định danh (KYC), số lượng tối thiểu (MOQ) của ${g.to}; đạt thì làm SKU mới và chuyển dần.${datapool ? " Đồng thời tăng tỷ trọng Datapool." : ""}`,
+        priority: g.off ? g.rev * 0.7 : g.rev,
+        offPriority: g.off || undefined,
       })
     })
 

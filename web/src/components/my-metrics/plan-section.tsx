@@ -136,6 +136,7 @@ export function PlanSection({ quarter, canEdit }: { quarter: string; canEdit: bo
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className={cn("text-[10px] font-black px-2 py-0.5 rounded-full", GROUP_CLS[p.group])}>{p.group}</span>
                   <p className="text-sm font-bold text-slate-800">{p.title}</p>
+                  {p.offPriority && <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-rose-50 text-rose-600">Ngoài thứ tự ưu tiên vendor</span>}
                 </div>
                 <p className="text-[11px] text-slate-600">{p.reason}</p>
                 <p className="text-[11px] text-slate-500 mt-0.5"><b className="text-slate-600">Nên làm:</b> {p.action}</p>

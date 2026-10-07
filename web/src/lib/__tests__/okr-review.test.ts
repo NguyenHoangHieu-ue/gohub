@@ -89,7 +89,8 @@ describe("buildProposals", () => {
     expect(keys).toContain("gmdrop|Nhật Bản")
     expect(keys).not.toContain("depend|3HK DATAPOOL")   // 3HK/BC Datapool ưu tiên 1–2 → không đề xuất giảm
     expect(keys.some(k => k.startsWith("switch|Nhật Bản"))).toBe(false)      // Nhật luôn KDDI
-    expect(keys.some(k => k.startsWith("switch|Trung Quốc"))).toBe(false)    // 3HK → BC là đi xuống thứ tự ưu tiên
+    const cn = ps.find(p => p.key === "switch|Trung Quốc|3HK DATAPOOL|BC_CMHK")   // 3HK → BC: vẫn hiện, gắn nhãn ngoài thứ tự
+    expect(cn?.offPriority).toBe(true)
     expect(keys).toContain("gap|MN")
   })
   it("đề xuất GM giảm có chỉ số theo dõi; xếp theo doanh thu liên quan, nước chưa bán xếp cuối", () => {
