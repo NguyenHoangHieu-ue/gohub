@@ -472,9 +472,11 @@ export async function runBeGau(opts: {
   let tokensIn = 0, tokensOut = 0
   // Số đo để tối ưu tốc độ (eval U1): thời gian/token từng lượt model, thời gian + độ lớn kết quả từng tool.
   const trace: BeGauTrace = { promptChars: systemInstruction.length, declChars: JSON.stringify(functionDeclarations).length, thinking: String(thinkingLevel), rounds: [], tools: [] }
+  // Suy nghĩ sâu chỉ ở lượt ĐẦU (lên kế hoạch); các lượt sau chủ yếu gọi SQL → LOW (eval trace: 14 lượt × ~10s khi HIGH mọi lượt).
+  const lowConfig = { ...config, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
   const turn = async (): Promise<TurnResult> => {
     const t0 = Date.now()
-    const r = await streamTurn(GEMINI_MODEL, contents, config, onChunk)
+    const r = await streamTurn(GEMINI_MODEL, contents, trace.rounds.length === 0 ? config : lowConfig, onChunk)
     trace.rounds.push({ ms: Date.now() - t0, tin: r.tokensIn, tout: r.tokensOut, calls: r.functionCalls.map(c => c.name ?? "") })
     tokensIn += r.tokensIn; tokensOut += r.tokensOut
     if (r.content.parts?.length) contents.push(r.content)

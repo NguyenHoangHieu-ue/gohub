@@ -24,6 +24,18 @@ export const BUSINESS_FACTS = `## Kết luận nghiệp vụ đã chốt (dùng 
   → lọc 1 thị trường: SUBSTRING(TRIM(sku),3,3)='THA' (SKU 14 ký tự: 3 ký tự đầu; 15 ký tự: ký tự 2–4).
 - Số theo ngày: GROUP BY fulfiled_date::date. Không thay số bán thật bằng mô tả gói trong kho kiến thức.
 
+## Bảng chính trong kho phân tích (đã kiểm cột thật 2026-10-07 — dùng thẳng, KHÔNG tốn lượt dò cấu trúc)
+- fact_fulfillment_revenue f: order_code, created_date, fulfiled_date (TEXT → luôn ::date), sku, order_source_code, company_code (VN/US),
+  fulfilled_quantity, fulfilled_revenue_amount_vnd, cogs_amount_vnd, gross_profit_vnd, staff_code (người tạo đơn), customer_code. Phí ship: sku='SHIPPINGFEE0'.
+- dim_order_source s (JOIN s.code = f.order_source_code): name, group_name (B2B/B2C/Internal-Transaction), channel_name, sub_group_name.
+- dim_customer c (JOIN c.code = TRIM(f.customer_code)): name, organization, sales_pic_code (người phụ trách khách B2B), price_list_name (tier), status.
+- dim_staff st (JOIN st.code = TRIM(f.staff_code) hoặc = c.sales_pic_code): name.
+- dim_sku: sku, vendor, category_name — trùng dòng → dùng (SELECT DISTINCT ON (TRIM(sku)) TRIM(sku) sku, vendor FROM dim_sku ORDER BY TRIM(sku)).
+
+## Cách lấy số nhanh (bắt buộc)
+- Nghĩ trước MỘT lần những số cần lấy, rồi gọi CÙNG LÚC nhiều truy vấn trong cùng một lượt (các truy vấn độc lập không phải chờ nhau).
+- Gộp nhiều chỉ số / nhiều kỳ vào MỘT câu SQL (SUM(CASE WHEN kỳ…), GROUP BY tháng/tuần/kênh) thay vì mỗi chỉ số một câu.
+
 ## Lưu ý dữ liệu (nhắc khi số liệu liên quan)
 - Từ 12/08/2026 đơn Zalo/Facebook bị ghi vào nguồn "Other" (kênh Misc.) → VN-Social giảm, Misc. tăng từ tháng 8 là do ghi nhận, không phải bán thật thay đổi.
 - Quý 2/2026 trở về trước có ~8,2 tỷ doanh thu dùng mã SKU cũ không đọc được thị trường → so thị trường giữa quý 2 và quý 3 không chính xác.
