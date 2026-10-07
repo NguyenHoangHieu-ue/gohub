@@ -17,6 +17,13 @@ export const BUSINESS_FACTS = `## Kết luận nghiệp vụ đã chốt (dùng 
   phải ghi rõ "tạm tính, chưa trừ chi phí riêng từng khách; số chuẩn xem tab Quarter Report".
 - "Doanh thu của sale X": có 2 cách hiểu — theo nhân viên tạo đơn, hoặc theo khách hàng do người đó phụ trách (B2B). Luôn nói rõ đang tính cách nào.
 
+## Đọc mã SKU (13 ký tự) khi cần lọc trong SQL
+- Ký tự 2 = hình thức: A = nạp thêm data (TOP-UP), B = eSIM trắng, C = eSIM, D = khung SIM, E = SIM vật lý, 1 = eSIM dùng ở VN, 2 = SIM dùng ở VN.
+  → "doanh số topup" = SKU có SUBSTRING(TRIM(sku),2,1)='A'.
+- Ký tự 3–5 = mã nước/thị trường (THA Thái Lan, JPN Nhật, CHN Trung Quốc, KOR Hàn, SGP Singapore, MYS Malaysia, EU1 Châu Âu 31 nước…)
+  → lọc 1 thị trường: SUBSTRING(TRIM(sku),3,3)='THA' (SKU 14 ký tự: 3 ký tự đầu; 15 ký tự: ký tự 2–4).
+- Số theo ngày: GROUP BY fulfiled_date::date. Không thay số bán thật bằng mô tả gói trong kho kiến thức.
+
 ## Lưu ý dữ liệu (nhắc khi số liệu liên quan)
 - Từ 12/08/2026 đơn Zalo/Facebook bị ghi vào nguồn "Other" (kênh Misc.) → VN-Social giảm, Misc. tăng từ tháng 8 là do ghi nhận, không phải bán thật thay đổi.
 - Quý 2/2026 trở về trước có ~8,2 tỷ doanh thu dùng mã SKU cũ không đọc được thị trường → so thị trường giữa quý 2 và quý 3 không chính xác.

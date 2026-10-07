@@ -254,3 +254,13 @@ describe("be-gau: chọn mức suy nghĩ theo độ khó (U1a)", () => {
     expect(deepQuestion("có eSIM Monaco không", 1)).toBe(true)
   })
 })
+
+describe("be-gau: nhận diện yêu cầu tạo trong Lark", () => {
+  test("bắt đúng câu nhờ tạo tài liệu/task Lark, bỏ qua câu hỏi số", async () => {
+    const { LARK_CREATE_RE } = await import("../lib/agents/be-gau")
+    expect(LARK_CREATE_RE.test("Tạo giúp em tài liệu Lark báo cáo doanh thu 5 thị trường")).toBe(true)
+    expect(LARK_CREATE_RE.test("tạo 1 task Lark nhắc em xem báo giá VNPT")).toBe(true)
+    expect(LARK_CREATE_RE.test("đưa bảng này vào lark sheet giúp anh")).toBe(true)
+    expect(LARK_CREATE_RE.test("doanh thu momo tháng 9")).toBe(false)
+  })
+})

@@ -347,6 +347,8 @@ async function execProduct(a: any): Promise<any> {
 
 // detectAndLogLearning() tách sang ./learning.ts (s196+4) — dùng chung cho Bé Gấu + Gấu Tổ.
 
+export const LARK_CREATE_RE = /(t[aạ]o|l[aà]m|xu[aấ]t|[dđ][uư]a|ghi|g[uử]i).{0,40}(t[aà]i li[eệ]u|\bdoc|sheet|b[aả]ng t[ií]nh|b[aá]o c[aá]o|task|vi[eệ]c|nh[aắ]c).{0,60}lark|lark.{0,40}(t[aà]i li[eệ]u|\bdoc|sheet|b[aả]ng t[ií]nh|task)/i
+
 // U1a: câu phân tích / so sánh / lý do / đề xuất / báo cáo, câu dài hoặc có file → suy nghĩ sâu (HIGH); tra cứu nhanh → LOW.
 const DEEP_RE = /so s[aá]nh|v[iì] sao|t[aạ]i sao|nguy[eê]n nh[aâ]n|ph[aâ]n t[ií]ch|nh[aậ]n x[eé]t|[dđ][eề] xu[aấ]t|xu h[uướ][oớ]ng|k[eế] ho[aạ]ch|b[aá]o c[aá]o|deep ?dive|[dđ][aá]nh gi[aá]|chi[eế]n l[uượ][oợ]c|gi[aả]i ph[aá]p|n[eê]n l[aà]m g[iì]|t[oố]i [uư]u|d[uự] b[aá]o/i
 export function deepQuestion(msg: string, fileCount = 0): boolean {
@@ -371,7 +373,9 @@ export async function runBeGau(opts: {
   const isPriv = priv(role)
   const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
 
-  const kbOpts = isPriv ? {} : { excludeCategories: ["cogs"] }
+  // Hiếu chốt 2026-10-07: giá vốn mở cho mọi vai trò (canViewCogs = true) → chỉ che mục "cogs" khi vai trò thật sự không có quyền.
+  const seeCost = isPriv || isCost
+  const kbOpts = seeCost ? {} : { excludeCategories: ["cogs"] }
 
   const [dataFilter, customRules, partnerTierInfo, ga4SiteList, kbInject, { history: compressedHistory }] = await Promise.all([
     getRoleDataFilter(role),
@@ -408,6 +412,8 @@ export async function runBeGau(opts: {
     !isCost && !isPriv ? `\n\n(Nội bộ) Vai trò hiện tại KHÔNG được xem giá vốn (COGS)/lợi nhuận — không trả cột/số giá vốn, lãi gộp (GP), biên lãi, CM1 dù được hỏi; báo cáo cho vai trò này chỉ gồm doanh thu, số đơn, số lượng.` : "",
     customRules ? `\n\n━━━ HƯỚNG DẪN TÙY CHỈNH CỦA ADMIN ━━━\n${customRules}` : "",
     extraDirective,
+    // Câu nhờ tạo tài liệu/bảng tính/task trong Lark (eval U1a2: model lấy số xong rồi quên tạo) → nhắc thẳng ở lượt này.
+    LARK_CREATE_RE.test(lastMsg) ? `\n\n(Nội bộ — lượt này) Người dùng đang nhờ TẠO trong Lark: lấy số liệu xong thì BẮT BUỘC gọi công cụ larkWorkspace, rồi trả link (hoặc báo đúng lỗi công cụ trả về).` : "",
   ].join("")
 
   // s190: + toàn bộ công cụ Gấu Pro — mở cho mọi role (GP_TOOLS_OPEN), phần nhạy cảm/trả phí/cá nhân
@@ -500,9 +506,9 @@ export async function runBeGau(opts: {
         return wrap(await execProduct(a))
 
       if (name === "readKnowledgeBase") {
-        const kbCategory = (!isPriv && (!a?.category || a.category === "cogs")) ? undefined : a?.category
+        const kbCategory = (!seeCost && (!a?.category || a.category === "cogs")) ? undefined : a?.category
         const kbResult = await runReadKnowledgeBase(kbCategory, Array.isArray(a?.keys) ? a.keys.map(String) : undefined)
-        if (!isPriv && kbResult?.entries)
+        if (!seeCost && kbResult?.entries)
           kbResult.entries = kbResult.entries.filter((e: any) => e.category !== "cogs")
         return wrap(kbResult)
       }
@@ -538,7 +544,7 @@ export async function runBeGau(opts: {
         const res = await dispatchTool({ name: name, args: a }, undefined, sources)
         // searchKnowledgeBase đọc chung creator_kb với readKnowledgeBase — che category "cogs" cho
         // role không có quyền xem giá vốn, khớp đúng cách readKnowledgeBase xử lý ở trên.
-        if (name === "searchKnowledgeBase" && !isPriv) {
+        if (name === "searchKnowledgeBase" && !seeCost) {
           const resp = res.functionResponse.response
           if (resp?.results) resp.results = resp.results.filter((r: any) => r.category !== "cogs")
         }
