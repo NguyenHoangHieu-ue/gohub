@@ -15,6 +15,7 @@ import { DatapoolDetailTable } from "@/components/my-metrics/datapool-detail-tab
 import { SkuScanSection } from "@/components/my-metrics/sku-scan-section"
 import { BegauInsightsSection } from "@/components/my-metrics/begau-insights-section"
 import { LarkConfigModal } from "@/components/my-metrics/lark-config-modal"
+import { PlanSection } from "@/components/my-metrics/plan-section"
 import { fck, pct, hhmm, currentQuarter, quarterOptions, achHigherBetter, achLowerBetter, type QuarterKey } from "@/lib/my-metrics-format"
 import { defaultTargetsFor, BASELINE_NOTE, WEIGHTS, OKR_GM_BASELINE_DISPLAY } from "@/lib/my-metrics-types"
 import type {
@@ -47,7 +48,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
   const [loading, setLoading] = useState(true)
   const [showLarkConfig, setShowLarkConfig] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
-  const [cat, setCat] = useState<"ops" | "product" | "ai">("ops")
+  const [cat, setCat] = useState<Cat>("ops")
 
   const [convs,      setConvs]      = useState<Conversation[]>([])
   const [convTotal,  setConvTotal]  = useState(0)
@@ -378,6 +379,9 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
         </div>
       )}
 
+      {/* ── Kế hoạch quý (M3) — chỉ mount khi mở tab: lần đầu đọc doanh thu theo SKU mất 20–40s ── */}
+      {cat === "plan" && <PlanSection quarter={qLabel} canEdit={canConfigLark} />}
+
       {/* ── Operational Excellence ── */}
       <div className={cn(cat !== "ops" && "hidden")}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -452,7 +456,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                 ]}
               />
               <SourceBox type="auto" table="gohub_dw · fact_fulfillment_revenue"
-                filter="REPLACE(UPPER(TRIM(vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')" />
+                filter="REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL' OR LIKE 'BCDATAPOOL%' (BC Datapool (CMHK)/(Singtel))" />
             </div>
           </div>
 
@@ -618,15 +622,18 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
 // numbered badge "1/2/3" cũ (sai ngữ nghĩa: 3 nhóm này KHÔNG phải 1 sequence, chỉ là 3 category song
 // song có trọng số riêng). Chấm màu = trạng thái chỉ số YẾU NHẤT trong nhóm, giúp thấy ngay nhóm nào
 // cần chú ý mà không cần mở tab.
+type Cat = "ops" | "product" | "ai" | "plan"
+
 function CategoryNav({ cat, setCat, tierOps, tierProduct, tierAi }: {
-  cat: "ops" | "product" | "ai"
-  setCat: (c: "ops" | "product" | "ai") => void
+  cat: Cat
+  setCat: (c: Cat) => void
   tierOps: number; tierProduct: number; tierAi: number
 }) {
-  const items: [("ops" | "product" | "ai"), string, string, number][] = [
+  const items: [Cat, string, string, number | null][] = [
     ["ops",     "Operational Excellence", `w=${WEIGHTS.sla + WEIGHTS.vendor_speed}%`, tierOps],
     ["product", "Product Performance",    `w=${WEIGHTS.sku_gm + WEIGHTS.hk3}%`,       tierProduct],
     ["ai",      "BI & AI Automation",     `w=${WEIGHTS.begau}%`,                      tierAi],
+    ["plan",    "Kế hoạch quý",           "",                                         null],
   ]
   return (
     <div className="flex gap-1.5 bg-slate-100 border border-slate-200 rounded-2xl p-1.5">
@@ -636,7 +643,7 @@ function CategoryNav({ cat, setCat, tierOps, tierProduct, tierAi }: {
             "flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[13px] font-bold transition-colors",
             cat === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700",
           )}>
-          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", tier >= 100 ? "bg-emerald-500" : "bg-amber-500")} />
+          {tier !== null && <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", tier >= 100 ? "bg-emerald-500" : "bg-amber-500")} />}
           {label}
           <span className="text-[10.5px] font-semibold text-slate-400">{note}</span>
         </button>

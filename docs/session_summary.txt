@@ -10807,3 +10807,12 @@ Chi tiết: wiki `analytics-quarterly.md` §s226.
 - Kiểm số B2C Quarter Report: Revenue/GP T7–T10 khớp tuyệt đối SQL thô. Phát hiện ngoài code: từ 12/08 Zalo/FB → nguồn S0020 "Other" (Misc.); chi phí kênh B2C chỉ nhập T4.
 - Lỗi Hiếu báo (Performance chọn US, B2C âm): group cost cả công ty bị trừ nguyên vào VN và US. Sửa: tên khoản có "Global" → US, còn lại → VN (`filterGroupCostsByCompany`), áp 5 route có lọc công ty. tsc sạch, vitest 577 qua + 2 lỗi có sẵn.
 **Việc còn cho Hiếu**: xem lại Performance US/VN trên staging; nhập Group Cost sau này nhớ đặt tên "Global…" cho chi phí US; hỏi Sapo/ops vụ S0020; nhập chi phí kênh B2C T5–T10.
+- Merge `main` 2026-10-07 (`25987070`, theo yêu cầu Hiếu): trước merge tsc sạch, `next build` OK, vitest 577 qua + 2 lỗi có sẵn (Windows).
+
+## s227 (2026-10-07) — My Metrics M3: tab "Kế hoạch quý" tự đo
+Chi tiết: wiki `analytics-my-metrics.md` §s227, plan `my-metrics-plan-quy.md`.
+- Bảng `okr_plan_items` (migration **v70**), API `my-metrics/plan`, logic `lib/okr-plan.ts` (8 loại việc đo từ doanh thu theo SKU của tab Thị trường + vendor_quotes; tiến độ so mức lẽ ra phải đạt hôm nay), tab thứ 4 trong My Metrics.
+- tsc sạch, lint không lỗi mới, `next build` OK, vitest 588 qua + 2 lỗi có sẵn (Windows), test mới 11/11.
+**Việc còn cho Hiếu**: chạy `web/db/migrations/v70_okr_plan_items.sql` + Reload schema, rồi báo để QA; nhập vài việc Q4 thật.
+- (s227 QA staging sau v70) ĐẠT: tạo 8 loại việc + chặn thiếu vendor/thiếu mục tiêu/sai loại/quý đã khoá; tick xong, bỏ việc, sửa hạn+mục tiêu, PATCH không đổi được quý, xoá; form trên giao diện (8 loại/4 nhóm, gợi ý 56 thị trường + 20 vendor) tạo được việc. Số đo khớp SQL độc lập (3HK 67,24%→66,24%; SKU mới 63).
+  Lỗi tìm ra + đã sửa: (a) LỖI CÓ SẴN — KPI %Datapool + bảng chi tiết Datapool so `= 'BCDATAPOOL'` trong khi vendor thật là "BC Datapool (CMHK)/(Singtel)" → BC luôn 0 (Q3 bỏ sót 129tr; %Datapool Q3 nay 67,77%) `c9cc074a`; (b) "SKU mới" đếm cả SKU cũ bán lại (73 → 63) `7fdeff90`; (c) chiều tốt suy từ mục tiêu làm GM mục tiêu thấp hơn mốc bị báo Đạt sai `d093ef3f`. Dữ liệu [QA] đã xoá.

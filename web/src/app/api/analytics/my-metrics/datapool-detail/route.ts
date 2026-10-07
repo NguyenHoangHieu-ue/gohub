@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   // v3 (s195+19): fix decodeSkuDestinationCode (nước sai cho SKU pháp nhân chữ A-E), cùng lý do bump
   // ở sku-scan/route.ts. v2: bump key sau s195+18-B (thêm prev quý/gp/gm_pct/country/product_code/
   // monthly — shape khác hẳn bản cũ).
-  const cacheKey = `okr_datapool_detail:v3:${quarter}`
+  const cacheKey = `okr_datapool_detail:v4:${quarter}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
          FULL OUTER JOIN prev p ON c.sku = p.sku
          JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) v
            ON COALESCE(c.sku, p.sku) = v.sku
-         WHERE REPLACE(UPPER(TRIM(v.vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')
+         WHERE (REPLACE(UPPER(TRIM(v.vendor)),' ','') = '3HKDATAPOOL' OR REPLACE(UPPER(TRIM(v.vendor)),' ','') LIKE 'BCDATAPOOL%')
            AND (COALESCE(c.rev, 0) > 0 OR COALESCE(p.rev, 0) > 0)
          ORDER BY COALESCE(c.rev, 0) DESC`,
         [curStart, curEnd, prevStart, prevEnd]
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
          WHERE f.fulfiled_date IS NOT NULL
            AND f.fulfiled_date::date BETWEEN $1::date AND $2::date
            AND f.fulfiled_date::date <= CURRENT_DATE - 1
-           AND REPLACE(UPPER(TRIM(v.vendor)),' ','') IN ('3HKDATAPOOL','BCDATAPOOL')
+           AND (REPLACE(UPPER(TRIM(v.vendor)),' ','') = '3HKDATAPOOL' OR REPLACE(UPPER(TRIM(v.vendor)),' ','') LIKE 'BCDATAPOOL%')
          GROUP BY 1, 2
          ORDER BY 1, 2`,
         [prevStart, curEnd]

@@ -7,11 +7,34 @@ visibility: admin-only
 is_hidden: true
 tags: [my-metrics, okr, analytics, sla, sku, gm, begau, lark-bot]
 created: 2026-08-27
-updated: 2026-10-06
+updated: 2026-10-07
 status: active
 ---
 
 # My Metrics — OKR Tracking
+
+## s227 (2026-10-07) — Tab "Kế hoạch quý" (M3: kế hoạch tự đo)
+- Tab thứ 4 trong `CategoryNav` (không có trọng số, không vào Weighted Score). Chỉ mount khi mở tab (lần đầu trong ngày đọc
+  doanh thu theo SKU mất 20–40s). Sửa được: admin/creator (`canConfigLark`); bod chỉ xem. Quý đã khoá (`isQuarterLocked`) → chỉ xem.
+- Bảng Supabase `okr_plan_items` (migration **v70**): quarter, kind, title, scope `{country, vendor}`, baseline (NULL = tự lấy
+  quý trước), target, due_date (NULL = cuối quý), done, dropped, note. Số thực tế KHÔNG lưu — tính mỗi lần xem.
+- API `GET/POST/PATCH/DELETE /api/analytics/my-metrics/plan` (`?quarter=Q4-2026[&options=1]`). Logic thuần `lib/okr-plan.ts`,
+  test `lib/__tests__/okr-plan.test.ts`.
+- 8 loại việc (`PLAN_KINDS`): % doanh thu thị trường qua 1 vendor · GM% thị trường · %Datapool (3HK+BC) thị trường · % doanh
+  thu công ty qua 1 vendor · số nước mới có doanh thu · số SKU mới có doanh thu · số báo giá vendor còn "reviewing" · việc tay.
+  Nguồn = `loadMarketData(quarter, "ALL")` (cùng cache `market:v3` với tab Thị trường: B2B+B2C, bỏ phí ship, tới hôm qua) và
+  `vendor_quotes`. "Thị trường" = tên hiển thị `MarketSku.country`, "vendor" = `dim_sku.vendor` — gõ đúng tên trong danh sách.
+- Đánh giá (`evaluate`): tiến độ = (hiện tại − mốc)/(mục tiêu − mốc), tự hiểu chiều tăng/giảm theo mục tiêu so với mốc;
+  "lẽ ra phải đạt hôm nay" = tuyến tính từ đầu quý tới hạn; Đạt / Đúng tiến độ (trễ ≤10% quãng đường) / Chậm / Quá hạn.
+  Báo giá chờ: mốc chụp số đang chờ lúc tạo việc.
+- ⚠️ Chỉ số tỷ lệ so quý này (tới hôm qua) với cả quý trước — đầu quý ít ngày nên dao động mạnh.
+- Cảnh báo tự động + Lark DM hằng ngày là M4 (chưa làm).
+- Chiều tốt cố định theo loại (`PLAN_KINDS[].dir`): tăng cho GM/Datapool/tỷ trọng vendor ở thị trường/nước & SKU mới, giảm cho
+  báo giá chờ, chỉ "phụ thuộc vendor" tự suy. Mục tiêu nằm sai phía mốc → "Chưa đạt … nên xem lại". "SKU mới" = lần đầu có doanh thu
+  (route kiểm lịch sử trước quý trước, loại SKU cũ bán lại).
+- ⚠️ Lỗi có sẵn sửa cùng lúc (s227): KPI **%Datapool** và bảng chi tiết Datapool so `vendor = 'BCDATAPOOL'` nhưng `dim_sku.vendor` thật là
+  "BC Datapool (CMHK)" / "BC Datapool (Singtel)" → phần BC luôn 0. Nay so tiền tố `LIKE 'BCDATAPOOL%'` (cache `okr_datapool_detail:v4`).
+  Q3-2026: BC 129tr, %Datapool 67,77% (trước chỉ tính 3HK).
 
 ## s225 (2026-10-06) — Bảng gập mặc định + tab mới "Thị trường & Báo giá"
 - Mọi bảng My Metrics gập mặc định (chỉ hiện biểu đồ, bấm "Xem bảng (N dòng)"): bọc 1 chỗ ở `components/my-metrics/shared-ui.tsx`
