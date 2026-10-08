@@ -1031,3 +1031,13 @@ lịch + phiên Trực tiếp là khung đa người dùng, bật theo `app_sett
 - Lọc cogs xảy ra SAU `match_count: 6` của RPC → với role không priv có thể còn ít mục hơn 6 nếu câu hỏi trúng mục cogs. Chấp nhận.
 - Test: `be-gau-runner.test.ts` khoá staff truyền `excludeCategories: ["cogs"]` (cả lượt sau), admin truyền `{}`.
 
+
+## § s228 (2026-10-08) — Sửa 3 lỗi mở sau G0–G5 (plan be-gau-upgrade §1)
+
+- **Cổng duyệt nhớ qua nhiều lượt**: cuối mỗi lượt `gp_runs.steps` thêm bước `{ tainted, taintSources }`. Lượt sau của cùng cuộc chat
+  (có lịch sử, cùng người + kênh, ≤2 giờ) đọc bước đó → nếu lượt trước đã đọc nội dung ngoài thì lượt này cũng "nhiễm" (nguồn ghi
+  "… (lượt trước)"). Kênh cron không áp. Danh sách Lượt chạy hiện dòng "⚠ đã đọc nội dung ngoài".
+  Hạn chế: không có `conversation_id` trong `gp_runs` → cuộc chat KHÁC trong 2 giờ có lịch sử cũng có thể bị coi nhiễm (thừa duyệt, an toàn).
+- **Lark DM hiện kế hoạch**: lần đầu model gọi `updatePlan` → bot gửi 1 tin "📋 Kế hoạch: …" (không gửi các lần cập nhật để khỏi spam).
+- **Tóm tắt hội thoại Lark DM**: `summarizeLarkThread()` tóm tắt luồng `lark_chat_history` (khi thêm ≥4 tin) vào `gp_conversation_memory`
+  với id UUID suy từ `lark:{openId}:{threadId}`, tiêu đề "[Lark DM] …" → `searchPastConversations` tìm được (link ghi "trong Lark DM").

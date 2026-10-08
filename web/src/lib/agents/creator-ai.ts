@@ -62,6 +62,15 @@ async function saveRunTrace(row: Record<string, unknown>) {
   } catch { /* bỏ qua */ }
 }
 
+/** Nguồn "nhiễm" của lượt gần nhất (≤2 giờ, cùng người + kênh) nếu lượt đó đã đọc nội dung ngoài; null nếu không. */
+async function previousRunTaint(username: string, channel: string): Promise<string[] | null> {
+  const { data } = await supabaseAdmin.from("gp_runs").select("steps,created_at")
+    .eq("username", username).eq("channel", channel).gte("created_at", new Date(Date.now() - 2 * 3600_000).toISOString())
+    .order("created_at", { ascending: false }).limit(1).maybeSingle()
+  const last = Array.isArray(data?.steps) ? (data!.steps as any[]).at(-1) : null
+  return last?.tainted ? (Array.isArray(last.taintSources) ? last.taintSources.map(String) : ["nội dung ngoài"]) : null
+}
+
 const previewArgs = (args: unknown) => {
   let s = ""
   try { s = JSON.stringify(args ?? {}) } catch { /* bỏ qua */ }
@@ -614,6 +623,12 @@ export async function runCreatorAI(
   const collectedSources: WebSource[] = []
   const safety = newTurnSafety(lastMsg, files.length > 0)
   if (opts.resume?.tainted) { safety.tainted = true; safety.taintSources = [...opts.resume.taintSources] }
+  // Cổng duyệt nhớ qua nhiều lượt (lỗi mở §1 plan be-gau-upgrade): nội dung ngoài đọc ở lượt trước vẫn nằm trong lịch sử chat → lượt sau
+  // của CÙNG cuộc chat (có lịch sử) cũng coi là đã "nhiễm". Lấy từ dòng trace gp_runs gần nhất (bước cuối ghi { tainted }).
+  if (!safety.tainted && geminiHistory.length > 0 && username && channel !== "cron") {
+    const prev = await previousRunTaint(username, channel).catch(() => null)
+    if (prev) { safety.tainted = true; safety.taintSources = [...new Set(prev.map(s => `${s.replace(/ \(lượt trước\)$/, "")} (lượt trước)`))] }
+  }
   const pendingActions: PendingAction[] = []
 
   // Mỗi tool bọc try/catch RIÊNG — 1 tool lỗi (network timeout portal/video API/...) trước đây làm
@@ -695,6 +710,7 @@ export async function runCreatorAI(
     } catch { /* keep empty */ }
   }
 
+  steps.push({ tainted: safety.tainted, taintSources: safety.taintSources })
   await saveRunTrace({
     username, channel, question: lastMsg.slice(0, 500), steps, skills: [...loadedSkills],
     tokens_in: loop.tokensIn, tokens_out: loop.tokensOut, duration_ms: Date.now() - t0,
