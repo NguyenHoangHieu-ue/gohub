@@ -12,7 +12,7 @@ const col = { type: S.OBJECT, properties: {
 
 export const buildReportDecl = {
   name: "buildReport",
-  description: "Tạo FILE báo cáo đẹp theo mẫu GoHub (Word/Excel/PowerPoint/PDF có bảng định dạng + biểu đồ). Dùng khi người dùng nhờ làm/xuất báo cáo, file Word/Excel/PPT/PDF, slide trình bày. Lấy số liệu trước bằng công cụ dữ liệu để viết kết luận; BẢNG và Ô SỐ nên kèm sql (SELECT gohub_dw) để server tự lấy số chính xác. Trả về link tải — đưa nguyên link cho người dùng.",
+  description: "Tạo FILE báo cáo đẹp theo mẫu GoHub (Word/Excel/PowerPoint/PDF có bảng định dạng + biểu đồ). Dùng khi người dùng nhờ làm/xuất báo cáo, file Word/Excel/PPT/PDF, slide trình bày. Lấy số liệu trước bằng công cụ dữ liệu để viết kết luận; BẢNG và Ô SỐ nên kèm sql (SELECT gohub_dw) để server tự lấy số chính xác. Trả về link tải — đưa nguyên link cho người dùng. Nhận xét/kết luận CHỈ dựa trên số đã lấy: KHÔNG tự gán nguyên nhân (thời tiết, cạnh tranh, điều chỉnh phân phối…) nếu dữ liệu không cho biết — ghi \"cần kiểm tra nguyên nhân\" thay vì đoán.",
   parameters: {
     type: S.OBJECT,
     properties: {

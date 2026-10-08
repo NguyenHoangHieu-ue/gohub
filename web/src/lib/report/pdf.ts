@@ -32,7 +32,7 @@ ${tot ? `<tr class="tot">${t.columns.map(c => `<td class="${isNum(c.type) ? "r" 
 .chart svg{width:100%;height:auto} table{width:100%;border-collapse:collapse;font-size:9pt;margin:8px 0;page-break-inside:auto}
 th{background:${BRAND.primary};color:#fff;text-align:left;padding:5px 6px} td{border-bottom:1px solid #E2E8F0;padding:4px 6px}
 tr:nth-child(even) td{background:#F8FAFC} tr.tot td{font-weight:700;background:#F1F5F9} .r{text-align:right} thead{display:table-header-group}
-section{page-break-inside:avoid-page} .notes{color:#475569;font-size:9pt}
+h2{break-after:avoid;page-break-after:avoid} .chart,.kpis,tr{break-inside:avoid;page-break-inside:avoid} .notes{color:#475569;font-size:9pt}
 </style></head><body>
 <div class="cover"><div class="brand">GOHUB · travel like a local</div><h1>${esc(spec.title)}</h1>
 ${spec.subtitle ? `<div>${esc(spec.subtitle)}</div>` : ""}<div class="meta">${spec.period ? `Kỳ dữ liệu: ${esc(spec.period)} · ` : ""}Ngày lập: ${today}</div></div>
