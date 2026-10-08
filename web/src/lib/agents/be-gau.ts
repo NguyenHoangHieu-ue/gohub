@@ -467,7 +467,7 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
       return wrap(await runScheduleTask(a, username, (role || "").toLowerCase() === "creator", ownerName))
 
     if (name === "buildReport")
-      return wrap(await runBuildReport(a, { owner: username || userId || "anon", runSql: async (sql: string) => {
+      return wrap(await runBuildReport(a, { owner: username || userId || "anon", larkOpenId, runSql: async (sql: string) => {
         const r = await execSQL(sql, isCost || isPriv)
         return r.error ? { error: r.error } : { rows: r.result as Record<string, unknown>[] }
       } }))

@@ -330,3 +330,9 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
   (thiếu cờ → API 400 "Please enable tool_config.include_server_side_tool_invocations"). Mọi lượt ép tool (Lark ANY, chốt NONE) phải giữ cờ.
 - Đo: model gọi executeSQL trước, lượt sau tự viết + chạy Python (executableCode/codeExecutionResult) rồi trả lời. Prompt: tính nhiều số
   bằng code, không in code ra câu trả lời. `streamTurn` giữ nguyên các part code trong lịch sử.
+
+## § s228 U2c (2026-10-08) — Báo cáo vào Lark Docs (CHƯA QA)
+
+- `buildReport` nhận format `lark` → `lib/report/lark.ts`: tạo Doc bằng token bot, nối từng mục (markdown) + ảnh biểu đồ đúng vị trí
+  (`appendImage` trong `creator/tools/lark-docs.ts`: khối ảnh trống → upload `docx_image` → `replace_image`), chuyển quyền cho người hỏi + DM link.
+- Chưa thử được: token Lark trong `.env.local` máy Hiếu báo "invalid param" (secret cũ). Cần QA trên staging.

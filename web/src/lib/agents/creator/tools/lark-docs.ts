@@ -44,7 +44,7 @@ async function resolveRef(token: string, ref: Ref): Promise<Ref> {
   return { type: n.obj_type === "sheet" ? "sheet" : n.obj_type === "docx" ? "docx" : "unknown", token: n.obj_token }
 }
 
-async function docUrl(token: string, docToken: string, docType: "docx" | "sheet"): Promise<string | undefined> {
+export async function docUrl(token: string, docToken: string, docType: "docx" | "sheet"): Promise<string | undefined> {
   try {
     const d = await lk(token, "/drive/v1/metas/batch_query", {
       method: "POST", body: JSON.stringify({ request_docs: [{ doc_token: docToken, doc_type: docType }], with_url: true }),
@@ -76,7 +76,7 @@ async function fullRange(token: string, sheetToken: string, range: string | unde
 }
 
 // Markdown → block docx (API convert) → chèn vào cuối tài liệu theo lô ≤1000 block.
-async function appendMarkdown(token: string, documentId: string, markdown: string): Promise<number> {
+export async function appendMarkdown(token: string, documentId: string, markdown: string): Promise<number> {
   const conv = await lk(token, "/docx/v1/documents/blocks/convert", {
     method: "POST", body: JSON.stringify({ content_type: "markdown", content: markdown }),
   })
@@ -107,6 +107,28 @@ async function appendMarkdown(token: string, documentId: string, markdown: strin
   }
   await flush()
   return inserted
+}
+
+/** U2: chèn 1 ảnh PNG vào cuối tài liệu — tạo khối ảnh trống → tải ảnh lên (parent = khối đó) → gắn token ảnh vào khối. */
+export async function appendImage(token: string, documentId: string, png: Buffer, name = "chart.png"): Promise<void> {
+  const d = await lk(token, `/docx/v1/documents/${documentId}/blocks/${documentId}/children?document_revision_id=-1`, {
+    method: "POST", body: JSON.stringify({ children: [{ block_type: 27, image: {} }], index: -1 }),
+  })
+  const blockId = d.children?.[0]?.block_id
+  if (!blockId) throw new Error("Lark không trả block ảnh.")
+  const form = new FormData()
+  form.append("file_name", name)
+  form.append("parent_type", "docx_image")
+  form.append("parent_node", blockId)
+  form.append("size", String(png.length))
+  form.append("extra", JSON.stringify({ drive_route_token: documentId }))
+  form.append("file", new Blob([new Uint8Array(png)], { type: "image/png" }), name)
+  const up = await fetch(`${L}/drive/v1/medias/upload_all`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form })
+  const u = await up.json().catch(() => ({ code: up.status, msg: up.statusText }))
+  if (u.code !== 0) throw new Error(`Lark tải ảnh ${u.code}: ${u.msg}`)
+  await lk(token, `/docx/v1/documents/${documentId}/blocks/${blockId}?document_revision_id=-1`, {
+    method: "PATCH", body: JSON.stringify({ replace_image: { token: u.data.file_token } }),
+  })
 }
 
 // Token truyền vào: user token (Gấu Pro, thao tác dưới tên creator) hoặc token bot (Bé Gấu mức A — lib/agents/lark-workspace.ts).

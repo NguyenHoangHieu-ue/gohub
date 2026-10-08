@@ -31,10 +31,12 @@ export interface BuiltFile { format: ReportFormat; filename: string; url: string
 export async function buildReport(raw: unknown, formats: ReportFormat[], opts: {
   owner: string
   runSql: (sql: string) => Promise<{ rows?: Record<string, unknown>[]; error?: string }>
+  onlyResolve?: boolean   // chỉ chuẩn hoá + lấy số (vd chỉ xin bản Lark), không dựng file
 }): Promise<{ files?: BuiltFile[]; spec?: ReportSpec; warnings?: string[]; error?: string }> {
   const { spec, error } = normalizeSpec(raw)
   if (!spec) return { error }
   const warnings = await resolveData(spec, opts.runSql)
+  if (opts.onlyResolve) return { files: [], spec, warnings }
   const want = formats.length ? [...new Set(formats)] : (["docx", "xlsx"] as ReportFormat[])
 
   const charts = new Map<number, Buffer>()
