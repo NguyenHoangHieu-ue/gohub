@@ -10918,3 +10918,5 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
   gói Pro qua CLAUDE_CODE_OAUTH_TOKEN), callback `/api/dev-tickets/callback`, mục "Phiếu sửa code" ở Creator Settings. Đã cài DEV_TICKET_SECRET
   (GitHub secret + Vercel Production/Preview). Chờ Hiếu: chạy v71, tạo CLAUDE_CODE_OAUTH_TOKEN + GITHUB_DISPATCH_TOKEN, bật quyền Actions tạo PR,
   merge main (workflow phải có trên main mới dispatch được), thử 1 phiếu nhỏ.
+- (s228 tiếp) MERGE `main` 2026-10-08 (`8e53dd02`): U5b phiếu sửa code + tính năng đặc biệt chỉ Creator. Đã cài GITHUB_DISPATCH_TOKEN (Vercel
+  Prod/Preview, lấy từ .env.local, GitHub API đọc repo 200), bật "Actions tạo PR". Chưa chạy phiếu thử — Hiếu tạo qua Gấu Pro + duyệt.
