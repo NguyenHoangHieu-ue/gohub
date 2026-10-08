@@ -148,6 +148,11 @@ async function runBeGauJobChunk(j: JobRow, st: BeGauJobState): Promise<"continue
       return still?.length ? "continue" : "finished"
     }
     const text = r.text || "⚠️ Việc quá dài, đã dừng sau nhiều chặng. Thu hẹp yêu cầu rồi giao lại."
+    // Việc canh chừng (đặt theo lịch): điều kiện không xảy ra → NO_ALERT → không lưu, không nhắn.
+    if (text.trim().replace(/[.!*`]/g, "") === "NO_ALERT") {
+      await supabaseAdmin.from("gp_jobs").update({ status: "done", result: "NO_ALERT", checkpoint: null, updated_at: new Date().toISOString() }).eq("id", j.id)
+      return "finished"
+    }
     let convId: string | null = null
     try {
       const { data: conv } = await supabaseAdmin.from("conversations")

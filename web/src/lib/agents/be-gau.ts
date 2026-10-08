@@ -26,6 +26,7 @@ import { newTurnSafety, recordToolResult, approvalReason } from "./creator/tool-
 import { loadFeatureMatrix, enabledFeatureTools } from "@/lib/assistant-features"
 import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { normalizePlan, compactContents, type PlanStep } from "./creator-ai"
+import { runScheduleTask } from "./creator/schedules"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 import { leakFilterStream, scrubLeaks } from "./core/leak-filter"
 import { b2bCustomerCm1Decl, runB2bCustomerCm1 } from "./b2b-cm1"
@@ -439,6 +440,7 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
     recordToolResult(safety, call, out.functionResponse.response)
     return out
   }
+  const ownerName = name || username   // tên hiển thị người hỏi (hội thoại Bé Gấu lưu theo tên)
   const runToolCore = async (call: any): Promise<any> => {
     const a = call.args as any
     const name = call.name ?? ""
@@ -447,6 +449,10 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
 
     if (name === "listSupabaseTables")
       return wrap({ tables: visibleTables })
+
+    // Việc theo lịch (tính năng "schedule"): lưu kèm dấu agent Bé Gấu → đến hạn chạy bằng Bé Gấu theo vai trò người đặt.
+    if (name === "scheduleTask" && featureTools.has("scheduleTask") && username)
+      return wrap(await runScheduleTask(a, username, (role || "").toLowerCase() === "creator", ownerName))
 
     if (name === "b2bCustomerCm1" && seeCost && !dataFilter)
       return wrap(await runB2bCustomerCm1(a))

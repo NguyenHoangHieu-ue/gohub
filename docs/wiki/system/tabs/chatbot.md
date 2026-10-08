@@ -285,3 +285,11 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
   → `GEMINI_MODEL` viết biên bản (tóm tắt, nội dung, quyết định, bảng việc cần làm, câu hỏi mở), có danh sách thuật ngữ để sửa chỗ nghe nhầm.
 - Gotcha đo được: model chép lời BỎ QUA gợi ý thuật ngữ (gửi kèm text không đổi kết quả); hay nhầm "Gighub"→"GitHub", "Hiếu"→"Hiểu".
 - Giới hạn: body request Vercel ~4,5MB → tối đa ~4,4MB (≈ 35 phút ở 16kbps); họp dài hơn cần upload qua kho file (chưa làm).
+
+## § s228 (2026-10-08) — Bé Gấu: việc theo lịch
+
+- Tính năng "Việc theo lịch" (Theo quyền, mặc định chỉ admin) → tool `scheduleTask` (create/list/cancel) trong Bé Gấu.
+- Dùng chung bảng `gp_scheduled_tasks` (không migration): việc đặt từ Bé Gấu lưu `schedule.agent = "be-gau"` + `schedule.ownerName`;
+  `runDueSchedules` tạo việc nền có dấu Bé Gấu → chạy `runBeGau` theo vai trò người đặt; việc canh chừng trả `NO_ALERT` thì không lưu/nhắn.
+- Kết quả: Lark DM (cần `users.lark_open_id`) + hội thoại "⏳ …". Cron `scheduled-messages` mỗi giờ → trễ tối đa ~1 giờ (đang trỏ staging).
+- Cổng an toàn: tạo lịch sau khi lượt đã đọc nội dung ngoài → bị chặn (rule `when_tainted`).

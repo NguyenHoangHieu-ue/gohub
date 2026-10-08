@@ -36,7 +36,7 @@ export const ASSISTANT_FEATURES: AssistantFeature[] = [
   { id: "browse_web", label: "Mở trang web", description: "Đọc nguyên trang web cụ thể (trang nhiều JS, nhiều trang)", group: "by_role", tools: ["browseWeb"] },
   { id: "video", label: "Tạo video", description: "Tạo video ngắn, kiểm tra trạng thái", group: "by_role", tools: ["generateVideo", "checkVideoStatus"] },
   { id: "live", label: "Trò chuyện trực tiếp", description: "Nói chuyện bằng giọng nói, chia sẻ màn hình (chỉ tra cứu)", group: "by_role", tools: [] },
-  { id: "schedule", label: "Việc theo lịch", description: "Hẹn giờ trợ lý tự làm và báo kết quả", group: "by_role", tools: [], soon: true },
+  { id: "schedule", label: "Việc theo lịch", description: "Hẹn giờ Bé Gấu tự làm (mỗi ngày/tuần/tháng hoặc 1 lần) và nhắn Lark kết quả; trễ tối đa ~1 giờ", group: "by_role", tools: ["scheduleTask"] },
   { id: "deep_research", label: "Nghiên cứu sâu", description: "Nghiên cứu dài nhiều nguồn, ra báo cáo", group: "by_role", tools: [], soon: true },
   { id: "translate", label: "Dịch trực tiếp", description: "Dịch hội thoại trực tiếp (CS)", group: "by_role", tools: [], soon: true },
 
