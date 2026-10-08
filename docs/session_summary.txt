@@ -10866,3 +10866,14 @@ Chi tiết: wiki `analytics-my-metrics.md` §s227b.
 - tsc sạch, vitest 613 qua + 2 lỗi có sẵn (bc-datapool, bridge-version). Wiki `chatbot.md` §s228.
 **Còn U3**: chạy nền việc dài, đọc to (TTS), ghi âm→biên bản, việc theo lịch, nghiên cứu sâu, dịch trực tiếp; sửa lỗi mở §1 plan (cổng duyệt nhớ
 qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hiếu cần: thử 🎙 Trực tiếp ở Bé Gấu (mic thật), bật tính năng cho vai trò cần.
+- (s228 tiếp, Hiếu: "làm lần lượt theo thứ tự") — 7 mục còn lại của U3, mỗi mục 1 commit trên staging:
+  1. Chạy nền `899f50d0`: gp_jobs dùng chung (checkpoint.agent="be-gau"), runBeGau theo chặng; QA staging đạt (1 chặng, số khớp, DM Lark).
+     Phát hiện: hội thoại Bé Gấu lọc theo TÊN hiển thị (session.user.name) — sửa phụ đề Live lưu theo tên.
+  2. Đọc to `82772897`: /api/chat/tts gemini-3.8-flash-tts (WAV, ~4s/câu), nút 🔊.
+  3. Ghi âm → biên bản `98239c9f`: gemini-3.5-transcribe (bỏ qua gợi ý thuật ngữ, nhầm Gighub→GitHub) → gemini-3.8-flash viết biên bản có sửa thuật ngữ; trần ~4,4MB ≈ 35 phút.
+  4. Việc theo lịch `195a6063`: gp_scheduled_tasks đánh dấu schedule.agent=be-gau; NO_ALERT.
+  5. Nghiên cứu sâu `a572c141`: Interactions API deep-research-preview-04-2026 background + việc nền hỏi trạng thái; QA staging đạt (1 chặng, có nguồn).
+  6. Dịch trực tiếp `44f4de4f`: gemini-3.5-live-translate-preview + translationConfig; echo=false vẫn phát âm → bấm chọn ai đang nói.
+  7. Lỗi §1 `165281fe`: cổng duyệt Gấu Pro nhớ qua nhiều lượt (gp_runs bước {tainted}), Lark DM gửi tin kế hoạch, tóm tắt luồng Lark DM.
+  Dữ liệu QA (2 hội thoại + 2 việc nền) đã xoá; 2 DM Lark "[QA…]" đã gửi cho Hiếu.
+  Chưa QA được trên giao diện (Chrome chặn script trang): Trực tiếp, đọc to, ghi âm, dịch, việc theo lịch, Lark DM (chạy production).

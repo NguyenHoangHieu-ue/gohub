@@ -1,7 +1,7 @@
 # Plan — Nâng cấp toàn diện Bé Gấu, chuyển giao tính năng tốt nhất từ Gấu Pro
 
 > File TẠM (quy ước CLAUDE.md): xong hết mốc (hoặc Hiếu bỏ plan) thì xoá file, chuyển kiến thức còn giá trị sang wiki
-> `docs/wiki/system/tabs/chatbot.md` + `analytics-creator-ai.md`. Tạo 2026-10-07 (s227e). **Trạng thái (2026-10-07): Hiếu đã duyệt. Thứ tự làm: U1 → U3 → U2 → U4 → U0. U1 XONG (staging, eval 8,72 → 9,85/10). U3 ĐANG LÀM (s228): xong bảng phân quyền, kế hoạch+Dừng, trí nhớ, Live theo vai trò, tool CM1 B2B, lọc lộ tên bảng; còn chạy nền, TTS, ghi âm, việc theo lịch, nghiên cứu sâu, dịch, lỗi §1.
+> `docs/wiki/system/tabs/chatbot.md` + `analytics-creator-ai.md`. Tạo 2026-10-07 (s227e). **Trạng thái (2026-10-07): Hiếu đã duyệt. Thứ tự làm: U1 → U3 → U2 → U4 → U0. U1 XONG (staging, eval 8,72 → 9,85/10). U3 XONG trên staging (s228, chưa merge): bảng phân quyền, kế hoạch+Dừng, trí nhớ, Live theo vai trò, tool CM1 B2B, lọc lộ tên bảng, chạy nền, TTS, ghi âm→biên bản, việc theo lịch, nghiên cứu sâu, dịch trực tiếp, lỗi §1 (trừ cron trễ ~1h — cấu hình cron-job.org). Bridge/file máy trong Bé Gấu: để Gấu Pro (creator). Tiếp: U2.
 > Lark mức A + định dạng card Lark đã làm ở s227d (`main` `741e59d0`).**
 
 ## 0. Bối cảnh & quyết định đã chốt
