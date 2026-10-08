@@ -238,3 +238,9 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
 - Tính năng "Trí nhớ + tìm hội thoại cũ" (`assistantMemory`, `searchPastConversations`, nạp khối trí nhớ mỗi lượt, sau lượt rút điều đáng
   nhớ + tóm tắt hội thoại) **mặc định TẮT** — Hiếu bật theo vai trò ở bảng tính năng. Trang gửi `conversation_id` để tóm tắt; link kết quả
   tìm hội thoại: tiêu đề "[GP] …" → Gấu Pro, còn lại → `/chatbot?c=<id>` (trang Bé Gấu mở thẳng hội thoại theo `?c=`).
+
+## § s228 (2026-10-08) — Bộ lọc lộ tên bảng/cột trong câu trả lời Bé Gấu
+
+- Eval U1b câu #1/#15 lộ "(`staff_code`)", "(`ref_countries`)" dù prompt cấm → thêm `core/leak-filter.ts`: xoá code nội dòng dạng
+  snake_case (kèm ngoặc bao quanh) ở chữ stream ra (giữ lại phần có thể là đoạn code chưa đóng) và ở câu trả lời cuối. Không đụng
+  khối ``` (khối export chứa SQL thật), mã SKU viết hoa, từ thường. Test `leak-filter.test.ts` (stream từng ký tự = lọc cả đoạn).

@@ -27,6 +27,7 @@ import { loadFeatureMatrix, enabledFeatureTools } from "@/lib/assistant-features
 import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { normalizePlan, type PlanStep } from "./creator-ai"
 import { GEMINI_MODEL } from "@/lib/ai-models"
+import { leakFilterStream, scrubLeaks } from "./core/leak-filter"
 
 // webSearch có executor riêng ở dưới (gom nguồn trích dẫn); các tool tính năng khác chạy qua dispatchTool.
 const FEATURE_DECLS = ALL_TOOL_DECLARATIONS.filter(d => d.name !== "webSearch")
@@ -345,7 +346,10 @@ export async function runBeGau(opts: {
   signal?: AbortSignal      // U3: người dùng bấm Dừng
   onPlan?: (steps: PlanStep[]) => void  // U3: kế hoạch từng bước hiện trên UI
 }): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number; trace: BeGauTrace }> {
-  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, onChunk, larkOpenId = null, username, signal, onPlan } = opts
+  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, larkOpenId = null, username, signal, onPlan } = opts
+  // Chữ stream ra đi qua bộ lọc lộ tên bảng/cột (core/leak-filter.ts).
+  const leak = opts.onChunk ? leakFilterStream(opts.onChunk) : null
+  const onChunk = leak ? (t: string) => leak.push(t) : undefined
   const isPriv = priv(role)
 
   // Hiếu chốt 2026-10-07: giá vốn mở cho mọi vai trò (canViewCogs = true) → chỉ che mục "cogs" khi vai trò thật sự không có quyền.
@@ -551,7 +555,8 @@ export async function runBeGau(opts: {
   })
   let genResult = loop.last
   if (loop.stopped) {
-    const text = `${genResult.text}\n\n⏹ Đã dừng theo yêu cầu.`.trim()
+    leak?.flush()
+    const text = scrubLeaks(`${genResult.text}\n\n⏹ Đã dừng theo yêu cầu.`.trim())
     return { text, sources, toolsUsed: Array.from(loop.toolsUsed), tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, trace }
   }
   if (loop.unfinished) {
@@ -592,7 +597,8 @@ export async function runBeGau(opts: {
       text = genResult.text
     } catch { /* keep */ }
   }
-  const finalText = text || "Mình chưa lấy được dữ liệu cho câu này, bạn thử hỏi lại cụ thể hơn nhé 😊"
+  leak?.flush()
+  const finalText = scrubLeaks(text) || "Mình chưa lấy được dữ liệu cho câu này, bạn thử hỏi lại cụ thể hơn nhé 😊"
 
   // await (không fire-and-forget) — bài học s195+18-C: serverless có thể đóng execution context
   // trước khi promise học liệu kịp gửi đi (đúng lớp bug đã fix cho logChat/app_usage_events).
