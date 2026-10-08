@@ -10,8 +10,8 @@ export function MovedToBeGau() {
         <div className="text-4xl mb-3">🐻</div>
         <h2 className="text-lg font-semibold text-slate-800">Gấu Pro đang cập nhật</h2>
         <p className="mt-2 text-sm text-slate-600">
-          Mọi chức năng của Gấu Pro đã chuyển sang <b>Bé Gấu</b>: phân tích số liệu, báo cáo Word/Excel/PPT, tạo ảnh/video,
-          nghiên cứu sâu, chạy nền, việc theo lịch, trò chuyện trực tiếp. Các hội thoại Gấu Pro cũ của bạn cũng đã nằm trong Bé Gấu.
+          Chức năng của Gấu Pro đã chuyển sang <b>Bé Gấu</b>, kể cả các hội thoại Gấu Pro cũ của bạn (tên bắt đầu bằng [GP]).
+          Từ nay bạn dùng Bé Gấu nhé.
         </p>
         <Link
           href="/chatbot"

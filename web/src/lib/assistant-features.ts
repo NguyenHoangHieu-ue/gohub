@@ -18,7 +18,6 @@ export interface AssistantFeature {
 export const FEATURE_ROLES = ["admin", "bod", "staff", "b2b", "b2c", "saleb2c", "ops-&-cs", "hr", "product"] as const
 
 const EVERYONE = [...FEATURE_ROLES] as string[]
-const ADMIN_ONLY = ["admin"]
 
 export const ASSISTANT_FEATURES: AssistantFeature[] = [
   { id: "web_search", label: "Tìm trên web", description: "Tra tin tức, tài liệu bên ngoài, có trích nguồn", group: "everyone", tools: ["webSearch"] },
@@ -50,12 +49,12 @@ export const ASSISTANT_FEATURES: AssistantFeature[] = [
 
 export type FeatureMatrix = Record<string, string[]>
 
-// Trí nhớ cá nhân: plan U3 — mặc định tắt cho tới khi Hiếu duyệt từng nhóm.
+// Trí nhớ cá nhân: plan U3 — mặc định tắt cho tới khi Hiếu duyệt từng nhóm. Nhóm "theo quyền" mặc định chỉ Creator (Hiếu chốt U5, 2026-10-08).
 const DEFAULT_OFF = new Set(["memory"])
 
 export function defaultMatrix(): FeatureMatrix {
   return Object.fromEntries(ASSISTANT_FEATURES.map(f => [f.id,
-    DEFAULT_OFF.has(f.id) ? [] : f.group === "everyone" ? EVERYONE : f.group === "by_role" ? ADMIN_ONLY : []]))
+    DEFAULT_OFF.has(f.id) ? [] : f.group === "everyone" ? EVERYONE : []]))
 }
 
 /** Gộp bản lưu với mặc định: chỉ nhận vai trò hợp lệ, tính năng "creator" luôn rỗng. */

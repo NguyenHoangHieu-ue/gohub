@@ -8,7 +8,7 @@ import type { AssistantFeature, FeatureGroup, FeatureMatrix } from "@/lib/assist
 
 const GROUPS: { id: FeatureGroup; label: string; hint: string }[] = [
   { id: "everyone", label: "Mọi người", hint: "Mặc định bật cho mọi vai trò" },
-  { id: "by_role", label: "Theo quyền", hint: "Mặc định chỉ Admin — bật thêm cho vai trò cần dùng" },
+  { id: "by_role", label: "Theo quyền", hint: "Mặc định chỉ Creator — bật thêm cho vai trò cần dùng" },
   { id: "creator", label: "Chỉ Creator", hint: "Khoá cứng, không cấp cho vai trò khác" },
 ]
 

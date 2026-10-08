@@ -7,15 +7,11 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { loadGpListed } from "@/lib/gp-access"
 import { sendLarkMessage } from "@/lib/lark"
 
-const MESSAGE = `🐻 Gấu Pro đã gộp vào Bé Gấu
+const MESSAGE = `🐻 Gấu Pro đã chuyển sang Bé Gấu
 
-Từ hôm nay, mọi chức năng của Gấu Pro đã chuyển sang Bé Gấu: hỏi số liệu, báo cáo Word/Excel/PowerPoint/PDF có biểu đồ, tạo và sửa ảnh, tạo video, nghiên cứu sâu, chạy nền, việc theo lịch, trò chuyện trực tiếp bằng giọng nói.
+Gấu Pro đã ngừng cho tài khoản của bạn. Chức năng đã được chuyển sang Bé Gấu, kể cả các hội thoại Gấu Pro cũ của bạn (tên bắt đầu bằng [GP]). Từ nay bạn dùng Bé Gấu nhé.
 
-Hội thoại Gấu Pro cũ của bạn đã được chuyển sang Bé Gấu (tên bắt đầu bằng [GP]).
-
-Mở Bé Gấu: https://intel-v2.gohub.cloud/chatbot
-
-Riêng Bridge (điều khiển trình duyệt của bạn) chưa có trong Bé Gấu.`
+Mở Bé Gấu: https://intel-v2.gohub.cloud/chatbot`
 
 export async function POST(req: NextRequest) {
   if (!isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
