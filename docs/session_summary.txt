@@ -10930,3 +10930,5 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
   (Q3 13, Q4 6). Chờ Hiếu chốt 5 câu §4.
 - (s228 tiếp) Đã DM Lark thông báo tính năng Bé Gấu mới (số liệu, báo cáo, chạy nền, ảnh, giọng nói, ghi âm→biên bản, giao diện mới; không nhắc
   tính năng chỉ Creator) cho 10 người từng được cấp Gấu Pro — 10/10 OK (route `gau-pro-moved` thêm tham số `message`, `172b052d` staging).
+- (s228 tiếp) Fix Bé Gấu không vẽ biểu đồ (`ef29f471`, staging): trang chỉ vẽ khi nhãn agent cũ bi-analyst/data-explorer; cả 2 trang chỉ vẽ khối
+  đầu. `lib/chat-charts.ts` splitChartBlocks dùng chung, vẽ mọi khối. Hội thoại Hiếu báo: c1b2abf9 (pie B2B/B2C Q3).
