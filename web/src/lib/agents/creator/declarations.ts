@@ -689,6 +689,8 @@ export const scheduleTaskDecl = {
 }
 
 // Ordered list used to initialize the Gemini model tools
+import { buildReportDecl } from "../report-tool"
+
 export const ALL_TOOL_DECLARATIONS = [
   readKBDecl, writeKBDecl, searchKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
   listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl,
@@ -703,4 +705,5 @@ export const ALL_TOOL_DECLARATIONS = [
   readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl, googleWorkspaceDecl, assistantMemoryDecl, larkDocsDecl,
   // s196+12 — second-opinion pass (roadmap audit s196+5, ý tưởng #7)
   verifyReportNumbersDecl, loadSkillDecl, updatePlanDecl, searchPastConversationsDecl, scheduleTaskDecl,
+  buildReportDecl,
 ]

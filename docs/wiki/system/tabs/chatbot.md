@@ -310,3 +310,16 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
   `translationConfig`): khách → tiếng Việt và nhân viên → tiếng khách. 13 ngôn ngữ. `live-token.ts` thêm tuỳ chọn `model` + `translationConfig`.
 - Gotcha đo được: `echoTargetLanguage: false` VẪN phát âm thanh (không ra chữ) khi nghe đúng ngôn ngữ đích → không thể để 2 phiên cùng nghe
   1 mic; giao diện có 2 nút "Khách đang nói" / "Tôi đang nói", mic chỉ gửi vào phiên của chiều đang chọn. Không lưu hội thoại.
+
+## § s228 U2 (2026-10-08) — Báo cáo đẹp: Word / Excel / PowerPoint / PDF
+
+- Tool `buildReport` (Bé Gấu: mọi vai trò; Gấu Pro: có sẵn) — `lib/agents/report-tool.ts` → bộ dựng `lib/report/`:
+  `spec.ts` (khung: title, period, summary, sections[heading, text, bullets, kpis, table, chart], actions, notes; định dạng số kiểu Việt),
+  `charts.ts` (SVG tự dựng: bar/stacked/line/pie, màu gohub.vn; PNG qua `@resvg/resvg-js` + font Be Vietnam Pro trong `lib/report/fonts/`),
+  `docx.ts`, `xlsx.ts` (exceljs: dòng tiêu đề xanh cố định, bộ lọc, #,##0 / 0.0"%", dòng Tổng là công thức SUM, ảnh biểu đồ), `pptx.ts`
+  (pptxgenjs: bìa, kết luận, biểu đồ GỐC sửa được, bảng ≤12 dòng), `pdf.ts` (HTML + SVG in qua browserless — gói free ngủ, chờ kết nối 90s).
+- **Số khớp SQL**: bảng/ô số kèm `sql` → server tự chạy (Bé Gấu qua `execSQL` có chặn giá vốn theo vai trò) và dùng số thật, bỏ số model gõ.
+- File lưu bucket RIÊNG TƯ `reports/<username>/…` (tự tạo bucket); link `/api/chat/report-file?p=` kiểm đăng nhập + đúng người (admin/creator
+  xem được hết) rồi chuyển sang link ký 60 giây.
+- `next.config`: external `@resvg/resvg-js`, `exceljs`, `pptxgenjs`; `outputFileTracingIncludes` kèm file font. Test `report.test.ts`.
+- Chưa có: chạy code Python, ghi thẳng vào Lark Docs kèm ảnh biểu đồ (U2 phần sau).

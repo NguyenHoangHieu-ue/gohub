@@ -23,6 +23,7 @@ import { runScheduleTask } from "../schedules"
 import { runLarkDocs } from "./lark-docs"
 import { logGpAction }             from "./audit-log"
 import { runVerifyReportNumbers }  from "./self-review"
+import { runBuildReport }          from "../../report-tool"
 
 // Tool có tác dụng phụ ra ngoài (ghi KB/Lark/portal/browser thật) — audit trail (s196+6).
 const AUDITED_TOOLS = new Set([
@@ -206,6 +207,13 @@ async function dispatchToolCore(
     const resp = await runExecuteSQL(call.args?.sql || "", call.args?.bypass_cache === true)
     return wrap(resp)
   }
+
+  // U2: file báo cáo đẹp — bảng/ô số kèm sql chạy lại ở server để số khớp.
+  if (call.name === "buildReport")
+    return wrap(await runBuildReport(call.args, { owner: ctx?.username || "anon", runSql: async (sql: string) => {
+      const r: any = await runExecuteSQL(sql, false)
+      return r.error ? { error: r.error } : { rows: r.result }
+    } }))
 
   if (call.name === "verifyReportNumbers")
     return wrap(await runVerifyReportNumbers(call.args))

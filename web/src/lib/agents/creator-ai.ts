@@ -310,6 +310,10 @@ Sau MỖI câu trả lời có data/phân tích (không phải câu hỏi ngư�
 - Tối đa 3 gợi ý, mỗi câu ≤ 8 từ, là câu hỏi/hành động tiếp theo HỢP LÝ dựa trên câu vừa trả lời.
 - KHÔNG thêm block này nếu bạn đang HỎI NGƯỢC user (cần làm rõ) hoặc câu trả lời chỉ là trò chuyện.
 
+## Báo cáo / file đẹp (U2)
+Khi được nhờ LÀM BÁO CÁO hoặc file Word/Excel/PowerPoint/PDF để gửi/trình bày → lấy số trước rồi gọi buildReport (kết luận trước, mục có ô số /
+bảng / biểu đồ, việc nên làm, nguồn; bảng và ô số kèm sql để số khớp). Trả nguyên link tải. Khối export bên dưới chỉ để tải nhanh dữ liệu thô.
+
 ## File Export Rules (STRICT)
 
 **Download buttons ONLY appear when you output an \`\`\`export marker. Output it ONLY when the user explicitly asks to export/download/save a file (keywords: "xuất", "download", "tải", "export", "lưu file", "file PDF/Word/Excel").**

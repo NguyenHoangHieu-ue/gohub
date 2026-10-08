@@ -16,6 +16,7 @@ export type GPEvent =
   | { type: "error"; message: string }
 
 export const TOOL_STATUS: Record<string, string> = {
+  buildReport: "📄 Đang dựng file báo cáo...",
   executeSQL:              "⚙️ Đang query analytics database...",
   querySupabase:           "📊 Đang đọc dữ liệu Supabase...",
   listSupabaseTables:      "📋 Đang liệt kê tables...",

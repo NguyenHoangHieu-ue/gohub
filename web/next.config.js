@@ -36,7 +36,9 @@ const nextConfig = {
   // (tên Next 15) bị Next 14 phớt lờ với warning "Unrecognized key(s)" (bug âm thầm trước đây: 6 package
   // cũ chưa từng thật sự được external, chỉ tình cờ chưa gói nào cần require() động như playwright-core).
   experimental: {
-    serverComponentsExternalPackages: ["docx", "mammoth", "pdf-parse", "pdfjs-dist", "pg", "googleapis", "playwright-core"],
+    serverComponentsExternalPackages: ["docx", "mammoth", "pdf-parse", "pdfjs-dist", "pg", "googleapis", "playwright-core", "@resvg/resvg-js", "exceljs", "pptxgenjs"],
+    // U2 báo cáo: font tiếng Việt cho ảnh biểu đồ (resvg không có font hệ thống trên Vercel) — đọc bằng fs nên phải khai báo để được đóng gói.
+    outputFileTracingIncludes: { "/api/**/*": ["./src/lib/report/fonts/*.ttf"] },
   },
   // Skip type-check và ESLint trong next build để tránh OOM (codebase lớn ~2GB heap).
   // Type-check được chạy riêng qua: npx.cmd tsc --noEmit

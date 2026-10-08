@@ -154,7 +154,8 @@ describe("be-gau: tool declarations & role filter", () => {
 
     const decls: any[] = box.config?.tools?.[0]?.functionDeclarations ?? []
     const names = decls.map((d: any) => d.name)
-    expect(decls).toHaveLength(16)
+    expect(decls).toHaveLength(17)
+    expect(names).toContain("buildReport")                // U2: file báo cáo đẹp — mọi vai trò
     expect(names).toContain("updatePlan")                 // U3: kế hoạch từng bước — mọi vai trò
     expect(names).not.toContain("browseWeb")
     expect(names).not.toContain("assistantMemory")        // trí nhớ mặc định tắt (+ không có username)

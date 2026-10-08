@@ -28,6 +28,7 @@ import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { normalizePlan, compactContents, type PlanStep } from "./creator-ai"
 import { runScheduleTask } from "./creator/schedules"
 import { deepResearchDecl, runDeepResearch } from "./deep-research"
+import { buildReportDecl, runBuildReport } from "./report-tool"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 import { leakFilterStream, scrubLeaks } from "./core/leak-filter"
 import { b2bCustomerCm1Decl, runB2bCustomerCm1 } from "./b2b-cm1"
@@ -210,9 +211,13 @@ Dùng chart_type "line"/"area" cho chuỗi thời gian (dùng "lines" thay "bars
 - "cái đó / nó / này" → chỉ thực thể gần nhất vừa nói. Đổi chủ đề hoàn toàn → suy luận lại từ đầu.
 - Không chắc "cái đó" là gì → hỏi lại: "Bạn muốn xem [A] hay [B]?"
 
-## Xuất file (chỉ khi được yêu cầu)
-Nút tải file CHỈ hiện khi bạn xuất khối \`\`\`export ở CUỐI câu trả lời. Chỉ làm việc này khi user rõ ràng
-xin xuất/tải/download/lưu file (từ khoá: "xuất", "tải", "download", "lưu file", "file Excel/Word/PDF").
+## Báo cáo / file đẹp (U2)
+Người dùng nhờ LÀM BÁO CÁO, xuất file Word/Excel/PowerPoint/PDF, làm slide → lấy số liệu trước, rồi gọi công cụ buildReport (khung: kết luận
+trước, mục có ô số / bảng / biểu đồ, việc nên làm, nguồn). Bảng và ô số kèm sql để số trong file khớp dữ liệu. Trả link tải nguyên văn.
+
+## Xuất nhanh dữ liệu thô (khối export)
+Chỉ để tải NHANH 1 bảng dữ liệu thô (Excel/CSV) khi người dùng xin "tải bảng này" — báo cáo/file trình bày thì dùng buildReport ở trên.
+Nút tải file CHỈ hiện khi bạn xuất khối \`\`\`export ở CUỐI câu trả lời.
 KHÔNG hỏi ngược "bạn có muốn xuất không?" — chỉ hành động khi được yêu cầu.
 
 Cú pháp (đặt CUỐI câu trả lời):
@@ -417,7 +422,7 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
   const functionDeclarations = [
     readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl,
     ...(featureTools.has("webSearch") ? [webSearchDecl] : []),
-    larkWorkspaceDecl, searchKBDecl,
+    larkWorkspaceDecl, searchKBDecl, buildReportDecl,
     // CM1 B2B theo KH (số tab Quarter Report) — chỉ vai trò xem được giá vốn và không bị giới hạn dữ liệu theo vai trò.
     ...(seeCost && !dataFilter ? [b2bCustomerCm1Decl] : []),
     ...(featureTools.has("deepResearch") && username ? [deepResearchDecl] : []),
@@ -456,6 +461,12 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
     // Việc theo lịch (tính năng "schedule"): lưu kèm dấu agent Bé Gấu → đến hạn chạy bằng Bé Gấu theo vai trò người đặt.
     if (name === "scheduleTask" && featureTools.has("scheduleTask") && username)
       return wrap(await runScheduleTask(a, username, (role || "").toLowerCase() === "creator", ownerName))
+
+    if (name === "buildReport")
+      return wrap(await runBuildReport(a, { owner: username || userId || "anon", runSql: async (sql: string) => {
+        const r = await execSQL(sql, isCost || isPriv)
+        return r.error ? { error: r.error } : { rows: r.result as Record<string, unknown>[] }
+      } }))
 
     if (name === "deepResearch" && featureTools.has("deepResearch") && username)
       return wrap(await runDeepResearch(a, { username, ownerName: ownerName || username, isCreator: (role || "").toLowerCase() === "creator",
