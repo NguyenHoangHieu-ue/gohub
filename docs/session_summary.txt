@@ -10900,3 +10900,6 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
   Stability (generateImageStability, tính năng image_paid), Kling; CSP bỏ pollinations. QA staging (Bé Gấu, admin): banner 16:9 có chữ
   "eSIM Hàn Quốc 5G — chỉ từ 89k" đúng nguyên văn (29s); video 9:16 mp4 2,3MB (114s). Local: SUPABASE_SERVICE_KEY trong .env.local máy Hiếu
   đã cũ ("Invalid Compact JWS") — không ảnh hưởng Vercel. Hiếu có thể xoá env STABILITY_API_KEY, KLING_API_KEY trên Vercel.
+- (s228 tiếp) Eval 40 câu sau U0–U4 (`web/eval/results/u4.md`): 9,88/10 (U1b 9,85), TB 49,0s/câu (U1b 46,4s), 0 lỗi. Dưới 10: #2 thiếu so tuần
+  trước, #21 kết luận để cuối, #26 %Datapool lệch (69,7 vs 67,8%), #30 giám khảo cho là bịa số SKU theo nước (thực tế lấy từ 3 lần SQL —
+  nhiều khả năng giám khảo thiếu dữ liệu đối chiếu; cột nhà mạng thì không từ dữ liệu).
