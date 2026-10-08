@@ -38,7 +38,7 @@ export const ASSISTANT_FEATURES: AssistantFeature[] = [
   { id: "live", label: "Trò chuyện trực tiếp", description: "Nói chuyện bằng giọng nói, chia sẻ màn hình (chỉ tra cứu)", group: "by_role", tools: [] },
   { id: "schedule", label: "Việc theo lịch", description: "Hẹn giờ Bé Gấu tự làm (mỗi ngày/tuần/tháng hoặc 1 lần) và nhắn Lark kết quả; trễ tối đa ~1 giờ", group: "by_role", tools: ["scheduleTask"] },
   { id: "deep_research", label: "Nghiên cứu sâu", description: "Nghiên cứu web nhiều nguồn ~2–20 phút, chạy nền, ra báo cáo có trích nguồn (chỉ gửi câu hỏi ra ngoài)", group: "by_role", tools: ["deepResearch"] },
-  { id: "translate", label: "Dịch trực tiếp", description: "Dịch hội thoại trực tiếp (CS)", group: "by_role", tools: [], soon: true },
+  { id: "translate", label: "Dịch trực tiếp", description: "Phiên dịch giọng nói với khách nước ngoài (13 ngôn ngữ), bấm chọn ai đang nói", group: "by_role", tools: [] },
 
   { id: "kb_write", label: "Ghi kiến thức chung", description: "Ghi KB, duyệt bài học Bé Gấu tự học", group: "creator", tools: ["writeKnowledgeBase", "reviewPendingLearning", "approveLearning", "rejectLearning"] },
   { id: "portal", label: "Portal nhà cung cấp", description: "Đăng nhập, đọc portal vendor", group: "creator", tools: ["browsePortal", "managePortalCredentials"] },

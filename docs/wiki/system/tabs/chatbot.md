@@ -302,3 +302,11 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
   tối đa 12 chặng (~40 phút, quá thì huỷ). Xong: `output_text` (markdown, cuối có danh sách nguồn) → hội thoại "🔎 …" + Lark DM.
 - Chỉ gửi CÂU HỎI ra ngoài (kèm bối cảnh GoHub chung), không kèm dữ liệu nội bộ. Đo: câu giá eSIM Nhật 7 ngày 136s, ~114k token.
 - `/api/chat` truyền `origin` cho `runBeGau` để tự gọi bộ chạy việc nền.
+
+## § s228 (2026-10-08) — Bé Gấu: dịch trực tiếp (CS)
+
+- Tính năng "Dịch trực tiếp" (Theo quyền, mặc định chỉ admin — bật cho Ops & CS khi cần): nút "🌐 Dịch trực tiếp" → `components/be-gau/translate-session.tsx`.
+- `POST /api/chat/translate/token { lang }` cấp 2 token Live (`GEMINI_TRANSLATE_MODEL`, mặc định `gemini-3.5-live-translate-preview`,
+  `translationConfig`): khách → tiếng Việt và nhân viên → tiếng khách. 13 ngôn ngữ. `live-token.ts` thêm tuỳ chọn `model` + `translationConfig`.
+- Gotcha đo được: `echoTargetLanguage: false` VẪN phát âm thanh (không ra chữ) khi nghe đúng ngôn ngữ đích → không thể để 2 phiên cùng nghe
+  1 mic; giao diện có 2 nút "Khách đang nói" / "Tôi đang nói", mic chỉ gửi vào phiên của chiều đang chọn. Không lưu hội thoại.

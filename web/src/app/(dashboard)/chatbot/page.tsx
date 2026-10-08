@@ -10,6 +10,7 @@ import type { PlanStep } from "@/lib/agents/creator-ai"
 import ChatChart from "@/components/chat-chart"
 import { LiveSession } from "@/components/gau-pro/live-session"
 import { MeetingRecorder } from "@/components/be-gau/meeting-recorder"
+import { TranslateSession } from "@/components/be-gau/translate-session"
 import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
 
 // sessionStorage keys
@@ -262,6 +263,7 @@ export default function ChatbotPage() {
   const [features,       setFeatures]      = useState<string[]>([])                 // U3: tính năng bật cho vai trò
   const [showLive,       setShowLive]      = useState(false)
   const [bgMode,         setBgMode]        = useState(false)                       // U3: giao việc chạy nền
+  const [showTranslate,  setShowTranslate] = useState(false)                       // U3: dịch trực tiếp (CS)
 
   useEffect(() => {
     fetch("/api/chat/features").then(r => r.ok ? r.json() : null).then(d => setFeatures(d?.features ?? [])).catch(() => {})
@@ -786,6 +788,12 @@ export default function ChatbotPage() {
             <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-slate-100">Bé Gấu</h1>
           </div>
           <div className="flex items-center gap-2">
+            {features.includes("translate") && (
+              <button onClick={() => setShowTranslate(true)} disabled={busy}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-800/30 disabled:opacity-40">
+                🌐 Dịch trực tiếp
+              </button>
+            )}
             {features.includes("live") && (
               <button onClick={() => setShowLive(true)} disabled={busy}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-800/30 disabled:opacity-40">
@@ -996,6 +1004,7 @@ export default function ChatbotPage() {
           </div>
         </div>
       </div>
+      {showTranslate && <TranslateSession onClose={() => setShowTranslate(false)} />}
       {showLive && (
         <LiveSession apiBase="/api/chat/live" title="Bé Gấu" allowControl={false} onClose={() => setShowLive(false)}
           onSaved={() => { loadConversations() }} />
