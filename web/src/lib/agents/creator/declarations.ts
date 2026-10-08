@@ -108,22 +108,15 @@ export const webSearchDecl = {
 
 export const generateImageDecl = {
   name: "generateImage",
-  description: "Generate an AI image from a text description. Use when Hiếu asks to 'tạo ảnh', 'vẽ', 'design', 'thumbnail', 'banner', 'mockup', 'storyboard frame'. Always write the prompt in English for best quality. Pollinations will AI-enhance the prompt automatically (enhance=true).",
+  description: "Tạo ảnh hoặc SỬA ẢNH người dùng đính kèm bằng Google Nano Banana (banner, thumbnail, ảnh sản phẩm, đổi nền, đổi chữ trên ảnh). Viết được chữ tiếng Việt trong ảnh. Trả về markdown ảnh — chép NGUYÊN trường markdown vào câu trả lời. Màu thương hiệu GoHub: xanh #1446A5, xanh đậm #003A93, xanh nhạt #009CE0.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      prompt: {
-        type: SchemaType.STRING,
-        description: "Detailed image description in English. Structure: [subject] + [style: photorealistic/cinematic/flat illustration/3D render] + [composition] + [lighting: golden hour/studio/dramatic] + [colors/mood]. The style_preset will auto-inject quality suffixes.",
-      },
-      aspect_ratio: {
-        type: SchemaType.STRING,
-        description: "Aspect ratio: '1:1' (square 1024×1024, default) | '9:16' (TikTok/Reels 864×1536) | '16:9' (landscape 1536×864) | '4:3' (standard 1024×768)",
-      },
-      style_preset: {
-        type: SchemaType.STRING,
-        description: "Optional style preset that auto-injects quality/style suffixes: 'commercial_photo' | 'tiktok_thumb' | 'travel_cinematic' | 'flat_illustration' | 'three_d_product' | 'storyboard'. Omit for custom prompts.",
-      },
+      prompt: { type: SchemaType.STRING, description: "Mô tả ảnh chi tiết (tiếng Việt hoặc Anh): chủ thể, bố cục, phong cách, ánh sáng, màu, chữ cần có trong ảnh (ghi đúng nguyên văn). Khi sửa ảnh: nói rõ cần đổi gì, giữ gì." },
+      aspect_ratio: { type: SchemaType.STRING, description: "1:1 (mặc định) | 16:9 | 9:16 | 4:3 | 3:4 | 4:5 | 21:9 — bỏ qua khi sửa ảnh (giữ khung ảnh gốc)." },
+      style_preset: { type: SchemaType.STRING, description: "Tuỳ chọn: commercial_photo | tiktok_thumb | travel_cinematic | flat_illustration | three_d_product | storyboard." },
+      quality: { type: SchemaType.STRING, description: "standard (mặc định, nhanh) | high (Nano Banana Pro — ảnh có nhiều chữ, ấn phẩm quan trọng)." },
+      edit_attached: { type: SchemaType.BOOLEAN, description: "true = sửa/biến đổi ảnh người dùng vừa đính kèm (đổi nền, thêm chữ, ghép sản phẩm…)." },
     },
     required: ["prompt"],
   },
@@ -519,55 +512,16 @@ export const compareVendorQuotesDecl = {
   },
 }
 
-export const generateImageStabilityDecl = {
-  name: "generateImageStability",
-  description: "Tạo ảnh AI chất lượng cao bằng Stability AI (SDXL Core) — thay thế cho generateImage khi cần ảnh photorealistic, commercial quality hoặc kết quả chính xác hơn. Viết prompt tiếng Anh. Cần STABILITY_API_KEY.",
-  parameters: {
-    type: SchemaType.OBJECT,
-    properties: {
-      prompt: {
-        type: SchemaType.STRING,
-        description: "Mô tả ảnh chi tiết bằng tiếng Anh. Cấu trúc: [chủ thể] + [phong cách: photorealistic/3D render/illustration] + [bối cảnh] + [ánh sáng] + [màu sắc/mood].",
-      },
-      aspect_ratio: {
-        type: SchemaType.STRING,
-        description: "Tỷ lệ khung hình: '1:1' (vuông, default) | '9:16' (TikTok/Reels) | '16:9' (landscape) | '4:3' | '3:4'",
-      },
-      style_preset: {
-        type: SchemaType.STRING,
-        description: "Style preset: 'commercial_photo' | 'tiktok_thumb' | 'travel_cinematic' | 'flat_illustration' | 'three_d_product' | 'storyboard'",
-      },
-    },
-    required: ["prompt"],
-  },
-}
-
 export const generateVideoDecl = {
   name: "generateVideo",
-  description: "Tạo video AI từ mô tả văn bản bằng Kling AI. Dùng khi Hiếu yêu cầu 'tạo video', 'quay video', 'làm clip', 'video TikTok/Reels'. Viết prompt tiếng Anh để chất lượng tốt nhất. Video render ~1-3 phút. Nếu timeout sẽ trả task_id để check sau.",
+  description: "Tạo video ngắn (~8 giây, có âm thanh) bằng Google Veo 3.1 từ mô tả. Dùng khi được nhờ tạo video/clip/TikTok/Reels. Dựng ~1 phút; quá lâu sẽ trả task_id để checkVideoStatus.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      prompt: {
-        type: SchemaType.STRING,
-        description: "Mô tả video chi tiết bằng tiếng Anh. Cấu trúc: [chủ thể] + [hành động] + [phong cách: cinematic/realistic/animation] + [bối cảnh] + [ánh sáng/màu sắc].",
-      },
-      negative_prompt: {
-        type: SchemaType.STRING,
-        description: "Những gì KHÔNG muốn có trong video (vd: 'blurry, watermark, text overlay, distorted faces').",
-      },
-      aspect_ratio: {
-        type: SchemaType.STRING,
-        description: "Tỷ lệ khung hình: '16:9' (landscape YouTube, default) | '9:16' (TikTok/Reels dọc) | '1:1' (vuông).",
-      },
-      duration: {
-        type: SchemaType.NUMBER,
-        description: "Thời lượng video: 5 (default) hoặc 10 giây.",
-      },
-      mode: {
-        type: SchemaType.STRING,
-        description: "Chất lượng render: 'std' (nhanh hơn, default) | 'pro' (chậm hơn, chất lượng cao hơn).",
-      },
+      prompt: { type: SchemaType.STRING, description: "Mô tả chi tiết: chủ thể, hành động, bối cảnh, góc máy/chuyển động máy, ánh sáng, âm thanh/lời thoại nếu cần." },
+      negative_prompt: { type: SchemaType.STRING, description: "Những gì KHÔNG muốn có (vd: chữ chạy, logo lạ, méo mặt)." },
+      aspect_ratio: { type: SchemaType.STRING, description: "16:9 (mặc định) | 9:16 (TikTok/Reels dọc)." },
+      quality: { type: SchemaType.STRING, description: "standard (Veo fast, mặc định) | high (Veo đầy đủ — chậm hơn, khi người dùng xin chất lượng cao)." },
     },
     required: ["prompt"],
   },
@@ -575,7 +529,7 @@ export const generateVideoDecl = {
 
 export const checkVideoStatusDecl = {
   name: "checkVideoStatus",
-  description: "Kiểm tra trạng thái render video Kling khi generateVideo trả về task_id (timeout). Gọi sau ~2 phút để lấy URL video.",
+  description: "Kiểm tra video Veo khi generateVideo trả task_id (dựng lâu). Gọi sau 1–2 phút để lấy link video.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
@@ -700,7 +654,7 @@ export const ALL_TOOL_DECLARATIONS = [
   // Phase 4 tools
   sendLarkMessageDecl, compareVendorQuotesDecl, trackSKUWinRateDecl,
   // Phase 3 tools
-  generateVideoDecl, checkVideoStatusDecl, generateImageStabilityDecl,
+  generateVideoDecl, checkVideoStatusDecl,
   // Phase 2 (s195+1) — Extension điều khiển browser cá nhân Hiếu
   readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl, googleWorkspaceDecl, assistantMemoryDecl, larkDocsDecl,
   // s196+12 — second-opinion pass (roadmap audit s196+5, ý tưởng #7)

@@ -167,13 +167,13 @@ describe("be-gau: tool declarations & role filter", () => {
       expect(names).toContain(n)
     }
     // Admin/creator-only — staff KHÔNG được thấy (hành động/credential/chi phí/dữ liệu cá nhân Hiếu).
-    for (const n of ["writeKnowledgeBase", "reviewPendingLearning", "approveLearning", "rejectLearning", "browsePortal", "managePortalCredentials", "sendLarkMessage", "listLarkTasks", "listLarkTasklists", "getLarkTask", "createLarkTask", "updateLarkTask", "generateImageStability", "generateVideo", "checkVideoStatus"]) {
+    for (const n of ["writeKnowledgeBase", "reviewPendingLearning", "approveLearning", "rejectLearning", "browsePortal", "managePortalCredentials", "sendLarkMessage", "listLarkTasks", "listLarkTasklists", "getLarkTask", "createLarkTask", "updateLarkTask", "generateVideo", "checkVideoStatus"]) {
       expect(names).not.toContain(n)
     }
   })
 
   // U3: bảng phân quyền tính năng (mặc định) — admin có nhóm "Theo quyền", nhóm "Chỉ Creator" khoá cứng.
-  const CREATOR_ONLY = ["writeKnowledgeBase", "browsePortal", "managePortalCredentials", "sendLarkMessage", "createLarkTask", "generateImageStability"]
+  const CREATOR_ONLY = ["writeKnowledgeBase", "browsePortal", "managePortalCredentials", "sendLarkMessage", "createLarkTask"]
   test("admin: có tool nhóm Theo quyền, KHÔNG có tool Chỉ Creator", async () => {
     const box = captureConfig()
     await runBeGau({ geminiHistory: [], lastMsg: "test", role: "admin" })

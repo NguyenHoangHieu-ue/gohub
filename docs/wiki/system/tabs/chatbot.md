@@ -346,3 +346,14 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
   Gửi/Dừng. Chạy nền và ghi âm cuộc họp hiện thành dải trạng thái phía trên ô nhập (ghi âm mở từ ⋯, `MeetingRecorder autoStart`).
 - Hội thoại dài (`use-stick-to-bottom.ts`): mở ra nhảy xuống tin mới nhất; chỉ tự bám đáy khi người dùng đang ở cuối; cuộn lên thì có nút
   "↓ Tin mới nhất"; >40 tin thì thu gọn "Hiện N tin trước". Gấu Pro chưa đổi (dùng lại các component này ở bước sau).
+
+## § s228 U0 (2026-10-08) — Ảnh/video chuyển sang Google
+
+- `generateImage` (`creator/tools/image.ts`): Google Nano Banana — `GEMINI_IMAGE_MODEL` (mặc định `gemini-nano-banana-2.1`), `quality: "high"` →
+  `GEMINI_IMAGE_MODEL_PRO` (`gemini-3-pro-image`, chữ trong ảnh đẹp hơn). `edit_attached: true` → sửa theo ảnh người dùng đính kèm (Bé Gấu +
+  Gấu Pro truyền ảnh qua `dispatchTool ctx.images`). Ảnh lưu bucket công khai `creator-images/<ngày>/<uuid>`. Đo: tạo ~29s, Pro ~18s, sửa ~21s.
+- `generateVideo` / `checkVideoStatus` (`video.ts`): Veo 3.1 — `GEMINI_VIDEO_MODEL` (`veo-3.1-fast-generate-preview`, ~55s) / `quality: "high"` →
+  `veo-3.1-generate-preview`. Chờ tối đa 150s trong lượt, lâu hơn trả `task_id` (tên operation). File Google cần API key → tải về, lưu bucket.
+- ĐÃ XOÁ Pollinations, Stability (`generateImageStability`, tính năng "image_paid"), Kling; CSP bỏ `image.pollinations.ai`. Env
+  `STABILITY_API_KEY`, `KLING_API_KEY` trên Vercel không còn dùng — Hiếu có thể xoá.
+- Quyền: tạo ảnh mọi vai trò (tính năng "image"); video theo vai trò (tính năng "video", mặc định admin).

@@ -26,7 +26,7 @@ export const ASSISTANT_FEATURES: AssistantFeature[] = [
   { id: "sku_win_rate", label: "Hiệu quả SKU mới", description: "SKU mới đạt/chưa đạt 5 đơn trong 14 ngày", group: "everyone", tools: ["trackSKUWinRate"] },
   { id: "trends", label: "Xu hướng thị trường", description: "Dữ liệu xu hướng du lịch/eSIM/TikTok lưu hằng ngày", group: "everyone", tools: ["getTrendSnapshots"] },
   { id: "lark_base", label: "Đọc Lark Base", description: "Đọc bảng Lark Base được chia sẻ cho bot", group: "everyone", tools: ["queryLarkBase"] },
-  { id: "image", label: "Tạo ảnh", description: "Tạo ảnh minh hoạ, banner, thumbnail", group: "everyone", tools: ["generateImage"] },
+  { id: "image", label: "Tạo ảnh", description: "Tạo/sửa ảnh minh hoạ, banner, thumbnail (Google Nano Banana)", group: "everyone", tools: ["generateImage"] },
   { id: "plan", label: "Kế hoạch từng bước", description: "Việc nhiều bước hiện danh sách bước đang làm (nút Dừng luôn có)", group: "everyone", tools: ["updatePlan"] },
   { id: "memory", label: "Trí nhớ + tìm hội thoại cũ", description: "Nhớ điều người dùng dặn, tìm lại hội thoại trước (mặc định tắt — bật từng vai trò khi đã duyệt)", group: "everyone", tools: ["assistantMemory", "searchPastConversations"] },
   { id: "background", label: "Chạy nền việc dài", description: "Giao việc dài chạy nền, không cần giữ trang; xong nhắn Lark + lưu vào Lịch sử", group: "everyone", tools: [] },
@@ -34,7 +34,7 @@ export const ASSISTANT_FEATURES: AssistantFeature[] = [
   { id: "transcribe", label: "Ghi âm → biên bản", description: "Ghi âm cuộc họp (tối đa ~35 phút) → biên bản: tóm tắt, quyết định, việc cần làm", group: "everyone", tools: [] },
 
   { id: "browse_web", label: "Mở trang web", description: "Đọc nguyên trang web cụ thể (trang nhiều JS, nhiều trang)", group: "by_role", tools: ["browseWeb"] },
-  { id: "video", label: "Tạo video", description: "Tạo video ngắn, kiểm tra trạng thái", group: "by_role", tools: ["generateVideo", "checkVideoStatus"] },
+  { id: "video", label: "Tạo video", description: "Tạo video ngắn ~8 giây (Google Veo 3.1)", group: "by_role", tools: ["generateVideo", "checkVideoStatus"] },
   { id: "live", label: "Trò chuyện trực tiếp", description: "Nói chuyện bằng giọng nói, chia sẻ màn hình (chỉ tra cứu)", group: "by_role", tools: [] },
   { id: "schedule", label: "Việc theo lịch", description: "Hẹn giờ Bé Gấu tự làm (mỗi ngày/tuần/tháng hoặc 1 lần) và nhắn Lark kết quả; trễ tối đa ~1 giờ", group: "by_role", tools: ["scheduleTask"] },
   { id: "deep_research", label: "Nghiên cứu sâu", description: "Nghiên cứu web nhiều nguồn ~2–20 phút, chạy nền, ra báo cáo có trích nguồn (chỉ gửi câu hỏi ra ngoài)", group: "by_role", tools: ["deepResearch"] },
@@ -44,7 +44,6 @@ export const ASSISTANT_FEATURES: AssistantFeature[] = [
   { id: "portal", label: "Portal nhà cung cấp", description: "Đăng nhập, đọc portal vendor", group: "creator", tools: ["browsePortal", "managePortalCredentials"] },
   { id: "lark_send", label: "Gửi Lark cho người khác", description: "Gửi tin vào group/người bất kỳ", group: "creator", tools: ["sendLarkMessage"] },
   { id: "lark_tasks", label: "Task Lark của Hiếu", description: "Xem/tạo/sửa task trong tài khoản Lark của Hiếu", group: "creator", tools: ["listLarkTasks", "listLarkTasklists", "getLarkTask", "createLarkTask", "updateLarkTask"] },
-  { id: "image_paid", label: "Ảnh Stability (trả phí)", description: "Tạo ảnh bằng dịch vụ trả phí cũ", group: "creator", tools: ["generateImageStability"] },
   { id: "bridge", label: "Điều khiển trình duyệt", description: "Đọc/thao tác Chrome cá nhân qua Bridge", group: "creator", tools: [], soon: true },
   { id: "local_files", label: "File trên máy", description: "Đọc/sửa file trên máy creator", group: "creator", tools: [], soon: true },
 ]

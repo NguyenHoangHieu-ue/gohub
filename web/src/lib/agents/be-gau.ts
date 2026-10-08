@@ -435,6 +435,8 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
   const dispatchNames = new Set([searchKBDecl.name, ...featureDecls.map(d => d.name)])
 
   const files = fileContexts || []
+  // U0: ảnh người dùng đính kèm — để generateImage sửa theo ảnh gốc (edit_attached).
+  const attachedImages = files.filter(f => f.type !== "text" && (f.mimeType || "").startsWith("image/")).map(f => ({ mimeType: f.mimeType!, data: f.content }))
   const sources: WebSource[] = []
   // Cổng an toàn dùng chung Gấu Pro (tool-policy.ts): lượt đã đọc nội dung ngoài (web, file, Lark Base…) thì không chạy hành động
   // ghi/gửi/mở URL lạ. Bé Gấu chưa có nút Duyệt (U3 sau) → từ chối và để người dùng hỏi lại ở lượt mới.
@@ -530,7 +532,7 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
     // Công cụ Gấu Pro đã bật cho vai trò (bảng phân quyền) — dùng CHUNG executor creator/tools/dispatch.ts.
     if (dispatchNames.has(name)) {
       const res = await dispatchTool({ name: name, args: a }, undefined, sources,
-        { username: username || userId, isCreator: (role || "").toLowerCase() === "creator", personal: useMemory })
+        { username: username || userId, isCreator: (role || "").toLowerCase() === "creator", personal: useMemory, images: attachedImages })
       // searchKnowledgeBase đọc chung creator_kb với readKnowledgeBase — che category "cogs" cho
       // role không có quyền xem giá vốn, khớp đúng cách readKnowledgeBase xử lý ở trên.
       if (name === "searchKnowledgeBase" && !seeCost) {

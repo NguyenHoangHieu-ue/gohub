@@ -590,6 +590,8 @@ export async function runCreatorAI(
   const files = fileContexts || []
   const texts   = files.filter(f => f.type === "text")
   const binaries = files.filter(f => f.type !== "text")
+  // U0: ảnh đính kèm cho generateImage sửa theo ảnh gốc.
+  const attachedImages = binaries.filter(b => (b.mimeType || "").startsWith("image/")).map(b => ({ mimeType: b.mimeType!, data: b.content }))
   const msgText = lastMsg || (files.length ? `Phân tích ${files.length} file: ${files.map(f => f.name).join(", ")}` : "")
 
   if (files.length > 0) {
@@ -672,7 +674,7 @@ export async function runCreatorAI(
     }
     const ts = Date.now()
     try {
-      const out = await dispatchTool(call, onEvent, collectedSources, { username, isCreator, personal })
+      const out = await dispatchTool(call, onEvent, collectedSources, { username, isCreator, personal, images: attachedImages })
       recordToolResult(safety, call, out.functionResponse.response)
       const err = out.functionResponse.response?.error
       steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), ...(err ? { err: String(err).slice(0, 200) } : {}) })

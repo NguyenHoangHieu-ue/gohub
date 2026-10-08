@@ -145,30 +145,14 @@ Output: summary table trong answer + \`\`\`export marker (formats: excel) + \`\`
   },
   {
     name: "content-creative",
-    description: "Nội dung & hình ảnh: xu hướng/trend, kịch bản TikTok, tạo ảnh (FLUX/Stability), tạo video.",
-    tools: ["getTrendSnapshots", "generateImage", "generateImageStability", "generateVideo", "checkVideoStatus"],
+    description: "Nội dung & hình ảnh: xu hướng/trend, kịch bản TikTok, tạo/sửa ảnh (Nano Banana), tạo video (Veo).",
+    tools: ["getTrendSnapshots", "generateImage", "generateVideo", "checkVideoStatus"],
     triggers: /tạo ảnh|vẽ|thumbnail|banner|mockup|storyboard|video|tiktok|kịch bản|script|content|xu hướng|trend/i,
-    instructions: `## Image Generation
-
-Khi Hiếu nhắc đến **"tạo ảnh", "vẽ", "design", "thumbnail", "banner", "mockup", "ảnh minh họa", "storyboard frame"**:
-
-1. Gọi \`generateImage()\` với prompt tiếng Anh chi tiết (style + subject + composition + lighting + colors + mood)
-2. **COPY NGUYÊN XI** trường \`markdown\` từ tool response vào câu trả lời — KHÔNG sửa, KHÔNG rút gọn
-3. Sau ảnh: đề xuất 2-3 biến thể prompt khác nhau về style/mood để thử
-
-**Cách viết prompt HIỆU QUẢ cho FLUX (Pollinations sẽ AI-enhance thêm):**
-- Luôn kết thúc bằng quality modifiers: *"highly detailed, 8K, masterpiece, professional quality"*
-- Mô tả ánh sáng cụ thể: *"golden hour light / soft studio lighting / dramatic rim light / neon glow"*
-- Nêu rõ style: *"photorealistic / cinematic photography / digital art / flat vector illustration / 3D render"*
-- Thêm negative hints cuối prompt: *"no text, no watermarks, no blur, sharp focus"*
-
-**Prompt templates hay dùng:**
-- TikTok thumbnail 9:16: *"vertical 9:16 TikTok thumbnail, [subject], vibrant saturated colors, bold composition with text space at top, [mood], eye-catching, professional social media quality, 8K ultra-detailed, no text, no watermark"*
-- Travel visual/banner: *"[destination] iconic landmark, cinematic wide-angle photography, golden hour warm light, travel aesthetic, [season], photorealistic, stunning landscape, 8K, professional travel photography"*
-- Product mockup: *"[product] on clean white background, professional product photography, soft studio lighting, crisp sharp details, commercial quality, 4K, no shadows, no reflections"*
-- Person/lifestyle: *"young Vietnamese woman, [action], [location], natural light, candid lifestyle photography, Sony A7 35mm, bokeh background, professional quality"*
-- Brand/graphic: *"[concept], flat minimalist design, [brand colors], clean geometric composition, modern corporate style, vector art"*
-- Storyboard: *"storyboard panel [N/total], [scene description], [camera angle], flat illustration style, clean lines, muted colors, professional animation storyboard"*
+    instructions: `## Tạo / sửa ảnh (Nano Banana) & video (Veo)
+- generateImage: mô tả rõ chủ thể, bố cục, ánh sáng, màu; chữ trong ảnh ghi NGUYÊN VĂN (tiếng Việt được). Ấn phẩm nhiều chữ/quan trọng → quality "high".
+  Người dùng gửi ảnh và nhờ sửa (đổi nền, thêm chữ, ghép sản phẩm) → edit_attached=true. Màu GoHub: #1446A5, #003A93, #009CE0.
+- Chép NGUYÊN trường markdown (ảnh/video) vào câu trả lời; sau đó gợi ý 1–2 biến thể.
+- generateVideo: ~8 giây có âm thanh, mô tả cả chuyển động máy; 9:16 cho TikTok/Reels. Trả task_id thì hẹn người dùng hỏi lại sau 1–2 phút.
 
 ## Content Creator Intelligence
 
@@ -223,26 +207,11 @@ Luôn dùng đúng cấu trúc này:
 **💡 GHI CHÚ SẢN XUẤT**
 - B-roll gợi ý: [loại cảnh quay cụ thể]
 - Style nhạc: [upbeat / trending sound / lo-fi]
-- Màu/filter: [gợi ý tone brand GoHub — xanh navy #003B95]
+- Màu/filter: [gợi ý tone brand GoHub — xanh #1446A5 / #003A93]
 - Biến thể hook A/B: [2 hook thay thế để test]
 ---
 
 Sau mỗi kịch bản, đề xuất thêm **2 biến thể hook** để A/B test và **lịch đăng** gợi ý (giờ cao điểm TikTok VN: 7-9h, 12-13h, 19-22h).
-
-## Image Style Presets
-
-Khi dùng \`generateImage()\`, có thể thêm \`style_preset\` để tự động inject quality suffix phù hợp:
-
-| Preset | Dùng cho |
-|---|---|
-| \`commercial_photo\` | Ảnh sản phẩm/thương mại, nền trắng, ánh sáng studio |
-| \`tiktok_thumb\` | Thumbnail TikTok 9:16, màu sắc nổi bật, không có text |
-| \`travel_cinematic\` | Ảnh du lịch, ánh sáng golden hour, wide-angle |
-| \`flat_illustration\` | Illustration vector phẳng, tối giản, Dribbble style |
-| \`three_d_product\` | 3D render sản phẩm, nền sạch, ánh sáng studio |
-| \`storyboard\` | Storyboard TikTok/video, flat illustration, muted colors |
-
-Khi Hiếu yêu cầu ảnh nhưng không chỉ định style → gợi ý preset phù hợp trước khi tạo.
 `,
   },
   {

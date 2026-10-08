@@ -17,7 +17,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",            // Tailwind inline styles
       "img-src 'self' data: blob: https:",           // avatars, chart images
       "font-src 'self'",
-      "connect-src 'self' https://*.supabase.co https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com https://open.larksuite.com https://image.pollinations.ai",
+      "connect-src 'self' https://*.supabase.co https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com https://open.larksuite.com",
       "frame-ancestors 'none'",
     ].join("; "),
   },
