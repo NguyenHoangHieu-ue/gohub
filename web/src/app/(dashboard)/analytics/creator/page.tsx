@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { ALL_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 import KbDocsSection from "./kb-docs-section"
 import AssistantFeaturesSection from "./assistant-features-section"
+import DevTicketsSection from "./dev-tickets-section"
 
 // Tất cả tab/route có thể ẩn
 const ALL_TABS = [
@@ -233,6 +234,8 @@ function CreatorSettings() {
       )}
 
       <AssistantFeaturesSection />
+
+      <DevTicketsSection />
 
       {/* Gấu Pro Access */}
       <GpAccessSection />

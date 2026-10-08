@@ -642,6 +642,25 @@ export const scheduleTaskDecl = {
   },
 }
 
+// U5b: phiếu sửa code — Claude Code chạy trên GitHub Actions, mở PR vào staging. Chỉ Creator.
+export const devTicketDecl = {
+  name: "devTicket",
+  description: "Phiếu sửa code GoHub Intel: Claude Code tự sửa code trên nhánh riêng và mở PR vào staging (KHÔNG đụng main/production). create cần Hiếu duyệt; list/status xem phiếu; answer trả lời câu Claude Code hỏi; cancel huỷ phiếu.",
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      action:  { type: SchemaType.STRING, description: "create | list | status | answer | cancel" },
+      title:   { type: SchemaType.STRING, description: "create: tên ngắn ≤ 80 ký tự, bắt đầu bằng động từ (vd 'Thêm cột %CM1 vào bảng B2B')." },
+      request: { type: SchemaType.STRING, description: "create: nguyên văn yêu cầu của Hiếu." },
+      plan:    { type: SchemaType.STRING, description: "create: kế hoạch từng bước bằng tiếng Việt dễ hiểu (sửa trang/chức năng nào, kết quả mong đợi, cách kiểm) — Hiếu đọc để duyệt." },
+      prompt:  { type: SchemaType.STRING, description: "create: yêu cầu ĐẦY ĐỦ, TỰ ĐỦ NGỮ CẢNH cho Claude Code (không thấy hội thoại này): trang/tab/route liên quan nếu biết, hành vi hiện tại, hành vi mong muốn, ràng buộc nghiệp vụ, tiêu chí xong. Không bịa tên file chưa chắc." },
+      id:      { type: SchemaType.NUMBER, description: "status/answer/cancel: số phiếu." },
+      answer:  { type: SchemaType.STRING, description: "answer: câu trả lời của Hiếu (nguyên ý)." },
+    },
+    required: ["action"],
+  },
+}
+
 // Ordered list used to initialize the Gemini model tools
 import { buildReportDecl } from "../report-tool"
 
@@ -659,5 +678,5 @@ export const ALL_TOOL_DECLARATIONS = [
   readMyBrowserDecl, controlMyBrowserDecl, localFilesDecl, googleWorkspaceDecl, assistantMemoryDecl, larkDocsDecl,
   // s196+12 — second-opinion pass (roadmap audit s196+5, ý tưởng #7)
   verifyReportNumbersDecl, loadSkillDecl, updatePlanDecl, searchPastConversationsDecl, scheduleTaskDecl,
-  buildReportDecl,
+  buildReportDecl, devTicketDecl,
 ]

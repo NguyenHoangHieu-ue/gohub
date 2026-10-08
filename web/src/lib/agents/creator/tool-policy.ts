@@ -57,6 +57,8 @@ function ruleFor(name: string, args: any): Rule {
   switch (name) {
     case "sendLarkMessage":
       return args?.chat_id === "me" ? "when_tainted" : "always"
+    case "devTicket":
+      return action === "create" ? "always" : action === "answer" || action === "cancel" ? "when_tainted" : "never"
     case "createLarkTask": case "updateLarkTask":
     case "writeKnowledgeBase": case "approveLearning": case "rejectLearning":
     case "generateImage": case "generateVideo":
@@ -88,7 +90,9 @@ export function approvalReason(call: { name: string; args: any }, state: TurnSaf
       : null
   }
   const rule = ruleFor(call.name, call.args)
-  if (rule === "always") return "Gửi tin nhắn Lark tới người/nhóm khác luôn cần duyệt."
+  if (rule === "always") return call.name === "devTicket"
+    ? "Phiếu sửa code (Claude Code chạy trên GitHub, mở PR vào staging) luôn cần Hiếu duyệt."
+    : "Gửi tin nhắn Lark tới người/nhóm khác luôn cần duyệt."
   if (rule === "when_tainted" && state.tainted)
     return `Lượt này đã đọc nội dung bên ngoài (${state.taintSources.join(", ")}) — hành động ghi/gửi cần duyệt để chống bị điều khiển ngầm.`
   return null
@@ -107,6 +111,9 @@ export function describeAction(call: { name: string; args: any }): string {
     case "localFiles": return `File máy: ${a.action} ${cut(a.path, 120)}`
     case "browseWeb": return `Mở trang: ${browseUrls(a).map(u => cut(u, 120)).join(", ")}`
     case "writeKnowledgeBase": return `Ghi KB: ${cut(a.title ?? a.key ?? a.content)}`
+    case "devTicket": return a.action === "create"
+      ? `Phiếu sửa code: "${cut(a.title, 120)}" — ${cut(a.plan, 600)}`
+      : `Phiếu #${a.id}: ${a.action}${a.answer ? ` "${cut(a.answer)}"` : ""}`
     case "assistantMemory": return `Trí nhớ: ${a.action} ${cut(a.content ?? a.id ?? "")}`
     default: return `${call.name}${a.action ? ` (${a.action})` : ""}: ${cut(JSON.stringify(a), 160)}`
   }

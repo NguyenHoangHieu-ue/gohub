@@ -1061,3 +1061,26 @@ lịch + phiên Trực tiếp là khung đa người dùng, bật theo `app_sett
   người có `lark_open_id`. Trí nhớ (`assistant_memory`, `gp_conversation_memory`) vốn lưu theo username, Bé Gấu đọc chung — không cần chuyển
   (lúc khoá: người không phải Creator không có dòng nào, cũng không có việc theo lịch/việc nền).
 - Lark DM với Gấu Pro vốn chỉ Creator — không đổi. Bridge chưa có trong Bé Gấu: người bị khoá mất Bridge.
+
+## § s228 U5b (2026-10-08) — Phiếu sửa code: Gấu Pro lập kế hoạch → Claude Code thực hiện
+
+Luồng: Hiếu nhờ Gấu Pro sửa/thêm chức năng web → Gấu Pro (skill `dev-ticket`) trình bày kế hoạch + gọi `devTicket(action:"create")` →
+cổng duyệt (`tool-policy.ts`: create LUÔN cần duyệt; answer/cancel cần duyệt khi lượt bị nhiễm) → duyệt trên web (thẻ Duyệt) hoặc Lark
+("duyệt <mã>"; tạo từ web thì bot tự nhắn Lark kèm mã) → `lib/dev-tickets.ts` tạo dòng `dev_tickets` (v71) + gọi GitHub `workflow_dispatch`
+`.github/workflows/claude-ticket.yml` (ref staging, input `ticket_id` + nội dung phiếu ≤60k ký tự).
+
+Workflow: nhánh `auto/ticket-<id>` (chạy lại thì merge staging vào nhánh cũ) → `anthropics/claude-code-action@v1` với
+`CLAUDE_CODE_OAUTH_TOKEN` (gói Claude Pro, `claude setup-token`), `--max-turns 80`, chỉ cho Read/Edit/Write/Glob/Grep + tsc/vitest/next lint/git
+đọc, cấm WebFetch/WebSearch, 45 phút, 1 phiếu chạy 1 lúc → Claude ghi `.ticket/question.md` (dừng hỏi) hoặc `.ticket/summary.md` → workflow
+commit, đẩy nhánh, `gh pr create --base staging` → báo `POST /api/dev-tickets/callback` (Bearer `DEV_TICKET_SECRET`, secret riêng chỉ dùng ở đây)
+→ bot nhắn Lark Hiếu: câu hỏi / link PR + bản xem thử Vercel (`gohub-intel-git-auto-ticket-<id>-…vercel.app`) / lỗi.
+Luật cho Claude nằm TRONG file workflow (web không đổi được): không push/merge, không sửa `.github/`, không gọi mạng, không chạy migration
+(chỉ viết file SQL), chạy tsc/vitest/lint, cập nhật wiki. Job chỉ có env mock cho vitest — không bí mật production nào.
+
+Trả lời câu hỏi: nhắn Gấu Pro "phiếu <số>: <trả lời>" (tool `answer`) hoặc ô trả lời ở Creator Settings → mục "Phiếu sửa code"
+(`dev-tickets-section.tsx`, API `GET/POST /api/dev-tickets`, chỉ Creator) → phiếu chạy lại kèm hỏi đáp.
+
+Cần có: migration v71; Vercel env `GITHUB_DISPATCH_TOKEN` (token GitHub fine-grained, repo gohub, quyền Actions: Read and write) +
+`DEV_TICKET_SECRET` (đã cài); GitHub secrets `CLAUDE_CODE_OAUTH_TOKEN` + `DEV_TICKET_SECRET` (đã cài); repo Settings → Actions → General →
+"Allow GitHub Actions to create and approve pull requests"; workflow phải có trên `main` (nhánh mặc định) thì mới dispatch được.
+Gotcha: PR do `GITHUB_TOKEN` tạo KHÔNG kích hoạt workflow CI khác (luật GitHub) — workflow phiếu đã tự chạy tsc/vitest qua Claude.

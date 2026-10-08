@@ -24,10 +24,11 @@ import { runLarkDocs } from "./lark-docs"
 import { logGpAction }             from "./audit-log"
 import { runVerifyReportNumbers }  from "./self-review"
 import { runBuildReport }          from "../../report-tool"
+import { runDevTicket }            from "@/lib/dev-tickets"
 
 // Tool có tác dụng phụ ra ngoài (ghi KB/Lark/portal/browser thật) — audit trail (s196+6).
 const AUDITED_TOOLS = new Set([
-  "scheduleTask", "writeKnowledgeBase", "approveLearning", "rejectLearning",
+  "scheduleTask", "devTicket", "writeKnowledgeBase", "approveLearning", "rejectLearning",
   "createLarkTask", "updateLarkTask", "sendLarkMessage",
   "controlMyBrowser", "managePortalCredentials", "localFiles", "googleWorkspace", "assistantMemory", "larkDocs",
 ])
@@ -121,6 +122,9 @@ async function dispatchToolCore(
 
   if (call.name === "scheduleTask")
     return wrap(personal ? await runScheduleTask(call.args, ctx?.username || "", isCreator) : { error: "Việc theo lịch chưa bật cho tài khoản này." })
+
+  if (call.name === "devTicket")
+    return wrap(await runDevTicket(call.args, ctx?.username || "", ctx?.isCreator === true))
 
   if (call.name === "searchPastConversations")
     return wrap(personal ? await searchPastConversations(ctx?.username || "", String(call.args?.query ?? "")) : { error: "Trí nhớ cá nhân chưa bật cho tài khoản này." })

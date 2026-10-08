@@ -1,7 +1,7 @@
 # Plan — Nâng cấp toàn diện Bé Gấu, chuyển giao tính năng tốt nhất từ Gấu Pro
 
 > File TẠM (quy ước CLAUDE.md): xong hết mốc (hoặc Hiếu bỏ plan) thì xoá file, chuyển kiến thức còn giá trị sang wiki
-> `docs/wiki/system/tabs/chatbot.md` + `analytics-creator-ai.md`. Tạo 2026-10-07 (s227e). **Trạng thái (2026-10-07): Hiếu đã duyệt. Thứ tự làm: U1 → U3 → U2 → U4 → U0. U1 XONG (staging, eval 8,72 → 9,85/10). U3 XONG trên staging (s228, chưa merge): bảng phân quyền, kế hoạch+Dừng, trí nhớ, Live theo vai trò, tool CM1 B2B, lọc lộ tên bảng, chạy nền, TTS, ghi âm→biên bản, việc theo lịch, nghiên cứu sâu, dịch trực tiếp, lỗi §1 (trừ cron trễ ~1h — cấu hình cron-job.org). Bridge/file máy trong Bé Gấu: để Gấu Pro (creator). U2 XONG trên staging (s228): buildReport Word/Excel/PPT/PDF + Lark Docs có biểu đồ, số lấy lại từ SQL, chạy code Python. U4 XONG trên staging (s228): thanh trên chọn hội thoại + ⋯, 🎤 nói thành chữ, cuộn thông minh/thu gọn — Bé Gấu + Gấu Pro (Trực tiếp vẫn là cửa sổ riêng). U0 XONG trên staging (s228): Nano Banana (tạo + sửa ảnh), Veo 3.1, đã xoá Pollinations/Stability/Kling. Eval cuối U4 (u4): **9,88/10**, TB 49s/câu, 0 lỗi (U1b 9,85, 46s). Đã merge main 2026-10-08 (`4fe534ea`). Còn: U5 bàn riêng.
+> `docs/wiki/system/tabs/chatbot.md` + `analytics-creator-ai.md`. Tạo 2026-10-07 (s227e). **Trạng thái (2026-10-07): Hiếu đã duyệt. Thứ tự làm: U1 → U3 → U2 → U4 → U0. U1 XONG (staging, eval 8,72 → 9,85/10). U3 XONG trên staging (s228, chưa merge): bảng phân quyền, kế hoạch+Dừng, trí nhớ, Live theo vai trò, tool CM1 B2B, lọc lộ tên bảng, chạy nền, TTS, ghi âm→biên bản, việc theo lịch, nghiên cứu sâu, dịch trực tiếp, lỗi §1 (trừ cron trễ ~1h — cấu hình cron-job.org). Bridge/file máy trong Bé Gấu: để Gấu Pro (creator). U2 XONG trên staging (s228): buildReport Word/Excel/PPT/PDF + Lark Docs có biểu đồ, số lấy lại từ SQL, chạy code Python. U4 XONG trên staging (s228): thanh trên chọn hội thoại + ⋯, 🎤 nói thành chữ, cuộn thông minh/thu gọn — Bé Gấu + Gấu Pro (Trực tiếp vẫn là cửa sổ riêng). U0 XONG trên staging (s228): Nano Banana (tạo + sửa ảnh), Veo 3.1, đã xoá Pollinations/Stability/Kling. Eval cuối U4 (u4): **9,88/10**, TB 49s/câu, 0 lỗi (U1b 9,85, 46s). Đã merge main 2026-10-08 (`4fe534ea`). U5a (khoá Gấu Pro) xong + main `ec512a40`. U5b (phiếu Claude Code) code xong trên staging: gói Claude Pro (OAuth token), duyệt cả web + Lark, chỉ Hiếu tạo phiếu, câu hỏi giữa chừng → dừng + hỏi qua Lark. Còn: Hiếu cài token + chạy v71 + merge main, thử 1 phiếu nhỏ.
 > Lark mức A + định dạng card Lark đã làm ở s227d (`main` `741e59d0`).**
 
 ## 0. Bối cảnh & quyết định đã chốt
@@ -110,7 +110,7 @@ cổng duyệt). Khác nhau chỉ ở **bộ tool theo vai trò** (1 bảng poli
   trang khi cuộn lên. Mô hình dùng tóm tắt + tin gần nhất (đã có) → không cần tạo cuộc mới để giữ ngữ cảnh.
 - Giữ UI Strict Lock: chỉ đổi khung chat, không đụng các tab analytics.
 
-### U5 — Sau cùng (CHƯA CHỐT, cần Hiếu quyết riêng)
+### U5 — Sau cùng (Hiếu chốt 2026-10-08: U5a XONG + main; U5b XONG code trên staging — chờ Hiếu cài token/migration rồi thử 1 phiếu)
 - Khoá Gấu Pro với người không phải Creator (màn hình "Đang cập nhật, mọi chức năng đã chuyển sang Bé Gấu" + nút Mở Bé Gấu), chuyển hội
   thoại + trí nhớ cũ của họ sang Bé Gấu.
 - Gấu Pro lập kế hoạch → Claude Code thực hiện: phiếu yêu cầu → Hiếu duyệt (web/Lark) → Gấu Pro soạn plan + prompt → Claude Code chạy
