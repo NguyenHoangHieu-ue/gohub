@@ -244,3 +244,10 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
 - Eval U1b câu #1/#15 lộ "(`staff_code`)", "(`ref_countries`)" dù prompt cấm → thêm `core/leak-filter.ts`: xoá code nội dòng dạng
   snake_case (kèm ngoặc bao quanh) ở chữ stream ra (giữ lại phần có thể là đoạn code chưa đóng) và ở câu trả lời cuối. Không đụng
   khối ``` (khối export chứa SQL thật), mã SKU viết hoa, từ thường. Test `leak-filter.test.ts` (stream từng ký tự = lọc cả đoạn).
+
+## § s228 (2026-10-08) — Tool `b2bCustomerCm1` (CM1 B2B theo khách hàng)
+
+- `lib/agents/b2b-cm1.ts` gọi THẲNG handler `GET` của `/api/analytics/quarterly-b2b-customers` (kèm `Bearer CRON_SECRET`) → số khớp tuyệt
+  đối tab Quarter Report (chi phí KH Turso, pro-rata tháng đang chạy, Group Cost B2B phân bổ ở mức nhóm), không viết lại công thức.
+  Lọc theo tên/mã KH, nhóm (tier), top N, tuỳ chọn số từng tháng. CM1 từng KH chưa trừ Group Cost; CM1 tổng nhóm đã trừ.
+- Chỉ khai báo khi vai trò xem được giá vốn VÀ không có `role_filters` giới hạn dữ liệu (route không áp bộ lọc vai trò).

@@ -28,6 +28,7 @@ import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { normalizePlan, type PlanStep } from "./creator-ai"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 import { leakFilterStream, scrubLeaks } from "./core/leak-filter"
+import { b2bCustomerCm1Decl, runB2bCustomerCm1 } from "./b2b-cm1"
 
 // webSearch có executor riêng ở dưới (gom nguồn trích dẫn); các tool tính năng khác chạy qua dispatchTool.
 const FEATURE_DECLS = ALL_TOOL_DECLARATIONS.filter(d => d.name !== "webSearch")
@@ -409,6 +410,8 @@ export async function runBeGau(opts: {
     readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl,
     ...(featureTools.has("webSearch") ? [webSearchDecl] : []),
     larkWorkspaceDecl, searchKBDecl,
+    // CM1 B2B theo KH (số tab Quarter Report) — chỉ vai trò xem được giá vốn và không bị giới hạn dữ liệu theo vai trò.
+    ...(seeCost && !dataFilter ? [b2bCustomerCm1Decl] : []),
     ...featureDecls,
   ]
   const dispatchNames = new Set([searchKBDecl.name, ...featureDecls.map(d => d.name)])
@@ -478,6 +481,9 @@ export async function runBeGau(opts: {
 
     if (name === "listSupabaseTables")
       return wrap({ tables: visibleTables })
+
+    if (name === "b2bCustomerCm1" && seeCost && !dataFilter)
+      return wrap(await runB2bCustomerCm1(a))
 
     if (name === "updatePlan" && featureTools.has("updatePlan")) {
       const steps = normalizePlan(a?.steps)
