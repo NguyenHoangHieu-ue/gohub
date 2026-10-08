@@ -1048,3 +1048,16 @@ lịch + phiên Trực tiếp là khung đa người dùng, bật theo `app_sett
   (`overflow-menu.tsx`): Trực tiếp, Trí nhớ, Việc & duyệt (số việc chờ duyệt — chấm đỏ trên ⋯, đọc `/api/creator-ai/approve`),
   Nhật ký & lượt chạy, Lark/Google (creator). Các panel cũ mở ngay dưới ⋯. Bỏ hàng nút rải rác + 2 nhãn "Đã kết nối".
 - Hội thoại dài: `use-stick-to-bottom.ts` (bám đáy khi đang ở cuối, nút "↓ Tin mới nhất"), >40 tin thu gọn "Hiện N tin trước".
+
+## § s228 U5a (2026-10-08) — Khoá Gấu Pro, chỉ còn Creator
+
+- `lib/gp-access.ts`: cờ `GP_CREATOR_ONLY = true` → `loadGpAllowed()` trả rỗng, `hasGpAccess()` chỉ Creator. Mọi route đang gác bằng 2 hàm
+  này (chat, approve, jobs, live, bridge/token) tự chặn người không phải Creator. Danh sách `gp_allowed_users` giữ nguyên (đọc bằng
+  `loadGpListed()`) chỉ để biết ai từng dùng. Mở lại: đổi cờ về `false`.
+- `/api/user/me` thêm `gp_moved` (từng được cấp, nay bị khoá) — `gp_enabled` chỉ còn Creator nên menu Gấu Pro/Bridge tự ẩn. Trang Gấu Pro và
+  Bridge thấy `gp_moved` thì hiện `components/gau-pro/moved-to-be-gau.tsx` ("Gấu Pro đang cập nhật…" + nút Mở Bé Gấu) thay vì đẩy về /analytics.
+- Chuyển dữ liệu: route chạy 1 lần `POST /api/admin/gau-pro-moved` (Bearer CRON_SECRET; mặc định `dryRun`; `{dryRun:false, migrate:true,
+  notify:true}`). Hội thoại "[GP] …" đổi `username` → tên hiển thị (`users.name`, khoá hội thoại Bé Gấu), giữ tiền tố [GP]; DM Lark từng
+  người có `lark_open_id`. Trí nhớ (`assistant_memory`, `gp_conversation_memory`) vốn lưu theo username, Bé Gấu đọc chung — không cần chuyển
+  (lúc khoá: người không phải Creator không có dòng nào, cũng không có việc theo lịch/việc nền).
+- Lark DM với Gấu Pro vốn chỉ Creator — không đổi. Bridge chưa có trong Bé Gấu: người bị khoá mất Bridge.

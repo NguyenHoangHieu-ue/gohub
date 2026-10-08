@@ -21,6 +21,7 @@ import { TasksPanel } from "@/components/gau-pro/tasks-panel"
 import { RunsList } from "@/components/gau-pro/runs-list"
 import { MemoryPanel } from "@/components/gau-pro/memory-panel"
 import { LiveSession } from "@/components/gau-pro/live-session"
+import { MovedToBeGau } from "@/components/gau-pro/moved-to-be-gau"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -440,6 +441,7 @@ export default function CreatorAIPage() {
   const [fileError,     setFileError]     = useState("")
   const [dragging,      setDragging]      = useState(false)
   const [gpAllowed,     setGpAllowed]     = useState<boolean | null>(null) // null = loading
+  const [gpMoved,       setGpMoved]       = useState(false)
   const [imgPreviews,   setImgPreviews]   = useState<Map<string, string>>(new Map())
   const [listening,     setListening]     = useState(false)
   const [voiceSupported, setVoiceSupported] = useState(false)
@@ -490,6 +492,7 @@ export default function CreatorAIPage() {
     if (session.user.role === "creator") { setGpAllowed(true); return }
     fetch("/api/user/me").then(r => r.ok ? r.json() : null).then(d => {
       if (d?.gp_enabled) setGpAllowed(true)
+      else if (d?.gp_moved) setGpMoved(true)
       else router.replace("/analytics")
     }).catch(() => router.replace("/analytics"))
   }, [session, status, router])
@@ -898,6 +901,7 @@ export default function CreatorAIPage() {
     }
   }, [send, input])
 
+  if (gpMoved) return <MovedToBeGau />
   if (status === "loading" || !session?.user || gpAllowed === null) return null
   if (!gpAllowed) return null
 

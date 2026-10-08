@@ -6,11 +6,13 @@ import { Plug, RefreshCw, Copy, CheckCircle, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { BridgeDevices } from "./bridge-devices"
 import { BRIDGE_LATEST_VERSION } from "@/lib/bridge-version"
+import { MovedToBeGau } from "@/components/gau-pro/moved-to-be-gau"
 
 export default function BridgePage() {
   const { status } = useSession()
   const [allowed, setAllowed] = useState<boolean | null>(null)
   const [isCreator, setIsCreator] = useState(false)
+  const [moved, setMoved] = useState(false)
 
   // s195+3: Bridge mở cho MỌI user có quyền Gấu Pro (gp_enabled — creator hoặc trong gp_allowed_users),
   // không còn creator-only — mỗi người tự pair browser CỦA CHÍNH HỌ (mirror my-metrics/page.tsx).
@@ -18,12 +20,14 @@ export default function BridgePage() {
     if (status !== "authenticated") return
     fetch("/api/user/me").then(r => r.ok ? r.json() : null).then(d => {
       setAllowed(d?.gp_enabled === true)
+      setMoved(d?.gp_moved === true)
       setIsCreator(d?.role === "creator")
     }).catch(() => setAllowed(false))
   }, [status])
 
   if (status !== "authenticated" || allowed === null) return null
   if (!allowed) {
+    if (moved) return <MovedToBeGau />
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <p className="text-slate-400 text-sm">Bạn không có quyền truy cập trang này.</p>
