@@ -229,6 +229,7 @@ export default function ChatbotPage() {
   const abortRef = useRef<AbortController | null>(null)
   const [features,       setFeatures]      = useState<string[]>([])                 // U3: tính năng bật cho vai trò
   const [showLive,       setShowLive]      = useState(false)
+  const [bgMode,         setBgMode]        = useState(false)                       // U3: giao việc chạy nền
 
   useEffect(() => {
     fetch("/api/chat/features").then(r => r.ok ? r.json() : null).then(d => setFeatures(d?.features ?? [])).catch(() => {})
@@ -485,6 +486,26 @@ export default function ChatbotPage() {
 
     saveMessage(convId, userMsg, isFirstMsg)
     saveToSS(convId, next)
+
+    // U3: chạy nền — không giữ kết nối; xong nhắn Lark + hội thoại "⏳ …" trong Lịch sử. Việc nền không kèm lịch sử chat/file.
+    if (bgMode && filesToSend.length === 0) {
+      setLoading(false)
+      let reply: string
+      try {
+        const res = await fetch("/api/chat/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: text }) })
+        const d = await res.json().catch(() => ({}))
+        reply = res.ok
+          ? `⏳ Đã giao việc chạy nền: "${d.job?.title ?? text.slice(0, 80)}". Bé Gấu làm xong sẽ nhắn Lark cho bạn và lưu kết quả thành 1 cuộc trò chuyện "⏳ …" trong Lịch sử.`
+          : `Không giao được việc nền: ${d.error || `HTTP ${res.status}`}`
+      } catch (e: any) { reply = `Không giao được việc nền: ${e.message}` }
+      const assistantMsg: StoredMessage = { role: "assistant", content: reply }
+      const finalMsgs = [...next, assistantMsg]
+      setMessages(finalMsgs)
+      saveMessage(convId, assistantMsg)
+      saveToSS(convId, finalMsgs)
+      msgCountRef.current = finalMsgs.length
+      return
+    }
 
     let streamStarted   = false
     let currentAgent: { id: string; name: string } | undefined
@@ -895,6 +916,13 @@ export default function ChatbotPage() {
                   </span>
                 )}
               </button>
+              {features.includes("background") && (
+                <button type="button" onClick={() => setBgMode(v => !v)} disabled={busy} aria-pressed={bgMode}
+                  title={bgMode ? "Đang ở chế độ Chạy nền: tin gửi đi thành việc nền (xong nhắn Lark). Bấm để tắt." : "Chạy nền: giao việc dài, không cần giữ trang mở"}
+                  className={`flex-shrink-0 h-10 px-3 flex items-center gap-1 text-xs border rounded-xl transition-colors disabled:opacity-40 ${bgMode ? "bg-amber-500 border-amber-500 text-white" : "text-gray-500 border-gray-200 dark:border-slate-700 hover:bg-brand-50"}`}>
+                  ⏳{bgMode && <span>Chạy nền</span>}
+                </button>
+              )}
               <input
                 type="text" value={input} onChange={e => setInput(e.target.value)}
                 placeholder={attachedFiles.length > 0 ? `Hỏi gì về ${attachedFiles.length} file này?` : "Hỏi về sản phẩm, SKU, giá, catalog NCC, doanh thu/đơn..."}

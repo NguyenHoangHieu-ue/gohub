@@ -41,7 +41,7 @@ export interface PlanStep { title: string; status: "pending" | "in_progress" | "
 export interface JobCheckpoint { contents: Content[]; tainted: boolean; taintSources: string[]; skills: string[] }
 
 // Rút gọn kết quả tool trong checkpoint (lưu jsonb) — giữ cấu trúc, cắt payload quá dài.
-function compactContents(contents: Content[]): Content[] {
+export function compactContents(contents: Content[]): Content[] {
   return contents.map(c => ({
     ...c,
     parts: (c.parts ?? []).map((p: any) => {

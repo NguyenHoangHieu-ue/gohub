@@ -73,7 +73,7 @@ export async function runAgentLoop(o: AgentLoopOptions): Promise<AgentLoop> {
     }))
     // Kết quả tool gửi lại với role "user" (định dạng Gemini API cho functionResponse).
     o.contents.push({ role: "user", parts })
-    if (o.timeBudgetMs && Date.now() - startedAt > o.timeBudgetMs) { unfinished = true; break }
+    if (o.timeBudgetMs != null && Date.now() - startedAt >= o.timeBudgetMs) { unfinished = true; break }
     last = await next()
   }
 

@@ -188,6 +188,14 @@ describe("be-gau: tool declarations & role filter", () => {
     for (const n of [...CREATOR_ONLY, "browseWeb", "generateVideo"]) expect(names).toContain(n)
   })
 
+  test("việc nền: hết ngân sách → trả checkpoint (giữ trạng thái đã đọc nội dung ngoài), không chốt câu trả lời", async () => {
+    _mockTurn.mockImplementationOnce(async () => turnOk("", [{ name: "webSearch", args: { query: "x" } }]))
+    const r = await runBeGau({ geminiHistory: [], lastMsg: "báo cáo dài", role: "admin", job: { timeBudgetMs: 0 } })
+    expect(r.text).toBe("")
+    expect(r.checkpoint?.tainted).toBe(true)
+    expect(r.checkpoint?.contents.length).toBeGreaterThan(1)
+  })
+
   test("đã đọc nội dung ngoài trong lượt → chặn mở URL lạ (cổng an toàn chung Gấu Pro)", async () => {
     const calls: any[] = []
     _mockTurn

@@ -25,7 +25,7 @@ import { dispatchTool } from "./creator/tools/dispatch"
 import { newTurnSafety, recordToolResult, approvalReason } from "./creator/tool-policy"
 import { loadFeatureMatrix, enabledFeatureTools } from "@/lib/assistant-features"
 import { buildMemoryBlock } from "@/lib/assistant-memory"
-import { normalizePlan, type PlanStep } from "./creator-ai"
+import { normalizePlan, compactContents, type PlanStep } from "./creator-ai"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 import { leakFilterStream, scrubLeaks } from "./core/leak-filter"
 import { b2bCustomerCm1Decl, runB2bCustomerCm1 } from "./b2b-cm1"
@@ -346,6 +346,7 @@ export interface BeGauOpts {
   username?: string         // U3: trí nhớ cá nhân + tìm hội thoại cũ theo username
   signal?: AbortSignal      // U3: người dùng bấm Dừng
   onPlan?: (steps: PlanStep[]) => void  // U3: kế hoạch từng bước hiện trên UI
+  job?: { timeBudgetMs: number; resume?: Content[]; tainted?: boolean }  // U3 việc nền: chạy theo chặng, hết ngân sách trả checkpoint thay vì chốt câu trả lời
 }
 
 /**
@@ -425,6 +426,7 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
   // Cổng an toàn dùng chung Gấu Pro (tool-policy.ts): lượt đã đọc nội dung ngoài (web, file, Lark Base…) thì không chạy hành động
   // ghi/gửi/mở URL lạ. Bé Gấu chưa có nút Duyệt (U3 sau) → từ chối và để người dùng hỏi lại ở lượt mới.
   const safety = newTurnSafety(lastMsg, files.length > 0)
+  if (opts.job?.tainted) safety.tainted = true   // việc nền chặng sau: giữ trạng thái "đã đọc nội dung ngoài" của chặng trước
 
   // Mỗi tool bọc try/catch riêng — 1 tool lỗi (network/DB timeout) chỉ trả functionResponse báo lỗi cho MỘT tool đó,
   // model tự quyết định retry/báo user thay vì mất trắng cả lượt.
@@ -516,15 +518,15 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
     }
   }
 
-  return { systemInstruction, functionDeclarations, runTool, sources, compressedHistory }
+  return { systemInstruction, functionDeclarations, runTool, sources, compressedHistory, safety }
 }
 
-export async function runBeGau(opts: BeGauOpts): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number; trace: BeGauTrace }> {
+export async function runBeGau(opts: BeGauOpts): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number; trace: BeGauTrace; checkpoint?: { contents: Content[]; tainted: boolean } }> {
   const { lastMsg, role, name, userId, sessionId, fileContexts, larkOpenId = null, signal } = opts
   // Chữ stream ra đi qua bộ lọc lộ tên bảng/cột (core/leak-filter.ts).
   const leak = opts.onChunk ? leakFilterStream(opts.onChunk) : null
   const onChunk = leak ? (t: string) => leak.push(t) : undefined
-  const { systemInstruction, functionDeclarations, runTool, sources, compressedHistory } = await prepareBeGau(opts)
+  const { systemInstruction, functionDeclarations, runTool, sources, compressedHistory, safety } = await prepareBeGau(opts)
 
   // U1a (plan be-gau-upgrade.md): SDK mới @google/genai (cùng streamTurn với Gấu Pro) — SDK cũ hết hỗ trợ, làm rớt thoughtSignature.
   const thinkingLevel = deepQuestion(lastMsg, fileContexts?.length ?? 0) ? ThinkingLevel.HIGH : ThinkingLevel.LOW
@@ -562,7 +564,7 @@ export async function runBeGau(opts: BeGauOpts): Promise<{ text: string; sources
   }
 
   // Fix #8: dùng history đã nén
-  const contents: Content[] = [...compressedHistory, { role: "user", parts: userParts }]
+  const contents: Content[] = opts.job?.resume ? [...opts.job.resume] : [...compressedHistory, { role: "user", parts: userParts }]
   // Số đo để tối ưu tốc độ (eval U1): thời gian/token từng lượt model, thời gian + độ lớn kết quả từng tool.
   const trace: BeGauTrace = { promptChars: systemInstruction.length, declChars: JSON.stringify(functionDeclarations).length, thinking: String(thinkingLevel), rounds: [], tools: [] }
   // Suy nghĩ sâu chỉ ở lượt ĐẦU (lên kế hoạch); các lượt sau chủ yếu gọi SQL → LOW (eval trace: 14 lượt × ~10s khi HIGH mọi lượt).
@@ -572,7 +574,7 @@ export async function runBeGau(opts: BeGauOpts): Promise<{ text: string; sources
   // toolsUsed = SỰ THẬT đã gọi tool gì — My Metrics dùng để phân biệt task tính KPI (DB_TASK_TOOLS ở lib/okr-helpers.ts) với trả lời chay.
   const loop = await runAgentLoop({
     model: GEMINI_MODEL, contents, configFor: r => r === 0 ? config : lowConfig, runTool, maxRounds: 12, onChunk,
-    timeBudgetMs: 240_000,   // trần route 300s — chừa lượt chốt khi model chậm bất thường (QA 2026-10-08)
+    timeBudgetMs: opts.job?.timeBudgetMs ?? 240_000,   // trần route 300s — chừa lượt chốt khi model chậm bất thường (QA 2026-10-08)
     signal,
   })
   let genResult = loop.last
@@ -581,6 +583,8 @@ export async function runBeGau(opts: BeGauOpts): Promise<{ text: string; sources
     const text = scrubLeaks(`${genResult.text}\n\n⏹ Đã dừng theo yêu cầu.`.trim())
     return { text, sources, toolsUsed: Array.from(loop.toolsUsed), tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, trace }
   }
+  if (loop.unfinished && opts.job)
+    return { text: "", sources, toolsUsed: Array.from(loop.toolsUsed), tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, trace, checkpoint: { contents: compactContents(contents), tainted: safety.tainted } }
   if (loop.unfinished) {
     try {
       contents.push({ role: "user", parts: [{ text: "(Hệ thống) Đã hết thời gian xử lý. Trả lời NGAY bằng dữ liệu đã lấy được ở trên, nói rõ phần nào chưa kịp kiểm tra. KHÔNG gọi thêm công cụ." }] })

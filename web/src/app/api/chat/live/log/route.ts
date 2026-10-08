@@ -17,8 +17,9 @@ export async function POST(req: NextRequest) {
   if (!turns.length) return NextResponse.json({ saved: false })
 
   const first = turns.find(t => t.role === "user")?.text ?? "Phiên giọng nói"
+  // Danh sách hội thoại Bé Gấu lọc theo TÊN hiển thị (session.user.name), không phải username.
   const { data: conv } = await supabaseAdmin.from("conversations")
-    .insert({ username: u.username, title: "🎙 " + first.slice(0, 48) }).select("id").single()
+    .insert({ username: u.name, title: "🎙 " + first.slice(0, 48) }).select("id").single()
   const convId = (conv?.id as string) ?? null
   if (convId) {
     const { error } = await supabaseAdmin.from("conversation_messages").insert(turns.map(t => ({

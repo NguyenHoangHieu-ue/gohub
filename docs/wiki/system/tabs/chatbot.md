@@ -261,3 +261,12 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
   KHÔNG đi đường tool Gấu Pro (đường đó không áp lọc theo vai trò). Chỉ tool ĐỌC (`BE_GAU_LIVE_TOOLS`), không có thao tác Chrome.
 - Route: `/api/chat/live/token` | `tool` | `log` (phụ đề lưu thành hội thoại "🎙 …" trong Bé Gấu). Tạo token dùng chung với Gấu Pro:
   `lib/agents/live-token.ts`. Component `components/gau-pro/live-session.tsx` thêm prop `apiBase`/`title`/`allowControl`.
+
+## § s228 (2026-10-08) — Bé Gấu: chạy nền việc dài
+
+- Tính năng "Chạy nền việc dài" (Mọi người, mặc định bật). Nút ⏳ cạnh ô nhập → tin gửi đi thành việc nền (`POST /api/chat/jobs`).
+- Dùng CHUNG bảng + bộ chạy `gp_jobs` của Gấu Pro (không migration): việc Bé Gấu đánh dấu `checkpoint.agent = "be-gau"` (+ `ownerName`,
+  `contents`, `tainted`). `runJobChunk` rẽ sang `runBeGauJobChunk`: đọc lại `users.role` mỗi chặng, chạy `runBeGau({ job })` — hết ngân sách
+  200s trả checkpoint (giữ trạng thái đã đọc nội dung ngoài), tối đa 6 chặng. Xong: hội thoại "⏳ …" lưu theo TÊN hiển thị + Lark DM.
+- ⚠️ Hội thoại Bé Gấu lọc theo `session.user.name` (không phải username) — phụ đề phiên Trực tiếp đã sửa lưu theo tên.
+- `core/agent-loop.ts`: ngân sách thời gian so `!= null` (trước `0` bị bỏ qua).
