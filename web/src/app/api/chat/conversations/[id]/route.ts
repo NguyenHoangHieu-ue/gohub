@@ -67,6 +67,8 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     .insert({ conversation_id: params.id, role, content, agent_id: agent_id ?? null, agent_name: agent_name ?? null })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Lịch sử xếp/nhóm theo updated_at (U4 phát hiện: trước không cập nhật → cuộc vừa chat vẫn nằm ở "Cũ hơn").
+  await supabaseAdmin.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
   return NextResponse.json({ ok: true })
 }
 
