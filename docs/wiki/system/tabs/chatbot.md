@@ -336,3 +336,13 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
 - `buildReport` nhận format `lark` → `lib/report/lark.ts`: tạo Doc bằng token bot, nối từng mục (markdown) + ảnh biểu đồ đúng vị trí
   (`appendImage` trong `creator/tools/lark-docs.ts`: khối ảnh trống → upload `docx_image` → `replace_image`), chuyển quyền cho người hỏi + DM link.
 - Chưa thử được: token Lark trong `.env.local` máy Hiếu báo "invalid param" (secret cũ). Cần QA trên staging.
+
+## § s228 U4 (2026-10-08) — Giao diện chat mới (trang Bé Gấu)
+
+- Bỏ cột lịch sử bên trái + nút Thu gọn/Lịch sử. Thanh trên: "Bé Gấu / <tên hội thoại ▾>" (`components/chat/conversation-switcher.tsx`:
+  danh sách nhóm theo ngày, ô tìm, "Cuộc mới", xoá) + nút ✎ cuộc mới + nút ⋯ (`overflow-menu.tsx`: Trực tiếp, Dịch, Ghi âm cuộc họp,
+  Biên bản từ file, Chạy nền — chỉ hiện mục được bật theo vai trò).
+- Ô nhập: 📎 · ô chữ · 🎤 nói thành chữ (`dictation-button.tsx` → `/api/chat/transcribe` mode=text, mở cho mọi người, tối đa 3 phút) ·
+  Gửi/Dừng. Chạy nền và ghi âm cuộc họp hiện thành dải trạng thái phía trên ô nhập (ghi âm mở từ ⋯, `MeetingRecorder autoStart`).
+- Hội thoại dài (`use-stick-to-bottom.ts`): mở ra nhảy xuống tin mới nhất; chỉ tự bám đáy khi người dùng đang ở cuối; cuộn lên thì có nút
+  "↓ Tin mới nhất"; >40 tin thì thu gọn "Hiện N tin trước". Gấu Pro chưa đổi (dùng lại các component này ở bước sau).

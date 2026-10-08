@@ -22,15 +22,17 @@ GitHub), SimStore, KDDI, Truemove, Joytel, CM1, GP, COGS, SKU, eSIM, B2B, B2C, Q
 ### Câu hỏi còn mở`
 
 // U3: Bé Gấu ghi âm cuộc họp → biên bản (tính năng "transcribe" theo vai trò). Nhận multipart "audio".
+// U4: mode=text → chỉ chép lời (nút 🎤 nói thành chữ ở ô nhập) — mở cho mọi người dùng đã đăng nhập.
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!featureEnabled(await loadFeatureMatrix(), "transcribe", session.user.role))
+  const form = await req.formData().catch(() => null)
+  const textOnly = form?.get("mode") === "text"
+  if (!textOnly && !featureEnabled(await loadFeatureMatrix(), "transcribe", session.user.role))
     return NextResponse.json({ error: "Vai trò của bạn chưa được mở Ghi âm → biên bản." }, { status: 403 })
-  const rl = await checkRateLimit(`transcribe:${session.user.username || session.user.email}`, 5, 60_000)
+  const rl = await checkRateLimit(`transcribe:${session.user.username || session.user.email}`, textOnly ? 20 : 5, 60_000)
   if (!rl.allowed) return NextResponse.json({ error: "Gửi quá nhiều, đợi 1 phút." }, { status: 429 })
 
-  const form = await req.formData().catch(() => null)
   const file = form?.get("audio")
   if (!(file instanceof File) || !file.size) return NextResponse.json({ error: "Thiếu file ghi âm." }, { status: 400 })
   if (file.size > MAX_BYTES) return NextResponse.json({ error: "File quá lớn (tối đa ~4MB ≈ 35 phút ghi âm)." }, { status: 413 })
@@ -40,6 +42,7 @@ export async function POST(req: NextRequest) {
     const tr = await genai().models.generateContent({ model: GEMINI_TRANSCRIBE_MODEL, contents: [{ role: "user", parts: [{ inlineData: audio }] }] })
     const transcript = (tr.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.audioTranscription?.text ?? p.text ?? "").join(" ").trim()
     if (!transcript) return NextResponse.json({ error: "Không nghe được lời nói trong file." }, { status: 422 })
+    if (textOnly) return NextResponse.json({ transcript })
     const mm = await genai().models.generateContent({
       model: GEMINI_MODEL, contents: `${MINUTES_PROMPT}\n\nBẢN CHÉP LỜI:\n${transcript.slice(0, 120_000)}`,
       config: { temperature: 0, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } },

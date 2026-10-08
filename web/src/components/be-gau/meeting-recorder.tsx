@@ -7,9 +7,12 @@ import { Mic, Square, Loader2, Upload } from "lucide-react"
 const MAX_MS = 35 * 60_000
 const fmt = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`
 
-export function MeetingRecorder({ disabled, onResult }: {
+// U4: autoStart = mở từ menu ⋯ ("record": ghi ngay, "file": mở chọn file) — chỉ hiện thanh trạng thái khi đang ghi/xử lý, xong gọi onDone.
+export function MeetingRecorder({ disabled, onResult, autoStart, onDone }: {
   disabled?: boolean
   onResult: (label: string, reply: string) => void
+  autoStart?: "record" | "file"
+  onDone?: () => void
 }) {
   const [state, setState] = useState<"idle" | "recording" | "processing">("idle")
   const [elapsed, setElapsed] = useState(0)
@@ -28,6 +31,14 @@ export function MeetingRecorder({ disabled, onResult }: {
     return () => clearInterval(id)
   }, [state])
   useEffect(() => () => { recRef.current?.stream.getTracks().forEach(t => t.stop()) }, [])
+  // Mở từ menu: chạy 1 lần khi gắn component.
+  const started = useRef(false)
+  useEffect(() => {
+    if (!autoStart || started.current) return
+    started.current = true
+    if (autoStart === "record") void start(); else fileRef.current?.click()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart])
 
   const send = async (blob: Blob, label: string) => {
     setState("processing")
@@ -43,6 +54,7 @@ export function MeetingRecorder({ disabled, onResult }: {
     } catch (e: any) { reply = `Không làm được biên bản: ${e.message}` }
     setState("idle")
     onResult(label, reply)
+    onDone?.()
   }
 
   const start = async () => {
@@ -63,13 +75,14 @@ export function MeetingRecorder({ disabled, onResult }: {
       setState("recording")
     } catch (e: any) {
       onResult("🎙 Ghi âm cuộc họp", e?.name === "NotAllowedError" ? "Bạn chưa cho phép dùng micro." : `Không ghi âm được: ${e.message}`)
+      onDone?.()
     }
   }
 
   if (state === "recording") return (
     <button type="button" onClick={() => recRef.current?.stop()} title="Dừng ghi âm và làm biên bản"
       className="flex-shrink-0 h-10 px-3 flex items-center gap-1.5 text-xs bg-rose-600 text-white rounded-xl animate-pulse">
-      <Square size={12} fill="currentColor" />{fmt(elapsed)}
+      <Square size={12} fill="currentColor" />{autoStart ? `Đang ghi cuộc họp ${fmt(elapsed)} — bấm để dừng & làm biên bản` : fmt(elapsed)}
     </button>
   )
   if (state === "processing") return (
@@ -77,6 +90,10 @@ export function MeetingRecorder({ disabled, onResult }: {
       <Loader2 size={13} className="animate-spin" />Đang làm biên bản…
     </span>
   )
+  if (autoStart) return <input ref={fileRef} type="file" accept="audio/*" className="hidden" onChange={e => {
+    const f = e.target.files?.[0]; e.target.value = ""
+    if (f) void send(f, `🎙 File ghi âm "${f.name}" — làm biên bản giúp mình`); else onDone?.()
+  }} />
   return (
     <div className="flex-shrink-0 flex items-center">
       <button type="button" onClick={start} disabled={disabled} title="Ghi âm cuộc họp → biên bản (tối đa 35 phút)"
