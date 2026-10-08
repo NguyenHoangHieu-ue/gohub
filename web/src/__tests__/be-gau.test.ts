@@ -309,7 +309,8 @@ describe("be-gau: nhờ tạo trong Lark mà model chưa gọi công cụ → l�
     expect(r.text).toContain("Báo cáo top 5 thị trường")
     expect(r.text).toContain("chưa liên kết Lark")
     const forcedCfg = _mockTurn.mock.calls[1][2]
-    expect(forcedCfg.toolConfig.functionCallingConfig.allowedFunctionNames).toEqual(["larkWorkspace"])
+    expect(forcedCfg.toolConfig.functionCallingConfig.allowedFunctionNames).toEqual(["larkWorkspace", "buildReport"])   // U2: báo cáo có biểu đồ → buildReport bản Lark
+    expect(forcedCfg.toolConfig.includeServerSideToolInvocations).toBe(true)
     _mockTurn.mockResolvedValue(turnOk("Xin chào! Mình là Bé Gấu 🐻"))
   })
 })
