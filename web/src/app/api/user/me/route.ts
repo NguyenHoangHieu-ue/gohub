@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions }      from "@/lib/auth"
 import { supabaseAdmin }    from "@/lib/supabase"
 import { memo }             from "@/lib/memo"
+import { GP_CREATOR_ONLY }  from "@/lib/gp-access"
 
 const WRITABLE_TABS_KEY = "permissions.writable_tabs"
 
@@ -28,13 +29,15 @@ async function loadMe(username: string, sessionRole: string) {
   }
 
   let gpEnabled = false
+  let gpMoved = false   // từng được cấp Gấu Pro, nay đã chuyển sang Bé Gấu (U5)
   const data = userRes.data
   if (data?.role === "creator") {
     gpEnabled = true
   } else if (gpRes.data?.value) {
     try {
-      const allowed = JSON.parse(gpRes.data.value) as string[]
-      gpEnabled = allowed.includes(username)
+      const listed = (JSON.parse(gpRes.data.value) as string[]).includes(username)
+      gpEnabled = listed && !GP_CREATOR_ONLY
+      gpMoved = listed && GP_CREATOR_ONLY
     } catch {}
   }
 
@@ -71,6 +74,7 @@ async function loadMe(username: string, sessionRole: string) {
     allowed_tabs:        data?.allowed_tabs       ?? null,
     writable_tabs:       writableTabs,
     gp_enabled:          gpEnabled,
+    gp_moved:            gpMoved,
     portal_enabled:      portalEnabled,
     my_metrics_enabled:  myMetricsEnabled,
     market_enabled:      marketEnabled,
