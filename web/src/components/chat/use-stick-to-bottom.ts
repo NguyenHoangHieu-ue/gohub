@@ -3,20 +3,22 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
 // U4: hội thoại dài — chỉ tự cuộn xuống khi người dùng đang ở cuối (đang đọc tin cũ thì không giật xuống); có nút "↓ Tin mới nhất".
+// Callback ref (không phải useRef + effect []): trang có thể vẽ khung chat MUỘN (Gấu Pro chờ kiểm quyền) — QA U4 bị kẹt ở đầu vì vậy.
 const NEAR_PX = 120
 
 export function useStickToBottom<T extends HTMLElement>(deps: unknown[]) {
-  const ref = useRef<T>(null)
+  const [el, setEl] = useState<T | null>(null)
+  const elRef = useRef<T | null>(null)
+  const ref = useCallback((node: T | null) => { elRef.current = node; setEl(node) }, [])
   const [atBottom, setAtBottom] = useState(true)
   const atBottomRef = useRef(true)
 
   const scrollToBottom = useCallback((smooth = true) => {
-    const el = ref.current
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" })
+    const e = elRef.current
+    if (e) e.scrollTo({ top: e.scrollHeight, behavior: smooth ? "smooth" : "auto" })
   }, [])
 
   useEffect(() => {
-    const el = ref.current
     if (!el) return
     const onScroll = () => {
       const b = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_PX
@@ -24,14 +26,15 @@ export function useStickToBottom<T extends HTMLElement>(deps: unknown[]) {
       setAtBottom(b)
     }
     el.addEventListener("scroll", onScroll, { passive: true })
-    // Nội dung cao thêm SAU khi đã cuộn (bảng/biểu đồ/ảnh vẽ xong muộn) → đang bám đáy thì kéo theo (QA U4: mở hội thoại dài bị kẹt giữa).
+    // Nội dung cao thêm SAU khi đã cuộn (bảng/biểu đồ/ảnh vẽ xong muộn) → đang bám đáy thì kéo theo.
     const ro = new ResizeObserver(() => { if (atBottomRef.current) el.scrollTop = el.scrollHeight })
     const watch = () => Array.from(el.children).forEach(c => ro.observe(c))
     watch()
     const mo = new MutationObserver(watch)
     mo.observe(el, { childList: true })
+    if (atBottomRef.current) el.scrollTop = el.scrollHeight
     return () => { el.removeEventListener("scroll", onScroll); ro.disconnect(); mo.disconnect() }
-  }, [])
+  }, [el])
 
   // Nội dung đổi (tin mới, chữ đang chạy) → chỉ bám đáy khi người dùng đang ở đáy.
   useEffect(() => {
