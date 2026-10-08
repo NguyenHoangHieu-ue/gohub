@@ -10913,3 +10913,8 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
 - (s228 tiếp) Hiếu chốt: tính năng thường mọi vai trò, tính năng đặc biệt (nhóm Theo quyền) chỉ Creator — `defaultMatrix()` bỏ mặc định admin
   (`aaa9935b`, staging, CHƯA merge main). Đã DM Lark 10 người từng dùng Gấu Pro (gửi từ route staging, cùng bot): "Gấu Pro đã chuyển sang Bé
   Gấu…" — 10/10 OK; bỏ qua `hieu`, `seikobao` (không có lark_id, tài khoản cũ/test).
+- (s228 tiếp) U5b code xong trên staging (`10da188a`): phiếu sửa code — tool `devTicket` + skill `dev-ticket` (Gấu Pro), cổng duyệt (create luôn
+  duyệt, web + Lark), `lib/dev-tickets.ts`, bảng `dev_tickets` (v71, CHƯA chạy), workflow `.github/workflows/claude-ticket.yml` (Claude Code,
+  gói Pro qua CLAUDE_CODE_OAUTH_TOKEN), callback `/api/dev-tickets/callback`, mục "Phiếu sửa code" ở Creator Settings. Đã cài DEV_TICKET_SECRET
+  (GitHub secret + Vercel Production/Preview). Chờ Hiếu: chạy v71, tạo CLAUDE_CODE_OAUTH_TOKEN + GITHUB_DISPATCH_TOKEN, bật quyền Actions tạo PR,
+  merge main (workflow phải có trên main mới dispatch được), thử 1 phiếu nhỏ.
