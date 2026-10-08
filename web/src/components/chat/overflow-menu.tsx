@@ -27,7 +27,7 @@ export function OverflowMenu({ items }: { items: MenuItem[] }) {
         {alert && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500" />}
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 top-full mt-1 z-40 min-w-[14rem] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl p-1">
+        <div role="menu" className="absolute right-0 top-full mt-1 z-40 w-72 max-w-[90vw] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl p-1">
           {items.map(i => (
             <button key={i.key} type="button" role="menuitem" disabled={i.disabled}
               onClick={() => { setOpen(false); i.onClick() }}
