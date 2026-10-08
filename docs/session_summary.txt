@@ -10885,3 +10885,10 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
   U2b `34dde6a5`: Bé Gấu chạy code Python (codeExecution + includeServerSideToolInvocations). QA staging: TB/độ lệch chuẩn/MoM khớp tuyệt đối.
   U2c `055ea573`+`134b8c3f`: bản Lark Docs có ảnh biểu đồ; câu "tạo … Lark" giờ cho phép buildReport. QA staging: tạo được Doc "[QA] …" trong Lark của Hiếu.
   Gotcha: browserless (Render free) ngủ → kết nối lần đầu >30s (chờ 90s); token Lark trong .env.local máy Hiếu đã cũ ("invalid param").
+- (s228 tiếp, Hiếu: "được làm đi") — U4 giao diện chat mới trên staging:
+  `13438a9f` Bé Gấu: bỏ cột lịch sử → thanh "Bé Gấu / <hội thoại ▾>" (tìm, cuộc mới, xoá) + ✎ + ⋯ (Trực tiếp, Dịch, Ghi âm cuộc họp,
+  Biên bản từ file, Chạy nền); ô nhập 📎 · 🎤 nói thành chữ (/api/chat/transcribe mode=text) · Gửi/Dừng; cuộn bám đáy thông minh +
+  "↓ Tin mới nhất" + thu gọn >40 tin. Component dùng chung `components/chat/`. QA giao diện staging đạt (menu, lịch sử, dải Chạy nền).
+  `e29aa430` lỗi có sẵn: lưu tin Bé Gấu không cập nhật conversations.updated_at → lịch sử xếp sai/"Cũ hơn".
+  `03d5ca68` Gấu Pro: cùng thanh trên + ⋯ (Trực tiếp, Trí nhớ, Việc & duyệt có số chờ duyệt, Nhật ký, Lark/Google), cuộn + thu gọn.
+  Lệch plan: 🎤 ở ô nhập = nói thành chữ; Trò chuyện trực tiếp vẫn mở cửa sổ riêng (chưa nhúng trong khung chat).
