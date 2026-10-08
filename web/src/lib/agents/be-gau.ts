@@ -24,6 +24,8 @@ import { ALL_TOOL_DECLARATIONS, searchKBDecl } from "./creator/declarations"
 import { dispatchTool } from "./creator/tools/dispatch"
 import { newTurnSafety, recordToolResult, approvalReason } from "./creator/tool-policy"
 import { loadFeatureMatrix, enabledFeatureTools } from "@/lib/assistant-features"
+import { buildMemoryBlock } from "@/lib/assistant-memory"
+import { normalizePlan, type PlanStep } from "./creator-ai"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 
 // webSearch có executor riêng ở dưới (gom nguồn trích dẫn); các tool tính năng khác chạy qua dispatchTool.
@@ -339,8 +341,11 @@ export async function runBeGau(opts: {
   extraDirective?: string   // vd quy tắc tạm thời
   fileContexts?: FileContext[]  // ảnh/PDF/file người dùng đính kèm (s190+3)
   onChunk?: (text: string) => void  // s195+18: stream token thật ra route — gọi mỗi khi Gemini sinh thêm đoạn text
+  username?: string         // U3: trí nhớ cá nhân + tìm hội thoại cũ theo username
+  signal?: AbortSignal      // U3: người dùng bấm Dừng
+  onPlan?: (steps: PlanStep[]) => void  // U3: kế hoạch từng bước hiện trên UI
 }): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number; trace: BeGauTrace }> {
-  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, onChunk, larkOpenId = null } = opts
+  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, onChunk, larkOpenId = null, username, signal, onPlan } = opts
   const isPriv = priv(role)
 
   // Hiếu chốt 2026-10-07: giá vốn mở cho mọi vai trò (canViewCogs = true) → chỉ che mục "cogs" khi vai trò thật sự không có quyền.
@@ -367,6 +372,8 @@ export async function runBeGau(opts: {
     compressHistory(geminiHistory),
   ])
 
+  const useMemory = !!username && featureTools.has("assistantMemory")
+  const memoryBlock = useMemory ? await buildMemoryBlock(username!).catch(() => "") : ""
   const visibleTables = { ...SUPABASE_TABLES, ...(isPriv ? SENSITIVE_TABLES : {}) }
   const tableCatalog = Object.entries(visibleTables).map(([t, d]) => `  · ${t}: ${d}`).join("\n")
 
@@ -383,13 +390,17 @@ export async function runBeGau(opts: {
     seeCost ? `\n\n(Nội bộ) Vai trò hiện tại ĐƯỢC xem giá vốn (COGS), lãi gộp (GP), biên lãi, CM1 — trả bình thường khi được hỏi, KHÔNG từ chối.` : "",
     !isCost && !isPriv ? `\n\n(Nội bộ) Vai trò hiện tại KHÔNG được xem giá vốn (COGS)/lợi nhuận — không trả cột/số giá vốn, lãi gộp (GP), biên lãi, CM1 dù được hỏi; báo cáo cho vai trò này chỉ gồm doanh thu, số đơn, số lượng.` : "",
     customRules ? `\n\n━━━ HƯỚNG DẪN TÙY CHỈNH CỦA ADMIN ━━━\n${customRules}` : "",
+    featureTools.has("updatePlan") ? `\n\n## Kế hoạch cho việc nhiều bước\nViệc cần ≥3 bước (nhiều lần lấy số, báo cáo, tạo tài liệu) → gọi updatePlan NGAY đầu với danh sách bước ngắn (≤7), cập nhật status khi xong từng bước (gọi CÙNG lượt với bước kế tiếp). Câu 1–2 bước → KHÔNG dùng updatePlan.` : "",
+    memoryBlock,
+    useMemory ? `\nNgười dùng hỏi "lần trước / đã bàn / đã chốt" mà trí nhớ trên không có → searchPastConversations.` : "",
     extraDirective,
     // Câu nhờ tạo tài liệu/bảng tính/task trong Lark (eval U1a2: model lấy số xong rồi quên tạo) → nhắc thẳng ở lượt này.
     LARK_CREATE_RE.test(lastMsg) ? `\n\n(Nội bộ — lượt này) Người dùng đang nhờ TẠO trong Lark: lấy số liệu xong thì BẮT BUỘC gọi công cụ larkWorkspace, rồi trả link (hoặc báo đúng lỗi công cụ trả về).` : "",
   ].join("")
 
   // Tool lõi luôn có + tool của tính năng đã bật cho vai trò (bảng phân quyền U3).
-  const featureDecls = FEATURE_DECLS.filter(d => featureTools.has(d.name))
+  const MEMORY_TOOLS = ["assistantMemory", "searchPastConversations"]
+  const featureDecls = FEATURE_DECLS.filter(d => featureTools.has(d.name) && (useMemory || !MEMORY_TOOLS.includes(d.name)))
   const functionDeclarations = [
     readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl,
     ...(featureTools.has("webSearch") ? [webSearchDecl] : []),
@@ -405,6 +416,7 @@ export async function runBeGau(opts: {
     tools: [{ functionDeclarations: toGenaiSchema(functionDeclarations) as any }],
     temperature: 0,
     thinkingConfig: { thinkingLevel },
+    abortSignal: signal,
   }
 
   // File/ảnh đính kèm (s190+3) — mirror cách runCreatorAI build parts (text + inlineData), rút gọn.
@@ -463,6 +475,12 @@ export async function runBeGau(opts: {
     if (name === "listSupabaseTables")
       return wrap({ tables: visibleTables })
 
+    if (name === "updatePlan" && featureTools.has("updatePlan")) {
+      const steps = normalizePlan(a?.steps)
+      onPlan?.(steps)
+      return wrap({ ok: true, steps: steps.length })
+    }
+
     if (name === "querySupabase")
       return wrap(await runQuerySupabase(a, role || "staff", isCost))
 
@@ -507,7 +525,8 @@ export async function runBeGau(opts: {
 
     // Công cụ Gấu Pro đã bật cho vai trò (bảng phân quyền) — dùng CHUNG executor creator/tools/dispatch.ts.
     if (dispatchNames.has(name)) {
-      const res = await dispatchTool({ name: name, args: a }, undefined, sources, { username: userId, isCreator: (role || "").toLowerCase() === "creator" })
+      const res = await dispatchTool({ name: name, args: a }, undefined, sources,
+        { username: username || userId, isCreator: (role || "").toLowerCase() === "creator", personal: useMemory })
       // searchKnowledgeBase đọc chung creator_kb với readKnowledgeBase — che category "cogs" cho
       // role không có quyền xem giá vốn, khớp đúng cách readKnowledgeBase xử lý ở trên.
       if (name === "searchKnowledgeBase" && !seeCost) {
@@ -528,8 +547,13 @@ export async function runBeGau(opts: {
   const loop = await runAgentLoop({
     model: GEMINI_MODEL, contents, configFor: r => r === 0 ? config : lowConfig, runTool, maxRounds: 12, onChunk,
     timeBudgetMs: 240_000,   // trần route 300s — chừa lượt chốt khi model chậm bất thường (QA 2026-10-08)
+    signal,
   })
   let genResult = loop.last
+  if (loop.stopped) {
+    const text = `${genResult.text}\n\n⏹ Đã dừng theo yêu cầu.`.trim()
+    return { text, sources, toolsUsed: Array.from(loop.toolsUsed), tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, trace }
+  }
   if (loop.unfinished) {
     try {
       contents.push({ role: "user", parts: [{ text: "(Hệ thống) Đã hết thời gian xử lý. Trả lời NGAY bằng dữ liệu đã lấy được ở trên, nói rõ phần nào chưa kịp kiểm tra. KHÔNG gọi thêm công cụ." }] })

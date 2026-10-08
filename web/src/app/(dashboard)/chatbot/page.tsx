@@ -2,10 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useSession, signOut }                        from "next-auth/react"
-import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen, FileSpreadsheet, Paperclip, FileText, Image as ImageIcon, ThumbsUp, ThumbsDown } from "lucide-react"
+import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen, FileSpreadsheet, Paperclip, FileText, Image as ImageIcon, ThumbsUp, ThumbsDown, Square, CheckCircle2, Circle, Loader2 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
+import type { PlanStep } from "@/lib/agents/creator-ai"
 import ChatChart from "@/components/chat-chart"
 import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
 
@@ -223,6 +224,8 @@ export default function ChatbotPage() {
   const [mobileDrawer,   setMobileDrawer]  = useState(false)
   const [chatSidebar,    setChatSidebar]   = useState(true)   // desktop: show/hide conv list
   const [feedbackGiven,  setFeedbackGiven] = useState<Record<number, 1 | -1>>({})   // 👍/👎 mỗi câu trả lời
+  const [plan,           setPlan]          = useState<PlanStep[]>([])               // U3: kế hoạch từng bước
+  const abortRef = useRef<AbortController | null>(null)
 
   // Đính kèm ảnh/file (s190+3)
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
@@ -367,6 +370,14 @@ export default function ChatbotPage() {
     try { setChatSidebar(localStorage.getItem(LS_CHAT_SIDEBAR) !== "0") } catch {}
 
     void (async () => {
+      // 0. Link mở lại hội thoại cũ (?c=id — từ kết quả tìm hội thoại cũ của trợ lý)
+      const linked = new URLSearchParams(window.location.search).get("c")
+      if (linked) {
+        loadConversations()
+        setActiveConvId(linked)
+        await loadMessages(linked)
+        return
+      }
       // 1. Restore sessionStorage (same tab/session — fastest path)
       try {
         const ssUser = sessionStorage.getItem(SS_CONV_USER)
@@ -470,6 +481,10 @@ export default function ChatbotPage() {
 
     let streamStarted   = false
     let currentAgent: { id: string; name: string } | undefined
+    let assistantText   = ""
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
+    setPlan([])
 
     try {
       const serializedMsgs = next.map(m => ({ role: m.role, content: m.content }))
@@ -478,13 +493,15 @@ export default function ChatbotPage() {
         const form = new FormData()
         form.append("messages", JSON.stringify(serializedMsgs))
         form.append("userName", userName)
+        form.append("conversation_id", convId)
         filesToSend.forEach((f, i) => form.append(`file_${i}`, f))
-        res = await fetch("/api/chat", { method: "POST", body: form })
+        res = await fetch("/api/chat", { method: "POST", body: form, signal: ctrl.signal })
       } else {
         res = await fetch("/api/chat", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ messages: serializedMsgs, userName }),
+          body:    JSON.stringify({ messages: serializedMsgs, userName, conversation_id: convId }),
+          signal:  ctrl.signal,
         })
       }
 
@@ -497,42 +514,39 @@ export default function ChatbotPage() {
       if (!reader) throw new Error("No stream")
 
       const decoder     = new TextDecoder()
-      let assistantText = ""
       setLoading(false)
       setStreaming(true)
       streamStarted = true
 
       setMessages(prev => [...prev, { role: "assistant", content: "" }])
+      const render = () => setMessages(prev => {
+        const u = [...prev]
+        u[u.length - 1] = { role: "assistant", content: assistantText, agent: currentAgent }
+        return u
+      })
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value, { stream: true })
-
-        if (chunk.startsWith("__AGENT__:")) {
-          const line  = chunk.split("\n")[0]
-          const parts = line.replace("__AGENT__:", "").split(":")
-          currentAgent = { id: parts[0], name: parts.slice(1).join(":") }
-          setAgentName(currentAgent.name)
-          const rest = chunk.slice(line.length + 1)
-          if (rest) {
-            assistantText += rest
-            setMessages(prev => {
-              const u = [...prev]
-              u[u.length - 1] = { role: "assistant", content: assistantText, agent: currentAgent }
-              return u
-            })
+      // U3: luồng SSE — mỗi sự kiện "data: {json}\n\n" (agent / delta / plan / done).
+      let buf = ""
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += decoder.decode(value, { stream: true })
+          const events = buf.split("\n\n")
+          buf = events.pop() ?? ""
+          for (const raw of events) {
+            if (!raw.startsWith("data: ")) continue
+            let ev: any
+            try { ev = JSON.parse(raw.slice(6)) } catch { continue }
+            if (ev.type === "agent") { currentAgent = { id: ev.id, name: ev.name }; setAgentName(ev.name) }
+            else if (ev.type === "delta") { assistantText += ev.content; render() }
+            else if (ev.type === "plan") setPlan(ev.steps ?? [])
           }
-          continue
         }
-
-        assistantText += chunk
-        setMessages(prev => {
-          const u = [...prev]
-          u[u.length - 1] = { role: "assistant", content: assistantText, agent: currentAgent }
-          return u
-        })
+      } catch (e: any) {
+        if (e?.name !== "AbortError") throw e
+        assistantText = `${assistantText}\n\n⏹ Đã dừng theo yêu cầu.`.trim()
+        render()
       }
 
       // Save complete assistant message
@@ -559,7 +573,8 @@ export default function ChatbotPage() {
       }
 
     } catch (e: any) {
-      const errMsg = (userRole === "admin" || userRole === "creator") ? `Lỗi: ${e.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
+      const errMsg = e?.name === "AbortError" ? "⏹ Đã dừng theo yêu cầu."
+        : (userRole === "admin" || userRole === "creator") ? `Lỗi: ${e.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
       if (streamStarted) {
         setMessages(prev => {
           const u = [...prev]
@@ -570,11 +585,13 @@ export default function ChatbotPage() {
         setMessages(prev => [...prev, { role: "assistant", content: errMsg }])
       }
     } finally {
+      abortRef.current = null
       setLoading(false)
       setStreaming(false)
       setAgentName(null)
     }
   }
+  const stop = () => abortRef.current?.abort()
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -805,6 +822,21 @@ export default function ChatbotPage() {
                 </div>
               </div>
             )}
+            {busy && plan.length > 0 && (
+              <div className="ml-11 max-w-md bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3 shadow-sm">
+                <p className="text-[11px] font-semibold text-gray-500 dark:text-slate-400 mb-1.5">Kế hoạch</p>
+                <ul className="space-y-1">
+                  {plan.map((s, k) => (
+                    <li key={k} className="flex items-center gap-2 text-xs text-gray-700 dark:text-slate-200">
+                      {s.status === "done" ? <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                        : s.status === "in_progress" ? <Loader2 size={13} className="text-brand-500 animate-spin shrink-0" />
+                        : <Circle size={13} className="text-gray-300 shrink-0" />}
+                      <span className={s.status === "done" ? "text-gray-400 line-through" : ""}>{s.title}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div ref={bottomRef} />
           </div>
 
@@ -856,10 +888,17 @@ export default function ChatbotPage() {
                 disabled={busy}
                 className="flex-1 px-4 py-2.5 text-sm bg-gray-50 dark:bg-slate-800 dark:text-slate-100 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-300 focus:bg-white dark:focus:bg-slate-800 disabled:opacity-60 transition"
               />
-              <button type="submit" disabled={(!input.trim() && attachedFiles.length === 0) || busy}
-                className="px-4 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm">
-                <Send size={15} />
-              </button>
+              {busy ? (
+                <button type="button" onClick={stop} title="Dừng" aria-label="Dừng"
+                  className="px-4 py-2.5 bg-gray-800 dark:bg-slate-600 text-white rounded-xl hover:bg-gray-700 transition-colors shadow-sm">
+                  <Square size={14} fill="currentColor" />
+                </button>
+              ) : (
+                <button type="submit" disabled={!input.trim() && attachedFiles.length === 0}
+                  className="px-4 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm">
+                  <Send size={15} />
+                </button>
+              )}
             </form>
           </div>
         </div>

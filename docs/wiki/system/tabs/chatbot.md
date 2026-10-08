@@ -228,3 +228,13 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
   hành động ghi/gửi/mở URL lạ (chưa có nút Duyệt ở Bé Gấu → báo người dùng gửi lại ở tin mới).
 - **Ngân sách thời gian 240s** cho Bé Gấu + Gấu Pro web: QA 2026-10-08 Gemini chậm bất thường (20s–2,5 phút/lượt, cả production)
   → Gấu Pro chạm trần 300s, UI "Không có nội dung trả về". Nay hết 240s thì chốt 1 lượt trả lời bằng dữ liệu đã có (không gọi tool).
+
+## § s228 U3b (2026-10-08) — Bé Gấu: kế hoạch từng bước, nút Dừng, trí nhớ
+
+- `/api/chat` đổi sang **SSE** (`data: {json}\n\n`, sự kiện `agent` / `delta` / `plan` / `done`) — trước là chữ thô + dòng `__AGENT__:`.
+  Trang `chatbot/page.tsx` đọc SSE, hiện khung "Kế hoạch" (checklist) khi đang chạy, nút Gửi thành nút **Dừng** khi đang chạy
+  (AbortController → `req.signal` → vòng lặp dừng, câu trả lời dở giữ lại + "⏹ Đã dừng theo yêu cầu.").
+- Tính năng "Kế hoạch từng bước" (tool `updatePlan`, xử lý tại chỗ, không ghi gì) mặc định bật mọi vai trò.
+- Tính năng "Trí nhớ + tìm hội thoại cũ" (`assistantMemory`, `searchPastConversations`, nạp khối trí nhớ mỗi lượt, sau lượt rút điều đáng
+  nhớ + tóm tắt hội thoại) **mặc định TẮT** — Hiếu bật theo vai trò ở bảng tính năng. Trang gửi `conversation_id` để tóm tắt; link kết quả
+  tìm hội thoại: tiêu đề "[GP] …" → Gấu Pro, còn lại → `/chatbot?c=<id>` (trang Bé Gấu mở thẳng hội thoại theo `?c=`).

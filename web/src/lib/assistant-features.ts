@@ -27,8 +27,8 @@ export const ASSISTANT_FEATURES: AssistantFeature[] = [
   { id: "trends", label: "Xu hướng thị trường", description: "Dữ liệu xu hướng du lịch/eSIM/TikTok lưu hằng ngày", group: "everyone", tools: ["getTrendSnapshots"] },
   { id: "lark_base", label: "Đọc Lark Base", description: "Đọc bảng Lark Base được chia sẻ cho bot", group: "everyone", tools: ["queryLarkBase"] },
   { id: "image", label: "Tạo ảnh", description: "Tạo ảnh minh hoạ, banner, thumbnail", group: "everyone", tools: ["generateImage"] },
-  { id: "plan", label: "Kế hoạch từng bước + Dừng", description: "Hiện các bước đang làm, bấm Dừng giữa chừng", group: "everyone", tools: [], soon: true },
-  { id: "memory", label: "Trí nhớ + tìm hội thoại cũ", description: "Nhớ điều người dùng dặn, tìm lại hội thoại trước", group: "everyone", tools: [], soon: true },
+  { id: "plan", label: "Kế hoạch từng bước", description: "Việc nhiều bước hiện danh sách bước đang làm (nút Dừng luôn có)", group: "everyone", tools: ["updatePlan"] },
+  { id: "memory", label: "Trí nhớ + tìm hội thoại cũ", description: "Nhớ điều người dùng dặn, tìm lại hội thoại trước (mặc định tắt — bật từng vai trò khi đã duyệt)", group: "everyone", tools: ["assistantMemory", "searchPastConversations"] },
   { id: "background", label: "Chạy nền việc dài", description: "Báo cáo dài chạy nền, xong thì báo", group: "everyone", tools: [], soon: true },
   { id: "tts", label: "Đọc câu trả lời", description: "Đọc to câu trả lời bằng giọng nói", group: "everyone", tools: [], soon: true },
   { id: "transcribe", label: "Ghi âm → biên bản", description: "Ghi âm cuộc họp, ra biên bản", group: "everyone", tools: [], soon: true },
@@ -51,8 +51,12 @@ export const ASSISTANT_FEATURES: AssistantFeature[] = [
 
 export type FeatureMatrix = Record<string, string[]>
 
+// Trí nhớ cá nhân: plan U3 — mặc định tắt cho tới khi Hiếu duyệt từng nhóm.
+const DEFAULT_OFF = new Set(["memory"])
+
 export function defaultMatrix(): FeatureMatrix {
-  return Object.fromEntries(ASSISTANT_FEATURES.map(f => [f.id, f.group === "everyone" ? EVERYONE : f.group === "by_role" ? ADMIN_ONLY : []]))
+  return Object.fromEntries(ASSISTANT_FEATURES.map(f => [f.id,
+    DEFAULT_OFF.has(f.id) ? [] : f.group === "everyone" ? EVERYONE : f.group === "by_role" ? ADMIN_ONLY : []]))
 }
 
 /** Gộp bản lưu với mặc định: chỉ nhận vai trò hợp lệ, tính năng "creator" luôn rỗng. */

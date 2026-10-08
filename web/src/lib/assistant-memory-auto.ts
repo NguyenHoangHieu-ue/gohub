@@ -121,7 +121,8 @@ export async function searchPastConversations(username: string, query: string): 
     results: rows.map(r => ({
       title: r.title, summary: r.summary, date: String(r.updated_at).slice(0, 10),
       similarity: Math.round(r.similarity * 100) / 100,
-      link: `/analytics/creator/ai?c=${r.conversation_id}`,
+      // Hội thoại Gấu Pro có tiêu đề "[GP] …"; còn lại là Bé Gấu.
+      link: String(r.title ?? "").startsWith("[GP]") ? `/analytics/creator/ai?c=${r.conversation_id}` : `/chatbot?c=${r.conversation_id}`,
     })),
     instruction: "Trả lời dựa trên tóm tắt, ghi rõ ngày và kèm link dạng [tiêu đề](link) để người dùng mở lại hội thoại.",
   }

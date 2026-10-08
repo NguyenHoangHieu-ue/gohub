@@ -154,8 +154,10 @@ describe("be-gau: tool declarations & role filter", () => {
 
     const decls: any[] = box.config?.tools?.[0]?.functionDeclarations ?? []
     const names = decls.map((d: any) => d.name)
-    expect(decls).toHaveLength(15)
+    expect(decls).toHaveLength(16)
+    expect(names).toContain("updatePlan")                 // U3: kế hoạch từng bước — mọi vai trò
     expect(names).not.toContain("browseWeb")
+    expect(names).not.toContain("assistantMemory")        // trí nhớ mặc định tắt (+ không có username)
     for (const n of ["executeSQL", "querySupabase", "listSupabaseTables", "queryProduct", "queryGA4", "queryGSC", "webSearch", "readKnowledgeBase", "larkWorkspace"]) {
       expect(names).toContain(n)
     }

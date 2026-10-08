@@ -68,7 +68,7 @@ const previewArgs = (args: unknown) => {
   return s.replace(/"(password|token|secret|api_key)"\s*:\s*"[^"]*"/gi, '"$1":"***"').slice(0, 300)
 }
 
-function normalizePlan(raw: unknown): PlanStep[] {
+export function normalizePlan(raw: unknown): PlanStep[] {
   if (!Array.isArray(raw)) return []
   return raw.slice(0, 10).map((s: any) => ({
     title: String(s?.title ?? "").slice(0, 120),
