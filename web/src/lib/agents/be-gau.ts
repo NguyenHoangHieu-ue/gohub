@@ -417,7 +417,7 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
     useMemory ? `\nNgười dùng hỏi "lần trước / đã bàn / đã chốt" mà trí nhớ trên không có → searchPastConversations.` : "",
     extraDirective,
     // Câu nhờ tạo tài liệu/bảng tính/task trong Lark (eval U1a2: model lấy số xong rồi quên tạo) → nhắc thẳng ở lượt này.
-    LARK_CREATE_RE.test(lastMsg) ? `\n\n(Nội bộ — lượt này) Người dùng đang nhờ TẠO trong Lark: lấy số liệu xong thì BẮT BUỘC gọi công cụ larkWorkspace, rồi trả link (hoặc báo đúng lỗi công cụ trả về).` : "",
+    LARK_CREATE_RE.test(lastMsg) ? `\n\n(Nội bộ — lượt này) Người dùng đang nhờ TẠO trong Lark: lấy số liệu xong thì BẮT BUỘC gọi công cụ — BÁO CÁO có bảng/biểu đồ → buildReport với formats ["lark"] (kèm định dạng file khác nếu được xin); tài liệu chữ đơn giản, bảng tính, task → larkWorkspace. Rồi trả link (hoặc báo đúng lỗi công cụ trả về).` : "",
   ].join("")
 
   // Tool lõi luôn có + tool của tính năng đã bật cho vai trò (bảng phân quyền U3).
@@ -624,17 +624,17 @@ export async function runBeGau(opts: BeGauOpts): Promise<{ text: string; sources
   const toolsUsed = loop.toolsUsed
 
   // Nhờ tạo trong Lark mà model chưa gọi công cụ (eval U1a2–U1a3: 3 lần bỏ qua dù đã dặn) → 1 lượt BẮT BUỘC gọi larkWorkspace.
-  if (LARK_CREATE_RE.test(lastMsg) && !toolsUsed.has("larkWorkspace")) {
+  if (LARK_CREATE_RE.test(lastMsg) && !toolsUsed.has("larkWorkspace") && !toolsUsed.has("buildReport")) {
     const before = genResult.text
     try {
-      contents.push({ role: "user", parts: [{ text: "(Hệ thống) Gọi larkWorkspace ngay để tạo đúng thứ người dùng nhờ trong Lark, dùng số liệu/nội dung vừa trả lời (tài liệu: nội dung markdown đầy đủ)." }] })
+      contents.push({ role: "user", parts: [{ text: "(Hệ thống) Tạo NGAY đúng thứ người dùng nhờ trong Lark bằng số liệu vừa trả lời: báo cáo có bảng/biểu đồ → buildReport (formats [\"lark\"]); tài liệu đơn giản/bảng tính/task → larkWorkspace." }] })
       const forced = await loop.next({
-        ...config, toolConfig: { includeServerSideToolInvocations: true, functionCallingConfig: { mode: FunctionCallingConfigMode.ANY, allowedFunctionNames: ["larkWorkspace"] } },
+        ...config, toolConfig: { includeServerSideToolInvocations: true, functionCallingConfig: { mode: FunctionCallingConfigMode.ANY, allowedFunctionNames: ["larkWorkspace", "buildReport"] } },
       }, () => {})
       const parts: any[] = []
-      for (const fc of forced.functionCalls.filter(f => f.name === "larkWorkspace")) {
-        toolsUsed.add("larkWorkspace")
-        parts.push({ functionResponse: { name: "larkWorkspace", response: await runLarkWorkspace(fc.args as any, larkOpenId) } })
+      for (const fc of forced.functionCalls.filter(f => f.name === "larkWorkspace" || f.name === "buildReport")) {
+        toolsUsed.add(fc.name!)
+        parts.push(await runTool(fc))
       }
       if (parts.length) {
         contents.push({ role: "user", parts: [...parts, { text: "Viết 1–2 câu báo kết quả tạo trong Lark (kèm link nếu có, hoặc báo đúng lỗi). Không lặp lại báo cáo." }] })
