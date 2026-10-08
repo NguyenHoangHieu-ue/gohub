@@ -387,3 +387,10 @@ Kiến thức còn giá trị:
   liệu riêng; trí nhớ tách theo người; che giá vốn theo quyền; ghi token/chi phí theo người (`app_usage_events`).
 - **Còn mở (ngoài code)**: Hiếu QA nút mic (🎙 🌐 🎤); việc theo lịch trễ tới ~1h (cron-job.org `scheduled-messages` mỗi giờ, trỏ staging);
   xoá env STABILITY_API_KEY, KLING_API_KEY trên Vercel.
+
+## § s228 (2026-10-08) — Sửa lỗi Bé Gấu không vẽ biểu đồ
+
+- Lỗi: trang Bé Gấu chỉ vẽ khối ```chart khi tin mang nhãn agent cũ `bi-analyst`/`data-explorer` (pipeline 6-agent cũ) → từ khi Bé Gấu là 1
+  agent, mọi biểu đồ hiện JSON thô. Cả Bé Gấu lẫn Gấu Pro chỉ vẽ khối ĐẦU TIÊN, khối sau bị bỏ.
+- Sửa: `lib/chat-charts.ts` `splitChartBlocks()` tách câu trả lời thành đoạn markdown + mọi khối chart (đúng thứ tự), dùng chung 2 trang;
+  JSON lỗi giữ nguyên là chữ; khối chart chưa đóng khi đang stream bị ẩn (không nháy JSON). Test `__tests__/chat-charts.test.ts`.

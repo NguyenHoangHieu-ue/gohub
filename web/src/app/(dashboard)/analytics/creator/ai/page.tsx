@@ -16,6 +16,7 @@ import { useStickToBottom } from "@/components/chat/use-stick-to-bottom"
 import ReactMarkdown from "react-markdown"
 import remarkGfm     from "remark-gfm"
 import ChatChart      from "@/components/chat-chart"
+import { splitChartBlocks } from "@/lib/chat-charts"
 import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
 import { TasksPanel } from "@/components/gau-pro/tasks-panel"
 import { RunsList } from "@/components/gau-pro/runs-list"
@@ -186,18 +187,6 @@ function isImage(name: string) {
 
 // ─── Chart helpers ────────────────────────────────────────────────────────────
 
-function extractChartData(text: string): { chart: any; before: string; after: string } | null {
-  const m = text.match(/```chart\s*([\s\S]*?)\s*```/)
-  if (!m) return null
-  try {
-    const chart = JSON.parse(m[1])
-    if (!chart.chart_type || !chart.data) return null
-    const idx = text.indexOf("```chart")
-    const end = text.indexOf("```", idx + 7) + 3
-    return { chart, before: text.slice(0, idx).trim(), after: text.slice(end).trim() }
-  } catch { return null }
-}
-
 // ─── Markdown renderer ────────────────────────────────────────────────────────
 
 function renderMarkdown(raw: string) {
@@ -284,17 +273,13 @@ function MsgContent({ msg, onFollowup, speaking, ttsSupported, onToggleSpeak }: 
   const chips = extractFollowupChips(msg.content)
   // Hide export/followup helper blocks from the visible answer (they drive buttons, not display)
   const display = stripExportHelperBlocks(msg.content).replace(/```followup[\s\S]*?```/g, "").trim()
-  const chartResult = extractChartData(display)
+  const segments = splitChartBlocks(display)
   return (
     <div>
       <div ref={contentRef}>
-        {chartResult ? (
-          <>
-            {chartResult.before && renderMarkdown(chartResult.before)}
-            <ChatChart data={chartResult.chart} />
-            {chartResult.after && renderMarkdown(chartResult.after)}
-          </>
-        ) : renderMarkdown(display)}
+        {segments.map((sg, i) => sg.type === "chart"
+          ? <ChatChart key={i} data={sg.chart} />
+          : <div key={i}>{renderMarkdown(sg.text)}</div>)}
       </div>
       <div className="flex items-center gap-2">
         <ExportBar content={msg.content} contentRef={contentRef} apiEndpoint="/api/creator-ai/export" />

@@ -10924,3 +10924,11 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
   chữ + 1 dòng wiki, tsc/lint sạch), callback pr_open + DM Lark. Phiếu #1 lỗi "thiếu GITHUB_DISPATCH_TOKEN" (duyệt khi web chưa nạp env mới).
 - (s228 tiếp) Merge PR #3 (phiếu thử #2) vào staging. Xong plan be-gau-upgrade: xoá `docs/plans/be-gau-upgrade.md`, chuyển kiến thức sang wiki
   `chatbot.md` §Chốt plan "be-gau-upgrade"; bộ câu eval chuyển `web/eval/be-gau-questions.md`. CLAUDE.md bỏ dòng plan, thêm mục s228.
+- (s228 tiếp) Lập plan `docs/plans/my-metrics-be-gau-tasks.md` (Hiếu dặn làm hôm sau): kiểm cách tính "Tasks via Bé Gấu" sau nâng cấp. Phát hiện
+  lỗi thật: 3 route đọc app_usage_events không phân trang (Supabase trả tối đa 1.000 dòng) → Q3 (1.161 câu) đếm thiếu (~196 thay vì 235).
+  Tool mới (buildReport, b2bCustomerCm1, compareVendorQuotes, trackSKUWinRate) + chạy nền/trực tiếp không được tính; câu Creator ở Bé Gấu bị tính
+  (Q3 13, Q4 6). Chờ Hiếu chốt 5 câu §4.
+- (s228 tiếp) Đã DM Lark thông báo tính năng Bé Gấu mới (số liệu, báo cáo, chạy nền, ảnh, giọng nói, ghi âm→biên bản, giao diện mới; không nhắc
+  tính năng chỉ Creator) cho 10 người từng được cấp Gấu Pro — 10/10 OK (route `gau-pro-moved` thêm tham số `message`, `172b052d` staging).
+- (s228 tiếp) Fix Bé Gấu không vẽ biểu đồ (`ef29f471`, staging): trang chỉ vẽ khi nhãn agent cũ bi-analyst/data-explorer; cả 2 trang chỉ vẽ khối
+  đầu. `lib/chat-charts.ts` splitChartBlocks dùng chung, vẽ mọi khối. Hội thoại Hiếu báo: c1b2abf9 (pie B2B/B2C Q3).
