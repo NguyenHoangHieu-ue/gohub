@@ -270,3 +270,9 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
   200s trả checkpoint (giữ trạng thái đã đọc nội dung ngoài), tối đa 6 chặng. Xong: hội thoại "⏳ …" lưu theo TÊN hiển thị + Lark DM.
 - ⚠️ Hội thoại Bé Gấu lọc theo `session.user.name` (không phải username) — phụ đề phiên Trực tiếp đã sửa lưu theo tên.
 - `core/agent-loop.ts`: ngân sách thời gian so `!= null` (trước `0` bị bỏ qua).
+
+## § s228 (2026-10-08) — Bé Gấu: đọc to câu trả lời (TTS)
+
+- Tính năng "Đọc câu trả lời" (Mọi người, mặc định bật): nút 🔊 dưới mỗi câu trả lời → `POST /api/chat/tts` → audio/wav, bấm lại để dừng.
+- Model `GEMINI_TTS_MODEL` (mặc định `gemini-3.8-flash-tts`, trả thẳng WAV; đo ~4s/câu ngắn), giọng "Kore". `lib/speech-text.ts` bỏ khối
+  code/chart/export, thay bảng bằng "(Bảng số liệu xem trên màn hình.)", cắt ở 2.500 ký tự. Giới hạn 10 lần/phút/người.

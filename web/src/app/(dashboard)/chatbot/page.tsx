@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useSession, signOut }                        from "next-auth/react"
-import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen, FileSpreadsheet, Paperclip, FileText, Image as ImageIcon, ThumbsUp, ThumbsDown, Square, CheckCircle2, Circle, Loader2 } from "lucide-react"
+import { Send, Bot, User, Sparkles, Plus, Trash2, MessageSquare, Menu, X, PanelLeftClose, PanelLeftOpen, FileSpreadsheet, Paperclip, FileText, Image as ImageIcon, ThumbsUp, ThumbsDown, Square, CheckCircle2, Circle, Loader2, Volume2 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
@@ -100,10 +100,40 @@ function renderMarkdown(text: string) {
 }
 
 // ─── Nội dung 1 message assistant — tách component để có contentRef riêng (cần cho xuất PDF) ────────
-function BeGauMsgContent({ msg, streaming, isLast, rated, onFeedback }: {
+// U3: đọc to câu trả lời (tính năng "tts"). Bấm lần nữa để dừng.
+function SpeakButton({ text }: { text: string }) {
+  const [state, setState] = useState<"idle" | "loading" | "playing">("idle")
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  useEffect(() => () => { audioRef.current?.pause() }, [])
+  const toggle = async () => {
+    if (state !== "idle") { audioRef.current?.pause(); audioRef.current = null; setState("idle"); return }
+    setState("loading")
+    try {
+      const res = await fetch("/api/chat/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`)
+      const url = URL.createObjectURL(await res.blob())
+      const audio = new Audio(url)
+      audioRef.current = audio
+      audio.onended = () => { URL.revokeObjectURL(url); setState("idle") }
+      await audio.play()
+      setState("playing")
+    } catch (e: any) { setState("idle"); alertless(e.message) }
+  }
+  return (
+    <button onClick={toggle} title={state === "playing" ? "Dừng đọc" : "Đọc câu trả lời"} aria-label="Đọc câu trả lời"
+      className={`p-1 rounded-md transition-colors ${state !== "idle" ? "text-brand-600 bg-brand-50" : "text-gray-300 hover:text-brand-600 hover:bg-brand-50"}`}>
+      {state === "loading" ? <Loader2 size={13} className="animate-spin" /> : state === "playing" ? <Square size={12} /> : <Volume2 size={13} />}
+    </button>
+  )
+}
+// Không dùng alert() (chặn trang) — ghi console là đủ, nút tự về trạng thái chờ.
+const alertless = (m: string) => console.warn("[tts]", m)
+
+function BeGauMsgContent({ msg, streaming, isLast, rated, onFeedback, canSpeak }: {
   msg: StoredMessage; streaming: boolean; isLast: boolean
   rated?: 1 | -1 | null
   onFeedback?: (rating: 1 | -1) => void
+  canSpeak?: boolean
 }) {
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -148,6 +178,7 @@ function BeGauMsgContent({ msg, streaming, isLast, rated, onFeedback }: {
       {!(streaming && isLast) && (
         <div className="flex items-center gap-2">
           <ExportBar content={msg.content} contentRef={contentRef} apiEndpoint="/api/chat/export" />
+          {canSpeak && <SpeakButton text={display} />}
           {onFeedback && (
             <div className="flex items-center gap-1">
               <button onClick={() => onFeedback(1)} title="Câu trả lời hữu ích"
@@ -828,7 +859,7 @@ export default function ChatbotPage() {
                       <span className="whitespace-pre-wrap">{msg.content}</span>
                     ) : (
                       <BeGauMsgContent msg={msg} streaming={streaming} isLast={i === messages.length - 1}
-                        rated={feedbackGiven[i]} onFeedback={r => sendFeedback(i, r)} />
+                        rated={feedbackGiven[i]} onFeedback={r => sendFeedback(i, r)} canSpeak={features.includes("tts")} />
                     )}
                   </div>
                 </div>
