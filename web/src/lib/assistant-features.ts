@@ -31,7 +31,7 @@ export const ASSISTANT_FEATURES: AssistantFeature[] = [
   { id: "memory", label: "Trí nhớ + tìm hội thoại cũ", description: "Nhớ điều người dùng dặn, tìm lại hội thoại trước (mặc định tắt — bật từng vai trò khi đã duyệt)", group: "everyone", tools: ["assistantMemory", "searchPastConversations"] },
   { id: "background", label: "Chạy nền việc dài", description: "Giao việc dài chạy nền, không cần giữ trang; xong nhắn Lark + lưu vào Lịch sử", group: "everyone", tools: [] },
   { id: "tts", label: "Đọc câu trả lời", description: "Nút 🔊 đọc to câu trả lời (bảng/biểu đồ xem trên màn hình)", group: "everyone", tools: [] },
-  { id: "transcribe", label: "Ghi âm → biên bản", description: "Ghi âm cuộc họp, ra biên bản", group: "everyone", tools: [], soon: true },
+  { id: "transcribe", label: "Ghi âm → biên bản", description: "Ghi âm cuộc họp (tối đa ~35 phút) → biên bản: tóm tắt, quyết định, việc cần làm", group: "everyone", tools: [] },
 
   { id: "browse_web", label: "Mở trang web", description: "Đọc nguyên trang web cụ thể (trang nhiều JS, nhiều trang)", group: "by_role", tools: ["browseWeb"] },
   { id: "video", label: "Tạo video", description: "Tạo video ngắn, kiểm tra trạng thái", group: "by_role", tools: ["generateVideo", "checkVideoStatus"] },

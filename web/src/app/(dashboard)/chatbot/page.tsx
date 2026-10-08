@@ -9,6 +9,7 @@ import type { Message } from "@/lib/agents/types"
 import type { PlanStep } from "@/lib/agents/creator-ai"
 import ChatChart from "@/components/chat-chart"
 import { LiveSession } from "@/components/gau-pro/live-session"
+import { MeetingRecorder } from "@/components/be-gau/meeting-recorder"
 import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
 
 // sessionStorage keys
@@ -652,6 +653,25 @@ export default function ChatbotPage() {
   }
   const stop = () => abortRef.current?.abort()
 
+  // U3: lượt hỏi–đáp không qua /api/chat (vd ghi âm → biên bản) — thêm vào hội thoại đang mở và lưu như tin thường.
+  const appendTurn = async (userText: string, reply: string) => {
+    let convId = activeConvId
+    if (!convId) {
+      convId = await createConversation()
+      if (!convId) return
+      setActiveConvId(convId)
+    }
+    const isFirstMsg = msgCountRef.current === 0
+    const userMsg: StoredMessage = { role: "user", content: userText }
+    const assistantMsg: StoredMessage = { role: "assistant", content: reply }
+    const finalMsgs = [...messages, userMsg, assistantMsg]
+    setMessages(finalMsgs)
+    saveMessage(convId, userMsg, isFirstMsg)
+    saveMessage(convId, assistantMsg)
+    saveToSS(convId, finalMsgs)
+    msgCountRef.current = finalMsgs.length
+  }
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   const groups = groupConversations(conversations)
@@ -947,6 +967,7 @@ export default function ChatbotPage() {
                   </span>
                 )}
               </button>
+              {features.includes("transcribe") && <MeetingRecorder disabled={busy} onResult={appendTurn} />}
               {features.includes("background") && (
                 <button type="button" onClick={() => setBgMode(v => !v)} disabled={busy} aria-pressed={bgMode}
                   title={bgMode ? "Đang ở chế độ Chạy nền: tin gửi đi thành việc nền (xong nhắn Lark). Bấm để tắt." : "Chạy nền: giao việc dài, không cần giữ trang mở"}

@@ -276,3 +276,12 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
 - Tính năng "Đọc câu trả lời" (Mọi người, mặc định bật): nút 🔊 dưới mỗi câu trả lời → `POST /api/chat/tts` → audio/wav, bấm lại để dừng.
 - Model `GEMINI_TTS_MODEL` (mặc định `gemini-3.8-flash-tts`, trả thẳng WAV; đo ~4s/câu ngắn), giọng "Kore". `lib/speech-text.ts` bỏ khối
   code/chart/export, thay bảng bằng "(Bảng số liệu xem trên màn hình.)", cắt ở 2.500 ký tự. Giới hạn 10 lần/phút/người.
+
+## § s228 (2026-10-08) — Bé Gấu: ghi âm cuộc họp → biên bản
+
+- Tính năng "Ghi âm → biên bản" (Mọi người, mặc định bật): nút 🎤 (ghi âm trên trình duyệt, opus 16kbps) + nút tải file ghi âm, cạnh ô nhập
+  (`components/be-gau/meeting-recorder.tsx`) → `POST /api/chat/transcribe` (multipart `audio`). Kết quả vào hội thoại đang mở như 1 lượt hỏi–đáp.
+- 2 bước: `GEMINI_TRANSCRIBE_MODEL` (mặc định `gemini-3.5-transcribe`, trả part `audioTranscription.text`, không tách người nói, ~2,5s/câu)
+  → `GEMINI_MODEL` viết biên bản (tóm tắt, nội dung, quyết định, bảng việc cần làm, câu hỏi mở), có danh sách thuật ngữ để sửa chỗ nghe nhầm.
+- Gotcha đo được: model chép lời BỎ QUA gợi ý thuật ngữ (gửi kèm text không đổi kết quả); hay nhầm "Gighub"→"GitHub", "Hiếu"→"Hiểu".
+- Giới hạn: body request Vercel ~4,5MB → tối đa ~4,4MB (≈ 35 phút ở 16kbps); họp dài hơn cần upload qua kho file (chưa làm).
