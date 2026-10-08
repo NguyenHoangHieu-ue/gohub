@@ -217,7 +217,7 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
 
 - **Bảng tính năng** `lib/assistant-features.ts` (lưu `app_settings.assistant_features` = `{featureId: role[]}`, cache 60s). 3 nhóm:
   *Mọi người* (mặc định bật mọi vai trò: tìm web, so giá vendor, win-rate SKU, xu hướng, Lark Base, tạo ảnh),
-  *Theo quyền* (mặc định chỉ admin: mở trang web `browseWeb`, tạo video), *Chỉ Creator* (khoá cứng: ghi KB/duyệt học liệu, portal
+  *Theo quyền* (mặc định chỉ Creator từ U5 — trước đó chỉ admin: mở trang web `browseWeb`, tạo video), *Chỉ Creator* (khoá cứng: ghi KB/duyệt học liệu, portal
   vendor, gửi Lark cho người khác, task Lark của Hiếu, ảnh Stability). Mục "Sắp có" (kế hoạch+Dừng, trí nhớ, chạy nền, đọc to,
   ghi âm→biên bản, Trực tiếp, việc theo lịch, nghiên cứu sâu, dịch, Bridge, file máy) hiện trong bảng nhưng chưa có tác dụng.
 - Giao diện: Creator Settings → khối "Bé Gấu — Tính năng theo vai trò" (`assistant-features-section.tsx`); API
@@ -254,7 +254,7 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
 
 ## § s228 (2026-10-08) — Bé Gấu: Trò chuyện trực tiếp theo vai trò
 
-- Tính năng "Trò chuyện trực tiếp" (nhóm Theo quyền, mặc định chỉ admin) — nút "🎙 Trực tiếp" trên trang Bé Gấu hiện khi vai trò được bật
+- Tính năng "Trò chuyện trực tiếp" (nhóm Theo quyền, mặc định chỉ Creator từ U5) — nút "🎙 Trực tiếp" trên trang Bé Gấu hiện khi vai trò được bật
   (`GET /api/chat/features` trả danh sách tính năng bật cho vai trò hiện tại).
 - `runBeGau` tách phần chuẩn bị thành `prepareBeGau()` (prompt + tool theo vai trò/tính năng + `runTool` có cổng an toàn và lọc giá vốn);
   `promptless: true` chỉ dựng phần chạy tool. Phiên Live Bé Gấu (`lib/agents/be-gau-live.ts`) dùng hàm này → cùng lọc vai trò như chat,
@@ -357,3 +357,10 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
 - ĐÃ XOÁ Pollinations, Stability (`generateImageStability`, tính năng "image_paid"), Kling; CSP bỏ `image.pollinations.ai`. Env
   `STABILITY_API_KEY`, `KLING_API_KEY` trên Vercel không còn dùng — Hiếu có thể xoá.
 - Quyền: tạo ảnh mọi vai trò (tính năng "image"); video theo vai trò (tính năng "video", mặc định admin).
+
+## § s228 U5a (2026-10-08) — Tính năng đặc biệt chỉ Creator
+
+- Hiếu chốt: tính năng thường (nhóm *Mọi người*) mọi vai trò dùng; tính năng đặc biệt (nhóm *Theo quyền*: mở trang web, video, trò chuyện
+  trực tiếp, việc theo lịch, nghiên cứu sâu, dịch trực tiếp) chỉ Creator — `defaultMatrix()` bỏ mặc định admin. Bảng tính năng vẫn bật thêm
+  cho vai trò được nếu sau này cần. Trí nhớ vẫn mặc định tắt.
+- Người từng dùng Gấu Pro: xem `analytics-creator-ai.md` §s228 U5a (khoá Gấu Pro, chuyển hội thoại, DM Lark).

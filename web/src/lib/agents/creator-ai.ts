@@ -17,6 +17,7 @@ import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { personalFeaturesEnabled } from "@/lib/assistant-memory-auto"
 import { newTurnSafety, recordToolResult, approvalReason, describeAction } from "./creator/tool-policy"
 import { createPendingAction, type PendingAction } from "./creator/approvals"
+import { getCreatorLarkOpenId, sendLarkMessage } from "@/lib/lark"
 import { SKILL_TOOLS, getSkill, skillCatalog, preloadSkills } from "./creator/skills"
 import { kbIndexBlock, relevantKbBlock } from "./creator/kb-recall"
 
@@ -63,6 +64,13 @@ async function saveRunTrace(row: Record<string, unknown>) {
 }
 
 /** Nguồn "nhiễm" của lượt gần nhất (≤2 giờ, cùng người + kênh) nếu lượt đó đã đọc nội dung ngoài; null nếu không. */
+async function notifyPendingOnLark(a: PendingAction): Promise<void> {
+  const openId = await getCreatorLarkOpenId().catch(() => null)
+  if (openId) await sendLarkMessage(openId, "open_id", `📝 Chờ anh duyệt — ${a.summary}
+
+Duyệt: nhắn Gấu Pro "duyệt ${a.code}" (hoặc bấm Duyệt trên web). Bỏ: "từ chối ${a.code}".`).catch(() => {})
+}
+
 async function previousRunTaint(username: string, channel: string): Promise<string[] | null> {
   const { data } = await supabaseAdmin.from("gp_runs").select("steps,created_at")
     .eq("username", username).eq("channel", channel).gte("created_at", new Date(Date.now() - 2 * 3600_000).toISOString())
@@ -665,6 +673,8 @@ export async function runCreatorAI(
         return { functionResponse: { name: call.name, response: { error: `Hành động cần duyệt nên CHƯA chạy (${error}). Báo người dùng.` } } }
       }
       pendingActions.push(action)
+      // U5b: phiếu sửa code duyệt được cả trên Lark — tạo từ web thì nhắn Lark kèm mã duyệt.
+      if (call.name === "devTicket" && channel !== "lark_dm") void notifyPendingOnLark(action)
       steps.push({ r: round, tool: call.name, approval: action.code })
       onEvent?.({ type: "approval_required", action })
       return { functionResponse: { name: call.name, response: {

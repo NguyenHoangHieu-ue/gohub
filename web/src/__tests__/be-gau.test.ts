@@ -174,11 +174,11 @@ describe("be-gau: tool declarations & role filter", () => {
 
   // U3: bảng phân quyền tính năng (mặc định) — admin có nhóm "Theo quyền", nhóm "Chỉ Creator" khoá cứng.
   const CREATOR_ONLY = ["writeKnowledgeBase", "browsePortal", "managePortalCredentials", "sendLarkMessage", "createLarkTask"]
-  test("admin: có tool nhóm Theo quyền, KHÔNG có tool Chỉ Creator", async () => {
+  test("admin: mặc định KHÔNG có tool nhóm Theo quyền (chỉ Creator, U5) lẫn Chỉ Creator", async () => {
     const box = captureConfig()
     await runBeGau({ geminiHistory: [], lastMsg: "test", role: "admin" })
     const names = (box.config?.tools?.find((t: any) => t.functionDeclarations)?.functionDeclarations ?? []).map((d: any) => d.name)
-    for (const n of ["browseWeb", "generateVideo", "checkVideoStatus"]) expect(names).toContain(n)
+    for (const n of ["browseWeb", "generateVideo", "checkVideoStatus"]) expect(names).not.toContain(n)
     // U2: chạy code Python cùng tool của mình — bắt buộc cờ includeServerSideToolInvocations (API trả 400 nếu thiếu).
     expect(box.config.tools.some((t: any) => t.codeExecution)).toBe(true)
     expect(box.config.toolConfig?.includeServerSideToolInvocations).toBe(true)

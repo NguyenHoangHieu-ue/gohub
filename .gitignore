@@ -72,3 +72,6 @@ docs/MERGE_PLAN.md
 
 # Claude Code local tooling (worktrees, agents) — không commit
 .claude/
+
+# Phiếu Claude Code (U5b) — file trao đổi trong workflow, không commit
+.ticket/
