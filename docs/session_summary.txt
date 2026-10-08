@@ -10877,3 +10877,11 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
   7. Lỗi §1 `165281fe`: cổng duyệt Gấu Pro nhớ qua nhiều lượt (gp_runs bước {tainted}), Lark DM gửi tin kế hoạch, tóm tắt luồng Lark DM.
   Dữ liệu QA (2 hội thoại + 2 việc nền) đã xoá; 2 DM Lark "[QA…]" đã gửi cho Hiếu.
   Chưa QA được trên giao diện (Chrome chặn script trang): Trực tiếp, đọc to, ghi âm, dịch, việc theo lịch, Lark DM (chạy production).
+- (s228 tiếp, Hiếu: "làm U2 đi") — U2 trên staging:
+  U2a `f44cd9bb`+`2fc2e739`: lib/report (khung JSON → docx/xlsx(exceljs)/pptx(pptxgenjs, biểu đồ gốc)/pdf(browserless)), biểu đồ SVG→PNG
+  (@resvg/resvg-js + font Be Vietnam Pro), bảng/ô số kèm sql chạy lại ở server, bucket riêng tư `reports` + /api/chat/report-file. Tool
+  buildReport cho Bé Gấu + Gấu Pro. QA staging: báo cáo CM1 top 8 KH B2B Q3 ra đủ 4 file, số khớp Quarter Report; sửa PDF ngắt trang +
+  cấm tự gán nguyên nhân (model bịa "Traveloka giảm do điều chỉnh phân phối").
+  U2b `34dde6a5`: Bé Gấu chạy code Python (codeExecution + includeServerSideToolInvocations). QA staging: TB/độ lệch chuẩn/MoM khớp tuyệt đối.
+  U2c `055ea573`+`134b8c3f`: bản Lark Docs có ảnh biểu đồ; câu "tạo … Lark" giờ cho phép buildReport. QA staging: tạo được Doc "[QA] …" trong Lark của Hiếu.
+  Gotcha: browserless (Render free) ngủ → kết nối lần đầu >30s (chờ 90s); token Lark trong .env.local máy Hiếu đã cũ ("invalid param").
