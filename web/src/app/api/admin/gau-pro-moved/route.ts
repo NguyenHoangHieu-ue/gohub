@@ -1,6 +1,6 @@
 // U5 (plan be-gau-upgrade.md): chạy 1 lần khi khoá Gấu Pro cho người không phải Creator.
 // migrate: chuyển hội thoại Gấu Pro ("[GP] …", lưu theo username) sang Bé Gấu (lưu theo tên hiển thị), giữ tiền tố [GP] để nhận ra.
-// notify: DM Lark cho từng người trong gp_allowed_users có lark_open_id. Mặc định chỉ xem trước (dryRun). Chỉ gọi bằng CRON_SECRET.
+// notify: DM Lark cho từng người trong gp_allowed_users có lark_open_id (nội dung mặc định hoặc `message` gửi kèm — vd thông báo tính năng Bé Gấu). Mặc định chỉ xem trước (dryRun). Chỉ gọi bằng CRON_SECRET.
 import { NextRequest, NextResponse } from "next/server"
 import { isCronReq } from "@/lib/analytics-helpers"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -15,7 +15,8 @@ Mở Bé Gấu: https://intel-v2.gohub.cloud/chatbot`
 
 export async function POST(req: NextRequest) {
   if (!isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const { dryRun = true, migrate = false, notify = false } = await req.json().catch(() => ({})) as { dryRun?: boolean; migrate?: boolean; notify?: boolean }
+  const { dryRun = true, migrate = false, notify = false, message } = await req.json().catch(() => ({})) as { dryRun?: boolean; migrate?: boolean; notify?: boolean; message?: string }
+  const text = message?.trim() || MESSAGE
 
   const listed = await loadGpListed()
   const { data: users, error } = await supabaseAdmin
@@ -35,10 +36,10 @@ export async function POST(req: NextRequest) {
       row.migrated = e ? `lỗi: ${e.message}` : count
     }
     if (!dryRun && notify && u.lark_open_id) {
-      try { row.notified = !!(await sendLarkMessage(u.lark_open_id, "open_id", MESSAGE)) }
+      try { row.notified = !!(await sendLarkMessage(u.lark_open_id, "open_id", text)) }
       catch (e) { row.notified = `lỗi: ${(e as Error).message}` }
     }
     out.push(row)
   }
-  return NextResponse.json({ dryRun, migrate, notify, message: MESSAGE, targets: out })
+  return NextResponse.json({ dryRun, migrate, notify, message: text, targets: out })
 }
