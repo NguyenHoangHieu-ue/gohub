@@ -364,3 +364,26 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
   trực tiếp, việc theo lịch, nghiên cứu sâu, dịch trực tiếp) chỉ Creator — `defaultMatrix()` bỏ mặc định admin. Bảng tính năng vẫn bật thêm
   cho vai trò được nếu sau này cần. Trí nhớ vẫn mặc định tắt.
 - Người từng dùng Gấu Pro: xem `analytics-creator-ai.md` §s228 U5a (khoá Gấu Pro, chuyển hội thoại, DM Lark).
+
+## § Chốt plan "be-gau-upgrade" (2026-10-08, đã xoá `docs/plans/be-gau-upgrade.md`)
+
+Plan nâng cấp Bé Gấu + chuyển tính năng Gấu Pro (tạo 2026-10-07, s227e) xong hết, đều đã lên `main`:
+U1 lõi chung `lib/agents/core/agent-loop.ts` + khối nghiệp vụ đã chốt `business-facts.ts` → U3 bảng tính năng theo vai trò (`assistant-features.ts`)
++ chuyển tính năng → U2 báo cáo `buildReport` (`lib/report/`) + chạy code Python → U4 giao diện chat mới → U0 ảnh Nano Banana / video Veo →
+U5a khoá Gấu Pro chỉ Creator → U5b phiếu sửa code Claude Code. Chi tiết từng mốc: các mục §s228 trong file này và `analytics-creator-ai.md`.
+
+Kiến thức còn giá trị:
+- **Eval**: 40 câu thật, `web/eval/be-gau-cases.json` (bản đọc `web/eval/be-gau-questions.md`), chạy `node scripts/eval-be-gau.mjs` (gọi
+  `/api/admin/eval/be-gau` bằng CRON_SECRET, giám khảo `gemini-pro-latest`). Điểm: baseline 8,72 → U1b 9,85 → u4 9,88/10 (TB 49s/câu).
+  Hiếu chỉ muốn chạy đủ 40 câu ở CUỐI mỗi mốc lớn, không chạy lại liên tục. Câu còn dưới 10 ở u4: #26 %Datapool lệch (69,7 vs 67,8%).
+- **Phân quyền tính năng** (Hiếu chốt U5): tính năng thường cho mọi vai trò; tính năng đặc biệt (nhóm Theo quyền) chỉ Creator; Trí nhớ mặc định tắt.
+- **Thương hiệu GoHub** (báo cáo, ảnh): xanh chủ đạo `#1446A5`, xanh đậm `#003A93`, xanh nhạt `#009CE0`, chữ `#0F1012`, nền `#F7F8F8`;
+  logo chữ "gohub" + "travel like a local".
+- **Model** tập trung ở `lib/ai-models.ts`; model preview có thể bị đổi/gỡ → gọi thử + eval trước khi đổi. Hạn mức Gemini thoải mái tới hết 2026.
+  Chưa dùng: `gemini-2.5-computer-use-preview-10-2025` (điều khiển trình duyệt), `gemini-embedding-2`, `antigravity-preview-latest`.
+- **Lark mức B** (bot thao tác dưới tên người dùng, đọc/sửa file riêng của họ) CHƯA làm. Nếu làm: mã hoá token, quyền tối thiểu, ghi file có sẵn
+  phải duyệt, mặc định chỉ ghi file mới/nối thêm, công tắc từng người, thu hồi khi nghỉ việc.
+- **Rủi ro giữ nguyên chốt chặn**: prompt injection → cổng duyệt nhớ qua nhiều lượt + tool nguy hiểm chỉ Creator; không học vào KB chung từ tài
+  liệu riêng; trí nhớ tách theo người; che giá vốn theo quyền; ghi token/chi phí theo người (`app_usage_events`).
+- **Còn mở (ngoài code)**: Hiếu QA nút mic (🎙 🌐 🎤); việc theo lịch trễ tới ~1h (cron-job.org `scheduled-messages` mỗi giờ, trỏ staging);
+  xoá env STABILITY_API_KEY, KLING_API_KEY trên Vercel.

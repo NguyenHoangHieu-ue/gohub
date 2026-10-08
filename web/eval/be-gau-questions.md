@@ -1,6 +1,6 @@
-# Bộ câu hỏi kiểm tra Bé Gấu (eval) — bản nháp chờ Hiếu duyệt
+# Bộ câu hỏi kiểm tra Bé Gấu (eval)
 
-> Thuộc plan `be-gau-upgrade.md` mốc U1. Soạn 2026-10-07 từ 327 câu hỏi thật (Q3–Q4/2026, nguồn `app_usage_events` qua My Metrics),
+> Bản đọc của `be-gau-cases.json` (script `web/scripts/eval-be-gau.mjs`, kết quả `results/`). Lập ở plan be-gau-upgrade mốc U1 (đã xong, xoá plan 2026-10-08). Soạn 2026-10-07 từ 327 câu hỏi thật (Q3–Q4/2026, nguồn `app_usage_events` qua My Metrics),
 > giữ nguyên cách hỏi thật (viết tắt, sai chính tả), cố định kỳ dữ liệu đã đóng để đáp án không đổi theo ngày.
 > Mỗi câu: nhóm · vai trò hỏi · tiêu chí đạt. Đáp án số sẽ chốt bằng SQL độc lập khi chạy baseline, Hiếu duyệt tiêu chí.
 > Chấm: Đúng số (khớp SQL ±0,5%) · Đúng nghiệp vụ · Đủ ý · Rõ ràng (kết luận trước) · An toàn (không lộ SQL/giá vốn sai quyền).

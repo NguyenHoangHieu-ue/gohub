@@ -70,7 +70,7 @@ export default function DevTicketsSection() {
 
       {error && <div className="mx-6 mt-4 px-4 py-2.5 rounded-xl text-sm bg-rose-50 text-rose-700 border border-rose-100">{error}</div>}
 
-      {!loading && !tickets.length && !error && <p className="px-6 py-8 text-sm text-slate-400 text-center">Chưa có phiếu nào.</p>}
+      {!loading && !tickets.length && !error && <p className="px-6 py-8 text-sm text-slate-400 text-center">Chưa có phiếu nào — nhờ Gấu Pro tạo phiếu sửa code.</p>}
 
       <ul className="divide-y divide-slate-100">
         {tickets.map(t => {
