@@ -10850,3 +10850,19 @@ Chi tiết: wiki `analytics-my-metrics.md` §s227b.
 - Tạo `web/src/lib/agents/core/agent-loop.ts` (`runAgentLoop`); Bé Gấu + Gấu Pro chạy cùng vòng lặp, giữ nguyên hành vi (cổng duyệt, kế hoạch, kỹ năng, việc nền, trace, ép larkWorkspace, HIGH chỉ lượt đầu).
 - Gấu Pro dựng lại config mỗi lượt (bỏ cờ skillsChanged). tsc + lint PASS; vitest 608 pass, 2 fail có sẵn không liên quan (bc-datapool thiếu file mẫu ở root, bridge-version zip). Wiki chatbot.md §s227g.
 - Eval U1b (40 câu, staging, concurrency 2): **9,85/10** (U1c 9,75; baseline 8,72), TB 46,4s/câu, trung vị 42s, token vào ~158k, 0 lỗi. Câu dưới 10: #15 lộ `ref_countries`, #1 lộ `staff_code`, #2 thiếu so tuần trước, #20 tự gán nguyên nhân ngập lụt, #35 CM1 diễn qua "Operation Cost". Gấu Pro chưa thử sống sau U1b (Chrome treo). LẦN SAU: U3.
+
+## s228 (2026-10-08) — Thử Gấu Pro sau U1b + U3 (một phần) trên staging
+- Thử Gấu Pro sống: lần 1 chạm trần 300s, UI "Không có nội dung trả về". Nguyên nhân: Gemini chậm bất thường (prod `main` cũng 20–37s/lượt,
+  staging 40s–2,5 phút/lượt; 10h51 chỉ 2–4s) — không phải lỗi U1b. Sửa: ngân sách 240s cho Gấu Pro web + Bé Gấu, hết thì chốt 1 lượt trả lời
+  bằng dữ liệu đã có (không gọi tool). Thử lại: trả lời được (~4 phút do model chậm). Ghi nhận: Gấu Pro tự dò "thị trường" bằng SUBSTRING mã SKU, nhiều lượt.
+- U3a `77dd7c78`: bảng phân quyền tính năng theo vai trò (`lib/assistant-features.ts`, `app_settings.assistant_features`, Creator Settings
+  khối "Bé Gấu — Tính năng theo vai trò"); Bé Gấu khai tool theo bảng; nhóm Chỉ Creator khoá cứng (admin MẤT ghi KB/portal/gửi Lark/task Lark Hiếu
+  trong Bé Gấu — theo plan); cổng an toàn tool-policy áp cho Bé Gấu. QA: bảng hiện đúng, lưu được (đã xoá dòng thử, về mặc định).
+- U3b `950d0f19`: /api/chat → SSE; kế hoạch từng bước (updatePlan) + nút Dừng (QA đạt: giữ phần đã viết + "⏹ Đã dừng"); trí nhớ + tìm hội
+  thoại cũ cho Bé Gấu (mặc định TẮT, bật theo vai trò); `/chatbot?c=<id>` mở hội thoại.
+- `cad96efb`: bộ lọc lộ tên bảng/cột (`core/leak-filter.ts`) — eval #1/#15.
+- `92a6595d`: tool `b2bCustomerCm1` gọi thẳng handler quarterly-b2b-customers — QA vai trò b2b: top 5 KH Q3 khớp tuyệt đối route (MoMo 590.383.766 / 17,1%).
+- `1f866a94`: Trò chuyện trực tiếp Bé Gấu theo vai trò (`prepareBeGau`, `/api/chat/live/*`, nút 🎙).
+- tsc sạch, vitest 613 qua + 2 lỗi có sẵn (bc-datapool, bridge-version). Wiki `chatbot.md` §s228.
+**Còn U3**: chạy nền việc dài, đọc to (TTS), ghi âm→biên bản, việc theo lịch, nghiên cứu sâu, dịch trực tiếp; sửa lỗi mở §1 plan (cổng duyệt nhớ
+qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hiếu cần: thử 🎙 Trực tiếp ở Bé Gấu (mic thật), bật tính năng cho vai trò cần.
