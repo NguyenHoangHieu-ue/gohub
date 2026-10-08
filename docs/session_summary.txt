@@ -10906,3 +10906,7 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
 - (s228 tiếp) MERGE `main` 2026-10-08 (`4fe534ea`, theo yêu cầu Hiếu): U1b–U4 + U0 (Bé Gấu/Gấu Pro lõi chung, phân quyền tính năng,
   báo cáo buildReport, giao diện chat mới, ảnh Nano Banana/video Veo). Trước merge: tsc sạch, lint 0 lỗi, next build OK, vitest 620 pass
   (2 lỗi có sẵn: bc-datapool thiếu file mẫu, bridge-version zip; be-gau timeout khi chạy song song build — chạy riêng pass). Không có migration mới.
+- (s228 tiếp) U5a: khoá Gấu Pro chỉ còn Creator (`GP_CREATOR_ONLY`, màn hình "đã chuyển sang Bé Gấu", `gp_moved`), route 1 lần
+  `/api/admin/gau-pro-moved`. MERGE `main` 2026-10-08 (`ec512a40`). Đã chuyển 133 hội thoại [GP] của 12 người sang Bé Gấu (username → tên hiển
+  thị) trên production. seikobao: tên = username nên vẫn đếm 13 ở lần xem trước sau. DM Lark 10 người: CHƯA gửi — chờ Hiếu chốt bật nhóm tính
+  năng "theo vai trò" cho bod hay sửa nội dung tin.
