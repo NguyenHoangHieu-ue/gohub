@@ -10910,3 +10910,6 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
   `/api/admin/gau-pro-moved`. MERGE `main` 2026-10-08 (`ec512a40`). Đã chuyển 133 hội thoại [GP] của 12 người sang Bé Gấu (username → tên hiển
   thị) trên production. seikobao: tên = username nên vẫn đếm 13 ở lần xem trước sau. DM Lark 10 người: CHƯA gửi — chờ Hiếu chốt bật nhóm tính
   năng "theo vai trò" cho bod hay sửa nội dung tin.
+- (s228 tiếp) Hiếu chốt: tính năng thường mọi vai trò, tính năng đặc biệt (nhóm Theo quyền) chỉ Creator — `defaultMatrix()` bỏ mặc định admin
+  (`aaa9935b`, staging, CHƯA merge main). Đã DM Lark 10 người từng dùng Gấu Pro (gửi từ route staging, cùng bot): "Gấu Pro đã chuyển sang Bé
+  Gấu…" — 10/10 OK; bỏ qua `hieu`, `seikobao` (không có lark_id, tài khoản cũ/test).
