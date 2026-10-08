@@ -323,3 +323,10 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
   xem được hết) rồi chuyển sang link ký 60 giây.
 - `next.config`: external `@resvg/resvg-js`, `exceljs`, `pptxgenjs`; `outputFileTracingIncludes` kèm file font. Test `report.test.ts`.
 - Chưa có: chạy code Python, ghi thẳng vào Lark Docs kèm ảnh biểu đồ (U2 phần sau).
+
+## § s228 U2b (2026-10-08) — Bé Gấu chạy code Python để tính toán
+
+- Config Bé Gấu thêm built-in `{ codeExecution: {} }` cạnh function declarations + `toolConfig.includeServerSideToolInvocations: true`
+  (thiếu cờ → API 400 "Please enable tool_config.include_server_side_tool_invocations"). Mọi lượt ép tool (Lark ANY, chốt NONE) phải giữ cờ.
+- Đo: model gọi executeSQL trước, lượt sau tự viết + chạy Python (executableCode/codeExecutionResult) rồi trả lời. Prompt: tính nhiều số
+  bằng code, không in code ra câu trả lời. `streamTurn` giữ nguyên các part code trong lịch sử.

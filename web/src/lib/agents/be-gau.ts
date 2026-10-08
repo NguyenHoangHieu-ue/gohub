@@ -211,6 +211,10 @@ Dùng chart_type "line"/"area" cho chuỗi thời gian (dùng "lines" thay "bars
 - "cái đó / nó / này" → chỉ thực thể gần nhất vừa nói. Đổi chủ đề hoàn toàn → suy luận lại từ đầu.
 - Không chắc "cái đó" là gì → hỏi lại: "Bạn muốn xem [A] hay [B]?"
 
+## Tính toán bằng code (U2)
+Cần tính trên nhiều số (tăng trưởng %, tỷ trọng, trung bình, độ lệch, xếp hạng, dự phóng, so sánh nhiều kỳ) → chạy code Python với số
+ĐÃ LẤY từ công cụ dữ liệu, không nhẩm. KHÔNG in code ra câu trả lời — chỉ trình bày kết quả.
+
 ## Báo cáo / file đẹp (U2)
 Người dùng nhờ LÀM BÁO CÁO, xuất file Word/Excel/PowerPoint/PDF, làm slide → lấy số liệu trước, rồi gọi công cụ buildReport (khung: kết luận
 trước, mục có ô số / bảng / biểu đồ, việc nên làm, nguồn). Bảng và ô số kèm sql để số trong file khớp dữ liệu. Trả link tải nguyên văn.
@@ -556,7 +560,9 @@ export async function runBeGau(opts: BeGauOpts): Promise<{ text: string; sources
   const thinkingLevel = deepQuestion(lastMsg, fileContexts?.length ?? 0) ? ThinkingLevel.HIGH : ThinkingLevel.LOW
   const config = {
     systemInstruction,
-    tools: [{ functionDeclarations: toGenaiSchema(functionDeclarations) as any }],
+    // U2: chạy code Python (Gemini code execution) để tính toán thay vì nhẩm — dùng chung với tool của mình cần cờ includeServerSideToolInvocations.
+    tools: [{ codeExecution: {} }, { functionDeclarations: toGenaiSchema(functionDeclarations) as any }],
+    toolConfig: { includeServerSideToolInvocations: true },
     temperature: 0,
     thinkingConfig: { thinkingLevel },
     abortSignal: signal,
@@ -612,7 +618,7 @@ export async function runBeGau(opts: BeGauOpts): Promise<{ text: string; sources
   if (loop.unfinished) {
     try {
       contents.push({ role: "user", parts: [{ text: "(Hệ thống) Đã hết thời gian xử lý. Trả lời NGAY bằng dữ liệu đã lấy được ở trên, nói rõ phần nào chưa kịp kiểm tra. KHÔNG gọi thêm công cụ." }] })
-      genResult = await loop.next({ ...lowConfig, toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.NONE } } })
+      genResult = await loop.next({ ...lowConfig, toolConfig: { includeServerSideToolInvocations: true, functionCallingConfig: { mode: FunctionCallingConfigMode.NONE } } })
     } catch { /* rơi xuống câu dự phòng bên dưới */ }
   }
   const toolsUsed = loop.toolsUsed
@@ -623,7 +629,7 @@ export async function runBeGau(opts: BeGauOpts): Promise<{ text: string; sources
     try {
       contents.push({ role: "user", parts: [{ text: "(Hệ thống) Gọi larkWorkspace ngay để tạo đúng thứ người dùng nhờ trong Lark, dùng số liệu/nội dung vừa trả lời (tài liệu: nội dung markdown đầy đủ)." }] })
       const forced = await loop.next({
-        ...config, toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.ANY, allowedFunctionNames: ["larkWorkspace"] } },
+        ...config, toolConfig: { includeServerSideToolInvocations: true, functionCallingConfig: { mode: FunctionCallingConfigMode.ANY, allowedFunctionNames: ["larkWorkspace"] } },
       }, () => {})
       const parts: any[] = []
       for (const fc of forced.functionCalls.filter(f => f.name === "larkWorkspace")) {

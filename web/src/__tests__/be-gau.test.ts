@@ -152,7 +152,7 @@ describe("be-gau: tool declarations & role filter", () => {
     const box = captureConfig()
     await runBeGau({ geminiHistory: [], lastMsg: "test", role: "staff" })
 
-    const decls: any[] = box.config?.tools?.[0]?.functionDeclarations ?? []
+    const decls: any[] = box.config?.tools?.find((t: any) => t.functionDeclarations)?.functionDeclarations ?? []
     const names = decls.map((d: any) => d.name)
     expect(decls).toHaveLength(17)
     expect(names).toContain("buildReport")                // U2: file báo cáo đẹp — mọi vai trò
@@ -177,15 +177,18 @@ describe("be-gau: tool declarations & role filter", () => {
   test("admin: có tool nhóm Theo quyền, KHÔNG có tool Chỉ Creator", async () => {
     const box = captureConfig()
     await runBeGau({ geminiHistory: [], lastMsg: "test", role: "admin" })
-    const names = (box.config?.tools?.[0]?.functionDeclarations ?? []).map((d: any) => d.name)
+    const names = (box.config?.tools?.find((t: any) => t.functionDeclarations)?.functionDeclarations ?? []).map((d: any) => d.name)
     for (const n of ["browseWeb", "generateVideo", "checkVideoStatus"]) expect(names).toContain(n)
+    // U2: chạy code Python cùng tool của mình — bắt buộc cờ includeServerSideToolInvocations (API trả 400 nếu thiếu).
+    expect(box.config.tools.some((t: any) => t.codeExecution)).toBe(true)
+    expect(box.config.toolConfig?.includeServerSideToolInvocations).toBe(true)
     for (const n of CREATOR_ONLY) expect(names).not.toContain(n)
   })
 
   test("creator: có cả tool Chỉ Creator", async () => {
     const box = captureConfig()
     await runBeGau({ geminiHistory: [], lastMsg: "test", role: "creator" })
-    const names = (box.config?.tools?.[0]?.functionDeclarations ?? []).map((d: any) => d.name)
+    const names = (box.config?.tools?.find((t: any) => t.functionDeclarations)?.functionDeclarations ?? []).map((d: any) => d.name)
     for (const n of [...CREATOR_ONLY, "browseWeb", "generateVideo"]) expect(names).toContain(n)
   })
 
