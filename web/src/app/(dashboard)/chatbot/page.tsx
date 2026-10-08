@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
 import type { PlanStep } from "@/lib/agents/creator-ai"
 import ChatChart from "@/components/chat-chart"
+import { splitChartBlocks } from "@/lib/chat-charts"
 import { LiveSession } from "@/components/gau-pro/live-session"
 import { MeetingRecorder } from "@/components/be-gau/meeting-recorder"
 import { TranslateSession } from "@/components/be-gau/translate-session"
@@ -62,18 +63,6 @@ const AGENT_COLORS: Record<string, string> = {
 }
 
 // ─── Chart helpers ────────────────────────────────────────────────────────────
-
-function extractChartData(text: string): { chart: any; before: string; after: string } | null {
-  const m = text.match(/```chart\s*([\s\S]*?)\s*```/)
-  if (!m) return null
-  try {
-    const chart = JSON.parse(m[1])
-    if (!chart.chart_type || !chart.data) return null
-    const idx = text.indexOf("```chart")
-    const end = text.indexOf("```", idx + 7) + 3
-    return { chart, before: text.slice(0, idx).trim(), after: text.slice(end).trim() }
-  } catch { return null }
-}
 
 // ─── Markdown renderer (dùng chung, hoisted để BeGauMsgContent dùng được) ───────────────────────────
 function renderMarkdown(text: string) {
@@ -162,19 +151,14 @@ function BeGauMsgContent({ msg, streaming, isLast, rated, onFeedback, canSpeak }
   }
 
   const display = stripExportHelperBlocks(msg.content)
-  const chartResult = (msg.agent?.id === "bi-analyst" || msg.agent?.id === "data-explorer")
-    ? extractChartData(display) : null
+  const segments = splitChartBlocks(display)
 
   return (
     <div>
       <div ref={contentRef}>
-        {chartResult ? (
-          <>
-            {chartResult.before && renderMarkdown(chartResult.before)}
-            <ChatChart data={chartResult.chart} />
-            {chartResult.after && renderMarkdown(chartResult.after)}
-          </>
-        ) : renderMarkdown(display)}
+        {segments.map((sg, i) => sg.type === "chart"
+          ? <ChatChart key={i} data={sg.chart} />
+          : <div key={i}>{renderMarkdown(sg.text)}</div>)}
         {streaming && isLast && (
           <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 align-middle animate-pulse" />
         )}
