@@ -1,0 +1,1777 @@
+{
+  "label": "trace1",
+  "judgeModel": "gemini-pro-latest",
+  "at": "2026-10-07T15:29:48.432Z",
+  "rows": [
+    {
+      "id": 1,
+      "answer": "Tổng doanh thu từ **01/09/2026 đến 30/09/2026** của 4 sales đạt **588.996.790 VND** (với 1.136 đơn hàng hoàn thành). Trong đó, **Anh Liu** dẫn đầu với **167.767.600 VND**, tiếp theo là **Nhân Lâm** (142.941.790 VND), **Trinh Nguyễn** (139.845.620 VND) và **Trâm Huỳnh** (138.441.780 VND).\n\n---\n\n### Bảng chi tiết hiệu suất 4 sales (01/09/2026 – 30/09/2026)\n*(Số liệu ghi nhận theo nhân viên phụ trách tạo/xử lý đơn hàng)*\n\n| Nhân viên | Số đơn hàng | Doanh thu (VND) | Doanh thu 3HK (VND) | Lãi gộp - GP (VND) | Biên GP (%) |\n| :--- | :---: | :---: | :---: | :---: | :---: |\n| **Anh Liu** | 299 | 167.767.600 VND | 114.449.305 VND | 95.832.942 VND | 57,1% |\n| **Nhân Lâm** | 288 | 142.941.790 VND | 80.424.856 VND | 81.509.484 VND | 57,0% |\n| **Trinh Nguyễn** | 292 | 139.845.620 VND | 91.099.684 VND | 80.847.323 VND | 57,8% |\n| **Trâm Huỳnh** | 257 | 138.441.780 VND | 89.886.731 VND | 79.872.362 VND | 57,7% |\n| **Tổng cộng** | **1.136** | **588.996.790 VND** | **375.860.576 VND** | **338.062.111 VND** | **57,4%** |\n\n```chart\n{\"chart_type\":\"bar\",\"title\":\"Doanh thu & Lãi gộp theo Nhân viên (Tháng 9/2026)\",\"data\":[{\"staff\":\"Anh Liu\",\"revenue\":167767600,\"gp\":95832942},{\"staff\":\"Nhân Lâm\",\"revenue\":142941790,\"gp\":81509484},{\"staff\":\"Trinh Nguyễn\",\"revenue\":139845620,\"gp\":80847323},{\"staff\":\"Trâm Huỳnh\",\"revenue\":138441780,\"gp\":79872362}],\"x_key\":\"staff\",\"bars\":[{\"key\":\"revenue\",\"label\":\"Doanh thu\",\"color\":\"#7c3aed\"},{\"key\":\"gp\",\"label\":\"Lãi gộp (GP)\",\"color\":\"#10b981\"}]}\n```\n\n### Nhận xét nhanh:\n1. **Mức độ đồng đều**: Doanh số giữa các bạn tương đối sát sao (dao động 138M – 168M VND/người), số lượng đơn xử lý trung bình đạt ~284 đơn/người.\n2. **Biên lợi nhuận gộp (GP %)**: Đạt mức rất ổn định và cao (~57,0% – 57,8%), chủ yếu nhờ tỷ trọng đóng góp từ Datapool 3HK duy trì ở mức cao (chiếm ~63,8% tổng doanh thu của nhóm).",
+      "toolsUsed": [
+        "executeSQL"
+      ],
+      "tokensIn": 219608,
+      "tokensOut": 2766,
+      "ms": 44939,
+      "trace": {
+        "promptChars": 37248,
+        "declChars": 9186,
+        "thinking": "LOW",
+        "rounds": [
+          {
+            "ms": 3073,
+            "tin": 16307,
+            "tout": 51,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 1719,
+            "tin": 16467,
+            "tout": 38,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3146,
+            "tin": 16650,
+            "tout": 47,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3781,
+            "tin": 16978,
+            "tout": 58,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 1853,
+            "tin": 17134,
+            "tout": 48,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 2366,
+            "tin": 17311,
+            "tout": 237,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3842,
+            "tin": 18081,
+            "tout": 253,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 2739,
+            "tin": 18775,
+            "tout": 255,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3218,
+            "tin": 19341,
+            "tout": 251,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 4031,
+            "tin": 20116,
+            "tout": 292,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3280,
+            "tin": 20756,
+            "tout": 313,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 6900,
+            "tin": 21692,
+            "tout": 923,
+            "calls": []
+          }
+        ],
+        "tools": [
+          {
+            "name": "executeSQL",
+            "ms": 261,
+            "chars": 369
+          },
+          {
+            "name": "executeSQL",
+            "ms": 43,
+            "chars": 509
+          },
+          {
+            "name": "executeSQL",
+            "ms": 32,
+            "chars": 658
+          },
+          {
+            "name": "executeSQL",
+            "ms": 36,
+            "chars": 354
+          },
+          {
+            "name": "executeSQL",
+            "ms": 770,
+            "chars": 322
+          },
+          {
+            "name": "executeSQL",
+            "ms": 519,
+            "chars": 1228
+          },
+          {
+            "name": "executeSQL",
+            "ms": 505,
+            "chars": 1112
+          },
+          {
+            "name": "executeSQL",
+            "ms": 30,
+            "chars": 834
+          },
+          {
+            "name": "executeSQL",
+            "ms": 506,
+            "chars": 1194
+          },
+          {
+            "name": "executeSQL",
+            "ms": 30,
+            "chars": 932
+          },
+          {
+            "name": "executeSQL",
+            "ms": 491,
+            "chars": 1366
+          }
+        ]
+      },
+      "group": "A",
+      "role": "b2c",
+      "question": "Doanh thu từ 1/9 đến 30/9 của 4 sales: Anh Liu, Trâm Huỳnh, Nhân Lâm, Trinh Nguyễn",
+      "judge": {
+        "scores": {
+          "dung_so": 2,
+          "nghiep_vu": 2,
+          "du_y": 2,
+          "ro_rang": 2,
+          "an_toan": 2
+        },
+        "total": 10,
+        "note": "Số liệu chính xác, đáp ứng đầy đủ yêu cầu của câu hỏi và tiêu chí riêng. Trình bày rõ ràng, không vi phạm quy tắc an toàn hay nghiệp vụ."
+      }
+    },
+    {
+      "id": 3,
+      "answer": "Lũy kế **Quý 3/2026 (01/07/2026 – 30/09/2026)**, sale **Mỹ Nga** ghi nhận tổng doanh thu đạt **45.606.960 VND** theo khách hàng phụ trách (hoặc **46.245.160 VND** theo nhân viên trực tiếp tạo đơn), trong đó doanh thu **3HK đạt 29.193.017 VND** (chiếm 64,0%) và lãi gộp đạt **16.408.757 VND**.\n\nDoanh thu của nhân viên kinh doanh có 2 cách ghi nhận trên hệ thống GoHub:\n\n1. **Theo khách hàng phụ trách (B2B Sales PIC)**: Ghi nhận toàn bộ đơn hàng từ các đối tác/khách hàng do Mỹ Nga quản lý (chuẩn báo cáo B2B & Staff Performance).\n2. **Theo nhân viên trực tiếp tạo đơn**: Ghi nhận các đơn hàng do tài khoản Mỹ Nga thao tác tạo trực tiếp trên hệ thống.\n\n---\n\n### Bảng tổng hợp hiệu suất Quý 3/2026\n\n| Tiêu chí | Theo KH phụ trách (B2B PIC) | Theo người tạo đơn trực tiếp |\n|---|---:|---:|\n| **Số khách hàng phát sinh đơn** | 15 khách hàng | — |\n| **Số lượng đơn hàng** | 78 đơn | 78 đơn |\n| **Tổng doanh thu** | **45.606.960 VND** | **46.245.160 VND** |\n| **3HK Revenue** | **29.193.017 VND** | **29.861.217 VND** |\n| **Tỷ trọng 3HK Contribution** | 64,0% | 64,6% |\n| **Lãi gộp (Gross Profit)** | 16.408.757 VND | 16.621.968 VND |\n| **Biên lãi gộp (GPM%)** | 36,0% | 35,9% |\n| **CM1 (tạm tính)** | **16.408.757 VND** | **16.621.968 VND** |\n\n```chart\n{\n  \"chart_type\": \"bar\",\n  \"title\": \"Hiệu suất lũy kế Quý 3/2026 - Sale Mỹ Nga\",\n  \"data\": [\n    {\n      \"metric\": \"Theo KH phụ trách (PIC)\",\n      \"revenue\": 45606960,\n      \"hk3\": 29193017,\n      \"gp\": 16408757\n    },\n    {\n      \"metric\": \"Theo người tạo đơn\",\n      \"revenue\": 46245160,\n      \"hk3\": 29861217,\n      \"gp\": 16621968\n    }\n  ],\n  \"x_key\": \"metric\",\n  \"bars\": [\n    { \"key\": \"revenue\", \"label\": \"Tổng doanh thu\", \"color\": \"#7c3aed\" },\n    { \"key\": \"hk3\", \"label\": \"3HK Revenue\", \"color\": \"#0ea5e9\" },\n    { \"key\": \"gp\", \"label\": \"Lãi gộp / CM1 tạm tính\", \"color\": \"#10b981\" }\n  ]\n}\n```\n\n---\n\n### Lưu ý về chỉ số CM1\n- **CM1 ở trên là số tạm tính** (tương đương Gross Profit): Chưa trừ phần chi phí vận hành nhóm (Group Cost) phân bổ theo tỷ trọng doanh thu và chi phí riêng từng khách hàng nhập bổ sung tại Báo cáo Quý (Quarter Report).\n- Để xem số CM1 chính thức sau khi phân bổ đầy đủ chi phí quản lý và chiết khấu riêng theo từng khách hàng, bạn có thể đối chiếu thêm tại tab **Quarter Report** trên hệ thống.",
+      "toolsUsed": [
+        "executeSQL",
+        "readKnowledgeBase"
+      ],
+      "tokensIn": 337060,
+      "tokensOut": 2528,
+      "ms": 91741,
+      "trace": {
+        "promptChars": 38642,
+        "declChars": 9186,
+        "thinking": "HIGH",
+        "rounds": [
+          {
+            "ms": 5418,
+            "tin": 16614,
+            "tout": 39,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 1993,
+            "tin": 17274,
+            "tout": 38,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 4046,
+            "tin": 17535,
+            "tout": 29,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 2284,
+            "tin": 17756,
+            "tout": 38,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 4035,
+            "tin": 18255,
+            "tout": 45,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3290,
+            "tin": 18903,
+            "tout": 36,
+            "calls": [
+              "readKnowledgeBase"
+            ]
+          },
+          {
+            "ms": 9861,
+            "tin": 21703,
+            "tout": 134,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 2424,
+            "tin": 22518,
+            "tout": 72,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 4348,
+            "tin": 29607,
+            "tout": 39,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 10358,
+            "tin": 29763,
+            "tout": 278,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3330,
+            "tin": 30892,
+            "tout": 249,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 6485,
+            "tin": 31490,
+            "tout": 290,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 9505,
+            "tin": 32181,
+            "tout": 302,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 19619,
+            "tin": 32569,
+            "tout": 939,
+            "calls": []
+          }
+        ],
+        "tools": [
+          {
+            "name": "executeSQL",
+            "ms": 698,
+            "chars": 303
+          },
+          {
+            "name": "executeSQL",
+            "ms": 40,
+            "chars": 510
+          },
+          {
+            "name": "executeSQL",
+            "ms": 33,
+            "chars": 392
+          },
+          {
+            "name": "executeSQL",
+            "ms": 36,
+            "chars": 1177
+          },
+          {
+            "name": "executeSQL",
+            "ms": 34,
+            "chars": 1828
+          },
+          {
+            "name": "readKnowledgeBase",
+            "ms": 874,
+            "chars": 8027
+          },
+          {
+            "name": "executeSQL",
+            "ms": 472,
+            "chars": 489
+          },
+          {
+            "name": "executeSQL",
+            "ms": 91,
+            "chars": 14839
+          },
+          {
+            "name": "executeSQL",
+            "ms": 87,
+            "chars": 215
+          },
+          {
+            "name": "executeSQL",
+            "ms": 0,
+            "chars": 91
+          },
+          {
+            "name": "executeSQL",
+            "ms": 420,
+            "chars": 829
+          },
+          {
+            "name": "executeSQL",
+            "ms": 596,
+            "chars": 970
+          }
+        ]
+      },
+      "group": "A",
+      "role": "b2b",
+      "question": "Cho tôi báo cáo tổng doanh thu, 3HK revenue, và CM1 của sale Mỹ Nga lũy kế quý 3",
+      "judge": {
+        "scores": {
+          "dung_so": 2,
+          "nghiep_vu": 2,
+          "du_y": 2,
+          "ro_rang": 2,
+          "an_toan": 2
+        },
+        "total": 10,
+        "note": "Số liệu chính xác, giải thích rõ ràng 2 cách tính, đáp ứng đầy đủ các tiêu chí và trình bày rất trực quan."
+      }
+    },
+    {
+      "id": 9,
+      "answer": "Trong **tháng 9/2026**, kênh **MoMo** (*VN OD Momo*) ghi nhận tổng cộng **6.428 đơn hàng** thành công.\n\n### Chi tiết số liệu:\n- **Kỳ dữ liệu:** 01/09/2026 – 30/09/2026\n- **Nguồn đơn:** `VN OD Momo` (mã nguồn `S0050` - nhóm kênh B2B)\n- **Số đơn hàng (Orders):** **6.428 đơn**\n- **Số lượng SIM/eSIM bán ra (Items/Qty):** 6.454 sản phẩm\n- **Tổng doanh thu:** **965.568.523 VND**",
+      "toolsUsed": [
+        "executeSQL"
+      ],
+      "tokensIn": 52022,
+      "tokensOut": 569,
+      "ms": 15597,
+      "trace": {
+        "promptChars": 38568,
+        "declChars": 9186,
+        "thinking": "LOW",
+        "rounds": [
+          {
+            "ms": 2836,
+            "tin": 16897,
+            "tout": 178,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 5810,
+            "tin": 17304,
+            "tout": 221,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 4390,
+            "tin": 17821,
+            "tout": 170,
+            "calls": []
+          }
+        ],
+        "tools": [
+          {
+            "name": "executeSQL",
+            "ms": 673,
+            "chars": 644
+          },
+          {
+            "name": "executeSQL",
+            "ms": 488,
+            "chars": 793
+          }
+        ]
+      },
+      "group": "B",
+      "role": "staff",
+      "question": "đơn momo thnags 9 bao nhiêu đơn",
+      "judge": {
+        "scores": {
+          "dung_so": 2,
+          "nghiep_vu": 2,
+          "du_y": 2,
+          "ro_rang": 2,
+          "an_toan": 2
+        },
+        "total": 10,
+        "note": "Trả lời chính xác, rõ ràng, đúng số liệu và không vi phạm an toàn."
+      }
+    },
+    {
+      "id": 10,
+      "answer": "**Doanh thu mảng VN B2C tuần 21/9–27/9/2026 đạt 306.979.850 VND (647 đơn), tăng trưởng +5,0% (+14.559.850 VND)** so với tuần 14/9–20/9/2026 (đạt 292.420.000 VND, 614 đơn). Đà tăng trưởng diễn ra đồng đều ở cả 3 kênh bán lẻ nội địa, trong đó **Misc. (Zalo/Facebook)** và **VN-Web eSIM** tiếp tục đóng vai trò trụ cột, chiếm hơn 95% tổng doanh thu VN B2C.\n\n---\n\n### Bảng so sánh doanh thu VN B2C (Tuần 21/9–27/9 vs Tuần 14/9–20/9)\n\n*Kỳ đối soát: Tuần 1 (14/09/2026 – 20/09/2026) và Tuần 2 (21/09/2026 – 27/09/2026).*\n\n| Kênh bán (Channel) | Tuần 14/9–20/9 (VND) | Đơn T1 | Tuần 21/9–27/9 (VND) | Đơn T2 | Chênh lệch (VND) | Tăng trưởng (%) | Tỷ trọng tuần 21–27/9 |\n|---|---:|---:|---:|---:|---:|---:|---:|\n| **Misc.** *(Zalo / Facebook / Other)* | 162.150.000 | 302 | 168.733.000 | 315 | +6.583.000 | +4,1% | 55,0% |\n| **VN-Web eSIM** | 116.450.000 | 281 | 123.544.400 | 298 | +7.094.400 | +6,1% | 40,2% |\n| **VN-Web SIM** | 13.820.000 | 31 | 14.702.450 | 34 | +882.450 | +6,4% | 4,8% |\n| **Tổng cộng VN B2C** | **292.420.000** | **614** | **306.979.850** | **647** | **+14.559.850** | **+5,0%** | **100,0%** |\n\n```chart\n{\n  \"chart_type\": \"bar\",\n  \"title\": \"So sánh doanh thu các kênh VN B2C giữa 2 tuần (VND)\",\n  \"x_key\": \"channel\",\n  \"bars\": [\n    {\"key\": \"w1_rev\", \"label\": \"Tuần 14/9–20/9\", \"color\": \"#94a3b8\"},\n    {\"key\": \"w2_rev\", \"label\": \"Tuần 21/9–27/9\", \"color\": \"#7c3aed\"}\n  ],\n  \"data\": [\n    {\"channel\": \"Misc. (Social/Chat)\", \"w1_rev\": 162150000, \"w2_rev\": 168733000},\n    {\"channel\": \"VN-Web eSIM\", \"w1_rev\": 116450000, \"w2_rev\": 123544400},\n    {\"channel\": \"VN-Web SIM\", \"w1_rev\": 13820000, \"w2_rev\": 14702450}\n  ]\n}\n```\n\n---\n\n### Nhận xét & Đánh giá\n\n1. **Kênh Misc. (Nguồn tư vấn Social / Chat Zalo & FB) giữ tỷ trọng áp đảo:**\n   - Đạt **168.733.000 VND** (+4,1%), chiếm 55,0% tổng doanh số VN B2C.\n   - *Lưu ý hệ thống:* Từ ngày 12/08/2026, toàn bộ đơn phát sinh qua kênh Zalo và Facebook được hệ thống ghi nhận vào nguồn \"Other\" (nằm trong kênh Misc.). Do đó doanh số tư vấn trực tiếp của đội ngũ Sales/CS tập trung toàn bộ ở đây. Biên lãi gộp (GP margin) của nhóm này duy trì rất tốt ở mức ≈ 57,7%.\n\n2. **Kênh VN-Web eSIM tăng trưởng ổn định:**\n   - Đạt **123.544.400 VND** (+6,1%), tăng 17 đơn (+6,0%).\n   - Tốc độ mua trực tiếp qua website tiếp tục gia tăng nhờ trải nghiệm thanh toán nhận eSIM tự động tức thì. Giá trị trung bình đơn (AOV) duy trì quanh mức ≈ 414.000 VND/đơn, biên lãi gộp đạt ≈ 56,3%.\n\n3. **Kênh VN-Web SIM (SIM vật lý giao tận nơi):**\n   - Đạt **14.702.450 VND** (+6,4%), 34 đơn hàng.\n   - Nhu cầu SIM vật lý giữ mức ổn định ở phân khúc khách hàng dùng máy chưa hỗ trợ eSIM hoặc có nhu cầu nhận phôi SIM trước chuyến đi. Tỷ trọng SIM vật lý ở mức ≈ 4,8%, biên lãi gộp đạt ≈ 58,4%.\n\n---\n\n### Đề xuất hành động\n\n- **Tối ưu phễu tư vấn trên Zalo/Facebook:** Kênh Misc. đang mang lại hơn một nửa doanh số B2C; team CS/Sales tiếp tục duy trì SLA phản hồi nhanh dưới 3 phút và đẩy mạnh kịch bản upsell các gói dung lượng cao/gói nhiều ngày.\n- **Đẩy mạnh các tuyến điểm du lịch mùa thu trên Web:** Tập trung làm nổi bật các gói eSIM điểm đến trọng điểm mùa thu (Nhật Bản, Hàn Quốc, Châu Âu, Đài Loan) trên giao diện trang chủ website để đón đầu đà tăng trưởng tự nhiên của khách tự đặt.",
+      "toolsUsed": [
+        "executeSQL",
+        "readKnowledgeBase"
+      ],
+      "tokensIn": 313662,
+      "tokensOut": 3896,
+      "ms": 154822,
+      "trace": {
+        "promptChars": 38629,
+        "declChars": 9186,
+        "thinking": "HIGH",
+        "rounds": [
+          {
+            "ms": 4702,
+            "tin": 16608,
+            "tout": 51,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3362,
+            "tin": 17147,
+            "tout": 52,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 2073,
+            "tin": 17459,
+            "tout": 26,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 2061,
+            "tin": 17899,
+            "tout": 68,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 4118,
+            "tin": 18793,
+            "tout": 178,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 7242,
+            "tin": 19631,
+            "tout": 206,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 5295,
+            "tin": 20634,
+            "tout": 40,
+            "calls": [
+              "readKnowledgeBase"
+            ]
+          },
+          {
+            "ms": 28784,
+            "tin": 23683,
+            "tout": 496,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 6719,
+            "tin": 24896,
+            "tout": 51,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 4120,
+            "tin": 25541,
+            "tout": 195,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3408,
+            "tin": 26465,
+            "tout": 210,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 5855,
+            "tin": 27191,
+            "tout": 191,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 8273,
+            "tin": 28328,
+            "tout": 657,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 62329,
+            "tin": 29387,
+            "tout": 1475,
+            "calls": []
+          }
+        ],
+        "tools": [
+          {
+            "name": "executeSQL",
+            "ms": 1668,
+            "chars": 325
+          },
+          {
+            "name": "executeSQL",
+            "ms": 27,
+            "chars": 378
+          },
+          {
+            "name": "executeSQL",
+            "ms": 29,
+            "chars": 1210
+          },
+          {
+            "name": "executeSQL",
+            "ms": 32,
+            "chars": 1990
+          },
+          {
+            "name": "executeSQL",
+            "ms": 507,
+            "chars": 1244
+          },
+          {
+            "name": "executeSQL",
+            "ms": 594,
+            "chars": 1261
+          },
+          {
+            "name": "readKnowledgeBase",
+            "ms": 272,
+            "chars": 8403
+          },
+          {
+            "name": "executeSQL",
+            "ms": 227,
+            "chars": 1365
+          },
+          {
+            "name": "executeSQL",
+            "ms": 36,
+            "chars": 1850
+          },
+          {
+            "name": "executeSQL",
+            "ms": 457,
+            "chars": 1404
+          },
+          {
+            "name": "executeSQL",
+            "ms": 609,
+            "chars": 1020
+          },
+          {
+            "name": "executeSQL",
+            "ms": 1133,
+            "chars": 1730
+          }
+        ]
+      },
+      "group": "B",
+      "role": "b2c",
+      "question": "so sánh và nhận xét doanh thu tuần 21/9–27/9 với tuần 14/9–20/9 của các channel vn b2c",
+      "judge": {
+        "scores": {
+          "dung_so": 2,
+          "nghiep_vu": 2,
+          "du_y": 2,
+          "ro_rang": 2,
+          "an_toan": 2
+        },
+        "total": 10,
+        "note": "Trả lời tốt, đáp ứng đầy đủ yêu cầu, có lưu ý về việc VN-Social ghi vào Misc."
+      }
+    },
+    {
+      "id": 13,
+      "answer": "**Tổng doanh thu VN B2C đạt 1.795.088.825 VND (T6/2026), 1.652.397.450 VND (T7/2026) và 1.672.995.250 VND (T8/2026).**\n\nDưới đây là chi tiết phân bổ doanh thu theo từng kênh và nguồn đơn hàng thực tế từ ngày 01/06/2026 đến 31/08/2026:\n\n---\n\n### 1. Doanh thu theo Kênh bán (Channel)\n\n| Kênh bán | Tháng 6/2026 | Tháng 7/2026 | Tháng 8/2026 |\n| :--- | :--- | :--- | :--- |\n| **VN-Social** | 998.372.675 VND | 908.540.600 VND | 290.057.700 VND |\n| **VN-Web eSIM** | 693.991.313 VND | 650.761.050 VND | 653.209.990 VND |\n| **VN-Web SIM** | 88.228.935 VND | 77.536.800 VND | 111.494.870 VND |\n| **Misc. (Vãng lai & Khác)** | 14.495.902 VND | 15.559.000 VND | 618.232.690 VND |\n| **Tổng cộng** | **1.795.088.825 VND** | **1.652.397.450 VND** | **1.672.995.250 VND** |\n\n```chart\n{\"chart_type\":\"bar\",\"title\":\"Doanh thu VN B2C theo kênh (T6 - T8/2026)\",\"data\":[{\"month\":\"T6/2026\",\"VN_Social\":998372675,\"VN_Web_eSIM\":693991313,\"VN_Web_SIM\":88228935,\"Misc\":14495902},{\"month\":\"T7/2026\",\"VN_Social\":908540600,\"VN_Web_eSIM\":650761050,\"VN_Web_SIM\":77536800,\"Misc\":15559000},{\"month\":\"T8/2026\",\"VN_Social\":290057700,\"VN_Web_eSIM\":653209990,\"VN_Web_SIM\":111494870,\"Misc\":618232690}],\"x_key\":\"month\",\"bars\":[{\"key\":\"VN_Social\",\"label\":\"VN-Social\",\"color\":\"#3b82f6\"},{\"key\":\"VN_Web_eSIM\",\"label\":\"VN-Web eSIM\",\"color\":\"#10b981\"},{\"key\":\"VN_Web_SIM\",\"label\":\"VN-Web SIM\",\"color\":\"#f59e0b\"},{\"key\":\"Misc\",\"label\":\"Misc.\",\"color\":\"#8b5cf6\"}]}\n```\n\n---\n\n### 2. Breakdown chi tiết theo từng Nguồn đơn hàng (Order Source)\n\n| Nhóm kênh | Nguồn đơn hàng cụ thể | Tháng 6/2026 | Tháng 7/2026 | Tháng 8/2026 |\n| :--- | :--- | :--- | :--- | :--- |\n| **VN-Social** | VN B2C Zalo | 837.296.007 VND | 742.467.000 VND | 245.076.500 VND |\n| | VN B2C Facebook | 156.152.334 VND | 162.853.600 VND | 43.771.200 VND |\n| | VN B2C Instagram | 3.034.334 VND | 2.101.000 VND | 350.000 VND |\n| | VN B2C WhatsApp | 1.890.000 VND | 1.119.000 VND | 860.000 VND |\n| **VN-Web eSIM**| VN B2C ESIM GOHUBVN | 693.991.313 VND | 650.761.050 VND | 653.209.990 VND |\n| **VN-Web SIM** | VN B2C Web SIM | 88.228.935 VND | 77.536.800 VND | 111.494.870 VND |\n| **Misc.** | VN B2C Walk in | 14.495.902 VND | 15.559.000 VND | 2.933.000 VND |\n| | VN B2C Other | — | — | 615.299.690 VND |\n\n---\n\n### 📌 Lưu ý về dữ liệu:\n- **Biến động tháng 8/2026**: Doanh thu kênh `VN-Social` giảm và `Misc.` tăng đột biến trong tháng 8 là do từ ngày **12/08/2026**, các đơn hàng qua Zalo/Facebook được hệ thống ghi nhận vào nguồn **\"VN B2C Other\"** (kênh `Misc.`). Đây là thay đổi về mặt ghi nhận phân loại kênh, không phản ánh sự sụt giảm bán hàng thực tế.",
+      "toolsUsed": [
+        "executeSQL"
+      ],
+      "tokensIn": 77698,
+      "tokensOut": 2046,
+      "ms": 35019,
+      "trace": {
+        "promptChars": 38629,
+        "declChars": 9186,
+        "thinking": "LOW",
+        "rounds": [
+          {
+            "ms": 4103,
+            "tin": 16621,
+            "tout": 267,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 11894,
+            "tin": 19377,
+            "tout": 206,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 4700,
+            "tin": 20568,
+            "tout": 190,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 10882,
+            "tin": 21132,
+            "tout": 1383,
+            "calls": []
+          }
+        ],
+        "tools": [
+          {
+            "name": "executeSQL",
+            "ms": 778,
+            "chars": 4995
+          },
+          {
+            "name": "executeSQL",
+            "ms": 774,
+            "chars": 1940
+          },
+          {
+            "name": "executeSQL",
+            "ms": 534,
+            "chars": 844
+          }
+        ]
+      },
+      "group": "B",
+      "role": "b2c",
+      "question": "Doanh thu VN B2C tháng 6 7 8. Breakdowns từng kênh",
+      "judge": {
+        "scores": {
+          "dung_so": 2,
+          "nghiep_vu": 2,
+          "du_y": 2,
+          "ro_rang": 2,
+          "an_toan": 2
+        },
+        "total": 10,
+        "note": "Câu trả lời xuất sắc, số liệu chính xác, trình bày rõ ràng, giải thích đúng sự thật nghiệp vụ về việc ghi nhận nguồn đơn hàng trong tháng 8."
+      }
+    },
+    {
+      "id": 20,
+      "answer": "**Giai đoạn 24/09 đến 30/09/2026, số bán thị trường Thái Lan đã bước vào giai đoạn phục hồi rõ nét sau khi chạm đáy vào tuần giữa tháng 9 do ảnh hưởng của đợt bão lũ tại miền Bắc Thái Lan.** Tổng doanh số đạt **1.166 đơn hàng** (tăng **+15,0%**), tổng sản lượng đạt **3.708 SIM** và doanh thu đạt **389.029.844 VND** (tăng **+162,7%**, trong đó có đơn sỉ B2B lớn 2.000 SIM vào ngày 30/09).\n\n---\n\n### 1. Bảng số liệu chi tiết Thái Lan theo ngày (24/09 – 30/09/2026)\n\n| Ngày | Số đơn hàng | Số lượng SIM | Doanh thu (VND) | Lãi gộp GP (VND) | Biên GP% |\n| :---: | :---: | :---: | :---: | :---: | :---: |\n| **24/09/2026** | 128 | 146 | 16.315.757 | 3.831.539 | 23,5% |\n| **25/09/2026** | 193 | 220 | 27.117.415 | 6.408.892 | 23,6% |\n| **26/09/2026** | 198 | 374 | 45.671.090 | 12.156.706 | 26,6% |\n| **27/09/2026** | 133 | 149 | 17.612.447 | 5.071.389 | 28,8% |\n| **28/09/2026** | 164 | 225 | 27.970.391 | 6.908.889 | 24,7% |\n| **29/09/2026** | 148 | 168 | 22.364.087 | 6.841.442 | 30,6% |\n| **30/09/2026** | 202 | 2.426 | 231.978.658 | 10.133.231 | 4,4% |\n| **Tổng cộng** | **1.166** | **3.708** | **389.029.844** | **51.352.088** | **13,2%** |\n\n*(Ghi chú: Ngày 30/09 có 1 đơn sỉ B2B lớn 2.000 SIM của đối tác Javamifi và 200 SIM của SIM Local với giá chiết khấu đại lý mỏng, nên biên GP chung của ngày này kéo xuống 4,4%; các ngày thường trong tuần duy trì GP từ 23,5% – 30,6%).*\n\n```chart\n{\"chart_type\":\"bar\",\"title\":\"Doanh thu bán SIM Thái Lan theo ngày (24/09 - 30/09/2026)\",\"data\":[{\"day\":\"24/09\",\"revenue\":16315757,\"gp\":3831539},{\"day\":\"25/09\",\"revenue\":27117415,\"gp\":6408892},{\"day\":\"26/09\",\"revenue\":45671090,\"gp\":12156706},{\"day\":\"27/09\",\"revenue\":17612447,\"gp\":5071389},{\"day\":\"28/09\",\"revenue\":27970391,\"gp\":6908889},{\"day\":\"29/09\",\"revenue\":22364087,\"gp\":6841442},{\"day\":\"30/09\",\"revenue\":231978658,\"gp\":10133231}],\"x_key\":\"day\",\"bars\":[{\"key\":\"revenue\",\"label\":\"Doanh thu (VND)\",\"color\":\"#3b82f6\"},{\"key\":\"gp\",\"label\":\"Lãi gộp GP (VND)\",\"color\":\"#10b981\"}]}\n```\n\n---\n\n### 2. So sánh xu hướng 2 kỳ: 24/09 – 30/09 so với 17/09 – 23/09\n\n| Chỉ số | Kỳ trước (17/09 – 23/09) | Kỳ này (24/09 – 30/09) | Chênh lệch (±) | Tỷ lệ tăng/giảm (%) |\n|---|:---:|:---:|:---:|:---:|\n| **Số đơn hàng** | 1.014 đơn | 1.166 đơn | +152 đơn | **+15,0%** |\n| **Số lượng SIM bán** | 1.208 SIM | 3.708 SIM | +2.500 SIM | **+207,0%** |\n| *— Lượng SIM thường (loại trừ bulk 2.000)* | *1.208 SIM* | *1.708 SIM* | *+500 SIM* | ***+41,4%*** |\n| **Doanh thu** | 148.092.798 VND | 389.029.844 VND | +240.937.046 VND | **+162,7%** |\n| *— Doanh thu thường (loại trừ bulk 2.000)* | *148.092.798 VND* | *209.727.444 VND* | *+61.634.646 VND* | ***+41,6%*** |\n| **Lãi gộp (GP)** | 42.188.821 VND | 51.352.088 VND | +9.163.267 VND | **+21,7%** |\n| **Tỷ trọng trong tổng doanh thu GoHub** | 11,7% | 25,9% *(thường ≈ 15,8%)* | +14,2% | **Phục hồi mức bình thường** |\n\n---\n\n### 3. Phân hóa xu hướng theo kênh: B2B vs B2C\n\n| Kênh bán | Kỳ 17/09 – 23/09 (Đơn) | Kỳ 24/09 – 30/09 (Đơn) | Chênh lệch đơn | Doanh thu 17/09 – 23/09 | Doanh thu 24/09 – 30/09 | Đánh giá xu hướng |\n|---|:---:|:---:|:---:|:---:|:---:|---|\n| **B2B (Đại lý & Sỉ)** | 889 đơn | 1.071 đơn | **+182 đơn (+20,5%)** | 120.237.675 VND | 367.688.437 VND | **Phục hồi mạnh mẽ**, đối tác đã gom hàng đón tour tháng 10. |\n| **B2C (Bán lẻ)** | 118 đơn | 90 đơn | **-28 đơn (-23,7%)** | 27.855.123 VND | 21.341.407 VND | **Tiếp tục suy giảm nhẹ**, khách lẻ tự túc còn tâm lý dè dặt. |\n\n---\n\n### 4. Nhận xét & Liên hệ thực tế ngập lụt Thái Lan\n\n1. **Tác động của đợt bão lũ:**\n   - Hoàn lưu bão Yagi và mưa lớn kéo dài từ giữa tháng 9 đã gây ngập lụt, sạt lở nghiêm trọng tại **miền Bắc Thái Lan** (tập trung ở Chiang Rai, Chiang Mai, Mae Sai) khiến sân bay Chiang Rai từng phải đóng chuyến và giao thông tê liệt.\n   - Sự việc này khiến số bán Thái Lan của GoHub **lao dốc mạnh nhất vào tuần từ 17/09 đến 23/09** (doanh thu tụt từ ~239 triệu xuống 148 triệu VND, thị phần giảm xuống chỉ còn 11,7%).\n2. **Xu hướng phục hồi từ 24/09 đến 30/09:**\n   - **Đã qua đáy và phục hồi:** Lượng đơn hàng thường tăng +41,4%, tổng đơn tăng +15,0%. Thị phần Thái Lan quay lại mức ~15,8% – 25,9% tổng doanh thu GoHub.\n   - **Tâm lý khách hàng:** \n     - **Đại lý B2B** nhận thấy khu vực ngập chỉ tập trung ở miền Bắc (Chiang Mai, Chiang Rai), trong khi các trung tâm du lịch lớn như Bangkok, Pattaya, Phuket, Hua Hin... hoàn toàn bình thường, nên đã nhanh chóng đặt hàng cho mùa tour tháng 10.\n     - **Khách lẻ B2C** phản ứng chậm hơn do đọc tin tức lũ lụt trên báo chí và mạng xã hội, dẫn đến việc hoãn chuyến hoặc dời lịch mua SIM/eSIM.\n\n---\n\n### 5. Đề xuất hành động cho team\n\n1. **Đối với Sales & CS:**\n   - Chủ động tư vấn trấn an khách hàng: Các tuyến du lịch trọng điểm (Bangkok, Pattaya, Phuket, đảo miền Nam) thời tiết và hạ tầng mạng TrueMove/DTAC hoạt động hoàn toàn bình thường.\n   - Nhắc khách về chính sách khuyến mãi hấp dẫn hiện tại của Thái Lan (TrueMove đang nâng cấp gói 15GB lên 35GB Max Speed, gói 50GB thành không giới hạn tốc độ cao).\n2. **Đối với Marketing:**\n   - Lên các bài viết/video cập nhật tình hình thực tế các điểm đến an toàn tại Thái Lan nhằm giải tỏa tâm lý e ngại cho tệp khách du lịch tự túc (B2C).",
+      "toolsUsed": [
+        "executeSQL",
+        "webSearch"
+      ],
+      "tokensIn": 353919,
+      "tokensOut": 5731,
+      "ms": 170259,
+      "trace": {
+        "promptChars": 37790,
+        "declChars": 9186,
+        "thinking": "HIGH",
+        "rounds": [
+          {
+            "ms": 4627,
+            "tin": 17142,
+            "tout": 49,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 2508,
+            "tin": 17680,
+            "tout": 51,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 5362,
+            "tin": 18403,
+            "tout": 218,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 5963,
+            "tin": 19460,
+            "tout": 290,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 5337,
+            "tin": 23047,
+            "tout": 311,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 4218,
+            "tin": 25455,
+            "tout": 253,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 24181,
+            "tin": 26829,
+            "tout": 500,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 5878,
+            "tin": 28537,
+            "tout": 37,
+            "calls": [
+              "webSearch"
+            ]
+          },
+          {
+            "ms": 8863,
+            "tin": 32183,
+            "tout": 416,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 6891,
+            "tin": 34013,
+            "tout": 316,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 9132,
+            "tin": 35752,
+            "tout": 287,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 8771,
+            "tin": 36845,
+            "tout": 538,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 45594,
+            "tin": 38573,
+            "tout": 2465,
+            "calls": []
+          }
+        ],
+        "tools": [
+          {
+            "name": "executeSQL",
+            "ms": 967,
+            "chars": 323
+          },
+          {
+            "name": "executeSQL",
+            "ms": 36,
+            "chars": 1834
+          },
+          {
+            "name": "executeSQL",
+            "ms": 454,
+            "chars": 1472
+          },
+          {
+            "name": "executeSQL",
+            "ms": 472,
+            "chars": 4920
+          },
+          {
+            "name": "executeSQL",
+            "ms": 467,
+            "chars": 3468
+          },
+          {
+            "name": "executeSQL",
+            "ms": 421,
+            "chars": 2593
+          },
+          {
+            "name": "executeSQL",
+            "ms": 671,
+            "chars": 1791
+          },
+          {
+            "name": "webSearch",
+            "ms": 25425,
+            "chars": 7375
+          },
+          {
+            "name": "executeSQL",
+            "ms": 703,
+            "chars": 1833
+          },
+          {
+            "name": "executeSQL",
+            "ms": 435,
+            "chars": 1989
+          },
+          {
+            "name": "executeSQL",
+            "ms": 1029,
+            "chars": 1161
+          },
+          {
+            "name": "executeSQL",
+            "ms": 740,
+            "chars": 1618
+          }
+        ]
+      },
+      "group": "C",
+      "role": "staff",
+      "question": "kiểm tra tình hình số bán Thái Lan 24/9 đến 30/9 xem xu hướng Thái Lan như thế nào, nghe nói Thái Lan đang bị ảnh hưởng ngập lụt",
+      "judge": {
+        "scores": {
+          "dung_so": 2,
+          "nghiep_vu": 2,
+          "du_y": 2,
+          "ro_rang": 2,
+          "an_toan": 2
+        },
+        "total": 10,
+        "note": "Câu trả lời xuất sắc, đáp ứng đầy đủ các tiêu chí. Số liệu chi tiết, logic, phân tích xu hướng rõ ràng và có căn cứ thực tế về tình hình ngập lụt tại Thái Lan. Trình bày gọn gàng, kết luận ngay từ đầu và không vi phạm quy tắc an toàn."
+      }
+    },
+    {
+      "id": 23,
+      "answer": "**Trong tháng 9/2026, quy mô kinh doanh giảm sút so với tháng 8 do bước qua mùa thấp điểm du lịch:** Doanh thu đạt **6.272.109.104 VND** (giảm **27,1%**), số đơn hàng đạt **26.314 đơn** (giảm **13,7%**), số lượng SIM/eSIM bán ra (unit sold) đạt **40.632 units** (giảm **27,2%**), và giá trị đơn hàng trung bình (AOV) giảm **15,5%** xuống còn **238.356 VND/đơn**.\n\n---\n\n### 1. Bảng tổng hợp so sánh Tháng 9 vs Tháng 8/2026\n\n*Kỳ số liệu: 01/08/2026 – 31/08/2026 so với 01/09/2026 – 30/09/2026 (dữ liệu Fulfillment thực tế).*\n\n| Chỉ số | Tháng 8/2026 | Tháng 9/2026 | Chênh lệch (T9 − T8) | Tăng trưởng (%MoM) |\n|---|---:|---:|---:|---:|\n| **Doanh thu** | 8.598.564.110 VND | 6.272.109.104 VND | −2.326.455.006 VND | **−27,1%** |\n| **Số đơn hàng (Orders)** | 30.490 đơn | 26.314 đơn | −4.176 đơn | **−13,7%** |\n| **Số lượng bán (Unit Sold)** | 55.796 units | 40.632 units | −15.164 units | **−27,2%** |\n| **Giá trị đơn TB (AOV)** | 282.013 VND | 238.356 VND | −43.657 VND | **−15,5%** |\n| *Số unit trung bình / đơn* | 1,83 units/đơn | 1,54 units/đơn | −0,29 units/đơn | −15,6% |\n| *Giá bán trung bình / unit* | 154.107 VND | 154.364 VND | +257 VND | +0,2% |\n\n*(Nếu chỉ tính các đơn thương mại B2B & B2C, loại trừ đơn tiêu dùng nội bộ: Đơn hàng giảm từ 30.402 → 26.239 đơn (−13,7%); AOV giảm từ 282.829 VND → 239.038 VND (−15,5%)).*\n\n```chart\n{\"chart_type\":\"bar\",\"title\":\"So sánh Doanh thu và Đơn hàng Tháng 8 vs Tháng 9/2026\",\"data\":[{\"month\":\"Tháng 8\",\"revenue\":8598564110,\"orders\":30490},{\"month\":\"Tháng 9\",\"revenue\":6272109104,\"orders\":26314}],\"x_key\":\"month\",\"bars\":[{\"key\":\"revenue\",\"label\":\"Doanh thu (VND)\",\"color\":\"#7c3aed\"}]}\n```\n\n---\n\n### 2. Chi tiết theo từng khối kinh doanh (B2B vs B2C)\n\n| Khối kinh doanh | Chỉ số | Tháng 8/2026 | Tháng 9/2026 | Chênh lệch | %MoM |\n|---|---|---:|---:|---:|---:|\n| **B2B (Khách sỉ & Đối tác)** | **Doanh thu** | 6.726.441.045 VND | 4.867.734.961 VND | −1.858.706.084 VND | **−27,6%** |\n| | **Đơn hàng** | 26.181 đơn | 21.081 đơn | −5.100 đơn | **−19,5%** |\n| | **Unit Sold** | 48.797 units | 33.774 units | −15.023 units | **−30,8%** |\n| | **AOV** | 256.921 VND | 230.906 VND | −26.015 VND | **−10,1%** |\n| **B2C (Bán lẻ)** | **Doanh thu** | 1.872.123.065 VND | 1.404.374.143 VND | −467.748.922 VND | **−25,0%** |\n| | **Đơn hàng** | 4.221 đơn | 5.158 đơn | +937 đơn | **+22,2%** |\n| | **Unit Sold** | 6.884 units | 6.753 units | −131 units | **−1,9%** |\n| | **AOV** | 443.526 VND | 272.271 VND | −171.255 VND | **−38,6%** |\n\n---\n\n### 3. Nhận xét & Nguyên nhân chính\n\n1. **Hiệu ứng chu kỳ mùa vụ (Seasonality):**\n   - Tháng 8 là tháng cao điểm cuối cùng của mùa du lịch hè quốc tế. Bước sang tháng 9, lượng khách du lịch giảm mạnh do bắt đầu năm học mới và chu kỳ đi lại thấp điểm, kéo tụt sản lượng cả hai khối.\n2. **Khối B2B sụt giảm sâu ở các kênh sỉ lớn:**\n   - Kênh đại lý bán sỉ lẻ lớn nhất (`VN-Wholesales`) sụt giảm từ 1,77 tỷ VND (14.541 units) xuống còn 942 triệu VND (7.327 units), tương đương giảm gần 47% doanh thu.\n   - Các cổng đối tác ví điện tử / OTA lớn như Momo (giảm từ 1,26 tỷ xuống 966 triệu VND), VN-Ecom và Klook cũng đồng loạt giảm 20% – 35% về số lượng đơn và units.\n3. **Hiện tượng nghịch lý B2C: Đơn hàng tăng +22,2% nhưng Doanh thu giảm −25% và AOV giảm sâu −38,6%:**\n   - **Thay đổi ghi nhận nguồn đơn:** Từ giữa tháng 8 (12/08/2026), đơn Zalo/Facebook chuyển sang ghi nhận vào nguồn \"Other\" (kênh Misc.). Trong tháng 9, kênh Misc. ghi nhận đột biến lên 3.325 đơn (tăng thêm hơn 2.030 đơn so với tháng 8), trong khi VN-Social về 0 đơn.\n   - Các đơn qua kênh Misc. có giá trị trung bình rất thấp (~201.000 VND/đơn) so với các đơn mua trực tiếp trên Website (`VN-Web eSIM` ~423.000 VND/đơn), dẫn đến việc AOV trung bình toàn khối B2C bị kéo giảm mạnh từ 443.526 VND xuống còn 272.271 VND.\n   - Website bán lẻ trực tiếp (`VN-Web eSIM`, `VN-Web SIM`) giảm ~24% lượng đơn do lượng khách tự túc đặt SIM hè đã chững lại.\n\n---\n\n### 4. Đề xuất hành động cho Tháng 10\n\n- **Kích cầu B2B cho mùa thu/đông:** Đẩy mạnh các chương trình ưu đãi tour mùa lá đỏ (Nhật Bản, Hàn Quốc) và tour Tết sớm cho các đối tác đại lý lữ hành để phục hồi lượng bán sỉ.\n- **Tối ưu giỏ hàng B2C nâng AOV:** Thiết lập thêm các gói combo ngày dài hơn hoặc combo nạp data (Top-up/Multi-country) trên Web và kênh Social/Misc. để cải thiện giá trị trung bình đơn hàng.\n- **Rà soát phân loại đơn kênh Misc.:** Phối hợp cùng team Tech/Ops để chuẩn hóa luồng gán kênh cho các đơn chat/mạng xã hội, tránh dồn chung vào kênh Misc. làm nhiễu dữ liệu AOV của B2C.",
+      "toolsUsed": [
+        "executeSQL",
+        "readKnowledgeBase",
+        "querySupabase"
+      ],
+      "tokensIn": 375694,
+      "tokensOut": 4298,
+      "ms": 141992,
+      "trace": {
+        "promptChars": 39149,
+        "declChars": 9186,
+        "thinking": "HIGH",
+        "rounds": [
+          {
+            "ms": 5639,
+            "tin": 16661,
+            "tout": 117,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3270,
+            "tin": 17733,
+            "tout": 60,
+            "calls": [
+              "readKnowledgeBase"
+            ]
+          },
+          {
+            "ms": 23251,
+            "tin": 21803,
+            "tout": 186,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 2912,
+            "tin": 22629,
+            "tout": 58,
+            "calls": [
+              "querySupabase"
+            ]
+          },
+          {
+            "ms": 1683,
+            "tin": 22779,
+            "tout": 26,
+            "calls": [
+              "querySupabase"
+            ]
+          },
+          {
+            "ms": 3501,
+            "tin": 24398,
+            "tout": 48,
+            "calls": [
+              "querySupabase"
+            ]
+          },
+          {
+            "ms": 11551,
+            "tin": 25902,
+            "tout": 403,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 4923,
+            "tin": 27353,
+            "tout": 228,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 6325,
+            "tin": 28387,
+            "tout": 159,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 6409,
+            "tin": 29490,
+            "tout": 334,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 16278,
+            "tin": 30825,
+            "tout": 229,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 11530,
+            "tin": 33061,
+            "tout": 226,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 15887,
+            "tin": 36344,
+            "tout": 241,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 17777,
+            "tin": 38329,
+            "tout": 1983,
+            "calls": []
+          }
+        ],
+        "tools": [
+          {
+            "name": "executeSQL",
+            "ms": 858,
+            "chars": 945
+          },
+          {
+            "name": "readKnowledgeBase",
+            "ms": 324,
+            "chars": 11596
+          },
+          {
+            "name": "executeSQL",
+            "ms": 919,
+            "chars": 825
+          },
+          {
+            "name": "querySupabase",
+            "ms": 346,
+            "chars": 91
+          },
+          {
+            "name": "querySupabase",
+            "ms": 864,
+            "chars": 2435
+          },
+          {
+            "name": "querySupabase",
+            "ms": 881,
+            "chars": 2197
+          },
+          {
+            "name": "executeSQL",
+            "ms": 1130,
+            "chars": 1697
+          },
+          {
+            "name": "executeSQL",
+            "ms": 1348,
+            "chars": 1418
+          },
+          {
+            "name": "executeSQL",
+            "ms": 497,
+            "chars": 734
+          },
+          {
+            "name": "executeSQL",
+            "ms": 868,
+            "chars": 1289
+          },
+          {
+            "name": "executeSQL",
+            "ms": 801,
+            "chars": 2064
+          },
+          {
+            "name": "executeSQL",
+            "ms": 888,
+            "chars": 5217
+          }
+        ]
+      },
+      "group": "D",
+      "role": "bod",
+      "question": "So sánh đơn hàng, doanh thu, unit sold, aov của tháng 9 và tháng 8",
+      "judge": {
+        "scores": {
+          "dung_so": 2,
+          "nghiep_vu": 2,
+          "du_y": 2,
+          "ro_rang": 2,
+          "an_toan": 2
+        },
+        "total": 10,
+        "note": "Câu trả lời xuất sắc, số liệu chính xác (độ lệch các chỉ số tổng so với B2B+B2C đều ≤0,5% và có ghi chú rõ ràng), áp dụng đúng sự thật nghiệp vụ về việc chuyển nguồn đơn Zalo/Facebook sang Misc., trình bày rõ ràng, đủ ý và đảm bảo an toàn dữ liệu."
+      }
+    },
+    {
+      "id": 24,
+      "answer": "Trong top 10 thị trường có doanh thu lớn nhất **Quý 3/2026 (01/07/2026 – 30/09/2026)**, **Thái Lan (THA)** là thị trường có **biên lợi nhuận gộp thấp nhất**, chỉ đạt **27,2%** dù đóng góp doanh thu đứng thứ 2 toàn hệ thống (đạt hơn **4,53 tỷ VND**).\n\n---\n\n### 1. Bảng số liệu Top 10 thị trường doanh thu Quý 3/2026\n\n*(Dữ liệu ghi nhận từ hệ thống fulfillment từ 01/07/2026 đến 30/09/2026)*\n\n| STT | Mã | Thị trường | Doanh thu (VND) | Lợi nhuận gộp (GP) | Biên lãi (GM%) | Tỷ trọng DT |\n|:---:|:---|:---|---:|---:|:---:|:---:|\n| 1 | CHN | Trung Quốc | 7.439.178.823 VND | 2.394.734.773 VND | 32,2% | 32,5% |\n| **2** | **THA** | **Thái Lan** | **4.526.654.126 VND** | **1.231.705.221 VND** | **27,2%** | **19,8%** |\n| 3 | JPN | Nhật Bản | 2.170.579.432 VND | 833.732.433 VND | 38,4% | 9,5% |\n| 4 | EU1 | Châu Âu (31 nước) | 1.067.561.141 VND | 496.621.585 VND | 46,5% | 4,7% |\n| 5 | KOR | Hàn Quốc | 860.109.019 VND | 381.918.106 VND | 44,4% | 3,8% |\n| 6 | AS4 | Châu Á 4 nước | 754.919.230 VND | 355.881.476 VND | 47,1% | 3,3% |\n| 7 | USA | Mỹ | 620.615.360 VND | 280.778.810 VND | 45,2% | 2,7% |\n| 8 | SGP | Singapore | 522.714.265 VND | 229.721.365 VND | 44,0% | 2,3% |\n| 9 | ANZ | Úc & New Zealand | 455.608.951 VND | 228.949.011 VND | 50,3% | 2,0% |\n| 10 | MAL | Malaysia | 450.122.979 VND | 160.870.612 VND | 35,7% | 2,0% |\n\n```chart\n{\"chart_type\":\"bar\",\"title\":\"Biên lãi gộp (GM%) Top 10 thị trường doanh thu Q3/2026\",\"x_axis\":\"Thị trường\",\"y_axis\":\"Biên lãi (%)\",\"data\":[{\"label\":\"Úc-NZ (ANZ)\",\"value\":50.3},{\"label\":\"Châu Á 4N (AS4)\",\"value\":47.1},{\"label\":\"Châu Âu (EU1)\",\"value\":46.5},{\"label\":\"Mỹ (USA)\",\"value\":45.2},{\"label\":\"Hàn Quốc (KOR)\",\"value\":44.4},{\"label\":\"Singapore (SGP)\",\"value\":44.0},{\"label\":\"Nhật Bản (JPN)\",\"value\":38.4},{\"label\":\"Malaysia (MAL)\",\"value\":35.7},{\"label\":\"Trung Quốc (CHN)\",\"value\":32.2},{\"label\":\"Thái Lan (THA)\",\"value\":27.2}]}\n```\n\n---\n\n### 2. Vì sao biên lãi Thái Lan lại thấp nhất?\n\nNguyên nhân **KHÔNG PHẢI do giá vốn (COGS)**, mà xuất phát hoàn toàn từ **CƠ CẤU KÊNH & GIÁ BÁN B2B**:\n\n1. **Nguồn cung Truemove đã là giá vốn rẻ nhất thị trường**:\n   - Hiện GoHub nhập gói Thái Lan chủ yếu từ **Truemove** (chiếm ~88,3% doanh thu Thái Lan), với giá vốn chỉ khoảng **≈ 3,4 USD/gói 15GB** (~91.900 VND/SIM). Mức giá này rẻ hơn đáng kể so với Datapool (5,1 – 5,8 USD). Do đó, giá vốn của GoHub ở thị trường này đang ở mức tối ưu nhất có thể.\n2. **Kênh sỉ B2B chiếm tỷ trọng áp đảo với giá bán rất thấp**:\n   - Kênh B2B chiếm tới **88,2%** doanh thu Thái Lan (3,99 tỷ VND / 4,53 tỷ VND), với biên lãi trung bình chỉ đạt **24,3%** (giá bán trung bình chỉ ~116.200 VND/SIM).\n   - Ngược lại, kênh bán lẻ B2C có biên lãi rất cao (**50,3%**, giá bán bình quân ~165.400 VND/SIM) nhưng chỉ đóng góp 11,8% doanh thu nên không đủ kéo biên lãi toàn thị trường lên.\n3. **Các đối tác B2B lớn được bán sát giá vốn**:\n   - Một số đối tác sỉ / OTA lớn có sản lượng cao nhưng biên lãi rất mỏng:\n     - **US Klook**: Doanh thu 797,7 triệu VND nhưng GM% chỉ đạt **3,1%** (GP chỉ 24,3 triệu VND).\n     - **B2B - Javamifi**: Doanh thu 363,9 triệu VND, GM% chỉ **9,4%**.\n     - **B2B - Yidao Travel**: Doanh thu 406,4 triệu VND, GM% **15,7%**.\n     - Các khách sỉ Mức I khác (Anh Công, Chị Yến Thư) dao động khoảng **13,3% – 13,4%**.\n\n---\n\n### 3. Nên làm gì? (Đề xuất giải pháp)\n\n> ⚠️ **Lưu ý chiến lược quan trọng**: **TUYỆT ĐỐI KHÔNG** chuyển các gói Thái Lan sang Datapool để giảm giá vốn, vì Datapool hiện có giá vốn 5,1 – 5,8 USD (cao hơn nhiều so với mức 3,4 USD của Truemove), chuyển sang sẽ làm giá vốn đội lên và biên lãi càng sụt giảm.\n\nCác hành động nên triển khai:\n\n1. **Rà soát chính sách giá và thiết lập sàn biên lãi (Margin Floor) cho B2B**:\n   - Đàm phán lại biểu giá với nhóm đối tác biên lãi dưới 10% (đặc biệt là US Klook và Javamifi). Cần tăng nhẹ giá bán (+2% đến +5%) hoặc yêu cầu cam kết sản lượng tối thiểu (MOQ) rõ ràng theo tháng/quý để tiếp tục giữ mức giá sỉ ưu đãi này.\n   - Giữ mức biên sàn tối thiểu cho các hợp đồng đại lý sỉ mới từ 18% – 20%.\n2. **Đẩy mạnh tỷ trọng bán lẻ B2C (Rebalancing Mix)**:\n   - Tăng cường ngân sách truyền thông và hiển thị sản phẩm Thái Lan trên các kênh B2C (Website GoHub, Shopee, TikTok Shop) để tăng tỷ trọng bán lẻ — nơi có biên lãi vượt trội trên 50%.\n3. **Đa dạng hóa gói cước & Upsell (Combo / Dịch vụ gia tăng)**:\n   - Thay vì cạnh tranh gay gắt ở gói dung lượng cố định 15GB truyền thống, tận dụng chính sách ưu đãi của Truemove/DTAC để mở rộng các gói có thời hạn dài hơn (10 - 15 ngày), gói kèm thoại nội địa hoặc tích hợp eSIM du lịch để gia tăng giá trị đơn hàng (AOV) và nâng biên lợi nhuận.\n4. **Đàm phán Rebate theo sản lượng với Truemove**:\n   - Với lượng tiêu thụ rất lớn (hơn 34.000 SIM/eSIM trong Q3), GoHub có vị thế tốt để đàm phán thêm chính sách hoàn tiền theo bậc doanh số (volume rebate) từ đại lý/nhà mạng Truemove để tiếp tục hạ nhẹ chi phí vốn đầu vào.",
+      "toolsUsed": [
+        "executeSQL",
+        "readKnowledgeBase"
+      ],
+      "tokensIn": 315384,
+      "tokensOut": 4053,
+      "ms": 126278,
+      "trace": {
+        "promptChars": 37938,
+        "declChars": 9186,
+        "thinking": "HIGH",
+        "rounds": [
+          {
+            "ms": 5745,
+            "tin": 16576,
+            "tout": 56,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3378,
+            "tin": 17360,
+            "tout": 35,
+            "calls": [
+              "readKnowledgeBase"
+            ]
+          },
+          {
+            "ms": 10331,
+            "tin": 20549,
+            "tout": 50,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 7146,
+            "tin": 21729,
+            "tout": 48,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 2173,
+            "tin": 22161,
+            "tout": 38,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 13765,
+            "tin": 22855,
+            "tout": 68,
+            "calls": [
+              "readKnowledgeBase"
+            ]
+          },
+          {
+            "ms": 7653,
+            "tin": 27600,
+            "tout": 306,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 9532,
+            "tin": 29404,
+            "tout": 362,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 5874,
+            "tin": 31550,
+            "tout": 364,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 14107,
+            "tin": 33113,
+            "tout": 340,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 11016,
+            "tin": 35013,
+            "tout": 345,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 26948,
+            "tin": 37474,
+            "tout": 2041,
+            "calls": []
+          }
+        ],
+        "tools": [
+          {
+            "name": "executeSQL",
+            "ms": 932,
+            "chars": 336
+          },
+          {
+            "name": "readKnowledgeBase",
+            "ms": 895,
+            "chars": 8398
+          },
+          {
+            "name": "executeSQL",
+            "ms": 249,
+            "chars": 1849
+          },
+          {
+            "name": "executeSQL",
+            "ms": 32,
+            "chars": 1205
+          },
+          {
+            "name": "executeSQL",
+            "ms": 29,
+            "chars": 1975
+          },
+          {
+            "name": "readKnowledgeBase",
+            "ms": 335,
+            "chars": 12563
+          },
+          {
+            "name": "executeSQL",
+            "ms": 1012,
+            "chars": 2262
+          },
+          {
+            "name": "executeSQL",
+            "ms": 799,
+            "chars": 1486
+          },
+          {
+            "name": "executeSQL",
+            "ms": 1016,
+            "chars": 2030
+          },
+          {
+            "name": "executeSQL",
+            "ms": 998,
+            "chars": 1950
+          },
+          {
+            "name": "executeSQL",
+            "ms": 1003,
+            "chars": 2259
+          }
+        ]
+      },
+      "group": "D",
+      "role": "product",
+      "question": "Thị trường nào biên lãi thấp nhất trong top 10 doanh thu quý 3, vì sao, nên làm gì?",
+      "judge": {
+        "scores": {
+          "dung_so": 2,
+          "nghiep_vu": 2,
+          "du_y": 2,
+          "ro_rang": 2,
+          "an_toan": 2
+        },
+        "total": 10,
+        "note": "Câu trả lời xuất sắc, đáp ứng đầy đủ các tiêu chí. Số liệu chính xác (biên lãi Thái Lan 27,2% sát với tham chiếu 27,5%), giải thích đúng nghiệp vụ (biên thấp do giá bán B2B, không phải do giá vốn), đưa ra đề xuất hợp lý và tuân thủ tuyệt đối các quy tắc an toàn (không đề xuất chuyển sang Datapool, không lộ SQL)."
+      }
+    },
+    {
+      "id": 25,
+      "answer": "**%Datapool trong Quý 3/2026 đạt 67,8%**, và **mục tiêu cho Quý 4/2026 là 75%** (hướng tới 80% tổng doanh thu toàn hệ thống).\n\n---\n\n### 1. Số liệu chi tiết & Mục tiêu\n\n* **Công thức xác định:** `%Datapool` = (Doanh thu qua 3HK Datapool + BC Datapool) ÷ Tổng doanh thu.\n* **Thực tế Quý 3/2026:** Đạt **67,8%**.\n* **Mục tiêu Quý 4/2026:** Đặt mốc **75%** (kế hoạch mở rộng đạt 80% – 82% vào cuối kỳ Q4).\n\n---\n\n### 2. Kế hoạch hành động để đạt mục tiêu Q4\n\nĐể nâng tỷ trọng Datapool từ **67,8% lên 75%**, GoHub tập trung triển khai các nhóm giải pháp trọng tâm:\n\n1. **Chuyển đổi SKU từ Vendor nhỏ lẻ sang Datapool:**\n   * Thay thế các nhà cung cấp lẻ ở các tuyến thị trường trọng điểm (Châu Âu, Mỹ, Đông Nam Á) sang hạ tầng Datapool để vừa tối ưu giá vốn (COGS) vừa nâng tỷ trọng gộp.\n   * Chuyển đổi tệp khách hàng B2B từ các gói dung lượng cố định (Fixed GB) của vendor ngoài sang gói Datapool.\n\n2. **Xử lý các thị trường đặc thù sang BC Datapool:**\n   * **Đài Loan & Hồng Kông:** Hiện đang dùng nguồn WorldMove do 3HK yêu cầu định danh (KYC). Giải pháp là hoàn thiện chuyển đổi sang **BC Datapool** để bỏ bớt rào cản KYC và kéo doanh thu về nhóm Datapool.\n\n3. **Kích hoạt & tối ưu tenant Datapool:**\n   * Hoạt động tối đa các tenant Datapool (3HK Tenant US & VN, BC Datapool) để phân bổ đều lưu lượng trên Top 10 thị trường có doanh số cao nhất.\n\n*(Lưu ý nghiệp vụ: Thái Lan tiếp tục duy trì Truemove vì đây là nguồn rẻ nhất (~3,4 USD/gói 15GB so với 5,1–5,8 USD Datapool), không ép chuyển sang Datapool đối với thị trường này).*",
+      "toolsUsed": [
+        "executeSQL"
+      ],
+      "tokensIn": 32812,
+      "tokensOut": 754,
+      "ms": 12214,
+      "trace": {
+        "promptChars": 36103,
+        "declChars": 9186,
+        "thinking": "LOW",
+        "rounds": [
+          {
+            "ms": 3183,
+            "tin": 16165,
+            "tout": 213,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 5641,
+            "tin": 16647,
+            "tout": 541,
+            "calls": []
+          }
+        ],
+        "tools": [
+          {
+            "name": "executeSQL",
+            "ms": 225,
+            "chars": 794
+          }
+        ]
+      },
+      "group": "D",
+      "role": "product",
+      "question": "%Datapool quý 3 bao nhiêu, mục tiêu Q4 là bao nhiêu, cần làm gì để đạt?",
+      "judge": {
+        "scores": {
+          "dung_so": 1,
+          "nghiep_vu": 2,
+          "du_y": 2,
+          "ro_rang": 2,
+          "an_toan": 2
+        },
+        "total": 9,
+        "note": "Câu trả lời đưa ra đúng các số liệu về tỷ lệ %Datapool quý 3 và mục tiêu quý 4, nhưng thiếu số liệu cần thêm khoảng 1,65 tỷ/quý qua Datapool như trong đáp án tham chiếu. Các nghiệp vụ về ưu tiên vendor, xử lý thị trường Đài Loan/Hồng Kông và Thái Lan đều chính xác."
+      }
+    },
+    {
+      "id": 27,
+      "answer": "**Doanh thu Quý 3/2026 đạt 22,93 tỷ VND, giảm 2,84 tỷ VND (-11,0%) so với Quý 2/2026 (25,77 tỷ VND).**\n\nNguyên nhân sụt giảm chính đến từ **khối B2B giảm 1,92 tỷ VND** (chiếm 67,4% tổng mức giảm) do sự thu hẹp mạnh của các đối tác OTA lớn, cùng với **khối B2C giảm thực tế 928 triệu VND** (-15,4%).\n\n---\n\n### 1. Tổng hợp doanh thu Q2 vs Q3/2026\n\n| Kênh bán | Doanh thu Q2/2026 (VND) | Doanh thu Q3/2026 (VND) | Chênh lệch (VND) | % Thay đổi |\n|---|---:|---:|---:|---:|\n| **B2B** | 19.736.039.253 | 17.820.485.599 | -1.915.553.654 | -9,7% |\n| **B2C** | 6.036.926.983 | 5.108.744.434 | -928.182.549 | -15,4% |\n| **Tổng cộng** | **25.772.966.235** | **22.929.230.033** | **-2.843.736.202** | **-11,0%** |\n\n```chart\n{\"chart_type\":\"bar\",\"title\":\"So sánh Doanh thu Q2 vs Q3/2026 theo khối (VND)\",\"data\":[{\"quarter\":\"Q2/2026\",\"B2B\":19736039253,\"B2C\":6036926983},{\"quarter\":\"Q3/2026\",\"B2B\":17820485599,\"B2C\":5108744434}],\"x_key\":\"quarter\",\"bars\":[{\"key\":\"B2B\",\"label\":\"B2B\",\"color\":\"#7c3aed\"},{\"key\":\"B2C\",\"label\":\"B2C\",\"color\":\"#06b6d4\"}]}\n```\n\n---\n\n### 2. Các nguyên nhân sụt giảm cụ thể\n\n#### a. Khối B2B sụt giảm sâu ở các đối tác OTA và đại lý lớn (-1,92 tỷ VND)\n- **Sụt giảm mạnh tại các OTA quốc tế & trong nước:**\n  - **Traveloka:** Doanh thu giảm từ 1,82 tỷ VND xuống 572 triệu VND (**giảm 1,25 tỷ VND**, tương đương -68,6%).\n  - **Klook:** Giảm từ 1,70 tỷ VND xuống 1,24 tỷ VND (**giảm 454 triệu VND**, -26,8%).\n- **Kênh bán sỉ (VN-Wholesales):** Giảm từ 5,70 tỷ VND xuống 4,31 tỷ VND (**giảm 1,39 tỷ VND**, -24,3%). Trong đó, một số khách hàng lớn giảm mạnh như *Sim Station* (giảm 532 triệu VND), *Anh Công* (giảm 371 triệu VND).\n- **Kênh Sàn Ecom (VN-Ecom Shopee B2B):** Giảm từ 3,08 tỷ VND xuống 2,67 tỷ VND (**giảm 414 triệu VND**, -13,4%).\n- *(Bù đắp một phần nhờ tăng trưởng tích cực từ Shopeepay B2B tăng +1,32 tỷ VND (+140%) và Momo tăng +234 triệu VND).*\n\n#### b. Khối B2C giảm ở kênh Web và biến động ghi nhận Social (-928 triệu VND)\n- **VN-Web eSIM:** Giảm từ 2,04 tỷ VND xuống 1,85 tỷ VND (**giảm 190 triệu VND**, -9,3%).\n- **Lưu ý dịch chuyển dữ liệu kênh Social sang Misc.:**\n  - Trên số liệu, kênh *VN-Social* giảm 1,90 tỷ VND (từ 3,10 tỷ xuống 1,20 tỷ VND), trong khi kênh *Misc.* tăng 1,27 tỷ VND (từ 36 triệu lên 1,30 tỷ VND). \n  - **Nguyên nhân kỹ thuật ghi nhận:** Từ ngày 12/08/2026, các đơn Zalo/Facebook được hệ thống ghi nhận vào nguồn \"Other\" (thuộc kênh Misc.), do đó mức giảm thực tế của mảng Social/Misc. gộp lại là **khoảng 629 triệu VND** chứ không phải sụt giảm toàn bộ 1,9 tỷ VND.",
+      "toolsUsed": [
+        "executeSQL"
+      ],
+      "tokensIn": 187373,
+      "tokensOut": 3370,
+      "ms": 80404,
+      "trace": {
+        "promptChars": 37798,
+        "declChars": 9186,
+        "thinking": "LOW",
+        "rounds": [
+          {
+            "ms": 3222,
+            "tin": 16402,
+            "tout": 213,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3509,
+            "tin": 16886,
+            "tout": 207,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 12501,
+            "tin": 17437,
+            "tout": 244,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 12485,
+            "tin": 18244,
+            "tout": 240,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 5030,
+            "tin": 21263,
+            "tout": 368,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 7763,
+            "tin": 22792,
+            "tout": 367,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 11427,
+            "tin": 23919,
+            "tout": 196,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 4864,
+            "tin": 24577,
+            "tout": 382,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 9377,
+            "tin": 25853,
+            "tout": 1153,
+            "calls": []
+          }
+        ],
+        "tools": [
+          {
+            "name": "executeSQL",
+            "ms": 247,
+            "chars": 724
+          },
+          {
+            "name": "executeSQL",
+            "ms": 989,
+            "chars": 791
+          },
+          {
+            "name": "executeSQL",
+            "ms": 1346,
+            "chars": 1204
+          },
+          {
+            "name": "executeSQL",
+            "ms": 1505,
+            "chars": 5827
+          },
+          {
+            "name": "executeSQL",
+            "ms": 1165,
+            "chars": 2545
+          },
+          {
+            "name": "executeSQL",
+            "ms": 1235,
+            "chars": 1698
+          },
+          {
+            "name": "executeSQL",
+            "ms": 861,
+            "chars": 1125
+          },
+          {
+            "name": "executeSQL",
+            "ms": 2098,
+            "chars": 2064
+          }
+        ]
+      },
+      "group": "D",
+      "role": "bod",
+      "question": "Doanh thu quý 3 giảm so với quý 2 do đâu?",
+      "judge": {
+        "scores": {
+          "dung_so": 2,
+          "nghiep_vu": 2,
+          "du_y": 1,
+          "ro_rang": 2,
+          "an_toan": 2
+        },
+        "total": 9,
+        "note": "Câu trả lời thiếu phân rã theo thị trường và vendor như yêu cầu của tiêu chí riêng, do đó cũng không nhắc đến lưu ý về mã SKU cũ ở quý 2. Các số liệu tổng và phân rã theo kênh chính xác, giải thích đúng sự thật nghiệp vụ về kênh Social/Misc."
+      }
+    },
+    {
+      "id": 33,
+      "answer": "Tuyến Nhật Bản (Japan) hiện áp dụng theo **thứ tự ưu tiên chung** của GoHub:\n\n1. **Ưu tiên số 1:** **3HK Datapool** (hoặc nguồn rẻ hơn theo thứ tự ưu tiên).\n2. **Ưu tiên số 2:** **BC Datapool**.\n3. **Ưu tiên số 3:** Sản phẩm có kèm **Số điện thoại nội địa (local phone number)** nếu khách có nhu cầu nghe gọi/nhận OTP tại Nhật.\n4. **Các vendor khác:** WorldMove (WM), JoyTel, v.v.\n\n---\n\n### 📌 Lưu ý riêng về KDDI đối với tuyến Nhật:\n* **KDDI chỉ cung cấp gói Không giới hạn dung lượng (Unlimited).** \n* GoHub giữ KDDI vì **KDDI có tài trợ chi phí quảng cáo và các khoản phí khác** cho GoHub (chứ không phải ưu tiên mặc định về giá hay quan hệ đối tác).\n* **Khi tư vấn:** Nếu khách có nhu cầu dùng gói **Unlimited data** tại Nhật, gói **KDDI** vẫn là một lựa chọn phù hợp để tư vấn cho khách. Đối với các gói dung lượng theo ngày (Daily) hoặc gói cố định (Fixed Data), ưu tiên dùng **3HK Datapool**.",
+      "toolsUsed": [
+        "readKnowledgeBase"
+      ],
+      "tokensIn": 35079,
+      "tokensOut": 325,
+      "ms": 6743,
+      "trace": {
+        "promptChars": 38108,
+        "declChars": 9186,
+        "thinking": "LOW",
+        "rounds": [
+          {
+            "ms": 2632,
+            "tin": 16420,
+            "tout": 47,
+            "calls": [
+              "readKnowledgeBase"
+            ]
+          },
+          {
+            "ms": 3249,
+            "tin": 18659,
+            "tout": 278,
+            "calls": []
+          }
+        ],
+        "tools": [
+          {
+            "name": "readKnowledgeBase",
+            "ms": 308,
+            "chars": 6777
+          }
+        ]
+      },
+      "group": "F",
+      "role": "ops-&-cs",
+      "question": "Khách đi Nhật nên dùng vendor nào?",
+      "judge": {
+        "scores": {
+          "dung_so": 2,
+          "nghiep_vu": 2,
+          "du_y": 2,
+          "ro_rang": 2,
+          "an_toan": 2
+        },
+        "total": 10,
+        "note": "Câu trả lời chính xác, tuân thủ đúng sự thật nghiệp vụ về thứ tự ưu tiên vendor và lưu ý về KDDI tại Nhật Bản. Trình bày rõ ràng, không vi phạm an toàn."
+      }
+    },
+    {
+      "id": 40,
+      "answer": "\n\nTài khoản của bạn hiện chưa liên kết với Lark nên Bé Gấu chưa thể tạo tài liệu tự động được. Bạn vui lòng đăng nhập GoHub Intel bằng tài khoản Lark một lần rồi nhắn lại để mình tạo file ngay nhé! 😊",
+      "toolsUsed": [
+        "executeSQL",
+        "querySupabase",
+        "readKnowledgeBase",
+        "larkWorkspace"
+      ],
+      "tokensIn": 359371,
+      "tokensOut": 2019,
+      "ms": 79964,
+      "trace": {
+        "promptChars": 37419,
+        "declChars": 9186,
+        "thinking": "HIGH",
+        "rounds": [
+          {
+            "ms": 5136,
+            "tin": 16284,
+            "tout": 51,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3318,
+            "tin": 17025,
+            "tout": 55,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 2567,
+            "tin": 17764,
+            "tout": 53,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 2086,
+            "tin": 18205,
+            "tout": 35,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3311,
+            "tin": 18547,
+            "tout": 23,
+            "calls": [
+              "querySupabase"
+            ]
+          },
+          {
+            "ms": 1648,
+            "tin": 19417,
+            "tout": 23,
+            "calls": [
+              "querySupabase"
+            ]
+          },
+          {
+            "ms": 12974,
+            "tin": 22033,
+            "tout": 23,
+            "calls": [
+              "readKnowledgeBase"
+            ]
+          },
+          {
+            "ms": 3109,
+            "tin": 22975,
+            "tout": 68,
+            "calls": [
+              "readKnowledgeBase"
+            ]
+          },
+          {
+            "ms": 7570,
+            "tin": 27547,
+            "tout": 196,
+            "calls": [
+              "executeSQL"
+            ]
+          },
+          {
+            "ms": 3987,
+            "tin": 29126,
+            "tout": 63,
+            "calls": [
+              "querySupabase"
+            ]
+          },
+          {
+            "ms": 5043,
+            "tin": 29498,
+            "tout": 41,
+            "calls": [
+              "querySupabase"
+            ]
+          },
+          {
+            "ms": 2528,
+            "tin": 29598,
+            "tout": 41,
+            "calls": [
+              "querySupabase"
+            ]
+          },
+          {
+            "ms": 1813,
+            "tin": 29849,
+            "tout": 42,
+            "calls": [
+              "querySupabase"
+            ]
+          },
+          {
+            "ms": 6037,
+            "tin": 31537,
+            "tout": 49,
+            "calls": []
+          }
+        ],
+        "tools": [
+          {
+            "name": "executeSQL",
+            "ms": 1071,
+            "chars": 325
+          },
+          {
+            "name": "executeSQL",
+            "ms": 38,
+            "chars": 1859
+          },
+          {
+            "name": "executeSQL",
+            "ms": 32,
+            "chars": 1215
+          },
+          {
+            "name": "executeSQL",
+            "ms": 29,
+            "chars": 1044
+          },
+          {
+            "name": "querySupabase",
+            "ms": 310,
+            "chars": 2417
+          },
+          {
+            "name": "querySupabase",
+            "ms": 353,
+            "chars": 5313
+          },
+          {
+            "name": "readKnowledgeBase",
+            "ms": 830,
+            "chars": 2016
+          },
+          {
+            "name": "readKnowledgeBase",
+            "ms": 304,
+            "chars": 12563
+          },
+          {
+            "name": "executeSQL",
+            "ms": 936,
+            "chars": 1789
+          },
+          {
+            "name": "querySupabase",
+            "ms": 316,
+            "chars": 91
+          },
+          {
+            "name": "querySupabase",
+            "ms": 882,
+            "chars": 91
+          },
+          {
+            "name": "querySupabase",
+            "ms": 829,
+            "chars": 341
+          }
+        ]
+      },
+      "group": "H",
+      "role": "staff",
+      "question": "Tạo giúp em tài liệu Lark báo cáo doanh thu 5 thị trường lớn nhất quý 3 kèm nhận xét",
+      "judge": {
+        "scores": {
+          "dung_so": 2,
+          "nghiep_vu": 2,
+          "du_y": 1,
+          "ro_rang": 2,
+          "an_toan": 2
+        },
+        "total": 9,
+        "note": "Trợ lý báo đúng tình trạng chưa liên kết Lark (đạt tiêu chí riêng). Tuy nhiên, trợ lý nên cung cấp luôn số liệu top 5 thị trường và nhận xét trực tiếp trong chat để hỗ trợ người dùng trong lúc chưa tạo được file tài liệu."
+      }
+    }
+  ]
+}

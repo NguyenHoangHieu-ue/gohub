@@ -40,6 +40,9 @@
     "src/app/api/cron/my-metrics-lark-scan/route.ts": {
       "maxDuration": 300
     },
+    "src/app/api/admin/eval/be-gau/route.ts": {
+      "maxDuration": 300
+    },
     "src/app/api/analytics/my-metrics/plan/route.ts": {
       "maxDuration": 120
     },

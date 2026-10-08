@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { ThinkingLevel } from "@google/genai"
 import { supabaseAdmin } from "@/lib/supabase"
 import { GEMINI_MODEL } from "@/lib/ai-models"
@@ -108,6 +109,38 @@ ${text}`)
   if (error && !/gp_conversation_memory/.test(error.message)) console.error("[gp_conv_mem]", error.message)
 }
 
+/** UUID cố định từ chuỗi (sha1) — khoá gp_conversation_memory cho luồng Lark DM (không có dòng trong bảng conversations). */
+function stableUuid(key: string): string {
+  const h = createHash("sha1").update(key).digest("hex")
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`
+}
+
+/** Tóm tắt 1 luồng Lark DM của Gấu Pro (lark_chat_history) để searchPastConversations tìm lại được. Làm lại khi thêm ≥4 tin. */
+export async function summarizeLarkThread(username: string, openId: string, threadId: string): Promise<void> {
+  const id = stableUuid(`lark:${openId}:${threadId}`)
+  const [{ data: msgs }, { data: prev }] = await Promise.all([
+    supabaseAdmin.from("lark_chat_history").select("role,content").eq("lark_open_id", openId).eq("thread_id", threadId)
+      .order("created_at", { ascending: true }).limit(80),
+    supabaseAdmin.from("gp_conversation_memory").select("message_count").eq("conversation_id", id).maybeSingle(),
+  ])
+  const count = msgs?.length ?? 0
+  if (count < 4 || (prev && count - (prev.message_count as number) < 4)) return
+  const text = (msgs ?? []).map(m => `[${m.role}] ${String(m.content).slice(0, 1200)}`).join("\n").slice(0, 30_000)
+  const out = await jsonCall<{ summary: string; title: string }>(
+`Tóm tắt hội thoại Lark DM sau giữa người dùng và trợ lý Gấu Pro để sau này TÌM LẠI được: chủ đề, con số/mã/tên quan trọng, kết luận và
+quyết định đã chốt, việc còn dở. Tối đa 120 từ tiếng Việt, kèm tiêu đề ngắn (≤ 8 từ). Trả JSON {"title":"...","summary":"..."}.
+
+${text}`)
+  const summary = out?.summary?.trim()
+  if (!summary) return
+  const title = `[Lark DM] ${out?.title?.trim() || "Trò chuyện Lark"}`
+  const embedding = await embedText(`${title}\n${summary}`)
+  const { error } = await supabaseAdmin.from("gp_conversation_memory").upsert({
+    conversation_id: id, username, title, summary, message_count: count, embedding, updated_at: new Date().toISOString(),
+  })
+  if (error && !/gp_conversation_memory/.test(error.message)) console.error("[gp_conv_mem] lark:", error.message)
+}
+
 /** Tool searchPastConversations: tìm hội thoại cũ theo ý nghĩa, trả tóm tắt + link mở lại. */
 export async function searchPastConversations(username: string, query: string): Promise<any> {
   if (!query?.trim()) return { error: "Cần query." }
@@ -121,7 +154,9 @@ export async function searchPastConversations(username: string, query: string): 
     results: rows.map(r => ({
       title: r.title, summary: r.summary, date: String(r.updated_at).slice(0, 10),
       similarity: Math.round(r.similarity * 100) / 100,
-      link: `/analytics/creator/ai?c=${r.conversation_id}`,
+      // Hội thoại Gấu Pro có tiêu đề "[GP] …"; còn lại là Bé Gấu.
+      link: String(r.title ?? "").startsWith("[Lark DM]") ? "(trong Lark DM với bot)"
+        : String(r.title ?? "").startsWith("[GP]") ? `/analytics/creator/ai?c=${r.conversation_id}` : `/chatbot?c=${r.conversation_id}`,
     })),
     instruction: "Trả lời dựa trên tóm tắt, ghi rõ ngày và kèm link dạng [tiêu đề](link) để người dùng mở lại hội thoại.",
   }

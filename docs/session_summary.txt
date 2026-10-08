@@ -10836,3 +10836,70 @@ Chi tiết: wiki `analytics-my-metrics.md` §s227b.
 - Sửa lỗi DM hiện `**…**`: tin có markdown gửi dạng card Lark, có dự phòng text. Áp cho mọi tin bot.
 - Kế hoạch nâng cấp Bé Gấu tổng thể (gộp lõi, chất lượng trả lời, báo cáo/biểu đồ, model Google Nano Banana/Veo/TTS…) đang ở bước ý tưởng, Hiếu đã chốt: hạn mức API thoải mái, bỏ Pollinations/Stability/Kling chuyển sang Google, màu thương hiệu từ gohub.vn (#1446A5, #003A93, #009CE0, #0F1012, #F7F8F8), chưa khoá Gấu Pro.
 - (s227d QA staging) ĐẠT: DM đánh giá có `**…**` gửi dạng card, log không có cảnh báo `[lark]` (card được nhận). Bé Gấu web tạo được Lark Doc "[QA2] Top 5 thị trường Q3-2026" (bảng + 3 nhận xét) + Lark Task "[QA2] Xem lại báo giá VNPT" hạn 10/10 giao cho Hiếu, câu trả lời có link cả hai. Lần gọi đầu "[QA] …" (bị ngắt phía trình duyệt) có thể cũng đã tạo 1 Doc — Hiếu tự xoá các file/task [QA]. Ghi nhận chất lượng: nhận xét "tối ưu COGS Thái Lan / chuyển Datapool" sai với phân tích (Truemove đang rẻ nhất) → thuộc việc nâng chất lượng trả lời.
+- Merge `main` 2026-10-07 (`741e59d0`, theo yêu cầu Hiếu sau khi xem tin Lark + tài liệu Bé Gấu tạo): tsc/build OK, vitest 604 qua + 2 lỗi có sẵn.
+
+## s227e (2026-10-07) — Plan nâng cấp Bé Gấu tổng thể
+- Viết `docs/plans/be-gau-upgrade.md` theo các điểm Hiếu đã chốt (chưa khoá Gấu Pro, Lark mức A xong, hạn mức API thoải mái, bỏ Pollinations/Stability/Kling → Google, màu gohub.vn). Mốc U0 → U5, chờ Hiếu duyệt + trả lời 4 câu ở §6.
+
+## s227f (2026-10-07) — Eval Bé Gấu + U1a
+- Bộ chấm điểm: route `/api/admin/eval/be-gau` (CRON_SECRET) + `web/scripts/eval-be-gau.mjs` + 40 câu `web/eval/be-gau-cases.json` (Hiếu duyệt), giám khảo `gemini-pro-latest`, kết quả `web/eval/results/`.
+- Baseline 8,43/10 (nghiệp vụ 1,38/2 yếu nhất). U1a (`629d7d44`: SDK mới, thinking HIGH cho câu phân tích, khối kết luận nghiệp vụ + khung trả lời, chặn cột giá vốn khi vai trò không có quyền) → 8,80/10, TB 55s/câu (baseline 38s).
+- Phát hiện: `canViewCogs()` trả true cho MỌI vai trò (quyết định cũ "margin_cogs mở cho mọi role") → giám khảo trừ oan câu GP; câu 37 (b2c hỏi giá vốn phải từ chối) ngược chính sách — chờ Hiếu chốt. KB `vendor_priority_and_pricing` còn "Nhật ưu tiên KDDI" → đã sửa; trang wiki web-only "Quy Tắc Chọn Vendor" (kb_wiki_pages) còn quy tắc cũ, sync KB chép lại → chờ Hiếu cho xoá.
+
+## s227g (2026-10-07) — U1b lõi agent chung
+- Tạo `web/src/lib/agents/core/agent-loop.ts` (`runAgentLoop`); Bé Gấu + Gấu Pro chạy cùng vòng lặp, giữ nguyên hành vi (cổng duyệt, kế hoạch, kỹ năng, việc nền, trace, ép larkWorkspace, HIGH chỉ lượt đầu).
+- Gấu Pro dựng lại config mỗi lượt (bỏ cờ skillsChanged). tsc + lint PASS; vitest 608 pass, 2 fail có sẵn không liên quan (bc-datapool thiếu file mẫu ở root, bridge-version zip). Wiki chatbot.md §s227g.
+- Eval U1b (40 câu, staging, concurrency 2): **9,85/10** (U1c 9,75; baseline 8,72), TB 46,4s/câu, trung vị 42s, token vào ~158k, 0 lỗi. Câu dưới 10: #15 lộ `ref_countries`, #1 lộ `staff_code`, #2 thiếu so tuần trước, #20 tự gán nguyên nhân ngập lụt, #35 CM1 diễn qua "Operation Cost". Gấu Pro chưa thử sống sau U1b (Chrome treo). LẦN SAU: U3.
+
+## s228 (2026-10-08) — Thử Gấu Pro sau U1b + U3 (một phần) trên staging
+- Thử Gấu Pro sống: lần 1 chạm trần 300s, UI "Không có nội dung trả về". Nguyên nhân: Gemini chậm bất thường (prod `main` cũng 20–37s/lượt,
+  staging 40s–2,5 phút/lượt; 10h51 chỉ 2–4s) — không phải lỗi U1b. Sửa: ngân sách 240s cho Gấu Pro web + Bé Gấu, hết thì chốt 1 lượt trả lời
+  bằng dữ liệu đã có (không gọi tool). Thử lại: trả lời được (~4 phút do model chậm). Ghi nhận: Gấu Pro tự dò "thị trường" bằng SUBSTRING mã SKU, nhiều lượt.
+- U3a `77dd7c78`: bảng phân quyền tính năng theo vai trò (`lib/assistant-features.ts`, `app_settings.assistant_features`, Creator Settings
+  khối "Bé Gấu — Tính năng theo vai trò"); Bé Gấu khai tool theo bảng; nhóm Chỉ Creator khoá cứng (admin MẤT ghi KB/portal/gửi Lark/task Lark Hiếu
+  trong Bé Gấu — theo plan); cổng an toàn tool-policy áp cho Bé Gấu. QA: bảng hiện đúng, lưu được (đã xoá dòng thử, về mặc định).
+- U3b `950d0f19`: /api/chat → SSE; kế hoạch từng bước (updatePlan) + nút Dừng (QA đạt: giữ phần đã viết + "⏹ Đã dừng"); trí nhớ + tìm hội
+  thoại cũ cho Bé Gấu (mặc định TẮT, bật theo vai trò); `/chatbot?c=<id>` mở hội thoại.
+- `cad96efb`: bộ lọc lộ tên bảng/cột (`core/leak-filter.ts`) — eval #1/#15.
+- `92a6595d`: tool `b2bCustomerCm1` gọi thẳng handler quarterly-b2b-customers — QA vai trò b2b: top 5 KH Q3 khớp tuyệt đối route (MoMo 590.383.766 / 17,1%).
+- `1f866a94`: Trò chuyện trực tiếp Bé Gấu theo vai trò (`prepareBeGau`, `/api/chat/live/*`, nút 🎙).
+- tsc sạch, vitest 613 qua + 2 lỗi có sẵn (bc-datapool, bridge-version). Wiki `chatbot.md` §s228.
+**Còn U3**: chạy nền việc dài, đọc to (TTS), ghi âm→biên bản, việc theo lịch, nghiên cứu sâu, dịch trực tiếp; sửa lỗi mở §1 plan (cổng duyệt nhớ
+qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hiếu cần: thử 🎙 Trực tiếp ở Bé Gấu (mic thật), bật tính năng cho vai trò cần.
+- (s228 tiếp, Hiếu: "làm lần lượt theo thứ tự") — 7 mục còn lại của U3, mỗi mục 1 commit trên staging:
+  1. Chạy nền `899f50d0`: gp_jobs dùng chung (checkpoint.agent="be-gau"), runBeGau theo chặng; QA staging đạt (1 chặng, số khớp, DM Lark).
+     Phát hiện: hội thoại Bé Gấu lọc theo TÊN hiển thị (session.user.name) — sửa phụ đề Live lưu theo tên.
+  2. Đọc to `82772897`: /api/chat/tts gemini-3.8-flash-tts (WAV, ~4s/câu), nút 🔊.
+  3. Ghi âm → biên bản `98239c9f`: gemini-3.5-transcribe (bỏ qua gợi ý thuật ngữ, nhầm Gighub→GitHub) → gemini-3.8-flash viết biên bản có sửa thuật ngữ; trần ~4,4MB ≈ 35 phút.
+  4. Việc theo lịch `195a6063`: gp_scheduled_tasks đánh dấu schedule.agent=be-gau; NO_ALERT.
+  5. Nghiên cứu sâu `a572c141`: Interactions API deep-research-preview-04-2026 background + việc nền hỏi trạng thái; QA staging đạt (1 chặng, có nguồn).
+  6. Dịch trực tiếp `44f4de4f`: gemini-3.5-live-translate-preview + translationConfig; echo=false vẫn phát âm → bấm chọn ai đang nói.
+  7. Lỗi §1 `165281fe`: cổng duyệt Gấu Pro nhớ qua nhiều lượt (gp_runs bước {tainted}), Lark DM gửi tin kế hoạch, tóm tắt luồng Lark DM.
+  Dữ liệu QA (2 hội thoại + 2 việc nền) đã xoá; 2 DM Lark "[QA…]" đã gửi cho Hiếu.
+  Chưa QA được trên giao diện (Chrome chặn script trang): Trực tiếp, đọc to, ghi âm, dịch, việc theo lịch, Lark DM (chạy production).
+- (s228 tiếp, Hiếu: "làm U2 đi") — U2 trên staging:
+  U2a `f44cd9bb`+`2fc2e739`: lib/report (khung JSON → docx/xlsx(exceljs)/pptx(pptxgenjs, biểu đồ gốc)/pdf(browserless)), biểu đồ SVG→PNG
+  (@resvg/resvg-js + font Be Vietnam Pro), bảng/ô số kèm sql chạy lại ở server, bucket riêng tư `reports` + /api/chat/report-file. Tool
+  buildReport cho Bé Gấu + Gấu Pro. QA staging: báo cáo CM1 top 8 KH B2B Q3 ra đủ 4 file, số khớp Quarter Report; sửa PDF ngắt trang +
+  cấm tự gán nguyên nhân (model bịa "Traveloka giảm do điều chỉnh phân phối").
+  U2b `34dde6a5`: Bé Gấu chạy code Python (codeExecution + includeServerSideToolInvocations). QA staging: TB/độ lệch chuẩn/MoM khớp tuyệt đối.
+  U2c `055ea573`+`134b8c3f`: bản Lark Docs có ảnh biểu đồ; câu "tạo … Lark" giờ cho phép buildReport. QA staging: tạo được Doc "[QA] …" trong Lark của Hiếu.
+  Gotcha: browserless (Render free) ngủ → kết nối lần đầu >30s (chờ 90s); token Lark trong .env.local máy Hiếu đã cũ ("invalid param").
+- (s228 tiếp, Hiếu: "được làm đi") — U4 giao diện chat mới trên staging:
+  `13438a9f` Bé Gấu: bỏ cột lịch sử → thanh "Bé Gấu / <hội thoại ▾>" (tìm, cuộc mới, xoá) + ✎ + ⋯ (Trực tiếp, Dịch, Ghi âm cuộc họp,
+  Biên bản từ file, Chạy nền); ô nhập 📎 · 🎤 nói thành chữ (/api/chat/transcribe mode=text) · Gửi/Dừng; cuộn bám đáy thông minh +
+  "↓ Tin mới nhất" + thu gọn >40 tin. Component dùng chung `components/chat/`. QA giao diện staging đạt (menu, lịch sử, dải Chạy nền).
+  `e29aa430` lỗi có sẵn: lưu tin Bé Gấu không cập nhật conversations.updated_at → lịch sử xếp sai/"Cũ hơn".
+  `03d5ca68` Gấu Pro: cùng thanh trên + ⋯ (Trực tiếp, Trí nhớ, Việc & duyệt có số chờ duyệt, Nhật ký, Lark/Google), cuộn + thu gọn.
+  Lệch plan: 🎤 ở ô nhập = nói thành chữ; Trò chuyện trực tiếp vẫn mở cửa sổ riêng (chưa nhúng trong khung chat).
+  QA U4 staging tìm + sửa: (a) Gấu Pro mở hội thoại kẹt ở đầu — trang vẽ khung chat muộn (chờ kiểm quyền) nên hook gắn theo dõi cuộn vào
+  phần tử chưa có → đổi sang callback ref `fb25121a`; (b) nội dung cao thêm sau khi cuộn (bảng/biểu đồ) → ResizeObserver kéo theo `3f2e6ae5`.
+  Kiểm lại: mở ra ở tin mới nhất, cuộn lên hiện "↓ Tin mới nhất", menu ⋯ + panel Việc & duyệt đúng chỗ, "Hiện N tin trước" chạy.
+- (s228 tiếp, Hiếu: "làm U0 đi") — U0 `a85686a0` trên staging: ảnh Google Nano Banana (gemini-nano-banana-2.1; quality high → gemini-3-pro-image;
+  sửa theo ảnh đính kèm edit_attached), video Veo 3.1 (fast mặc định, high → bản đầy đủ), lưu bucket công khai creator-images. Xoá Pollinations,
+  Stability (generateImageStability, tính năng image_paid), Kling; CSP bỏ pollinations. QA staging (Bé Gấu, admin): banner 16:9 có chữ
+  "eSIM Hàn Quốc 5G — chỉ từ 89k" đúng nguyên văn (29s); video 9:16 mp4 2,3MB (114s). Local: SUPABASE_SERVICE_KEY trong .env.local máy Hiếu
+  đã cũ ("Invalid Compact JWS") — không ảnh hưởng Vercel. Hiếu có thể xoá env STABILITY_API_KEY, KLING_API_KEY trên Vercel.
+- (s228 tiếp) Eval 40 câu sau U0–U4 (`web/eval/results/u4.md`): 9,88/10 (U1b 9,85), TB 49,0s/câu (U1b 46,4s), 0 lỗi. Dưới 10: #2 thiếu so tuần
+  trước, #21 kết luận để cuối, #26 %Datapool lệch (69,7 vs 67,8%), #30 giám khảo cho là bịa số SKU theo nước (thực tế lấy từ 3 lần SQL —
+  nhiều khả năng giám khảo thiếu dữ liệu đối chiếu; cột nhà mạng thì không từ dữ liệu).

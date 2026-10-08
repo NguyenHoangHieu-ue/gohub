@@ -11,6 +11,18 @@ import { parseUploadedFile, type FileContext } from "@/lib/agents/file-parser"
 import { usedDbTaskTool }                      from "@/lib/okr-helpers"
 import { estimateCostUsd }                     from "@/lib/agents/gemini-pricing"
 import { larkOpenIdOf }                        from "@/lib/agents/lark-workspace"
+import type { PlanStep }                       from "@/lib/agents/creator-ai"
+import { extractMemoriesFromTurn, summarizeConversation } from "@/lib/assistant-memory-auto"
+import { loadFeatureMatrix, featureEnabled }   from "@/lib/assistant-features"
+import { waitUntil }                           from "@vercel/functions"
+
+type BeGauEvent =
+  | { type: "agent"; id: string; name: string }
+  | { type: "delta"; content: string }
+  | { type: "plan"; steps: PlanStep[] }
+  | { type: "done" }
+
+const memoryOn = async (role: string) => featureEnabled(await loadFeatureMatrix(), "memory", role)
 
 // Hobby plan trần cứng 60s (Vercel Runtime Timeout Error thật, xem log s195+14) — nâng lên 300s (Hobby +
 // Fluid Compute cho phép tới 5 phút, không cần nâng gói). Giữ nguyên dù s195+18 đã thêm stream token thật
@@ -66,6 +78,7 @@ export async function POST(req: NextRequest) {
   // Nhận JSON (như cũ) hoặc multipart/form-data (khi có ảnh/file đính kèm — s190+3).
   let messages: Message[] = []
   let userName: string | undefined
+  let conversationId: string | null = null
   let fileContexts: FileContext[] = []
 
   try {
@@ -75,6 +88,7 @@ export async function POST(req: NextRequest) {
       const raw  = form.get("messages")
       messages   = JSON.parse(typeof raw === "string" ? raw : "[]")
       userName   = (form.get("userName") as string) || undefined
+      conversationId = (form.get("conversation_id") as string) || null
 
       const fileEntries: File[] = []
       for (let i = 0; i < 5; i++) {
@@ -89,6 +103,7 @@ export async function POST(req: NextRequest) {
       const body = await req.json()
       messages = Array.isArray(body.messages) ? body.messages : []
       userName = body.userName
+      conversationId = typeof body.conversation_id === "string" ? body.conversation_id : null
     }
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "Invalid request" }, { status: 400 })
@@ -97,6 +112,7 @@ export async function POST(req: NextRequest) {
   const role       = (session.user.role || "staff") as UserRole
   const department = session.user.department || "all"
   const name    = userName || session.user.name || "bạn"
+  const username = (session.user as any).username as string | undefined
   const history = (messages as Message[]).slice(0, -1)
   const lastMsg = (messages as Message[]).at(-1)?.content ?? ""
   const encoder = new TextEncoder()
@@ -107,16 +123,21 @@ export async function POST(req: NextRequest) {
       canViewCogs(role),
     ])
 
+    // U3: luồng sự kiện SSE (giống Gấu Pro) — chữ (delta), kế hoạch (plan), kết thúc (done).
+    const sse = (c: ReadableStreamDefaultController, e: BeGauEvent) => { try { c.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`)) } catch {} }
+    const SSE_HEADERS = { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" }
+
     // ── Guardian: câu hỏi code/hệ thống/nội bộ hoặc vượt quyền → từ chối, KHÔNG gọi agent ──
     if (!guard.allowed) {
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode(`__AGENT__:guardian:Hạn chế quyền\n`))
-          controller.enqueue(encoder.encode(guard.reason))
+          sse(controller, { type: "agent", id: "guardian", name: "Hạn chế quyền" })
+          sse(controller, { type: "delta", content: guard.reason })
+          sse(controller, { type: "done" })
           controller.close()
         },
       })
-      return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } })
+      return new Response(stream, { headers: SSE_HEADERS })
     }
 
     const identity = session.user.email || (session.user as any).username || null
@@ -135,17 +156,21 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          controller.enqueue(encoder.encode(`__AGENT__:be-gau:Bé Gấu\n`))
+          sse(controller, { type: "agent", id: "be-gau", name: "Bé Gấu" })
           const larkOpenId = await larkOpenIdOf((session.user as any).username) ?? await larkOpenIdOf(session.user.email)
           const { text, sources, toolsUsed, tokensIn, tokensOut } = await runBeGau({
             geminiHistory, lastMsg, role, name, larkOpenId,
             userId: identity || session.user.email || undefined,
+            username,
             sessionId: (session as any)?.sessionId || undefined,
             isCost, extraDirective: priceDirective,
             fileContexts: fileContexts.length > 0 ? fileContexts : undefined,
+            signal: req.signal,
+            origin: req.nextUrl.origin,
             // s195+18: text đã được stream ra controller theo từng đoạn ngay trong lúc runBeGau() chạy —
-            // KHÔNG enqueue lại `text` đầy đủ bên dưới nữa (sẽ bị lặp đôi nội dung).
-            onChunk: (delta) => { try { controller.enqueue(encoder.encode(delta)) } catch {} },
+            // KHÔNG gửi lại `text` đầy đủ bên dưới nữa (sẽ bị lặp đôi nội dung).
+            onChunk: (delta) => sse(controller, { type: "delta", content: delta }),
+            onPlan: (steps) => sse(controller, { type: "plan", steps }),
           })
           // Log cả câu hỏi + câu trả lời sau khi có đủ. PHẢI await (không fire-and-forget) — phát hiện
           // qua QA My Metrics s195+18-B: gọi KHÔNG await rồi controller.close() ngay sau khiến Vercel
@@ -156,18 +181,28 @@ export async function POST(req: NextRequest) {
           // Trích nguồn web (nếu có) — nối cuối, không lộ cơ chế.
           if (sources.length) {
             const uniq = Array.from(new Map(sources.map(s => [s.url, s])).values()).slice(0, 5)
-            controller.enqueue(encoder.encode("\n\n**Nguồn tham khảo:**\n" + uniq.map(s => `- [${s.title}](${s.url})`).join("\n")))
+            sse(controller, { type: "delta", content: "\n\n**Nguồn tham khảo:**\n" + uniq.map(s => `- [${s.title}](${s.url})`).join("\n") })
           }
+          sse(controller, { type: "done" })
           controller.close()
+          // Trí nhớ (U3, khi tính năng bật cho vai trò): rút điều đáng nhớ + tóm tắt hội thoại để tìm lại — chạy sau khi trả lời xong.
+          if (username && toolsUsed.includes("assistantMemory") === false && await memoryOn(role)) {
+            waitUntil(Promise.all([
+              extractMemoriesFromTurn(username, lastMsg, text, "be-gau").catch(() => 0),
+              conversationId ? summarizeConversation(username, conversationId).catch(() => {}) : undefined,
+            ]))
+          }
         } catch (err: any) {
+          if (req.signal.aborted) { try { controller.close() } catch {} ; return }
           const msg = (role === "admin" || role === "creator") ? `Lỗi: ${err.message}` : "Hiếu đang fix, vui lòng đợi 🔧"
           await logChat(identity, name, role, lastMsg, null)
-          controller.enqueue(encoder.encode(msg))
+          sse(controller, { type: "delta", content: msg })
+          sse(controller, { type: "done" })
           controller.close()
         }
       },
     })
-    return new Response(stream, { headers: { "Content-Type": "text/plain; charset=utf-8" } })
+    return new Response(stream, { headers: SSE_HEADERS })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }

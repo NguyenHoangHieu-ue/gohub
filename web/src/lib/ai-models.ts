@@ -7,3 +7,17 @@ export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash"
 export const GEMINI_MODEL_PRO = process.env.GEMINI_MODEL_PRO || GEMINI_MODEL
 // G5 Gấu Pro phiên giọng nói/màn hình (Gemini Live API, bidiGenerateContent). Kiểm model có sẵn: ListModels lọc bidiGenerateContent.
 export const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-3.8-live"
+// U3 Bé Gấu đọc câu trả lời (TTS) — 3.8-flash-tts trả thẳng audio/wav (đo 2026-10-08: ~4s cho 1 câu).
+export const GEMINI_TTS_MODEL = process.env.GEMINI_TTS_MODEL || "gemini-3.8-flash-tts"
+// U3 ghi âm cuộc họp → biên bản: chép lời (trả part audioTranscription.text, không tách người nói; đo ~2s cho 1 câu).
+export const GEMINI_TRANSCRIBE_MODEL = process.env.GEMINI_TRANSCRIBE_MODEL || "gemini-3.5-transcribe"
+// U3 dịch trực tiếp (CS): Live + translationConfig (đo 2026-10-08: Việt→Anh đúng; echoTargetLanguage=false VẪN phát âm thanh khi nghe đúng
+// ngôn ngữ đích → giao diện chỉ gửi mic vào chiều đang chọn, không mở 2 chiều nghe cùng lúc).
+export const GEMINI_TRANSLATE_MODEL = process.env.GEMINI_TRANSLATE_MODEL || "gemini-3.5-live-translate-preview"
+// U3 nghiên cứu sâu: agent Deep Research (Interactions API, background). Đo 2026-10-08: câu giá eSIM Nhật 136s, ~114k token, có nguồn.
+export const GEMINI_DEEP_RESEARCH_AGENT = process.env.GEMINI_DEEP_RESEARCH_AGENT || "deep-research-preview-04-2026"
+// U0 ảnh/video Google (thay Pollinations/Stability/Kling). Đo 2026-10-08: Nano Banana 2.1 ~29s, Pro ~18s (chữ đẹp hơn); Veo 3.1 fast ~55s.
+export const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-nano-banana-2.1"
+export const GEMINI_IMAGE_MODEL_PRO = process.env.GEMINI_IMAGE_MODEL_PRO || "gemini-3-pro-image"
+export const GEMINI_VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL || "veo-3.1-fast-generate-preview"
+export const GEMINI_VIDEO_MODEL_HQ = process.env.GEMINI_VIDEO_MODEL_HQ || "veo-3.1-generate-preview"

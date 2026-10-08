@@ -39,7 +39,7 @@ async function lk(token: string, path: string, body: unknown): Promise<any> {
   return d.data ?? d
 }
 
-async function giveToUser(token: string, fileToken: string, type: "docx" | "sheet", openId: string): Promise<"owner" | "editor"> {
+export async function giveToUser(token: string, fileToken: string, type: "docx" | "sheet", openId: string): Promise<"owner" | "editor"> {
   try {
     await lk(token, `/drive/v1/permissions/${fileToken}/members/transfer_owner?type=${type}&need_notification=false&remove_old_owner=false`,
       { member_type: "openid", member_id: openId })

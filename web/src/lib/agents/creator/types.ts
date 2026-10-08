@@ -16,13 +16,14 @@ export type GPEvent =
   | { type: "error"; message: string }
 
 export const TOOL_STATUS: Record<string, string> = {
+  buildReport: "📄 Đang dựng file báo cáo...",
   executeSQL:              "⚙️ Đang query analytics database...",
   querySupabase:           "📊 Đang đọc dữ liệu Supabase...",
   listSupabaseTables:      "📋 Đang liệt kê tables...",
   queryGA4:                "📈 Đang query Google Analytics...",
   queryGSC:                "🔍 Đang query Google Search Console...",
   queryProduct:            "📦 Đang tra cứu sản phẩm...",
-  generateImage:           "🎨 Đang tạo ảnh...",
+  generateImage:           "🎨 Đang tạo ảnh (Nano Banana)...",
   getTrendSnapshots:       "📡 Đang đọc trend data...",
   listLarkTasks:           "✅ Đang đọc Lark tasks...",
   listLarkTasklists:       "✅ Đang đọc Lark task lists...",
@@ -40,9 +41,8 @@ export const TOOL_STATUS: Record<string, string> = {
   compareVendorQuotes:     "💱 Đang so sánh báo giá NCC...",
   trackSKUWinRate:         "📊 Đang tính Win Rate SKU...",
   verifyReportNumbers:     "🔍 Đang kiểm tra lại số liệu (second opinion)...",
-  generateVideo:           "🎬 Đang tạo video Kling AI (1-3 phút)...",
+  generateVideo:           "🎬 Đang dựng video (Veo)...",
   checkVideoStatus:        "🎬 Đang kiểm tra trạng thái video...",
-  generateImageStability:  "🎨 Đang tạo ảnh Stability AI (SDXL)...",
   searchKnowledgeBase:     "🔍 Đang tìm kiếm KB theo ngữ nghĩa...",
   readMyBrowser:           "👀 Đang đọc browser của Hiếu...",
   controlMyBrowser:        "🖱️ Đang thao tác trên browser của Hiếu...",

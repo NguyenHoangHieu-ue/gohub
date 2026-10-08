@@ -16,6 +16,8 @@ export interface Schedule {
   weekdays?: number[]     // weekly: 1=Thứ 2 … 7=Chủ nhật
   day?: number            // monthly: ngày trong tháng (tháng thiếu ngày → ngày cuối tháng)
   date?: string           // once: "YYYY-MM-DD"
+  agent?: "be-gau"        // U3: việc đặt từ Bé Gấu → chạy bằng Bé Gấu (theo vai trò người đặt), không phải Gấu Pro
+  ownerName?: string      // tên hiển thị — hội thoại Bé Gấu lưu theo tên
 }
 
 export function validateSchedule(raw: any): { schedule?: Schedule; error?: string } {
@@ -78,7 +80,7 @@ export function describeSchedule(s: Schedule): string {
 }
 
 /** Tool scheduleTask: create | list | cancel. */
-export async function runScheduleTask(args: any, username: string, isCreator: boolean): Promise<any> {
+export async function runScheduleTask(args: any, username: string, isCreator: boolean, beGauOwnerName?: string): Promise<any> {
   const table = () => supabaseAdmin.from("gp_scheduled_tasks")
   const fail = (m: string) => ({ error: missingTable(m) ? MIGRATION_HINT : m })
   switch (args?.action) {
@@ -88,6 +90,7 @@ export async function runScheduleTask(args: any, username: string, isCreator: bo
       if (prompt.length < 15) return { error: "prompt phải mô tả ĐẦY ĐỦ việc cần làm (sẽ chạy độc lập, không thấy hội thoại này)." }
       const { schedule, error } = validateSchedule(args.schedule)
       if (!schedule) return { error }
+      if (beGauOwnerName) Object.assign(schedule, { agent: "be-gau", ownerName: beGauOwnerName })
       const next = nextRunAt(schedule, new Date())
       if (!next) return { error: "Thời điểm đã qua." }
       const { count, error: cErr } = await table().select("id", { count: "exact", head: true }).eq("username", username).eq("active", true)
@@ -135,7 +138,9 @@ export async function runDueSchedules(origin: string): Promise<number> {
     const prompt = `[Việc theo lịch: ${t.title}]\n${t.prompt}` + (t.only_if_notable
       ? `\n\nĐây là việc CANH CHỪNG: nếu điều kiện cần báo KHÔNG xảy ra, chỉ trả lời đúng một từ ${NO_ALERT} (không thêm gì). Nếu có → báo ngắn gọn, nêu số liệu.`
       : "")
-    const { job } = await createJob({ username: t.username as string, isCreator: t.is_creator as boolean, prompt })
+    const sch = t.schedule as Schedule
+    const { job } = await createJob({ username: t.username as string, isCreator: t.is_creator as boolean, prompt,
+      beGauOwnerName: sch.agent === "be-gau" ? sch.ownerName || (t.username as string) : undefined })
     if (job) { await triggerJobRun(origin, job.id); n++ }
   }
   return n

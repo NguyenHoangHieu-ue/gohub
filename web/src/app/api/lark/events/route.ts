@@ -13,9 +13,9 @@ import type { Message, UserRole }    from "@/lib/agents/types"
 import { captureForOkrLog }           from "@/lib/okr-lark-capture"
 import { usedDbTaskTool }             from "@/lib/okr-helpers"
 import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
-import { runCreatorAI }               from "@/lib/agents/creator-ai"
+import { runCreatorAI, type GPEvent } from "@/lib/agents/creator-ai"
 import { decidePendingAction, followupMessage } from "@/lib/agents/creator/approvals"
-import { extractMemoriesFromTurn } from "@/lib/assistant-memory-auto"
+import { extractMemoriesFromTurn, summarizeLarkThread } from "@/lib/assistant-memory-auto"
 import { detectGroupTask }            from "@/lib/task-assistant"
 import { isNoteCommand }              from "@/lib/okr-lark-rules"
 import { evaluateThreadNow }          from "@/lib/lark-scan-runner"
@@ -416,7 +416,14 @@ async function replyCreatorDM(openId: string, messageId: string, threadId: strin
   const history = await getLarkHistory(openId, threadId)
   const geminiHistory = history.map(m => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] }))
   const now = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 16).replace("T", " ")
-  const gp = await runCreatorAI(geminiHistory, agentInput + CREATOR_DM_DIRECTIVE.replace("{NOW}", now), undefined, undefined, true, username, "lark_dm", { preloadSkills: ["workspace"] })
+  // Lỗi mở §1 plan be-gau-upgrade: Lark DM không thấy kế hoạch → gửi 1 tin kế hoạch ở lần đầu model lập (không gửi các lần cập nhật để khỏi spam).
+  let planSent = false
+  const onEvent = (e: GPEvent) => {
+    if (e.type !== "plan" || planSent || !e.steps.length) return
+    planSent = true
+    void replyLarkMessage(messageId, "📋 Kế hoạch:\n" + e.steps.map((st, i) => `${i + 1}. ${st.title}`).join("\n")).catch(() => {})
+  }
+  const gp = await runCreatorAI(geminiHistory, agentInput + CREATOR_DM_DIRECTIVE.replace("{NOW}", now), undefined, onEvent, true, username, "lark_dm", { preloadSkills: ["workspace"] })
   let response = gp.text.replace(/```chart[\s\S]*?```/g, "").trim() || "(Gấu Pro không có câu trả lời)"
   // Mã duyệt ghép bằng code (không trông vào model nhắc lại cho đúng).
   if (gp.pendingActions.length) response += "\n\n" + gp.pendingActions.map(a =>
@@ -426,6 +433,8 @@ async function replyCreatorDM(openId: string, messageId: string, threadId: strin
   saveLarkMessage(openId, threadId, "assistant", response)
   // G3: tự rút trí nhớ từ tin DM của creator (chỉ lời người dùng; bỏ qua lệnh duyệt / khi model đã tự lưu).
   if (!cmd && !gp.toolsUsed.includes("assistantMemory")) await extractMemoriesFromTurn(username, userText, response, "lark_dm").catch(() => 0)
+  // Tóm tắt luồng DM để searchPastConversations tìm lại được (trước chỉ hội thoại web được tóm tắt).
+  await summarizeLarkThread(username, openId, threadId).catch(e => console.error("[gp_conv_mem] lark:", e?.message))
   try {
     await supabaseAdmin.from("app_usage_events").insert({
       event_type: "chat", user_email: `lark:${openId}`, user_name: name || openId, user_role: "creator",

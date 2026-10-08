@@ -1,4 +1,4 @@
-import { ThinkingLevel, type Content } from "@google/genai"
+import { ThinkingLevel, FunctionCallingConfigMode, type Content } from "@google/genai"
 import { supabaseAdmin }      from "@/lib/supabase"
 import { ga4Sites }           from "@/lib/ga4"
 import { getPartnerTiers }    from "@/lib/analytics-helpers"
@@ -10,7 +10,8 @@ export type { FileContext }  from "./file-parser"
 // ─── Phase 2: import từ creator/ modules ─────────────────────────────────────
 import { ALL_TOOL_DECLARATIONS } from "./creator/declarations"
 import { dispatchTool }          from "./creator/tools/dispatch"
-import { streamTurn, toGenaiSchema, type TurnResult } from "./genai-stream"
+import { toGenaiSchema } from "./genai-stream"
+import { runAgentLoop } from "./core/agent-loop"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { personalFeaturesEnabled } from "@/lib/assistant-memory-auto"
@@ -40,7 +41,7 @@ export interface PlanStep { title: string; status: "pending" | "in_progress" | "
 export interface JobCheckpoint { contents: Content[]; tainted: boolean; taintSources: string[]; skills: string[] }
 
 // Rút gọn kết quả tool trong checkpoint (lưu jsonb) — giữ cấu trúc, cắt payload quá dài.
-function compactContents(contents: Content[]): Content[] {
+export function compactContents(contents: Content[]): Content[] {
   return contents.map(c => ({
     ...c,
     parts: (c.parts ?? []).map((p: any) => {
@@ -61,13 +62,22 @@ async function saveRunTrace(row: Record<string, unknown>) {
   } catch { /* bỏ qua */ }
 }
 
+/** Nguồn "nhiễm" của lượt gần nhất (≤2 giờ, cùng người + kênh) nếu lượt đó đã đọc nội dung ngoài; null nếu không. */
+async function previousRunTaint(username: string, channel: string): Promise<string[] | null> {
+  const { data } = await supabaseAdmin.from("gp_runs").select("steps,created_at")
+    .eq("username", username).eq("channel", channel).gte("created_at", new Date(Date.now() - 2 * 3600_000).toISOString())
+    .order("created_at", { ascending: false }).limit(1).maybeSingle()
+  const last = Array.isArray(data?.steps) ? (data!.steps as any[]).at(-1) : null
+  return last?.tainted ? (Array.isArray(last.taintSources) ? last.taintSources.map(String) : ["nội dung ngoài"]) : null
+}
+
 const previewArgs = (args: unknown) => {
   let s = ""
   try { s = JSON.stringify(args ?? {}) } catch { /* bỏ qua */ }
   return s.replace(/"(password|token|secret|api_key)"\s*:\s*"[^"]*"/gi, '"$1":"***"').slice(0, 300)
 }
 
-function normalizePlan(raw: unknown): PlanStep[] {
+export function normalizePlan(raw: unknown): PlanStep[] {
   if (!Array.isArray(raw)) return []
   return raw.slice(0, 10).map((s: any) => ({
     title: String(s?.title ?? "").slice(0, 120),
@@ -299,6 +309,10 @@ Sau MỖI câu trả lời có data/phân tích (không phải câu hỏi ngư�
 \`\`\`
 - Tối đa 3 gợi ý, mỗi câu ≤ 8 từ, là câu hỏi/hành động tiếp theo HỢP LÝ dựa trên câu vừa trả lời.
 - KHÔNG thêm block này nếu bạn đang HỎI NGƯỢC user (cần làm rõ) hoặc câu trả lời chỉ là trò chuyện.
+
+## Báo cáo / file đẹp (U2)
+Khi được nhờ LÀM BÁO CÁO hoặc file Word/Excel/PowerPoint/PDF để gửi/trình bày → lấy số trước rồi gọi buildReport (kết luận trước, mục có ô số /
+bảng / biểu đồ, việc nên làm, nguồn; bảng và ô số kèm sql để số khớp). Trả nguyên link tải. Khối export bên dưới chỉ để tải nhanh dữ liệu thô.
 
 ## File Export Rules (STRICT)
 
@@ -576,6 +590,8 @@ export async function runCreatorAI(
   const files = fileContexts || []
   const texts   = files.filter(f => f.type === "text")
   const binaries = files.filter(f => f.type !== "text")
+  // U0: ảnh đính kèm cho generateImage sửa theo ảnh gốc.
+  const attachedImages = binaries.filter(b => (b.mimeType || "").startsWith("image/")).map(b => ({ mimeType: b.mimeType!, data: b.content }))
   const msgText = lastMsg || (files.length ? `Phân tích ${files.length} file: ${files.map(f => f.name).join(", ")}` : "")
 
   if (files.length > 0) {
@@ -608,90 +624,85 @@ export async function runCreatorAI(
   let round = 0
 
   // Tích luỹ token qua MỌI vòng gọi model (mỗi vòng là 1 request Gemini riêng, tính phí riêng dù
-  // contents chồng lấn) — dùng cho cost dashboard (s196+7).
-  let tokensIn = 0, tokensOut = 0
+  // contents chồng lấn) — dùng cho cost dashboard (s196+7). U1b: vòng lặp chạy ở lõi chung core/agent-loop.ts.
   const onChunk = (delta: string) => onEvent?.({ type: "delta", content: delta })
-  let config = makeConfig()
-  const turn = async (): Promise<TurnResult> => {
-    const ts = Date.now()
-    const r = await streamTurn(GEMINI_MODEL, contents, config, onChunk)
-    steps.push({ r: round, model_ms: Date.now() - ts, tin: r.tokensIn, tout: r.tokensOut, calls: r.functionCalls.map(c => c.name) })
-    tokensIn += r.tokensIn; tokensOut += r.tokensOut
-    if (r.content.parts?.length) contents.push(r.content)
-    return r
-  }
-  let genResult = await turn()
   const collectedSources: WebSource[] = []
-  const toolsUsed = new Set<string>()
   const safety = newTurnSafety(lastMsg, files.length > 0)
   if (opts.resume?.tainted) { safety.tainted = true; safety.taintSources = [...opts.resume.taintSources] }
+  // Cổng duyệt nhớ qua nhiều lượt (lỗi mở §1 plan be-gau-upgrade): nội dung ngoài đọc ở lượt trước vẫn nằm trong lịch sử chat → lượt sau
+  // của CÙNG cuộc chat (có lịch sử) cũng coi là đã "nhiễm". Lấy từ dòng trace gp_runs gần nhất (bước cuối ghi { tainted }).
+  if (!safety.tainted && geminiHistory.length > 0 && username && channel !== "cron") {
+    const prev = await previousRunTaint(username, channel).catch(() => null)
+    if (prev) { safety.tainted = true; safety.taintSources = [...new Set(prev.map(s => `${s.replace(/ \(lượt trước\)$/, "")} (lượt trước)`))] }
+  }
   const pendingActions: PendingAction[] = []
 
+  // Mỗi tool bọc try/catch RIÊNG — 1 tool lỗi (network timeout portal/video API/...) trước đây làm
+  // Promise.all reject cả round, sập TOÀN BỘ câu trả lời dù các tool khác đã chạy xong. Nay tool lỗi chỉ
+  // trả functionResponse báo lỗi cho MỘT tool đó, các tool còn lại + phần trả lời vẫn tiếp tục bình thường.
+  const runTool = async (call: any, r: number): Promise<any> => {
+    round = r + 1
+    if (call.name === "updatePlan") {
+      const steps = normalizePlan(call.args?.steps)
+      onEvent?.({ type: "plan", steps })
+      return { functionResponse: { name: call.name, response: { ok: true, steps: steps.length } } }
+    }
+    if (call.name === "loadSkill") {
+      const skill = getSkill(String(call.args?.name ?? ""))
+      if (!skill) return { functionResponse: { name: call.name, response: { error: `Không có skill "${call.args?.name}".` } } }
+      loadedSkills.add(skill.name)   // configFor đọc lại loadedSkills mỗi lượt → tool của kỹ năng có hiệu lực từ lượt sau
+      onEvent?.({ type: "status", text: `📚 Đang nạp kỹ năng ${skill.name}...` })
+      return { functionResponse: { name: call.name, response: { loaded: skill.name, tools_enabled: skill.tools, instructions: skill.instructions } } }
+    }
+    // Cổng duyệt (tool-policy.ts): hành động cần duyệt KHÔNG chạy — lưu hàng chờ, báo UI/Lark, trả trạng thái cho model.
+    const reason = approvalReason(call, safety)
+    if (reason) {
+      const summary = describeAction(call)
+      const { action, error } = channel === "cron"
+        ? { action: undefined, error: "việc tự động không có người duyệt" }
+        : await createPendingAction({ username, tool: call.name, args: call.args, reason, summary, channel })
+      if (!action) {
+        return { functionResponse: { name: call.name, response: { error: `Hành động cần duyệt nên CHƯA chạy (${error}). Báo người dùng.` } } }
+      }
+      pendingActions.push(action)
+      steps.push({ r: round, tool: call.name, approval: action.code })
+      onEvent?.({ type: "approval_required", action })
+      return { functionResponse: { name: call.name, response: {
+        status: "pending_approval", approval_code: action.code, reason,
+        message: `CHƯA thực hiện. Đã gửi yêu cầu duyệt #${action.code} cho người dùng (web: nút Duyệt; Lark: gõ "duyệt ${action.code}"). Nói ngắn rằng đang chờ duyệt, KHÔNG gọi lại tool này, KHÔNG tìm cách khác để làm thay.`,
+      } } }
+    }
+    const ts = Date.now()
+    try {
+      const out = await dispatchTool(call, onEvent, collectedSources, { username, isCreator, personal, images: attachedImages })
+      recordToolResult(safety, call, out.functionResponse.response)
+      const err = out.functionResponse.response?.error
+      steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), ...(err ? { err: String(err).slice(0, 200) } : {}) })
+      return out
+    } catch (e: any) {
+      steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), err: String(e?.message || e).slice(0, 200) })
+      return { functionResponse: { name: call.name, response: { error: e?.message || "Tool execution failed" } } }
+    }
+  }
 
   // Function calling loop — max 20 iterations. Tools run in parallel per turn.
-  let stopped = false
-  let unfinished = false
-  for (let i = 0; i < 20; i++) {
-    round = i + 1
-    if (opts.signal?.aborted) { stopped = true; break }   // G2: người dùng bấm Dừng
-    const calls = genResult.functionCalls
-    if (calls.length === 0) break
-
-    // Mỗi tool bọc try/catch RIÊNG — 1 tool lỗi (network timeout portal/video API/...) trước đây làm
-    // Promise.all reject cả round, sập TOÀN BỘ câu trả lời dù các tool khác đã chạy xong. Nay tool lỗi chỉ
-    // trả functionResponse báo lỗi cho MỘT tool đó, các tool còn lại + phần trả lời vẫn tiếp tục bình thường.
-    calls.forEach((c: any) => toolsUsed.add(c.name))
-    let skillsChanged = false
-    const fnParts = await Promise.all(calls.map(async (call: any) => {
-      if (call.name === "updatePlan") {
-        const steps = normalizePlan(call.args?.steps)
-        onEvent?.({ type: "plan", steps })
-        return { functionResponse: { name: call.name, response: { ok: true, steps: steps.length } } }
-      }
-      if (call.name === "loadSkill") {
-        const skill = getSkill(String(call.args?.name ?? ""))
-        if (!skill) return { functionResponse: { name: call.name, response: { error: `Không có skill "${call.args?.name}".` } } }
-        if (!loadedSkills.has(skill.name)) { loadedSkills.add(skill.name); skillsChanged = true }
-        onEvent?.({ type: "status", text: `📚 Đang nạp kỹ năng ${skill.name}...` })
-        return { functionResponse: { name: call.name, response: { loaded: skill.name, tools_enabled: skill.tools, instructions: skill.instructions } } }
-      }
-      // Cổng duyệt (tool-policy.ts): hành động cần duyệt KHÔNG chạy — lưu hàng chờ, báo UI/Lark, trả trạng thái cho model.
-      const reason = approvalReason(call, safety)
-      if (reason) {
-        const summary = describeAction(call)
-        const { action, error } = channel === "cron"
-          ? { action: undefined, error: "việc tự động không có người duyệt" }
-          : await createPendingAction({ username, tool: call.name, args: call.args, reason, summary, channel })
-        if (!action) {
-          return { functionResponse: { name: call.name, response: { error: `Hành động cần duyệt nên CHƯA chạy (${error}). Báo người dùng.` } } }
-        }
-        pendingActions.push(action)
-        steps.push({ r: round, tool: call.name, approval: action.code })
-        onEvent?.({ type: "approval_required", action })
-        return { functionResponse: { name: call.name, response: {
-          status: "pending_approval", approval_code: action.code, reason,
-          message: `CHƯA thực hiện. Đã gửi yêu cầu duyệt #${action.code} cho người dùng (web: nút Duyệt; Lark: gõ "duyệt ${action.code}"). Nói ngắn rằng đang chờ duyệt, KHÔNG gọi lại tool này, KHÔNG tìm cách khác để làm thay.`,
-        } } }
-      }
-      const ts = Date.now()
-      try {
-        const out = await dispatchTool(call, onEvent, collectedSources, { username, isCreator, personal })
-        recordToolResult(safety, call, out.functionResponse.response)
-        const err = out.functionResponse.response?.error
-        steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), ...(err ? { err: String(err).slice(0, 200) } : {}) })
-        return out
-      } catch (e: any) {
-        steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), err: String(e?.message || e).slice(0, 200) })
-        return { functionResponse: { name: call.name, response: { error: e?.message || "Tool execution failed" } } }
-      }
-    }))
-
-    // Kết quả tool gửi lại với role "user" (định dạng Gemini API cho functionResponse).
-    contents.push({ role: "user", parts: fnParts as any })
-    if (skillsChanged) config = makeConfig()
-    // Việc nền: hết ngân sách thời gian chặng → dừng TRƯỚC lượt model kế tiếp; chặng sau gọi lại model với contents này.
-    if (opts.timeBudgetMs && Date.now() - t0 > opts.timeBudgetMs) { unfinished = true; break }
-    genResult = await turn()
+  const loop = await runAgentLoop({
+    model: GEMINI_MODEL, contents, configFor: () => makeConfig(), runTool, maxRounds: 20, onChunk,
+    signal: opts.signal, timeBudgetMs: opts.timeBudgetMs, startedAt: t0,
+    onRound: x => steps.push({ r: x.r, model_ms: x.ms, tin: x.tin, tout: x.tout, calls: x.calls }),
+  })
+  let genResult = loop.last
+  const toolsUsed = loop.toolsUsed
+  const { stopped } = loop
+  let unfinished = loop.unfinished
+  // Web hết ngân sách thời gian (model chậm bất thường — QA 2026-10-08: 40s–2,5 phút/lượt, chạm trần 300s, UI trống) → không có
+  // việc nền nối tiếp, nên chốt 1 lượt cuối trả lời bằng dữ liệu đã lấy, không gọi thêm tool.
+  if (unfinished && channel === "web") {
+    try {
+      contents.push({ role: "user", parts: [{ text: "(Hệ thống) Đã hết thời gian xử lý. Trả lời NGAY bằng dữ liệu đã lấy được ở trên, nói rõ phần nào chưa kịp kiểm tra. KHÔNG gọi thêm công cụ." }] })
+      genResult = await loop.next({ ...makeConfig(), toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.NONE } } })
+      unfinished = false
+    } catch { /* giữ unfinished */ }
   }
 
   // Ensure non-empty response
@@ -700,14 +711,15 @@ export async function runCreatorAI(
   else if (!unfinished && !text.trim()) {
     try {
       contents.push({ role: "user", parts: [{ text: "Based on the data retrieved above, write a complete, detailed answer in Vietnamese. Include a markdown table or chart if the data is tabular. DO NOT call any more tools." }] })
-      genResult = await turn()
+      genResult = await loop.next(makeConfig())
       text = genResult.text
     } catch { /* keep empty */ }
   }
 
+  steps.push({ tainted: safety.tainted, taintSources: safety.taintSources })
   await saveRunTrace({
     username, channel, question: lastMsg.slice(0, 500), steps, skills: [...loadedSkills],
-    tokens_in: tokensIn, tokens_out: tokensOut, duration_ms: Date.now() - t0,
+    tokens_in: loop.tokensIn, tokens_out: loop.tokensOut, duration_ms: Date.now() - t0,
     outcome: stopped ? "stopped" : unfinished ? "unfinished" : "done",
   })
   const checkpoint = unfinished
@@ -715,6 +727,6 @@ export async function runCreatorAI(
     : undefined
   return {
     text: unfinished ? "" : (text || "Không có dữ liệu trả về."),
-    sources: collectedSources, tokensIn, tokensOut, toolsUsed: [...toolsUsed], pendingActions, checkpoint,
+    sources: collectedSources, tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, toolsUsed: [...toolsUsed], pendingActions, checkpoint,
   }
 }

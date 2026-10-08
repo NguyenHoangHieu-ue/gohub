@@ -59,7 +59,7 @@ function ruleFor(name: string, args: any): Rule {
       return args?.chat_id === "me" ? "when_tainted" : "always"
     case "createLarkTask": case "updateLarkTask":
     case "writeKnowledgeBase": case "approveLearning": case "rejectLearning":
-    case "generateImage": case "generateImageStability": case "generateVideo":
+    case "generateImage": case "generateVideo":
       return "when_tainted"
     case "assistantMemory": case "managePortalCredentials": case "scheduleTask":
       return action === "list" ? "never" : "when_tainted"

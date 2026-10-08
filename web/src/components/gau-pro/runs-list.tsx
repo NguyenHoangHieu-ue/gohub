@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 
 // Trace các lượt chạy Gấu Pro (G2, gp_runs) — tab "Lượt chạy" trong panel Nhật ký (chỉ creator).
-interface Step { r?: number; tool?: string; ms?: number; err?: string; approval?: string; args?: string; model_ms?: number; tin?: number; tout?: number; calls?: string[] }
+interface Step { r?: number; tool?: string; ms?: number; err?: string; approval?: string; args?: string; model_ms?: number; tin?: number; tout?: number; calls?: string[]; tainted?: boolean; taintSources?: string[] }
 interface Run {
   id: string; username: string | null; channel: string | null; question: string | null; steps: Step[]; skills: string[] | null
   tokens_in: number; tokens_out: number; duration_ms: number | null; outcome: string | null; created_at: string
@@ -50,6 +50,8 @@ export function RunsList() {
                     #{s.r} {s.tool} {s.approval ? `→ chờ duyệt #${s.approval}` : sec(s.ms)} {s.err ? `✗ ${s.err}` : ""}
                     {s.args ? <span className="text-gray-400"> {s.args.slice(0, 120)}</span> : null}
                   </div>
+                ) : s.tainted !== undefined ? (
+                  s.tainted ? <div key={i} className="text-amber-600">⚠ đã đọc nội dung ngoài: {(s.taintSources ?? []).join(", ")}</div> : null
                 ) : (
                   <div key={i} className="text-violet-500">#{s.r} model {sec(s.model_ms)} {s.calls?.length ? `→ ${s.calls.join(", ")}` : "→ trả lời"}</div>
                 ))}

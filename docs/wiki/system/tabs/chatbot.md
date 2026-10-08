@@ -17,6 +17,17 @@ Mô tả chi tiết kỹ thuật, cơ chế định tuyến, bảo mật và ph�
 
 ---
 
+## s227g (2026-10-07) — U1b: lõi agent chung Bé Gấu + Gấu Pro
+- `lib/agents/core/agent-loop.ts` → `runAgentLoop({ model, contents, configFor(round), runTool(call, round), maxRounds, onChunk, signal,
+  timeBudgetMs, startedAt, onRound })`: gọi model → chạy mọi tool của lượt song song → lặp; dừng khi hết tool / bấm Dừng (`stopped`) /
+  hết ngân sách thời gian việc nền (`unfinished`). Trả `last`, `toolsUsed`, token cộng dồn, `rounds`/`tools` (số đo) và `next(config?, onChunk?)`
+  để persona gọi thêm 1 lượt (ép gọi tool, viết lại câu trả lời rỗng).
+- **Bé Gấu** (`be-gau.ts`): `configFor = lượt 0 ? config (HIGH nếu câu phân tích) : lowConfig`, tối đa 12 lượt; `runTool` = switch tool cũ.
+  Lượt ép `larkWorkspace` dùng `loop.next(cfg ANY, () => {})` (không stream). `trace.rounds/tools` lấy từ `loop`.
+- **Gấu Pro** (`creator-ai.ts`): `configFor = () => makeConfig()` dựng lại mỗi lượt → kỹ năng vừa `loadSkill` có tool ngay lượt sau (bỏ cờ
+  `skillsChanged`). `runTool` giữ nguyên updatePlan/loadSkill/cổng duyệt/dispatchTool/steps; `onRound` ghi steps cho `gp_runs`.
+- Sửa vòng lặp/streaming/đo đạc thì sửa 1 chỗ ở `core/`, cả hai cùng có. Persona chỉ giữ prompt, tool theo vai trò, cách chạy 1 tool.
+
 ## s227d (2026-10-07) — Bé Gấu tạo Doc/Sheet/task trong Lark cho người hỏi ("mức A") + sửa định dạng tin Lark
 - **Tool `larkWorkspace`** (mọi vai trò, `lib/agents/lark-workspace.ts`): `create_doc` (markdown → Lark Docs), `create_sheet` (mảng 2 chiều →
   Lark Sheets), `create_task` (Lark Task giao cho người hỏi). Dùng **token của bot** — người dùng không cần kết nối thêm, chỉ cần
@@ -202,3 +213,147 @@ Theo roadmap audit toàn diện Bé Gấu (s196+5, xem artifact riêng). 4 việ
 tsc + lint (0 lỗi mới) + vitest (230/230) PASS. **Cần Hiếu**: chạy migration v59; muốn xem cost Bé Gấu thì
 tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi phí Gấu Pro" hiện có chỉ lọc
 `gau_pro`, chưa gộp — để riêng cho rõ vì đối tượng khác nhau, xem quyết định #2 trong artifact roadmap).
+## § s228 U3a (2026-10-08) — Bảng phân quyền tính năng theo vai trò + cổng an toàn chung
+
+- **Bảng tính năng** `lib/assistant-features.ts` (lưu `app_settings.assistant_features` = `{featureId: role[]}`, cache 60s). 3 nhóm:
+  *Mọi người* (mặc định bật mọi vai trò: tìm web, so giá vendor, win-rate SKU, xu hướng, Lark Base, tạo ảnh),
+  *Theo quyền* (mặc định chỉ admin: mở trang web `browseWeb`, tạo video), *Chỉ Creator* (khoá cứng: ghi KB/duyệt học liệu, portal
+  vendor, gửi Lark cho người khác, task Lark của Hiếu, ảnh Stability). Mục "Sắp có" (kế hoạch+Dừng, trí nhớ, chạy nền, đọc to,
+  ghi âm→biên bản, Trực tiếp, việc theo lịch, nghiên cứu sâu, dịch, Bridge, file máy) hiện trong bảng nhưng chưa có tác dụng.
+- Giao diện: Creator Settings → khối "Bé Gấu — Tính năng theo vai trò" (`assistant-features-section.tsx`); API
+  `GET/POST /api/config/assistant-features` (xem creator/admin, sửa chỉ creator).
+- Bé Gấu: tool lõi (SQL, Supabase, sản phẩm, KB, GA4/GSC, `larkWorkspace`, `searchKnowledgeBase`) luôn có; tool Gấu Pro khai báo theo
+  bảng. **Đổi hành vi**: trước admin có cả nhóm "Chỉ Creator" trong Bé Gấu — nay chỉ creator (theo plan U3).
+- **Cổng an toàn chung** (`creator/tool-policy.ts`): Bé Gấu ghi nhận lượt đã đọc nội dung ngoài (web, file, Lark Base, xu hướng) → chặn
+  hành động ghi/gửi/mở URL lạ (chưa có nút Duyệt ở Bé Gấu → báo người dùng gửi lại ở tin mới).
+- **Ngân sách thời gian 240s** cho Bé Gấu + Gấu Pro web: QA 2026-10-08 Gemini chậm bất thường (20s–2,5 phút/lượt, cả production)
+  → Gấu Pro chạm trần 300s, UI "Không có nội dung trả về". Nay hết 240s thì chốt 1 lượt trả lời bằng dữ liệu đã có (không gọi tool).
+
+## § s228 U3b (2026-10-08) — Bé Gấu: kế hoạch từng bước, nút Dừng, trí nhớ
+
+- `/api/chat` đổi sang **SSE** (`data: {json}\n\n`, sự kiện `agent` / `delta` / `plan` / `done`) — trước là chữ thô + dòng `__AGENT__:`.
+  Trang `chatbot/page.tsx` đọc SSE, hiện khung "Kế hoạch" (checklist) khi đang chạy, nút Gửi thành nút **Dừng** khi đang chạy
+  (AbortController → `req.signal` → vòng lặp dừng, câu trả lời dở giữ lại + "⏹ Đã dừng theo yêu cầu.").
+- Tính năng "Kế hoạch từng bước" (tool `updatePlan`, xử lý tại chỗ, không ghi gì) mặc định bật mọi vai trò.
+- Tính năng "Trí nhớ + tìm hội thoại cũ" (`assistantMemory`, `searchPastConversations`, nạp khối trí nhớ mỗi lượt, sau lượt rút điều đáng
+  nhớ + tóm tắt hội thoại) **mặc định TẮT** — Hiếu bật theo vai trò ở bảng tính năng. Trang gửi `conversation_id` để tóm tắt; link kết quả
+  tìm hội thoại: tiêu đề "[GP] …" → Gấu Pro, còn lại → `/chatbot?c=<id>` (trang Bé Gấu mở thẳng hội thoại theo `?c=`).
+
+## § s228 (2026-10-08) — Bộ lọc lộ tên bảng/cột trong câu trả lời Bé Gấu
+
+- Eval U1b câu #1/#15 lộ "(`staff_code`)", "(`ref_countries`)" dù prompt cấm → thêm `core/leak-filter.ts`: xoá code nội dòng dạng
+  snake_case (kèm ngoặc bao quanh) ở chữ stream ra (giữ lại phần có thể là đoạn code chưa đóng) và ở câu trả lời cuối. Không đụng
+  khối ``` (khối export chứa SQL thật), mã SKU viết hoa, từ thường. Test `leak-filter.test.ts` (stream từng ký tự = lọc cả đoạn).
+
+## § s228 (2026-10-08) — Tool `b2bCustomerCm1` (CM1 B2B theo khách hàng)
+
+- `lib/agents/b2b-cm1.ts` gọi THẲNG handler `GET` của `/api/analytics/quarterly-b2b-customers` (kèm `Bearer CRON_SECRET`) → số khớp tuyệt
+  đối tab Quarter Report (chi phí KH Turso, pro-rata tháng đang chạy, Group Cost B2B phân bổ ở mức nhóm), không viết lại công thức.
+  Lọc theo tên/mã KH, nhóm (tier), top N, tuỳ chọn số từng tháng. CM1 từng KH chưa trừ Group Cost; CM1 tổng nhóm đã trừ.
+- Chỉ khai báo khi vai trò xem được giá vốn VÀ không có `role_filters` giới hạn dữ liệu (route không áp bộ lọc vai trò).
+
+## § s228 (2026-10-08) — Bé Gấu: Trò chuyện trực tiếp theo vai trò
+
+- Tính năng "Trò chuyện trực tiếp" (nhóm Theo quyền, mặc định chỉ admin) — nút "🎙 Trực tiếp" trên trang Bé Gấu hiện khi vai trò được bật
+  (`GET /api/chat/features` trả danh sách tính năng bật cho vai trò hiện tại).
+- `runBeGau` tách phần chuẩn bị thành `prepareBeGau()` (prompt + tool theo vai trò/tính năng + `runTool` có cổng an toàn và lọc giá vốn);
+  `promptless: true` chỉ dựng phần chạy tool. Phiên Live Bé Gấu (`lib/agents/be-gau-live.ts`) dùng hàm này → cùng lọc vai trò như chat,
+  KHÔNG đi đường tool Gấu Pro (đường đó không áp lọc theo vai trò). Chỉ tool ĐỌC (`BE_GAU_LIVE_TOOLS`), không có thao tác Chrome.
+- Route: `/api/chat/live/token` | `tool` | `log` (phụ đề lưu thành hội thoại "🎙 …" trong Bé Gấu). Tạo token dùng chung với Gấu Pro:
+  `lib/agents/live-token.ts`. Component `components/gau-pro/live-session.tsx` thêm prop `apiBase`/`title`/`allowControl`.
+
+## § s228 (2026-10-08) — Bé Gấu: chạy nền việc dài
+
+- Tính năng "Chạy nền việc dài" (Mọi người, mặc định bật). Nút ⏳ cạnh ô nhập → tin gửi đi thành việc nền (`POST /api/chat/jobs`).
+- Dùng CHUNG bảng + bộ chạy `gp_jobs` của Gấu Pro (không migration): việc Bé Gấu đánh dấu `checkpoint.agent = "be-gau"` (+ `ownerName`,
+  `contents`, `tainted`). `runJobChunk` rẽ sang `runBeGauJobChunk`: đọc lại `users.role` mỗi chặng, chạy `runBeGau({ job })` — hết ngân sách
+  200s trả checkpoint (giữ trạng thái đã đọc nội dung ngoài), tối đa 6 chặng. Xong: hội thoại "⏳ …" lưu theo TÊN hiển thị + Lark DM.
+- ⚠️ Hội thoại Bé Gấu lọc theo `session.user.name` (không phải username) — phụ đề phiên Trực tiếp đã sửa lưu theo tên.
+- `core/agent-loop.ts`: ngân sách thời gian so `!= null` (trước `0` bị bỏ qua).
+
+## § s228 (2026-10-08) — Bé Gấu: đọc to câu trả lời (TTS)
+
+- Tính năng "Đọc câu trả lời" (Mọi người, mặc định bật): nút 🔊 dưới mỗi câu trả lời → `POST /api/chat/tts` → audio/wav, bấm lại để dừng.
+- Model `GEMINI_TTS_MODEL` (mặc định `gemini-3.8-flash-tts`, trả thẳng WAV; đo ~4s/câu ngắn), giọng "Kore". `lib/speech-text.ts` bỏ khối
+  code/chart/export, thay bảng bằng "(Bảng số liệu xem trên màn hình.)", cắt ở 2.500 ký tự. Giới hạn 10 lần/phút/người.
+
+## § s228 (2026-10-08) — Bé Gấu: ghi âm cuộc họp → biên bản
+
+- Tính năng "Ghi âm → biên bản" (Mọi người, mặc định bật): nút 🎤 (ghi âm trên trình duyệt, opus 16kbps) + nút tải file ghi âm, cạnh ô nhập
+  (`components/be-gau/meeting-recorder.tsx`) → `POST /api/chat/transcribe` (multipart `audio`). Kết quả vào hội thoại đang mở như 1 lượt hỏi–đáp.
+- 2 bước: `GEMINI_TRANSCRIBE_MODEL` (mặc định `gemini-3.5-transcribe`, trả part `audioTranscription.text`, không tách người nói, ~2,5s/câu)
+  → `GEMINI_MODEL` viết biên bản (tóm tắt, nội dung, quyết định, bảng việc cần làm, câu hỏi mở), có danh sách thuật ngữ để sửa chỗ nghe nhầm.
+- Gotcha đo được: model chép lời BỎ QUA gợi ý thuật ngữ (gửi kèm text không đổi kết quả); hay nhầm "Gighub"→"GitHub", "Hiếu"→"Hiểu".
+- Giới hạn: body request Vercel ~4,5MB → tối đa ~4,4MB (≈ 35 phút ở 16kbps); họp dài hơn cần upload qua kho file (chưa làm).
+
+## § s228 (2026-10-08) — Bé Gấu: việc theo lịch
+
+- Tính năng "Việc theo lịch" (Theo quyền, mặc định chỉ admin) → tool `scheduleTask` (create/list/cancel) trong Bé Gấu.
+- Dùng chung bảng `gp_scheduled_tasks` (không migration): việc đặt từ Bé Gấu lưu `schedule.agent = "be-gau"` + `schedule.ownerName`;
+  `runDueSchedules` tạo việc nền có dấu Bé Gấu → chạy `runBeGau` theo vai trò người đặt; việc canh chừng trả `NO_ALERT` thì không lưu/nhắn.
+- Kết quả: Lark DM (cần `users.lark_open_id`) + hội thoại "⏳ …". Cron `scheduled-messages` mỗi giờ → trễ tối đa ~1 giờ (đang trỏ staging).
+- Cổng an toàn: tạo lịch sau khi lượt đã đọc nội dung ngoài → bị chặn (rule `when_tainted`).
+
+## § s228 (2026-10-08) — Bé Gấu: nghiên cứu sâu (Deep Research)
+
+- Tính năng "Nghiên cứu sâu" (Theo quyền, mặc định chỉ admin) → tool `deepResearch` (`lib/agents/deep-research.ts`): tạo phiên
+  `ai.interactions.create({ agent: GEMINI_DEEP_RESEARCH_AGENT, background: true })` (mặc định `deep-research-preview-04-2026`) + 1 việc nền
+  `gp_jobs` với `checkpoint = { agent: "deep-research", interactionId, ownerName }`. Bộ chạy hỏi trạng thái mỗi 15s trong chặng 200s,
+  tối đa 12 chặng (~40 phút, quá thì huỷ). Xong: `output_text` (markdown, cuối có danh sách nguồn) → hội thoại "🔎 …" + Lark DM.
+- Chỉ gửi CÂU HỎI ra ngoài (kèm bối cảnh GoHub chung), không kèm dữ liệu nội bộ. Đo: câu giá eSIM Nhật 7 ngày 136s, ~114k token.
+- `/api/chat` truyền `origin` cho `runBeGau` để tự gọi bộ chạy việc nền.
+
+## § s228 (2026-10-08) — Bé Gấu: dịch trực tiếp (CS)
+
+- Tính năng "Dịch trực tiếp" (Theo quyền, mặc định chỉ admin — bật cho Ops & CS khi cần): nút "🌐 Dịch trực tiếp" → `components/be-gau/translate-session.tsx`.
+- `POST /api/chat/translate/token { lang }` cấp 2 token Live (`GEMINI_TRANSLATE_MODEL`, mặc định `gemini-3.5-live-translate-preview`,
+  `translationConfig`): khách → tiếng Việt và nhân viên → tiếng khách. 13 ngôn ngữ. `live-token.ts` thêm tuỳ chọn `model` + `translationConfig`.
+- Gotcha đo được: `echoTargetLanguage: false` VẪN phát âm thanh (không ra chữ) khi nghe đúng ngôn ngữ đích → không thể để 2 phiên cùng nghe
+  1 mic; giao diện có 2 nút "Khách đang nói" / "Tôi đang nói", mic chỉ gửi vào phiên của chiều đang chọn. Không lưu hội thoại.
+
+## § s228 U2 (2026-10-08) — Báo cáo đẹp: Word / Excel / PowerPoint / PDF
+
+- Tool `buildReport` (Bé Gấu: mọi vai trò; Gấu Pro: có sẵn) — `lib/agents/report-tool.ts` → bộ dựng `lib/report/`:
+  `spec.ts` (khung: title, period, summary, sections[heading, text, bullets, kpis, table, chart], actions, notes; định dạng số kiểu Việt),
+  `charts.ts` (SVG tự dựng: bar/stacked/line/pie, màu gohub.vn; PNG qua `@resvg/resvg-js` + font Be Vietnam Pro trong `lib/report/fonts/`),
+  `docx.ts`, `xlsx.ts` (exceljs: dòng tiêu đề xanh cố định, bộ lọc, #,##0 / 0.0"%", dòng Tổng là công thức SUM, ảnh biểu đồ), `pptx.ts`
+  (pptxgenjs: bìa, kết luận, biểu đồ GỐC sửa được, bảng ≤12 dòng), `pdf.ts` (HTML + SVG in qua browserless — gói free ngủ, chờ kết nối 90s).
+- **Số khớp SQL**: bảng/ô số kèm `sql` → server tự chạy (Bé Gấu qua `execSQL` có chặn giá vốn theo vai trò) và dùng số thật, bỏ số model gõ.
+- File lưu bucket RIÊNG TƯ `reports/<username>/…` (tự tạo bucket); link `/api/chat/report-file?p=` kiểm đăng nhập + đúng người (admin/creator
+  xem được hết) rồi chuyển sang link ký 60 giây.
+- `next.config`: external `@resvg/resvg-js`, `exceljs`, `pptxgenjs`; `outputFileTracingIncludes` kèm file font. Test `report.test.ts`.
+- Chưa có: chạy code Python, ghi thẳng vào Lark Docs kèm ảnh biểu đồ (U2 phần sau).
+
+## § s228 U2b (2026-10-08) — Bé Gấu chạy code Python để tính toán
+
+- Config Bé Gấu thêm built-in `{ codeExecution: {} }` cạnh function declarations + `toolConfig.includeServerSideToolInvocations: true`
+  (thiếu cờ → API 400 "Please enable tool_config.include_server_side_tool_invocations"). Mọi lượt ép tool (Lark ANY, chốt NONE) phải giữ cờ.
+- Đo: model gọi executeSQL trước, lượt sau tự viết + chạy Python (executableCode/codeExecutionResult) rồi trả lời. Prompt: tính nhiều số
+  bằng code, không in code ra câu trả lời. `streamTurn` giữ nguyên các part code trong lịch sử.
+
+## § s228 U2c (2026-10-08) — Báo cáo vào Lark Docs (CHƯA QA)
+
+- `buildReport` nhận format `lark` → `lib/report/lark.ts`: tạo Doc bằng token bot, nối từng mục (markdown) + ảnh biểu đồ đúng vị trí
+  (`appendImage` trong `creator/tools/lark-docs.ts`: khối ảnh trống → upload `docx_image` → `replace_image`), chuyển quyền cho người hỏi + DM link.
+- Chưa thử được: token Lark trong `.env.local` máy Hiếu báo "invalid param" (secret cũ). Cần QA trên staging.
+
+## § s228 U4 (2026-10-08) — Giao diện chat mới (trang Bé Gấu)
+
+- Bỏ cột lịch sử bên trái + nút Thu gọn/Lịch sử. Thanh trên: "Bé Gấu / <tên hội thoại ▾>" (`components/chat/conversation-switcher.tsx`:
+  danh sách nhóm theo ngày, ô tìm, "Cuộc mới", xoá) + nút ✎ cuộc mới + nút ⋯ (`overflow-menu.tsx`: Trực tiếp, Dịch, Ghi âm cuộc họp,
+  Biên bản từ file, Chạy nền — chỉ hiện mục được bật theo vai trò).
+- Ô nhập: 📎 · ô chữ · 🎤 nói thành chữ (`dictation-button.tsx` → `/api/chat/transcribe` mode=text, mở cho mọi người, tối đa 3 phút) ·
+  Gửi/Dừng. Chạy nền và ghi âm cuộc họp hiện thành dải trạng thái phía trên ô nhập (ghi âm mở từ ⋯, `MeetingRecorder autoStart`).
+- Hội thoại dài (`use-stick-to-bottom.ts`): mở ra nhảy xuống tin mới nhất; chỉ tự bám đáy khi người dùng đang ở cuối; cuộn lên thì có nút
+  "↓ Tin mới nhất"; >40 tin thì thu gọn "Hiện N tin trước". Gấu Pro chưa đổi (dùng lại các component này ở bước sau).
+
+## § s228 U0 (2026-10-08) — Ảnh/video chuyển sang Google
+
+- `generateImage` (`creator/tools/image.ts`): Google Nano Banana — `GEMINI_IMAGE_MODEL` (mặc định `gemini-nano-banana-2.1`), `quality: "high"` →
+  `GEMINI_IMAGE_MODEL_PRO` (`gemini-3-pro-image`, chữ trong ảnh đẹp hơn). `edit_attached: true` → sửa theo ảnh người dùng đính kèm (Bé Gấu +
+  Gấu Pro truyền ảnh qua `dispatchTool ctx.images`). Ảnh lưu bucket công khai `creator-images/<ngày>/<uuid>`. Đo: tạo ~29s, Pro ~18s, sửa ~21s.
+- `generateVideo` / `checkVideoStatus` (`video.ts`): Veo 3.1 — `GEMINI_VIDEO_MODEL` (`veo-3.1-fast-generate-preview`, ~55s) / `quality: "high"` →
+  `veo-3.1-generate-preview`. Chờ tối đa 150s trong lượt, lâu hơn trả `task_id` (tên operation). File Google cần API key → tải về, lưu bucket.
+- ĐÃ XOÁ Pollinations, Stability (`generateImageStability`, tính năng "image_paid"), Kling; CSP bỏ `image.pollinations.ai`. Env
+  `STABILITY_API_KEY`, `KLING_API_KEY` trên Vercel không còn dùng — Hiếu có thể xoá.
+- Quyền: tạo ảnh mọi vai trò (tính năng "image"); video theo vai trò (tính năng "video", mặc định admin).

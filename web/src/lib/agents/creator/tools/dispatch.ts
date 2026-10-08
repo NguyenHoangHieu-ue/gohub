@@ -6,7 +6,7 @@ import { runReadKnowledgeBase, runWriteKnowledgeBase, runSearchKnowledgeBase, ru
 import { runExecuteSQL }           from "./sql"
 import { runQuerySupabase, runQueryProduct } from "./supabase"
 import { runQueryGA4, runQueryGSC } from "./analytics"
-import { runGenerateImage, runGenerateImageStability, runGetTrendSnapshots } from "./image"
+import { runGenerateImage, runGetTrendSnapshots, type InputImage } from "./image"
 import { runLarkTask, runLarkBase } from "./lark"
 import { runSendLarkMessage }      from "./lark-send"
 import { runBrowsePortal, runManagePortalCredentials } from "./portal"
@@ -23,6 +23,7 @@ import { runScheduleTask } from "../schedules"
 import { runLarkDocs } from "./lark-docs"
 import { logGpAction }             from "./audit-log"
 import { runVerifyReportNumbers }  from "./self-review"
+import { runBuildReport }          from "../../report-tool"
 
 // Tool có tác dụng phụ ra ngoài (ghi KB/Lark/portal/browser thật) — audit trail (s196+6).
 const AUDITED_TOOLS = new Set([
@@ -35,7 +36,7 @@ export async function dispatchTool(
   call: { name: string; args: any },
   onEvent: ((e: GPEvent) => void) | undefined,
   collectedSources: WebSource[],
-  ctx?: { username?: string; isCreator?: boolean; personal?: boolean },
+  ctx?: { username?: string; isCreator?: boolean; personal?: boolean; images?: InputImage[] },
 ): Promise<{ functionResponse: { name: string; response: any } }> {
   const result = await dispatchToolCore(call, onEvent, collectedSources, ctx)
   if (AUDITED_TOOLS.has(call.name)) {
@@ -50,7 +51,7 @@ async function dispatchToolCore(
   call: { name: string; args: any },
   onEvent: ((e: GPEvent) => void) | undefined,
   collectedSources: WebSource[],
-  ctx?: { username?: string; isCreator?: boolean; personal?: boolean },
+  ctx?: { username?: string; isCreator?: boolean; personal?: boolean; images?: InputImage[] },
 ): Promise<{ functionResponse: { name: string; response: any } }> {
   const isCreator = ctx?.isCreator === true
   // Emit status event
@@ -144,9 +145,9 @@ async function dispatchToolCore(
     return wrap({
       ...resp,
       instruction: resp.error
-        ? `Video generation failed: ${resp.error}. Tell Hiếu and suggest rephrasing the prompt.`
+        ? `Video generation failed: ${resp.error}. Báo người dùng lỗi và gợi ý mô tả lại.`
         : resp.task_id
-          ? `Include the markdown field as-is in your response. Tell Hiếu they can ask "checkVideoStatus ${resp.task_id}" sau ~2 phút.`
+          ? `Chép nguyên trường markdown vào câu trả lời; báo người dùng hỏi lại sau ~2 phút (checkVideoStatus ${resp.task_id}).`
           : "Include the markdown field EXACTLY as-is in your response so the UI renders the video link.",
     })
   }
@@ -162,22 +163,12 @@ async function dispatchToolCore(
   }
 
   if (call.name === "generateImage") {
-    const resp = await runGenerateImage(call.args)
+    const resp = await runGenerateImage(call.args, ctx?.images)
     return wrap({
       ...resp,
       instruction: resp.error
-        ? `Image generation failed: ${resp.error}. Tell Hiếu and suggest rephrasing the prompt.`
-        : "Include the markdown field EXACTLY as-is in your response — it contains the base64 image that the UI will render. Do NOT modify or truncate it.",
-    })
-  }
-
-  if (call.name === "generateImageStability") {
-    const resp = await runGenerateImageStability(call.args)
-    return wrap({
-      ...resp,
-      instruction: resp.error
-        ? `Image generation failed: ${resp.error}. Báo Hiếu lỗi này.`
-        : "Include the markdown field EXACTLY as-is in your response — it contains the image URL. Do NOT modify or truncate it.",
+        ? `Image generation failed: ${resp.error}. Báo người dùng lỗi và gợi ý mô tả lại.`
+        : "Chép NGUYÊN trường markdown (ảnh) vào câu trả lời, không sửa link.",
     })
   }
 
@@ -206,6 +197,13 @@ async function dispatchToolCore(
     const resp = await runExecuteSQL(call.args?.sql || "", call.args?.bypass_cache === true)
     return wrap(resp)
   }
+
+  // U2: file báo cáo đẹp — bảng/ô số kèm sql chạy lại ở server để số khớp.
+  if (call.name === "buildReport")
+    return wrap(await runBuildReport(call.args, { owner: ctx?.username || "anon", runSql: async (sql: string) => {
+      const r: any = await runExecuteSQL(sql, false)
+      return r.error ? { error: r.error } : { rows: r.result }
+    } }))
 
   if (call.name === "verifyReportNumbers")
     return wrap(await runVerifyReportNumbers(call.args))

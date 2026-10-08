@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai"
+import { SchemaType } from "@google/generative-ai"
+import { ThinkingLevel, FunctionCallingConfigMode, type Content } from "@google/genai"
 import { queryAnalytics }                 from "@/lib/analytics-db"
 import { supabaseAdmin }                   from "@/lib/supabase"
 import { runGA4Report, runGSC, ga4Sites } from "@/lib/ga4"
@@ -9,58 +10,31 @@ import { getCustomRules }                from "./guardian"
 import { runWebSearch, runReadKnowledgeBase, type WebSource, type FileContext } from "./creator-ai"
 import { compressHistory }              from "./creator/compress"
 import { kbIndexBlock, relevantKbBlock } from "./creator/kb-recall"
-import { genWithRetryStream }            from "./gemini-stream"
+import { toGenaiSchema } from "./genai-stream"
+import { runAgentLoop } from "./core/agent-loop"
 import { detectAndLogLearning }          from "./learning"
 import { larkWorkspaceDecl, runLarkWorkspace } from "./lark-workspace"
+import { BUSINESS_FACTS, ANSWER_STYLE } from "./business-facts"
 
-// ─── s190: gộp Gấu Pro vào Bé Gấu ──────────────────────────────────────────────
-// Theo yêu cầu Hiếu: Bé Gấu nay có TẤT CẢ công cụ Gấu Pro (declarations/executor dùng CHUNG qua
-// creator/declarations.ts + creator/tools/dispatch.ts — không chép lại logic, tránh đúng kiểu "code
-// thừa/trùng lặp" mà audit s190 tìm thấy ở chỗ khác). Gấu Pro (route/trang riêng, creator-only) GIỮ
-// NGUYÊN không đổi — Hiếu sẽ quyết hướng xử lý sau.
-// Phân quyền theo đúng yêu cầu: "code/hệ thống/quy trình" → guardian.ts chặn ở tầng CÂU HỎI (category
-// system_internal, chỉ admin/creator). Ở tầng CÔNG CỤ, một số tool Gấu Pro không phải "hỏi thông tin" mà
-// là HÀNH ĐỘNG có rủi ro/chi phí riêng — những tool đó bị giữ admin/creator-only bằng cách không đăng ký
-// declaration cho role khác (Gemini không thể gọi hàm nó không thấy), độc lập với Guardian:
-//   - browsePortal/managePortalCredentials: đăng nhập + đọc credential portal NCC bên thứ 3.
-//   - writeKnowledgeBase/reviewPendingLearning/approveLearning/rejectLearning: ghi đè KB dùng chung cho
-//     MỌI người hỏi Bé Gấu sau này — 1 người ghi sai/ghi bậy sẽ lan ra toàn bộ câu trả lời sau đó.
-//   - sendLarkMessage: gửi tin nhắn Lark tới bất kỳ group nào (rủi ro spam/mạo danh).
-//   - listLarkTasks/listLarkTasklists/getLarkTask/createLarkTask/updateLarkTask: các API Lark Task này
-//     LUÔN thao tác trên tài khoản Lark CÁ NHÂN của Hiếu (gán task cho creatorOpenId, đọc task của chính
-//     Hiếu) — mở cho role khác sẽ lộ task cá nhân của Hiếu cho bất kỳ ai hỏi, không phải lỗi phân quyền
-//     thường mà là rò rỉ dữ liệu cá nhân, nên giữ creator/admin dù bản chất là "đọc", không phải "ghi".
-//   - generateImageStability/generateVideo/checkVideoStatus: gọi API trả phí (Stability AI/Kling) —
-//     generateImage (Pollinations, miễn phí) thì mở cho mọi người, 2 cái trả phí giữ admin/creator để
-//     tránh bị lạm dụng tốn tiền khi mở cho toàn công ty.
-// Còn lại (generateImage, getTrendSnapshots, queryLarkBase, compareVendorQuotes, trackSKUWinRate,
-// searchKnowledgeBase) mở cho MỌI role đã đăng nhập — đúng tinh thần "ai cũng như nhau".
-import {
-  generateImageDecl, getTrendSnapshotsDecl, queryLarkBaseDecl, compareVendorQuotesDecl,
-  trackSKUWinRateDecl, searchKBDecl,
-  writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
-  browsePortalDecl, managePortalCredsDecl, sendLarkMessageDecl,
-  listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl,
-  generateImageStabilityDecl, generateVideoDecl, checkVideoStatusDecl,
-} from "./creator/declarations"
+// ─── Công cụ Gấu Pro dùng chung ─────────────────────────────────────────────────
+// Declarations/executor dùng CHUNG với Gấu Pro (creator/declarations.ts + creator/tools/dispatch.ts). Tool nào Bé Gấu được khai báo
+// do bảng phân quyền tính năng theo vai trò quyết định (lib/assistant-features.ts, U3) — Gemini không thấy hàm thì không gọi được.
+// Nhóm "Chỉ Creator" (ghi KB chung, portal vendor, gửi Lark cho người khác, task Lark CÁ NHÂN của Hiếu) khoá cứng trong bảng đó.
+import { ALL_TOOL_DECLARATIONS, searchKBDecl } from "./creator/declarations"
 import { dispatchTool } from "./creator/tools/dispatch"
+import { newTurnSafety, recordToolResult, approvalReason } from "./creator/tool-policy"
+import { loadFeatureMatrix, enabledFeatureTools } from "@/lib/assistant-features"
+import { buildMemoryBlock } from "@/lib/assistant-memory"
+import { normalizePlan, compactContents, type PlanStep } from "./creator-ai"
+import { runScheduleTask } from "./creator/schedules"
+import { deepResearchDecl, runDeepResearch } from "./deep-research"
+import { buildReportDecl, runBuildReport } from "./report-tool"
 import { GEMINI_MODEL } from "@/lib/ai-models"
+import { leakFilterStream, scrubLeaks } from "./core/leak-filter"
+import { b2bCustomerCm1Decl, runB2bCustomerCm1 } from "./b2b-cm1"
 
-// Tool mở cho MỌI role (business/productivity, không phải hành động nhạy cảm/trả phí).
-const GP_TOOLS_OPEN = [
-  generateImageDecl, getTrendSnapshotsDecl, queryLarkBaseDecl, compareVendorQuotesDecl,
-  trackSKUWinRateDecl, searchKBDecl,
-]
-// Tool CHỈ admin/creator — hành động/credential/chi phí/dữ liệu cá nhân Hiếu (xem giải thích ở trên).
-const GP_TOOLS_ADMIN_ONLY = [
-  writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
-  browsePortalDecl, managePortalCredsDecl, sendLarkMessageDecl,
-  listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl,
-  generateImageStabilityDecl, generateVideoDecl, checkVideoStatusDecl,
-]
-const GP_DISPATCH_NAMES = new Set(
-  [...GP_TOOLS_OPEN, ...GP_TOOLS_ADMIN_ONLY].map(d => d.name),
-)
+// webSearch có executor riêng ở dưới (gom nguồn trích dẫn); các tool tính năng khác chạy qua dispatchTool.
+const FEATURE_DECLS = ALL_TOOL_DECLARATIONS.filter(d => d.name !== "webSearch")
 
 // ─── Helpers dùng chung ─────────────────────────────────────────────────────────
 
@@ -192,14 +166,14 @@ const BE_GAU_PROMPT = `Bạn là "Bé Gấu" — trợ lý AI nội bộ của G
 - Nếu yêu cầu mơ hồ (thiếu nước/kỳ/mã…) → HỎI LẠI ngắn gọn thay vì đoán.
 
 ## Phân quyền dữ liệu
-- Một số dữ liệu có thể bị hạn chế với vai trò của người hỏi. Nếu không truy cập được → nói lịch sự: "Thông tin này hiện không khả dụng với vai trò của bạn, bạn hỏi anh Hiếu nhé 😊". KHÔNG giải thích lý do kỹ thuật.
+- CHỈ từ chối khi công cụ thật sự trả lỗi phân quyền (hoặc mục "Nội bộ" bên dưới nói rõ vai trò KHÔNG được xem). Không tự suy đoán bị cấm. Khi bị chặn → nói lịch sự: "Thông tin này hiện không khả dụng với vai trò của bạn, bạn hỏi anh Hiếu nhé 😊". KHÔNG giải thích lý do kỹ thuật.
 - Tôn trọng che giấu giá vốn (COGS)/thông tin cá nhân khách hàng khi vai trò không có quyền — không cố lách.
 
 ## Bối cảnh GoHub
 - GoHub bán Sim/eSIM data cho khách du lịch quốc tế.
 - Kênh: B2B (doanh nghiệp/sỉ — khách có tier Strategic/VIP/Gold/Silver theo bảng giá) + B2C (bán lẻ — không có tier).
-- Chỉ số: Revenue (VND); GP = Revenue − COGS; CM1 = GP − Operation Cost; CM1% = CM1/Revenue×100.
-- Op cost gồm phí cố định (VND, pro-rata theo số ngày) + phí % trên revenue (CỘNG HẾT tất cả phí %).
+- Chỉ số: Revenue (VND); GP = Revenue − COGS; CM1 = GP − chi phí kênh − chi phí nhóm (group cost); CM1% = CM1/Revenue×100.
+- Chi phí kênh gồm phí cố định (VND, pro-rata theo số ngày) + phí % trên revenue (CỘNG HẾT tất cả phí %).
 - 3HK: chuẩn nhận diện vendor là "3HKDATAPOOL" (bỏ khoảng trắng, viết hoa) — KHÔNG gộp nhầm các vendor "3HK" khác. "3HK Contribution %" = doanh thu 3HKDATAPOOL / tổng doanh thu.
 - Phân tích B2B theo tier: loại khách tên 'B2C Customer US','B2C Customer VN','B2B Ops'.
 - Total GP có thể khác B2B GP + B2C GP do nhóm nội bộ "Internal-Transaction" (SIM tiêu dùng nội bộ, doanh thu 0, GP âm). Nếu ai đối chiếu, giải thích ngắn khoản chênh này.
@@ -237,9 +211,17 @@ Dùng chart_type "line"/"area" cho chuỗi thời gian (dùng "lines" thay "bars
 - "cái đó / nó / này" → chỉ thực thể gần nhất vừa nói. Đổi chủ đề hoàn toàn → suy luận lại từ đầu.
 - Không chắc "cái đó" là gì → hỏi lại: "Bạn muốn xem [A] hay [B]?"
 
-## Xuất file (chỉ khi được yêu cầu)
-Nút tải file CHỈ hiện khi bạn xuất khối \`\`\`export ở CUỐI câu trả lời. Chỉ làm việc này khi user rõ ràng
-xin xuất/tải/download/lưu file (từ khoá: "xuất", "tải", "download", "lưu file", "file Excel/Word/PDF").
+## Tính toán bằng code (U2)
+Cần tính trên nhiều số (tăng trưởng %, tỷ trọng, trung bình, độ lệch, xếp hạng, dự phóng, so sánh nhiều kỳ) → chạy code Python với số
+ĐÃ LẤY từ công cụ dữ liệu, không nhẩm. KHÔNG in code ra câu trả lời — chỉ trình bày kết quả.
+
+## Báo cáo / file đẹp (U2)
+Người dùng nhờ LÀM BÁO CÁO, xuất file Word/Excel/PowerPoint/PDF, làm slide → lấy số liệu trước, rồi gọi công cụ buildReport (khung: kết luận
+trước, mục có ô số / bảng / biểu đồ, việc nên làm, nguồn). Bảng và ô số kèm sql để số trong file khớp dữ liệu. Trả link tải nguyên văn.
+
+## Xuất nhanh dữ liệu thô (khối export)
+Chỉ để tải NHANH 1 bảng dữ liệu thô (Excel/CSV) khi người dùng xin "tải bảng này" — báo cáo/file trình bày thì dùng buildReport ở trên.
+Nút tải file CHỈ hiện khi bạn xuất khối \`\`\`export ở CUỐI câu trả lời.
 KHÔNG hỏi ngược "bạn có muốn xuất không?" — chỉ hành động khi được yêu cầu.
 
 Cú pháp (đặt CUỐI câu trả lời):
@@ -274,9 +256,14 @@ sql: SELECT c.name, SUM(f.fulfilled_revenue_amount_vnd) AS revenue FROM fact_ful
 - Không rõ người dùng muốn gì với file → hỏi lại ngắn gọn thay vì đoán.`
 
 // ─── Executor: gohub_dw SQL ─────────────────────────────────────────────────────
-async function execSQL(sql: string): Promise<any> {
+// U1a: vai trò không được xem giá vốn → chặn ở tầng code mọi câu SQL đụng cột giá vốn/lãi gộp (baseline eval: vai trò b2c vẫn
+// thấy GP dù prompt cấm). CM1/biên lãi đều tính từ các cột này nên chặn tận gốc.
+const COST_COLS_RE = /gross_profit|cogs|unit_cost|cost_price/i
+async function execSQL(sql: string, canSeeCost = true): Promise<any> {
   const norm = (sql || "").trim().toLowerCase()
   if (!norm.startsWith("select") && !norm.startsWith("with")) return { error: "Only SELECT/WITH allowed." }
+  if (!canSeeCost && COST_COLS_RE.test(sql))
+    return { error: "Vai trò này không được xem giá vốn / lãi gộp / CM1 / biên lãi. Chỉ trả doanh thu, số đơn, số lượng; báo người dùng nhẹ nhàng rằng phần lãi/giá vốn không khả dụng với vai trò của họ." }
   if (sql.includes(";") && sql.split(";").filter(s => s.trim()).length > 1) return { error: "Multiple statements not allowed." }
   try {
     const rawRows = await queryAnalytics(sql)
@@ -340,8 +327,22 @@ async function execProduct(a: any): Promise<any> {
 
 // detectAndLogLearning() tách sang ./learning.ts (s196+4) — dùng chung cho Bé Gấu + Gấu Tổ.
 
+export const LARK_CREATE_RE = /(t[aạ]o|l[aà]m|xu[aấ]t|[dđ][uư]a|ghi|g[uử]i).{0,40}(t[aà]i li[eệ]u|\bdoc|sheet|b[aả]ng t[ií]nh|b[aá]o c[aá]o|task|vi[eệ]c|nh[aắ]c).{0,60}lark|lark.{0,40}(t[aà]i li[eệ]u|\bdoc|sheet|b[aả]ng t[ií]nh|task)/i
+
+export interface BeGauTrace {
+  promptChars: number; declChars: number; thinking: string
+  rounds: { ms: number; tin: number; tout: number; calls: string[] }[]
+  tools: { name: string; ms: number; chars: number }[]
+}
+
+// U1a: câu phân tích / so sánh / lý do / đề xuất / báo cáo, câu dài hoặc có file → suy nghĩ sâu (HIGH); tra cứu nhanh → LOW.
+const DEEP_RE = /so s[aá]nh|v[iì] sao|t[aạ]i sao|nguy[eê]n nh[aâ]n|ph[aâ]n t[ií]ch|nh[aậ]n x[eé]t|[dđ][eề] xu[aấ]t|xu h[uướ][oớ]ng|k[eế] ho[aạ]ch|b[aá]o c[aá]o|deep ?dive|[dđ][aá]nh gi[aá]|chi[eế]n l[uượ][oợ]c|gi[aả]i ph[aá]p|n[eê]n l[aà]m g[iì]|t[oố]i [uư]u|d[uự] b[aá]o/i
+export function deepQuestion(msg: string, fileCount = 0): boolean {
+  return fileCount > 0 || msg.length > 220 || DEEP_RE.test(msg)
+}
+
 // ─── Runner ─────────────────────────────────────────────────────────────────────
-export async function runBeGau(opts: {
+export interface BeGauOpts {
   geminiHistory: any[]
   lastMsg: string
   role?: string
@@ -353,68 +354,221 @@ export async function runBeGau(opts: {
   extraDirective?: string   // vd quy tắc tạm thời
   fileContexts?: FileContext[]  // ảnh/PDF/file người dùng đính kèm (s190+3)
   onChunk?: (text: string) => void  // s195+18: stream token thật ra route — gọi mỗi khi Gemini sinh thêm đoạn text
-}): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number }> {
-  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, onChunk, larkOpenId = null } = opts
+  username?: string         // U3: trí nhớ cá nhân + tìm hội thoại cũ theo username
+  signal?: AbortSignal      // U3: người dùng bấm Dừng
+  onPlan?: (steps: PlanStep[]) => void  // U3: kế hoạch từng bước hiện trên UI
+  job?: { timeBudgetMs: number; resume?: Content[]; tainted?: boolean }
+  origin?: string           // để tự gọi bộ chạy việc nền (nghiên cứu sâu)  // U3 việc nền: chạy theo chặng, hết ngân sách trả checkpoint thay vì chốt câu trả lời
+}
+
+/**
+ * Phần chuẩn bị dùng chung (U3): prompt + bộ tool theo vai trò/tính năng + cách chạy 1 tool (cổng an toàn, lọc giá vốn).
+ * runBeGau (chat) và phiên Trực tiếp (live) cùng dùng — Live không đi đường tool Gấu Pro (không lọc theo vai trò).
+ * promptless: chỉ cần chạy tool (route tool của Live) → bỏ các phần chỉ phục vụ prompt (KB, GA4, partner tier, trí nhớ, nén lịch sử).
+ */
+export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
+  const { geminiHistory, lastMsg, role, name, userId, isCost = false, extraDirective = "", fileContexts, larkOpenId = null, username, onPlan, promptless = false } = opts
   const isPriv = priv(role)
-  const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
 
-  const kbOpts = isPriv ? {} : { excludeCategories: ["cogs"] }
+  // Hiếu chốt 2026-10-07: giá vốn mở cho mọi vai trò (canViewCogs = true) → chỉ che mục "cogs" khi vai trò thật sự không có quyền.
+  const seeCost = isPriv || isCost
+  const kbOpts = seeCost ? {} : { excludeCategories: ["cogs"] }
 
-  const [dataFilter, customRules, partnerTierInfo, ga4SiteList, kbInject, { history: compressedHistory }] = await Promise.all([
+  const [featureTools, dataFilter, customRules, partnerTierInfo, ga4SiteList, kbInject, { history: compressedHistory }] = await Promise.all([
+    loadFeatureMatrix().then(m => enabledFeatureTools(m, role)),
     getRoleDataFilter(role),
-    getCustomRules(),
-    getPartnerTiers().then(t => {
+    promptless ? "" : getCustomRules(),
+    promptless ? "" : getPartnerTiers().then(t => {
       const lines = Object.entries(t).map(([tier, ch]) => `  ${tier}: ${(ch as string[]).join(", ")}`).join("\n")
       return lines ? `\n\n━━━ PARTNER TIERS (B2B) ━━━\n${lines}` : ""
     }).catch(() => ""),
-    ga4Sites().then(s => s.length ? "\n\nGA4 SITES: " + s.map(x => `${x.id}="${x.name}" (${x.propertyId})`).join(", ") : "").catch(() => ""),
+    promptless ? "" : ga4Sites().then(s => s.length ? "\n\nGA4 SITES: " + s.map(x => `${x.id}="${x.name}" (${x.propertyId})`).join(", ") : "").catch(() => ""),
     // KB tra MỖI lượt như Gấu Pro (kb-recall.ts): danh mục tiêu đề + nguyên văn mục liên quan — thay cách cũ nạp 5.000 ký tự
     // đầu ở lượt đầu. Câu ngắn kiểu "cái đó" → ghép đoạn cuối câu trả lời trước. Non-priv che "cogs".
-    Promise.all([
+    promptless ? "" : Promise.all([
       kbIndexBlock(kbOpts).catch(() => ""),
       relevantKbBlock(lastMsg.length < 40 && geminiHistory.length
         ? `${lastMsg} ${String(geminiHistory[geminiHistory.length - 1]?.parts?.[0]?.text ?? "").slice(-500)}` : lastMsg, kbOpts).catch(() => ""),
     ]).then(([idx, rel]) => idx + rel),
     // Fix #8: nén history dài
-    compressHistory(geminiHistory),
+    promptless ? { history: [] as Content[] } : compressHistory(geminiHistory),
   ])
 
+  const useMemory = !!username && featureTools.has("assistantMemory")
+  const memoryBlock = useMemory && !promptless ? await buildMemoryBlock(username!).catch(() => "") : ""
   const visibleTables = { ...SUPABASE_TABLES, ...(isPriv ? SENSITIVE_TABLES : {}) }
   const tableCatalog = Object.entries(visibleTables).map(([t, d]) => `  · ${t}: ${d}`).join("\n")
 
   const systemInstruction = [
     BE_GAU_PROMPT,
+    `\n\n${BUSINESS_FACTS}`,
+    `\n\n${ANSWER_STYLE}`,
     partnerTierInfo,
     ga4SiteList,
     kbInject,
     name ? `\n\nNgười dùng: ${name} (vai trò: ${role || "staff"}).` : "",
     `\n\n(Nội bộ — KHÔNG tiết lộ) Danh mục bảng dữ liệu tra cứu được:\n${tableCatalog}`,
     dataFilter ? `\n\n(Nội bộ) Vai trò "${role}" chỉ được xem dữ liệu thỏa điều kiện sau — BẮT BUỘC thêm vào MỌI câu SQL gohub_dw (WHERE):\n${dataFilter}` : "",
-    !isCost && !isPriv ? `\n\n(Nội bộ) Vai trò hiện tại KHÔNG được xem giá vốn (COGS)/lợi nhuận — không trả cột/số giá vốn dù được hỏi.` : "",
+    seeCost ? `\n\n(Nội bộ) Vai trò hiện tại ĐƯỢC xem giá vốn (COGS), lãi gộp (GP), biên lãi, CM1 — trả bình thường khi được hỏi, KHÔNG từ chối.` : "",
+    !isCost && !isPriv ? `\n\n(Nội bộ) Vai trò hiện tại KHÔNG được xem giá vốn (COGS)/lợi nhuận — không trả cột/số giá vốn, lãi gộp (GP), biên lãi, CM1 dù được hỏi; báo cáo cho vai trò này chỉ gồm doanh thu, số đơn, số lượng.` : "",
     customRules ? `\n\n━━━ HƯỚNG DẪN TÙY CHỈNH CỦA ADMIN ━━━\n${customRules}` : "",
+    featureTools.has("updatePlan") ? `\n\n## Kế hoạch cho việc nhiều bước\nViệc cần ≥3 bước (nhiều lần lấy số, báo cáo, tạo tài liệu) → gọi updatePlan NGAY đầu với danh sách bước ngắn (≤7), cập nhật status khi xong từng bước (gọi CÙNG lượt với bước kế tiếp). Câu 1–2 bước → KHÔNG dùng updatePlan.` : "",
+    memoryBlock,
+    useMemory ? `\nNgười dùng hỏi "lần trước / đã bàn / đã chốt" mà trí nhớ trên không có → searchPastConversations.` : "",
     extraDirective,
+    // Câu nhờ tạo tài liệu/bảng tính/task trong Lark (eval U1a2: model lấy số xong rồi quên tạo) → nhắc thẳng ở lượt này.
+    LARK_CREATE_RE.test(lastMsg) ? `\n\n(Nội bộ — lượt này) Người dùng đang nhờ TẠO trong Lark: lấy số liệu xong thì BẮT BUỘC gọi công cụ — BÁO CÁO có bảng/biểu đồ → buildReport với formats ["lark"] (kèm định dạng file khác nếu được xin); tài liệu chữ đơn giản, bảng tính, task → larkWorkspace. Rồi trả link (hoặc báo đúng lỗi công cụ trả về).` : "",
   ].join("")
 
-  // s190: + toàn bộ công cụ Gấu Pro — mở cho mọi role (GP_TOOLS_OPEN), phần nhạy cảm/trả phí/cá nhân
-  // Hiếu chỉ đăng ký cho admin/creator (GP_TOOLS_ADMIN_ONLY) — Gemini không thấy thì không gọi được.
+  // Tool lõi luôn có + tool của tính năng đã bật cho vai trò (bảng phân quyền U3).
+  const MEMORY_TOOLS = ["assistantMemory", "searchPastConversations"]
+  const featureDecls = FEATURE_DECLS.filter(d => featureTools.has(d.name) && (useMemory || !MEMORY_TOOLS.includes(d.name)))
   const functionDeclarations = [
-    readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl, webSearchDecl,
-    larkWorkspaceDecl,
-    ...GP_TOOLS_OPEN,
-    ...(isAdminCreator ? GP_TOOLS_ADMIN_ONLY : []),
+    readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl,
+    ...(featureTools.has("webSearch") ? [webSearchDecl] : []),
+    larkWorkspaceDecl, searchKBDecl, buildReportDecl,
+    // CM1 B2B theo KH (số tab Quarter Report) — chỉ vai trò xem được giá vốn và không bị giới hạn dữ liệu theo vai trò.
+    ...(seeCost && !dataFilter ? [b2bCustomerCm1Decl] : []),
+    ...(featureTools.has("deepResearch") && username ? [deepResearchDecl] : []),
+    ...featureDecls,
   ]
+  const dispatchNames = new Set([searchKBDecl.name, ...featureDecls.map(d => d.name)])
 
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
-  // thinkingLevel "low": cân bằng — 3.8-flash cải thiện tool-orchestration/reasoning nhiều bước (đúng lợi
-  // ích cho vòng lặp function-calling BI), nhưng KHÔNG để mặc định "medium" (billable, thêm latency ẩn
-  // mỗi vòng × tối đa 12 vòng) đội lại đúng bug timeout vừa fix (s195+14, maxDuration 60→300). SDK v0.21.0
-  // chưa có type cho thinkingConfig (ra đời sau SDK) → "as any".
-  const model = genAI.getGenerativeModel({
-    model: GEMINI_MODEL,
+  const files = fileContexts || []
+  // U0: ảnh người dùng đính kèm — để generateImage sửa theo ảnh gốc (edit_attached).
+  const attachedImages = files.filter(f => f.type !== "text" && (f.mimeType || "").startsWith("image/")).map(f => ({ mimeType: f.mimeType!, data: f.content }))
+  const sources: WebSource[] = []
+  // Cổng an toàn dùng chung Gấu Pro (tool-policy.ts): lượt đã đọc nội dung ngoài (web, file, Lark Base…) thì không chạy hành động
+  // ghi/gửi/mở URL lạ. Bé Gấu chưa có nút Duyệt (U3 sau) → từ chối và để người dùng hỏi lại ở lượt mới.
+  const safety = newTurnSafety(lastMsg, files.length > 0)
+  if (opts.job?.tainted) safety.tainted = true   // việc nền chặng sau: giữ trạng thái "đã đọc nội dung ngoài" của chặng trước
+
+  // Mỗi tool bọc try/catch riêng — 1 tool lỗi (network/DB timeout) chỉ trả functionResponse báo lỗi cho MỘT tool đó,
+  // model tự quyết định retry/báo user thay vì mất trắng cả lượt.
+  const runTool = async (call: any): Promise<any> => {
+    const blocked = approvalReason(call, safety)
+    if (blocked) return { functionResponse: { name: call.name, response: {
+      error: `Chưa thực hiện: ${blocked} Báo người dùng gửi lại yêu cầu này ở một tin nhắn mới (không kèm nội dung bên ngoài), KHÔNG tìm cách khác để làm thay.`,
+    } } }
+    const out = await runToolCore(call)
+    recordToolResult(safety, call, out.functionResponse.response)
+    return out
+  }
+  const ownerName = name || username   // tên hiển thị người hỏi (hội thoại Bé Gấu lưu theo tên)
+  const runToolCore = async (call: any): Promise<any> => {
+    const a = call.args as any
+    const name = call.name ?? ""
+    const wrap = (resp: any) => ({ functionResponse: { name, response: resp } })
+    try {
+
+    if (name === "listSupabaseTables")
+      return wrap({ tables: visibleTables })
+
+    // Việc theo lịch (tính năng "schedule"): lưu kèm dấu agent Bé Gấu → đến hạn chạy bằng Bé Gấu theo vai trò người đặt.
+    if (name === "scheduleTask" && featureTools.has("scheduleTask") && username)
+      return wrap(await runScheduleTask(a, username, (role || "").toLowerCase() === "creator", ownerName))
+
+    if (name === "buildReport")
+      return wrap(await runBuildReport(a, { owner: username || userId || "anon", larkOpenId, runSql: async (sql: string) => {
+        const r = await execSQL(sql, isCost || isPriv)
+        return r.error ? { error: r.error } : { rows: r.result as Record<string, unknown>[] }
+      } }))
+
+    if (name === "deepResearch" && featureTools.has("deepResearch") && username)
+      return wrap(await runDeepResearch(a, { username, ownerName: ownerName || username, isCreator: (role || "").toLowerCase() === "creator",
+        origin: opts.origin || process.env.NEXTAUTH_URL || "" }))
+
+    if (name === "b2bCustomerCm1" && seeCost && !dataFilter)
+      return wrap(await runB2bCustomerCm1(a))
+
+    if (name === "updatePlan" && featureTools.has("updatePlan")) {
+      const steps = normalizePlan(a?.steps)
+      onPlan?.(steps)
+      return wrap({ ok: true, steps: steps.length })
+    }
+
+    if (name === "querySupabase")
+      return wrap(await runQuerySupabase(a, role || "staff", isCost))
+
+    if (name === "executeSQL")
+      return wrap(await execSQL(a?.sql || "", isCost || isPriv))
+
+    if (name === "queryProduct")
+      return wrap(await execProduct(a))
+
+    if (name === "readKnowledgeBase") {
+      const kbCategory = (!seeCost && (!a?.category || a.category === "cogs")) ? undefined : a?.category
+      const kbResult = await runReadKnowledgeBase(kbCategory, Array.isArray(a?.keys) ? a.keys.map(String) : undefined)
+      if (!seeCost && kbResult?.entries)
+        kbResult.entries = kbResult.entries.filter((e: any) => e.category !== "cogs")
+      return wrap(kbResult)
+    }
+
+    if (name === "webSearch" && featureTools.has("webSearch")) {
+      const { result, sources: s } = await runWebSearch(a?.query || "")
+      sources.push(...s)
+      const srcText = s.length ? "\n\nSources:\n" + s.map((x: any, i: number) => `[${i + 1}] ${x.title}: ${x.url}`).join("\n") : ""
+      return wrap({ result: result + srcText, instruction: "Cite the source URLs when using this info." })
+    }
+
+    if (name === "larkWorkspace")
+      return wrap(await runLarkWorkspace(a, larkOpenId))
+
+    if (name === "queryGA4") {
+      try {
+        const report = await runGA4Report({ siteId: a.siteId, startDate: a.startDate, endDate: a.endDate, metrics: a.metrics || ["sessions"], dimensions: a.dimensions, limit: a.limit || 50 })
+        const rows = (report.rows || []).slice(0, 100).map((r: any) => ({ dimensions: r.dimensionValues?.map((d: any) => d.value), metrics: r.metricValues?.map((m: any) => m.value) }))
+        return wrap({ rows, rowCount: report.rowCount })
+      } catch (e: any) { return wrap({ error: e.message }) }
+    }
+
+    if (name === "queryGSC") {
+      try {
+        const rows = await runGSC(a.siteId, a.startDate, a.endDate, a.dimensions || ["query"], a.rowLimit || 20)
+        return wrap({ rows: rows.slice(0, 100) })
+      } catch (e: any) { return wrap({ error: e.message }) }
+    }
+
+    // Công cụ Gấu Pro đã bật cho vai trò (bảng phân quyền) — dùng CHUNG executor creator/tools/dispatch.ts.
+    if (dispatchNames.has(name)) {
+      const res = await dispatchTool({ name: name, args: a }, undefined, sources,
+        { username: username || userId, isCreator: (role || "").toLowerCase() === "creator", personal: useMemory, images: attachedImages })
+      // searchKnowledgeBase đọc chung creator_kb với readKnowledgeBase — che category "cogs" cho
+      // role không có quyền xem giá vốn, khớp đúng cách readKnowledgeBase xử lý ở trên.
+      if (name === "searchKnowledgeBase" && !seeCost) {
+        const resp = res.functionResponse.response
+        if (resp?.results) resp.results = resp.results.filter((r: any) => r.category !== "cogs")
+      }
+      return res
+    }
+
+    return wrap({ error: "Unknown tool" })
+    } catch (e: any) {
+      return wrap({ error: e?.message || "Tool execution failed" })
+    }
+  }
+
+  return { systemInstruction, functionDeclarations, runTool, sources, compressedHistory, safety }
+}
+
+export async function runBeGau(opts: BeGauOpts): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number; trace: BeGauTrace; checkpoint?: { contents: Content[]; tainted: boolean } }> {
+  const { lastMsg, role, name, userId, sessionId, fileContexts, larkOpenId = null, signal } = opts
+  // Chữ stream ra đi qua bộ lọc lộ tên bảng/cột (core/leak-filter.ts).
+  const leak = opts.onChunk ? leakFilterStream(opts.onChunk) : null
+  const onChunk = leak ? (t: string) => leak.push(t) : undefined
+  const { systemInstruction, functionDeclarations, runTool, sources, compressedHistory, safety } = await prepareBeGau(opts)
+
+  // U1a (plan be-gau-upgrade.md): SDK mới @google/genai (cùng streamTurn với Gấu Pro) — SDK cũ hết hỗ trợ, làm rớt thoughtSignature.
+  const thinkingLevel = deepQuestion(lastMsg, fileContexts?.length ?? 0) ? ThinkingLevel.HIGH : ThinkingLevel.LOW
+  const config = {
     systemInstruction,
-    tools: [{ functionDeclarations }],
-    generationConfig: { temperature: 0, thinkingConfig: { thinkingLevel: "low" } } as any,
-  })
+    // U2: chạy code Python (Gemini code execution) để tính toán thay vì nhẩm — dùng chung với tool của mình cần cờ includeServerSideToolInvocations.
+    tools: [{ codeExecution: {} }, { functionDeclarations: toGenaiSchema(functionDeclarations) as any }],
+    toolConfig: { includeServerSideToolInvocations: true },
+    temperature: 0,
+    thinkingConfig: { thinkingLevel },
+    abortSignal: signal,
+  }
 
   // File/ảnh đính kèm (s190+3) — mirror cách runCreatorAI build parts (text + inlineData), rút gọn.
   const files    = fileContexts || []
@@ -442,120 +596,67 @@ export async function runBeGau(opts: {
   }
 
   // Fix #8: dùng history đã nén
-  const contents: any[] = [...compressedHistory, { role: "user", parts: userParts }]
-  // Tích luỹ token qua MỌI vòng gọi model (đúng pattern creator-ai.ts s196+7) — cost dashboard.
-  let tokensIn = 0, tokensOut = 0
-  const addUsage = (r: any) => {
-    const u = r?.response?.usageMetadata
-    if (u) { tokensIn += u.promptTokenCount || 0; tokensOut += u.candidatesTokenCount || 0 }
+  const contents: Content[] = opts.job?.resume ? [...opts.job.resume] : [...compressedHistory, { role: "user", parts: userParts }]
+  // Số đo để tối ưu tốc độ (eval U1): thời gian/token từng lượt model, thời gian + độ lớn kết quả từng tool.
+  const trace: BeGauTrace = { promptChars: systemInstruction.length, declChars: JSON.stringify(functionDeclarations).length, thinking: String(thinkingLevel), rounds: [], tools: [] }
+  // Suy nghĩ sâu chỉ ở lượt ĐẦU (lên kế hoạch); các lượt sau chủ yếu gọi SQL → LOW (eval trace: 14 lượt × ~10s khi HIGH mọi lượt).
+  const lowConfig = { ...config, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+
+  // U1b: vòng lặp chạy ở lõi chung core/agent-loop.ts (cùng Gấu Pro), tool song song mỗi lượt, tối đa 12 lượt.
+  // toolsUsed = SỰ THẬT đã gọi tool gì — My Metrics dùng để phân biệt task tính KPI (DB_TASK_TOOLS ở lib/okr-helpers.ts) với trả lời chay.
+  const loop = await runAgentLoop({
+    model: GEMINI_MODEL, contents, configFor: r => r === 0 ? config : lowConfig, runTool, maxRounds: 12, onChunk,
+    timeBudgetMs: opts.job?.timeBudgetMs ?? 240_000,   // trần route 300s — chừa lượt chốt khi model chậm bất thường (QA 2026-10-08)
+    signal,
+  })
+  let genResult = loop.last
+  if (loop.stopped) {
+    leak?.flush()
+    const text = scrubLeaks(`${genResult.text}\n\n⏹ Đã dừng theo yêu cầu.`.trim())
+    return { text, sources, toolsUsed: Array.from(loop.toolsUsed), tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, trace }
+  }
+  if (loop.unfinished && opts.job)
+    return { text: "", sources, toolsUsed: Array.from(loop.toolsUsed), tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, trace, checkpoint: { contents: compactContents(contents), tainted: safety.tainted } }
+  if (loop.unfinished) {
+    try {
+      contents.push({ role: "user", parts: [{ text: "(Hệ thống) Đã hết thời gian xử lý. Trả lời NGAY bằng dữ liệu đã lấy được ở trên, nói rõ phần nào chưa kịp kiểm tra. KHÔNG gọi thêm công cụ." }] })
+      genResult = await loop.next({ ...lowConfig, toolConfig: { includeServerSideToolInvocations: true, functionCallingConfig: { mode: FunctionCallingConfigMode.NONE } } })
+    } catch { /* rơi xuống câu dự phòng bên dưới */ }
+  }
+  const toolsUsed = loop.toolsUsed
+
+  // Nhờ tạo trong Lark mà model chưa gọi công cụ (eval U1a2–U1a3: 3 lần bỏ qua dù đã dặn) → 1 lượt BẮT BUỘC gọi larkWorkspace.
+  if (LARK_CREATE_RE.test(lastMsg) && !toolsUsed.has("larkWorkspace") && !toolsUsed.has("buildReport")) {
+    const before = genResult.text
+    try {
+      contents.push({ role: "user", parts: [{ text: "(Hệ thống) Tạo NGAY đúng thứ người dùng nhờ trong Lark bằng số liệu vừa trả lời: báo cáo có bảng/biểu đồ → buildReport (formats [\"lark\"]); tài liệu đơn giản/bảng tính/task → larkWorkspace." }] })
+      const forced = await loop.next({
+        ...config, toolConfig: { includeServerSideToolInvocations: true, functionCallingConfig: { mode: FunctionCallingConfigMode.ANY, allowedFunctionNames: ["larkWorkspace", "buildReport"] } },
+      }, () => {})
+      const parts: any[] = []
+      for (const fc of forced.functionCalls.filter(f => f.name === "larkWorkspace" || f.name === "buildReport")) {
+        toolsUsed.add(fc.name!)
+        parts.push(await runTool(fc))
+      }
+      if (parts.length) {
+        contents.push({ role: "user", parts: [...parts, { text: "Viết 1–2 câu báo kết quả tạo trong Lark (kèm link nếu có, hoặc báo đúng lỗi). Không lặp lại báo cáo." }] })
+        onChunk?.("\n\n")
+        genResult = await loop.next(lowConfig)
+        genResult = { ...genResult, text: `${before}\n\n${genResult.text}` }
+      }
+    } catch { /* giữ câu trả lời đã có */ }
   }
 
-  // s195+18: genWithRetryStream — stream token thật, thay genWithRetry (generateContent chờ hết mới trả)
-  let genResult = await genWithRetryStream(model, { contents }, onChunk)
-  addUsage(genResult)
-  const sources: WebSource[] = []
-  // Track tool nào được gọi trong cả vòng lặp — dùng để phân biệt "task tính KPI Bé Gấu" (đã thật sự
-  // xuất dữ liệu từ DB) khỏi trả lời chay/chào hỏi (My Metrics my-metrics/route.ts, s195+18-B). Định
-  // nghĩa "DB tool nào tính KPI" nằm ở lib/okr-helpers.ts (DB_TASK_TOOLS), không phải ở đây — be-gau.ts
-  // chỉ ghi lại SỰ THẬT đã gọi tool gì, không tự quyết định ý nghĩa nghiệp vụ của việc đó.
-  const toolsUsed = new Set<string>()
-  const appendModel = () => { const c = genResult.response.candidates?.[0]?.content; if (c) contents.push(c) }
-  appendModel()
-
-  for (let i = 0; i < 12; i++) {
-    const calls = genResult.response.functionCalls()
-    if (!calls || calls.length === 0) break
-
-    // Fix #1: parallel tool execution (Promise.all)
-    // Toàn bộ nhánh bọc try/catch NGOÀI CÙNG — 1 tool lỗi (network/DB timeout) trước đây làm Promise.all
-    // reject cả round, sập TOÀN BỘ câu trả lời dù tool khác đã chạy xong. Nay tool lỗi chỉ trả
-    // functionResponse báo lỗi cho MỘT tool đó, model tự quyết định retry/báo user thay vì mất trắng.
-    const fnParts = await Promise.all(calls.map(async (call: any) => {
-      const a = call.args as any
-      toolsUsed.add(call.name)
-      const wrap = (resp: any) => ({ functionResponse: { name: call.name, response: resp } })
-      try {
-
-      if (call.name === "listSupabaseTables")
-        return wrap({ tables: visibleTables })
-
-      if (call.name === "querySupabase")
-        return wrap(await runQuerySupabase(a, role || "staff", isCost))
-
-      if (call.name === "executeSQL")
-        return wrap(await execSQL(a?.sql || ""))
-
-      if (call.name === "queryProduct")
-        return wrap(await execProduct(a))
-
-      if (call.name === "readKnowledgeBase") {
-        const kbCategory = (!isPriv && (!a?.category || a.category === "cogs")) ? undefined : a?.category
-        const kbResult = await runReadKnowledgeBase(kbCategory, Array.isArray(a?.keys) ? a.keys.map(String) : undefined)
-        if (!isPriv && kbResult?.entries)
-          kbResult.entries = kbResult.entries.filter((e: any) => e.category !== "cogs")
-        return wrap(kbResult)
-      }
-
-      if (call.name === "webSearch") {
-        const { result, sources: s } = await runWebSearch(a?.query || "")
-        sources.push(...s)
-        const srcText = s.length ? "\n\nSources:\n" + s.map((x: any, i: number) => `[${i + 1}] ${x.title}: ${x.url}`).join("\n") : ""
-        return wrap({ result: result + srcText, instruction: "Cite the source URLs when using this info." })
-      }
-
-      if (call.name === "larkWorkspace")
-        return wrap(await runLarkWorkspace(a, larkOpenId))
-
-      if (call.name === "queryGA4") {
-        try {
-          const report = await runGA4Report({ siteId: a.siteId, startDate: a.startDate, endDate: a.endDate, metrics: a.metrics || ["sessions"], dimensions: a.dimensions, limit: a.limit || 50 })
-          const rows = (report.rows || []).slice(0, 100).map((r: any) => ({ dimensions: r.dimensionValues?.map((d: any) => d.value), metrics: r.metricValues?.map((m: any) => m.value) }))
-          return wrap({ rows, rowCount: report.rowCount })
-        } catch (e: any) { return wrap({ error: e.message }) }
-      }
-
-      if (call.name === "queryGSC") {
-        try {
-          const rows = await runGSC(a.siteId, a.startDate, a.endDate, a.dimensions || ["query"], a.rowLimit || 20)
-          return wrap({ rows: rows.slice(0, 100) })
-        } catch (e: any) { return wrap({ error: e.message }) }
-      }
-
-      // s190: mọi công cụ Gấu Pro (mở cho all hoặc admin/creator-only, xem GP_TOOLS_* ở đầu file) — dùng
-      // CHUNG executor có sẵn ở creator/tools/dispatch.ts, không chép lại logic.
-      if (GP_DISPATCH_NAMES.has(call.name)) {
-        const res = await dispatchTool({ name: call.name, args: a }, undefined, sources)
-        // searchKnowledgeBase đọc chung creator_kb với readKnowledgeBase — che category "cogs" cho
-        // role không có quyền xem giá vốn, khớp đúng cách readKnowledgeBase xử lý ở trên.
-        if (call.name === "searchKnowledgeBase" && !isPriv) {
-          const resp = res.functionResponse.response
-          if (resp?.results) resp.results = resp.results.filter((r: any) => r.category !== "cogs")
-        }
-        return res
-      }
-
-      return wrap({ error: "Unknown tool" })
-      } catch (e: any) {
-        return wrap({ error: e?.message || "Tool execution failed" })
-      }
-    }))
-
-    contents.push({ role: "user", parts: fnParts })
-    genResult = await genWithRetryStream(model, { contents }, onChunk)  // s195+18
-    addUsage(genResult)
-    appendModel()
-  }
-
-  let text = genResult.response.text()
+  let text = genResult.text
   if (!text.trim()) {
     try {
       contents.push({ role: "user", parts: [{ text: "Dựa trên dữ liệu ở trên, viết câu trả lời hoàn chỉnh bằng tiếng Việt cho người dùng (kèm bảng/chart nếu hợp lý). KHÔNG gọi thêm công cụ, KHÔNG lộ SQL/tên bảng." }] })
-      genResult = await genWithRetryStream(model, { contents }, onChunk)
-      addUsage(genResult)
-      text = genResult.response.text()
+      genResult = await loop.next(lowConfig)
+      text = genResult.text
     } catch { /* keep */ }
   }
-  const finalText = text || "Mình chưa lấy được dữ liệu cho câu này, bạn thử hỏi lại cụ thể hơn nhé 😊"
+  leak?.flush()
+  const finalText = scrubLeaks(text) || "Mình chưa lấy được dữ liệu cho câu này, bạn thử hỏi lại cụ thể hơn nhé 😊"
 
   // await (không fire-and-forget) — bài học s195+18-C: serverless có thể đóng execution context
   // trước khi promise học liệu kịp gửi đi (đúng lớp bug đã fix cho logChat/app_usage_events).
@@ -567,5 +668,7 @@ export async function runBeGau(opts: {
     })
   }
 
-  return { text: finalText, sources, toolsUsed: Array.from(toolsUsed), tokensIn, tokensOut }
+  trace.rounds = loop.rounds.map(({ ms, tin, tout, calls }) => ({ ms, tin, tout, calls }))
+  trace.tools = loop.tools.map(({ name, ms, chars }) => ({ name, ms, chars }))
+  return { text: finalText, sources, toolsUsed: Array.from(toolsUsed), tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, trace }
 }

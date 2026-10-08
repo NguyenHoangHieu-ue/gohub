@@ -4,11 +4,15 @@ import { useState, useRef, useEffect, useCallback, memo } from "react"
 import { useSession }                                from "next-auth/react"
 import { useRouter }                                 from "next/navigation"
 import {
-  Send, Cpu, User, Plus, Trash2, ExternalLink, Loader2,
+  Send, Cpu, User, Trash2, ExternalLink, Loader2,
   Database, Globe, BarChart2, Code2, Lightbulb,
   Paperclip, X, FileText, Image as ImageIcon, FileSpreadsheet,
   FileJson, FileType, Package, Mic, Volume2, VolumeX, ShieldAlert, Square, CheckCircle2, Circle, Timer,
+  SquarePen, Radio, Brain, ListChecks, ScrollText, Link2, FolderOpen, ArrowDown,
 } from "lucide-react"
+import { ConversationSwitcher } from "@/components/chat/conversation-switcher"
+import { OverflowMenu } from "@/components/chat/overflow-menu"
+import { useStickToBottom } from "@/components/chat/use-stick-to-bottom"
 import ReactMarkdown from "react-markdown"
 import remarkGfm     from "remark-gfm"
 import ChatChart      from "@/components/chat-chart"
@@ -448,7 +452,6 @@ export default function CreatorAIPage() {
   // Người dùng đã thao tác (mới/mở cuộc khác/gửi) → huỷ auto-restore cuộc gần nhất đang tải dở, tránh nó về SAU và đè lên.
   const userActedRef = useRef(false)
   const [pastConvs,     setPastConvs]     = useState<{ id: string; title: string; updated_at: string }[]>([])
-  const [showConvList,  setShowConvList]  = useState(false)
   const [showActionLog, setShowActionLog] = useState(false)
   const [actionLog,     setActionLog]     = useState<{ id: number; username: string; tool_name: string; ok: boolean; summary: string; created_at: string }[]>([])
   const [actionLogLoading, setActionLogLoading] = useState(false)
@@ -474,7 +477,6 @@ export default function CreatorAIPage() {
     }
   }
 
-  const bottomRef    = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null)
   const inputRef     = useRef<HTMLTextAreaElement>(null)
@@ -601,10 +603,15 @@ export default function CreatorAIPage() {
     setSpeakingIdx(index)
   }, [])
 
-  // Smooth-scroll mỗi token stream chồng animation lên nhau → giật khi hội thoại dài; khi đang stream nhảy thẳng.
+  // U4: chỉ bám đáy khi người dùng đang ở cuối (đọc tin cũ thì không giật xuống) — components/chat/use-stick-to-bottom.ts.
+  const { ref: scrollRef, atBottom, scrollToBottom, jumpToBottom } = useStickToBottom<HTMLDivElement>([messages, loading])
+  const [showAll, setShowAll] = useState(false)
+  const hiddenCount = showAll ? 0 : Math.max(0, messages.length - 40)
+  // Chấm đỏ ở nút ⋯ khi có hành động chờ duyệt.
+  const [pendingCount, setPendingCount] = useState(0)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: loading ? "auto" : "smooth" })
-  }, [messages, loading])
+    fetch("/api/creator-ai/approve").then(r => r.ok ? r.json() : { rows: [] }).then(d => setPendingCount((d.rows ?? []).length)).catch(() => {})
+  }, [tasksRefresh, loading])
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -631,10 +638,11 @@ export default function CreatorAIPage() {
       const converted: Message[] = msgs.map(m => ({ role: m.role as "user" | "assistant", content: m.content }))
       setMessages(converted)
       setConvId(id)
-      setShowConvList(false)
+      setShowAll(false)
+      jumpToBottom()
       try { localStorage.setItem(LS_KEY, JSON.stringify(converted)) } catch {}
     } catch {}
-  }, [LS_KEY])
+  }, [LS_KEY, jumpToBottom])
 
   // G3: link "?c=<id>" (tool searchPastConversations trả về) → mở đúng hội thoại cũ.
   useEffect(() => {
@@ -716,6 +724,7 @@ export default function CreatorAIPage() {
     const next = [...messages, userMsg]
     setMessages(next)
     setInput("")
+    jumpToBottom()
 
     // G2: giao việc chạy nền — không giữ kết nối, xong báo Lark + panel "Việc & duyệt". Việc nền KHÔNG kèm lịch sử chat/file.
     if (bgMode && attachedFiles.length === 0) {
@@ -854,7 +863,7 @@ export default function CreatorAIPage() {
       setLoading(false)
       setTimeout(() => inputRef.current?.focus(), 100)
     }
-  }, [messages, loading, attachedFiles, addFiles, imgPreviews, bgMode])
+  }, [messages, loading, attachedFiles, addFiles, imgPreviews, bgMode, jumpToBottom])
 
   const abortRef = useRef<AbortController | null>(null)
   const sendRef = useRef(send)
@@ -921,167 +930,85 @@ export default function CreatorAIPage() {
         onChange={handleFileSelect}
       />
 
-      {/* Header */}
-      <div className="flex-shrink-0 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center shadow-sm shadow-violet-600/20">
+      {/* Header (U4): tên hội thoại → lịch sử · ✎ cuộc mới · ⋯ gom chức năng (chấm đỏ khi có việc chờ duyệt) */}
+      <div className="flex-shrink-0 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-6 py-2.5 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center shadow-sm shadow-violet-600/20 shrink-0">
             <Cpu size={16} className="text-white" />
           </div>
-          <div>
-            <h1 className="text-base font-bold text-gray-900 dark:text-slate-100">Gấu Pro</h1>
-            <p className="text-[11px] text-gray-400">Private AI · Creator only · Full access</p>
-          </div>
+          <span className="hidden sm:inline text-base font-bold text-gray-900 dark:text-slate-100 shrink-0">Gấu Pro</span>
+          <span className="hidden sm:inline text-gray-300">/</span>
+          <ConversationSwitcher conversations={pastConvs} activeId={convId} disabled={loading}
+            title={pastConvs.find(c => c.id === convId)?.title?.replace(/^\[GP\]\s*/, "") || (messages.length ? "Cuộc trò chuyện" : "Cuộc trò chuyện mới")}
+            onSelect={c => loadConversation(c.id)} onNew={clearConversation} />
         </div>
-        <div className="flex items-center gap-2">
-          {isCreatorRole && larkConnected !== null && (
-            larkConnected ? (
-              <a href="/api/lark/oauth/start" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg" title="Gấu Pro xem được task Lark của bạn — bấm để cấp quyền lại (khi app Lark thêm quyền mới)">
-                🔗 Đã kết nối Lark
-              </a>
-            ) : (
-              <a href="/api/lark/oauth/start"
-                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors"
-                title="Cấp quyền để Gấu Pro xem task/task list Lark của bạn">
-                🔗 Kết nối Lark
-              </a>
-            )
-          )}
-          {isCreatorRole && google !== null && (
-            google.connected ? (
-              <a href="/api/google/oauth/start" className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg" title={`Gấu Pro đọc/sửa được Drive, Docs, Sheets của ${google.email ?? "bạn"} — bấm để cấp quyền lại`}>
-                📁 Đã kết nối Google
-              </a>
-            ) : (
-              <a href="/api/google/oauth/start"
-                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors"
-                title="Cấp quyền để Gấu Pro đọc/sửa Google Drive, Docs, Sheets của bạn">
-                📁 Kết nối Google
-              </a>
-            )
-          )}
+        <div className="flex items-center gap-1.5 shrink-0">
           {loading && (
-            <span className="flex items-center gap-1.5 text-xs text-violet-500 max-w-[240px] truncate">
+            <span className="hidden md:flex items-center gap-1.5 text-xs text-violet-500 max-w-[240px] truncate">
               <Loader2 size={13} className="animate-spin flex-shrink-0" />
               {statusText || `Đang xử lý${thinkingMsg}…`}
             </span>
           )}
-          {messages.length > 0 && !loading && (
-            <button
-              onClick={clearConversation}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:hover:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg transition-colors"
-            >
-              <Plus size={13} />
-              Cuộc trò chuyện mới
-            </button>
-          )}
-          <button
-            onClick={() => setShowLive(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:hover:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg transition-colors"
-            title="Nói chuyện bằng giọng + chia sẻ màn hình/camera với Gấu Pro (thử nghiệm)"
-          >
-            🎙 Trực tiếp
+          <button type="button" onClick={clearConversation} disabled={loading} title="Cuộc trò chuyện mới" aria-label="Cuộc trò chuyện mới"
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-violet-600 hover:bg-gray-100 dark:hover:bg-slate-800 disabled:opacity-40">
+            <SquarePen size={17} />
           </button>
+          <div className="relative">
+            <OverflowMenu items={[
+              { key: "live", label: "Trò chuyện trực tiếp", hint: "Giọng nói + chia sẻ màn hình/camera", icon: <Radio size={15} />, onClick: () => setShowLive(true) },
+              { key: "memory", label: "Trí nhớ", hint: "Xem/sửa điều Gấu Pro nhớ về bạn", icon: <Brain size={15} />, onClick: () => setShowMemory(true) },
+              { key: "tasks", label: "Việc & duyệt", hint: "Hành động chờ duyệt, việc nền, việc theo lịch", icon: <ListChecks size={15} />, onClick: () => setShowTasks(true), badge: pendingCount },
+              ...(isCreatorRole ? [
+                { key: "log", label: "Nhật ký & lượt chạy", hint: "Ghi KB/Lark/portal/browser, trace", icon: <ScrollText size={15} />, onClick: toggleActionLog },
+                ...(larkConnected !== null ? [{ key: "lark", label: larkConnected ? "Lark: đã kết nối" : "Kết nối Lark", hint: larkConnected ? "Bấm để cấp quyền lại" : "Cho Gấu Pro xem task Lark", icon: <Link2 size={15} />, onClick: () => { window.location.href = "/api/lark/oauth/start" } }] : []),
+                ...(google !== null ? [{ key: "google", label: google.connected ? "Google: đã kết nối" : "Kết nối Google", hint: google.connected ? (google.email ?? "Bấm để cấp quyền lại") : "Drive, Docs, Sheets", icon: <FolderOpen size={15} />, onClick: () => { window.location.href = "/api/google/oauth/start" } }] : []),
+              ] : []),
+            ]} />
+            {showMemory && <MemoryPanel onClose={() => setShowMemory(false)} />}
+            {showTasks && (
+              <TasksPanel refreshKey={tasksRefresh} onClose={() => { setShowTasks(false); setTasksRefresh(k => k + 1) }}
+                onOpenConversation={id => { setShowTasks(false); loadConversation(id) }} />
+            )}
+            {isCreatorRole && showActionLog && (
+              <div className="absolute right-0 top-full mt-1 w-96 max-w-[90vw] max-h-96 overflow-y-auto bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50">
+                <div className="p-2 border-b border-gray-100 dark:border-slate-800 text-[10px] font-semibold uppercase tracking-wide px-3 sticky top-0 bg-white dark:bg-slate-900 flex gap-3">
+                  <button onClick={() => setLogTab("actions")} className={logTab === "actions" ? "text-violet-600" : "text-gray-400"}>Hành động</button>
+                  <button onClick={() => setLogTab("runs")} className={logTab === "runs" ? "text-violet-600" : "text-gray-400"}>Lượt chạy (trace)</button>
+                  <button onClick={toggleActionLog} className="ml-auto text-gray-400 hover:text-gray-600" aria-label="Đóng">✕</button>
+                </div>
+                {logTab === "runs" ? <RunsList /> : actionLogLoading ? (
+                  <div className="p-4 text-center text-xs text-gray-400">Đang tải...</div>
+                ) : actionLog.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-gray-400">Chưa có hành động nào được ghi.</div>
+                ) : (
+                  <div className="divide-y divide-gray-100 dark:divide-slate-800">
+                    {actionLog.map(a => (
+                      <div key={a.id} className="px-3 py-2 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`font-medium ${a.ok ? "text-gray-700 dark:text-slate-300" : "text-rose-600 dark:text-rose-400"}`}>
+                            {a.ok ? "" : "⚠️ "}{a.tool_name}
+                          </span>
+                          <span className="text-[10px] text-gray-400 flex-shrink-0">{new Date(a.created_at).toLocaleString("vi-VN")}</span>
+                        </div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">{a.username || "?"}</div>
+                        {a.summary && <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 truncate" title={a.summary}>{a.summary}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           {showLive && (
             <LiveSession onClose={() => setShowLive(false)} onSaved={() => {
               fetch("/api/creator-ai/conversations").then(r => r.ok ? r.json() : []).then(list => { if (Array.isArray(list)) setPastConvs(list) }).catch(() => {})
             }} />
           )}
-          <div className="relative">
-            <button
-              onClick={() => setShowMemory(v => !v)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
-              title="Xem/sửa những gì Gấu Pro nhớ về bạn"
-            >
-              🧠 Trí nhớ
-            </button>
-            {showMemory && <MemoryPanel onClose={() => setShowMemory(false)} />}
-          </div>
-          <div className="relative">
-            <button
-              onClick={() => setShowTasks(v => !v)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
-              title="Hành động chờ duyệt + việc chạy nền"
-            >
-              ⏳ Việc & duyệt
-            </button>
-            {showTasks && (
-              <TasksPanel refreshKey={tasksRefresh} onClose={() => setShowTasks(false)}
-                onOpenConversation={id => { setShowTasks(false); loadConversation(id) }} />
-            )}
-          </div>
-          {isCreatorRole && (
-            <div className="relative">
-              <button
-                onClick={toggleActionLog}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
-                title="Nhật ký hành động Gấu Pro (ghi KB/Lark/portal/browser)"
-              >
-                🗂 Nhật ký
-              </button>
-              {showActionLog && (
-                <div className="absolute right-0 top-full mt-1 w-96 max-h-96 overflow-y-auto bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50">
-                  <div className="p-2 border-b border-gray-100 dark:border-slate-800 text-[10px] font-semibold uppercase tracking-wide px-3 sticky top-0 bg-white dark:bg-slate-900 flex gap-3">
-                    <button onClick={() => setLogTab("actions")} className={logTab === "actions" ? "text-violet-600" : "text-gray-400"}>Hành động</button>
-                    <button onClick={() => setLogTab("runs")} className={logTab === "runs" ? "text-violet-600" : "text-gray-400"}>Lượt chạy (trace)</button>
-                  </div>
-                  {logTab === "runs" ? <RunsList /> : actionLogLoading ? (
-                    <div className="p-4 text-center text-xs text-gray-400">Đang tải...</div>
-                  ) : actionLog.length === 0 ? (
-                    <div className="p-4 text-center text-xs text-gray-400">Chưa có hành động nào được ghi.</div>
-                  ) : (
-                    <div className="divide-y divide-gray-100 dark:divide-slate-800">
-                      {actionLog.map(a => (
-                        <div key={a.id} className="px-3 py-2 text-xs">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className={`font-medium ${a.ok ? "text-gray-700 dark:text-slate-300" : "text-rose-600 dark:text-rose-400"}`}>
-                              {a.ok ? "" : "⚠️ "}{a.tool_name}
-                            </span>
-                            <span className="text-[10px] text-gray-400 flex-shrink-0">{new Date(a.created_at).toLocaleString("vi-VN")}</span>
-                          </div>
-                          <div className="text-[10px] text-gray-400 mt-0.5">{a.username || "?"}</div>
-                          {a.summary && <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 truncate" title={a.summary}>{a.summary}</div>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          {pastConvs.length > 0 && (
-            <div className="relative">
-              <button
-                onClick={() => setShowConvList(v => !v)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors"
-                title="Lịch sử hội thoại"
-              >
-                <Database size={13} />
-                Lịch sử
-              </button>
-              {showConvList && (
-                <div className="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden">
-                  <div className="p-2 border-b border-gray-100 dark:border-slate-800 text-[10px] font-semibold text-gray-400 uppercase tracking-wide px-3">
-                    Hội thoại gần đây
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {pastConvs.map(c => (
-                      <button key={c.id} onClick={() => loadConversation(c.id)}
-                        className={`w-full text-left px-3 py-2 text-xs hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors ${convId === c.id ? "bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300" : "text-gray-700 dark:text-slate-300"}`}
-                      >
-                        <div className="truncate font-medium">{c.title || "Cuộc trò chuyện"}</div>
-                        <div className="text-[10px] text-gray-400 mt-0.5">{new Date(c.updated_at).toLocaleDateString("vi-VN")}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Chat area */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5">
+      {/* Chat area (U4: bám đáy thông minh, thu gọn tin cũ) */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5">
         {/* Empty state */}
         {messages.length === 0 && (
           <div className="max-w-3xl mx-auto pt-6">
@@ -1130,7 +1057,15 @@ export default function CreatorAIPage() {
 
         {/* Messages */}
         <div className="max-w-3xl mx-auto space-y-5">
-          {messages.map((msg, i) => (
+          {hiddenCount > 0 && (
+            <div className="flex justify-center">
+              <button type="button" onClick={() => setShowAll(true)}
+                className="px-3 py-1.5 text-xs text-gray-500 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-full hover:text-violet-600 hover:border-violet-300">
+                Hiện {hiddenCount} tin trước
+              </button>
+            </div>
+          )}
+          {messages.map((msg, i) => i < hiddenCount ? null : (
             <MessageRow key={i} msg={msg} index={i}
               speaking={speakingIdx === i} ttsSupported={ttsSupported}
               onFollowup={handleFollowup} onToggleSpeak={toggleSpeak} onDecide={handleDecide} />
@@ -1165,9 +1100,16 @@ export default function CreatorAIPage() {
             </div>
           )}
 
-          <div ref={bottomRef} />
         </div>
       </div>
+      {!atBottom && messages.length > 0 && (
+        <div className="relative">
+          <button type="button" onClick={() => scrollToBottom()} title="Tin mới nhất"
+            className="absolute left-1/2 -translate-x-1/2 -top-12 z-10 flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-violet-700 bg-white dark:bg-slate-800 border border-violet-200 dark:border-slate-700 rounded-full shadow-md hover:bg-violet-50">
+            <ArrowDown size={13} />Tin mới nhất
+          </button>
+        </div>
+      )}
 
       {/* Input area */}
       <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">

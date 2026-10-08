@@ -20,7 +20,10 @@ function toBase64(buf: ArrayBuffer): string {
   return btoa(s)
 }
 
-export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved?: (conversationId: string) => void }) {
+// U3: dùng chung cho Bé Gấu — apiBase "/api/chat/live", tắt công tắc thao tác Chrome (Bé Gấu không có Bridge).
+export function LiveSession({ onClose, onSaved, apiBase = "/api/creator-ai/live", title = "Gấu Pro", allowControl = true }: {
+  onClose: () => void; onSaved?: (conversationId: string) => void; apiBase?: string; title?: string; allowControl?: boolean
+}) {
   const [status, setStatus] = useState<"idle" | "connecting" | "live" | "ending" | "error">("idle")
   const [err, setErr] = useState("")
   const [turns, setTurns] = useState<Turn[]>([])
@@ -97,7 +100,7 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
       : fc.name === "readMyBrowser" ? `👀 đọc Chrome (${a.action})` : `🔎 ${fc.name}`, true)
     let response: unknown
     try {
-      const d = await fetch("/api/creator-ai/live/tool", {
+      const d = await fetch(`${apiBase}/tool`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fc.name, args: fc.args ?? {}, control: controlRef.current }),
       }).then(r => r.json())
       response = d.response ?? { error: d.error || "Lỗi" }
@@ -172,7 +175,7 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
       // Xin quyền micro TRƯỚC khi mở phiên — không giữ phiên Gemini (tính phí, token 1 lần) mở trong lúc người dùng còn đang quyết định.
       const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } })
       micStreamRef.current = mic
-      const tok = await fetch("/api/creator-ai/live/token", { method: "POST" }).then(async r => ({ ok: r.ok, ...(await r.json()) }))
+      const tok = await fetch(`${apiBase}/token`, { method: "POST" }).then(async r => ({ ok: r.ok, ...(await r.json()) }))
       if (!tok.ok || !tok.token) throw new Error(tok.error || "Không lấy được token phiên")
       const { GoogleGenAI } = await import("@google/genai")
       const ai = new GoogleGenAI({ apiKey: tok.token, httpOptions: { apiVersion: "v1alpha" } })
@@ -217,7 +220,7 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
       tools: toolsRef.current, durationMs: t0Ref.current ? Date.now() - t0Ref.current : 0,
     }
     if (payload.turns.length) {
-      const d = await fetch("/api/creator-ai/live/log", {
+      const d = await fetch(`${apiBase}/log`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       }).then(r => r.json()).catch(() => ({}))
       if (d.conversationId) onSaved?.(d.conversationId)
@@ -245,7 +248,7 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-800">
           <div className="flex items-center gap-2">
             <span className={`w-2.5 h-2.5 rounded-full ${live ? (speaking ? "bg-violet-500 animate-pulse" : "bg-emerald-500") : "bg-gray-300"}`} />
-            <span className="font-semibold text-sm text-gray-800 dark:text-slate-100">🎙 Gấu Pro trực tiếp</span>
+            <span className="font-semibold text-sm text-gray-800 dark:text-slate-100">🎙 {title} trực tiếp</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">thử nghiệm</span>
           </div>
           <button onClick={() => { if (live) end(); onClose() }} className="p-1 text-gray-400 hover:text-gray-700" title="Đóng"><X size={16} /></button>
@@ -254,7 +257,7 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 text-sm">
           {status === "idle" && turns.length === 0 && (
             <div className="text-gray-500 dark:text-slate-400 text-xs leading-relaxed">
-              Nói chuyện bằng giọng với Gấu Pro, có thể chia sẻ màn hình hoặc camera để Gấu nhìn cùng (vd bảng giá NCC đang mở → hỏi
+              Nói chuyện bằng giọng với {title}, có thể chia sẻ màn hình hoặc camera để Gấu nhìn cùng (vd bảng giá NCC đang mở → hỏi
               "so với COGS hiện tại thế nào"). Chỉ có công cụ <b>đọc</b> dữ liệu; việc cần ghi/gửi/tạo file hãy dùng chat thường.
               Hình màn hình được gửi tới Google Gemini để phân tích — chỉ chia sẻ khi cần. Kết thúc phiên, phụ đề được lưu thành 1 hội thoại.
             </div>
@@ -305,11 +308,11 @@ export function LiveSession({ onClose, onSaved }: { onClose: () => void; onSaved
                 className={`w-10 h-10 rounded-xl flex items-center justify-center border ${share === "camera" ? "bg-violet-600 text-white border-violet-600" : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300"}`}>
                 <Camera size={15} />
               </button>
-              <button onClick={() => setControl(v => !v)}
+              {allowControl && <button onClick={() => setControl(v => !v)}
                 title={control ? "Đang cho Gấu thao tác Chrome — bấm để TẮT" : "Cho Gấu thao tác trên Chrome của bạn (cần extension Bridge)"}
                 className={`h-10 px-2.5 rounded-xl flex items-center gap-1 border text-xs ${control ? "bg-amber-500 text-white border-amber-500" : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300"}`}>
                 <MousePointerClick size={15} />{control && <span>Đang bật</span>}
-              </button>
+              </button>}
               <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") sendText() }}
                 placeholder="Hoặc gõ..." className="flex-1 min-w-0 px-3 py-2 text-sm rounded-xl border border-gray-200 dark:border-slate-700 bg-transparent" />
               <button onClick={sendText} disabled={!text.trim()} className="w-10 h-10 rounded-xl flex items-center justify-center text-violet-600 disabled:opacity-30"><Send size={15} /></button>
