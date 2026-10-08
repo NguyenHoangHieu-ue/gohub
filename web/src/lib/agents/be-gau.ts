@@ -27,6 +27,7 @@ import { loadFeatureMatrix, enabledFeatureTools } from "@/lib/assistant-features
 import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { normalizePlan, compactContents, type PlanStep } from "./creator-ai"
 import { runScheduleTask } from "./creator/schedules"
+import { deepResearchDecl, runDeepResearch } from "./deep-research"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 import { leakFilterStream, scrubLeaks } from "./core/leak-filter"
 import { b2bCustomerCm1Decl, runB2bCustomerCm1 } from "./b2b-cm1"
@@ -347,7 +348,8 @@ export interface BeGauOpts {
   username?: string         // U3: trí nhớ cá nhân + tìm hội thoại cũ theo username
   signal?: AbortSignal      // U3: người dùng bấm Dừng
   onPlan?: (steps: PlanStep[]) => void  // U3: kế hoạch từng bước hiện trên UI
-  job?: { timeBudgetMs: number; resume?: Content[]; tainted?: boolean }  // U3 việc nền: chạy theo chặng, hết ngân sách trả checkpoint thay vì chốt câu trả lời
+  job?: { timeBudgetMs: number; resume?: Content[]; tainted?: boolean }
+  origin?: string           // để tự gọi bộ chạy việc nền (nghiên cứu sâu)  // U3 việc nền: chạy theo chặng, hết ngân sách trả checkpoint thay vì chốt câu trả lời
 }
 
 /**
@@ -418,6 +420,7 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
     larkWorkspaceDecl, searchKBDecl,
     // CM1 B2B theo KH (số tab Quarter Report) — chỉ vai trò xem được giá vốn và không bị giới hạn dữ liệu theo vai trò.
     ...(seeCost && !dataFilter ? [b2bCustomerCm1Decl] : []),
+    ...(featureTools.has("deepResearch") && username ? [deepResearchDecl] : []),
     ...featureDecls,
   ]
   const dispatchNames = new Set([searchKBDecl.name, ...featureDecls.map(d => d.name)])
@@ -453,6 +456,10 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
     // Việc theo lịch (tính năng "schedule"): lưu kèm dấu agent Bé Gấu → đến hạn chạy bằng Bé Gấu theo vai trò người đặt.
     if (name === "scheduleTask" && featureTools.has("scheduleTask") && username)
       return wrap(await runScheduleTask(a, username, (role || "").toLowerCase() === "creator", ownerName))
+
+    if (name === "deepResearch" && featureTools.has("deepResearch") && username)
+      return wrap(await runDeepResearch(a, { username, ownerName: ownerName || username, isCreator: (role || "").toLowerCase() === "creator",
+        origin: opts.origin || process.env.NEXTAUTH_URL || "" }))
 
     if (name === "b2bCustomerCm1" && seeCost && !dataFilter)
       return wrap(await runB2bCustomerCm1(a))

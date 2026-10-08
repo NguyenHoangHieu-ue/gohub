@@ -166,6 +166,7 @@ export async function POST(req: NextRequest) {
             isCost, extraDirective: priceDirective,
             fileContexts: fileContexts.length > 0 ? fileContexts : undefined,
             signal: req.signal,
+            origin: req.nextUrl.origin,
             // s195+18: text đã được stream ra controller theo từng đoạn ngay trong lúc runBeGau() chạy —
             // KHÔNG gửi lại `text` đầy đủ bên dưới nữa (sẽ bị lặp đôi nội dung).
             onChunk: (delta) => sse(controller, { type: "delta", content: delta }),

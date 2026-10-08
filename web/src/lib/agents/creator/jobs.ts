@@ -4,11 +4,17 @@ import { runCreatorAI, type JobCheckpoint } from "@/lib/agents/creator-ai"
 import { runBeGau } from "@/lib/agents/be-gau"
 import { canViewCogs } from "@/lib/agents/guardian"
 import type { Content } from "@google/genai"
+import { genai } from "@/lib/agents/genai-stream"
 
 // U3: việc nền của Bé Gấu dùng chung bảng gp_jobs (không migration) — đánh dấu bằng checkpoint.agent = "be-gau"; chạy runBeGau theo vai trò
 // thật của người giao (đọc lại users.role mỗi chặng), hội thoại kết quả lưu theo TÊN hiển thị (danh sách Bé Gấu lọc theo tên).
 export interface BeGauJobState { agent: "be-gau"; ownerName: string; contents?: Content[]; tainted?: boolean }
 const isBeGauJob = (c: unknown): c is BeGauJobState => (c as any)?.agent === "be-gau"
+
+// U3 nghiên cứu sâu: phiên Deep Research chạy ngầm phía Google (Interactions API, ~2–20 phút); việc nền chỉ hỏi trạng thái theo chặng.
+export interface DeepResearchState { agent: "deep-research"; ownerName: string; interactionId: string }
+const isDeepResearch = (c: unknown): c is DeepResearchState => (c as any)?.agent === "deep-research"
+const DR_MAX_CHUNKS = 12                   // ≈ 40 phút chờ
 
 // Việc chạy nền Gấu Pro (G2, bảng gp_jobs migration v65). Gói Vercel Hobby → không dùng Workflow: mỗi chặng chạy trong 1 request
 // `/api/creator-ai/jobs/run` (maxDuration 300s) với ngân sách CHUNK_BUDGET_MS; chưa xong thì lưu checkpoint + tự gọi chặng tiếp.
@@ -25,9 +31,9 @@ export interface JobRow {
   conversation_id: string | null; created_at: string; updated_at: string
 }
 
-export async function createJob(p: { username: string; isCreator: boolean; prompt: string; beGauOwnerName?: string }): Promise<{ job?: JobRow; error?: string }> {
+export async function createJob(p: { username: string; isCreator: boolean; prompt: string; beGauOwnerName?: string; state?: DeepResearchState }): Promise<{ job?: JobRow; error?: string }> {
   const title = p.prompt.replace(/\s+/g, " ").slice(0, 80)
-  const checkpoint: BeGauJobState | null = p.beGauOwnerName ? { agent: "be-gau", ownerName: p.beGauOwnerName } : null
+  const checkpoint: BeGauJobState | DeepResearchState | null = p.state ?? (p.beGauOwnerName ? { agent: "be-gau", ownerName: p.beGauOwnerName } : null)
   const { data, error } = await supabaseAdmin.from("gp_jobs")
     .insert({ username: p.username, is_creator: p.isCreator, title, prompt: p.prompt.slice(0, 8000), checkpoint })
     .select("*").single()
@@ -86,6 +92,7 @@ export async function runJobChunk(id: string): Promise<"continue" | "finished" |
   if (!claimed?.length) return "skipped"
 
   if (isBeGauJob(j.checkpoint)) return runBeGauJobChunk(j, j.checkpoint)
+  if (isDeepResearch(j.checkpoint)) return runDeepResearchChunk(j, j.checkpoint)
   try {
     const r = await runCreatorAI([], j.prompt, undefined, undefined, j.is_creator, j.username, "job",
       { timeBudgetMs: CHUNK_BUDGET_MS, resume: j.checkpoint ?? undefined })
@@ -171,6 +178,50 @@ async function runBeGauJobChunk(j: JobRow, st: BeGauJobState): Promise<"continue
   } catch (e: any) {
     await finish(j, { status: "failed", error: String(e?.message || e).slice(0, 1000) },
       `⚠️ Việc nền Bé Gấu "${j.title}" lỗi: ${String(e?.message || e).slice(0, 300)}`)
+    return "finished"
+  }
+}
+
+async function runDeepResearchChunk(j: JobRow, st: DeepResearchState): Promise<"continue" | "finished"> {
+  const save = async (text: string) => {
+    let convId: string | null = null
+    try {
+      const { data: conv } = await supabaseAdmin.from("conversations")
+        .insert({ username: st.ownerName, title: "🔎 " + j.title.slice(0, 48) }).select("id").single()
+      convId = (conv?.id as string) ?? null
+      if (convId) await supabaseAdmin.from("conversation_messages").insert([
+        { conversation_id: convId, role: "user",      content: j.prompt, agent_id: "be-gau", agent_name: "Bé Gấu" },
+        { conversation_id: convId, role: "assistant", content: text,     agent_id: "be-gau", agent_name: "Bé Gấu (nghiên cứu sâu)" },
+      ])
+    } catch (e) { console.error("[deep_research] save conversation:", e) }
+    return convId
+  }
+  try {
+    const ai = genai()
+    const t0 = Date.now()
+    for (;;) {
+      const g: any = await ai.interactions.get(st.interactionId)
+      if (g.status === "completed") {
+        const text = String(g.output_text ?? "").trim() || "Không có nội dung."
+        const convId = await save(text)
+        await finish(j, { status: "done", result: text.slice(0, 20_000), conversation_id: convId },
+          `🔎 Bé Gấu đã xong nghiên cứu: "${j.title}"\n\n${text.slice(0, 1200)}${text.length > 1200 ? "\n…(xem đầy đủ trong Bé Gấu, mục Lịch sử)" : ""}`)
+        return "finished"
+      }
+      if (!["in_progress", "queued", "running"].includes(g.status)) throw new Error(`Phiên nghiên cứu kết thúc với trạng thái ${g.status}`)
+      if (Date.now() - t0 > CHUNK_BUDGET_MS) break
+      await new Promise(r => setTimeout(r, 15_000))
+    }
+    if (j.chunks + 1 >= DR_MAX_CHUNKS) {
+      await ai.interactions.cancel(st.interactionId).catch(() => {})
+      throw new Error("Nghiên cứu quá lâu (>40 phút), đã huỷ.")
+    }
+    const { data: still } = await supabaseAdmin.from("gp_jobs")
+      .update({ status: "queued", updated_at: new Date().toISOString() }).eq("id", j.id).eq("status", "running").select("id")
+    return still?.length ? "continue" : "finished"
+  } catch (e: any) {
+    await finish(j, { status: "failed", error: String(e?.message || e).slice(0, 1000) },
+      `⚠️ Nghiên cứu "${j.title}" lỗi: ${String(e?.message || e).slice(0, 300)}`)
     return "finished"
   }
 }

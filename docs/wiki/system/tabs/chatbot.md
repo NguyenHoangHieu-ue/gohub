@@ -293,3 +293,12 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
   `runDueSchedules` tạo việc nền có dấu Bé Gấu → chạy `runBeGau` theo vai trò người đặt; việc canh chừng trả `NO_ALERT` thì không lưu/nhắn.
 - Kết quả: Lark DM (cần `users.lark_open_id`) + hội thoại "⏳ …". Cron `scheduled-messages` mỗi giờ → trễ tối đa ~1 giờ (đang trỏ staging).
 - Cổng an toàn: tạo lịch sau khi lượt đã đọc nội dung ngoài → bị chặn (rule `when_tainted`).
+
+## § s228 (2026-10-08) — Bé Gấu: nghiên cứu sâu (Deep Research)
+
+- Tính năng "Nghiên cứu sâu" (Theo quyền, mặc định chỉ admin) → tool `deepResearch` (`lib/agents/deep-research.ts`): tạo phiên
+  `ai.interactions.create({ agent: GEMINI_DEEP_RESEARCH_AGENT, background: true })` (mặc định `deep-research-preview-04-2026`) + 1 việc nền
+  `gp_jobs` với `checkpoint = { agent: "deep-research", interactionId, ownerName }`. Bộ chạy hỏi trạng thái mỗi 15s trong chặng 200s,
+  tối đa 12 chặng (~40 phút, quá thì huỷ). Xong: `output_text` (markdown, cuối có danh sách nguồn) → hội thoại "🔎 …" + Lark DM.
+- Chỉ gửi CÂU HỎI ra ngoài (kèm bối cảnh GoHub chung), không kèm dữ liệu nội bộ. Đo: câu giá eSIM Nhật 7 ngày 136s, ~114k token.
+- `/api/chat` truyền `origin` cho `runBeGau` để tự gọi bộ chạy việc nền.
