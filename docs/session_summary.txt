@@ -10920,3 +10920,5 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
   merge main (workflow phải có trên main mới dispatch được), thử 1 phiếu nhỏ.
 - (s228 tiếp) MERGE `main` 2026-10-08 (`8e53dd02`): U5b phiếu sửa code + tính năng đặc biệt chỉ Creator. Đã cài GITHUB_DISPATCH_TOKEN (Vercel
   Prod/Preview, lấy từ .env.local, GitHub API đọc repo 200), bật "Actions tạo PR". Chưa chạy phiếu thử — Hiếu tạo qua Gấu Pro + duyệt.
+- (s228 tiếp) U5b chạy thử thật OK: phiếu #2 (Hiếu tạo qua Gấu Pro + duyệt) → workflow 1 phút 51 giây → PR #3 vào staging (+2 −1, đúng 1 dòng
+  chữ + 1 dòng wiki, tsc/lint sạch), callback pr_open + DM Lark. Phiếu #1 lỗi "thiếu GITHUB_DISPATCH_TOKEN" (duyệt khi web chưa nạp env mới).
