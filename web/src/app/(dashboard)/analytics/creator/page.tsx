@@ -7,6 +7,7 @@ import { Crown, Save, RefreshCw, Eye, EyeOff, Shield, Cpu, Plus, Trash2, AlertTr
 import { cn } from "@/lib/utils"
 import { ALL_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 import KbDocsSection from "./kb-docs-section"
+import AssistantFeaturesSection from "./assistant-features-section"
 
 // Tất cả tab/route có thể ẩn
 const ALL_TABS = [
@@ -230,6 +231,8 @@ function CreatorSettings() {
           </p>
         </div>
       )}
+
+      <AssistantFeaturesSection />
 
       {/* Gấu Pro Access */}
       <GpAccessSection />

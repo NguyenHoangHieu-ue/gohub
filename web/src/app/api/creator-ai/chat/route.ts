@@ -125,7 +125,8 @@ export async function POST(req: NextRequest) {
           isCreator,
           username,
           "web",
-          { signal: req.signal },   // G2: người dùng bấm Dừng → client huỷ request → dừng vòng lặp
+          // G2: người dùng bấm Dừng → client huỷ request → dừng vòng lặp. 240s: chừa ~60s cho lượt chốt trả lời trước trần 300s.
+          { signal: req.signal, timeBudgetMs: 240_000 },
         )
 
         // Cost dashboard (s196+7) — Gấu Pro trước đây không ghi app_usage_events gì cả (khác Bé Gấu).

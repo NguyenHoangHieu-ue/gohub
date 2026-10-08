@@ -1,4 +1,4 @@
-import { ThinkingLevel, type Content } from "@google/genai"
+import { ThinkingLevel, FunctionCallingConfigMode, type Content } from "@google/genai"
 import { supabaseAdmin }      from "@/lib/supabase"
 import { ga4Sites }           from "@/lib/ga4"
 import { getPartnerTiers }    from "@/lib/analytics-helpers"
@@ -672,7 +672,17 @@ export async function runCreatorAI(
   })
   let genResult = loop.last
   const toolsUsed = loop.toolsUsed
-  const { stopped, unfinished } = loop
+  const { stopped } = loop
+  let unfinished = loop.unfinished
+  // Web hết ngân sách thời gian (model chậm bất thường — QA 2026-10-08: 40s–2,5 phút/lượt, chạm trần 300s, UI trống) → không có
+  // việc nền nối tiếp, nên chốt 1 lượt cuối trả lời bằng dữ liệu đã lấy, không gọi thêm tool.
+  if (unfinished && channel === "web") {
+    try {
+      contents.push({ role: "user", parts: [{ text: "(Hệ thống) Đã hết thời gian xử lý. Trả lời NGAY bằng dữ liệu đã lấy được ở trên, nói rõ phần nào chưa kịp kiểm tra. KHÔNG gọi thêm công cụ." }] })
+      genResult = await loop.next({ ...makeConfig(), toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.NONE } } })
+      unfinished = false
+    } catch { /* giữ unfinished */ }
+  }
 
   // Ensure non-empty response
   let text = unfinished ? "" : genResult.text

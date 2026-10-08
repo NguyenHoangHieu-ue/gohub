@@ -16,54 +16,18 @@ import { detectAndLogLearning }          from "./learning"
 import { larkWorkspaceDecl, runLarkWorkspace } from "./lark-workspace"
 import { BUSINESS_FACTS, ANSWER_STYLE } from "./business-facts"
 
-// ─── s190: gộp Gấu Pro vào Bé Gấu ──────────────────────────────────────────────
-// Theo yêu cầu Hiếu: Bé Gấu nay có TẤT CẢ công cụ Gấu Pro (declarations/executor dùng CHUNG qua
-// creator/declarations.ts + creator/tools/dispatch.ts — không chép lại logic, tránh đúng kiểu "code
-// thừa/trùng lặp" mà audit s190 tìm thấy ở chỗ khác). Gấu Pro (route/trang riêng, creator-only) GIỮ
-// NGUYÊN không đổi — Hiếu sẽ quyết hướng xử lý sau.
-// Phân quyền theo đúng yêu cầu: "code/hệ thống/quy trình" → guardian.ts chặn ở tầng CÂU HỎI (category
-// system_internal, chỉ admin/creator). Ở tầng CÔNG CỤ, một số tool Gấu Pro không phải "hỏi thông tin" mà
-// là HÀNH ĐỘNG có rủi ro/chi phí riêng — những tool đó bị giữ admin/creator-only bằng cách không đăng ký
-// declaration cho role khác (Gemini không thể gọi hàm nó không thấy), độc lập với Guardian:
-//   - browsePortal/managePortalCredentials: đăng nhập + đọc credential portal NCC bên thứ 3.
-//   - writeKnowledgeBase/reviewPendingLearning/approveLearning/rejectLearning: ghi đè KB dùng chung cho
-//     MỌI người hỏi Bé Gấu sau này — 1 người ghi sai/ghi bậy sẽ lan ra toàn bộ câu trả lời sau đó.
-//   - sendLarkMessage: gửi tin nhắn Lark tới bất kỳ group nào (rủi ro spam/mạo danh).
-//   - listLarkTasks/listLarkTasklists/getLarkTask/createLarkTask/updateLarkTask: các API Lark Task này
-//     LUÔN thao tác trên tài khoản Lark CÁ NHÂN của Hiếu (gán task cho creatorOpenId, đọc task của chính
-//     Hiếu) — mở cho role khác sẽ lộ task cá nhân của Hiếu cho bất kỳ ai hỏi, không phải lỗi phân quyền
-//     thường mà là rò rỉ dữ liệu cá nhân, nên giữ creator/admin dù bản chất là "đọc", không phải "ghi".
-//   - generateImageStability/generateVideo/checkVideoStatus: gọi API trả phí (Stability AI/Kling) —
-//     generateImage (Pollinations, miễn phí) thì mở cho mọi người, 2 cái trả phí giữ admin/creator để
-//     tránh bị lạm dụng tốn tiền khi mở cho toàn công ty.
-// Còn lại (generateImage, getTrendSnapshots, queryLarkBase, compareVendorQuotes, trackSKUWinRate,
-// searchKnowledgeBase) mở cho MỌI role đã đăng nhập — đúng tinh thần "ai cũng như nhau".
-import {
-  generateImageDecl, getTrendSnapshotsDecl, queryLarkBaseDecl, compareVendorQuotesDecl,
-  trackSKUWinRateDecl, searchKBDecl,
-  writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
-  browsePortalDecl, managePortalCredsDecl, sendLarkMessageDecl,
-  listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl,
-  generateImageStabilityDecl, generateVideoDecl, checkVideoStatusDecl,
-} from "./creator/declarations"
+// ─── Công cụ Gấu Pro dùng chung ─────────────────────────────────────────────────
+// Declarations/executor dùng CHUNG với Gấu Pro (creator/declarations.ts + creator/tools/dispatch.ts). Tool nào Bé Gấu được khai báo
+// do bảng phân quyền tính năng theo vai trò quyết định (lib/assistant-features.ts, U3) — Gemini không thấy hàm thì không gọi được.
+// Nhóm "Chỉ Creator" (ghi KB chung, portal vendor, gửi Lark cho người khác, task Lark CÁ NHÂN của Hiếu) khoá cứng trong bảng đó.
+import { ALL_TOOL_DECLARATIONS, searchKBDecl } from "./creator/declarations"
 import { dispatchTool } from "./creator/tools/dispatch"
+import { newTurnSafety, recordToolResult, approvalReason } from "./creator/tool-policy"
+import { loadFeatureMatrix, enabledFeatureTools } from "@/lib/assistant-features"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 
-// Tool mở cho MỌI role (business/productivity, không phải hành động nhạy cảm/trả phí).
-const GP_TOOLS_OPEN = [
-  generateImageDecl, getTrendSnapshotsDecl, queryLarkBaseDecl, compareVendorQuotesDecl,
-  trackSKUWinRateDecl, searchKBDecl,
-]
-// Tool CHỈ admin/creator — hành động/credential/chi phí/dữ liệu cá nhân Hiếu (xem giải thích ở trên).
-const GP_TOOLS_ADMIN_ONLY = [
-  writeKBDecl, reviewPendingLearningDecl, approveLearningDecl, rejectLearningDecl,
-  browsePortalDecl, managePortalCredsDecl, sendLarkMessageDecl,
-  listLarkTasksDecl, listLarkTasklistsDecl, getLarkTaskDecl, createLarkTaskDecl, updateLarkTaskDecl,
-  generateImageStabilityDecl, generateVideoDecl, checkVideoStatusDecl,
-]
-const GP_DISPATCH_NAMES = new Set(
-  [...GP_TOOLS_OPEN, ...GP_TOOLS_ADMIN_ONLY].map(d => d.name),
-)
+// webSearch có executor riêng ở dưới (gom nguồn trích dẫn); các tool tính năng khác chạy qua dispatchTool.
+const FEATURE_DECLS = ALL_TOOL_DECLARATIONS.filter(d => d.name !== "webSearch")
 
 // ─── Helpers dùng chung ─────────────────────────────────────────────────────────
 
@@ -378,13 +342,13 @@ export async function runBeGau(opts: {
 }): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number; trace: BeGauTrace }> {
   const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, onChunk, larkOpenId = null } = opts
   const isPriv = priv(role)
-  const isAdminCreator = (role || "").toLowerCase() === "admin" || (role || "").toLowerCase() === "creator"
 
   // Hiếu chốt 2026-10-07: giá vốn mở cho mọi vai trò (canViewCogs = true) → chỉ che mục "cogs" khi vai trò thật sự không có quyền.
   const seeCost = isPriv || isCost
   const kbOpts = seeCost ? {} : { excludeCategories: ["cogs"] }
 
-  const [dataFilter, customRules, partnerTierInfo, ga4SiteList, kbInject, { history: compressedHistory }] = await Promise.all([
+  const [featureTools, dataFilter, customRules, partnerTierInfo, ga4SiteList, kbInject, { history: compressedHistory }] = await Promise.all([
+    loadFeatureMatrix().then(m => enabledFeatureTools(m, role)),
     getRoleDataFilter(role),
     getCustomRules(),
     getPartnerTiers().then(t => {
@@ -424,14 +388,15 @@ export async function runBeGau(opts: {
     LARK_CREATE_RE.test(lastMsg) ? `\n\n(Nội bộ — lượt này) Người dùng đang nhờ TẠO trong Lark: lấy số liệu xong thì BẮT BUỘC gọi công cụ larkWorkspace, rồi trả link (hoặc báo đúng lỗi công cụ trả về).` : "",
   ].join("")
 
-  // s190: + toàn bộ công cụ Gấu Pro — mở cho mọi role (GP_TOOLS_OPEN), phần nhạy cảm/trả phí/cá nhân
-  // Hiếu chỉ đăng ký cho admin/creator (GP_TOOLS_ADMIN_ONLY) — Gemini không thấy thì không gọi được.
+  // Tool lõi luôn có + tool của tính năng đã bật cho vai trò (bảng phân quyền U3).
+  const featureDecls = FEATURE_DECLS.filter(d => featureTools.has(d.name))
   const functionDeclarations = [
-    readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl, webSearchDecl,
-    larkWorkspaceDecl,
-    ...GP_TOOLS_OPEN,
-    ...(isAdminCreator ? GP_TOOLS_ADMIN_ONLY : []),
+    readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl,
+    ...(featureTools.has("webSearch") ? [webSearchDecl] : []),
+    larkWorkspaceDecl, searchKBDecl,
+    ...featureDecls,
   ]
+  const dispatchNames = new Set([searchKBDecl.name, ...featureDecls.map(d => d.name)])
 
   // U1a (plan be-gau-upgrade.md): SDK mới @google/genai (cùng streamTurn với Gấu Pro) — SDK cũ hết hỗ trợ, làm rớt thoughtSignature.
   const thinkingLevel = deepQuestion(lastMsg, fileContexts?.length ?? 0) ? ThinkingLevel.HIGH : ThinkingLevel.LOW
@@ -474,10 +439,22 @@ export async function runBeGau(opts: {
   // Suy nghĩ sâu chỉ ở lượt ĐẦU (lên kế hoạch); các lượt sau chủ yếu gọi SQL → LOW (eval trace: 14 lượt × ~10s khi HIGH mọi lượt).
   const lowConfig = { ...config, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
   const sources: WebSource[] = []
+  // Cổng an toàn dùng chung Gấu Pro (tool-policy.ts): lượt đã đọc nội dung ngoài (web, file, Lark Base…) thì không chạy hành động
+  // ghi/gửi/mở URL lạ. Bé Gấu chưa có nút Duyệt (U3 sau) → từ chối và để người dùng hỏi lại ở lượt mới.
+  const safety = newTurnSafety(lastMsg, files.length > 0)
 
   // Mỗi tool bọc try/catch riêng — 1 tool lỗi (network/DB timeout) chỉ trả functionResponse báo lỗi cho MỘT tool đó,
   // model tự quyết định retry/báo user thay vì mất trắng cả lượt.
   const runTool = async (call: any): Promise<any> => {
+    const blocked = approvalReason(call, safety)
+    if (blocked) return { functionResponse: { name: call.name, response: {
+      error: `Chưa thực hiện: ${blocked} Báo người dùng gửi lại yêu cầu này ở một tin nhắn mới (không kèm nội dung bên ngoài), KHÔNG tìm cách khác để làm thay.`,
+    } } }
+    const out = await runToolCore(call)
+    recordToolResult(safety, call, out.functionResponse.response)
+    return out
+  }
+  const runToolCore = async (call: any): Promise<any> => {
     const a = call.args as any
     const name = call.name ?? ""
     const wrap = (resp: any) => ({ functionResponse: { name, response: resp } })
@@ -503,7 +480,7 @@ export async function runBeGau(opts: {
       return wrap(kbResult)
     }
 
-    if (name === "webSearch") {
+    if (name === "webSearch" && featureTools.has("webSearch")) {
       const { result, sources: s } = await runWebSearch(a?.query || "")
       sources.push(...s)
       const srcText = s.length ? "\n\nSources:\n" + s.map((x: any, i: number) => `[${i + 1}] ${x.title}: ${x.url}`).join("\n") : ""
@@ -528,10 +505,9 @@ export async function runBeGau(opts: {
       } catch (e: any) { return wrap({ error: e.message }) }
     }
 
-    // s190: mọi công cụ Gấu Pro (mở cho all hoặc admin/creator-only, xem GP_TOOLS_* ở đầu file) — dùng
-    // CHUNG executor có sẵn ở creator/tools/dispatch.ts, không chép lại logic.
-    if (GP_DISPATCH_NAMES.has(name)) {
-      const res = await dispatchTool({ name: name, args: a }, undefined, sources)
+    // Công cụ Gấu Pro đã bật cho vai trò (bảng phân quyền) — dùng CHUNG executor creator/tools/dispatch.ts.
+    if (dispatchNames.has(name)) {
+      const res = await dispatchTool({ name: name, args: a }, undefined, sources, { username: userId, isCreator: (role || "").toLowerCase() === "creator" })
       // searchKnowledgeBase đọc chung creator_kb với readKnowledgeBase — che category "cogs" cho
       // role không có quyền xem giá vốn, khớp đúng cách readKnowledgeBase xử lý ở trên.
       if (name === "searchKnowledgeBase" && !seeCost) {
@@ -551,8 +527,15 @@ export async function runBeGau(opts: {
   // toolsUsed = SỰ THẬT đã gọi tool gì — My Metrics dùng để phân biệt task tính KPI (DB_TASK_TOOLS ở lib/okr-helpers.ts) với trả lời chay.
   const loop = await runAgentLoop({
     model: GEMINI_MODEL, contents, configFor: r => r === 0 ? config : lowConfig, runTool, maxRounds: 12, onChunk,
+    timeBudgetMs: 240_000,   // trần route 300s — chừa lượt chốt khi model chậm bất thường (QA 2026-10-08)
   })
   let genResult = loop.last
+  if (loop.unfinished) {
+    try {
+      contents.push({ role: "user", parts: [{ text: "(Hệ thống) Đã hết thời gian xử lý. Trả lời NGAY bằng dữ liệu đã lấy được ở trên, nói rõ phần nào chưa kịp kiểm tra. KHÔNG gọi thêm công cụ." }] })
+      genResult = await loop.next({ ...lowConfig, toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.NONE } } })
+    } catch { /* rơi xuống câu dự phòng bên dưới */ }
+  }
   const toolsUsed = loop.toolsUsed
 
   // Nhờ tạo trong Lark mà model chưa gọi công cụ (eval U1a2–U1a3: 3 lần bỏ qua dù đã dặn) → 1 lượt BẮT BUỘC gọi larkWorkspace.

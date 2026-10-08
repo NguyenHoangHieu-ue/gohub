@@ -213,3 +213,18 @@ Theo roadmap audit toàn diện Bé Gấu (s196+5, xem artifact riêng). 4 việ
 tsc + lint (0 lỗi mới) + vitest (230/230) PASS. **Cần Hiếu**: chạy migration v59; muốn xem cost Bé Gấu thì
 tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi phí Gấu Pro" hiện có chỉ lọc
 `gau_pro`, chưa gộp — để riêng cho rõ vì đối tượng khác nhau, xem quyết định #2 trong artifact roadmap).
+## § s228 U3a (2026-10-08) — Bảng phân quyền tính năng theo vai trò + cổng an toàn chung
+
+- **Bảng tính năng** `lib/assistant-features.ts` (lưu `app_settings.assistant_features` = `{featureId: role[]}`, cache 60s). 3 nhóm:
+  *Mọi người* (mặc định bật mọi vai trò: tìm web, so giá vendor, win-rate SKU, xu hướng, Lark Base, tạo ảnh),
+  *Theo quyền* (mặc định chỉ admin: mở trang web `browseWeb`, tạo video), *Chỉ Creator* (khoá cứng: ghi KB/duyệt học liệu, portal
+  vendor, gửi Lark cho người khác, task Lark của Hiếu, ảnh Stability). Mục "Sắp có" (kế hoạch+Dừng, trí nhớ, chạy nền, đọc to,
+  ghi âm→biên bản, Trực tiếp, việc theo lịch, nghiên cứu sâu, dịch, Bridge, file máy) hiện trong bảng nhưng chưa có tác dụng.
+- Giao diện: Creator Settings → khối "Bé Gấu — Tính năng theo vai trò" (`assistant-features-section.tsx`); API
+  `GET/POST /api/config/assistant-features` (xem creator/admin, sửa chỉ creator).
+- Bé Gấu: tool lõi (SQL, Supabase, sản phẩm, KB, GA4/GSC, `larkWorkspace`, `searchKnowledgeBase`) luôn có; tool Gấu Pro khai báo theo
+  bảng. **Đổi hành vi**: trước admin có cả nhóm "Chỉ Creator" trong Bé Gấu — nay chỉ creator (theo plan U3).
+- **Cổng an toàn chung** (`creator/tool-policy.ts`): Bé Gấu ghi nhận lượt đã đọc nội dung ngoài (web, file, Lark Base, xu hướng) → chặn
+  hành động ghi/gửi/mở URL lạ (chưa có nút Duyệt ở Bé Gấu → báo người dùng gửi lại ở tin mới).
+- **Ngân sách thời gian 240s** cho Bé Gấu + Gấu Pro web: QA 2026-10-08 Gemini chậm bất thường (20s–2,5 phút/lượt, cả production)
+  → Gấu Pro chạm trần 300s, UI "Không có nội dung trả về". Nay hết 240s thì chốt 1 lượt trả lời bằng dữ liệu đã có (không gọi tool).
