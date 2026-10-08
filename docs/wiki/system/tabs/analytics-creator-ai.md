@@ -1041,3 +1041,10 @@ lịch + phiên Trực tiếp là khung đa người dùng, bật theo `app_sett
 - **Lark DM hiện kế hoạch**: lần đầu model gọi `updatePlan` → bot gửi 1 tin "📋 Kế hoạch: …" (không gửi các lần cập nhật để khỏi spam).
 - **Tóm tắt hội thoại Lark DM**: `summarizeLarkThread()` tóm tắt luồng `lark_chat_history` (khi thêm ≥4 tin) vào `gp_conversation_memory`
   với id UUID suy từ `lark:{openId}:{threadId}`, tiêu đề "[Lark DM] …" → `searchPastConversations` tìm được (link ghi "trong Lark DM").
+
+## § s228 U4 (2026-10-08) — Giao diện chat mới cho Gấu Pro
+
+- Thanh trên: "Gấu Pro / <tên hội thoại ▾>" (`components/chat/conversation-switcher.tsx`, bỏ nút Lịch sử riêng) + ✎ cuộc mới + ⋯
+  (`overflow-menu.tsx`): Trực tiếp, Trí nhớ, Việc & duyệt (số việc chờ duyệt — chấm đỏ trên ⋯, đọc `/api/creator-ai/approve`),
+  Nhật ký & lượt chạy, Lark/Google (creator). Các panel cũ mở ngay dưới ⋯. Bỏ hàng nút rải rác + 2 nhãn "Đã kết nối".
+- Hội thoại dài: `use-stick-to-bottom.ts` (bám đáy khi đang ở cuối, nút "↓ Tin mới nhất"), >40 tin thu gọn "Hiện N tin trước".
