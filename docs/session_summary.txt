@@ -10892,3 +10892,6 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
   `e29aa430` lỗi có sẵn: lưu tin Bé Gấu không cập nhật conversations.updated_at → lịch sử xếp sai/"Cũ hơn".
   `03d5ca68` Gấu Pro: cùng thanh trên + ⋯ (Trực tiếp, Trí nhớ, Việc & duyệt có số chờ duyệt, Nhật ký, Lark/Google), cuộn + thu gọn.
   Lệch plan: 🎤 ở ô nhập = nói thành chữ; Trò chuyện trực tiếp vẫn mở cửa sổ riêng (chưa nhúng trong khung chat).
+  QA U4 staging tìm + sửa: (a) Gấu Pro mở hội thoại kẹt ở đầu — trang vẽ khung chat muộn (chờ kiểm quyền) nên hook gắn theo dõi cuộn vào
+  phần tử chưa có → đổi sang callback ref `fb25121a`; (b) nội dung cao thêm sau khi cuộn (bảng/biểu đồ) → ResizeObserver kéo theo `3f2e6ae5`.
+  Kiểm lại: mở ra ở tin mới nhất, cuộn lên hiện "↓ Tin mới nhất", menu ⋯ + panel Việc & duyệt đúng chỗ, "Hiện N tin trước" chạy.
