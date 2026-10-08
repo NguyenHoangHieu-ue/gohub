@@ -24,7 +24,13 @@ export function useStickToBottom<T extends HTMLElement>(deps: unknown[]) {
       setAtBottom(b)
     }
     el.addEventListener("scroll", onScroll, { passive: true })
-    return () => el.removeEventListener("scroll", onScroll)
+    // Nội dung cao thêm SAU khi đã cuộn (bảng/biểu đồ/ảnh vẽ xong muộn) → đang bám đáy thì kéo theo (QA U4: mở hội thoại dài bị kẹt giữa).
+    const ro = new ResizeObserver(() => { if (atBottomRef.current) el.scrollTop = el.scrollHeight })
+    const watch = () => Array.from(el.children).forEach(c => ro.observe(c))
+    watch()
+    const mo = new MutationObserver(watch)
+    mo.observe(el, { childList: true })
+    return () => { el.removeEventListener("scroll", onScroll); ro.disconnect(); mo.disconnect() }
   }, [])
 
   // Nội dung đổi (tin mới, chữ đang chạy) → chỉ bám đáy khi người dùng đang ở đáy.
