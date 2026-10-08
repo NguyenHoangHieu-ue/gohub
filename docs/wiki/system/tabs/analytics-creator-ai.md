@@ -1079,6 +1079,7 @@ Luật cho Claude nằm TRONG file workflow (web không đổi được): không
 
 Trả lời câu hỏi: nhắn Gấu Pro "phiếu <số>: <trả lời>" (tool `answer`) hoặc ô trả lời ở Creator Settings → mục "Phiếu sửa code"
 (`dev-tickets-section.tsx`, API `GET/POST /api/dev-tickets`, chỉ Creator) → phiếu chạy lại kèm hỏi đáp.
+Trạng thái trống của mục: "Chưa có phiếu nào — nhờ Gấu Pro tạo phiếu sửa code."
 
 Cần có: migration v71; Vercel env `GITHUB_DISPATCH_TOKEN` (token GitHub fine-grained, repo gohub, quyền Actions: Read and write) +
 `DEV_TICKET_SECRET` (đã cài); GitHub secrets `CLAUDE_CODE_OAUTH_TOKEN` + `DEV_TICKET_SECRET` (đã cài); repo Settings → Actions → General →
