@@ -1,6 +1,6 @@
 name: Claude Code — phiếu sửa code
 
-# U5b (docs/plans/be-gau-upgrade.md). Chỉ chạy khi web GoHub Intel gọi workflow_dispatch SAU KHI Hiếu duyệt phiếu (lib/dev-tickets.ts).
+# U5b (wiki docs/wiki/system/tabs/analytics-creator-ai.md §s228 U5b). Chỉ chạy khi web GoHub Intel gọi workflow_dispatch SAU KHI Hiếu duyệt phiếu (lib/dev-tickets.ts).
 # Ranh giới: chỉ nhánh auto/ticket-<id>, chỉ mở PR vào staging; không có bí mật production (chỉ token Claude, GITHUB_TOKEN,
 # DEV_TICKET_SECRET để báo trạng thái); Claude chỉ được sửa file + chạy tsc/vitest/lint; không push/merge; giới hạn lượt + thời gian.
 on:

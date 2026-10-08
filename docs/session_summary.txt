@@ -10922,3 +10922,5 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
   Prod/Preview, lấy từ .env.local, GitHub API đọc repo 200), bật "Actions tạo PR". Chưa chạy phiếu thử — Hiếu tạo qua Gấu Pro + duyệt.
 - (s228 tiếp) U5b chạy thử thật OK: phiếu #2 (Hiếu tạo qua Gấu Pro + duyệt) → workflow 1 phút 51 giây → PR #3 vào staging (+2 −1, đúng 1 dòng
   chữ + 1 dòng wiki, tsc/lint sạch), callback pr_open + DM Lark. Phiếu #1 lỗi "thiếu GITHUB_DISPATCH_TOKEN" (duyệt khi web chưa nạp env mới).
+- (s228 tiếp) Merge PR #3 (phiếu thử #2) vào staging. Xong plan be-gau-upgrade: xoá `docs/plans/be-gau-upgrade.md`, chuyển kiến thức sang wiki
+  `chatbot.md` §Chốt plan "be-gau-upgrade"; bộ câu eval chuyển `web/eval/be-gau-questions.md`. CLAUDE.md bỏ dòng plan, thêm mục s228.
