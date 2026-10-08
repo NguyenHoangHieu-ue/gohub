@@ -331,7 +331,7 @@ export function deepQuestion(msg: string, fileCount = 0): boolean {
 }
 
 // ─── Runner ─────────────────────────────────────────────────────────────────────
-export async function runBeGau(opts: {
+export interface BeGauOpts {
   geminiHistory: any[]
   lastMsg: string
   role?: string
@@ -346,11 +346,15 @@ export async function runBeGau(opts: {
   username?: string         // U3: trí nhớ cá nhân + tìm hội thoại cũ theo username
   signal?: AbortSignal      // U3: người dùng bấm Dừng
   onPlan?: (steps: PlanStep[]) => void  // U3: kế hoạch từng bước hiện trên UI
-}): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number; trace: BeGauTrace }> {
-  const { geminiHistory, lastMsg, role, name, userId, sessionId, isCost = false, extraDirective = "", fileContexts, larkOpenId = null, username, signal, onPlan } = opts
-  // Chữ stream ra đi qua bộ lọc lộ tên bảng/cột (core/leak-filter.ts).
-  const leak = opts.onChunk ? leakFilterStream(opts.onChunk) : null
-  const onChunk = leak ? (t: string) => leak.push(t) : undefined
+}
+
+/**
+ * Phần chuẩn bị dùng chung (U3): prompt + bộ tool theo vai trò/tính năng + cách chạy 1 tool (cổng an toàn, lọc giá vốn).
+ * runBeGau (chat) và phiên Trực tiếp (live) cùng dùng — Live không đi đường tool Gấu Pro (không lọc theo vai trò).
+ * promptless: chỉ cần chạy tool (route tool của Live) → bỏ các phần chỉ phục vụ prompt (KB, GA4, partner tier, trí nhớ, nén lịch sử).
+ */
+export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
+  const { geminiHistory, lastMsg, role, name, userId, isCost = false, extraDirective = "", fileContexts, larkOpenId = null, username, onPlan, promptless = false } = opts
   const isPriv = priv(role)
 
   // Hiếu chốt 2026-10-07: giá vốn mở cho mọi vai trò (canViewCogs = true) → chỉ che mục "cogs" khi vai trò thật sự không có quyền.
@@ -360,25 +364,25 @@ export async function runBeGau(opts: {
   const [featureTools, dataFilter, customRules, partnerTierInfo, ga4SiteList, kbInject, { history: compressedHistory }] = await Promise.all([
     loadFeatureMatrix().then(m => enabledFeatureTools(m, role)),
     getRoleDataFilter(role),
-    getCustomRules(),
-    getPartnerTiers().then(t => {
+    promptless ? "" : getCustomRules(),
+    promptless ? "" : getPartnerTiers().then(t => {
       const lines = Object.entries(t).map(([tier, ch]) => `  ${tier}: ${(ch as string[]).join(", ")}`).join("\n")
       return lines ? `\n\n━━━ PARTNER TIERS (B2B) ━━━\n${lines}` : ""
     }).catch(() => ""),
-    ga4Sites().then(s => s.length ? "\n\nGA4 SITES: " + s.map(x => `${x.id}="${x.name}" (${x.propertyId})`).join(", ") : "").catch(() => ""),
+    promptless ? "" : ga4Sites().then(s => s.length ? "\n\nGA4 SITES: " + s.map(x => `${x.id}="${x.name}" (${x.propertyId})`).join(", ") : "").catch(() => ""),
     // KB tra MỖI lượt như Gấu Pro (kb-recall.ts): danh mục tiêu đề + nguyên văn mục liên quan — thay cách cũ nạp 5.000 ký tự
     // đầu ở lượt đầu. Câu ngắn kiểu "cái đó" → ghép đoạn cuối câu trả lời trước. Non-priv che "cogs".
-    Promise.all([
+    promptless ? "" : Promise.all([
       kbIndexBlock(kbOpts).catch(() => ""),
       relevantKbBlock(lastMsg.length < 40 && geminiHistory.length
         ? `${lastMsg} ${String(geminiHistory[geminiHistory.length - 1]?.parts?.[0]?.text ?? "").slice(-500)}` : lastMsg, kbOpts).catch(() => ""),
     ]).then(([idx, rel]) => idx + rel),
     // Fix #8: nén history dài
-    compressHistory(geminiHistory),
+    promptless ? { history: [] as Content[] } : compressHistory(geminiHistory),
   ])
 
   const useMemory = !!username && featureTools.has("assistantMemory")
-  const memoryBlock = useMemory ? await buildMemoryBlock(username!).catch(() => "") : ""
+  const memoryBlock = useMemory && !promptless ? await buildMemoryBlock(username!).catch(() => "") : ""
   const visibleTables = { ...SUPABASE_TABLES, ...(isPriv ? SENSITIVE_TABLES : {}) }
   const tableCatalog = Object.entries(visibleTables).map(([t, d]) => `  · ${t}: ${d}`).join("\n")
 
@@ -416,47 +420,7 @@ export async function runBeGau(opts: {
   ]
   const dispatchNames = new Set([searchKBDecl.name, ...featureDecls.map(d => d.name)])
 
-  // U1a (plan be-gau-upgrade.md): SDK mới @google/genai (cùng streamTurn với Gấu Pro) — SDK cũ hết hỗ trợ, làm rớt thoughtSignature.
-  const thinkingLevel = deepQuestion(lastMsg, fileContexts?.length ?? 0) ? ThinkingLevel.HIGH : ThinkingLevel.LOW
-  const config = {
-    systemInstruction,
-    tools: [{ functionDeclarations: toGenaiSchema(functionDeclarations) as any }],
-    temperature: 0,
-    thinkingConfig: { thinkingLevel },
-    abortSignal: signal,
-  }
-
-  // File/ảnh đính kèm (s190+3) — mirror cách runCreatorAI build parts (text + inlineData), rút gọn.
-  const files    = fileContexts || []
-  const texts    = files.filter(f => f.type === "text")
-  const binaries = files.filter(f => f.type !== "text")
-  const msgText  = lastMsg || (files.length ? `Phân tích ${files.length} file: ${files.map(f => f.name).join(", ")}` : "")
-
-  let userParts: any[]
-  if (files.length > 0) {
-    const textContent = texts.map(f => {
-      const raw = f.content.length > 50000
-        ? f.content.slice(0, 50000) + `\n... [cắt bớt — ${f.content.length} ký tự]`
-        : f.content
-      return `=== FILE: ${f.name} ===\n${raw}`
-    }).join("\n\n---\n\n")
-
-    userParts = binaries.length > 0
-      ? [
-          { text: msgText + (textContent ? `\n\n=== FILE VĂN BẢN KÈM THEO ===\n${textContent.slice(0, 20000)}` : "") },
-          ...binaries.map(b => ({ inlineData: { mimeType: b.mimeType || "application/octet-stream", data: b.content } })),
-        ]
-      : [{ text: `${msgText}\n\n${textContent}` }]
-  } else {
-    userParts = [{ text: msgText }]
-  }
-
-  // Fix #8: dùng history đã nén
-  const contents: Content[] = [...compressedHistory, { role: "user", parts: userParts }]
-  // Số đo để tối ưu tốc độ (eval U1): thời gian/token từng lượt model, thời gian + độ lớn kết quả từng tool.
-  const trace: BeGauTrace = { promptChars: systemInstruction.length, declChars: JSON.stringify(functionDeclarations).length, thinking: String(thinkingLevel), rounds: [], tools: [] }
-  // Suy nghĩ sâu chỉ ở lượt ĐẦU (lên kế hoạch); các lượt sau chủ yếu gọi SQL → LOW (eval trace: 14 lượt × ~10s khi HIGH mọi lượt).
-  const lowConfig = { ...config, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+  const files = fileContexts || []
   const sources: WebSource[] = []
   // Cổng an toàn dùng chung Gấu Pro (tool-policy.ts): lượt đã đọc nội dung ngoài (web, file, Lark Base…) thì không chạy hành động
   // ghi/gửi/mở URL lạ. Bé Gấu chưa có nút Duyệt (U3 sau) → từ chối và để người dùng hỏi lại ở lượt mới.
@@ -551,6 +515,58 @@ export async function runBeGau(opts: {
       return wrap({ error: e?.message || "Tool execution failed" })
     }
   }
+
+  return { systemInstruction, functionDeclarations, runTool, sources, compressedHistory }
+}
+
+export async function runBeGau(opts: BeGauOpts): Promise<{ text: string; sources: WebSource[]; toolsUsed: string[]; tokensIn: number; tokensOut: number; trace: BeGauTrace }> {
+  const { lastMsg, role, name, userId, sessionId, fileContexts, larkOpenId = null, signal } = opts
+  // Chữ stream ra đi qua bộ lọc lộ tên bảng/cột (core/leak-filter.ts).
+  const leak = opts.onChunk ? leakFilterStream(opts.onChunk) : null
+  const onChunk = leak ? (t: string) => leak.push(t) : undefined
+  const { systemInstruction, functionDeclarations, runTool, sources, compressedHistory } = await prepareBeGau(opts)
+
+  // U1a (plan be-gau-upgrade.md): SDK mới @google/genai (cùng streamTurn với Gấu Pro) — SDK cũ hết hỗ trợ, làm rớt thoughtSignature.
+  const thinkingLevel = deepQuestion(lastMsg, fileContexts?.length ?? 0) ? ThinkingLevel.HIGH : ThinkingLevel.LOW
+  const config = {
+    systemInstruction,
+    tools: [{ functionDeclarations: toGenaiSchema(functionDeclarations) as any }],
+    temperature: 0,
+    thinkingConfig: { thinkingLevel },
+    abortSignal: signal,
+  }
+
+  // File/ảnh đính kèm (s190+3) — mirror cách runCreatorAI build parts (text + inlineData), rút gọn.
+  const files    = fileContexts || []
+  const texts    = files.filter(f => f.type === "text")
+  const binaries = files.filter(f => f.type !== "text")
+  const msgText  = lastMsg || (files.length ? `Phân tích ${files.length} file: ${files.map(f => f.name).join(", ")}` : "")
+
+  let userParts: any[]
+  if (files.length > 0) {
+    const textContent = texts.map(f => {
+      const raw = f.content.length > 50000
+        ? f.content.slice(0, 50000) + `\n... [cắt bớt — ${f.content.length} ký tự]`
+        : f.content
+      return `=== FILE: ${f.name} ===\n${raw}`
+    }).join("\n\n---\n\n")
+
+    userParts = binaries.length > 0
+      ? [
+          { text: msgText + (textContent ? `\n\n=== FILE VĂN BẢN KÈM THEO ===\n${textContent.slice(0, 20000)}` : "") },
+          ...binaries.map(b => ({ inlineData: { mimeType: b.mimeType || "application/octet-stream", data: b.content } })),
+        ]
+      : [{ text: `${msgText}\n\n${textContent}` }]
+  } else {
+    userParts = [{ text: msgText }]
+  }
+
+  // Fix #8: dùng history đã nén
+  const contents: Content[] = [...compressedHistory, { role: "user", parts: userParts }]
+  // Số đo để tối ưu tốc độ (eval U1): thời gian/token từng lượt model, thời gian + độ lớn kết quả từng tool.
+  const trace: BeGauTrace = { promptChars: systemInstruction.length, declChars: JSON.stringify(functionDeclarations).length, thinking: String(thinkingLevel), rounds: [], tools: [] }
+  // Suy nghĩ sâu chỉ ở lượt ĐẦU (lên kế hoạch); các lượt sau chủ yếu gọi SQL → LOW (eval trace: 14 lượt × ~10s khi HIGH mọi lượt).
+  const lowConfig = { ...config, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
 
   // U1b: vòng lặp chạy ở lõi chung core/agent-loop.ts (cùng Gấu Pro), tool song song mỗi lượt, tối đa 12 lượt.
   // toolsUsed = SỰ THẬT đã gọi tool gì — My Metrics dùng để phân biệt task tính KPI (DB_TASK_TOOLS ở lib/okr-helpers.ts) với trả lời chay.

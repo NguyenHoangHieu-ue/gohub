@@ -251,3 +251,13 @@ tự thêm 1 card lọc `agent_id="be-gau"` vào Usage Analytics (KpiCard "Chi p
   đối tab Quarter Report (chi phí KH Turso, pro-rata tháng đang chạy, Group Cost B2B phân bổ ở mức nhóm), không viết lại công thức.
   Lọc theo tên/mã KH, nhóm (tier), top N, tuỳ chọn số từng tháng. CM1 từng KH chưa trừ Group Cost; CM1 tổng nhóm đã trừ.
 - Chỉ khai báo khi vai trò xem được giá vốn VÀ không có `role_filters` giới hạn dữ liệu (route không áp bộ lọc vai trò).
+
+## § s228 (2026-10-08) — Bé Gấu: Trò chuyện trực tiếp theo vai trò
+
+- Tính năng "Trò chuyện trực tiếp" (nhóm Theo quyền, mặc định chỉ admin) — nút "🎙 Trực tiếp" trên trang Bé Gấu hiện khi vai trò được bật
+  (`GET /api/chat/features` trả danh sách tính năng bật cho vai trò hiện tại).
+- `runBeGau` tách phần chuẩn bị thành `prepareBeGau()` (prompt + tool theo vai trò/tính năng + `runTool` có cổng an toàn và lọc giá vốn);
+  `promptless: true` chỉ dựng phần chạy tool. Phiên Live Bé Gấu (`lib/agents/be-gau-live.ts`) dùng hàm này → cùng lọc vai trò như chat,
+  KHÔNG đi đường tool Gấu Pro (đường đó không áp lọc theo vai trò). Chỉ tool ĐỌC (`BE_GAU_LIVE_TOOLS`), không có thao tác Chrome.
+- Route: `/api/chat/live/token` | `tool` | `log` (phụ đề lưu thành hội thoại "🎙 …" trong Bé Gấu). Tạo token dùng chung với Gấu Pro:
+  `lib/agents/live-token.ts`. Component `components/gau-pro/live-session.tsx` thêm prop `apiBase`/`title`/`allowControl`.

@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
 import type { PlanStep } from "@/lib/agents/creator-ai"
 import ChatChart from "@/components/chat-chart"
+import { LiveSession } from "@/components/gau-pro/live-session"
 import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
 
 // sessionStorage keys
@@ -226,6 +227,12 @@ export default function ChatbotPage() {
   const [feedbackGiven,  setFeedbackGiven] = useState<Record<number, 1 | -1>>({})   // 👍/👎 mỗi câu trả lời
   const [plan,           setPlan]          = useState<PlanStep[]>([])               // U3: kế hoạch từng bước
   const abortRef = useRef<AbortController | null>(null)
+  const [features,       setFeatures]      = useState<string[]>([])                 // U3: tính năng bật cho vai trò
+  const [showLive,       setShowLive]      = useState(false)
+
+  useEffect(() => {
+    fetch("/api/chat/features").then(r => r.ok ? r.json() : null).then(d => setFeatures(d?.features ?? [])).catch(() => {})
+  }, [])
 
   // Đính kèm ảnh/file (s190+3)
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
@@ -707,6 +714,12 @@ export default function ChatbotPage() {
             <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-slate-100">Bé Gấu</h1>
           </div>
           <div className="flex items-center gap-2">
+            {features.includes("live") && (
+              <button onClick={() => setShowLive(true)} disabled={busy}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-800/30 disabled:opacity-40">
+                🎙 Trực tiếp
+              </button>
+            )}
             {busy && (
               <span className="flex items-center gap-1.5 text-xs text-brand-500">
                 <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-pulse" />
@@ -903,6 +916,10 @@ export default function ChatbotPage() {
           </div>
         </div>
       </div>
+      {showLive && (
+        <LiveSession apiBase="/api/chat/live" title="Bé Gấu" allowControl={false} onClose={() => setShowLive(false)}
+          onSaved={() => { loadConversations() }} />
+      )}
     </div>
   )
 }
