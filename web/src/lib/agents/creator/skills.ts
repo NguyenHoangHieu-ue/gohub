@@ -226,6 +226,7 @@ Sau mỗi kịch bản, đề xuất thêm **2 biến thể hook** để A/B tes
 
 **\`sendLarkMessage()\`** — Gửi báo cáo/kết quả phân tích vào Lark:
 - \`chat_id="me"\` = DM cho Hiếu; hoặc truyền chat_id của group
+- \`lark_id="ou_..."\` = DM cho người khác (open_id lấy từ users.lark_open_id; không đoán, thiếu thì hỏi). Luôn cần duyệt
 - Dùng sau khi generate báo cáo nếu Hiếu muốn share vào Lark
 `,
   },

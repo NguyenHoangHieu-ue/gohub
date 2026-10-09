@@ -10932,3 +10932,6 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
   tính năng chỉ Creator) cho 10 người từng được cấp Gấu Pro — 10/10 OK (route `gau-pro-moved` thêm tham số `message`, `172b052d` staging).
 - (s228 tiếp) Fix Bé Gấu không vẽ biểu đồ (`ef29f471`, staging): trang chỉ vẽ khi nhãn agent cũ bi-analyst/data-explorer; cả 2 trang chỉ vẽ khối
   đầu. `lib/chat-charts.ts` splitChartBlocks dùng chung, vẽ mọi khối. Hội thoại Hiếu báo: c1b2abf9 (pie B2B/B2C Q3).
+- (s228 tiếp) MERGE `main` 2026-10-08 (`29c5dc8a`): fix biểu đồ Bé Gấu/Gấu Pro, route thông báo nhận nội dung tuỳ chọn, plan My Metrics. CI/Wiki
+  Sync/Notify Lark xanh. Chưa QA biểu đồ trên UI thật (Chrome treo) — Hiếu xác nhận. Hết s228. LẦN SAU: plan `my-metrics-be-gau-tasks.md` (T0 sửa
+  lỗi KPI chỉ đọc 1.000 dòng làm ngay; T1–T4 chờ Hiếu chốt 5 câu §4).

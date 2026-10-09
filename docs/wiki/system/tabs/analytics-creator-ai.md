@@ -1085,3 +1085,8 @@ Cần có: migration v71; Vercel env `GITHUB_DISPATCH_TOKEN` (token GitHub fine-
 `DEV_TICKET_SECRET` (đã cài); GitHub secrets `CLAUDE_CODE_OAUTH_TOKEN` + `DEV_TICKET_SECRET` (đã cài); repo Settings → Actions → General →
 "Allow GitHub Actions to create and approve pull requests"; workflow phải có trên `main` (nhánh mặc định) thì mới dispatch được.
 Gotcha: PR do `GITHUB_TOKEN` tạo KHÔNG kích hoạt workflow CI khác (luật GitHub) — workflow phiếu đã tự chạy tsc/vitest qua Claude.
+
+## s229 — sendLarkMessage nhắn DM người khác
+Tool `sendLarkMessage` (chỉ Creator) thêm tham số `lark_id` = open_id Lark (`ou_...`, cột `users.lark_open_id`) → DM riêng thay vì chat_id.
+`chat_id` giờ không bắt buộc (cần `chat_id` hoặc `lark_id`). Có `lark_id` thì LUÔN qua cổng duyệt (`ruleFor` "always"); thẻ duyệt hiện "DM ou_...".
+Code: `declarations.ts`, `tools/lark-send.ts`, `tool-policy.ts`, skill `lark` trong `skills.ts`.
