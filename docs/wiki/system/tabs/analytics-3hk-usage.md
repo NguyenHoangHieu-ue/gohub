@@ -5,7 +5,7 @@ is_hidden: true
 department: all
 tags: [tab, analytics, 3hk]
 created: 2026-06-28
-updated: 2026-09-22
+updated: 2026-10-09
 status: active
 ---
 
@@ -56,6 +56,10 @@ Trang theo dõi chi tiết **dung lượng data thực tế tiêu thụ** của 
 | `data_amount_gb` | **Định mức/capacity** của gói (GB) | "Total Plan" |
 | **`first_report_date`** | **⭐ Ngày báo cáo lưu lượng** (snapshot) — lưu ở **00:00:00 UTC** | **CỘT LỌC KỲ CHÍNH** (xem mục 4) |
 | `activation_date` | Ngày kích hoạt SIM | **CHỈ hiển thị** ("Acts: …"), KHÔNG dùng lọc kỳ |
+| `day_amount` | Số ngày của gói (s229, MỚI) | Chưa dùng — trang vẫn tự suy ra bằng `daysOfSku()` từ chuỗi SKU |
+| `usage_pct` | `total_data_gb / data_amount_gb × 100` (s229, MỚI; NULL khi `data_amount_gb`=0) | Chưa dùng — trang tự tính SUM/SUM |
+| `usage_class` | Nhóm mức dùng "~10%", "~100%"… (s229, MỚI) | Chưa dùng |
+| `month_tag` | Nhãn đợt nạp, từ T4 có hậu tố phiên bản (`APR_V3`…`SEP_V4`) | Chưa dùng |
 
 ### 3.1 Phân loại loại gói (Daily/Fixed/Unlimited) — s200+3 (2026-09-17)
 
@@ -144,7 +148,8 @@ và giả thuyết chưa xử lý ở đợt trước)**:
 
 ### 3.2 Cấu trúc bản ghi (quan trọng để hiểu SUM)
 - Mỗi bản ghi = 1 **snapshot theo ngày** của 1 SIM. `first_report_date` là mốc ngày (00:00:00 UTC).
-- ~87% bundle chỉ có **1 bản ghi**; ~13% có 2–3 bản ghi (SIM báo cáo qua nhiều mốc cuối tháng).
+- **Từ đợt nạp 2026-10-08 (s229): mỗi tháng đúng 1 bản ghi cho mỗi ICCID** (T1–T9: số bản ghi = số ICCID mỗi tháng, 0 nhóm
+  `(iccid, order_code, first_report_date)` trùng). Trước đó ~13% bundle có 2–3 bản ghi. Gom nhiều tháng vẫn SUM theo `(iccid, order_code)`.
 - `total_data_gb` là **incremental** (usage của kỳ đó) → tab **SUM** các bản ghi trong kỳ ra tổng usage.
 
 ---
@@ -319,6 +324,13 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
 ---
 
 ## 9. Gotchas & Lịch sử thay đổi
+
+- **s229 (2026-10-09) — đọc lại DB sau khi nguồn đổi (chỉ đọc, chưa sửa code).** Đợt nạp **2026-10-08**: `fact_data_usage` và
+  `data_usage_log` tới **2026-09-30** (T8–T9 một đợt; trước đó T7 ngày 17/09). `fact_data_usage` 278.053 dòng, `data_usage_log` 1,92 triệu dòng.
+  Khớp: tổng TB mỗi tháng 2 bảng bằng nhau (T9 = 164,5 TB; T6 = 186,8 TB). T9: 33.274 ICCID; T6: 37.729 ICCID − 68 dòng SKU null = 37.661 (khớp NCC).
+  Mã K chỉ còn 2 dòng T9 (hết ~5.235 SIM gán nhầm như s200+4). Mã cũ 14/15 ký tự còn 214 dòng T9. Dòng `sku` null: 241 dòng cả năm (bị lọc vendor, đúng thiết kế).
+  `data_usage_log` có ~360.000 dòng 2025 (`month_tag` SEP–DEC) với `report_date` NULL — query Zone đã lọc `report_date IS NOT NULL` nên không ảnh hưởng.
+  T9 có 45 nước; Moldova/Liechtenstein/Cyprus mới (~0 TB), chưa đối chiếu `ncc_3hk`. Đề xuất (chưa làm): dùng `day_amount` thay `daysOfSku()`.
 
 - **s203+ (2026-09-21) — Export bảng "Average Usage by SKU" theo tháng.** Hiếu: export nhiều tháng cần cột
   tháng để phân biệt + thống kê. Nút **"Export theo tháng"** (header bảng SKU, `exportMonthly`) xuất 1 sheet
