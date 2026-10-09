@@ -52,3 +52,29 @@ Neo4j · truy vấn graph 2 bước + centrality · giao diện đồ thị · M
 ## 7. Câu hỏi còn mở
 - Tên sản phẩm cho người dùng: lớp agent cá nhân dùng chung lõi với Bé Gấu (Gấu Pro vẫn là bản siêu tập của Hiếu) — chốt khi tới P3.
 - Thời hạn lưu trí nhớ và nội dung thông báo cho nhân viên.
+
+## 8. Kết quả P0 (2026-10-09, staging, hệ thống HIỆN TẠI)
+Bộ eval: `web/eval/memory-cases.json` (persona tổng hợp "Minh Anh", 32 câu, 7 nhóm) + chế độ `--stress N` (N khách giả, thêm 15 câu); route `/api/admin/eval/memory`;
+runner `web/scripts/eval-memory.mjs`; kết quả `web/eval/results/memory-baseline.md`, `memory-stress60.md`. Giám khảo Gemini có bảng sự thật đầy đủ.
+
+| Nhóm | Baseline (12 mục) | Stress 60 khách (72 mục) |
+|---|---|---|
+| single_fact / preference / update / multi_hop / abstention / conversation_recall | 100% | 100% |
+| history (hỏi giá trị CŨ) | 80% | 100% (kịch bản chính) |
+| **stress_history** (giá trị cũ của khách giả) | — | **0% (0/5)** |
+| stress_current / stress_market | — | 100% / 100% |
+| Tổng đúng | 97% | 89% |
+
+Kết luận (một lần chạy, mỗi nhóm 4–5 câu — đủ để định hướng, KHÔNG đủ để kết luận thống kê):
+1. **Điểm yếu thật duy nhất là lịch sử**: cập nhật đang GHI ĐÈ nội dung nên giá trị cũ mất (hỏi "trước khi đổi là bao nhiêu" → 0/5; đầu mối cũ còn,
+   mục tiêu cũ mất). Đây đúng là supersedence/`valid_to` của P1 — có bằng chứng để làm.
+2. **Multi-hop 100%, update hiện tại 100%** ở quy mô này → CHƯA có lý do làm graph. Giữ quyết định hoãn graph.
+3. **Trần prompt bắt đầu cắn**: 72 mục = 8.653 ký tự, vượt `MAX_INJECT_CHARS` 8.000. Các câu hỏi vẫn đúng vì model tự gọi `assistantMemory list`/`searchPastConversations`
+   (14/47 câu gọi tool) — nhưng đó là cách tốn kém. Chưa thử 200+ mục: cần chạy `--stress 150` trước khi khẳng định retrieval theo ngữ cảnh là bắt buộc.
+4. **Chi phí do prompt nền, không do trí nhớ**: token vào TB ~32.000–35.000/câu (tối thiểu ~15.400 cho câu đơn giản; tối đa ~212.000 khi nhiều vòng tool). Khối trí nhớ
+   chỉ ~600–2.500 token. → Ưu tiên **context caching phần prompt tĩnh** (lợi lớn hơn mọi thay đổi trí nhớ). Chưa đo chi phí rút trí nhớ (1 lệnh gọi/lượt, ~2–4s).
+5. Bỏ qua câu nhiễu tốt: 0 mục sai từ 2 lượt tra cứu số liệu. Rút trí nhớ tối đa 2 mục/lượt chưa bị thử (kịch bản stress ≤ 2 sự kiện/lượt).
+6. Giám khảo có nhiễu: cờ "bịa" ~16% phần lớn do thêm năm/diễn giải; chỉ dùng cờ "đúng". Chạy lặp ≥3 lần trước khi so A/B ở P1.
+
+**Quyết định cổng P0:** đi tiếp P1, nhưng đổi thứ tự ưu tiên: (a) lịch sử/supersedence không ghi đè (`valid_to`, giữ bản cũ), (b) nạp trí nhớ theo ngữ cảnh thay vì đổ
+tất cả khi vượt trần, (c) context caching prompt tĩnh (đo trước/sau), (d) phương án markdown vẫn chưa đo — làm trong P1 nếu cần so.
