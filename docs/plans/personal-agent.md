@@ -82,3 +82,15 @@ tất cả khi vượt trần, (c) context caching prompt tĩnh (đo trước/sa
 ## 9. Tiến độ P1
 - [x] (a) Lịch sử không ghi đè: v72 `history JSONB` + code + test (commit s229). **Chờ Hiếu chạy v72**, rồi chạy lại `eval-memory.mjs --stress 60` để đo stress_history.
 - [ ] (b) Nạp trí nhớ theo ngữ cảnh khi vượt trần; (c) context caching prompt tĩnh; (d) so markdown. Stress 150 chưa chạy được (máy hết RAM, 2026-10-09) — chạy lại khi Hiếu bảo.
+
+## 10. Kết quả stress 150 (2026-10-09, SAU v72) — đúng 100% nhưng KHÔNG chứng minh v72
+`web/eval/results/memory-stress150.md`: 47 câu đúng 100% (kể cả stress_history 5/5, trước v72 ở stress 60 là 0/5), bịa 2%, token vào TB ~37.100/câu, 20/47 câu gọi tool.
+Soi dữ liệu nạp (dump) cho thấy KẾT QUẢ BỊ NHIỄU, đừng đọc là "v72 đã sửa lịch sử":
+1. **629 mục cho 150 khách** (stress 60 chỉ 72 mục cho 60 khách). Cột `history` chỉ được dùng **4 lần**, cả 4 ở persona chính, 0 lần ở khách giả.
+   Nguyên nhân: bộ rút trí nhớ chỉ nhìn **120 mục đầu** của trí nhớ hiện có (`extractMemoriesFromTurn`: `.slice(0, 120)`), vượt 120 thì không thấy mục cũ để `update` →
+   chỉ `save` thêm mục mới. Giá trị cũ sống sót nhờ mục trùng lặp, không nhờ lịch sử. → **Lỗi quy mô thật**: vượt ~120 mục thì mất khử trùng + mất supersedence.
+2. **Khối prompt đã đầy** (8.790 ký tự cho 629 mục: chỉ ~7% mục lọt vào prompt). Câu vẫn đúng vì model tự gọi `assistantMemory list` có `query` (tìm chuỗi `ilike`),
+   nên tìm theo TÊN RIÊNG hiệu quả; chi phí token không tăng đáng kể (37k so với 35k).
+3. **Bộ câu hỏi chưa đủ khó** (trần 100% lần nữa): toàn câu có tên khách chính xác. Chưa thử: hỏi không nêu tên, đếm/tổng hợp ("bao nhiêu khách ở Nhật?"), xung đột giữa mục cũ và mới, hỏi nhiều khách một lúc.
+Việc tiếp theo: (i) rút trí nhớ phải lấy **mục LIÊN QUAN** tới tin nhắn (tìm theo tên/ý) thay vì 120 mục đầu; (ii) chạy lại `--stress 60` sau v72 để so đúng baseline (stress_history trước 0/5);
+(iii) thêm nhóm câu hỏi khó vào `memory-cases.json`; (iv) khi sửa (i), kỳ vọng số mục stress 150 giảm về ~300 và `history` được dùng.
