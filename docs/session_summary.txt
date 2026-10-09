@@ -10941,3 +10941,15 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
   Đã DM thông báo tính năng Bé Gấu (14 mục, có gửi ảnh/docx/excel/pdf) cho 47 tài khoản: 44 OK; 3 lỗi (Phan Minh Lộc, Đình Minh, Lê Văn Nhật) — chưa tra nguyên nhân, chưa gửi lại.
   MERGE `main` 2026-10-09 (`e9aeec81`). tsc/lint/build sạch; vitest 3 fail (lỗi có sẵn: bc-datapool, bridge-version zip, +1 chưa xem tên).
   LẦN SAU: plan my-metrics-be-gau-tasks.md (T0 làm ngay).
+- (s229 tiếp, sau merge `e9aeec81`) 3HK Data Usage: đọc lại DB sau khi nguồn đổi (chỉ đọc, qua Chrome + /api/analytics/query). Đợt nạp 2026-10-08: fact_data_usage/data_usage_log tới 2026-09-30;
+  mỗi tháng 1 bản ghi/ICCID; cột mới day_amount/usage_pct/usage_class/month_tag; mã K chỉ còn 2 dòng T9; Latvia là nước duy nhất chưa có trong ncc_3hk. `891fe04c` wiki, `f0b6d602` trang dùng
+  day_amount làm số ngày gói (dự phòng daysOfSku; khớp 3.117/3.119 SKU, số GB/ngày/SIM không đổi).
+- (s229 tiếp) PLAN MỚI `docs/plans/personal-agent.md` (`e0588327`): agent cá nhân cho từng người, trí nhớ v2 (Hiếu test trước, sau mở cả công ty). Chốt: Postgres không Neo4j, bảng fact 2 mốc thời gian,
+  tìm kiếm lai; hoãn graph/UI đồ thị/MCP/LLM local/agent tự học skill.
+  P0 (đo hệ thống hiện tại): bộ eval `web/eval/memory-cases.json` (persona tổng hợp 32 câu) + route `/api/admin/eval/memory` + runner `web/scripts/eval-memory.mjs` (`--stress N`).
+  Baseline 97%; stress 60 khách 89% (hỏi giá trị CŨ 0/5 vì update ghi đè). Chi phí chủ yếu từ prompt nền (~15–35k token/câu), không phải trí nhớ.
+  P1(a) `f9c6c9df`: migration v72 `assistant_memory.history JSONB` (Hiếu ĐÃ chạy) — update đổi nội dung đẩy bản cũ vào history (≤5), prompt hiện "⟲ trước đây".
+  P1(b) `c4241528`: bộ rút trí nhớ lấy mục liên quan (IDF) thay vì 120 mục đầu. Phát hiện lỗi quy mô thật: >120 mục thì mất khử trùng/supersedence (stress 150: 629 mục, history dùng 4 lần).
+  Sau sửa (stress 150): 320 mục, history dùng 236 mục, đúng 98% (1 lỗi mạng). Sửa luôn vòng lặp vô hạn của `--stress` >117 (script cũ treo, log trống).
+  Gotcha: máy Hiếu hết RAM làm tiến trình nền bị dừng (không phải lỗi script); chạy eval dài dùng `--concurrency 2`.
+  LẦN SAU: P1 còn lại — nhóm câu hỏi khó trong eval (hiện trần ~100%), nạp trí nhớ vào prompt theo ngữ cảnh, context caching prompt tĩnh, so markdown; rồi P2 (lỗ hổng nền + quyền người dùng), P3 (agent_profiles).
