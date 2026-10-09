@@ -17,7 +17,7 @@ function chain(): any {
 }
 vi.mock("@/lib/supabase", () => ({ supabaseAdmin: { from: () => chain() } }))
 
-import { buildMemoryBlock, runAssistantMemory } from "@/lib/assistant-memory"
+import { buildMemoryBlock, runAssistantMemory, rankMemories } from "@/lib/assistant-memory"
 
 describe("assistant memory", () => {
   beforeEach(() => { selectResult = { data: [], error: null }; inserted.length = 0; updates.length = 0; queue = [] })
@@ -89,5 +89,24 @@ describe("assistant memory", () => {
     expect((await runAssistantMemory({ action: "update" }, "hieu", "t")).error).toContain("id")
     expect((await runAssistantMemory({ action: "save", content: "a" }, "", "t")).error).toBeTruthy()
     expect((await runAssistantMemory({ action: "nope" }, "hieu", "t")).error).toBeTruthy()
+  })
+
+  it("rankMemories: ưu tiên mục chứa tên riêng hiếm, bỏ qua dấu tiếng Việt, vẫn kèm mục mới nhất", () => {
+    const rows = [
+      { id: 1, kind: "profile", content: "Tên là Minh Anh, làm Account Manager" },
+      ...Array.from({ length: 200 }, (_, i) => ({ id: 100 + i, kind: "project", content: `Khách Công ty ${i} thuộc thị trường Nhật Bản` })),
+      { id: 999, kind: "project", content: "Khách Zephyr Voyages đầu mối anh Hải, mục tiêu 300 SIM" },
+    ]
+    const out = rankMemories("Khách zephyr voyages đổi đầu mối sang chị Chi", rows, 5, 2)
+    expect(out[0].id).toBe(999)
+    expect(out.map(r => r.id)).toContain(1)   // mục mới nhất (đứng đầu mảng) làm ngữ cảnh nền
+    expect(out.length).toBeLessThanOrEqual(7)
+    expect(rankMemories("Phụ trách Châu Âu", [{ id: 5, kind: "x", content: "Phu trach chau au tu 1/9" }], 3, 0)[0].id).toBe(5)
+  })
+
+  it("rankMemories: không có từ chung → chỉ trả mục mới nhất", () => {
+    const rows = [{ id: 1, kind: "x", content: "alpha beta" }, { id: 2, kind: "x", content: "gamma delta" }]
+    expect(rankMemories("zzz qqq", rows, 5, 1).map(r => r.id)).toEqual([1])
+    expect(rankMemories("abc", [], 5, 1)).toEqual([])
   })
 })

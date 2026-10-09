@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 import { embedText } from "@/lib/kb"
 import { genai } from "@/lib/agents/genai-stream"
-import { runAssistantMemory, MEMORY_KINDS } from "@/lib/assistant-memory"
+import { runAssistantMemory, findRelevantMemories, MEMORY_KINDS } from "@/lib/assistant-memory"
 
 // Gấu Pro G3 — trí nhớ 2 tầng (docs/plans/gau-pro-assistant.md):
 //   1) tự rút điều đáng nhớ sau mỗi lượt (bổ sung cho việc model tự gọi assistantMemory);
@@ -43,9 +43,7 @@ async function jsonCall<T>(prompt: string): Promise<T | null> {
 export async function extractMemoriesFromTurn(username: string, userMsg: string, assistantMsg: string, source: string): Promise<number> {
   const msg = userMsg.trim()
   if (msg.length < 25 || msg.startsWith("[Đã ")) return 0          // câu ngắn / câu nối sau khi duyệt hành động
-  const existing = await runAssistantMemory({ action: "list" }, username, source)
-  if (existing.error) return 0
-  const mems = ((existing.result?.memories ?? []) as { id: number; kind: string; content: string }[]).slice(0, 120)
+  const mems = await findRelevantMemories(username, msg)
 
   const out = await jsonCall<{ save?: { kind: string; content: string }[]; update?: { id: number; content: string }[] }>(
 `Bạn quản lý trí nhớ dài hạn của trợ lý cho 1 người dùng. Đọc TIN NHẮN NGƯỜI DÙNG (câu trả lời của bot chỉ để hiểu ngữ cảnh,
@@ -57,7 +55,7 @@ Hầu hết lượt KHÔNG có gì đáng nhớ → trả {"save":[],"update":[]
 kind ∈ ${MEMORY_KINDS.join("|")}.
 Trả JSON: {"save":[{"kind":"...","content":"..."}],"update":[{"id":123,"content":"..."}]}
 
-TRÍ NHỚ HIỆN CÓ:
+TRÍ NHỚ HIỆN CÓ (chỉ các mục liên quan tới tin nhắn + vài mục mới nhất; thông tin đã có ở đây thì dùng update/bỏ qua, đừng save trùng):
 ${mems.map(m => `[#${m.id}] (${m.kind}) ${m.content}`).join("\n") || "(trống)"}
 
 TIN NHẮN NGƯỜI DÙNG:

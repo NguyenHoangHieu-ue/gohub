@@ -129,3 +129,36 @@ export async function runAssistantMemory(
       return { error: "action phải là save | update | forget | list." }
   }
 }
+
+// ── Chọn mục liên quan (plan personal-agent.md P1b) ──────────────────────────────────────────────────────────────
+// Bộ rút trí nhớ trước đây chỉ nhìn 120 mục đầu → vượt 120 thì không thấy mục cũ để update/khử trùng (eval stress 150: 629 mục cho 150 khách).
+// Xếp hạng theo từ khoá hiếm (IDF) giữa tin nhắn và nội dung từng mục — không gọi thêm model, 1 truy vấn/lượt.
+const foldVi = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase()
+const tokensOf = (t: string) => new Set(foldVi(t).split(/[^a-z0-9]+/).filter(w => w.length >= 2))
+
+export interface MemoryRow { id: number; kind: string; content: string }
+
+/** Top `limit` mục có từ khoá chung với `message` (điểm = Σ idf), kèm `recent` mục mới nhất làm ngữ cảnh nền. rows nên xếp mới → cũ. */
+export function rankMemories(message: string, rows: MemoryRow[], limit = 40, recent = 10): MemoryRow[] {
+  if (!rows.length) return []
+  const q = tokensOf(message)
+  const rowTokens = rows.map(r => tokensOf(r.content))
+  const df = new Map<string, number>()
+  for (const ts of rowTokens) for (const t of ts) if (q.has(t)) df.set(t, (df.get(t) ?? 0) + 1)
+  const scored = rows.map((r, i) => {
+    let score = 0
+    for (const t of rowTokens[i]) if (q.has(t)) score += Math.log(1 + rows.length / (df.get(t) ?? 1))
+    return { r, score }
+  }).filter(x => x.score > 0).sort((a, b) => b.score - a.score).slice(0, limit).map(x => x.r)
+  const seen = new Set(scored.map(r => r.id))
+  return [...scored, ...rows.slice(0, recent).filter(r => !seen.has(r.id))]
+}
+
+/** Các mục còn hiệu lực của user liên quan tới tin nhắn (cho bộ rút trí nhớ). Lỗi/chưa có bảng → []. */
+export async function findRelevantMemories(username: string, message: string, limit = 40): Promise<MemoryRow[]> {
+  if (!username) return []
+  const { data, error } = await supabaseAdmin.from("assistant_memory").select("id,kind,content")
+    .eq("username", username).eq("archived", false).order("updated_at", { ascending: false }).limit(3000)
+  if (error) return []
+  return rankMemories(message, (data ?? []) as MemoryRow[], limit)
+}
