@@ -56,7 +56,7 @@ function ruleFor(name: string, args: any): Rule {
   const action = String(args?.action ?? "")
   switch (name) {
     case "sendLarkMessage":
-      return args?.chat_id === "me" ? "when_tainted" : "always"
+      return args?.chat_id === "me" && !args?.lark_id ? "when_tainted" : "always"
     case "devTicket":
       return action === "create" ? "always" : action === "answer" || action === "cancel" ? "when_tainted" : "never"
     case "createLarkTask": case "updateLarkTask":
@@ -103,7 +103,7 @@ export function describeAction(call: { name: string; args: any }): string {
   const a = call.args ?? {}
   const cut = (s: unknown, n = 160) => String(s ?? "").replace(/\s+/g, " ").slice(0, n)
   switch (call.name) {
-    case "sendLarkMessage": return `Gửi Lark tới ${a.chat_id === "me" ? "chính bạn" : a.chat_id}: "${cut(a.title ? `${a.title} — ${a.content}` : a.content)}"`
+    case "sendLarkMessage": return `Gửi Lark tới ${a.lark_id ? `DM ${a.lark_id}` : a.chat_id === "me" ? "chính bạn" : a.chat_id}: "${cut(a.title ? `${a.title} — ${a.content}` : a.content)}"`
     case "createLarkTask": return `Tạo task Lark: "${cut(a.summary)}"${a.due ? ` (hạn ${a.due})` : ""}`
     case "updateLarkTask": return `Sửa task Lark ${cut(a.task_guid, 40)}${a.complete ? " → hoàn thành" : ""}${a.due ? ` (hạn ${a.due})` : ""}`
     case "managePortalCredentials": return `Portal: ${a.action} "${cut(a.name, 60)}"${a.url ? ` ${cut(a.url, 80)}` : ""}`

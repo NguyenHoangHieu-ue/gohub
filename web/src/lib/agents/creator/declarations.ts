@@ -472,15 +472,16 @@ export const managePortalCredsDecl = {
 
 export const sendLarkMessageDecl = {
   name: "sendLarkMessage",
-  description: "Gửi message vào Lark group hoặc DM cho Hiếu. Dùng khi Hiếu muốn share báo cáo/kết quả phân tích qua Lark, hoặc khi cần gửi thông báo tự động. chat_id='me' để gửi DM cho Hiếu.",
+  description: "Gửi message vào Lark group hoặc DM cho Hiếu. Dùng khi Hiếu muốn share báo cáo/kết quả phân tích qua Lark, hoặc khi cần gửi thông báo tự động. chat_id='me' để gửi DM cho Hiếu. Gửi DM cho người khác: truyền lark_id (open_id, dạng ou_..., cột users.lark_open_id) thay cho chat_id.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      chat_id:  { type: SchemaType.STRING, description: "Lark chat_id của group (lấy từ Lark group settings) hoặc 'me' để gửi DM cho Hiếu." },
+      chat_id:  { type: SchemaType.STRING, description: "Lark chat_id của group (lấy từ Lark group settings) hoặc 'me' để gửi DM cho Hiếu. Bỏ trống khi dùng lark_id." },
+      lark_id:  { type: SchemaType.STRING, description: "open_id Lark (ou_...) của người nhận DM. Dùng thay chat_id để nhắn riêng cho người khác." },
       content:  { type: SchemaType.STRING, description: "Nội dung message (markdown được hỗ trợ)." },
       title:    { type: SchemaType.STRING, description: "Tiêu đề optional — sẽ được in đậm ở đầu message." },
     },
-    required: ["chat_id", "content"],
+    required: ["content"],
   },
 }
 
