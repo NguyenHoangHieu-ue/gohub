@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true })
       }
       case "dump": {
-        const { data } = await supabaseAdmin.from("assistant_memory").select("id,kind,content,archived,source,updated_at").eq("username", user).order("id")
+        const { data } = await supabaseAdmin.from("assistant_memory").select("id,kind,content,archived,source,updated_at,history").eq("username", user).order("id")
         const { data: sums } = await supabaseAdmin.from("gp_conversation_memory").select("title,summary,message_count").eq("username", user)
         const block = await buildMemoryBlock(user)
         return NextResponse.json({ memories: data ?? [], conversationSummaries: sums ?? [], memoryBlockChars: block.length })

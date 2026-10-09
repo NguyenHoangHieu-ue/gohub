@@ -25,10 +25,11 @@ function stressData(n) {
   let seed = 20261009
   const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296
   const pick = a => a[Math.floor(rnd() * a.length)]
-  const A = ["Alfa", "Alpha", "Bravo", "Cedar", "Delta", "Ember", "Fjord", "Garnet", "Harbor", "Indigo", "Jade", "Koala", "Lotus", "Mango", "Nimbus", "Onyx", "Pearl", "Quartz", "Raven", "Sierra"]
+  const A = ["Alfa", "Alpha", "Bravo", "Cedar", "Delta", "Ember", "Fjord", "Garnet", "Harbor", "Indigo", "Jade", "Koala", "Lotus", "Mango", "Nimbus", "Onyx", "Pearl", "Quartz", "Raven", "Sierra", "Topaz", "Umber", "Velvet", "Willow", "Xenon", "Yarrow", "Zephyr", "Amber", "Birch", "Coral", "Dune"]
   const B = ["Travel", "Tours", "Holidays", "Voyages", "Trips", "Journeys"]
   const M = ["Nhật Bản", "Thái Lan", "Singapore", "Mỹ", "Úc", "Hàn Quốc", "Đài Loan", "Pháp", "Ý", "Đức"]
   const P = ["anh Bảo", "chị Chi", "anh Dũng", "chị Giang", "anh Hải", "chị Hạnh", "anh Khải", "chị Lam", "anh Nam", "chị Oanh", "anh Phát", "chị Quyên", "anh Sơn", "chị Thảo", "anh Việt", "chị Yến"]
+  if (n > A.length * B.length - 3) throw new Error(`--stress tối đa ${A.length * B.length - 3} khách`)
   const names = new Set(); const clients = []
   while (clients.length < n) {
     const name = `${pick(A)} ${pick(B)}`
