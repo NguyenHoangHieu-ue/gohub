@@ -1,5 +1,6 @@
 // Eval trí nhớ Gấu Pro (plan personal-agent.md P0): nạp kịch bản persona tổng hợp qua đường rút trí nhớ thật rồi hỏi 32 câu, chấm bằng Gemini.
-//   node scripts/eval-memory.mjs --base https://stg-intel-v2.gohub.cloud --label base [--user eval-p0] [--skip-ingest] [--only 1,2] [--concurrency 3]
+//   node scripts/eval-memory.mjs --base https://stg-intel-v2.gohub.cloud --label base [--user eval-p0] [--skip-ingest] [--only 1,2] [--concurrency 3] [--stress 60]
+// --stress N: thêm N khách giả (nạp TRƯỚC kịch bản chính, khoảng 3N lượt) + câu hỏi kim-đáy-bể-rơm, để thử khi trí nhớ vượt trần prompt.
 //   node scripts/eval-memory.mjs --judge-only eval/results/memory-base.json
 // Cần web/.env.local: CRON_SECRET (gọi /api/admin/eval/memory), GEMINI_KEY (giám khảo). User thử phải dạng eval-xxx; reset xoá dữ liệu user đó.
 import fs from "node:fs"
@@ -12,11 +13,54 @@ const env = Object.fromEntries(fs.readFileSync(path.join(ROOT, ".env.local"), "u
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d }
 const flag = k => process.argv.includes(`--${k}`)
 const JUDGE_MODEL = arg("judge-model", "gemini-pro-latest")
-const { sessions, questions } = JSON.parse(fs.readFileSync(path.join(ROOT, "eval/memory-cases.json"), "utf8"))
+const dataset = JSON.parse(fs.readFileSync(path.join(ROOT, "eval/memory-cases.json"), "utf8"))
 const OUT_DIR = path.join(ROOT, "eval/results")
 fs.mkdirSync(OUT_DIR, { recursive: true })
 const base = arg("base", "https://stg-intel-v2.gohub.cloud")
 const user = arg("user", "eval-p0")
+const STRESS = Number(arg("stress", 0))
+
+// Sinh dữ liệu stress tất định (seed cố định): N khách, mỗi khách có đầu mối, mục tiêu, và một phần đổi đầu mối/mục tiêu.
+function stressData(n) {
+  let seed = 20261009
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296
+  const pick = a => a[Math.floor(rnd() * a.length)]
+  const A = ["Alfa", "Alpha", "Bravo", "Cedar", "Delta", "Ember", "Fjord", "Garnet", "Harbor", "Indigo", "Jade", "Koala", "Lotus", "Mango", "Nimbus", "Onyx", "Pearl", "Quartz", "Raven", "Sierra"]
+  const B = ["Travel", "Tours", "Holidays", "Voyages", "Trips", "Journeys"]
+  const M = ["Nhật Bản", "Thái Lan", "Singapore", "Mỹ", "Úc", "Hàn Quốc", "Đài Loan", "Pháp", "Ý", "Đức"]
+  const P = ["anh Bảo", "chị Chi", "anh Dũng", "chị Giang", "anh Hải", "chị Hạnh", "anh Khải", "chị Lam", "anh Nam", "chị Oanh", "anh Phát", "chị Quyên", "anh Sơn", "chị Thảo", "anh Việt", "chị Yến"]
+  const names = new Set(); const clients = []
+  while (clients.length < n) {
+    const name = `${pick(A)} ${pick(B)}`
+    if (names.has(name) || ["Alpha Travel", "Beta Tours", "Gamma Holidays"].includes(name)) continue
+    names.add(name)
+    clients.push({ name, market: pick(M), contact: pick(P), target: (1 + Math.floor(rnd() * 20)) * 50 })
+  }
+  const turns = [], facts = [], questions = []
+  for (const c of clients) {
+    turns.push({ user: `Khách ${c.name} thuộc thị trường ${c.market}, đầu mối bên họ là ${c.contact}.`, assistant: "Đã ghi nhận." })
+    turns.push({ user: `Mục tiêu hằng tháng của khách ${c.name} là ${c.target} SIM.`, assistant: "Đã ghi nhận." })
+    facts.push(`Khách ${c.name} thuộc thị trường ${c.market}, đầu mối ban đầu ${c.contact}, mục tiêu ban đầu ${c.target} SIM/tháng.`)
+  }
+  let id = 100
+  for (const c of clients) {
+    if (rnd() < 0.5) {
+      const nc = pick(P.filter(x => x !== c.contact)); const nt = c.target + 50
+      turns.push({ user: `Khách ${c.name} đổi đầu mối từ ${c.contact} sang ${nc}, mục tiêu tháng tăng lên ${nt} SIM.`, assistant: "Đã cập nhật." })
+      facts.push(`Khách ${c.name} đã đổi đầu mối từ ${c.contact} sang ${nc} và mục tiêu tăng lên ${nt} SIM/tháng.`)
+      const old = { contact: c.contact, target: c.target }; c.contact = nc; c.target = nt; c.changed = old
+    }
+  }
+  const sample = [...clients].sort(() => rnd() - 0.5).slice(0, 15)
+  for (const c of sample.slice(0, 5)) questions.push({ id: id++, cat: "stress_current", q: `Hiện giờ đầu mối bên khách ${c.name} là ai và mục tiêu SIM hằng tháng là bao nhiêu?`, ref: `Đầu mối ${c.contact}, mục tiêu ${c.target} SIM mỗi tháng.` })
+  for (const c of sample.filter(x => x.changed).slice(0, 5)) questions.push({ id: id++, cat: "stress_history", q: `Trước khi đổi, đầu mối của khách ${c.name} là ai và mục tiêu tháng lúc đó là bao nhiêu?`, ref: `Đầu mối ${c.changed.contact}, mục tiêu ${c.changed.target} SIM mỗi tháng.` })
+  for (const c of sample.slice(5, 10)) questions.push({ id: id++, cat: "stress_market", q: `Khách ${c.name} thuộc thị trường nào?`, ref: c.market })
+  return { sessions: [{ date: "2026-07-01", turns }], questions, facts }
+}
+const stress = STRESS ? stressData(STRESS) : null
+const sessions = [...(stress?.sessions ?? []), ...dataset.sessions]
+const questions = [...dataset.questions, ...(stress?.questions ?? [])]
+const FACT_SHEET = [...(stress?.facts ?? []), ...dataset.sessions.flatMap(s => s.turns.filter(t => !t.noise).map(t => t.user))].join("\n")
 
 async function call(body, retries = 2) {
   for (let a = 0; ; a++) {
@@ -64,13 +108,15 @@ async function judge(q, r) {
   const prompt = `Bạn chấm câu trả lời của một trợ lý có trí nhớ về người dùng. Chỉ so với đáp án tham chiếu, KHÔNG dùng kiến thức ngoài.
 Câu hỏi: ${q.q}
 Đáp án tham chiếu: ${q.ref}
+BẢNG SỰ THẬT ĐẦY ĐỦ (mọi điều người dùng từng nói, theo thứ tự thời gian):
+${FACT_SHEET}
 Câu trả lời của trợ lý:
 """${String(r.answer).slice(0, 4000)}"""
 
 Quy tắc:
 - correct = 1 nếu trả lời đúng ý chính của đáp án tham chiếu (đủ mọi phần được hỏi); 0 nếu sai, thiếu ý chính, hoặc trả lời thông tin đã lỗi thời thay vì thông tin hiện tại/đúng thời điểm được hỏi.
 ${abst ? "- Câu này đáp án đúng là KHÔNG BIẾT: correct = 1 chỉ khi trợ lý nói rõ chưa có thông tin; bịa ra bất kỳ giá trị cụ thể nào thì correct = 0." : "- Trợ lý nói không biết/chưa có thông tin cho câu CÓ đáp án thì correct = 0."}
-- hallucinated = 1 nếu trợ lý khẳng định một sự kiện/giá trị cụ thể trái hoặc không có trong đáp án tham chiếu; ngược lại 0.
+- hallucinated = 1 CHỈ khi trợ lý khẳng định điều trái với, hoặc hoàn toàn không có trong, BẢNG SỰ THẬT. Thông tin thừa nhưng có trong bảng sự thật KHÔNG phải bịa (hallucinated = 0). Việc bổ sung NĂM 2026 cho một ngày/tháng, hoặc tính ngày kết thúc suy ra từ ngày bắt đầu + thời hạn, KHÔNG tính là bịa.
 Trả JSON {"correct":0|1,"hallucinated":0|1,"note":"lý do ngắn"}.`
   const body = { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0, responseMimeType: "application/json",
     responseSchema: { type: "OBJECT", properties: { correct: { type: "INTEGER" }, hallucinated: { type: "INTEGER" }, note: { type: "STRING" } }, required: ["correct", "hallucinated", "note"] } } }
