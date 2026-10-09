@@ -56,7 +56,7 @@ Trang theo dõi chi tiết **dung lượng data thực tế tiêu thụ** của 
 | `data_amount_gb` | **Định mức/capacity** của gói (GB) | "Total Plan" |
 | **`first_report_date`** | **⭐ Ngày báo cáo lưu lượng** (snapshot) — lưu ở **00:00:00 UTC** | **CỘT LỌC KỲ CHÍNH** (xem mục 4) |
 | `activation_date` | Ngày kích hoạt SIM | **CHỈ hiển thị** ("Acts: …"), KHÔNG dùng lọc kỳ |
-| `day_amount` | Số ngày của gói (s229, MỚI) | Chưa dùng — trang vẫn tự suy ra bằng `daysOfSku()` từ chuỗi SKU |
+| `day_amount` | Số ngày của gói (s229, MỚI) | Số ngày cho GB/ngày/SIM (`daysOf`); `daysOfSku()` chỉ còn dự phòng |
 | `usage_pct` | `total_data_gb / data_amount_gb × 100` (s229, MỚI; NULL khi `data_amount_gb`=0) | Chưa dùng — trang tự tính SUM/SUM |
 | `usage_class` | Nhóm mức dùng "~10%", "~100%"… (s229, MỚI) | Chưa dùng |
 | `month_tag` | Nhãn đợt nạp, từ T4 có hậu tố phiên bản (`APR_V3`…`SEP_V4`) | Chưa dùng |
@@ -330,7 +330,9 @@ WHERE sku IN (SELECT sku FROM dim_sku WHERE REPLACE(UPPER(vendor),' ','')='3HKDA
   Khớp: tổng TB mỗi tháng 2 bảng bằng nhau (T9 = 164,5 TB; T6 = 186,8 TB). T9: 33.274 ICCID; T6: 37.729 ICCID − 68 dòng SKU null = 37.661 (khớp NCC).
   Mã K chỉ còn 2 dòng T9 (hết ~5.235 SIM gán nhầm như s200+4). Mã cũ 14/15 ký tự còn 214 dòng T9. Dòng `sku` null: 241 dòng cả năm (bị lọc vendor, đúng thiết kế).
   `data_usage_log` có ~360.000 dòng 2025 (`month_tag` SEP–DEC) với `report_date` NULL — query Zone đã lọc `report_date IS NOT NULL` nên không ảnh hưởng.
-  T9 có 45 nước; Moldova/Liechtenstein/Cyprus mới (~0 TB), chưa đối chiếu `ncc_3hk`. Đề xuất (chưa làm): dùng `day_amount` thay `daysOfSku()`.
+  T9 có 45 nước; Moldova/Liechtenstein/Cyprus mới (~0 TB), chưa đối chiếu `ncc_3hk`. **Đã làm:** trang dùng `day_amount` làm số ngày gói (`daysOf(sku, dayAmount)`; thiếu thì dự phòng `daysOfSku()` suy từ mã SKU).
+  Verify: `day_amount` 1 giá trị/SKU, khớp `daysOfSku()` 3.117/3.119 SKU (0 lệch; 2 SKU còn lại là khung SIM, 0 ngày) → số GB/ngày/SIM không đổi.
+  SQL thêm `MAX(day_amount)` ở `bundlesCTE`, `fetchSKUMetrics`, export theo tháng; `SKUMetrics.days`.
 
 - **s203+ (2026-09-21) — Export bảng "Average Usage by SKU" theo tháng.** Hiếu: export nhiều tháng cần cột
   tháng để phân biệt + thống kê. Nút **"Export theo tháng"** (header bảng SKU, `exportMonthly`) xuất 1 sheet
