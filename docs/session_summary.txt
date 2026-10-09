@@ -10935,3 +10935,9 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
 - (s228 tiếp) MERGE `main` 2026-10-08 (`29c5dc8a`): fix biểu đồ Bé Gấu/Gấu Pro, route thông báo nhận nội dung tuỳ chọn, plan My Metrics. CI/Wiki
   Sync/Notify Lark xanh. Chưa QA biểu đồ trên UI thật (Chrome treo) — Hiếu xác nhận. Hết s228. LẦN SAU: plan `my-metrics-be-gau-tasks.md` (T0 sửa
   lỗi KPI chỉ đọc 1.000 dòng làm ngay; T1–T4 chờ Hiếu chốt 5 câu §4).
+- (s229, 2026-10-09) Hiếu: list tính năng Bé Gấu cho mọi vai trò (bỏ giá vốn) + Gấu Pro DM bằng lark_id.
+  `2848cdf4`: tool sendLarkMessage thêm `lark_id` (open_id ou_..., users.lark_open_id); chat_id không bắt buộc; có lark_id luôn qua cổng duyệt.
+  `2dc791ca`: route `/api/admin/lark-broadcast` (CRON_SECRET, dryRun mặc định, mọi user có lark_open_id hoặc `usernames`).
+  Đã DM thông báo tính năng Bé Gấu (14 mục, có gửi ảnh/docx/excel/pdf) cho 47 tài khoản: 44 OK; 3 lỗi (Phan Minh Lộc, Đình Minh, Lê Văn Nhật) — chưa tra nguyên nhân, chưa gửi lại.
+  MERGE `main` 2026-10-09 (`e9aeec81`). tsc/lint/build sạch; vitest 3 fail (lỗi có sẵn: bc-datapool, bridge-version zip, +1 chưa xem tên).
+  LẦN SAU: plan my-metrics-be-gau-tasks.md (T0 làm ngay).
