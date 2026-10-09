@@ -1099,3 +1099,8 @@ Eval P0 (`web/eval/results/memory-*.md`): hỏi giá trị CŨ sau khi cập nh�
 - Prompt rút trí nhớ tự động + khối hướng dẫn: `content` chỉ ghi trạng thái HIỆN TẠI (hệ thống tự giữ giá trị cũ).
 - Chưa chạy v72 → đọc lại không có cột history và update ghi đè như cũ (fail-safe, có test).
 Cách kiểm: `node web/scripts/eval-memory.mjs --label p1 --stress 60` (cần v72 đã chạy), so nhóm `stress_history`/`history` với `memory-stress60.md`.
+
+## s229 P1b — bộ rút trí nhớ lấy mục liên quan
+`extractMemoriesFromTurn` trước chỉ đưa 120 mục đầu cho model → vượt 120 mục thì không `update` được mục cũ (eval stress 150: 629 mục cho 150 khách, `history` dùng 4 lần).
+Nay `findRelevantMemories` (`lib/assistant-memory.ts`) đọc mọi mục còn hiệu lực của user (1 truy vấn, ≤3000) và `rankMemories` xếp theo từ khoá hiếm (IDF, bỏ dấu tiếng Việt)
+→ top 40 liên quan + 10 mục mới nhất. Không gọi thêm model. Kết quả stress 150: 320 mục, `history` dùng 236 mục. Giới hạn: khớp từ khoá, chưa khớp theo ý nghĩa (paraphrase) — thêm vector nếu eval cho thấy cần.

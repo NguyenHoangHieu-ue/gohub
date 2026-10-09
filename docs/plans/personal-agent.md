@@ -81,7 +81,7 @@ tất cả khi vượt trần, (c) context caching prompt tĩnh (đo trước/sa
 
 ## 9. Tiến độ P1
 - [x] (a) Lịch sử không ghi đè: v72 `history JSONB` + code + test (commit s229). **Chờ Hiếu chạy v72**, rồi chạy lại `eval-memory.mjs --stress 60` để đo stress_history.
-- [ ] (b) Nạp trí nhớ theo ngữ cảnh khi vượt trần; (c) context caching prompt tĩnh; (d) so markdown. Stress 150 chưa chạy được (máy hết RAM, 2026-10-09) — chạy lại khi Hiếu bảo.
+- [x] (b1) Bộ rút trí nhớ lấy mục liên quan thay vì 120 mục đầu (xem mục 11). [ ] (b2) Nạp trí nhớ vào prompt theo ngữ cảnh khi vượt trần; (c) context caching prompt tĩnh; (d) so markdown. Stress 150 chưa chạy được (máy hết RAM, 2026-10-09) — chạy lại khi Hiếu bảo.
 
 ## 10. Kết quả stress 150 (2026-10-09, SAU v72) — đúng 100% nhưng KHÔNG chứng minh v72
 `web/eval/results/memory-stress150.md`: 47 câu đúng 100% (kể cả stress_history 5/5, trước v72 ở stress 60 là 0/5), bịa 2%, token vào TB ~37.100/câu, 20/47 câu gọi tool.
@@ -94,3 +94,17 @@ Soi dữ liệu nạp (dump) cho thấy KẾT QUẢ BỊ NHIỄU, đừng đọc
 3. **Bộ câu hỏi chưa đủ khó** (trần 100% lần nữa): toàn câu có tên khách chính xác. Chưa thử: hỏi không nêu tên, đếm/tổng hợp ("bao nhiêu khách ở Nhật?"), xung đột giữa mục cũ và mới, hỏi nhiều khách một lúc.
 Việc tiếp theo: (i) rút trí nhớ phải lấy **mục LIÊN QUAN** tới tin nhắn (tìm theo tên/ý) thay vì 120 mục đầu; (ii) chạy lại `--stress 60` sau v72 để so đúng baseline (stress_history trước 0/5);
 (iii) thêm nhóm câu hỏi khó vào `memory-cases.json`; (iv) khi sửa (i), kỳ vọng số mục stress 150 giảm về ~300 và `history` được dùng.
+
+## 11. Kết quả sau sửa bộ rút trí nhớ (stress 150, 2026-10-09) — xác nhận P1(a)+(b)
+`web/eval/results/memory-stress150-p1b.md`: bộ rút trí nhớ lấy **mục liên quan (xếp hạng IDF)** thay vì 120 mục đầu (`findRelevantMemories`, `rankMemories`).
+| Chỉ số | Trước sửa (stress 150) | Sau sửa |
+|---|---|---|
+| Số mục trí nhớ cho 150 khách | 629 | **320** |
+| Mục có `history` / số bản cũ giữ lại | 4 / 4 | **236 / 317** |
+| Đúng (47 câu) | 100% | 98% — 1 câu lỗi mạng "fetch failed", 46/46 câu chạy được đều đúng |
+| stress_history | 5/5 (nhờ mục trùng) | 5/5 (nhờ `history` + khử trùng thật) |
+| Token vào TB / câu | ~37.100 | ~35.500 |
+Kết luận: lỗi quy mô (>120 mục mất khử trùng/supersedence) đã sửa; lịch sử nay được lưu đúng chỗ. Cột `history` được dùng ở khách giả (trước 0 lần).
+Hạn chế còn nguyên: một lần chạy; bộ câu hỏi vẫn toàn câu nêu tên chính xác (trần ~100%), chưa có câu không nêu tên / đếm-tổng hợp / xung đột; khối prompt vẫn đầy (8.764 ký tự cho 320 mục)
+nên phần lớn mục vẫn phải tra bằng tool (16/47 câu gọi tool). Chưa đo chi phí lệnh rút trí nhớ.
+Còn lại của P1: (c) nạp trí nhớ vào prompt theo ngữ cảnh (không đổ theo thời gian); (d) context caching prompt tĩnh; (e) nhóm câu hỏi khó; (f) so markdown.
