@@ -1090,3 +1090,12 @@ Gotcha: PR do `GITHUB_TOKEN` tạo KHÔNG kích hoạt workflow CI khác (luật
 Tool `sendLarkMessage` (chỉ Creator) thêm tham số `lark_id` = open_id Lark (`ou_...`, cột `users.lark_open_id`) → DM riêng thay vì chat_id.
 `chat_id` giờ không bắt buộc (cần `chat_id` hoặc `lark_id`). Có `lark_id` thì LUÔN qua cổng duyệt (`ruleFor` "always"); thẻ duyệt hiện "DM ou_...".
 Code: `declarations.ts`, `tools/lark-send.ts`, `tool-policy.ts`, skill `lark` trong `skills.ts`.
+
+## s229 P1 — trí nhớ giữ lịch sử khi cập nhật (plan `docs/plans/personal-agent.md`)
+Eval P0 (`web/eval/results/memory-*.md`): hỏi giá trị CŨ sau khi cập nhật → 0/5 vì `assistantMemory update` ghi đè `content`. Sửa:
+- Migration **v72** `assistant_memory.history JSONB` (Hiếu phải chạy + Reload schema). `update` đổi nội dung → đẩy bản cũ vào `history`
+  `[{c, at}]`, giữ tối đa 5 bản gần nhất; cùng nội dung thì không thêm.
+- Khối nạp prompt thêm ` ⟲ trước đây: "…" (đến YYYY-MM-DD)` (2 bản gần nhất, mới trước); `action=list` trả đủ `history`.
+- Prompt rút trí nhớ tự động + khối hướng dẫn: `content` chỉ ghi trạng thái HIỆN TẠI (hệ thống tự giữ giá trị cũ).
+- Chưa chạy v72 → đọc lại không có cột history và update ghi đè như cũ (fail-safe, có test).
+Cách kiểm: `node web/scripts/eval-memory.mjs --label p1 --stress 60` (cần v72 đã chạy), so nhóm `stress_history`/`history` với `memory-stress60.md`.

@@ -52,6 +52,7 @@ export async function extractMemoriesFromTurn(username: string, userMsg: string,
 KHÔNG lấy thông tin từ đó). Chỉ rút điều ĐÁNG NHỚ LÂU DÀI do chính người dùng nói: hồ sơ/vai trò, sở thích cách làm việc, dự án
 đang theo, người liên quan (ai là ai, phụ trách gì), quyết định đã chốt. KHÔNG rút: câu hỏi tra cứu số liệu, việc chỉ dùng 1 lần,
 mật khẩu/token/thông tin nhạy cảm, điều đã có trong trí nhớ hiện có (nếu là bản cập nhật của 1 mục cũ → dùng update với id).
+update: content ghi trạng thái HIỆN TẠI (hệ thống tự giữ giá trị cũ trong lịch sử, đừng chép lại giá trị cũ vào content).
 Hầu hết lượt KHÔNG có gì đáng nhớ → trả {"save":[],"update":[]}. Tối đa 2 mục. Mỗi content ≤ 200 ký tự, tiếng Việt, kèm mốc thời gian nếu có.
 kind ∈ ${MEMORY_KINDS.join("|")}.
 Trả JSON: {"save":[{"kind":"...","content":"..."}],"update":[{"id":123,"content":"..."}]}

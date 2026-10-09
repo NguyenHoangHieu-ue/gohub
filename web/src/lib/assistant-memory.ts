@@ -16,23 +16,40 @@ const KIND_LABEL: Record<MemoryKind, string> = {
 const missingTable = (msg?: string) => !!msg && /assistant_memory/.test(msg) && /(does not exist|schema cache|Could not find)/i.test(msg)
 const MIGRATION_HINT = "Chưa có bảng assistant_memory — Hiếu cần chạy migration web/db/migrations/v63_assistant_memory.sql trên Supabase rồi Reload schema."
 
-interface Row { id: number; kind: MemoryKind; content: string; pinned: boolean; updated_at: string }
+// v72: giá trị cũ bị thay được giữ lại (tối đa MAX_HISTORY bản gần nhất) để trả lời "trước đây/ban đầu là gì".
+const MAX_HISTORY = 5
+interface HistoryEntry { c: string; at: string }
+interface Row { id: number; kind: MemoryKind; content: string; pinned: boolean; updated_at: string; history?: HistoryEntry[] | null }
+
+const missingHistoryCol = (msg?: string) => !!msg && /history/.test(msg) && /(does not exist|schema cache|Could not find)/i.test(msg)
+type QueryResult = { data: any; error: { message: string } | null }
+
+/** Đọc kèm cột history; chưa chạy v72 thì đọc lại không có cột đó (không làm hỏng chat). */
+async function selectCompat(build: (cols: string) => PromiseLike<QueryResult>, cols: string): Promise<QueryResult> {
+  const r = await build(`${cols},history`)
+  return r.error && missingHistoryCol(r.error.message) ? build(cols) : r
+}
+
+const histNote = (h?: HistoryEntry[] | null) => {
+  const last = (h ?? []).slice(-2).reverse()
+  return last.length ? ` ⟲ trước đây: ${last.map(e => `"${e.c.slice(0, 120)}" (đến ${String(e.at).slice(0, 10)})`).join("; ")}` : ""
+}
 
 // Khối nạp vào system prompt. "" khi chưa có trí nhớ / chưa chạy migration (không làm hỏng chat).
 export async function buildMemoryBlock(username: string): Promise<string> {
   if (!username) return ""
-  const { data, error } = await supabaseAdmin.from("assistant_memory")
-    .select("id,kind,content,pinned,updated_at")
+  const { data, error } = await selectCompat(cols => supabaseAdmin.from("assistant_memory")
+    .select(cols)
     .eq("username", username).eq("archived", false)
     .order("pinned", { ascending: false }).order("updated_at", { ascending: false })
-    .limit(200)
+    .limit(200), "id,kind,content,pinned,updated_at")
   if (error) { if (!missingTable(error.message)) console.error("[assistant-memory]", error.message); return "" }
 
   const rows = (data ?? []) as Row[]
   const lines: string[] = []
   let used = 0, dropped = 0
   for (const r of rows) {
-    const line = `- [#${r.id}${r.pinned ? " 📌" : ""}] (${KIND_LABEL[r.kind] ?? r.kind}) ${r.content}`
+    const line = `- [#${r.id}${r.pinned ? " 📌" : ""}] (${KIND_LABEL[r.kind] ?? r.kind}) ${r.content}${histNote(r.history)}`
     if (used + line.length > MAX_INJECT_CHARS) { dropped++; continue }
     lines.push(line); used += line.length + 1
   }
@@ -40,7 +57,8 @@ export async function buildMemoryBlock(username: string): Promise<string> {
 Dùng các điều dưới đây làm bối cảnh (không đọc lại nguyên văn trừ khi được hỏi). Khi người dùng nói điều ĐÁNG NHỚ LÂU
 DÀI — hồ sơ/vai trò, sở thích cách làm việc, dự án đang theo, người liên quan (ai là ai, phụ trách gì), quyết định đã
 chốt — thì gọi assistantMemory action=save (1 ý/lần, ngắn gọn, kèm mốc thời gian nếu có). Điều đã nhớ thay đổi →
-action=update với id. Sai/lỗi thời → action=forget. KHÔNG lưu: số liệu tra lại được từ DB, chuyện chỉ dùng trong lượt
+action=update với id, content chỉ ghi trạng thái HIỆN TẠI (giá trị cũ hệ thống tự giữ, hiện ở "⟲ trước đây"; hỏi về quá khứ thì
+dựa vào đó hoặc action=list). Sai/lỗi thời → action=forget. KHÔNG lưu: số liệu tra lại được từ DB, chuyện chỉ dùng trong lượt
 này, mật khẩu/token/thông tin nhạy cảm. Lưu xong nói ngắn "đã nhớ".`
   if (!lines.length) return `${header}\n(Chưa có gì.)`
   return `${header}\n${lines.join("\n")}${dropped ? `\n(…còn ${dropped} mục cũ hơn không nạp — gọi action=list để xem)` : ""}`
@@ -67,11 +85,25 @@ export async function runAssistantMemory(
     }
     case "update": {
       if (!args.id) return { error: "update cần id (số trong [#id] ở khối trí nhớ)." }
-      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      const now = new Date().toISOString()
+      const patch: Record<string, unknown> = { updated_at: now }
       if (content) patch.content = content
       if (args.kind) patch.kind = kind
       if (typeof args.pinned === "boolean") patch.pinned = args.pinned
-      const { data, error } = await table().update(patch).eq("id", args.id).eq("username", username).select("id")
+      let withHistory = false
+      if (content) {
+        const cur = await selectCompat(cols => table().select(cols).eq("id", args.id).eq("username", username).limit(1), "content")
+        const old = (cur.data?.[0] ?? null) as { content: string; history?: HistoryEntry[] | null } | null
+        if (old && old.content.trim() !== content) {
+          patch.history = [...(old.history ?? []), { c: old.content.slice(0, 300), at: now }].slice(-MAX_HISTORY)
+          withHistory = true
+        }
+      }
+      let { data, error } = await table().update(patch).eq("id", args.id).eq("username", username).select("id")
+      if (error && withHistory && missingHistoryCol(error.message)) {
+        delete patch.history
+        ;({ data, error } = await table().update(patch).eq("id", args.id).eq("username", username).select("id"))
+      }
       if (error) return fail(error.message)
       return data?.length ? { result: { updated: args.id } } : { error: `Không thấy trí nhớ #${args.id}.` }
     }
@@ -83,12 +115,14 @@ export async function runAssistantMemory(
       return data?.length ? { result: { forgotten: args.id } } : { error: `Không thấy trí nhớ #${args.id}.` }
     }
     case "list": {
-      let q = table().select("id,kind,content,pinned,source,updated_at")
-        .eq("username", username).eq("archived", false)
-        .order("pinned", { ascending: false }).order("updated_at", { ascending: false }).limit(300)
-      if (args.kind) q = q.eq("kind", kind)
-      if (args.query) q = q.ilike("content", `%${args.query.replace(/[%_]/g, "")}%`)
-      const { data, error } = await q
+      const { data, error } = await selectCompat(cols => {
+        let q = table().select(cols)
+          .eq("username", username).eq("archived", false)
+          .order("pinned", { ascending: false }).order("updated_at", { ascending: false }).limit(300)
+        if (args.kind) q = q.eq("kind", kind)
+        if (args.query) q = q.ilike("content", `%${args.query.replace(/[%_]/g, "")}%`)
+        return q
+      }, "id,kind,content,pinned,source,updated_at")
       return error ? fail(error.message) : { result: { count: data?.length ?? 0, memories: data ?? [] } }
     }
     default:

@@ -78,3 +78,7 @@ Kết luận (một lần chạy, mỗi nhóm 4–5 câu — đủ để định
 
 **Quyết định cổng P0:** đi tiếp P1, nhưng đổi thứ tự ưu tiên: (a) lịch sử/supersedence không ghi đè (`valid_to`, giữ bản cũ), (b) nạp trí nhớ theo ngữ cảnh thay vì đổ
 tất cả khi vượt trần, (c) context caching prompt tĩnh (đo trước/sau), (d) phương án markdown vẫn chưa đo — làm trong P1 nếu cần so.
+
+## 9. Tiến độ P1
+- [x] (a) Lịch sử không ghi đè: v72 `history JSONB` + code + test (commit s229). **Chờ Hiếu chạy v72**, rồi chạy lại `eval-memory.mjs --stress 60` để đo stress_history.
+- [ ] (b) Nạp trí nhớ theo ngữ cảnh khi vượt trần; (c) context caching prompt tĩnh; (d) so markdown. Stress 150 chưa chạy được (máy hết RAM, 2026-10-09) — chạy lại khi Hiếu bảo.
