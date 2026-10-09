@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
           convId = data.id as string
         }
         if (convId) {
-          const rows = [{ conversation_id: convId, role: "user", content: b.userMsg }, ...(b.assistantMsg ? [{ conversation_id: convId, role: "model", content: b.assistantMsg }] : [])]
+          const rows = [{ conversation_id: convId, role: "user", content: b.userMsg, agent_id: "gau_pro", agent_name: "Gấu Pro" }, ...(b.assistantMsg ? [{ conversation_id: convId, role: "assistant", content: b.assistantMsg, agent_id: "gau_pro", agent_name: "Gấu Pro" }] : [])]
           const { error } = await supabaseAdmin.from("conversation_messages").insert(rows)
           if (error) throw new Error(error.message)
         }
