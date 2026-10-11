@@ -906,7 +906,7 @@ Migration **v67** (`gp_scheduled_tasks`) — Hiếu phải chạy (cần cả v6
 - `only_if_notable` = **canh chừng** (thay cho trigger viết cứng bằng code): prompt chạy kèm hướng dẫn "không có gì → trả đúng NO_ALERT";
   `runJobChunk` gặp NO_ALERT thì ghi nhận, không lưu hội thoại, không nhắn. Ngưỡng do người dùng nói bằng lời (vd "giảm >20% so TB 7 ngày").
   Doanh thu hằng ngày đã có digest 09:45 lo — không thêm trigger cứng trùng việc.
-- Chạy: cron `scheduled-messages` (cron-job.org, hiện MỖI GIỜ, đang trỏ staging) → `runDueSchedules`: lấy ≤5 việc đến hạn, chiếm
+- Chạy: cron `scheduled-messages` (cron-job.org, MỖI GIỜ, đã trỏ production từ 2026-10-11) → `runDueSchedules`: lấy ≤5 việc đến hạn, chiếm
   nguyên tử (dời `next_run_at` theo `nextRunAt`, khớp giá trị cũ), tạo việc nền `gp_jobs` → chặng chạy → DM Lark. Nên giờ chạy trễ tối đa
   ~1 giờ; muốn sát giờ thì tăng tần suất job ở cron-job.org.
 - Panel "Việc & duyệt": mục "Việc theo lịch" (⏰ thường / 👀 canh chừng, lần tới, số lần đã chạy, Huỷ) — `GET/DELETE /api/creator-ai/schedules`.
@@ -1018,7 +1018,7 @@ lịch + phiên Trực tiếp là khung đa người dùng, bật theo `app_sett
 - Bé Gấu (`be-gau.ts`) còn dùng SDK cũ `@google/generative-ai` (KB đã chuyển sang `kb-recall.ts` ở s225).
 - "Nhiễm" (cổng duyệt) chỉ tính trong 1 lượt — nội dung ngoài đọc ở lượt trước không làm lượt sau phải duyệt.
 - Lark DM chưa hiện kế hoạch (`plan`), chưa có phiên giọng nói; hội thoại Lark DM chưa được tóm tắt cho `searchPastConversations`.
-- Việc theo lịch phụ thuộc cron-job.org gọi `scheduled-messages` mỗi giờ (đang trỏ STAGING) → giờ chạy trễ tới ~1h.
+- Việc theo lịch phụ thuộc cron-job.org gọi `scheduled-messages` mỗi giờ (đã trỏ production từ 2026-10-11) → giờ chạy trễ tới ~1h.
 - Phiên Trực tiếp: chưa có người thật thử nói/nghe qua mic-loa + chia sẻ màn hình/camera trên production; mỗi bước thao tác Bridge 3–4s
   (lần đầu ≤15s chờ nhịp poll).
 - Mọi người dùng Bridge phải cài 1.2.2 thủ công 1 lần (trang Bridge → Tải extension → giải nén đè → ↻).
@@ -1116,7 +1116,7 @@ Nay `findRelevantMemories` (`lib/assistant-memory.ts`) đọc mọi mục còn h
 - **Lark DM của Bé Gấu (không phải Creator) có trí nhớ:** trước đây `runBeGau` ở Lark không nhận `username` → không có khối trí nhớ/tool, không rút, không tóm tắt. Nay CHỈ DM riêng (`p2p`) + vai trò bật "memory": truyền `username`, sau trả lời rút trí nhớ (`extractMemoriesFromTurn`, source `lark_dm_begau`) + `summarizeLarkThread` (chờ lưu tin xong rồi mới tóm tắt). Group KHÔNG có trí nhớ cá nhân (khỏi lộ điều riêng của 1 người ra cả nhóm).
 - **Cổng duyệt "nhiễm" gắn theo cuộc chat (Gấu Pro):** `runCreatorAI` nhận `opts.conversationKey` (web: id hội thoại; Lark DM: `lark:<thread>`), ghi `conv` ở bước cuối trace `gp_runs`; `taintFromRuns` (`tool-policy.ts`) coi cuộc chat là nhiễm nếu BẤT KỲ lượt nào của nó từng nhiễm (cửa sổ 24h, trước: chỉ lượt gần nhất của người+kênh trong 2h → chat cuộc khác xen giữa là mất nhiễm). Route web tạo hội thoại TRƯỚC khi chạy để lượt 1 đã có khoá. Bé Gấu KHÔNG nhớ nhiễm qua lượt: bé Gấu chặn cứng hành động ghi/gửi khi nhiễm và chưa có nút Duyệt → nhớ qua lượt sẽ khoá cả cuộc chat; làm khi Bé Gấu có nút Duyệt.
 - **Quyền người dùng** (`lib/assistant-memory-rights.ts`): xem/thêm/sửa/ghim/**xoá hẳn** từng mục, **xuất** JSON (mục + lịch sử giá trị cũ + tóm tắt hội thoại), **xoá tất cả** (xoá thật `assistant_memory` + `gp_conversation_memory` của chính mình, không đụng nội dung chat), **tắt/bật** (app_settings `assistant_memory_off:<username>`, cache 60s; tắt = không nạp, không rút, không tóm tắt, tool memory báo lỗi). API: `/api/chat/memory` (Bé Gấu, theo cờ "memory" của vai trò; menu ⋯ "Trí nhớ của tôi") và `/api/creator-ai/memory` (Gấu Pro); dùng chung `components/gau-pro/memory-panel.tsx` (prop `api`, `floating`). Luôn theo username phiên đăng nhập — Creator/admin không đọc trí nhớ người khác.
-- **Còn ngoài code:** cron-job.org đang trỏ staging (job `scheduled-messages` mỗi giờ + các job khác) — Hiếu đổi URL sang production; mở cho người khác cần thông báo + đồng ý + thời hạn lưu (plan §6).
+- **Còn ngoài code:** (cron-job.org đã đổi sang production — Hiếu xác nhận 2026-10-11); mở cho người khác cần thông báo + đồng ý + thời hạn lưu (plan §6).
 
 ## s230 P3 — hồ sơ trợ lý cá nhân + người dùng thử theo từng người (plan `personal-agent.md` §14)
 - **Người dùng thử theo từng người** (`lib/assistant-features.ts`): app_settings `assistant_feature_users` = `{ [featureId]: username[] }`. `featureEnabledFor(matrix, pilot, id, role, username)` = bật cho vai trò HOẶC cho đích danh username; chỉ cộng thêm quyền, tính năng nhóm "creator" khoá cứng. `featureOn(id, role, username)` nạp cả hai cho route. Đã thay mọi chỗ kiểm tính năng ở Bé Gấu (chat memory, conversations, live log/token, jobs, transcribe, translate, tts, Lark p2p, `be-gau.ts` bộ tool, `/api/chat/features`). Sửa ở Creator Settings → dưới bảng tính năng ("Người dùng thử theo từng người", route `/api/config/assistant-feature-users`: xem creator/admin, sửa creator; username không có trong `users` bị bỏ và báo lại).
