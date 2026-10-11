@@ -150,3 +150,25 @@ So sánh trên cùng dữ liệu Hiếu (444 tin, baseline 1.644 tin toàn công
 ## 17. H1 — tự lưu thói quen (2026-10-11, staging)
 Xong code: `lib/habit-store.ts` + `/api/cron/habit-learn` + khối prompt riêng + nhãn panel; 6 test habit-store + 1 test khối prompt. Đã chạy thật cho tài khoản Hiếu (3 mục), idempotent. Chưa merge `main`, chưa đặt cron-job.org. Chi tiết: wiki `analytics-creator-ai.md` §s230 H1.
 Còn: H2 — đo A/B xem khối thói quen có làm câu trả lời tốt hơn không (bộ câu eval phong cách); chạy thử/mở cho 2–3 người dùng thường (Hiếu chỉ định) + thông báo nhân viên.
+
+## 18. Kết quả H2 — A/B khối thói quen quan sát (2026-10-11, staging, 1 lần chạy)
+`web/scripts/eval-habits.mjs` + action `setHabits` (route eval/memory); kết quả `web/eval/results/habits-h2.md/.json`. 10 câu hỏi trung tính (không nêu yêu cầu về cách trả lời) × 3 profile thói quen; arm A = không có khối thói quen, arm B = có các dòng thói quen (như job ban đêm ghi, `auto-habit:*`); giám khảo gemini-pro so cặp MÙ, đảo thứ tự. Đường Gấu Pro (cùng khối `buildMemoryBlock` với Bé Gấu).
+| Profile | Giám khảo chọn B hợp hơn | Thay đổi đo được | Đủ ý (A→B) | Nhắc lộ liễu |
+|---|---|---|---|---|
+| `short` (hay yêu cầu ngắn gọn) | **10/10** | độ dài còn 72%, bảng 70%→50% | 90%→100% | 0% |
+| `table` (hay yêu cầu dạng bảng) | 5/10, hoà 5 (A không thua câu nào) | có bảng 70%→100%, dài 115% | 100%→100% | 0% |
+| `control` (thói quen KHÔNG liên quan) | 0/10, hoà 10 | độ dài 99%, bảng 70%→60% | 100%→100% | 0% |
+Kết luận: khối thói quen **làm câu trả lời đổi đúng hướng thói quen** (ngắn hơn / nhiều bảng hơn) mà **không giảm độ đủ ý**; thói quen không liên quan **không làm đổi** câu trả lời (đối chứng sạch); **không câu nào nêu lộ liễu "em thấy anh hay…"** (1/10 dính regex ở control là dương tính giả: giám khảo xác nhận không nhắc). Hạn chế: 1 lần chạy, 10 câu, giám khảo LLM, thói quen nạp giả lập (không phải do job ghi), chưa đo tác dụng "gợi ý chủ động" và chưa chạy trên đường Bé Gấu thật (be-gau.ts) — nên chạy lặp ≥3 lần trước khi coi là chắc.
+Đề xuất tiếp: chạy lặp 3 lần + thêm profile `excel`/`no_diacritics`; sau đó mở dần cho người dùng thử khác (cần Hiếu chỉ định) + thông báo nhân viên.
+
+## 19. H2 chạy lặp 3 lần × 5 profile (2026-10-11, staging) — `web/eval/results/habits-h2r{1,2,3}.md/.json`
+30 cặp mỗi profile (10 câu × 3 lần; user eval-h1/h2/h3 chạy song song). B hợp hơn / A hợp hơn / hoà:
+| Profile | B / A / hoà | Độ dài B/A | Có bảng A→B | Đủ ý A→B | Nhắc lộ liễu |
+|---|---|---|---|---|---|
+| `short` | **29 / 1 / 0** | 64–71% (TB 67%) | 70→57% | 93→100% | 0% |
+| `table` | 10 / 1 / 19 | 95–108% | 70→**100%** | 100→97% | 0% |
+| `excel` | 0 / 3 / 27 | 99% | 70→70% | 100→97% | 0% |
+| `nodiac` | 1 / 1 / 28 | 93% | 70→67% | 97→97% | 0% |
+| `control` | 0 / 1 / 29 | 98% | 70→70% | 100→97% | 0% |
+Kết luận (ổn định qua 3 lần): thói quen **ngắn gọn** có tác dụng rất rõ và lặp lại (29/30, độ dài còn ~2/3, không mất ý); thói quen **dạng bảng** có tác dụng (bảng 70→100%) nhưng giám khảo hay hoà vì arm A vốn đã 70% có bảng; **excel / không dấu / đối chứng** đúng kỳ vọng là KHÔNG làm đổi câu trả lời (hoà 27–29/30; vài ca A hơn là nhiễu 1/30). Không lần nào lộ liễu "em thấy anh hay…". Đủ ý giữ ở 97–100% (dao động 1/30 là nhiễu giám khảo, không tập trung vào profile nào). Hạn chế còn: giám khảo LLM, thói quen nạp giả lập, câu hỏi kiến thức (chưa đo "excel" lúc có yêu cầu số liệu — nơi thói quen này mới phát huy), đường Gấu Pro (chưa riêng be-gau.ts).
+Đánh giá: đủ bằng chứng để giữ H1 bật cho nhóm tín hiệu "cách trả lời" (định dạng/văn phong); chủ đề (cmhk, vnpt…) và gợi ý chủ động chưa được đo.

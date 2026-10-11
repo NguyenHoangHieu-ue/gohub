@@ -12,7 +12,7 @@ export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
   if (!isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const b = await req.json() as { action: string; user?: string; conv?: string; title?: string; userMsg?: string; assistantMsg?: string; question?: string }
+  const b = await req.json() as { action: string; user?: string; conv?: string; title?: string; userMsg?: string; assistantMsg?: string; question?: string; lines?: string[] }
   const user = b.user ?? ""
   if (!/^eval-[a-z0-9-]{1,30}$/.test(user)) return NextResponse.json({ error: "user phải dạng eval-xxx" }, { status: 400 })
   const t0 = Date.now()
@@ -55,6 +55,16 @@ export async function POST(req: NextRequest) {
         const { data: sums } = await supabaseAdmin.from("gp_conversation_memory").select("title,summary,message_count").eq("username", user)
         const block = await buildMemoryBlock(user)
         return NextResponse.json({ memories: data ?? [], conversationSummaries: sums ?? [], memoryBlockChars: block.length })
+      }
+      case "setHabits": {
+        // H2 eval thói quen: nạp sẵn các dòng thói quen như job ban đêm đã ghi (source auto-habit:*), để so A/B có/không có khối thói quen.
+        const lines = (b.lines ?? []).map(l => String(l).slice(0, 300)).filter(Boolean).slice(0, 15)
+        await supabaseAdmin.from("assistant_memory").delete().eq("username", user).like("source", "auto-habit:%")
+        if (lines.length) {
+          const { error } = await supabaseAdmin.from("assistant_memory").insert(lines.map((content, i) => ({ username: user, kind: "preference", content, source: `auto-habit:eval:${i}`, pinned: false })))
+          if (error) throw new Error(error.message)
+        }
+        return NextResponse.json({ ok: true, habits: lines.length })
       }
       case "ask": {
         if (!b.question?.trim()) return NextResponse.json({ error: "question required" }, { status: 400 })

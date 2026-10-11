@@ -1,0 +1,1249 @@
+{
+ "label": "habits-h2r2",
+ "armA": {
+  "rows": [
+   {
+    "q": "Giải thích cấu trúc mã SKU của GoHub.",
+    "a": "Mã **SKU (Stock Keeping Unit)** của GoHub gồm chuẩn **13 ký tự**, được thiết kế để quản lý tồn kho, định giá vốn (COGS) và tự động nhận diện toàn bộ thuộc tính kỹ thuật của gói cước. \n\nNgoài ra, **8 ký tự đầu tiên** của SKU chính là **Product Code** (Mã nhóm sản phẩm).\n\n---\n\n### 1. Sơ đồ cấu trúc 13 ký tự\n\n```text\n Vị trí:   [1]   [2]   [3 - 5]   [6 - 7]   [8]   [9 - 11]   [12 - 13]\n Ý nghĩa:  Pháp  Loại   Quốc      Nhà      Chính   Dung        Số\n           nhân   SP    gia/Vùng  cung cấp  sách   lượng       ngày\n                                            Data\n```\n\n---\n\n### 2. Chi tiết từng thành phần\n\n| Vị trí | Ký tự | Tên trường | Ý nghĩa & Quy ước quy định |\n| :---: | :---: | :--- | :--- |\n| **1** | 1 ký tự | **Purchase Type / Source Type**<br>*(Pháp nhân & Phương thức mua)* | • **Pháp nhân VN (GoHub JSC)**:<br>&nbsp;&nbsp;- `1`: VN Stock Direct (Kho chính VN)<br>&nbsp;&nbsp;- `2`: VN Stocks - Internal GHI<br>&nbsp;&nbsp;- `3`: VN Monthly Invoice Internal GHI<br>&nbsp;&nbsp;- `4`: VN Telco Balance<br>&nbsp;&nbsp;- `5`: VN Datapool<br>&nbsp;&nbsp;- `6`: VN Others<br>• **Pháp nhân US (GoHub Inc)**:<br>&nbsp;&nbsp;- `A`: US Stock Direct (Kho chính US)<br>&nbsp;&nbsp;- `B`: US Stock - Internal GHV<br>&nbsp;&nbsp;- `C`: US Monthly Invoice Internal GHV<br>&nbsp;&nbsp;- `D`: US Telco Balance<br>&nbsp;&nbsp;- `E`: US Datapool |\n| **2** | 1 ký tự | **Product Type**<br>*(Loại sản phẩm)* | • `C`: eSIM Full (eSIM hoàn chỉnh khách cài trực tiếp)<br>• `E`: SIM Full (SIM vật lý hoàn chỉnh)<br>• `A`: SIM/eSIM Data lẻ từ NCC<br>• `B`: eSIM Profile (hồ sơ chưa có gói data)<br>• `D`: Khung SIM (SIM frame vật lý)<br>• *(Nội địa VN: `1` = Phôi SIM nội địa, `2` = eSIM nội địa)* |\n| **3 – 5** | 3 ký tự | **Country / Region Group**<br>*(Mã quốc gia/Vùng)* | Chuẩn mã GoHub 3 chữ cái:<br>• Quốc gia đơn: `VNM` (Việt Nam), `JPN` (Nhật), `KOR` (Hàn), `THA` (Thái Lan), `USA` (Mỹ), `SGP` (Singapore), `TWN` (Đài Loan), `CHM` (Trung-Hồng Kông-Macao)...<br>• Nhóm khu vực: `EU1` (Châu Âu), `APA` (Châu Á - TBD), `GLO` (Toàn cầu)...<br>• `000`: Phôi profile / Khung SIM không gán nước |\n| **6 – 7** | 2 ký tự | **Vendor Code**<br>*(Nhà cung cấp)* | • `WM`: WorldMove<br>• `3H`: 3HK Datapool<br>• `JT`: JoyTel<br>• `KD`: KDDI<br>• `BC`: Billion Connect<br>• `WD`: BC Datapool |\n| **8** | 1 ký tự | **Data Policy / Throttle**<br>*(Chính sách Data)* | • Daily (theo ngày): `A`, `B`, `P`, `D`...<br>• Fixed (tổng dung lượng gói): `F`, `E`, `G`...<br>• Ngắt kết nối khi hết dung lượng tốc độ cao: `Y`, `Z`...<br>• True Unlimited: `D`, `U`... |\n| **9 – 11** | 3 ký tự | **Data Capacity**<br>*(Dung lượng tốc độ cao)* | • Theo GB: `001` (1GB), `005` (5GB), `010` (10GB), `065` (65GB)...<br>• Lẻ GB / MB: `0D5` (0.5GB / 500MB), `1HM` (100MB)...<br>• Không giới hạn: `UNL` (Unlimited) |\n| **12 – 13** | 2 ký tự | **Validity / Day Amount**<br>*(Thời hạn ngày)* | Số ngày sử dụng từ `01` đến `99`:<br>• `03`: 3 ngày<br>• `07`: 7 ngày<br>• `15`: 15 ngày<br>• `30`: 30 ngày |\n\n---\n\n### 3. Ví dụ minh họa thực tế\n\n#### Ví dụ 1: `3CUSAWMY00507`\n* **3**: Pháp nhân VN (Monthly Invoice Internal GHI).\n* **C**: eSIM Full.\n* **USA**: Hoa Kỳ.\n* **WM**: Nhà cung cấp WorldMove.\n* **Y**: Gói Fixed, ngắt khi hết data.\n* **005**: 5GB tổng.\n* **07**: 7 ngày.\n* *(Product Code tương ứng: `3CUSAWMY`)*.\n\n#### Ví dụ 2: `DCAUSWMY06530`\n* **D**: Pháp nhân US (US Telco Balance).\n* **C**: eSIM Full.\n* **AUS**: Úc.\n* **WM**: Nhà cung cấp WorldMove.\n* **Y**: Gói Fixed, ngắt khi hết data.\n* **065**: 65GB.\n* **30**: 30 ngày.\n\n#### Ví dụ 3: `1CJPNKDD00107`\n* **1**: Pháp nhân VN (Kho chính GoHub VN).\n* **C**: eSIM Full.\n* **JPN**: Nhật Bản.\n* **KD**: Vendor KDDI.\n* **D**: Daily Data.\n* **001**: 1GB/ngày.\n* **07**: 7 ngày.\n\n---\n\n### 4. Mối quan hệ giữa SKU và các cấp mã khác\n\nHệ thống GoHub phân định 4 cấp mã rõ ràng:\n1. **Product Code (8 ký tự)**: 8 ký tự đầu của SKU (VD: `3CUSAWMY`), đại diện cho dòng sản phẩm theo NCC và thị trường.\n2. **SKU Code (13 ký tự)**: Định danh phiên bản chi tiết (Dung lượng + Ngày) để quản lý kho và COGS.\n3. **Listing Code**: Tên và nhóm hiển thị trên Website/Sàn TMĐT.\n4. **Item Code / Alias (18–20 ký tự)**: Mã định danh thực tế phát sinh đơn hàng khi bán ra, gồm: `[Kênh bán][Đối tác][Bảng giá][SKU 13 ký tự][Số thứ tự/Pack]`.\n   * *Ví dụ: `BSP011CRUS12A00107AA` (Kênh B2C `B` + ShopeePay `SP` + Bảng giá `01` + SKU `1CRUS12A00107` + STT `AA`).*\n\n```followup\n[\"Giải thích cấu trúc mã Item/Alias?\", \"Bảng mã các Vendor chính?\", \"Quy chuẩn Combo 42 gói?\"]\n```",
+    "tokensIn": 18791,
+    "ms": 17244
+   },
+   {
+    "q": "Thứ tự ưu tiên chọn vendor khi bán một gói eSIM mới là gì?",
+    "a": "Theo chuẩn quy định vận hành và định giá của GoHub (cập nhật mới nhất), thứ tự ưu tiên chọn Vendor khi tạo/bán một gói eSIM mới được áp dụng theo các tầng nguyên tắc sau:\n\n---\n\n### 1. Thứ tự ưu tiên tổng thể (Toàn hệ thống)\n\n| Thứ tự | Vendor | Ưu điểm & Lý do ưu tiên |\n| :---: | :--- | :--- |\n| **1** | **3HK Datapool (`3H`)** | **Ưu tiên số 1:** Tính giá theo GB trên 45 vùng địa lý, linh hoạt tự tùy biến gói cước (Daily, Fixed, FUP), độ phủ rộng và biên lợi nhuận tối ưu nhất. |\n| **2** | **BC Datapool (`WD`)** | **Ưu tiên số 2:** Nguồn Datapool linh hoạt từ Billion Connect (Singtel & CMHK Core), dùng làm nguồn bổ trợ mạnh sau 3HK. |\n| **3** | **Sản phẩm có SĐT Local** | Ưu tiên các vendor cung cấp gói tích hợp nghe/gọi nội địa nếu khách/thị trường có nhu cầu (ví dụ: Viettech cho SIM/eSIM nội địa, GigHub...). |\n| **4** | **WorldMove (`WM`)** | Danh mục gói khổng lồ (>8.900 gói), không cần KYC, kết nối ổn định; đóng vai trò làm vendor dự phòng/bổ trợ chính. |\n| **5** | **Các Vendor khác** | Billion Connect gói cố định (`BC`), Joytel, Viettech, GigHub (Airhub)... tùy theo thị trường ngách hoặc tuyến đặc thù. |\n\n---\n\n### 2. Cây quyết định ưu tiên theo Tuyến / Quốc gia đặc thù\n\nBên cạnh thứ tự chung, có các trường hợp **ngoại lệ bắt buộc** theo quy chuẩn tuyến:\n\n* **Tuyến Hồng Kông (HK) & Đài Loan (TW)**:\n  * **Ưu tiên #1 là WorldMove (`WM`)**: Do chính sách **không yêu cầu KYC** và giá cạnh tranh, tránh rủi ro rớt đơn/phiền hà giấy tờ cho khách.\n* **Tuyến Nhật Bản (JP)**:\n  * Tuân theo thứ tự chung: **3HK Datapool** trước hoặc nguồn rẻ hơn.\n  * *Lưu ý về KDDI (`KD`)*: Chỉ có gói Unlimited. GoHub tiếp tục duy trì KDDI vì đối tác tài trợ phí quảng cáo và các khoản trợ phí khác, không phải vì độ ưu tiên sản phẩm thông thường.\n* **Tuyến Việt Nam / Lào**:\n  * Ưu tiên **Viettech (`VT`)** nếu cần gói mạng nội địa (Viettel, Wintel, Unitel Lào) không roaming, tốc độ trực tiếp.\n* **Các tuyến còn lại**:\n  * Luôn ưu tiên **3HK Datapool (`3H`)** trước, sau đó đến **BC Datapool (`WD`)**, và dự phòng/bổ sung bằng **WorldMove (`WM`)**.\n\n---\n\n### 3. Phân biệt các mã Vendor dễ nhầm lẫn\n\n* **`3H` (3HK Datapool)** vs **`3HK` (gói cố định cũ)**: Luôn ưu tiên nguồn Datapool (`3HKDATAPOOL`).\n* **`WD` (BC Datapool)** vs **`BC` (Billion Connect gói cố định)**: `WD` là gói Datapool linh hoạt, `BC` là gói cố định tiêu chuẩn.\n\n```followup\n[\"Xem công thức COGS của 3HK?\", \"Chính sách KYC các vendor?\", \"Quy tắc đặt mã SKU vendor?\"]\n```",
+    "tokensIn": 18942,
+    "ms": 9551
+   },
+   {
+    "q": "Gói Fixed và gói Daily khác nhau thế nào?",
+    "a": "Trong hệ sinh thái sản phẩm SIM/eSIM của GoHub, sự khác biệt cốt lõi giữa gói **Fixed (Tổng dung lượng cố định)** và gói **Daily (Dung lượng theo ngày)** nằm ở **cơ chế cấp phát data**, **chu kỳ reset**, và **hành vi sau khi hết dung lượng**:\n\n---\n\n### 1. Bảng so sánh chi tiết\n\n| Tiêu chí | Gói Fixed (Tổng cố định) | Gói Daily (Theo ngày) |\n|---|---|---|\n| **Cơ chế cấp data** | Cấp **1 lần duy nhất** toàn bộ dung lượng cho cả chu kỳ (vd: 5GB dùng trong 7 ngày, 10GB trong 15 ngày). | Cấp **định mức mới mỗi ngày** (vd: 1GB/ngày, 2GB/ngày, 3GB/ngày). |\n| **Chu kỳ reset** | **Không reset**. Dùng hết là hết hạn mức tốc độ cao. | **Reset hàng ngày** (thường vào 00:00 theo giờ địa phương của nhà mạng hoặc nửa đêm GMT+8). |\n| **Khi dùng hết dung lượng trong chu kỳ** | Tùy chính sách gói: hạ băng thông (thường < 128 kbps - 2 Mbps) hoặc ngắt kết nối hoàn toàn cho đến hết chu kỳ. | Chỉ hạ băng thông/ngắt kết nối trong **ngày hôm đó**; sang ngày tiếp theo sẽ có lại hạn mức mới. |\n| **Độ linh hoạt sử dụng** | Rất cao: Khách có thể dùng nhiều vào ngày cần thiết (vd: 3GB ngày đầu tìm đường, ngày sau chỉ dùng 500MB). | Cố định theo ngày: Nếu ngày hôm đó dùng quá mức sẽ bị chậm; data thừa trong ngày **không được cộng dồn** sang hôm sau. |\n| **Data Policy Code (Ký tự thứ 8 SKU)** | Thường là `F` (hạ tốc độ < 2Mbps) hoặc `Y` (no-throttle/ngắt). | Thường là `P` (hạ tốc độ < 2Mbps), `T` (reset nửa đêm), hoặc `Z` (no-throttle). |\n| **Phù hợp với khách hàng** | Nhu cầu dùng không đều (đi tour, công tác đột xuất, chỉ cần backup bản đồ/chat). | Khách đi du lịch tự túc dài ngày, lướt web/mạng xã hội đều đặn mỗi ngày, sợ \"lỡ tay\" dùng hết sạch data trong vài ngày đầu. |\n\n---\n\n### 2. Minh họa thực tế dễ hiểu\n\n* **Gói Fixed (vd: 10GB / 10 ngày):**\n  * Ngày 1 khách livestream, dùng hết 6GB → Còn 4GB cho 9 ngày còn lại.\n  * Nếu ngày 2 khách dùng nốt 4GB → Từ ngày 3 đến ngày 10 sẽ bị bóp băng thông hoặc dừng hẳn.\n* **Gói Daily (vd: 1GB/ngày / 10 ngày):**\n  * Mỗi ngày khách có đúng 1GB tốc độ cao.\n  * Ngày 1 khách dùng hết 1GB lúc 15:00 → Từ 15:00 đến 24:00 bị chậm lại.\n  * Đúng 00:00 ngày 2 → Khách lại có 1GB tốc độ cao mới tinh, không bị ảnh hưởng bởi việc ngày 1 dùng nhiều.\n\n---\n\n### 3. Lưu ý phân biệt với nhóm \"Unlimited\"\n* Cả hai gói này đều khác với nhóm **Unlimited** (mã `A`, `B`, `C`, `D`, `E`, `G`...): Gói Unlimited cho phép truy cập data không giới hạn tổng dung lượng và duy trì tốc độ sau hạ ở mức cao hơn (5 Mbps, 10 Mbps, hoặc không giới hạn như True Unlimited).\n\n```followup\n[\"Mã Data Policy quy định thế nào?\", \"Tư vấn khách nên chọn loại nào?\", \"Xem các gói Fixed/Daily của vendor WM\"]\n```",
+    "tokensIn": 18567,
+    "ms": 9769
+   },
+   {
+    "q": "Combo chuẩn của GoHub gồm những gì?",
+    "a": "Theo quy chuẩn của GoHub, **Bộ Combo chuẩn cho mỗi quốc gia/vùng gồm 42 combo**, được chia thành **3 nhóm gói cước** kết hợp với **6 mốc thời hạn ngày**:\n\n---\n\n### 1. Chi tiết 42 Combo Chuẩn\n\n| Nhóm gói cước | Mức dung lượng | 6 Mốc thời hạn (Số ngày) | Tổng số combo |\n| :--- | :--- | :--- | :--- |\n| **1. Daily Data** *(Data theo ngày)* | • 1GB/ngày<br>• 2GB/ngày<br>• 3GB/ngày | **7, 14, 21, 30, 60, 90 ngày** | **18 combo**<br>*(3 mức dung lượng × 6 mốc ngày)* |\n| **2. Fixed Data** *(Tổng dung lượng cố định)* | • 5GB<br>• 10GB<br>• 20GB | **7, 14, 21, 30, 60, 90 ngày** | **18 combo**<br>*(3 mức dung lượng × 6 mốc ngày)* |\n| **3. Unlimited Data** *(Không giới hạn dung lượng)* | • Unlimited | **7, 14, 21, 30, 60, 90 ngày** | **6 combo**<br>*(1 loại × 6 mốc ngày)* |\n| **TỔNG CỘNG** | | | **42 combo / nước** |\n\n---\n\n### 2. Thuật ngữ & Quy tắc vận hành (Gap Analysis)\n\nKhi rà soát danh mục sản phẩm (Gap Analysis) theo bộ 42 combo chuẩn:\n* **\"Thiếu combo\" / \"Chưa có trong hệ thống\"**: Nghĩa là GoHub chưa tạo SKU nội bộ hoặc cần yêu cầu Vendor tạo thêm gói, **không nói** là \"vendor hết hàng\".\n* **\"Có trong hệ thống GoHub\"**: SKU đã được cấu hình và sẵn sàng mở bán trên các kênh.\n* **Đối chiếu với Vendor (Ví dụ WorldMove - WM)**:\n  * *WM có, GoHub đã tạo*: Đang mở bán bình thường.\n  * *WM có, GoHub chưa tạo*: Cần team Product onboard & map SKU.\n  * *WM chưa có*: Cần liên hệ Vendor yêu cầu bổ sung gói.\n\n```followup\n[\"Cấu trúc mã SKU 13 ký tự?\", \"Thứ tự ưu tiên chọn vendor?\", \"Gap analysis theo từng nước?\"]\n```",
+    "tokensIn": 19223,
+    "ms": 7317
+   },
+   {
+    "q": "Gói Unlimited của BC Datapool có những mức tốc độ nào?",
+    "a": "Trong hệ thống sản phẩm GoHub, dòng sản phẩm **BC Datapool (mã vendor `WD`)** (gồm cả 2 core CMHK và Singtel) hiện đang cấu hình dòng gói **Unlimited** với mức tốc độ như sau:\n\n---\n\n### 1. Mức tốc độ gói Unlimited của BC Datapool (`WD`)\nDòng Unlimited của BC Datapool được định nghĩa theo nhóm chính sách **Mã `X` (Daily Unlimited 10Mbps - Midnight Reset)**:\n* **Cấu trúc gói:** **3GB data tốc độ cao mỗi ngày**, sau khi dùng hết 3GB sẽ **không giới hạn dung lượng ở tốc độ 10 Mbps** (`throttle_speed: 10Mbps`).\n* **Cơ chế reset:** Reset mốc giới hạn tốc độ cao và chu kỳ throttle vào lúc nửa đêm (**Midnight Reset**).\n* **Core áp dụng:** Đã triển khai trên cả **BC Datapool (CMHK)** (182 SKU) và **BC Datapool (Singtel)** (28 SKU) cho các thị trường trọng điểm như Hàn Quốc (`3CKORWDX`), Thái Lan (`3CTHAWDX`, `ECTHAWDX`), Mỹ (`3CUSAWDX`, `ECUSAWDX`),...\n\n---\n\n### 2. So sánh với các dòng gói khác của BC Datapool\nĐể phân biệt rõ trải nghiệm tốc độ mạng khi tư vấn hoặc cấu hình SKU:\n\n| Nhóm gói | Mã Policy (Ký tự thứ 8 SKU) | Quota tốc độ cao | Mức tốc độ sau khi hết Quota (Throttle Speed) | Chu kỳ Reset |\n|---|:---:|:---:|:---:|:---:|\n| **Unlimited (Gói không giới hạn)** | **`X`** | **3GB / ngày** | **10 Mbps** (duy trì stream, xem video HD mượt mà) | Nửa đêm (00:00) |\n| **Daily Throttle (Gói theo ngày)** | **`T`** | 500MB – 3GB / ngày | **384 kbps** (tối đa dưới 2 Mbps, đủ chat/bản đồ) | Nửa đêm (00:00) |\n| **Fixed Data (Gói dung lượng cố định)** | **`F`** | 1GB – 50GB tổng | **384 kbps** (hết dung lượng tổng thì bóp băng thông) | Hết gói |\n\n---\n\n### 3. Lưu ý về tính tương thích & kiểm soát COGS\n* **Tính tương thích mạng:**\n  * **Core Singtel (`WD` Singtel):** IP Singapore sạch, truy cập đầy đủ TikTok (cả iOS & Android), ChatGPT, Claude, Gemini.\n  * **Core CMHK (`WD` CMHK):** IP Hong Kong, bị chặn Claude và TikTok Android (chỉ hỗ trợ TikTok iOS).\n* **Định mức COGS:** Theo nguyên tắc tính giá Datapool nội bộ, gói Unlimited có throttle 10Mbps được áp dụng định mức tính tiêu dùng tương đương **1.7 – 2.8 GB/ngày** trên đơn giá GB của từng Core khi tính giá vốn (COGS) và biên lợi nhuận.\n\n```followup\n[\"So sánh giá WD vs 3HK?\", \"Xem danh sách SKU mã X?\", \"Cách tính COGS gói Unlimited?\"]\n```",
+    "tokensIn": 425409,
+    "ms": 42217
+   },
+   {
+    "q": "Quy trình import danh mục nhà cung cấp WorldMove gồm những bước nào?",
+    "a": "Quy trình import danh mục sản phẩm từ đối tác **WorldMove (WM)** vào hệ thống GoHub gồm **3 bước chuẩn** như sau:\n\n---\n\n### Bước 1: Chuẩn bị file dữ liệu\nHệ thống GoHub hỗ trợ tự động nhận dạng **2 định dạng file**:\n\n1. **WM Native Format (`CSV` hoặc `XLSX`)**:\n   - Nhận dạng tự động thông qua sự xuất hiện của cột `wmproductId`.\n   - Chứa các thông tin gốc từ portal của WorldMove: ID sản phẩm (`wmproductId`), tên gói, khu vực/quốc gia, loại SIM/eSIM, giá nhập gốc, cờ `leSIM`...\n2. **GoHub Standard Format (`XLSX`)**:\n   - Sử dụng sheet tiêu chuẩn tên **\"Goi co san\"** (dành cho gói cố định của WM, BC, SS...).\n   - Tải template tại giao diện **SP Vendor / NCC** (nút *Tải template*).\n   - Các trường bắt buộc gồm: `vendor_code` (`WM`), `vendor_id`, `product_name`, `region`, `sim_type`, `days`, `data_gb`, `is_daily`, `is_unlimited`, `cost_price`, `currency`, `is_kyc`.\n   - Các trường tùy chọn: `throttle_mbps`, `apn`, `network_type`, `is_lesim`, `notes`.\n\n---\n\n### Bước 2: Tải lên và Kiểm tra thay đổi (Import Preview)\n1. Truy cập trang **SP Vendor / NCC** (`/ncc`), chọn tab **WorldMove (WM)**.\n2. Bấm nút **\"Import CSV\"** (yêu cầu phân quyền role *Admin* hoặc *Manager*).\n3. Chọn file dữ liệu vừa chuẩn bị. Hệ thống gọi API `/api/ncc/import-preview` để kiểm tra tính hợp lệ và tự động phân loại các biến động thành **3 nhóm màu trực quan**:\n   - 🟢 **Nhóm Sản phẩm mới (Màu xanh)**: Gói có trong file báo giá mới nhưng chưa tồn tại trong danh mục `ncc_worldmove` của hệ thống.\n   - 🟡 **Nhóm Giá thay đổi (Màu vàng)**: Sản phẩm đã có nhưng giá nhập (`cost_price`) có sự chênh lệch so với kỳ trước.\n   - 🔴 **Nhóm Ngưng cung cấp (Màu đỏ)**: Sản phẩm hiện có trong hệ thống nhưng không còn xuất hiện trong bảng giá mới của WM.\n\n---\n\n### Bước 3: Xác nhận Import và Cập nhật Database\n1. Kiểm tra lại bảng preview (mặc định mở xem các mẫu đầu tiên của từng nhóm).\n2. Bấm **\"Xác nhận Import\"** để thực thi đồng bộ qua API `/api/ncc/import-confirm`.\n3. Hệ thống sẽ ghi nhận:\n   - Cập nhật bảng `ncc_worldmove` (hơn 8.900 gói).\n   - **Bảo toàn dữ liệu APN**: Các cấu hình mạng, nhà mạng hỗ trợ và APN cũ được giữ nguyên, không bị ghi đè khi chỉ có thay đổi về giá.\n   - Các gói \"ngưng cung cấp\" sẽ được chuyển đổi trạng thái (status), tuyệt đối **không xóa cứng** khỏi database nhằm bảo vệ lịch sử đơn hàng.\n   - Lưu vết lịch sử upload vào bảng theo dõi (`data_file_registry`) gồm: ngày giờ, người thực hiện, số dòng thay đổi và trạng thái.\n\n---\n\n💡 **Lưu ý sau khi import (Gap Analysis & Onboarding SKU)**:\n- Sau khi hoàn tất import catalog NCC, hệ thống sẽ tự động cập nhật trạng thái **`exist = Yes / No`** (so sánh với bảng `products` & `skus` của GoHub).\n- Các gói tiềm năng có `exist = No` (WM có bán nhưng GoHub chưa tạo SKU) sẽ được lọc ra để team Product Ops sinh template mở mã SKU GoHub mới hàng loạt.",
+    "tokensIn": 19659,
+    "ms": 11154
+   },
+   {
+    "q": "Giá vốn của 3HK được tính theo cách nào?",
+    "a": "Cơ chế tính giá vốn (COGS) của **3HK Datapool** được xây dựng dựa trên **mức tiêu thụ dung lượng thực tế (Data Consumption)** chứ không tính trọn gói theo dung lượng danh nghĩa, vì khách hàng du lịch thường không dùng hết 100% dung lượng gói đã mua.\n\n---\n\n### 1. Nguyên Tắc 3 Bước Tính COGS\n\n* **Bước 1: Quy đổi dung lượng tiêu thụ ước tính (GB thực tế)**\n  Tùy theo loại gói cấu hình, hệ số tiêu thụ (consumption factor / breakage rate) được áp dụng để tính ra số GB thực tế tiêu hao.\n* **Bước 2: Tính giá vốn theo HKD**\n  $$\\text{COGS (HKD)} = \\text{GB thực tế} \\times \\text{Đơn giá Vùng (HKD/GB)}$$\n* **Bước 3: Quy đổi sang USD và VND**\n  * $\\text{COGS (USD)} = \\text{COGS (HKD)} \\div \\text{Tỷ giá HKD/USD}$ (≈ 7.798)\n  * $\\text{COGS (VND)} = \\text{COGS (USD)} \\times \\text{Tỷ giá USD/VND}$ *(Lưu ý: Tỷ giá quy đổi lấy động theo tỷ giá nội bộ cấu hình trên hệ thống)*.\n\n---\n\n### 2. Bảng Giả Định Hệ Số Tiêu Thụ (Consumption Assumptions)\n\nHệ số tiêu thụ hiện tại đang áp dụng chuẩn tại GoHub:\n\n| Loại gói | Công thức tính GB thực tế | Hệ số tiêu thụ | Ghi chú |\n|---|---|:---:|---|\n| **Gói Cố định (Fixed Data)** | $\\text{Dung lượng gói} \\times 0.55$ | **55%** | Khách dùng trung bình 55% quota |\n| **Gói Theo ngày (Daily Data)** | $(\\text{GB/ngày}) \\times \\text{Số ngày} \\times 0.38$ | **38%** | Đã điều chỉnh từ 40% xuống 38% để sát thực tế |\n| **Unlimited 500MB / 5 Mbps** | $1.6 \\times \\text{Số ngày}$ | 100% | Định mức 1.6 GB/ngày |\n| **Unlimited 500MB / 10 Mbps** | $1.8 \\times \\text{Số ngày}$ | 100% | Định mức 1.8 GB/ngày |\n| **Unlimited 1GB / 10 Mbps** | $2.8 \\times \\text{Số ngày}$ | 100% | Định mức 2.8 GB/ngày |\n| **Unlimited 3GB / 10 Mbps** | $1.7 \\times \\text{Số ngày}$ | 100% | Định mức 1.7 GB/ngày |\n\n---\n\n### 3. Đơn Giá Tham Chiếu Theo Vùng (HKD/GB)\n\n3HK phân chia đơn giá theo 45 vùng địa lý, tiêu biểu:\n* **Châu Á (12 nước chính: JP, KR, SG, TH, MY, HK, TW, VN...):** 5.0 HKD/GB.\n* **Châu Âu + Bắc Mỹ (Mỹ, Anh, Pháp, Đức...):** 7.0 HKD/GB.\n* **Úc & New Zealand (AU, NZ):** 6.5 HKD/GB.\n\n---\n\n### 4. Ví Dụ Minh Họa Cụ Thể\n\n1. **Gói Fixed 10GB đi Nhật Bản (Vùng Châu Á: 5 HKD/GB):**\n   * GB thực tế = $10 \\text{ GB} \\times 0.55 = 5.5 \\text{ GB}$\n   * COGS HKD = $5.5 \\times 5 = 27.5 \\text{ HKD}$\n   * COGS USD ≈ $27.5 \\div 7.798 \\approx 3.53 \\text{ USD}$\n   * COGS VND ≈ $3.53 \\times 26,394 \\approx 93,050 \\text{ VND}$\n\n2. **Gói Daily 2GB/ngày trong 7 ngày đi Châu Âu (Vùng EU: 7 HKD/GB):**\n   * GB thực tế = $2 \\times 7 \\times 0.38 = 5.32 \\text{ GB}$\n   * COGS HKD = $5.32 \\times 7 = 37.24 \\text{ HKD}$\n   * COGS USD ≈ $37.24 \\div 7.798 \\approx 4.78 \\text{ USD}$\n   * COGS VND ≈ $4.78 \\times 26,394 \\approx 126,050 \\text{ VND}$\n\n---\n\n### 5. Lưu Ý Vận Hành\n* Các hệ số (55%, 38%, 1.8, 1.6...) là giá trị cấu hình trực tiếp trên hệ thống (**Admin → Cài đặt → Công thức 3HK Datapool**).\n* Khi so sánh 3HK với các vendor Datapool khác (như BC Datapool - WD), cả hai đều áp dụng chung cơ chế breakage rate này, nên **vendor nào có đơn giá pool HKD/GB rẻ hơn sẽ cho ra COGS rẻ hơn trên toàn bộ dải gói**.\n\n```followup\n[\"So sánh giá 3HK với WorldMove?\", \"Xem bảng giá các vùng của 3HK?\", \"Tính COGS thử cho 1 gói cụ thể?\"]\n```",
+    "tokensIn": 19273,
+    "ms": 13351
+   },
+   {
+    "q": "Vì sao gói Nhật hay dùng KDDI?",
+    "a": "Đối với tuyến **Nhật Bản (JP)** tại GoHub, việc phân phối và duy trì các gói mạng **KDDI (mã KD)** xuất phát từ hai lý do chính:\n\n---\n\n### 1. Góc độ Kinh doanh & Hợp tác (Lý do cốt lõi)\n* **Tài trợ chi phí:** GoHub tiếp tục duy trì danh mục KDDI chủ yếu vì **KDDI chi trả phí quảng cáo (marketing subsidy/co-op fund) và một số chi phí khác** cho GoHub. \n* Quyết định giữ dòng sản phẩm này mang tính chiến lược thương mại nhằm tối ưu dòng tiền/doanh thu phụ trợ, **không phải vì KDDI có chất lượng mạng vượt trội hay ưu đãi đối tác đặc biệt**.\n\n---\n\n### 2. Đặc thù Sản phẩm & Cấu hình Gói\n* **Chỉ tập trung dòng Unlimited:** KDDI tại GoHub chủ yếu cung cấp dòng gói **Unlimited**.\n* **Định vị phân khúc:** Đáp ứng tệp khách hàng có nhu cầu sử dụng data không giới hạn khi sang Nhật, đồng thời tận dụng hạ tầng phủ sóng rộng của mạng di động au/KDDI tại Nhật Bản.\n\n---\n\n### 💡 Lưu ý về Cây ưu tiên Vendor (Tối ưu COGS)\nTheo quy tắc định tuyến nhà cung cấp hiện tại của GoHub cho tuyến Nhật Bản:\n* GoHub ưu tiên **3HK Datapool (3H)** hoặc các nguồn Datapool giá rẻ hơn cho các gói linh hoạt/data cố định/daily để tối ưu COGS.\n* Gói **KDDI** được duy trì song song phục vụ mục đích thương mại và phân khúc Unlimited nêu trên.\n\n```followup\n[\"Xem doanh thu gói KDDI?\", \"So sánh COGS Nhật Bản?\", \"Chi tiết gói Unlimited Nhật?\"]\n```",
+    "tokensIn": 19513,
+    "ms": 7760
+   },
+   {
+    "q": "Mã Item khác mã SKU ở điểm nào?",
+    "a": "Trong kiến trúc sản phẩm GoHub, **Mã SKU (SKU Code)** và **Mã Item (Item Code / Alias)** đại diện cho hai tầng quản lý khác nhau:\n\n---\n\n### 1. Bản chất & Mục đích sử dụng\n\n| Tiêu chí | Mã SKU (13 ký tự) | Mã Item / Alias (18–20 ký tự) |\n| :--- | :--- | :--- |\n| **Bản chất** | **Mã quản lý kho & quy cách sản phẩm** (Warehouse / Inventory level) | **Mã thương mại theo kênh & bảng giá** (Commercial / Channel level) |\n| **Mục đích** | Quản lý thông số kỹ thuật của gói cước: gói data gì, bao nhiêu ngày, vendor nào, phôi gì, thuộc pháp nhân nào. | Định danh gói cước khi bán ra cho một **kênh/đối tác cụ thể** với **bảng giá cụ thể**, gửi cho đối tác/khách hàng tra cứu đơn. |\n| **Quan hệ** | Là \"nhân\" kỹ thuật bên trong. Một SKU có thể sinh ra **nhiều Item Code** trên nhiều kênh/đối tác khác nhau. | **Chứa trọn vẹn mã SKU 13 ký tự** ở giữa, kèm thông tin tiền tố (kênh, đối tác, bảng giá) và hậu tố (số thứ tự). |\n| **Độ dài** | Cố định **13 ký tự** | Thường **18 đến 20 ký tự** |\n\n---\n\n### 2. So sánh cấu trúc giải mã\n\n#### A. Mã SKU (13 ký tự)\nChỉ mang thông tin kỹ thuật & nguồn nhập:\n```text\n[1][2][3-5][6-7][8][9-11][12-13]\n │  │   │    │   │    │     │\n │  │   │    │   │    │     └─► Số ngày (vd: 07 = 7 ngày)\n │  │   │    │   │    └───────► Dung lượng (vd: 001 = 1GB, UNL = Không giới hạn)\n │  │   │    │   └────────────► Loại data (F = Fixed, D = Daily, U = Unlimited...)\n │  │   │    └────────────────► Vendor (WM = WorldMove, 3H = 3HK, KD = KDDI...)\n │  │   └─────────────────────► Nước / Vùng (JPN, USA, THA, EU1...)\n │  └─────────────────────────► Loại sản phẩm (C = eSIM full, E = SIM vật lý...)\n └────────────────────────────► Pháp nhân / Nguồn kho (1..6 = VN, A..E = US)\n```\n\n#### B. Mã Item / Alias (18–20 ký tự)\nMã Item bọc thêm ngữ cảnh bán hàng bên ngoài SKU:\n```text\n[Kênh][Đối tác][Bảng giá]  ─── [MÃ SKU 13 KÝ TỰ] ───  [Số thứ tự / Pack]\n (1)    (2)      (2)                 (13)                     (2)\n```\n- **Ký tự 1 (Kênh bán):** `B` = B2C, `D` = On Demand (OD), `W` = Wholesale (WS), `I` = Internal.\n- **Ký tự 2–3 (Mã đối tác):** `SP` = ShopeePay, `MM` = MoMo, `KK` = KKday, `T1` = B2B Tier 1, `VE` = VN B2B Ecom...\n- **Ký tự 4–5 (Bảng giá / Pricelist):** `01` = Bảng giá tiêu chuẩn, `02` = Bảng giá ưu đãi...\n- **Ký tự 6–18 (Mã SKU nhúng):** Toàn bộ 13 ký tự của SKU gốc.\n- **Ký tự 19–20 (Hậu tố / Pack / Stt):** `AA`, `01`, `00`... dùng để phân biệt các item cùng SKU trên cùng một kênh.\n\n---\n\n### 3. Ví dụ thực tế\n\nXét mã Item: **`BSP011CRUS12A00107AA`**\n\n- **Phần Item (Bối cảnh bán hàng):**\n  - `B`: Bán lẻ B2C\n  - `SP`: Kênh ShopeePay\n  - `01`: Bảng giá số 01\n  - `AA`: Số thứ tự phân biệt\n- **Phần SKU nhúng bên trong (`1CRUS12A00107`):**\n  - `1`: Pháp nhân GoHub VN (Kho chính)\n  - `C`: eSIM Full\n  - `RUS`: Nước Nga\n  - `12` / `WM`: Vendor cung ứng\n  - `A` / `D`: Gói Daily\n  - `001`: 1GB/ngày\n  - `07`: Thời hạn 7 ngày\n\n> **Tóm lại một câu:** **SKU** là gói hàng nằm trong kho quản lý kỹ thuật, còn **Item (Alias)** là gói hàng đó khi đem ra niêm yết bán trên một kênh/đối tác cụ thể với một mức giá cụ thể.\n\n```followup\n[\"Xem chi tiết quy tắc đặt mã SKU?\", \"Quy tắc mã Alias trên sàn Ecom?\", \"Tra cứu một mã SKU cụ thể?\"]\n```",
+    "tokensIn": 19063,
+    "ms": 13544
+   },
+   {
+    "q": "Làm sao biết một SKU đang còn bán hay đã ngừng?",
+    "a": "Để xác định một **SKU đang còn mở bán (Active) hay đã ngừng (Inactive/Tạm ngưng)**, GoHub dựa trên **cấu trúc dữ liệu 4 tầng** trong hệ thống và **thực tế phát sinh đơn hàng**. \n\nDưới đây là các bước và nguyên tắc kiểm tra chuẩn:\n\n---\n\n### 1. Kiểm tra trạng thái SKU trong Supabase (Source of Truth)\nTrong bảng `skus` và `listings` trên Supabase:\n* **`skus.status`**:\n  * **`Active`**: Đang mở bán bình thường.\n  * **`Inactive`**: Đã tắt/ngừng bán hoàn toàn.\n  * **`Temporary`**: **Gói sắp hết hàng hoặc chuẩn bị phase-out / ngưng nhập thêm** (clearance). Trạng thái này là tín hiệu cảnh báo để Ops/Sales/CS chủ động canh tồn kho, tránh over-sell.\n* **`listings.status`**: Kiểm tra các listing liên kết với SKU xem có đang bật (`Active`) trên các kênh bán lẻ hay không.\n\n---\n\n### 2. Quy tắc kiểm tra mở bán trên các sàn Ecom (Shopee, TikTokShop, Lazada)\n⚠️ **Lưu ý đặc biệt quan trọng về Ecom:**\n* Khi kiểm tra các mã Alias trên Ecom trong bảng `items`, các sàn có thể có mã lẻ như `DES...` (Shopee), `DET...` (TikTok), `DEL...` (Lazada) hiển thị `Inactive` do chưa bật đồng bộ riêng lẻ.\n* **Thực tế vận hành:** Toàn bộ hệ thống Ecom đang mapping qua **mã Alias tổng `DVE...` (`DVE[sku]000` - `VN B2B - Ecom`)** để phát sinh đơn.\n* **Quy tắc:**\n  1. **Không** vội kết luận SKU bị tắt chỉ vì thấy các mã lẻ `DES/DET/DEL` bị `Inactive`.\n  2. Bắt buộc kiểm tra mã tổng `DVE...` và đối chiếu đơn hàng thực tế trên kênh `VN-Ecom`.\n\n---\n\n### 3. Kiểm tra đơn hàng phát sinh thực tế trong Analytics DW (`gohub_dw`)\nDữ liệu trạng thái cấu hình có thể có độ trễ hoặc cấu hình nhầm. Cách chính xác nhất để biết SKU có còn \"sống\" trên thị trường không:\n* Kiểm tra bảng `fact_fulfillment_revenue` trong vòng **7 - 30 ngày gần nhất**:\n  * Nếu **vẫn có đơn phát sinh và fulfilled thành công**: SKU chắc chắn vẫn đang được bán trên kênh đó.\n  * Nếu **0 đơn trong 30–60 ngày**, đồng thời status trên Supabase là `Inactive` hoặc `Temporary`: SKU đã ngừng bán hoặc hết hàng.\n\n---\n\n### 📌 Bạn có đang cần kiểm tra cụ thể mã SKU nào không?\nBạn chỉ cần gửi **mã SKU (13 ký tự)** hoặc **tên gói/nước**, mình sẽ tra cứu ngay:\n1. Trạng thái trong DB Catalog (`skus`, `listings`, mã `DVE`).\n2. Tồn kho/COGS hiện tại.\n3. Lịch sử đơn hàng gần nhất xem có đang bán ra hay không!\n\n```followup\n[\"Check giúp SKU cụ thể\", \"Xem danh sách SKU Temporary\", \"Tra cứu theo Product Code\"]\n```",
+    "tokensIn": 19147,
+    "ms": 8684
+   }
+  ],
+  "blockChars": 747
+ },
+ "all": {
+  "short": {
+   "prof": {
+    "desc": "hay yêu cầu trả lời ngắn gọn",
+    "lines": [
+     "Hay yêu cầu trả lời ngắn gọn/tóm tắt (quan sát 28 lần).",
+     "Hay nhắn ngắn gọn, ít chi tiết (quan sát 40 tin)."
+    ]
+   },
+   "m": {
+    "n": 10,
+    "bWin": 10,
+    "aWin": 0,
+    "tie": 0,
+    "lenRatio": 0.6510628501266211,
+    "tableA": 0.7,
+    "tableB": 0.5,
+    "completeA": 1,
+    "completeB": 1,
+    "mentionB": 0,
+    "creepyB": 0,
+    "creepyA": 0.1
+   },
+   "pairs": [
+    {
+     "q": "Giải thích cấu trúc mã SKU của GoHub.",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu trả lời X trình bày ngắn gọn, súc tích hơn (dùng công thức tóm tắt, bảng chi tiết được rút gọn hợp lý) nhưng vẫn đầy đủ thông tin, phù hợp với thói quen thích sự ngắn gọn của người hỏi. Cả hai đều không đề cập trực tiếp đến thói quen này.",
+     "sA": {
+      "chars": 4471,
+      "hasTable": true,
+      "bullets": 23,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2649,
+      "hasTable": true,
+      "bullets": 14,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Thứ tự ưu tiên chọn vendor khi bán một gói eSIM mới là gì?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu trả lời Y súc tích hơn, các ý được rút gọn hợp lý và có thêm phần tóm tắt nguyên tắc chọn rất ngắn gọn, dễ hiểu, phù hợp với thói quen thích sự ngắn gọn của người hỏi. Cả hai đều trả lời đầy đủ thông tin và không nhắc đến thói quen một cách lộ liễu.",
+     "sA": {
+      "chars": 2445,
+      "hasTable": true,
+      "bullets": 11,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2115,
+      "hasTable": true,
+      "bullets": 7,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Gói Fixed và gói Daily khác nhau thế nào?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu trả lời Y ngắn gọn, súc tích hơn câu X nhưng vẫn trình bày đầy đủ các điểm khác biệt cốt lõi giữa hai gói cước, phù hợp với thói quen thích sự ngắn gọn của người hỏi.",
+     "sA": {
+      "chars": 2615,
+      "hasTable": true,
+      "bullets": 8,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1641,
+      "hasTable": true,
+      "bullets": 0,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Combo chuẩn của GoHub gồm những gì?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu Y trình bày ngắn gọn và súc tích hơn ở phần quy ước thuật ngữ so với câu X, phù hợp với thói quen thích câu trả lời ngắn gọn của người hỏi.",
+     "sA": {
+      "chars": 1525,
+      "hasTable": true,
+      "bullets": 6,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1273,
+      "hasTable": true,
+      "bullets": 3,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Gói Unlimited của BC Datapool có những mức tốc độ nào?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu Y ngắn gọn, đi thẳng vào trọng tâm câu hỏi (mức tốc độ của gói Unlimited) phù hợp với thói quen của người dùng. Câu X cung cấp quá nhiều thông tin thừa không được hỏi đến như tính tương thích mạng và COGS.",
+     "sA": {
+      "chars": 2211,
+      "hasTable": true,
+      "bullets": 7,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 994,
+      "hasTable": false,
+      "bullets": 4,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Quy trình import danh mục nhà cung cấp WorldMove gồm những bước nào?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu trả lời Y trình bày súc tích và ngắn gọn hơn X, phù hợp với thói quen của người hỏi nhưng vẫn đảm bảo đầy đủ các bước và thông tin quan trọng. Cả hai câu đều không nhắc trực tiếp đến thói quen của người dùng.",
+     "sA": {
+      "chars": 2813,
+      "hasTable": false,
+      "bullets": 15,
+      "creepy": true
+     },
+     "sB": {
+      "chars": 2448,
+      "hasTable": false,
+      "bullets": 7,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Giá vốn của 3HK được tính theo cách nào?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu X ngắn gọn và súc tích hơn câu Y, đi thẳng vào các bước tính toán và ví dụ mà không liệt kê quá nhiều chi tiết phụ (như bảng hệ số dài hay lưu ý vận hành), phù hợp với thói quen thích sự ngắn gọn của người hỏi.",
+     "sA": {
+      "chars": 3138,
+      "hasTable": true,
+      "bullets": 18,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1899,
+      "hasTable": false,
+      "bullets": 20,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Vì sao gói Nhật hay dùng KDDI?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu X ngắn gọn, súc tích và đi thẳng vào vấn đề hơn câu Y, phù hợp với thói quen thích câu trả lời ngắn gọn của người hỏi. Cả hai câu đều trả lời đầy đủ ý và không đề cập trực tiếp đến thói quen của người dùng.",
+     "sA": {
+      "chars": 1324,
+      "hasTable": false,
+      "bullets": 6,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 710,
+      "hasTable": false,
+      "bullets": 2,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Mã Item khác mã SKU ở điểm nào?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu X phù hợp hơn vì trình bày ngắn gọn, súc tích đúng với thói quen của người hỏi, trong khi câu Y giải thích quá chi tiết và dài dòng.",
+     "sA": {
+      "chars": 3168,
+      "hasTable": true,
+      "bullets": 18,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1498,
+      "hasTable": true,
+      "bullets": 9,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Làm sao biết một SKU đang còn bán hay đã ngừng?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu Y trình bày ngắn gọn, súc tích hơn câu X nhưng vẫn đảm bảo đầy đủ các ý chính (3 bước kiểm tra), phù hợp với thói quen thích câu trả lời ngắn gọn của người dùng.",
+     "sA": {
+      "chars": 2352,
+      "hasTable": false,
+      "bullets": 11,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1741,
+      "hasTable": false,
+      "bullets": 9,
+      "creepy": false
+     }
+    }
+   ],
+   "armBBlock": 1191
+  },
+  "table": {
+   "prof": {
+    "desc": "hay yêu cầu trình bày dạng bảng",
+    "lines": [
+     "Hay yêu cầu trình bày dạng bảng (quan sát 12 lần).",
+     "Hay 👍 câu trả lời có bảng (quan sát 6 lần)."
+    ]
+   },
+   "m": {
+    "n": 10,
+    "bWin": 4,
+    "aWin": 1,
+    "tie": 5,
+    "lenRatio": 0.9885273578389995,
+    "tableA": 0.7,
+    "tableB": 1,
+    "completeA": 1,
+    "completeB": 0.9,
+    "mentionB": 0,
+    "creepyB": 0,
+    "creepyA": 0.1
+   },
+   "pairs": [
+    {
+     "q": "Giải thích cấu trúc mã SKU của GoHub.",
+     "bWins": "A",
+     "aComplete": 1,
+     "bComplete": 0,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều đáp ứng thói quen trình bày dạng bảng của người hỏi. Tuy nhiên, câu trả lời Y bị cắt ngang ở phần cuối nên không hoàn chỉnh. Do đó, câu trả lời X tốt hơn.",
+     "sA": {
+      "chars": 4471,
+      "hasTable": true,
+      "bullets": 23,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 3989,
+      "hasTable": true,
+      "bullets": 14,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Thứ tự ưu tiên chọn vendor khi bán một gói eSIM mới là gì?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều sử dụng định dạng bảng để trình bày thứ tự ưu tiên, đáp ứng rất tốt thói quen của người hỏi mà không cần nhắc lại thói quen đó. Thông tin cung cấp đều đầy đủ và chính xác.",
+     "sA": {
+      "chars": 2445,
+      "hasTable": true,
+      "bullets": 11,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2232,
+      "hasTable": true,
+      "bullets": 10,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Gói Fixed và gói Daily khác nhau thế nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều trình bày thông tin dưới dạng bảng so sánh rất rõ ràng và chi tiết, đáp ứng hoàn hảo thói quen của người dùng mà không cần nhắc đến thói quen đó.",
+     "sA": {
+      "chars": 2615,
+      "hasTable": true,
+      "bullets": 8,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2408,
+      "hasTable": true,
+      "bullets": 2,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Combo chuẩn của GoHub gồm những gì?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều trình bày thông tin dưới dạng bảng rất rõ ràng và chi tiết, đáp ứng tốt thói quen của người dùng.",
+     "sA": {
+      "chars": 1525,
+      "hasTable": true,
+      "bullets": 6,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1481,
+      "hasTable": true,
+      "bullets": 4,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Gói Unlimited của BC Datapool có những mức tốc độ nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ thông tin về mức tốc độ của gói Unlimited và đều sử dụng định dạng bảng theo thói quen của người dùng mà không đề cập trực tiếp đến thói quen đó.",
+     "sA": {
+      "chars": 2211,
+      "hasTable": true,
+      "bullets": 7,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1773,
+      "hasTable": true,
+      "bullets": 3,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Quy trình import danh mục nhà cung cấp WorldMove gồm những bước nào?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu Y có sử dụng bảng để tóm tắt quy trình, phù hợp với thói quen của người hỏi. Mặc dù câu Y bị cắt một chút ở phần mở rộng cuối cùng, nhưng nội dung chính trả lời cho câu hỏi đã đầy đủ.",
+     "sA": {
+      "chars": 2813,
+      "hasTable": false,
+      "bullets": 15,
+      "creepy": true
+     },
+     "sB": {
+      "chars": 3660,
+      "hasTable": true,
+      "bullets": 16,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Giá vốn của 3HK được tính theo cách nào?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu X phù hợp với thói quen của người hỏi hơn vì sử dụng định dạng bảng cho cả phần hệ số tiêu dùng và phần đơn giá theo vùng, trong khi câu Y chỉ dùng bảng cho phần hệ số và dùng gạch đầu dòng cho phần đơn giá. Cả hai đều trả lời đầy đủ và không đề cập trực tiếp đến thói quen của người dùng.",
+     "sA": {
+      "chars": 3138,
+      "hasTable": true,
+      "bullets": 18,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 3086,
+      "hasTable": true,
+      "bullets": 10,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Vì sao gói Nhật hay dùng KDDI?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "X trình bày dạng bảng theo thói quen của người hỏi, trong khi Y dùng danh sách.",
+     "sA": {
+      "chars": 1324,
+      "hasTable": false,
+      "bullets": 6,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1469,
+      "hasTable": true,
+      "bullets": 0,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Mã Item khác mã SKU ở điểm nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều tự động sử dụng định dạng bảng để so sánh mã Item và mã SKU, đáp ứng rất tốt thói quen của người dùng mà không cần nhắc lại thói quen đó. Thông tin cung cấp đều đầy đủ, chi tiết và dễ hiểu.",
+     "sA": {
+      "chars": 3168,
+      "hasTable": true,
+      "bullets": 18,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2490,
+      "hasTable": true,
+      "bullets": 18,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Làm sao biết một SKU đang còn bán hay đã ngừng?",
+     "bWins": "B",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu trả lời X sử dụng bảng để tóm tắt thông tin, phù hợp với thói quen thích trình bày dạng bảng của người hỏi. Cả hai câu đều trả lời đầy đủ và không đề cập trực tiếp đến thói quen.",
+     "sA": {
+      "chars": 2352,
+      "hasTable": false,
+      "bullets": 11,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 3175,
+      "hasTable": true,
+      "bullets": 9,
+      "creepy": false
+     }
+    }
+   ],
+   "armBBlock": 1181
+  },
+  "excel": {
+   "prof": {
+    "desc": "hay xin kết quả dạng file Excel",
+    "lines": [
+     "Hay xin kết quả dạng file Excel (quan sát 10 lần).",
+     "Hay nhờ làm báo cáo (quan sát 9 lần)."
+    ]
+   },
+   "m": {
+    "n": 10,
+    "bWin": 0,
+    "aWin": 1,
+    "tie": 9,
+    "lenRatio": 0.9839996930396747,
+    "tableA": 0.7,
+    "tableB": 0.8,
+    "completeA": 1,
+    "completeB": 0.9,
+    "mentionB": 0,
+    "creepyB": 0.1,
+    "creepyA": 0.1
+   },
+   "pairs": [
+    {
+     "q": "Giải thích cấu trúc mã SKU của GoHub.",
+     "bWins": "A",
+     "aComplete": 1,
+     "bComplete": 0,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu trả lời X bị cắt ngang ở cuối nên không hoàn chỉnh. Cả hai câu trả lời đều không trực tiếp cung cấp file Excel nhưng có sử dụng bảng Markdown giúp người dùng dễ dàng copy/paste vào Excel. Y tốt hơn vì trình bày đầy đủ và trọn vẹn.",
+     "sA": {
+      "chars": 4471,
+      "hasTable": true,
+      "bullets": 23,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 4667,
+      "hasTable": true,
+      "bullets": 14,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Thứ tự ưu tiên chọn vendor khi bán một gói eSIM mới là gì?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều trình bày thông tin dưới dạng văn bản và bảng Markdown, không có câu nào cung cấp file Excel hay định dạng dữ liệu thô (như CSV) để đáp ứng thói quen của người hỏi.",
+     "sA": {
+      "chars": 2445,
+      "hasTable": true,
+      "bullets": 11,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2502,
+      "hasTable": true,
+      "bullets": 10,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Gói Fixed và gói Daily khác nhau thế nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều không cung cấp kết quả dưới dạng file Excel (hoặc định dạng tương tự như CSV) theo thói quen của người hỏi, mà chỉ sử dụng bảng Markdown thông thường. Do đó, không có câu nào đáp ứng thói quen tốt hơn câu nào.",
+     "sA": {
+      "chars": 2615,
+      "hasTable": true,
+      "bullets": 8,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2230,
+      "hasTable": true,
+      "bullets": 7,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Combo chuẩn của GoHub gồm những gì?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều trình bày dưới dạng bảng Markdown và văn bản thông thường, không có câu nào cung cấp kết quả dưới dạng file Excel theo thói quen của người hỏi.",
+     "sA": {
+      "chars": 1525,
+      "hasTable": true,
+      "bullets": 6,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1545,
+      "hasTable": true,
+      "bullets": 7,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Gói Unlimited của BC Datapool có những mức tốc độ nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều không cung cấp kết quả dưới dạng file Excel hay định dạng CSV để dễ dàng sao chép vào Excel, do đó không có câu nào đáp ứng thói quen của người dùng. Cả hai đều trả lời đầy đủ thông tin về mức tốc độ.",
+     "sA": {
+      "chars": 2211,
+      "hasTable": true,
+      "bullets": 7,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1550,
+      "hasTable": true,
+      "bullets": 3,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Quy trình import danh mục nhà cung cấp WorldMove gồm những bước nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều trình bày chi tiết quy trình bằng văn bản và không cung cấp kết quả dưới dạng file Excel (do bản chất câu hỏi là hỏi về các bước quy trình). Không có sự khác biệt đáng kể về việc đáp ứng thói quen của người dùng.",
+     "sA": {
+      "chars": 2813,
+      "hasTable": false,
+      "bullets": 15,
+      "creepy": true
+     },
+     "sB": {
+      "chars": 3035,
+      "hasTable": false,
+      "bullets": 13,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Giá vốn của 3HK được tính theo cách nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều trình bày dưới dạng văn bản và bảng Markdown, không cung cấp kết quả dưới dạng file Excel như thói quen của người dùng. Do đó không có câu nào đáp ứng tốt hơn thói quen này.",
+     "sA": {
+      "chars": 3138,
+      "hasTable": true,
+      "bullets": 18,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2722,
+      "hasTable": true,
+      "bullets": 17,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Vì sao gói Nhật hay dùng KDDI?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều giải thích đầy đủ lý do nhưng không câu nào cung cấp kết quả dưới dạng file Excel theo thói quen của người dùng.",
+     "sA": {
+      "chars": 1324,
+      "hasTable": false,
+      "bullets": 6,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1631,
+      "hasTable": false,
+      "bullets": 6,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Mã Item khác mã SKU ở điểm nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều trình bày thông tin so sánh dưới dạng bảng Markdown nhưng không cung cấp định dạng dữ liệu dễ dàng xuất ra file Excel (như CSV) để đáp ứng thói quen của người dùng. Do đó, không có câu nào thực sự nổi bật hơn về mặt này.",
+     "sA": {
+      "chars": 3168,
+      "hasTable": true,
+      "bullets": 18,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 3143,
+      "hasTable": true,
+      "bullets": 6,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Làm sao biết một SKU đang còn bán hay đã ngừng?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều giải thích chi tiết cách kiểm tra trạng thái SKU. Không câu nào cung cấp file Excel hay nhắc đến thói quen của người dùng (điều này hợp lý vì câu hỏi hỏi về quy trình, không yêu cầu xuất dữ liệu). Do đó, đánh giá hòa.",
+     "sA": {
+      "chars": 2352,
+      "hasTable": false,
+      "bullets": 11,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2620,
+      "hasTable": true,
+      "bullets": 10,
+      "creepy": true
+     }
+    }
+   ],
+   "armBBlock": 1174
+  },
+  "nodiac": {
+   "prof": {
+    "desc": "hay gõ tiếng Việt không dấu (trợ lý vẫn nên trả lời tiếng Việt CÓ DẤU bình thường — thói quen này chỉ cho biết cách người dùng gõ, không đổi cách trả lời)",
+    "lines": [
+     "Hay gõ tiếng Việt không dấu (quan sát 15 tin)."
+    ]
+   },
+   "m": {
+    "n": 10,
+    "bWin": 0,
+    "aWin": 1,
+    "tie": 9,
+    "lenRatio": 0.8531578543473257,
+    "tableA": 0.7,
+    "tableB": 0.6,
+    "completeA": 1,
+    "completeB": 0.9,
+    "mentionB": 0,
+    "creepyB": 0,
+    "creepyA": 0.1
+   },
+   "pairs": [
+    {
+     "q": "Giải thích cấu trúc mã SKU của GoHub.",
+     "bWins": "A",
+     "aComplete": 1,
+     "bComplete": 0,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều dùng tiếng Việt có dấu bình thường, phù hợp với hướng dẫn. Tuy nhiên, câu Y bị cắt ngang ở phần cuối nên không hoàn chỉnh, trong khi câu X trình bày đầy đủ và trọn vẹn.",
+     "sA": {
+      "chars": 4471,
+      "hasTable": true,
+      "bullets": 23,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 3702,
+      "hasTable": true,
+      "bullets": 18,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Thứ tự ưu tiên chọn vendor khi bán một gói eSIM mới là gì?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ thông tin và trả lời bằng tiếng Việt có dấu bình thường, phù hợp với yêu cầu (thói quen gõ không dấu của người dùng không làm thay đổi cách trợ lý trả lời).",
+     "sA": {
+      "chars": 2445,
+      "hasTable": true,
+      "bullets": 11,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2647,
+      "hasTable": true,
+      "bullets": 8,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Gói Fixed và gói Daily khác nhau thế nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều giải thích chi tiết và đầy đủ sự khác biệt giữa gói Fixed và Daily bằng tiếng Việt có dấu. Thói quen gõ không dấu của người dùng không yêu cầu trợ lý thay đổi cách trả lời, và cả hai đều tuân thủ tốt điều này mà không nhắc đến thói quen đó.",
+     "sA": {
+      "chars": 2615,
+      "hasTable": true,
+      "bullets": 8,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2335,
+      "hasTable": true,
+      "bullets": 6,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Combo chuẩn của GoHub gồm những gì?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ thông tin, trình bày rõ ràng và sử dụng tiếng Việt có dấu bình thường theo đúng yêu cầu (thói quen gõ không dấu của người dùng không làm thay đổi cách trợ lý trả lời).",
+     "sA": {
+      "chars": 1525,
+      "hasTable": true,
+      "bullets": 6,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1304,
+      "hasTable": true,
+      "bullets": 3,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Gói Unlimited của BC Datapool có những mức tốc độ nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ thông tin về mức tốc độ của gói Unlimited và trả lời bằng tiếng Việt có dấu bình thường, tuân thủ đúng hướng dẫn về thói quen của người dùng. Không câu nào đề cập đến thói quen gõ không dấu của người dùng.",
+     "sA": {
+      "chars": 2211,
+      "hasTable": true,
+      "bullets": 7,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1280,
+      "hasTable": true,
+      "bullets": 2,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Quy trình import danh mục nhà cung cấp WorldMove gồm những bước nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ thông tin quy trình 3 bước và trả lời bằng tiếng Việt có dấu chuẩn xác. Thói quen gõ không dấu của người dùng không ảnh hưởng đến cách trợ lý trả lời, do đó cả hai đều phù hợp và không có sự khác biệt đáng kể.",
+     "sA": {
+      "chars": 2813,
+      "hasTable": false,
+      "bullets": 15,
+      "creepy": true
+     },
+     "sB": {
+      "chars": 2507,
+      "hasTable": false,
+      "bullets": 13,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Giá vốn của 3HK được tính theo cách nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ thông tin, trình bày rõ ràng bằng tiếng Việt có dấu và không đề cập đến thói quen gõ chữ của người dùng. Chất lượng tương đương nhau.",
+     "sA": {
+      "chars": 3138,
+      "hasTable": true,
+      "bullets": 18,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2672,
+      "hasTable": false,
+      "bullets": 26,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Vì sao gói Nhật hay dùng KDDI?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Thói quen gõ không dấu của người dùng không yêu cầu thay đổi cách trả lời. Cả hai câu trả lời đều trả lời bằng tiếng Việt có dấu bình thường, đầy đủ thông tin và không đề cập đến thói quen.",
+     "sA": {
+      "chars": 1324,
+      "hasTable": false,
+      "bullets": 6,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1529,
+      "hasTable": false,
+      "bullets": 6,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Mã Item khác mã SKU ở điểm nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều giải thích chi tiết và đầy đủ sự khác biệt giữa mã Item và mã SKU bằng tiếng Việt có dấu, tuân thủ đúng yêu cầu không thay đổi cách trả lời dù người dùng có thói quen gõ không dấu. Không câu nào đề cập đến thói quen của người dùng.",
+     "sA": {
+      "chars": 3168,
+      "hasTable": true,
+      "bullets": 18,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2008,
+      "hasTable": true,
+      "bullets": 16,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Làm sao biết một SKU đang còn bán hay đã ngừng?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ thông tin bằng tiếng Việt có dấu chuẩn xác và không đề cập đến thói quen gõ không dấu của người dùng.",
+     "sA": {
+      "chars": 2352,
+      "hasTable": false,
+      "bullets": 11,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2251,
+      "hasTable": false,
+      "bullets": 10,
+      "creepy": false
+     }
+    }
+   ],
+   "armBBlock": 1130
+  },
+  "control": {
+   "prof": {
+    "desc": "thói quen KHÔNG liên quan tới cách trả lời (đối chứng — không được làm đổi câu trả lời)",
+    "lines": [
+     "Hay nhắc tới \"zephyr\" (quan sát 9 lần).",
+     "Thường nhắn vào buổi chiều (quan sát 120 tin)."
+    ]
+   },
+   "m": {
+    "n": 10,
+    "bWin": 0,
+    "aWin": 1,
+    "tie": 9,
+    "lenRatio": 0.9423298288696187,
+    "tableA": 0.7,
+    "tableB": 0.7,
+    "completeA": 1,
+    "completeB": 0.9,
+    "mentionB": 0,
+    "creepyB": 0.1,
+    "creepyA": 0.1
+   },
+   "pairs": [
+    {
+     "q": "Giải thích cấu trúc mã SKU của GoHub.",
+     "bWins": "A",
+     "aComplete": 1,
+     "bComplete": 0,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Câu trả lời Y bị cắt cụt ở phần cuối (Ví dụ 2 chưa hoàn thành), trong khi câu trả lời X trình bày đầy đủ, chi tiết và trọn vẹn.",
+     "sA": {
+      "chars": 4471,
+      "hasTable": true,
+      "bullets": 23,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 4571,
+      "hasTable": true,
+      "bullets": 22,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Thứ tự ưu tiên chọn vendor khi bán một gói eSIM mới là gì?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ thông tin về thứ tự ưu tiên chọn vendor và các ngoại lệ. Thói quen của người dùng là đối chứng (không ảnh hưởng đến cách trả lời), và cả hai câu đều không nhắc đến thói quen này. Chất lượng hai câu tương đương nhau.",
+     "sA": {
+      "chars": 2445,
+      "hasTable": true,
+      "bullets": 11,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2565,
+      "hasTable": true,
+      "bullets": 10,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Gói Fixed và gói Daily khác nhau thế nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều giải thích chi tiết và rõ ràng sự khác biệt giữa gói Fixed và Daily. Vì thói quen của người dùng là đối chứng và không ảnh hưởng đến cách trả lời, cả hai câu đều đáp ứng tốt yêu cầu và không có sự khác biệt đáng kể về mức độ phù hợp.",
+     "sA": {
+      "chars": 2615,
+      "hasTable": true,
+      "bullets": 8,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2707,
+      "hasTable": true,
+      "bullets": 9,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Combo chuẩn của GoHub gồm những gì?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ thông tin về combo chuẩn của GoHub. Thói quen của người dùng là đối chứng (không liên quan đến cách trả lời) nên cả hai đều phù hợp như nhau và không nhắc đến thói quen.",
+     "sA": {
+      "chars": 1525,
+      "hasTable": true,
+      "bullets": 6,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1810,
+      "hasTable": true,
+      "bullets": 8,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Gói Unlimited của BC Datapool có những mức tốc độ nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ và chính xác thông tin về mức tốc độ của gói Unlimited (3GB tốc độ cao, sau đó hạ băng thông xuống 10 Mbps). Vì thói quen của người dùng là đối chứng và không ảnh hưởng đến cách trả lời, cả hai câu đều đáp ứng tốt và không có sự khác biệt về việc tuân thủ thói quen.",
+     "sA": {
+      "chars": 2211,
+      "hasTable": true,
+      "bullets": 7,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1595,
+      "hasTable": true,
+      "bullets": 6,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Quy trình import danh mục nhà cung cấp WorldMove gồm những bước nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ thông tin về quy trình import gồm 3 bước. Thói quen của người dùng là đối chứng (không liên quan đến cách trả lời) nên cả hai đều phù hợp và không nhắc đến thói quen.",
+     "sA": {
+      "chars": 2813,
+      "hasTable": false,
+      "bullets": 15,
+      "creepy": true
+     },
+     "sB": {
+      "chars": 2684,
+      "hasTable": false,
+      "bullets": 15,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Giá vốn của 3HK được tính theo cách nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Người hỏi không có thói quen nào liên quan đến cách trả lời. Cả hai câu trả lời đều cung cấp đầy đủ thông tin chi tiết, chính xác và không đề cập đến thói quen.",
+     "sA": {
+      "chars": 3138,
+      "hasTable": true,
+      "bullets": 18,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2854,
+      "hasTable": true,
+      "bullets": 15,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Vì sao gói Nhật hay dùng KDDI?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ thông tin giải thích lý do dùng KDDI và không nhắc đến thói quen đối chứng, hoàn toàn phù hợp với yêu cầu.",
+     "sA": {
+      "chars": 1324,
+      "hasTable": false,
+      "bullets": 6,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 1118,
+      "hasTable": false,
+      "bullets": 4,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Mã Item khác mã SKU ở điểm nào?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Thói quen của người hỏi không liên quan đến cách trả lời. Cả hai câu trả lời đều giải thích đầy đủ sự khác biệt giữa mã Item và mã SKU, cấu trúc của chúng và không đề cập đến thói quen của người dùng.",
+     "sA": {
+      "chars": 3168,
+      "hasTable": true,
+      "bullets": 18,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2423,
+      "hasTable": true,
+      "bullets": 12,
+      "creepy": false
+     }
+    },
+    {
+     "q": "Làm sao biết một SKU đang còn bán hay đã ngừng?",
+     "bWins": "tie",
+     "aComplete": 1,
+     "bComplete": 1,
+     "aMentions": 0,
+     "bMentions": 0,
+     "note": "Cả hai câu trả lời đều cung cấp đầy đủ thông tin chi tiết để giải quyết câu hỏi và không đề cập đến thói quen của người dùng, phù hợp với điều kiện đối chứng.",
+     "sA": {
+      "chars": 2352,
+      "hasTable": false,
+      "bullets": 11,
+      "creepy": false
+     },
+     "sB": {
+      "chars": 2232,
+      "hasTable": false,
+      "bullets": 11,
+      "creepy": true
+     }
+    }
+   ],
+   "armBBlock": 1172
+  }
+ }
+}
