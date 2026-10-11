@@ -35,7 +35,7 @@ ${candidates.map((c, i) => `${i + 1}. [${c.kind}] ${c.detail} — ${c.count} l�
 
 export async function POST(req: NextRequest) {
   if (!isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const { usernames, days = 60, phrase: wantPhrase = true } = await req.json().catch(() => ({})) as { usernames?: string[]; days?: number; phrase?: boolean }
+  const { usernames, days = 60, phrase: wantPhrase = true, aliases = {} } = await req.json().catch(() => ({})) as { usernames?: string[]; days?: number; phrase?: boolean; aliases?: Record<string, string[]> }   // aliases: danh tính khác của CHÍNH người đó trong app_usage_events (email, tên hiển thị)
   if (!Array.isArray(usernames) || !usernames.length) return NextResponse.json({ error: "usernames bắt buộc (liệt kê tường minh từng người)" }, { status: 400 })
   if (usernames.length > 10) return NextResponse.json({ error: "Tối đa 10 người mỗi lần chạy thử" }, { status: 400 })
 
@@ -49,6 +49,8 @@ export async function POST(req: NextRequest) {
     for (const k of [u.username, u.email, u.lark_open_id ? `lark:${u.lark_open_id}` : null]) if (k) idOf.set(k.toLowerCase(), u.username)
   }
 
+  for (const [u, list] of Object.entries(aliases)) if (usernames.includes(u)) for (const a of list ?? []) if (a) idOf.set(String(a).toLowerCase(), u)
+
   const end = new Date().toISOString().slice(0, 10)
   const start = new Date(Date.now() - Math.min(Math.max(days, 7), 180) * 86_400_000).toISOString().slice(0, 10)
   // 1 lần đọc cho cả nhóm (không lặp theo từng người), rồi chia theo danh tính trong bộ nhớ.
@@ -60,7 +62,7 @@ export async function POST(req: NextRequest) {
   const out = []
   for (const username of usernames) {
     const mine = (e: { user_email?: string | null; user_name?: string | null }) =>
-      idOf.get(String(e.user_email ?? "").toLowerCase()) === username || String(e.user_name ?? "").toLowerCase() === username.toLowerCase()
+      idOf.get(String(e.user_email ?? "").toLowerCase()) === username || idOf.get(String(e.user_name ?? "").toLowerCase()) === username || String(e.user_name ?? "").toLowerCase() === username.toLowerCase()
     const events = rows.filter(mine)
     const feedback = (fb ?? []).filter(f => idOf.get(String(f.user_email ?? "").toLowerCase()) === username)
     const { stats, candidates } = computeHabits(events as unknown as HabitEvent[], feedback as { rating: number; answer?: string | null; created_at: string }[])
