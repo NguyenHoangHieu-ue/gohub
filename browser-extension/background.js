@@ -12,12 +12,16 @@ const BURST_INTERVAL_MS = 1000
 const BURST_WINDOW_MS = 60000
 const DEBUGGER_IDLE_MS = 30000
 const BLOCK_MSG = "Trang nhạy cảm (ngân hàng/thanh toán/đổi mật khẩu/trình quản lý mật khẩu…) — Gấu Pro KHÔNG được đọc hoặc thao tác. Người dùng có thể cho phép trang này trong popup extension."
+const COMMAND_TIMEOUT_MS = 50000   // nhỏ hơn TTL lệnh 60s phía server
+// Mọi thao tác chrome.* có thể treo (tab ẩn, cửa sổ không focus, debugger kẹt) — KHÔNG được để 1 lệnh treo khoá cả hàng đợi.
+const withTimeout = (promise, ms, msg) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))])
 let lastCommandAt = 0
 const EXT_VERSION = chrome.runtime.getManifest().version
 
 let pollTimer = null
 let infoSent = false
 let polling = false
+let pollingSince = 0
 
 // ─── Cấu hình, thiết bị, API ────────────────────────────────────────────────────────────────────────────────────────
 
@@ -127,7 +131,7 @@ async function attachOnce(tabId) {
 }
 async function ensureDebugger(tabId) {
   if (!attached.has(tabId)) {
-    if (!attaching.has(tabId)) attaching.set(tabId, attachOnce(tabId).finally(() => attaching.delete(tabId)))
+    if (!attaching.has(tabId)) attaching.set(tabId, withTimeout(attachOnce(tabId), 8000, "Gắn debugger quá lâu").finally(() => attaching.delete(tabId)))
     await attaching.get(tabId)
   }
   clearTimeout(attached.get(tabId))
@@ -149,7 +153,7 @@ chrome.debugger.onDetach.addListener((src) => {
 })
 async function cdp(tabId, method, params = {}) {
   await ensureDebugger(tabId)
-  return chrome.debugger.sendCommand(debuggee.get(tabId) || { tabId }, method, params)
+  return withTimeout(chrome.debugger.sendCommand(debuggee.get(tabId) || { tabId }, method, params), 15000, `Lệnh debugger ${method} quá lâu`)
 }
 // Lưới an toàn: service worker bị Chrome tắt giữa chừng thì timer mất → tháo các tab đã gắn quá hạn.
 async function sweepDebuggers() {
@@ -424,7 +428,7 @@ function pageOp(op, a) {
 }
 
 async function page(tabId, op, args) {
-  const [{ result }] = await chrome.scripting.executeScript({ target: { tabId }, func: pageOp, args: [op, args || {}] })
+  const [{ result }] = await withTimeout(chrome.scripting.executeScript({ target: { tabId }, func: pageOp, args: [op, args || {}] }), 25000, `Trang không phản hồi cho "${op}" (tab đang treo hoặc đang tải?)`)
   if (result == null) throw new Error(`Trang không trả kết quả cho "${op}" (phần tử không hỗ trợ thao tác này, hoặc trang vừa chuyển).`)
   return result
 }
@@ -698,7 +702,8 @@ async function execAction(action, p) {
 // Chỉ chụp được tab ĐANG HIỂN THỊ trong cửa sổ của nó (tab nền → báo người dùng/Gấu activate_tab).
 async function screenshotFallback(tab, p, cause) {
   if (!tab.active) throw new Error(`Tab đang ẩn và không gắn được debugger (${String(cause.message || cause).slice(0, 70)}) — dùng activate_tab rồi chụp lại.`)
-  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 60 })
+  const dataUrl = await withTimeout(chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 60 }), 6000,
+    "Không chụp được (cửa sổ Chrome có thể đang thu nhỏ/không hiển thị) — đưa cửa sổ ra trước rồi thử lại.")
   const blob = await (await fetch(dataUrl)).blob()
   const bmp = await createImageBitmap(blob)
   const maxW = Number(p.max_width) || 1000
@@ -747,7 +752,7 @@ async function processCommand(command) {
       notifyAction(command, text)
       if (p.tab_id) showOverlay(p.tab_id, text)
     }
-    const result = await execAction(command.action, p)
+    const result = await withTimeout(execAction(command.action, p), COMMAND_TIMEOUT_MS, `Lệnh ${command.action} quá ${COMMAND_TIMEOUT_MS / 1000}s — extension đã bỏ qua để không kẹt hàng đợi.`)
     await apiFetch("/api/creator-ai/bridge/result", { method: "POST", body: JSON.stringify({ id: command.id, result }) })
   } catch (e) {
     await apiFetch("/api/creator-ai/bridge/result", {
@@ -761,8 +766,9 @@ async function processCommand(command) {
 
 async function pollOnce() {
   const { enabled } = await getConfig()
-  if (!enabled || polling) return
-  polling = true
+  if (!enabled) return
+  if (polling && Date.now() - pollingSince < COMMAND_TIMEOUT_MS + 15000) return
+  polling = true; pollingSince = Date.now()
   try {
     const res = await apiFetch("/api/creator-ai/bridge/next")
     if (!res.ok) return
