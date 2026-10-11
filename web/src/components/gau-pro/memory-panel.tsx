@@ -99,7 +99,8 @@ export function MemoryPanel({ onClose, api = "/api/creator-ai/memory", floating 
             <div key={m.id} className="px-3 py-2">
               <div className="flex items-center gap-2 text-[10px] text-gray-400">
                 <span>{KIND_LABEL[m.kind] ?? m.kind}</span>
-                {m.source?.startsWith("auto") && <span className="text-violet-500">Tự nhớ từ chat</span>}
+                {m.source?.startsWith("auto-habit:") ? <span className="text-amber-600">Bé Gấu tự quan sát</span>
+                  : m.source?.startsWith("auto") && <span className="text-violet-500">Tự nhớ từ chat</span>}
                 <span className="ml-auto">{new Date(m.updated_at).toLocaleDateString("vi-VN")}</span>
                 <button title={m.pinned ? "Bỏ ghim" : "Ghim (luôn nạp trước)"} onClick={() => act({ action: "update", id: m.id, pinned: !m.pinned })}
                   className={m.pinned ? "text-violet-600" : "hover:text-violet-600"}><Pin size={11} /></button>
