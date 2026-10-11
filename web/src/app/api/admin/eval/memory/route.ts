@@ -66,6 +66,10 @@ export async function POST(req: NextRequest) {
         }
         return NextResponse.json({ ok: true, habits: lines.length })
       }
+      case "clearHabits": {
+        await supabaseAdmin.from("assistant_memory").delete().eq("username", user).like("source", "auto-habit:%")
+        return NextResponse.json({ ok: true })
+      }
       case "ask": {
         if (!b.question?.trim()) return NextResponse.json({ error: "question required" }, { status: 400 })
         const r = await runCreatorAI([], b.question, undefined, undefined, false, user, "web", { personal: true })
