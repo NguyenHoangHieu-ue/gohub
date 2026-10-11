@@ -35,7 +35,7 @@ ${candidates.map((c, i) => `${i + 1}. [${c.kind}] ${c.detail} — ${c.count} l�
 
 export async function POST(req: NextRequest) {
   if (!isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const { usernames, days = 60, phrase: wantPhrase = true, aliases = {} } = await req.json().catch(() => ({})) as { usernames?: string[]; days?: number; phrase?: boolean; aliases?: Record<string, string[]> }   // aliases: danh tính khác của CHÍNH người đó trong app_usage_events (email, tên hiển thị)
+  const { usernames, days = 60, phrase: wantPhrase = true, aliases = {}, listIdentities = false } = await req.json().catch(() => ({})) as { listIdentities?: boolean; usernames?: string[]; days?: number; phrase?: boolean; aliases?: Record<string, string[]> }   // aliases: danh tính khác của CHÍNH người đó trong app_usage_events (email, tên hiển thị)
   if (!Array.isArray(usernames) || !usernames.length) return NextResponse.json({ error: "usernames bắt buộc (liệt kê tường minh từng người)" }, { status: 400 })
   if (usernames.length > 10) return NextResponse.json({ error: "Tối đa 10 người mỗi lần chạy thử" }, { status: 400 })
 
@@ -59,6 +59,14 @@ export async function POST(req: NextRequest) {
   const { data: fb } = await supabaseAdmin.from("chat_feedback").select("user_email,rating,answer,created_at")
     .gte("created_at", `${start}T00:00:00.000Z`).limit(5000)
 
+  // Chỉ để tìm danh tính (email/tên) của chính người chạy thử: đếm số tin theo (email|tên), KHÔNG kèm nội dung.
+  let identities: { who: string; n: number }[] | undefined
+  if (listIdentities) {
+    const m = new Map<string, number>()
+    for (const e of rows) { const k = `${e.user_email ?? ""} | ${e.user_name ?? ""}`; m.set(k, (m.get(k) ?? 0) + 1) }
+    identities = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25).map(([who, n]) => ({ who, n }))
+  }
+
   const out = []
   for (const username of usernames) {
     const mine = (e: { user_email?: string | null; user_name?: string | null }) =>
@@ -69,5 +77,5 @@ export async function POST(req: NextRequest) {
     const ph = wantPhrase ? await phrase(candidates, stats.events) : undefined
     out.push({ username, found: users.some(u => u.username === username), stats, candidates, phrased: ph, saved: false })
   }
-  return NextResponse.json({ dryRun: true, saved: false, window: { start, end }, thresholds: { MIN_COUNT, MIN_WEEKS }, results: out })
+  return NextResponse.json({ dryRun: true, saved: false, window: { start, end }, thresholds: { MIN_COUNT, MIN_WEEKS }, results: out, identities })
 }
