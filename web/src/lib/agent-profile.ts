@@ -1,20 +1,18 @@
 // Hồ sơ trợ lý cá nhân (P3 personal-agent): người dùng tự viết trợ lý nên xưng hô/giọng điệu/ưu tiên ra sao và mục tiêu đang theo.
 // Lưu app_settings.agent_profile:<username> (JSON) — đủ cho quy mô vài chục người, không cần migration. Tool/kênh KHÔNG lưu ở đây:
 // tool lấy từ bảng tính năng theo vai trò (lib/assistant-features.ts) nên hồ sơ không thể mở rộng quyền.
+// Không cache trong bộ nhớ (nhiều instance Vercel → sửa/xoá hồ sơ phải có hiệu lực ngay).
 import { supabaseAdmin } from "@/lib/supabase"
 
 export interface AgentProfile { persona: string; goals: string; updated_at?: string }
 
 export const PROFILE_MAX = 800
 const key = (username: string) => `agent_profile:${username}`
-const cache = new Map<string, { p: AgentProfile | null; at: number }>()
 
 const clean = (s: unknown) => String(s ?? "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, PROFILE_MAX)
 
 export async function getAgentProfile(username: string | undefined | null): Promise<AgentProfile | null> {
   if (!username) return null
-  const c = cache.get(username)
-  if (c && Date.now() - c.at < 60_000) return c.p
   let p: AgentProfile | null = null
   try {
     const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", key(username)).maybeSingle()
@@ -24,7 +22,6 @@ export async function getAgentProfile(username: string | undefined | null): Prom
       if (persona || goals) p = { persona, goals, updated_at: j.updated_at }
     }
   } catch { /* không có hồ sơ */ }
-  cache.set(username, { p, at: Date.now() })
   return p
 }
 
@@ -33,13 +30,11 @@ export async function saveAgentProfile(username: string, input: { persona?: unkn
   const persona = clean(input.persona), goals = clean(input.goals)
   if (!persona && !goals) {
     await supabaseAdmin.from("app_settings").delete().eq("key", key(username))
-    cache.set(username, { p: null, at: Date.now() })
     return null
   }
   const p: AgentProfile = { persona, goals, updated_at: new Date().toISOString() }
   const { error } = await supabaseAdmin.from("app_settings").upsert({ key: key(username), value: JSON.stringify(p), category: "user" }, { onConflict: "key" })
   if (error) throw new Error(error.message)
-  cache.set(username, { p, at: Date.now() })
   return p
 }
 

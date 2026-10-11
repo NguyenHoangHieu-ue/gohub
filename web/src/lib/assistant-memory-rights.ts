@@ -3,23 +3,18 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { saveAgentProfile, getAgentProfile } from "@/lib/agent-profile"
 
 const offKey = (username: string) => `assistant_memory_off:${username}`
-const cache = new Map<string, { v: boolean; at: number }>()
 
-/** Người dùng đã tắt trí nhớ → không nạp, không rút, không tóm tắt. Lỗi đọc → coi như chưa tắt. Cache 60s. */
+/** Người dùng đã tắt trí nhớ → không nạp, không rút, không tóm tắt. Lỗi đọc → coi như chưa tắt.
+ *  KHÔNG cache: Vercel có nhiều instance, cache trong bộ nhớ làm nút "Tắt trí nhớ" chỉ có hiệu lực sau tới 60s ở instance khác (QA s230 gặp thật). */
 export async function isMemoryOff(username: string | undefined | null): Promise<boolean> {
   if (!username) return false
-  const c = cache.get(username)
-  if (c && Date.now() - c.at < 60_000) return c.v
   const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", offKey(username)).maybeSingle()
-  const v = String(data?.value ?? "") === "1"
-  cache.set(username, { v, at: Date.now() })
-  return v
+  return String(data?.value ?? "") === "1"
 }
 
 export async function setMemoryOff(username: string, off: boolean): Promise<void> {
   if (off) await supabaseAdmin.from("app_settings").upsert({ key: offKey(username), value: "1" })
   else await supabaseAdmin.from("app_settings").delete().eq("key", offKey(username))
-  cache.set(username, { v: off, at: Date.now() })
 }
 
 /** Toàn bộ dữ liệu trí nhớ của người dùng (mục đang nhớ + đã quên, lịch sử giá trị cũ, tóm tắt hội thoại — không kèm vector). */
