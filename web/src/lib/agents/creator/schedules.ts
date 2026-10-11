@@ -140,7 +140,7 @@ export async function runDueSchedules(origin: string): Promise<number> {
       : "")
     const sch = t.schedule as Schedule
     const { job } = await createJob({ username: t.username as string, isCreator: t.is_creator as boolean, prompt,
-      beGauOwnerName: sch.agent === "be-gau" ? sch.ownerName || (t.username as string) : undefined })
+      beGauOwnerName: sch.agent === "be-gau" ? sch.ownerName || (t.username as string) : undefined, scheduled: true })
     if (job) { await triggerJobRun(origin, job.id); n++ }
   }
   return n

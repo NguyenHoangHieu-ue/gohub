@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { beGauLiveUser } from "@/lib/agents/be-gau-live"
 import { summarizeConversation } from "@/lib/assistant-memory-auto"
 import { loadFeatureMatrix, featureEnabled } from "@/lib/assistant-features"
+import { isDataTask } from "@/lib/okr-helpers"
 
 // U3: kết thúc phiên Trực tiếp Bé Gấu → lưu phụ đề thành 1 hội thoại "🎙 …" (mở lại được trong Bé Gấu).
 interface Turn { role: "user" | "assistant"; text: string }
@@ -29,5 +30,18 @@ export async function POST(req: NextRequest) {
     else if (featureEnabled(await loadFeatureMatrix(), "memory", u.role))
       waitUntil(summarizeConversation(u.username, convId).catch(e => console.error("[gp_conv_mem]", e?.message)))
   }
+  // My Metrics "Tasks via Bé Gấu": 1 phiên Trực tiếp = 1 task nếu có tool đọc dữ liệu chạy thành công.
+  const tools = Array.from(new Set(
+    (Array.isArray(body.tools) ? body.tools.slice(0, 100) : [])
+      .filter((t: any) => t && typeof t.name === "string" && !t.err).map((t: any) => String(t.name)),
+  )) as string[]
+  const reply = turns.filter(t => t.role === "assistant").map(t => t.text).join("\n")
+  try {
+    await supabaseAdmin.from("app_usage_events").insert({
+      event_type: "chat", agent_id: "be-gau-live", user_email: u.username, user_name: u.name, user_role: u.role,
+      user_message: first.slice(0, 500), ai_response: reply.slice(0, 3000) || null,
+      tools_used: tools.length ? tools : null, used_db_tool: isDataTask(tools, u.role),
+    })
+  } catch (e) { console.error("[bg_live] log task:", e) }
   return NextResponse.json({ saved: true, conversationId: convId })
 }

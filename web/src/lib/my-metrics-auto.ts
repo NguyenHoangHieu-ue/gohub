@@ -1,8 +1,8 @@
 // KPI tự động của My Metrics: %Datapool (3HK + BC) và số task Bé Gấu — tách từ route my-metrics (s227) để "Đánh giá hôm nay"
 // + Lark DM hằng ngày dùng chung đúng một công thức. Không đổi logic.
 import { queryAnalytics } from "@/lib/analytics-db"
-import { quarterRange, OKR_GM_BASELINE, OKR_HK3_BASELINE } from "@/lib/okr-helpers"
-import { loadChatEvents, isCountedTask } from "@/lib/task-events"
+import { quarterRange, OKR_GM_BASELINE, OKR_HK3_BASELINE, TASK_RULE_CHANGED_AT } from "@/lib/okr-helpers"
+import { loadChatEvents, isCountedTask, taskSource } from "@/lib/task-events"
 
 export async function loadAutoMetrics(quarter: string, year: number) {
   const { start, end } = quarterRange(quarter, year)
@@ -83,25 +83,25 @@ export async function loadAutoMetrics(quarter: string, year: number) {
   const gmQtdPct   = gmTotalRev > 0 ? +(gmTotalGP / gmTotalRev * 100).toFixed(2) : 0
 
   // ── 3. Bé Gấu task count (Supabase) ──────────────────────────────────────
-  const { rows: events } = await loadChatEvents("id, user_email, user_role, created_at, ai_response, used_db_tool", start, end)
+  const { rows: events } = await loadChatEvents("id, user_email, user_role, agent_id, created_at, ai_response, used_db_tool", start, end)
   // Task "tính KPI" (s195+18-B, đổi định nghĩa) = ĐÃ THẬT SỰ gọi tool đọc dữ liệu DB (executeSQL/
   // querySupabase/queryProduct/listSupabaseTables — xem DB_TASK_TOOLS trong okr-helpers.ts), KHÔNG
   // còn chỉ dựa vào độ dài response (trước đây trả lời chay/chào hỏi dài cũng bị tính nhầm là task).
   // Giữ thêm điều kiện độ dài làm lưới an toàn phụ (loại nốt trường hợp lỗi cụt hiếm gặp).
   const tasks     = events.filter(isCountedTask)
   const taskTotal = tasks.length
-  const taskLark  = tasks.filter(t => (t.user_email ?? "").startsWith("lark:")).length
-  const taskWeb   = taskTotal - taskLark
+  const bySource  = { web: 0, lark: 0, job: 0, live: 0 }
   const excludedShort = events.length - tasks.length
 
   // Monthly breakdown
-  const taskByMonth: Record<string, { total: number; web: number; lark: number }> = {}
+  const taskByMonth: Record<string, { total: number; web: number; lark: number; job: number; live: number }> = {}
   for (const t of tasks) {
     const m = (t.created_at as string).slice(0, 7) // YYYY-MM
-    if (!taskByMonth[m]) taskByMonth[m] = { total: 0, web: 0, lark: 0 }
+    if (!taskByMonth[m]) taskByMonth[m] = { total: 0, web: 0, lark: 0, job: 0, live: 0 }
+    const s = taskSource(t)
     taskByMonth[m].total++
-    if ((t.user_email ?? "").startsWith("lark:")) taskByMonth[m].lark++
-    else taskByMonth[m].web++
+    taskByMonth[m][s]++
+    bySource[s]++
   }
 
   // Breakdown theo phòng ban/role sử dụng (khớp câu offer letter: Sales/CSKH/Ops...)
@@ -133,8 +133,11 @@ export async function loadAutoMetrics(quarter: string, year: number) {
     },
     begau: {
       total:   taskTotal,
-      web:     taskWeb,
-      lark:    taskLark,
+      web:     bySource.web,
+      lark:    bySource.lark,
+      job:     bySource.job,
+      live:    bySource.live,
+      rule_changed_at: TASK_RULE_CHANGED_AT,
       excluded_short: excludedShort,
       by_role: taskByRole,
       monthly: taskByMonth,

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { canWriteTab } from "@/lib/writable-tabs"
 import { parseQuarterLabel } from "@/lib/okr-helpers"
-import { loadChatEvents, isCountedTask } from "@/lib/task-events"
+import { loadChatEvents, isCountedTask, taskSource } from "@/lib/task-events"
 
 const READ_ROLES = ["admin", "creator", "bod"]
 
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     id:           r.id,
     user_message: r.user_message,
     ai_response:  (r.ai_response as string)?.slice(0, 400),   // truncate để không bloat
-    channel:      (r.user_email as string)?.startsWith("lark:") ? "Lark" : "Web",
+    channel:      ({ web: "Web", lark: "Lark", job: "Chạy nền", live: "Trực tiếp" } as const)[taskSource(r)],
     user:         r.user_name || r.user_email || "—",
     created_at:   r.created_at,
     tools_used:   (r.tools_used as string[] | null) ?? [],

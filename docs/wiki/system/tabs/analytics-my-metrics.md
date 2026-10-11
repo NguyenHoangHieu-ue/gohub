@@ -834,3 +834,16 @@ tự so số trước/sau fix trên staging, số CHỈ đổi nếu `dim_sku` t
 ## s230 (2026-10-11) — T0: sửa lỗi KPI "Tasks via Bé Gấu" chỉ đọc 1.000 dòng
 
 Supabase trả tối đa 1.000 dòng/lần; thẻ KPI, danh sách "hội thoại được tính" và Insights đọc `app_usage_events` 1 lần nên quý > 1.000 câu (Q3: 1.161) bị đếm thiếu (~196 thay vì 235). Nay cả 3 nơi dùng chung `lib/task-events.ts` (`loadChatEvents` đọc theo trang + `isCountedTask`), cùng 1 tập dòng và 1 luật (`used_db_tool` + trả lời ≥ 15 ký tự). Test `task-events.test.ts` (2.500 dòng giả). `topics-ai` giữ `limit(80)` (lấy mẫu, không đếm). Định nghĩa task chưa đổi — T1–T4 chờ Hiếu chốt 5 câu trong plan `my-metrics-be-gau-tasks.md`. Số Q3 trên thẻ KPI sẽ tăng lên ~235 sau deploy — không phải lỗi.
+
+## s230 (2026-10-11) — T1–T3: định nghĩa "Tasks via Bé Gấu" mới (Hiếu chốt 5 câu)
+
+**Task = chat đã gọi ≥1 tool đọc dữ liệu** (`DATA_TASK_TOOLS` trong `lib/okr-helpers.ts`): `executeSQL`, `querySupabase`, `queryProduct`, `listSupabaseTables` + **mới** `queryGA4`, `queryGSC`, `queryLarkBase`, `buildReport`, `b2bCustomerCm1`, `compareVendorQuotes`, `trackSKUWinRate`; trả lời ≥ 15 ký tự. Một hàm `isDataTask(tools, role)` dùng chung mọi nơi ghi (Bé Gấu web, Lark, Gấu Pro, việc nền, trực tiếp). **Câu của role `creator` KHÔNG tính** (Bé Gấu lẫn Gấu Pro). Đổi luật từ `TASK_RULE_CHANGED_AT` = 2026-10-11 (tooltip dòng mô tả thẻ KPI).
+
+**Nguồn ghi mới** (không cần migration, phân biệt bằng `agent_id`):
+- Việc nền Bé Gấu: khi xong ghi 1 event `agent_id='be-gau-job'` (tool gộp qua các chặng trong checkpoint `gp_jobs.checkpoint.tools`). Việc **theo lịch** (`scheduled:true` trong checkpoint, từ `schedules.ts`) KHÔNG ghi task. Nghiên cứu sâu: không tính (chỉ web).
+- Trò chuyện trực tiếp: `/api/chat/live/log` ghi 1 event `agent_id='be-gau-live'` / phiên (chỉ tool chạy thành công). Gấu Pro live chỉ Creator → không tính.
+- `taskSource()` (`lib/task-events.ts`): job | live | lark (`user_email` bắt đầu `lark:`) | web. Gấu Pro (cũ) gộp vào web.
+
+**Hiển thị**: thẻ KPI + bảng/biểu đồ tháng có thêm Chạy nền, Trực tiếp; danh sách hội thoại ghi nguồn; Insights thêm cột 👍/👎 thật + tổng phản hồi (`chat_feedback`, ghép theo `user_email|câu hỏi` vì bảng không có khoá tới event). Heuristic chấm điểm chưa đổi.
+
+**Tính lại cờ cũ**: route `POST /api/admin/my-metrics-recompute` (CRON_SECRET, `{from,to,dryRun}`, mặc định dryRun) tính lại `used_db_tool` từ `tools_used` + `user_role`, chỉ đổi cột đó, cập nhật theo lô 200 id. Trả `tasksBefore/tasksAfter`. Số Q3/Q4 nhảy sau khi chạy là do đổi luật, không phải lỗi.

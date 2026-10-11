@@ -11,7 +11,7 @@ import {
 } from "@/lib/lark"
 import type { Message, UserRole }    from "@/lib/agents/types"
 import { captureForOkrLog }           from "@/lib/okr-lark-capture"
-import { usedDbTaskTool }             from "@/lib/okr-helpers"
+import { isDataTask }           from "@/lib/okr-helpers"
 import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
 import { runCreatorAI, type GPEvent } from "@/lib/agents/creator-ai"
 import { decidePendingAction, followupMessage } from "@/lib/agents/creator/approvals"
@@ -541,7 +541,7 @@ async function processAndReply(openId: string, chatId: string, messageId: string
         event_type: "chat", user_email: `lark:${openId}`, user_name: name || openId, user_role: role,
         agent_id: "be-gau", user_message: userText.slice(0, 500), ai_response: beGau.text.slice(0, 3000),
         tools_used: beGau.toolsUsed.length > 0 ? beGau.toolsUsed : null,
-        used_db_tool: usedDbTaskTool(beGau.toolsUsed),
+        used_db_tool: isDataTask(beGau.toolsUsed, role),
         tokens_in: beGau.tokensIn, tokens_out: beGau.tokensOut,
         est_cost_usd: estimateCostUsd(beGau.tokensIn, beGau.tokensOut),
       })

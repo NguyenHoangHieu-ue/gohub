@@ -37,6 +37,16 @@ export async function loadChatEvents(
   return { rows }
 }
 
+export type TaskSource = "web" | "lark" | "job" | "live"
+
+// Nguồn của 1 task: chạy nền / trực tiếp phân biệt bằng agent_id (không cần cột mới); còn lại theo user_email `lark:`.
+// Gấu Pro (cũ) gộp vào "web" cùng Bé Gấu.
+export function taskSource(r: Row): TaskSource {
+  if (r.agent_id === "be-gau-job") return "job"
+  if (r.agent_id === "be-gau-live") return "live"
+  return ((r.user_email as string) ?? "").startsWith("lark:") ? "lark" : "web"
+}
+
 export function isCountedTask(r: Row): boolean {
   return !!r.used_db_tool && ((r.ai_response as string) ?? "").trim().length >= MIN_TASK_RESPONSE_LEN
 }
