@@ -56,6 +56,19 @@ function stressData(n) {
   for (const c of sample.slice(0, 5)) questions.push({ id: id++, cat: "stress_current", q: `Hiện giờ đầu mối bên khách ${c.name} là ai và mục tiêu SIM hằng tháng là bao nhiêu?`, ref: `Đầu mối ${c.contact}, mục tiêu ${c.target} SIM mỗi tháng.` })
   for (const c of sample.filter(x => x.changed).slice(0, 5)) questions.push({ id: id++, cat: "stress_history", q: `Trước khi đổi, đầu mối của khách ${c.name} là ai và mục tiêu tháng lúc đó là bao nhiêu?`, ref: `Đầu mối ${c.changed.contact}, mục tiêu ${c.changed.target} SIM mỗi tháng.` })
   for (const c of sample.slice(5, 10)) questions.push({ id: id++, cat: "stress_market", q: `Khách ${c.name} thuộc thị trường nào?`, ref: c.market })
+  // Nhóm câu KHÓ (P1e) — không dùng rnd để không đổi các câu cũ. Không nêu tên khách / đếm-tổng hợp / hỏi nhiều khách một lúc.
+  const byMarket = {}; for (const c of clients) (byMarket[c.market] ??= []).push(c)
+  for (const m of Object.keys(byMarket).filter(k => !["Hàn Quốc", "Châu Âu"].includes(k)).sort().slice(0, 3))
+    questions.push({ id: id++, cat: "stress_count", q: `Trong các khách mình đã kể (trừ Alpha Travel, Beta Tours, Gamma Holidays), có bao nhiêu khách thuộc thị trường ${m}?`, ref: `${byMarket[m].length} khách (${byMarket[m].map(c => c.name).join(", ")}).` })
+  for (let i = 0; i < 3; i++) {
+    const a = sample[10 + i], b = sample[(11 + i) % sample.length]
+    if (a && b && a !== b) questions.push({ id: id++, cat: "stress_multi", q: `Hiện giờ đầu mối của khách ${a.name} và khách ${b.name} lần lượt là ai?`, ref: `${a.name}: ${a.contact}; ${b.name}: ${b.contact}.` })
+  }
+  const pairs = {}; for (const c of clients) (pairs[`${c.market}|${c.contact}`] ??= []).push(c)
+  for (const [k, list] of Object.entries(pairs).sort().slice(0, 3)) {
+    const [m, p] = k.split("|")
+    questions.push({ id: id++, cat: "stress_reverse", q: `Khách nào thuộc thị trường ${m} mà hiện giờ đầu mối là ${p}? (không tính Alpha Travel, Beta Tours, Gamma Holidays)`, ref: list.map(c => c.name).join(", ") })
+  }
   return { sessions: [{ date: "2026-07-01", turns }], questions, facts }
 }
 const stress = STRESS ? stressData(STRESS) : null

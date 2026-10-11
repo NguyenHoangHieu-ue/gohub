@@ -38,6 +38,21 @@ describe("assistant memory", () => {
     expect(block).toMatch(/còn \d+ mục cũ hơn không nạp/)
   })
 
+  it("P1 b2: vượt trần → mục liên quan tin nhắn được nạp trước dù cũ, mục ghim luôn có", async () => {
+    const filler = Array.from({ length: 40 }, (_, i) => ({ id: 100 + i, kind: "project", content: `Khách Công ty ${i} thị trường Nhật Bản ${"x".repeat(300)}`, pinned: false, updated_at: "" }))
+    selectResult = { data: [
+      { id: 1, kind: "profile", content: "Hồ sơ ghim", pinned: true, updated_at: "" },
+      ...filler,
+      { id: 999, kind: "project", content: `Khách Zephyr Voyages đầu mối anh Hải ${"y".repeat(300)}`, pinned: false, updated_at: "" },   // cũ nhất (cuối mảng)
+    ], error: null }
+    const block = await buildMemoryBlock("hieu", "Đầu mối khách zephyr voyages là ai?")
+    expect(block).toContain("[#1 📌]")
+    expect(block).toContain("[#999]")
+    expect(block).toMatch(/còn \d+ mục cũ hơn không nạp/)
+    // không có message → hành vi cũ (theo thời gian): mục cuối bị cắt
+    expect(await buildMemoryBlock("hieu")).not.toContain("[#999]")
+  })
+
   it("chưa chạy migration → không làm hỏng chat (khối rỗng) và tool báo cách sửa", async () => {
     selectResult = { data: null, error: { message: 'relation "assistant_memory" does not exist' } }
     expect(await buildMemoryBlock("hieu")).toBe("")

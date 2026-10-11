@@ -574,7 +574,7 @@ export async function runCreatorAI(
         ? `${lastMsg} ${String(geminiHistory[geminiHistory.length - 1]?.parts?.[0]?.text ?? "").slice(-500)}` : lastMsg).catch(() => ""),
     ]).then(([idx, rel]) => idx + rel),
     // Trí nhớ dài hạn — nạp MỖI lượt (khác KB chỉ lượt đầu) để điều vừa nhớ có hiệu lực ngay.
-    personal ? buildMemoryBlock(username).catch(() => "") : Promise.resolve(""),
+    personal ? buildMemoryBlock(username, lastMsg).catch(() => "") : Promise.resolve(""),
   ])
 
   // Business date context — auto-inject để Gấu tự biết "tháng này"/"hôm nay" mà không hỏi lại

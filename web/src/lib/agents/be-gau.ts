@@ -395,7 +395,7 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
   ])
 
   const useMemory = !!username && featureTools.has("assistantMemory")
-  const memoryBlock = useMemory && !promptless ? await buildMemoryBlock(username!).catch(() => "") : ""
+  const memoryBlock = useMemory && !promptless ? await buildMemoryBlock(username!, lastMsg).catch(() => "") : ""
   const visibleTables = { ...SUPABASE_TABLES, ...(isPriv ? SENSITIVE_TABLES : {}) }
   const tableCatalog = Object.entries(visibleTables).map(([t, d]) => `  · ${t}: ${d}`).join("\n")
 
