@@ -303,7 +303,7 @@ Quyết định Hiếu chốt (không tự đoán):
 | 1 | Vendor Selection Speed | ≤15 phút/query | Tương tự SLA |
 | 2 | SKU Gross Margin | +2.5% GM SKU trọng điểm/mới | **Auto-scan toàn hệ thống** (sku-scan) — weighted theo revenue, không cần tag tay |
 | 2 | %3HK + Datapool Vendor | 74% revenue | `SUM(rev WHERE vendor IN (3HKDATAPOOL, BCDATAPOOL))/SUM(rev)` toàn công ty — auto |
-| 3 (w=30%) | Tasks via Bé Gấu | 450/quý | `app_usage_events` chat có `ai_response` dài ≥15 ký tự, company-wide, breakdown theo `user_role` |
+| 3 (w=30%) | Tasks via Bé Gấu | 450/quý | `app_usage_events` chat có `used_db_tool=true` (đã gọi tool đọc dữ liệu — định nghĩa mới từ 2026-10-11, xem §s230 T1–T3) và `ai_response` ≥15 ký tự, company-wide, breakdown theo `user_role` + nguồn |
 
 **Weighted OKR Score** = Σ(đạt-%ᵢ × trọng-sốᵢ)/100, `WEIGHTS` trong `page.tsx`: SLA/VendorSpeed/SKU-GM/%3HK mỗi
 17.5% + Bé Gấu 30%.
@@ -833,7 +833,7 @@ tự so số trước/sau fix trên staging, số CHỈ đổi nếu `dim_sku` t
 
 ## s230 (2026-10-11) — T0: sửa lỗi KPI "Tasks via Bé Gấu" chỉ đọc 1.000 dòng
 
-Supabase trả tối đa 1.000 dòng/lần; thẻ KPI, danh sách "hội thoại được tính" và Insights đọc `app_usage_events` 1 lần nên quý > 1.000 câu (Q3: 1.161) bị đếm thiếu (~196 thay vì 235). Nay cả 3 nơi dùng chung `lib/task-events.ts` (`loadChatEvents` đọc theo trang + `isCountedTask`), cùng 1 tập dòng và 1 luật (`used_db_tool` + trả lời ≥ 15 ký tự). Test `task-events.test.ts` (2.500 dòng giả). `topics-ai` giữ `limit(80)` (lấy mẫu, không đếm). Định nghĩa task chưa đổi — T1–T4 chờ Hiếu chốt 5 câu trong plan `my-metrics-be-gau-tasks.md`. Số Q3 trên thẻ KPI sẽ tăng lên ~235 sau deploy — không phải lỗi.
+Supabase trả tối đa 1.000 dòng/lần; thẻ KPI, danh sách "hội thoại được tính" và Insights đọc `app_usage_events` 1 lần nên quý > 1.000 câu (Q3: 1.161) bị đếm thiếu (~196 thay vì 235). Nay cả 3 nơi dùng chung `lib/task-events.ts` (`loadChatEvents` đọc theo trang + `isCountedTask`), cùng 1 tập dòng và 1 luật (`used_db_tool` + trả lời ≥ 15 ký tự). Test `task-events.test.ts` (2.500 dòng giả). `topics-ai` giữ `limit(80)` (lấy mẫu, không đếm). Định nghĩa task chưa đổi — Số Q3 trên thẻ KPI sẽ tăng lên ~235 sau deploy — không phải lỗi.
 
 ## s230 (2026-10-11) — T1–T3: định nghĩa "Tasks via Bé Gấu" mới (Hiếu chốt 5 câu)
 
@@ -847,3 +847,5 @@ Supabase trả tối đa 1.000 dòng/lần; thẻ KPI, danh sách "hội thoại
 **Hiển thị**: thẻ KPI + bảng/biểu đồ tháng có thêm Chạy nền, Trực tiếp; danh sách hội thoại ghi nguồn; Insights thêm cột 👍/👎 thật + tổng phản hồi (`chat_feedback`, ghép theo `user_email|câu hỏi` vì bảng không có khoá tới event). Heuristic chấm điểm chưa đổi.
 
 **Tính lại cờ cũ**: route `POST /api/admin/my-metrics-recompute` (CRON_SECRET, `{from,to,dryRun}`, mặc định dryRun) tính lại `used_db_tool` từ `tools_used` + `user_role`, chỉ đổi cột đó, cập nhật theo lô 200 id. Trả `tasksBefore/tasksAfter`. Số Q3/Q4 nhảy sau khi chạy là do đổi luật, không phải lỗi.
+
+**Kết quả (2026-10-11):** Q3 235 → 246, Q4 (tới 11/10) 202 → 208 sau tính lại cờ (route recompute đã chạy thật trên staging/Supabase chung; chạy lại = 0 dòng lệch). Đối chiếu 3 số (thẻ KPI = tổng danh sách hội thoại = tổng breakdown nguồn) đúng theo cấu trúc vì cùng `loadChatEvents` + `isCountedTask`; chưa Hiếu xem tay trên UI. Plan `my-metrics-be-gau-tasks.md` đã xoá (xong T0–T4).
