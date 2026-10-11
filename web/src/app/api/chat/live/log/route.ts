@@ -3,7 +3,7 @@ import { waitUntil } from "@vercel/functions"
 import { supabaseAdmin } from "@/lib/supabase"
 import { beGauLiveUser } from "@/lib/agents/be-gau-live"
 import { summarizeConversation } from "@/lib/assistant-memory-auto"
-import { loadFeatureMatrix, featureEnabled } from "@/lib/assistant-features"
+import { featureOn } from "@/lib/assistant-features"
 import { isDataTask } from "@/lib/okr-helpers"
 
 // U3: kết thúc phiên Trực tiếp Bé Gấu → lưu phụ đề thành 1 hội thoại "🎙 …" (mở lại được trong Bé Gấu).
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       conversation_id: convId, role: t.role, content: t.text, agent_id: "be_gau_live", agent_name: "Bé Gấu (giọng nói)",
     })))
     if (error) console.error("[bg_live] save messages:", error.message)
-    else if (featureEnabled(await loadFeatureMatrix(), "memory", u.role))
+    else if (await featureOn("memory", u.role, u.username))
       waitUntil(summarizeConversation(u.username, convId).catch(e => console.error("[gp_conv_mem]", e?.message)))
   }
   // My Metrics "Tasks via Bé Gấu": 1 phiên Trực tiếp = 1 task nếu có tool đọc dữ liệu chạy thành công.

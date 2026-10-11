@@ -16,7 +16,7 @@ import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
 import { runCreatorAI, type GPEvent } from "@/lib/agents/creator-ai"
 import { decidePendingAction, followupMessage } from "@/lib/agents/creator/approvals"
 import { extractMemoriesFromTurn, summarizeLarkThread } from "@/lib/assistant-memory-auto"
-import { loadFeatureMatrix, featureEnabled } from "@/lib/assistant-features"
+import { featureOn } from "@/lib/assistant-features"
 import { isMemoryOff } from "@/lib/assistant-memory-rights"
 import { detectGroupTask }            from "@/lib/task-assistant"
 import { isNoteCommand }              from "@/lib/okr-lark-rules"
@@ -509,7 +509,7 @@ async function processAndReply(openId: string, chatId: string, messageId: string
 
     // Bé Gấu: 1 agent function-calling (giống web) — Lark không render chart nên bỏ khối chart.
     // P2: chỉ DM riêng mới có trí nhớ cá nhân (trong group, trí nhớ riêng của 1 người không được đưa vào câu trả lời cho cả nhóm).
-    const memory = chatType === "p2p" && !!username && featureEnabled(await loadFeatureMatrix(), "memory", role) && !(await isMemoryOff(username))
+    const memory = chatType === "p2p" && !!username && await featureOn("memory", role, username) && !(await isMemoryOff(username))
     const beGau = await runBeGau({
       geminiHistory: larkHistory, lastMsg: userText, role, name: name || openId,
       userId: openId, username: memory ? username : undefined, isCost, larkOpenId: openId ?? null,

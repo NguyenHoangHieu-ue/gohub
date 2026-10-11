@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth"
 import { genai } from "@/lib/agents/genai-stream"
 import { GEMINI_MODEL, GEMINI_TRANSCRIBE_MODEL } from "@/lib/ai-models"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { loadFeatureMatrix, featureEnabled } from "@/lib/assistant-features"
+import { featureOn } from "@/lib/assistant-features"
 
 export const maxDuration = 300
 const MAX_BYTES = 4_400_000   // trần body request Vercel ~4,5MB (ghi âm 16kbps ≈ 35 phút)
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const form = await req.formData().catch(() => null)
   const textOnly = form?.get("mode") === "text"
-  if (!textOnly && !featureEnabled(await loadFeatureMatrix(), "transcribe", session.user.role))
+  if (!textOnly && !await featureOn("transcribe", session.user.role, session.user.username))
     return NextResponse.json({ error: "Vai trò của bạn chưa được mở Ghi âm → biên bản." }, { status: 403 })
   const rl = await checkRateLimit(`transcribe:${session.user.username || session.user.email}`, textOnly ? 20 : 5, 60_000)
   if (!rl.allowed) return NextResponse.json({ error: "Gửi quá nhiều, đợi 1 phút." }, { status: 429 })

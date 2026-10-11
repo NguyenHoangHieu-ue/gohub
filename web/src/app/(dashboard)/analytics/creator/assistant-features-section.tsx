@@ -5,6 +5,7 @@ import { Bot, Check, Lock, RefreshCw, Save } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ROLE_LABELS } from "@/lib/agents/types"
 import type { AssistantFeature, FeatureGroup, FeatureMatrix } from "@/lib/assistant-features"
+import AssistantPilotUsers from "./assistant-pilot-users"
 
 const GROUPS: { id: FeatureGroup; label: string; hint: string }[] = [
   { id: "everyone", label: "Mọi người", hint: "Mặc định bật cho mọi vai trò" },
@@ -143,6 +144,7 @@ export default function AssistantFeaturesSection() {
           </p>
         </div>
       )}
+      {!loading && <AssistantPilotUsers features={features} />}
     </div>
   )
 }

@@ -5,7 +5,7 @@ import { supabaseAdmin }            from "@/lib/supabase"
 import { waitUntil }                from "@vercel/functions"
 import { summarizeConversation }    from "@/lib/assistant-memory-auto"
 import { isMemoryOff }              from "@/lib/assistant-memory-rights"
-import { loadFeatureMatrix, featureEnabled } from "@/lib/assistant-features"
+import { featureOn } from "@/lib/assistant-features"
 
 type Ctx = { params: { id: string } }
 
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   // Lịch sử xếp/nhóm theo updated_at (U4 phát hiện: trước không cập nhật → cuộc vừa chat vẫn nằm ở "Cũ hơn").
   await supabaseAdmin.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
   // P2 tầng Recall: tóm tắt SAU khi tin trả lời đã lưu (trước đây tóm tắt chạy ở route chat khi client chưa kịp lưu → thiếu lượt cuối, hội thoại ngắn không bao giờ được tóm tắt).
-  if (role === "assistant" && session.user.username && featureEnabled(await loadFeatureMatrix(), "memory", session.user.role) && !(await isMemoryOff(session.user.username))) {
+  if (role === "assistant" && session.user.username && await featureOn("memory", session.user.role, session.user.username) && !(await isMemoryOff(session.user.username))) {
     waitUntil(summarizeConversation(session.user.username, params.id).catch(() => {}))
   }
   return NextResponse.json({ ok: true })

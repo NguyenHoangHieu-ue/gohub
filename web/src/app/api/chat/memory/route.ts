@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { runAssistantMemory } from "@/lib/assistant-memory"
-import { loadFeatureMatrix, featureEnabled } from "@/lib/assistant-features"
+import { featureOn } from "@/lib/assistant-features"
+import { getAgentProfile, saveAgentProfile } from "@/lib/agent-profile"
 import { isMemoryOff, setMemoryOff, exportMemory, eraseMemory, deleteMemoryItem } from "@/lib/assistant-memory-rights"
 
 // Trí nhớ của Bé Gấu (P2): người dùng tự xem/thêm/sửa/ghim/xoá/xuất/tắt trí nhớ CỦA CHÍNH MÌNH. Bật theo bảng tính năng theo vai trò ("memory").
@@ -11,7 +12,7 @@ async function me() {
   const session = await getServerSession(authOptions)
   const username = session?.user?.username
   if (!username) return null
-  return { username, enabled: featureEnabled(await loadFeatureMatrix(), "memory", session.user.role) }
+  return { username, enabled: await featureOn("memory", session.user.role, username) }
 }
 
 export async function GET(req: NextRequest) {
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     })
   }
   const r = await runAssistantMemory({ action: "list" }, u.username, "manual")
-  return NextResponse.json({ enabled: true, off: await isMemoryOff(u.username), memories: r.result?.memories ?? [], error: r.error })
+  return NextResponse.json({ enabled: true, off: await isMemoryOff(u.username), profile: await getAgentProfile(u.username), memories: r.result?.memories ?? [], error: r.error })
 }
 
 // POST { action: save|update|delete|erase|off, id?, content?, pinned?, off? }
@@ -41,6 +42,8 @@ export async function POST(req: NextRequest) {
     case "delete":
       return typeof body.id === "number" && await deleteMemoryItem(u.username, body.id)
         ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Không thấy mục này." }, { status: 404 })
+    case "profile":
+      return NextResponse.json({ ok: true, profile: await saveAgentProfile(u.username, body) })
     case "erase":
       return NextResponse.json({ ok: true, ...(await eraseMemory(u.username)) })
     case "off":

@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { genai } from "@/lib/agents/genai-stream"
 import { GEMINI_TTS_MODEL } from "@/lib/ai-models"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { loadFeatureMatrix, featureEnabled } from "@/lib/assistant-features"
+import { featureOn } from "@/lib/assistant-features"
 import { toSpeechText } from "@/lib/speech-text"
 
 export const maxDuration = 60
@@ -22,7 +22,7 @@ function pcmToWav(pcm: Buffer, rate: number): Buffer {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!featureEnabled(await loadFeatureMatrix(), "tts", session.user.role))
+  if (!await featureOn("tts", session.user.role, session.user.username))
     return NextResponse.json({ error: "Vai trò của bạn chưa được mở Đọc câu trả lời." }, { status: 403 })
   const rl = await checkRateLimit(`tts:${session.user.username || session.user.email}`, 10, 60_000)
   if (!rl.allowed) return NextResponse.json({ error: "Đọc quá nhiều, đợi 1 phút." }, { status: 429 })

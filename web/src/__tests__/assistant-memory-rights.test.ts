@@ -51,8 +51,9 @@ describe("quyền của người dùng với trí nhớ (P2)", () => {
   it("xoá tất cả chỉ xoá theo username của người gọi", async () => {
     const r = await eraseMemory("binh")
     expect(r).toEqual({ memories: 2, summaries: 1 })
-    expect(deleted.every(d => d.filters.username === "binh")).toBe(true)
-    expect(deleted.map(d => d.table).sort()).toEqual(["assistant_memory", "gp_conversation_memory"])
+    expect(deleted.filter(d => d.table !== "app_settings").every(d => d.filters.username === "binh")).toBe(true)
+    expect(deleted.map(d => d.table).sort()).toEqual(["app_settings", "assistant_memory", "gp_conversation_memory"])
+    expect(deleted.find(d => d.table === "app_settings")?.filters.key).toBe("agent_profile:binh")   // hồ sơ trợ lý xoá cùng
   })
 
   it("xoá 1 mục kèm điều kiện username (không xoá được mục người khác)", async () => {

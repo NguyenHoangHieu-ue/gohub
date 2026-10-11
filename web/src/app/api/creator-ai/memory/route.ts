@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { runAssistantMemory } from "@/lib/assistant-memory"
 import { personalFeaturesEnabled } from "@/lib/assistant-memory-auto"
+import { getAgentProfile, saveAgentProfile } from "@/lib/agent-profile"
 import { isMemoryOff, setMemoryOff, exportMemory, eraseMemory, deleteMemoryItem } from "@/lib/assistant-memory-rights"
 
 // Trí nhớ của Gấu (G3): xem/thêm/sửa/ghim/xoá/xuất/tắt trí nhớ dài hạn CỦA CHÍNH người gọi. Bật theo cờ gp_personal_features.
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     })
   }
   const r = await runAssistantMemory({ action: "list" }, u.username, "manual")
-  return NextResponse.json({ enabled: true, off: await isMemoryOff(u.username), memories: r.result?.memories ?? [], error: r.error })
+  return NextResponse.json({ enabled: true, off: await isMemoryOff(u.username), profile: await getAgentProfile(u.username), memories: r.result?.memories ?? [], error: r.error })
 }
 
 // POST { action: save|update|forget|delete|erase|off, id?, kind?, content?, pinned?, off? }
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
   if (body.action === "delete")
     return typeof body.id === "number" && await deleteMemoryItem(u.username, body.id)
       ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Không thấy mục này." }, { status: 404 })
+  if (body.action === "profile") return NextResponse.json({ ok: true, profile: await saveAgentProfile(u.username, body) })
   if (body.action === "erase") return NextResponse.json({ ok: true, ...(await eraseMemory(u.username)) })
   if (body.action === "off") { await setMemoryOff(u.username, !!body.off); return NextResponse.json({ ok: true, off: !!body.off }) }
   if (!["save", "update", "forget"].includes(body.action)) return NextResponse.json({ error: "action không hợp lệ" }, { status: 400 })

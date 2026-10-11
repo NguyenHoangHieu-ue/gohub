@@ -16,6 +16,7 @@ import { GEMINI_MODEL } from "@/lib/ai-models"
 import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { personalFeaturesEnabled } from "@/lib/assistant-memory-auto"
 import { isMemoryOff } from "@/lib/assistant-memory-rights"
+import { buildProfileBlock } from "@/lib/agent-profile"
 import { newTurnSafety, recordToolResult, approvalReason, describeAction, taintFromRuns } from "./creator/tool-policy"
 import { createPendingAction, type PendingAction } from "./creator/approvals"
 import { getCreatorLarkOpenId, sendLarkMessage } from "@/lib/lark"
@@ -564,7 +565,7 @@ export async function runCreatorAI(
   const t0 = Date.now()
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const personal = opts.personal ?? (username && username !== "cron" ? await personalFeaturesEnabled(isCreator).catch(() => isCreator) : false)
-  const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock] = await Promise.all([
+  const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock, profileBlock] = await Promise.all([
     getPartnerTiers().then(tiers => {
       const lines = Object.entries(tiers).map(([tier, channels]) => `  ${tier}: ${(channels as string[]).join(", ")}`).join("\n")
       return lines ? `\n\n━━━ PARTNER TIERS (B2B từ Supabase) ━━━\n${lines}` : ""
@@ -579,6 +580,7 @@ export async function runCreatorAI(
     ]).then(([idx, rel]) => idx + rel),
     // Trí nhớ dài hạn — nạp MỖI lượt (khác KB chỉ lượt đầu) để điều vừa nhớ có hiệu lực ngay.
     personal && !(await isMemoryOff(username).catch(() => false)) ? buildMemoryBlock(username, lastMsg).catch(() => "") : Promise.resolve(""),
+    personal ? buildProfileBlock(username).catch(() => "") : Promise.resolve(""),
   ])
 
   // Business date context — auto-inject để Gấu tự biết "tháng này"/"hôm nay" mà không hỏi lại
@@ -589,7 +591,7 @@ export async function runCreatorAI(
   // Skill nạp sẵn: do nơi gọi chỉ định (Lark DM, cron) + đoán từ tin nhắn mới và câu trả lời gần nhất.
   const lastModelText = geminiHistory.length ? (geminiHistory[geminiHistory.length - 1]?.parts?.[0]?.text ?? "") : ""
   const loadedSkills = new Set<string>([...(opts.resume?.skills ?? []), ...(opts.preloadSkills ?? []), ...preloadSkills(`${lastMsg}\n${String(lastModelText).slice(0, 1500)}`)])
-  const systemInstruction = (isCreator ? CREATOR_INTRO + CREATOR_PROFILE : MEMBER_INTRO) + SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject + memoryBlock
+  const systemInstruction = (isCreator ? CREATOR_INTRO + CREATOR_PROFILE : MEMBER_INTRO) + SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + profileBlock + kbInject + memoryBlock
   const makeConfig = () => ({
     systemInstruction,
     tools: [{ functionDeclarations: toGenaiSchema(activeDeclarations(isCreator, loadedSkills, personal)) as any }],

@@ -14,7 +14,7 @@ import { larkOpenIdOf }                        from "@/lib/agents/lark-workspace
 import type { PlanStep }                       from "@/lib/agents/creator-ai"
 import { extractMemoriesFromTurn } from "@/lib/assistant-memory-auto"
 import { isMemoryOff } from "@/lib/assistant-memory-rights"
-import { loadFeatureMatrix, featureEnabled }   from "@/lib/assistant-features"
+import { featureOn }                          from "@/lib/assistant-features"
 import { waitUntil }                           from "@vercel/functions"
 
 type BeGauEvent =
@@ -23,7 +23,7 @@ type BeGauEvent =
   | { type: "plan"; steps: PlanStep[] }
   | { type: "done" }
 
-const memoryOn = async (role: string) => featureEnabled(await loadFeatureMatrix(), "memory", role)
+const memoryOn = async (role: string, username?: string | null) => featureOn("memory", role, username)
 
 // Hobby plan trần cứng 60s (Vercel Runtime Timeout Error thật, xem log s195+14) — nâng lên 300s (Hobby +
 // Fluid Compute cho phép tới 5 phút, không cần nâng gói). Giữ nguyên dù s195+18 đã thêm stream token thật
@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
           sse(controller, { type: "done" })
           controller.close()
           // Trí nhớ (U3, khi tính năng bật cho vai trò): rút điều đáng nhớ + tóm tắt hội thoại để tìm lại — chạy sau khi trả lời xong.
-          if (username && toolsUsed.includes("assistantMemory") === false && await memoryOn(role) && !(await isMemoryOff(username).catch(() => false))) {
+          if (username && toolsUsed.includes("assistantMemory") === false && await memoryOn(role, username) && !(await isMemoryOff(username).catch(() => false))) {
             // Tóm tắt hội thoại chuyển sang POST /api/chat/conversations/[id] (sau khi client lưu xong tin trả lời).
             waitUntil(extractMemoriesFromTurn(username, lastMsg, text, "be-gau").catch(() => 0))
           }

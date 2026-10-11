@@ -18,10 +18,14 @@ export function MemoryPanel({ onClose, api = "/api/creator-ai/memory", floating 
   const [draft, setDraft] = useState("")
   const [newText, setNewText] = useState("")
   const [busy, setBusy] = useState(false)
+  const [persona, setPersona] = useState("")
+  const [goals, setGoals] = useState("")
+  const [profileSaved, setProfileSaved] = useState(false)
 
   const load = useCallback(async () => {
     const d = await fetch(api).then(r => r.json()).catch(e => ({ error: e.message }))
     setRows(d.memories ?? []); setOff(!!d.off)
+    setPersona(d.profile?.persona ?? ""); setGoals(d.profile?.goals ?? "")
     setErr(d.error ?? (d.enabled === false ? "Trí nhớ cá nhân chưa bật cho tài khoản này." : ""))
   }, [api])
   useEffect(() => { load() }, [load])
@@ -34,6 +38,11 @@ export function MemoryPanel({ onClose, api = "/api/creator-ai/memory", floating 
     setBusy(false)
     if (d.error) setErr(d.error)
     await load()
+  }
+
+  const saveProfile = async () => {
+    await act({ action: "profile", persona, goals })
+    setProfileSaved(true); setTimeout(() => setProfileSaved(false), 2000)
   }
 
   const erase = async () => {
@@ -62,6 +71,20 @@ export function MemoryPanel({ onClose, api = "/api/creator-ai/memory", floating 
         </label>
         <a href={`${api}?export=1`} className="ml-auto flex items-center gap-1 hover:text-violet-600"><Download size={11} /> Xuất</a>
         <button onClick={erase} disabled={busy} className="hover:text-rose-500">Xoá tất cả</button>
+      </div>
+      <div className="px-3 py-2 border-b border-gray-100 dark:border-slate-800 space-y-1.5">
+        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Hồ sơ trợ lý của bạn</div>
+        <textarea value={persona} onChange={e => setPersona(e.target.value.slice(0, 800))} rows={2}
+          placeholder="Bạn muốn trợ lý làm việc thế nào? (vd: gọi mình là Minh, trả lời ngắn, kết luận trước, số liệu để trong bảng)"
+          className="w-full px-2 py-1 rounded-md border border-gray-200 dark:border-slate-700 bg-transparent" />
+        <textarea value={goals} onChange={e => setGoals(e.target.value.slice(0, 800))} rows={2}
+          placeholder="Mục tiêu / việc bạn đang theo (vd: Q4 tập trung khách B2B Châu Âu, theo dõi %Datapool)"
+          className="w-full px-2 py-1 rounded-md border border-gray-200 dark:border-slate-700 bg-transparent" />
+        <div className="flex items-center gap-2">
+          <button disabled={busy} onClick={saveProfile} className="px-2.5 py-1 rounded-md bg-violet-600 text-white disabled:opacity-40">Lưu hồ sơ</button>
+          {profileSaved && <span className="text-emerald-600">Đã lưu</span>}
+          <span className="ml-auto text-[10px] text-gray-400">Chỉ chỉnh cách làm việc — không mở thêm quyền.</span>
+        </div>
       </div>
       <div className="flex gap-2 px-3 py-2 border-b border-gray-100 dark:border-slate-800">
         <input value={newText} onChange={e => setNewText(e.target.value)} placeholder="Thêm điều nên nhớ..."

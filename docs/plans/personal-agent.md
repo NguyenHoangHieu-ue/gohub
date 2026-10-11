@@ -129,3 +129,9 @@ Eval nay có thêm 9 câu KHÓ cho stress (`stress_count` đếm khách theo th�
 - Quyền người dùng: xem/sửa/xoá hẳn/xuất/xoá tất cả/tắt — `/api/chat/memory` + `/api/creator-ai/memory`, menu "Trí nhớ của tôi" ở Bé Gấu.
 - Chưa làm / ngoài code: cron-job.org đổi sang production (Hiếu); thông báo + đồng ý + thời hạn lưu (pháp chế) trước khi mở cả công ty; QA giao diện + Lark DM thật (cần Hiếu); chưa đo lại số dòng gp_conversation_memory sau vài ngày chạy.
 - P3 còn: `agent_profiles`, mở cho vài người test (cờ `gp_personal_features` theo người).
+
+## 14. P3 (2026-10-11, staging) — xong phần code
+- Người dùng thử theo từng người: `assistant_feature_users` + UI ở Creator Settings; mọi cổng tính năng Bé Gấu nhận username.
+- Hồ sơ trợ lý: chọn app_settings `agent_profile:<username>` thay vì bảng `agent_profiles` (không cần migration; tool/kênh lấy từ bảng tính năng theo vai trò). Panel Trí nhớ có ô hồ sơ.
+- Còn: Hiếu QA (thêm vài username thử Trí nhớ → mở "Trí nhớ của tôi", viết hồ sơ, hỏi vài câu xem giọng/ưu tiên đổi đúng); thông báo + đồng ý + thời hạn lưu trước khi mở cả công ty; đổi cron-job.org sang production; chưa đo bằng eval việc hồ sơ làm đổi hành vi (chỉ có test đơn vị).
+- Plan này xong phần code — khi Hiếu QA xong và chốt mở rộng thì xoá file + dòng trong CLAUDE.md, chuyển phần còn lại sang wiki.
