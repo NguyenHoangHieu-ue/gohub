@@ -5,7 +5,7 @@ import { useSession }    from "next-auth/react"
 import { useRouter }     from "next/navigation"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
+  Cell, LineChart, Line, CartesianGrid, Legend,
   RadialBarChart, RadialBar,
 } from "recharts"
 import {
@@ -17,7 +17,6 @@ import { exportRawRows } from "@/lib/export-excel"
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const COLORS = ["#003B95","#2563eb","#7c3aed","#059669","#d97706","#dc2626","#0891b2","#6b7280"]
 const SCORE_COLORS: Record<string, string> = {
   "5": "#059669", "4": "#2563eb", "3": "#d97706", "2": "#f97316", "1": "#dc2626",
 }
@@ -37,7 +36,7 @@ const TAB_LABELS: Record<string, string> = {
   products:"Products BI",market:"Thị trường & Báo giá",targets:"KPI/Target",sql:"SQL Explorer",scheduled:"Scheduled",
   chatbot:"Bé Gấu",kb:"Knowledge Base",skus:"System SKUs",ncc:"NCC Catalog",
   countries:"Reference",promotions:"Promotions",info:"Note",
-  "creator":"Creator","creator/ai":"Gấu Pro","creator/knowledge":"Own Info",
+  "creator":"Creator","creator/ai":"Gấu Pro",
   "creator/devtools":"DevTools","creator/usage":"Usage Analytics",
 }
 
@@ -467,35 +466,8 @@ export default function UsagePage() {
             )}
           </div>
 
-          {/* Agent + Top users */}
-          <div className="grid lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <h2 className="text-lg font-bold text-slate-900 mb-4">Phân bố Agent Bé Gấu</h2>
-              {agentData.length === 0 ? (
-                <div className="h-20 flex items-center justify-center text-slate-400 text-sm">Chưa có chat</div>
-              ) : (
-                <div className="flex gap-4 items-center">
-                  <ResponsiveContainer width={160} height={160}>
-                    <PieChart>
-                      <Pie data={agentData} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={false}>
-                        {agentData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip formatter={(v) => [`${v} lần`, "Gọi"]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="flex-1 space-y-1">
-                    {agentData.map((a, i) => (
-                      <div key={a.name} className="flex items-center gap-2 text-xs">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
-                        <span className="flex-1 truncate text-slate-700">{a.name}</span>
-                        <span className="font-bold text-slate-900">{a.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
+          {/* Top users */}
+          <div className="grid gap-6">
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <h2 className="text-lg font-bold text-slate-900 mb-3">User hoạt động nhiều nhất</h2>
               <table className="w-full text-sm">
