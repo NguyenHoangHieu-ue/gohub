@@ -76,6 +76,13 @@ describe("H0.5 — chỉ giữ thói quen ĐẶC TRƯNG so với công ty (basel
     expect(keys).toContain("buildReport")
   })
 
+  it("từ đơn tiếng Việt có dấu và từ chỉ cách trả lời không thành chủ đề", () => {
+    const mine = [0, 1, 2, 3].map(w => ev(mon(w), "trả lời ngắn giúp mình nhưng phía khách khác chưa rõ"))
+    const base = buildBaseline([...mine, ...other(50, "xem doanh thu hôm nay")])
+    const keys = computeHabits(mine, [], base).candidates.filter(c => c.kind === "topic" || c.kind === "weekday_topic").map(c => c.key)
+    for (const bad of ["nhưng", "phía", "khác", "ngắn", "trả lời", "trả lời ngắn"]) expect(keys).not.toContain(bad)
+  })
+
   it("kênh Lark chỉ là thói quen khi khác số đông", () => {
     const mine = [0, 1, 2, 3, 0, 1, 2, 3, 0, 1].map((w, i) => ev(mon(w, 3 + (i % 2)), `câu hỏi số ${i} về đơn hàng`, [], "lark:ou_abc"))
     const others = other(40, "xem doanh thu hôm nay", [], "x@y.z")

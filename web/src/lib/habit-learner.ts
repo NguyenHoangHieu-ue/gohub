@@ -18,6 +18,9 @@ const SENSITIVE_RE = /(lương|thưởng|vay|nợ|bệnh|ốm|thai|sức khoẻ|
 // Tool lõi mà ai cũng gọi — dùng nhiều không nói lên thói quen riêng.
 const CORE_TOOLS = new Set(["executeSQL", "querySupabase", "listSupabaseTables", "queryProduct", "searchKnowledgeBase", "readKnowledgeBase", "loadSkill", "assistantMemory", "searchPastConversations", "updatePlan"])
 
+// Từ nói về CÁCH trả lời/trình bày — đã có nhóm "format"/"style" riêng, không đưa vào "chủ đề".
+const STYLE_WORDS_RE = /(ngắn|trả lời|tóm tắt|chi tiết|gọn|excel|biểu đồ|dạng bảng|báo cáo|nhớ giúp|ghi nhớ)/i
+
 // Âm tiết tiếng Việt quá chung: tokenize tách theo âm tiết nên "thông tin" thành "thông"/"tin"; chỉ cho đứng trong cụm ≥2 âm tiết.
 const GENERIC_SYLLABLES = new Set(["gửi", "lại", "thông", "tin", "phẩm", "sản", "giá", "gói", "xem", "lấy", "tìm", "tra", "cứu", "làm", "thêm", "sửa", "đổi", "nhờ", "tên", "số", "bảng", "file", "trang", "mới", "cũ", "nào", "đây", "đấy", "thôi", "luôn", "check", "list", "cho", "biết", "lên", "xuống", "ra", "vào", "tháng", "tuần", "năm", "quý", "hôm", "qua", "trước", "sau", "nữa", "thử", "xong", "tiếp", "tất", "cả"])
 
@@ -68,7 +71,9 @@ function termSet(text: string): Set<string> {
     s.add(`${w[i]} ${w[i + 1]}`)
     if (i < w.length - 2) s.add(`${w[i]} ${w[i + 1]} ${w[i + 2]}`)
   }
-  for (const t of w) if (t.length >= 4 && !GENERIC_SYLLABLES.has(t) && !/^\d+$/.test(t)) s.add(t)
+  // Từ đơn chỉ nhận token "kiểu định danh": chỉ gồm chữ/số ASCII (tên riêng, vendor, mã, từ tiếng Anh) — âm tiết tiếng Việt có dấu
+  // ("phía", "nhưng", "khác") không bao giờ là chủ đề đứng một mình; cụm ≥2 âm tiết đã được thêm ở trên.
+  for (const t of w) if (t.length >= 4 && /^[a-z0-9]+$/.test(t) && !GENERIC_SYLLABLES.has(t) && !/^\d+$/.test(t)) s.add(t)
   return s
 }
 
@@ -146,7 +151,7 @@ export function computeHabits(events: HabitEvent[], feedback: HabitFeedback[] = 
   msgs.forEach((e, i) => { for (const t of termSet(e.user_message ?? "")) { const a = termIdx.get(t); a ? a.push(i) : termIdx.set(t, [i]) } })
   const topicCands: { term: string; idx: number[]; lift: number }[] = []
   termIdx.forEach((idx, term) => {
-    if (idx.length < MIN_COUNT || weeksOf(idx) < MIN_WEEKS || SENSITIVE_RE.test(term)) return
+    if (idx.length < MIN_COUNT || weeksOf(idx) < MIN_WEEKS || SENSITIVE_RE.test(term) || STYLE_WORDS_RE.test(term)) return
     const l = lift(idx.length, n, baseline?.termDf.get(term))
     if (l >= MIN_LIFT) topicCands.push({ term, idx, lift: l })
   })
