@@ -1,0 +1,104 @@
+{
+  "note": "Persona TỔNG HỢP (không phải người thật): Minh Anh, Account Manager nhóm B2B. Đáp án suy ra từ kịch bản nên đúng theo cấu trúc. Các hội thoại (conv) được lưu + tóm tắt như luồng thật; lượt không có conv chỉ chạy đường rút trí nhớ. Các lượt 'noise' là câu tra cứu số liệu — không được tạo trí nhớ.",
+  "sessions": [
+    {
+      "date": "2026-08-04",
+      "turns": [
+        { "user": "Chào, mình là Minh Anh, làm Account Manager nhóm B2B, báo cáo trực tiếp cho chị Lan.", "assistant": "Chào Minh Anh, mình đã biết vai trò của bạn." },
+        { "user": "Hiện mình phụ trách chăm sóc khách Alpha Travel và Beta Tours, chủ yếu thị trường Hàn Quốc.", "assistant": "Ok, bạn đang theo Alpha Travel và Beta Tours ở thị trường Hàn Quốc." },
+        { "user": "Mình thích câu trả lời ngắn, kết luận trước, số liệu để trong bảng chứ đừng vẽ biểu đồ nhé.", "assistant": "Mình sẽ trả lời ngắn, kết luận trước và dùng bảng." },
+        { "user": "Doanh thu B2B tuần trước của Alpha Travel là bao nhiêu vậy?", "assistant": "Doanh thu B2B tuần trước của Alpha Travel là 120 triệu đồng.", "noise": true }
+      ]
+    },
+    {
+      "date": "2026-08-20",
+      "conv": { "title": "Giá hợp đồng năm Alpha Travel" },
+      "turns": [
+        { "user": "Alpha Travel vừa chốt hợp đồng năm với bên mình, người liên hệ chính bên họ là anh Quang, đầu mối thanh toán là chị Hà.", "assistant": "Chúc mừng! Mình ghi nhận anh Quang là liên hệ chính, chị Hà là đầu mối thanh toán." },
+        { "user": "Giờ cần chọn mức giá cho họ. Bạn so sánh giúp mình 3 phương án: A giữ giá hiện tại, B giảm 5% nếu họ cam kết 12 tháng, C giảm 8% nếu cam kết 24 tháng.", "assistant": "Phương án A giữ giá, biên lợi nhuận cao nhất nhưng khó giữ khách. Phương án B giảm 5% đổi lấy cam kết 12 tháng, cân bằng giữa giữ khách và biên lợi nhuận. Phương án C giảm 8% với cam kết 24 tháng, biên thấp và rủi ro nếu giá vốn giảm." },
+        { "user": "Mình chọn phương án B: giảm 5% với cam kết 12 tháng.", "assistant": "Đã rõ, chốt phương án B: giảm 5% cho Alpha Travel kèm cam kết 12 tháng." },
+        { "user": "Mình quyết định gửi báo cáo khách hàng vào sáng thứ Hai hằng tuần, không gửi cuối tuần nữa.", "assistant": "Ok, báo cáo khách hàng sẽ gửi sáng thứ Hai hằng tuần." }
+      ]
+    },
+    {
+      "date": "2026-09-02",
+      "turns": [
+        { "user": "Từ 1/9 mình chuyển sang phụ trách thị trường Châu Âu, không làm Hàn Quốc nữa. Beta Tours vẫn do mình giữ.", "assistant": "Đã ghi nhận bạn chuyển sang Châu Âu từ 1/9 và vẫn giữ Beta Tours." },
+        { "user": "Khách Châu Âu mới là Gamma Holidays, đầu mối là chị Elena, đang thương lượng gói Unlimited 10 ngày.", "assistant": "Ok, Gamma Holidays do chị Elena làm đầu mối, đang thương lượng gói Unlimited 10 ngày." },
+        { "user": "Từ tháng này sếp trực tiếp của mình là anh Tuấn, chị Lan chuyển sang mảng B2C rồi.", "assistant": "Mình đã cập nhật: sếp trực tiếp của bạn là anh Tuấn." },
+        { "user": "Alpha Travel bàn giao cho bạn Phúc từ 1/9, mình không còn theo khách đó nữa.", "assistant": "Đã ghi nhận Alpha Travel do bạn Phúc phụ trách từ 1/9." }
+      ]
+    },
+    {
+      "date": "2026-09-15",
+      "conv": { "title": "Hỗ trợ đồng thương hiệu cho Gamma Holidays" },
+      "turns": [
+        { "user": "Gamma Holidays ký thử nghiệm 3 tháng, bắt đầu 15/9, mục tiêu 200 SIM mỗi tháng.", "assistant": "Mình đã ghi lại hợp đồng thử nghiệm 3 tháng của Gamma Holidays từ 15/9 với mục tiêu 200 SIM mỗi tháng." },
+        { "user": "Chị Elena muốn mình hỗ trợ eSIM đồng thương hiệu, tức có logo của họ cùng logo GoHub trên trang kích hoạt.", "assistant": "Có thể làm được: cần mẫu thiết kế logo từ phía Gamma và thời gian thiết kế khoảng một tuần." },
+        { "user": "Hai bên thống nhất mình gửi mẫu thiết kế đồng thương hiệu cho họ trước ngày 30/9.", "assistant": "Ok, hạn gửi mẫu thiết kế đồng thương hiệu cho Gamma là trước 30/9." },
+        { "user": "Mình muốn bảng báo cáo luôn có cột CM1% bên cạnh doanh thu, đừng để mình nhắc lại.", "assistant": "Đã rõ, bảng báo cáo của bạn sẽ luôn có cột CM1% cạnh doanh thu." }
+      ]
+    },
+    {
+      "date": "2026-09-16",
+      "turns": [
+        { "user": "Cho mình xem top 5 SKU bán chạy tháng 8 nhé, theo số lượng đơn.", "assistant": "Top 5 SKU tháng 8 theo số đơn: ...", "noise": true }
+      ]
+    },
+    {
+      "date": "2026-09-28",
+      "turns": [
+        { "user": "Chị Elena bên Gamma Holidays đổi sang gói Unlimited 7 ngày thay vì 10 ngày như trước.", "assistant": "Đã cập nhật: Gamma Holidays chuyển sang gói Unlimited 7 ngày." },
+        { "user": "Mình sẽ nghỉ phép từ 6/10 đến 10/10, trong thời gian đó bạn Phúc nhận việc Beta Tours và Gamma.", "assistant": "Đã ghi: bạn nghỉ phép 6/10–10/10, bạn Phúc thay xử lý Beta Tours và Gamma." }
+      ]
+    },
+    {
+      "date": "2026-10-05",
+      "turns": [
+        { "user": "Mục tiêu quý 4 của mình là đưa Gamma Holidays lên 500 SIM mỗi tháng và giữ Beta Tours không giảm.", "assistant": "Đã ghi mục tiêu quý 4: Gamma Holidays 500 SIM mỗi tháng, Beta Tours không giảm." },
+        { "user": "Mình hay họp với anh Tuấn vào chiều thứ Sáu, đừng đặt lịch nhắc vào giờ đó.", "assistant": "Ok, mình sẽ tránh đặt nhắc vào chiều thứ Sáu." }
+      ]
+    }
+  ],
+  "questions": [
+    { "id": 1, "cat": "single_fact", "q": "Đầu mối thanh toán của Alpha Travel là ai?", "ref": "Chị Hà." },
+    { "id": 2, "cat": "single_fact", "q": "Người liên hệ chính bên Alpha Travel là ai?", "ref": "Anh Quang." },
+    { "id": 3, "cat": "single_fact", "q": "Gamma Holidays ký thử nghiệm bao lâu và bắt đầu từ ngày nào?", "ref": "3 tháng, bắt đầu 15/9." },
+    { "id": 4, "cat": "single_fact", "q": "Mình nghỉ phép khi nào?", "ref": "Từ 6/10 đến 10/10." },
+    { "id": 5, "cat": "single_fact", "q": "Công việc của mình là gì ở công ty?", "ref": "Account Manager nhóm B2B." },
+
+    { "id": 6, "cat": "preference", "q": "Bạn nên trình bày dữ liệu cho mình theo cách nào?", "ref": "Trả lời ngắn, kết luận trước, số liệu để trong bảng, không vẽ biểu đồ." },
+    { "id": 7, "cat": "preference", "q": "Mình muốn nhận báo cáo khách hàng vào lúc nào trong tuần?", "ref": "Sáng thứ Hai hằng tuần." },
+    { "id": 8, "cat": "preference", "q": "Làm bảng báo cáo cho mình thì phải có cột gì cạnh doanh thu?", "ref": "Cột CM1%." },
+    { "id": 9, "cat": "preference", "q": "Khung giờ nào trong tuần không nên đặt lịch nhắc cho mình?", "ref": "Chiều thứ Sáu (mình họp với anh Tuấn)." },
+
+    { "id": 10, "cat": "update_current", "q": "Hiện giờ mình đang phụ trách thị trường nào?", "ref": "Châu Âu (không còn Hàn Quốc từ 1/9)." },
+    { "id": 11, "cat": "update_current", "q": "Sếp trực tiếp của mình bây giờ là ai?", "ref": "Anh Tuấn (không còn là chị Lan)." },
+    { "id": 12, "cat": "update_current", "q": "Alpha Travel hiện do ai phụ trách?", "ref": "Bạn Phúc (từ 1/9)." },
+    { "id": 13, "cat": "update_current", "q": "Chị Elena đang quan tâm gói Unlimited mấy ngày?", "ref": "7 ngày (đã đổi từ 10 ngày)." },
+    { "id": 14, "cat": "update_current", "q": "Mục tiêu số SIM mỗi tháng của Gamma Holidays hiện là bao nhiêu?", "ref": "500 SIM mỗi tháng (mục tiêu quý 4), không phải 200 của giai đoạn thử nghiệm." },
+
+    { "id": 15, "cat": "history", "q": "Trước tháng 9 mình phụ trách thị trường nào?", "ref": "Hàn Quốc." },
+    { "id": 16, "cat": "history", "q": "Trước anh Tuấn thì sếp trực tiếp của mình là ai?", "ref": "Chị Lan." },
+    { "id": 17, "cat": "history", "q": "Ban đầu Gamma Holidays thương lượng gói Unlimited mấy ngày?", "ref": "10 ngày." },
+    { "id": 18, "cat": "history", "q": "Lúc mới ký thử nghiệm, mục tiêu SIM mỗi tháng của Gamma là bao nhiêu?", "ref": "200 SIM mỗi tháng." },
+    { "id": 19, "cat": "history", "q": "Chị Lan bây giờ làm mảng nào?", "ref": "Mảng B2C." },
+
+    { "id": 20, "cat": "multi_hop", "q": "Khách hàng mà mình đã bàn giao hẳn cho bạn Phúc có đầu mối liên hệ và đầu mối thanh toán là ai?", "ref": "Khách là Alpha Travel; liên hệ chính anh Quang, thanh toán chị Hà." },
+    { "id": 21, "cat": "multi_hop", "q": "Trong lúc mình nghỉ phép, ai xử lý khách Châu Âu của mình và đầu mối bên khách đó là ai?", "ref": "Bạn Phúc xử lý; khách Châu Âu là Gamma Holidays, đầu mối chị Elena." },
+    { "id": 22, "cat": "multi_hop", "q": "Khách nào của mình đang thương lượng gói Unlimited, hiện là mấy ngày và mục tiêu SIM hằng tháng quý 4 là bao nhiêu?", "ref": "Gamma Holidays; 7 ngày; 500 SIM mỗi tháng." },
+    { "id": 23, "cat": "multi_hop", "q": "Mình hay họp với sếp vào lúc nào, và sếp đó là ai?", "ref": "Chiều thứ Sáu; sếp là anh Tuấn." },
+    { "id": 24, "cat": "multi_hop", "q": "Khách nào mình giữ từ đầu đến giờ không đổi người phụ trách, và mục tiêu quý 4 của khách đó là gì?", "ref": "Beta Tours; giữ không giảm." },
+
+    { "id": 25, "cat": "abstention", "q": "Số điện thoại của anh Quang bên Alpha Travel là gì?", "ref": "Không có thông tin — phải nói chưa biết, không bịa số." },
+    { "id": 26, "cat": "abstention", "q": "Sinh nhật mình là ngày nào?", "ref": "Không có thông tin — phải nói chưa biết." },
+    { "id": 27, "cat": "abstention", "q": "Giá bán mỗi SIM trong hợp đồng với Gamma Holidays là bao nhiêu?", "ref": "Không có thông tin — phải nói chưa biết." },
+    { "id": 28, "cat": "abstention", "q": "Mình tốt nghiệp trường đại học nào?", "ref": "Không có thông tin — phải nói chưa biết." },
+
+    { "id": 29, "cat": "conversation_recall", "q": "Lần bàn giá hợp đồng năm cho Alpha Travel, mình đã chọn phương án nào và điều kiện đi kèm là gì?", "ref": "Phương án B: giảm 5% với cam kết 12 tháng." },
+    { "id": 30, "cat": "conversation_recall", "q": "Trong phương án giá của Alpha Travel, mình còn cân nhắc những phương án nào khác?", "ref": "A giữ giá hiện tại; C giảm 8% nếu cam kết 24 tháng." },
+    { "id": 31, "cat": "conversation_recall", "q": "Chị Elena nhờ hỗ trợ gì thêm ngoài việc ký thử nghiệm, và hạn gửi là khi nào?", "ref": "eSIM đồng thương hiệu (logo Gamma cùng GoHub); gửi mẫu thiết kế trước 30/9." },
+    { "id": 32, "cat": "conversation_recall", "q": "Cuộc bàn về đồng thương hiệu với Gamma, bên Gamma cần cung cấp gì cho mình?", "ref": "Mẫu thiết kế logo từ phía Gamma." }
+  ],
+  "noiseExpectation": "Sau khi nạp, assistant_memory không được chứa số liệu doanh thu / top SKU (các lượt noise); soi bằng action=dump."
+}

@@ -121,7 +121,7 @@ export function BegauInsightsSection({ quarter }: { quarter: string }) {
           {/* Quality summary */}
           <div>
             <div className="flex items-center justify-between flex-wrap gap-2 mb-1.5">
-              <p className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1"><Award className="w-3 h-3" /> Chất lượng câu trả lời (heuristic, điểm TB {data.quality.avgScore})</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1"><Award className="w-3 h-3" /> Chất lượng câu trả lời (heuristic, điểm TB {data.quality.avgScore}{data.feedback ? ` · phản hồi thật: 👍 ${data.feedback.up} · 👎 ${data.feedback.down}` : ""})</p>
               <div className="flex gap-1.5">
                 {([["all", "Tất cả", items.length], ["high", "Tốt", data.quality.high], ["medium", "Trung bình", data.quality.medium], ["low", "Cần soát", data.quality.low]] as const).map(([key, label, n]) => (
                   <button key={key} onClick={() => setBucketFilter(key)}
@@ -150,6 +150,7 @@ export function BegauInsightsSection({ quarter }: { quarter: string }) {
                 ) },
                 { key: "score", label: "Điểm", align: "right", render: r => <span className="font-black tabular-nums">{r.score}</span> },
                 { key: "bucket", label: "Đánh giá", align: "center", render: r => bucketBadge(r.bucket) },
+                { key: "rating", label: "👍/👎", align: "center", render: r => r.rating === 1 ? "👍" : r.rating === -1 ? "👎" : "—" },
               ]}
             />
           </div>

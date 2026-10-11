@@ -9,7 +9,7 @@ import { parseUploadedFile }          from "@/lib/agents/file-parser"
 import { loadGpAllowed }              from "@/lib/gp-access"
 import { compressHistory, stripBase64Images } from "@/lib/agents/creator/compress"
 import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
-import { usedDbTaskTool }             from "@/lib/okr-helpers"
+import { isDataTask }           from "@/lib/okr-helpers"
 import { waitUntil }                  from "@vercel/functions"
 import { personalFeaturesEnabled, extractMemoriesFromTurn, summarizeConversation } from "@/lib/assistant-memory-auto"
 
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
             ai_response:  text ? text.slice(0, 3000) : null,
             tools_used: toolsUsed.length > 0 ? toolsUsed : null,
             // Tính task My Metrics như Bé Gấu (đã gọi tool đọc DB), TRỪ câu hỏi của Creator (Hiếu tự hỏi/thử).
-            used_db_tool: !isCreator && usedDbTaskTool(toolsUsed),
+            used_db_tool: !isCreator && isDataTask(toolsUsed),
             tokens_in: tokensIn, tokens_out: tokensOut,
             est_cost_usd: estimateCostUsd(tokensIn, tokensOut),
           })

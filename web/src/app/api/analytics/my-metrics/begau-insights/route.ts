@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { loadChatEvents, isCountedTask } from "@/lib/task-events"
 import { canWriteTab } from "@/lib/writable-tabs"
 import { quarterRange } from "@/lib/okr-helpers"
 import { extractTopKeywords, scoreResponseQuality } from "@/lib/begau-insights"
 
 const READ_ROLES = ["admin", "creator", "bod"]
-const MIN_TASK_RESPONSE_LEN = 15   // khớp đúng ngưỡng đếm "task" ở api/analytics/my-metrics
 
 // GET ?quarter=Q3&year=2026 — ai dùng Bé Gấu nhiều nhất, chủ đề hay hỏi, chấm điểm heuristic câu trả lời.
 export async function GET(req: NextRequest) {
@@ -19,22 +19,16 @@ export async function GET(req: NextRequest) {
   const quarter = req.nextUrl.searchParams.get("quarter") ?? "Q3"
   const year    = parseInt(req.nextUrl.searchParams.get("year") ?? "2026")
   const { start, end } = quarterRange(quarter, year)
-  const startISO = `${start}T00:00:00.000Z`
-  const endISO   = `${end}T23:59:59.999Z`
+  const { rows: allEvents, error } = await loadChatEvents(
+    "id, user_email, user_name, user_role, created_at, user_message, ai_response, used_db_tool, tools_used",
+    start, end,
+  )
 
-  const { data: allEvents, error } = await supabaseAdmin
-    .from("app_usage_events")
-    .select("id, user_email, user_name, user_role, created_at, user_message, ai_response, used_db_tool, tools_used")
-    .eq("event_type", "chat")
-    .not("ai_response", "is", null)
-    .gte("created_at", startISO)
-    .lte("created_at", endISO)
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error }, { status: 500 })
 
   // Cùng định nghĩa "task" với api/analytics/my-metrics (s195+18-B: phải dùng DB tool, không chỉ dựa
   // độ dài response) — Insights CHỈ phân tích trên đúng tập task được tính KPI, không lẫn trả lời chay.
-  const tasks = (allEvents ?? []).filter(t => t.used_db_tool && ((t.ai_response as string) ?? "").trim().length >= MIN_TASK_RESPONSE_LEN)
+  const tasks = allEvents.filter(isCountedTask)
 
   // ── Top người dùng ──
   const userCount = new Map<string, number>()
@@ -50,6 +44,14 @@ export async function GET(req: NextRequest) {
   // ── Chủ đề hay được hỏi (heuristic tần suất từ khoá, không AI) ──
   const topKeywords = extractTopKeywords(tasks.map(t => (t.user_message as string) ?? ""), 20)
 
+  // ── 👍/👎 thật (chat_feedback, v59) — ghép theo người + câu hỏi (bảng không có khoá tới event) ──
+  const { data: fb } = await supabaseAdmin.from("chat_feedback").select("user_email, question, rating, created_at")
+    .gte("created_at", `${start}T00:00:00.000Z`).lte("created_at", `${end}T23:59:59.999Z`)
+    .order("created_at", { ascending: true }).limit(5000)
+  const ratingBy = new Map<string, 1 | -1>()
+  for (const f of fb ?? []) ratingBy.set(`${f.user_email}|${f.question}`, f.rating as 1 | -1)
+  const feedback = { up: (fb ?? []).filter(f => f.rating === 1).length, down: (fb ?? []).filter(f => f.rating === -1).length }
+
   // ── Chấm điểm heuristic câu trả lời ──
   const scored = tasks.map(t => {
     const q = scoreResponseQuality((t.ai_response as string) ?? "")
@@ -61,6 +63,7 @@ export async function GET(req: NextRequest) {
       ai_response_preview: ((t.ai_response as string) ?? "").slice(0, 200),
       score: q.score, bucket: q.bucket, flags: q.flags,
       tools_used: (t.tools_used as string[] | null) ?? [],
+      rating: ratingBy.get(`${t.user_email}|${((t.user_message as string) ?? "").slice(0, 500)}`) ?? null,
     }
   })
   const high = scored.filter(s => s.bucket === "high").length
@@ -73,7 +76,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     quarter, year, start, end, total_tasks: tasks.length,
-    topUsers, topKeywords,
+    topUsers, topKeywords, feedback,
     quality: { avgScore, high, medium, low, items: scored },
   })
 }

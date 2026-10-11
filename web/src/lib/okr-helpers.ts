@@ -63,7 +63,15 @@ export const OKR_HK3_BASELINE = 67.5
 // trả lời chay). Danh sách tool "đọc dữ liệu bảng thật" — loại webSearch (web ngoài, không phải DB nội
 // bộ) và readKnowledgeBase/searchKnowledgeBase (semantic search KB, không phải query bảng dữ liệu có
 // cấu trúc) và các tool Gấu Pro khác (MRP/browser/gen ảnh — không liên quan "task tính KPI").
-export const DB_TASK_TOOLS = ["executeSQL", "querySupabase", "queryProduct", "listSupabaseTables"] as const
-export function usedDbTaskTool(tools: string[] | null | undefined): boolean {
-  return !!tools && tools.some(t => (DB_TASK_TOOLS as readonly string[]).includes(t))
+// s230 (Hiếu chốt 2026-10-11): thêm GA4/GSC/Lark Base + tool tự đọc dữ liệu (báo cáo, CM1 B2B, báo giá vendor,
+// SKU win-rate); câu của Creator không tính. Đổi luật có hiệu lực từ TASK_RULE_CHANGED_AT.
+export const DATA_TASK_TOOLS = [
+  "executeSQL", "querySupabase", "queryProduct", "listSupabaseTables",
+  "queryGA4", "queryGSC", "queryLarkBase",
+  "buildReport", "b2bCustomerCm1", "compareVendorQuotes", "trackSKUWinRate",
+] as const
+export const TASK_RULE_CHANGED_AT = "2026-10-11"
+export function isDataTask(tools: string[] | null | undefined, role?: string | null): boolean {
+  if (role === "creator") return false
+  return !!tools && tools.some(t => (DATA_TASK_TOOLS as readonly string[]).includes(t))
 }

@@ -551,6 +551,7 @@ export async function runCreatorAI(
     signal?: AbortSignal
     timeBudgetMs?: number          // G2 việc nền: hết ngân sách thời gian → dừng giữa các vòng, trả checkpoint để chạy chặng sau
     resume?: JobCheckpoint         // G2 việc nền: chạy tiếp từ checkpoint chặng trước
+    personal?: boolean             // eval trí nhớ: ép bật/tắt trí nhớ cá nhân, bỏ qua cờ gp_personal_features
   } = {},
 ): Promise<{
   text: string; sources: WebSource[]; tokensIn: number; tokensOut: number; toolsUsed: string[]
@@ -558,7 +559,7 @@ export async function runCreatorAI(
 }> {
   const t0 = Date.now()
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
-  const personal = username && username !== "cron" ? await personalFeaturesEnabled(isCreator).catch(() => isCreator) : false
+  const personal = opts.personal ?? (username && username !== "cron" ? await personalFeaturesEnabled(isCreator).catch(() => isCreator) : false)
   const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock] = await Promise.all([
     getPartnerTiers().then(tiers => {
       const lines = Object.entries(tiers).map(([tier, channels]) => `  ${tier}: ${(channels as string[]).join(", ")}`).join("\n")

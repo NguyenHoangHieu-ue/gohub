@@ -8,7 +8,7 @@ import type { Message, UserRole }              from "@/lib/agents/types"
 import { supabaseAdmin }                       from "@/lib/supabase"
 import { checkRateLimit }                      from "@/lib/rate-limit"
 import { parseUploadedFile, type FileContext } from "@/lib/agents/file-parser"
-import { usedDbTaskTool }                      from "@/lib/okr-helpers"
+import { isDataTask }                    from "@/lib/okr-helpers"
 import { estimateCostUsd }                     from "@/lib/agents/gemini-pricing"
 import { larkOpenIdOf }                        from "@/lib/agents/lark-workspace"
 import type { PlanStep }                       from "@/lib/agents/creator-ai"
@@ -54,7 +54,7 @@ async function logChat(
       agent_id: "be-gau", user_message: msg.slice(0, 500),
       ai_response: aiResponse ? aiResponse.slice(0, 3000) : null,
       tools_used: toolsUsed && toolsUsed.length > 0 ? toolsUsed : null,
-      used_db_tool: usedDbTaskTool(toolsUsed),
+      used_db_tool: isDataTask(toolsUsed, role),
       tokens_in: tokensIn, tokens_out: tokensOut,
       est_cost_usd: estimateCostUsd(tokensIn, tokensOut),
     })

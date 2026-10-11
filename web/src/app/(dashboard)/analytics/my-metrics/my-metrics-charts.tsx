@@ -62,7 +62,7 @@ export const DatapoolTrendChart = React.memo(function DatapoolTrendChart({ data,
 })
 
 // ── 3. Bé Gấu tasks theo tháng — stacked bar Web/Lark ────────────────────────
-export interface BegauTrendPoint { month: string; web: number; lark: number }
+export interface BegauTrendPoint { month: string; web: number; lark: number; job: number; live: number }
 export const BegauTrendChart = React.memo(function BegauTrendChart({ data }: { data: BegauTrendPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -73,7 +73,9 @@ export const BegauTrendChart = React.memo(function BegauTrendChart({ data }: { d
         <Tooltip contentStyle={tooltipStyle} labelFormatter={l => `Tháng ${String(l).slice(5)}`} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
         <Bar dataKey="web" name="Web" stackId="s" fill={BRAND} radius={[0, 0, 0, 0]} maxBarSize={36} />
-        <Bar dataKey="lark" name="Lark" stackId="s" fill="#5f9de3" radius={[4, 4, 0, 0]} maxBarSize={36} />
+        <Bar dataKey="lark" name="Lark" stackId="s" fill="#5f9de3" radius={[0, 0, 0, 0]} maxBarSize={36} />
+        <Bar dataKey="job" name="Chạy nền" stackId="s" fill="#94b8e8" radius={[0, 0, 0, 0]} maxBarSize={36} />
+        <Bar dataKey="live" name="Trực tiếp" stackId="s" fill="#c3d6f2" radius={[4, 4, 0, 0]} maxBarSize={36} />
       </BarChart>
     </ResponsiveContainer>
   )

@@ -7,13 +7,13 @@ export interface AutoMetrics {
   hk3: { pct: number; hk3_rev: number; hk3_only_rev: number; bc_only_rev: number; total_rev: number; monthly: MonthStat[]; baseline: number }
   gm:  { qtd_pct: number; total_gp: number; total_rev: number; monthly: GmStat[]; baseline: number }
   begau: {
-    total: number; web: number; lark: number; excluded_short: number
+    total: number; web: number; lark: number; job?: number; live?: number; rule_changed_at?: string; excluded_short: number
     by_role: Record<string, number>; monthly: Record<string, MonthCount>
   }
 }
 export interface MonthStat    { month: string; hk3_rev: number; bc_rev: number; total_rev: number }
 export interface GmStat       { month: string; gp: number; rev: number; gm_pct: number }
-export interface MonthCount   { total: number; web: number; lark: number }
+export interface MonthCount   { total: number; web: number; lark: number; job?: number; live?: number }
 export interface EvidenceRecord {
   id: string; quarter: string; metric: string; title: string | null
   request_time: string; request_note: string | null; request_image_url: string | null
@@ -88,9 +88,11 @@ export interface QualityItem {
   user_message: string; ai_response_preview: string
   score: number; bucket: "high" | "medium" | "low"; flags: string[]
   tools_used: string[]
+  rating?: 1 | -1 | null
 }
 export interface BegauInsightsData {
   total_tasks: number
+  feedback?: { up: number; down: number }
   topUsers: TopUserRow[]
   topKeywords: TopicRow[]
   quality: { avgScore: number; high: number; medium: number; low: number; items: QualityItem[] }

@@ -159,7 +159,7 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
   const datapoolTrend = hk3TableRows.map(m => ({
     month: m.month, pct: m.total_rev > 0 ? ((m.hk3_rev + m.bc_rev) / m.total_rev) * 100 : 0,
   }))
-  const begauTrendData = begauMonthEntries.map(([month, d]) => ({ month, web: d.web, lark: d.lark }))
+  const begauTrendData = begauMonthEntries.map(([month, d]) => ({ month, web: d.web, lark: d.lark, job: d.job ?? 0, live: d.live ?? 0 }))
 
   // ── Nội dung Notes Drawer — mọi công thức/giải thích trước đây nằm rải rác luôn-hiện trong card ──
   const noteSections: NoteSection[] = [
@@ -505,11 +505,14 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                 <div className="text-[11px] text-slate-400 mt-0.5">
                   Target {selQ}: {targets.begau} tasks · Baseline: {BASELINE_NOTE.begau_weekly}
                   {auto && auto.begau.excluded_short > 0 && ` · đã loại ${auto.begau.excluded_short} tin nhắn quá ngắn (<15 ký tự, không tính là task)`}
+                  {auto?.begau.rule_changed_at && ` · cách tính task đổi từ ${auto.begau.rule_changed_at}: thêm GA4/GSC/Lark Base, báo cáo, chạy nền, trực tiếp; bỏ câu của Creator`}
                 </div>
               </div>
               <div className="text-right space-y-1 shrink-0">
                 <div className="text-[11px] text-slate-500">Web: <strong className="text-slate-700">{auto?.begau.web ?? 0}</strong></div>
                 <div className="text-[11px] text-slate-500">Lark: <strong className="text-slate-700">{auto?.begau.lark ?? 0}</strong></div>
+                <div className="text-[11px] text-slate-500">Chạy nền: <strong className="text-slate-700">{auto?.begau.job ?? 0}</strong></div>
+                <div className="text-[11px] text-slate-500">Trực tiếp: <strong className="text-slate-700">{auto?.begau.live ?? 0}</strong></div>
               </div>
             </div>
             <div className="mt-4">
@@ -544,12 +547,14 @@ function MyMetricsInner({ canConfigLark }: { canConfigLark: boolean }) {
                     { key: "total", label: "Total", align: "right", render: ([, d]) => <span className="font-black">{d.total}</span> },
                     { key: "web", label: "Web", align: "right", render: ([, d]) => d.web },
                     { key: "lark", label: "Lark", align: "right", render: ([, d]) => d.lark },
+                    { key: "job", label: "Chạy nền", align: "right", render: ([, d]) => d.job ?? 0 },
+                    { key: "live", label: "Trực tiếp", align: "right", render: ([, d]) => d.live ?? 0 },
                   ]}
                 />
               </div>
             )}
             <SourceBox type="auto" table="Supabase · app_usage_events"
-              filter="event_type='chat' AND used_db_tool=true AND length(trim(ai_response)) >= 15 · Lark: user_email LIKE 'lark:%'" />
+              filter="event_type='chat' AND used_db_tool=true AND length(trim(ai_response)) >= 15 · Lark: user_email LIKE 'lark:%' · Chạy nền: agent_id='be-gau-job' · Trực tiếp: agent_id='be-gau-live'" />
 
             <BegauInsightsSection quarter={qLabel} />
 

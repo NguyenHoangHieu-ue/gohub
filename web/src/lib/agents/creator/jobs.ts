@@ -3,12 +3,15 @@ import { sendLarkDM, getCreatorLarkOpenId } from "@/lib/lark"
 import { runCreatorAI, type JobCheckpoint } from "@/lib/agents/creator-ai"
 import { runBeGau } from "@/lib/agents/be-gau"
 import { canViewCogs } from "@/lib/agents/guardian"
+import { isDataTask } from "@/lib/okr-helpers"
+import { estimateCostUsd } from "@/lib/agents/gemini-pricing"
 import type { Content } from "@google/genai"
 import { genai } from "@/lib/agents/genai-stream"
 
 // U3: việc nền của Bé Gấu dùng chung bảng gp_jobs (không migration) — đánh dấu bằng checkpoint.agent = "be-gau"; chạy runBeGau theo vai trò
 // thật của người giao (đọc lại users.role mỗi chặng), hội thoại kết quả lưu theo TÊN hiển thị (danh sách Bé Gấu lọc theo tên).
-export interface BeGauJobState { agent: "be-gau"; ownerName: string; contents?: Content[]; tainted?: boolean }
+// tools = tool đã gọi qua các chặng (để ghi 1 task My Metrics khi xong); scheduled = việc tự chạy theo lịch → KHÔNG tính task (Hiếu chốt s230).
+export interface BeGauJobState { agent: "be-gau"; ownerName: string; contents?: Content[]; tainted?: boolean; tools?: string[]; scheduled?: boolean }
 const isBeGauJob = (c: unknown): c is BeGauJobState => (c as any)?.agent === "be-gau"
 
 // U3 nghiên cứu sâu: phiên Deep Research chạy ngầm phía Google (Interactions API, ~2–20 phút); việc nền chỉ hỏi trạng thái theo chặng.
@@ -31,9 +34,9 @@ export interface JobRow {
   conversation_id: string | null; created_at: string; updated_at: string
 }
 
-export async function createJob(p: { username: string; isCreator: boolean; prompt: string; beGauOwnerName?: string; state?: DeepResearchState }): Promise<{ job?: JobRow; error?: string }> {
+export async function createJob(p: { username: string; isCreator: boolean; prompt: string; beGauOwnerName?: string; scheduled?: boolean; state?: DeepResearchState }): Promise<{ job?: JobRow; error?: string }> {
   const title = p.prompt.replace(/\s+/g, " ").slice(0, 80)
-  const checkpoint: BeGauJobState | DeepResearchState | null = p.state ?? (p.beGauOwnerName ? { agent: "be-gau", ownerName: p.beGauOwnerName } : null)
+  const checkpoint: BeGauJobState | DeepResearchState | null = p.state ?? (p.beGauOwnerName ? { agent: "be-gau", ownerName: p.beGauOwnerName, ...(p.scheduled ? { scheduled: true } : {}) } : null)
   const { data, error } = await supabaseAdmin.from("gp_jobs")
     .insert({ username: p.username, is_creator: p.isCreator, title, prompt: p.prompt.slice(0, 8000), checkpoint })
     .select("*").single()
@@ -147,8 +150,9 @@ async function runBeGauJobChunk(j: JobRow, st: BeGauJobState): Promise<"continue
       isCost: canViewCogs(role), larkOpenId: (user?.lark_open_id as string) || null,
       job: { timeBudgetMs: CHUNK_BUDGET_MS, resume: st.contents, tainted: st.tainted },
     })
+    const tools = Array.from(new Set([...(st.tools ?? []), ...r.toolsUsed]))
     if (r.checkpoint && j.chunks + 1 < MAX_CHUNKS) {
-      const next: BeGauJobState = { ...st, contents: r.checkpoint.contents, tainted: r.checkpoint.tainted }
+      const next: BeGauJobState = { ...st, contents: r.checkpoint.contents, tainted: r.checkpoint.tainted, tools }
       const { data: still } = await supabaseAdmin.from("gp_jobs")
         .update({ status: "queued", checkpoint: next, updated_at: new Date().toISOString() })
         .eq("id", j.id).eq("status", "running").select("id")
@@ -172,6 +176,17 @@ async function runBeGauJobChunk(j: JobRow, st: BeGauJobState): Promise<"continue
     } catch (e) { console.error("[bg_jobs] save conversation:", e) }
     const { data: cur } = await supabaseAdmin.from("gp_jobs").select("status").eq("id", j.id).maybeSingle()
     if (cur?.status === "cancelled") return "finished"
+    // My Metrics "Tasks via Bé Gấu": 1 việc nền xong = 1 task (nếu có đọc dữ liệu); việc theo lịch không tính.
+    if (!st.scheduled) {
+      try {
+        await supabaseAdmin.from("app_usage_events").insert({
+          event_type: "chat", agent_id: "be-gau-job", user_email: j.username, user_name: st.ownerName, user_role: role,
+          user_message: j.prompt.slice(0, 500), ai_response: text.slice(0, 3000),
+          tools_used: tools.length ? tools : null, used_db_tool: isDataTask(tools, role),
+          tokens_in: r.tokensIn, tokens_out: r.tokensOut, est_cost_usd: estimateCostUsd(r.tokensIn, r.tokensOut),
+        })
+      } catch (e) { console.error("[bg_jobs] log task:", e) }
+    }
     await finish(j, { status: "done", result: text.slice(0, 20_000), conversation_id: convId },
       `✅ Bé Gấu đã xong việc nền: "${j.title}"\n\n${text.slice(0, 1500)}${text.length > 1500 ? "\n…(xem đầy đủ trong Bé Gấu, mục Lịch sử)" : ""}`)
     return "finished"

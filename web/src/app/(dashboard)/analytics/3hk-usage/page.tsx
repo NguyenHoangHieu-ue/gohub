@@ -56,6 +56,10 @@ const daysOfSku = (sku: string): number | null => {
   return null
 }
 
+// Ưu tiên cột day_amount của DB (s229, khớp daysOfSku 3.117/3.119 SKU — 2 SKU còn lại là khung SIM, 0 ngày); thiếu thì suy từ mã SKU.
+const daysOf = (sku: string, dayAmount?: number): number | null =>
+  dayAmount && dayAmount > 0 ? dayAmount : daysOfSku(sku)
+
 
 // ─── Phân loại ký tự/nhóm theo mã SKU — 3 vintage KHÁC cấu trúc hoàn toàn (s202+2, Hiếu cung cấp cấu
 // trúc mã CŨ, verify 100% qua SQL thật trên fact_data_usage 2026-09-22 — xem wiki §3.1e):
@@ -181,6 +185,7 @@ interface DataUsageRecord {
 
 interface SKUMetrics {
   sku: string
+  days?: number          // MAX(day_amount) của SKU trong kỳ
   active_sims: number
   total_plan_gb: number
   total_usage_gb: number
@@ -554,7 +559,7 @@ export default function ThreeHKDataUsagePage() {
       g.active_sims    += sm.active_sims
       g.total_plan_gb  += sm.total_plan_gb
       g.total_usage_gb += sm.total_usage_gb
-      const dd = daysOfSku(sm.sku)
+      const dd = daysOf(sm.sku, sm.days)
       if (dd && dd > 0) g.sim_days += sm.active_sims * dd
     }
     const list = Object.values(acc)
@@ -625,7 +630,7 @@ export default function ThreeHKDataUsagePage() {
       const members = speedGroupMembers[sg.key] ?? []
       let usage = 0, plan = 0, simDays = 0
       for (const m of members) {
-        const d = daysOfSku(m.sku)
+        const d = daysOf(m.sku, m.days)
         usage += m.total_usage_gb
         plan  += m.total_plan_gb
         if (d && d > 0) simDays += m.active_sims * d
@@ -659,7 +664,7 @@ export default function ThreeHKDataUsagePage() {
     for (const sg of speedGroups) {
       const gname = sgChartName(sg)
       for (const m of speedGroupMembers[sg.key] ?? []) {
-        const d = daysOfSku(m.sku)
+        const d = daysOf(m.sku, m.days)
         if (!d || d <= 0 || m.active_sims <= 0) continue
         const perDay = m.total_usage_gb / m.active_sims / d
         const bi = USAGE_BUCKETS.findIndex(b => perDay >= b.min && perDay < b.max)
@@ -671,7 +676,7 @@ export default function ThreeHKDataUsagePage() {
 
   // GB/ngày/SIM per SKU (cho tab Unlimited — chỉ số đúng nghĩa thay cho "Usage %" vô nghĩa với gói không giới hạn).
   const gbPerDaySimOfSku = (sm: SKUMetrics): number | null => {
-    const d = daysOfSku(sm.sku)
+    const d = daysOf(sm.sku, sm.days)
     return d && d > 0 && sm.active_sims > 0 ? sm.total_usage_gb / sm.active_sims / d : null
   }
   // Trung bình có trọng số GB/ngày/SIM toàn bộ gói Unlimited (cho summary card).
@@ -679,7 +684,7 @@ export default function ThreeHKDataUsagePage() {
     if (activeTab !== "Unlimited" || skuMetricsTab !== "Unlimited") return null
     let usage = 0, simDays = 0
     for (const sm of skuMetrics) {
-      const d = daysOfSku(sm.sku)
+      const d = daysOf(sm.sku, sm.days)
       if (!d || d <= 0 || sm.active_sims <= 0) continue
       usage += sm.total_usage_gb
       simDays += sm.active_sims * d
@@ -732,7 +737,7 @@ export default function ThreeHKDataUsagePage() {
     END`
   const bundlesCTE = () => `
     WITH period_records AS (
-      SELECT iccid, order_code, sku, sku_type, total_data_gb, data_amount_gb, first_report_date, activation_date
+      SELECT iccid, order_code, sku, sku_type, total_data_gb, data_amount_gb, day_amount, first_report_date, activation_date
       FROM fact_data_usage
       WHERE ${V3HK}
         AND ${EXCLUDE_FRAME}
@@ -742,7 +747,7 @@ export default function ThreeHKDataUsagePage() {
       SELECT iccid, order_code, MAX(sku) AS sku,
              ${SKU_TYPE_CASE} AS sku_type,
              MIN(first_report_date) AS first_report_date, MAX(activation_date) AS activation_date,
-             SUM(total_data_gb) AS total_data_gb, MAX(data_amount_gb) AS data_amount_gb, COUNT(*) AS record_count
+             SUM(total_data_gb) AS total_data_gb, MAX(data_amount_gb) AS data_amount_gb, MAX(day_amount) AS day_amount, COUNT(*) AS record_count
       FROM period_records GROUP BY iccid, order_code
     )`
 
@@ -782,7 +787,7 @@ export default function ThreeHKDataUsagePage() {
     try {
       const sql = `
         ${bundlesCTE()}
-        SELECT sku, COUNT(*) as active_sims, SUM(data_amount_gb) as total_plan_gb, SUM(total_data_gb) as total_usage_gb,
+        SELECT sku, COUNT(*) as active_sims, MAX(day_amount) as day_amount, SUM(data_amount_gb) as total_plan_gb, SUM(total_data_gb) as total_usage_gb,
           CASE WHEN SUM(data_amount_gb) > 0 THEN (SUM(total_data_gb) / SUM(data_amount_gb)) * 100 ELSE 0 END as avg_usage_pct
         FROM bundles WHERE 1=1 ${tabClause()} ${searchClause()}
         GROUP BY 1 ORDER BY total_usage_gb DESC
@@ -791,6 +796,7 @@ export default function ThreeHKDataUsagePage() {
       if (reqId !== skuMetricsReqIdRef.current) return   // có request mới hơn đã bắn ra sau — bỏ response cũ này
       setSkuMetrics(result.map((r: any) => ({
         sku: r.sku,
+        days: parseFloat(r.day_amount || 0),
         active_sims: parseInt(r.active_sims || 0),
         total_plan_gb: parseFloat(r.total_plan_gb || 0),
         total_usage_gb: parseFloat(r.total_usage_gb || 0),
@@ -924,7 +930,7 @@ export default function ThreeHKDataUsagePage() {
     try {
       const sql = `
         WITH period_records AS (
-          SELECT iccid, order_code, sku, sku_type, total_data_gb, data_amount_gb,
+          SELECT iccid, order_code, sku, sku_type, total_data_gb, data_amount_gb, day_amount,
                  to_char(first_report_date::date, 'YYYY-MM') AS ym
           FROM fact_data_usage
           WHERE ${V3HK}
@@ -934,10 +940,10 @@ export default function ThreeHKDataUsagePage() {
         bundles AS (
           SELECT ym, iccid, order_code, MAX(sku) AS sku,
                  ${SKU_TYPE_CASE} AS sku_type,
-                 SUM(total_data_gb) AS total_data_gb, MAX(data_amount_gb) AS data_amount_gb
+                 SUM(total_data_gb) AS total_data_gb, MAX(data_amount_gb) AS data_amount_gb, MAX(day_amount) AS day_amount
           FROM period_records GROUP BY ym, iccid, order_code
         )
-        SELECT ym, sku, COUNT(*) AS active_sims,
+        SELECT ym, sku, COUNT(*) AS active_sims, MAX(day_amount) AS day_amount,
           SUM(data_amount_gb) AS total_plan_gb, SUM(total_data_gb) AS total_usage_gb
         FROM bundles WHERE 1=1 ${tabClause()} ${searchClause()}
         GROUP BY ym, sku
@@ -948,7 +954,7 @@ export default function ThreeHKDataUsagePage() {
         const sims = parseInt(r.active_sims || 0)
         const plan = parseFloat(r.total_plan_gb || 0)
         const usage = parseFloat(r.total_usage_gb || 0)
-        const d = daysOfSku(r.sku || "")
+        const d = daysOf(r.sku || "", parseFloat(r.day_amount || 0))
         const okDay = d != null && d > 0 && sims > 0
         return {
           "Tháng": r.ym || "",
@@ -1429,7 +1435,7 @@ export default function ThreeHKDataUsagePage() {
                               </thead>
                               <tbody className="divide-y divide-slate-50">
                                 {members.length > 0 ? members.map((m, j) => {
-                                  const d = daysOfSku(m.sku)
+                                  const d = daysOf(m.sku, m.days)
                                   // Kế hoạch/ngày = data_amount_gb ÷ ngày (từ DB) — mức 3HK cấp/ngày cho gói này.
                                   const planPerDay = (d && d > 0 && m.active_sims > 0) ? m.total_plan_gb / m.active_sims / d : null
                                   const gbPerDaySim = (d && d > 0 && m.active_sims > 0) ? m.total_usage_gb / m.active_sims / d : null
