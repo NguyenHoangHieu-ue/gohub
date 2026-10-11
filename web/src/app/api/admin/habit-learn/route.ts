@@ -18,7 +18,7 @@ async function phrase(candidates: HabitCandidate[], events: number): Promise<{ h
     const r = await genai().models.generateContent({
       model: GEMINI_MODEL,
       contents: `Bạn tổng hợp "thói quen làm việc" của 1 người dùng trợ lý BI nội bộ (công ty SIM/eSIM du lịch) từ SỐ LIỆU đã tính sẵn dưới đây.
-Quy tắc: chỉ diễn đạt lại đúng những gì số liệu nói, KHÔNG suy diễn thêm, KHÔNG đoán tính cách/đời tư/sức khoẻ/lương/tôn giáo/chính trị/quan hệ riêng.
+Quy tắc: chỉ diễn đạt lại đúng những gì số liệu nói, KHÔNG suy diễn thêm. KHÔNG đoán nghĩa của từ khoá/tên (đừng giải thích "X là nhà cung cấp/dự án…"); chủ đề chỉ viết dạng: Hay nhắc tới "X". KHÔNG đoán tính cách/đời tư/sức khoẻ/lương/tôn giáo/chính trị/quan hệ riêng.
 Mỗi thói quen 1 câu tiếng Việt ≤ 140 ký tự, trung tính (không "em theo dõi anh"), viết dạng nhận xét về người dùng ("Hay hỏi…", "Thích câu trả lời…").
 Gộp mục trùng ý. Bỏ mục không hữu ích cho việc điều chỉnh cách trợ lý trả lời (vd công cụ nội bộ mà người dùng không chủ động chọn). confidence 0-1 theo số lần/số tuần quan sát.
 Tổng số tin đã phân tích: ${events}. Ngưỡng bằng chứng: ≥${MIN_COUNT} lần trong ≥${MIN_WEEKS} tuần.

@@ -83,6 +83,15 @@ describe("H0.5 — chỉ giữ thói quen ĐẶC TRƯNG so với công ty (basel
     for (const bad of ["nhưng", "phía", "khác", "ngắn", "trả lời", "trả lời ngắn"]) expect(keys).not.toContain(bad)
   })
 
+  it("cụm toàn âm tiết chung (thông tin) và âm tiết không dấu (dung) không thành chủ đề; tên riêng ASCII (cmhk) thì có", () => {
+    const mine = [0, 1, 2, 3].map(w => ev(mon(w), "cho mình thông tin dung cmhk"))
+    const base = buildBaseline([...mine, ...other(50, "xem doanh thu hôm nay")])
+    const keys = computeHabits(mine, [], base).candidates.filter(c => c.kind === "topic" || c.kind === "weekday_topic").map(c => c.key)
+    expect(keys).not.toContain("thông tin")
+    expect(keys).not.toContain("dung")
+    expect(keys.some(k => /cmhk/.test(k))).toBe(true)
+  })
+
   it("kênh Lark chỉ là thói quen khi khác số đông", () => {
     const mine = [0, 1, 2, 3, 0, 1, 2, 3, 0, 1].map((w, i) => ev(mon(w, 3 + (i % 2)), `câu hỏi số ${i} về đơn hàng`, [], "lark:ou_abc"))
     const others = other(40, "xem doanh thu hôm nay", [], "x@y.z")

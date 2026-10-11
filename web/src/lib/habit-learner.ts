@@ -24,6 +24,9 @@ const STYLE_WORDS_RE = /(ngắn|trả lời|tóm tắt|chi tiết|gọn|excel|bi
 // Âm tiết tiếng Việt quá chung: tokenize tách theo âm tiết nên "thông tin" thành "thông"/"tin"; chỉ cho đứng trong cụm ≥2 âm tiết.
 const GENERIC_SYLLABLES = new Set(["gửi", "lại", "thông", "tin", "phẩm", "sản", "giá", "gói", "xem", "lấy", "tìm", "tra", "cứu", "làm", "thêm", "sửa", "đổi", "nhờ", "tên", "số", "bảng", "file", "trang", "mới", "cũ", "nào", "đây", "đấy", "thôi", "luôn", "check", "list", "cho", "biết", "lên", "xuống", "ra", "vào", "tháng", "tuần", "năm", "quý", "hôm", "qua", "trước", "sau", "nữa", "thử", "xong", "tiếp", "tất", "cả"])
 
+// Âm tiết tiếng Việt gõ KHÔNG dấu hay gặp — không được coi là "từ đặc trưng" kiểu mã/tên riêng.
+const ASCII_VI_SYLLABLES = new Set(["dung", "khong", "duoc", "nhieu", "thang", "tuan", "khach", "minh", "giup", "voi", "nhung", "nhu", "cua", "nay", "nao", "gui", "them", "sua", "bang", "doanh", "thu", "san", "pham", "gia", "goi", "xem", "cho", "lay", "tim", "lam", "biet", "roi", "nhe", "nha", "thong", "tin"])
+
 export interface HabitCandidate {
   kind: "topic" | "weekday_topic" | "tool" | "time_of_day" | "channel" | "style" | "format" | "feedback"
   key: string
@@ -67,13 +70,14 @@ const hourBucket = (iso: string) => { const h = vn(iso).getUTCHours(); return h 
 function termSet(text: string): Set<string> {
   const w = tokenize(text)
   const s = new Set<string>()
+  const allGeneric = (...parts: string[]) => parts.every(p => GENERIC_SYLLABLES.has(p))   // "thông tin", "sản phẩm"... toàn âm tiết chung → không phải chủ đề
   for (let i = 0; i < w.length - 1; i++) {
-    s.add(`${w[i]} ${w[i + 1]}`)
-    if (i < w.length - 2) s.add(`${w[i]} ${w[i + 1]} ${w[i + 2]}`)
+    if (!allGeneric(w[i], w[i + 1])) s.add(`${w[i]} ${w[i + 1]}`)
+    if (i < w.length - 2 && !allGeneric(w[i], w[i + 1], w[i + 2])) s.add(`${w[i]} ${w[i + 1]} ${w[i + 2]}`)
   }
   // Từ đơn chỉ nhận token "kiểu định danh": chỉ gồm chữ/số ASCII (tên riêng, vendor, mã, từ tiếng Anh) — âm tiết tiếng Việt có dấu
   // ("phía", "nhưng", "khác") không bao giờ là chủ đề đứng một mình; cụm ≥2 âm tiết đã được thêm ở trên.
-  for (const t of w) if (t.length >= 4 && /^[a-z0-9]+$/.test(t) && !GENERIC_SYLLABLES.has(t) && !/^\d+$/.test(t)) s.add(t)
+  for (const t of w) if (t.length >= 4 && /^[a-z0-9]+$/.test(t) && !GENERIC_SYLLABLES.has(t) && !ASCII_VI_SYLLABLES.has(t) && !/^\d+$/.test(t)) s.add(t)
   return s
 }
 
