@@ -19,6 +19,7 @@ import { runReadMyBrowser, runControlMyBrowser, runLocalFiles } from "./bridge"
 import { runGoogleWorkspace } from "./google"
 import { runAssistantMemory } from "@/lib/assistant-memory"
 import { searchPastConversations } from "@/lib/assistant-memory-auto"
+import { isMemoryOff } from "@/lib/assistant-memory-rights"
 import { runScheduleTask } from "../schedules"
 import { runLarkDocs } from "./lark-docs"
 import { logGpAction }             from "./audit-log"
@@ -117,6 +118,8 @@ async function dispatchToolCore(
 
   // G3: trí nhớ cá nhân theo cờ gp_personal_features (ctx.personal); không truyền (vd duyệt hành động) thì như cũ = creator.
   const personal = ctx?.personal ?? ctx?.isCreator === true
+  const memOff = (call.name === "assistantMemory" || call.name === "searchPastConversations") && await isMemoryOff(ctx?.username).catch(() => false)
+  if (memOff) return wrap({ error: "Người dùng đã tắt trí nhớ — không đọc/ghi trí nhớ. Nếu muốn dùng lại, bật ở panel Trí nhớ." })
   if (call.name === "assistantMemory")
     return wrap(personal ? await runAssistantMemory(call.args, ctx?.username || "", "gau-pro") : { error: "Trí nhớ cá nhân chưa bật cho tài khoản này." })
 

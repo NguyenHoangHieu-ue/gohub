@@ -1,8 +1,9 @@
 "use client"
 
+import { MemoryPanel } from "@/components/gau-pro/memory-panel"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useSession, signOut }                        from "next-auth/react"
-import { Send, Bot, User, Sparkles, X, FileSpreadsheet, Paperclip, FileText, Image as ImageIcon, ThumbsUp, ThumbsDown, Square, CheckCircle2, Circle, Loader2, Volume2, ArrowDown, Radio, Languages, Mic, FileAudio, Hourglass, SquarePen } from "lucide-react"
+import { Send, Bot, User, Sparkles, X, FileSpreadsheet, Paperclip, FileText, Image as ImageIcon, ThumbsUp, ThumbsDown, Square, CheckCircle2, Circle, Loader2, Volume2, ArrowDown, Radio, Languages, Mic, FileAudio, Hourglass, SquarePen, Brain } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
@@ -226,6 +227,7 @@ export default function ChatbotPage() {
   const [bgMode,         setBgMode]        = useState(false)                       // U3: giao việc chạy nền
   const [showTranslate,  setShowTranslate] = useState(false)                       // U3: dịch trực tiếp (CS)
   const [meetingMode,    setMeetingMode]   = useState<"record" | "file" | null>(null)  // U4: ghi âm cuộc họp mở từ menu ⋯
+  const [showMemory,     setShowMemory]    = useState(false)                       // P2: panel trí nhớ cá nhân
   const [showAll,        setShowAll]       = useState(false)                       // U4: hiện cả tin cũ đã thu gọn
 
   useEffect(() => {
@@ -640,6 +642,7 @@ export default function ChatbotPage() {
       { key: "meeting", label: "Ghi âm cuộc họp → biên bản", hint: "Tối đa ~35 phút", icon: <Mic size={15} />, onClick: () => setMeetingMode("record"), disabled: busy || !!meetingMode },
       { key: "meeting-file", label: "Biên bản từ file ghi âm", hint: "File ≤ 4MB", icon: <FileAudio size={15} />, onClick: () => setMeetingMode("file"), disabled: busy || !!meetingMode },
     ] : []),
+    ...(features.includes("memory") ? [{ key: "memory", label: "Trí nhớ của tôi", hint: "Xem, sửa, xoá, xuất, tắt điều Bé Gấu nhớ về bạn", icon: <Brain size={15} />, onClick: () => setShowMemory(true) }] : []),
     ...(features.includes("background") ? [{ key: "bg", label: bgMode ? "Tắt chế độ chạy nền" : "Chạy nền việc dài", hint: "Xong nhắn Lark + lưu vào lịch sử", icon: <Hourglass size={15} />, onClick: () => setBgMode(v => !v) }] : []),
   ]
 
@@ -875,6 +878,7 @@ export default function ChatbotPage() {
           </form>
         </div>
       </div>
+      {showMemory && <MemoryPanel api="/api/chat/memory" floating onClose={() => setShowMemory(false)} />}
       {showTranslate && <TranslateSession onClose={() => setShowTranslate(false)} />}
       {showLive && (
         <LiveSession apiBase="/api/chat/live" title="Bé Gấu" allowControl={false} onClose={() => setShowLive(false)}

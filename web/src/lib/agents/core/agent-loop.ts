@@ -30,6 +30,7 @@ export interface AgentLoop {
   toolsUsed: Set<string>
   tokensIn: number
   tokensOut: number
+  cachedIn: number
   stopped: boolean
   unfinished: boolean
   rounds: LoopRound[]
@@ -43,7 +44,7 @@ export async function runAgentLoop(o: AgentLoopOptions): Promise<AgentLoop> {
   const rounds: LoopRound[] = []
   const tools: LoopToolRun[] = []
   const toolsUsed = new Set<string>()
-  let tokensIn = 0, tokensOut = 0
+  let tokensIn = 0, tokensOut = 0, cachedIn = 0
 
   const next = async (config?: GenerateContentConfig, onChunk = o.onChunk): Promise<TurnResult> => {
     const r0 = rounds.length
@@ -52,7 +53,7 @@ export async function runAgentLoop(o: AgentLoopOptions): Promise<AgentLoop> {
     const round = { r: r0, ms: Date.now() - ts, tin: r.tokensIn, tout: r.tokensOut, calls: r.functionCalls.map(c => c.name ?? "") }
     rounds.push(round)
     o.onRound?.(round)
-    tokensIn += r.tokensIn; tokensOut += r.tokensOut
+    tokensIn += r.tokensIn; tokensOut += r.tokensOut; cachedIn += r.cachedIn ?? 0
     if (r.content.parts?.length) o.contents.push(r.content)
     return r
   }
@@ -81,5 +82,6 @@ export async function runAgentLoop(o: AgentLoopOptions): Promise<AgentLoop> {
     last, toolsUsed, stopped, unfinished, rounds, tools, next,
     get tokensIn() { return tokensIn },
     get tokensOut() { return tokensOut },
+    get cachedIn() { return cachedIn },
   }
 }

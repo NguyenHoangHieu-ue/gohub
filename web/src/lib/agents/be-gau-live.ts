@@ -3,7 +3,7 @@ import { authOptions } from "@/lib/auth"
 import { canViewCogs } from "./guardian"
 import { prepareBeGau } from "./be-gau"
 import { toGenaiSchema } from "./genai-stream"
-import { loadFeatureMatrix, featureEnabled } from "@/lib/assistant-features"
+import { featureOn } from "@/lib/assistant-features"
 
 // Phiên Trực tiếp (giọng nói + màn hình) của Bé Gấu (plan U3) — mở theo vai trò ở bảng tính năng ("live").
 // Prompt + tool lấy từ prepareBeGau (cùng lọc vai trò/giá vốn như chat), chỉ giữ tool ĐỌC: phiên live không có cổng duyệt.
@@ -29,7 +29,7 @@ export async function beGauLiveUser(): Promise<LiveUser | null> {
   const username = session?.user?.username
   if (!username) return null
   const role = session.user.role || "staff"
-  if (!featureEnabled(await loadFeatureMatrix(), "live", role)) return null
+  if (!await featureOn("live", role, username)) return null
   return { username, role, name: session.user.name || username, isCost: canViewCogs(role) }
 }
 

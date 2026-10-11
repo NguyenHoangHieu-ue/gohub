@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { createLiveToken } from "@/lib/agents/live-token"
 import { GEMINI_TRANSLATE_MODEL } from "@/lib/ai-models"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { loadFeatureMatrix, featureEnabled } from "@/lib/assistant-features"
+import { featureOn } from "@/lib/assistant-features"
 
 const LANGS = new Set(["en", "zh", "ja", "ko", "th", "fr", "de", "es", "ru", "id", "ms", "km", "lo"])
 
@@ -12,7 +12,7 @@ const LANGS = new Set(["en", "zh", "ja", "ko", "th", "fr", "de", "es", "ru", "id
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (!featureEnabled(await loadFeatureMatrix(), "translate", session.user.role))
+  if (!await featureOn("translate", session.user.role, session.user.username))
     return NextResponse.json({ error: "Vai trò của bạn chưa được mở Dịch trực tiếp." }, { status: 403 })
   const rl = await checkRateLimit(`bg-translate:${session.user.username || session.user.email}`, 6, 60_000)
   if (!rl.allowed) return NextResponse.json({ error: "Mở phiên quá nhiều, đợi 1 phút." }, { status: 429 })

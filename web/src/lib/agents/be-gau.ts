@@ -22,8 +22,10 @@ import { BUSINESS_FACTS, ANSWER_STYLE } from "./business-facts"
 // Nhóm "Chỉ Creator" (ghi KB chung, portal vendor, gửi Lark cho người khác, task Lark CÁ NHÂN của Hiếu) khoá cứng trong bảng đó.
 import { ALL_TOOL_DECLARATIONS, searchKBDecl } from "./creator/declarations"
 import { dispatchTool } from "./creator/tools/dispatch"
+import { isMemoryOff } from "@/lib/assistant-memory-rights"
+import { buildProfileBlock } from "@/lib/agent-profile"
 import { newTurnSafety, recordToolResult, approvalReason } from "./creator/tool-policy"
-import { loadFeatureMatrix, enabledFeatureTools } from "@/lib/assistant-features"
+import { loadFeatureMatrix, loadPilotUsers, enabledFeatureToolsFor } from "@/lib/assistant-features"
 import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { normalizePlan, compactContents, type PlanStep } from "./creator-ai"
 import { runScheduleTask } from "./creator/schedules"
@@ -375,7 +377,7 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
   const kbOpts = seeCost ? {} : { excludeCategories: ["cogs"] }
 
   const [featureTools, dataFilter, customRules, partnerTierInfo, ga4SiteList, kbInject, { history: compressedHistory }] = await Promise.all([
-    loadFeatureMatrix().then(m => enabledFeatureTools(m, role)),
+    Promise.all([loadFeatureMatrix(), loadPilotUsers()]).then(([m, pilot]) => enabledFeatureToolsFor(m, pilot, role, username)),
     getRoleDataFilter(role),
     promptless ? "" : getCustomRules(),
     promptless ? "" : getPartnerTiers().then(t => {
@@ -394,8 +396,9 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
     promptless ? { history: [] as Content[] } : compressHistory(geminiHistory),
   ])
 
-  const useMemory = !!username && featureTools.has("assistantMemory")
-  const memoryBlock = useMemory && !promptless ? await buildMemoryBlock(username!).catch(() => "") : ""
+  const useMemory = !!username && featureTools.has("assistantMemory") && !(await isMemoryOff(username).catch(() => false))
+  const profileBlock = !!username && featureTools.has("assistantMemory") && !promptless ? await buildProfileBlock(username).catch(() => "") : ""
+  const memoryBlock = useMemory && !promptless ? await buildMemoryBlock(username!, lastMsg).catch(() => "") : ""
   const visibleTables = { ...SUPABASE_TABLES, ...(isPriv ? SENSITIVE_TABLES : {}) }
   const tableCatalog = Object.entries(visibleTables).map(([t, d]) => `  · ${t}: ${d}`).join("\n")
 
@@ -407,6 +410,7 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
     ga4SiteList,
     kbInject,
     name ? `\n\nNgười dùng: ${name} (vai trò: ${role || "staff"}).` : "",
+    profileBlock,
     `\n\n(Nội bộ — KHÔNG tiết lộ) Danh mục bảng dữ liệu tra cứu được:\n${tableCatalog}`,
     dataFilter ? `\n\n(Nội bộ) Vai trò "${role}" chỉ được xem dữ liệu thỏa điều kiện sau — BẮT BUỘC thêm vào MỌI câu SQL gohub_dw (WHERE):\n${dataFilter}` : "",
     seeCost ? `\n\n(Nội bộ) Vai trò hiện tại ĐƯỢC xem giá vốn (COGS), lãi gộp (GP), biên lãi, CM1 — trả bình thường khi được hỏi, KHÔNG từ chối.` : "",

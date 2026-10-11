@@ -15,7 +15,9 @@ import { runAgentLoop } from "./core/agent-loop"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { personalFeaturesEnabled } from "@/lib/assistant-memory-auto"
-import { newTurnSafety, recordToolResult, approvalReason, describeAction } from "./creator/tool-policy"
+import { isMemoryOff } from "@/lib/assistant-memory-rights"
+import { buildProfileBlock } from "@/lib/agent-profile"
+import { newTurnSafety, recordToolResult, approvalReason, describeAction, taintFromRuns } from "./creator/tool-policy"
 import { createPendingAction, type PendingAction } from "./creator/approvals"
 import { getCreatorLarkOpenId, sendLarkMessage } from "@/lib/lark"
 import { SKILL_TOOLS, getSkill, skillCatalog, preloadSkills } from "./creator/skills"
@@ -63,7 +65,7 @@ async function saveRunTrace(row: Record<string, unknown>) {
   } catch { /* bỏ qua */ }
 }
 
-/** Nguồn "nhiễm" của lượt gần nhất (≤2 giờ, cùng người + kênh) nếu lượt đó đã đọc nội dung ngoài; null nếu không. */
+/** Nguồn "nhiễm" nếu cuộc chat đã đọc nội dung ngoài ở lượt trước; null nếu không. */
 async function notifyPendingOnLark(a: PendingAction): Promise<void> {
   const openId = await getCreatorLarkOpenId().catch(() => null)
   if (openId) await sendLarkMessage(openId, "open_id", `📝 Chờ anh duyệt — ${a.summary}
@@ -71,12 +73,14 @@ async function notifyPendingOnLark(a: PendingAction): Promise<void> {
 Duyệt: nhắn Gấu Pro "duyệt ${a.code}" (hoặc bấm Duyệt trên web). Bỏ: "từ chối ${a.code}".`).catch(() => {})
 }
 
-async function previousRunTaint(username: string, channel: string): Promise<string[] | null> {
+// P2: gắn theo CUỘC CHAT (`conv`, ghi ở bước cuối của trace): quay lại cuộc chat bị nhiễm sau khi chat cuộc khác vẫn còn nhiễm, và không hết hạn
+// sau 2 giờ — bất kỳ lượt nào của cuộc chat đó từng nhiễm là đủ. Không có `conv` (kênh cũ) → như trước: lượt gần nhất của người + kênh trong 2 giờ.
+async function previousRunTaint(username: string, channel: string, conv?: string): Promise<string[] | null> {
+  const since = new Date(Date.now() - (conv ? 24 : 2) * 3600_000).toISOString()
   const { data } = await supabaseAdmin.from("gp_runs").select("steps,created_at")
-    .eq("username", username).eq("channel", channel).gte("created_at", new Date(Date.now() - 2 * 3600_000).toISOString())
-    .order("created_at", { ascending: false }).limit(1).maybeSingle()
-  const last = Array.isArray(data?.steps) ? (data!.steps as any[]).at(-1) : null
-  return last?.tainted ? (Array.isArray(last.taintSources) ? last.taintSources.map(String) : ["nội dung ngoài"]) : null
+    .eq("username", username).eq("channel", channel).gte("created_at", since)
+    .order("created_at", { ascending: false }).limit(conv ? 60 : 1)
+  return taintFromRuns((data ?? []) as { steps: unknown }[], conv)
 }
 
 const previewArgs = (args: unknown) => {
@@ -551,16 +555,17 @@ export async function runCreatorAI(
     signal?: AbortSignal
     timeBudgetMs?: number          // G2 việc nền: hết ngân sách thời gian → dừng giữa các vòng, trả checkpoint để chạy chặng sau
     resume?: JobCheckpoint         // G2 việc nền: chạy tiếp từ checkpoint chặng trước
+    conversationKey?: string       // khoá cuộc chat để cổng duyệt nhớ "nhiễm" đúng cuộc chat (web: id hội thoại, Lark DM: thread)
     personal?: boolean             // eval trí nhớ: ép bật/tắt trí nhớ cá nhân, bỏ qua cờ gp_personal_features
   } = {},
 ): Promise<{
-  text: string; sources: WebSource[]; tokensIn: number; tokensOut: number; toolsUsed: string[]
+  text: string; sources: WebSource[]; tokensIn: number; tokensOut: number; cachedIn: number; toolsUsed: string[]
   pendingActions: PendingAction[]; checkpoint?: JobCheckpoint
 }> {
   const t0 = Date.now()
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const personal = opts.personal ?? (username && username !== "cron" ? await personalFeaturesEnabled(isCreator).catch(() => isCreator) : false)
-  const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock] = await Promise.all([
+  const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock, profileBlock] = await Promise.all([
     getPartnerTiers().then(tiers => {
       const lines = Object.entries(tiers).map(([tier, channels]) => `  ${tier}: ${(channels as string[]).join(", ")}`).join("\n")
       return lines ? `\n\n━━━ PARTNER TIERS (B2B từ Supabase) ━━━\n${lines}` : ""
@@ -574,7 +579,8 @@ export async function runCreatorAI(
         ? `${lastMsg} ${String(geminiHistory[geminiHistory.length - 1]?.parts?.[0]?.text ?? "").slice(-500)}` : lastMsg).catch(() => ""),
     ]).then(([idx, rel]) => idx + rel),
     // Trí nhớ dài hạn — nạp MỖI lượt (khác KB chỉ lượt đầu) để điều vừa nhớ có hiệu lực ngay.
-    personal ? buildMemoryBlock(username).catch(() => "") : Promise.resolve(""),
+    personal && !(await isMemoryOff(username).catch(() => false)) ? buildMemoryBlock(username, lastMsg).catch(() => "") : Promise.resolve(""),
+    personal ? buildProfileBlock(username).catch(() => "") : Promise.resolve(""),
   ])
 
   // Business date context — auto-inject để Gấu tự biết "tháng này"/"hôm nay" mà không hỏi lại
@@ -585,7 +591,7 @@ export async function runCreatorAI(
   // Skill nạp sẵn: do nơi gọi chỉ định (Lark DM, cron) + đoán từ tin nhắn mới và câu trả lời gần nhất.
   const lastModelText = geminiHistory.length ? (geminiHistory[geminiHistory.length - 1]?.parts?.[0]?.text ?? "") : ""
   const loadedSkills = new Set<string>([...(opts.resume?.skills ?? []), ...(opts.preloadSkills ?? []), ...preloadSkills(`${lastMsg}\n${String(lastModelText).slice(0, 1500)}`)])
-  const systemInstruction = (isCreator ? CREATOR_INTRO + CREATOR_PROFILE : MEMBER_INTRO) + SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + kbInject + memoryBlock
+  const systemInstruction = (isCreator ? CREATOR_INTRO + CREATOR_PROFILE : MEMBER_INTRO) + SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + profileBlock + kbInject + memoryBlock
   const makeConfig = () => ({
     systemInstruction,
     tools: [{ functionDeclarations: toGenaiSchema(activeDeclarations(isCreator, loadedSkills, personal)) as any }],
@@ -641,7 +647,7 @@ export async function runCreatorAI(
   // Cổng duyệt nhớ qua nhiều lượt (lỗi mở §1 plan be-gau-upgrade): nội dung ngoài đọc ở lượt trước vẫn nằm trong lịch sử chat → lượt sau
   // của CÙNG cuộc chat (có lịch sử) cũng coi là đã "nhiễm". Lấy từ dòng trace gp_runs gần nhất (bước cuối ghi { tainted }).
   if (!safety.tainted && geminiHistory.length > 0 && username && channel !== "cron") {
-    const prev = await previousRunTaint(username, channel).catch(() => null)
+    const prev = await previousRunTaint(username, channel, opts.conversationKey).catch(() => null)
     if (prev) { safety.tainted = true; safety.taintSources = [...new Set(prev.map(s => `${s.replace(/ \(lượt trước\)$/, "")} (lượt trước)`))] }
   }
   const pendingActions: PendingAction[] = []
@@ -727,7 +733,7 @@ export async function runCreatorAI(
     } catch { /* keep empty */ }
   }
 
-  steps.push({ tainted: safety.tainted, taintSources: safety.taintSources })
+  steps.push({ tainted: safety.tainted, taintSources: safety.taintSources, ...(opts.conversationKey ? { conv: opts.conversationKey } : {}) })
   await saveRunTrace({
     username, channel, question: lastMsg.slice(0, 500), steps, skills: [...loadedSkills],
     tokens_in: loop.tokensIn, tokens_out: loop.tokensOut, duration_ms: Date.now() - t0,
@@ -738,6 +744,6 @@ export async function runCreatorAI(
     : undefined
   return {
     text: unfinished ? "" : (text || "Không có dữ liệu trả về."),
-    sources: collectedSources, tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, toolsUsed: [...toolsUsed], pendingActions, checkpoint,
+    sources: collectedSources, tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, cachedIn: loop.cachedIn, toolsUsed: [...toolsUsed], pendingActions, checkpoint,
   }
 }

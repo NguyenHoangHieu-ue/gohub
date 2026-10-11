@@ -22,6 +22,15 @@ export function newTurnSafety(userText: string, hasFiles: boolean): TurnSafety {
   }
 }
 
+// P2: gắn theo CUỘC CHAT (`conv`, ghi ở bước cuối của trace gp_runs): bất kỳ lượt nào của cuộc chat đó từng nhiễm là đủ (không phụ thuộc lượt gần nhất,
+// chat cuộc khác xen giữa không xoá được). Không có `conv` (kênh cũ) → chỉ xét lượt gần nhất (rows xếp mới → cũ).
+export function taintFromRuns(rows: { steps: unknown }[], conv?: string): string[] | null {
+  const lastStep = (r: { steps: unknown }) => (Array.isArray(r.steps) ? (r.steps as any[]).at(-1) : null)
+  const pool = conv ? rows.filter(r => lastStep(r)?.conv === conv) : rows.slice(0, 1)
+  const hit = pool.map(lastStep).find(s => s?.tainted)
+  return hit ? (Array.isArray(hit.taintSources) ? hit.taintSources.map(String) : ["nội dung ngoài"]) : null
+}
+
 const READ_ACTIONS = new Set(["search", "read", "list", "list_tabs", "read_tab"])
 
 // Tool đưa nội dung KHÔNG tin cậy vào ngữ cảnh model.

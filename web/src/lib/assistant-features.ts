@@ -99,6 +99,63 @@ export function featureEnabled(m: FeatureMatrix, featureId: string, role: string
   return f.group !== "creator" && (m[featureId] ?? []).includes(r)
 }
 
+// ── Người dùng thử theo TỪNG NGƯỜI (P3 personal-agent): bật tính năng cho vài username cụ thể dù vai trò của họ chưa được bật ──
+// Lưu app_settings.assistant_feature_users = { [featureId]: username[] }. Chỉ cộng thêm quyền, không bao giờ bớt; tính năng "creator" khoá cứng.
+export type PilotUsers = Record<string, string[]>
+const PILOT_KEY = "assistant_feature_users"
+let pilotCache: { p: PilotUsers; at: number } | null = null
+
+export function normalizePilot(raw: unknown): PilotUsers {
+  const out: PilotUsers = {}
+  if (!raw || typeof raw !== "object") return out
+  for (const f of ASSISTANT_FEATURES) {
+    const v = (raw as Record<string, unknown>)[f.id]
+    if (f.group === "creator" || f.soon || !Array.isArray(v)) continue
+    const names = [...new Set(v.filter((x): x is string => typeof x === "string").map(x => x.trim()).filter(x => x && x.length <= 80))].slice(0, 200)
+    if (names.length) out[f.id] = names
+  }
+  return out
+}
+
+export async function loadPilotUsers(): Promise<PilotUsers> {
+  if (pilotCache && Date.now() - pilotCache.at < 60_000) return pilotCache.p
+  let p: PilotUsers = {}
+  try {
+    const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", PILOT_KEY).maybeSingle()
+    if (data?.value) p = normalizePilot(JSON.parse(data.value))
+  } catch { /* không có → không ai được thêm */ }
+  pilotCache = { p, at: Date.now() }
+  return p
+}
+
+export async function savePilotUsers(raw: unknown): Promise<PilotUsers> {
+  const p = normalizePilot(raw)
+  const { error } = await supabaseAdmin.from("app_settings").upsert({ key: PILOT_KEY, value: JSON.stringify(p), category: "system" }, { onConflict: "key" })
+  if (error) throw new Error(error.message)
+  pilotCache = { p, at: Date.now() }
+  return p
+}
+
+/** Tính năng bật cho vai trò HOẶC cho đích danh người dùng (người dùng thử). */
+export function featureEnabledFor(m: FeatureMatrix, pilot: PilotUsers, featureId: string, role: string | undefined, username?: string | null): boolean {
+  if (featureEnabled(m, featureId, role)) return true
+  const f = ASSISTANT_FEATURES.find(x => x.id === featureId)
+  return !!username && !!f && !f.soon && f.group !== "creator" && (pilot[featureId] ?? []).includes(username)
+}
+
+/** Tiện dụng cho route: tự nạp bảng vai trò + danh sách người dùng thử. */
+export async function featureOn(featureId: string, role: string | undefined, username?: string | null): Promise<boolean> {
+  const [m, pilot] = await Promise.all([loadFeatureMatrix(), loadPilotUsers()])
+  return featureEnabledFor(m, pilot, featureId, role, username)
+}
+
+/** Tên tool trợ lý được dùng theo vai trò + người dùng thử. */
+export function enabledFeatureToolsFor(m: FeatureMatrix, pilot: PilotUsers, role: string | undefined, username?: string | null): Set<string> {
+  const out = new Set<string>()
+  for (const f of ASSISTANT_FEATURES) if (featureEnabledFor(m, pilot, f.id, role, username)) f.tools.forEach(t => out.add(t))
+  return out
+}
+
 /** Tên tool trợ lý được dùng theo vai trò (chỉ tool thuộc tính năng đã bật + đã làm xong). */
 export function enabledFeatureTools(m: FeatureMatrix, role: string | undefined): Set<string> {
   const out = new Set<string>()

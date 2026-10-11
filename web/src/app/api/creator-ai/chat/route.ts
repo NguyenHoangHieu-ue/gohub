@@ -118,6 +118,13 @@ export async function POST(req: NextRequest) {
         try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`)) } catch {}
       }
       try {
+        // Tạo hội thoại TRƯỚC khi chạy để cổng duyệt gắn "nhiễm" đúng cuộc chat ngay từ lượt đầu (trước đây tạo sau → lượt 2 không thấy lượt 1).
+        if (!conversationId) {
+          try {
+            const { data: conv } = await supabaseAdmin.from("conversations").insert({ username, title: GP_PREFIX + lastMsg.slice(0, 47) }).select("id").single()
+            conversationId = conv?.id ?? null
+          } catch (e) { console.error("[CreatorAI] create conversation:", e) }
+        }
         const { text, sources, tokensIn, tokensOut, toolsUsed } = await runCreatorAI(
           history, lastMsg,
           fileContexts.length > 0 ? fileContexts : undefined,
@@ -126,7 +133,7 @@ export async function POST(req: NextRequest) {
           username,
           "web",
           // G2: người dùng bấm Dừng → client huỷ request → dừng vòng lặp. 240s: chừa ~60s cho lượt chốt trả lời trước trần 300s.
-          { signal: req.signal, timeBudgetMs: 240_000 },
+          { signal: req.signal, timeBudgetMs: 240_000, conversationKey: conversationId ?? undefined },
         )
 
         // Cost dashboard (s196+7) — Gấu Pro trước đây không ghi app_usage_events gì cả (khác Bé Gấu).
@@ -168,7 +175,7 @@ export async function POST(req: NextRequest) {
                 await supabaseAdmin.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", savedConvId!)
               } catch (e: any) { console.error("[CreatorAI] save messages:", e) }
               // G3: trí nhớ — rút điều đáng nhớ (bỏ qua nếu model đã tự lưu lượt này) + tóm tắt hội thoại để tìm lại sau.
-              if (await personalFeaturesEnabled(isCreator).catch(() => false)) {
+              if (await personalFeaturesEnabled(isCreator, username).catch(() => false)) {
                 await Promise.all([
                   toolsUsed.includes("assistantMemory") ? 0 : extractMemoriesFromTurn(username, lastMsg, text, "web").catch(() => 0),
                   summarizeConversation(username, savedConvId!).catch(e => console.error("[gp_conv_mem]", e?.message)),

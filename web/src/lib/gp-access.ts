@@ -1,8 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase"
 
-// U5 (plan be-gau-upgrade.md, 2026-10-08): Gấu Pro chỉ còn Creator — mọi tính năng đã chuyển sang Bé Gấu.
-// Danh sách gp_allowed_users giữ lại để biết ai từng dùng (hiện màn hình "đã chuyển sang Bé Gấu"), không còn cấp quyền.
-export const GP_CREATOR_ONLY = true
+// U5 (plan be-gau-upgrade.md, 2026-10-08) đã khoá Gấu Pro chỉ còn Creator; 2026-10-11 Hiếu thu hồi quyền tất cả (gp_allowed_users = [])
+// và mở lại cơ chế cấp quyền: chỉ người được Hiếu cấp từng người ở Creator Settings (gp_allowed_users) mới vào được Gấu Pro.
+// Đặt true để khoá lại mọi người trừ Creator (danh sách khi đó chỉ để hiện màn hình "đã chuyển sang Bé Gấu").
+export const GP_CREATOR_ONLY = false
 
 export async function loadGpListed(): Promise<string[]> {
   try {

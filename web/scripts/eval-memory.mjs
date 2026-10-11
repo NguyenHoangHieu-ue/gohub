@@ -56,6 +56,19 @@ function stressData(n) {
   for (const c of sample.slice(0, 5)) questions.push({ id: id++, cat: "stress_current", q: `Hiện giờ đầu mối bên khách ${c.name} là ai và mục tiêu SIM hằng tháng là bao nhiêu?`, ref: `Đầu mối ${c.contact}, mục tiêu ${c.target} SIM mỗi tháng.` })
   for (const c of sample.filter(x => x.changed).slice(0, 5)) questions.push({ id: id++, cat: "stress_history", q: `Trước khi đổi, đầu mối của khách ${c.name} là ai và mục tiêu tháng lúc đó là bao nhiêu?`, ref: `Đầu mối ${c.changed.contact}, mục tiêu ${c.changed.target} SIM mỗi tháng.` })
   for (const c of sample.slice(5, 10)) questions.push({ id: id++, cat: "stress_market", q: `Khách ${c.name} thuộc thị trường nào?`, ref: c.market })
+  // Nhóm câu KHÓ (P1e) — không dùng rnd để không đổi các câu cũ. Không nêu tên khách / đếm-tổng hợp / hỏi nhiều khách một lúc.
+  const byMarket = {}; for (const c of clients) (byMarket[c.market] ??= []).push(c)
+  for (const m of Object.keys(byMarket).filter(k => !["Hàn Quốc", "Châu Âu"].includes(k)).sort().slice(0, 3))
+    questions.push({ id: id++, cat: "stress_count", q: `Trong các khách mình đã kể (trừ Alpha Travel, Beta Tours, Gamma Holidays), có bao nhiêu khách thuộc thị trường ${m}?`, ref: `${byMarket[m].length} khách (${byMarket[m].map(c => c.name).join(", ")}).` })
+  for (let i = 0; i < 3; i++) {
+    const a = sample[10 + i], b = sample[(11 + i) % sample.length]
+    if (a && b && a !== b) questions.push({ id: id++, cat: "stress_multi", q: `Hiện giờ đầu mối của khách ${a.name} và khách ${b.name} lần lượt là ai?`, ref: `${a.name}: ${a.contact}; ${b.name}: ${b.contact}.` })
+  }
+  const pairs = {}; for (const c of clients) (pairs[`${c.market}|${c.contact}`] ??= []).push(c)
+  for (const [k, list] of Object.entries(pairs).sort().slice(0, 3)) {
+    const [m, p] = k.split("|")
+    questions.push({ id: id++, cat: "stress_reverse", q: `Khách nào thuộc thị trường ${m} mà hiện giờ đầu mối là ${p}? (không tính Alpha Travel, Beta Tours, Gamma Holidays)`, ref: list.map(c => c.name).join(", ") })
+  }
   return { sessions: [{ date: "2026-07-01", turns }], questions, facts }
 }
 const stress = STRESS ? stressData(STRESS) : null
@@ -97,7 +110,7 @@ async function runQ(q) {
   const t0 = Date.now()
   try {
     const r = await call({ action: "ask", question: q.q }, 1)
-    return { id: q.id, cat: q.cat, question: q.q, answer: r.text, toolsUsed: r.toolsUsed, tokensIn: r.tokensIn, tokensOut: r.tokensOut, ms: r.ms }
+    return { id: q.id, cat: q.cat, question: q.q, answer: r.text, toolsUsed: r.toolsUsed, tokensIn: r.tokensIn, tokensOut: r.tokensOut, cachedIn: r.cachedIn, ms: r.ms }
   } catch (e) {
     return { id: q.id, cat: q.cat, question: q.q, error: e.message, ms: Date.now() - t0 }
   }
@@ -147,7 +160,7 @@ function summary(label, rows, dump) {
     `**Đúng: ${pct(avg(rows.map(r => r.judge.correct)))}** · bịa: ${pct(avg(rows.map(r => r.judge.hallucinated)))} · lỗi chạy: ${rows.filter(r => r.error).length}`, "",
     "| Nhóm | Số câu | Đúng | Bịa |", "|---|---|---|---|",
     ...cats.map(c => { const a = rows.filter(r => r.cat === c); return `| ${c} | ${a.length} | ${pct(avg(a.map(r => r.judge.correct)))} | ${pct(avg(a.map(r => r.judge.hallucinated)))} |` }), "",
-    `Mỗi câu: thời gian TB ${(avg(rows.filter(r => r.ms).map(r => r.ms)) / 1000).toFixed(1)}s · token vào/ra TB ${Math.round(avg(rows.map(r => r.tokensIn || 0)))}/${Math.round(avg(rows.map(r => r.tokensOut || 0)))} · gọi tool: ${rows.filter(r => r.toolsUsed?.length).length}/${rows.length} câu`, "",
+    `Mỗi câu: thời gian TB ${(avg(rows.filter(r => r.ms).map(r => r.ms)) / 1000).toFixed(1)}s · token vào/ra TB ${Math.round(avg(rows.map(r => r.tokensIn || 0)))}/${Math.round(avg(rows.map(r => r.tokensOut || 0)))} · gọi tool: ${rows.filter(r => r.toolsUsed?.length).length}/${rows.length} câu · token vào từ cache TB ${Math.round(avg(rows.map(r => r.cachedIn || 0)))} (${pct(avg(rows.map(r => r.cachedIn || 0)) / Math.max(1, avg(rows.map(r => r.tokensIn || 0))))})`, "",
     dump ? `Trí nhớ sau khi nạp: ${dump.memories.length} mục (${dump.memories.filter(m => m.archived).length} đã lưu trữ), ${dump.conversationSummaries.length} tóm tắt hội thoại, khối prompt ${dump.memoryBlockChars} ký tự` : "", "",
     "| # | Nhóm | Đúng | Bịa | Ghi chú giám khảo |", "|---|---|---|---|---|",
     ...rows.map(r => `| ${r.id} | ${r.cat} | ${r.judge.correct} | ${r.judge.hallucinated} | ${String(r.judge.note || "").replace(/\|/g, "/").replace(/\n/g, " ").slice(0, 200)} |`)].join("\n")

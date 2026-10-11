@@ -5,6 +5,7 @@ import { GEMINI_MODEL } from "@/lib/ai-models"
 import { embedText } from "@/lib/kb"
 import { genai } from "@/lib/agents/genai-stream"
 import { runAssistantMemory, findRelevantMemories, MEMORY_KINDS } from "@/lib/assistant-memory"
+import { isMemoryOff } from "@/lib/assistant-memory-rights"
 
 // Gấu Pro G3 — trí nhớ 2 tầng (docs/plans/gau-pro-assistant.md):
 //   1) tự rút điều đáng nhớ sau mỗi lượt (bổ sung cho việc model tự gọi assistantMemory);
@@ -13,7 +14,8 @@ import { runAssistantMemory, findRelevantMemories, MEMORY_KINDS } from "@/lib/as
 
 let _flag: { v: string; at: number } | null = null
 /** "all" = mọi user Gấu Pro; khác/không có = chỉ creator. Cache 60s. */
-export async function personalFeaturesEnabled(isCreator: boolean): Promise<boolean> {
+export async function personalFeaturesEnabled(isCreator: boolean, username?: string): Promise<boolean> {
+  if (username && await isMemoryOff(username).catch(() => false)) return false   // người dùng tự tắt trí nhớ (P2)
   if (isCreator) return true
   if (!_flag || Date.now() - _flag.at > 60_000) {
     const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", "gp_personal_features").maybeSingle()
@@ -78,7 +80,7 @@ ${assistantMsg.slice(0, 1500)}`)
   return n
 }
 
-/** Tóm tắt + embedding 1 hội thoại web. Chỉ làm lại khi có thêm ≥4 tin so với lần trước (đỡ gọi model mỗi lượt). */
+/** Tóm tắt + embedding 1 hội thoại web. Lần đầu khi có ≥2 tin (1 lượt hỏi-đáp); làm lại khi có thêm ≥4 tin so với lần trước (đỡ gọi model mỗi lượt). */
 export async function summarizeConversation(username: string, conversationId: string): Promise<void> {
   const [{ data: msgs }, { data: prev }, { data: conv }] = await Promise.all([
     supabaseAdmin.from("conversation_messages").select("role,content").eq("conversation_id", conversationId)
@@ -87,7 +89,7 @@ export async function summarizeConversation(username: string, conversationId: st
     supabaseAdmin.from("conversations").select("title").eq("id", conversationId).maybeSingle(),
   ])
   const count = msgs?.length ?? 0
-  if (count < 4 || (prev && count - (prev.message_count as number) < 4)) {
+  if (count < 2 || (prev && count - (prev.message_count as number) < 4)) {
     console.log(`[gp_conv_mem] bỏ qua ${conversationId}: ${count} tin (lần trước ${prev?.message_count ?? 0})`)
     return
   }

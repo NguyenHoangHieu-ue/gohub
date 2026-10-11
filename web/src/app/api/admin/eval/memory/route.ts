@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       case "ask": {
         if (!b.question?.trim()) return NextResponse.json({ error: "question required" }, { status: 400 })
         const r = await runCreatorAI([], b.question, undefined, undefined, false, user, "web", { personal: true })
-        return NextResponse.json({ text: r.text, toolsUsed: r.toolsUsed, tokensIn: r.tokensIn, tokensOut: r.tokensOut, ms: Date.now() - t0 })
+        return NextResponse.json({ text: r.text, toolsUsed: r.toolsUsed, tokensIn: r.tokensIn, tokensOut: r.tokensOut, cachedIn: r.cachedIn, ms: Date.now() - t0 })
       }
       default:
         return NextResponse.json({ error: "action không hợp lệ" }, { status: 400 })

@@ -36,16 +36,25 @@ const histNote = (h?: HistoryEntry[] | null) => {
 }
 
 // Khối nạp vào system prompt. "" khi chưa có trí nhớ / chưa chạy migration (không làm hỏng chat).
-export async function buildMemoryBlock(username: string): Promise<string> {
+// `message` (tin nhắn hiện tại): khi trí nhớ vượt trần ký tự, mục GHIM luôn vào trước, phần còn lại xếp theo độ liên quan tới tin nhắn
+// (rankMemories) thay vì chỉ theo thời gian — mục liên quan không còn bị cắt chỉ vì cũ (P1 b2).
+export async function buildMemoryBlock(username: string, message?: string): Promise<string> {
   if (!username) return ""
   const { data, error } = await selectCompat(cols => supabaseAdmin.from("assistant_memory")
     .select(cols)
     .eq("username", username).eq("archived", false)
     .order("pinned", { ascending: false }).order("updated_at", { ascending: false })
-    .limit(200), "id,kind,content,pinned,updated_at")
+    .limit(1000), "id,kind,content,pinned,updated_at")
   if (error) { if (!missingTable(error.message)) console.error("[assistant-memory]", error.message); return "" }
 
-  const rows = (data ?? []) as Row[]
+  let rows = (data ?? []) as Row[]
+  if (message?.trim() && rows.reduce((n, r) => n + r.content.length + 40, 0) > MAX_INJECT_CHARS) {
+    const pinned = rows.filter(r => r.pinned)
+    const rest = rows.filter(r => !r.pinned)
+    const ranked = rankMemories(message, rest, rest.length, 10)   // liên quan trước (điểm cao → thấp), rồi mục mới nhất
+    const seen = new Set(ranked.map(r => r.id))
+    rows = [...pinned, ...ranked, ...rest.filter(r => !seen.has(r.id))]
+  }
   const lines: string[] = []
   let used = 0, dropped = 0
   for (const r of rows) {
@@ -139,7 +148,7 @@ const tokensOf = (t: string) => new Set(foldVi(t).split(/[^a-z0-9]+/).filter(w =
 export interface MemoryRow { id: number; kind: string; content: string }
 
 /** Top `limit` mục có từ khoá chung với `message` (điểm = Σ idf), kèm `recent` mục mới nhất làm ngữ cảnh nền. rows nên xếp mới → cũ. */
-export function rankMemories(message: string, rows: MemoryRow[], limit = 40, recent = 10): MemoryRow[] {
+export function rankMemories<T extends MemoryRow>(message: string, rows: T[], limit = 40, recent = 10): T[] {
   if (!rows.length) return []
   const q = tokensOf(message)
   const rowTokens = rows.map(r => tokensOf(r.content))
