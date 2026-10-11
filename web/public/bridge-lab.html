@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bridge Lab — trang thử Gấu Pro Browser</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 16px; color: #0f172a; }
+  h1 { font-size: 20px } h2 { font-size: 15px; margin: 22px 0 6px; color: #475569 }
+  section { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px }
+  label { display: block; margin: 6px 0 2px; font-weight: 600 } input, textarea, select { padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100% ; box-sizing: border-box }
+  input[type=checkbox], input[type=radio] { width: auto }
+  button { padding: 7px 12px; border: 0; border-radius: 8px; background: #7c3aed; color: #fff; font-weight: 700; cursor: pointer; margin-top: 8px }
+  .out { margin-top: 8px; padding: 6px 8px; background: #f1f5f9; border-radius: 8px; font-family: ui-monospace, monospace; min-height: 1.5em }
+  .cover { position: relative } .cover .veil { position: absolute; inset: 0; background: rgba(255,255,255,.6); }
+  iframe { width: 100%; height: 130px; border: 1px dashed #94a3b8; border-radius: 8px }
+  canvas { border: 1px solid #94a3b8; border-radius: 8px; cursor: pointer }
+  .spacer { height: 900px; background: linear-gradient(#fff, #eef2ff); border-radius: 12px; display: flex; align-items: flex-end; justify-content: center; }
+</style>
+</head>
+<body>
+<h1>🐻 Bridge Lab</h1>
+<p>Trang thử để đo Gấu Pro dùng browser (plan <code>docs/plans/browser-upgrade.md</code>). Mỗi mục có kết quả hiện ở ô xám — kiểm chứng việc thao tác thật sự thành công.</p>
+
+<section id="t1"><h2>T1 · Form: nhập chữ, chọn dropdown, tick, gửi</h2>
+  <label for="name">Họ tên</label><input id="name" placeholder="Nhập họ tên">
+  <label for="country">Quốc gia</label>
+  <select id="country"><option value="">-- chọn --</option><option value="jp">Nhật Bản</option><option value="kr">Hàn Quốc</option><option value="th">Thái Lan</option></select>
+  <label><input type="checkbox" id="agree"> Tôi đồng ý điều khoản</label>
+  <label for="note">Ghi chú</label><textarea id="note" rows="2"></textarea>
+  <button id="submit">Gửi</button>
+  <div class="out" id="r1">chưa gửi</div>
+</section>
+
+<section id="t2"><h2>T2 · Tin cậy: nút này chỉ nhận click THẬT (isTrusted)</h2>
+  <button id="trusted">Bấm tôi</button>
+  <div class="out" id="r2">chưa bấm</div>
+</section>
+
+<section id="t3"><h2>T3 · Chờ nội dung tải chậm (2 giây)</h2>
+  <button id="load">Tải dữ liệu</button>
+  <div class="out" id="r3">trống</div>
+</section>
+
+<section id="t4"><h2>T4 · Phần tử bị che</h2>
+  <div class="cover"><button id="covered">Nút bị che</button><div class="veil" id="veil"></div></div>
+  <button id="uncover">Gỡ lớp che</button>
+  <div class="out" id="r4">chưa bấm nút bị che</div>
+</section>
+
+<section id="t5"><h2>T5 · Iframe cùng origin</h2>
+  <iframe id="frame" srcdoc="<body style='font:14px system-ui'><label>Ô trong iframe <input id='fin'></label><button id='fbtn' onclick=&quot;document.getElementById('fout').textContent='iframe nhận: '+document.getElementById('fin').value&quot;>Gửi từ iframe</button><div id='fout'>chưa gửi</div></body>"></iframe>
+</section>
+
+<section id="t6"><h2>T6 · Shadow DOM</h2>
+  <div id="host"></div>
+</section>
+
+<section id="t7"><h2>T7 · Canvas (chỉ click theo toạ độ)</h2>
+  <canvas id="cv" width="300" height="90"></canvas>
+  <div class="out" id="r7">chưa bấm vào ô xanh</div>
+</section>
+
+<section id="t8"><h2>T8 · Phím (Enter / Tab) và ô soạn thảo</h2>
+  <label for="keys">Gõ rồi nhấn Enter</label><input id="keys">
+  <div class="out" id="r8">chưa có phím</div>
+  <label>Ô contenteditable</label><div id="ce" contenteditable="true" style="border:1px solid #cbd5e1;border-radius:8px;padding:6px 8px;min-height:1.6em"></div>
+  <div class="out" id="r8b"></div>
+</section>
+
+<section id="t9"><h2>T9 · Mật khẩu (giá trị không được lộ ra snapshot)</h2>
+  <input id="pw" type="password" value="matkhau-bi-mat">
+</section>
+
+<section id="t10"><h2>T10 · Cuộn</h2>
+  <div class="spacer"><button id="bottom">Nút ở cuối trang</button></div>
+  <div class="out" id="r10">chưa bấm nút cuối trang</div>
+</section>
+
+<script>
+  const $ = (id) => document.getElementById(id)
+  $("submit").onclick = () => { $("r1").textContent = `Đã gửi: tên=${$("name").value}; quốc gia=${$("country").value}; đồng ý=${$("agree").checked}; ghi chú=${$("note").value}` }
+  $("trusted").onclick = (e) => { $("r2").textContent = e.isTrusted ? "OK: click THẬT (isTrusted=true)" : "TỪ CHỐI: click giả (isTrusted=false)" }
+  $("load").onclick = () => { $("r3").textContent = "đang tải…"; setTimeout(() => { $("r3").textContent = "Dữ liệu sẵn sàng" }, 2000) }
+  $("covered").onclick = () => { $("r4").textContent = "Đã bấm nút từng bị che" }
+  $("uncover").onclick = () => { $("veil").remove() }
+  const host = $("host"); const sr = host.attachShadow({ mode: "open" })
+  sr.innerHTML = `<label>Ô trong shadow <input id="sin"></label><button id="sbtn">Gửi từ shadow</button><div id="sout">chưa gửi</div>`
+  sr.getElementById("sbtn").onclick = () => { sr.getElementById("sout").textContent = "shadow nhận: " + sr.getElementById("sin").value }
+  const cv = $("cv"), g = cv.getContext("2d"); let hits = 0
+  g.fillStyle = "#e2e8f0"; g.fillRect(0, 0, 300, 90); g.fillStyle = "#16a34a"; g.fillRect(200, 20, 80, 50); g.fillStyle = "#fff"; g.fillText("Bấm ô xanh", 207, 48)
+  cv.addEventListener("click", (e) => { const r = cv.getBoundingClientRect(); const x = e.clientX - r.left, y = e.clientY - r.top; if (x > 200 && x < 280 && y > 20 && y < 70) $("r7").textContent = `Đã bấm ô xanh (${++hits} lần, isTrusted=${e.isTrusted})` })
+  $("keys").addEventListener("keydown", (e) => { if (e.key === "Enter") $("r8").textContent = `Enter nhận: "${$("keys").value}" (isTrusted=${e.isTrusted})`; if (e.key === "Tab") $("r8").textContent = "Tab nhận" })
+  $("ce").addEventListener("input", () => { $("r8b").textContent = "contenteditable nhận: " + $("ce").innerText })
+  $("bottom").onclick = () => { $("r10").textContent = "Đã bấm nút cuối trang" }
+</script>
+</body>
+</html>

@@ -44,6 +44,6 @@ export const TOOL_STATUS: Record<string, string> = {
   generateVideo:           "🎬 Đang dựng video (Veo)...",
   checkVideoStatus:        "🎬 Đang kiểm tra trạng thái video...",
   searchKnowledgeBase:     "🔍 Đang tìm kiếm KB theo ngữ nghĩa...",
-  readMyBrowser:           "👀 Đang đọc browser của Hiếu...",
-  controlMyBrowser:        "🖱️ Đang thao tác trên browser của Hiếu...",
+  readMyBrowser:           "👀 Đang nhìn browser của bạn...",
+  controlMyBrowser:        "🖱️ Đang thao tác trên browser của bạn...",
 }

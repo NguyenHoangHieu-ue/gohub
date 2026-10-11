@@ -15,6 +15,7 @@ vi.mock("@/lib/supabase", () => ({
           }),
         }
       },
+      update: () => ({ eq: async () => ({ error: null }) }),
       select: () => ({
         eq: () => ({
           maybeSingle: async () => {
@@ -48,6 +49,26 @@ describe("bridge tool — enqueueAndPoll (multi-tenant, s195+3)", () => {
     expect(insertedRows[0].action).toBe("list_tabs")
     expect(insertedRows[0].owner_username).toBe("alice")
     expect(res.result).toEqual([{ id: 1, title: "Tab A" }])
+  })
+
+  it("click theo toạ độ x,y (canvas) không cần ref và truyền x,y xuống extension", async () => {
+    statusSequence = [{ status: "done", result: { ok: true } }]
+    const p = runControlMyBrowser({ action: "click", tab_id: 5, x: 250, y: 45 }, "alice")
+    await vi.advanceTimersByTimeAsync(2000)
+    await p
+    expect(insertedRows[0].action).toBe("click")
+    expect(insertedRows[0].payload).toMatchObject({ tab_id: 5, x: 250, y: 45 })
+    expect(insertedRows[0].requires_confirm).toBe(true)
+  })
+
+  it("ảnh chụp: tách ra khỏi result trả về (và dọn khỏi DB)", async () => {
+    statusSequence = [{ status: "done", result: { image: { mime: "image/jpeg", data: "QUJD" }, viewport: { w: 100, h: 50 } } }]
+    const p = runReadMyBrowser({ action: "screenshot", tab_id: 5 }, "alice")
+    await vi.advanceTimersByTimeAsync(2000)
+    const res = await p
+    expect(res.image).toEqual({ mime: "image/jpeg", data: "QUJD" })
+    expect(JSON.stringify(res.result)).not.toContain("QUJD")
+    expect(res.result.viewport).toEqual({ w: 100, h: 50 })
   })
 
   it("2 user khác nhau → owner_username tách biệt đúng người gọi", async () => {

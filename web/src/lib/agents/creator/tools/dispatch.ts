@@ -104,8 +104,12 @@ async function dispatchToolCore(
   if (call.name === "browseWeb")
     return wrap(await runBrowseWeb(call.args))
 
-  if (call.name === "readMyBrowser")
-    return wrap(await runReadMyBrowser(call.args, ctx?.username || "", onEvent))
+  if (call.name === "readMyBrowser") {
+    const { image, ...rest } = await runReadMyBrowser(call.args, ctx?.username || "", onEvent)
+    const part: any = wrap(image ? { ...rest, note: "Ảnh chụp màn hình tab nằm ngay bên dưới kết quả này." } : rest)
+    if (image) part.__extra = [{ inlineData: { mimeType: image.mime, data: image.data } }]
+    return part
+  }
 
   if (call.name === "controlMyBrowser")
     return wrap(await runControlMyBrowser(call.args, ctx?.username || "", onEvent))

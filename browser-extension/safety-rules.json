@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "schemes": ["chrome:", "chrome-extension:", "edge:", "about:", "file:", "devtools:", "view-source:"],
+  "hostPatterns": [
+    "(^|\\.)(vietcombank|vcbdigibank|techcombank|bidv|vietinbank|mbbank|acb|tpb|tpbank|sacombank|agribank|vpbank|hdbank|shb|ocb|msb|vib|eximbank|scb|seabank|lpbank|lienvietpostbank|namabank|abbank|bacabank|pvcombank|kienlongbank|baovietbank|timo|cake)\\.(com|vn|com\\.vn|net\\.vn)$",
+    "(^|\\.)(ebanking|internetbanking|ibanking|digibank|onlinebanking|netbanking)\\.",
+    "(^|\\.)(paypal|wise|payoneer|alipay|vnpay|momo|zalopay|payos)\\.(com|vn|me)$",
+    "^pay\\.google\\.com$",
+    "^checkout\\.stripe\\.com$",
+    "^accounts\\.google\\.com$",
+    "^myaccount\\.google\\.com$",
+    "^(login\\.microsoftonline|login\\.live|account\\.microsoft)\\.com$",
+    "^appleid\\.apple\\.com$",
+    "(^|\\.)(1password|bitwarden|lastpass|dashlane|nordpass|keepersecurity)\\.com$"
+  ],
+  "pathPatterns": [
+    "(^|/)(checkout|payment|payments|thanh-toan|change-password|doi-mat-khau|reset-password|forgot-password|two-factor|2fa)(/|$)"
+  ]
+}
