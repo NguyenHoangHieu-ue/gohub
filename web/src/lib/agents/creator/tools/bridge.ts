@@ -103,7 +103,7 @@ export async function runReadMyBrowser(
 export interface ControlArgs {
   action: ControlAction; tab_id?: number; ref?: string; selector?: string; value?: string; url?: string; press_enter?: boolean
   keys?: string; repeat?: number; direction?: string; amount?: number; text?: string; gone?: boolean; timeout_ms?: number
-  background?: boolean; force?: boolean; double?: boolean; append?: boolean
+  background?: boolean; force?: boolean; double?: boolean; append?: boolean; x?: number; y?: number
 }
 
 export async function runControlMyBrowser(
@@ -113,7 +113,9 @@ export async function runControlMyBrowser(
 ): Promise<{ result?: any; error?: string }> {
   if (!CONTROL_ACTIONS.includes(args.action)) return { error: `action phải là ${CONTROL_ACTIONS.join(", ")}.` }
   if (args.action !== "open_tab" && !args.tab_id) return { error: "Thiếu tab_id — gọi readMyBrowser action=list_tabs trước để lấy tab_id." }
-  if (NEEDS_TARGET.has(args.action) && !args.ref && !args.selector) return { error: `${args.action} cần ref (lấy từ readMyBrowser action=snapshot) hoặc selector.` }
+  const hasXY = Number.isFinite(args.x) && Number.isFinite(args.y)
+  if (NEEDS_TARGET.has(args.action) && !args.ref && !args.selector && !(hasXY && (args.action === "click" || args.action === "hover")))
+    return { error: `${args.action} cần ref (lấy từ readMyBrowser action=snapshot) hoặc selector${args.action === "click" || args.action === "hover" ? " (hoặc x,y toạ độ trên ảnh chụp cho canvas)" : ""}.` }
   if ((args.action === "fill" || args.action === "select") && typeof args.value !== "string") return { error: `${args.action} cần value.` }
   if (args.action === "key" && !args.keys) return { error: "key cần keys (vd Enter, Tab, ctrl+a)." }
   if (args.action === "wait_for" && !args.text && !args.ref && !args.selector && !args.timeout_ms) return { error: "wait_for cần text, ref/selector hoặc timeout_ms." }

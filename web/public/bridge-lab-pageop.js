@@ -113,7 +113,10 @@ window.pageOp = function pageOp(op, a) {
       if (el.tagName === "SELECT") e.options = [...el.options].slice(0, 25).map(o => (o.label || o.text || o.value).trim().slice(0, 40))
       return e
     })
-    const text = document.body ? document.body.innerText : ""
+    let text = document.body ? document.body.innerText : ""
+    // Chữ BÊN TRONG iframe cùng origin (kết quả/thông báo hiện ở đó) cũng phải nằm trong content để Gấu kiểm được kết quả thao tác.
+    frames.forEach((d, i) => { const t = d.body ? d.body.innerText.trim() : ""; if (t) text += `
+[iframe ${i + 1}] ` + t.slice(0, 2000) })
     return {
       title: document.title, url: location.href, readyState: document.readyState,
       viewport: { w: vw, h: vh, scrollY: Math.round(window.scrollY), scrollMax: Math.max(0, Math.round(document.documentElement.scrollHeight - vh)) },
@@ -158,6 +161,13 @@ window.pageOp = function pageOp(op, a) {
 
   if (op === "set_value") {
     const el = findEl(); if (!el) return missing()
+    if (el.isContentEditable && el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") {
+      el.focus()
+      if (a.append) el.textContent = (el.textContent || "") + a.value; else el.textContent = a.value
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: a.value }))
+      return { ok: true }
+    }
+    if (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") return { ok: false, error: `Phần tử <${el.tagName.toLowerCase()}> không phải ô nhập — dùng click hoặc chọn phần tử khác.` }
     const proto = el.tagName === "TEXTAREA" ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype
     const setter = Object.getOwnPropertyDescriptor(proto, "value") && Object.getOwnPropertyDescriptor(proto, "value").set
     if (setter) setter.call(el, a.value); else el.value = a.value
@@ -170,6 +180,31 @@ window.pageOp = function pageOp(op, a) {
         el.dispatchEvent(ev)
       }
     }
+    return { ok: true }
+  }
+
+  if (op === "click_at") {
+    const hit = document.elementFromPoint(a.x, a.y)
+    if (!hit) return { ok: false, error: `Không có phần tử nào ở (${a.x}, ${a.y}) — kiểm tra lại toạ độ (px CSS của vùng nhìn thấy).` }
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"])
+      hit.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: a.x, clientY: a.y, button: 0, view: window }))
+    return { ok: true, tag: hit.tagName.toLowerCase() }
+  }
+
+  if (op === "key_synthetic") {
+    let el = a.ref || a.selector ? findEl() : (document.activeElement || document.body)
+    if ((a.ref || a.selector) && !el) return missing()
+    el = el || document.body
+    const map = { enter: ["Enter", 13], tab: ["Tab", 9], escape: ["Escape", 27], esc: ["Escape", 27], backspace: ["Backspace", 8], delete: ["Delete", 46],
+      arrowup: ["ArrowUp", 38], arrowdown: ["ArrowDown", 40], arrowleft: ["ArrowLeft", 37], arrowright: ["ArrowRight", 39], space: [" ", 32] }
+    const name = String(a.keys || "").split("+").pop().trim().toLowerCase()
+    const [key, code] = map[name] || [name, name.length === 1 ? name.toUpperCase().charCodeAt(0) : 0]
+    for (let i = 0; i < Math.min(Math.max(a.repeat || 1, 1), 50); i++)
+      for (const type of ["keydown", "keypress", "keyup"]) {
+        const ev = new KeyboardEvent(type, { key, code: key, bubbles: true, cancelable: true })
+        Object.defineProperty(ev, "keyCode", { get: () => code }); Object.defineProperty(ev, "which", { get: () => code })
+        el.dispatchEvent(ev)
+      }
     return { ok: true }
   }
 

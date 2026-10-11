@@ -23,3 +23,6 @@ Môi trường dev không cài được extension vào Chrome thật → server 
 - [ ] **Hiếu cài 1.3.0 và QA bằng `/bridge-lab.html` (T1–T10)** — phần `chrome.debugger`/tab group/overlay chưa kiểm được ở môi trường dev.
 - [ ] B4: tải/tải lên file, ghi-chạy-lại quy trình, chạy theo lịch (hoãn).
 - [ ] So bản cũ/mới bằng bộ T1–T10 (tỉ lệ thành công, số bước, thời gian) sau khi QA.
+
+## QA thật 2026-10-11 (Gấu Pro chạy Bridge Lab, 1.3.0 → sửa thành 1.3.1)
+Đạt T1,T3,T4,T5,T6,T8,T9,T10; T2/T7 chưa kiểm được trên máy Hiếu vì extension khác chặn `chrome.debugger` (xem wiki). Sửa 4 lỗi + thêm dự phòng ở 1.3.1. **Hiếu cần tải 1.3.1, giải nén đè, reload**, rồi (nếu muốn kiểm click thật) thử T2/T7 ở profile Chrome KHÔNG cài Claude in Chrome.

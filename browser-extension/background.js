@@ -105,14 +105,24 @@ async function tabFor(tabId) {
 
 const attached = new Map()   // tabId → timer
 const attaching = new Map()  // tabId → Promise (tránh 2 lệnh song song cùng gắn)
+const debuggee = new Map()   // tabId → đối tượng debugger đang dùng ({tabId} hoặc {targetId})
 async function attachOnce(tabId) {
-  try { await chrome.debugger.attach({ tabId }, "1.3") }
+  let target = { tabId }
+  try { await chrome.debugger.attach(target, "1.3") }
   catch (e) {
     // Service worker vừa khởi động lại: debugger CỦA MÌNH vẫn gắn từ trước nhưng bộ nhớ đã mất → tháo rồi gắn lại.
-    // Nếu là DevTools/extension khác đang gắn thì detach không làm gì và lần attach sau ném lỗi thật → caller dùng cách dự phòng.
     try { await chrome.debugger.detach({ tabId }) } catch { /* không phải của mình */ }
-    await chrome.debugger.attach({ tabId }, "1.3")
+    try { await chrome.debugger.attach(target, "1.3") }
+    catch (e2) {
+      // Chrome từ chối gắn theo tab khi trang có khung của extension khác ("different extension", vd Claude in Chrome chèn iframe) →
+      // thử gắn thẳng vào MỤC TIÊU trang (targetId). Không được thì ném lỗi gốc để caller dùng cách dự phòng.
+      const t = (await chrome.debugger.getTargets()).find(x => x.tabId === tabId && x.type === "page")
+      if (!t) throw e2
+      target = { targetId: t.id }
+      await chrome.debugger.attach(target, "1.3")
+    }
   }
+  debuggee.set(tabId, target)
   attached.set(tabId, null)
 }
 async function ensureDebugger(tabId) {
@@ -127,15 +137,19 @@ async function ensureDebugger(tabId) {
 async function detachDebugger(tabId) {
   clearTimeout(attached.get(tabId))
   attached.delete(tabId)
+  const target = debuggee.get(tabId) || { tabId }
+  debuggee.delete(tabId)
   await chrome.storage.session.remove(`dbg:${tabId}`).catch(() => {})
-  try { await chrome.debugger.detach({ tabId }) } catch { /* đã tháo */ }
+  try { await chrome.debugger.detach(target) } catch { /* đã tháo */ }
 }
 chrome.debugger.onDetach.addListener((src) => {
-  if (src.tabId != null) { clearTimeout(attached.get(src.tabId)); attached.delete(src.tabId) }
+  let tabId = src.tabId
+  if (tabId == null && src.targetId) tabId = [...debuggee.entries()].find(([, d]) => d.targetId === src.targetId)?.[0]
+  if (tabId != null) { clearTimeout(attached.get(tabId)); attached.delete(tabId); debuggee.delete(tabId) }
 })
 async function cdp(tabId, method, params = {}) {
   await ensureDebugger(tabId)
-  return chrome.debugger.sendCommand({ tabId }, method, params)
+  return chrome.debugger.sendCommand(debuggee.get(tabId) || { tabId }, method, params)
 }
 // Lưới an toàn: service worker bị Chrome tắt giữa chừng thì timer mất → tháo các tab đã gắn quá hạn.
 async function sweepDebuggers() {
@@ -266,7 +280,10 @@ function pageOp(op, a) {
       if (el.tagName === "SELECT") e.options = [...el.options].slice(0, 25).map(o => (o.label || o.text || o.value).trim().slice(0, 40))
       return e
     })
-    const text = document.body ? document.body.innerText : ""
+    let text = document.body ? document.body.innerText : ""
+    // Chữ BÊN TRONG iframe cùng origin (kết quả/thông báo hiện ở đó) cũng phải nằm trong content để Gấu kiểm được kết quả thao tác.
+    frames.forEach((d, i) => { const t = d.body ? d.body.innerText.trim() : ""; if (t) text += `
+[iframe ${i + 1}] ` + t.slice(0, 2000) })
     return {
       title: document.title, url: location.href, readyState: document.readyState,
       viewport: { w: vw, h: vh, scrollY: Math.round(window.scrollY), scrollMax: Math.max(0, Math.round(document.documentElement.scrollHeight - vh)) },
@@ -311,6 +328,13 @@ function pageOp(op, a) {
 
   if (op === "set_value") {
     const el = findEl(); if (!el) return missing()
+    if (el.isContentEditable && el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") {
+      el.focus()
+      if (a.append) el.textContent = (el.textContent || "") + a.value; else el.textContent = a.value
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: a.value }))
+      return { ok: true }
+    }
+    if (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") return { ok: false, error: `Phần tử <${el.tagName.toLowerCase()}> không phải ô nhập — dùng click hoặc chọn phần tử khác.` }
     const proto = el.tagName === "TEXTAREA" ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype
     const setter = Object.getOwnPropertyDescriptor(proto, "value") && Object.getOwnPropertyDescriptor(proto, "value").set
     if (setter) setter.call(el, a.value); else el.value = a.value
@@ -323,6 +347,31 @@ function pageOp(op, a) {
         el.dispatchEvent(ev)
       }
     }
+    return { ok: true }
+  }
+
+  if (op === "click_at") {
+    const hit = document.elementFromPoint(a.x, a.y)
+    if (!hit) return { ok: false, error: `Không có phần tử nào ở (${a.x}, ${a.y}) — kiểm tra lại toạ độ (px CSS của vùng nhìn thấy).` }
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"])
+      hit.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: a.x, clientY: a.y, button: 0, view: window }))
+    return { ok: true, tag: hit.tagName.toLowerCase() }
+  }
+
+  if (op === "key_synthetic") {
+    let el = a.ref || a.selector ? findEl() : (document.activeElement || document.body)
+    if ((a.ref || a.selector) && !el) return missing()
+    el = el || document.body
+    const map = { enter: ["Enter", 13], tab: ["Tab", 9], escape: ["Escape", 27], esc: ["Escape", 27], backspace: ["Backspace", 8], delete: ["Delete", 46],
+      arrowup: ["ArrowUp", 38], arrowdown: ["ArrowDown", 40], arrowleft: ["ArrowLeft", 37], arrowright: ["ArrowRight", 39], space: [" ", 32] }
+    const name = String(a.keys || "").split("+").pop().trim().toLowerCase()
+    const [key, code] = map[name] || [name, name.length === 1 ? name.toUpperCase().charCodeAt(0) : 0]
+    for (let i = 0; i < Math.min(Math.max(a.repeat || 1, 1), 50); i++)
+      for (const type of ["keydown", "keypress", "keyup"]) {
+        const ev = new KeyboardEvent(type, { key, code: key, bubbles: true, cancelable: true })
+        Object.defineProperty(ev, "keyCode", { get: () => code }); Object.defineProperty(ev, "which", { get: () => code })
+        el.dispatchEvent(ev)
+      }
     return { ok: true }
   }
 
@@ -376,6 +425,7 @@ function pageOp(op, a) {
 
 async function page(tabId, op, args) {
   const [{ result }] = await chrome.scripting.executeScript({ target: { tabId }, func: pageOp, args: [op, args || {}] })
+  if (result == null) throw new Error(`Trang không trả kết quả cho "${op}" (phần tử không hỗ trợ thao tác này, hoặc trang vừa chuyển).`)
   return result
 }
 
@@ -503,6 +553,7 @@ async function execAction(action, p) {
 
   if (action === "screenshot") {
     const tab = await tabFor(p.tab_id)
+    try { await ensureDebugger(tab.id) } catch (e) { return await screenshotFallback(tab, p, e) }
     const m = await cdp(tab.id, "Page.getLayoutMetrics")
     const vp = m.cssVisualViewport || m.visualViewport
     const scale = Math.min(1, (Number(p.max_width) || 1000) / vp.clientWidth)
@@ -510,7 +561,26 @@ async function execAction(action, p) {
       cdp(tab.id, "Page.captureScreenshot", { format: "jpeg", quality: 55, clip: { x: vp.pageX, y: vp.pageY, width: vp.clientWidth, height: vp.clientHeight, scale } }),
       new Promise((_, rej) => setTimeout(() => rej(new Error("Chụp ảnh quá lâu — tab có thể đang ẩn, dùng activate_tab rồi chụp lại.")), 10000)),
     ])
-    return { image: { mime: "image/jpeg", data: shot.data }, viewport: { w: Math.round(vp.clientWidth), h: Math.round(vp.clientHeight) }, url: tab.url, title: tab.title }
+    return {
+      image: { mime: "image/jpeg", data: shot.data }, viewport: { w: Math.round(vp.clientWidth), h: Math.round(vp.clientHeight) },
+      image_scale: +scale.toFixed(3),   // ảnh rộng = viewport.w × image_scale; toạ độ click (px CSS) = toạ độ trong ảnh ÷ image_scale
+      url: tab.url, title: tab.title,
+    }
+  }
+
+  if ((action === "click" || action === "hover") && Number.isFinite(p.x) && Number.isFinite(p.y) && !p.ref && !p.selector) {
+    // Click/rê chuột THEO TOẠ ĐỘ (px CSS của vùng nhìn thấy) — cho canvas / trang vẽ tay không có phần tử để chọn. Tab đã qua kiểm tra trang nhạy cảm.
+    const tab = await tabFor(p.tab_id)
+    try {
+      if (action === "hover") await cdp(tab.id, "Input.dispatchMouseEvent", { type: "mouseMoved", x: p.x, y: p.y })
+      else { await mouseClick(tab.id, p.x, p.y, p.double ? 2 : 1); await new Promise(r => setTimeout(r, 200)) }
+      return { ok: true, method: "trusted", at: { x: p.x, y: p.y }, ...(action === "click" ? { after: await afterState(tab.id) } : {}) }
+    } catch (e) {
+      if (action === "hover") throw e
+      const r = await page(tab.id, "click_at", { x: p.x, y: p.y })   // không gắn được debugger → bắn sự kiện chuột giả tại toạ độ
+      if (!r.ok) throw new Error(r.error)
+      return { ok: true, method: "synthetic", note: `Click giả tại toạ độ (không gắn được debugger: ${String(e.message || e).slice(0, 80)})`, at: { x: p.x, y: p.y }, after: await afterState(tab.id) }
+    }
   }
 
   if (action === "click" || action === "hover") {
@@ -544,7 +614,7 @@ async function execAction(action, p) {
       if (p.press_enter) await pressKey(tab.id, "Enter", 1)
       return { ok: true, method: "trusted" }
     } catch (e) {
-      const r = await page(tab.id, "set_value", { ref: p.ref, selector: p.selector, value, pressEnter: !!p.press_enter })
+      const r = await page(tab.id, "set_value", { ref: p.ref, selector: p.selector, value, pressEnter: !!p.press_enter, append: !!p.append })
       if (!r.ok) throw new Error(r.error)
       return { ok: true, method: "synthetic", note: `Điền thường (không gắn được debugger: ${String(e.message || e).slice(0, 80)})` }
     }
@@ -552,9 +622,15 @@ async function execAction(action, p) {
 
   if (action === "key") {
     const tab = await tabFor(p.tab_id)
-    if (p.ref || p.selector) { const f = await page(tab.id, "focus_select", { ref: p.ref, selector: p.selector }); if (!f.ok) throw new Error(f.error) }
-    await pressKey(tab.id, p.keys, p.repeat)
-    return { ok: true, after: await afterState(tab.id) }
+    if (p.ref || p.selector) { const f = await page(tab.id, "focus_select", { ref: p.ref, selector: p.selector, noSelect: true }); if (!f.ok) throw new Error(f.error) }
+    try {
+      await pressKey(tab.id, p.keys, p.repeat)
+      return { ok: true, method: "trusted", after: await afterState(tab.id) }
+    } catch (e) {
+      const r = await page(tab.id, "key_synthetic", { keys: p.keys, repeat: p.repeat })   // không gắn được debugger → bắn sự kiện phím giả
+      if (!r.ok) throw new Error(r.error)
+      return { ok: true, method: "synthetic", note: `Phím giả (không gắn được debugger: ${String(e.message || e).slice(0, 80)}) — nhiều trang bỏ qua phím giả (vd gửi form bằng Enter).`, after: await afterState(tab.id) }
+    }
   }
 
   if (action === "select") {
@@ -618,9 +694,38 @@ async function execAction(action, p) {
   throw new Error(`Action không hỗ trợ: ${action}`)
 }
 
+// Không gắn được debugger (extension khác chèn khung / DevTools đang mở): chụp vùng đang hiển thị của tab bằng captureVisibleTab.
+// Chỉ chụp được tab ĐANG HIỂN THỊ trong cửa sổ của nó (tab nền → báo người dùng/Gấu activate_tab).
+async function screenshotFallback(tab, p, cause) {
+  if (!tab.active) throw new Error(`Tab đang ẩn và không gắn được debugger (${String(cause.message || cause).slice(0, 70)}) — dùng activate_tab rồi chụp lại.`)
+  const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 60 })
+  const blob = await (await fetch(dataUrl)).blob()
+  const bmp = await createImageBitmap(blob)
+  const maxW = Number(p.max_width) || 1000
+  const scale = Math.min(1, maxW / bmp.width)
+  const [{ result: vp }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => ({ w: window.innerWidth, h: window.innerHeight }) })
+  let data
+  if (scale < 1) {
+    const cv = new OffscreenCanvas(Math.round(bmp.width * scale), Math.round(bmp.height * scale))
+    cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height)
+    const out = await cv.convertToBlob({ type: "image/jpeg", quality: 0.6 })
+    data = await blobToBase64(out)
+  } else data = await blobToBase64(blob)
+  return {
+    image: { mime: "image/jpeg", data }, viewport: vp, image_scale: +(((scale < 1 ? bmp.width * scale : bmp.width)) / vp.w).toFixed(3),
+    url: tab.url, title: tab.title, note: "Chụp bằng cách dự phòng (không gắn được debugger) — click theo toạ độ có thể không dùng được trên tab này.",
+  }
+}
+async function blobToBase64(blob) {
+  const buf = new Uint8Array(await blob.arrayBuffer())
+  let bin = ""
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000))
+  return btoa(bin)
+}
+
 function describeAction(action, p) {
   const t = p.ref || p.selector || ""
-  if (action === "click") return `Click ${t}`
+  if (action === "click") return p.x != null && p.y != null && !t ? `Click toạ độ (${Math.round(p.x)}, ${Math.round(p.y)})` : `Click ${t}`
   if (action === "fill") return `Điền "${String(p.value ?? "").slice(0, 40)}" vào ${t}`
   if (action === "key") return `Nhấn phím ${p.keys}`
   if (action === "select") return `Chọn "${p.value}" ở ${t}`
