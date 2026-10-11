@@ -14,7 +14,9 @@ export async function POST(req: NextRequest) {
   if (!isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const b = await req.json() as { action: string; user?: string; conv?: string; title?: string; userMsg?: string; assistantMsg?: string; question?: string; lines?: string[] }
   const user = b.user ?? ""
-  if (!/^eval-[a-z0-9-]{1,30}$/.test(user)) return NextResponse.json({ error: "user phải dạng eval-xxx" }, { status: 400 })
+  // QA TẠM (s230, Hiếu đồng ý): tài khoản thử "hieu" chỉ được nạp/xoá DÒNG THÓI QUEN (setHabits/clearHabits) — không reset/ask/turn. Gỡ sau khi QA xong.
+  const qaHabitsOnly = user === "hieu" && (b.action === "setHabits" || b.action === "clearHabits")
+  if (!qaHabitsOnly && !/^eval-[a-z0-9-]{1,30}$/.test(user)) return NextResponse.json({ error: "user phải dạng eval-xxx" }, { status: 400 })
   const t0 = Date.now()
   try {
     switch (b.action) {
@@ -65,6 +67,10 @@ export async function POST(req: NextRequest) {
           if (error) throw new Error(error.message)
         }
         return NextResponse.json({ ok: true, habits: lines.length })
+      }
+      case "clearHabits": {
+        await supabaseAdmin.from("assistant_memory").delete().eq("username", user).like("source", "auto-habit:%")
+        return NextResponse.json({ ok: true })
       }
       case "ask": {
         if (!b.question?.trim()) return NextResponse.json({ error: "question required" }, { status: 400 })
