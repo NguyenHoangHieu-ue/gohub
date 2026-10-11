@@ -1,12 +1,8 @@
 // KPI tự động của My Metrics: %Datapool (3HK + BC) và số task Bé Gấu — tách từ route my-metrics (s227) để "Đánh giá hôm nay"
 // + Lark DM hằng ngày dùng chung đúng một công thức. Không đổi logic.
-import { supabaseAdmin } from "@/lib/supabase"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { quarterRange, OKR_GM_BASELINE, OKR_HK3_BASELINE } from "@/lib/okr-helpers"
-
-// Response quá ngắn gần như chắc chắn không phải 1 task nghiệp vụ thật (chào hỏi, "ok", lỗi cụt) —
-// loại khỏi đếm "task hoàn thành" để số không bị thổi phồng bởi tin nhắn vu vơ.
-const MIN_TASK_RESPONSE_LEN = 15
+import { loadChatEvents, isCountedTask } from "@/lib/task-events"
 
 export async function loadAutoMetrics(quarter: string, year: number) {
   const { start, end } = quarterRange(quarter, year)
@@ -87,23 +83,12 @@ export async function loadAutoMetrics(quarter: string, year: number) {
   const gmQtdPct   = gmTotalRev > 0 ? +(gmTotalGP / gmTotalRev * 100).toFixed(2) : 0
 
   // ── 3. Bé Gấu task count (Supabase) ──────────────────────────────────────
-  const startISO = `${start}T00:00:00.000Z`
-  const endISO   = `${end}T23:59:59.999Z`
-
-  const { data: allEvents } = await supabaseAdmin
-    .from("app_usage_events")
-    .select("id, user_email, user_role, created_at, ai_response, used_db_tool")
-    .eq("event_type", "chat")
-    .not("ai_response", "is", null)
-    .gte("created_at", startISO)
-    .lte("created_at", endISO)
-
-  const events    = allEvents ?? []
+  const { rows: events } = await loadChatEvents("id, user_email, user_role, created_at, ai_response, used_db_tool", start, end)
   // Task "tính KPI" (s195+18-B, đổi định nghĩa) = ĐÃ THẬT SỰ gọi tool đọc dữ liệu DB (executeSQL/
   // querySupabase/queryProduct/listSupabaseTables — xem DB_TASK_TOOLS trong okr-helpers.ts), KHÔNG
   // còn chỉ dựa vào độ dài response (trước đây trả lời chay/chào hỏi dài cũng bị tính nhầm là task).
   // Giữ thêm điều kiện độ dài làm lưới an toàn phụ (loại nốt trường hợp lỗi cụt hiếm gặp).
-  const tasks     = events.filter(t => t.used_db_tool && ((t.ai_response as string) ?? "").trim().length >= MIN_TASK_RESPONSE_LEN)
+  const tasks     = events.filter(isCountedTask)
   const taskTotal = tasks.length
   const taskLark  = tasks.filter(t => (t.user_email ?? "").startsWith("lark:")).length
   const taskWeb   = taskTotal - taskLark

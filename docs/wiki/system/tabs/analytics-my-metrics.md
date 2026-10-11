@@ -830,3 +830,7 @@ tự so số trước/sau fix trên staging, số CHỈ đổi nếu `dim_sku` t
   khỏi danh sách khi xử lý xong). ⚠️ Mã emoji `YES`/`Typing` so không phân biệt hoa thường; chưa đối chiếu được trên Lark thật (máy dev không
   có khoá Lark) — lệnh "Note đi" in ra emoji Hiếu đã thả để kiểm.
 - ⚠️ Webhook Lark trỏ production → lệnh "Note đi" chỉ chạy sau khi merge `main`.
+
+## s230 (2026-10-11) — T0: sửa lỗi KPI "Tasks via Bé Gấu" chỉ đọc 1.000 dòng
+
+Supabase trả tối đa 1.000 dòng/lần; thẻ KPI, danh sách "hội thoại được tính" và Insights đọc `app_usage_events` 1 lần nên quý > 1.000 câu (Q3: 1.161) bị đếm thiếu (~196 thay vì 235). Nay cả 3 nơi dùng chung `lib/task-events.ts` (`loadChatEvents` đọc theo trang + `isCountedTask`), cùng 1 tập dòng và 1 luật (`used_db_tool` + trả lời ≥ 15 ký tự). Test `task-events.test.ts` (2.500 dòng giả). `topics-ai` giữ `limit(80)` (lấy mẫu, không đếm). Định nghĩa task chưa đổi — T1–T4 chờ Hiếu chốt 5 câu trong plan `my-metrics-be-gau-tasks.md`. Số Q3 trên thẻ KPI sẽ tăng lên ~235 sau deploy — không phải lỗi.

@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { supabaseAdmin } from "@/lib/supabase"
+import { loadChatEvents, isCountedTask } from "@/lib/task-events"
 import { canWriteTab } from "@/lib/writable-tabs"
 import { quarterRange } from "@/lib/okr-helpers"
 import { extractTopKeywords, scoreResponseQuality } from "@/lib/begau-insights"
 
 const READ_ROLES = ["admin", "creator", "bod"]
-const MIN_TASK_RESPONSE_LEN = 15   // khớp đúng ngưỡng đếm "task" ở api/analytics/my-metrics
 
 // GET ?quarter=Q3&year=2026 — ai dùng Bé Gấu nhiều nhất, chủ đề hay hỏi, chấm điểm heuristic câu trả lời.
 export async function GET(req: NextRequest) {
@@ -19,22 +18,16 @@ export async function GET(req: NextRequest) {
   const quarter = req.nextUrl.searchParams.get("quarter") ?? "Q3"
   const year    = parseInt(req.nextUrl.searchParams.get("year") ?? "2026")
   const { start, end } = quarterRange(quarter, year)
-  const startISO = `${start}T00:00:00.000Z`
-  const endISO   = `${end}T23:59:59.999Z`
+  const { rows: allEvents, error } = await loadChatEvents(
+    "id, user_email, user_name, user_role, created_at, user_message, ai_response, used_db_tool, tools_used",
+    start, end,
+  )
 
-  const { data: allEvents, error } = await supabaseAdmin
-    .from("app_usage_events")
-    .select("id, user_email, user_name, user_role, created_at, user_message, ai_response, used_db_tool, tools_used")
-    .eq("event_type", "chat")
-    .not("ai_response", "is", null)
-    .gte("created_at", startISO)
-    .lte("created_at", endISO)
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error }, { status: 500 })
 
   // Cùng định nghĩa "task" với api/analytics/my-metrics (s195+18-B: phải dùng DB tool, không chỉ dựa
   // độ dài response) — Insights CHỈ phân tích trên đúng tập task được tính KPI, không lẫn trả lời chay.
-  const tasks = (allEvents ?? []).filter(t => t.used_db_tool && ((t.ai_response as string) ?? "").trim().length >= MIN_TASK_RESPONSE_LEN)
+  const tasks = allEvents.filter(isCountedTask)
 
   // ── Top người dùng ──
   const userCount = new Map<string, number>()
