@@ -12,7 +12,8 @@ import { isDataTask }                    from "@/lib/okr-helpers"
 import { estimateCostUsd }                     from "@/lib/agents/gemini-pricing"
 import { larkOpenIdOf }                        from "@/lib/agents/lark-workspace"
 import type { PlanStep }                       from "@/lib/agents/creator-ai"
-import { extractMemoriesFromTurn, summarizeConversation } from "@/lib/assistant-memory-auto"
+import { extractMemoriesFromTurn } from "@/lib/assistant-memory-auto"
+import { isMemoryOff } from "@/lib/assistant-memory-rights"
 import { loadFeatureMatrix, featureEnabled }   from "@/lib/assistant-features"
 import { waitUntil }                           from "@vercel/functions"
 
@@ -186,11 +187,9 @@ export async function POST(req: NextRequest) {
           sse(controller, { type: "done" })
           controller.close()
           // Trí nhớ (U3, khi tính năng bật cho vai trò): rút điều đáng nhớ + tóm tắt hội thoại để tìm lại — chạy sau khi trả lời xong.
-          if (username && toolsUsed.includes("assistantMemory") === false && await memoryOn(role)) {
-            waitUntil(Promise.all([
-              extractMemoriesFromTurn(username, lastMsg, text, "be-gau").catch(() => 0),
-              conversationId ? summarizeConversation(username, conversationId).catch(() => {}) : undefined,
-            ]))
+          if (username && toolsUsed.includes("assistantMemory") === false && await memoryOn(role) && !(await isMemoryOff(username).catch(() => false))) {
+            // Tóm tắt hội thoại chuyển sang POST /api/chat/conversations/[id] (sau khi client lưu xong tin trả lời).
+            waitUntil(extractMemoriesFromTurn(username, lastMsg, text, "be-gau").catch(() => 0))
           }
         } catch (err: any) {
           if (req.signal.aborted) { try { controller.close() } catch {} ; return }

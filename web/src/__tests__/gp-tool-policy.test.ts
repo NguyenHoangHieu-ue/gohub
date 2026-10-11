@@ -57,3 +57,23 @@ describe("Gấu Pro tool policy (cổng duyệt G0)", () => {
     expect(describeAction(call("sendLarkMessage", { chat_id: "me", content: "Báo cáo" }))).toContain("chính bạn")
   })
 })
+
+import { taintFromRuns } from "@/lib/agents/creator/tool-policy"
+
+describe("taintFromRuns (P2: nhiễm gắn theo cuộc chat)", () => {
+  const run = (conv: string | undefined, tainted: boolean, src: string[] = []) =>
+    ({ steps: [{ tool: "x" }, { tainted, taintSources: src, ...(conv ? { conv } : {}) }] })
+  it("cuộc chat từng nhiễm vẫn nhiễm dù chat cuộc khác xen giữa", () => {
+    const rows = [run("B", false), run("A", true, ["webSearch"]), run("A", false)]   // mới → cũ
+    expect(taintFromRuns(rows, "A")).toEqual(["webSearch"])
+    expect(taintFromRuns(rows, "B")).toBeNull()
+  })
+  it("không có conv → chỉ xét lượt gần nhất", () => {
+    expect(taintFromRuns([run(undefined, false), run(undefined, true, ["browseWeb"])])).toBeNull()
+    expect(taintFromRuns([run(undefined, true, ["browseWeb"])])).toEqual(["browseWeb"])
+  })
+  it("không có dòng / steps hỏng → null", () => {
+    expect(taintFromRuns([], "A")).toBeNull()
+    expect(taintFromRuns([{ steps: null }], "A")).toBeNull()
+  })
+})

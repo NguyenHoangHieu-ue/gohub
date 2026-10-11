@@ -16,6 +16,8 @@ import { estimateCostUsd }            from "@/lib/agents/gemini-pricing"
 import { runCreatorAI, type GPEvent } from "@/lib/agents/creator-ai"
 import { decidePendingAction, followupMessage } from "@/lib/agents/creator/approvals"
 import { extractMemoriesFromTurn, summarizeLarkThread } from "@/lib/assistant-memory-auto"
+import { loadFeatureMatrix, featureEnabled } from "@/lib/assistant-features"
+import { isMemoryOff } from "@/lib/assistant-memory-rights"
 import { detectGroupTask }            from "@/lib/task-assistant"
 import { isNoteCommand }              from "@/lib/okr-lark-rules"
 import { evaluateThreadNow }          from "@/lib/lark-scan-runner"
@@ -55,8 +57,8 @@ async function getLarkHistory(openId: string, threadId: string): Promise<Message
 
 // Save a message to lark_chat_history
 function saveLarkMessage(openId: string, threadId: string, role: "user" | "assistant", content: string) {
-  // Fire-and-forget — không throw để tránh trigger catch block của processAndReply
-  (supabaseAdmin
+  // Không throw để tránh trigger catch block của processAndReply; trả Promise để chỗ cần (tóm tắt trí nhớ) có thể chờ ghi xong
+  return (supabaseAdmin
     .from("lark_chat_history")
     .insert({ lark_open_id: openId, thread_id: threadId, role, content }) as any)
     .then(() => {})
@@ -423,7 +425,7 @@ async function replyCreatorDM(openId: string, messageId: string, threadId: strin
     planSent = true
     void replyLarkMessage(messageId, "📋 Kế hoạch:\n" + e.steps.map((st, i) => `${i + 1}. ${st.title}`).join("\n")).catch(() => {})
   }
-  const gp = await runCreatorAI(geminiHistory, agentInput + CREATOR_DM_DIRECTIVE.replace("{NOW}", now), undefined, onEvent, true, username, "lark_dm", { preloadSkills: ["workspace"] })
+  const gp = await runCreatorAI(geminiHistory, agentInput + CREATOR_DM_DIRECTIVE.replace("{NOW}", now), undefined, onEvent, true, username, "lark_dm", { preloadSkills: ["workspace"], conversationKey: `lark:${threadId}` })
   let response = gp.text.replace(/```chart[\s\S]*?```/g, "").trim() || "(Gấu Pro không có câu trả lời)"
   // Mã duyệt ghép bằng code (không trông vào model nhắc lại cho đúng).
   if (gp.pendingActions.length) response += "\n\n" + gp.pendingActions.map(a =>
@@ -432,9 +434,10 @@ async function replyCreatorDM(openId: string, messageId: string, threadId: strin
   saveLarkMessage(openId, threadId, "user", userText)
   saveLarkMessage(openId, threadId, "assistant", response)
   // G3: tự rút trí nhớ từ tin DM của creator (chỉ lời người dùng; bỏ qua lệnh duyệt / khi model đã tự lưu).
-  if (!cmd && !gp.toolsUsed.includes("assistantMemory")) await extractMemoriesFromTurn(username, userText, response, "lark_dm").catch(() => 0)
+  const memOff = await isMemoryOff(username).catch(() => false)
+  if (!cmd && !memOff && !gp.toolsUsed.includes("assistantMemory")) await extractMemoriesFromTurn(username, userText, response, "lark_dm").catch(() => 0)
   // Tóm tắt luồng DM để searchPastConversations tìm lại được (trước chỉ hội thoại web được tóm tắt).
-  await summarizeLarkThread(username, openId, threadId).catch(e => console.error("[gp_conv_mem] lark:", e?.message))
+  if (!memOff) await summarizeLarkThread(username, openId, threadId).catch(e => console.error("[gp_conv_mem] lark:", e?.message))
   try {
     await supabaseAdmin.from("app_usage_events").insert({
       event_type: "chat", user_email: `lark:${openId}`, user_name: name || openId, user_role: "creator",
@@ -505,9 +508,11 @@ async function processAndReply(openId: string, chatId: string, messageId: string
     }))
 
     // Bé Gấu: 1 agent function-calling (giống web) — Lark không render chart nên bỏ khối chart.
+    // P2: chỉ DM riêng mới có trí nhớ cá nhân (trong group, trí nhớ riêng của 1 người không được đưa vào câu trả lời cho cả nhóm).
+    const memory = chatType === "p2p" && !!username && featureEnabled(await loadFeatureMatrix(), "memory", role) && !(await isMemoryOff(username))
     const beGau = await runBeGau({
       geminiHistory: larkHistory, lastMsg: userText, role, name: name || openId,
-      userId: openId, isCost, larkOpenId: openId ?? null,
+      userId: openId, username: memory ? username : undefined, isCost, larkOpenId: openId ?? null,
       extraDirective: priceDirective + "\n\n(Nội bộ) Kênh trả lời: Lark — KHÔNG dùng khối \`\`\`chart (Lark không render được).",
     })
     let response = beGau.text.replace(/```chart[\s\S]*?```/g, "").trim()
@@ -531,8 +536,10 @@ async function processAndReply(openId: string, chatId: string, messageId: string
 
     // Lưu full response vào history để Gemini có context đầy đủ ở turn sau
     // (display gửi Lark đã strip/card rồi, history cần giữ nguyên nội dung)
-    saveLarkMessage(openId, threadId, "user",      userText)
-    saveLarkMessage(openId, threadId, "assistant", response)
+    const saved = Promise.all([
+      saveLarkMessage(openId, threadId, "user",      userText),
+      saveLarkMessage(openId, threadId, "assistant", response),
+    ])
 
     // PHẢI await — xem comment ở nhánh guard-denied phía trên (cùng lý do, đây còn là câu lệnh CUỐI
     // trong try block nên rủi ro bị cắt ngang trước khi insert xong càng cao).
@@ -546,6 +553,15 @@ async function processAndReply(openId: string, chatId: string, messageId: string
         est_cost_usd: estimateCostUsd(beGau.tokensIn, beGau.tokensOut),
       })
     } catch { /* tracking không được làm vỡ luồng trả lời */ }
+
+    // P2 trí nhớ Bé Gấu qua Lark DM: rút điều đáng nhớ (bỏ qua khi model đã tự lưu) + tóm tắt luồng để searchPastConversations tìm lại.
+    if (memory) {
+      await saved
+      await Promise.all([
+        beGau.toolsUsed.includes("assistantMemory") ? 0 : extractMemoriesFromTurn(username, userText, response, "lark_dm_begau").catch(() => 0),
+        summarizeLarkThread(username, openId, threadId).catch(e => console.error("[gp_conv_mem] lark:", e?.message)),
+      ])
+    }
 
   } catch (err: any) {
     console.error("[Lark bot] ERROR:", err?.message ?? err)

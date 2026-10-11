@@ -22,6 +22,7 @@ import { BUSINESS_FACTS, ANSWER_STYLE } from "./business-facts"
 // Nhóm "Chỉ Creator" (ghi KB chung, portal vendor, gửi Lark cho người khác, task Lark CÁ NHÂN của Hiếu) khoá cứng trong bảng đó.
 import { ALL_TOOL_DECLARATIONS, searchKBDecl } from "./creator/declarations"
 import { dispatchTool } from "./creator/tools/dispatch"
+import { isMemoryOff } from "@/lib/assistant-memory-rights"
 import { newTurnSafety, recordToolResult, approvalReason } from "./creator/tool-policy"
 import { loadFeatureMatrix, enabledFeatureTools } from "@/lib/assistant-features"
 import { buildMemoryBlock } from "@/lib/assistant-memory"
@@ -394,7 +395,7 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
     promptless ? { history: [] as Content[] } : compressHistory(geminiHistory),
   ])
 
-  const useMemory = !!username && featureTools.has("assistantMemory")
+  const useMemory = !!username && featureTools.has("assistantMemory") && !(await isMemoryOff(username).catch(() => false))
   const memoryBlock = useMemory && !promptless ? await buildMemoryBlock(username!, lastMsg).catch(() => "") : ""
   const visibleTables = { ...SUPABASE_TABLES, ...(isPriv ? SENSITIVE_TABLES : {}) }
   const tableCatalog = Object.entries(visibleTables).map(([t, d]) => `  · ${t}: ${d}`).join("\n")

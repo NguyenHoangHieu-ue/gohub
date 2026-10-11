@@ -122,3 +122,10 @@ Eval nay có thêm 9 câu KHÓ cho stress (`stress_count` đếm khách theo th�
 - **(c) Context caching:** đã đo `cachedContentTokenCount` (stream→loop→eval). Cache NGẦM của Gemini đã phủ **~48% token vào** (23.200/48.500 mỗi câu): phần prompt tĩnh (giới thiệu, quy tắc, partner tiers, GA4, mục lục KB) đứng trước phần đổi mỗi lượt (KB liên quan, trí nhớ) nên tiền tố chung đã tối đa. **Không làm cache tường minh** (không thêm được gì trên phần đã cache). Phần còn lại là KB liên quan + trí nhớ + kết quả tool đổi mỗi câu.
 - **(f) So markdown: HOÃN** — hệ thống hiện tại ở trần eval, không có chỗ để phương án khác thắng; chỉ làm nếu có bộ câu khó phân biệt được.
 **Kết luận P1:** (a) lịch sử, (b1) khử trùng theo liên quan, (b2) nạp theo ngữ cảnh đã xong; (c) không cần; (d)/(f) hoãn. Còn lại theo plan: P2 (lỗ hổng nền: tầng Recall chưa chạy, Lark DM chưa tóm tắt hội thoại, "nhiễm" chỉ tính 1 lượt, cron-job.org trỏ staging; quyền người dùng xem/sửa/xoá/xuất/tắt trí nhớ) rồi P3 (`agent_profiles`).
+
+## 13. P2 (2026-10-11, staging) — xong phần code
+- Recall: gốc lỗi 6/537 tìm ra (tóm tắt chạy trước khi client lưu tin + ngưỡng ≥4 tin) → tóm tắt chuyển sang POST lưu tin trả lời, ngưỡng đầu ≥2. Bé Gấu Lark p2p có trí nhớ + tóm tắt luồng (group không).
+- "Nhiễm" gắn theo cuộc chat, 24h (Gấu Pro web + Lark DM); Bé Gấu chưa (cần nút Duyệt) — xem wiki §s230 P2.
+- Quyền người dùng: xem/sửa/xoá hẳn/xuất/xoá tất cả/tắt — `/api/chat/memory` + `/api/creator-ai/memory`, menu "Trí nhớ của tôi" ở Bé Gấu.
+- Chưa làm / ngoài code: cron-job.org đổi sang production (Hiếu); thông báo + đồng ý + thời hạn lưu (pháp chế) trước khi mở cả công ty; QA giao diện + Lark DM thật (cần Hiếu); chưa đo lại số dòng gp_conversation_memory sau vài ngày chạy.
+- P3 còn: `agent_profiles`, mở cho vài người test (cờ `gp_personal_features` theo người).
