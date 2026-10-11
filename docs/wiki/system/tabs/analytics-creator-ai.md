@@ -1104,3 +1104,9 @@ Cách kiểm: `node web/scripts/eval-memory.mjs --label p1 --stress 60` (cần v
 `extractMemoriesFromTurn` trước chỉ đưa 120 mục đầu cho model → vượt 120 mục thì không `update` được mục cũ (eval stress 150: 629 mục cho 150 khách, `history` dùng 4 lần).
 Nay `findRelevantMemories` (`lib/assistant-memory.ts`) đọc mọi mục còn hiệu lực của user (1 truy vấn, ≤3000) và `rankMemories` xếp theo từ khoá hiếm (IDF, bỏ dấu tiếng Việt)
 → top 40 liên quan + 10 mục mới nhất. Không gọi thêm model. Kết quả stress 150: 320 mục, `history` dùng 236 mục. Giới hạn: khớp từ khoá, chưa khớp theo ý nghĩa (paraphrase) — thêm vector nếu eval cho thấy cần.
+
+## s230 P1 còn lại — nạp trí nhớ theo ngữ cảnh + đo cache (plan `personal-agent.md` §12)
+- `buildMemoryBlock(username, message?)` (`lib/assistant-memory.ts`): khi tổng ký tự vượt `MAX_INJECT_CHARS` (8.000) và có `message`, mục GHIM luôn vào trước, phần còn lại xếp theo `rankMemories` (IDF, bỏ dấu) rồi tới mục còn lại theo thời gian; đọc tối đa 1.000 mục (trước 200). Không có `message` hoặc chưa vượt trần → như cũ. Bé Gấu (`be-gau.ts`) và Gấu Pro (`creator-ai.ts` lượt chat) truyền `lastMsg`; phiên Live giữ gọi không message (chưa có tin nhắn).
+- Eval stress 150 + 9 câu khó (đếm / hỏi 2 khách / tra ngược): token vào 56.6k → ~44k, gọi tool 26 → ~12/56 câu, đúng 98–100%.
+- `cachedContentTokenCount` đi qua `streamTurn` → `runAgentLoop` (`cachedIn`) → `runCreatorAI` → route eval: cache ngầm Gemini phủ ~48% token vào. Không làm context caching tường minh.
+- Gotcha: eval chạy dài dùng `--concurrency 2`, `--skip-ingest` dùng lại dữ liệu user `eval-p0` đã nạp (cùng seed `--stress 150`).

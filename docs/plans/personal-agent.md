@@ -82,6 +82,7 @@ tất cả khi vượt trần, (c) context caching prompt tĩnh (đo trước/sa
 ## 9. Tiến độ P1
 - [x] (a) Lịch sử không ghi đè: v72 `history JSONB` + code + test (commit s229). **Chờ Hiếu chạy v72**, rồi chạy lại `eval-memory.mjs --stress 60` để đo stress_history.
 - [x] (b1) Bộ rút trí nhớ lấy mục liên quan thay vì 120 mục đầu (xem mục 11). [ ] (b2) Nạp trí nhớ vào prompt theo ngữ cảnh khi vượt trần; (c) context caching prompt tĩnh; (d) so markdown. Stress 150 chưa chạy được (máy hết RAM, 2026-10-09) — chạy lại khi Hiếu bảo.
+- [x] (e)(b2)(c) xong 2026-10-11, (f) hoãn — xem mục 12.
 
 ## 10. Kết quả stress 150 (2026-10-09, SAU v72) — đúng 100% nhưng KHÔNG chứng minh v72
 `web/eval/results/memory-stress150.md`: 47 câu đúng 100% (kể cả stress_history 5/5, trước v72 ở stress 60 là 0/5), bịa 2%, token vào TB ~37.100/câu, 20/47 câu gọi tool.
@@ -108,3 +109,16 @@ Kết luận: lỗi quy mô (>120 mục mất khử trùng/supersedence) đã s�
 Hạn chế còn nguyên: một lần chạy; bộ câu hỏi vẫn toàn câu nêu tên chính xác (trần ~100%), chưa có câu không nêu tên / đếm-tổng hợp / xung đột; khối prompt vẫn đầy (8.764 ký tự cho 320 mục)
 nên phần lớn mục vẫn phải tra bằng tool (16/47 câu gọi tool). Chưa đo chi phí lệnh rút trí nhớ.
 Còn lại của P1: (c) nạp trí nhớ vào prompt theo ngữ cảnh (không đổ theo thời gian); (d) context caching prompt tĩnh; (e) nhóm câu hỏi khó; (f) so markdown.
+
+## 12. Kết quả P1 còn lại (2026-10-11, staging, stress 150 + nhóm câu khó)
+Eval nay có thêm 9 câu KHÓ cho stress (`stress_count` đếm khách theo thị trường, `stress_multi` hỏi 2 khách một lúc, `stress_reverse` tra ngược theo thị trường + đầu mối, không nêu tên khách) → 56 câu. Chạy `--skip-ingest --concurrency 2` trên dữ liệu 150 khách sẵn có.
+| Lần chạy | Đúng | Token vào TB | Gọi tool | Thời gian TB |
+|---|---|---|---|---|
+| Trước b2 (`hard-base`) | 100% | 56.597 | 26/56 | 8,6s |
+| Sau b2, lần 1 (`hard-b2`) | 98% (1 câu conversation_recall bị cờ bịa — nhiễu giám khảo, câu #32 cũng bị cờ từ baseline) | 42.359 | 12/56 | 6,0s |
+| Sau b2, lần 2 (`hard-b2-r2`) | 100% | 45.580 | 13/56 | 7,9s |
+- **(e) Nhóm câu khó: bộ trí nhớ HIỆN TẠI vẫn đúng 100%** kể cả đếm 22 khách theo thị trường, tra ngược không nêu tên → vẫn chưa có bằng chứng cần graph; trần eval vẫn ~100% (muốn phân biệt phương án cần câu khó hơn nữa hoặc quy mô lớn hơn).
+- **(b2) Nạp trí nhớ theo ngữ cảnh** (`buildMemoryBlock(username, message)`): khi vượt `MAX_INJECT_CHARS`, mục ghim vào trước, còn lại xếp theo độ liên quan (IDF) tới tin nhắn thay vì theo thời gian; giới hạn đọc 200 → 1.000 mục. Hiệu quả: **token vào −20–25%, số câu phải gọi tool giảm một nửa (26→12–13/56), nhanh hơn ~1–2,5s**, đúng không giảm. Áp cho Bé Gấu + Gấu Pro (không đổi gì khi chưa vượt trần).
+- **(c) Context caching:** đã đo `cachedContentTokenCount` (stream→loop→eval). Cache NGẦM của Gemini đã phủ **~48% token vào** (23.200/48.500 mỗi câu): phần prompt tĩnh (giới thiệu, quy tắc, partner tiers, GA4, mục lục KB) đứng trước phần đổi mỗi lượt (KB liên quan, trí nhớ) nên tiền tố chung đã tối đa. **Không làm cache tường minh** (không thêm được gì trên phần đã cache). Phần còn lại là KB liên quan + trí nhớ + kết quả tool đổi mỗi câu.
+- **(f) So markdown: HOÃN** — hệ thống hiện tại ở trần eval, không có chỗ để phương án khác thắng; chỉ làm nếu có bộ câu khó phân biệt được.
+**Kết luận P1:** (a) lịch sử, (b1) khử trùng theo liên quan, (b2) nạp theo ngữ cảnh đã xong; (c) không cần; (d)/(f) hoãn. Còn lại theo plan: P2 (lỗ hổng nền: tầng Recall chưa chạy, Lark DM chưa tóm tắt hội thoại, "nhiễm" chỉ tính 1 lượt, cron-job.org trỏ staging; quyền người dùng xem/sửa/xoá/xuất/tắt trí nhớ) rồi P3 (`agent_profiles`).
