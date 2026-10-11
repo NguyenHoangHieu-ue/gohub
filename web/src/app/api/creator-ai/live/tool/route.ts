@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
   try {
     const out = await dispatchTool({ name, args: args ?? {} }, undefined, [], { username: u.username, isCreator: u.isCreator })
     let response = out.functionResponse.response
+    // Phiên giọng nói chỉ nhận JSON, không nhận ảnh: báo thẳng để model dùng snapshot thay vì tin là đã "thấy" ảnh.
+    if ((out as any).__extra?.length) response = { ...response, note: "Phiên giọng nói không nhận được ảnh chụp — dùng readMyBrowser snapshot để đọc trang." }
     // read_tab (extension 1.2.0) = content + elements(selector). Cắt CONTENT trước để không mất danh sách selector ở cuối.
     const r = response?.result
     if (r && typeof r.content === "string" && Array.isArray(r.elements)) response = { ...response, result: { ...r, content: r.content.slice(0, 6000) } }

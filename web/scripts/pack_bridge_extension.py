@@ -25,4 +25,12 @@ io.open(OUT_TS, "w", encoding="utf-8", newline="\n").write(
     "// Bản extension Bridge mới nhất: server trả cho popup để báo \"có bản mới\"; zip ở /downloads/gau-pro-bridge.zip.\n"
     f'export const BRIDGE_LATEST_VERSION = "{version}"\n'
 )
+# Trang thử Bridge Lab dùng chính hàm pageOp của extension để kiểm trong Chrome thật (public/bridge-lab.html).
+bg = io.open(os.path.join(EXT, "background.js"), encoding="utf-8").read()
+start = bg.index("function pageOp(op, a) {")
+end = bg.index("\nasync function page(tabId, op, args)")
+fn = bg[start:end].rstrip()
+header = "// SINH TỰ ĐỘNG bởi web/scripts/pack_bridge_extension.py từ browser-extension/background.js (hàm pageOp) — không sửa tay.\n"
+io.open(os.path.join(ROOT, "web", "public", "bridge-lab-pageop.js"), "w", encoding="utf-8", newline="\n").write(header + "window.pageOp = " + fn + "\n")
+
 print(f"OK {version} -> {OUT_ZIP}")

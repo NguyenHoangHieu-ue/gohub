@@ -39,7 +39,7 @@ function isTaintSource(name: string, args: any): boolean {
     case "webSearch": case "browseWeb": case "browsePortal": case "queryLarkBase": case "getTrendSnapshots":
       return true
     case "readMyBrowser":
-      return args?.action === "read_tab"
+      return args?.action === "read_tab" || args?.action === "snapshot" || args?.action === "screenshot"
     case "larkDocs": case "googleWorkspace":
       return args?.action === "read"
     default:
@@ -61,6 +61,9 @@ export function recordToolResult(state: TurnSafety, call: { name: string; args: 
 
 type Rule = "always" | "when_tainted" | "never"
 
+// Thao tác trên tab của người dùng không đổi dữ liệu / không đi đâu xa: luôn chạy luôn.
+const BROWSER_FREE_ACTIONS = new Set(["scroll", "scroll_to", "hover", "wait_for", "activate_tab"])
+
 function ruleFor(name: string, args: any): Rule {
   const action = String(args?.action ?? "")
   switch (name) {
@@ -75,7 +78,7 @@ function ruleFor(name: string, args: any): Rule {
     case "assistantMemory": case "managePortalCredentials": case "scheduleTask":
       return action === "list" ? "never" : "when_tainted"
     case "controlMyBrowser":
-      return action === "scroll" ? "never" : "when_tainted"
+      return BROWSER_FREE_ACTIONS.has(action) ? "never" : "when_tainted"
     case "localFiles": case "googleWorkspace": case "larkDocs":
       return READ_ACTIONS.has(action) ? "never" : "when_tainted"
     default:
@@ -98,6 +101,15 @@ export function approvalReason(call: { name: string; args: any }, state: TurnSaf
       ? `Mở URL chưa từng xuất hiện trong hội thoại sau khi đã đọc nội dung bên ngoài (${state.taintSources.join(", ")}).`
       : null
   }
+  // Browser (Bridge 1.3.0): trước đây MỌI click/gõ sau khi đọc tab đều đòi duyệt → không dùng được. Nay: nếu nguồn "nhiễm" chỉ là chính
+  // tab của người dùng (readMyBrowser) thì click/gõ/phím/chọn chạy luôn (trang nhạy cảm đã bị extension + server chặn cứng); còn nguồn ngoài
+  // (web, tài liệu, file…) hoặc điều hướng/mở tab tới URL chưa từng thấy thì vẫn cần duyệt.
+  if (call.name === "controlMyBrowser" && state.tainted && !BROWSER_FREE_ACTIONS.has(String(call.args?.action ?? ""))) {
+    const act = String(call.args?.action ?? "")
+    if ((act === "navigate" || act === "open_tab") && call.args?.url && !state.knownText.includes(String(call.args.url)))
+      return `Mở URL chưa từng xuất hiện trong hội thoại sau khi đã đọc nội dung bên ngoài (${state.taintSources.join(", ")}).`
+    if (state.taintSources.every(s => s.replace(/ \(lượt trước\)$/, "") === "readMyBrowser")) return null
+  }
   const rule = ruleFor(call.name, call.args)
   if (rule === "always") return call.name === "devTicket"
     ? "Phiếu sửa code (Claude Code chạy trên GitHub, mở PR vào staging) luôn cần Hiếu duyệt."
@@ -116,7 +128,7 @@ export function describeAction(call: { name: string; args: any }): string {
     case "createLarkTask": return `Tạo task Lark: "${cut(a.summary)}"${a.due ? ` (hạn ${a.due})` : ""}`
     case "updateLarkTask": return `Sửa task Lark ${cut(a.task_guid, 40)}${a.complete ? " → hoàn thành" : ""}${a.due ? ` (hạn ${a.due})` : ""}`
     case "managePortalCredentials": return `Portal: ${a.action} "${cut(a.name, 60)}"${a.url ? ` ${cut(a.url, 80)}` : ""}`
-    case "controlMyBrowser": return `Trình duyệt: ${a.action} ${cut(a.selector ?? a.url ?? "", 80)}${a.value ? ` = "${cut(a.value, 60)}"` : ""}`
+    case "controlMyBrowser": return `Trình duyệt: ${a.action} ${cut(a.ref ?? a.selector ?? a.url ?? a.keys ?? "", 80)}${a.value ? ` = "${cut(a.value, 60)}"` : ""}`
     case "localFiles": return `File máy: ${a.action} ${cut(a.path, 120)}`
     case "browseWeb": return `Mở trang: ${browseUrls(a).map(u => cut(u, 120)).join(", ")}`
     case "writeKnowledgeBase": return `Ghi KB: ${cut(a.title ?? a.key ?? a.content)}`

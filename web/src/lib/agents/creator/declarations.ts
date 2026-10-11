@@ -335,12 +335,13 @@ export const browseWebDecl = {
 
 export const readMyBrowserDecl = {
   name: "readMyBrowser",
-  description: "Đọc tab Chrome THẬT đang mở trên máy của người dùng hiện tại (dùng session đăng nhập sẵn Lark/Sapo/portal của họ) qua Extension đã pair — action=list_tabs liệt kê tab đang mở (id/title/url), action=read_tab đọc nội dung text 1 tab + `elements` (ô nhập/nút/link kèm `sel` là CSS selector đã kiểm duy nhất — extension 1.2.0+). Nếu lỗi 'Bridge chưa phản hồi' → báo người dùng kiểm tra đã bật extension + toggle Bridge ON + dán đúng token của CHÍNH HỌ chưa (mỗi người 1 token riêng, không dùng chung).",
+  description: "NHÌN tab Chrome THẬT trên máy người dùng (dùng phiên đăng nhập sẵn của họ) qua Extension Bridge đã pair. action=list_tabs: liệt kê tab (id/title/url; trang nhạy cảm bị ẩn). action=snapshot (hoặc read_tab): đọc 1 tab → text + `elements` là các ô nhập/nút/link NHÌN THẤY được, mỗi phần tử có `ref` (mã tham chiếu dùng cho controlMyBrowser), role, name, toạ độ, giá trị, tick/disabled, `options` của dropdown — xuyên iframe cùng origin + shadow DOM. action=screenshot: chụp ảnh vùng đang hiển thị của tab (ảnh gửi kèm ngay sau kết quả, dùng cho trang vẽ bằng canvas, bảng/biểu đồ, hoặc khi snapshot không đủ hiểu bố cục). Quy trình chuẩn: list_tabs → snapshot → controlMyBrowser theo `ref` → snapshot/screenshot lại để KIỂM kết quả. Lỗi 'Bridge chưa phản hồi' → báo người dùng kiểm tra đã bật extension + toggle Bridge ON + dán đúng token của CHÍNH HỌ. Trang ngân hàng/thanh toán/đổi mật khẩu bị chặn cứng — báo người dùng tự làm.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      action: { type: SchemaType.STRING, description: "list_tabs | read_tab" },
-      tab_id: { type: SchemaType.NUMBER, description: "ID tab cần đọc (lấy từ list_tabs) — bỏ trống ở read_tab để đọc tab đang active." },
+      action: { type: SchemaType.STRING, description: "list_tabs | snapshot (= read_tab) | screenshot" },
+      tab_id: { type: SchemaType.NUMBER, description: "ID tab (từ list_tabs). snapshot/read_tab: bỏ trống = tab đang active. screenshot: bắt buộc." },
+      max_width: { type: SchemaType.NUMBER, description: "screenshot: bề rộng ảnh tối đa px (mặc định 1000)." },
     },
     required: ["action"],
   },
@@ -348,18 +349,30 @@ export const readMyBrowserDecl = {
 
 export const controlMyBrowserDecl = {
   name: "controlMyBrowser",
-  description: "Thao tác (click/điền form/điều hướng/cuộn) trên tab Chrome THẬT của người dùng hiện tại qua Extension đã pair — thực thi NGAY, dùng session đăng nhập thật của họ nên LUÔN nói rõ bạn sắp làm gì TRƯỚC khi gọi tool này. Cần tab_id (gọi readMyBrowser action=list_tabs trước nếu chưa có). Với ô nhập kiểu spreadsheet/quick-add cần bấm Enter mới lưu (vd thêm dòng trong sheet) → set press_enter=true.",
+  description: "THAO TÁC trên tab Chrome THẬT của người dùng (click/gõ/phím là thao tác thật, không phải giả lập) — thực thi NGAY, dùng session đăng nhập thật của họ nên LUÔN nói ngắn bạn sắp làm gì TRƯỚC khi gọi. Luôn dùng `ref` lấy NGUYÊN từ readMyBrowser snapshot (không tự đoán); ref hỏng ('Không thấy phần tử') → snapshot lại. Làm TỪNG bước rồi snapshot/screenshot kiểm lại. Actions: click (ref; double=true để bấm đúp; bị che thì báo lỗi, đóng popup/cuộn rồi thử lại) · fill (ref + value: thay toàn bộ nội dung; append=true để gõ tiếp; press_enter=true để nhấn Enter sau khi điền) · key (keys: Enter | Tab | Escape | ArrowDown | ctrl+a | ctrl+c …; repeat; tuỳ chọn ref để focus trước) · select (ref + value: chọn dropdown theo chữ hoặc value) · hover (ref) · scroll (direction up|down|top|bottom, amount = số trang; ref để cuộn 1 khung con) · scroll_to (ref) · wait_for (text | ref | selector, gone=true để chờ biến mất, timeout_ms ≤20000) · navigate (tab_id + url, chờ tải xong) · open_tab (url; mở NỀN trong nhóm tab '🐻 Gấu Pro', trả tab_id mới) · close_tab (chỉ tab do open_tab mở) · activate_tab (đưa tab ra trước, cần khi chụp ảnh tab đang ẩn). Với canvas/trang chỉ bấm theo toạ độ thì dùng screenshot để nhìn. KHÔNG điền mật khẩu/OTP/thanh toán; thao tác không hoàn tác (gửi, xoá, xác nhận đơn, đăng bài) → hỏi người dùng đồng ý bằng lời trước.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      action:      { type: SchemaType.STRING, description: "click | fill | navigate | scroll" },
-      tab_id:      { type: SchemaType.NUMBER, description: "ID tab cần thao tác (từ list_tabs)." },
-      selector:    { type: SchemaType.STRING, description: "CSS selector (cho click/fill) — LẤY NGUYÊN `sel` từ elements của readMyBrowser read_tab, KHÔNG tự đoán theo trí nhớ (giao diện web thay đổi thường xuyên)." },
-      value:       { type: SchemaType.STRING, description: "Giá trị điền (cho fill)." },
-      url:         { type: SchemaType.STRING, description: "URL điều hướng tới (cho navigate)." },
-      press_enter: { type: SchemaType.BOOLEAN, description: "true = sau khi fill xong, gửi thêm phím Enter — cần cho ô nhập nhanh (sheet cell, quick-add) mà chỉ set giá trị KHÔNG tự lưu, phải Enter mới commit." },
+      action:      { type: SchemaType.STRING, description: "click | fill | key | select | hover | scroll | scroll_to | wait_for | navigate | open_tab | close_tab | activate_tab" },
+      tab_id:      { type: SchemaType.NUMBER, description: "ID tab cần thao tác (từ list_tabs / open_tab). Bắt buộc trừ open_tab." },
+      ref:         { type: SchemaType.STRING, description: "Mã phần tử (vd e12) lấy từ elements[].ref của readMyBrowser snapshot." },
+      selector:    { type: SchemaType.STRING, description: "CSS selector — chỉ dùng khi KHÔNG có ref; lấy từ elements[].sel, không tự đoán." },
+      value:       { type: SchemaType.STRING, description: "fill: nội dung điền. select: chữ hiển thị hoặc value của lựa chọn." },
+      url:         { type: SchemaType.STRING, description: "navigate/open_tab: URL đích (https://…)." },
+      press_enter: { type: SchemaType.BOOLEAN, description: "fill: nhấn Enter sau khi điền (ô tìm kiếm, ô nhập nhanh kiểu sheet/quick-add)." },
+      append:      { type: SchemaType.BOOLEAN, description: "fill: gõ nối tiếp, không xoá nội dung cũ." },
+      double:      { type: SchemaType.BOOLEAN, description: "click: bấm đúp." },
+      force:       { type: SchemaType.BOOLEAN, description: "click: vẫn bấm dù phần tử có vẻ bị che." },
+      keys:        { type: SchemaType.STRING, description: "key: tên phím hoặc tổ hợp (Enter, Tab, Escape, ArrowDown, PageDown, Backspace, ctrl+a, ctrl+shift+k…)." },
+      repeat:      { type: SchemaType.NUMBER, description: "key: số lần nhấn (≤50)." },
+      direction:   { type: SchemaType.STRING, description: "scroll: up | down | top | bottom (mặc định down)." },
+      amount:      { type: SchemaType.NUMBER, description: "scroll: số trang cuộn (mặc định 1)." },
+      text:        { type: SchemaType.STRING, description: "wait_for: chữ cần chờ xuất hiện (hoặc biến mất nếu gone=true)." },
+      gone:        { type: SchemaType.BOOLEAN, description: "wait_for: chờ biến mất thay vì xuất hiện." },
+      timeout_ms:  { type: SchemaType.NUMBER, description: "wait_for: thời gian chờ tối đa ms (≤20000, mặc định 8000)." },
+      background:  { type: SchemaType.BOOLEAN, description: "open_tab: mở nền (mặc định true); false = đưa ra trước." },
     },
-    required: ["action", "tab_id"],
+    required: ["action"],
   },
 }
 

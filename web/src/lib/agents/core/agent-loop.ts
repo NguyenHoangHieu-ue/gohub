@@ -13,8 +13,9 @@ export interface AgentLoopOptions {
   contents: Content[]
   /** Cấu hình cho lượt model thứ `round` (0 = lượt đầu) — gọi lại MỖI lượt nên đổi được tool/kỹ năng/mức suy nghĩ giữa chừng. */
   configFor: (round: number) => GenerateContentConfig
-  /** Chạy 1 lời gọi tool → part functionResponse (persona tự lo lỗi, duyệt, kế hoạch…). */
-  runTool: (call: FunctionCall, round: number) => Promise<Part>
+  /** Chạy 1 lời gọi tool → part functionResponse (persona tự lo lỗi, duyệt, kế hoạch…). Có thể kèm `__extra`: các part phụ (vd ảnh
+   *  chụp màn hình inlineData) được nối SAU toàn bộ functionResponse của lượt này — Gemini nhận được ảnh cùng lượt trả kết quả tool. */
+  runTool: (call: FunctionCall, round: number) => Promise<Part & { __extra?: Part[] }>
   maxRounds: number
   onChunk?: (text: string) => void
   signal?: AbortSignal
@@ -66,12 +67,15 @@ export async function runAgentLoop(o: AgentLoopOptions): Promise<AgentLoop> {
     if (!calls.length) break
     calls.forEach(c => toolsUsed.add(c.name ?? ""))
     const round = rounds.length - 1
-    const parts = await Promise.all(calls.map(async call => {
+    const results = await Promise.all(calls.map(async call => {
       const ts = Date.now()
       const part = await o.runTool(call, round)
-      tools.push({ r: round, name: call.name ?? "", ms: Date.now() - ts, chars: JSON.stringify(part).length })
+      tools.push({ r: round, name: call.name ?? "", ms: Date.now() - ts, chars: JSON.stringify({ ...part, __extra: undefined }).length })
       return part
     }))
+    const parts: Part[] = [], extras: Part[] = []
+    for (const r of results) { const { __extra, ...part } = r; parts.push(part as Part); if (__extra?.length) extras.push(...__extra) }
+    parts.push(...extras)
     // Kết quả tool gửi lại với role "user" (định dạng Gemini API cho functionResponse).
     o.contents.push({ role: "user", parts })
     if (o.timeBudgetMs != null && Date.now() - startedAt >= o.timeBudgetMs) { unfinished = true; break }

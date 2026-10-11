@@ -1,4 +1,4 @@
-// SINH TỰ ĐỘNG từ browser-extension/background.js (hàm pageOp) — chỉ để thử trong trang Bridge Lab. Không sửa tay.
+// SINH TỰ ĐỘNG bởi web/scripts/pack_bridge_extension.py từ browser-extension/background.js (hàm pageOp) — không sửa tay.
 window.pageOp = function pageOp(op, a) {
   a = a || {}
   const INTERACTIVE = 'a[href], button, input:not([type=hidden]), textarea, select, summary, [role=button], [role=link], [role=textbox], [role=searchbox], [role=checkbox], [role=radio], [role=tab], [role=menuitem], [role=option], [role=switch], [role=combobox], [role=treeitem], [contenteditable=""], [contenteditable="true"], [tabindex]:not([tabindex="-1"]), [onclick]'
@@ -104,6 +104,7 @@ window.pageOp = function pageOp(op, a) {
       const role = roleOf(el)
       const e = { ref: refFor(el), role, name: nameOf(el).trim().replace(/\s+/g, " ").slice(0, 80), tag: el.tagName.toLowerCase(), x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), inView }
       const sel = uniqueSel(el, doc); if (sel) e.sel = sel
+      if (el.tagName === "A" && el.href) e.href = el.href.slice(0, 200)
       if (el.type && el.tagName === "INPUT") e.type = el.type
       if (el.type === "password") e.value = "••••"
       else if (typeof el.value === "string" && el.value && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) e.value = el.value.slice(0, 80)
@@ -128,11 +129,9 @@ window.pageOp = function pageOp(op, a) {
     const cx = r.left + r.width / 2, cy = r.top + r.height / 2
     const { ox, oy } = frameOffset(el.ownerDocument)
     const hit = el.ownerDocument.elementFromPoint(cx, cy)
-    let covered = false
-    if (hit && hit !== el && !el.contains(hit) && !hit.contains(el)) {
-      const host = hit.getRootNode && hit.getRootNode().host
-      covered = !(host && (host === el || el.contains(host))) && !(el.shadowRoot && el.shadowRoot.contains(hit))
-    }
+    // Quan hệ cha-con XUYÊN shadow DOM (elementFromPoint trả về host chứ không phải phần tử bên trong shadow).
+    const composedContains = (anc, node) => { for (let n = node; n; n = n.parentNode || n.host) if (n === anc) return true; return false }
+    const covered = !!hit && !composedContains(hit, el) && !composedContains(el, hit)
     return {
       ok: true, x: ox + cx, y: oy + cy, w: Math.round(r.width), h: Math.round(r.height), tag: el.tagName.toLowerCase(),
       disabled: !!(el.disabled || el.getAttribute("aria-disabled") === "true"),

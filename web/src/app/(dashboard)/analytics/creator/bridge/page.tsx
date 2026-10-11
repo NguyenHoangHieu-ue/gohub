@@ -136,6 +136,7 @@ function BridgeSettings({ isCreator }: { isCreator: boolean }) {
           <p>3. Bấm icon extension trên thanh Chrome → dán token phía trên + Server URL (domain đang dùng, vd <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">https://stg-intel-v2.gohub.cloud</code>) → bật toggle <strong>Bridge ON</strong>.</p>
           <p>4. Vào Gấu Pro, thử hỏi "list các tab đang mở" để xác nhận kết nối.</p>
           <p><strong>Cập nhật bản mới</strong> (popup extension sẽ báo &quot;Có bản mới&quot;): tải zip ở nút trên → giải nén ĐÈ lên đúng thư mục đã cài → <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">chrome://extensions</code> bấm ↻ → kiểm số phiên bản. Chỉ bấm ↻ mà không chép file mới thì vẫn là bản cũ.</p>
+          <p><strong>Bản 1.3.0 xin thêm quyền</strong> (&quot;gỡ lỗi trình duyệt&quot;, &quot;nhóm tab&quot;) để Gấu Pro click/gõ như người thật và chụp ảnh tab. Khi Gấu thao tác, Chrome hiện dải vàng &quot;đang bị gỡ lỗi&quot; và trang có khung cam + nút <strong>⛔ DỪNG</strong> (tắt Bridge ngay). Trang ngân hàng/thanh toán/đổi mật khẩu/trình quản lý mật khẩu bị chặn mặc định; bạn thêm/bớt tên miền trong popup extension.</p>
           <p className="text-amber-700 pt-1">⚠️ click/fill/navigate thực thi NGAY (không cần duyệt) — chỉ hiện thông báo Chrome không chặn để biết Gấu Pro vừa làm gì. Đây là session đăng nhập THẬT của bạn — cân nhắc kỹ khi nhờ Gấu Pro thao tác việc quan trọng. Token của bạn RIÊNG — không chia sẻ cho ai.</p>
         </div>
       </div>

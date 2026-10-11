@@ -21,6 +21,7 @@ import { ExportBar, stripExportHelperBlocks } from "@/components/chat-export"
 import { TasksPanel } from "@/components/gau-pro/tasks-panel"
 import { RunsList } from "@/components/gau-pro/runs-list"
 import { MemoryPanel } from "@/components/gau-pro/memory-panel"
+import { wakeBridgeIfBrowserStatus } from "@/lib/bridge-wake"
 import { LiveSession } from "@/components/gau-pro/live-session"
 import { MovedToBeGau } from "@/components/gau-pro/moved-to-be-gau"
 
@@ -794,7 +795,7 @@ export default function CreatorAIPage() {
           if (!part.startsWith("data: ")) continue
           try {
             const ev = JSON.parse(part.slice(6))
-            if (ev.type === "status") setStatusText(ev.text)
+            if (ev.type === "status") { setStatusText(ev.text); wakeBridgeIfBrowserStatus(ev.text) }
             else if (ev.type === "delta") {
               assistantContent += ev.content
               setStatusText("")

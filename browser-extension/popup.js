@@ -27,7 +27,9 @@ function renderStatus() {
   $statusText.className = "status " + ($enabled.checked ? "on" : "off")
 }
 
-chrome.storage.local.get(["serverUrl", "token", "enabled"], (cfg) => {
+const $allow = document.getElementById("allowDomains"), $block = document.getElementById("blockDomains")
+chrome.storage.local.get(["serverUrl", "token", "enabled", "allowDomains", "blockDomains"], (cfg) => {
+  $allow.value = cfg.allowDomains || ""; $block.value = cfg.blockDomains || ""
   $serverUrl.value = cfg.serverUrl || ""
   $token.value = cfg.token || ""
   $enabled.checked = !!cfg.enabled
@@ -41,6 +43,8 @@ $save.addEventListener("click", () => {
     serverUrl: $serverUrl.value.trim(),
     token: $token.value.trim(),
     enabled: $enabled.checked,
+    allowDomains: $allow.value.trim(),
+    blockDomains: $block.value.trim(),
   }, () => {
     $save.textContent = "Đã lưu ✓"
     setTimeout(() => { $save.textContent = "Lưu" }, 1500)

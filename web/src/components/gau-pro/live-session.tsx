@@ -1,5 +1,6 @@
 "use client"
 
+import { wakeBridge } from "@/lib/bridge-wake"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Mic, MicOff, Monitor, Camera, PhoneOff, Loader2, X, Send, MousePointerClick } from "lucide-react"
 
@@ -96,8 +97,9 @@ export function LiveSession({ onClose, onSaved, apiBase = "/api/creator-ai/live"
     const ts = Date.now()
     const a: any = fc.args ?? {}
     pushText("tool", fc.name === "controlMyBrowser"
-      ? `🖱 ${a.action} ${String(a.selector ?? a.url ?? "").slice(0, 60)}${a.value ? ` = "${String(a.value).slice(0, 40)}"` : ""}`
+      ? `🖱 ${a.action} ${String(a.ref ?? a.selector ?? a.url ?? a.keys ?? "").slice(0, 60)}${a.value ? ` = "${String(a.value).slice(0, 40)}"` : ""}`
       : fc.name === "readMyBrowser" ? `👀 đọc Chrome (${a.action})` : `🔎 ${fc.name}`, true)
+    if (fc.name === "readMyBrowser" || fc.name === "controlMyBrowser") wakeBridge()
     let response: unknown
     try {
       const d = await fetch(`${apiBase}/tool`, {
