@@ -22,6 +22,8 @@ const OUT = path.join(ROOT, "eval/results"); fs.mkdirSync(OUT, { recursive: true
 const PROFILES = {
   short: { desc: "hay yêu cầu trả lời ngắn gọn", lines: ["Hay yêu cầu trả lời ngắn gọn/tóm tắt (quan sát 28 lần).", "Hay nhắn ngắn gọn, ít chi tiết (quan sát 40 tin)."] },
   table: { desc: "hay yêu cầu trình bày dạng bảng", lines: ["Hay yêu cầu trình bày dạng bảng (quan sát 12 lần).", "Hay 👍 câu trả lời có bảng (quan sát 6 lần)."] },
+  excel: { desc: "hay xin kết quả dạng file Excel", lines: ["Hay xin kết quả dạng file Excel (quan sát 10 lần).", "Hay nhờ làm báo cáo (quan sát 9 lần)."] },
+  nodiac: { desc: "hay gõ tiếng Việt không dấu (trợ lý vẫn nên trả lời tiếng Việt CÓ DẤU bình thường — thói quen này chỉ cho biết cách người dùng gõ, không đổi cách trả lời)", lines: ["Hay gõ tiếng Việt không dấu (quan sát 15 tin)."] },
   control: { desc: "thói quen KHÔNG liên quan tới cách trả lời (đối chứng — không được làm đổi câu trả lời)", lines: ['Hay nhắc tới "zephyr" (quan sát 9 lần).', "Thường nhắn vào buổi chiều (quan sát 120 tin)."] },
 }
 const QUESTIONS = [
