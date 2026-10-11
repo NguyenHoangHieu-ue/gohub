@@ -44,8 +44,11 @@ export function habitLine(c: HabitCandidate): string {
 }
 
 /** Chỉ nhóm an toàn: định dạng, văn phong, kênh, khung giờ, phản hồi tốt, + chủ đề là TÊN RIÊNG ASCII (1 token) hoặc chủ đề có nhịp theo thứ. Không lưu tool, không lưu 👎. */
+// Thứ tự ưu tiên khi bị trần "3 mục mới/đêm": tín hiệu về CÁCH trả lời trước (hữu ích nhất cho việc chỉnh giọng), chủ đề sau.
+const PRIORITY: Record<string, number> = { format: 0, feedback: 1, style: 2, channel: 3, time_of_day: 4, weekday_topic: 5, topic: 6 }
+
 export function selectSafeHabits(cands: HabitCandidate[]): HabitCandidate[] {
-  return cands.filter(c => {
+  return [...cands].sort((a, b) => (PRIORITY[a.kind] ?? 9) - (PRIORITY[b.kind] ?? 9) || (b.lift ?? 0) * b.count - (a.lift ?? 0) * a.count).filter(c => {
     if (c.kind === "tool") return false
     if (c.kind === "feedback") return c.key === "table" || c.key === "concise"
     if (c.kind === "topic") return /^[a-z0-9]{4,}$/.test(c.key)

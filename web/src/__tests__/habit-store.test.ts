@@ -17,12 +17,13 @@ describe("habit-store (H1 tự lưu thói quen)", () => {
 
   it("chỉ nhóm an toàn: bỏ tool, bỏ 👎, bỏ chủ đề không phải tên riêng ASCII", () => {
     const out = selectSafeHabits([c("tool", "createLarkTask"), c("feedback", "down"), c("feedback", "table"), c("topic", "cập nhật"), c("topic", "cmhk"), c("format", "excel"), c("style", "short"), c("channel", "Lark")])
-    expect(out.map(x => `${x.kind}:${x.key}`)).toEqual(["feedback:table", "topic:cmhk", "format:excel", "style:short", "channel:Lark"])
+    expect(out.map(x => `${x.kind}:${x.key}`)).toEqual(["format:excel", "feedback:table", "style:short", "channel:Lark", "topic:cmhk"])
   })
 
-  it("lần đầu: chèn tối đa 3 mục mới/đêm; có khoá nguồn để cập nhật sau", () => {
-    const plan = planHabitWrites("an", [c("format", "short"), c("format", "excel"), c("style", "short"), c("channel", "Lark"), c("topic", "cmhk")], [])
+  it("lần đầu: chèn tối đa 3 mục mới/đêm, ưu tiên cách trả lời trước chủ đề; có khoá nguồn để cập nhật sau", () => {
+    const plan = planHabitWrites("an", selectSafeHabits([c("topic", "cmhk"), c("topic", "vnpt"), c("format", "short"), c("style", "short"), c("channel", "Lark")]), [])
     expect(plan.insert).toHaveLength(MAX_NEW_PER_RUN)
+    expect(plan.insert.map(i => i.source)).toEqual(["auto-habit:format:short", "auto-habit:style:short", "auto-habit:channel:Lark"])
     expect(plan.insert[0].source).toBe("auto-habit:format:short")
     expect(plan.insert[0].kind).toBe("preference")
   })
