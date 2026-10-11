@@ -22,7 +22,7 @@ Trang cấu hình kỹ thuật sâu dành riêng cho quản trị viên bao gồ
   `next/dynamic` (code-split, cùng pattern recharts s196+21), KHÔNG đổi logic/UI (cùng nguyên tắc Phase 5
   quarterly/channels/to-gau/my-metrics). `page.tsx` (shell + tab bar) còn **116 dòng**. File mới:
   `settings-tab.tsx`, `template-tab.tsx` (lớn nhất, ~1019 dòng — sinh template WM/3HK), `promotions-tab.tsx`,
-  `scheduled-tab.tsx`, `ref-import-tab.tsx`, `api-keys-tab.tsx`, `admin-types.ts` (type `AppSetting` dùng
+  `ref-import-tab.tsx`, `api-keys-tab.tsx`, `admin-types.ts` (type `AppSetting` dùng
   chung giữa Settings + Template). tsc + lint (0 lỗi mới) + vitest (243/243) PASS ngay lần đầu (không phải
   sửa lỗi import sau khi tách — icon/type mapping đúng theo phạm vi dòng gốc).
 - **Lưu ý (s82)**: Quản lý tài khoản người dùng & phân quyền (thêm/đổi mật khẩu/role/ma trận) đã **gộp về `/analytics/users`** (tab "Users"), KHÔNG còn ở `/admin`.
