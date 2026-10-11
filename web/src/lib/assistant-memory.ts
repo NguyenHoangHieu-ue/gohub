@@ -44,10 +44,13 @@ export async function buildMemoryBlock(username: string, message?: string): Prom
     .select(cols)
     .eq("username", username).eq("archived", false)
     .order("pinned", { ascending: false }).order("updated_at", { ascending: false })
-    .limit(1000), "id,kind,content,pinned,updated_at")
+    .limit(1000), "id,kind,content,pinned,updated_at,source")
   if (error) { if (!missingTable(error.message)) console.error("[assistant-memory]", error.message); return "" }
 
-  let rows = (data ?? []) as Row[]
+  const all = (data ?? []) as (Row & { source?: string | null })[]
+  // Thói quen tự quan sát (job ban đêm, lib/habit-store.ts) tách khỏi trí nhớ người dùng tự nói — nạp ở khối riêng bên dưới.
+  const habitRows = all.filter(r => (r.source ?? "").startsWith("auto-habit:"))
+  let rows: Row[] = all.filter(r => !(r.source ?? "").startsWith("auto-habit:"))
   if (message?.trim() && rows.reduce((n, r) => n + r.content.length + 40, 0) > MAX_INJECT_CHARS) {
     const pinned = rows.filter(r => r.pinned)
     const rest = rows.filter(r => !r.pinned)
@@ -69,8 +72,12 @@ chốt — thì gọi assistantMemory action=save (1 ý/lần, ngắn gọn, kè
 action=update với id, content chỉ ghi trạng thái HIỆN TẠI (giá trị cũ hệ thống tự giữ, hiện ở "⟲ trước đây"; hỏi về quá khứ thì
 dựa vào đó hoặc action=list). Sai/lỗi thời → action=forget. KHÔNG lưu: số liệu tra lại được từ DB, chuyện chỉ dùng trong lượt
 này, mật khẩu/token/thông tin nhạy cảm. Lưu xong nói ngắn "đã nhớ".`
-  if (!lines.length) return `${header}\n(Chưa có gì.)`
-  return `${header}\n${lines.join("\n")}${dropped ? `\n(…còn ${dropped} mục cũ hơn không nạp — gọi action=list để xem)` : ""}`
+  const habitBlock = habitRows.length
+    ? `\n\n━━━ THÓI QUEN QUAN SÁT ĐƯỢC (hệ thống tự ghi từ cách người dùng chat — có thể sai) ━━━
+Chỉ dùng để chỉnh giọng, độ dài, cách trình bày và đôi khi gợi ý nhẹ ("anh hay xem X đầu tuần, em lấy luôn nhé?"). KHÔNG nói là em đang theo dõi, KHÔNG khẳng định như sự thật, KHÔNG để thói quen thắng yêu cầu trực tiếp của người dùng ở lượt này.\n${habitRows.slice(0, 15).map(r => `- ${r.content}`).join("\n")}`
+    : ""
+  if (!lines.length) return `${header}\n(Chưa có gì.)${habitBlock}`
+  return `${header}\n${lines.join("\n")}${dropped ? `\n(…còn ${dropped} mục cũ hơn không nạp — gọi action=list để xem)` : ""}${habitBlock}`
 }
 
 export async function runAssistantMemory(
@@ -167,7 +174,7 @@ export function rankMemories<T extends MemoryRow>(message: string, rows: T[], li
 export async function findRelevantMemories(username: string, message: string, limit = 40): Promise<MemoryRow[]> {
   if (!username) return []
   const { data, error } = await supabaseAdmin.from("assistant_memory").select("id,kind,content")
-    .eq("username", username).eq("archived", false).order("updated_at", { ascending: false }).limit(3000)
+    .eq("username", username).eq("archived", false).not("source", "like", "auto-habit:%").order("updated_at", { ascending: false }).limit(3000)
   if (error) return []
   return rankMemories(message, (data ?? []) as MemoryRow[], limit)
 }

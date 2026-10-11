@@ -53,6 +53,19 @@ describe("assistant memory", () => {
     expect(await buildMemoryBlock("hieu")).not.toContain("[#999]")
   })
 
+  it("H1: thói quen tự quan sát nạp ở khối riêng có cảnh báo, không lẫn vào trí nhớ người dùng tự nói", async () => {
+    selectResult = { data: [
+      { id: 1, kind: "project", content: "Phụ trách Châu Âu", pinned: false, updated_at: "", source: "manual" },
+      { id: 2, kind: "preference", content: "Hay yêu cầu trả lời ngắn gọn/tóm tắt (quan sát 29 lần).", pinned: false, updated_at: "", source: "auto-habit:format:short" },
+    ], error: null }
+    const block = await buildMemoryBlock("hieu")
+    expect(block).toContain("[#1] (Dự án/việc đang theo) Phụ trách Châu Âu")
+    expect(block).not.toContain("[#2]")
+    expect(block).toContain("THÓI QUEN QUAN SÁT ĐƯỢC")
+    expect(block).toContain("KHÔNG nói là em đang theo dõi")
+    expect(block).toContain("- Hay yêu cầu trả lời ngắn gọn/tóm tắt (quan sát 29 lần).")
+  })
+
   it("chưa chạy migration → không làm hỏng chat (khối rỗng) và tool báo cách sửa", async () => {
     selectResult = { data: null, error: { message: 'relation "assistant_memory" does not exist' } }
     expect(await buildMemoryBlock("hieu")).toBe("")
