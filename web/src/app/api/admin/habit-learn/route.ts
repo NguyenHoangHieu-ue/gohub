@@ -8,7 +8,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { loadChatEvents } from "@/lib/task-events"
 import { genai } from "@/lib/agents/genai-stream"
 import { GEMINI_MODEL } from "@/lib/ai-models"
-import { computeHabits, isSensitiveHabit, MIN_COUNT, MIN_WEEKS, type HabitCandidate, type HabitEvent } from "@/lib/habit-learner"
+import { computeHabits, buildBaseline, isSensitiveHabit, MIN_COUNT, MIN_WEEKS, MIN_LIFT, type HabitCandidate, type HabitEvent } from "@/lib/habit-learner"
 
 export const maxDuration = 120
 
@@ -67,15 +67,16 @@ export async function POST(req: NextRequest) {
     identities = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25).map(([who, n]) => ({ who, n }))
   }
 
+  const baseline = buildBaseline(rows as unknown as HabitEvent[])   // toàn công ty trong cửa sổ, để so "đặc trưng cho người này"
   const out = []
   for (const username of usernames) {
     const mine = (e: { user_email?: string | null; user_name?: string | null }) =>
       idOf.get(String(e.user_email ?? "").toLowerCase()) === username || idOf.get(String(e.user_name ?? "").toLowerCase()) === username || String(e.user_name ?? "").toLowerCase() === username.toLowerCase()
     const events = rows.filter(mine)
     const feedback = (fb ?? []).filter(f => idOf.get(String(f.user_email ?? "").toLowerCase()) === username)
-    const { stats, candidates } = computeHabits(events as unknown as HabitEvent[], feedback as { rating: number; answer?: string | null; created_at: string }[])
+    const { stats, candidates } = computeHabits(events as unknown as HabitEvent[], feedback as { rating: number; answer?: string | null; created_at: string }[], baseline)
     const ph = wantPhrase ? await phrase(candidates, stats.events) : undefined
     out.push({ username, found: users.some(u => u.username === username), stats, candidates, phrased: ph, saved: false })
   }
-  return NextResponse.json({ dryRun: true, saved: false, window: { start, end }, thresholds: { MIN_COUNT, MIN_WEEKS }, results: out, identities })
+  return NextResponse.json({ dryRun: true, saved: false, window: { start, end }, thresholds: { MIN_COUNT, MIN_WEEKS, MIN_LIFT }, baseline: { messages: baseline.n }, results: out, identities })
 }
