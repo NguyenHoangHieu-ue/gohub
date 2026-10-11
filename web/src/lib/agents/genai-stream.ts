@@ -16,6 +16,7 @@ export interface TurnResult {
   text: string
   tokensIn: number
   tokensOut: number
+  cachedIn?: number              // token vào được Gemini lấy từ cache ngầm (usageMetadata.cachedContentTokenCount)
 }
 
 // SDK cũ dùng SchemaType chữ thường ("object"/"string"); Schema của SDK mới dùng Type chữ hoa. Đổi đệ quy để dùng chung
@@ -46,7 +47,7 @@ export async function streamTurn(
   for (let i = 0; i < attempts; i++) {
     let emitted = false
     const parts: Part[] = []
-    let tokensIn = 0, tokensOut = 0
+    let tokensIn = 0, tokensOut = 0, cachedIn = 0
     try {
       const stream = await genai().models.generateContentStream({ model, contents, config })
       for await (const chunk of stream) {
@@ -56,11 +57,11 @@ export async function streamTurn(
           if (typeof p.text === "string" && p.text && !p.thought) { emitted = true; onChunk?.(p.text) }
         }
         const u = chunk.usageMetadata
-        if (u) { tokensIn = u.promptTokenCount ?? tokensIn; tokensOut = u.candidatesTokenCount ?? tokensOut }
+        if (u) { tokensIn = u.promptTokenCount ?? tokensIn; tokensOut = u.candidatesTokenCount ?? tokensOut; cachedIn = u.cachedContentTokenCount ?? cachedIn }
       }
       const functionCalls = parts.filter(p => p.functionCall).map(p => p.functionCall!) as FunctionCall[]
       const text = parts.filter(p => typeof p.text === "string" && !p.thought).map(p => p.text).join("")
-      return { content: { role: "model", parts }, functionCalls, text, tokensIn, tokensOut }
+      return { content: { role: "model", parts }, functionCalls, text, tokensIn, tokensOut, cachedIn }
     } catch (e: any) {
       lastErr = e
       if (emitted || !TRANSIENT.test(String(e?.message || "")) || i === attempts - 1) throw e

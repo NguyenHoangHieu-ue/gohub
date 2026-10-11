@@ -110,7 +110,7 @@ async function runQ(q) {
   const t0 = Date.now()
   try {
     const r = await call({ action: "ask", question: q.q }, 1)
-    return { id: q.id, cat: q.cat, question: q.q, answer: r.text, toolsUsed: r.toolsUsed, tokensIn: r.tokensIn, tokensOut: r.tokensOut, ms: r.ms }
+    return { id: q.id, cat: q.cat, question: q.q, answer: r.text, toolsUsed: r.toolsUsed, tokensIn: r.tokensIn, tokensOut: r.tokensOut, cachedIn: r.cachedIn, ms: r.ms }
   } catch (e) {
     return { id: q.id, cat: q.cat, question: q.q, error: e.message, ms: Date.now() - t0 }
   }
@@ -160,7 +160,7 @@ function summary(label, rows, dump) {
     `**Đúng: ${pct(avg(rows.map(r => r.judge.correct)))}** · bịa: ${pct(avg(rows.map(r => r.judge.hallucinated)))} · lỗi chạy: ${rows.filter(r => r.error).length}`, "",
     "| Nhóm | Số câu | Đúng | Bịa |", "|---|---|---|---|",
     ...cats.map(c => { const a = rows.filter(r => r.cat === c); return `| ${c} | ${a.length} | ${pct(avg(a.map(r => r.judge.correct)))} | ${pct(avg(a.map(r => r.judge.hallucinated)))} |` }), "",
-    `Mỗi câu: thời gian TB ${(avg(rows.filter(r => r.ms).map(r => r.ms)) / 1000).toFixed(1)}s · token vào/ra TB ${Math.round(avg(rows.map(r => r.tokensIn || 0)))}/${Math.round(avg(rows.map(r => r.tokensOut || 0)))} · gọi tool: ${rows.filter(r => r.toolsUsed?.length).length}/${rows.length} câu`, "",
+    `Mỗi câu: thời gian TB ${(avg(rows.filter(r => r.ms).map(r => r.ms)) / 1000).toFixed(1)}s · token vào/ra TB ${Math.round(avg(rows.map(r => r.tokensIn || 0)))}/${Math.round(avg(rows.map(r => r.tokensOut || 0)))} · gọi tool: ${rows.filter(r => r.toolsUsed?.length).length}/${rows.length} câu · token vào từ cache TB ${Math.round(avg(rows.map(r => r.cachedIn || 0)))} (${pct(avg(rows.map(r => r.cachedIn || 0)) / Math.max(1, avg(rows.map(r => r.tokensIn || 0))))})`, "",
     dump ? `Trí nhớ sau khi nạp: ${dump.memories.length} mục (${dump.memories.filter(m => m.archived).length} đã lưu trữ), ${dump.conversationSummaries.length} tóm tắt hội thoại, khối prompt ${dump.memoryBlockChars} ký tự` : "", "",
     "| # | Nhóm | Đúng | Bịa | Ghi chú giám khảo |", "|---|---|---|---|---|",
     ...rows.map(r => `| ${r.id} | ${r.cat} | ${r.judge.correct} | ${r.judge.hallucinated} | ${String(r.judge.note || "").replace(/\|/g, "/").replace(/\n/g, " ").slice(0, 200)} |`)].join("\n")

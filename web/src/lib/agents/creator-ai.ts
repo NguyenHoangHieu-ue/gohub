@@ -554,7 +554,7 @@ export async function runCreatorAI(
     personal?: boolean             // eval trí nhớ: ép bật/tắt trí nhớ cá nhân, bỏ qua cờ gp_personal_features
   } = {},
 ): Promise<{
-  text: string; sources: WebSource[]; tokensIn: number; tokensOut: number; toolsUsed: string[]
+  text: string; sources: WebSource[]; tokensIn: number; tokensOut: number; cachedIn: number; toolsUsed: string[]
   pendingActions: PendingAction[]; checkpoint?: JobCheckpoint
 }> {
   const t0 = Date.now()
@@ -738,6 +738,6 @@ export async function runCreatorAI(
     : undefined
   return {
     text: unfinished ? "" : (text || "Không có dữ liệu trả về."),
-    sources: collectedSources, tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, toolsUsed: [...toolsUsed], pendingActions, checkpoint,
+    sources: collectedSources, tokensIn: loop.tokensIn, tokensOut: loop.tokensOut, cachedIn: loop.cachedIn, toolsUsed: [...toolsUsed], pendingActions, checkpoint,
   }
 }
