@@ -172,7 +172,7 @@ async function sweepDebuggers() {
 
 function pageOp(op, a) {
   a = a || {}
-  const INTERACTIVE = 'a[href], button, input:not([type=hidden]), textarea, select, summary, [role=button], [role=link], [role=textbox], [role=searchbox], [role=checkbox], [role=radio], [role=tab], [role=menuitem], [role=option], [role=switch], [role=combobox], [role=treeitem], [contenteditable=""], [contenteditable="true"], [tabindex]:not([tabindex="-1"]), [onclick]'
+  const INTERACTIVE = 'a[href], button, input:not([type=hidden]), textarea, select, summary, [role=button], [role=link], [role=textbox], [role=searchbox], [role=checkbox], [role=radio], [role=tab], [role=menuitem], [role=option], [role=switch], [role=combobox], [role=treeitem], [contenteditable=""], [contenteditable="true"], [tabindex]:not([tabindex="-1"]), [onclick], canvas'
   if (!window.__gauRefs) { window.__gauRefs = new Map(); window.__gauRefOf = new WeakMap(); window.__gauRefN = 0 }
 
   // Mọi "root" cần tìm: document + iframe cùng origin (≤4 tầng) + shadow root mở. Giới hạn số phần tử quét để trang khổng lồ không treo.
@@ -231,6 +231,7 @@ function pageOp(op, a) {
     const r = el.getAttribute("role"); if (r) return r
     const t = el.tagName.toLowerCase()
     if (t === "a") return "link"
+    if (t === "canvas") return "canvas"   // vùng vẽ tay: không có phần tử con để chọn → Gấu click theo toạ độ x,y (xem rect trong snapshot)
     if (t === "button" || t === "summary") return "button"
     if (t === "select") return "combobox"
     if (t === "textarea") return "textbox"
@@ -703,7 +704,7 @@ async function execAction(action, p) {
 async function screenshotFallback(tab, p, cause) {
   if (!tab.active) throw new Error(`Tab đang ẩn và không gắn được debugger (${String(cause.message || cause).slice(0, 70)}) — dùng activate_tab rồi chụp lại.`)
   const dataUrl = await withTimeout(chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 60 }), 6000,
-    "Không chụp được (cửa sổ Chrome có thể đang thu nhỏ/không hiển thị) — đưa cửa sổ ra trước rồi thử lại.")
+    "Không chụp được (cửa sổ Chrome đang bị che/thu nhỏ — Chrome không cho chụp cửa sổ không hiển thị). Đưa cửa sổ ra trước rồi thử lại, hoặc dùng snapshot (có toạ độ cả canvas) và click theo x,y.")
   const blob = await (await fetch(dataUrl)).blob()
   const bmp = await createImageBitmap(blob)
   const maxW = Number(p.max_width) || 1000

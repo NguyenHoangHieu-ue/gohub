@@ -1,7 +1,7 @@
 // SINH TỰ ĐỘNG bởi web/scripts/pack_bridge_extension.py từ browser-extension/background.js (hàm pageOp) — không sửa tay.
 window.pageOp = function pageOp(op, a) {
   a = a || {}
-  const INTERACTIVE = 'a[href], button, input:not([type=hidden]), textarea, select, summary, [role=button], [role=link], [role=textbox], [role=searchbox], [role=checkbox], [role=radio], [role=tab], [role=menuitem], [role=option], [role=switch], [role=combobox], [role=treeitem], [contenteditable=""], [contenteditable="true"], [tabindex]:not([tabindex="-1"]), [onclick]'
+  const INTERACTIVE = 'a[href], button, input:not([type=hidden]), textarea, select, summary, [role=button], [role=link], [role=textbox], [role=searchbox], [role=checkbox], [role=radio], [role=tab], [role=menuitem], [role=option], [role=switch], [role=combobox], [role=treeitem], [contenteditable=""], [contenteditable="true"], [tabindex]:not([tabindex="-1"]), [onclick], canvas'
   if (!window.__gauRefs) { window.__gauRefs = new Map(); window.__gauRefOf = new WeakMap(); window.__gauRefN = 0 }
 
   // Mọi "root" cần tìm: document + iframe cùng origin (≤4 tầng) + shadow root mở. Giới hạn số phần tử quét để trang khổng lồ không treo.
@@ -60,6 +60,7 @@ window.pageOp = function pageOp(op, a) {
     const r = el.getAttribute("role"); if (r) return r
     const t = el.tagName.toLowerCase()
     if (t === "a") return "link"
+    if (t === "canvas") return "canvas"   // vùng vẽ tay: không có phần tử con để chọn → Gấu click theo toạ độ x,y (xem rect trong snapshot)
     if (t === "button" || t === "summary") return "button"
     if (t === "select") return "combobox"
     if (t === "textarea") return "textbox"
