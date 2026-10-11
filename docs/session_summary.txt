@@ -10972,3 +10972,4 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
 - (s230 tiếp) MERGE main 2026-10-11 (Hiếu yêu cầu): H2 eval A/B thói quen (action setHabits + scripts/eval-habits.mjs + kết quả). Không migration. tsc/build OK, vitest 671 pass (2 lỗi có sẵn).
 - (s230 tiếp) H2b đo gợi ý chủ động (3 lần x 8 câu): 0% gợi ý ở mọi ô kể cả liên quan, 0% theo dõi/khẳng định/lấn át => an toàn nhưng tính năng chủ động gần như không xảy ra. Cần siết lời dặn + đo trên câu dữ liệu thật nếu muốn.
 - (s230 tiếp) Hiếu chốt: dừng ở H2b, giữ nguyên (không siết gợi ý chủ động). Còn mở: mở dần cho người dùng thử khác + thông báo nhân viên; job cron-job.org habit-learn production.
+- (s230 tiếp) MERGE main 2026-10-11 (6bc2ac5f): kết quả H2/H2b + tài liệu. Hiếu đã thêm job cron-job.org habit-learn; dryRun trên production OK (HTTP 200, 2 người đủ điều kiện).
