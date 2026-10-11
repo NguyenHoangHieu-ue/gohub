@@ -26,3 +26,7 @@ Môi trường dev không cài được extension vào Chrome thật → server 
 
 ## QA thật 2026-10-11 (Gấu Pro chạy Bridge Lab, 1.3.0 → sửa thành 1.3.1)
 Đạt T1,T3,T4,T5,T6,T8,T9,T10; T2/T7 chưa kiểm được trên máy Hiếu vì extension khác chặn `chrome.debugger` (xem wiki). Sửa 4 lỗi + thêm dự phòng ở 1.3.1. **Hiếu cần tải 1.3.1, giải nén đè, reload**, rồi (nếu muốn kiểm click thật) thử T2/T7 ở profile Chrome KHÔNG cài Claude in Chrome.
+
+## Tổng kết QA (2026-10-11): bản 1.3.3
+Đạt qua Gấu Pro thật trên máy Hiếu: T1, T3, T4, T5, T6, T7 (canvas, synthetic), T8, T9, T10; T2 chạy ở chế độ synthetic. Chưa kiểm: click thật `isTrusted=true` và chụp ảnh qua debugger (máy Hiếu có extension khác chặn `chrome.debugger`) — thử ở profile sạch. Lỗi tìm ra + đã sửa trong đợt QA: key không dự phòng, fill contenteditable, screenshot dự phòng, chữ iframe, lệnh treo khoá hàng đợi, canvas không có trong snapshot.
+Còn lại: B4 (tải/tải lên file, ghi-chạy-lại quy trình, chạy theo lịch); đo so sánh bản cũ/mới; quyết merge `main`.
