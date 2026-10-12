@@ -11001,3 +11001,5 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
 - (s232) Gấu Pro: skill tự học — tool learnSkill (create/list/delete, chỉ Creator), lưu app_settings gp_learned_skills, LUÔN cần duyệt (kể cả khi đã tự-duyệt-theo-ngày), skill chỉ là chỉ dẫn chữ không thêm tool/quyền, nạp qua loadSkill. Chưa QA sống.
 
 - (s232) Gấu Pro: sửa thẻ duyệt hiện lại nút Duyệt sau khi lượt chat kết thúc (approvalDecided ref); tăng tốc browser: bridge/next giữ request 8s khi dồn dập, poll kết quả 200ms, skill browser-files dặn snapshot gọn. Chưa đo thật.
+
+- (s232) Gấu Pro trợ lý cá nhân: task Lark dùng token Lark của CHÍNH từng người (khoá lark_oauth_user:<username>), bịt lỗ hổng người được cấp quyền thấy/sửa task của Hiếu; Kết nối Lark mở cho người được cấp Gấu Pro (scope task). Chưa QA sống non-creator.

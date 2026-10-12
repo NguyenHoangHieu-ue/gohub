@@ -6,6 +6,9 @@ const LARK_API = "https://open.larksuite.com/open-apis"
 
 // ─── OAuth user_access_token (cho phép đọc task cá nhân của creator) ─────────────
 const OAUTH_KEY = "lark_oauth_creator"
+// Gấu Pro = trợ lý cá nhân của TỪNG người được cấp quyền: mỗi người kết nối Lark của CHÍNH mình (khoá riêng theo username).
+// Không truyền username = token của Creator (khoá cũ) — các luồng của Hiếu (My Metrics, cron, Cà Thread...) giữ nguyên.
+const oauthKey = (username?: string) => username ? `lark_oauth_user:${username}` : OAUTH_KEY
 
 interface LarkOAuthStore {
   open_id?:            string
@@ -32,7 +35,7 @@ export async function exchangeLarkCode(code: string, redirectUri: string): Promi
 }
 
 // Lưu token vào app_settings (tính sẵn thời điểm hết hạn, trừ hao 60s)
-export async function saveLarkUserToken(tok: any, openId?: string): Promise<void> {
+export async function saveLarkUserToken(tok: any, openId?: string, username?: string): Promise<void> {
   const now = Date.now()
   const store: LarkOAuthStore = {
     open_id:            openId,
@@ -42,14 +45,14 @@ export async function saveLarkUserToken(tok: any, openId?: string): Promise<void
     refresh_expires_at: now + ((tok.refresh_token_expires_in || 2592000) - 60) * 1000,
   }
   await supabaseAdmin.from("app_settings").upsert(
-    { key: OAUTH_KEY, value: JSON.stringify(store), category: "lark_oauth" },
+    { key: oauthKey(username), value: JSON.stringify(store), category: "lark_oauth" },
     { onConflict: "key" }
   )
 }
 
 // Trả access_token còn hạn (tự refresh nếu cần); null nếu chưa kết nối / refresh hết hạn.
-export async function getLarkUserToken(): Promise<string | null> {
-  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", OAUTH_KEY).maybeSingle()
+export async function getLarkUserToken(username?: string): Promise<string | null> {
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", oauthKey(username)).maybeSingle()
   if (!data?.value) return null
   let store: LarkOAuthStore
   try { store = JSON.parse(data.value) } catch { return null }
@@ -71,14 +74,14 @@ export async function getLarkUserToken(): Promise<string | null> {
     const tok = await res.json()
     if (tok.code && tok.code !== 0) return null
     if (!tok.access_token) return null
-    await saveLarkUserToken(tok, store.open_id)
+    await saveLarkUserToken(tok, store.open_id, username)
     return tok.access_token
   } catch { return null }
 }
 
 // open_id của creator đã kết nối Lark cá nhân (để gán task assignee mà không cần env).
-export async function getLarkUserOpenId(): Promise<string | null> {
-  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", OAUTH_KEY).maybeSingle()
+export async function getLarkUserOpenId(username?: string): Promise<string | null> {
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", oauthKey(username)).maybeSingle()
   if (!data?.value) return null
   try { return (JSON.parse(data.value) as LarkOAuthStore).open_id ?? null } catch { return null }
 }

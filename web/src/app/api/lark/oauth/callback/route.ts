@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { exchangeLarkCode, saveLarkUserToken, getLarkSelfOpenId } from "@/lib/lark"
+import { loadGpAllowed } from "@/lib/gp-access"
 
 // Lark redirect về đây kèm ?code&state. Đổi code → user token, lưu, quay về Gấu Pro.
 export async function GET(req: NextRequest) {
@@ -10,7 +11,9 @@ export async function GET(req: NextRequest) {
   const done = (status: string) => NextResponse.redirect(`${base}/analytics/creator/ai?lark=${status}`)
 
   const session = await getServerSession(authOptions)
-  if (!session || session.user.role !== "creator") return done("error")
+  const isCreator = session?.user?.role === "creator"
+  const username = session?.user?.username
+  if (!username || (!isCreator && !(await loadGpAllowed()).includes(username))) return done("error")
 
   const code  = req.nextUrl.searchParams.get("code")  || ""
   const state = req.nextUrl.searchParams.get("state") || ""
@@ -27,7 +30,8 @@ export async function GET(req: NextRequest) {
     // Bug đã fix: tok.open_id KHÔNG tồn tại trong response đổi code→token của Lark OAuth v2 — phải
     // gọi riêng /authen/v1/user_info bằng access_token vừa nhận để tự tra open_id thật.
     const openId = await getLarkSelfOpenId(tok.access_token)
-    await saveLarkUserToken(tok, openId ?? undefined)
+    // Creator → khoá cũ (các luồng của Hiếu dùng); người khác → khoá riêng theo username, không bao giờ ghi đè token của Creator.
+    await saveLarkUserToken(tok, openId ?? undefined, isCreator ? undefined : username)
     const res = done("connected")
     res.cookies.delete("lark_oauth_state")
     return res
