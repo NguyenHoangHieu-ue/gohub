@@ -13,11 +13,12 @@ const TPL: ProductTpl = {
   note: "note TH", activation_time: "It will be activated after receiving the network signal.", activation: null, local_phone_number: "No", local_number_country: null,
   top_up_options: "No", hotspot: "Yes", apn_original: "mobile.three.com.hk", apn: "gohub.com",
 }
-const input = (sim: "eSIM" | "SIM", plans: ThkPlanInput[]) => ({
-  input: { simType: sim, supportCountryCode: "THA", isoCodes: "TH", countryNameEn: "Thailand", countryNameVn: "Thái Lan", plans },
+type Extra = { usSimFull?: boolean; vnEsimData?: boolean }
+const input = (sim: "eSIM" | "SIM", plans: ThkPlanInput[], extra: Extra = {}) => ({
+  input: { simType: sim, supportCountryCode: "THA", isoCodes: "TH", countryNameEn: "Thailand", countryNameVn: "Thái Lan", plans, ...extra },
   price: PRICE, tpls: [TPL],
 })
-const run = (sim: "eSIM" | "SIM", plans: ThkPlanInput[]) => build([input(sim, plans)], { fx: FX, a: DEFAULT_ASSUMPTIONS, frames: FRAMES })
+const run = (sim: "eSIM" | "SIM", plans: ThkPlanInput[], extra: Extra = {}) => build([input(sim, plans, extra)], { fx: FX, a: DEFAULT_ASSUMPTIONS, frames: FRAMES })
 const skuOf = (rows: (string | number)[][], code: string) => rows.find(r => r[20] === code)!
 
 describe("3HK Datapool builder", () => {
@@ -34,9 +35,17 @@ describe("3HK Datapool builder", () => {
     expect(ea[10]).toBe(1.75); expect(ea[8]).toBe(""); expect(ea[18]).toBe("")
     expect(ec[10]).toBe(2.26); expect(ec[8]).toBe("AB0003DK00000"); expect(ec[9]).toBe("EATHA3DF00505")
     expect(ea[12]).toBe("256 kbps"); expect(ea[17]).toBe(60)
-    const a3 = skuOf(r.sheets.skuVN, "3ATHA3DF00505"), c3 = skuOf(r.sheets.skuVN, "3CTHA3DF00505")
-    expect(a3[18]).toBe("EATHA3DF00505"); expect(a3[19]).toBe("EATHA3DF00505"); expect(a3[10]).toBe(Math.ceil(1.75 * 26000))
+    const c3 = skuOf(r.sheets.skuVN, "3CTHA3DF00505")
     expect(c3[18]).toBe("ECTHA3DF00505"); expect(c3[8]).toBe(""); expect(c3[10]).toBe(Math.ceil(2.26 * 26000))
+    expect(r.sheets.skuVN.map(x => x[20])).toEqual(["3CTHA3DF00505"])
+  })
+
+  test("đặc biệt: eSIM data đầu VN (vnEsimData)", () => {
+    const r = run("eSIM", [{ policy: "F", amount: 5, unit: "GB", days: [5] }], { vnEsimData: true })
+    const a3 = skuOf(r.sheets.skuVN, "3ATHA3DF00505")
+    expect(a3[18]).toBe("EATHA3DF00505"); expect(a3[19]).toBe("EATHA3DF00505"); expect(a3[10]).toBe(Math.ceil(1.75 * 26000))
+    expect(r.sheets.skuVN.map(x => x[20]).sort()).toEqual(["3ATHA3DF00505", "3CTHA3DF00505"])
+    expect(r.sheets.productVN.map(x => x[35]).sort()).toEqual(["3ATHA3DF", "3CTHA3DF"])
   })
 
   test("Fixed: giá không đổi theo số ngày; Daily nhân số ngày", () => {
@@ -66,7 +75,10 @@ describe("3HK Datapool builder", () => {
   })
 
   test("SIM: datapack A + SIM full E (US = EA + 0.34 · VN = EA VND + khung 11.061)", () => {
-    const r = run("SIM", [{ policy: "F", amount: 5, unit: "GB", days: [5] }])
+    const base = run("SIM", [{ policy: "F", amount: 5, unit: "GB", days: [5] }])
+    expect(base.sheets.skuUS.map(x => x[20])).toEqual(["EATHA3DF00505"])
+    expect(base.sheets.skuVN.map(x => x[20]).sort()).toEqual(["3ATHA3DF00505", "3ETHA3DF00505"])
+    const r = run("SIM", [{ policy: "F", amount: 5, unit: "GB", days: [5] }], { usSimFull: true })
     const ce = skuOf(r.sheets.skuUS, "CETHA3DF00505"), e3 = skuOf(r.sheets.skuVN, "3ETHA3DF00505")
     expect(ce[10]).toBe(2.09); expect(ce[8]).toBe("CD0003DK00000"); expect(ce[9]).toBe("EATHA3DF00505")
     expect(e3[10]).toBe(Math.ceil(1.75 * 26000) + 11061); expect(e3[8]).toBe("1D0003DK00000"); expect(e3[9]).toBe("3ATHA3DF00505")
@@ -86,7 +98,7 @@ describe("3HK Datapool builder", () => {
   })
 
   test("bỏ SKU/Product đã có (dùng chung dedupe với BC)", () => {
-    const r = run("eSIM", [{ policy: "F", amount: 5, unit: "GB", days: [5, 15] }])
+    const r = run("eSIM", [{ policy: "F", amount: 5, unit: "GB", days: [5, 15] }], { vnEsimData: true })
     const { result, skipped } = dropExisting(r, new Map([["EATHA3DF00505", "Active"], ["3ATHA3DF00505", "Active"]]), new Map([["EATHA3DF", "Active"]]))
     expect(skipped.skus.map(s => s.sku).sort()).toEqual(["3ATHA3DF00505", "EATHA3DF00505"])
     expect(skipped.products.map(p => p.code)).toEqual(["EATHA3DF"])

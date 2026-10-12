@@ -11,7 +11,7 @@ type Notify = (type: "success" | "error", text: string) => void
 interface Options { ncc: NccRow[]; assumptions: Assumptions; frames: Frames; fx: (Fx & { month?: string }) | null; fxError: string | null }
 interface PreviewResult extends ThkBuildResult { fx: Fx; skipped: Skipped; nothingNew: boolean; supports: { code: string; hint: string }[] }
 interface PlanForm { policy: Policy; amount: string; unit: "MB" | "GB"; days: number[] }
-interface ProductForm { simType: SimType; countries: string[]; codeOverride: string; plans: PlanForm[] }
+interface ProductForm { simType: SimType; countries: string[]; codeOverride: string; usSimFull: boolean; vnEsimData: boolean; plans: PlanForm[] }
 
 const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 20, 25, 30]
 const COMMON_DAYS = [1, 2, 3, 5, 7, 10, 15, 20, 30]
@@ -21,7 +21,7 @@ const label = "block text-[11px] text-gray-500 mb-0.5"
 const btn = "px-2 py-0.5 text-[11px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800"
 
 const newPlan = (policy: Policy = "F"): PlanForm => ({ policy, amount: policy === "X" ? "3" : policy === "F" ? "5" : "1", unit: "GB", days: policy === "X" ? [3, 5, 7, 10] : [3, 5, 7, 10, 15, 30] })
-const newProduct = (): ProductForm => ({ simType: "eSIM", countries: [], codeOverride: "", plans: [newPlan()] })
+const newProduct = (): ProductForm => ({ simType: "eSIM", countries: [], codeOverride: "", usSimFull: false, vnEsimData: false, plans: [newPlan()] })
 
 export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
   const [opts, setOpts] = useState<Options | null>(null)
@@ -51,6 +51,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
     force,
     products: products.map(p => ({
       simType: p.simType, countries: p.countries, codeOverride: p.codeOverride,
+      usSimFull: p.simType === "SIM" && p.usSimFull, vnEsimData: p.simType === "eSIM" && p.vnEsimData,
       plans: p.plans.map(pl => ({ policy: pl.policy, amount: pl.policy === "X" ? 3 : Number(pl.amount.replace(",", ".")) || 0, unit: pl.policy === "X" ? "GB" : pl.unit, days: [...pl.days].sort((a, b) => a - b) })),
     })),
   })
@@ -146,6 +147,12 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
                 <label className={label}>Mã nước/nhóm 3 ký tự (để trống = tự tìm)</label>
                 <input className={`${input} font-mono uppercase`} maxLength={3} value={p.codeOverride} onChange={e => patchProduct(i, { codeOverride: e.target.value })} placeholder={sup?.code || "VD THA"} />
               </div>
+            </div>
+            <div className="text-xs text-gray-600 dark:text-slate-300 space-y-1">
+              <div>Mặc định — US: {p.simType === "eSIM" ? "eSIM data + eSIM full" : "SIM data"} · VN: {p.simType === "eSIM" ? "eSIM full" : "SIM data + SIM full"}</div>
+              {p.simType === "SIM"
+                ? <label className="flex items-center gap-1.5"><input type="checkbox" checked={p.usSimFull} onChange={e => patchProduct(i, { usSimFull: e.target.checked })} /> Tạo thêm SIM full đầu US (trường hợp đặc biệt)</label>
+                : <label className="flex items-center gap-1.5"><input type="checkbox" checked={p.vnEsimData} onChange={e => patchProduct(i, { vnEsimData: e.target.checked })} /> Tạo thêm eSIM data đầu VN (trường hợp đặc biệt)</label>}
             </div>
             {top && <div className="text-xs text-gray-600 dark:text-slate-300">Giá áp dụng: <b>{top.price_per_gb_hkd} HKD/GB</b> ({top.country}{top.is_kyc ? " · có KYC" : ""}) · nhà mạng: {p.countries.length > 1 ? "các nước đã chọn" : top.network}</div>}
             {!stale && sup?.hint && <div className="text-[11px] text-amber-700">{sup.hint}</div>}

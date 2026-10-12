@@ -36,6 +36,9 @@ export interface ThkProductInput {
   countryNameEn: string
   countryNameVn: string
   plans: ThkPlanInput[]
+  /** Trường hợp đặc biệt: thêm SIM full đầu US (chỉ khi SIM) / eSIM data đầu VN (chỉ khi eSIM). */
+  usSimFull?: boolean
+  vnEsimData?: boolean
 }
 
 /** Giá nguồn của 1 sản phẩm (từ ncc_3hk): nước đắt nhất trong các nước của gói. */
@@ -124,17 +127,23 @@ export function build(products: { input: ThkProductInput; price: ThkPrice | null
       t === "C" ? frames.esimUsUsd == null && `khung eSIM ${FRAME.esimUs}`
       : t === "E" ? (frames.simUsUsd == null && `khung SIM US ${FRAME.simUs}`) || (frames.simVnVnd == null && `khung SIM VN ${FRAME.simVn}`)
       : false
-    const usable = (p.simType === "eSIM" ? ["A", "C"] : ["A", "E"] as TypeChar[]).filter(t => {
-      const m = missing(t as TypeChar)
-      if (m) out.warnings.push(`${label}: thiếu giá ${m} trong hệ thống — bỏ qua loại ${TYPE_LABEL[t as TypeChar]}`)
+    // US: eSIM A+C · SIM A (+E nếu bật) — VN: eSIM C (+A nếu bật) · SIM A+E
+    const esim = p.simType === "eSIM"
+    const typesFor = (tenant: Tenant): TypeChar[] =>
+      tenant === "US" ? (esim ? ["A", "C"] : p.usSimFull ? ["A", "E"] : ["A"]) : esim ? (p.vnEsimData ? ["A", "C"] : ["C"]) : ["A", "E"]
+    const has = (tenant: Tenant, t: TypeChar) => typesFor(tenant).includes(t)
+    const usable = (["A", "C", "E"] as TypeChar[]).filter(t => has("US", t) || has("VN", t)).filter(t => {
+      const m = missing(t)
+      if (m) out.warnings.push(`${label}: thiếu giá ${m} trong hệ thống — bỏ qua loại ${TYPE_LABEL[t]}`)
       return !m
-    }) as TypeChar[]
+    })
 
     for (const policy of Array.from(new Set(p.plans.map(pl => pl.policy)))) {
       for (const type of usable) {
         for (const tenant of ["US", "VN"] as Tenant[]) {
+          if (!has(tenant, type)) continue
           const pc = productCode(tenant, type, p.supportCountryCode, policy)
-          if (tenant === "US" && seenProduct.has(pc)) out.warnings.push(`${label}: trùng Product Code ${pc} với sản phẩm khác trong cùng lần xuất`)
+          if ((tenant === "US" || !has("US", type)) && seenProduct.has(pc)) out.warnings.push(`${label}: trùng Product Code ${pc} với sản phẩm khác trong cùng lần xuất`)
           seenProduct.add(pc)
           const t = pickTpl(tpls, tenant, type, policy, p.supportCountryCode)
           const row: (string | number)[] = [
@@ -198,10 +207,10 @@ export function build(products: { input: ThkProductInput; price: ThkPrice | null
             ]
           }
           const ci = out.costRows.length
-          out.sheets.skuUS.push(row("US")); out.usCost.push(ci)
-          out.sheets.skuVN.push(row("VN")); out.vnCost.push(ci)
+          if (has("US", type)) { out.sheets.skuUS.push(row("US")); out.usCost.push(ci) }
+          if (has("VN", type)) { out.sheets.skuVN.push(row("VN")); out.vnCost.push(ci) }
           out.costRows.push({
-            type: TYPE_LABEL[type], skuUS: cUS, skuVN: cVN, policy: pl.policy, kind, dataAmount: pl.amount, unit: pl.unit, days: d, typeChar: type,
+            type: TYPE_LABEL[type], skuUS: has("US", type) ? cUS : "", skuVN: has("VN", type) ? cVN : "", policy: pl.policy, kind, dataAmount: pl.amount, unit: pl.unit, days: d, typeChar: type,
             pricePerGbHkd: price.pricePerGbHkd, network: price.network, dataPool, dataUsd, feeUsd, cogsUsd, cogsVnd, explain,
           })
         }

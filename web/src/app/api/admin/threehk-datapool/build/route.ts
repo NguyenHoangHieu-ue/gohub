@@ -11,7 +11,7 @@ import { loadFrames, loadNcc3hk, loadTemplates } from "@/lib/threehk-datapool/se
 export const dynamic = "force-dynamic"
 
 interface Body {
-  products?: { simType: SimType; countries: string[]; codeOverride?: string; plans: ThkPlanInput[] }[]
+  products?: { simType: SimType; countries: string[]; codeOverride?: string; usSimFull?: boolean; vnEsimData?: boolean; plans: ThkPlanInput[] }[]
   assumptions?: Partial<Assumptions>
   force?: boolean
 }
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     })
     const tpls = await loadTemplates(resolved.map(r => r.code))
     const built = build(inputs.map((p, i) => ({
-      input: { simType: p.simType, supportCountryCode: resolved[i].code, isoCodes: resolved[i].s.iso, countryNameEn: resolved[i].s.en, countryNameVn: resolved[i].s.vn, plans: p.plans ?? [] },
+      input: { simType: p.simType, supportCountryCode: resolved[i].code, isoCodes: resolved[i].s.iso, countryNameEn: resolved[i].s.en, countryNameVn: resolved[i].s.vn, plans: p.plans ?? [], usSimFull: !!p.usSimFull, vnEsimData: !!p.vnEsimData },
       price: priceOf(ncc, p.countries ?? []),
       tpls: tpls[resolved[i].code] ?? [],
     })), { fx, a, frames })
