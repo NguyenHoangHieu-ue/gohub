@@ -468,6 +468,8 @@ export default function CreatorAIPage() {
   const recognitionRef = useRef<any>(null)
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null)
   const inputRef     = useRef<HTMLTextAreaElement>(null)
+  // Quyết định duyệt theo id: luồng stream của lượt đang chạy giữ bản `approvals` cũ (state "pending") và vẽ đè lại khi kết thúc → nút Duyệt hiện lại.
+  const approvalDecided = useRef<Record<string, { state: Approval["state"]; note?: string }>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const LS_KEY       = "gp_conv"
 
@@ -777,7 +779,7 @@ export default function CreatorAIPage() {
       const updateBubble = (content: string, extra?: Partial<Message>) => {
         setMessages(prev => {
           const u = [...prev]
-          u[u.length - 1] = { role: "assistant", content, ...(approvals.length ? { approvals: [...approvals] } : {}), ...(plan ? { plan } : {}), ...extra }
+          u[u.length - 1] = { role: "assistant", content, ...(approvals.length ? { approvals: approvals.map(a => ({ ...a, ...approvalDecided.current[a.id] })) } : {}), ...(plan ? { plan } : {}), ...extra }
           return u
         })
       }
@@ -861,8 +863,12 @@ export default function CreatorAIPage() {
 
   // Duyệt/từ chối hành động chờ (G0) → server chạy tool → gửi câu nối cho Gấu Pro làm tiếp.
   const handleDecide = useCallback(async (msgIndex: number, id: string, approve: boolean) => {
-    const setState = (state: Approval["state"], note?: string) => setMessages(prev => prev.map((m, i) =>
-      i !== msgIndex || !m.approvals ? m : { ...m, approvals: m.approvals.map(a => a.id === id ? { ...a, state, note } : a) }))
+    const setState = (state: Approval["state"], note?: string) => {
+      if (state === "pending" || state === "error") delete approvalDecided.current[id]
+      else approvalDecided.current[id] = { state, note }
+      setMessages(prev => prev.map((m, i) =>
+        i !== msgIndex || !m.approvals ? m : { ...m, approvals: m.approvals.map(a => a.id === id ? { ...a, state, note } : a) }))
+    }
     setState("working")
     try {
       const res = await fetch("/api/creator-ai/approve", {
