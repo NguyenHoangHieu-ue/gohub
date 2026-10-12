@@ -1,7 +1,7 @@
 # Plan: tab Admin "Tạo sản phẩm" — thêm vendor 3HK Datapool (file TẠM — xong thì xoá + xoá dòng ở CLAUDE.md)
 
 Hiếu yêu cầu 2026-10-11: tab hiện chỉ tạo gói BC Datapool (`admin/product-builder-tab.tsx`, `lib/bc-datapool/`), làm thêm 3HK Datapool.
-**Trạng thái: mới nghiên cứu, CHƯA code.** Mai làm tiếp.
+**Trạng thái (2026-10-12): CODE XONG trên `staging` (`403ff6e3`), chọn phương án (a) vendorSku US để trống. Chưa QA UI, chưa merge `main`.** Còn: Hiếu QA UI (vd Thái Lan eSIM Fixed/Daily/X, SIM full), chốt hệ số Unlimited (DB 3HK cũ ~2.0 GB/ngày, Công Thức Datapool hiện 1.8), nước chưa có Product 3HK. Xong QA thì xoá file này + dòng ở CLAUDE.md. Kiến thức đã ghi: wiki `admin-product.md` §s231.
 
 ## Hiếu đã chốt
 - Loại gói: **Fixed (F), Daily (P hoặc T), Unlimited X (3GB→10Mbps)**. KHÔNG làm Unlimited A/B kiểu cũ.
