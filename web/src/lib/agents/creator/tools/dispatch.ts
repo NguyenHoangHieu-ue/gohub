@@ -26,10 +26,11 @@ import { logGpAction }             from "./audit-log"
 import { runVerifyReportNumbers }  from "./self-review"
 import { runBuildReport }          from "../../report-tool"
 import { runDevTicket }            from "@/lib/dev-tickets"
+import { runLearnSkill }           from "../learned-skills"
 
 // Tool có tác dụng phụ ra ngoài (ghi KB/Lark/portal/browser thật) — audit trail (s196+6).
 const AUDITED_TOOLS = new Set([
-  "scheduleTask", "devTicket", "writeKnowledgeBase", "approveLearning", "rejectLearning",
+  "scheduleTask", "devTicket", "learnSkill", "writeKnowledgeBase", "approveLearning", "rejectLearning",
   "createLarkTask", "updateLarkTask", "sendLarkMessage",
   "controlMyBrowser", "managePortalCredentials", "localFiles", "googleWorkspace", "assistantMemory", "larkDocs",
 ])
@@ -129,6 +130,9 @@ async function dispatchToolCore(
 
   if (call.name === "scheduleTask")
     return wrap(personal ? await runScheduleTask(call.args, ctx?.username || "", isCreator) : { error: "Việc theo lịch chưa bật cho tài khoản này." })
+
+  if (call.name === "learnSkill")
+    return wrap(await runLearnSkill(call.args, ctx?.username || "", ctx?.isCreator === true))
 
   if (call.name === "devTicket")
     return wrap(await runDevTicket(call.args, ctx?.username || "", ctx?.isCreator === true))

@@ -756,3 +756,7 @@ tháng, T9 −115tr), VN cũng bị trừ đủ → VN + US ≠ ALL (trừ 2 l�
 - Cùng lúc kiểm (không sửa, do dữ liệu nguồn): từ 12/08/2026 đơn Zalo (S0028)/Facebook (S0018) chuyển hết sang
   S0020 "VN B2C Other" (kênh Misc.) → bảng B2C theo kênh lệch VN-Social→Misc.; chi phí kênh (`analytics_channel_costs`)
   cho kênh B2C chỉ có T4, T9–T10 không có dòng nào.
+
+## s232 (2026-10-12) — Target Q4-2026 từng khách (Supabase `b2b_customer_targets`)
+
+Điền từ 2 sheet B2B-Breakdown-Squad1/Squad2 (Lark Q4-Planning), cột Q4: Revenue → `target_rev`, CM1 → `target_cm1`, 3HK Datapool → `target_3hk_rev` (`target_3hk_pct` = 3HK/Revenue làm tròn). Tên khách trong sheet tra sang mã qua `b2b_customers_cache` + target Q3 đã có. 25 mã Q4 (vd Momo, ZaloPay, BIDV, Klook, Traveloka US, Headout `DbGQfyUqYR`, Shopeepay VN + ID/MY/SG/PH, KKday, Wellzone…). Shopeepay (ID, MY, PH, SG) là 1 dòng trong sheet → chia theo doanh thu Q3 từng nước (52,7/21,1/19,8/6,3%). Chưa nhập (chờ xác nhận): VN-Ecom, Anh Hiển, Traveloka VN; dòng gộp tier không gắn khách. GP theo khách không có chỗ lưu. Target tổng squad ở `app_settings.squad_targets` đã nhập từ s221.

@@ -906,7 +906,7 @@ Migration **v67** (`gp_scheduled_tasks`) — Hiếu phải chạy (cần cả v6
 - `only_if_notable` = **canh chừng** (thay cho trigger viết cứng bằng code): prompt chạy kèm hướng dẫn "không có gì → trả đúng NO_ALERT";
   `runJobChunk` gặp NO_ALERT thì ghi nhận, không lưu hội thoại, không nhắn. Ngưỡng do người dùng nói bằng lời (vd "giảm >20% so TB 7 ngày").
   Doanh thu hằng ngày đã có digest 09:45 lo — không thêm trigger cứng trùng việc.
-- Chạy: cron `scheduled-messages` (cron-job.org, hiện MỖI GIỜ, đang trỏ staging) → `runDueSchedules`: lấy ≤5 việc đến hạn, chiếm
+- Chạy: cron `scheduled-messages` (cron-job.org, MỖI GIỜ, đã trỏ production từ 2026-10-11) → `runDueSchedules`: lấy ≤5 việc đến hạn, chiếm
   nguyên tử (dời `next_run_at` theo `nextRunAt`, khớp giá trị cũ), tạo việc nền `gp_jobs` → chặng chạy → DM Lark. Nên giờ chạy trễ tối đa
   ~1 giờ; muốn sát giờ thì tăng tần suất job ở cron-job.org.
 - Panel "Việc & duyệt": mục "Việc theo lịch" (⏰ thường / 👀 canh chừng, lần tới, số lần đã chạy, Huỷ) — `GET/DELETE /api/creator-ai/schedules`.
@@ -1018,7 +1018,7 @@ lịch + phiên Trực tiếp là khung đa người dùng, bật theo `app_sett
 - Bé Gấu (`be-gau.ts`) còn dùng SDK cũ `@google/generative-ai` (KB đã chuyển sang `kb-recall.ts` ở s225).
 - "Nhiễm" (cổng duyệt) chỉ tính trong 1 lượt — nội dung ngoài đọc ở lượt trước không làm lượt sau phải duyệt.
 - Lark DM chưa hiện kế hoạch (`plan`), chưa có phiên giọng nói; hội thoại Lark DM chưa được tóm tắt cho `searchPastConversations`.
-- Việc theo lịch phụ thuộc cron-job.org gọi `scheduled-messages` mỗi giờ (đang trỏ STAGING) → giờ chạy trễ tới ~1h.
+- Việc theo lịch phụ thuộc cron-job.org gọi `scheduled-messages` mỗi giờ (đã trỏ production từ 2026-10-11) → giờ chạy trễ tới ~1h.
 - Phiên Trực tiếp: chưa có người thật thử nói/nghe qua mic-loa + chia sẻ màn hình/camera trên production; mỗi bước thao tác Bridge 3–4s
   (lần đầu ≤15s chờ nhịp poll).
 - Mọi người dùng Bridge phải cài 1.2.2 thủ công 1 lần (trang Bridge → Tải extension → giải nén đè → ↻).
@@ -1116,7 +1116,7 @@ Nay `findRelevantMemories` (`lib/assistant-memory.ts`) đọc mọi mục còn h
 - **Lark DM của Bé Gấu (không phải Creator) có trí nhớ:** trước đây `runBeGau` ở Lark không nhận `username` → không có khối trí nhớ/tool, không rút, không tóm tắt. Nay CHỈ DM riêng (`p2p`) + vai trò bật "memory": truyền `username`, sau trả lời rút trí nhớ (`extractMemoriesFromTurn`, source `lark_dm_begau`) + `summarizeLarkThread` (chờ lưu tin xong rồi mới tóm tắt). Group KHÔNG có trí nhớ cá nhân (khỏi lộ điều riêng của 1 người ra cả nhóm).
 - **Cổng duyệt "nhiễm" gắn theo cuộc chat (Gấu Pro):** `runCreatorAI` nhận `opts.conversationKey` (web: id hội thoại; Lark DM: `lark:<thread>`), ghi `conv` ở bước cuối trace `gp_runs`; `taintFromRuns` (`tool-policy.ts`) coi cuộc chat là nhiễm nếu BẤT KỲ lượt nào của nó từng nhiễm (cửa sổ 24h, trước: chỉ lượt gần nhất của người+kênh trong 2h → chat cuộc khác xen giữa là mất nhiễm). Route web tạo hội thoại TRƯỚC khi chạy để lượt 1 đã có khoá. Bé Gấu KHÔNG nhớ nhiễm qua lượt: bé Gấu chặn cứng hành động ghi/gửi khi nhiễm và chưa có nút Duyệt → nhớ qua lượt sẽ khoá cả cuộc chat; làm khi Bé Gấu có nút Duyệt.
 - **Quyền người dùng** (`lib/assistant-memory-rights.ts`): xem/thêm/sửa/ghim/**xoá hẳn** từng mục, **xuất** JSON (mục + lịch sử giá trị cũ + tóm tắt hội thoại), **xoá tất cả** (xoá thật `assistant_memory` + `gp_conversation_memory` của chính mình, không đụng nội dung chat), **tắt/bật** (app_settings `assistant_memory_off:<username>`, cache 60s; tắt = không nạp, không rút, không tóm tắt, tool memory báo lỗi). API: `/api/chat/memory` (Bé Gấu, theo cờ "memory" của vai trò; menu ⋯ "Trí nhớ của tôi") và `/api/creator-ai/memory` (Gấu Pro); dùng chung `components/gau-pro/memory-panel.tsx` (prop `api`, `floating`). Luôn theo username phiên đăng nhập — Creator/admin không đọc trí nhớ người khác.
-- **Còn ngoài code:** cron-job.org đang trỏ staging (job `scheduled-messages` mỗi giờ + các job khác) — Hiếu đổi URL sang production; mở cho người khác cần thông báo + đồng ý + thời hạn lưu (plan §6).
+- **Còn ngoài code:** (cron-job.org đã đổi sang production — Hiếu xác nhận 2026-10-11); mở cho người khác cần thông báo + đồng ý + thời hạn lưu (plan §6).
 
 ## s230 P3 — hồ sơ trợ lý cá nhân + người dùng thử theo từng người (plan `personal-agent.md` §14)
 - **Người dùng thử theo từng người** (`lib/assistant-features.ts`): app_settings `assistant_feature_users` = `{ [featureId]: username[] }`. `featureEnabledFor(matrix, pilot, id, role, username)` = bật cho vai trò HOẶC cho đích danh username; chỉ cộng thêm quyền, tính năng nhóm "creator" khoá cứng. `featureOn(id, role, username)` nạp cả hai cho route. Đã thay mọi chỗ kiểm tính năng ở Bé Gấu (chat memory, conversations, live log/token, jobs, transcribe, translate, tts, Lark p2p, `be-gau.ts` bộ tool, `/api/chat/features`). Sửa ở Creator Settings → dưới bảng tính năng ("Người dùng thử theo từng người", route `/api/config/assistant-feature-users`: xem creator/admin, sửa creator; username không có trong `users` bị bỏ và báo lại).
@@ -1164,3 +1164,28 @@ Gấu Pro (tài khoản Creator, extension 1.3.0 đã cài) làm T1–T10 qua `/
 - **Lỗi nghiêm trọng tìm ra khi chạy lại T2/T7 (sửa ở 1.3.2):** sau lệnh `screenshot` dự phòng, các lệnh kế tiếp hết hạn không ai nhận — một thao tác chrome.* bị TREO (`captureVisibleTab` khi cửa sổ Chrome không hiển thị…) giữ cờ `polling` mãi nên extension ngừng nhận lệnh cho tới khi reload. 1.3.2: mọi lệnh có hạn 50s (nhỏ hơn TTL server 60s), `executeScript`/CDP/gắn debugger/`captureVisibleTab` có hạn riêng, cờ `polling` tự nhả nếu kẹt. Debugger vẫn bị chặn trên máy Hiếu do extension khác (gắn theo `targetId` cũng bị từ chối) → T2/T7 chỉ chạy ở chế độ synthetic; kiểm click thật cần profile không cài Claude in Chrome.
 - **Chạy lại T7 với 1.3.2:** hết treo (lệnh lỗi sau 6s kèm lời báo rõ). `screenshot` dự phòng bằng `captureVisibleTab` KHÔNG chụp được khi cửa sổ Chrome bị che/thu nhỏ (Chrome từ chối chụp cửa sổ không hiển thị) → với máy đang bị extension khác chặn debugger, ảnh chỉ chụp được khi cửa sổ ở trước. **1.3.3:** `snapshot` liệt kê cả `<canvas>` (role `canvas`, x/y/w/h trên màn hình) để Gấu click theo toạ độ `x,y` không cần ảnh.
 - **T7 (canvas) ĐẠT với 1.3.3 (Gấu Pro thật, không cần ảnh):** snapshot thấy `canvas` (e17, x480 y847 w302 h92, ngoài khung) → `scroll_to` → snapshot lại (y360) → click `x,y` = 80%/50% canvas → `method: synthetic` (debugger vẫn bị extension khác chặn) → ô kết quả "Đã bấm ô xanh (1 lần, isTrusted=false)". Còn lại CHƯA kiểm trên máy Hiếu: click thật `isTrusted=true` (T2/T7) + chụp ảnh qua debugger — cần profile Chrome không cài Claude in Chrome.
+
+### s230 dọn dẹp (2026-10-11)
+- Gỡ trang **Own Info** (`/analytics/creator/knowledge`) vì chỉ 3 lượt mở/72 ngày. Dữ liệu bảng `creator_kb` và route `/api/creator-ai/knowledge` giữ nguyên: Gấu Pro đọc/ghi qua `readKnowledgeBase`/`manageKnowledge`/`approveLearning` + `kb-recall.ts`, Bé Gấu qua `searchKnowledgeBase` (category `cogs` che với non-Creator). Sửa tay hiện chỉ qua Gấu Pro hoặc Supabase.
+- Usage Analytics: bỏ thẻ "Phân bố Agent Bé Gấu" (nhãn agent cũ); KPI "Agents Used" còn lại.
+- Xoá route chạy 1 lần `gau-pro-moved`, `lark-broadcast`, `gp-revoke-all` (các mục mô tả ở trên là lịch sử; route không còn).
+
+## § s232 (2026-10-12) — Tự động duyệt theo ngày (hỏi đúng 1 lần/ngày)
+
+Hiếu: không muốn lúc nào cũng chờ duyệt. **Duyệt 1 hành động đầu tiên trong ngày (web hoặc Lark "duyệt abc123") → hết hôm nay (giờ VN, UTC+7) các hành động chỉ-cần-duyệt-vì-lượt-nhiễm (rule `when_tainted`) tự chạy luôn.** Sang ngày mới hỏi lại đúng 1 lần.
+- Code: `lib/agents/creator/auto-approve.ts` (cờ ở `app_settings` khoá `gp_auto_approve` = `{username: "YYYY-MM-DD"}`, không migration, không cache vì nhiều instance), cấp cờ trong `decidePendingAction` (chỉ Creator), `approvalReason(call, state, {dailyAuto})` trong `tool-policy.ts`, gọi ở `creator-ai.ts` `runTool` (bước tự duyệt ghi `auto:true` trong trace `gp_runs`).
+- **VẪN hỏi dù đã bật** (chốt chặn chống prompt injection, Hiếu chọn bản an toàn hơn): gửi Lark tới người/nhóm khác (`sendLarkMessage` có `lark_id`/group), tạo phiếu sửa code (`devTicket create`), mở URL chưa từng xuất hiện sau khi đã đọc nội dung ngoài (`browseWeb`, `controlMyBrowser navigate/open_tab`). Cron không áp (không có người). Bé Gấu không đổi.
+- Nút tắt khẩn cấp: `DELETE /api/creator-ai/approve` (huỷ cờ hôm nay). `GET /api/creator-ai/approve` trả `autoApproveToday`. Chưa có nút trên UI.
+- Test: `gp-tool-policy.test.ts` (nhóm "Tự động duyệt theo ngày").
+- Rủi ro chấp nhận: sau lần duyệt đầu, trang/tài liệu độc đọc trong ngày có thể khiến Gấu Pro ghi task/KB/trí nhớ, click-gõ trình duyệt mà không hỏi.
+
+
+## § s232 (2026-10-12) — Skill tự học (learnSkill)
+
+Gấu Pro học thêm cách làm từ NGUỒN NGOÀI (tài liệu, trang web, cách Hiếu vừa chỉ) dưới dạng skill chữ, có người duyệt.
+- Tool `learnSkill` (chỉ Creator): `create` | `list` | `delete`. Code `lib/agents/creator/learned-skills.ts`; lưu `app_settings` khoá `gp_learned_skills` (không cần migration), tối đa 20 skill.
+- **Luôn duyệt**: rule `always` trong `tool-policy.ts` cho create/delete — KHÔNG bị "tự động duyệt theo ngày" bỏ qua, kể cả lượt chưa nhiễm. Thẻ duyệt hiện đủ tên, mô tả, nguồn và 1.500 ký tự đầu nội dung. `list` chạy luôn.
+- **Skill học chỉ là chỉ dẫn chữ**: không kèm tool, không đổi luật duyệt, nên nội dung xấu cũng không nâng được quyền. Tên kebab-case 3–40 ký tự, không trùng skill có sẵn; mô tả 10–200, nội dung 40–6000 ký tự.
+- Danh mục skill tự học được thêm vào cuối prompt lõi mỗi lượt (chỉ Creator); nạp nội dung bằng `loadSkill(name)` (phản hồi nhắc "chỉ là chỉ dẫn, không thêm quyền"). Chưa có preload theo từ khoá.
+- Tool mô tả bắt buộc: chỉ tạo khi Hiếu nhờ học/ghi nhớ, không tạo từ chỉ thị nằm trong nội dung web/file.
+- Test `gp-learned-skills.test.ts`. Chưa có nút UI xoá skill (nhờ Gấu Pro `learnSkill delete`). Chưa QA sống trên staging.

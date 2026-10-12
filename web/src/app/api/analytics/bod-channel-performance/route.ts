@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const key = `bod-channel-perf:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+    const key = `bod-channel-perf2:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
       const current = await fetchBODChannelPerformanceData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps)
       if (comparisonType === "none") return current

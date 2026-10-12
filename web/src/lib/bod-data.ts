@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode, excludeInactiveCustomers } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
 import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
 
 // Port y hệt gohub-intel server.ts fetchBODGroupMarginData + fetchBODChannelPerformanceData.
@@ -304,12 +305,12 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
      ORDER BY 1, 2, 3`
   )
   const costsP = fetchCosts(months)
-  const custRevP = queryAnalytics<{ customer_code: string; month: string; revenue: string }>(
+  const custRevP = queryAnalytics<{ customer_code: string; month: string; channel: string; revenue: string }>(
     `SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
-            SUM(f.${source.revenueCol}) as revenue
+            TRIM(s.channel_name) as channel, SUM(f.${source.revenueCol}) as revenue
      FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
      WHERE ${filter} ${extraFilters} ${sfx} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
-     GROUP BY 1, 2`
+     GROUP BY 1, 2, 3`
   )
   const [rows, { channelCosts }, custRevRows, customerCostMap] = await Promise.all([rowsP, costsP, custRevP, fetchCustomerCosts(months)])
 
@@ -327,27 +328,18 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
   })
 
   // B2B per-customer cost (Turso b2b_customer_cost_monthly) — B2B KHÔNG dùng analytics_channel_costs
-  // (tránh double-count, khớp Quarter Report/b2b-kpis). Phân bổ tổng cost B2B vào từng channel theo
-  // revenue-share (không có dimension channel trong Turso cost).
-  const custRevMap = new Map<string, number>()
-  custRevRows.forEach(r => custRevMap.set(`${r.month}_${r.customer_code}`, parseFloat(r.revenue || "0")))
-  let totalB2BTursoCost = 0
-  customerCostMap.forEach((rec, key) => {
-    const month = key.slice(0, 7), code = key.slice(8)
-    const custRev = custRevMap.get(`${month}_${code}`) || 0
-    if (custRev === 0) return
-    const ratio = getDaysInMonth(month) > 0 ? getDaysInRange(startDate, endDate, month) / getDaysInMonth(month) : 0
-    totalB2BTursoCost += calcChCostForPeriod(rec, custRev, ratio)
-  })
-  const totalB2BRevenue = Array.from(agg.values())
-    .filter(r => (r.group || "").startsWith("B2B"))
-    .reduce((s, r) => s + r.revenue, 0)
+  // (tránh double-count, khớp Quarter Report/b2b-kpis). Chi phí tính theo KHÁCH THẬT rồi chia về từng channel theo doanh thu
+  // của khách trong channel (s232) — trước gộp mọi chi phí B2B rồi chia theo doanh thu channel.
+  const b2bCostByChannel = allocateCustomerCostByKey(
+    custRevRows.map(r => ({ customer_code: r.customer_code, month: r.month, key: r.channel, revenue: parseFloat(r.revenue || "0") })),
+    customerCostMap, startDate, endDate,
+  )
 
   return Array.from(agg.values()).map(row => {
     const isB2B = (row.group || "").startsWith("B2B")
     let opCost = 0
     if (isB2B) {
-      opCost += totalB2BRevenue > 0 ? totalB2BTursoCost * (row.revenue / totalB2BRevenue) : 0
+      opCost += b2bCostByChannel.get(row.channel) || 0
     }
     row.monthly.forEach((mRow: any) => {
       if (isB2B) return  // B2B dùng Turso cost ở trên, bỏ analytics_channel_costs tránh double-count

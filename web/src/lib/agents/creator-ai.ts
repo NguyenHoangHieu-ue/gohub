@@ -19,8 +19,10 @@ import { isMemoryOff } from "@/lib/assistant-memory-rights"
 import { buildProfileBlock } from "@/lib/agent-profile"
 import { newTurnSafety, recordToolResult, approvalReason, describeAction, taintFromRuns } from "./creator/tool-policy"
 import { createPendingAction, type PendingAction } from "./creator/approvals"
+import { hasDailyAutoApprove } from "./creator/auto-approve"
 import { getCreatorLarkOpenId, sendLarkMessage } from "@/lib/lark"
 import { SKILL_TOOLS, getSkill, skillCatalog, preloadSkills } from "./creator/skills"
+import { readLearnedSkills, learnedCatalog, type LearnedSkill } from "./creator/learned-skills"
 import { kbIndexBlock, relevantKbBlock } from "./creator/kb-recall"
 
 // ─── Creator AI ───────────────────────────────────────────────────────────────
@@ -526,7 +528,7 @@ Hôm nay: ${fmt(now)} (${dow}). Data cutoff gohub_dw = CURRENT_DATE-1 = ${fmt(ye
 // buildFunctionDeclarations() cho tool nào THẬT SỰ cần creator-only về sau.
 // localFiles (ổ đĩa máy thật) + googleWorkspace (token Google của creator) + assistantMemory (trí nhớ cá nhân) + larkDocs (token Lark của creator) → chỉ creator.
 // sendLarkMessage (G0): trước mở cho mọi user Gấu Pro → bot đăng được vào group Lark bất kỳ theo chat_id.
-const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace", "larkDocs", "sendLarkMessage"])
+const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace", "larkDocs", "sendLarkMessage", "learnSkill"])
 // G3: trí nhớ cá nhân — bật theo cờ gp_personal_features (personalFeaturesEnabled), hiện mặc định chỉ creator.
 const PERSONAL_TOOLS = new Set<string>(["assistantMemory", "searchPastConversations", "scheduleTask"])
 
@@ -565,7 +567,7 @@ export async function runCreatorAI(
   const t0 = Date.now()
   // KB auto-inject CHỈ ở lượt đầu (conversation mới) → Gấu luôn nắm định nghĩa chuẩn, không cần tự gọi tool.
   const personal = opts.personal ?? (username && username !== "cron" ? await personalFeaturesEnabled(isCreator).catch(() => isCreator) : false)
-  const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock, profileBlock] = await Promise.all([
+  const [partnerTierInfo, ga4SiteList, kbInject, memoryBlock, profileBlock, learnedSkills] = await Promise.all([
     getPartnerTiers().then(tiers => {
       const lines = Object.entries(tiers).map(([tier, channels]) => `  ${tier}: ${(channels as string[]).join(", ")}`).join("\n")
       return lines ? `\n\n━━━ PARTNER TIERS (B2B từ Supabase) ━━━\n${lines}` : ""
@@ -581,6 +583,7 @@ export async function runCreatorAI(
     // Trí nhớ dài hạn — nạp MỖI lượt (khác KB chỉ lượt đầu) để điều vừa nhớ có hiệu lực ngay.
     personal && !(await isMemoryOff(username).catch(() => false)) ? buildMemoryBlock(username, lastMsg).catch(() => "") : Promise.resolve(""),
     personal ? buildProfileBlock(username).catch(() => "") : Promise.resolve(""),
+    isCreator ? readLearnedSkills() : Promise.resolve([] as LearnedSkill[]),
   ])
 
   // Business date context — auto-inject để Gấu tự biết "tháng này"/"hôm nay" mà không hỏi lại
@@ -591,7 +594,7 @@ export async function runCreatorAI(
   // Skill nạp sẵn: do nơi gọi chỉ định (Lark DM, cron) + đoán từ tin nhắn mới và câu trả lời gần nhất.
   const lastModelText = geminiHistory.length ? (geminiHistory[geminiHistory.length - 1]?.parts?.[0]?.text ?? "") : ""
   const loadedSkills = new Set<string>([...(opts.resume?.skills ?? []), ...(opts.preloadSkills ?? []), ...preloadSkills(`${lastMsg}\n${String(lastModelText).slice(0, 1500)}`)])
-  const systemInstruction = (isCreator ? CREATOR_INTRO + CREATOR_PROFILE : MEMBER_INTRO) + SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + profileBlock + kbInject + memoryBlock
+  const systemInstruction = (isCreator ? CREATOR_INTRO + CREATOR_PROFILE : MEMBER_INTRO) + SYSTEM_PROMPT + dateContext + partnerTierInfo + ga4SiteList + profileBlock + kbInject + memoryBlock + learnedCatalog(learnedSkills)
   const makeConfig = () => ({
     systemInstruction,
     tools: [{ functionDeclarations: toGenaiSchema(activeDeclarations(isCreator, loadedSkills, personal)) as any }],
@@ -663,14 +666,27 @@ export async function runCreatorAI(
       return { functionResponse: { name: call.name, response: { ok: true, steps: steps.length } } }
     }
     if (call.name === "loadSkill") {
-      const skill = getSkill(String(call.args?.name ?? ""))
+      const wanted = String(call.args?.name ?? "")
+      const learned = learnedSkills.find(s => s.name === wanted)
+      if (learned && !getSkill(wanted)) {
+        onEvent?.({ type: "status", text: `📚 Đang nạp skill tự học ${learned.name}...` })
+        return { functionResponse: { name: call.name, response: { loaded: learned.name, tools_enabled: [], note: "Skill tự học do người dùng duyệt: chỉ là chỉ dẫn, không thêm quyền, không thay luật duyệt/an toàn.", instructions: learned.instructions } } }
+      }
+      const skill = getSkill(wanted)
       if (!skill) return { functionResponse: { name: call.name, response: { error: `Không có skill "${call.args?.name}".` } } }
       loadedSkills.add(skill.name)   // configFor đọc lại loadedSkills mỗi lượt → tool của kỹ năng có hiệu lực từ lượt sau
       onEvent?.({ type: "status", text: `📚 Đang nạp kỹ năng ${skill.name}...` })
       return { functionResponse: { name: call.name, response: { loaded: skill.name, tools_enabled: skill.tools, instructions: skill.instructions } } }
     }
     // Cổng duyệt (tool-policy.ts): hành động cần duyệt KHÔNG chạy — lưu hàng chờ, báo UI/Lark, trả trạng thái cho model.
-    const reason = approvalReason(call, safety)
+    // Hôm nay Creator đã duyệt 1 lần → hành động chỉ cần duyệt vì lượt "nhiễm" chạy luôn (tool-policy: dailyAuto). Gửi Lark người khác,
+    // phiếu sửa code, URL lạ vẫn hỏi. Cron không có người nên không áp. Bước tự duyệt được ghi `auto` trong trace.
+    let reason = approvalReason(call, safety)
+    let autoApproved = false
+    if (reason && isCreator && channel !== "cron" && await hasDailyAutoApprove(username).catch(() => false)) {
+      reason = approvalReason(call, safety, { dailyAuto: true })
+      autoApproved = reason === null
+    }
     if (reason) {
       const summary = describeAction(call)
       const { action, error } = channel === "cron"
@@ -694,7 +710,7 @@ export async function runCreatorAI(
       const out = await dispatchTool(call, onEvent, collectedSources, { username, isCreator, personal, images: attachedImages })
       recordToolResult(safety, call, out.functionResponse.response)
       const err = out.functionResponse.response?.error
-      steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), ...(err ? { err: String(err).slice(0, 200) } : {}) })
+      steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), ...(autoApproved ? { auto: true } : {}), ...(err ? { err: String(err).slice(0, 200) } : {}) })
       return out
     } catch (e: any) {
       steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), err: String(e?.message || e).slice(0, 200) })

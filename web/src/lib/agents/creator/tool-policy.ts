@@ -71,6 +71,8 @@ function ruleFor(name: string, args: any): Rule {
       return args?.chat_id === "me" && !args?.lark_id ? "when_tainted" : "always"
     case "devTicket":
       return action === "create" ? "always" : action === "answer" || action === "cancel" ? "when_tainted" : "never"
+    case "learnSkill":
+      return action === "list" ? "never" : "always"
     case "createLarkTask": case "updateLarkTask":
     case "writeKnowledgeBase": case "approveLearning": case "rejectLearning":
     case "generateImage": case "generateVideo":
@@ -92,7 +94,9 @@ function browseUrls(args: any): string[] {
 }
 
 /** Lý do cần duyệt (tiếng Việt, hiện cho người dùng) hoặc null nếu được chạy luôn. */
-export function approvalReason(call: { name: string; args: any }, state: TurnSafety): string | null {
+// opts.dailyAuto = Creator đã duyệt 1 lần hôm nay (auto-approve.ts): bỏ qua các hành động chỉ cần duyệt vì lượt "nhiễm" (when_tainted).
+// VẪN hỏi: gửi Lark tới người/nhóm khác, tạo phiếu sửa code (rule "always") và mở URL chưa từng xuất hiện sau khi nhiễm (kênh rò dữ liệu).
+export function approvalReason(call: { name: string; args: any }, state: TurnSafety, opts?: { dailyAuto?: boolean }): string | null {
   // browseWeb vừa đọc vừa có thể làm kênh rò (nhét dữ liệu vào URL). Sau khi nhiễm, chỉ mở URL đã xuất hiện nguyên văn.
   if (call.name === "browseWeb") {
     if (!state.tainted) return null
@@ -113,8 +117,10 @@ export function approvalReason(call: { name: string; args: any }, state: TurnSaf
   const rule = ruleFor(call.name, call.args)
   if (rule === "always") return call.name === "devTicket"
     ? "Phiếu sửa code (Claude Code chạy trên GitHub, mở PR vào staging) luôn cần Hiếu duyệt."
-    : "Gửi tin nhắn Lark tới người/nhóm khác luôn cần duyệt."
-  if (rule === "when_tainted" && state.tainted)
+    : call.name === "learnSkill"
+      ? "Skill tự học sẽ được nạp vào prompt của Gấu Pro về sau — luôn cần Hiếu đọc và duyệt."
+      : "Gửi tin nhắn Lark tới người/nhóm khác luôn cần duyệt."
+  if (rule === "when_tainted" && state.tainted && !opts?.dailyAuto)
     return `Lượt này đã đọc nội dung bên ngoài (${state.taintSources.join(", ")}) — hành động ghi/gửi cần duyệt để chống bị điều khiển ngầm.`
   return null
 }
@@ -135,6 +141,9 @@ export function describeAction(call: { name: string; args: any }): string {
     case "devTicket": return a.action === "create"
       ? `Phiếu sửa code: "${cut(a.title, 120)}" — ${cut(a.plan, 600)}`
       : `Phiếu #${a.id}: ${a.action}${a.answer ? ` "${cut(a.answer)}"` : ""}`
+    case "learnSkill": return a.action === "create"
+      ? `Học skill mới "${cut(a.name, 40)}" — ${cut(a.description, 200)} | Nguồn: ${cut(a.source, 120) || "không ghi"} | Nội dung: ${cut(a.instructions, 1500)}`
+      : `Skill tự học: ${a.action} "${cut(a.name, 40)}"`
     case "assistantMemory": return `Trí nhớ: ${a.action} ${cut(a.content ?? a.id ?? "")}`
     default: return `${call.name}${a.action ? ` (${a.action})` : ""}: ${cut(JSON.stringify(a), 160)}`
   }
