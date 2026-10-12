@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       : ""
 
   try {
-    const key = `ch-kpis3:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+    const key = `ch-kpis4:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
     const [cur, prv] = await Promise.all([
       queryAnalytics<Record<string, string>>(
@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
     // của scope đang xem + group cost phân bổ theo tỷ trọng doanh thu scope/toàn công ty (khớp bod-data.ts).
     const months = getMonthsInRange(startDate || "", endDate || "")
     let cm1 = cMar
+    const opCostBreakdown = { ads: 0, platformFee: 0, sponsorProducts: 0, media: 0, b2bCustomer: 0, group: 0 }
     if (months.length > 0) {
       const [channelCosts, groupCostsRaw, custRevRows, customerCostMap, companyGroupRows] = await Promise.all([
         getChannelCostsForMonths(months),
@@ -136,7 +137,11 @@ export async function GET(req: NextRequest) {
           COST_KEYS.forEach(key => {
             const cv = cc[key]
             // percent type: dùng cB2CRev (doanh thu B2C thực trong scope) — B2B đã tính riêng ở trên.
-            if (cv?.value) opCost += cv.type === "amount" ? cv.value * dayRatio : (cB2CRev * cv.value) / 100
+            if (cv?.value) {
+              const amt = cv.type === "amount" ? cv.value * dayRatio : (cB2CRev * cv.value) / 100
+              opCost += amt
+              opCostBreakdown[key] += amt
+            }
           })
         })
       }
@@ -147,13 +152,16 @@ export async function GET(req: NextRequest) {
       for (const r of companyGroupRows) companyRevByGroup[r.grp] = parseFloat(r.rev || "0")
       const revShareOf = (scopeRev: number, grp: "B2B" | "B2C") =>
         (companyRevByGroup[grp] || 0) > 0 ? scopeRev / companyRevByGroup[grp] : 0
-      opCost += totalB2BTursoCost * revShareOf(cB2BRev, "B2B")
+      opCostBreakdown.b2bCustomer = totalB2BTursoCost * revShareOf(cB2BRev, "B2B")
+      opCost += opCostBreakdown.b2bCustomer
       groupCosts.forEach(gc => {
         const share = gc.group_name === "B2B" ? revShareOf(cB2BRev, "B2B") : gc.group_name === "B2C" ? revShareOf(cB2CRev, "B2C") : 0
         if (share === 0) return
         const dayRatio = getDaysInMonth(gc.month) > 0
           ? getDaysInRange(startDate || "", endDate || "", gc.month) / getDaysInMonth(gc.month) : 0
-        opCost += parseFloat(gc.amount || "0") * dayRatio * share
+        const amt = parseFloat(gc.amount || "0") * dayRatio * share
+        opCost += amt
+        opCostBreakdown.group += amt
       })
 
       cm1 = cMar - opCost
@@ -169,6 +177,8 @@ export async function GET(req: NextRequest) {
       gpm2_percent:   cRev > 0 ? (cm1 / cRev) * 100 : 0,
       cm1,
       cm1_percent:    cRev > 0 ? (cm1 / cRev) * 100 : 0,
+      total_op_cost:  cMar - cm1,
+      op_cost_breakdown: opCostBreakdown,
       projection_factor: projFactor,
       orders:         cOrd,
       units:          cUni,

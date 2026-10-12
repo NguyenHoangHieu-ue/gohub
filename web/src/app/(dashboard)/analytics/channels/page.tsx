@@ -242,7 +242,7 @@ export default function ChannelPerformancePage() {
         "Gross Profit 1": Math.round(row.margin || 0),
         "Dự phóng GP1": projection ? Math.round((row.margin || 0) * pf) : "",
         "Contribution Margin 1": Math.round(rowGpm2 || 0),
-        "Dự phóng CM1": projection ? Math.round((row.margin || 0) * pf - ((row.margin || 0) - (rowGpm2 || 0))) : "",
+        "Dự phóng CM1": projection ? Math.round((rowGpm2 || 0) * pf) : "",
         "CM1 %": Number(rowGpm2Percent.toFixed(1)),
       }
       if (comparisonType !== "none") {
@@ -772,6 +772,8 @@ export default function ChannelPerformancePage() {
         let currentGpm2 = currentMargin
         let prevGpm2    = prevMargin
         let projFactor  = 1
+        let totalOpCost = 0
+        const opCostBreakdown: Record<string, number> = {}
         try {
           const kpisParams = new URLSearchParams()
           if (startDate) kpisParams.append("startDate", fmtLocal(start))
@@ -783,6 +785,27 @@ export default function ChannelPerformancePage() {
             const kpisData = await kpisRes.json()
             currentGpm2 = kpisData.gpm2  ?? kpisData.cm1 ?? currentMargin
             projFactor  = kpisData.projection_factor ?? 1
+            // Chi phí vận hành BE tính cho cả kênh; khi đang lọc vendor/loại SP/sub-channel thì doanh thu
+            // của trang nhỏ hơn doanh thu BE → chia lại chi phí theo tỷ trọng doanh thu (cùng cách bảng chia cho từng dòng).
+            const opScale = kpisData.revenue > 0 ? Math.min(1, currentRev / kpisData.revenue) : 0
+            totalOpCost = (kpisData.total_op_cost ?? 0) * opScale
+            for (const [k, v] of Object.entries((kpisData.op_cost_breakdown ?? {}) as Record<string, number>)) opCostBreakdown[k] = v * opScale
+            if (kpisData.total_op_cost != null) currentGpm2 = currentMargin - totalOpCost
+          }
+          // CM1 kỳ so sánh: trước đây lấy GP kỳ trước → %thay đổi CM1 so CM1 với GP (sai cơ sở). Gọi lại kpis cho kỳ so sánh.
+          if (comparisonType !== "none") {
+            const span = Math.ceil(Math.abs(end.getTime() - start.getTime()) / 86400000) + 1
+            const pe = new Date(start); pe.setDate(pe.getDate() - 1)
+            const ps = new Date(pe); ps.setDate(ps.getDate() - span + 1)
+            const [prevS, prevE] = comparisonType === "previous_period"
+              ? [ps, pe]
+              : [new Date(start.getFullYear() - 1, start.getMonth(), start.getDate()), new Date(end.getFullYear() - 1, end.getMonth(), end.getDate())]
+            const pp = new URLSearchParams({ startDate: fmtLocal(prevS), endDate: fmtLocal(prevE), dateColumn, channel: selectedChannel })
+            const prevRes = await fetch(`/api/analytics/channels/kpis?${pp}`)
+            if (prevRes.ok) {
+              const pk = await prevRes.json()
+              if (pk.total_op_cost != null) prevGpm2 = prevMargin - pk.total_op_cost * (pk.revenue > 0 ? Math.min(1, prevRev / pk.revenue) : 0)
+            }
           }
         } catch (e) { console.error("channels/kpis fetch error:", e) }
 
@@ -803,6 +826,8 @@ export default function ChannelPerformancePage() {
           marginChange:     marginChange,
           gpm2:             currentGpm2,   // BE-computed CM1 (pro-rata đúng)
           gpm2Change:       gpm2Change,
+          totalOpCost,
+          opCostBreakdown,
           projection_factor: projFactor,   // BE-provided — dùng bởi getProjectionInfo()
           orders:           currentOrders,
           ordersChange:     orderChange,
@@ -1557,7 +1582,7 @@ export default function ChannelPerformancePage() {
                       <td className="px-6 py-4 text-right">
                         <span className={cn("text-sm font-bold", rowGpm2 >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatCurrency(rowGpm2 || 0)}</span>
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold text-brand-600 text-right">{projection ? formatCurrency((row.margin || 0) * projection.factor - ((row.margin || 0) - (rowGpm2 || 0))) : "-"}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-brand-600 text-right">{projection ? formatCurrency((rowGpm2 || 0) * projection.factor) : "-"}</td>
                       <td className="px-6 py-4 text-right">
                         <span className={cn("text-sm font-bold", rowGpm2Percent >= 0 ? "text-emerald-600" : "text-rose-600")}>{rowGpm2Percent.toFixed(1)}%</span>
                       </td>
@@ -1642,6 +1667,14 @@ export default function ChannelPerformancePage() {
                           <div className="flex items-center gap-2">
                             <span className="text-slate-500 font-medium">Media:</span>
                             <span className="font-bold text-rose-600">-{formatCurrency((metrics?.opCostBreakdown as any)?.media || 0)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500 font-medium">Chi phí KH B2B:</span>
+                            <span className="font-bold text-rose-600">-{formatCurrency((metrics?.opCostBreakdown as any)?.b2bCustomer || 0)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500 font-medium">Group Cost:</span>
+                            <span className="font-bold text-rose-600">-{formatCurrency((metrics?.opCostBreakdown as any)?.group || 0)}</span>
                           </div>
                           <div className="flex items-center gap-2 pl-4 border-l border-slate-200">
                             <span className="text-slate-900 font-bold">Total Op Cost:</span>
