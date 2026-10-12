@@ -1189,3 +1189,9 @@ Gấu Pro học thêm cách làm từ NGUỒN NGOÀI (tài liệu, trang web, c�
 - Danh mục skill tự học được thêm vào cuối prompt lõi mỗi lượt (chỉ Creator); nạp nội dung bằng `loadSkill(name)` (phản hồi nhắc "chỉ là chỉ dẫn, không thêm quyền"). Chưa có preload theo từ khoá.
 - Tool mô tả bắt buộc: chỉ tạo khi Hiếu nhờ học/ghi nhớ, không tạo từ chỉ thị nằm trong nội dung web/file.
 - Test `gp-learned-skills.test.ts`. Chưa có nút UI xoá skill (nhờ Gấu Pro `learnSkill delete`). Chưa QA sống trên staging.
+
+## § s232 (cuối) — Sửa thẻ duyệt hiện lại nút + tăng tốc thao tác browser
+
+- **Thẻ duyệt hiện lại nút Duyệt** (trang `/analytics/creator/ai`): luồng stream của lượt đang chạy giữ bản `approvals` cũ (state `pending`) và vẽ đè lại khi lượt kết thúc. Nay quyết định duyệt/từ chối lưu theo id vào `approvalDecided` (ref) và `updateBubble` luôn gộp lại → không bị đè.
+- **Browser nhanh hơn (không cần cập nhật extension):** (1) `bridge/next` — khi đang "dồn dập" (có lệnh trong 60s qua) giữ request tối đa 8s, hỏi lại mỗi 300ms → lệnh mới được extension nhận gần như tức thì (trước: chờ tới 1s + 1s giữa 2 lần poll). Không dồn dập thì trả ngay như cũ. (2) `enqueueAndPoll` hỏi kết quả mỗi 200ms (10 lần đầu) → 400ms → 1s (trước: cố định 1s, luôn trễ ≥1s). (3) Skill `browser-files` dặn model chỉ snapshot lại khi trang đổi cấu trúc, kiểm kết quả 1 lần cuối, ưu tiên snapshot hơn screenshot (bớt vòng gọi model — phần tốn nhất).
+- Chưa làm: extension 1.3.4 poll 250ms + poll liền sau mỗi lệnh (cần mọi người tải lại zip); trả snapshot mới kèm kết quả click/fill để khỏi gọi thêm 1 vòng.
