@@ -1,4 +1,12 @@
-import type { BuildResult } from "./builder"
+import type { BuiltSheets } from "./types"
+
+/** Phần tối thiểu của kết quả build mà dedupe cần (dùng chung BC Datapool + 3HK Datapool). */
+export interface Dedupable<C extends { type: string; kind: string; dataAmount: number; unit: string; days: number }> {
+  sheets: BuiltSheets
+  costRows: C[]
+  usCost: number[]
+  vnCost: number[]
+}
 
 export interface SkippedSku { sku: string; tenant: "US" | "VN"; status: string; label: string }
 export interface SkippedProduct { code: string; tenant: "US" | "VN"; status: string }
@@ -9,7 +17,7 @@ export interface Skipped { skus: SkippedSku[]; products: SkippedProduct[] }
  * để báo cho người dùng. Phần còn lại được tạo bình thường (VD chọn 10,11,12 ngày mà 10 ngày đã có → chỉ tạo 11 và 12).
  * `existingSkus`/`existingProducts`: mã → trạng thái trong hệ thống (Active/Inactive/Deleted...).
  */
-export function dropExisting(r: BuildResult, existingSkus: Map<string, string>, existingProducts: Map<string, string>): { result: BuildResult; skipped: Skipped } {
+export function dropExisting<C extends { type: string; kind: string; dataAmount: number; unit: string; days: number }, R extends Dedupable<C>>(r: R, existingSkus: Map<string, string>, existingProducts: Map<string, string>): { result: R; skipped: Skipped } {
   const skipped: Skipped = { skus: [], products: [] }
   const labelOf = (ci: number) => {
     const c = r.costRows[ci]

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Download, Eye, Plus, Trash2, Upload } from "lucide-react"
+import ProductBuilder3hk from "./product-builder-3hk"
 import { PRODUCT_HEADERS, SKU_HEADERS, pickOperatorPrice, type BuildResult } from "@/lib/bc-datapool/builder"
 import { pickSupportCountry, pickSupportGroup } from "@/lib/bc-datapool/iso"
 import type { Skipped } from "@/lib/bc-datapool/dedupe"
@@ -77,7 +78,7 @@ const catalogGroups = (d?: CatalogDiff | null): DiffGroup[] => !d ? [] : [
   { label: "Gói đổi số ngày/tốc độ/nhà mạng", tone: "amber", total: d.counts.changed, items: d.changed.map(p => `${p.label} — ${p.id}: ${p.detail}`) },
 ]
 
-export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
+function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
   const [opts, setOpts] = useState<Options | null>(null)
   const [loadErr, setLoadErr] = useState<string | null>(null)
   const [assumptions, setAssumptions] = useState<Assumptions>(DEFAULT_ASSUMPTIONS)
@@ -533,6 +534,26 @@ export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
           <div className="text-[11px] text-gray-400">Rê chuột vào giá (gạch chấm) để xem công thức đã thế số — mọi công thức dùng ROUNDUP. Bản xem trước tính bằng tỷ giá nội bộ hiện tại; file xuất sẽ tính lại y hệt. Hiển thị tối đa 1000 dòng/sheet, file xuất đủ tất cả.</div>
         </div>
       )}
+    </div>
+  )
+}
+
+type Vendor = "bc" | "3hk"
+const VENDORS: { id: Vendor; label: string }[] = [{ id: "bc", label: "BC Datapool" }, { id: "3hk", label: "3HK Datapool" }]
+
+export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
+  const [vendor, setVendor] = useState<Vendor>("bc")
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-500">Vendor</span>
+        <div className="flex gap-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-xl">
+          {VENDORS.map(v => (
+            <button key={v.id} onClick={() => setVendor(v.id)} className={`px-3 py-1.5 text-sm font-medium rounded-lg ${vendor === v.id ? "bg-white dark:bg-slate-700 text-brand-700 shadow-sm" : "text-gray-500"}`}>{v.label}</button>
+          ))}
+        </div>
+      </div>
+      {vendor === "bc" ? <BcDatapoolBuilder onNotify={onNotify} /> : <ProductBuilder3hk onNotify={onNotify} />}
     </div>
   )
 }
