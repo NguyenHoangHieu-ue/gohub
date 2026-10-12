@@ -712,7 +712,8 @@ export default function CreatorAIPage() {
       content:  text || `[Gửi ${attachedFiles.length} file: ${fileNames}]`,
       fileName: fileNames || undefined,
     }
-    const next = [...messages, userMsg]
+    // `messages` của lần render này có thể chưa kịp nhận quyết định duyệt vừa bấm (câu nối gửi ngay sau khi duyệt) → áp lại từ approvalDecided.
+    const next = [...messages.map(m => m.approvals ? { ...m, approvals: m.approvals.map(a => ({ ...a, ...approvalDecided.current[a.id] })) } : m), userMsg]
     setMessages(next)
     setInput("")
     jumpToBottom()
