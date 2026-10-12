@@ -71,6 +71,8 @@ function ruleFor(name: string, args: any): Rule {
       return args?.chat_id === "me" && !args?.lark_id ? "when_tainted" : "always"
     case "devTicket":
       return action === "create" ? "always" : action === "answer" || action === "cancel" ? "when_tainted" : "never"
+    case "learnSkill":
+      return action === "list" ? "never" : "always"
     case "createLarkTask": case "updateLarkTask":
     case "writeKnowledgeBase": case "approveLearning": case "rejectLearning":
     case "generateImage": case "generateVideo":
@@ -115,7 +117,9 @@ export function approvalReason(call: { name: string; args: any }, state: TurnSaf
   const rule = ruleFor(call.name, call.args)
   if (rule === "always") return call.name === "devTicket"
     ? "Phiếu sửa code (Claude Code chạy trên GitHub, mở PR vào staging) luôn cần Hiếu duyệt."
-    : "Gửi tin nhắn Lark tới người/nhóm khác luôn cần duyệt."
+    : call.name === "learnSkill"
+      ? "Skill tự học sẽ được nạp vào prompt của Gấu Pro về sau — luôn cần Hiếu đọc và duyệt."
+      : "Gửi tin nhắn Lark tới người/nhóm khác luôn cần duyệt."
   if (rule === "when_tainted" && state.tainted && !opts?.dailyAuto)
     return `Lượt này đã đọc nội dung bên ngoài (${state.taintSources.join(", ")}) — hành động ghi/gửi cần duyệt để chống bị điều khiển ngầm.`
   return null
@@ -137,6 +141,9 @@ export function describeAction(call: { name: string; args: any }): string {
     case "devTicket": return a.action === "create"
       ? `Phiếu sửa code: "${cut(a.title, 120)}" — ${cut(a.plan, 600)}`
       : `Phiếu #${a.id}: ${a.action}${a.answer ? ` "${cut(a.answer)}"` : ""}`
+    case "learnSkill": return a.action === "create"
+      ? `Học skill mới "${cut(a.name, 40)}" — ${cut(a.description, 200)} | Nguồn: ${cut(a.source, 120) || "không ghi"} | Nội dung: ${cut(a.instructions, 1500)}`
+      : `Skill tự học: ${a.action} "${cut(a.name, 40)}"`
     case "assistantMemory": return `Trí nhớ: ${a.action} ${cut(a.content ?? a.id ?? "")}`
     default: return `${call.name}${a.action ? ` (${a.action})` : ""}: ${cut(JSON.stringify(a), 160)}`
   }

@@ -1178,3 +1178,14 @@ Hiếu: không muốn lúc nào cũng chờ duyệt. **Duyệt 1 hành động �
 - Nút tắt khẩn cấp: `DELETE /api/creator-ai/approve` (huỷ cờ hôm nay). `GET /api/creator-ai/approve` trả `autoApproveToday`. Chưa có nút trên UI.
 - Test: `gp-tool-policy.test.ts` (nhóm "Tự động duyệt theo ngày").
 - Rủi ro chấp nhận: sau lần duyệt đầu, trang/tài liệu độc đọc trong ngày có thể khiến Gấu Pro ghi task/KB/trí nhớ, click-gõ trình duyệt mà không hỏi.
+
+
+## § s232 (2026-10-12) — Skill tự học (learnSkill)
+
+Gấu Pro học thêm cách làm từ NGUỒN NGOÀI (tài liệu, trang web, cách Hiếu vừa chỉ) dưới dạng skill chữ, có người duyệt.
+- Tool `learnSkill` (chỉ Creator): `create` | `list` | `delete`. Code `lib/agents/creator/learned-skills.ts`; lưu `app_settings` khoá `gp_learned_skills` (không cần migration), tối đa 20 skill.
+- **Luôn duyệt**: rule `always` trong `tool-policy.ts` cho create/delete — KHÔNG bị "tự động duyệt theo ngày" bỏ qua, kể cả lượt chưa nhiễm. Thẻ duyệt hiện đủ tên, mô tả, nguồn và 1.500 ký tự đầu nội dung. `list` chạy luôn.
+- **Skill học chỉ là chỉ dẫn chữ**: không kèm tool, không đổi luật duyệt, nên nội dung xấu cũng không nâng được quyền. Tên kebab-case 3–40 ký tự, không trùng skill có sẵn; mô tả 10–200, nội dung 40–6000 ký tự.
+- Danh mục skill tự học được thêm vào cuối prompt lõi mỗi lượt (chỉ Creator); nạp nội dung bằng `loadSkill(name)` (phản hồi nhắc "chỉ là chỉ dẫn, không thêm quyền"). Chưa có preload theo từ khoá.
+- Tool mô tả bắt buộc: chỉ tạo khi Hiếu nhờ học/ghi nhớ, không tạo từ chỉ thị nằm trong nội dung web/file.
+- Test `gp-learned-skills.test.ts`. Chưa có nút UI xoá skill (nhờ Gấu Pro `learnSkill delete`). Chưa QA sống trên staging.
