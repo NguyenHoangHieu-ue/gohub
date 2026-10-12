@@ -5,7 +5,8 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getStrategicPartnersList, shipFilter, internalOpsFilter, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
 import { fetchCosts, getDaysInRange, getDaysInMonth, monthsBetween } from "@/lib/bod-data"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
-import { COST_KEYS, calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
+import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
   const sfx = `${shipFilter(false)} ${internalOpsFilter(false)}`
 
   try {
-    const key = `ch-perf:${dateColumn}:${startDate}:${endDate}:${channelGroup}`
+    const key = `ch-perf2:${dateColumn}:${startDate}:${endDate}:${channelGroup}`
     const payload = await cachedQuery(key, async () => {
     const strategicList = await getStrategicPartnersList()
 
@@ -74,29 +75,25 @@ export async function GET(req: NextRequest) {
     })
 
     // B2B per-customer cost (Turso b2b_customer_cost_monthly) — B2B KHÔNG dùng analytics_channel_costs
-    // (tránh double-count với Turso, khớp Quarter Report/b2b-kpis). Phân bổ tổng cost B2B vào từng channel
-    // theo revenue-share (giống cách group cost đang phân bổ ở dưới).
-    let totalB2BTursoCost = 0
+    // (tránh double-count với Turso, khớp Quarter Report/b2b-kpis). Chi phí tính theo KHÁCH THẬT rồi chia về từng
+    // channel theo doanh thu của khách trong channel (s232) — trước gộp mọi chi phí B2B rồi chia theo doanh thu channel
+    // nên channel có khách chưa nhập chi phí vẫn bị trừ.
+    let b2bCostByChannel = new Map<string, number>()
     if (groupRevTotals["B2B"] > 0) {
       const [custRevRows, customerCostMap] = await Promise.all([
-        queryAnalytics<{ customer_code: string; month: string; revenue: string }>(`
+        queryAnalytics<{ customer_code: string; month: string; channel: string; revenue: string }>(`
           SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
-                 SUM(f.${source.revenueCol}) as revenue
+                 TRIM(s.channel_name) as channel, SUM(f.${source.revenueCol}) as revenue
           FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
           WHERE ${filter} ${sfx} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
-          GROUP BY 1, 2
+          GROUP BY 1, 2, 3
         `),
         fetchCustomerCosts(months),
       ])
-      const custRevMap = new Map<string, number>()
-      custRevRows.forEach(r => custRevMap.set(`${r.month}_${r.customer_code}`, parseFloat(r.revenue || "0")))
-      customerCostMap.forEach((rec, key) => {
-        const mo = key.slice(0, 7); const code = key.slice(8)
-        const custRev = custRevMap.get(`${mo}_${code}`) || 0
-        if (custRev === 0) return
-        const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(startDate || "", endDate || "", mo) / getDaysInMonth(mo) : 0
-        totalB2BTursoCost += calcChCostForPeriod(rec, custRev, ratio)
-      })
+      b2bCostByChannel = allocateCustomerCostByKey(
+        custRevRows.map(r => ({ customer_code: r.customer_code, month: r.month, key: r.channel, revenue: parseFloat(r.revenue || "0") })),
+        customerCostMap, startDate || "", endDate || "",
+      )
     }
 
     return rows.map(r => {
@@ -107,7 +104,7 @@ export async function GET(req: NextRequest) {
 
       const isB2B = grp.startsWith("B2B")
       // Op cost theo channel (channel_costs: ads/platform/sponsor/media) — B2B KHÔNG dùng nguồn này
-      // (dùng Turso per-customer cost thay thế, xem totalB2BTursoCost ở trên).
+      // (dùng Turso per-customer cost thay thế, xem b2bCostByChannel ở trên).
       let opCost = 0
       if (!isB2B) {
         channelCosts.filter(cc => cc.channel === r.channel).forEach(cc => {
@@ -122,7 +119,7 @@ export async function GET(req: NextRequest) {
       // Op cost theo group (channel_group_costs: B2B / B2C) — chia theo revenue share
       const tursoGroup = grp.startsWith("B2B") ? "B2B" : grp.includes("B2C") ? "B2C" : grp
       const revShare = (groupRevTotals[tursoGroup] || 0) > 0 ? rev / groupRevTotals[tursoGroup] : 0
-      if (isB2B) opCost += totalB2BTursoCost * revShare
+      if (isB2B) opCost += b2bCostByChannel.get(r.channel) || 0
       groupCosts.filter(gc => gc.group_name === tursoGroup).forEach(gc => {
         const ratio = getDaysInMonth(gc.month) > 0
           ? getDaysInRange(startDate || "", endDate || "", gc.month) / getDaysInMonth(gc.month) : 0

@@ -8,8 +8,9 @@ import {
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
-import { COST_KEYS, calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -35,8 +36,14 @@ export async function GET(req: NextRequest) {
       ? `AND UPPER(s.group_name) = '${channelGroup.toUpperCase().replace(/'/g, "''")}'`
       : ""
 
+  const scopeCond = channelName
+    ? `TRIM(s.channel_name) = '${channelName.replace(/'/g, "''")}'`
+    : channelGroup && channelGroup !== "All"
+      ? `UPPER(s.group_name) = '${channelGroup.toUpperCase().replace(/'/g, "''")}'`
+      : "TRUE"
+
   try {
-    const key = `ch-kpis4:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+    const key = `ch-kpis5:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
     const [cur, prv] = await Promise.all([
       queryAnalytics<Record<string, string>>(
@@ -81,25 +88,26 @@ export async function GET(req: NextRequest) {
     // của scope đang xem + group cost phân bổ theo tỷ trọng doanh thu scope/toàn công ty (khớp bod-data.ts).
     const months = getMonthsInRange(startDate || "", endDate || "")
     let cm1 = cMar
+    const subChannelCosts: Record<string, { revenue: number; b2bCustomer: number }> = {}
     const opCostBreakdown = { ads: 0, platformFee: 0, sponsorProducts: 0, media: 0, b2bCustomer: 0, group: 0 }
     if (months.length > 0) {
       const [channelCosts, groupCostsRaw, custRevRows, customerCostMap, companyGroupRows] = await Promise.all([
         getChannelCostsForMonths(months),
         getGroupCostsForMonths(months),
         cB2BRev !== 0
-          ? queryAnalytics<{ customer_code: string; month: string; revenue: string }>(
-              // KHÔNG lọc theo chFilter — Turso cost gắn với KHÁCH HÀNG, không có dimension channel (1 khách
-              // có thể mua qua nhiều kênh trong kỳ). Cần tổng doanh thu TOÀN CÔNG TY của khách để tính đúng
-              // % phí, sau đó phân bổ TỔNG chi phí B2B vào scope theo tỷ trọng doanh thu (giống channels/
-              // performance + bod-data.ts `finalizeGroupMargin` — KHÔNG tính trực tiếp theo doanh thu trong
-              // phạm vi kênh, sẽ sai khi 1 khách trải nhiều kênh).
+          ? queryAnalytics<{ customer_code: string; month: string; sub: string; in_scope: string; revenue: string }>(
+              // KHÔNG lọc theo chFilter — Turso cost gắn với KHÁCH HÀNG (1 khách có thể mua qua nhiều kênh). Lấy doanh thu
+              // B2B TOÀN CÔNG TY của khách theo sub-channel + cờ in_scope: chi phí tính trên tổng doanh thu khách rồi
+              // chỉ phần doanh thu trong scope nhận chi phí (s232) — khách chưa nhập chi phí không gánh phần của khách khác.
               `SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
+                      COALESCE(TRIM(s.sapo_name), TRIM(s.name)) as sub,
+                      CASE WHEN ${scopeCond} THEN 1 ELSE 0 END as in_scope,
                       SUM(f.${source.revenueCol}) as revenue
                FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
                WHERE ${filter} ${sfx} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
-               GROUP BY 1, 2`
+               GROUP BY 1, 2, 3, 4`
             )
-          : Promise.resolve([] as { customer_code: string; month: string; revenue: string }[]),
+          : Promise.resolve([] as { customer_code: string; month: string; sub: string; in_scope: string; revenue: string }[]),
         cB2BRev !== 0 ? fetchCustomerCosts(months) : Promise.resolve(new Map<string, import("@/lib/b2b-customer-cost").CostRecord>()),
         // Doanh thu B2B/B2C TOÀN CÔNG TY cùng kỳ (không lọc channel) — mẫu số revenue-share phân bổ group cost.
         queryAnalytics<{ grp: string; rev: string }>(
@@ -111,17 +119,16 @@ export async function GET(req: NextRequest) {
       const groupCosts = groupCostsRaw as Array<{ group_name: string; month: string; amount: string }>
       let opCost = 0
 
-      // B2B: TỔNG chi phí Turso toàn công ty, rồi phân bổ vào scope theo revShare (cùng cách group cost bên dưới).
-      const custRevMap = new Map<string, number>()
-      custRevRows.forEach(r => custRevMap.set(`${r.month}_${r.customer_code}`, parseFloat(r.revenue || "0")))
+      // B2B: chi phí Turso theo KHÁCH THẬT, chia về sub-channel theo doanh thu của khách (allocateCustomerCostByKey).
+      const subCost = allocateCustomerCostByKey(
+        custRevRows.map(r => ({ customer_code: r.customer_code, month: r.month, key: r.sub, revenue: parseFloat(r.revenue || "0"), inScope: Number(r.in_scope) === 1 })),
+        customerCostMap, startDate || "", endDate || "",
+      )
       let totalB2BTursoCost = 0
-      customerCostMap.forEach((rec, ckey) => {
-        const mo = ckey.slice(0, 7); const code = ckey.slice(8)
-        const custRev = custRevMap.get(`${mo}_${code}`) || 0
-        if (custRev === 0) return
-        const dayRatio = getDaysInMonth(mo) > 0 ? getDaysInRange(startDate || "", endDate || "", mo) / getDaysInMonth(mo) : 0
-        totalB2BTursoCost += calcChCostForPeriod(rec, custRev, dayRatio)
-      })
+      subCost.forEach(v => { totalB2BTursoCost += v })
+      const subRev = new Map<string, number>()
+      custRevRows.forEach(r => { if (Number(r.in_scope) === 1) subRev.set(r.sub, (subRev.get(r.sub) || 0) + parseFloat(r.revenue || "0")) })
+      subRev.forEach((rev, sub) => { subChannelCosts[sub] = { revenue: rev, b2bCustomer: subCost.get(sub) || 0 } })
 
       // B2C: channel-level costs (theo channelName hoặc tất cả channels nếu không filter). Bỏ qua hoàn
       // toàn khi scope không có doanh thu B2C (channel/kênh 100% B2B) — B2B đã tính qua Turso ở trên, cộng
@@ -152,7 +159,7 @@ export async function GET(req: NextRequest) {
       for (const r of companyGroupRows) companyRevByGroup[r.grp] = parseFloat(r.rev || "0")
       const revShareOf = (scopeRev: number, grp: "B2B" | "B2C") =>
         (companyRevByGroup[grp] || 0) > 0 ? scopeRev / companyRevByGroup[grp] : 0
-      opCostBreakdown.b2bCustomer = totalB2BTursoCost * revShareOf(cB2BRev, "B2B")
+      opCostBreakdown.b2bCustomer = totalB2BTursoCost
       opCost += opCostBreakdown.b2bCustomer
       groupCosts.forEach(gc => {
         const share = gc.group_name === "B2B" ? revShareOf(cB2BRev, "B2B") : gc.group_name === "B2C" ? revShareOf(cB2CRev, "B2C") : 0
@@ -179,6 +186,7 @@ export async function GET(req: NextRequest) {
       cm1_percent:    cRev > 0 ? (cm1 / cRev) * 100 : 0,
       total_op_cost:  cMar - cm1,
       op_cost_breakdown: opCostBreakdown,
+      sub_channel_costs: subChannelCosts,
       projection_factor: projFactor,
       orders:         cOrd,
       units:          cUni,

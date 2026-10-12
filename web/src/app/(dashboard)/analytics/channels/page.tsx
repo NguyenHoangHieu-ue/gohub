@@ -203,31 +203,10 @@ export default function ChannelPerformancePage() {
   const exportPerformanceBreakdown = () => {
     if (!performanceData || performanceData.length === 0) return
     const totalRevenue = metrics?.revenue || 1
-    const totalOpCost = metrics?.totalOpCost || 0
-    const mode = channelSettingsMap[selectedChannel] || "total"
-    const start = new Date(startDate || "2026-03-01")
-    const end = new Date(endDate || "2026-03-31")
-    const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
-    const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / 86400000) + 1
-    const ratio = Math.min(1, diffDays / daysInMonth)
     const pf = projection ? projection.factor : 0
 
     const rows = performanceData.map((row: any) => {
-      let opCostRow = 0
-      if (mode === "subchannels") {
-        const c = channelCostsMap[`${selectedChannel} - ${row.sub_channel}`]
-        if (c && Object.keys(c).length > 0) {
-          ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-            if (c[key]) {
-              opCostRow += c[key].type === "amount"
-                ? (parseFloat(c[key].value) || 0) * ratio
-                : (row.revenue * (parseFloat(c[key].value) || 0)) / 100
-            }
-          })
-        }
-      } else {
-        opCostRow = (row.revenue / totalRevenue) * totalOpCost
-      }
+      const opCostRow = metrics?.rowOpCostMap?.[row.sub_channel] || 0
       const rowGpm2 = row.margin - opCostRow
       const rowGpm2Percent = row.revenue > 0 ? (rowGpm2 / row.revenue) * 100 : 0
       const contribution = (row.revenue / totalRevenue) * 100
@@ -773,6 +752,7 @@ export default function ChannelPerformancePage() {
         let prevGpm2    = prevMargin
         let projFactor  = 1
         let totalOpCost = 0
+        const rowOpCostMap: Record<string, number> = {}
         const opCostBreakdown: Record<string, number> = {}
         try {
           const kpisParams = new URLSearchParams()
@@ -787,10 +767,26 @@ export default function ChannelPerformancePage() {
             projFactor  = kpisData.projection_factor ?? 1
             // Chi phí vận hành BE tính cho cả kênh; khi đang lọc vendor/loại SP/sub-channel thì doanh thu
             // của trang nhỏ hơn doanh thu BE → chia lại chi phí theo tỷ trọng doanh thu (cùng cách bảng chia cho từng dòng).
-            const opScale = kpisData.revenue > 0 ? Math.min(1, currentRev / kpisData.revenue) : 0
-            totalOpCost = (kpisData.total_op_cost ?? 0) * opScale
-            for (const [k, v] of Object.entries((kpisData.op_cost_breakdown ?? {}) as Record<string, number>)) opCostBreakdown[k] = v * opScale
-            if (kpisData.total_op_cost != null) currentGpm2 = currentMargin - totalOpCost
+            // Chi phí KH B2B: BE chia theo KHÁCH THẬT về từng sub-channel (sub_channel_costs); khi đang lọc vendor/loại SP thì
+            // doanh thu dòng nhỏ hơn doanh thu BE → thu nhỏ theo tỷ lệ. Các chi phí còn lại (kênh B2C, group) chia theo doanh thu.
+            if (kpisData.total_op_cost != null) {
+              const bd = (kpisData.op_cost_breakdown ?? {}) as Record<string, number>
+              const subCosts = (kpisData.sub_channel_costs ?? {}) as Record<string, { revenue: number; b2bCustomer: number }>
+              const opScale = kpisData.revenue > 0 ? Math.min(1, currentRev / kpisData.revenue) : 0
+              const otherScaled = Math.max(0, kpisData.total_op_cost - (bd.b2bCustomer || 0)) * opScale
+              let b2bScaled = 0
+              for (const d of breakdownDataArr) {
+                const rev = parseFloat(d.revenue || 0)
+                const sc = subCosts[d.sub_channel]
+                const own = sc && sc.revenue > 0 ? sc.b2bCustomer * Math.min(1, rev / sc.revenue) : 0
+                b2bScaled += own
+                rowOpCostMap[d.sub_channel] = own + (currentRev > 0 ? otherScaled * (rev / currentRev) : 0)
+              }
+              totalOpCost = b2bScaled + otherScaled
+              for (const k of Object.keys(bd)) if (k !== "b2bCustomer") opCostBreakdown[k] = bd[k] * opScale
+              opCostBreakdown.b2bCustomer = b2bScaled
+              currentGpm2 = currentMargin - totalOpCost
+            }
           }
           // CM1 kỳ so sánh: trước đây lấy GP kỳ trước → %thay đổi CM1 so CM1 với GP (sai cơ sở). Gọi lại kpis cho kỳ so sánh.
           if (comparisonType !== "none") {
@@ -828,6 +824,7 @@ export default function ChannelPerformancePage() {
           gpm2Change:       gpm2Change,
           totalOpCost,
           opCostBreakdown,
+          rowOpCostMap,
           projection_factor: projFactor,   // BE-provided — dùng bởi getProjectionInfo()
           orders:           currentOrders,
           ordersChange:     orderChange,
@@ -1527,34 +1524,7 @@ export default function ChannelPerformancePage() {
               ) : (
                 performanceData.map((row, idx) => {
                   const totalRevenue = metrics?.revenue || 1
-                  const totalOpCost = metrics?.totalOpCost || 0
-
-                  let opCostRow = 0
-                  const mode = channelSettingsMap[selectedChannel] || "total"
-                  const start = new Date(startDate || "2026-03-01")
-                  const end = new Date(endDate || "2026-03-31")
-                  const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
-                  const diffTime = Math.abs(end.getTime() - start.getTime())
-                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
-                  const ratio = Math.min(1, diffDays / daysInMonth)
-
-                  if (mode === "subchannels") {
-                    const c = channelCostsMap[`${selectedChannel} - ${row.sub_channel}`]
-                    if (c && Object.keys(c).length > 0) {
-                      ;["ads", "platformFee", "sponsorProducts", "media"].forEach(key => {
-                        if (c[key]) {
-                          if (c[key].type === "amount") {
-                            opCostRow += (parseFloat(c[key].value) || 0) * ratio
-                          } else {
-                            opCostRow += (row.revenue * (parseFloat(c[key].value) || 0)) / 100
-                          }
-                        }
-                      })
-                    }
-                  } else {
-                    opCostRow = (row.revenue / totalRevenue) * totalOpCost
-                  }
-
+                  const opCostRow = metrics?.rowOpCostMap?.[row.sub_channel] || 0
                   const rowGpm2 = row.margin - opCostRow
                   const rowGpm2Percent = row.revenue > 0 ? (rowGpm2 / row.revenue) * 100 : 0
 
