@@ -28,7 +28,6 @@ async function enqueueAndPoll(
 
   const isLocal = action.startsWith(LOCAL_PREFIX)
   const isWrite = WRITE_ACTIONS.has(action) || LOCAL_WRITE_ACTIONS.has(action)
-  const maxPolls = Math.ceil((TTL_SECONDS * 1000) / POLL_MS)
 
   const { data: inserted, error: insertErr } = await supabaseAdmin
     .from("browser_bridge_commands")
@@ -52,8 +51,10 @@ async function enqueueAndPoll(
       : (isWrite ? "🖱️ Đang thao tác trên browser của bạn..." : "👀 Đang đọc từ browser của bạn..."),
   })
 
-  for (let i = 0; i < maxPolls; i++) {
-    await new Promise(r => setTimeout(r, POLL_MS))
+  // Hỏi kết quả dày lúc đầu (lệnh đọc/click thường xong < 2s), thưa dần về POLL_MS.
+  const deadline = Date.now() + TTL_SECONDS * 1000
+  for (let i = 0; Date.now() < deadline; i++) {
+    await new Promise(r => setTimeout(r, i < 10 ? 200 : i < 20 ? 400 : POLL_MS))
 
     const { data: row } = await supabaseAdmin
       .from("browser_bridge_commands")

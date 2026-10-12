@@ -468,6 +468,8 @@ export default function CreatorAIPage() {
   const recognitionRef = useRef<any>(null)
   const timerRef     = useRef<ReturnType<typeof setInterval> | null>(null)
   const inputRef     = useRef<HTMLTextAreaElement>(null)
+  // Quyết định duyệt theo id: luồng stream của lượt đang chạy giữ bản `approvals` cũ (state "pending") và vẽ đè lại khi kết thúc → nút Duyệt hiện lại.
+  const approvalDecided = useRef<Record<string, { state: Approval["state"]; note?: string }>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const LS_KEY       = "gp_conv"
 
@@ -710,7 +712,8 @@ export default function CreatorAIPage() {
       content:  text || `[Gửi ${attachedFiles.length} file: ${fileNames}]`,
       fileName: fileNames || undefined,
     }
-    const next = [...messages, userMsg]
+    // `messages` của lần render này có thể chưa kịp nhận quyết định duyệt vừa bấm (câu nối gửi ngay sau khi duyệt) → áp lại từ approvalDecided.
+    const next = [...messages.map(m => m.approvals ? { ...m, approvals: m.approvals.map(a => ({ ...a, ...approvalDecided.current[a.id] })) } : m), userMsg]
     setMessages(next)
     setInput("")
     jumpToBottom()
@@ -777,7 +780,7 @@ export default function CreatorAIPage() {
       const updateBubble = (content: string, extra?: Partial<Message>) => {
         setMessages(prev => {
           const u = [...prev]
-          u[u.length - 1] = { role: "assistant", content, ...(approvals.length ? { approvals: [...approvals] } : {}), ...(plan ? { plan } : {}), ...extra }
+          u[u.length - 1] = { role: "assistant", content, ...(approvals.length ? { approvals: approvals.map(a => ({ ...a, ...approvalDecided.current[a.id] })) } : {}), ...(plan ? { plan } : {}), ...extra }
           return u
         })
       }
@@ -857,12 +860,27 @@ export default function CreatorAIPage() {
   const abortRef = useRef<AbortController | null>(null)
   const sendRef = useRef(send)
   sendRef.current = send
+  // Duyệt khi lượt chat còn đang chạy → send() bỏ qua (đang loading) nên câu nối bị mất, Gấu Pro không biết kết quả. Xếp hàng, gửi khi lượt xong.
+  const loadingRef = useRef(loading)
+  loadingRef.current = loading
+  const queuedFollowup = useRef<string[]>([])
+  useEffect(() => {
+    if (!loading && queuedFollowup.current.length) {
+      const msg = queuedFollowup.current.join("\n\n")
+      queuedFollowup.current = []
+      sendRef.current(msg)
+    }
+  }, [loading])
   const handleFollowup = useCallback((q: string) => { sendRef.current(q) }, [])
 
   // Duyệt/từ chối hành động chờ (G0) → server chạy tool → gửi câu nối cho Gấu Pro làm tiếp.
   const handleDecide = useCallback(async (msgIndex: number, id: string, approve: boolean) => {
-    const setState = (state: Approval["state"], note?: string) => setMessages(prev => prev.map((m, i) =>
-      i !== msgIndex || !m.approvals ? m : { ...m, approvals: m.approvals.map(a => a.id === id ? { ...a, state, note } : a) }))
+    const setState = (state: Approval["state"], note?: string) => {
+      if (state === "pending" || state === "error") delete approvalDecided.current[id]
+      else approvalDecided.current[id] = { state, note }
+      setMessages(prev => prev.map((m, i) =>
+        i !== msgIndex || !m.approvals ? m : { ...m, approvals: m.approvals.map(a => a.id === id ? { ...a, state, note } : a) }))
+    }
     setState("working")
     try {
       const res = await fetch("/api/creator-ai/approve", {
@@ -873,7 +891,7 @@ export default function CreatorAIPage() {
       const st = d.status as Approval["state"] | undefined
       if (st === "executed" || st === "failed" || st === "rejected") {
         setState(st, st === "failed" ? d.error : undefined)
-        if (d.followup) sendRef.current(d.followup)
+        if (d.followup) { if (loadingRef.current) queuedFollowup.current.push(d.followup); else sendRef.current(d.followup) }
       } else setState("error", d.error || `HTTP ${res.status}`)
     } catch (e: any) {
       setState("error", e.message)

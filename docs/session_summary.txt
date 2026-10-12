@@ -10999,3 +10999,5 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
 - (s232) Gấu Pro: tự động duyệt theo ngày — duyệt 1 hành động → hết hôm nay (giờ VN) tool ghi/gửi chỉ-cần-duyệt-vì-nhiễm tự chạy; vẫn hỏi gửi Lark người/nhóm khác, phiếu sửa code, URL lạ. Chỉ Creator, cron không áp. Cờ app_settings gp_auto_approve; DELETE /api/creator-ai/approve để tắt. Wiki analytics-creator-ai §s232.
 
 - (s232) Gấu Pro: skill tự học — tool learnSkill (create/list/delete, chỉ Creator), lưu app_settings gp_learned_skills, LUÔN cần duyệt (kể cả khi đã tự-duyệt-theo-ngày), skill chỉ là chỉ dẫn chữ không thêm tool/quyền, nạp qua loadSkill. Chưa QA sống.
+
+- (s232) Gấu Pro: sửa thẻ duyệt hiện lại nút Duyệt sau khi lượt chat kết thúc (approvalDecided ref); tăng tốc browser: bridge/next giữ request 8s khi dồn dập, poll kết quả 200ms, skill browser-files dặn snapshot gọn. Chưa đo thật.
