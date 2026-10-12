@@ -12,12 +12,21 @@ export function dueMs(due: string): string {
   return String(ms)
 }
 
-export async function runLarkTask(action: string, args: any): Promise<any> {
+// ctx.isCreator === false (người dùng Gấu Pro khác): CHỈ dùng token Lark của chính họ (Kết nối Lark ở Gấu Pro), tuyệt đối không rơi về
+// token app / tài khoản của Creator. Không truyền ctx (cron, trợ lý task của Hiếu) hoặc isCreator = true → luồng của Creator như cũ.
+export async function runLarkTask(action: string, args: any, ctx?: { username?: string; isCreator?: boolean }): Promise<any> {
   try {
-    const userToken = await getLarkUserToken()
-    const appToken  = await getLarkToken()
-    // Assignee: env LARK_CREATOR_USER_ID, fallback open_id đã kết nối Lark cá nhân
-    const creatorOpenId = process.env.LARK_CREATOR_USER_ID || (await getLarkUserOpenId()) || ""
+    const personal = !!ctx && ctx.isCreator !== true
+    if (personal && !ctx?.username) return { error: "Không xác định được người dùng để dùng Lark của họ." }
+    const who = personal ? ctx!.username : undefined
+    const userToken = await getLarkUserToken(who)
+    if (personal && !userToken)
+      return { error: "Bạn chưa kết nối Lark của mình. Bấm 'Kết nối Lark' trong menu Gấu Pro để cấp quyền (Gấu chỉ xem/tạo/sửa task trong tài khoản của bạn), rồi thử lại." }
+    const appToken  = personal ? "" : await getLarkToken()
+    // Assignee: Creator = env LARK_CREATOR_USER_ID, fallback open_id đã kết nối; người khác = open_id của chính họ
+    const creatorOpenId = personal
+      ? ((await getLarkUserOpenId(who)) || "")
+      : (process.env.LARK_CREATOR_USER_ID || (await getLarkUserOpenId()) || "")
     const h: Record<string, string> = {
       "Authorization": `Bearer ${userToken || appToken}`,
       "Content-Type": "application/json",

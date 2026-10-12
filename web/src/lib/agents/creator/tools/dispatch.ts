@@ -92,7 +92,7 @@ async function dispatchToolCore(
     return wrap(await runRejectLearning(call.args))
 
   if (["listLarkTasks","listLarkTasklists","getLarkTask","createLarkTask","updateLarkTask"].includes(call.name))
-    return wrap(await runLarkTask(call.name, call.args))
+    return wrap(await runLarkTask(call.name, call.args, { username: ctx?.username, isCreator }))
 
   if (call.name === "queryLarkBase")
     return wrap(await runLarkBase(call.args))

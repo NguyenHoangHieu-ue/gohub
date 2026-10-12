@@ -137,7 +137,7 @@ export const getTrendSnapshotsDecl = {
 
 export const listLarkTasksDecl = {
   name: "listLarkTasks",
-  description: "List Hiếu's Lark tasks (To-do / in-progress / done). Nếu truyền tasklist_guid → chỉ lấy task trong Danh sách công việc (Task List) đó; bỏ trống → tất cả task của Hiếu. Requires 'task:task:read'.",
+  description: "List the CURRENT USER's own Lark tasks (To-do / in-progress / done) — mỗi người chỉ thấy task trong tài khoản Lark của chính mình (phải đã Kết nối Lark). Nếu truyền tasklist_guid → chỉ lấy task trong Danh sách công việc (Task List) đó; bỏ trống → tất cả task của người dùng. Requires 'task:task:read'.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
@@ -150,7 +150,7 @@ export const listLarkTasksDecl = {
 
 export const listLarkTasklistsDecl = {
   name: "listLarkTasklists",
-  description: "Liệt kê các Danh sách công việc (Task List) của Hiếu trong Lark — trả về guid + tên mỗi list. Dùng khi Hiếu hỏi về 'task list'/'danh sách công việc'; rồi gọi listLarkTasks với tasklist_guid để xem task bên trong. Requires 'task:tasklist:read'.",
+  description: "Liệt kê các Danh sách công việc (Task List) của CHÍNH người dùng hiện tại trong Lark — trả về guid + tên mỗi list. Dùng khi người dùng hỏi về 'task list'/'danh sách công việc'; rồi gọi listLarkTasks với tasklist_guid để xem task bên trong. Requires 'task:tasklist:read'.",
   parameters: { type: SchemaType.OBJECT, properties: {} },
 }
 
@@ -166,7 +166,7 @@ export const getLarkTaskDecl = {
 
 export const createLarkTaskDecl = {
   name: "createLarkTask",
-  description: "Tạo task Lark mới GÁN cho Hiếu (hiện trong My Tasks của Hiếu). Hoạt động tốt với app token. Requires 'task:task:write'.",
+  description: "Tạo task Lark mới GÁN cho CHÍNH người dùng hiện tại (hiện trong My Tasks của họ; người dùng phải đã Kết nối Lark, trừ Creator). Requires 'task:task:write'.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
