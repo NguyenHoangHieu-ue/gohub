@@ -860,6 +860,17 @@ export default function CreatorAIPage() {
   const abortRef = useRef<AbortController | null>(null)
   const sendRef = useRef(send)
   sendRef.current = send
+  // Duyệt khi lượt chat còn đang chạy → send() bỏ qua (đang loading) nên câu nối bị mất, Gấu Pro không biết kết quả. Xếp hàng, gửi khi lượt xong.
+  const loadingRef = useRef(loading)
+  loadingRef.current = loading
+  const queuedFollowup = useRef<string[]>([])
+  useEffect(() => {
+    if (!loading && queuedFollowup.current.length) {
+      const msg = queuedFollowup.current.join("\n\n")
+      queuedFollowup.current = []
+      sendRef.current(msg)
+    }
+  }, [loading])
   const handleFollowup = useCallback((q: string) => { sendRef.current(q) }, [])
 
   // Duyệt/từ chối hành động chờ (G0) → server chạy tool → gửi câu nối cho Gấu Pro làm tiếp.
@@ -880,7 +891,7 @@ export default function CreatorAIPage() {
       const st = d.status as Approval["state"] | undefined
       if (st === "executed" || st === "failed" || st === "rejected") {
         setState(st, st === "failed" ? d.error : undefined)
-        if (d.followup) sendRef.current(d.followup)
+        if (d.followup) { if (loadingRef.current) queuedFollowup.current.push(d.followup); else sendRef.current(d.followup) }
       } else setState("error", d.error || `HTTP ${res.status}`)
     } catch (e: any) {
       setState("error", e.message)
