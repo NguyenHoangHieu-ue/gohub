@@ -5,6 +5,7 @@ import { loadGpAllowed } from "@/lib/gp-access"
 import { decidePendingAction, followupMessage } from "@/lib/agents/creator/approvals"
 import { describeAction } from "@/lib/agents/creator/tool-policy"
 import { supabaseAdmin } from "@/lib/supabase"
+import { hasDailyAutoApprove, revokeDailyAutoApprove } from "@/lib/agents/creator/auto-approve"
 
 export const maxDuration = 120
 
@@ -32,14 +33,23 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.username) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const autoApproveToday = await hasDailyAutoApprove(session.user.username)
   const since = new Date(Date.now() - 24 * 3600_000).toISOString()
   const { data, error } = await supabaseAdmin.from("gp_pending_actions")
     .select("id,code,tool,args,reason,channel,created_at")
     .eq("username", session.user.username).eq("status", "pending").gte("created_at", since)
     .order("created_at", { ascending: false }).limit(30)
   if (error) return NextResponse.json({ rows: [], error: error.message })
-  return NextResponse.json({ rows: (data ?? []).map(r => ({
+  return NextResponse.json({ autoApproveToday, rows: (data ?? []).map(r => ({
     id: r.id, code: r.code, tool: r.tool, reason: r.reason, channel: r.channel, created_at: r.created_at,
     summary: describeAction({ name: r.tool as string, args: r.args }),
   })) })
+}
+
+// DELETE — tắt tự động duyệt hôm nay (nút khẩn cấp khi nghi bị điều khiển ngầm). Sang ngày mới Gấu Pro tự hỏi lại 1 lần.
+export async function DELETE() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.username) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  await revokeDailyAutoApprove(session.user.username)
+  return NextResponse.json({ ok: true })
 }

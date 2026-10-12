@@ -19,6 +19,7 @@ import { isMemoryOff } from "@/lib/assistant-memory-rights"
 import { buildProfileBlock } from "@/lib/agent-profile"
 import { newTurnSafety, recordToolResult, approvalReason, describeAction, taintFromRuns } from "./creator/tool-policy"
 import { createPendingAction, type PendingAction } from "./creator/approvals"
+import { hasDailyAutoApprove } from "./creator/auto-approve"
 import { getCreatorLarkOpenId, sendLarkMessage } from "@/lib/lark"
 import { SKILL_TOOLS, getSkill, skillCatalog, preloadSkills } from "./creator/skills"
 import { kbIndexBlock, relevantKbBlock } from "./creator/kb-recall"
@@ -670,7 +671,14 @@ export async function runCreatorAI(
       return { functionResponse: { name: call.name, response: { loaded: skill.name, tools_enabled: skill.tools, instructions: skill.instructions } } }
     }
     // Cổng duyệt (tool-policy.ts): hành động cần duyệt KHÔNG chạy — lưu hàng chờ, báo UI/Lark, trả trạng thái cho model.
-    const reason = approvalReason(call, safety)
+    // Hôm nay Creator đã duyệt 1 lần → hành động chỉ cần duyệt vì lượt "nhiễm" chạy luôn (tool-policy: dailyAuto). Gửi Lark người khác,
+    // phiếu sửa code, URL lạ vẫn hỏi. Cron không có người nên không áp. Bước tự duyệt được ghi `auto` trong trace.
+    let reason = approvalReason(call, safety)
+    let autoApproved = false
+    if (reason && isCreator && channel !== "cron" && await hasDailyAutoApprove(username).catch(() => false)) {
+      reason = approvalReason(call, safety, { dailyAuto: true })
+      autoApproved = reason === null
+    }
     if (reason) {
       const summary = describeAction(call)
       const { action, error } = channel === "cron"
@@ -694,7 +702,7 @@ export async function runCreatorAI(
       const out = await dispatchTool(call, onEvent, collectedSources, { username, isCreator, personal, images: attachedImages })
       recordToolResult(safety, call, out.functionResponse.response)
       const err = out.functionResponse.response?.error
-      steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), ...(err ? { err: String(err).slice(0, 200) } : {}) })
+      steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), ...(autoApproved ? { auto: true } : {}), ...(err ? { err: String(err).slice(0, 200) } : {}) })
       return out
     } catch (e: any) {
       steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), err: String(e?.message || e).slice(0, 200) })

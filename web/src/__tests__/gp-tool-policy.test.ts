@@ -97,3 +97,28 @@ describe("taintFromRuns (P2: nhiễm gắn theo cuộc chat)", () => {
     expect(taintFromRuns([{ steps: null }], "A")).toBeNull()
   })
 })
+
+describe("Tự động duyệt theo ngày (dailyAuto) — vẫn giữ chốt chặn cứng", () => {
+  const tainted = () => {
+    const s = newTurnSafety("tìm giá", false)
+    recordToolResult(s, call("webSearch", { query: "x" }), { text: "https://known.example/a" })
+    return s
+  }
+  it("bỏ duyệt cho tool ghi khi lượt đã nhiễm", () => {
+    const s = tainted()
+    expect(approvalReason(call("createLarkTask", { summary: "x" }), s)).not.toBeNull()
+    expect(approvalReason(call("createLarkTask", { summary: "x" }), s, { dailyAuto: true })).toBeNull()
+    expect(approvalReason(call("sendLarkMessage", { chat_id: "me", content: "hi" }), s, { dailyAuto: true })).toBeNull()
+    expect(approvalReason(call("controlMyBrowser", { action: "click", tab_id: 1, selector: "#a" }), s, { dailyAuto: true })).toBeNull()
+  })
+  it("vẫn hỏi: gửi Lark người/nhóm khác, phiếu sửa code, URL lạ", () => {
+    const s = tainted()
+    const opt = { dailyAuto: true }
+    expect(approvalReason(call("sendLarkMessage", { chat_id: "oc_123", content: "hi" }), s, opt)).not.toBeNull()
+    expect(approvalReason(call("sendLarkMessage", { lark_id: "ou_1", content: "hi" }), s, opt)).not.toBeNull()
+    expect(approvalReason(call("devTicket", { action: "create", title: "t", plan: "p" }), s, opt)).not.toBeNull()
+    expect(approvalReason(call("browseWeb", { url: "https://evil.example/?d=secret" }), s, opt)).not.toBeNull()
+    expect(approvalReason(call("controlMyBrowser", { action: "navigate", url: "https://evil.example/" }), s, opt)).not.toBeNull()
+    expect(approvalReason(call("browseWeb", { url: "https://known.example/a" }), s, opt)).toBeNull()
+  })
+})

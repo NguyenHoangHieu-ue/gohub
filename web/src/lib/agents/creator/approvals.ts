@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto"
 import { supabaseAdmin } from "@/lib/supabase"
 import { dispatchTool } from "./tools/dispatch"
+import { grantDailyAutoApprove } from "./auto-approve"
 
 // Hàng chờ duyệt hành động Gấu Pro (bảng gp_pending_actions, migration v64). Xem tool-policy.ts.
 const EXPIRE_MS = 24 * 3600_000
@@ -24,7 +25,7 @@ export async function createPendingAction(
 }
 
 // decided = CHÍNH lần gọi này vừa duyệt/từ chối (lần gọi lặp lại trên hành động đã xử lý → false, không gửi câu nối nữa).
-export interface DecideResult { ok: boolean; decided?: boolean; status?: string; tool?: string; code?: string; result?: unknown; error?: string }
+export interface DecideResult { ok: boolean; decided?: boolean; autoApprove?: boolean; status?: string; tool?: string; code?: string; result?: unknown; error?: string }
 
 /** Duyệt/từ chối theo id (web) hoặc code (Lark). Chỉ chủ hành động; chuyển trạng thái nguyên tử để không chạy 2 lần. */
 export async function decidePendingAction(
@@ -50,6 +51,10 @@ export async function decidePendingAction(
   if (!claimed?.length) return { ok: false, error: "Hành động vừa được xử lý ở nơi khác." }
   if (!p.approve) return { ok: true, decided: true, status: "rejected", tool: row.tool, code: row.code }
 
+  // Duyệt 1 lần → hôm nay (giờ VN) các hành động chỉ cần duyệt vì lượt "nhiễm" tự chạy (xem auto-approve.ts). Chỉ Creator; lỗi ghi cờ không chặn việc đã duyệt.
+  let autoApprove = false
+  if (p.isCreator) { try { await grantDailyAutoApprove(p.username); autoApprove = true } catch { /* bỏ qua */ } }
+
   // Chạy đúng tool + tham số đã lưu (dispatchTool tự ghi audit log như mọi lần gọi tool ghi).
   let response: any
   try {
@@ -61,7 +66,7 @@ export async function decidePendingAction(
   const failed = !!response?.error
   await supabaseAdmin.from("gp_pending_actions")
     .update({ status: failed ? "failed" : "executed", result: response ?? null }).eq("id", row.id)
-  return { ok: !failed, decided: true, status: failed ? "failed" : "executed", tool: row.tool, code: row.code, result: response, error: failed ? String(response.error) : undefined }
+  return { ok: !failed, decided: true, autoApprove, status: failed ? "failed" : "executed", tool: row.tool, code: row.code, result: response, error: failed ? String(response.error) : undefined }
 }
 
 /** Câu nối gửi lại cho Gấu Pro sau khi người dùng quyết định — để agent làm tiếp việc dở. */
@@ -70,7 +75,8 @@ export function followupMessage(r: DecideResult): string {
   if (r.status === "rejected") return `[Đã TỪ CHỐI hành động ${tag}] Không thực hiện hành động đó. Làm tiếp phần việc còn lại nếu có, không thử lại hành động này.`
   let res = ""
   try { res = JSON.stringify(r.result ?? r.error ?? null).slice(0, 1500) } catch { /* bỏ qua */ }
+  const auto = r.autoApprove ? " Hôm nay (giờ VN) các hành động ghi/gửi khác tự chạy luôn dù đã đọc nội dung ngoài; gửi Lark người khác, phiếu sửa code và URL lạ vẫn hỏi — nhắc người dùng 1 câu ngắn." : ""
   return r.ok
-    ? `[Đã DUYỆT và đã chạy hành động ${tag}] Kết quả: ${res}. Báo ngắn kết quả và làm tiếp phần việc còn lại nếu có.`
+    ? `[Đã DUYỆT và đã chạy hành động ${tag}] Kết quả: ${res}. Báo ngắn kết quả và làm tiếp phần việc còn lại nếu có.${auto}`
     : `[Đã duyệt nhưng hành động ${tag} lỗi] ${res}. Báo lỗi + cách sửa.`
 }

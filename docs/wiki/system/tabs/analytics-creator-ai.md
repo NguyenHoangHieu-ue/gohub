@@ -1169,3 +1169,12 @@ Gấu Pro (tài khoản Creator, extension 1.3.0 đã cài) làm T1–T10 qua `/
 - Gỡ trang **Own Info** (`/analytics/creator/knowledge`) vì chỉ 3 lượt mở/72 ngày. Dữ liệu bảng `creator_kb` và route `/api/creator-ai/knowledge` giữ nguyên: Gấu Pro đọc/ghi qua `readKnowledgeBase`/`manageKnowledge`/`approveLearning` + `kb-recall.ts`, Bé Gấu qua `searchKnowledgeBase` (category `cogs` che với non-Creator). Sửa tay hiện chỉ qua Gấu Pro hoặc Supabase.
 - Usage Analytics: bỏ thẻ "Phân bố Agent Bé Gấu" (nhãn agent cũ); KPI "Agents Used" còn lại.
 - Xoá route chạy 1 lần `gau-pro-moved`, `lark-broadcast`, `gp-revoke-all` (các mục mô tả ở trên là lịch sử; route không còn).
+
+## § s232 (2026-10-12) — Tự động duyệt theo ngày (hỏi đúng 1 lần/ngày)
+
+Hiếu: không muốn lúc nào cũng chờ duyệt. **Duyệt 1 hành động đầu tiên trong ngày (web hoặc Lark "duyệt abc123") → hết hôm nay (giờ VN, UTC+7) các hành động chỉ-cần-duyệt-vì-lượt-nhiễm (rule `when_tainted`) tự chạy luôn.** Sang ngày mới hỏi lại đúng 1 lần.
+- Code: `lib/agents/creator/auto-approve.ts` (cờ ở `app_settings` khoá `gp_auto_approve` = `{username: "YYYY-MM-DD"}`, không migration, không cache vì nhiều instance), cấp cờ trong `decidePendingAction` (chỉ Creator), `approvalReason(call, state, {dailyAuto})` trong `tool-policy.ts`, gọi ở `creator-ai.ts` `runTool` (bước tự duyệt ghi `auto:true` trong trace `gp_runs`).
+- **VẪN hỏi dù đã bật** (chốt chặn chống prompt injection, Hiếu chọn bản an toàn hơn): gửi Lark tới người/nhóm khác (`sendLarkMessage` có `lark_id`/group), tạo phiếu sửa code (`devTicket create`), mở URL chưa từng xuất hiện sau khi đã đọc nội dung ngoài (`browseWeb`, `controlMyBrowser navigate/open_tab`). Cron không áp (không có người). Bé Gấu không đổi.
+- Nút tắt khẩn cấp: `DELETE /api/creator-ai/approve` (huỷ cờ hôm nay). `GET /api/creator-ai/approve` trả `autoApproveToday`. Chưa có nút trên UI.
+- Test: `gp-tool-policy.test.ts` (nhóm "Tự động duyệt theo ngày").
+- Rủi ro chấp nhận: sau lần duyệt đầu, trang/tài liệu độc đọc trong ngày có thể khiến Gấu Pro ghi task/KB/trí nhớ, click-gõ trình duyệt mà không hỏi.
