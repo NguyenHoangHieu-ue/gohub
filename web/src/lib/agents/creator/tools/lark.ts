@@ -104,10 +104,7 @@ export async function runLarkBase(args: any, ctx?: { username?: string; isCreato
     if (creatorOpenId) h["X-Lark-Request-User-Open-Id"] = creatorOpenId
 
     if (!args?.app_token) {
-      const res = await fetch(`${LARK}/bitable/v1/apps?page_size=50`, { headers: h })
-      const d = await res.json()
-      if (d.code && d.code !== 0) return { error: `Lark API error ${d.code}: ${d.msg}`, raw: d, note: "Cần scope bitable:app:readonly." }
-      return { hint: "Truyền app_token để xem tables trong 1 Base.", ...(d.data || d) }
+      return { error: "Cần app_token của Base: mở Base trong Lark, copy phần mã sau '/base/' trong đường dẫn (trước dấu ?) rồi gửi cho mình. Lark không cho liệt kê toàn bộ Base." }
     }
     if (!args?.table_id) {
       const res = await fetch(`${LARK}/bitable/v1/apps/${encodeURIComponent(args.app_token)}/tables?page_size=100`, { headers: h })

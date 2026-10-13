@@ -196,11 +196,11 @@ export const updateLarkTaskDecl = {
 
 export const queryLarkBaseDecl = {
   name: "queryLarkBase",
-  description: "Đọc dữ liệu Lark Base (bảng tính Lark): CS ticket, inventory, tracking, danh sách. Gọi KHÔNG tham số để liệt kê các Base có sẵn; truyền app_token để liệt kê tables; truyền cả app_token + table_id để đọc records. Requires 'bitable:app:readonly' scope.",
+  description: "Đọc dữ liệu Lark Base (bảng tính Lark): CS ticket, inventory, tracking, danh sách. Lark không cho liệt kê toàn bộ Base: cần app_token (mã sau '/base/' trong link Base, hỏi người dùng nếu chưa có); truyền app_token để liệt kê tables; truyền cả app_token + table_id để đọc records. Requires 'bitable:app:readonly' scope.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      app_token: { type: SchemaType.STRING, description: "Base app_token (bỏ trống để list các Base)." },
+      app_token: { type: SchemaType.STRING, description: "Base app_token (mã sau '/base/' trong link Base). Bắt buộc." },
       table_id:  { type: SchemaType.STRING, description: "Table ID trong Base (bỏ trống để list tables của Base)." },
       filter:    { type: SchemaType.STRING, description: "Filter formula Lark (tùy chọn), vd: CurrentValue.[Status]=\"Open\"." },
       page_size: { type: SchemaType.NUMBER, description: "Số records tối đa (default 50, max 200)." },
