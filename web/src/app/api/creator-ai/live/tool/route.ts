@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ response: { error: `Tool "${name}" không dùng được trong phiên giọng nói — chuyển sang chat thường.` } })
   }
   try {
-    const out = await dispatchTool({ name, args: args ?? {} }, undefined, [], { username: u.username, isCreator: u.isCreator })
+    const out = await dispatchTool({ name, args: args ?? {} }, undefined, [], { username: u.username, isCreator: u.isCreator, gauPro: true })
     let response = out.functionResponse.response
     // Phiên giọng nói chỉ nhận JSON, không nhận ảnh: báo thẳng để model dùng snapshot thay vì tin là đã "thấy" ảnh.
     if ((out as any).__extra?.length) response = { ...response, note: "Phiên giọng nói không nhận được ảnh chụp — dùng readMyBrowser snapshot để đọc trang." }

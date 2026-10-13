@@ -89,10 +89,17 @@ export async function runLarkTask(action: string, args: any, ctx?: { username?: 
   } catch (e: any) { return { error: e.message } }
 }
 
-export async function runLarkBase(args: any): Promise<any> {
+// Gấu Pro của người không phải Creator: chỉ đọc các Base mà CHÍNH tài khoản Lark của họ xem được (token riêng, không rơi về app token /
+// quyền của Creator). Bé Gấu và Creator giữ cách cũ (Base được chia sẻ cho bot).
+export async function runLarkBase(args: any, ctx?: { username?: string; isCreator?: boolean; gauPro?: boolean }): Promise<any> {
   try {
-    const token = await getLarkToken()
-    const creatorOpenId = process.env.LARK_CREATOR_USER_ID || ""
+    const personal = ctx?.gauPro === true && ctx.isCreator !== true
+    if (personal && !ctx?.username) return { error: "Không xác định được người dùng để dùng Lark của họ." }
+    const userToken = personal ? await getLarkUserToken(ctx!.username) : null
+    if (personal && !userToken)
+      return { error: "Bạn chưa kết nối Lark của mình (hoặc quyền đọc Base chưa được cấp). Bấm 'Kết nối Lark' trong menu Gấu Pro rồi thử lại — Gấu chỉ đọc các Base bạn đã có quyền xem." }
+    const token = personal ? userToken! : await getLarkToken()
+    const creatorOpenId = personal ? "" : (process.env.LARK_CREATOR_USER_ID || "")
     const h: Record<string, string> = { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
     if (creatorOpenId) h["X-Lark-Request-User-Open-Id"] = creatorOpenId
 

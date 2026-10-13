@@ -11003,3 +11003,5 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
 - (s232) Gấu Pro: sửa thẻ duyệt hiện lại nút Duyệt sau khi lượt chat kết thúc (approvalDecided ref); tăng tốc browser: bridge/next giữ request 8s khi dồn dập, poll kết quả 200ms, skill browser-files dặn snapshot gọn. Chưa đo thật.
 
 - (s232) Gấu Pro trợ lý cá nhân: task Lark dùng token Lark của CHÍNH từng người (khoá lark_oauth_user:<username>), bịt lỗ hổng người được cấp quyền thấy/sửa task của Hiếu; Kết nối Lark mở cho người được cấp Gấu Pro (scope task). Chưa QA sống non-creator.
+
+- (s232) Gấu Pro: khóa portal/ghi KB cho Creator, Lark Base theo token từng người, luật xưng hô cho người dùng thường; soạn kế hoạch đưa Bridge lên Chrome Web Store (unlisted). Chưa QA sống.

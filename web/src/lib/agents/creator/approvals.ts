@@ -58,7 +58,7 @@ export async function decidePendingAction(
   // Chạy đúng tool + tham số đã lưu (dispatchTool tự ghi audit log như mọi lần gọi tool ghi).
   let response: any
   try {
-    const out = await dispatchTool({ name: row.tool, args: row.args }, undefined, [], { username: p.username, isCreator: p.isCreator })
+    const out = await dispatchTool({ name: row.tool, args: row.args }, undefined, [], { username: p.username, isCreator: p.isCreator, gauPro: true })
     response = out.functionResponse.response
   } catch (e: any) {
     response = { error: e?.message || "Tool lỗi" }

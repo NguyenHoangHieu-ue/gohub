@@ -28,6 +28,9 @@ import { runBuildReport }          from "../../report-tool"
 import { runDevTicket }            from "@/lib/dev-tickets"
 import { runLearnSkill }           from "../learned-skills"
 
+// Tool dùng tài khoản/dữ liệu chung của Creator — không bao giờ chạy cho người khác dù khai báo lọt.
+const CREATOR_ONLY_DISPATCH = new Set(["browsePortal", "managePortalCredentials", "writeKnowledgeBase", "reviewPendingLearning", "approveLearning", "rejectLearning"])
+
 // Tool có tác dụng phụ ra ngoài (ghi KB/Lark/portal/browser thật) — audit trail (s196+6).
 const AUDITED_TOOLS = new Set([
   "scheduleTask", "devTicket", "learnSkill", "writeKnowledgeBase", "approveLearning", "rejectLearning",
@@ -39,7 +42,7 @@ export async function dispatchTool(
   call: { name: string; args: any },
   onEvent: ((e: GPEvent) => void) | undefined,
   collectedSources: WebSource[],
-  ctx?: { username?: string; isCreator?: boolean; personal?: boolean; images?: InputImage[] },
+  ctx?: { username?: string; isCreator?: boolean; personal?: boolean; gauPro?: boolean; images?: InputImage[] },
 ): Promise<{ functionResponse: { name: string; response: any } }> {
   const result = await dispatchToolCore(call, onEvent, collectedSources, ctx)
   if (AUDITED_TOOLS.has(call.name)) {
@@ -54,7 +57,7 @@ async function dispatchToolCore(
   call: { name: string; args: any },
   onEvent: ((e: GPEvent) => void) | undefined,
   collectedSources: WebSource[],
-  ctx?: { username?: string; isCreator?: boolean; personal?: boolean; images?: InputImage[] },
+  ctx?: { username?: string; isCreator?: boolean; personal?: boolean; gauPro?: boolean; images?: InputImage[] },
 ): Promise<{ functionResponse: { name: string; response: any } }> {
   const isCreator = ctx?.isCreator === true
   // Emit status event
@@ -72,6 +75,10 @@ async function dispatchToolCore(
   onEvent?.({ type: "status", text: statusMsg })
 
   const wrap = (resp: any) => ({ functionResponse: { name: call.name, response: resp } })
+
+  // Chốt chặn thứ 2 (khai báo tool đã lọc theo vai trò): tài khoản portal dùng chung + KB chung chỉ Creator. Người khác đã có trí nhớ riêng.
+  if (CREATOR_ONLY_DISPATCH.has(call.name) && !isCreator)
+    return wrap({ error: "Chức năng này chỉ dành cho Creator." })
 
   if (call.name === "readKnowledgeBase")
     return wrap(await runReadKnowledgeBase(call.args?.category, Array.isArray(call.args?.keys) ? call.args.keys.map(String) : undefined))
@@ -95,7 +102,7 @@ async function dispatchToolCore(
     return wrap(await runLarkTask(call.name, call.args, { username: ctx?.username, isCreator }))
 
   if (call.name === "queryLarkBase")
-    return wrap(await runLarkBase(call.args))
+    return wrap(await runLarkBase(call.args, { username: ctx?.username, isCreator, gauPro: ctx?.gauPro === true }))
 
   if (call.name === "browsePortal") {
     console.log(`[CreatorAI] browsePortal: ${call.args?.portal_name}`)
