@@ -103,19 +103,11 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
   const exportTierTable = async () => {
     const EXPORT_SUB_LABELS = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%QoQ(CM1)", "3HK Rev", "3HK%"]
     const headers: string[] = ["Loại", "Nhóm", "Region", "Mã KH", "Tên KH", "Số KH"]
-    // Mỗi chỉ số có 2 cột liền nhau: Pro-rata (số đang hiển thị: tháng đang chạy chiếu cả tháng) rồi Thực tế (tới hôm qua, không chiếu).
-    // %QoQ chỉ có 1 cột (so CM1 pro-rata với quý trước). Tháng đã xong thì Pro-rata = Thực tế.
-    const ACT_SUB_LABELS = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "3HK Rev", "3HK%"]
-    const PERIOD_LABELS = ["Revenue (Pro-rata)", "Revenue (Thực tế)", "Gross Margin (Pro-rata)", "Gross Margin (Thực tế)", "Ch.Cost (Pro-rata)", "Ch.Cost (Thực tế)",
-      "CM1 (Pro-rata)", "CM1 (Thực tế)", "%CM1 (Pro-rata)", "%CM1 (Thực tế)", "%QoQ(CM1)", "3HK Rev (Pro-rata)", "3HK Rev (Thực tế)", "3HK% (Pro-rata)", "3HK% (Thực tế)"]
-    // Ghép mảng pro-rata (8 phần tử, thứ tự EXPORT_SUB_LABELS) + thực tế (7 phần tử, ACT_SUB_LABELS) thành các cặp cột liền nhau.
-    const weave = (pr: (string | number)[], ac: (string | number)[]): (string | number)[] =>
-      [pr[0], ac[0], pr[1], ac[1], pr[2], ac[2], pr[3], ac[3], pr[4], ac[4], pr[5], pr[6], ac[5], pr[7], ac[6]]
     visibleMonths.forEach(m => {
       const [y, mo] = m.split("-")
-      PERIOD_LABELS.forEach(l => headers.push(`T${parseInt(mo)}/${y} - ${l}`))
+      EXPORT_SUB_LABELS.forEach(l => headers.push(`T${parseInt(mo)}/${y} - ${l}`))
     })
-    PERIOD_LABELS.forEach(l => headers.push(`Tổng Quý - ${l}`))
+    EXPORT_SUB_LABELS.forEach(l => headers.push(`Tổng Quý - ${l}`))
 
     // Cột theo tháng dùng chung cho cả dòng Nhóm (d = tier.months[m]) lẫn dòng KH (d = c.monthSummary[m]).
     const periodCols = (d: any | undefined): (string | number)[] => {
@@ -127,30 +119,13 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       ]
     }
 
-    const actCols = (v: { rev: number; gm: number; cc: number; cm1: number; hk3: number } | undefined): (string | number)[] => {
-      if (!v) return ACT_SUB_LABELS.map(() => "")
-      return [
-        Math.round(v.rev), Math.round(v.gm), v.cc > 0 ? Math.round(v.cc) : "", Math.round(v.cm1),
-        v.rev ? Number((v.cm1 / v.rev * 100).toFixed(1)) : "", Math.round(v.hk3), v.rev ? Number((v.hk3 / v.rev * 100).toFixed(1)) : "",
-      ]
-    }
-    // Thực tế của 1 tháng (dòng Nhóm hoặc KH): tháng đang chạy có field actual*, tháng đã xong thì chính số hiện có.
-    const monthAct = (d: any | undefined) => d && (d.hasData ?? true) ? {
-      rev: d.actualRevenue ?? d.revenue ?? 0, gm: d.actualGm ?? d.gm ?? 0, cc: d.actualCc ?? d.cc ?? 0,
-      cm1: d.actualCm1 ?? d.cm1 ?? 0, hk3: d.hk3Rev ?? 0,
-    } : undefined
-    const custQAct = (c: any) => {
-      const hp = c.hasProjected === true
-      return { rev: hp ? (c.actualRevenue ?? c.revenue) : c.revenue, gm: hp ? (c.actualGm ?? c.gm) : c.gm, cc: hp ? (c.actualCc ?? c.cc) : c.cc, cm1: hp ? (c.actualCm1 ?? c.cm1) : c.cm1, hk3: c.hk3Rev ?? 0 }
-    }
-
     const rows: (string | number)[][] = []
     tiers.forEach((tierRaw: any) => {
       const tier = pickView(tierRaw)
       const tierRow: (string | number)[] = ["Nhóm", tierRaw.tier, "", "", "", tier.customerCount]
-      const tierMonthParts = visibleMonths.map(m => {
+      visibleMonths.forEach(m => {
         const d = tier.months.find((x: any) => x.month === m)
-        return weave(periodCols(d?.hasData ? d : undefined), actCols(monthAct(d)))
+        tierRow.push(...periodCols(d?.hasData ? d : undefined))
       })
       const qPrRev = Math.round(tier.totalRevenue * futureScale)
       const qPrGm  = Math.round(tier.totalGm * futureScale)
@@ -159,14 +134,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       const qPrCm1Pct = qPrRev > 0 ? Number((qPrCm1 / qPrRev * 100).toFixed(1)) : 0
       const tierQoQ: string | number = tier.prevCm1 && tier.prevCm1 !== 0
         ? Number(((qPrCm1 - tier.prevCm1) / Math.abs(tier.prevCm1) * 100).toFixed(1)) : ""
-      // Quý thực tế của Nhóm = Σ thực tế KH − phần group cost đã trừ ở CM1 hiển thị (= Σ cm1 KH − totalCm1).
-      const tierCusts: any[] = (region === "ALL" ? ["VN", "US"] : [region]).flatMap(reg => tierRaw.byRegion?.[reg]?.customers ?? [])
-      const tq = tierCusts.reduce((a, c) => { const v = custQAct(c); return { rev: a.rev + v.rev, gm: a.gm + v.gm, cc: a.cc + v.cc, cm1: a.cm1 + v.cm1, hk3: a.hk3 + v.hk3, cm1Pr: a.cm1Pr + (c.cm1 ?? 0) } }, { rev: 0, gm: 0, cc: 0, cm1: 0, hk3: 0, cm1Pr: 0 })
-      tierMonthParts.forEach(part => tierRow.push(...part))
-      tierRow.push(...weave(
-        [qPrRev, qPrGm, qPrCc > 0 ? qPrCc : "", qPrCm1, qPrCm1Pct, tierQoQ, Math.round(tier.totalHk3Rev ?? 0), Number((tier.totalHk3Pct ?? 0).toFixed(1))],
-        actCols({ rev: tq.rev, gm: tq.gm, cc: tq.cc, cm1: tq.cm1 - (tq.cm1Pr - (tier.totalCm1 ?? 0)), hk3: tq.hk3 }),
-      ))
+      tierRow.push(qPrRev, qPrGm, qPrCc > 0 ? qPrCc : "", qPrCm1, qPrCm1Pct, tierQoQ, Math.round(tier.totalHk3Rev ?? 0), Number((tier.totalHk3Pct ?? 0).toFixed(1)))
       rows.push(tierRow)
 
       // Breakdown khách hàng — cùng vùng region đang xem (ALL → gộp cả VN+US, có cột Region phân biệt).
@@ -176,14 +144,14 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
         custs.forEach((c: any) => {
           const custRow: (string | number)[] = ["Khách hàng", tierRaw.tier, reg, c.code, c.name, ""]
           const ms: Record<string, any> = c.monthSummary ?? {}
-          visibleMonths.forEach(m => custRow.push(...weave(periodCols(ms[m]), actCols(monthAct(ms[m])))))
+          visibleMonths.forEach(m => custRow.push(...periodCols(ms[m])))
           const pr = custPr(c)
           const cPrCc = pr.prGm - pr.prCm1
-          custRow.push(...weave(
-            [pr.prRev, pr.prGm, cPrCc > 0 ? Math.round(cPrCc) : "", pr.prCm1, Number(pr.prCm1Pct.toFixed(1)),
-              pr.qoqPct != null ? Number(pr.qoqPct.toFixed(1)) : "", Math.round(c.hk3Rev ?? 0), Number((c.hk3Pct ?? 0).toFixed(1))],
-            actCols(custQAct(c)),
-          ))
+          custRow.push(
+            pr.prRev, pr.prGm, cPrCc > 0 ? Math.round(cPrCc) : "", pr.prCm1, Number(pr.prCm1Pct.toFixed(1)),
+            pr.qoqPct != null ? Number(pr.qoqPct.toFixed(1)) : "",
+            Math.round(c.hk3Rev ?? 0), Number((c.hk3Pct ?? 0).toFixed(1)),
+          )
           rows.push(custRow)
         })
       })
@@ -453,12 +421,6 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
     if (!custs.length) { notify?.(false, "Không có khách hàng nào để xuất"); return }
     const fmtM = (m: string) => { const [y, mo] = m.split("-"); return `T${parseInt(mo)}/${y}` }
     const futRatio = (mk: string) => existingDaysFE > 0 ? daysInMonthFE(mk) / existingDaysFE : 0
-    const periods: { key: string; label: string; kind: string }[] = []
-    quarterMonths.forEach(m => {
-      if ((monthKpiFactor[m] ?? 1) > 1) periods.push({ key: `${m}|act`, label: fmtM(m), kind: "Thực tế (tới hôm qua)" }, { key: `${m}|pr`, label: fmtM(m), kind: "Pro-rata cả tháng" })
-      else periods.push({ key: `${m}|one`, label: fmtM(m), kind: futureMonthsFE.includes(m) ? "Ước tính" : "Thực tế" })
-    })
-    periods.push({ key: "Q|pr", label: "Tổng Quý", kind: "Pro-rata (gồm ước tính)" }, { key: "Q|act", label: "Tổng Quý", kind: "Thực tế" })
 
     const valuesOf = (c: any): Record<string, Vals | null> => {
       const ms: Record<string, any> = c.monthSummary ?? {}
@@ -480,25 +442,51 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       out["Q|act"] = { rev: hp ? (c.actualRevenue ?? c.revenue) : c.revenue, gm: hp ? (c.actualGm ?? c.gm) : c.gm, cc: hp ? (c.actualCc ?? c.cc) : c.cc, cm1: hp ? (c.actualCm1 ?? c.cm1) : c.cm1, hk3: c.hk3Rev ?? 0 }
       return out
     }
-    const line = (who: (string | number)[], p: { label: string; kind: string }, v: Vals): (string | number)[] => [
-      ...who, p.label, p.kind, Math.round(v.rev), Math.round(v.gm), Math.round(v.cc), Math.round(v.cm1),
-      v.rev ? Number((v.cm1 / v.rev * 100).toFixed(1)) : "", Math.round(v.hk3), v.rev ? Number((v.hk3 / v.rev * 100).toFixed(1)) : "",
+    // Mỗi KH = 1 HÀNG; mỗi chỉ số có 2 cột liền nhau (Pro-rata, Thực tế) cho từng tháng + Tổng Quý.
+    // Tháng đã xong: 2 cột bằng nhau. Tháng tương lai: chỉ có Pro-rata (ước tính), Thực tế để trống.
+    type Pair = { pr: Vals | null; act: Vals | null }
+    const pairOf = (vals: Record<string, Vals | null>, m: string): Pair => {
+      if ((monthKpiFactor[m] ?? 1) > 1) return { pr: vals[`${m}|pr`] ?? null, act: vals[`${m}|act`] ?? null }
+      const v = vals[`${m}|one`] ?? null
+      return futureMonthsFE.includes(m) ? { pr: v, act: null } : { pr: v, act: v }
+    }
+    const slots: { label: string; get: (vals: Record<string, Vals | null>) => Pair }[] = [
+      ...quarterMonths.map(m => ({ label: fmtM(m), get: (vals: Record<string, Vals | null>) => pairOf(vals, m) })),
+      { label: "Tổng Quý", get: (vals: Record<string, Vals | null>) => ({ pr: vals["Q|pr"] ?? null, act: vals["Q|act"] ?? null }) },
     ]
+    const METRICS = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "3HK Rev", "3HK%"]
+    const pctOf = (a: number, b: number) => b ? Number((a / b * 100).toFixed(1)) : ""
+    const cells = (v: Vals | null): (string | number)[] => v
+      ? [Math.round(v.rev), Math.round(v.gm), Math.round(v.cc), Math.round(v.cm1), pctOf(v.cm1, v.rev), Math.round(v.hk3), pctOf(v.hk3, v.rev)]
+      : METRICS.map(() => "")
+    const weave = (p: Pair): (string | number)[] => {
+      const a = cells(p.pr), b = cells(p.act)
+      return METRICS.flatMap((_, i) => [a[i], b[i]])
+    }
+    const headers = ["Nhóm", "Region", "Mã KH", "Tên KH"]
+    slots.forEach(sl => METRICS.forEach(mt => headers.push(`${sl.label} - ${mt} (Pro-rata)`, `${sl.label} - ${mt} (Thực tế)`)))
+
     const rows: (string | number)[][] = []
-    const sum: Record<string, Vals> = {}
+    const sum = slots.map(() => ({ pr: null as Vals | null, act: null as Vals | null }))
+    const addTo = (acc: Vals | null, v: Vals | null): Vals | null =>
+      !v ? acc : { rev: (acc?.rev ?? 0) + v.rev, gm: (acc?.gm ?? 0) + v.gm, cc: (acc?.cc ?? 0) + v.cc, cm1: (acc?.cm1 ?? 0) + v.cm1, hk3: (acc?.hk3 ?? 0) + v.hk3 }
     custs.forEach(({ c, reg }) => {
       const vals = valuesOf(c)
-      periods.forEach(p => {
-        const v = vals[p.key]
-        if (!v) return
-        rows.push(line([selectedTierData.tier, reg, c.code, c.name], p, v))
-        const s = sum[p.key] ?? (sum[p.key] = { rev: 0, gm: 0, cc: 0, cm1: 0, hk3: 0 })
-        s.rev += v.rev; s.gm += v.gm; s.cc += v.cc; s.cm1 += v.cm1; s.hk3 += v.hk3
+      const row: (string | number)[] = [selectedTierData.tier, reg, c.code, c.name]
+      slots.forEach((sl, i) => {
+        const pair = sl.get(vals)
+        row.push(...weave(pair))
+        sum[i].pr = addTo(sum[i].pr, pair.pr); sum[i].act = addTo(sum[i].act, pair.act)
       })
+      rows.push(row)
     })
-    if (custs.length > 1) periods.forEach(p => { if (sum[p.key]) rows.push(line([selectedTierData.tier, "", "", `TỔNG ${custs.length} KH${custSearch ? ` khớp "${custSearch}"` : ""}`], p, sum[p.key])) })
+    if (custs.length > 1) {
+      const tot: (string | number)[] = [selectedTierData.tier, "", "", `TỔNG ${custs.length} KH${custSearch ? ` khớp "${custSearch}"` : ""}`]
+      sum.forEach(sp => tot.push(...weave(sp)))
+      rows.push(tot)
+    }
     const name = `b2b_kh_chi_tiet_thang_${(quarterLabel || "quarter").replace(/[^A-Za-z0-9-]/g, "_")}_${selectedTierData.tier}${custSearch ? `_${custSearch}` : ""}`.replace(/[^\w-]+/g, "_")
-    await exportAOA(["Nhóm", "Region", "Mã KH", "Tên KH", "Kỳ", "Loại số", "Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "3HK Rev", "3HK%"], rows, name, "KH chi tiet thang")
+    await exportAOA(headers, rows, name, "KH chi tiet thang")
   }
 
   // ── Chi phí KH: mở/sửa/lưu ──
