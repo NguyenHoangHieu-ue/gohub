@@ -11007,3 +11007,5 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
 - (s232) Gấu Pro: khóa portal/ghi KB cho Creator, Lark Base theo token từng người, luật xưng hô cho người dùng thường; soạn kế hoạch đưa Bridge lên Chrome Web Store (unlisted). Chưa QA sống.
 
 - (s232) Mở lại Gấu Pro: DM 12 người (thẻ Lark); bật gp_personal_features=all (trí nhớ Gấu Pro; tắt trí nhớ Bé Gấu); bỏ Chrome Web Store; sửa queryLarkBase thiếu app_token; merge main cfe15b7d. Còn: đọc Base thật bằng link, kiểm panel trí nhớ UI, tách cờ trí nhớ khỏi lịch/Live nếu cần.
+
+- (s232) Sửa lỗi Lark 9499 (description task gửi chuỗi, không object) → bot tạo task từ việc được giao hết lỗi; merge main a9f31904. Xuất Excel KH của nhóm (Strategic…) ở Quarter Report: 1 hàng/KH, cột Pro-rata + Thực tế liền nhau mỗi chỉ số (trước là 2 hàng/kỳ); thử nhầm nút Export bảng Nhóm × Tháng rồi gỡ; merge main a3345d95. Chưa tải file kiểm số; CM1 thực tế dòng Nhóm không có (chỉ dòng KH + tổng).
