@@ -11005,3 +11005,5 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
 - (s232) Gấu Pro trợ lý cá nhân: task Lark dùng token Lark của CHÍNH từng người (khoá lark_oauth_user:<username>), bịt lỗ hổng người được cấp quyền thấy/sửa task của Hiếu; Kết nối Lark mở cho người được cấp Gấu Pro (scope task). Chưa QA sống non-creator.
 
 - (s232) Gấu Pro: khóa portal/ghi KB cho Creator, Lark Base theo token từng người, luật xưng hô cho người dùng thường; soạn kế hoạch đưa Bridge lên Chrome Web Store (unlisted). Chưa QA sống.
+
+- (s232) Mở lại Gấu Pro: DM 12 người (thẻ Lark); bật gp_personal_features=all (trí nhớ Gấu Pro; tắt trí nhớ Bé Gấu); bỏ Chrome Web Store; sửa queryLarkBase thiếu app_token; merge main cfe15b7d. Còn: đọc Base thật bằng link, kiểm panel trí nhớ UI, tách cờ trí nhớ khỏi lịch/Live nếu cần.

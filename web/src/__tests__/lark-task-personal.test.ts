@@ -37,6 +37,15 @@ describe("task Lark theo từng người (Gấu Pro = trợ lý cá nhân)", () 
     expect(lark.getLarkUserOpenId).toHaveBeenCalledWith("nv1")
   })
 
+  it("description gửi dạng chuỗi (Lark task v2 từ chối object {content, content_type} → lỗi 9499)", async () => {
+    lark.getLarkUserToken.mockResolvedValue("tok")
+    lark.getLarkUserOpenId.mockResolvedValue("ou_x")
+    await runLarkTask("createLarkTask", { summary: "x", description: "Từ group — dòng 1" }, { username: "nv1", isCreator: false })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).description).toBe("Từ group — dòng 1")
+    await runLarkTask("updateLarkTask", { task_guid: "g1", description: "mới" }, { username: "nv1", isCreator: false })
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).task.description).toBe("mới")
+  })
+
   it("thiếu username khi không phải Creator → từ chối", async () => {
     const r = await runLarkTask("listLarkTasks", {}, { isCreator: false })
     expect(r.error).toBeTruthy()
