@@ -67,7 +67,7 @@ export async function runLarkTask(action: string, args: any, ctx?: { username?: 
         summary: args.summary,
         members: creatorOpenId ? [{ id: creatorOpenId, type: "user", role: "assignee" }] : undefined,
       }
-      if (args.description) body.description = { content: args.description, content_type: "markdown" }
+      if (args.description) body.description = String(args.description)
       if (args.due) body.due = { timestamp: dueMs(args.due) }
       const res = await fetch(`${LARK}/task/v2/tasks?user_id_type=open_id`, { method: "POST", headers: h, body: JSON.stringify(body) })
       const d = await res.json()
@@ -77,7 +77,7 @@ export async function runLarkTask(action: string, args: any, ctx?: { username?: 
     if (action === "updateLarkTask") {
       const body: any = { task: {}, update_fields: [] as string[] }
       if (args.summary)     { body.task.summary = args.summary; body.update_fields.push("summary") }
-      if (args.description) { body.task.description = { content: args.description, content_type: "markdown" }; body.update_fields.push("description") }
+      if (args.description) { body.task.description = String(args.description); body.update_fields.push("description") }
       if (args.due)         { body.task.due = { timestamp: dueMs(args.due) }; body.update_fields.push("due") }
       if (args.complete)    { body.task.completed_at = String(Date.now() / 1000 | 0); body.update_fields.push("completed_at") }
       const res = await fetch(`${LARK}/task/v2/tasks/${encodeURIComponent(args.task_guid)}?user_id_type=open_id`, { method: "PATCH", headers: h, body: JSON.stringify(body) })
