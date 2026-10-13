@@ -103,11 +103,19 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
   const exportTierTable = async () => {
     const EXPORT_SUB_LABELS = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%QoQ(CM1)", "3HK Rev", "3HK%"]
     const headers: string[] = ["Loại", "Nhóm", "Region", "Mã KH", "Tên KH", "Số KH"]
+    // Mỗi chỉ số có 2 cột liền nhau: Pro-rata (số đang hiển thị: tháng đang chạy chiếu cả tháng) rồi Thực tế (tới hôm qua, không chiếu).
+    // %QoQ chỉ có 1 cột (so CM1 pro-rata với quý trước). Tháng đã xong thì Pro-rata = Thực tế.
+    const ACT_SUB_LABELS = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "3HK Rev", "3HK%"]
+    const PERIOD_LABELS = ["Revenue (Pro-rata)", "Revenue (Thực tế)", "Gross Margin (Pro-rata)", "Gross Margin (Thực tế)", "Ch.Cost (Pro-rata)", "Ch.Cost (Thực tế)",
+      "CM1 (Pro-rata)", "CM1 (Thực tế)", "%CM1 (Pro-rata)", "%CM1 (Thực tế)", "%QoQ(CM1)", "3HK Rev (Pro-rata)", "3HK Rev (Thực tế)", "3HK% (Pro-rata)", "3HK% (Thực tế)"]
+    // Ghép mảng pro-rata (8 phần tử, thứ tự EXPORT_SUB_LABELS) + thực tế (7 phần tử, ACT_SUB_LABELS) thành các cặp cột liền nhau.
+    const weave = (pr: (string | number)[], ac: (string | number)[]): (string | number)[] =>
+      [pr[0], ac[0], pr[1], ac[1], pr[2], ac[2], pr[3], ac[3], pr[4], ac[4], pr[5], pr[6], ac[5], pr[7], ac[6]]
     visibleMonths.forEach(m => {
       const [y, mo] = m.split("-")
-      EXPORT_SUB_LABELS.forEach(l => headers.push(`T${parseInt(mo)}/${y} - ${l}`))
+      PERIOD_LABELS.forEach(l => headers.push(`T${parseInt(mo)}/${y} - ${l}`))
     })
-    EXPORT_SUB_LABELS.forEach(l => headers.push(`Tổng Quý - ${l}`))
+    PERIOD_LABELS.forEach(l => headers.push(`Tổng Quý - ${l}`))
 
     // Cột theo tháng dùng chung cho cả dòng Nhóm (d = tier.months[m]) lẫn dòng KH (d = c.monthSummary[m]).
     const periodCols = (d: any | undefined): (string | number)[] => {
@@ -119,13 +127,30 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       ]
     }
 
+    const actCols = (v: { rev: number; gm: number; cc: number; cm1: number; hk3: number } | undefined): (string | number)[] => {
+      if (!v) return ACT_SUB_LABELS.map(() => "")
+      return [
+        Math.round(v.rev), Math.round(v.gm), v.cc > 0 ? Math.round(v.cc) : "", Math.round(v.cm1),
+        v.rev ? Number((v.cm1 / v.rev * 100).toFixed(1)) : "", Math.round(v.hk3), v.rev ? Number((v.hk3 / v.rev * 100).toFixed(1)) : "",
+      ]
+    }
+    // Thực tế của 1 tháng (dòng Nhóm hoặc KH): tháng đang chạy có field actual*, tháng đã xong thì chính số hiện có.
+    const monthAct = (d: any | undefined) => d && (d.hasData ?? true) ? {
+      rev: d.actualRevenue ?? d.revenue ?? 0, gm: d.actualGm ?? d.gm ?? 0, cc: d.actualCc ?? d.cc ?? 0,
+      cm1: d.actualCm1 ?? d.cm1 ?? 0, hk3: d.hk3Rev ?? 0,
+    } : undefined
+    const custQAct = (c: any) => {
+      const hp = c.hasProjected === true
+      return { rev: hp ? (c.actualRevenue ?? c.revenue) : c.revenue, gm: hp ? (c.actualGm ?? c.gm) : c.gm, cc: hp ? (c.actualCc ?? c.cc) : c.cc, cm1: hp ? (c.actualCm1 ?? c.cm1) : c.cm1, hk3: c.hk3Rev ?? 0 }
+    }
+
     const rows: (string | number)[][] = []
     tiers.forEach((tierRaw: any) => {
       const tier = pickView(tierRaw)
       const tierRow: (string | number)[] = ["Nhóm", tierRaw.tier, "", "", "", tier.customerCount]
-      visibleMonths.forEach(m => {
+      const tierMonthParts = visibleMonths.map(m => {
         const d = tier.months.find((x: any) => x.month === m)
-        tierRow.push(...periodCols(d?.hasData ? d : undefined))
+        return weave(periodCols(d?.hasData ? d : undefined), actCols(monthAct(d)))
       })
       const qPrRev = Math.round(tier.totalRevenue * futureScale)
       const qPrGm  = Math.round(tier.totalGm * futureScale)
@@ -134,7 +159,14 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       const qPrCm1Pct = qPrRev > 0 ? Number((qPrCm1 / qPrRev * 100).toFixed(1)) : 0
       const tierQoQ: string | number = tier.prevCm1 && tier.prevCm1 !== 0
         ? Number(((qPrCm1 - tier.prevCm1) / Math.abs(tier.prevCm1) * 100).toFixed(1)) : ""
-      tierRow.push(qPrRev, qPrGm, qPrCc > 0 ? qPrCc : "", qPrCm1, qPrCm1Pct, tierQoQ, Math.round(tier.totalHk3Rev ?? 0), Number((tier.totalHk3Pct ?? 0).toFixed(1)))
+      // Quý thực tế của Nhóm = Σ thực tế KH − phần group cost đã trừ ở CM1 hiển thị (= Σ cm1 KH − totalCm1).
+      const tierCusts: any[] = (region === "ALL" ? ["VN", "US"] : [region]).flatMap(reg => tierRaw.byRegion?.[reg]?.customers ?? [])
+      const tq = tierCusts.reduce((a, c) => { const v = custQAct(c); return { rev: a.rev + v.rev, gm: a.gm + v.gm, cc: a.cc + v.cc, cm1: a.cm1 + v.cm1, hk3: a.hk3 + v.hk3, cm1Pr: a.cm1Pr + (c.cm1 ?? 0) } }, { rev: 0, gm: 0, cc: 0, cm1: 0, hk3: 0, cm1Pr: 0 })
+      tierMonthParts.forEach(part => tierRow.push(...part))
+      tierRow.push(...weave(
+        [qPrRev, qPrGm, qPrCc > 0 ? qPrCc : "", qPrCm1, qPrCm1Pct, tierQoQ, Math.round(tier.totalHk3Rev ?? 0), Number((tier.totalHk3Pct ?? 0).toFixed(1))],
+        actCols({ rev: tq.rev, gm: tq.gm, cc: tq.cc, cm1: tq.cm1 - (tq.cm1Pr - (tier.totalCm1 ?? 0)), hk3: tq.hk3 }),
+      ))
       rows.push(tierRow)
 
       // Breakdown khách hàng — cùng vùng region đang xem (ALL → gộp cả VN+US, có cột Region phân biệt).
@@ -144,14 +176,14 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
         custs.forEach((c: any) => {
           const custRow: (string | number)[] = ["Khách hàng", tierRaw.tier, reg, c.code, c.name, ""]
           const ms: Record<string, any> = c.monthSummary ?? {}
-          visibleMonths.forEach(m => custRow.push(...periodCols(ms[m])))
+          visibleMonths.forEach(m => custRow.push(...weave(periodCols(ms[m]), actCols(monthAct(ms[m])))))
           const pr = custPr(c)
           const cPrCc = pr.prGm - pr.prCm1
-          custRow.push(
-            pr.prRev, pr.prGm, cPrCc > 0 ? Math.round(cPrCc) : "", pr.prCm1, Number(pr.prCm1Pct.toFixed(1)),
-            pr.qoqPct != null ? Number(pr.qoqPct.toFixed(1)) : "",
-            Math.round(c.hk3Rev ?? 0), Number((c.hk3Pct ?? 0).toFixed(1)),
-          )
+          custRow.push(...weave(
+            [pr.prRev, pr.prGm, cPrCc > 0 ? Math.round(cPrCc) : "", pr.prCm1, Number(pr.prCm1Pct.toFixed(1)),
+              pr.qoqPct != null ? Number(pr.qoqPct.toFixed(1)) : "", Math.round(c.hk3Rev ?? 0), Number((c.hk3Pct ?? 0).toFixed(1))],
+            actCols(custQAct(c)),
+          ))
           rows.push(custRow)
         })
       })
