@@ -103,11 +103,18 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
   const exportTierTable = async () => {
     const EXPORT_SUB_LABELS = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%QoQ(CM1)", "3HK Rev", "3HK%"]
     const headers: string[] = ["Loại", "Nhóm", "Region", "Mã KH", "Tên KH", "Số KH"]
+    // Số liệu hiển thị = pro-rata (tháng đang chạy chiếu cả tháng); thêm khối "Thực tế" (tới hôm qua, không chiếu) ở cuối để so.
+    const ACT_SUB_LABELS = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "3HK Rev", "3HK%"]
     visibleMonths.forEach(m => {
       const [y, mo] = m.split("-")
-      EXPORT_SUB_LABELS.forEach(l => headers.push(`T${parseInt(mo)}/${y} - ${l}`))
+      EXPORT_SUB_LABELS.forEach(l => headers.push(`T${parseInt(mo)}/${y} - ${l} (Pro-rata)`))
     })
-    EXPORT_SUB_LABELS.forEach(l => headers.push(`Tổng Quý - ${l}`))
+    EXPORT_SUB_LABELS.forEach(l => headers.push(`Tổng Quý - ${l} (Pro-rata)`))
+    visibleMonths.forEach(m => {
+      const [y, mo] = m.split("-")
+      ACT_SUB_LABELS.forEach(l => headers.push(`T${parseInt(mo)}/${y} - ${l} (Thực tế)`))
+    })
+    ACT_SUB_LABELS.forEach(l => headers.push(`Tổng Quý - ${l} (Thực tế)`))
 
     // Cột theo tháng dùng chung cho cả dòng Nhóm (d = tier.months[m]) lẫn dòng KH (d = c.monthSummary[m]).
     const periodCols = (d: any | undefined): (string | number)[] => {
@@ -117,6 +124,23 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
         Math.round(d.cm1 ?? 0), Number((d.cm1Pct ?? 0).toFixed(1)), "",
         Math.round(d.hk3Rev ?? 0), Number((d.hk3Pct ?? 0).toFixed(1)),
       ]
+    }
+
+    const actCols = (v: { rev: number; gm: number; cc: number; cm1: number; hk3: number } | undefined): (string | number)[] => {
+      if (!v) return ACT_SUB_LABELS.map(() => "")
+      return [
+        Math.round(v.rev), Math.round(v.gm), v.cc > 0 ? Math.round(v.cc) : "", Math.round(v.cm1),
+        v.rev ? Number((v.cm1 / v.rev * 100).toFixed(1)) : "", Math.round(v.hk3), v.rev ? Number((v.hk3 / v.rev * 100).toFixed(1)) : "",
+      ]
+    }
+    // Thực tế của 1 tháng (dòng Nhóm hoặc KH): tháng đang chạy có field actual*, tháng đã xong thì chính số hiện có.
+    const monthAct = (d: any | undefined) => d && (d.hasData ?? true) ? {
+      rev: d.actualRevenue ?? d.revenue ?? 0, gm: d.actualGm ?? d.gm ?? 0, cc: d.actualCc ?? d.cc ?? 0,
+      cm1: d.actualCm1 ?? d.cm1 ?? 0, hk3: d.hk3Rev ?? 0,
+    } : undefined
+    const custQAct = (c: any) => {
+      const hp = c.hasProjected === true
+      return { rev: hp ? (c.actualRevenue ?? c.revenue) : c.revenue, gm: hp ? (c.actualGm ?? c.gm) : c.gm, cc: hp ? (c.actualCc ?? c.cc) : c.cc, cm1: hp ? (c.actualCm1 ?? c.cm1) : c.cm1, hk3: c.hk3Rev ?? 0 }
     }
 
     const rows: (string | number)[][] = []
@@ -135,6 +159,11 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       const tierQoQ: string | number = tier.prevCm1 && tier.prevCm1 !== 0
         ? Number(((qPrCm1 - tier.prevCm1) / Math.abs(tier.prevCm1) * 100).toFixed(1)) : ""
       tierRow.push(qPrRev, qPrGm, qPrCc > 0 ? qPrCc : "", qPrCm1, qPrCm1Pct, tierQoQ, Math.round(tier.totalHk3Rev ?? 0), Number((tier.totalHk3Pct ?? 0).toFixed(1)))
+      visibleMonths.forEach(m => tierRow.push(...actCols(monthAct(tier.months.find((x: any) => x.month === m)))))
+      // Quý thực tế của Nhóm = Σ thực tế KH − phần group cost đã trừ ở CM1 hiển thị (= Σ cm1 KH − totalCm1).
+      const tierCusts: any[] = (region === "ALL" ? ["VN", "US"] : [region]).flatMap(reg => tierRaw.byRegion?.[reg]?.customers ?? [])
+      const tq = tierCusts.reduce((a, c) => { const v = custQAct(c); return { rev: a.rev + v.rev, gm: a.gm + v.gm, cc: a.cc + v.cc, cm1: a.cm1 + v.cm1, hk3: a.hk3 + v.hk3, cm1Pr: a.cm1Pr + (c.cm1 ?? 0) } }, { rev: 0, gm: 0, cc: 0, cm1: 0, hk3: 0, cm1Pr: 0 })
+      tierRow.push(...actCols({ rev: tq.rev, gm: tq.gm, cc: tq.cc, cm1: tq.cm1 - (tq.cm1Pr - (tier.totalCm1 ?? 0)), hk3: tq.hk3 }))
       rows.push(tierRow)
 
       // Breakdown khách hàng — cùng vùng region đang xem (ALL → gộp cả VN+US, có cột Region phân biệt).
@@ -152,6 +181,8 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
             pr.qoqPct != null ? Number(pr.qoqPct.toFixed(1)) : "",
             Math.round(c.hk3Rev ?? 0), Number((c.hk3Pct ?? 0).toFixed(1)),
           )
+          visibleMonths.forEach(m => custRow.push(...actCols(monthAct(ms[m]))))
+          custRow.push(...actCols(custQAct(c)))
           rows.push(custRow)
         })
       })
