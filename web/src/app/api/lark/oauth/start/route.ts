@@ -9,7 +9,7 @@ const LARK_OAUTH_SCOPES = "offline_access task:task:read task:task:write task:ta
   "drive:drive docx:document docx:document.block:convert sheets:spreadsheet wiki:wiki"
 
 // Người dùng Gấu Pro thường chỉ xin quyền task (Gấu là trợ lý cá nhân: xem/tạo/sửa task trong CHÍNH tài khoản Lark của họ).
-const MEMBER_OAUTH_SCOPES = "offline_access task:task:read task:task:write task:tasklist:read"
+const MEMBER_OAUTH_SCOPES = "offline_access task:task:read task:task:write task:tasklist:read bitable:app:readonly"
 
 // Khởi động OAuth: redirect sang trang cấp quyền Lark. Creator → token của Hiếu (đủ scope); người được cấp Gấu Pro → token riêng, scope task.
 export async function GET(req: NextRequest) {

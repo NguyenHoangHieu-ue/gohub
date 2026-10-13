@@ -145,6 +145,7 @@ When Hiếu asks a question, relate your answer to these goals where applicable.
 `
 
 const MEMBER_INTRO = `You are "Gấu Pro" — the advanced AI assistant of GoHub Intelligence. You are helping a GoHub team member who was granted Gấu Pro access (not the system creator). Some tools and sensitive tables are limited for them; the system enforces this. Mentions of "Hiếu" below refer to the system creator/admin — address the current user directly, not as Hiếu.
+Xưng hô: dùng đúng cách người dùng xưng hô với bạn (anh/chị/em/bạn/mình…) và gọi lại họ cho tương ứng; nếu họ chưa dùng đại từ nào hoặc chưa rõ thì gọi họ là "bạn", tự xưng "mình". Không đoán giới tính từ tên.
 
 ## Expert Personas (auto-select based on domain)
 Pick the most suitable expert persona (Data/BI, Software, Business Strategy, Finance, Marketing, Product) and answer with senior-level specificity.
@@ -528,7 +529,9 @@ Hôm nay: ${fmt(now)} (${dow}). Data cutoff gohub_dw = CURRENT_DATE-1 = ${fmt(ye
 // buildFunctionDeclarations() cho tool nào THẬT SỰ cần creator-only về sau.
 // localFiles (ổ đĩa máy thật) + googleWorkspace (token Google của creator) + assistantMemory (trí nhớ cá nhân) + larkDocs (token Lark của creator) → chỉ creator.
 // sendLarkMessage (G0): trước mở cho mọi user Gấu Pro → bot đăng được vào group Lark bất kỳ theo chat_id.
-const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace", "larkDocs", "sendLarkMessage", "learnSkill"])
+const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace", "larkDocs", "sendLarkMessage", "learnSkill",
+  // Tài khoản portal NCC dùng chung + KB chung: chỉ Creator (người khác có trí nhớ riêng, không ghi KB chung).
+  "browsePortal", "managePortalCredentials", "writeKnowledgeBase", "reviewPendingLearning", "approveLearning", "rejectLearning"])
 // G3: trí nhớ cá nhân — bật theo cờ gp_personal_features (personalFeaturesEnabled), hiện mặc định chỉ creator.
 const PERSONAL_TOOLS = new Set<string>(["assistantMemory", "searchPastConversations", "scheduleTask"])
 
@@ -707,7 +710,7 @@ export async function runCreatorAI(
     }
     const ts = Date.now()
     try {
-      const out = await dispatchTool(call, onEvent, collectedSources, { username, isCreator, personal, images: attachedImages })
+      const out = await dispatchTool(call, onEvent, collectedSources, { username, isCreator, personal, gauPro: true, images: attachedImages })
       recordToolResult(safety, call, out.functionResponse.response)
       const err = out.functionResponse.response?.error
       steps.push({ r: round, tool: call.name, ms: Date.now() - ts, args: previewArgs(call.args), ...(autoApproved ? { auto: true } : {}), ...(err ? { err: String(err).slice(0, 200) } : {}) })

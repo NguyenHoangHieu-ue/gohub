@@ -1203,3 +1203,11 @@ Gấu Pro học thêm cách làm từ NGUỒN NGOÀI (tài liệu, trang web, c�
 - **Kết nối:** menu Gấu Pro → "Kết nối Lark" (`/api/lark/oauth/start`) mở cho người được cấp Gấu Pro (`gp_allowed_users`); người thường chỉ xin scope task (`offline_access task:task:read task:task:write task:tasklist:read`), Creator xin đủ scope như cũ. `callback` lưu token đúng khoá; `status` trả trạng thái của chính người đang đăng nhập. `getLarkUserToken/getLarkUserOpenId/saveLarkUserToken` nhận tham số `username?`.
 - Test `lark-task-personal.test.ts` (4 ca). Chưa QA sống với tài khoản không phải Creator.
 - **Còn mở (dùng chung, chưa đổi):** `queryLarkBase` (đọc Base được chia sẻ cho bot, qua app token), `browsePortal`/`managePortalCredentials` (đăng nhập portal đã lưu), `writeKnowledgeBase` — Gấu Pro vẫn mở cho người được cấp quyền.
+
+## § s232 (cuối 3) — Khóa portal/KB chung, Lark Base theo từng tài khoản
+
+- `CREATOR_ONLY_TOOLS` (creator-ai.ts) thêm: `browsePortal`, `managePortalCredentials`, `writeKnowledgeBase`, `reviewPendingLearning`, `approveLearning`, `rejectLearning` — người được cấp Gấu Pro không còn thấy các tool này. Chốt chặn thứ 2 trong `dispatch.ts` (`CREATOR_ONLY_DISPATCH`): gọi lọt vẫn trả "chỉ dành cho Creator". Lý do: tài khoản portal NCC dùng chung; KB chung do Creator quản; người khác dùng trí nhớ riêng.
+- `queryLarkBase`: trong Gấu Pro của người thường (`ctx.gauPro`) chỉ dùng token Lark của chính họ → đọc được Base họ có quyền xem, không rơi về app token/quyền Creator. Bé Gấu và Creator giữ cách cũ. Scope xin cho người thường thêm `bitable:app:readonly` — người đã kết nối trước đó cần bấm "Kết nối Lark" lại.
+- `MEMBER_INTRO` thêm luật xưng hô: theo cách người dùng xưng hô, chưa rõ thì "bạn/mình", không đoán giới tính từ tên.
+- Trí nhớ cá nhân trong Gấu Pro của người thường vẫn tắt (cờ `gp_personal_features` chưa có → mặc định "creator"); bật = đặt "all".
+- Kế hoạch đưa extension lên Chrome Web Store (Unlisted): `docs/plans/bridge-chrome-web-store.md` (TẠM).

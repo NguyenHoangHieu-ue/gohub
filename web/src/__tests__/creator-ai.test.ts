@@ -116,11 +116,12 @@ describe("buildFunctionDeclarations", () => {
   it("localFiles + googleWorkspace + assistantMemory + larkDocs + sendLarkMessage chỉ có với creator, các tool khác như nhau", () => {
     const all = buildFunctionDeclarations(true)
     const restricted = buildFunctionDeclarations(false)
-    for (const name of ["localFiles", "googleWorkspace", "assistantMemory", "larkDocs", "sendLarkMessage", "searchPastConversations", "scheduleTask", "learnSkill"]) {
+    for (const name of ["localFiles", "googleWorkspace", "assistantMemory", "larkDocs", "sendLarkMessage", "searchPastConversations", "scheduleTask", "learnSkill",
+      "browsePortal", "managePortalCredentials", "writeKnowledgeBase", "reviewPendingLearning", "approveLearning", "rejectLearning"]) {
       expect(all.map(d => d.name)).toContain(name)
       expect(restricted.map(d => d.name)).not.toContain(name)
     }
-    expect(restricted.length).toBe(all.length - 8)
+    expect(restricted.length).toBe(all.length - 14)
   })
 })
 

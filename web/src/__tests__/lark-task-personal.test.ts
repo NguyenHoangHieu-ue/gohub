@@ -7,7 +7,7 @@ const lark = vi.hoisted(() => ({
 }))
 vi.mock("@/lib/lark", () => lark)
 
-import { runLarkTask } from "@/lib/agents/creator/tools/lark"
+import { runLarkTask, runLarkBase } from "@/lib/agents/creator/tools/lark"
 
 const fetchMock = vi.fn()
 beforeEach(() => {
@@ -41,6 +41,30 @@ describe("task Lark theo từng người (Gấu Pro = trợ lý cá nhân)", () 
     const r = await runLarkTask("listLarkTasks", {}, { isCreator: false })
     expect(r.error).toBeTruthy()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("Lark Base trong Gấu Pro của người thường: chưa kết nối → báo lỗi, không dùng token app", async () => {
+    lark.getLarkUserToken.mockResolvedValue(null)
+    const r = await runLarkBase({}, { username: "nv1", isCreator: false, gauPro: true })
+    expect(r.error).toMatch(/chưa kết nối Lark/i)
+    expect(lark.getLarkToken).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("Lark Base trong Gấu Pro: đã kết nối → dùng token riêng, không gắn open_id Creator", async () => {
+    lark.getLarkUserToken.mockResolvedValue("tok-nv1")
+    process.env.LARK_CREATOR_USER_ID = "ou_creator"
+    await runLarkBase({}, { username: "nv1", isCreator: false, gauPro: true })
+    const [, init] = fetchMock.mock.calls[0]
+    expect(init.headers.Authorization).toBe("Bearer tok-nv1")
+    expect(init.headers["X-Lark-Request-User-Open-Id"]).toBeUndefined()
+    delete process.env.LARK_CREATOR_USER_ID
+  })
+
+  it("Lark Base của Bé Gấu (không phải Gấu Pro) giữ cách cũ: app token", async () => {
+    await runLarkBase({}, { username: "nv1", isCreator: false, gauPro: false })
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer app-token")
+    expect(lark.getLarkUserToken).not.toHaveBeenCalled()
   })
 
   it("Creator và luồng không ctx (cron, trợ lý task) giữ token cũ của Hiếu", async () => {
