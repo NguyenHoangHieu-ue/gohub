@@ -16,3 +16,7 @@ export function compareCogs(current: number, expected: number, currency: string)
   const verdict: CogsVerdict = abs < 1e-9 ? "match" : abs <= round ? "rounding" : abs <= tol ? "rounding" : "diff"
   return { current, expected, diff, diffPct: expected ? Math.round((diff / expected) * 10000) / 100 : 0, verdict }
 }
+
+/** % tăng/giảm khi đổi từ giá cũ (hệ thống) sang giá mới (tính lại): dương = giá mới cao hơn. */
+export const changePct = (current: number | null, expected: number | null): number | null =>
+  current == null || expected == null || !current ? null : Math.round(((expected - current) / current) * 10000) / 100

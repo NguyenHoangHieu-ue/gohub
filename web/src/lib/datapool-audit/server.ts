@@ -1,3 +1,4 @@
+import { changePct } from "./compare"
 import { waitUntil } from "@vercel/functions"
 import { supabaseAdmin } from "@/lib/supabase"
 import { findLevel, levelsOf, type CustomUnlimited } from "@/lib/datapool-formula"
@@ -120,8 +121,8 @@ export function dmText(run: AuditRun, changed: string[], reason: string): string
   if (changed.length) { lines.push("", "Đầu vào đã đổi so với lần soát trước:", ...changed.slice(0, 14).map(x => `• ${x}`)) }
   lines.push("", "Kết quả theo vendor (lệch / khớp / tổng):")
   for (const v of ALL_VENDORS) { const x = s.byVendor[v]; lines.push(`• ${VENDOR_LABEL[v]}: ${x.diff + x.nocogs} lệch · ${x.match + x.rounding} khớp · ${x.total} SKU${x.skip ? ` (${x.skip} bỏ qua — không tính lại được)` : ""}`) }
-  const top = bad.filter(r => r.verdict === "diff").sort((a, b) => Math.abs(b.diffPct ?? 0) - Math.abs(a.diffPct ?? 0)).slice(0, 5)
-  if (top.length) lines.push("", "Lệch lớn nhất:", ...top.map(r => `• ${r.sku} (${r.tenant}): hệ thống ${r.current} → tính lại ${r.expected} ${r.currency} (${(r.diffPct ?? 0) > 0 ? "+" : ""}${r.diffPct}%)`))
+  const top = bad.filter(r => r.verdict === "diff").sort((a, b) => Math.abs(changePct(b.current, b.expected) ?? 0) - Math.abs(changePct(a.current, a.expected) ?? 0)).slice(0, 5)
+  if (top.length) lines.push("", "Lệch lớn nhất:", ...top.map(r => `• ${r.sku} (${r.tenant}): giá cũ ${r.current} → giá mới ${r.expected} ${r.currency} (${(changePct(r.current, r.expected) ?? 0) > 0 ? "+" : ""}${changePct(r.current, r.expected)}%)`))
   lines.push("", `Xem + xuất file công thức: ${AUDIT_PAGE}`)
   return lines.join("\n")
 }

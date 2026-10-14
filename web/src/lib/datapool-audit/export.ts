@@ -17,7 +17,7 @@ const num = (v: number, f?: string, z?: string): Cell => ({ t: "n", v, ...(f ? {
 const str = (v: string): Cell => ({ t: "s", v })
 
 const HEADERS = ["SKU", "Tenant", "Vendor", "Loại", "Gói", "Data", "Đơn vị", "Ngày", "Giá/GB", "Tiền pool", "Hệ số (%/GB-ngày)", "Data (tiền pool)", "Data (USD)", "Phí khung (USD)", "COGS US (USD)", "COGS VN (VND)",
-  "Tính lại", "Hệ thống", "Chênh (hệ thống − tính lại)", "Chênh %", "Kết luận", "Ghi chú"]
+  "Giá mới (tính lại)", "Giá cũ (hệ thống)", "Chênh (mới − cũ)", "Tăng/giảm % (so giá cũ)", "Kết luận", "Ghi chú"]
 const VERDICT: Record<string, string> = { match: "Khớp", rounding: "Khớp (chênh do làm tròn)", diff: "LỆCH", nocogs: "Hệ thống chưa có giá", skip: "Không tính lại được" }
 
 export function buildAuditWorkbook(rows: AuditRow[], ctx: AuditCtx): XLSX.WorkBook {
@@ -68,8 +68,8 @@ export function buildAuditWorkbook(rows: AuditRow[], ctx: AuditCtx): XLSX.WorkBo
     put(ws, `P${r}`, num(c.cogsVnd, x.vendor === "3HK" && x.type === "E" ? `ROUNDUP(M${r}*${P(R.vndJsc)},0)+${P(R.simVn3hk)}` : `ROUNDUP(O${r}*${P(R.vndJsc)},0)`))
     put(ws, `Q${r}`, num(x.expected ?? 0, x.tenant === "US" ? `O${r}` : `P${r}`))
     if (x.current != null) {
-      put(ws, `S${r}`, num(x.diff ?? 0, `R${r}-Q${r}`))
-      put(ws, `T${r}`, num(x.expected ? (x.diff ?? 0) / x.expected : 0, `IF(Q${r}=0,0,S${r}/Q${r})`, "0.00%"))
+      put(ws, `S${r}`, num(x.expected != null ? x.expected - x.current : 0, `Q${r}-R${r}`))
+      put(ws, `T${r}`, num(x.current ? (x.expected! - x.current) / x.current : 0, `IF(R${r}=0,0,S${r}/R${r})`, "0.00%"))
     }
   })
   ws["!ref"] = `A1:V${Math.max(usable.length + 1, 2)}`
@@ -77,12 +77,12 @@ export function buildAuditWorkbook(rows: AuditRow[], ctx: AuditCtx): XLSX.WorkBo
   ws["!autofilter"] = { ref: `A1:V${Math.max(usable.length + 1, 2)}` }
 
   const up: XLSX.WorkSheet = {}
-  ;["tenant*", "skuCode", "latestCogs (tính lại)", "latestCogsCurrency", "Hệ thống đang có", "Chênh %", "Ghi chú"].forEach((h, i) => put(up, XLSX.utils.encode_cell({ r: 0, c: i }), str(h)))
+  ;["tenant*", "skuCode", "latestCogs (giá MỚI)", "latestCogsCurrency", "Giá CŨ (hệ thống)", "Tăng/giảm %", "Ghi chú"].forEach((h, i) => put(up, XLSX.utils.encode_cell({ r: 0, c: i }), str(h)))
   const bad = usable.filter(x => (x.verdict === "diff" || x.verdict === "nocogs") && x.expected != null)
   bad.forEach((x, i) => {
     const r = i + 2, src = rowOf.get(`${x.sku}|${x.tenant}`)!
     put(up, `A${r}`, str(x.tenant)); put(up, `B${r}`, str(x.sku)); put(up, `C${r}`, num(x.expected!, `'${AUDIT_SHEET}'!Q${src}`)); put(up, `D${r}`, str(x.currency))
-    put(up, `E${r}`, x.current == null ? str("") : num(x.current)); put(up, `F${r}`, num((x.diffPct ?? 0) / 100, undefined, "0.00%")); put(up, `G${r}`, str(x.note ?? ""))
+    put(up, `E${r}`, x.current == null ? str("") : num(x.current)); put(up, `F${r}`, num(x.current ? (x.expected! - x.current) / x.current : 0, `IF(E${r}=0,0,(C${r}-E${r})/E${r})`, "0.00%")); put(up, `G${r}`, str(x.note ?? ""))
   })
   up["!ref"] = `A1:G${Math.max(bad.length + 1, 2)}`
   up["!cols"] = [{ wch: 8 }, { wch: 16 }, { wch: 16 }, { wch: 10 }, { wch: 16 }, { wch: 10 }, { wch: 50 }]

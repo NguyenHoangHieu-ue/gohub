@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { Bell, Download, Loader2, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { VENDOR_LABEL, type AuditRow, type AuditSummary, type AuditVendor } from "@/lib/datapool-audit/engine"
+import { changePct } from "@/lib/datapool-audit/compare"
 import type { CustomUnlimited } from "@/lib/datapool-formula"
 
 type Notify = (type: "success" | "error", text: string) => void
@@ -135,7 +136,7 @@ export default function CogsAuditTab({ onNotify }: { onNotify: Notify }) {
 
           <div className="overflow-auto max-h-[560px] border border-gray-200 dark:border-slate-700 rounded-xl">
             <table className="min-w-full text-xs">
-              <thead className="sticky top-0 bg-gray-50 dark:bg-slate-800"><tr>{["SKU", "Đầu", "Vendor", "Gói", "Trạng thái", "Hệ thống", "Tính lại", "Chênh %", "Kết luận", "Ghi chú"].map(h => <th key={h} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
+              <thead className="sticky top-0 bg-gray-50 dark:bg-slate-800"><tr>{["SKU", "Đầu", "Vendor", "Gói", "Trạng thái", "Giá cũ (hệ thống)", "Giá mới (tính lại)", "Tăng/giảm %", "Kết luận", "Ghi chú"].map(h => <th key={h} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
               <tbody>
                 {rows.slice(0, 500).map(r => (
                   <tr key={`${r.sku}${r.tenant}`} className="border-t border-gray-100 dark:border-slate-800">
@@ -143,7 +144,7 @@ export default function CogsAuditTab({ onNotify }: { onNotify: Notify }) {
                     <td className="px-2 py-1 whitespace-nowrap">{r.label}</td><td className="px-2 py-1">{r.status}</td>
                     <td className="px-2 py-1 tabular-nums">{fmt(r.current, r.currency)} {r.currency}</td>
                     <td className="px-2 py-1 tabular-nums font-semibold cursor-help underline decoration-dotted" title={r.explain ?? ""}>{fmt(r.expected, r.currency)}</td>
-                    <td className={cn("px-2 py-1 tabular-nums", r.verdict === "diff" && "text-red-600 font-semibold")}>{r.diffPct == null ? "" : `${r.diffPct > 0 ? "+" : ""}${r.diffPct}%`}</td>
+                    <td className={cn("px-2 py-1 tabular-nums", r.verdict === "diff" && "text-red-600 font-semibold")}>{changePct(r.current, r.expected) == null ? "" : `${changePct(r.current, r.expected)! > 0 ? "+" : ""}${changePct(r.current, r.expected)}%`}</td>
                     <td className="px-2 py-1"><span className={cn("px-1.5 py-0.5 rounded", VERDICT_CLS[r.verdict])}>{VERDICT_LABEL[r.verdict]}</span></td>
                     <td className="px-2 py-1 text-gray-500 max-w-[420px] truncate" title={r.note}>{r.note}</td>
                   </tr>
@@ -153,7 +154,7 @@ export default function CogsAuditTab({ onNotify }: { onNotify: Notify }) {
             </table>
           </div>
           {rows.length > 500 && <div className="text-[11px] text-amber-700">Bảng chỉ hiện 500 dòng đầu — lọc thêm hoặc xuất file để xem đủ.</div>}
-          <div className="text-[11px] text-gray-400">Rê chuột vào giá &quot;Tính lại&quot; để xem công thức đã thế số. File xuất: sheet &quot;Soát giá vốn&quot; (công thức ROUNDUP dùng chung sheet &quot;Tham số&quot;) + sheet &quot;Cập nhật latestCogs&quot; (SKU lệch kèm giá tính lại, công thức trỏ sheet soát).</div>
+          <div className="text-[11px] text-gray-400">Rê chuột vào giá mới để xem công thức đã thế số. File xuất: sheet &quot;Soát giá vốn&quot; (công thức ROUNDUP dùng chung sheet &quot;Tham số&quot;) + sheet &quot;Cập nhật latestCogs&quot; (SKU lệch kèm giá tính lại, công thức trỏ sheet soát).</div>
         </>
       )}
     </div>
