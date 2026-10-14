@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react"
 import { FileText, FileSpreadsheet, Image as ImageIcon, Film, Music, File as FileIcon, StickyNote, Link2, Mail, Pin, PinOff, Trash2, Upload, Eye, Plus, Loader2, FileType2, RefreshCw } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { supabaseBrowser } from "@/lib/supabase-browser"
 import { cn } from "@/lib/utils"
 import { api, jsonInit, fmtBytes, fmtTokens, CONTEXT_LIMIT, type MailRuleUi, type Source } from "./argon-types"
 
@@ -93,7 +93,7 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
       const items: { path: string; name: string; mime: string; size: number }[] = []
       for (let i = 0; i < files.length; i++) {
         const up = prep.uploads[i]
-        const { error } = await supabase.storage.from(prep.bucket).uploadToSignedUrl(up.path, up.token, files[i])
+        const { error } = await supabaseBrowser.storage.from(prep.bucket).uploadToSignedUrl(up.path, up.token, files[i])
         if (error) throw new Error(`Tải "${files[i].name}" lỗi: ${error.message}`)
         items.push({ path: up.path, name: files[i].name, mime: files[i].type, size: files[i].size })
       }
