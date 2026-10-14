@@ -1,3 +1,4 @@
+import type { CustomUnlimited } from "@/lib/datapool-formula"
 export type Pool = "CMHK" | "SINGTEL"
 export type PlanKind = "Daily" | "Fixed" | "Unlimited"
 export type DataUnit = "MB" | "GB"
@@ -50,7 +51,7 @@ export const UNLIMITED_PROFILES: { key: UnlimitedKey; dataMb: number; speedMbps:
 ]
 
 /** Giả định data thực dùng — lấy từ Admin › Cài đặt › Công Thức Datapool, nhập được trên UI. */
-export type Assumptions = { fixedPct: number; dailyPct: number } & Record<UnlimitedKey, number>
+export type Assumptions = { fixedPct: number; dailyPct: number; unlCustom?: CustomUnlimited[] } & Record<UnlimitedKey, number>
 
 export const DEFAULT_ASSUMPTIONS: Assumptions = { fixedPct: 0.55, dailyPct: 0.38, unl3gb10: 1.7 }
 

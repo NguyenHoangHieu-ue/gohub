@@ -7,7 +7,7 @@ import { loadEffectiveTable } from "@/lib/fx/server"
 import { currentMonth, monthLabel, rateAt } from "@/lib/fx/table"
 import { FRAME_SKU } from "./codes"
 import type { PlanCatalog } from "./plan-catalog"
-import { FORMULA_KEYS, resolveFormula } from "@/lib/datapool-formula"
+import { FORMULA_KEYS, resolveFormula, parseCustomUnlimited } from "@/lib/datapool-formula"
 import type { Assumptions, Fx, PriceList } from "./types"
 
 export const PRICE_LIST_KEY = "bcdp.price_list"
@@ -100,5 +100,6 @@ export async function loadAssumptions(): Promise<Assumptions> {
   return {
     fixedPct: f[FORMULA_KEYS.fixed], dailyPct: f[FORMULA_KEYS.daily],
     unl3gb10: f[FORMULA_KEYS.unl3gb10],
+    unlCustom: parseCustomUnlimited(data ?? []),
   }
 }

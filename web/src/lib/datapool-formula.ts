@@ -34,6 +34,34 @@ export const FORMULA_KEYS = {
   unl3gb10: "datapool.unlim_3gb_10mbps_gb_day",
 } as const
 
+/** Key lưu các mức Unlimited do người dùng tự thêm (JSON mảng CustomUnlimited) — thêm ở Admin › Cài đặt › Công Thức Datapool. */
+export const CUSTOM_UNLIMITED_KEY = "datapool.unlimited_custom"
+
+/** 1 mức Unlimited tự thêm: tốc độ cao (MB/ngày) + tốc độ Unlimited (Mbps) → GB/ngày dùng tính giá. */
+export interface CustomUnlimited { dataMb: number; speedMbps: number; gbPerDay: number }
+
+export const customUnlimitedLabel = (c: CustomUnlimited) =>
+  `${c.dataMb % 1024 === 0 ? `${c.dataMb / 1024}GB` : `${c.dataMb}MB`} tốc độ cao + Unlimited ${c.speedMbps}Mbps`
+
+/** Đọc + lọc dữ liệu hợp lệ (dataMb, speedMbps, gbPerDay > 0; bỏ trùng cặp dataMb+speedMbps). */
+export function parseCustomUnlimited(rows: { key: string; value: unknown }[]): CustomUnlimited[] {
+  const raw = rows.find(r => r.key === CUSTOM_UNLIMITED_KEY)?.value
+  let arr: unknown
+  try { arr = typeof raw === "string" ? JSON.parse(raw) : raw } catch { return [] }
+  if (!Array.isArray(arr)) return []
+  const seen = new Set<string>()
+  const out: CustomUnlimited[] = []
+  for (const x of arr) {
+    const dataMb = Number((x as CustomUnlimited)?.dataMb), speedMbps = Number((x as CustomUnlimited)?.speedMbps), gbPerDay = Number((x as CustomUnlimited)?.gbPerDay)
+    if (!(dataMb > 0) || !(speedMbps > 0) || !(gbPerDay > 0)) continue
+    const k = `${dataMb}:${speedMbps}`
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push({ dataMb, speedMbps, gbPerDay })
+  }
+  return out
+}
+
 /** Giá trị đang áp dụng: key mới → key cũ (3hk.*) → mặc định. */
 export function resolveFormula(rows: { key: string; value: unknown }[]): Record<string, number> {
   const byKey = new Map(rows.map(r => [r.key, parseFloat(String(r.value))]))

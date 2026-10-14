@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWrite } from "@/lib/writable-tabs"
-import { DATAPOOL_FORMULA } from "@/lib/datapool-formula"
+import { CUSTOM_UNLIMITED_KEY, DATAPOOL_FORMULA } from "@/lib/datapool-formula"
 
 const WRITE_ROLES = ["admin", "creator"]
 
@@ -46,6 +46,7 @@ export async function PATCH(req: NextRequest) {
       ...(u.key.startsWith("perm_") && { category: "permission" }),
       // datapool.* (công thức Datapool dùng chung): dòng mới cần label + category để INSERT
       ...(DATAPOOL_FORMULA.some(d => d.key === u.key) && { category: "formula", label: DATAPOOL_FORMULA.find(d => d.key === u.key)!.label }),
+      ...(u.key === CUSTOM_UNLIMITED_KEY && { category: "formula", label: "Các mức Unlimited tự thêm (JSON)" }),
       updated_at: new Date().toISOString(),
     }))
 

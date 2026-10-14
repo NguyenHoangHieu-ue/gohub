@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx"
 import { SHEET_NAMES, withHeaders, type BuildResult } from "./builder"
 import { frameFeeUsd } from "./pricing"
+import { customUnlimitedLabel } from "@/lib/datapool-formula"
 import type { Assumptions, Fx, Pool, PriceList } from "./types"
 
 /** Tên sheet công thức — các ô latestCogs ở sheet SKU trỏ về đây để người dùng soát lại cách tính giá. */
@@ -9,6 +10,9 @@ export const CALC_SHEET = "Tính giá"
 // Ô tham số (cột S:T của sheet Tính giá)
 const P = { hkd: "$T$2", cny: "$T$3", vnd: "$T$4", fixed: "$T$5", daily: "$T$6", white: "$T$8", vndInc: "$T$9" } as const
 const UNL_CELL = { unl3gb10: "$T$7" } as const
+/** Mức Unlimited tự thêm: ô hệ số ở T21, T22... (khối riêng dưới phí khung) */
+const CUSTOM_UNL_ROW0 = 21
+const unlCellOf = (c: { unlKey?: "unl3gb10"; unlCustomIdx?: number }) => c.unlCustomIdx !== undefined ? `$T$${CUSTOM_UNL_ROW0 + c.unlCustomIdx}` : UNL_CELL[c.unlKey ?? "unl3gb10"]
 const FEE_CELL = {
   "esim:CMHK": "$T$15", "esim:SINGTEL": "$T$16", "sim:CMHK": "$T$17", "sim:SINGTEL": "$T$18",
 } as const
@@ -51,6 +55,8 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
   put("S17", str("Phí khung SIM CMHK (USD) = giá SIM trắng/VND-USD(Inc) + IMSI HKD/HKD-USD")); put("T17", num(fee("SIM", "CMHK"), "ROUNDUP($T$8/$T$9+T10/$T$2,2)"))
   put("S18", str("Phí khung SIM Singtel (USD) = giá SIM trắng/VND-USD(Inc) + IMSI USD"));    put("T18", num(fee("SIM", "SINGTEL"), "ROUNDUP($T$8/$T$9+T12,2)"))
 
+  ;(ctx.a.unlCustom ?? []).forEach((u, i) => { put(at("S", CUSTOM_UNL_ROW0 + i), str(`Unlimited ${customUnlimitedLabel(u)} — GB/ngày`)); put(at("T", CUSTOM_UNL_ROW0 + i), num(u.gbPerDay)) })
+
   // ── Bảng tính giá: 1 dòng / SKU ──
   CALC_HEADERS.forEach((h, i) => put(XLSX.utils.encode_cell({ r: 0, c: i }), str(h)))
   result.costRows.forEach((c, i) => {
@@ -58,7 +64,7 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
     const gb = `IF(I${r}="MB",H${r}/1024,H${r})`
     const dataF = c.kind === "Daily" ? `ROUNDUP(K${r}*${gb}*J${r}*${P.daily},2)`
       : c.kind === "Fixed" ? `ROUNDUP(K${r}*${gb}*${P.fixed},2)`
-      : `ROUNDUP(K${r}*${UNL_CELL[c.unlKey ?? "unl3gb10"]}*J${r},2)`   // ô hệ số theo (dung lượng tốc độ cao, tốc độ Unlimited)
+      : `ROUNDUP(K${r}*${unlCellOf(c)}*J${r},2)`   // ô hệ số theo (dung lượng tốc độ cao, tốc độ Unlimited)
     put(at("A", r), str(c.type)); put(at("B", r), str(c.skuUS)); put(at("C", r), str(c.skuVN)); put(at("D", r), str(c.productId))
     put(at("E", r), str(c.pool)); put(at("F", r), str(c.operator)); put(at("G", r), str(c.kind === "Unlimited" ? `Unlimited ${c.speedMbps}Mbps` : c.kind))
     put(at("H", r), num(c.dataAmount)); put(at("I", r), str(c.unit)); put(at("J", r), num(c.days))
@@ -69,7 +75,7 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
     put(at("P", r), num(c.cogsUsd, `ROUNDUP(N${r}+O${r},2)`))
     put(at("Q", r), num(c.cogsVnd, `ROUNDUP(P${r}*${P.vnd},0)`))
   })
-  calc["!ref"] = `A1:T${Math.max(result.costRows.length + 1, 18)}`
+  calc["!ref"] = `A1:T${Math.max(result.costRows.length + 1, 18, CUSTOM_UNL_ROW0 + (ctx.a.unlCustom?.length ?? 0))}`
   calc["!cols"] = [{ wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 9 }, { wch: 28 }, { wch: 10 }, { wch: 8 }, { wch: 7 }, { wch: 6 }, { wch: 12 }, { wch: 9 }, { wch: 12 }, { wch: 11 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 2 }, { wch: 2 }, { wch: 60 }, { wch: 12 }]
 
   // ── 4 sheet template; ô latestCogs (cột K) = công thức trỏ sheet Tính giá ──

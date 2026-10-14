@@ -9,6 +9,7 @@ import type { Skipped } from "@/lib/bc-datapool/dedupe"
 import type { CatalogDiff, PriceDiff } from "@/lib/bc-datapool/diff"
 import { availableKinds, canonCountry, choosePlan, findPlans, manualMismatches, multiRegions, offers, sellableCountries, type CatalogPlan, type PlanCatalog, type PlanInfo } from "@/lib/bc-datapool/plan-lookup"
 import { unlimitedFactor } from "@/lib/bc-datapool/pricing"
+import { customUnlimitedLabel } from "@/lib/datapool-formula"
 import { DEFAULT_ASSUMPTIONS, UNLIMITED_PROFILES, type Assumptions, type Fx, type PlanKind, type Pool, type PriceList, type ProductInput } from "@/lib/bc-datapool/types"
 
 type Notify = (type: "success" | "error", text: string) => void
@@ -22,7 +23,7 @@ interface PreviewResult extends BuildResult { fx: Fx; skipped: Skipped; nothingN
  * Daily/Fixed: `amountKey` = dung lượng gói Portal. Unlimited: `amountKey` = gói BC thật ("Daily {tổng} Throttle to 1Mbps"),
  * còn `hs` + `hsUnit` = dung lượng TỐC ĐỘ CAO khách thấy (cột dataMB) và `speed` = tốc độ Unlimited (cột speedMbps) — mặc định 3GB + 10Mbps.
  */
-interface PlanForm { kind: PlanKind; amountKey: string; days: number[]; productId: string; hs: string; hsUnit: "MB" | "GB"; speed: 5 | 10 }
+interface PlanForm { kind: PlanKind; amountKey: string; days: number[]; productId: string; hs: string; hsUnit: "MB" | "GB"; speed: number }
 /** coverage: tên nước (nước đơn) hoặc khoá vùng (gói đa vùng, có "+"); covs: tên khu vực trong bảng giá dùng để lấy giá (nhiều phần tử = gói đa vùng) */
 interface ProductForm { pool: Pool; simType: "eSIM" | "SIM"; coverage: string; covs: string[]; operators: string[]; code: string; codeHint?: string; iso: string; en: string; vn: string; plans: PlanForm[] }
 
@@ -414,8 +415,8 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
                         </div>
                         <div>
                           <label className={label}>Tốc độ Unlimited (→ cột speedMbps)</label>
-                          <select className={input} value={pl.speed} onChange={e => patchPlan(i, j, { speed: Number(e.target.value) as 5 | 10 })}>
-                            <option value={10}>10 Mbps</option><option value={5}>5 Mbps</option>
+                          <select className={input} value={pl.speed} onChange={e => patchPlan(i, j, { speed: Number(e.target.value) })}>
+                            {Array.from(new Set([10, 5, pl.speed, ...(assumptions.unlCustom ?? []).map(c => c.speedMbps)])).sort((x, y) => y - x).map(v => <option key={v} value={v}>{v} Mbps</option>)}
                           </select>
                         </div>
                         <div className="text-[11px] text-gray-500 pb-1.5">
@@ -424,7 +425,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
                         </div>
                         {!unlimitedFactor(assumptions, parseFloat(pl.hs.replace(",", ".")) || 0, pl.hsUnit, pl.speed) && (
                           <div className="w-full text-[11px] text-red-600">
-                            Tổ hợp này chưa có hệ số GB/ngày — hiện chỉ có mức: {UNLIMITED_PROFILES.map(x => x.label).join(" · ")}. Mức mới thêm ở Công Thức Datapool; chưa xuất được.
+                            Tổ hợp này chưa có hệ số GB/ngày — hiện có mức: {[...UNLIMITED_PROFILES.map(x => x.label), ...(assumptions.unlCustom ?? []).map(customUnlimitedLabel)].join(" · ")}. Mức mới thêm ở Công Thức Datapool; chưa xuất được.
                           </div>
                         )}
                       </div>

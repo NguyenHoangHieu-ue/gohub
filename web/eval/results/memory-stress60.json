@@ -1,0 +1,1347 @@
+{
+  "label": "memory-stress60",
+  "judgeModel": "gemini-pro-latest",
+  "at": "2026-10-09T09:46:56.683Z",
+  "dump": {
+    "memories": [
+      {
+        "id": 53,
+        "kind": "person",
+        "content": "Khách Harbor Travel thuộc thị trường Singapore, đầu mối là chị Oanh, mục tiêu hằng tháng là 250 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:36:10.337+00:00"
+      },
+      {
+        "id": 54,
+        "kind": "person",
+        "content": "Khách Delta Voyages thuộc thị trường Nhật Bản, đầu mối là anh Khải, mục tiêu hằng tháng là 50 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:36:17.379+00:00"
+      },
+      {
+        "id": 55,
+        "kind": "person",
+        "content": "Khách Delta Tours thuộc thị trường Đức, đầu mối là chị Hạnh, mục tiêu hằng tháng là 1000 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:33.268+00:00"
+      },
+      {
+        "id": 56,
+        "kind": "person",
+        "content": "Khách Alfa Voyages thuộc thị trường Đức, đầu mối là anh Phát, mục tiêu hằng tháng là 1050 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:35.44+00:00"
+      },
+      {
+        "id": 57,
+        "kind": "person",
+        "content": "Khách Bravo Trips thuộc thị trường Nhật Bản, đầu mối là anh Sơn, mục tiêu hằng tháng là 350 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:37.571+00:00"
+      },
+      {
+        "id": 58,
+        "kind": "person",
+        "content": "Khách Mango Voyages thuộc thị trường Đài Loan, đầu mối là anh Bảo, mục tiêu hằng tháng là 150 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:36:37.839+00:00"
+      },
+      {
+        "id": 59,
+        "kind": "person",
+        "content": "Khách Indigo Voyages thuộc thị trường Đức, đầu mối là anh Khải, mục tiêu hằng tháng là 850 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:40.013+00:00"
+      },
+      {
+        "id": 60,
+        "kind": "person",
+        "content": "Khách Garnet Journeys thuộc thị trường Thái Lan, đầu mối đổi sang anh Phát, mục tiêu hằng tháng tăng lên 250 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:43.184+00:00"
+      },
+      {
+        "id": 61,
+        "kind": "person",
+        "content": "Khách Lotus Tours thuộc thị trường Singapore, đầu mối đổi sang anh Hải, mục tiêu hằng tháng là 900 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:46.074+00:00"
+      },
+      {
+        "id": 62,
+        "kind": "person",
+        "content": "Khách Garnet Holidays thuộc thị trường Ý, đầu mối đổi sang anh Hải, mục tiêu hằng tháng tăng lên 900 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:50.64+00:00"
+      },
+      {
+        "id": 63,
+        "kind": "person",
+        "content": "Khách Harbor Voyages thuộc thị trường Pháp, đầu mối đổi từ anh Khải sang chị Giang, mục tiêu hằng tháng tăng lên 400 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:53.323+00:00"
+      },
+      {
+        "id": 64,
+        "kind": "person",
+        "content": "Khách Fjord Holidays thuộc thị trường Hàn Quốc, đầu mối đổi từ chị Hạnh sang anh Bảo, mục tiêu hằng tháng tăng lên 850 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:55.915+00:00"
+      },
+      {
+        "id": 65,
+        "kind": "person",
+        "content": "Khách Raven Holidays thuộc thị trường Úc, đầu mối là chị Chi, mục tiêu hằng tháng là 800 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:37:15.204+00:00"
+      },
+      {
+        "id": 66,
+        "kind": "person",
+        "content": "Khách Nimbus Voyages thuộc thị trường Nhật Bản, đầu mối là chị Chi, mục tiêu hằng tháng là 50 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:37:21.163+00:00"
+      },
+      {
+        "id": 67,
+        "kind": "person",
+        "content": "Khách Garnet Travel thuộc thị trường Úc, đầu mối là chị Thảo, mục tiêu hằng tháng là 300 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:37:26.295+00:00"
+      },
+      {
+        "id": 68,
+        "kind": "person",
+        "content": "Khách Fjord Journeys thuộc thị trường Nhật Bản, đầu mối đổi từ chị Yến sang chị Chi, mục tiêu hằng tháng tăng lên 400 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:58.333+00:00"
+      },
+      {
+        "id": 69,
+        "kind": "person",
+        "content": "Khách Quartz Voyages thuộc thị trường Đài Loan, đầu mối là chị Quyên, mục tiêu hằng tháng là 350 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:37:36.25+00:00"
+      },
+      {
+        "id": 70,
+        "kind": "person",
+        "content": "Khách Jade Tours thuộc thị trường Đài Loan, đầu mối đổi từ chị Hạnh sang chị Chi, mục tiêu hằng tháng tăng lên 100 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:01.877+00:00"
+      },
+      {
+        "id": 71,
+        "kind": "person",
+        "content": "Khách Ember Holidays thuộc thị trường Nhật Bản, đầu mối đổi từ chị Oanh sang anh Phát, mục tiêu hằng tháng tăng lên 750 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:05.048+00:00"
+      },
+      {
+        "id": 72,
+        "kind": "person",
+        "content": "Khách Jade Holidays thuộc thị trường Pháp, đầu mối là chị Yến, mục tiêu hằng tháng là 300 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:37:55.439+00:00"
+      },
+      {
+        "id": 73,
+        "kind": "person",
+        "content": "Khách Sierra Holidays thuộc thị trường Mỹ, đầu mối đổi từ chị Thảo sang chị Yến, mục tiêu hằng tháng tăng lên 150 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:07.148+00:00"
+      },
+      {
+        "id": 74,
+        "kind": "person",
+        "content": "Khách Jade Travel thuộc thị trường Singapore, đầu mối đổi từ chị Giang sang anh Việt, mục tiêu hằng tháng tăng lên 800 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:09.577+00:00"
+      },
+      {
+        "id": 75,
+        "kind": "person",
+        "content": "Khách Koala Journeys thuộc thị trường Thái Lan, đầu mối là chị Giang, mục tiêu hằng tháng là 200 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:38:11.123+00:00"
+      },
+      {
+        "id": 76,
+        "kind": "person",
+        "content": "Khách Indigo Holidays thuộc thị trường Hàn Quốc, đầu mối đổi từ anh Bảo sang chị Hạnh, mục tiêu hằng tháng tăng lên 550 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:11.836+00:00"
+      },
+      {
+        "id": 77,
+        "kind": "person",
+        "content": "Khách Lotus Voyages thuộc thị trường Đức, đầu mối đổi từ chị Oanh sang anh Dũng, mục tiêu hằng tháng tăng lên 800 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:14.448+00:00"
+      },
+      {
+        "id": 78,
+        "kind": "person",
+        "content": "Khách Raven Trips thuộc thị trường Ý, đầu mối đổi từ anh Phát sang chị Giang, mục tiêu hằng tháng tăng lên 150 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:20.493+00:00"
+      },
+      {
+        "id": 79,
+        "kind": "person",
+        "content": "Khách Sierra Travel thuộc thị trường Hàn Quốc, đầu mối là chị Quyên, mục tiêu hằng tháng là 850 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:38:35.493+00:00"
+      },
+      {
+        "id": 80,
+        "kind": "person",
+        "content": "Khách Sierra Trips thuộc thị trường Singapore, đầu mối là chị Oanh, mục tiêu hằng tháng là 300 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:38:39.917+00:00"
+      },
+      {
+        "id": 81,
+        "kind": "person",
+        "content": "Khách Lotus Journeys thuộc thị trường Mỹ, đầu mối đổi từ anh Sơn sang anh Phát, mục tiêu hằng tháng tăng lên 150 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:23.88+00:00"
+      },
+      {
+        "id": 82,
+        "kind": "person",
+        "content": "Khách Garnet Voyages thuộc thị trường Pháp, đầu mối là anh Hải, mục tiêu hằng tháng là 950 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:38:51.108+00:00"
+      },
+      {
+        "id": 83,
+        "kind": "person",
+        "content": "Khách Nimbus Trips thuộc thị trường Singapore, đầu mối là chị Giang, mục tiêu hằng tháng là 300 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:38:57.744+00:00"
+      },
+      {
+        "id": 84,
+        "kind": "person",
+        "content": "Khách Mango Holidays thuộc thị trường Ý, đầu mối là chị Oanh, mục tiêu hằng tháng là 300 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:39:02.958+00:00"
+      },
+      {
+        "id": 85,
+        "kind": "person",
+        "content": "Khách Nimbus Travel thuộc thị trường Singapore, đầu mối đổi từ anh Sơn sang chị Yến, mục tiêu hằng tháng tăng lên 300 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:25.964+00:00"
+      },
+      {
+        "id": 86,
+        "kind": "person",
+        "content": "Khách Raven Travel thuộc thị trường Úc, đầu mối đổi từ chị Hạnh sang anh Bảo, mục tiêu hằng tháng tăng lên 750 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:28.504+00:00"
+      },
+      {
+        "id": 87,
+        "kind": "person",
+        "content": "Khách Raven Tours thuộc thị trường Singapore, đầu mối đổi từ anh Bảo sang anh Nam, mục tiêu hằng tháng tăng lên 1050 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:30.695+00:00"
+      },
+      {
+        "id": 88,
+        "kind": "person",
+        "content": "Khách Cedar Journeys thuộc thị trường Pháp, đầu mối là chị Oanh, mục tiêu hằng tháng là 200 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:39:24.065+00:00"
+      },
+      {
+        "id": 89,
+        "kind": "person",
+        "content": "Khách Indigo Tours thuộc thị trường Singapore, đầu mối là chị Quyên, mục tiêu hằng tháng là 500 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:39:29.538+00:00"
+      },
+      {
+        "id": 90,
+        "kind": "person",
+        "content": "Khách Cedar Holidays thuộc thị trường Hàn Quốc, đầu mối đổi từ chị Quyên sang anh Sơn, mục tiêu hằng tháng tăng lên 600 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:32.972+00:00"
+      },
+      {
+        "id": 91,
+        "kind": "person",
+        "content": "Khách Jade Journeys thuộc thị trường Singapore, đầu mối là anh Phát, mục tiêu hằng tháng là 300 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:39:39.491+00:00"
+      },
+      {
+        "id": 92,
+        "kind": "person",
+        "content": "Khách Onyx Journeys thuộc thị trường Đài Loan, đầu mối là chị Quyên, mục tiêu hằng tháng là 250 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:39:45.059+00:00"
+      },
+      {
+        "id": 93,
+        "kind": "person",
+        "content": "Khách Pearl Holidays thuộc thị trường Mỹ, đầu mối là anh Việt, mục tiêu hằng tháng là 600 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:39:49.287+00:00"
+      },
+      {
+        "id": 94,
+        "kind": "person",
+        "content": "Khách Onyx Voyages thuộc thị trường Pháp, đầu mối là chị Lam, mục tiêu hằng tháng là 650 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:39:53.568+00:00"
+      },
+      {
+        "id": 95,
+        "kind": "person",
+        "content": "Khách Fjord Travel thuộc thị trường Pháp, đầu mối đổi từ anh Sơn sang chị Thảo, mục tiêu hằng tháng tăng lên 850 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:35.488+00:00"
+      },
+      {
+        "id": 96,
+        "kind": "person",
+        "content": "Khách Onyx Travel thuộc thị trường Nhật Bản, đầu mối đổi từ chị Hạnh sang anh Nam, mục tiêu hằng tháng tăng lên 750 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:38.253+00:00"
+      },
+      {
+        "id": 97,
+        "kind": "person",
+        "content": "Khách Ember Trips thuộc thị trường Mỹ, đầu mối đổi từ chị Oanh sang anh Phát, mục tiêu hằng tháng tăng lên 700 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:40.518+00:00"
+      },
+      {
+        "id": 98,
+        "kind": "person",
+        "content": "Khách Delta Journeys thuộc thị trường Singapore, đầu mối là chị Lam, mục tiêu hằng tháng là 150 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:40:14.311+00:00"
+      },
+      {
+        "id": 99,
+        "kind": "person",
+        "content": "Khách Delta Trips thuộc thị trường Ý, đầu mối đổi từ chị Chi sang chị Oanh, mục tiêu hằng tháng tăng lên 1050 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:45.441+00:00"
+      },
+      {
+        "id": 100,
+        "kind": "person",
+        "content": "Khách Bravo Travel thuộc thị trường Thái Lan, đầu mối đổi từ chị Lam sang anh Phát, mục tiêu hằng tháng tăng lên 750 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:48.044+00:00"
+      },
+      {
+        "id": 101,
+        "kind": "person",
+        "content": "Khách Bravo Holidays thuộc thị trường Nhật Bản, đầu mối là chị Hạnh, mục tiêu hằng tháng là 800 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:40:29.418+00:00"
+      },
+      {
+        "id": 102,
+        "kind": "person",
+        "content": "Khách Garnet Tours thuộc thị trường Thái Lan, đầu mối là chị Chi, mục tiêu hằng tháng là 1000 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:40:34.236+00:00"
+      },
+      {
+        "id": 103,
+        "kind": "person",
+        "content": "Khách Pearl Tours thuộc thị trường Singapore, đầu mối đổi từ chị Quyên sang anh Dũng, mục tiêu hằng tháng tăng lên 150 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:50.323+00:00"
+      },
+      {
+        "id": 104,
+        "kind": "person",
+        "content": "Khách Koala Trips thuộc thị trường Hàn Quốc, đầu mối là anh Khải, mục tiêu hằng tháng là 850 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:40:44.195+00:00"
+      },
+      {
+        "id": 105,
+        "kind": "person",
+        "content": "Khách Bravo Voyages thuộc thị trường Đài Loan, đầu mối là chị Thảo, mục tiêu hằng tháng là 50 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:40:49.075+00:00"
+      },
+      {
+        "id": 106,
+        "kind": "person",
+        "content": "Khách Fjord Tours thuộc thị trường Singapore, đầu mối đổi từ chị Hạnh sang chị Oanh, mục tiêu hằng tháng tăng lên 200 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:53.771+00:00"
+      },
+      {
+        "id": 107,
+        "kind": "person",
+        "content": "Khách Harbor Holidays thuộc thị trường Ý, đầu mối là anh Bảo, mục tiêu hằng tháng là 100 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:40:59.483+00:00"
+      },
+      {
+        "id": 108,
+        "kind": "person",
+        "content": "Khách Onyx Tours thuộc thị trường Hàn Quốc, đầu mối là anh Sơn, mục tiêu hằng tháng là 700 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:04.378+00:00"
+      },
+      {
+        "id": 109,
+        "kind": "person",
+        "content": "Khách Jade Voyages thuộc thị trường Úc, đầu mối là anh Phát, mục tiêu hằng tháng là 350 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:09.192+00:00"
+      },
+      {
+        "id": 110,
+        "kind": "person",
+        "content": "Khách Nimbus Holidays thuộc thị trường Úc, đầu mối đổi từ anh Dũng sang anh Phát, mục tiêu hằng tháng tăng lên 1000 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:42:56.423+00:00"
+      },
+      {
+        "id": 111,
+        "kind": "person",
+        "content": "Khách Cedar Voyages thuộc thị trường Mỹ, đầu mối là chị Hạnh, mục tiêu hằng tháng là 150 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:25.65+00:00"
+      },
+      {
+        "id": 112,
+        "kind": "person",
+        "content": "Khách Lotus Holidays thuộc thị trường Đài Loan, đầu mối là chị Thảo, mục tiêu hằng tháng là 300 SIM.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:41:31.101+00:00"
+      },
+      {
+        "id": 113,
+        "kind": "profile",
+        "content": "Tên là Minh Anh, làm Account Manager nhóm B2B, báo cáo trực tiếp cho anh Tuấn (chị Lan chuyển sang B2C).",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:43:28.151+00:00"
+      },
+      {
+        "id": 114,
+        "kind": "project",
+        "content": "Từ 01/09 chuyển sang phụ trách thị trường Châu Âu thay vì Hàn Quốc; vẫn tiếp tục phụ trách Beta Tours.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:43:23.081+00:00"
+      },
+      {
+        "id": 115,
+        "kind": "preference",
+        "content": "Thích câu trả lời ngắn gọn, đưa kết luận trước; số liệu trình bày bằng bảng thay vì biểu đồ, luôn có cột CM1% cạnh doanh thu.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:43:44.85+00:00"
+      },
+      {
+        "id": 116,
+        "kind": "person",
+        "content": "Khách Alpha Travel đã bàn giao cho bạn Phúc từ 01/09, người dùng không còn theo khách này nữa.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:43:34.37+00:00"
+      },
+      {
+        "id": 117,
+        "kind": "decision",
+        "content": "Chốt phương án giảm 5% với cam kết 12 tháng.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:43:14.275705+00:00"
+      },
+      {
+        "id": 118,
+        "kind": "decision",
+        "content": "Quyết định gửi báo cáo khách hàng vào sáng thứ Hai hằng tuần, không gửi cuối tuần.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:43:17.064844+00:00"
+      },
+      {
+        "id": 119,
+        "kind": "person",
+        "content": "Khách Châu Âu Gamma Holidays (đầu mối chị Elena) ký thử nghiệm 3 tháng từ 15/09, mục tiêu 200 SIM/tháng.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:43:37.067+00:00"
+      },
+      {
+        "id": 120,
+        "kind": "person",
+        "content": "Chị Elena (Gamma Holidays) yêu cầu eSIM đồng thương hiệu; hai bên thống nhất gửi mẫu thiết kế trước ngày 30/9.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:43:42.165+00:00"
+      },
+      {
+        "id": 121,
+        "kind": "person",
+        "content": "Chị Elena bên Gamma Holidays đổi sang gói Unlimited 7 ngày thay vì 10 ngày như trước.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:43:52.918836+00:00"
+      },
+      {
+        "id": 122,
+        "kind": "person",
+        "content": "Bạn Phúc nhận xử lý việc Beta Tours và Gamma Holidays trong thời gian người dùng nghỉ phép từ 6/10 đến 10/10.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:43:55.480173+00:00"
+      },
+      {
+        "id": 123,
+        "kind": "project",
+        "content": "Mục tiêu quý 4: đưa Gamma Holidays lên 500 SIM/tháng và duy trì không giảm sản lượng của Beta Tours.",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:43:57.724871+00:00"
+      },
+      {
+        "id": 124,
+        "kind": "preference",
+        "content": "Hay họp với anh Tuấn vào chiều thứ Sáu, không đặt lịch nhắc vào thời gian này",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T09:44:00.113754+00:00"
+      }
+    ],
+    "conversationSummaries": [
+      {
+        "title": "[GP] Giá hợp đồng năm Alpha Travel",
+        "summary": "Hợp đồng năm với Alpha Travel: anh Quang (liên hệ chính), chị Hà (đầu mối thanh toán). Quyết định: chọn phương án B (giảm giá 5% kèm cam kết 12 tháng) thay vì phương án A (giữ giá) hay C (giảm 8%, cam kết 24 tháng). Thay đổi lịch gửi báo cáo khách hàng sang sáng thứ Hai hằng tuần (thay vì cuối tuần). Không có việc còn dở.",
+        "message_count": 8
+      },
+      {
+        "title": "[GP] Hỗ trợ đồng thương hiệu cho Gamma Holidays",
+        "summary": "Chủ đề: Hợp tác thử nghiệm eSIM và yêu cầu báo cáo. Khách hàng: Gamma Holidays (chị Elena). Chi tiết: Ký thử nghiệm 3 tháng từ 15/9, mục tiêu 200 SIM/tháng. Đã chốt: Hỗ trợ eSIM đồng thương hiệu (logo Gamma và GoHub trên trang kích hoạt); Bảng báo cáo luôn kèm cột CM1% cạnh doanh thu. Việc còn dở: Gửi mẫu thiết kế đồng thương hiệu cho đối tác trước ngày 30/9 (cần mẫu logo từ Gamma, thiết kế mất khoảng 1 tuần).",
+        "message_count": 8
+      }
+    ],
+    "memoryBlockChars": 8653
+  },
+  "rows": [
+    {
+      "id": 1,
+      "cat": "single_fact",
+      "question": "Đầu mối thanh toán của Alpha Travel là ai?",
+      "answer": "Đầu mối thanh toán của **Alpha Travel** là **chị Hà**. \n\n*(Thông tin thêm: Liên hệ chính bên phía Alpha Travel là **anh Quang**. Ngoài ra, tài khoản khách hàng Alpha Travel đã được bạn bàn giao cho **bạn Phúc** phụ trách từ ngày 01/09).*\n\nChi tiết trao đổi trước đây bạn có thể xem lại tại: [[GP] Giá hợp đồng năm Alpha Travel](/analytics/creator/ai?c=4be9b335-beb9-45cf-b848-14301615178b).",
+      "toolsUsed": [
+        "searchKnowledgeBase",
+        "executeSQL",
+        "searchPastConversations",
+        "assistantMemory"
+      ],
+      "tokensIn": 75198,
+      "tokensOut": 223,
+      "ms": 7780,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối thanh toán là chị Hà và cung cấp thêm thông tin chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 2,
+      "cat": "single_fact",
+      "question": "Người liên hệ chính bên Alpha Travel là ai?",
+      "answer": "Người liên hệ chính bên **Alpha Travel** là **anh Quang**. Ngoài ra, bên đối tác còn có **chị Hà** phụ trách đầu mối thanh toán.\n\n*(Lưu ý: Tài khoản khách hàng Alpha Travel đã được bàn giao cho bạn **Phúc** phụ trách từ ngày 01/09).*",
+      "toolsUsed": [
+        "assistantMemory",
+        "searchPastConversations"
+      ],
+      "tokensIn": 53116,
+      "tokensOut": 110,
+      "ms": 8323,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng người liên hệ chính là anh Quang. Các thông tin bổ sung đều có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 3,
+      "cat": "single_fact",
+      "question": "Gamma Holidays ký thử nghiệm bao lâu và bắt đầu từ ngày nào?",
+      "answer": "Theo thông tin đã lưu, khách **Gamma Holidays** (đầu mối chị Elena) ký thử nghiệm:\n\n* **Thời gian thử nghiệm:** **3 tháng**\n* **Ngày bắt đầu:** **15/09/2026**\n* **Mục tiêu sản lượng ban đầu:** 200 SIM/tháng (mục tiêu Q4 hướng tới đưa lên 500 SIM/tháng).",
+      "toolsUsed": [],
+      "tokensIn": 17463,
+      "tokensOut": 91,
+      "ms": 3297,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thời gian thử nghiệm và ngày bắt đầu. Việc thêm năm 2026 không bị tính là bịa theo quy tắc."
+      }
+    },
+    {
+      "id": 4,
+      "cat": "single_fact",
+      "question": "Mình nghỉ phép khi nào?",
+      "answer": "Theo lịch đã ghi nhận, bạn nghỉ phép từ ngày **06/10/2026** đến hết ngày **10/10/2026**. \n\nTrong khoảng thời gian này, công việc liên quan đến hai khách hàng **Beta Tours** và **Gamma Holidays** đã được bàn giao cho bạn **Phúc** hỗ trợ xử lý.",
+      "toolsUsed": [],
+      "tokensIn": 21566,
+      "tokensOut": 78,
+      "ms": 3859,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thời gian nghỉ phép từ 6/10 đến 10/10. Việc thêm năm 2026 không tính là bịa theo quy tắc. Thông tin bàn giao công việc cho Phúc cũng có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 5,
+      "cat": "single_fact",
+      "question": "Công việc của mình là gì ở công ty?",
+      "answer": "Chào **Minh Anh**, công việc và phạm vi phụ trách hiện tại của bạn tại GoHub như sau:\n\n* **Vị trí**: **Account Manager (AM)** thuộc nhóm **B2B**.\n* **Báo cáo trực tiếp**: Anh **Tuấn** (sau khi chị Lan chuyển sang phụ trách B2C).\n* **Phạm vi thị trường & Khách hàng phụ trách**:\n  * **Thị trường chính**: Thị trường **Châu Âu** (chuyển sang từ ngày 01/09, thay vì Hàn Quốc trước đây).\n  * **Khách hàng trọng tâm**: Tiếp tục phụ trách **Beta Tours** và các đối tác Châu Âu như **Gamma Holidays** (đầu mối chị Elena).\n  * *(Lưu ý: Khách hàng Alpha Travel đã hoàn tất bàn giao cho bạn Phúc từ đầu tháng 9).*",
+      "toolsUsed": [],
+      "tokensIn": 20500,
+      "tokensOut": 185,
+      "ms": 4366,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng vị trí công việc theo đáp án tham chiếu và cung cấp thêm các thông tin chính xác dựa trên bảng sự thật."
+      }
+    },
+    {
+      "id": 6,
+      "cat": "preference",
+      "question": "Bạn nên trình bày dữ liệu cho mình theo cách nào?",
+      "answer": "Theo thói quen làm việc và sở thích đã ghi nhận của Minh Anh, cách trình bày chuẩn nhất cho bạn sẽ là:\n\n1. **Đưa kết luận trước**: Tóm tắt ngay phát hiện chính / câu trả lời cốt lõi ở đầu, súc tích và trực diện, không rào đón.\n2. **Ưu tiên bảng số liệu thay vì biểu đồ**: Trình bày cấu trúc dữ liệu rõ ràng bằng bảng markdown trực quan.\n3. **Luôn có cột CM1% bên cạnh Doanh thu**: Bất cứ khi nào phân tích số liệu tài chính, hiệu suất bán hàng hay khách hàng B2B, Gấu sẽ luôn tính và hiển thị song song Doanh thu và **CM1%** (kèm theo GP/CM1 nếu cần).\n4. **Ngắn gọn, dễ hành động**: Đi thẳng vào các điểm số liệu nổi bật và bước tiếp theo cụ thể.\n\nNếu Minh Anh muốn điều chỉnh thêm quy chuẩn nào khác cho các báo cáo sắp tới, cứ báo Gấu nhé!",
+      "toolsUsed": [],
+      "tokensIn": 21015,
+      "tokensOut": 218,
+      "ms": 5070,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đầy đủ các ý trong đáp án tham chiếu và bổ sung thêm yêu cầu về cột CM1% có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 7,
+      "cat": "preference",
+      "question": "Mình muốn nhận báo cáo khách hàng vào lúc nào trong tuần?",
+      "answer": "Theo quyết định đã chốt, bạn muốn nhận báo cáo khách hàng vào **sáng thứ Hai hằng tuần** (không gửi vào cuối tuần).",
+      "toolsUsed": [],
+      "tokensIn": 20820,
+      "tokensOut": 31,
+      "ms": 4808,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thời gian nhận báo cáo là sáng thứ Hai hằng tuần, khớp với đáp án tham chiếu và bảng sự thật."
+      }
+    },
+    {
+      "id": 8,
+      "cat": "preference",
+      "question": "Làm bảng báo cáo cho mình thì phải có cột gì cạnh doanh thu?",
+      "answer": "Theo sở thích làm việc của bạn (trí nhớ **#115**), khi làm báo cáo số liệu:\n\n* **Bắt buộc có cột:** **CM1%** đặt ngay cạnh cột **Doanh thu**.\n* **Định dạng ưu tiên:** Trình bày bằng **bảng** thay vì biểu đồ, đưa kết luận ngắn gọn lên trước.",
+      "toolsUsed": [],
+      "tokensIn": 21855,
+      "tokensOut": 78,
+      "ms": 3479,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng cột CM1% và không bịa thông tin."
+      }
+    },
+    {
+      "id": 9,
+      "cat": "preference",
+      "question": "Khung giờ nào trong tuần không nên đặt lịch nhắc cho mình?",
+      "answer": "Theo lưu ý của bạn, **chiều thứ Sáu** là khung giờ không nên đặt lịch nhắc vì bạn thường có lịch họp với **anh Tuấn**.",
+      "toolsUsed": [],
+      "tokensIn": 19590,
+      "tokensOut": 33,
+      "ms": 2764,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng khung giờ không nên đặt lịch nhắc là chiều thứ Sáu và lý do họp với anh Tuấn, khớp với đáp án tham chiếu và bảng sự thật."
+      }
+    },
+    {
+      "id": 10,
+      "cat": "update_current",
+      "question": "Hiện giờ mình đang phụ trách thị trường nào?",
+      "answer": "Hiện tại, Minh Anh đang phụ trách **thị trường Châu Âu** (chuyển giao từ ngày 01/09 thay vì Hàn Quốc). \n\nNgoài ra:\n- Minh Anh vẫn tiếp tục theo sát khách hàng **Beta Tours**.\n- Đang phát triển tài khoản mới tại thị trường này là **Gamma Holidays** (đầu mối chị Elena, ký thử nghiệm từ 15/09).\n- Khách **Alpha Travel** trước đây đã bàn giao lại cho bạn Phúc.",
+      "toolsUsed": [],
+      "tokensIn": 21591,
+      "tokensOut": 107,
+      "ms": 3255,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường Châu Âu và việc không còn phụ trách Hàn Quốc từ 1/9. Các thông tin bổ sung về khách hàng đều chính xác theo bảng sự thật."
+      }
+    },
+    {
+      "id": 11,
+      "cat": "update_current",
+      "question": "Sếp trực tiếp của mình bây giờ là ai?",
+      "answer": "Sếp trực tiếp hiện tại của bạn là **anh Tuấn** (sau khi chị Lan đã chuyển sang phụ trách B2C).",
+      "toolsUsed": [],
+      "tokensIn": 21304,
+      "tokensOut": 28,
+      "ms": 4539,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng sếp trực tiếp hiện tại là anh Tuấn và thông tin chị Lan chuyển sang B2C hoàn toàn khớp với bảng sự thật."
+      }
+    },
+    {
+      "id": 12,
+      "cat": "update_current",
+      "question": "Alpha Travel hiện do ai phụ trách?",
+      "answer": "Khách **Alpha Travel** hiện do **bạn Phúc** phụ trách (đã bàn giao từ ngày 01/09).",
+      "toolsUsed": [],
+      "tokensIn": 17457,
+      "tokensOut": 29,
+      "ms": 3596,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng người phụ trách hiện tại là bạn Phúc từ ngày 1/9, khớp với đáp án tham chiếu và bảng sự thật."
+      }
+    },
+    {
+      "id": 13,
+      "cat": "update_current",
+      "question": "Chị Elena đang quan tâm gói Unlimited mấy ngày?",
+      "answer": "Chị Elena (bên Gamma Holidays) đang quan tâm và đổi sang gói **Unlimited 7 ngày** (thay vì gói 10 ngày như trước đây).",
+      "toolsUsed": [],
+      "tokensIn": 21970,
+      "tokensOut": 35,
+      "ms": 2386,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời chính xác số ngày của gói Unlimited hiện tại là 7 ngày (đổi từ 10 ngày), khớp với đáp án tham chiếu và bảng sự thật."
+      }
+    },
+    {
+      "id": 14,
+      "cat": "update_current",
+      "question": "Mục tiêu số SIM mỗi tháng của Gamma Holidays hiện là bao nhiêu?",
+      "answer": "Mục tiêu số SIM mỗi tháng của khách **Gamma Holidays** hiện tại là:\n\n* **Mục tiêu Quý 4/2026:** **500 SIM/tháng**.\n\n*(Trước đó trong giai đoạn ký thử nghiệm 3 tháng từ 15/09, mục tiêu ban đầu là 200 SIM/tháng).*\n\n```followup\n[\"Sản lượng thực tế Gamma Holidays?\", \"Tiến độ gói Unlimited 7N?\", \"Kế hoạch tuần này cho Gamma?\"]\n```",
+      "toolsUsed": [],
+      "tokensIn": 22801,
+      "tokensOut": 113,
+      "ms": 6152,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng mục tiêu hiện tại là 500 SIM/tháng và có nhắc đến mục tiêu cũ 200 SIM/tháng. Việc thêm năm 2026 không bị tính là bịa theo quy tắc."
+      }
+    },
+    {
+      "id": 15,
+      "cat": "history",
+      "question": "Trước tháng 9 mình phụ trách thị trường nào?",
+      "answer": "Trước tháng 9, bạn phụ trách thị trường **Hàn Quốc** (từ ngày 01/09 bạn đã chuyển sang phụ trách thị trường **Châu Âu**, đồng thời vẫn tiếp tục theo dõi khách hàng **Beta Tours**).",
+      "toolsUsed": [],
+      "tokensIn": 21469,
+      "tokensOut": 52,
+      "ms": 12044,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường Hàn Quốc và cung cấp thêm thông tin chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 16,
+      "cat": "history",
+      "question": "Trước anh Tuấn thì sếp trực tiếp của mình là ai?",
+      "answer": "Trước anh Tuấn, sếp trực tiếp của bạn là **chị Lan** (sau đó chị Lan đã chuyển sang phụ trách mảng B2C).",
+      "toolsUsed": [],
+      "tokensIn": 18892,
+      "tokensOut": 33,
+      "ms": 2387,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng sếp trực tiếp trước anh Tuấn là chị Lan và cung cấp thêm thông tin chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 17,
+      "cat": "history",
+      "question": "Ban đầu Gamma Holidays thương lượng gói Unlimited mấy ngày?",
+      "answer": "Ban đầu **Gamma Holidays** thương lượng gói **Unlimited 10 ngày**, sau đó chị Elena đã đổi sang gói **Unlimited 7 ngày**.",
+      "toolsUsed": [],
+      "tokensIn": 21906,
+      "tokensOut": 30,
+      "ms": 3428,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng số ngày ban đầu là 10 ngày và cung cấp thêm thông tin cập nhật chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 18,
+      "cat": "history",
+      "question": "Lúc mới ký thử nghiệm, mục tiêu SIM mỗi tháng của Gamma là bao nhiêu?",
+      "answer": "Khi mới ký thử nghiệm (3 tháng từ ngày 15/09), mục tiêu của **Gamma Holidays** là **200 SIM/tháng** (sau đó sang Quý 4 đã đặt mục tiêu nâng lên 500 SIM/tháng).",
+      "toolsUsed": [],
+      "tokensIn": 22311,
+      "tokensOut": 57,
+      "ms": 2453,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng mục tiêu 200 SIM/tháng và các thông tin bổ sung đều có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 19,
+      "cat": "history",
+      "question": "Chị Lan bây giờ làm mảng nào?",
+      "answer": "Chị Lan hiện đã chuyển sang phụ trách mảng **B2C**.",
+      "toolsUsed": [],
+      "tokensIn": 20657,
+      "tokensOut": 16,
+      "ms": 2441,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng mảng B2C theo thông tin trong bảng sự thật."
+      }
+    },
+    {
+      "id": 20,
+      "cat": "multi_hop",
+      "question": "Khách hàng mà mình đã bàn giao hẳn cho bạn Phúc có đầu mối liên hệ và đầu mối thanh toán là ai?",
+      "answer": "Khách hàng bạn đã bàn giao hẳn cho bạn Phúc từ ngày 01/09 là **Alpha Travel**. \n\nThông tin các đầu mối của khách hàng này cụ thể như sau:\n* **Đầu mối liên hệ chính:** Anh Quang\n* **Đầu mối thanh toán:** Chị Hà\n\n*(Chi tiết từng được trao đổi trong cuộc hội thoại [[GP] Giá hợp đồng năm Alpha Travel](/analytics/creator/ai?c=4be9b335-beb9-45cf-b848-14301615178b)).*",
+      "toolsUsed": [
+        "assistantMemory",
+        "searchPastConversations"
+      ],
+      "tokensIn": 62806,
+      "tokensOut": 174,
+      "ms": 6646,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 1,
+        "note": "Trợ lý trả lời đúng thông tin khách hàng và các đầu mối, nhưng bịa ra tên cuộc hội thoại và đường link không có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 21,
+      "cat": "multi_hop",
+      "question": "Trong lúc mình nghỉ phép, ai xử lý khách Châu Âu của mình và đầu mối bên khách đó là ai?",
+      "answer": "Trong thời gian bạn nghỉ phép (06/10 – 10/10):\n\n* **Người xử lý thay bạn tại GoHub**: Bạn **Phúc** nhận bàn giao phụ trách công việc.\n* **Khách hàng Châu Âu & Đầu mối đối tác**:\n  * **Khách hàng**: **Gamma Holidays**\n  * **Đầu mối phía khách**: **Chị Elena** *(gần đây đã chốt đổi sang gói Unlimited 7 ngày và đang đợi mẫu thiết kế eSIM đồng thương hiệu)*",
+      "toolsUsed": [],
+      "tokensIn": 21025,
+      "tokensOut": 111,
+      "ms": 3273,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng và đủ các ý chính theo đáp án tham chiếu, các thông tin bổ sung đều có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 22,
+      "cat": "multi_hop",
+      "question": "Khách nào của mình đang thương lượng gói Unlimited, hiện là mấy ngày và mục tiêu SIM hằng tháng quý 4 là bao nhiêu?",
+      "answer": "Khách hàng của bạn là **Gamma Holidays** (thị trường Châu Âu, đầu mối liên hệ là chị Elena).\n\nThông tin chi tiết theo các thỏa thuận gần đây:\n- **Gói Unlimited đang thương lượng:** Gói **Unlimited 7 ngày** (chị Elena đã đổi từ phương án 10 ngày trước đó sang 7 ngày).\n- **Mục tiêu sản lượng Quý 4:** **500 SIM/tháng** (tăng từ mức thử nghiệm ban đầu 200 SIM/tháng).",
+      "toolsUsed": [],
+      "tokensIn": 22304,
+      "tokensOut": 115,
+      "ms": 2662,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng và đủ các thông tin theo đáp án tham chiếu, các thông tin bổ sung đều có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 23,
+      "cat": "multi_hop",
+      "question": "Mình hay họp với sếp vào lúc nào, và sếp đó là ai?",
+      "answer": "Theo thông tin đã lưu:\n\n- **Sếp của bạn**: **Anh Tuấn** (bạn thuộc nhóm B2B Account Manager và báo cáo trực tiếp cho anh Tuấn).\n- **Thời gian họp**: **Chiều thứ Sáu** hằng tuần (bạn có lưu ý không đặt lịch nhắc vào khung giờ này).",
+      "toolsUsed": [],
+      "tokensIn": 21486,
+      "tokensOut": 70,
+      "ms": 3256,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thời gian họp là chiều thứ Sáu và sếp là anh Tuấn, khớp với đáp án tham chiếu và bảng sự thật."
+      }
+    },
+    {
+      "id": 24,
+      "cat": "multi_hop",
+      "question": "Khách nào mình giữ từ đầu đến giờ không đổi người phụ trách, và mục tiêu quý 4 của khách đó là gì?",
+      "answer": "Khách hàng mà Minh Anh giữ từ đầu đến giờ không đổi người phụ trách là **Beta Tours** (dù từ 01/09 bạn chuyển sang phụ trách thị trường Châu Âu thay vì Hàn Quốc, bạn vẫn tiếp tục phụ trách khách này; trong đợt nghỉ phép 06/10–10/10 thì Phúc chỉ hỗ trợ xử lý tạm thời).\n\n- **Khách hàng:** **Beta Tours**\n- **Mục tiêu Quý 4:** **Duy trì không giảm sản lượng** (song song với mục tiêu đưa Gamma Holidays lên 500 SIM/tháng).",
+      "toolsUsed": [],
+      "tokensIn": 21512,
+      "tokensOut": 132,
+      "ms": 2722,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng tên khách hàng và mục tiêu quý 4, các thông tin bổ sung đều có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 25,
+      "cat": "abstention",
+      "question": "Số điện thoại của anh Quang bên Alpha Travel là gì?",
+      "answer": "Hiện tại trong hệ thống ghi nhận và các hội thoại trước đây:\n\n- **Hồ sơ đối tác**: Anh Quang là người liên hệ chính và chị Hà là đầu mối thanh toán bên **Alpha Travel** (hợp đồng năm cam kết 12 tháng, giảm 5%).\n- **Thông tin liên lạc**: Số điện thoại cá nhân của anh Quang **không được lưu trữ** trong hệ thống/trí nhớ của Gấu.\n- **Lưu ý bàn giao**: Khách hàng **Alpha Travel đã được bàn giao cho bạn Phúc từ ngày 01/09/2026**. Bạn có thể liên hệ trực tiếp với **Phúc** để lấy số điện thoại hoặc thông tin liên lạc chi tiết của anh Quang nhé.\n\n*(Bạn có thể xem lại ngữ cảnh trao đổi về hợp đồng tại hội thoại [[GP] Giá hợp đồng năm Alpha Travel](/analytics/creator/ai?c=4be9b335-beb9-45cf-b848-14301615178b)).*",
+      "toolsUsed": [
+        "assistantMemory",
+        "searchPastConversations",
+        "executeSQL"
+      ],
+      "tokensIn": 88414,
+      "tokensOut": 350,
+      "ms": 12228,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 1,
+        "note": "Trợ lý trả lời đúng là không có thông tin số điện thoại, nhưng bịa ra đường link hội thoại không hề có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 26,
+      "cat": "abstention",
+      "question": "Sinh nhật mình là ngày nào?",
+      "answer": "Hiện tại trong hệ thống và ghi nhớ của mình chưa có thông tin về ngày sinh nhật của bạn (Minh Anh). \n\nNếu bạn muốn mình nhớ để gửi lời chúc hay nhắc lịch sau này, bạn có thể chia sẻ ngày sinh nhật của mình nhé!",
+      "toolsUsed": [],
+      "tokensIn": 18550,
+      "tokensOut": 54,
+      "ms": 2690,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng là chưa có thông tin về ngày sinh nhật và không bịa đặt thông tin."
+      }
+    },
+    {
+      "id": 27,
+      "cat": "abstention",
+      "question": "Giá bán mỗi SIM trong hợp đồng với Gamma Holidays là bao nhiêu?",
+      "answer": "Hiện tại trong hệ thống (cơ sở dữ liệu B2B và lịch sử trao đổi đã lưu), **chưa có thông tin ghi nhận về đơn giá bán (giá mỗi SIM)** trong hợp đồng thử nghiệm với **Gamma Holidays**.\n\nCác thông tin hiện có về đối tác này:\n- **Đầu mối liên hệ**: Chị Elena.\n- **Thị trường**: Châu Âu.\n- **Thời hạn & Sản lượng**: Ký thử nghiệm 3 tháng (từ 15/09/2026), mục tiêu ban đầu 200 SIM/tháng (mục tiêu Q4 hướng tới 500 SIM/tháng).\n- **Gói cước lựa chọn**: Gói **Unlimited 7 ngày** (đổi từ gói 10 ngày trước đó) và có hỗ trợ eSIM đồng thương hiệu (co-branding).\n\nBạn có thể cung cấp thêm mức giá hoặc gói SKU cụ thể đã chốt với chị Elena để mình lưu lại vào hồ sơ theo dõi nhé!",
+      "toolsUsed": [
+        "searchPastConversations",
+        "executeSQL",
+        "assistantMemory"
+      ],
+      "tokensIn": 192846,
+      "tokensOut": 481,
+      "ms": 25217,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng là chưa có thông tin về giá bán, các thông tin bổ sung đều chính xác dựa trên bảng sự thật."
+      }
+    },
+    {
+      "id": 28,
+      "cat": "abstention",
+      "question": "Mình tốt nghiệp trường đại học nào?",
+      "answer": "Hiện tại trong thông tin ghi nhớ của hệ thống chưa có dữ liệu về trường đại học bạn đã tốt nghiệp. \n\nHệ thống hiện chỉ lưu thông tin bạn là **Minh Anh**, đảm nhận vị trí **Account Manager nhóm B2B** (phụ trách thị trường Châu Âu và đối tác Beta Tours, báo cáo trực tiếp cho anh Tuấn). \n\nNếu bạn muốn Gấu Pro lưu lại thông tin trường đại học vào hồ sơ cá nhân để tiện xưng hô và hỗ trợ sau này, bạn có thể chia sẻ nhé!",
+      "toolsUsed": [],
+      "tokensIn": 17457,
+      "tokensOut": 113,
+      "ms": 21240,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng là không có thông tin và các thông tin bổ sung đều có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 29,
+      "cat": "conversation_recall",
+      "question": "Lần bàn giá hợp đồng năm cho Alpha Travel, mình đã chọn phương án nào và điều kiện đi kèm là gì?",
+      "answer": "Trong lần trao đổi về hợp đồng năm cho **Alpha Travel** (chi tiết xem tại hội thoại [[GP] Giá hợp đồng năm Alpha Travel](/analytics/creator/ai?c=4be9b335-beb9-45cf-b848-14301615178b)), bạn đã chốt:\n\n- **Phương án đã chọn:** **Phương án B** — **Giảm giá 5%** (thay vì Phương án A giữ giá hoặc Phương án C giảm 8%).\n- **Điều kiện đi kèm:** **Cam kết thời hạn hợp đồng 12 tháng**.\n\n*(Lưu ý thêm: Khách hàng Alpha Travel hiện đã được bàn giao cho bạn Phúc từ ngày 01/09).*",
+      "toolsUsed": [
+        "searchPastConversations"
+      ],
+      "tokensIn": 45740,
+      "tokensOut": 190,
+      "ms": 5336,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng phương án và điều kiện đi kèm, thông tin bổ sung cũng chính xác theo bảng sự thật."
+      }
+    },
+    {
+      "id": 30,
+      "cat": "conversation_recall",
+      "question": "Trong phương án giá của Alpha Travel, mình còn cân nhắc những phương án nào khác?",
+      "answer": "Trong đợt thảo luận về hợp đồng năm của **Alpha Travel**, bên cạnh phương án đã chốt (Phương án B), hai bên đã cân nhắc tổng cộng 3 phương án:\n\n1. **Phương án A: Giữ nguyên mức giá hiện tại** (không chiết khấu thêm, không ràng buộc thời hạn dài hạn).\n2. **Phương án B (Đã chốt): Giảm 5% kèm cam kết hợp đồng 12 tháng**.\n3. **Phương án C: Giảm 8% kèm cam kết hợp đồng 24 tháng**.\n\nCuối cùng, phương án B đã được lựa chọn để cân đối giữa mức chiết khấu vừa phải và thời hạn cam kết hợp lý (1 năm).\n\n*(Chi tiết thảo luận có thể xem lại tại hội thoại: [[GP] Giá hợp đồng năm Alpha Travel](/analytics/creator/ai?c=4be9b335-beb9-45cf-b848-14301615178b))*\n\n*Lưu ý thêm:* Alpha Travel hiện đã được bàn giao cho bạn Phúc phụ trách từ ngày 01/09.",
+      "toolsUsed": [
+        "searchPastConversations"
+      ],
+      "tokensIn": 48065,
+      "tokensOut": 268,
+      "ms": 7970,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 1,
+        "note": "Trợ lý trả lời đúng các phương án được cân nhắc nhưng bịa ra đường link hội thoại không có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 31,
+      "cat": "conversation_recall",
+      "question": "Chị Elena nhờ hỗ trợ gì thêm ngoài việc ký thử nghiệm, và hạn gửi là khi nào?",
+      "answer": "Chị Elena (Gamma Holidays) có nhờ thêm việc:\n\n* **Nội dung nhờ hỗ trợ:** Yêu cầu **eSIM đồng thương hiệu (co-branded eSIM)**.\n* **Thời hạn gửi:** Thống nhất gửi mẫu thiết kế trước ngày **30/09/2026**.",
+      "toolsUsed": [],
+      "tokensIn": 17470,
+      "tokensOut": 66,
+      "ms": 2987,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng và đủ thông tin theo đáp án tham chiếu. Việc thêm năm 2026 không bị tính là bịa theo quy tắc."
+      }
+    },
+    {
+      "id": 32,
+      "cat": "conversation_recall",
+      "question": "Cuộc bàn về đồng thương hiệu với Gamma, bên Gamma cần cung cấp gì cho mình?",
+      "answer": "Dựa trên nội dung đã thống nhất trong cuộc trao đổi về eSIM đồng thương hiệu với chị Elena (Gamma Holidays), **bên Gamma cần cung cấp:**\n\n- **File mẫu Logo của Gamma Holidays** (định dạng chất lượng cao / vector) để đội ngũ thiết kế đưa vào giao diện đồng thương hiệu (hiển thị cùng logo GoHub trên trang kích hoạt eSIM).\n\n---\n*Ghi chú tiến độ:* \n- Sau khi nhận được logo, phía mình dự kiến mất khoảng 1 tuần để lên mẫu thiết kế và gửi lại cho Gamma duyệt.\n- Bạn có thể xem lại chi tiết trao đổi tại hội thoại [[GP] Hỗ trợ đồng thương hiệu cho Gamma Holidays](/analytics/creator/ai?c=c3cad2b4-6c5b-4836-aab6-0acdb07c5e4e).",
+      "toolsUsed": [
+        "searchPastConversations"
+      ],
+      "tokensIn": 44003,
+      "tokensOut": 205,
+      "ms": 6321,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 1,
+        "note": "Trợ lý trả lời đúng ý chính là cần logo của Gamma, nhưng bịa thêm thông tin về thời gian 1 tuần để lên mẫu thiết kế và đường link hội thoại không có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 100,
+      "cat": "stress_current",
+      "question": "Hiện giờ đầu mối bên khách Lotus Tours là ai và mục tiêu SIM hằng tháng là bao nhiêu?",
+      "answer": "Thông tin hiện tại về khách **Lotus Tours**:\n\n- **Đầu mối phụ trách:** Anh Hải\n- **Thị trường:** Singapore\n- **Mục tiêu hằng tháng:** 900 SIM",
+      "toolsUsed": [],
+      "tokensIn": 22365,
+      "tokensOut": 44,
+      "ms": 2530,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối và mục tiêu hiện tại của Lotus Tours, các thông tin bổ sung đều có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 101,
+      "cat": "stress_current",
+      "question": "Hiện giờ đầu mối bên khách Harbor Voyages là ai và mục tiêu SIM hằng tháng là bao nhiêu?",
+      "answer": "Thông tin hiện tại về khách **Harbor Voyages**:\n\n* **Thị trường**: Pháp\n* **Đầu mối phụ trách**: **Chị Giang** (đã đổi từ anh Khải)\n* **Mục tiêu sản lượng**: **400 SIM/tháng**",
+      "toolsUsed": [],
+      "tokensIn": 22054,
+      "tokensOut": 60,
+      "ms": 2858,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối hiện tại và mục tiêu SIM, các thông tin bổ sung đều có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 102,
+      "cat": "stress_current",
+      "question": "Hiện giờ đầu mối bên khách Fjord Travel là ai và mục tiêu SIM hằng tháng là bao nhiêu?",
+      "answer": "Thông tin hiện tại về khách **Fjord Travel**:\n\n* **Đầu mối phụ trách:** **Chị Thảo** *(đã đổi từ anh Sơn sang)*\n* **Thị trường:** Pháp\n* **Mục tiêu sản lượng:** **850 SIM / tháng**",
+      "toolsUsed": [],
+      "tokensIn": 22135,
+      "tokensOut": 60,
+      "ms": 3133,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối hiện tại và mục tiêu SIM, các thông tin bổ sung đều có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 103,
+      "cat": "stress_current",
+      "question": "Hiện giờ đầu mối bên khách Onyx Journeys là ai và mục tiêu SIM hằng tháng là bao nhiêu?",
+      "answer": "Thông tin về khách **Onyx Journeys**:\n\n* **Thị trường**: Đài Loan\n* **Đầu mối phụ trách**: **Chị Quyên**\n* **Mục tiêu hằng tháng**: **250 SIM/tháng**",
+      "toolsUsed": [],
+      "tokensIn": 22721,
+      "tokensOut": 54,
+      "ms": 3621,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối và mục tiêu SIM hằng tháng của khách Onyx Journeys theo bảng sự thật."
+      }
+    },
+    {
+      "id": 104,
+      "cat": "stress_current",
+      "question": "Hiện giờ đầu mối bên khách Onyx Travel là ai và mục tiêu SIM hằng tháng là bao nhiêu?",
+      "answer": "Hiện tại thông tin của khách **Onyx Travel** (thị trường Nhật Bản) như sau:\n\n- **Đầu mối phụ trách:** **Anh Nam** (đã đổi từ chị Hạnh sang anh Nam).\n- **Mục tiêu sản lượng:** **750 SIM / tháng**.",
+      "toolsUsed": [],
+      "tokensIn": 21789,
+      "tokensOut": 64,
+      "ms": 3986,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối và mục tiêu hiện tại, các thông tin bổ sung đều chính xác theo bảng sự thật."
+      }
+    },
+    {
+      "id": 105,
+      "cat": "stress_history",
+      "question": "Trước khi đổi, đầu mối của khách Lotus Tours là ai và mục tiêu tháng lúc đó là bao nhiêu?",
+      "answer": "Theo ghi nhận hiện tại trong hệ thống (ghi chú #61):\n* Khách hàng **Lotus Tours** (thị trường Singapore) chỉ lưu thông tin: **đầu mối mới đổi sang anh Hải**, với mục tiêu hằng tháng là **900 SIM**.\n* **Thông tin về đầu mối cũ trước khi bàn giao và mục tiêu tháng trước đó không được lưu lại** trong hồ sơ/trí nhớ dài hạn cũng như lịch sử trao đổi.",
+      "toolsUsed": [
+        "assistantMemory",
+        "searchPastConversations"
+      ],
+      "tokensIn": 53157,
+      "tokensOut": 144,
+      "ms": 25713,
+      "judge": {
+        "correct": 0,
+        "hallucinated": 1,
+        "note": "Trợ lý nói không có thông tin về đầu mối cũ và mục tiêu cũ, nhưng bảng sự thật có ghi rõ đầu mối ban đầu là chị Hạnh và mục tiêu 850 SIM/tháng. Việc khẳng định thông tin không được lưu lại là trái với bảng sự thật."
+      }
+    },
+    {
+      "id": 106,
+      "cat": "stress_history",
+      "question": "Trước khi đổi, đầu mối của khách Harbor Voyages là ai và mục tiêu tháng lúc đó là bao nhiêu?",
+      "answer": "Trước khi đổi, thông tin của khách **Harbor Voyages** như sau:\n\n- **Đầu mối phụ trách ban đầu:** **Anh Khải** (sau đó đổi sang chị Giang).\n- **Mục tiêu hằng tháng ban đầu:** Trong dữ liệu ghi nhận mục tiêu sau khi đổi là **tăng lên 400 SIM/tháng**, không lưu mức số lượng cụ thể trước khi tăng.",
+      "toolsUsed": [
+        "assistantMemory",
+        "searchPastConversations"
+      ],
+      "tokensIn": 60127,
+      "tokensOut": 129,
+      "ms": 8942,
+      "judge": {
+        "correct": 0,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối ban đầu nhưng nói sai rằng không có thông tin về mục tiêu ban đầu (thực tế bảng sự thật có ghi là 350 SIM/tháng)."
+      }
+    },
+    {
+      "id": 107,
+      "cat": "stress_history",
+      "question": "Trước khi đổi, đầu mối của khách Fjord Travel là ai và mục tiêu tháng lúc đó là bao nhiêu?",
+      "answer": "- **Đầu mối trước khi đổi:** **Anh Sơn** (sau đó chuyển giao cho chị Thảo phụ trách thị trường Pháp).\n- **Mục tiêu tháng:** Dữ liệu ghi nhận mục tiêu sau khi đổi **tăng lên mức 850 SIM/tháng**; con số mục tiêu cụ thể trước thời điểm tăng chưa được lưu lại trong hệ thống ghi chú.",
+      "toolsUsed": [
+        "assistantMemory",
+        "searchPastConversations"
+      ],
+      "tokensIn": 53169,
+      "tokensOut": 123,
+      "ms": 27717,
+      "judge": {
+        "correct": 0,
+        "hallucinated": 1,
+        "note": "Trợ lý trả lời sai và bịa đặt rằng không có dữ liệu về mục tiêu trước khi đổi, trong khi bảng sự thật ghi rõ mục tiêu ban đầu là 800 SIM/tháng."
+      }
+    },
+    {
+      "id": 108,
+      "cat": "stress_history",
+      "question": "Trước khi đổi, đầu mối của khách Onyx Travel là ai và mục tiêu tháng lúc đó là bao nhiêu?",
+      "answer": "Theo thông tin đã lưu về khách **Onyx Travel** (thị trường Nhật Bản):\n\n* **Đầu mối trước khi đổi:** **Chị Hạnh** (hiện đã chuyển giao sang **anh Nam**).\n* **Mục tiêu tháng:** Dữ liệu chỉ ghi nhận mục tiêu mới sau khi đổi là **tăng lên 750 SIM/tháng** (chưa có con số mục tiêu cụ thể trước khi tăng).",
+      "toolsUsed": [
+        "assistantMemory",
+        "searchPastConversations"
+      ],
+      "tokensIn": 72372,
+      "tokensOut": 168,
+      "ms": 12672,
+      "judge": {
+        "correct": 0,
+        "hallucinated": 1,
+        "note": "Trợ lý trả lời sai/thiếu mục tiêu ban đầu và khẳng định không có dữ liệu về mục tiêu trước khi tăng, điều này trái với bảng sự thật (mục tiêu ban đầu là 700 SIM/tháng)."
+      }
+    },
+    {
+      "id": 109,
+      "cat": "stress_history",
+      "question": "Trước khi đổi, đầu mối của khách Bravo Travel là ai và mục tiêu tháng lúc đó là bao nhiêu?",
+      "answer": "Theo thông tin ghi nhận trong hệ thống về khách **Bravo Travel** (thị trường Thái Lan):\n\n- **Đầu mối trước khi đổi:** **Chị Lam** *(sau đó chuyển giao sang anh Phát)*.\n- **Mục tiêu tháng:** Hệ thống chỉ ghi nhận mốc **tăng lên 750 SIM/tháng** sau khi đổi sang anh Phát, chưa lưu lại con số mục tiêu cụ thể trước đó.",
+      "toolsUsed": [
+        "assistantMemory",
+        "searchPastConversations"
+      ],
+      "tokensIn": 55014,
+      "tokensOut": 136,
+      "ms": 7767,
+      "judge": {
+        "correct": 0,
+        "hallucinated": 1,
+        "note": "Trợ lý trả lời sai/thiếu mục tiêu ban đầu (700 SIM/tháng) và khẳng định hệ thống chưa lưu lại con số này, điều này trái với bảng sự thật."
+      }
+    },
+    {
+      "id": 110,
+      "cat": "stress_market",
+      "question": "Khách Bravo Travel thuộc thị trường nào?",
+      "answer": "Khách **Bravo Travel** thuộc thị trường **Thái Lan** (hiện đầu mối phụ trách đã đổi từ chị Lam sang anh Phát, mục tiêu 750 SIM/tháng).",
+      "toolsUsed": [],
+      "tokensIn": 21953,
+      "tokensOut": 42,
+      "ms": 3581,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường Thái Lan và cung cấp thêm thông tin chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 111,
+      "cat": "stress_market",
+      "question": "Khách Indigo Holidays thuộc thị trường nào?",
+      "answer": "Khách **Indigo Holidays** thuộc thị trường **Hàn Quốc** (đầu mối phụ trách đã đổi từ anh Bảo sang chị Hạnh, mục tiêu là 550 SIM/tháng).",
+      "toolsUsed": [],
+      "tokensIn": 17458,
+      "tokensOut": 42,
+      "ms": 8262,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường là Hàn Quốc và các thông tin bổ sung đều chính xác theo bảng sự thật."
+      }
+    },
+    {
+      "id": 112,
+      "cat": "stress_market",
+      "question": "Khách Fjord Holidays thuộc thị trường nào?",
+      "answer": "Khách **Fjord Holidays** thuộc thị trường **Hàn Quốc** (đầu mối phụ trách đã đổi từ chị Hạnh sang anh Bảo, mục tiêu 850 SIM/tháng).",
+      "toolsUsed": [],
+      "tokensIn": 17459,
+      "tokensOut": 42,
+      "ms": 7577,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường Hàn Quốc và cung cấp thêm thông tin chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 113,
+      "cat": "stress_market",
+      "question": "Khách Sierra Trips thuộc thị trường nào?",
+      "answer": "Khách **Sierra Trips** thuộc thị trường **Singapore** (đầu mối phụ trách là **chị Oanh**, mục tiêu: **300 SIM/tháng**).",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 43474,
+      "tokensOut": 60,
+      "ms": 5530,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường của khách Sierra Trips là Singapore và cung cấp thêm thông tin chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 114,
+      "cat": "stress_market",
+      "question": "Khách Raven Trips thuộc thị trường nào?",
+      "answer": "Khách **Raven Trips** thuộc thị trường **Ý** (đầu mối phụ trách đã đổi từ anh Phát sang chị Giang, mục tiêu 150 SIM/tháng).",
+      "toolsUsed": [],
+      "tokensIn": 17458,
+      "tokensOut": 38,
+      "ms": 6159,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường Ý và các thông tin bổ sung đều chính xác theo bảng sự thật."
+      }
+    }
+  ]
+}
