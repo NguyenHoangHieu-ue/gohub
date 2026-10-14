@@ -78,3 +78,21 @@ describe("tên nước kiểu bảng 3HK (US / UK / Vatican City)", () => {
     expect(r.unresolved).toEqual([]); expect(r.matches.map(m => m.code)).toEqual(["ZZ9"])
   })
 })
+
+describe("nhóm nước hỗ trợ cùng tập nước", () => {
+  const gs = [{ code: "AS4", en: "Asia 4", iso: "SG,MY,ID,TH" }, { code: "AS5", en: "Asia 4b", iso: "TH, ID, MY, SG" }, { code: "SEA", en: "SEA", iso: "ID,MY,SG,TH" }, { code: "ANZ", en: "ANZ", iso: "AU, NZ" }, { code: "JPN", en: "Japan", iso: "JP" }, { code: "JKD", en: "Japan", iso: "JP" }]
+  test("sameSetGroups: trả mọi nhóm đúng tập nước (không phụ thuộc thứ tự), bỏ qua nước đơn", async () => {
+    const { sameSetGroups } = await import("@/lib/bc-datapool/iso")
+    expect(sameSetGroups(gs, "MY, SG, ID, TH").map(g => g.code)).toEqual(["AS4", "AS5", "SEA"])
+    expect(sameSetGroups(gs, "AU,NZ").map(g => g.code)).toEqual(["ANZ"])
+    expect(sameSetGroups(gs, "JP")).toEqual([])
+  })
+  test("sameSetWarning: chỉ báo khi ≥ 2 nhóm; có mã thì ghi 'đang dùng', chưa có thì 'chưa chọn mã'; không chứa chữ 'trùng' (không chặn xuất khi đã có mã)", async () => {
+    const { sameSetWarning } = await import("@/lib/bc-datapool/iso")
+    const m = [{ code: "AS4" }, { code: "AS5" }]
+    expect(sameSetWarning("SP#1", [{ code: "ANZ" }], "ANZ")).toBeNull()
+    expect(sameSetWarning("SP#1", m, "AS4")).toMatch(/đang dùng AS4/)
+    expect(sameSetWarning("SP#1", m, "")).toMatch(/chưa chọn mã/)
+    expect(sameSetWarning("SP#1", m, "AS4")).not.toMatch(/trùng/)
+  })
+})

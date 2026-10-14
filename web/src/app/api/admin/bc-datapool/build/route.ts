@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import * as XLSX from "xlsx"
+import { sameSetGroups, sameSetWarning } from "@/lib/bc-datapool/iso"
 import { build } from "@/lib/bc-datapool/builder"
 import { dropExisting } from "@/lib/bc-datapool/dedupe"
 import { buildWorkbook } from "@/lib/bc-datapool/export"
 import type { Assumptions, ProductInput } from "@/lib/bc-datapool/types"
 import { resolvePlans } from "@/lib/bc-datapool/plan-catalog"
 import { FRAME_SKU } from "@/lib/bc-datapool/codes"
-import { findExisting, loadAssumptions, loadFx, loadPlanCatalog, loadPriceList, loadWhiteSimVnd, requireAdmin } from "@/lib/bc-datapool/server"
+import { findExisting, loadAssumptions, loadFx, loadPlanCatalog, loadPriceList, loadSupportCountries, loadWhiteSimVnd, requireAdmin } from "@/lib/bc-datapool/server"
 
 export const dynamic = "force-dynamic"
 
@@ -38,6 +39,12 @@ export async function POST(req: NextRequest) {
       if (!frames.has(FRAME_SKU.VN)) warnings.push(`Khung SIM chưa có trong hệ thống: ${FRAME_SKU.VN} — tạo trước khi import SKU SIM full`)
     }
     warnings.unshift(...resolved.warnings)
+    // Nhiều nhóm nước hỗ trợ cùng tập nước (AS4/AS5/SEA…): báo để soát đúng mã (không chặn khi đã có mã)
+    const supportGroups = await loadSupportCountries()
+    products.forEach((p, i) => {
+      const w = sameSetWarning(`Sản phẩm #${i + 1} (${(p.countryNameEn || p.coverages?.join(", ") || "?").slice(0, 60)})`, sameSetGroups(supportGroups, p.isoCodes ?? ""), (p.supportCountryCode ?? "").trim())
+      if (w) warnings.unshift(w)
+    })
 
     const [existProducts, existSkus] = await Promise.all([
       findExisting("products", "product_code", [...built.sheets.productUS, ...built.sheets.productVN].map(r => String(r[35]))),

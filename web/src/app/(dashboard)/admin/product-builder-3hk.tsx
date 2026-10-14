@@ -5,12 +5,13 @@ import { Download, Eye, Plus, Trash2, X } from "lucide-react"
 import type { Skipped } from "@/lib/bc-datapool/dedupe"
 import type { Assumptions, Fx, SimType } from "@/lib/bc-datapool/types"
 import { POLICY_KIND, POLICY_LABEL, PRODUCT_HEADERS, SKU_HEADERS, type Frames, type Policy, type ThkBuildResult } from "@/lib/threehk-datapool/builder"
-import type { NccRow } from "@/lib/threehk-datapool/resolve"
+import type { CoveredGroup, NccRow } from "@/lib/threehk-datapool/resolve"
+import { customUnlimitedLabel } from "@/lib/datapool-formula"
 
 type Notify = (type: "success" | "error", text: string) => void
-interface Options { ncc: NccRow[]; assumptions: Assumptions; frames: Frames; fx: (Fx & { month?: string }) | null; fxError: string | null }
+interface Options { ncc: NccRow[]; groups: CoveredGroup[]; assumptions: Assumptions; frames: Frames; fx: (Fx & { month?: string }) | null; fxError: string | null }
 interface PreviewResult extends ThkBuildResult { fx: Fx; skipped: Skipped; nothingNew: boolean; supports: { code: string; hint: string }[] }
-interface PlanForm { policy: Policy; amount: string; unit: "MB" | "GB"; days: number[] }
+interface PlanForm { policy: Policy; amount: string; unit: "MB" | "GB"; days: number[]; speed: number }
 interface ProductForm { simType: SimType; countries: string[]; codeOverride: string; usSimFull: boolean; vnEsimData: boolean; plans: PlanForm[] }
 
 const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 20, 25, 30]
@@ -20,7 +21,7 @@ const input = "w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-s
 const label = "block text-[11px] text-gray-500 mb-0.5"
 const btn = "px-2 py-0.5 text-[11px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800"
 
-const newPlan = (policy: Policy = "F"): PlanForm => ({ policy, amount: policy === "X" ? "3" : policy === "F" ? "5" : "1", unit: "GB", days: policy === "X" ? [3, 5, 7, 10] : [3, 5, 7, 10, 15, 30] })
+const newPlan = (policy: Policy = "F"): PlanForm => ({ policy, speed: 10, amount: policy === "X" ? "3" : policy === "F" ? "5" : "1", unit: "GB", days: policy === "X" ? [3, 5, 7, 10] : [3, 5, 7, 10, 15, 30] })
 const newProduct = (): ProductForm => ({ simType: "eSIM", countries: [], codeOverride: "", usSimFull: false, vnEsimData: false, plans: [newPlan()] })
 
 export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
@@ -46,13 +47,23 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
     setProducts(prev => prev.map((x, k) => (k === i ? { ...x, plans: x.plans.map((pl, m) => (m === j ? { ...pl, ...p } : pl)) } : x))); touch()
   }
   const countries = useMemo(() => (opts?.ncc ?? []).map(r => r.country).sort(), [opts])
+  const zones = useMemo(() => Object.entries((opts?.ncc ?? []).reduce<Record<string, number>>((m, r) => ((m[r.zone] = (m[r.zone] ?? 0) + 1), m), {})).sort(([x], [y]) => x.localeCompare(y)), [opts])
+  // Mức Unlimited chọn được: mức có sẵn 3GB+10Mbps + các mức tự thêm ở Công Thức Datapool
+  const unlProfiles = useMemo(() => {
+    const a = opts?.assumptions
+    if (!a) return []
+    return [
+      { amount: "3", unit: "GB" as const, speed: 10, label: `3GB tốc độ cao + Unlimited 10Mbps · ${a.unl3gb10} GB/ngày (có sẵn)` },
+      ...(a.unlCustom ?? []).map(c => ({ amount: String(c.dataMb % 1024 === 0 ? c.dataMb / 1024 : c.dataMb), unit: (c.dataMb % 1024 === 0 ? "GB" : "MB") as "GB" | "MB", speed: c.speedMbps, label: `${customUnlimitedLabel(c)} · ${c.gbPerDay} GB/ngày (tự thêm)` })),
+    ]
+  }, [opts])
 
   const body = (force = false) => JSON.stringify({
     force,
     products: products.map(p => ({
       simType: p.simType, countries: p.countries, codeOverride: p.codeOverride,
       usSimFull: p.simType === "SIM" && p.usSimFull, vnEsimData: p.simType === "eSIM" && p.vnEsimData,
-      plans: p.plans.map(pl => ({ policy: pl.policy, amount: pl.policy === "X" ? 3 : Number(pl.amount.replace(",", ".")) || 0, unit: pl.policy === "X" ? "GB" : pl.unit, days: [...pl.days].sort((a, b) => a - b) })),
+      plans: p.plans.map(pl => ({ policy: pl.policy, amount: Number(pl.amount.replace(",", ".")) || 0, unit: pl.unit, speedMbps: pl.policy === "X" ? pl.speed : undefined, days: [...pl.days].sort((a, b) => a - b) })),
     })),
   })
 
@@ -108,7 +119,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl text-xs space-y-1 text-gray-600 dark:text-slate-300">
           <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">Tỷ giá nội bộ{fx?.month ? ` (${fx.month})` : ""}</div>
           {fx ? <><div>HKD/USD (Inc): <b>{fx.hkdPerUsd}</b> · VND/USD (JSC): <b>{fx.vndPerUsd.toLocaleString("vi-VN")}</b></div></> : <div className="text-red-600">{opts.fxError || "Chưa có tỷ giá"}</div>}
-          <div>Công thức Datapool: Fixed <b>{a.fixedPct * 100}%</b> · Daily <b>{a.dailyPct * 100}%</b> · Unlimited 3GB→10Mbps <b>{a.unl3gb10} GB/ngày</b></div>
+          <div>Công thức Datapool: Fixed <b>{a.fixedPct * 100}%</b> · Daily <b>{a.dailyPct * 100}%</b> · Unlimited 3GB+10Mbps <b>{a.unl3gb10} GB/ngày</b>{(a.unlCustom ?? []).map(c => <span key={`${c.dataMb}:${c.speedMbps}`}> · {customUnlimitedLabel(c)} <b>{c.gbPerDay}</b></span>)}</div>
         </div>
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl text-xs space-y-1 text-gray-600 dark:text-slate-300">
           <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">Giá khung (từ hệ thống)</div>
@@ -139,6 +150,16 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
                   <option value="">+ Thêm nước…</option>
                   {countries.filter(c => !p.countries.includes(c)).map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
+                <select className={`${input} mt-1.5`} value="" onChange={e => {
+                  const v = e.target.value
+                  if (!v) return
+                  const cs = v.startsWith("g:") ? (opts.groups.find(g => g.code === v.slice(2))?.countries ?? []) : opts.ncc.filter(r => r.zone === v.slice(2)).map(r => r.country)
+                  patchProduct(i, { countries: Array.from(new Set([...p.countries, ...cs])), codeOverride: "" })
+                }}>
+                  <option value="">+ Thêm cả nhóm / vùng…</option>
+                  <optgroup label="Nhóm nước hỗ trợ (đủ nước trong bảng giá)">{(opts.groups ?? []).map(g => <option key={g.code} value={`g:${g.code}`}>{g.code} — {g.countries.length} nước ({g.en.slice(0, 40)})</option>)}</optgroup>
+                  <optgroup label="Vùng giá 3HK (cột zone)">{zones.map(([z, n]) => <option key={z} value={`z:${z}`}>Vùng {z} — {n} nước</option>)}</optgroup>
+                </select>
                 <div className="flex flex-wrap gap-1 mt-1.5">
                   {p.countries.map(c => (
                     <span key={c} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-100 dark:bg-slate-800 rounded-md">{c}
@@ -167,12 +188,18 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
                   <div className="grid gap-2 md:grid-cols-[1.5fr_1fr_auto] items-end">
                     <div>
                       <label className={label}>Loại gói</label>
-                      <select className={input} value={pl.policy} onChange={e => { const po = e.target.value as Policy; patchPlan(i, j, { policy: po, ...(po === "X" ? { amount: "3", unit: "GB" as const } : {}) }) }}>
+                      <select className={input} value={pl.policy} onChange={e => { const po = e.target.value as Policy; patchPlan(i, j, { policy: po, ...(po === "X" ? { amount: "3", unit: "GB" as const, speed: 10 } : {}) }) }}>
                         {POLICIES.map(po => <option key={po} value={po}>{POLICY_LABEL[po]}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className={label}>{pl.policy === "X" ? "Tốc độ cao mỗi ngày (cố định)" : POLICY_KIND[pl.policy] === "Daily" ? "Dung lượng mỗi ngày" : "Tổng dung lượng"}</label>
+                      <label className={label}>{pl.policy === "X" ? "Mức Unlimited (tốc độ cao mỗi ngày + tốc độ)" : POLICY_KIND[pl.policy] === "Daily" ? "Dung lượng mỗi ngày" : "Tổng dung lượng"}</label>
+                      {pl.policy === "X" && (
+                        <select className={`${input} mb-1`} value={`${pl.amount}|${pl.unit}|${pl.speed}`} onChange={e => { const [amount, unit, speed] = e.target.value.split("|"); patchPlan(i, j, { amount, unit: unit as "MB" | "GB", speed: Number(speed) }) }}>
+                          {unlProfiles.map(u => <option key={`${u.amount}|${u.unit}|${u.speed}`} value={`${u.amount}|${u.unit}|${u.speed}`}>{u.label}</option>)}
+                          {!unlProfiles.some(u => u.amount === pl.amount && u.unit === pl.unit && u.speed === pl.speed) && <option value={`${pl.amount}|${pl.unit}|${pl.speed}`}>{pl.amount}{pl.unit} + {pl.speed}Mbps (chưa có hệ số)</option>}
+                        </select>
+                      )}
                       <div className="flex gap-1">
                         <input className={input} value={pl.amount} disabled={pl.policy === "X"} inputMode="decimal" onChange={e => patchPlan(i, j, { amount: e.target.value })} />
                         <select className={`${input} w-20`} value={pl.unit} disabled={pl.policy === "X"} onChange={e => patchPlan(i, j, { unit: e.target.value as "MB" | "GB" })}><option>GB</option><option>MB</option></select>

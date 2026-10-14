@@ -46,3 +46,18 @@ export function resolveSupport(countries: string[], groups: SupportCountry[], re
   }
 }
 
+
+export interface CoveredGroup { code: string; en: string; countries: string[] }
+
+/** Nhóm nước hỗ trợ (≥ 2 nước) mà MỌI nước đều có trong bảng giá ncc_3hk → chọn 1 phát thêm cả nhóm. */
+export function coveredGroups(ncc: NccRow[], groups: SupportCountry[], refs: { code: string; name: string }[]): CoveredGroup[] {
+  const nameByIso = new Map<string, string>()
+  for (const r of ncc) { const i = nameToIso2(r.country, refs, groups); if (i && !nameByIso.has(i)) nameByIso.set(i, r.country) }
+  const out: CoveredGroup[] = []
+  for (const g of groups) {
+    const isos = g.iso.split(/[,\s]+/).map(x => x.trim().toUpperCase()).filter(x => /^[A-Z]{2}$/.test(x))
+    if (isos.length < 2 || !isos.every(i => nameByIso.has(i))) continue
+    out.push({ code: g.code, en: g.en, countries: isos.map(i => nameByIso.get(i)!) })
+  }
+  return out.sort((a, b) => b.countries.length - a.countries.length || a.code.localeCompare(b.code))
+}

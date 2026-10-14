@@ -5,7 +5,8 @@ import { findExisting, loadAssumptions, loadFx, loadRefCountries, loadSupportCou
 import type { Assumptions, SimType } from "@/lib/bc-datapool/types"
 import { build, type ThkPlanInput } from "@/lib/threehk-datapool/builder"
 import { buildWorkbook } from "@/lib/threehk-datapool/export"
-import { priceOf, resolveSupport } from "@/lib/threehk-datapool/resolve"
+import { sameSetGroups, sameSetWarning } from "@/lib/bc-datapool/iso"
+import { coveredGroups, priceOf, resolveSupport } from "@/lib/threehk-datapool/resolve"
 import { loadFrames, loadNcc3hk, loadTemplates } from "@/lib/threehk-datapool/server"
 
 export const dynamic = "force-dynamic"
@@ -35,6 +36,19 @@ export async function POST(req: NextRequest) {
       return { s, code: p.codeOverride?.trim().toUpperCase() || s.code }
     })
     const tpls = await loadTemplates(resolved.map(r => r.code))
+    // Cảnh báo (không tự đoán): nhiều nhóm nước hỗ trợ cùng tập nước · nước đơn chưa có Product 3HK nhưng đang bán trong 1 nhóm (vd Australia/New Zealand → ANZ)
+    const extra: string[] = []
+    const covered = coveredGroups(ncc, groups, refs)
+    const groupTpls = await loadTemplates(inputs.flatMap((p, i) => ((tpls[resolved[i].code] ?? []).length || (p.countries ?? []).length !== 1 ? [] : covered.filter(g => g.countries.includes(p.countries[0])).map(g => g.code))))
+    inputs.forEach((p, i) => {
+      const lbl = `Sản phẩm #${i + 1} (${(p.countries ?? []).join(", ").slice(0, 60) || "?"})`
+      const sw = sameSetWarning(lbl, sameSetGroups(groups, resolved[i].s.iso), resolved[i].code)
+      if (sw) extra.push(sw)
+      if ((p.countries ?? []).length === 1 && !(tpls[resolved[i].code] ?? []).length) {
+        const hit = covered.filter(g => g.countries.includes(p.countries[0]) && (groupTpls[g.code] ?? []).length)
+        if (hit.length) extra.push(`${lbl}: 3HK chưa có Product mã ${resolved[i].code || "(chưa có mã)"} nhưng đang bán nước này trong nhóm ${hit.map(g => `${g.code} (${g.countries.length <= 3 ? g.countries.join(" + ") : `${g.countries.length} nước`})`).join(", ")} — nếu gói bán gộp, hãy chọn đủ các nước của nhóm đó để ra đúng mã và copy được thông tin nước`)
+      }
+    })
     const built = build(inputs.map((p, i) => ({
       input: { simType: p.simType, supportCountryCode: resolved[i].code, isoCodes: resolved[i].s.iso, countryNameEn: resolved[i].s.en, countryNameVn: resolved[i].s.vn, plans: p.plans ?? [], usSimFull: !!p.usSimFull, vnEsimData: !!p.vnEsimData },
       price: priceOf(ncc, p.countries ?? []),
@@ -46,7 +60,7 @@ export async function POST(req: NextRequest) {
       findExisting("skus", "sku_code", [...built.sheets.skuUS, ...built.sheets.skuVN].map(r => String(r[20]))),
     ])
     const { result: deduped, skipped } = dropExisting(built, existSkus, existProducts)
-    const result = { ...deduped, warnings: built.warnings }
+    const result = { ...deduped, warnings: [...extra, ...built.warnings] }
     const nothingNew = !result.sheets.skuUS.length && !result.sheets.skuVN.length
 
     if (req.nextUrl.searchParams.get("format") === "xlsx") {

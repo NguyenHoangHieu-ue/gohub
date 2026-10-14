@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { loadAssumptions, loadFx, requireAdmin } from "@/lib/bc-datapool/server"
+import { loadAssumptions, loadFx, loadRefCountries, loadSupportCountries, requireAdmin } from "@/lib/bc-datapool/server"
+import { coveredGroups } from "@/lib/threehk-datapool/resolve"
 import { loadFrames, loadNcc3hk } from "@/lib/threehk-datapool/server"
 
 export const dynamic = "force-dynamic"
@@ -8,10 +9,10 @@ export const dynamic = "force-dynamic"
 export async function GET() {
   if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   try {
-    const [ncc, assumptions, frames] = await Promise.all([loadNcc3hk(), loadAssumptions(), loadFrames()])
+    const [ncc, assumptions, frames, supports, refs] = await Promise.all([loadNcc3hk(), loadAssumptions(), loadFrames(), loadSupportCountries(), loadRefCountries()])
     let fx = null, fxError: string | null = null
     try { fx = await loadFx() } catch (e) { fxError = (e as Error).message }
-    return NextResponse.json({ ncc, assumptions, frames, fx, fxError })
+    return NextResponse.json({ ncc, assumptions, frames, fx, fxError, groups: coveredGroups(ncc, supports, refs) })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }

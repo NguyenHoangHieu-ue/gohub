@@ -70,3 +70,19 @@ export function pickSupportGroup<T extends SupportCountryLite>(groups: T[], coun
   })
   return { matches, iso: Array.from(want), unresolved }
 }
+
+/** Các nhóm nước hỗ trợ có CÙNG tập nước với `iso` (chỉ xét ≥ 2 nước). > 1 phần tử = mã nhóm trùng tập (AS4/AS5/SEA…) → cần người dùng soát đúng mã. */
+export function sameSetGroups<T extends SupportCountryLite>(groups: T[], iso: string): T[] {
+  const want = new Set(parseIso(iso))
+  if (want.size < 2) return []
+  return groups.filter(g => {
+    const have = new Set(parseIso(g.iso))
+    return have.size === want.size && Array.from(want).every(c => have.has(c))
+  })
+}
+
+/** Cảnh báo (không chặn khi đã có mã) khi nhiều nhóm nước hỗ trợ cùng tập nước. null nếu không có gì để báo. */
+export function sameSetWarning(label: string, matches: { code: string }[], chosen: string): string | null {
+  if (matches.length < 2) return null
+  return `${label}: có ${matches.length} nhóm nước hỗ trợ cùng tập nước (${matches.map(m => m.code).join(", ")}) — ${chosen ? `đang dùng ${chosen}` : "chưa chọn mã"}; kiểm tra đúng mã trước khi import`
+}
