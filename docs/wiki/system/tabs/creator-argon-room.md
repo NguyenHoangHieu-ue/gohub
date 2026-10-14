@@ -23,7 +23,11 @@ Bảng `argon_projects`, `argon_sources`, `argon_source_versions`, `argon_runs` 
 ## Sửa tài liệu
 `POST sources/[id]/revise` trả BẢN NHÁP (không lưu); giao diện so khác biệt theo dòng (`lib/argon/diff.ts`) rồi Hiếu duyệt → `PATCH text` tạo phiên bản mới. Bản nháp bị cắt vì quá dài (`truncated`) không áp dụng được. `GET sources/[id]/export?format=docx|xlsx|md` xuất phiên bản hiện tại (`lib/argon/export.ts`) — chỉ chữ, KHÔNG giữ định dạng của file Word/Excel gốc.
 
+## Mail Lark (P2, chỉ đọc)
+`lib/argon/mail.ts` (đọc: thư mục, danh sách thư mới→cũ, nội dung base64url → chữ, đính kèm), `lib/argon/mail-sync.ts` (quy tắc + đồng bộ), API `projects/[id]/mail` (GET quy tắc + thư mục · POST {rule} lưu + nạp ngay, {action:"sync"} nạp lại tất cả · DELETE ?ruleId). Quy tắc lưu `app_settings` key `argon_mail_rules:<projectId>` (xoá cùng dự án). Quét tối đa 150 thư từ mới → cũ, dừng khi quá `sinceDays`; lọc theo người gửi/từ khoá; gom theo `thread_id`, giữ `maxThreads` luồng mới nhất. Luồng đổi (hash) → phiên bản mới; đính kèm tải về qua `download_url` rồi `ingestBuffer` (`lib/argon/ingest.ts`). Cần scope `mail:user_mailbox.folder:read` + `mail:user_mailbox.message:readonly` (+ `.body/.subject/.address` đã xin ở `LARK_OAUTH_SCOPES`); thiếu → Lark 99991679, báo tên scope. Mail chứa thông tin bên thứ ba và được gửi tới Gemini API khi chạy (Hiếu chốt 2026-10-14: không cần báo pháp chế). Cron `/api/cron/argon-sync` cũng nạp lại các quy tắc.
+
 ## Gotchas
+- Client component KHÔNG import `@/lib/supabase` (tạo client admin cần `SUPABASE_SERVICE_KEY`, không có ở trình duyệt → trắng cả trang; sự cố 2026-10-14). Dùng `@/lib/supabase-browser`; test `argon-client-imports` chặn lại.
 - PDF/ảnh/video/âm thanh (`send_binary`) không sửa chữ được; tổng file gốc nhúng ≤18MB/lượt, vượt thì bỏ + cảnh báo. File >20MB chưa hỗ trợ (cần Gemini Files API — P1).
 - `thinkingLevel "minimal"` bị Argon từ chối (chỉ low/medium/high).
 - Giá ước lượng `estimateArgonCostUsd` là giá giới thiệu ($2/$10 trên 1M token); Google nói sẽ tăng — cập nhật ở `lib/agents/gemini-pricing.ts`.
