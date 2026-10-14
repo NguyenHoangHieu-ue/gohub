@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import * as XLSX from "xlsx"
 import { dropExisting } from "@/lib/bc-datapool/dedupe"
-import { findExisting, loadAssumptions, loadFx, loadRefCountries, loadSupportCountries, requireAdmin } from "@/lib/bc-datapool/server"
+import { findExisting, findSkuCogs, loadAssumptions, loadFx, loadRefCountries, loadSupportCountries, requireAdmin } from "@/lib/bc-datapool/server"
 import type { Assumptions, SimType } from "@/lib/bc-datapool/types"
 import { build, type ThkPlanInput } from "@/lib/threehk-datapool/builder"
 import { buildWorkbook } from "@/lib/threehk-datapool/export"
 import { sameSetGroups, sameSetWarning } from "@/lib/bc-datapool/iso"
+import { applyEdits, sanitizeEdits } from "@/lib/datapool-audit/edits"
 import { coveredGroups, priceOf, resolveSupport } from "@/lib/threehk-datapool/resolve"
 import { loadFrames, loadNcc3hk, loadTemplates } from "@/lib/threehk-datapool/server"
 
@@ -15,6 +16,7 @@ interface Body {
   products?: { simType: SimType; countries: string[]; codeOverride?: string; usSimFull?: boolean; vnEsimData?: boolean; plans: ThkPlanInput[] }[]
   assumptions?: Partial<Assumptions>
   force?: boolean
+  edits?: unknown
 }
 
 /**
@@ -59,7 +61,10 @@ export async function POST(req: NextRequest) {
       findExisting("products", "product_code", [...built.sheets.productUS, ...built.sheets.productVN].map(r => String(r[35]))),
       findExisting("skus", "sku_code", [...built.sheets.skuUS, ...built.sheets.skuVN].map(r => String(r[20]))),
     ])
-    const { result: deduped, skipped } = dropExisting(built, existSkus, existProducts)
+    const existCogs = await findSkuCogs(Array.from(existSkus.keys()))
+    const { result: deduped, skipped } = dropExisting(built, existSkus, existProducts, existCogs)
+    const drift = skipped.skus.filter(s => s.verdict === "diff").length
+    if (drift) extra.push(`Có ${drift} SKU ĐÃ CÓ trong hệ thống nhưng giá vốn lệch giá tính lại bây giờ (tỷ giá / công thức / bảng giá đã đổi?) — xem hộp xanh bên dưới; dùng "Soát giá vốn" để cập nhật`)
     const result = { ...deduped, warnings: [...extra, ...built.warnings] }
     const nothingNew = !result.sheets.skuUS.length && !result.sheets.skuVN.length
 
@@ -67,7 +72,10 @@ export async function POST(req: NextRequest) {
       if (nothingNew) return NextResponse.json({ error: "Tất cả SKU đã có trong hệ thống — không còn gì để tạo mới", skipped }, { status: 422 })
       if (result.warnings.some(w => /không mã hoá được|trùng|thiếu|phải đúng|chưa có gói|chưa chọn|chưa nhập|chưa có hệ số|chỉ có mức/.test(w)) && body.force !== true)
         return NextResponse.json({ error: "Còn lỗi cần sửa trước khi xuất", warnings: result.warnings }, { status: 422 })
-      const buf = XLSX.write(buildWorkbook(result, { fx, a, frames }), { type: "buffer", bookType: "xlsx" }) as Buffer
+      const wb = buildWorkbook(result, { fx, a, frames })
+      const edits = sanitizeEdits(body.edits)
+      if (edits.length) applyEdits(wb, result.sheets, edits)
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
       return new NextResponse(new Uint8Array(buf), {
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

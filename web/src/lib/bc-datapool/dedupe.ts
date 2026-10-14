@@ -1,3 +1,4 @@
+import { compareCogs, type CogsVerdict } from "@/lib/datapool-audit/compare"
 import type { BuiltSheets } from "./types"
 
 /** Phần tối thiểu của kết quả build mà dedupe cần (dùng chung BC Datapool + 3HK Datapool). */
@@ -8,16 +9,17 @@ export interface Dedupable<C extends { type: string; kind: string; dataAmount: n
   vnCost: number[]
 }
 
-export interface SkippedSku { sku: string; tenant: "US" | "VN"; status: string; label: string }
+/** `current` = giá vốn đang có trong hệ thống; `computed` = giá tính lại bây giờ (tỷ giá/công thức/bảng giá hiện tại); null nếu hệ thống chưa có giá. */
+export interface SkippedSku { sku: string; tenant: "US" | "VN"; status: string; label: string; currency?: string; current?: number | null; computed?: number; diffPct?: number; verdict?: CogsVerdict }
 export interface SkippedProduct { code: string; tenant: "US" | "VN"; status: string }
 export interface Skipped { skus: SkippedSku[]; products: SkippedProduct[] }
 
 /**
  * Bỏ những SKU / Product ĐÃ CÓ trong hệ thống khỏi kết quả (cả bản xem trước lẫn file xuất) và trả danh sách đã bỏ
  * để báo cho người dùng. Phần còn lại được tạo bình thường (VD chọn 10,11,12 ngày mà 10 ngày đã có → chỉ tạo 11 và 12).
- * `existingSkus`/`existingProducts`: mã → trạng thái trong hệ thống (Active/Inactive/Deleted...).
+ * `existingSkus`/`existingProducts`: mã → trạng thái trong hệ thống (Active/Inactive/Deleted...). `existingCogs`: mã SKU → giá vốn đang có để so với giá tính lại.
  */
-export function dropExisting<C extends { type: string; kind: string; dataAmount: number; unit: string; days: number }, R extends Dedupable<C>>(r: R, existingSkus: Map<string, string>, existingProducts: Map<string, string>): { result: R; skipped: Skipped } {
+export function dropExisting<C extends { type: string; kind: string; dataAmount: number; unit: string; days: number }, R extends Dedupable<C>>(r: R, existingSkus: Map<string, string>, existingProducts: Map<string, string>, existingCogs?: Map<string, { cogs: number | null }>): { result: R; skipped: Skipped } {
   const skipped: Skipped = { skus: [], products: [] }
   const labelOf = (ci: number) => {
     const c = r.costRows[ci]
@@ -29,7 +31,12 @@ export function dropExisting<C extends { type: string; kind: string; dataAmount:
     rows.forEach((row, i) => {
       const code = String(row[20])
       const status = existingSkus.get(code)
-      if (status !== undefined) skipped.skus.push({ sku: code, tenant, status, label: labelOf(cost[i]) })
+      if (status !== undefined) {
+        const cur = existingCogs?.get(code)
+        const computed = Number(row[10]), currency = String(row[11] ?? "")
+        const cmp = cur && cur.cogs != null && Number.isFinite(computed) ? compareCogs(cur.cogs, computed, currency) : null
+        skipped.skus.push({ sku: code, tenant, status, label: labelOf(cost[i]), currency, current: cur ? cur.cogs : undefined, computed, diffPct: cmp?.diffPct, verdict: cmp?.verdict })
+      }
       else { kept.push(row); keptCost.push(cost[i]) }
     })
     return { kept, keptCost }

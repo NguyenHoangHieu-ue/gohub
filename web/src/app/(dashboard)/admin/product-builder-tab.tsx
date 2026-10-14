@@ -1,6 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { SkippedSkuLine } from "./skipped-sku-line"
+import { EditableCell } from "./editable-cell"
+import { useSheetEdits } from "./use-sheet-edits"
+import { lockedCols, rowKey, type EditSheet } from "@/lib/datapool-audit/edits"
 import { Download, Eye, Plus, Trash2, Upload } from "lucide-react"
 import ProductBuilder3hk from "./product-builder-3hk"
 import { PRODUCT_HEADERS, SKU_HEADERS, pickOperatorPrice, type BuildResult } from "@/lib/bc-datapool/builder"
@@ -25,7 +29,7 @@ interface PreviewResult extends BuildResult { fx: Fx; skipped: Skipped; nothingN
  */
 interface PlanForm { kind: PlanKind; amountKey: string; days: number[]; productId: string; hs: string; hsUnit: "MB" | "GB"; speed: number }
 /** coverage: tên nước (nước đơn) hoặc khoá vùng (gói đa vùng, có "+"); covs: tên khu vực trong bảng giá dùng để lấy giá (nhiều phần tử = gói đa vùng) */
-interface ProductForm { pool: Pool; simType: "eSIM" | "SIM"; coverage: string; covs: string[]; operators: string[]; code: string; codeHint?: string; iso: string; en: string; vn: string; plans: PlanForm[] }
+interface ProductForm { pool: Pool; simType: "eSIM" | "SIM"; coverage: string; covs: string[]; operators: string[]; code: string; codeHint?: string; iso: string; en: string; vn: string; plans: PlanForm[]; esimDataUs?: boolean; esimDataVn?: boolean }
 
 /** Bộ ngày phổ biến — mặc định bật sẵn phần giao với số ngày Portal bán */
 const COMMON_DAYS = [1, 2, 3, 4, 5, 6, 7, 10, 15, 20, 25, 30]
@@ -88,6 +92,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
   const [previewStale, setPreviewStale] = useState(false)
   const [sheet, setSheet] = useState<"skuUS" | "skuVN" | "productUS" | "productVN" | "cost">("cost")
   const [busy, setBusy] = useState<"" | "upload" | "catalog" | "preview" | "export">("")
+  const ed = useSheetEdits()
   const fileRef = useRef<HTMLInputElement>(null)
   const catRef = useRef<HTMLInputElement>(null)
 
@@ -175,6 +180,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
     pool: p.pool, simType: p.simType, coverages: p.covs, operators: p.operators,
     supportCountryCode: p.code.trim().toUpperCase(), isoCodes: p.iso.trim().toUpperCase(),
     countryNameEn: p.en.trim(), countryNameVn: p.vn.trim(),
+    esimDataUs: p.simType === "eSIM" && !!p.esimDataUs, esimDataVn: p.simType === "eSIM" && !!p.esimDataVn,
     plans: p.plans.map(pl => {
       const [amount, unit] = pl.amountKey.split("|")
       const base = { kind: pl.kind, days: [...pl.days].sort((a, b) => a - b), productId: pl.productId.trim() }
@@ -227,7 +233,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
   const runExport = async (force = false) => {
     setBusy("export")
     try {
-      const r = await fetch("/api/admin/bc-datapool/build?format=xlsx", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ products: toInputs(), assumptions, force }) })
+      const r = await fetch("/api/admin/bc-datapool/build?format=xlsx", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ products: toInputs(), assumptions, force, edits: ed.edits }) })
       if (!r.ok) {
         const j = await r.json().catch(() => ({}))
         setBusy("")
@@ -376,6 +382,17 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
               <div><label className={label}>Tên nước (VN)</label><input className={`${input} w-full`} value={p.vn} onChange={e => patchProduct(i, { vn: e.target.value })} placeholder="Nhật Bản" /></div>
             </div>
 
+            <div className="text-xs text-gray-600 dark:text-slate-300 space-y-1">
+              <div>Mặc định — {p.simType === "eSIM" ? "eSIM full (cả đầu US và VN)" : "SIM: gói data rời (A) cả 2 đầu + SIM full (E, chỉ đầu VN)"}</div>
+              {p.simType === "eSIM" && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span>Tạo THÊM gói data rời (A) của eSIM:</span>
+                  <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={!!p.esimDataUs} onChange={e => patchProduct(i, { esimDataUs: e.target.checked })} /> đầu US</label>
+                  <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={!!p.esimDataVn} onChange={e => patchProduct(i, { esimDataVn: e.target.checked })} /> đầu VN</label>
+                </div>
+              )}
+            </div>
+
             <div className="space-y-2">
               <label className={label}>Gói (chỉ chọn được gói BC Portal đang bán · mỗi dòng = 1 loại × 1 dung lượng · ProductID tự điền từ Portal)</label>
               {!p.coverage && <div className="text-xs text-gray-400">Chọn khu vực để hiện các gói Portal có bán.</div>}
@@ -492,7 +509,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
                 {preview.nothingNew ? " · không còn SKU nào để tạo mới" : ` · sẽ tạo mới ${preview.sheets.skuUS.length} SKU US + ${preview.sheets.skuVN.length} SKU VN`}
               </div>
               <ul className="list-disc pl-5 space-y-0.5 text-xs max-h-56 overflow-auto">
-                {preview.skipped.skus.map(s => <li key={`${s.tenant}${s.sku}`}><span className="font-mono">{s.sku}</span> ({s.tenant}, trạng thái {s.status}) — {s.label}</li>)}
+                {preview.skipped.skus.map(s => <SkippedSkuLine key={`${s.tenant}${s.sku}`} s={s} />)}
                 {preview.skipped.products.map(p => <li key={`${p.tenant}${p.code}`}>Product <span className="font-mono">{p.code}</span> ({p.tenant}, {p.status}) đã có — không tạo lại dòng Product, chỉ thêm SKU mới nếu có</li>)}
               </ul>
             </div>
@@ -506,6 +523,13 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
               <ul className="list-disc pl-5 space-y-0.5 text-xs">{preview.warnings.map((w, k) => <li key={k}>{w}</li>)}</ul>
             </div>
           )}
+          {ed.edits.length > 0 && (
+            <div className="p-2.5 border border-amber-300 bg-amber-50 rounded-xl text-xs text-amber-900 flex flex-wrap items-center gap-3">
+              <span><b>Đã chỉnh tay {ed.edits.length} ô</b> — sẽ ghi vào file xuất (kèm sheet &quot;Chỉnh sửa tay&quot; để truy vết). Ô giá vốn sửa tay thành số cố định, mất công thức.</span>
+              <button onClick={ed.clear} className="px-2 py-0.5 border border-amber-400 rounded-md hover:bg-amber-100">Bỏ hết chỉnh sửa</button>
+            </div>
+          )}
+          <div className="text-[11px] text-gray-500">Bấm đúp vào một ô của SKU/Product để sửa tay trước khi xuất (ô mã bị khoá).</div>
           <div className="flex flex-wrap gap-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
             {([["cost", `Tính giá (${preview.costRows.length})`], ["skuUS", `SKU US (${preview.sheets.skuUS.length})`], ["skuVN", `SKU VN (${preview.sheets.skuVN.length})`], ["productUS", `Product US (${preview.sheets.productUS.length})`], ["productVN", `Product VN (${preview.sheets.productVN.length})`]] as const).map(([id, l]) => (
               <button key={id} onClick={() => setSheet(id)} className={`px-3 py-1.5 text-xs font-medium rounded-lg ${sheet === id ? "bg-white dark:bg-slate-700 text-brand-700 shadow-sm" : "text-gray-500"}`}>{l}</button>
@@ -535,7 +559,11 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
                   const tip = ex ? (sheet === "skuUS" ? `${ex.dataPool}\n${ex.dataUsd}\n${ex.fee}\n${ex.cogsUsd}` : `${ex.cogsUsd}\n${ex.cogsVnd}`) : undefined
                   return (
                     <tr key={k} className="border-t border-gray-100 dark:border-slate-800">
-                      {row.map((c, m) => <td key={m} title={m === 10 ? tip : undefined} className={`px-2 py-1 whitespace-nowrap ${m === 10 && tip ? "cursor-help underline decoration-dotted font-semibold" : ""}`}>{String(c)}</td>)}
+                      {row.map((c, m) => {
+                        const es = sheet as EditSheet, key = rowKey(es, row), e = ed.find(es, key, m)
+                        return <EditableCell key={m} value={e ? e.value : c} edited={!!e} locked={lockedCols(es).includes(m)} title={m === 10 ? tip : undefined}
+                          extraClass={m === 10 && tip ? "cursor-help underline decoration-dotted font-semibold" : ""} onCommit={v => ed.set(es, key, m, v)} onReset={() => ed.reset(es, key, m)} />
+                      })}
                     </tr>
                   )
                 })}</tbody>

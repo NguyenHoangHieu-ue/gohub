@@ -84,6 +84,9 @@ export interface ProductInput {
   countryNameEn: string
   countryNameVn: string
   plans: PlanLine[]
+  /** eSIM: tạo THÊM gói data rời (A) — đầu US / đầu VN (mặc định chỉ eSIM full C). SIM luôn có A (cả 2 đầu) + E (VN). */
+  esimDataUs?: boolean
+  esimDataVn?: boolean
 }
 
 export interface BuiltSheets {

@@ -1,6 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { SkippedSkuLine } from "./skipped-sku-line"
+import { EditableCell } from "./editable-cell"
+import { useSheetEdits } from "./use-sheet-edits"
+import { lockedCols, rowKey, type EditSheet } from "@/lib/datapool-audit/edits"
 import { Download, Eye, Plus, Trash2, X } from "lucide-react"
 import type { Skipped } from "@/lib/bc-datapool/dedupe"
 import type { Assumptions, Fx, SimType } from "@/lib/bc-datapool/types"
@@ -32,6 +36,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
   const [stale, setStale] = useState(false)
   const [sheet, setSheet] = useState<"skuUS" | "skuVN" | "productUS" | "productVN" | "cost">("cost")
   const [busy, setBusy] = useState<"" | "preview" | "export">("")
+  const ed = useSheetEdits()
 
   useEffect(() => {
     fetch("/api/admin/threehk-datapool").then(async r => {
@@ -59,7 +64,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
   }, [opts])
 
   const body = (force = false) => JSON.stringify({
-    force,
+    force, edits: ed.edits,
     products: products.map(p => ({
       simType: p.simType, countries: p.countries, codeOverride: p.codeOverride,
       usSimFull: p.simType === "SIM" && p.usSimFull, vnEsimData: p.simType === "eSIM" && p.vnEsimData,
@@ -242,7 +247,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
                 {preview.nothingNew ? " · không còn SKU nào để tạo mới" : ` · sẽ tạo mới ${preview.sheets.skuUS.length} SKU US + ${preview.sheets.skuVN.length} SKU VN`}
               </div>
               <ul className="list-disc pl-5 space-y-0.5 text-xs max-h-56 overflow-auto">
-                {preview.skipped.skus.map(s => <li key={`${s.tenant}${s.sku}`}><span className="font-mono">{s.sku}</span> ({s.tenant}, {s.status}) — {s.label}</li>)}
+                {preview.skipped.skus.map(s => <SkippedSkuLine key={`${s.tenant}${s.sku}`} s={s} />)}
                 {preview.skipped.products.map(p => <li key={`${p.tenant}${p.code}`}>Product <span className="font-mono">{p.code}</span> ({p.tenant}, {p.status}) đã có — không tạo lại dòng Product</li>)}
               </ul>
             </div>
@@ -254,6 +259,13 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
               <ul className="list-disc pl-5 space-y-0.5 text-xs">{preview.warnings.map((w, k) => <li key={k}>{w}</li>)}</ul>
             </div>
           )}
+          {ed.edits.length > 0 && (
+            <div className="p-2.5 border border-amber-300 bg-amber-50 rounded-xl text-xs text-amber-900 flex flex-wrap items-center gap-3">
+              <span><b>Đã chỉnh tay {ed.edits.length} ô</b> — sẽ ghi vào file xuất (kèm sheet &quot;Chỉnh sửa tay&quot; để truy vết). Ô giá vốn sửa tay thành số cố định, mất công thức.</span>
+              <button onClick={ed.clear} className="px-2 py-0.5 border border-amber-400 rounded-md hover:bg-amber-100">Bỏ hết chỉnh sửa</button>
+            </div>
+          )}
+          <div className="text-[11px] text-gray-500">Bấm đúp vào một ô của SKU/Product để sửa tay trước khi xuất (ô mã bị khoá).</div>
           <div className="flex flex-wrap gap-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
             {([["cost", `Tính giá (${preview.costRows.length})`], ["skuUS", `SKU US (${preview.sheets.skuUS.length})`], ["skuVN", `SKU VN (${preview.sheets.skuVN.length})`], ["productUS", `Product US (${preview.sheets.productUS.length})`], ["productVN", `Product VN (${preview.sheets.productVN.length})`]] as const).map(([id, l]) => (
               <button key={id} onClick={() => setSheet(id)} className={`px-3 py-1.5 text-xs font-medium rounded-lg ${sheet === id ? "bg-white dark:bg-slate-700 text-brand-700 shadow-sm" : "text-gray-500"}`}>{l}</button>
@@ -279,7 +291,11 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
                   const tip = ci != null ? preview.costRows[ci].explain : undefined
                   return (
                     <tr key={k} className="border-t border-gray-100 dark:border-slate-800">
-                      {row.map((c, m) => <td key={m} title={m === 10 ? tip : undefined} className={`px-2 py-1 whitespace-nowrap ${m === 10 && tip ? "cursor-help underline decoration-dotted font-semibold" : ""}`}>{String(c)}</td>)}
+                      {row.map((c, m) => {
+                        const es = sheet as EditSheet, key = rowKey(es, row), e = ed.find(es, key, m)
+                        return <EditableCell key={m} value={e ? e.value : c} edited={!!e} locked={lockedCols(es).includes(m)} title={m === 10 ? tip : undefined}
+                          extraClass={m === 10 && tip ? "cursor-help underline decoration-dotted font-semibold" : ""} onCommit={v => ed.set(es, key, m, v)} onReset={() => ed.reset(es, key, m)} />
+                      })}
                     </tr>
                   )
                 })}</tbody>

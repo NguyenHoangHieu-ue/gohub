@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import * as XLSX from "xlsx"
 import { sameSetGroups, sameSetWarning } from "@/lib/bc-datapool/iso"
+import { applyEdits, sanitizeEdits } from "@/lib/datapool-audit/edits"
 import { build } from "@/lib/bc-datapool/builder"
 import { dropExisting } from "@/lib/bc-datapool/dedupe"
 import { buildWorkbook } from "@/lib/bc-datapool/export"
 import type { Assumptions, ProductInput } from "@/lib/bc-datapool/types"
 import { resolvePlans } from "@/lib/bc-datapool/plan-catalog"
 import { FRAME_SKU } from "@/lib/bc-datapool/codes"
-import { findExisting, loadAssumptions, loadFx, loadPlanCatalog, loadPriceList, loadSupportCountries, loadWhiteSimVnd, requireAdmin } from "@/lib/bc-datapool/server"
+import { findExisting, findSkuCogs, loadAssumptions, loadFx, loadPlanCatalog, loadPriceList, loadSupportCountries, loadWhiteSimVnd, requireAdmin } from "@/lib/bc-datapool/server"
 
 export const dynamic = "force-dynamic"
 
@@ -51,7 +52,10 @@ export async function POST(req: NextRequest) {
       findExisting("skus", "sku_code", [...built.sheets.skuUS, ...built.sheets.skuVN].map(r => String(r[20]))),
     ])
     // SKU/Product đã có trong hệ thống: báo (kèm mã) và BỎ khỏi kết quả, phần còn lại tạo bình thường
-    const { result: deduped, skipped } = dropExisting(built, existSkus, existProducts)
+    const existCogs = await findSkuCogs(Array.from(existSkus.keys()))
+    const { result: deduped, skipped } = dropExisting(built, existSkus, existProducts, existCogs)
+    const drift = skipped.skus.filter(s => s.verdict === "diff").length
+    if (drift) warnings.push(`Có ${drift} SKU ĐÃ CÓ trong hệ thống nhưng giá vốn lệch giá tính lại bây giờ (tỷ giá / công thức / bảng giá đã đổi?) — xem hộp xanh bên dưới; dùng "Soát giá vốn" để cập nhật`)
     const result = { ...deduped, warnings }
     const nothingNew = !result.sheets.skuUS.length && !result.sheets.skuVN.length
 
@@ -61,6 +65,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Còn lỗi cần sửa trước khi xuất", warnings: result.warnings }, { status: 422 })
       // Ô giá là công thức Excel (trỏ sheet "Tính giá") để người dùng soát lại cách tính
       const wb = buildWorkbook(result, { fx, a, list, whiteSimVnd })
+      const edits = sanitizeEdits(body.edits)
+      if (edits.length) applyEdits(wb, result.sheets, edits)
       const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer
       return new NextResponse(new Uint8Array(buf), {
         headers: {

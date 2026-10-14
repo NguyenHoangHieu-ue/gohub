@@ -213,10 +213,11 @@ describe("SKU/Product đã có trong hệ thống → báo kèm mã, bỏ đi, t
     expect(built.sheets.skuUS.map(x => x[20])).toEqual(["ECCHNWDT00110", "ECCHNWDT00111", "ECCHNWDT00112"])
     const skus = new Map([["ECCHNWDT00110", "Active"], ["3CCHNWDT00110", "Inactive"]])
     const { result, skipped } = dropExisting(built, skus, new Map())
-    expect(skipped.skus).toEqual([
-      { sku: "ECCHNWDT00110", tenant: "US", status: "Active", label: "eSIM full · Daily 1GB × 10 ngày" },
-      { sku: "3CCHNWDT00110", tenant: "VN", status: "Inactive", label: "eSIM full · Daily 1GB × 10 ngày" },
+    expect(skipped.skus).toMatchObject([
+      { sku: "ECCHNWDT00110", tenant: "US", status: "Active", label: "eSIM full · Daily 1GB × 10 ngày", currency: "USD" },
+      { sku: "3CCHNWDT00110", tenant: "VN", status: "Inactive", label: "eSIM full · Daily 1GB × 10 ngày", currency: "VND" },
     ])
+    expect(skipped.skus[0].verdict).toBeUndefined()   // không truyền giá vốn hệ thống → không so
     expect(result.sheets.skuUS.map(x => x[20])).toEqual(["ECCHNWDT00111", "ECCHNWDT00112"])
     expect(result.sheets.skuVN.map(x => x[20])).toEqual(["3CCHNWDT00111", "3CCHNWDT00112"])
     expect(result.costRows.map(c => c.days)).toEqual([11, 12])
@@ -410,5 +411,43 @@ describe("Sản phẩm đa vùng", () => {
 
   test("nước đơn giữ onsiteCarrier cũ (nhà mạng nối bằng /)", () => {
     expect(build([jp()], list, FX, A).sheets.productUS[0][22]).toBe("KDDI/SoftBank")
+  })
+})
+
+describe("eSIM: tạo thêm gói data rời (A) đầu US/VN", () => {
+  const base = () => jp({ plans: [plan({ kind: "Fixed", dataAmount: 5, unit: "GB", days: [7], productId: "22" })] })
+  test("mặc định chỉ eSIM full C (cả US + VN); không có A", () => {
+    const r = build([base()], list, FX, A, { whiteSimVnd: 16028 })
+    expect(r.sheets.skuUS.map(x => x[20])).toEqual(["ECJPNWDF00507"]); expect(r.sheets.skuVN.map(x => x[20])).toEqual(["3CJPNWDF00507"])
+  })
+  test("tích A đầu US + VN: thêm EA/3A, giá chỉ data (không phí khung), vendorSku + vendorSkuSim = ProductID (US) / SKU US (VN)", () => {
+    const r = build([{ ...base(), esimDataUs: true, esimDataVn: true }], list, FX, A, { whiteSimVnd: 16028 })
+    expect(r.sheets.skuUS.map(x => x[20]).sort()).toEqual(["EAJPNWDF00507", "ECJPNWDF00507"])
+    const ea = r.sheets.skuUS.find(x => x[20] === "EAJPNWDF00507")!, ec = r.sheets.skuUS.find(x => x[20] === "ECJPNWDF00507")!
+    expect(Number(ea[10])).toBeLessThan(Number(ec[10])); expect(ea[18]).toBe("22"); expect(ea[19]).toBe("22")
+    const va = r.sheets.skuVN.find(x => x[20] === "3AJPNWDF00507")!
+    expect(va[18]).toBe("EAJPNWDF00507"); expect(va[19]).toBe("EAJPNWDF00507")
+    expect(r.sheets.productUS.map(x => x[35]).sort()).toEqual(["EAJPNWDF", "ECJPNWDF"]); expect(r.sheets.productVN.map(x => x[35]).sort()).toEqual(["3AJPNWDF", "3CJPNWDF"])
+    expect(r.costRows.map(c => c.type).sort()).toEqual(["eSIM data (A)", "eSIM full"])
+  })
+  test("chỉ đầu VN: không có SKU/Product US của A và có cảnh báo trỏ về SKU US", () => {
+    const r = build([{ ...base(), esimDataVn: true }], list, FX, A, { whiteSimVnd: 16028 })
+    expect(r.sheets.skuUS.map(x => x[20])).toEqual(["ECJPNWDF00507"]); expect(r.sheets.skuVN.map(x => x[20]).sort()).toEqual(["3AJPNWDF00507", "3CJPNWDF00507"])
+    expect(r.warnings.some(w => /chỉ tạo đầu VN/.test(w))).toBe(true)
+  })
+})
+
+describe("SKU đã có: so giá vốn hệ thống với giá tính lại", () => {
+  test("khớp / chênh làm tròn / lệch được gắn verdict + % lệch; hệ thống chưa có giá thì không so", () => {
+    const built = build([jp()], list, FX, A, { whiteSimVnd: 16028 })
+    const us = built.sheets.skuUS.find(x => String(x[20]).startsWith("ECJPNWDT"))!
+    const code = String(us[20]), computed = Number(us[10])
+    const status = new Map([[code, "Active"]])
+    const verdictFor = (cogs: number | null) => dropExisting(built, status, new Map(), new Map([[code, { cogs }]])).skipped.skus[0]
+    expect(verdictFor(computed).verdict).toBe("match")
+    expect(verdictFor(Math.round((computed - 0.01) * 100) / 100).verdict).toBe("rounding")
+    const bad = verdictFor(Math.round(computed * 0.9 * 100) / 100)
+    expect(bad.verdict).toBe("diff"); expect(bad.diffPct).toBeLessThan(-8)
+    expect(verdictFor(null).verdict).toBeUndefined()
   })
 })

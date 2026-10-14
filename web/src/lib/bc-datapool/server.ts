@@ -77,6 +77,17 @@ export async function findExisting(table: "products" | "skus", column: "product_
   return found
 }
 
+/** Giá vốn đang có của các SKU (mã → { cogs, currency }) — để so với giá tính lại khi tạo sản phẩm (SKU đã có). */
+export async function findSkuCogs(codes: string[]): Promise<Map<string, { cogs: number | null; currency: string }>> {
+  const out = new Map<string, { cogs: number | null; currency: string }>()
+  const uniq = Array.from(new Set(codes))
+  for (let i = 0; i < uniq.length; i += 100) {
+    const { data } = await supabaseAdmin.from("skus").select("sku_code,latest_cogs,latest_cogs_currency").in("sku_code", uniq.slice(i, i + 100))
+    for (const r of (data ?? []) as { sku_code: string; latest_cogs: number | null; latest_cogs_currency: string | null }[]) out.set(r.sku_code, { cogs: r.latest_cogs == null ? null : Number(r.latest_cogs), currency: r.latest_cogs_currency ?? "" })
+  }
+  return out
+}
+
 export async function loadPlanCatalog(): Promise<PlanCatalog | null> {
   const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", PLAN_CATALOG_KEY).maybeSingle()
   if (!data?.value) return null
