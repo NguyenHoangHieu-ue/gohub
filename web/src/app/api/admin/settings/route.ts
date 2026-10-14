@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWrite } from "@/lib/writable-tabs"
+import { triggerAudit } from "@/lib/datapool-audit/server"
 import { DATAPOOL_FORMULA, FORMULA_KEYS, UNLIMITED_LEVELS_KEY, findLevel, sanitizeLevels } from "@/lib/datapool-formula"
 
 const WRITE_ROLES = ["admin", "creator"]
@@ -67,6 +68,7 @@ export async function PATCH(req: NextRequest) {
       .upsert(rows, { onConflict: "key" })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (updates.some(u => u.key.startsWith("datapool."))) triggerAudit("Hiếu đổi Công Thức Datapool (giả định / bảng mức Unlimited)")
     return NextResponse.json({ ok: true, updated: rows.length })
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

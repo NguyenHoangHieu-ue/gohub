@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { triggerAudit } from "@/lib/datapool-audit/server"
 import { createNotification } from "@/lib/notifications"
 import { diffPriceList, hasPriceChanges } from "@/lib/bc-datapool/diff"
 import { parsePriceList } from "@/lib/bc-datapool/price-list"
@@ -38,5 +39,6 @@ export async function POST(req: NextRequest) {
     await createNotification("price_change", `BC Datapool: bảng báo giá mới — ${d.counts.changed} nhà mạng đổi giá, ${d.counts.added} mới, ${d.counts.removed} bị bỏ`,
       `${priceList.fileName}${d.counts.fees ? ` · ${d.counts.fees} khoản phí đổi` : ""}. Xem chi tiết ở Admin › Tạo sản phẩm.`, { summary: d.counts }, "admin_manager")
   }
+  triggerAudit("Upload bảng báo giá BC Datapool mới")
   return NextResponse.json({ priceList })
 }

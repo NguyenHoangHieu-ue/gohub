@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { canWrite } from "@/lib/writable-tabs"
 import { createNotification } from "@/lib/notifications"
 import { loadEffectiveTable, saveMonthlyTable } from "@/lib/fx/server"
+import { triggerAudit } from "@/lib/datapool-audit/server"
 import { parseFxWorkbook } from "@/lib/fx/parse"
 import { currentMonth, FX_ROWS, monthLabel, MONTHS, setCell, type FxTable } from "@/lib/fx/table"
 
@@ -37,6 +38,7 @@ export async function PUT(req: NextRequest) {
   }
   try {
     const { flatWritten } = await saveMonthlyTable(table)
+    triggerAudit("Tỷ giá nội bộ thay đổi")
     return NextResponse.json({ ...view(table, "monthly", new Date().toISOString()), saved: changes.length, flatWritten })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
@@ -63,6 +65,7 @@ export async function POST(req: NextRequest) {
     }
   try {
     const { flatWritten } = await saveMonthlyTable(table)
+    triggerAudit("Tỷ giá nội bộ thay đổi")
     if (changed.length)
       await createNotification("price_change", `Tỷ giá nội bộ: nhập từ ${file.name} — ${changed.length} ô thay đổi`, "Xem chi tiết ở Admin › Cài đặt › Tỷ Giá Nội Bộ.", { summary: { changed: changed.length } }, "admin_manager")
     return NextResponse.json({ ...view(table, "monthly", new Date().toISOString()), imported: { rows: parsed.rows, cells: parsed.cells }, changed: changed.slice(0, 100), changedCount: changed.length, flatWritten })
