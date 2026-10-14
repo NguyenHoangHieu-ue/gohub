@@ -1,0 +1,267 @@
+{
+  "label": "gps-argon",
+  "model": "gemini-4-argon",
+  "judgeModel": "gemini-pro-latest",
+  "at": "2026-10-14T06:08:03.848Z",
+  "rows": [
+    {
+      "id": 1,
+      "group": "A-báo cáo dài",
+      "error": "HTTP 504",
+      "ms": 302000,
+      "judge": {
+        "scores": {
+          "dung_su_that": 0,
+          "do_sau": 0,
+          "day_du": 0,
+          "tuan_thu_nghiep_vu": 0,
+          "ro_rang": 0
+        },
+        "total": 0,
+        "note": "Lỗi: HTTP 504"
+      }
+    },
+    {
+      "id": 2,
+      "group": "A-báo cáo dài",
+      "error": "HTTP 504",
+      "ms": 300501,
+      "judge": {
+        "scores": {
+          "dung_su_that": 0,
+          "do_sau": 0,
+          "day_du": 0,
+          "tuan_thu_nghiep_vu": 0,
+          "ro_rang": 0
+        },
+        "total": 0,
+        "note": "Lỗi: HTTP 504"
+      }
+    },
+    {
+      "id": 3,
+      "group": "A-báo cáo dài",
+      "error": "HTTP 504",
+      "ms": 300685,
+      "judge": {
+        "scores": {
+          "dung_su_that": 0,
+          "do_sau": 0,
+          "day_du": 0,
+          "tuan_thu_nghiep_vu": 0,
+          "ro_rang": 0
+        },
+        "total": 0,
+        "note": "Lỗi: HTTP 504"
+      }
+    },
+    {
+      "id": 4,
+      "group": "A-báo cáo dài",
+      "error": "HTTP 504",
+      "ms": 300528,
+      "judge": {
+        "scores": {
+          "dung_su_that": 0,
+          "do_sau": 0,
+          "day_du": 0,
+          "tuan_thu_nghiep_vu": 0,
+          "ro_rang": 0
+        },
+        "total": 0,
+        "note": "Lỗi: HTTP 504"
+      }
+    },
+    {
+      "id": 5,
+      "group": "B-mã nguồn",
+      "answer": "### 1. Nguyên nhân gốc (Root Causes)\n\nCó **2 lỗi kết hợp** khiến hàm luôn trả về mảng rỗng `[]` trong im lặng (silent failure):\n\n1. **Query vào cột không tồn tại (`status`)**:\n   - Bảng `kb_wiki_pages` chỉ có các cột: `id, title, slug, content, group_id, updated_at` — **không có cột `status`**.\n   - Khi gọi `.eq(\"status\", \"published\")`, PostgREST (Supabase) trả về lỗi `42703: column kb_wiki_pages.status does not exist`.\n2. **Nuốt lỗi (Swallowing errors) của Supabase JS SDK**:\n   - Supabase client **không `throw` exception** khi query lỗi, mà trả về `{ data: null, error: PostgrestError }`.\n   - Do bạn chỉ destructure `{ data }` mà bỏ qua `error`, rồi dùng `data ?? []`, nên khi `data` là `null`, hàm âm thầm trả về `[]` mà không có bất kỳ log hay cảnh báo nào.\n\n*(Điểm cải thiện thêm)*: Chỉ tìm bằng `.ilike(\"content\", ...)` sẽ bỏ sót trường hợp từ khóa nằm ở `title` hoặc người dùng gõ câu dài chứa ký tự đặc biệt của PostgREST (như dấu `,`, `(` `)`).\n\n---\n\n### 2. Code đã sửa\n\n```ts\nasync function searchWiki(q: string): Promise<string[]> {\n  const keyword = q.trim().replace(/[%_,()]/g, \" \").trim();\n  if (!keyword) return [];\n\n  const { data, error } = await supabaseAdmin\n    .from(\"kb_wiki_pages\")\n    .select(\"title, content, slug\")\n    // 1. Đã bỏ .eq(\"status\", \"published\") vì cột status không tồn tại\n    // 2. Tìm trên cả title và content để tăng recall\n    .or(`title.ilike.%${keyword}%,content.ilike.%${keyword}%`)\n    .order(\"updated_at\", { ascending: false })\n    .limit(5);\n\n  // 3. Luôn kiểm tra và log error từ Supabase để tránh silent failure\n  if (error) {\n    console.error(\"[searchWiki] Supabase query error:\", error.message, { q });\n    return [];\n  }\n\n  return (data ?? []).map(\n    (p) => `${p.title} (${p.slug}): ${(p.content ?? \"\").slice(0, 500)}`\n  );\n}\n```\n\n### Tóm tắt các thay đổi:\n- **Bỏ `.eq(\"status\", \"published\")`**: Khớp đúng schema thật của `kb_wiki_pages`. (Nếu trên GoHub Intel có dùng cột `is_hidden` cho trang ẩn ở một số bản migration, hãy kiểm tra chính xác schema trước khi thêm filter).\n- **Destructure và log `error`**: Phát hiện ngay nếu sau này có thay đổi schema hoặc lỗi kết nối.\n- **Dùng `.or(...)` tìm cả `title` lẫn `content`** + sanitize ký tự đặc biệt (`%_,()`) để không làm vỡ cú pháp filter của PostgREST.\n- **Guard `(p.content ?? \"\")`**: Tránh lỗi runtime `Cannot read properties of null (reading 'slice')` nếu có trang wiki mới tạo chưa có `content`.",
+      "toolsUsed": [],
+      "tokensIn": 19697,
+      "tokensOut": 749,
+      "ms": 18363,
+      "judge": {
+        "scores": {
+          "dung_su_that": 2,
+          "do_sau": 2,
+          "day_du": 2,
+          "tuan_thu_nghiep_vu": 2,
+          "ro_rang": 2
+        },
+        "total": 10,
+        "note": "Câu trả lời xuất sắc, chẩn đoán đúng nguyên nhân gốc và sửa code đúng yêu cầu, giải thích rõ ràng."
+      }
+    },
+    {
+      "id": 6,
+      "group": "B-mã nguồn",
+      "answer": "### 1. Nguyên nhân gốc (Root Cause)\n\nKhi vào ngày đầu tiên (hoặc bất kỳ ngày nào trong **tháng đầu tiên**) của một quý mới — ví dụ ngày `01/10` (tháng 10, bắt đầu Quý 4):\n1. Các tháng của Quý 4 là `[10, 11, 12]`.\n2. Hàm `closedMonths(4, new Date('2026-10-01'))` lọc các tháng có `m < 10` → trả về mảng rỗng `[]` (vì tháng 10 chưa kết thúc, chưa có tháng nào trong Quý 4 khép sổ).\n3. Biến `cols` sẽ trở thành chuỗi rỗng `\"\"`.\n4. Câu SQL sinh ra bị **dư dấu phẩy ngay trước `FROM`**:\n   ```sql\n   SELECT squad,  FROM fact_revenue WHERE year = $1 GROUP BY squad\n   --           ^ lỗi syntax error at or near \"FROM\"\n   ```\n\n---\n\n### 2. Cách sửa (Fix)\n\nCó 2 cách xử lý tùy theo yêu cầu của Frontend (FE), nhưng tốt nhất là **kết hợp cả hai**: vừa không tốn query DB khi mảng rỗng (hoặc giữ đủ cấu trúc cột `m10, m11, m12` = 0 cho FE không bị crash khi đọc field), vừa tránh nối chuỗi SQL với mảng rỗng.\n\n#### Cách 1: Early Return (Khuyên dùng nếu FE chỉ cần mảng rỗng hoặc danh sách squad = 0)\nNếu chưa có tháng nào đóng sổ, trả về ngay hoặc chỉ query danh sách `squad` mà không ghép `, ${cols}`:\n\n```typescript\nconst months = closedMonths(quarter, new Date())\n\n// Option 1A: Nếu không có tháng nào đóng sổ -> trả rỗng luôn, đỡ tốn 1 round-trip query DB\nif (months.length === 0) {\n  return NextResponse.json({ data: [], closedMonths: [] })\n}\n\n// Option 1B: Nếu vẫn cần danh sách squad với giá trị mặc định\nconst selectCols = [\n  \"squad\",\n  ...months.map(m => ` COALESCE(SUM(CASE WHEN month = ${m} THEN revenue END), 0) AS m${m}`)\n].join(\", \")\n\nconst sql = `SELECT ${selectCols} FROM fact_revenue WHERE year = $1 GROUP BY squad`\n```\n\n#### Cách 2: Luôn trả đủ 3 cột của Quý (An toàn nhất cho UI bảng/chart)\nNếu UI đang hardcode đọc các thuộc tính `row.m10`, `row.m11`, `row.m12`, việc bỏ cột khi tháng chưa đóng sẽ làm FE nhận `undefined`. Thay vì `.filter()`, bạn nên giữ đủ 3 tháng của quý và trả `0` cho các tháng chưa đóng:\n\n```typescript\nfunction getQuarterMonths(q: number) {\n  return [1, 2, 3].map(i => (q - 1) * 3 + i)\n}\n\nconst currentMonth = new Date().getMonth() + 1\nconst qMonths = getQuarterMonths(quarter)\n\nconst cols = qMonths.map(m => \n  m < currentMonth\n    ? `COALESCE(SUM(CASE WHEN month = ${m} THEN revenue END), 0) AS m${m}`\n    : `0::numeric AS m${m}` // Tháng chưa kết thúc -> trả về 0\n).join(\", \")\n\nconst sql = `SELECT squad, ${cols} FROM fact_revenue WHERE year = $1 GROUP BY squad`\n```\n\n---\n\n### 💡 Lưu ý thêm (Edge Case về Năm)\nHàm `closedMonths(q, today)` hiện tại **chưa nhận tham số `year`**. \n- Nếu hôm nay là `01/10/2026` (`currentMonth = 10`), nhưng người dùng chọn xem lại **Quý 4 năm 2025** (`year = 2025`), logic `m < 10` vẫn chạy và làm mất sạch dữ liệu tháng 10, 11, 12 của năm 2025!\n- **Sửa chuẩn bao gồm cả `year`:**\n\n```typescript\nfunction closedMonths(q: number, year: number, today = new Date()) {\n  const currentYear = today.getFullYear()\n  const currentMonth = today.getMonth() + 1\n  const qMonths = [1, 2, 3].map(i => (q - 1) * 3 + i)\n\n  if (year < currentYear) return qMonths // Năm cũ: cả 3 tháng đều đã đóng\n  if (year > currentYear) return []      // Năm tương lai: chưa tháng nào đóng\n  return qMonths.filter(m => m < currentMonth)\n}\n```\n\n```followup\n[\"Tạo dev-ticket sửa lỗi này trên repo?\", \"Kiểm tra các API khác có lỗi tương tự?\"]\n```",
+      "toolsUsed": [],
+      "tokensIn": 18473,
+      "tokensOut": 1117,
+      "ms": 25609,
+      "judge": {
+        "scores": {
+          "dung_su_that": 2,
+          "do_sau": 2,
+          "day_du": 2,
+          "tuan_thu_nghiep_vu": 2,
+          "ro_rang": 2
+        },
+        "total": 10,
+        "note": "Câu trả lời xuất sắc, chẩn đoán chính xác nguyên nhân gốc, đưa ra cách sửa hợp lý và còn phân tích thêm edge case về năm rất sâu sắc."
+      }
+    },
+    {
+      "id": 7,
+      "group": "B-mã nguồn",
+      "answer": "### 1. Nguyên nhân gốc (Root Cause)\n\n- **Cache tồn tại qua các lần deploy (Persistent Cache) với key không có version:**\n  Hàm `cachedQuery` đang lưu kết quả vào bộ nhớ ngoài (Redis / Upstash / Turso / DB hoặc persistent cache layer) với `ttlSec: 86400` (24 giờ).\n- **Schema/Payload mismatch sau deploy:**\n  Key hiện tại chỉ là ``squad-progress:${quarter}`` (ví dụ: `squad-progress:2026-Q4`). Trước khi deploy, cache đã lưu payload **cũ** (chưa có trường `customer_orgs`). Khi deploy code mới lên, key không đổi nên `cachedQuery` trả thẳng JSON cũ từ cache ra trong suốt 24h tiếp theo mà không chạy lại `loadSquadProgress(quarter)`.\n- **Vì sao `?nocache=1` lại đúng:**\n  Khi truyền `nocache=1`, cờ `bypass: true` ép `cachedQuery` bỏ qua bản ghi cũ trong cache, gọi lại `loadSquadProgress(quarter)` (chạy câu SQL mới có `customer_orgs`) và ghi đè/trả về dữ liệu mới.\n\n---\n\n### 2. Giải pháp & Sửa code\n\nCó **2 lớp bảo vệ** nên áp dụng cùng lúc:\n1. **Thêm Schema Version vào Cache Key (Chuẩn nhất cho mọi đợt đổi cấu trúc SQL/response):** Đổi key thành `squad-progress:v2:${quarter}`. Ngay khi deploy, toàn bộ request sẽ miss cache cũ và tự động lấy payload mới mà không cần xóa cache tay hay đợi 24h.\n2. **Self-healing validation (Tự phát hiện cache cũ thiếu trường):** Nếu dữ liệu lấy từ cache ra không có trường bắt buộc mới (`customer_orgs`), tự động re-fetch và cập nhật lại cache.\n\n#### Code đã sửa:\n\n```ts\nconst CACHE_SCHEMA_VERSION = \"v2\" // Tăng version mỗi khi đổi cấu trúc SQL / response\n\nexport async function GET(req: NextRequest) {\n  const quarter = req.nextUrl.searchParams.get(\"quarter\") ?? currentQuarter()\n  const nocache = req.nextUrl.searchParams.get(\"nocache\") === \"1\"\n\n  // 1. Gắn version vào key để invalidate ngay lập tức sau khi deploy\n  const key = `squad-progress:${CACHE_SCHEMA_VERSION}:${quarter}`\n\n  let data = await cachedQuery(\n    key,\n    () => loadSquadProgress(quarter),\n    { ttlSec: 86400, bypass: nocache }\n  )\n\n  // 2. Fallback an toàn: Nếu cache cũ bị lọt (thiếu trường customer_orgs) -> ép bypass để ghi đè lại cache\n  if (!nocache && data && !(\"customer_orgs\" in data)) {\n    data = await cachedQuery(\n      key,\n      () => loadSquadProgress(quarter),\n      { ttlSec: 86400, bypass: true }\n    )\n  }\n\n  return NextResponse.json(data)\n}\n```\n\n> **Lưu ý nếu `customer_orgs` nằm bên trong phần tử mảng** (ví dụ `data.items[0].customer_orgs` hoặc `data.squads[0].customer_orgs`):\n> Bạn sửa điều kiện kiểm tra ở bước 2 thành:\n> ```ts\n> const isStaleSchema = Array.isArray(data?.squads) && data.squads.length > 0 && !(\"customer_orgs\" in data.squads[0])\n> ```\n> Tuy nhiên, chỉ riêng việc đổi key sang **`squad-progress:v2:${quarter}`** ở bước 1 đã giải quyết triệt để 100% vấn đề ngay khi deploy.\n\n```followup\n[\"Kiểm tra hàm cachedQuery trong repo?\", \"Tạo ticket sửa route này?\"]\n```",
+      "toolsUsed": [],
+      "tokensIn": 18919,
+      "tokensOut": 862,
+      "ms": 16304,
+      "judge": {
+        "scores": {
+          "dung_su_that": 2,
+          "do_sau": 2,
+          "day_du": 2,
+          "tuan_thu_nghiep_vu": 2,
+          "ro_rang": 2
+        },
+        "total": 10,
+        "note": "Câu trả lời xuất sắc, chỉ ra đúng nguyên nhân gốc (cache key không đổi nên trả về dữ liệu cũ) và đưa ra giải pháp chuẩn xác (bump cache key version), kèm theo code minh họa rõ ràng và fallback an toàn."
+      }
+    },
+    {
+      "id": 8,
+      "group": "B-mã nguồn",
+      "answer": "Dưới góc độ của **Staff Engineer / BI Lead**, đoạn code trên hội tụ gần như đầy đủ các anti-pattern kinh điển khi làm việc với cơ sở dữ liệu phân tích (OLAP/DW) trên PostgreSQL. Với 2.000 khách hàng, code này có thể mất từ vài chục giây đến vài phút (thậm chí timeout).\n\nDưới đây là **TẤT CẢ các vấn đề hiệu năng & logic** và bản viết lại tối ưu nhất theo đúng quy ước của dự án.\n\n---\n\n### 1. Chỉ ra TẤT CẢ các vấn đề\n\n#### 🔴 Vấn đề 1: N+1 Query Problem & Tuần tự hóa (`await` trong vòng lặp `for...of`)\n- **Hiện tượng:** Với 2.000 khách hàng, ứng dụng bắn **2.000 câu query riêng biệt** nối tiếp nhau (xong câu 1 mới gửi câu 2).\n- **Tác hại:** Giả sử network round-trip + thời gian parse/plan query của Postgres chỉ mất 10ms/query → riêng độ trễ mạng đã mất `2.000 × 10ms = 20 giây` (chưa tính thời gian quét đĩa). Ngoài ra, bảng `fact_revenue` bị quét đi quét lại 2.000 lần thay vì chỉ quét 1 lần duy nhất.\n\n#### 🔴 Vấn đề 2: Bọc `TRIM(d.code)` làm mất Index (Non-SARGable Join) & Vi phạm quy ước dự án\n- **Hiện tượng:** `ON TRIM(f.customer_code) = TRIM(d.code)`.\n- **Tác hại:** Trong `gohub_dw`, `dim_customer` có ~355.000 dòng và `code` là khóa UNIQUE đã có B-Tree Index. Khi bọc hàm `TRIM(d.code)`, Postgres **không thể dùng index chuẩn trên `d.code`** khi thực hiện Join (trừ khi có expression index riêng cho `TRIM(code)`), dẫn đến Hash Join hoặc Sequential Scan trên bảng dim, làm tốc độ join chậm đi ~10 lần.\n- **Quy ước dự án:** Chỉ `TRIM` phía bảng Fact (`TRIM(f.customer_code) = d.code`), tuyệt đối không `TRIM` phía `dim_customer.code`.\n\n#### 🟠 Vấn đề 3: Thừa phép `JOIN dim_customer` (Unnecessary Join)\n- **Hiện tượng:** Trong vòng lặp đã có sẵn `c.code`, câu SQL chỉ lấy `SUM(f.revenue)` và lọc `d.code = $1`, hoàn toàn không lấy bất kỳ cột nào khác từ `dim_customer`.\n- **Tác hại:** Việc `JOIN dim_customer` là hoàn toàn vô nghĩa, tốn thêm CPU để thực hiện phép nối bảng. Chỉ cần lọc trực tiếp trên bảng Fact: `WHERE TRIM(f.customer_code) = $1` (hoặc `= ANY($1)`).\n- *(Lưu ý phụ: Trong code gốc, `WHERE d.code = $1` nhưng `ON TRIM(f.customer_code) = TRIM(d.code)` — vì biểu thức ở `ON` và ở `WHERE` khác nhau (`TRIM(d.code)` vs `d.code`), bộ tối ưu hóa (Query Planner) của Postgres không thể đẩy điều kiện lọc `$1` sang thẳng phía `TRIM(f.customer_code)` trước khi join).*\n\n#### 🟡 Vấn đề 4: Tiềm ẩn Full Table Scan trên `fact_revenue` do `TRIM(f.customer_code)`\n- **Hiện tượng:** Dù bỏ `TRIM(d.code)`, việc gọi `TRIM(f.customer_code)` ở bảng Fact cũng khiến index chuẩn trên `f.customer_code` không hoạt động nếu không có Expression Index.\n- **Giải pháp DB:** Kết hợp gộp thành 1 query (`GROUP BY`) để nếu phải quét vùng dữ liệu từ `order_date >= $2`, Postgres chỉ quét đúng **1 lần duy nhất** thay vì 2.000 lần.\n\n#### ⚪ Vấn đề 5 (Logic / Edge case): Xử lý `NULL` và ép kiểu\n- Trong SQL, `SUM()` không có dòng nào khớp sẽ trả về `NULL`. Trong JS, `Number(null)` trả về `0` (may mắn đúng), nhưng nếu driver trả về `undefined` hoặc kiểu khác sẽ dễ sinh `NaN`. Nên dùng `COALESCE(SUM(...), 0)` ngay trong SQL hoặc `Number(row?.rev ?? 0)`.\n\n---\n\n### 2. Viết lại code tối ưu (1 Query duy nhất — Nhanh hơn ~100–500 lần)\n\nThay vì 2.000 queries, ta gom toàn bộ mã khách hàng vào 1 mảng và dùng `ANY($1::text[])` kết hợp `GROUP BY`. \n\n#### Cách 1: Tối ưu triệt để (Bỏ luôn JOIN thừa vì đã có danh sách `c.code`)\nĐây là cách nhanh nhất vì loại bỏ hoàn toàn bảng `dim_customer` khỏi kế hoạch thực thi:\n\n```ts\nconst codes = customers.map((c) => c.code);\n\n// 1 query duy nhất quét fact_revenue 1 lần\nconst { rows } = await pool.query<{ code: string; rev: string }>(\n  `SELECT \n     TRIM(f.customer_code) AS code,\n     COALESCE(SUM(f.revenue), 0) AS rev\n   FROM fact_revenue f\n   WHERE TRIM(f.customer_code) = ANY($1::text[])\n     AND f.order_date >= $2\n   GROUP BY TRIM(f.customer_code)`,\n  [codes, from]\n);\n\n// Map kết quả O(1) và giữ nguyên thứ tự mảng customers ban đầu (kể cả khách có rev = 0)\nconst revMap = new Map(rows.map((r) => [r.code, Number(r.rev)]));\nconst out = customers.map((c) => ({\n  code: c.code,\n  rev: revMap.get(c.code) ?? 0,\n}));\n```\n\n#### Cách 2: Nếu BẮT BUỘC phải `JOIN dim_customer` (ví dụ cần lấy thêm cột từ `dim_customer` hoặc verify khách tồn tại)\nTuân thủ nghiêm ngặt quy ước dự án: **`TRIM(f.customer_code) = d.code`** (không bọc `TRIM` lên `d.code`):\n\n```ts\nconst codes = customers.map((c) => c.code);\n\nconst { rows } = await pool.query<{ code: string; rev: string }>(\n  `SELECT \n     d.code,\n     COALESCE(SUM(f.revenue), 0) AS rev\n   FROM dim_customer d\n   LEFT JOIN fact_revenue f \n     ON TRIM(f.customer_code) = d.code\n     AND f.order_date >= $2\n   WHERE d.code = ANY($1::text[])\n   GROUP BY d.code`,\n  [codes, from]\n);\n\nconst revMap = new Map(rows.map((r) => [r.code, Number(r.rev)]));\nconst out = customers.map((c) => ({\n  code: c.code,\n  rev: revMap.get(c.code) ?? 0,\n}));\n```\n\n---\n\n### 3. Khuyến nghị Index trên PostgreSQL (để đạt tốc độ < 50ms)\n\nĐể câu query gộp ở trên chạy ở tốc độ mili-giây trên bảng Fact hàng triệu dòng, hãy đảm bảo có **Composite Functional Index** sau trên DB:\n\n```sql\nCREATE INDEX CONCURRENTLY IF NOT EXISTS idx_fact_rev_order_date_trim_cust \nON fact_revenue (order_date, (TRIM(customer_code))) \nINCLUDE (revenue);\n```\n*Lợi ích:* Postgres sẽ thực hiện **Index-Only Scan** (chỉ đọc từ RAM/Index, không cần chạm vào Heap table) vì cả `order_date`, `TRIM(customer_code)` và `revenue` đều đã nằm sẵn trong Index.\n\n```followup\n[\"Kiểm tra index hiện tại trên gohub_dw?\", \"Xem thêm cách tối ưu query báo cáo KH?\", \"Tối ưu tương tự cho bảng fact_fulfillment_revenue?\"]\n```",
+      "toolsUsed": [],
+      "tokensIn": 19016,
+      "tokensOut": 1860,
+      "ms": 29772,
+      "judge": {
+        "scores": {
+          "dung_su_that": 2,
+          "do_sau": 2,
+          "day_du": 2,
+          "tuan_thu_nghiep_vu": 2,
+          "ro_rang": 2
+        },
+        "total": 10,
+        "note": "Câu trả lời xuất sắc, phân tích rất sâu về các vấn đề hiệu năng (N+1, Non-SARGable do TRIM, JOIN thừa, xử lý NULL). Tuân thủ đúng quy ước dự án và viết lại code tối ưu, rõ ràng, dễ hiểu."
+      }
+    },
+    {
+      "id": 9,
+      "group": "C-ngữ cảnh dài",
+      "answer": "Dựa trên mục **s226 (2026-10-07) — Group Cost chia theo pháp nhân khi lọc VN/US** trong tài liệu `quarterly`, câu trả lời cụ thể như sau:\n\n**1. Luật chia Group Cost theo pháp nhân khi lọc VN / US / ALL:**\n* **US:** Các khoản chi phí có chứa chữ **\"Global\"** trong cột `item_name` (không phân biệt chữ hoa/thường).\n* **VN:** Tất cả các khoản **còn lại** (bao gồm cả các dòng không có tên — ví dụ dữ liệu gộp T1–T6/2026 sync từ Turso ngày 04/08 không tên, không ghi chú — và khoản `\"Branding & media\"` của T8).\n* **ALL:** Giữ nguyên toàn bộ bảng (không lọc bớt).\n* *Lưu ý vận hành:* Người nhập Group Cost bắt buộc phải ghi tên khoản có chữ `\"Global\"` nếu đó là chi phí của US; mọi tên khác sẽ mặc định tính cho VN.\n\n**2. Các route áp dụng luật này:**\nÁp dụng ở mọi route có lọc công ty (pháp nhân) mà có trừ Group Cost, bao gồm **5 route**:\n1. `quarterly-report` (áp dụng cho cả quý hiện tại và quý trước khi tính `%QoQ`)\n2. `squad-progress`\n3. `quarterly-b2b-customers`\n4. `staff-report`\n5. `monthly-kpis` (đã bump cache key lên `monthly-kpis3`)\n\n**3. Hàm dùng chung và vị trí file:**\n* Tên hàm: `filterGroupCostsByCompany()` (đi kèm việc sửa `fetchCosts` để đọc thêm trường `item_name`).\n* File chứa hàm: **`lib/bod-data.ts`** (có file unit test tương ứng tại `lib/__tests__/group-cost-company.test.ts`).",
+      "toolsUsed": [],
+      "tokensIn": 74248,
+      "tokensOut": 425,
+      "ms": 9107,
+      "judge": {
+        "scores": {
+          "dung_su_that": 2,
+          "do_sau": 2,
+          "day_du": 2,
+          "tuan_thu_nghiep_vu": 2,
+          "ro_rang": 2
+        },
+        "total": 10,
+        "note": "Câu trả lời xuất sắc, đáp ứng đầy đủ và chính xác các yêu cầu của câu hỏi, trình bày rõ ràng, dễ hiểu."
+      }
+    },
+    {
+      "id": 10,
+      "group": "C-ngữ cảnh dài",
+      "answer": "Dựa trên tài liệu **My Metrics — OKR Tracking (mục s227)**, chi tiết về lỗi KPI **%Datapool** như sau:\n\n* **Nguyên nhân lỗi:** KPI `%Datapool` và bảng chi tiết Datapool trước đó so sánh chính xác `vendor = 'BCDATAPOOL'` (sau khi chuẩn hoá), nhưng dữ liệu thực tế trong cột `dim_sku.vendor` lại lưu là `\"BC Datapool (CMHK)\"` và `\"BC Datapool (Singtel)\"` → dẫn đến phần doanh thu của BC Datapool luôn bằng **0** (trước đó chỉ tính mỗi 3HK).\n* **Cách sửa:** Đổi sang so sánh theo tiền tố `LIKE 'BCDATAPOOL%'` (đồng thời nâng cache key lên `okr_datapool_detail:v4`).\n* **Kết quả Q3-2026 sau khi sửa:**\n  * Doanh thu **BC Datapool**: **129 triệu** (129tr).\n  * **%Datapool**: **67,77%**.",
+      "toolsUsed": [],
+      "tokensIn": 74262,
+      "tokensOut": 244,
+      "ms": 10819,
+      "judge": {
+        "scores": {
+          "dung_su_that": 2,
+          "do_sau": 2,
+          "day_du": 2,
+          "tuan_thu_nghiep_vu": 2,
+          "ro_rang": 2
+        },
+        "total": 10,
+        "note": "Câu trả lời hoàn toàn chính xác, đầy đủ các ý được yêu cầu, đúng số liệu và nguyên nhân gốc."
+      }
+    },
+    {
+      "id": 11,
+      "group": "C-ngữ cảnh dài",
+      "answer": "Dựa trên tài liệu nội bộ đã cung cấp, dưới đây là thông tin chi tiết cho từng phần câu hỏi của bạn:\n\n### 1. Các loại đề xuất tự động của Kế hoạch quý (khoá ổn định) và ngưỡng của từng loại\nTheo mục **s227b (2026-10-07)** trong tài liệu `mymetrics` (`lib/okr-proposals.ts`), có **7 loại đề xuất** tự động với khoá ổn định và ngưỡng/điều kiện cụ thể như sau:\n\n| Khoá ổn định | Ý nghĩa / Mô tả | Ngưỡng & Điều kiện áp dụng |\n|---|---|---|\n| **`switch\\|thị trường\\|vendor\\|nguồn`** | Gói đang bán có nơi nhập rẻ hơn | **≥ 2 gói** hoặc doanh thu **≥ 20 triệu**.<br>*(Lưu ý về thứ tự ưu tiên vendor: chỉ đề xuất chuyển sang nguồn ngang/cao hơn ưu tiên; Nhật theo thứ tự chung từ 2026-10-07, KDDI giữ vì trả phí quảng cáo; ngoại lệ Đài Loan/Hồng Kông được WM. Riêng **3HK → BC Datapool** vẫn hiện nhưng gắn nhãn \"Ngoài thứ tự ưu tiên vendor\" (`offPriority`) và xếp sau với hệ số **×0,7**; 3HK → vendor khác không hiện).* |\n| **`quote\\|id`** | Báo giá đang xem rẻ hơn ở gói đang bán | Có báo giá đang xem rẻ hơn ở gói đang bán (không nêu ngưỡng số lượng/doanh thu tối thiểu). |\n| **`gmdrop\\|thị trường`** | Thị trường bị giảm biên lợi nhuận gộp (GM) | Thuộc **top 15** thị trường, có **GM giảm ≥ 3 điểm** (điểm %). Có `track` → duyệt thành việc đo số (`market_gm`). |\n| **`lowgm\\|…`** | Thị trường có GM thấp hơn mặt bằng công ty | Có GM **thấp hơn GM công ty ≥ 5 điểm** (điểm %). Có `track` → duyệt thành việc đo số (`market_gm`). |\n| **`depend\\|vendor`** | Phụ thuộc doanh thu lớn vào 1 vendor | Chiếm **≥ 60% doanh thu**.<br>*(Lưu ý: không đề xuất \"giảm phụ thuộc\" đối với 3HK/BC Datapool).* Có `track` → duyệt thành việc đo số (`vendor_dependency`). |\n| **`growth\\|…`** | Thị trường đang tăng trưởng nhanh | Quý đang chạy đã qua **≥ 14 ngày**, có **doanh thu/ngày +30%** (tăng ≥ 30%). |\n| **`gap\\|iso`** | Mở thị trường chưa có gói riêng | Nước **có báo giá mà chưa bán gói riêng** (được xếp cuối trong danh sách đề xuất). |\n\n*(Tất cả các đề xuất trên được sắp xếp theo doanh thu liên quan).*\n\n---\n\n### 2. Ghi nhận về đơn Zalo/Facebook từ 12/08/2026 và chi phí kênh B2C T9–T10\nTheo mục **s226 (2026-10-07)** trong tài liệu `quarterly`, khi kiểm tra dữ liệu nguồn (ghi nhận hiện trạng, không sửa code vì do dữ liệu nguồn):\n\n* **Về đơn Zalo/Facebook từ 12/08/2026:** Toàn bộ đơn từ **Zalo (`S0028`)** và **Facebook (`S0018`)** đã bị chuyển hết sang mã **`S0020` (\"VN B2C Other\" — thuộc kênh `Misc.`)**. Hệ quả là trên bảng B2C theo kênh, số liệu bị lệch từ kênh `VN-Social` sang kênh `Misc.`.\n* **Về chi phí kênh B2C (`analytics_channel_costs`) T9–T10:** Chi phí kênh cho B2C chỉ có dữ liệu ở **T4**, còn **T9–T10 không có dòng nào**.",
+      "toolsUsed": [],
+      "tokensIn": 74279,
+      "tokensOut": 880,
+      "ms": 14477,
+      "judge": {
+        "scores": {
+          "dung_su_that": 2,
+          "do_sau": 2,
+          "day_du": 2,
+          "tuan_thu_nghiep_vu": 2,
+          "ro_rang": 2
+        },
+        "total": 10,
+        "note": "Câu trả lời chính xác, đầy đủ các loại đề xuất và ngưỡng tương ứng. Thông tin về đơn Zalo/Facebook và chi phí kênh B2C cũng được trả lời đúng theo yêu cầu và sự thật nghiệp vụ. Trình bày rõ ràng, dễ theo dõi."
+      }
+    },
+    {
+      "id": 12,
+      "group": "D-agent nhiều bước",
+      "error": "HTTP 504",
+      "ms": 300296,
+      "judge": {
+        "scores": {
+          "dung_su_that": 0,
+          "do_sau": 0,
+          "day_du": 0,
+          "tuan_thu_nghiep_vu": 0,
+          "ro_rang": 0
+        },
+        "total": 0,
+        "note": "Lỗi: HTTP 504"
+      }
+    },
+    {
+      "id": 13,
+      "group": "D-agent nhiều bước",
+      "error": "HTTP 504",
+      "ms": 300286,
+      "judge": {
+        "scores": {
+          "dung_su_that": 0,
+          "do_sau": 0,
+          "day_du": 0,
+          "tuan_thu_nghiep_vu": 0,
+          "ro_rang": 0
+        },
+        "total": 0,
+        "note": "Lỗi: HTTP 504"
+      }
+    },
+    {
+      "id": 14,
+      "group": "D-agent nhiều bước",
+      "error": "HTTP 504",
+      "ms": 300703,
+      "judge": {
+        "scores": {
+          "dung_su_that": 0,
+          "do_sau": 0,
+          "day_du": 0,
+          "tuan_thu_nghiep_vu": 0,
+          "ro_rang": 0
+        },
+        "total": 0,
+        "note": "Lỗi: HTTP 504"
+      }
+    }
+  ]
+}
