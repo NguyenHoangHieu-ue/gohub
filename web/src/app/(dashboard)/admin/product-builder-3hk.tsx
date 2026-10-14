@@ -58,25 +58,29 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
 
   const runPreview = async () => {
     setBusy("preview")
-    const r = await fetch("/api/admin/threehk-datapool/build", { method: "POST", headers: { "Content-Type": "application/json" }, body: body() })
-    const j = await r.json(); setBusy("")
-    if (!r.ok) return onNotify("error", j.error || "Không tạo được bản xem trước")
-    setPreview(j); setStale(false)
+    try {
+      const r = await fetch("/api/admin/threehk-datapool/build", { method: "POST", headers: { "Content-Type": "application/json" }, body: body() })
+      const j = await r.json()
+      if (!r.ok) return onNotify("error", j.error || "Không tạo được bản xem trước")
+      setPreview(j); setStale(false)
+    } catch { onNotify("error", "Lỗi mạng hoặc máy chủ trả về không đúng định dạng (có thể quá thời gian) — thử lại") } finally { setBusy("") }
   }
 
   const runExport = async (force = false) => {
     setBusy("export")
-    const r = await fetch("/api/admin/threehk-datapool/build?format=xlsx", { method: "POST", headers: { "Content-Type": "application/json" }, body: body(force) })
-    setBusy("")
-    if (!r.ok) {
-      const j = await r.json().catch(() => ({}))
-      if (r.status === 422 && j.warnings && !force && window.confirm(`Còn ${j.warnings.length} cảnh báo/lỗi. Vẫn xuất file?`)) return runExport(true)
-      return onNotify("error", j.error || "Không xuất được file")
-    }
-    const url = URL.createObjectURL(await r.blob())
-    const a = document.createElement("a"); a.href = url; a.download = `3hk_datapool_${new Date().toISOString().slice(0, 10)}.xlsx`; a.click()
-    URL.revokeObjectURL(url)
-    onNotify("success", "Đã xuất file")
+    try {
+      const r = await fetch("/api/admin/threehk-datapool/build?format=xlsx", { method: "POST", headers: { "Content-Type": "application/json" }, body: body(force) })
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}))
+        setBusy("")
+        if (r.status === 422 && j.warnings && !force && window.confirm(`Còn ${j.warnings.length} cảnh báo/lỗi. Vẫn xuất file?`)) return await runExport(true)
+        return onNotify("error", j.error || "Không xuất được file")
+      }
+      const url = URL.createObjectURL(await r.blob())
+      const a = document.createElement("a"); a.href = url; a.download = `3hk_datapool_${new Date().toISOString().slice(0, 10)}.xlsx`; a.click()
+      URL.revokeObjectURL(url)
+      onNotify("success", "Đã xuất file")
+    } catch { onNotify("error", "Lỗi mạng hoặc máy chủ trả về không đúng định dạng (có thể quá thời gian) — thử lại") } finally { setBusy("") }
   }
 
   const sheets = useMemo(() => (preview ? {
@@ -255,6 +259,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
               </table>
             )}
           </div>
+          {(preview.costRows.length > 1000 || Object.values(sheets).some(sh => sh.rows.length > 1000)) && <div className="text-[11px] text-amber-700">Bảng xem trước chỉ hiện 1.000 dòng đầu mỗi tab — file xuất vẫn đủ toàn bộ.</div>}
           <div className="text-[11px] text-gray-400">Rê chuột vào giá (gạch chấm) để xem công thức đã thế số — mọi công thức dùng ROUNDUP. File xuất tính lại y hệt, ô giá là công thức trỏ sheet &quot;Tính giá&quot;.</div>
         </div>
       )}

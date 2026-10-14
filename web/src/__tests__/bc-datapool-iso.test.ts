@@ -64,3 +64,17 @@ describe("nhóm nước hỗ trợ cho gói đa vùng: khớp ĐÚNG tập nư�
     expect(pickSupportGroup(groups, ["Turkey", "Atlantis"], refs).unresolved).toEqual(["Atlantis"])
   })
 })
+
+describe("tên nước kiểu bảng 3HK (US / UK / Vatican City)", () => {
+  const refs = [{ code: "US", name: "United States" }, { code: "GB", name: "United Kingdom" }, { code: "VA", name: "Vatican" }, { code: "FR", name: "France" }]
+  const groups = [{ code: "ZZ9", en: "Test", iso: "US,GB,VA,FR" }]
+  test("nameToIso2 nhận US, UK, Vatican City (trước đây trả null → gói W22/W24 không tra được mã nhóm)", async () => {
+    const { nameToIso2 } = await import("@/lib/bc-datapool/iso")
+    expect(["US", "UK", "Vatican City", "United States of America", "USA"].map(n => nameToIso2(n, refs, groups))).toEqual(["US", "GB", "VA", "US", "US"])
+  })
+  test("gói gồm US + UK + Vatican City khớp đúng nhóm có đủ các nước đó", async () => {
+    const { pickSupportGroup } = await import("@/lib/bc-datapool/iso")
+    const r = pickSupportGroup(groups, ["US", "UK", "Vatican City", "France"], refs)
+    expect(r.unresolved).toEqual([]); expect(r.matches.map(m => m.code)).toEqual(["ZZ9"])
+  })
+})

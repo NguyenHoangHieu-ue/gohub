@@ -33,6 +33,7 @@ export interface RefCountryLite { code: string; name: string }
 // Tên nước Portal/bảng giá viết khác ref_countries (Macau/Macao, UAE, East Timor...) → ISO2
 const NAME_ALIAS: Record<string, string> = {
   uae: "AE", macau: "MO", macao: "MO", "east timor": "TL", "timor leste": "TL", columbia: "CO", "u s a": "US", usa: "US",
+  us: "US", uk: "GB", "great britain": "GB", "united states of america": "US", "vatican city": "VA", vatican: "VA",
   russia: "RU", "brunei darussalam": "BN", brunei: "BN", "mainland china": "CN", "south korea": "KR", korea: "KR", turkiye: "TR", laos: "LA", vietnam: "VN",
 }
 const parseIso = (s: string) => s.split(/[,\s]+/).map(x => x.trim().toUpperCase()).filter(x => /^[A-Z]{2}$/.test(x))

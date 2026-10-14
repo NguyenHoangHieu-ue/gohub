@@ -188,9 +188,12 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
   const upload = async (file: File) => {
     setBusy("upload")
     const fd = new FormData(); fd.append("file", file)
-    const r = await fetch("/api/admin/bc-datapool/price-list", { method: "POST", body: fd })
-    const j = await r.json(); setBusy("")
-    if (!r.ok) return onNotify("error", j.error || "Không đọc được file báo giá")
+    let j: any
+    try {
+      const r = await fetch("/api/admin/bc-datapool/price-list", { method: "POST", body: fd })
+      j = await r.json()
+      if (!r.ok) return onNotify("error", j.error || "Không đọc được file báo giá")
+    } catch { return onNotify("error", "Lỗi mạng hoặc máy chủ trả về không đúng định dạng (có thể quá thời gian) — thử lại") } finally { setBusy("") }
     setOpts(o => (o ? { ...o, priceList: j.priceList } : o)); touch()
     const c = j.priceList.lastDiff?.counts
     const changed = c ? c.changed + c.added + c.removed + c.fees : 0
@@ -200,9 +203,12 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
   const uploadCatalog = async (files: FileList) => {
     setBusy("catalog")
     const fd = new FormData(); Array.from(files).forEach(f => fd.append("files", f))
-    const r = await fetch("/api/admin/bc-datapool/plan-catalog", { method: "POST", body: fd })
-    const j = await r.json(); setBusy("")
-    if (!r.ok) return onNotify("error", j.error || "Không đọc được file Portal")
+    let j: any
+    try {
+      const r = await fetch("/api/admin/bc-datapool/plan-catalog", { method: "POST", body: fd })
+      j = await r.json()
+      if (!r.ok) return onNotify("error", j.error || "Không đọc được file Portal")
+    } catch { return onNotify("error", "Lỗi mạng hoặc máy chủ trả về không đúng định dạng (có thể quá thời gian) — thử lại") } finally { setBusy("") }
     await load(false); touch()
     const c = j.planCatalog.lastDiff?.counts
     onNotify("success", `Đã lưu danh mục gói Portal: ${j.planCatalog.esim} gói eSIM, ${j.planCatalog.sim} gói SIM` + (j.planCatalog.lastDiff?.compared ? (c && c.added + c.removed + c.changed ? ` — ${c.added} gói mới, ${c.removed} bị bỏ, ${c.changed} đổi ngày/tốc độ (xem bên dưới)` : " — không có thay đổi so với bản trước") : ""))
@@ -210,25 +216,29 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
 
   const runPreview = async () => {
     setBusy("preview")
-    const r = await fetch("/api/admin/bc-datapool/build", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ products: toInputs(), assumptions }) })
-    const j = await r.json(); setBusy("")
-    if (!r.ok) return onNotify("error", j.error || "Không tạo được bản xem trước")
-    setPreview(j); setPreviewStale(false)
+    try {
+      const r = await fetch("/api/admin/bc-datapool/build", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ products: toInputs(), assumptions }) })
+      const j = await r.json()
+      if (!r.ok) return onNotify("error", j.error || "Không tạo được bản xem trước")
+      setPreview(j); setPreviewStale(false)
+    } catch { onNotify("error", "Lỗi mạng hoặc máy chủ trả về không đúng định dạng (có thể quá thời gian) — thử lại") } finally { setBusy("") }
   }
 
   const runExport = async (force = false) => {
     setBusy("export")
-    const r = await fetch("/api/admin/bc-datapool/build?format=xlsx", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ products: toInputs(), assumptions, force }) })
-    setBusy("")
-    if (!r.ok) {
-      const j = await r.json().catch(() => ({}))
-      if (r.status === 422 && j.warnings && !force && window.confirm(`Còn ${j.warnings?.length ?? 0} cảnh báo/lỗi. Vẫn xuất file?`)) return runExport(true)
-      return onNotify("error", j.error || "Không xuất được file")
-    }
-    const url = URL.createObjectURL(await r.blob())
-    const a = document.createElement("a"); a.href = url; a.download = `bc_datapool_${new Date().toISOString().slice(0, 10)}.xlsx`; a.click()
-    URL.revokeObjectURL(url)
-    onNotify("success", "Đã xuất file")
+    try {
+      const r = await fetch("/api/admin/bc-datapool/build?format=xlsx", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ products: toInputs(), assumptions, force }) })
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}))
+        setBusy("")
+        if (r.status === 422 && j.warnings && !force && window.confirm(`Còn ${j.warnings?.length ?? 0} cảnh báo/lỗi. Vẫn xuất file?`)) return await runExport(true)
+        return onNotify("error", j.error || "Không xuất được file")
+      }
+      const url = URL.createObjectURL(await r.blob())
+      const a = document.createElement("a"); a.href = url; a.download = `bc_datapool_${new Date().toISOString().slice(0, 10)}.xlsx`; a.click()
+      URL.revokeObjectURL(url)
+      onNotify("success", "Đã xuất file")
+    } catch { onNotify("error", "Lỗi mạng hoặc máy chủ trả về không đúng định dạng (có thể quá thời gian) — thử lại") } finally { setBusy("") }
   }
 
   const sheets = useMemo(() => (preview ? {
@@ -532,6 +542,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
               </table>
             )}
           </div>
+          {(preview.costRows.length > 1000 || Object.values(sheets).some(sh => sh.rows.length > 1000)) && <div className="text-[11px] text-amber-700">Bảng xem trước chỉ hiện 1.000 dòng đầu mỗi tab — file xuất vẫn đủ toàn bộ.</div>}
           <div className="text-[11px] text-gray-400">Rê chuột vào giá (gạch chấm) để xem công thức đã thế số — mọi công thức dùng ROUNDUP. Bản xem trước tính bằng tỷ giá nội bộ hiện tại; file xuất sẽ tính lại y hệt. Hiển thị tối đa 1000 dòng/sheet, file xuất đủ tất cả.</div>
         </div>
       )}

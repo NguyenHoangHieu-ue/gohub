@@ -58,7 +58,9 @@ export default function SettingsTab({ onNotify }: {
   const customNow: CustomUnlimited[] = changed[CUSTOM_UNLIMITED_KEY] !== undefined ? parseCustomUnlimited([{ key: CUSTOM_UNLIMITED_KEY, value: changed[CUSTOM_UNLIMITED_KEY] }]) : parseCustomUnlimited(settings)
   const setCustom = (list: CustomUnlimited[]) => setValue(CUSTOM_UNLIMITED_KEY, JSON.stringify(list))
   const addCustom = () => {
-    const dataMb = (parseFloat(draft.hs.replace(",", ".")) || 0) * (draft.hsUnit === "GB" ? 1024 : 1)
+    const hsNum = parseFloat(draft.hs.replace(",", ".")) || 0
+    if (draft.hsUnit === "GB" && hsNum > 0 && hsNum < 1) { onNotify("error", "Dưới 1GB hãy nhập theo MB (vd 500 MB) — 0.5 GB sẽ thành 512MB, không khớp 500MB ở tab Tạo sản phẩm"); return }
+    const dataMb = hsNum * (draft.hsUnit === "GB" ? 1024 : 1)
     const speedMbps = parseFloat(draft.speed.replace(",", ".")) || 0
     const gbPerDay = parseFloat(draft.gbPerDay.replace(",", ".")) || 0
     if (!(dataMb > 0 && speedMbps > 0 && gbPerDay > 0)) { onNotify("error", "Nhập đủ tốc độ cao, tốc độ Mbps và GB/ngày (đều > 0)"); return }
