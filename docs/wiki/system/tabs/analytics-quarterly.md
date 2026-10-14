@@ -764,3 +764,11 @@ tháng, T9 −115tr), VN cũng bị trừ đủ → VN + US ≠ ALL (trừ 2 l�
 ## § s232 (2026-10-13) — Xuất Excel danh sách KH của nhóm: 1 hàng/KH, cột Pro-rata + Thực tế liền nhau
 - Nút **Xuất Excel** trong panel chi tiết KH của 1 nhóm (Strategic/VIP/…; `exportCustomerDetail`, `b2b-tier-section.tsx`): trước đây mỗi KH × kỳ là 2 HÀNG (Thực tế / Pro-rata, cột "Loại số"). Nay **mỗi KH 1 hàng**; mỗi chỉ số (Revenue, Gross Margin, Ch.Cost, CM1, %CM1, 3HK Rev, 3HK%) có 2 cột liền nhau `(Pro-rata)`, `(Thực tế)` cho từng tháng + Tổng Quý. Tháng đã xong: 2 cột bằng nhau; tháng tương lai: chỉ Pro-rata (ước tính), Thực tế để trống. Dòng cuối "TỔNG n KH" cộng theo cột. Cùng công thức `valuesOf` như cũ.
 - Nút **Export** của cả bảng Nhóm × Tháng (`exportTierTable`) giữ nguyên như trước (bản thử thêm cột Thực tế ở s232 đã gỡ — nhầm nút).
+
+## s233 (2026-10-14) — %CM1 nhóm B2B Q4 chỉ 0,9% (CH.Cost cộng 2 lần ở tháng tương lai)
+
+Hiếu báo Quarter Report Q4: bảng "B2B — Chi tiết theo Nhóm × Tháng", nhóm **Strategic** %CM1 = 0,9% (CM1 PR 115 tr trên doanh thu PR 12,9 tỷ), khác hẳn thẻ KPI (CM1 PR B2B 53% target, %CM1 B2B ~18%).
+- Gốc (đo sống production 2026-10-14, ngày 13/92 của quý): `quarterly-b2b-customers` cộng "ước tính CH.Cost tháng tương lai" (T11 lấy record T10 làm dự phòng) vào `c.cc` từng khách → `totalCc` tier = 1,325 tỷ = **2×** CH.Cost đúng (662 tr, đúng bằng cc cấp tháng T10 và khớp `quarterly-report`). FE lại nhân `futureScale` (quarterDays/existingDays ≈ 2,97) cho Revenue/GM/CH.Cost "existing projected" → CH.Cost PR = 3,93 tỷ (đúng ≈ 1,97 tỷ) → CM1 PR = GM − CC = 115 tr (0,9%) thay vì ~2,08 tỷ (16,1%, bằng %CM1 cấp tháng).
+- Chỉ lộ ra ở ~2 tháng đầu mỗi quý (khi còn tháng tương lai và đã nhập CH.Cost cho tháng hiện tại). Dòng KH dùng `exGm − exCm1` (không dính future estimate) nên đúng; số của dòng Nhóm, `c.cm1` và QoQ server sai.
+- Sửa: `route.ts` bỏ hẳn nhánh ước tính tháng tương lai (`if (isFuture) return`) — phần tháng chưa tới đã được `futureScale` ở FE phủ cho Revenue/GM/CH.Cost.
+- Lưu ý chưa sửa: cột CH.COST dòng KH chế độ "Cả Quý" hiển thị `c.cc` (Σ projected các tháng đã có, KHÔNG nhân futureScale) trong khi Revenue/GM/CM1 đã nhân — lệch nhìn thấy được (vd Strategic: CC 313 tr cạnh Rev PR 2,6 tỷ).

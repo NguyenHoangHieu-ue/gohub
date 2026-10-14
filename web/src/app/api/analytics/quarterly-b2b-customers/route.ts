@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
   const monthBeforeQStartEnd = new Date(mbY, mbM, 0).toISOString().split("T")[0]
 
   // Cache key bao gồm excl hash → auto-invalidate khi settings thay đổi
-  // v8: cộng ước tính T9 CH.Cost (dùng T8 record làm fallback)
+  // (CH.Cost tháng tương lai không còn cộng vào tổng — xem comment ở vòng months.forEach)
   const rawCacheKey = `${QB2B_CACHE_PREFIX}${quarter}:${year}:${companyCode}:${qEndDate}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
   try {
@@ -320,21 +320,10 @@ export async function GET(req: NextRequest) {
         const isProj = meta?.isProjected ?? false
         const isFuture = meta?.isFuture ?? false
 
-        // Tháng tương lai (T9): ước tính CH.Cost từ record của T9 (nếu đã nhập) hoặc fallback T8.
-        if (isFuture) {
-          const prevIdx = months.indexOf(m) - 1
-          const prevM = prevIdx >= 0 ? months[prevIdx] : undefined
-          const fallbackRec = prevM ? costMap.get(`${prevM}_${cust.code}`) : undefined
-          const futureRec = rec ?? fallbackRec
-          if (futureRec) {
-            // amount: full monthly amount. percent: × prev month projected revenue làm ước tính.
-            const prevMd = prevM ? cust.months.get(prevM) : undefined
-            const estRev = prevMd ? prevMd.rawRevenue * prevMd.factor : 0
-            const estCost = calcRecordCostProjected(futureRec, estRev, 1, 1)
-            totCc += estCost
-          }
-          return
-        }
+        // Tháng tương lai: KHÔNG cộng ước tính CH.Cost vào tổng. Revenue/GM/CH.Cost "existing projected" của các tháng đã có dữ liệu
+        // sẽ được FE nhân futureScale (quarterDays/existingDays) để ra Pro-rata cả quý — cộng thêm 1 tháng ước tính ở đây nữa thì
+        // CH.Cost bị tính 2 lần (s233: Q4 đầu quý, nhóm Strategic CH.Cost PR gấp đôi → %CM1 0,9% thay vì ~16%).
+        if (isFuture) return
 
         // Tỷ lệ ngày đã qua trong tháng (vd: 4 / 31) — s183 Phase 2: dùng getElapsedRatio() dùng chung
         // (analytics-engine/quarter-projection.ts) thay công thức viết tay, công thức không đổi.
