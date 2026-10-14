@@ -41,19 +41,22 @@ export interface Fx {
 }
 
 /**
- * Các "mức throttle" của gói Unlimited đang có hệ số GB/ngày. Từ nay gói Unlimited chuyển hết sang kiểu 2 mức throttle
- * (tốc độ cao + phần 5/10Mbps + Unlimited 1Mbps, tổng thường 6GB) thay cho kiểu cũ 1 mốc tốc độ cao + Unlimited (1.6/1.8 — chỉ còn 3HK dùng).
- * Hiện chỉ 1 mức: 3GB tốc độ cao + 3GB 10Mbps + Unlimited 1Mbps = 1.7. Thêm mức mới = thêm 1 dòng ở đây + 1 giả định ở Công Thức Datapool.
+ * Gói Unlimited = N GB tốc độ cao + phần còn lại ở mức throttle Unlimited (Mbps) + Unlimited 1Mbps. Mỗi MỨC = (GB tốc độ cao, Mbps) → GB/ngày dùng tính giá.
+ * Bảng mức do Hiếu tự quản ở Admin › Cài đặt › Công Thức Datapool (key `datapool.unlimited_levels`), 3HK và BC cùng dùng.
  */
-export type UnlimitedKey = "unl3gb10"
-export const UNLIMITED_PROFILES: { key: UnlimitedKey; dataMb: number; speedMbps: number; label: string }[] = [
-  { key: "unl3gb10", dataMb: 3072, speedMbps: 10, label: "3GB tốc độ cao + 3GB 10Mbps + Unlimited 1Mbps" },
-]
-
 /** Giả định data thực dùng — lấy từ Admin › Cài đặt › Công Thức Datapool, nhập được trên UI. */
-export type Assumptions = { fixedPct: number; dailyPct: number; unlCustom?: CustomUnlimited[] } & Record<UnlimitedKey, number>
+export type Assumptions = {
+  fixedPct: number
+  dailyPct: number
+  /** GB/ngày của mức 3GB + 10Mbps (giữ cho code cũ/chatbot; nguồn thật là unlLevels). */
+  unl3gb10: number
+  /** Bảng mức Unlimited đầy đủ (GB tốc độ cao + mức throttle + GB/ngày). Thiếu thì dựng từ unl3gb10 + unlCustom. */
+  unlLevels?: CustomUnlimited[]
+  /** @deprecated chỉ còn để đọc dữ liệu/test cũ — dùng unlLevels */
+  unlCustom?: CustomUnlimited[]
+}
 
-export const DEFAULT_ASSUMPTIONS: Assumptions = { fixedPct: 0.55, dailyPct: 0.38, unl3gb10: 1.7 }
+export const DEFAULT_ASSUMPTIONS: Assumptions = { fixedPct: 0.55, dailyPct: 0.38, unl3gb10: 1.7, unlLevels: [{ dataMb: 3072, speedMbps: 10, gbPerDay: 1.7 }] }
 
 export interface PlanLine {
   kind: PlanKind

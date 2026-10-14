@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWrite } from "@/lib/writable-tabs"
-import { CUSTOM_UNLIMITED_KEY, DATAPOOL_FORMULA } from "@/lib/datapool-formula"
+import { DATAPOOL_FORMULA, FORMULA_KEYS, UNLIMITED_LEVELS_KEY, findLevel, sanitizeLevels } from "@/lib/datapool-formula"
 
 const WRITE_ROLES = ["admin", "creator"]
 
@@ -46,9 +46,21 @@ export async function PATCH(req: NextRequest) {
       ...(u.key.startsWith("perm_") && { category: "permission" }),
       // datapool.* (công thức Datapool dùng chung): dòng mới cần label + category để INSERT
       ...(DATAPOOL_FORMULA.some(d => d.key === u.key) && { category: "formula", label: DATAPOOL_FORMULA.find(d => d.key === u.key)!.label }),
-      ...(u.key === CUSTOM_UNLIMITED_KEY && { category: "formula", label: "Các mức Unlimited tự thêm (JSON)" }),
+      ...(u.key === UNLIMITED_LEVELS_KEY && { category: "formula", label: "Bảng mức Unlimited (GB tốc độ cao + throttle + GB/ngày, JSON)" }),
       updated_at: new Date().toISOString(),
     }))
+
+    // Bảng mức Unlimited lưu → ghi xuôi 3 khoá cũ cho mức tương ứng (code/đọc dự phòng cũ vẫn chạy): 500MB+5Mbps, 500MB+10Mbps, 3GB+10Mbps
+    const lvRow = updates.find(u => u.key === UNLIMITED_LEVELS_KEY)
+    if (lvRow) {
+      let arr: unknown = null
+      try { arr = JSON.parse(String(lvRow.value)) } catch { /* bỏ qua */ }
+      const lv = sanitizeLevels(arr)
+      for (const [key, mb, sp] of [[FORMULA_KEYS.unl500mb5, 500, 5], [FORMULA_KEYS.unl500mb10, 500, 10], [FORMULA_KEYS.unl3gb10, 3072, 10]] as const) {
+        const hit = findLevel(lv, mb, sp)
+        if (hit && !rows.some(r => r.key === key)) rows.push({ key, value: String(hit.gbPerDay), category: "formula", label: DATAPOOL_FORMULA.find(d => d.key === key)!.label, updated_at: new Date().toISOString() } as (typeof rows)[number])
+      }
+    }
 
     const { error } = await supabaseAdmin
       .from("app_settings")

@@ -13,8 +13,8 @@ import type { Skipped } from "@/lib/bc-datapool/dedupe"
 import type { CatalogDiff, PriceDiff } from "@/lib/bc-datapool/diff"
 import { availableKinds, canonCountry, choosePlan, findPlans, manualMismatches, multiRegions, offers, sellableCountries, type CatalogPlan, type PlanCatalog, type PlanInfo } from "@/lib/bc-datapool/plan-lookup"
 import { unlimitedFactor } from "@/lib/bc-datapool/pricing"
-import { customUnlimitedLabel } from "@/lib/datapool-formula"
-import { DEFAULT_ASSUMPTIONS, UNLIMITED_PROFILES, type Assumptions, type Fx, type PlanKind, type Pool, type PriceList, type ProductInput } from "@/lib/bc-datapool/types"
+import { customUnlimitedLabel, levelsOf } from "@/lib/datapool-formula"
+import { DEFAULT_ASSUMPTIONS, type Assumptions, type Fx, type PlanKind, type Pool, type PriceList, type ProductInput } from "@/lib/bc-datapool/types"
 
 type Notify = (type: "success" | "error", text: string) => void
 interface SupportCountry { code: string; en: string; vn: string; iso: string }
@@ -308,11 +308,18 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-2">
           <div className="text-sm font-semibold">Giả định COGS</div>
           <div className="grid grid-cols-3 gap-2">
-            {([["fixedPct", "Fixed %", 100], ["dailyPct", "Daily %", 100], ["unl3gb10", "Unlimited GB/ngày (2 mức throttle)", 1]] as const).map(([k, l, mul]) => (
+            {([["fixedPct", "Fixed %", 100], ["dailyPct", "Daily %", 100]] as const).map(([k, l, mul]) => (
               <div key={k}>
                 <label className={label}>{l}</label>
                 <input className={`${input} w-full`} type="number" step="any" value={Number((assumptions[k] * mul).toFixed(4))}
                   onChange={e => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) { setAssumptions(a => ({ ...a, [k]: v / mul })); touch() } }} />
+              </div>
+            ))}
+            {levelsOf(assumptions).map((lv, li) => (
+              <div key={`${lv.dataMb}:${lv.speedMbps}`}>
+                <label className={label}>Unl {customUnlimitedLabel(lv).replace(" tốc độ cao + Unlimited ", " + ")} (GB/ngày)</label>
+                <input className={`${input} w-full`} type="number" step="any" value={lv.gbPerDay}
+                  onChange={e => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) { setAssumptions(a => ({ ...a, unlLevels: levelsOf(a).map((x, xi) => (xi === li ? { ...x, gbPerDay: v } : x)) })); touch() } }} />
               </div>
             ))}
           </div>
@@ -443,7 +450,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
                         <div>
                           <label className={label}>Tốc độ Unlimited (→ cột speedMbps)</label>
                           <select className={input} value={pl.speed} onChange={e => patchPlan(i, j, { speed: Number(e.target.value) })}>
-                            {Array.from(new Set([10, 5, pl.speed, ...(assumptions.unlCustom ?? []).map(c => c.speedMbps)])).sort((x, y) => y - x).map(v => <option key={v} value={v}>{v} Mbps</option>)}
+                            {Array.from(new Set([pl.speed, ...levelsOf(assumptions).map(c => c.speedMbps)])).sort((x, y) => y - x).map(v => <option key={v} value={v}>{v} Mbps</option>)}
                           </select>
                         </div>
                         <div className="text-[11px] text-gray-500 pb-1.5">
@@ -452,7 +459,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
                         </div>
                         {!unlimitedFactor(assumptions, parseFloat(pl.hs.replace(",", ".")) || 0, pl.hsUnit, pl.speed) && (
                           <div className="w-full text-[11px] text-red-600">
-                            Tổ hợp này chưa có hệ số GB/ngày — hiện có mức: {[...UNLIMITED_PROFILES.map(x => x.label), ...(assumptions.unlCustom ?? []).map(customUnlimitedLabel)].join(" · ")}. Mức mới thêm ở Công Thức Datapool; chưa xuất được.
+                            Tổ hợp này chưa có hệ số GB/ngày — hiện có mức: {levelsOf(assumptions).map(customUnlimitedLabel).join(" · ") || "(bảng mức trống)"}. Thêm mức mới ở Admin › Cài đặt › Công Thức Datapool; chưa xuất được.
                           </div>
                         )}
                       </div>

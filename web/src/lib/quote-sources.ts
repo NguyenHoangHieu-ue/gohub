@@ -7,7 +7,7 @@ import { loadEffectiveTable } from "@/lib/fx/server"
 import { convert, currentMonth, type Ccy, type FxTable } from "@/lib/fx/table"
 import { loadPriceList, loadRefCountries, loadSupportCountries, loadAssumptions } from "@/lib/bc-datapool/server"
 import { nameToIso2, type RefCountryLite, type SupportCountryLite } from "@/lib/bc-datapool/iso"
-import { FORMULA_KEYS, resolveFormula } from "@/lib/datapool-formula"
+import { FORMULA_KEYS, findLevel, parseUnlimitedLevels, resolveFormula } from "@/lib/datapool-formula"
 import { countryNameVn } from "@/lib/catalogue/country-index"
 import { loadMarketNames } from "@/lib/market-names"
 import { loadMarketData } from "@/lib/market-data"
@@ -93,6 +93,7 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
     if (!vndPerUsd) throw new Error("Thiếu tỷ giá USD→VND (Admin › Cài đặt › Tỷ Giá Nội Bộ)")
     const f = resolveFormula(formulaRows)
     const a = { fixedPct: f[FORMULA_KEYS.fixed], dailyPct: f[FORMULA_KEYS.daily] }
+    const levels = parseUnlimitedLevels(formulaRows)   // bảng mức Unlimited (Công Thức Datapool)
 
     const unresolved = new Set<string>()
     const EXTRA_ALIAS: Record<string, string> = { uk: "GB", brasil: "BR", saipan: "MP", "vatican city": "VA" }
@@ -121,7 +122,7 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
       pools.push({
         id: "3HK", label: "3HK Datapool", currency: "HKD", toUsd: hkdToUsd, byIso,
         frameUsd: { eSIM: frameUsd("3D", "B", "US"), SIM: frameUsd("3D", "D", "VN") },
-        unlimitedGbPerDay: s => s === 5 ? f[FORMULA_KEYS.unl500mb5] : s === 10 ? f[FORMULA_KEYS.unl500mb10] : null,
+        unlimitedGbPerDay: s => findLevel(levels, 500, s ?? -1)?.gbPerDay ?? (s === 5 ? f[FORMULA_KEYS.unl500mb5] : s === 10 ? f[FORMULA_KEYS.unl500mb10] : null),
       })
     }
     if (priceList && hkdToUsd && cnyToUsd) {
@@ -136,7 +137,7 @@ export async function loadQuoteCompare(quarter: string, group: MarketData["group
         pools.push({
           id, label, currency: pl.currency, toUsd, byIso,
           frameUsd: { eSIM: pl.esimFeeCny * cnyToUsd + imsi, SIM: whiteSim === null ? null : whiteSim + imsi },
-          unlimitedGbPerDay: s => s === 10 ? assumptionsBc.unl3gb10 : null,
+          unlimitedGbPerDay: s => findLevel(levels, 3072, s ?? -1)?.gbPerDay ?? (s === 10 ? assumptionsBc.unl3gb10 : null),
           unlimitedNote: "Unlimited BC = 3GB tốc độ cao + 3GB 10Mbps + 1Mbps, khác cấu trúc 500MB + 10Mbps",
         })
       }

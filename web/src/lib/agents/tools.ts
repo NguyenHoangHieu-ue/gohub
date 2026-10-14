@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import type { RefCache } from "./cache"
 import { convertCogsFlat } from "@/lib/fx/flat"
-import { FORMULA_KEYS, resolveFormula } from "@/lib/datapool-formula"
+import { FORMULA_KEYS, findLevel, parseUnlimitedLevels, resolveFormula } from "@/lib/datapool-formula"
 
 const FULL_TYPES = new Set(["C", "E", "1", "2"])
 
@@ -968,12 +968,13 @@ export async function calculate3hkCogs(params: {
     gbUsed = (params.data_gb ?? 0) * f[FORMULA_KEYS.fixed]
   else if (params.data_type === "daily")
     gbUsed = (params.data_gb ?? 0) * params.days * f[FORMULA_KEYS.daily]
-  else if (params.data_type === "unlim_10mbps")
-    gbUsed = f[FORMULA_KEYS.unl500mb10] * params.days
-  else if (params.data_type === "unlim_3gb_10mbps")
-    gbUsed = f[FORMULA_KEYS.unl3gb10] * params.days
-  else
-    gbUsed = f[FORMULA_KEYS.unl500mb5] * params.days
+  else {
+    // Unlimited: tra BẢNG MỨC (Công Thức Datapool); mức bị xoá khỏi bảng thì dùng giá trị khoá cũ
+    const lv = parseUnlimitedLevels(settings ?? [])
+    gbUsed = params.days * (params.data_type === "unlim_10mbps" ? findLevel(lv, 500, 10)?.gbPerDay ?? f[FORMULA_KEYS.unl500mb10]
+      : params.data_type === "unlim_3gb_10mbps" ? findLevel(lv, 3072, 10)?.gbPerDay ?? f[FORMULA_KEYS.unl3gb10]
+      : findLevel(lv, 500, 5)?.gbPerDay ?? f[FORMULA_KEYS.unl500mb5])
+  }
 
   const cogsHkd = gbUsed * hkdPerGb
   // HKD → USD là CHIA cho "HKD/USD" (khoá fx.hkd_usd = số HKD cho 1 USD); USD → VND theo tỷ giá JSC

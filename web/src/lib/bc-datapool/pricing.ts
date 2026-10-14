@@ -1,5 +1,5 @@
-import { customUnlimitedLabel } from "@/lib/datapool-formula"
-import { UNLIMITED_PROFILES, type Assumptions, type Fx, type PlanLine, type PoolPriceList, type SimType, type UnlimitedKey } from "./types"
+import { customUnlimitedLabel, levelsOf } from "@/lib/datapool-formula"
+import { type Assumptions, type Fx, type PlanLine, type PoolPriceList, type SimType } from "./types"
 
 /** ROUNDUP kiểu Excel (2 số lẻ), chống sai số dấu phẩy động. */
 export const ceil2 = (x: number) => Math.ceil(x * 100 - 1e-9) / 100
@@ -7,15 +7,14 @@ const toGb = (amount: number, unit: "MB" | "GB") => (unit === "MB" ? amount / 10
 export const toMb = (amount: number, unit: "MB" | "GB") => (unit === "GB" ? amount * 1024 : amount)
 
 /**
- * GB/ngày dùng để tính giá gói Unlimited theo mức throttle (data tốc độ cao, tốc độ): mức có sẵn (3GB + 10Mbps) + các mức tự thêm ở Công Thức Datapool.
- * Tổ hợp chưa có mức → null (không đoán).
+ * GB/ngày dùng để tính giá gói Unlimited theo MỨC (GB tốc độ cao, mức throttle Mbps) trong bảng mức ở Công Thức Datapool.
+ * Tổ hợp chưa có trong bảng → null (không đoán). `idx` = vị trí trong bảng mức (ô tham số riêng ở sheet Tính giá).
  */
-export function unlimitedFactor(a: Assumptions, amount: number, unit: "MB" | "GB", speedMbps = 10): { key?: UnlimitedKey; customIdx?: number; gbPerDay: number; label: string } | null {
-  const mb = toMb(amount, unit)
-  const prof = UNLIMITED_PROFILES.find(p => p.dataMb === mb && p.speedMbps === speedMbps)
-  if (prof) return { key: prof.key, gbPerDay: a[prof.key], label: prof.label }
-  const ci = (a.unlCustom ?? []).findIndex(c => c.dataMb === mb && c.speedMbps === speedMbps)
-  return ci >= 0 ? { customIdx: ci, gbPerDay: a.unlCustom![ci].gbPerDay, label: customUnlimitedLabel(a.unlCustom![ci]) } : null
+export function unlimitedFactor(a: Assumptions, amount: number, unit: "MB" | "GB", speedMbps = 10): { idx: number; gbPerDay: number; label: string } | null {
+  const mb = Math.round(toMb(amount, unit))
+  const levels = levelsOf(a)
+  const idx = levels.findIndex(l => l.dataMb === mb && l.speedMbps === speedMbps)
+  return idx >= 0 ? { idx, gbPerDay: levels[idx].gbPerDay, label: customUnlimitedLabel(levels[idx]) } : null
 }
 
 /**

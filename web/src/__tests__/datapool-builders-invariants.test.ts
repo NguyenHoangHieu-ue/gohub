@@ -5,7 +5,7 @@ import type { Frames, ThkPlanInput, Policy } from "@/lib/threehk-datapool/builde
 import { DEFAULT_ASSUMPTIONS, type PriceList, type ProductInput, type PlanLine } from "@/lib/bc-datapool/types"
 
 const FX = { hkdPerUsd: 7.807, cnyPerUsd: 6.681, vndPerUsd: 26153, vndPerUsdInc: 25626.2 }
-const A = { ...DEFAULT_ASSUMPTIONS, fixedPct: 0.55, dailyPct: 0.35, unl3gb10: 2, unlCustom: [{ dataMb: 1024, speedMbps: 5, gbPerDay: 2.1 }] }
+const A = { ...DEFAULT_ASSUMPTIONS, fixedPct: 0.55, dailyPct: 0.35, unl3gb10: 2, unlLevels: [{ dataMb: 3072, speedMbps: 10, gbPerDay: 2 }, { dataMb: 1024, speedMbps: 5, gbPerDay: 2.1 }] }
 const FRAMES: Frames = { esimUsUsd: 0.51, simUsUsd: 0.34, simVnVnd: 11061 }
 const bad: string[] = []
 const chk = (c: boolean, m: string) => { if (!c) bad.push(m) }

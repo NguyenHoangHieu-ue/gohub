@@ -1,9 +1,8 @@
 import { FRAME_SKU, POLICY_CODE, VENDOR_CODE, productCode, skuCode, type ProductTypeChar } from "./codes"
 import { explainCost, type CostExplain } from "./explain"
 import { ceil2, dataCostPool, dataCostUsd, frameFeeUsd, toMb, unlimitedFactor, usdToVnd } from "./pricing"
-import type { Assumptions, BuiltSheets, Fx, PlanKind, Pool, PriceList, ProductInput, UnlimitedKey } from "./types"
-import { customUnlimitedLabel } from "@/lib/datapool-formula"
-import { UNLIMITED_PROFILES } from "./types"
+import type { Assumptions, BuiltSheets, Fx, PlanKind, Pool, PriceList, ProductInput } from "./types"
+import { customUnlimitedLabel, levelsOf } from "@/lib/datapool-formula"
 
 /** Tên sheet + tiêu đề cột PHẢI y hệt Format_add_new_packages.xlsx (template bắt buộc). */
 export const SKU_HEADERS = ["tenant*", "productCode*", "dataAmount*", "dataAmountUnit*", "dayAmount*", "dayAmountUnit*", "nameVn*", "nameEn*", "frameSku", "datapackSku", "latestCogs", "latestCogsCurrency", "throttleSpeed", "dataMB", "speedMbps", "call", "callSmsDetails", "expirations", "vendorSku", "vendorSkuSim", "SKU CODE"]
@@ -36,9 +35,8 @@ export interface CostRow {
   feeKind: "esim" | "sim" | "none"
   /** Unlimited: tốc độ (Mbps) + ô hệ số GB/ngày dùng để tính (để file xuất chọn đúng ô tham số) */
   speedMbps?: number
-  unlKey?: UnlimitedKey
-  /** Mức Unlimited tự thêm: thứ tự trong Assumptions.unlCustom (ô tham số riêng ở sheet Tính giá) */
-  unlCustomIdx?: number
+  /** Mức Unlimited: vị trí trong bảng mức (ô tham số riêng ở sheet Tính giá) */
+  unlIdx?: number
   poolKey: Pool
   dataPool: number
   /** Công thức đã thế số cho từng giá (hiện khi rê chuột ở bản xem trước) */
@@ -161,7 +159,7 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
       const speed = speedOf(pl)
       const unl = pl.kind === "Unlimited" ? unlimitedFactor(a, pl.dataAmount, pl.unit, speed) : null
       if (pl.kind === "Unlimited") {
-        if (!unl) { out.warnings.push(`${pname}: chưa có hệ số GB/ngày cho Unlimited ${pl.dataAmount}${pl.unit} tốc độ cao + ${speed}Mbps — hiện có mức ${[...UNLIMITED_PROFILES.map(x => x.label), ...(a.unlCustom ?? []).map(customUnlimitedLabel)].join(" · ")} (thêm mức mới ở Admin › Cài đặt › Công Thức Datapool)`); return }
+        if (!unl) { out.warnings.push(`${pname}: chưa có hệ số GB/ngày cho Unlimited ${pl.dataAmount}${pl.unit} tốc độ cao + ${speed}Mbps — hiện có mức ${levelsOf(a).map(customUnlimitedLabel).join(" · ") || "(bảng mức trống)"} (thêm mức mới ở Admin › Cài đặt › Công Thức Datapool)`); return }
         const bcMb = toMb(pl.bcAmount ?? pl.dataAmount * 2, pl.bcUnit ?? pl.unit)
         if (toMb(pl.dataAmount, pl.unit) > bcMb) { out.warnings.push(`${pname}: dung lượng tốc độ cao ${pl.dataAmount}${pl.unit} lớn hơn tổng gói BC`); return }
       }
@@ -206,7 +204,7 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
           out.costRows.push({
             type: typeLabel(type), skuUS: useUs ? cUS : "—", skuVN: useVn ? cVN : "—", productId: pid, pool: p.pool, operator: `${top.operator} (${top.coverage})`,
             pricePerGb: top.pricePerGb, currency: pool.currency, kind: pl.kind, dataAmount: pl.dataAmount, unit: pl.unit, days: d,
-            feeKind: feeUsd === 0 ? "none" : p.simType === "eSIM" ? "esim" : "sim", poolKey: p.pool, speedMbps: speed, unlKey: unl?.key, unlCustomIdx: unl?.customIdx,
+            feeKind: feeUsd === 0 ? "none" : p.simType === "eSIM" ? "esim" : "sim", poolKey: p.pool, speedMbps: speed, unlIdx: unl?.idx,
             dataPool: dataCostPool(pl, d, top.pricePerGb, a), dataUsd, feeUsd, cogsUsd, cogsVnd,
             explain: explainCost({
               kind: pl.kind, dataAmount: pl.dataAmount, unit: pl.unit, days: d, pricePerGb: top.pricePerGb, currency: pool.currency,

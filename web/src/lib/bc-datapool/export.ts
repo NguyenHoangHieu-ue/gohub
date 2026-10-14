@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx"
 import { SHEET_NAMES, withHeaders, type BuildResult } from "./builder"
 import { frameFeeUsd } from "./pricing"
-import { customUnlimitedLabel } from "@/lib/datapool-formula"
+import { customUnlimitedLabel, levelsOf } from "@/lib/datapool-formula"
 import type { Assumptions, Fx, Pool, PriceList } from "./types"
 
 /** Tên sheet công thức — các ô latestCogs ở sheet SKU trỏ về đây để người dùng soát lại cách tính giá. */
@@ -9,10 +9,9 @@ export const CALC_SHEET = "Tính giá"
 
 // Ô tham số (cột S:T của sheet Tính giá)
 const P = { hkd: "$T$2", cny: "$T$3", vnd: "$T$4", fixed: "$T$5", daily: "$T$6", white: "$T$8", vndInc: "$T$9" } as const
-const UNL_CELL = { unl3gb10: "$T$7" } as const
-/** Mức Unlimited tự thêm: ô hệ số ở T21, T22... (khối riêng dưới phí khung) */
+/** Bảng mức Unlimited: ô hệ số GB/ngày ở T21, T22... (khối riêng dưới phí khung), theo thứ tự bảng mức ở Công Thức Datapool */
 const CUSTOM_UNL_ROW0 = 21
-const unlCellOf = (c: { unlKey?: "unl3gb10"; unlCustomIdx?: number }) => c.unlCustomIdx !== undefined ? `$T$${CUSTOM_UNL_ROW0 + c.unlCustomIdx}` : UNL_CELL[c.unlKey ?? "unl3gb10"]
+const unlCellOf = (c: { unlIdx?: number }) => `$T$${CUSTOM_UNL_ROW0 + (c.unlIdx ?? 0)}`
 const FEE_CELL = {
   "esim:CMHK": "$T$15", "esim:SINGTEL": "$T$16", "sim:CMHK": "$T$17", "sim:SINGTEL": "$T$18",
 } as const
@@ -43,7 +42,7 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
   put("S1", str("THAM SỐ (tỷ giá nội bộ + bảng báo giá — sửa ở đây, giá tự đổi)"))
   const params: [number, string, number][] = [
     [2, "HKD/USD (Inc)", ctx.fx.hkdPerUsd], [3, "CNY/USD (Inc)", ctx.fx.cnyPerUsd], [4, "VND/USD (JSC — đổi USD→VND)", ctx.fx.vndPerUsd],
-    [5, "Fixed % (data thực dùng)", ctx.a.fixedPct], [6, "Daily % (data thực dùng)", ctx.a.dailyPct], [7, "Unlimited 3GB tốc độ cao + 3GB 10Mbps + Unlimited 1Mbps — GB/ngày", ctx.a.unl3gb10],
+    [5, "Fixed % (data thực dùng)", ctx.a.fixedPct], [6, "Daily % (data thực dùng)", ctx.a.dailyPct],
     [8, "Giá SIM trắng (VND, từ hệ thống)", white], [9, "VND/USD (Inc — đổi VND→USD)", ctx.fx.vndPerUsdInc],
     [10, "CMHK — phí IMSI (HKD)", pl.CMHK.imsiFee], [11, "CMHK — phí eSIM (CNY)", pl.CMHK.esimFeeCny],
     [12, "Singtel — phí IMSI (USD)", pl.SINGTEL.imsiFee], [13, "Singtel — phí eSIM (CNY)", pl.SINGTEL.esimFeeCny],
@@ -55,7 +54,7 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
   put("S17", str("Phí khung SIM CMHK (USD) = giá SIM trắng/VND-USD(Inc) + IMSI HKD/HKD-USD")); put("T17", num(fee("SIM", "CMHK"), "ROUNDUP($T$8/$T$9+T10/$T$2,2)"))
   put("S18", str("Phí khung SIM Singtel (USD) = giá SIM trắng/VND-USD(Inc) + IMSI USD"));    put("T18", num(fee("SIM", "SINGTEL"), "ROUNDUP($T$8/$T$9+T12,2)"))
 
-  ;(ctx.a.unlCustom ?? []).forEach((u, i) => { put(at("S", CUSTOM_UNL_ROW0 + i), str(`Unlimited ${customUnlimitedLabel(u)} — GB/ngày`)); put(at("T", CUSTOM_UNL_ROW0 + i), num(u.gbPerDay)) })
+  ;levelsOf(ctx.a).forEach((u, i) => { put(at("S", CUSTOM_UNL_ROW0 + i), str(`Unlimited ${customUnlimitedLabel(u)} — GB/ngày`)); put(at("T", CUSTOM_UNL_ROW0 + i), num(u.gbPerDay)) })
 
   // ── Bảng tính giá: 1 dòng / SKU ──
   CALC_HEADERS.forEach((h, i) => put(XLSX.utils.encode_cell({ r: 0, c: i }), str(h)))
@@ -75,7 +74,7 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
     put(at("P", r), num(c.cogsUsd, `ROUNDUP(N${r}+O${r},2)`))
     put(at("Q", r), num(c.cogsVnd, `ROUNDUP(P${r}*${P.vnd},0)`))
   })
-  calc["!ref"] = `A1:T${Math.max(result.costRows.length + 1, 18, CUSTOM_UNL_ROW0 + (ctx.a.unlCustom?.length ?? 0))}`
+  calc["!ref"] = `A1:T${Math.max(result.costRows.length + 1, 18, CUSTOM_UNL_ROW0 + levelsOf(ctx.a).length)}`
   calc["!cols"] = [{ wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 9 }, { wch: 28 }, { wch: 10 }, { wch: 8 }, { wch: 7 }, { wch: 6 }, { wch: 12 }, { wch: 9 }, { wch: 12 }, { wch: 11 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 2 }, { wch: 2 }, { wch: 60 }, { wch: 12 }]
 
   // ── 4 sheet template; ô latestCogs (cột K) = công thức trỏ sheet Tính giá ──

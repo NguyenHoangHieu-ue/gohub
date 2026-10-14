@@ -338,7 +338,7 @@ describe("Unlimited: dataMB / speedMbps, 1 mức throttle (3GB + 10Mbps = 1.7), 
     expect(r.sheets.skuUS[0][6]).toBe("eSIM Nhật Bản Unlimited 10mbps 1 ngày")
     expect(r.sheets.skuUS[0][7]).toBe("eSIM Japan Unlimited 10mbps 1 Day(s)")
     expect(r.sheets.productUS.map(x => [x[6], x[35]])).toEqual([["X", "ECJPNWDX"]])
-    expect(r.costRows[0].unlKey).toBe("unl3gb10")
+    expect(r.costRows[0].unlIdx).toBe(0)
     expect(r.costRows[0].explain.dataPool).toContain("1.7 GB/ngày")
   })
 
@@ -346,7 +346,7 @@ describe("Unlimited: dataMB / speedMbps, 1 mức throttle (3GB + 10Mbps = 1.7), 
     for (const o of [{ dataAmount: 500, unit: "MB" as const }, { dataAmount: 500, unit: "MB" as const, speedMbps: 5 }, { speedMbps: 5 }, { dataAmount: 1 }]) {
       const r = run(o)
       expect(r.warnings.join()).toContain("chưa có hệ số GB/ngày")
-      expect(r.warnings.join()).toContain("3GB tốc độ cao + 3GB 10Mbps + Unlimited 1Mbps")   // báo rõ mức duy nhất đang có
+      expect(r.warnings.join()).toContain("3GB tốc độ cao + Unlimited 10Mbps")   // báo rõ mức đang có trong bảng mức
       expect(r.sheets.skuUS).toHaveLength(0)
     }
   })
@@ -367,9 +367,9 @@ describe("Unlimited: dataMB / speedMbps, 1 mức throttle (3GB + 10Mbps = 1.7), 
     const r = build([jp({ plans: [unl({ days: [1, 30] })] })], list, fx, A)
     const wb = buildWorkbook(r, { fx, a: A, list, whiteSimVnd: null })
     const calc = wb.Sheets[CALC_SHEET]
-    expect((calc.T7 as XLSX.CellObject).v).toBe(1.7)
-    expect((calc.M2 as XLSX.CellObject).f).toContain("$T$7")
-    expect(calc.T20).toBeUndefined()   // không còn ô hệ số 500MB
+    expect((calc.T21 as XLSX.CellObject).v).toBe(1.7)               // bảng mức Unlimited bắt đầu ở T21
+    expect((calc.M2 as XLSX.CellObject).f).toContain("$T$21")
+    expect(calc.T22).toBeUndefined()   // chỉ 1 mức trong bảng
     const { run } = evaluator(wb)
     for (const [addr, c] of Object.entries(calc)) {
       const cell = c as XLSX.CellObject

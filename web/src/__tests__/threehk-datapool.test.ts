@@ -129,7 +129,7 @@ describe("3HK giá + nước", () => {
 })
 
 describe("3HK Unlimited tự thêm ở Công Thức Datapool", () => {
-  const A2 = { ...DEFAULT_ASSUMPTIONS, unl3gb10: 2, unlCustom: [{ dataMb: 1024, speedMbps: 5, gbPerDay: 2.1 }, { dataMb: 500, speedMbps: 10, gbPerDay: 1.9 }] }
+  const A2 = { ...DEFAULT_ASSUMPTIONS, unl3gb10: 2, unlLevels: [{ dataMb: 3072, speedMbps: 10, gbPerDay: 2 }, { dataMb: 1024, speedMbps: 5, gbPerDay: 2.1 }, { dataMb: 500, speedMbps: 10, gbPerDay: 1.9 }] }
   const runA = (plans: ThkPlanInput[]) => build([input("eSIM", plans)], { fx: FX, a: A2, frames: FRAMES })
 
   test("1GB + 5Mbps: tên, throttle, dataMB/speedMbps, giá theo hệ số 2.1, mã X dung lượng 001", () => {
@@ -141,25 +141,25 @@ describe("3HK Unlimited tự thêm ở Công Thức Datapool", () => {
     // 2.1 GB/ngày × 5 ngày × 5 HKD = 52.5 HKD → /7.86 = 6.68 → ROUNDUP 6.68
     expect(ea[10]).toBe(Math.ceil((52.5 / FX.hkdPerUsd) * 100 - 1e-9) / 100)
     expect(skuOf(r.sheets.skuVN, "3CTHA3DX00105")[12]).toBe("1GB tốc độ cao mỗi ngày, sau đó không giới hạn ở tốc độ 5Mbps")
-    expect(r.costRows[0].unlCustomIdx).toBe(0)
+    expect(r.costRows[0].unlIdx).toBe(1)
   })
   test("500MB + 10Mbps (mức tự thêm) mã 5HM; mức có sẵn 3GB+10Mbps vẫn hoạt động với hệ số 2", () => {
     const r = runA([{ policy: "X", amount: 500, unit: "MB", speedMbps: 10, days: [3] }, { policy: "X", amount: 3, unit: "GB", days: [3] }])
     expect(r.sheets.skuUS.map(x => x[20])).toEqual(expect.arrayContaining(["EATHA3DX5HM03", "EATHA3DX00303"]))
     expect(skuOf(r.sheets.skuUS, "EATHA3DX5HM03")[13]).toBe(500)
-    expect(r.costRows.find(c => c.skuUS === "EATHA3DX00303")!.unlKey).toBe("unl3gb10")
+    expect(r.costRows.find(c => c.skuUS === "EATHA3DX00303")!.unlIdx).toBe(0)
   })
   test("mức chưa khai báo → cảnh báo chặn xuất, không sinh SKU", () => {
     const r = runA([{ policy: "X", amount: 2, unit: "GB", speedMbps: 10, days: [3] }])
     expect(r.warnings.some(w => /chưa có hệ số GB\/ngày cho Unlimited 2GB tốc độ cao \+ 10Mbps/.test(w))).toBe(true)
     expect(r.sheets.skuUS).toHaveLength(0)
   })
-  test("file xuất: hệ số tự thêm nằm ở R11 và công thức dòng đó trỏ R11", async () => {
+  test("file xuất: hệ số từng mức nằm ở R11, R12… và công thức dòng đó trỏ đúng ô mức của nó", async () => {
     const { buildWorkbook, CALC_SHEET } = await import("@/lib/threehk-datapool/export")
     const r = runA([{ policy: "X", amount: 1, unit: "GB", speedMbps: 5, days: [5] }])
     const ws = buildWorkbook(r, { fx: FX, a: A2, frames: FRAMES }).Sheets[CALC_SHEET]
-    expect(ws["R11"].v).toBe(2.1); expect(ws["R12"].v).toBe(1.9)
-    expect(ws["J2"].f).toBe("ROUNDUP(H2*$R$11*G2,2)")
+    expect(ws["R11"].v).toBe(2); expect(ws["R12"].v).toBe(2.1); expect(ws["R13"].v).toBe(1.9)
+    expect(ws["J2"].f).toBe("ROUNDUP(H2*$R$12*G2,2)")
     expect(ws["D2"].v).toBe("Unlimited 5Mbps")
   })
 })

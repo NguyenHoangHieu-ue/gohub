@@ -7,7 +7,7 @@ import { loadEffectiveTable } from "@/lib/fx/server"
 import { currentMonth, monthLabel, rateAt } from "@/lib/fx/table"
 import { FRAME_SKU } from "./codes"
 import type { PlanCatalog } from "./plan-catalog"
-import { FORMULA_KEYS, resolveFormula, parseCustomUnlimited } from "@/lib/datapool-formula"
+import { FORMULA_KEYS, findLevel, parseUnlimitedLevels, resolveFormula } from "@/lib/datapool-formula"
 import type { Assumptions, Fx, PriceList } from "./types"
 
 export const PRICE_LIST_KEY = "bcdp.price_list"
@@ -108,9 +108,10 @@ export async function loadWhiteSimVnd(): Promise<number | null> {
 export async function loadAssumptions(): Promise<Assumptions> {
   const { data } = await supabaseAdmin.from("app_settings").select("key,value").or("key.like.datapool.%,key.like.3hk.%")
   const f = resolveFormula(data ?? [])
+  const levels = parseUnlimitedLevels(data ?? [])
   return {
     fixedPct: f[FORMULA_KEYS.fixed], dailyPct: f[FORMULA_KEYS.daily],
-    unl3gb10: f[FORMULA_KEYS.unl3gb10],
-    unlCustom: parseCustomUnlimited(data ?? []),
+    unl3gb10: findLevel(levels, 3072, 10)?.gbPerDay ?? f[FORMULA_KEYS.unl3gb10],
+    unlLevels: levels,
   }
 }

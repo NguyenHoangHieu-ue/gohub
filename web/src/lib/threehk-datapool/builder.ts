@@ -1,7 +1,7 @@
 import { dataCode, dayCode } from "@/lib/bc-datapool/codes"
 import { PRODUCT_HEADERS, SKU_HEADERS } from "@/lib/bc-datapool/builder"
 import { ceil2, dataCostPool, dataCostUsd, toMb, unlimitedFactor, usdToVnd } from "@/lib/bc-datapool/pricing"
-import type { Assumptions, BuiltSheets, DataUnit, Fx, PlanKind, PlanLine, SimType, UnlimitedKey } from "@/lib/bc-datapool/types"
+import type { Assumptions, BuiltSheets, DataUnit, Fx, PlanKind, PlanLine, SimType } from "@/lib/bc-datapool/types"
 
 export { PRODUCT_HEADERS, SKU_HEADERS }
 
@@ -62,9 +62,8 @@ export interface ThkCostRow {
   policy: Policy
   kind: PlanKind
   speedMbps?: number
-  unlKey?: UnlimitedKey
-  /** Mức Unlimited tự thêm: thứ tự trong Assumptions.unlCustom (ô tham số riêng ở sheet Tính giá) */
-  unlCustomIdx?: number
+  /** Mức Unlimited: vị trí trong bảng mức (ô tham số riêng ở sheet Tính giá) */
+  unlIdx?: number
   dataAmount: number
   unit: string
   days: number
@@ -172,7 +171,7 @@ export function build(products: { input: ThkProductInput; price: ThkPrice | null
       const speed = isX ? (pl.speedMbps ?? 10) : undefined
       // Unlimited: (dung lượng tốc độ cao, tốc độ) phải thuộc mức có hệ số GB/ngày (mức có sẵn 3GB+10Mbps hoặc mức tự thêm) — không đoán
       const unl = isX ? unlimitedFactor(a, pl.amount, pl.unit, speed) : null
-      if (isX && !unl) { out.warnings.push(`${pname}: chưa có hệ số GB/ngày cho Unlimited ${fmt(pl.amount)}${pl.unit} tốc độ cao + ${speed}Mbps — thêm mức này ở Admin › Cài đặt › Công Thức Datapool`); return }
+      if (isX && !unl) { out.warnings.push(`${pname}: chưa có hệ số GB/ngày cho Unlimited ${fmt(pl.amount)}${pl.unit} tốc độ cao + ${speed}Mbps — thêm mức này vào bảng mức Unlimited ở Admin › Cài đặt › Công Thức Datapool`); return }
       const line: PlanLine = { kind, dataAmount: pl.amount, unit: pl.unit, days: pl.days, productId: "", speedMbps: speed }
       for (const d of pl.days) {
         const dc = dataCode(pl.amount, pl.unit), dd = dayCode(d)
@@ -218,7 +217,7 @@ export function build(products: { input: ThkProductInput; price: ThkPrice | null
           if (has("US", type)) { out.sheets.skuUS.push(row("US")); out.usCost.push(ci) }
           if (has("VN", type)) { out.sheets.skuVN.push(row("VN")); out.vnCost.push(ci) }
           out.costRows.push({
-            type: TYPE_LABEL[type], skuUS: has("US", type) ? cUS : "", skuVN: has("VN", type) ? cVN : "", policy: pl.policy, kind, speedMbps: speed, unlKey: unl?.key, unlCustomIdx: unl?.customIdx, dataAmount: pl.amount, unit: pl.unit, days: d, typeChar: type,
+            type: TYPE_LABEL[type], skuUS: has("US", type) ? cUS : "", skuVN: has("VN", type) ? cVN : "", policy: pl.policy, kind, speedMbps: speed, unlIdx: unl?.idx, dataAmount: pl.amount, unit: pl.unit, days: d, typeChar: type,
             pricePerGbHkd: price.pricePerGbHkd, network: price.network, dataPool, dataUsd, feeUsd, cogsUsd, cogsVnd, explain,
           })
         }

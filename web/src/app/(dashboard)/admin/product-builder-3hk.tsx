@@ -10,7 +10,7 @@ import type { Skipped } from "@/lib/bc-datapool/dedupe"
 import type { Assumptions, Fx, SimType } from "@/lib/bc-datapool/types"
 import { POLICY_KIND, POLICY_LABEL, PRODUCT_HEADERS, SKU_HEADERS, type Frames, type Policy, type ThkBuildResult } from "@/lib/threehk-datapool/builder"
 import type { CoveredGroup, NccRow } from "@/lib/threehk-datapool/resolve"
-import { customUnlimitedLabel } from "@/lib/datapool-formula"
+import { customUnlimitedLabel, levelsOf } from "@/lib/datapool-formula"
 
 type Notify = (type: "success" | "error", text: string) => void
 interface Options { ncc: NccRow[]; groups: CoveredGroup[]; assumptions: Assumptions; frames: Frames; fx: (Fx & { month?: string }) | null; fxError: string | null }
@@ -57,10 +57,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
   const unlProfiles = useMemo(() => {
     const a = opts?.assumptions
     if (!a) return []
-    return [
-      { amount: "3", unit: "GB" as const, speed: 10, label: `3GB tốc độ cao + Unlimited 10Mbps · ${a.unl3gb10} GB/ngày (có sẵn)` },
-      ...(a.unlCustom ?? []).map(c => ({ amount: String(c.dataMb % 1024 === 0 ? c.dataMb / 1024 : c.dataMb), unit: (c.dataMb % 1024 === 0 ? "GB" : "MB") as "GB" | "MB", speed: c.speedMbps, label: `${customUnlimitedLabel(c)} · ${c.gbPerDay} GB/ngày (tự thêm)` })),
-    ]
+    return levelsOf(a).map(c => ({ amount: String(c.dataMb % 1024 === 0 ? c.dataMb / 1024 : c.dataMb), unit: (c.dataMb % 1024 === 0 ? "GB" : "MB") as "GB" | "MB", speed: c.speedMbps, label: `${customUnlimitedLabel(c)} · ${c.gbPerDay} GB/ngày` }))
   }, [opts])
 
   const body = (force = false) => JSON.stringify({
@@ -124,7 +121,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl text-xs space-y-1 text-gray-600 dark:text-slate-300">
           <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">Tỷ giá nội bộ{fx?.month ? ` (${fx.month})` : ""}</div>
           {fx ? <><div>HKD/USD (Inc): <b>{fx.hkdPerUsd}</b> · VND/USD (JSC): <b>{fx.vndPerUsd.toLocaleString("vi-VN")}</b></div></> : <div className="text-red-600">{opts.fxError || "Chưa có tỷ giá"}</div>}
-          <div>Công thức Datapool: Fixed <b>{a.fixedPct * 100}%</b> · Daily <b>{a.dailyPct * 100}%</b> · Unlimited 3GB+10Mbps <b>{a.unl3gb10} GB/ngày</b>{(a.unlCustom ?? []).map(c => <span key={`${c.dataMb}:${c.speedMbps}`}> · {customUnlimitedLabel(c)} <b>{c.gbPerDay}</b></span>)}</div>
+          <div>Công thức Datapool: Fixed <b>{a.fixedPct * 100}%</b> · Daily <b>{a.dailyPct * 100}%</b> · Unlimited:{levelsOf(a).map(c => <span key={`${c.dataMb}:${c.speedMbps}`}> · {customUnlimitedLabel(c).replace(" tốc độ cao + Unlimited ", " + ")} <b>{c.gbPerDay} GB/ngày</b></span>)}</div>
         </div>
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl text-xs space-y-1 text-gray-600 dark:text-slate-300">
           <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">Giá khung (từ hệ thống)</div>
@@ -202,7 +199,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
                       {pl.policy === "X" && (
                         <select className={`${input} mb-1`} value={`${pl.amount}|${pl.unit}|${pl.speed}`} onChange={e => { const [amount, unit, speed] = e.target.value.split("|"); patchPlan(i, j, { amount, unit: unit as "MB" | "GB", speed: Number(speed) }) }}>
                           {unlProfiles.map(u => <option key={`${u.amount}|${u.unit}|${u.speed}`} value={`${u.amount}|${u.unit}|${u.speed}`}>{u.label}</option>)}
-                          {!unlProfiles.some(u => u.amount === pl.amount && u.unit === pl.unit && u.speed === pl.speed) && <option value={`${pl.amount}|${pl.unit}|${pl.speed}`}>{pl.amount}{pl.unit} + {pl.speed}Mbps (chưa có hệ số)</option>}
+                          {!unlProfiles.some(u => u.amount === pl.amount && u.unit === pl.unit && u.speed === pl.speed) && <option value={`${pl.amount}|${pl.unit}|${pl.speed}`}>{pl.amount}{pl.unit} + {pl.speed}Mbps (chưa có trong bảng mức)</option>}
                         </select>
                       )}
                       <div className="flex gap-1">

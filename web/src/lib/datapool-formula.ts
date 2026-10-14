@@ -43,11 +43,8 @@ export interface CustomUnlimited { dataMb: number; speedMbps: number; gbPerDay: 
 export const customUnlimitedLabel = (c: CustomUnlimited) =>
   `${c.dataMb % 1024 === 0 ? `${c.dataMb / 1024}GB` : `${c.dataMb}MB`} tốc độ cao + Unlimited ${c.speedMbps}Mbps`
 
-/** Đọc + lọc dữ liệu hợp lệ (dataMb, speedMbps, gbPerDay > 0; bỏ trùng cặp dataMb+speedMbps). */
-export function parseCustomUnlimited(rows: { key: string; value: unknown }[]): CustomUnlimited[] {
-  const raw = rows.find(r => r.key === CUSTOM_UNLIMITED_KEY)?.value
-  let arr: unknown
-  try { arr = typeof raw === "string" ? JSON.parse(raw) : raw } catch { return [] }
+/** Lọc dữ liệu hợp lệ của danh sách mức (dataMb, speedMbps, gbPerDay > 0; bỏ trùng cặp dataMb+speedMbps). */
+export function sanitizeLevels(arr: unknown): CustomUnlimited[] {
   if (!Array.isArray(arr)) return []
   const seen = new Set<string>()
   const out: CustomUnlimited[] = []
@@ -57,10 +54,45 @@ export function parseCustomUnlimited(rows: { key: string; value: unknown }[]): C
     const k = `${dataMb}:${speedMbps}`
     if (seen.has(k)) continue
     seen.add(k)
-    out.push({ dataMb, speedMbps, gbPerDay })
+    out.push({ dataMb, speedMbps: speedMbps, gbPerDay })
   }
   return out
 }
+
+const parseJson = (raw: unknown): unknown => { try { return typeof raw === "string" ? JSON.parse(raw) : raw } catch { return null } }
+
+/** Các mức tự thêm kiểu cũ (key `datapool.unlimited_custom`) — chỉ dùng để chuyển sang bảng mức mới. */
+export function parseCustomUnlimited(rows: { key: string; value: unknown }[]): CustomUnlimited[] {
+  return sanitizeLevels(parseJson(rows.find(r => r.key === CUSTOM_UNLIMITED_KEY)?.value))
+}
+
+/** Key lưu BẢNG MỨC UNLIMITED (JSON mảng CustomUnlimited): mỗi mức = GB tốc độ cao + mức throttle Unlimited (Mbps) + GB/ngày tính giá. Nguồn sự thật cho 3HK, BC, chatbot. */
+export const UNLIMITED_LEVELS_KEY = "datapool.unlimited_levels"
+
+/** Bảng mức khi Hiếu chưa lưu lần nào: 3 mức từ key cũ (500MB+5Mbps, 500MB+10Mbps, 3GB+10Mbps) + các mức tự thêm đã nhập trước đây. */
+export function defaultUnlimitedLevels(rows: { key: string; value: unknown }[]): CustomUnlimited[] {
+  const f = resolveFormula(rows)
+  return sanitizeLevels([
+    { dataMb: 500, speedMbps: 5, gbPerDay: f[FORMULA_KEYS.unl500mb5] },
+    { dataMb: 500, speedMbps: 10, gbPerDay: f[FORMULA_KEYS.unl500mb10] },
+    { dataMb: 3072, speedMbps: 10, gbPerDay: f[FORMULA_KEYS.unl3gb10] },
+    ...parseCustomUnlimited(rows),
+  ])
+}
+
+/** Bảng mức đang áp dụng: đã lưu thì dùng đúng bảng đó (kể cả rỗng), chưa lưu thì mặc định. */
+export function parseUnlimitedLevels(rows: { key: string; value: unknown }[]): CustomUnlimited[] {
+  const raw = rows.find(r => r.key === UNLIMITED_LEVELS_KEY)?.value
+  const parsed = raw == null ? null : parseJson(raw)
+  return Array.isArray(parsed) ? sanitizeLevels(parsed) : defaultUnlimitedLevels(rows)
+}
+
+export const levelMb = (amount: number, unit: "MB" | "GB") => Math.round(unit === "GB" ? amount * 1024 : amount)
+export const findLevel = (levels: CustomUnlimited[], dataMb: number, speedMbps: number) => levels.find(l => l.dataMb === dataMb && l.speedMbps === speedMbps)
+
+/** Bảng mức của 1 bộ giả định; dữ liệu cũ (chưa có unlLevels) thì dựng từ `unl3gb10` + mức tự thêm. */
+export const levelsOf = (a: { unl3gb10?: number; unlLevels?: CustomUnlimited[]; unlCustom?: CustomUnlimited[] }): CustomUnlimited[] =>
+  a.unlLevels ?? [...(a.unl3gb10 ? [{ dataMb: 3072, speedMbps: 10, gbPerDay: a.unl3gb10 }] : []), ...(a.unlCustom ?? [])]
 
 /** Giá trị đang áp dụng: key mới → key cũ (3hk.*) → mặc định. */
 export function resolveFormula(rows: { key: string; value: unknown }[]): Record<string, number> {
