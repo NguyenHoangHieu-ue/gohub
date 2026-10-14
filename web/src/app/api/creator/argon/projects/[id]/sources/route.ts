@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { ARGON_BUCKET, MAX_UPLOAD_BYTES, ensureArgonBucket, ownProject, requireArgonUser, type ArgonSource } from "@/lib/argon/server"
 import { extractFile } from "@/lib/argon/extract"
 import { countTokens, sourceParts } from "@/lib/argon/context"
-import { addLarkLink, syncMany } from "@/lib/argon/lark-sync"
+import { addDataPack, addLarkLink, syncMany } from "@/lib/argon/lark-sync"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 120
@@ -13,7 +13,8 @@ export const maxDuration = 120
 //   POST { action:"register", items:[{path,name,mime,size}] } → server đọc file, trích chữ, đếm token, tạo nguồn
 //   POST { action:"note", name, text } → nguồn ghi chú (văn bản dán tay)
 //   POST { action:"lark", url, mode } → nguồn từ link Lark (docx/sheet/wiki/base; thư mục → mỗi file con 1 nguồn)
-//   POST { action:"sync" } → đồng bộ lại mọi nguồn Lark của dự án (chỉ tạo phiên bản mới khi nội dung đổi)
+//   POST { action:"sync" } → đồng bộ lại mọi nguồn Lark + gói dữ liệu của dự án (chỉ tạo phiên bản mới khi nội dung đổi)
+//   POST { action:"data", pack, quarter, mode } → thêm "gói dữ liệu" (số liệu hệ thống mới nhất từ các endpoint analytics)
 const safe = (n: string) => n.replace(/[^\w.\-]+/g, "_").slice(-120)
 const strip = ({ extracted_text: _t, ...s }: ArgonSource) => (void _t, s)
 
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (!(await ownProject(params.id, username))) return NextResponse.json({ error: "Không tìm thấy dự án" }, { status: 404 })
   const b = (await req.json().catch(() => ({}))) as {
-    action?: string; url?: string; mode?: string; files?: { name: string; size: number }[]; items?: { path: string; name: string; mime: string; size: number }[]; name?: string; text?: string
+    action?: string; url?: string; mode?: string; pack?: string; quarter?: string; files?: { name: string; size: number }[]; items?: { path: string; name: string; mime: string; size: number }[]; name?: string; text?: string
   }
 
   if (b.action === "prepare") {
@@ -85,12 +86,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   if (b.action === "sync") {
-    const { data } = await supabaseAdmin.from("argon_sources").select("*").eq("project_id", params.id).eq("kind", "lark")
-    const results = await syncMany((data ?? []) as ArgonSource[])
+    const { data } = await supabaseAdmin.from("argon_sources").select("*").eq("project_id", params.id).or("kind.eq.lark,external_id.like.datapack:%")
+    const results = await syncMany((data ?? []) as ArgonSource[], req.nextUrl.origin)
     const { data: fresh } = await supabaseAdmin.from("argon_sources")
-      .select("id,project_id,kind,name,mime,size_bytes,send_binary,tokens,external_url,sync_mode,synced_at,enabled,pinned,version,meta,created_at,updated_at").eq("project_id", params.id).eq("kind", "lark")
+      .select("id,project_id,kind,name,mime,size_bytes,send_binary,tokens,external_url,sync_mode,synced_at,enabled,pinned,version,meta,created_at,updated_at").eq("project_id", params.id).or("kind.eq.lark,external_id.like.datapack:%")
     return NextResponse.json({ results, sources: fresh ?? [] })
   }
 
-  return NextResponse.json({ error: "action phải là prepare | register | note | lark | sync" }, { status: 400 })
+  if (b.action === "data") {
+    try {
+      const s = await addDataPack(params.id, String(b.pack ?? ""), String(b.quarter ?? ""), b.mode === "live" ? "live" : "snapshot", req.nextUrl.origin)
+      if (!s) return NextResponse.json({ sources: [], errors: [], skipped: ["Gói này (cùng quý) đã có trong dự án"] })
+      await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
+      return NextResponse.json({ sources: [strip(s)], errors: [], skipped: [] })
+    } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }) }
+  }
+
+  return NextResponse.json({ error: "action phải là prepare | register | note | lark | data | sync" }, { status: 400 })
 }

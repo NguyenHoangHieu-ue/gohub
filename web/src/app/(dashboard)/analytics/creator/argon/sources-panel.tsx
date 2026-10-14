@@ -1,13 +1,14 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { FileText, FileSpreadsheet, Image as ImageIcon, Film, Music, File as FileIcon, StickyNote, Link2, Mail, Pin, PinOff, Trash2, Upload, Eye, Plus, Loader2, FileType2, RefreshCw } from "lucide-react"
+import { FileText, FileSpreadsheet, Image as ImageIcon, Film, Music, File as FileIcon, StickyNote, Link2, Mail, Pin, PinOff, Trash2, Upload, Eye, Plus, Loader2, FileType2, RefreshCw, BarChart3 } from "lucide-react"
 import { supabaseBrowser } from "@/lib/supabase-browser"
 import { cn } from "@/lib/utils"
 import { api, jsonInit, fmtBytes, fmtTokens, CONTEXT_LIMIT, type MailRuleUi, type Source } from "./argon-types"
 
 function iconFor(s: Source) {
   const m = s.mime ?? ""
+  if (s.meta?.dataPack) return BarChart3
   if (s.kind === "note") return StickyNote
   if (s.kind === "lark") return Link2
   if (s.kind === "mail") return Mail
@@ -36,14 +37,40 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
   const [larkOpen, setLarkOpen] = useState(false)
   const [lark, setLark] = useState({ url: "", mode: "snapshot" as "snapshot" | "live" })
   const [info, setInfo] = useState<string | null>(null)
+  const [dataOpen, setDataOpen] = useState(false)
+  const [packs, setPacks] = useState<{ id: string; label: string; description: string }[]>([])
+  const [quarters, setQuarters] = useState<string[]>([])
+  const [pack, setPack] = useState({ id: "", quarter: "", mode: "snapshot" as "snapshot" | "live" })
   const [mailOpen, setMailOpen] = useState(false)
+
+  async function openData() {
+    const opening = !dataOpen
+    setDataOpen(opening); setLarkOpen(false); setNoteOpen(false); setMailOpen(false)
+    if (!opening || packs.length) return
+    try {
+      const r = await api<{ packs: { id: string; label: string; description: string }[]; quarters: string[] }>("/api/creator/argon/data-packs")
+      setPacks(r.packs); setQuarters(r.quarters); setPack(p => ({ ...p, id: r.packs[0]?.id ?? "", quarter: r.quarters[0] ?? "" }))
+    } catch (e) { onError((e as Error).message) }
+  }
+
+  async function addPack() {
+    if (!pack.id || !pack.quarter) return
+    setBusy("Đang lấy số liệu hệ thống… (có thể mất ~30 giây)"); setInfo(null)
+    try {
+      const r = await api<{ sources: Source[]; skipped: string[] }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "data", pack: pack.id, quarter: pack.quarter, mode: pack.mode }))
+      setSources(prev => [...prev, ...r.sources])
+      setInfo(r.sources.length ? `Đã thêm gói dữ liệu (${fmtTokens(r.sources[0].tokens)} token)` : r.skipped.join(", "))
+      if (r.sources.length) setDataOpen(false)
+    } catch (e) { onError((e as Error).message) }
+    setBusy(null)
+  }
   const [rules, setRules] = useState<MailRuleUi[]>([])
   const [folders, setFolders] = useState<{ id: string; name: string }[]>([])
   const [rule, setRule] = useState<MailRuleUi>({ id: "", name: "", folder: "INBOX", from: "", keywords: "", sinceDays: 30, maxThreads: 30, attachments: true })
 
   async function openMail() {
     const opening = !mailOpen
-    setMailOpen(opening); setLarkOpen(false); setNoteOpen(false)
+    setMailOpen(opening); setLarkOpen(false); setNoteOpen(false); setDataOpen(false)
     if (!opening) return
     try {
       const r = await api<{ rules: MailRuleUi[]; folders: { id: string; name: string }[]; error?: string }>(`/api/creator/argon/projects/${projectId}/mail`)
@@ -189,13 +216,31 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
         </button>
         <div className="text-gray-500 mt-1">docx · xlsx · pptx · pdf · ảnh · video · âm thanh · md/csv/json — tối đa 20MB/file</div>
         <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
-          <button onClick={() => { setLarkOpen(v => !v); setNoteOpen(false); setMailOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Link2 size={12} />Thêm link Lark</button>
-          <button onClick={() => { setNoteOpen(v => !v); setLarkOpen(false); setMailOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Plus size={12} />Ghi chú / dán văn bản</button>
+          <button onClick={() => { setLarkOpen(v => !v); setNoteOpen(false); setMailOpen(false); setDataOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Link2 size={12} />Thêm link Lark</button>
+          <button onClick={() => { setNoteOpen(v => !v); setLarkOpen(false); setMailOpen(false); setDataOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Plus size={12} />Ghi chú / dán văn bản</button>
+          <button onClick={openData} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><BarChart3 size={12} />Số liệu hệ thống</button>
           <button onClick={openMail} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Mail size={12} />Mail Lark</button>
-          {sources.some(x => x.kind === "lark") && <button onClick={syncAll} disabled={!!busy} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline disabled:opacity-50"><RefreshCw size={12} />Đồng bộ Lark</button>}
+          {sources.some(x => x.kind === "lark" || !!x.meta?.dataPack) && <button onClick={syncAll} disabled={!!busy} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline disabled:opacity-50"><RefreshCw size={12} />Đồng bộ Lark</button>}
         </div>
       </div>
 
+      {dataOpen && (
+        <div className="mx-3 mb-3 space-y-2 text-xs">
+          <div className="text-gray-500">Số liệu MỚI NHẤT của hệ thống (cùng nguồn với các tab Quarter Report, Squad, Thị trường…), lưu thành 1 nguồn để Argon đọc. Đồng bộ hằng đêm hoặc đọc mới mỗi lần chạy.</div>
+          <select value={pack.id} onChange={e => setPack(p => ({ ...p, id: e.target.value }))} className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent">
+            {packs.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+          <div className="text-gray-400">{packs.find(p => p.id === pack.id)?.description}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={pack.quarter} onChange={e => setPack(p => ({ ...p, quarter: e.target.value }))} className="px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent">
+              {quarters.map(q => <option key={q} value={q}>{q}</option>)}
+            </select>
+            <label className="inline-flex items-center gap-1"><input type="radio" checked={pack.mode === "snapshot"} onChange={() => setPack(p => ({ ...p, mode: "snapshot" }))} />Chụp lại (hằng đêm)</label>
+            <label className="inline-flex items-center gap-1"><input type="radio" checked={pack.mode === "live"} onChange={() => setPack(p => ({ ...p, mode: "live" }))} />Mới mỗi lần chạy</label>
+          </div>
+          <button onClick={addPack} disabled={!!busy || !pack.id} className="px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50">Thêm</button>
+        </div>
+      )}
       {mailOpen && (
         <div className="mx-3 mb-3 space-y-2 text-xs">
           <div className="text-gray-500">Chỉ đọc. Mỗi luồng thư khớp quy tắc thành 1 nguồn; đính kèm pdf/docx/xlsx/pptx/csv thành nguồn riêng.</div>
@@ -258,8 +303,8 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
               </div>
               <div className="pl-6 text-[11px] text-gray-500 flex gap-2">
                 <span>{fmtTokens(s.tokens)} token</span>{s.size_bytes ? <span>{fmtBytes(s.size_bytes)}</span> : null}
-                {s.kind === "lark" && s.synced_at ? <span title={s.sync_mode === "live" ? "Đọc mới mỗi lần chạy" : "Đồng bộ hằng đêm"}>{s.sync_mode === "live" ? "live" : "chụp"} · {new Date(s.synced_at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span> : null}
-                {s.kind === "lark" && <button onClick={() => syncOne(s)} disabled={!!busy} className="text-violet-600 hover:underline inline-flex items-center gap-0.5 disabled:opacity-50"><RefreshCw size={10} />đồng bộ</button>}
+                {(s.kind === "lark" || !!s.meta?.dataPack) && s.synced_at ? <span title={s.sync_mode === "live" ? "Đọc mới mỗi lần chạy" : "Đồng bộ hằng đêm"}>{s.sync_mode === "live" ? "live" : "chụp"} · {new Date(s.synced_at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span> : null}
+                {(s.kind === "lark" || !!s.meta?.dataPack) && <button onClick={() => syncOne(s)} disabled={!!busy} className="text-violet-600 hover:underline inline-flex items-center gap-0.5 disabled:opacity-50"><RefreshCw size={10} />đồng bộ</button>}
                 {s.version > 1 ? <span>v{s.version}</span> : null}{s.meta?.edited ? <span className="text-amber-600">đã sửa</span> : null}
               </div>
             </div>

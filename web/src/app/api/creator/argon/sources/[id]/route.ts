@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { ARGON_BUCKET, ownSource, requireArgonUser } from "@/lib/argon/server"
 import { countTokens, sourceParts } from "@/lib/argon/context"
 import { sha256 } from "@/lib/argon/extract"
-import { syncLarkSource } from "@/lib/argon/lark-sync"
+import { syncSource } from "@/lib/argon/lark-sync"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
@@ -63,13 +63,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json({ source: data })
 }
 
-// POST → đồng bộ lại 1 nguồn Lark ngay (so hash, đổi mới tạo phiên bản).
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+// POST → đồng bộ lại 1 nguồn Lark / gói dữ liệu ngay (so hash, đổi mới tạo phiên bản).
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const username = await requireArgonUser()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const src = await ownSource(params.id, username)
   if (!src) return NextResponse.json({ error: "Không tìm thấy nguồn" }, { status: 404 })
-  const result = await syncLarkSource(src)
+  const result = await syncSource(src, req.nextUrl.origin)
   const { data } = await supabaseAdmin.from("argon_sources").select("id,project_id,kind,name,mime,size_bytes,send_binary,tokens,external_url,sync_mode,synced_at,enabled,pinned,version,meta,created_at,updated_at").eq("id", params.id).single()
   return NextResponse.json({ result, source: data })
 }

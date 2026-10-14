@@ -1,0 +1,96 @@
+import { digest, fmtNum } from "./digest"
+import { gmPct, groupBy, type Dimension, type MarketData } from "@/lib/market-breakdown"
+
+// "Gói dữ liệu" của Phòng Argon: số liệu hệ thống MỚI NHẤT lấy từ chính các endpoint của tab analytics (cùng logic, cùng số với tab) qua Bearer CRON_SECRET
+// (cùng cơ chế prewarm), rút gọn thành văn bản rồi lưu thành nguồn của dự án. Chỉ GỌI endpoint trong danh sách dưới (chỉ đọc).
+export interface PackDef { id: string; label: string; description: string }
+
+export const PACKS: PackDef[] = [
+  { id: "quarter-report", label: "Quarter Report — tổng quan quý", description: "Doanh thu, GP, CH.Cost, Group Cost, CM1, %3HK theo tháng (thực tế + pro-rata) cho tổng/B2B/B2C, quý trước, bảng kênh B2B/B2C." },
+  { id: "b2b-tiers", label: "B2B theo nhóm khách (Strategic/VIP/Gold/Silver)", description: "Tổng từng nhóm theo tháng + 40 khách lớn nhất mỗi nhóm (doanh thu, GP, CH.Cost, CM1, %3HK, QoQ)." },
+  { id: "squad-progress", label: "Squad Progress — tiến độ target", description: "Từng squad: doanh thu/GP/CM1/3HK so với target, mức rủi ro, vòng đời khách, và 40 khách lớn nhất mỗi squad." },
+  { id: "market", label: "Thị trường — doanh thu theo nước / vendor / loại gói", description: "Doanh thu, GP, %GM, số lượng và so quý trước, gộp theo thị trường (top 30), vendor và kiểu gói." },
+  { id: "period-overview", label: "Tổng quan kỳ — BOD + KPI tháng + target", description: "Tổng doanh thu/GP/GPM2/3HK so kỳ trước, KPI theo tháng, tiến độ target — từ đầu quý đến hôm qua." },
+]
+
+export interface QuarterRef { q: number; year: number; label: string; start: string; end: string }
+
+const pad = (n: number) => String(n).padStart(2, "0")
+const ymd = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+
+/** "Q4-2026" → khoảng ngày; end = min(cuối quý, hôm qua theo giờ VN). Quý chưa bắt đầu → lỗi. */
+export function parseQuarter(label: string, now = new Date()): QuarterRef {
+  const m = label.match(/^Q([1-4])-(\d{4})$/)
+  if (!m) throw new Error(`Quý không hợp lệ: "${label}" (dạng Q4-2026)`)
+  const q = Number(m[1]), year = Number(m[2])
+  const start = `${year}-${pad((q - 1) * 3 + 1)}-01`
+  const qEnd = ymd(new Date(Date.UTC(year, q * 3, 0)))
+  const yesterday = ymd(new Date(now.getTime() + 7 * 3600_000 - 86_400_000))
+  if (yesterday < start) throw new Error(`${label} chưa có dữ liệu (bắt đầu ${start})`)
+  return { q, year, label, start, end: yesterday < qEnd ? yesterday : qEnd }
+}
+
+async function call(origin: string, path: string): Promise<any> {
+  if (!process.env.CRON_SECRET) throw new Error("Thiếu CRON_SECRET trên server")
+  const res = await fetch(`${origin}${path}`, { headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` }, signal: AbortSignal.timeout(150_000) })
+  const j = await res.json().catch(() => null)
+  if (!res.ok) throw new Error(`${path.split("?")[0]}: ${(j as { error?: string } | null)?.error ?? `HTTP ${res.status}`}`)
+  return j
+}
+
+const keep = (o: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.filter(k => k in o).map(k => [k, o[k]]))
+const top = <T,>(a: unknown, key: string, n: number): T[] => (Array.isArray(a) ? ([...a] as Record<string, number>[]).sort((x, y) => Number(y[key] ?? 0) - Number(x[key] ?? 0)).slice(0, n) as unknown as T[] : [])
+
+function marketTable(title: string, rows: ReturnType<typeof groupBy>): string {
+  const body = rows.map(r => `| ${r.key} | ${fmtNum(r.rev)} | ${fmtNum(r.gp)} | ${gmPct(r.gp, r.rev).toFixed(1)}% | ${fmtNum(r.units)} | ${fmtNum(r.revPrev)} | ${r.revPrev > 0 ? `${((r.rev / r.revPrev - 1) * 100).toFixed(1)}%` : ""} | ${r.skuCount} |`)
+  return `### ${title}\n| nhóm | doanh thu | GP | %GM | số lượng | doanh thu quý trước | %QoQ doanh thu | số SKU |\n|---|---|---|---|---|---|---|---|\n${body.join("\n")}`
+}
+
+/** Dựng nội dung 1 gói cho 1 quý. `origin` = gốc URL của chính server này (vd https://intel-v2.gohub.cloud). */
+export async function buildPack(id: string, quarterLabel: string, origin: string): Promise<{ title: string; text: string }> {
+  const r = parseQuarter(quarterLabel)
+  const note = `Lấy lúc ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC · ${r.label} · dữ liệu đến ${r.end} (hôm qua). Đơn vị tiền: VND. "pro-rata/PR" = chiếu cả tháng/quý theo số ngày đã qua.`
+  switch (id) {
+    case "quarter-report": {
+      const j = await call(origin, `/api/analytics/quarterly-report?quarter=Q${r.q}&year=${r.year}&companyCode=ALL`)
+      return { title: `📊 Quarter Report ${r.label}`, text: `${note}\n\n${digest(keep(j, ["quarter", "year", "months", "elapsed_days", "quarter_days", "summary", "quarterTotal", "prevQuarterTotals", "b2bChannels", "b2cChannels", "customerLifecycle"]), "Quarter Report", { maxRows: 120 })}` }
+    }
+    case "b2b-tiers": {
+      const j = await call(origin, `/api/analytics/quarterly-b2b-customers?quarter=Q${r.q}&year=${r.year}&companyCode=ALL`)
+      const tiers = (j.tiers ?? []).map((t: Record<string, unknown>) => ({
+        ...Object.fromEntries(Object.entries(t).filter(([k, v]) => !Array.isArray(v) && (typeof v !== "object" || v === null) && k !== "byRegion")),
+        months: t.months,
+        top_customers: top<Record<string, unknown>>(t.customers, "revenue", 40).map(c => keep(c, ["code", "name", "region", "orgName", "revenue", "gm", "gmPct", "cc", "cm1", "cm1Pct", "hk3Rev", "hk3Pct", "qoqPct", "prevCm1"])),
+      }))
+      return { title: `📊 B2B theo nhóm khách ${r.label}`, text: `${note}\n(Số liệu chiếu: tháng đang chạy đã nhân hệ số theo ngày; xem cột actual/PR của từng tháng.)\n\n${tiers.map((t: Record<string, unknown>) => digest(t, `Nhóm ${String(t.tier)}`, { maxRows: 60 })).join("\n\n")}` }
+    }
+    case "squad-progress": {
+      const j = await call(origin, `/api/analytics/squad-progress?quarter=Q${r.q}&year=${r.year}`)
+      const squads = (j.squads ?? []).map((s: Record<string, unknown>) => ({
+        ...Object.fromEntries(Object.entries(s).filter(([, v]) => v === null || typeof v !== "object")),
+        risk_counts: s.risk_counts, tier_counts: s.tier_counts, lifecycle: s.lifecycle, monthly: s.monthly,
+        top_customers: top<Record<string, unknown>>(s.customers, "revenue_pr", 40).map(c => keep(c, ["customer_code", "customer_name", "org_name", "sales_pic", "tier", "region", "lifecycle_state", "prev_revenue", "revenue", "revenue_pr", "target_rev", "cm1", "cm1_pr", "target_cm1", "hk3_pct", "risk_level"])),
+      }))
+      return { title: `📊 Squad Progress ${r.label}`, text: `${note}\n\n${digest(keep(j, ["quarter", "year", "elapsed_days", "quarter_days", "pr_factor", "totals"]), "Squad Progress — tổng", { maxRows: 60 })}\n\n${squads.map((s: Record<string, unknown>) => digest(s, `Squad ${String(s.name)}`, { maxRows: 60 })).join("\n\n")}` }
+    }
+    case "market": {
+      const data = (await call(origin, `/api/analytics/market?quarter=${r.label}&group=ALL`)) as MarketData
+      const dims: [Dimension, string, number][] = [["country", "Theo thị trường (top 30 theo doanh thu)", 30], ["vendor", "Theo vendor", 40], ["plan", "Theo kiểu gói", 10], ["form", "Theo loại sản phẩm", 12], ["service", "Theo dịch vụ", 6]]
+      const blocks = dims.map(([d, t, n]) => marketTable(t, groupBy(data, d).sort((a, b) => b.rev - a.rev).slice(0, n)))
+      const partial = r.end < ymd(new Date(Date.UTC(r.year, r.q * 3, 0)))
+      const warn = partial ? `\n⚠️ ${r.label} CHƯA HẾT (mới đến ${r.end}) còn quý trước là cả quý → cột %QoQ chỉ phản ánh độ dài kỳ, KHÔNG phải tăng/giảm thật; hãy so cơ cấu (%GM, tỷ trọng) thay vì so tuyệt đối.` : ""
+      return { title: `📊 Thị trường ${r.label}`, text: `${note}\nQuý trước để so: ${data.prevQuarter}. Tổng công ty = B2B + B2C, bỏ phí ship.${warn}\n\n${blocks.join("\n\n")}` }
+    }
+    case "period-overview": {
+      const range = `startDate=${r.start}&endDate=${r.end}`
+      const [bod, kpi, tgt] = await Promise.all([
+        call(origin, `/api/analytics/bod-summary?${range}`),
+        call(origin, `/api/analytics/monthly-kpis?${range}&companyCode=ALL`),
+        call(origin, `/api/analytics/targets-summary?${range}`),
+      ])
+      return { title: `📊 Tổng quan kỳ ${r.start} → ${r.end}`, text: `${note}\n\n${digest(bod, "BOD Summary")}\n\n${digest(kpi, "KPI theo tháng")}\n\n${digest(tgt, "Target")}` }
+    }
+    default:
+      throw new Error(`Gói dữ liệu không có: ${id}`)
+  }
+}

@@ -109,7 +109,7 @@ export default function ArgonRoomPage() {
             {projects.map(p => (
               <button key={p.id} onClick={() => setActiveId(p.id)} className={cn("w-full text-left rounded-lg px-2.5 py-2 text-sm", p.id === activeId ? "bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-200" : "hover:bg-gray-50 dark:hover:bg-slate-700")}>
                 <div className="truncate font-medium">{p.name}</div>
-                <div className="text-[11px] text-gray-500">{p.sources} nguồn · {fmtTokens(p.tokens)} token</div>
+                <div className="text-[11px] text-gray-500">{p.id === activeId && project ? sources.length : p.sources} nguồn · {fmtTokens(p.id === activeId && project ? enabled.reduce((n, x) => n + x.tokens, 0) : p.tokens)} token</div>
               </button>
             ))}
           </div>

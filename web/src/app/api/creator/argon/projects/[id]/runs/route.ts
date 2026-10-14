@@ -41,10 +41,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { data: srcRows } = await supabaseAdmin.from("argon_sources").select("*").eq("project_id", params.id).eq("enabled", true)
   const pick = resume ? new Set(resume.source_ids) : b.sourceIds ? new Set(b.sourceIds) : null
   let sources = ((srcRows ?? []) as ArgonSource[]).filter(s => !pick || pick.has(s.id))
-  // Nguồn Lark chế độ "live": đọc lại ngay trước khi chạy (nội dung mới nhất); lỗi thì dùng bản đã lưu.
-  const live = sources.filter(s => s.kind === "lark" && s.sync_mode === "live")
+  // Nguồn Lark / gói dữ liệu chế độ "live": đọc lại ngay trước khi chạy (nội dung mới nhất); lỗi thì dùng bản đã lưu.
+  const live = sources.filter(s => (s.kind === "lark" || s.external_id?.startsWith("datapack:")) && s.sync_mode === "live")
   if (live.length) {
-    await syncMany(live)
+    await syncMany(live, req.nextUrl.origin)
     const { data: fresh } = await supabaseAdmin.from("argon_sources").select("*").in("id", live.map(s => s.id))
     const byId = new Map(((fresh ?? []) as ArgonSource[]).map(s => [s.id, s]))
     sources = sources.map(s => byId.get(s.id) ?? s)

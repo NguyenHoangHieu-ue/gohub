@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { countTokens, sourceParts } from "./context"
 import { sha256 } from "./extract"
+import { buildPack } from "./data-packs"
 import { listFolder, larkToken, parseLarkUrl, readLark, type LarkContent, type LarkFolderItem } from "./lark"
 import type { ArgonSource } from "./server"
 
@@ -78,15 +79,68 @@ export async function syncLarkSource(src: ArgonSource, token?: string): Promise<
   }
 }
 
-/** Đồng bộ nhiều nguồn với 1 token (giới hạn song song 3 để không dính giới hạn tốc độ của Lark). */
-export async function syncMany(sources: ArgonSource[]): Promise<SyncResult[]> {
+// ── Gói dữ liệu (số liệu hệ thống mới nhất, lấy từ endpoint analytics — xem data-packs.ts) ──
+export const isDataPack = (s: Pick<ArgonSource, "external_id">) => !!s.external_id?.startsWith("datapack:")
+export const isSyncable = (s: Pick<ArgonSource, "kind" | "external_id">) => s.kind === "lark" || isDataPack(s)
+
+export async function addDataPack(projectId: string, pack: string, quarter: string, mode: "snapshot" | "live", origin: string): Promise<ArgonSource | null> {
+  const extId = `datapack:${pack}:${quarter}`
+  const { data: dup } = await supabaseAdmin.from("argon_sources").select("id").eq("project_id", projectId).eq("external_id", extId).maybeSingle()
+  if (dup) return null
+  const c = await buildPack(pack, quarter, origin)
+  const row = {
+    project_id: projectId, kind: "note" as const, name: c.title.slice(0, 160), mime: "text/markdown", size_bytes: Buffer.byteLength(c.text), extracted_text: c.text, send_binary: false,
+    content_hash: sha256(c.text), tokens: 0, external_id: extId, sync_mode: mode, synced_at: new Date().toISOString(), meta: { dataPack: pack, quarter },
+  }
+  const { data: src, error } = await supabaseAdmin.from("argon_sources").insert(row).select("*").single()
+  if (error || !src) throw new Error(error?.message ?? "lưu gói dữ liệu lỗi")
+  const tokens = await countTokens(await sourceParts(src as ArgonSource, { left: 0 }, []))
+  await supabaseAdmin.from("argon_sources").update({ tokens }).eq("id", src.id)
+  await supabaseAdmin.from("argon_source_versions").insert({ source_id: src.id, version: 1, extracted_text: c.text, note: "Lấy số liệu hệ thống", author: "datapack" })
+  return { ...(src as ArgonSource), tokens }
+}
+
+/** Lấy lại số liệu của 1 gói: chỉ tạo phiên bản mới khi nội dung đổi — mỗi lần chạy có dòng "Lấy lúc …" nên so hash PHẦN SAU dòng đầu. */
+export async function syncDataSource(src: ArgonSource, origin: string): Promise<SyncResult> {
+  const base = { id: src.id, name: src.name }
+  const pack = String(src.meta?.dataPack ?? ""), quarter = String(src.meta?.quarter ?? "")
+  if (!pack || !quarter) return { ...base, status: "skipped", note: "thiếu thông tin gói" }
+  try {
+    const c = await buildPack(pack, quarter, origin)
+    const body = (t: string) => t.slice(t.indexOf("\n"))
+    const now = new Date().toISOString()
+    if (sha256(body(c.text)) === sha256(body(src.extracted_text ?? ""))) {
+      await supabaseAdmin.from("argon_sources").update({ synced_at: now, extracted_text: c.text }).eq("id", src.id)
+      return { ...base, status: "same" }
+    }
+    const version = src.version + 1
+    const tokens = await countTokens(await sourceParts({ ...src, extracted_text: c.text }, { left: 0 }, []))
+    await supabaseAdmin.from("argon_source_versions").insert({ source_id: src.id, version, extracted_text: c.text, note: "Số liệu thay đổi", author: "datapack" })
+    await supabaseAdmin.from("argon_sources").update({ extracted_text: c.text, content_hash: sha256(c.text), version, tokens, size_bytes: Buffer.byteLength(c.text), synced_at: now, updated_at: now, name: c.title.slice(0, 160) }).eq("id", src.id)
+    return { ...base, status: "changed", note: `v${version}` }
+  } catch (e) {
+    return { ...base, status: "error", note: (e as Error).message }
+  }
+}
+
+/** Đồng bộ 1 nguồn (Lark hoặc gói dữ liệu). */
+export async function syncSource(src: ArgonSource, origin: string, token?: string): Promise<SyncResult> {
+  return isDataPack(src) ? syncDataSource(src, origin) : syncLarkSource(src, token)
+}
+
+/** Đồng bộ nhiều nguồn (giới hạn song song 3 để không dính giới hạn tốc độ của Lark/endpoint). Token Lark chỉ lấy khi có nguồn Lark. */
+export async function syncMany(sources: ArgonSource[], origin: string): Promise<SyncResult[]> {
   if (!sources.length) return []
-  let token: string
-  try { token = await larkToken() } catch (e) { return sources.map(s => ({ id: s.id, name: s.name, status: "error" as const, note: (e as Error).message })) }
+  let token: string | undefined
+  let tokenErr: string | undefined
+  if (sources.some(s => s.kind === "lark")) { try { token = await larkToken() } catch (e) { tokenErr = (e as Error).message } }
   const out: SyncResult[] = []
   let i = 0
   await Promise.all(Array.from({ length: Math.min(3, sources.length) }, async () => {
-    while (i < sources.length) out.push(await syncLarkSource(sources[i++], token))
+    while (i < sources.length) {
+      const s = sources[i++]
+      out.push(s.kind === "lark" && !token ? { id: s.id, name: s.name, status: "error", note: tokenErr } : await syncSource(s, origin, token))
+    }
   }))
   return out
 }
