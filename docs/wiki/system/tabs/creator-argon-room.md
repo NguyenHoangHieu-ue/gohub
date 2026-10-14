@@ -35,3 +35,6 @@ Bảng `argon_projects`, `argon_sources`, `argon_source_versions`, `argon_runs` 
 - `thinkingLevel "minimal"` bị Argon từ chối (chỉ low/medium/high).
 - Giá ước lượng `estimateArgonCostUsd` là giá giới thiệu ($2/$10 trên 1M token); Google nói sẽ tăng — cập nhật ở `lib/agents/gemini-pricing.ts`.
 - Eval so model: `web/scripts/eval-be-gau.mjs --endpoint gau-pro --model …` và `eval-gau-pro-strength.mjs`; kết quả `web/eval/results/gp-*`, `gps-*`.
+
+### s233e — Dự án "Tri thức công ty GoHub"
+Dự án dùng cho câu hỏi nghiệp vụ (vendor, giá vốn, mã SKU, quy trình CS, KPI): 1 nguồn docx dựng từ Wiki nghiệp vụ + ghi chú Gấu Pro (`creator_kb`) + mục giả định hiện hành. Dựng lại bằng `web/scripts/argon-knowledge/` (README trong thư mục). Không tự đồng bộ; không chứa mật khẩu portal (loại bởi `sanitize()`); ghi chú KB tháng 08 có thể lỗi thời — tài liệu dặn Argon ưu tiên mục "Giả định HIỆN HÀNH".
