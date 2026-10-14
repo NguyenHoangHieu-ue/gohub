@@ -39,14 +39,19 @@ export default function ArgonRoomPage() {
 
   useEffect(() => { if (role === "creator") void loadProjects().then(ps => { if (ps.length && !activeId) setActiveId(ps[0].id) }) }, [role]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const loadDetail = useCallback((id: string, keepMeta = false) => {
+    const seq = ++loadSeq.current
+    api<{ project: Project; sources: Source[]; runs: Run[] }>(`/api/creator/argon/projects/${id}`).then(r => {
+      if (seq !== loadSeq.current) return
+      setProject(r.project); setSources(r.sources); setRuns(r.runs)
+      if (!keepMeta) { setNotes(r.project.notes); setInstr(r.project.instructions); setMetaDirty(false) }
+    }).catch(e => onError(e.message))
+  }, [onError])
+
   useEffect(() => {
     if (!activeId) { setProject(null); setSources([]); setRuns([]); return }
-    const seq = ++loadSeq.current
-    api<{ project: Project; sources: Source[]; runs: Run[] }>(`/api/creator/argon/projects/${activeId}`).then(r => {
-      if (seq !== loadSeq.current) return
-      setProject(r.project); setSources(r.sources); setRuns(r.runs); setNotes(r.project.notes); setInstr(r.project.instructions); setMetaDirty(false)
-    }).catch(e => onError(e.message))
-  }, [activeId, onError])
+    loadDetail(activeId)
+  }, [activeId, loadDetail])
 
   async function createProject() {
     const name = prompt("Tên dự án mới?")?.trim()
@@ -136,11 +141,11 @@ export default function ArgonRoomPage() {
         </main>
 
         <aside className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 min-h-0 hidden lg:block">
-          {project && <SourcesPanel projectId={project.id} sources={sources} setSources={fn => { setSources(fn); void loadProjects() }} onOpen={setViewing} onError={onError} />}
+          {project && <SourcesPanel projectId={project.id} sources={sources} setSources={fn => { setSources(fn); void loadProjects() }} onOpen={setViewing} onError={onError} onReload={() => activeId && loadDetail(activeId, true)} />}
         </aside>
       </div>
 
-      {project && <div className="lg:hidden px-4 pb-4"><div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 h-[60vh]"><SourcesPanel projectId={project.id} sources={sources} setSources={fn => { setSources(fn); void loadProjects() }} onOpen={setViewing} onError={onError} /></div></div>}
+      {project && <div className="lg:hidden px-4 pb-4"><div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 h-[60vh]"><SourcesPanel projectId={project.id} sources={sources} setSources={fn => { setSources(fn); void loadProjects() }} onOpen={setViewing} onError={onError} onReload={() => activeId && loadDetail(activeId, true)} /></div></div>}
       {viewing && <SourceViewer source={viewing} onClose={() => setViewing(null)} onChanged={s => setSources(prev => prev.map(x => (x.id === s.id ? s : x)))} onError={onError} />}
     </div>
   )

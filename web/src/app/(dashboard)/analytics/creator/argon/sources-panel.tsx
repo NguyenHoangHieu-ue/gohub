@@ -4,7 +4,7 @@ import { useRef, useState } from "react"
 import { FileText, FileSpreadsheet, Image as ImageIcon, Film, Music, File as FileIcon, StickyNote, Link2, Mail, Pin, PinOff, Trash2, Upload, Eye, Plus, Loader2, FileType2, RefreshCw } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
-import { api, jsonInit, fmtBytes, fmtTokens, CONTEXT_LIMIT, type Source } from "./argon-types"
+import { api, jsonInit, fmtBytes, fmtTokens, CONTEXT_LIMIT, type MailRuleUi, type Source } from "./argon-types"
 
 function iconFor(s: Source) {
   const m = s.mime ?? ""
@@ -20,12 +20,13 @@ function iconFor(s: Source) {
   return FileIcon
 }
 
-export function SourcesPanel({ projectId, sources, setSources, onOpen, onError }: {
+export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, onReload }: {
   projectId: string
   sources: Source[]
   setSources: (fn: (prev: Source[]) => Source[]) => void
   onOpen: (s: Source) => void
   onError: (msg: string) => void
+  onReload: () => void
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -35,6 +36,51 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError }
   const [larkOpen, setLarkOpen] = useState(false)
   const [lark, setLark] = useState({ url: "", mode: "snapshot" as "snapshot" | "live" })
   const [info, setInfo] = useState<string | null>(null)
+  const [mailOpen, setMailOpen] = useState(false)
+  const [rules, setRules] = useState<MailRuleUi[]>([])
+  const [folders, setFolders] = useState<{ id: string; name: string }[]>([])
+  const [rule, setRule] = useState<MailRuleUi>({ id: "", name: "", folder: "INBOX", from: "", keywords: "", sinceDays: 30, maxThreads: 30, attachments: true })
+
+  async function openMail() {
+    const opening = !mailOpen
+    setMailOpen(opening); setLarkOpen(false); setNoteOpen(false)
+    if (!opening) return
+    try {
+      const r = await api<{ rules: MailRuleUi[]; folders: { id: string; name: string }[]; error?: string }>(`/api/creator/argon/projects/${projectId}/mail`)
+      setRules(r.rules); setFolders(r.folders)
+      if (r.error) onError(r.error)
+    } catch (e) { onError((e as Error).message) }
+  }
+
+  const mailInfo = (results: { rule: string; threads: number; created: number; updated: number; attachments: number; errors: string[] }[]) => {
+    const t = results.reduce((n, x) => n + x.threads, 0), c = results.reduce((n, x) => n + x.created, 0), u = results.reduce((n, x) => n + x.updated, 0), a = results.reduce((n, x) => n + x.attachments, 0)
+    const errs = results.flatMap(x => x.errors)
+    setInfo(`Mail: ${t} luồng khớp · ${c} mới · ${u} cập nhật · ${a} đính kèm`)
+    if (errs.length) onError(errs.join("\n"))
+  }
+
+  async function saveRule() {
+    setBusy("Đang đọc mail Lark… (có thể mất ~30 giây)"); setInfo(null)
+    try {
+      const r = await api<{ results: Parameters<typeof mailInfo>[0]; rules: MailRuleUi[] }>(`/api/creator/argon/projects/${projectId}/mail`, jsonInit("POST", { rule: { ...rule, name: rule.name || `Mail ${rule.folder}` } }))
+      setRules(r.rules); mailInfo(r.results); onReload()
+      setRule({ id: "", name: "", folder: rule.folder, from: "", keywords: "", sinceDays: 30, maxThreads: 30, attachments: true })
+    } catch (e) { onError((e as Error).message) }
+    setBusy(null)
+  }
+
+  async function syncMail() {
+    setBusy("Đang đọc lại mail Lark…")
+    try {
+      const r = await api<{ results: Parameters<typeof mailInfo>[0] }>(`/api/creator/argon/projects/${projectId}/mail`, jsonInit("POST", { action: "sync" }))
+      mailInfo(r.results); onReload()
+    } catch (e) { onError((e as Error).message) }
+    setBusy(null)
+  }
+
+  async function deleteRule(id: string) {
+    try { const r = await api<{ rules: MailRuleUi[] }>(`/api/creator/argon/projects/${projectId}/mail?ruleId=${id}`, { method: "DELETE" }); setRules(r.rules) } catch (e) { onError((e as Error).message) }
+  }
 
   const total = sources.filter(s => s.enabled).reduce((n, s) => n + s.tokens, 0)
 
@@ -143,12 +189,39 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError }
         </button>
         <div className="text-gray-500 mt-1">docx · xlsx · pptx · pdf · ảnh · video · âm thanh · md/csv/json — tối đa 20MB/file</div>
         <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
-          <button onClick={() => { setLarkOpen(v => !v); setNoteOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Link2 size={12} />Thêm link Lark</button>
-          <button onClick={() => { setNoteOpen(v => !v); setLarkOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Plus size={12} />Ghi chú / dán văn bản</button>
+          <button onClick={() => { setLarkOpen(v => !v); setNoteOpen(false); setMailOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Link2 size={12} />Thêm link Lark</button>
+          <button onClick={() => { setNoteOpen(v => !v); setLarkOpen(false); setMailOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Plus size={12} />Ghi chú / dán văn bản</button>
+          <button onClick={openMail} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Mail size={12} />Mail Lark</button>
           {sources.some(x => x.kind === "lark") && <button onClick={syncAll} disabled={!!busy} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline disabled:opacity-50"><RefreshCw size={12} />Đồng bộ Lark</button>}
         </div>
       </div>
 
+      {mailOpen && (
+        <div className="mx-3 mb-3 space-y-2 text-xs">
+          <div className="text-gray-500">Chỉ đọc. Mỗi luồng thư khớp quy tắc thành 1 nguồn; đính kèm pdf/docx/xlsx/pptx/csv thành nguồn riêng.</div>
+          {rules.map(r => (
+            <div key={r.id} className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 px-2 py-1">
+              <span className="flex-1 truncate" title={`${r.folder} · ${r.sinceDays} ngày${r.from ? ` · từ ${r.from}` : ""}${r.keywords ? ` · ${r.keywords}` : ""}`}>{r.name} <span className="text-gray-400">· {folders.find(f => f.id === r.folder)?.name ?? r.folder} · {r.sinceDays}n</span></span>
+              <button onClick={() => deleteRule(r.id)} className="text-gray-400 hover:text-red-600"><Trash2 size={12} /></button>
+            </div>
+          ))}
+          {rules.length > 0 && <button onClick={syncMail} disabled={!!busy} className="inline-flex items-center gap-1 text-violet-600 hover:underline disabled:opacity-50"><RefreshCw size={11} />Nạp lại mọi quy tắc</button>}
+          <div className="pt-1 border-t border-gray-100 dark:border-slate-700 space-y-1.5">
+            <input value={rule.name} onChange={e => setRule(r => ({ ...r, name: e.target.value }))} placeholder="Tên quy tắc (vd: Mail vendor 3HK)" className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" />
+            <div className="flex gap-1.5">
+              <select value={rule.folder} onChange={e => setRule(r => ({ ...r, folder: e.target.value }))} className="px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent">
+                {(folders.length ? folders : [{ id: "INBOX", name: "Inbox" }]).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+              <input type="number" min={1} max={365} value={rule.sinceDays} onChange={e => setRule(r => ({ ...r, sinceDays: Number(e.target.value) }))} title="Số ngày gần nhất" className="w-16 px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" />
+              <input type="number" min={1} max={60} value={rule.maxThreads} onChange={e => setRule(r => ({ ...r, maxThreads: Number(e.target.value) }))} title="Tối đa số luồng thư" className="w-16 px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" />
+            </div>
+            <input value={rule.from ?? ""} onChange={e => setRule(r => ({ ...r, from: e.target.value }))} placeholder="Người gửi chứa… (vd: hthk.com)" className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" />
+            <input value={rule.keywords ?? ""} onChange={e => setRule(r => ({ ...r, keywords: e.target.value }))} placeholder="Từ khoá, cách nhau dấu phẩy (khớp tiêu đề hoặc nội dung)" className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" />
+            <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={rule.attachments} onChange={e => setRule(r => ({ ...r, attachments: e.target.checked }))} className="accent-violet-600" />Tải cả đính kèm (≤15MB)</label>
+            <div><button onClick={saveRule} disabled={!!busy} className="px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50">Lưu & nạp mail</button></div>
+          </div>
+        </div>
+      )}
       {info && <div className="mx-3 mb-2 text-xs rounded-lg bg-emerald-50 text-emerald-800 px-2.5 py-1.5 whitespace-pre-wrap">{info}</div>}
       {larkOpen && (
         <div className="mx-3 mb-3 space-y-2">
