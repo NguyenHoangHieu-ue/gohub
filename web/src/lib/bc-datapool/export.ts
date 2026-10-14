@@ -13,7 +13,7 @@ const P = { hkd: "$T$2", cny: "$T$3", vnd: "$T$4", fixed: "$T$5", daily: "$T$6",
 const CUSTOM_UNL_ROW0 = 21
 const unlCellOf = (c: { unlIdx?: number }) => `$T$${CUSTOM_UNL_ROW0 + (c.unlIdx ?? 0)}`
 const FEE_CELL = {
-  "esim:CMHK": "$T$15", "esim:SINGTEL": "$T$16", "sim:CMHK": "$T$17", "sim:SINGTEL": "$T$18",
+  "esim:CMHK": "$T$15", "esim:SINGTEL": "$T$16",
 } as const
 
 const CALC_HEADERS = ["Loại", "SKU US", "SKU VN", "ProductID", "Pool", "Nhà mạng áp dụng", "Loại gói", "Data", "Đơn vị", "Ngày", "Giá/GB (tiền pool)", "Tiền tệ pool",
@@ -48,11 +48,9 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
     [12, "Singtel — phí IMSI (USD)", pl.SINGTEL.imsiFee], [13, "Singtel — phí eSIM (CNY)", pl.SINGTEL.esimFeeCny],
   ]
   for (const [r, l, v] of params) { put(at("S", r), str(l)); put(at("T", r), num(v)) }
-  const fee = (sim: "eSIM" | "SIM", pool: Pool) => frameFeeUsd(sim, pl[pool], ctx.fx, white)
+  const fee = (sim: "eSIM", pool: Pool) => frameFeeUsd(sim, pl[pool], ctx.fx)
   put("S15", str("Phí khung eSIM CMHK (USD) = eSIM CNY/CNY-USD + IMSI HKD/HKD-USD"));  put("T15", num(fee("eSIM", "CMHK"), "ROUNDUP(T11/$T$3+T10/$T$2,2)"))
   put("S16", str("Phí khung eSIM Singtel (USD) = eSIM CNY/CNY-USD + IMSI USD"));        put("T16", num(fee("eSIM", "SINGTEL"), "ROUNDUP(T13/$T$3+T12,2)"))
-  put("S17", str("Phí khung SIM CMHK (USD) = giá SIM trắng/VND-USD(Inc) + IMSI HKD/HKD-USD")); put("T17", num(fee("SIM", "CMHK"), "ROUNDUP($T$8/$T$9+T10/$T$2,2)"))
-  put("S18", str("Phí khung SIM Singtel (USD) = giá SIM trắng/VND-USD(Inc) + IMSI USD"));    put("T18", num(fee("SIM", "SINGTEL"), "ROUNDUP($T$8/$T$9+T12,2)"))
 
   ;levelsOf(ctx.a).forEach((u, i) => { put(at("S", CUSTOM_UNL_ROW0 + i), str(`Unlimited ${customUnlimitedLabel(u)} — GB/ngày`)); put(at("T", CUSTOM_UNL_ROW0 + i), num(u.gbPerDay)) })
 
@@ -70,9 +68,9 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
     put(at("K", r), num(c.pricePerGb)); put(at("L", r), str(c.currency))
     put(at("M", r), num(c.dataPool, dataF))
     put(at("N", r), num(c.dataUsd, `ROUNDUP(IF(L${r}="HKD",M${r}/${P.hkd},M${r}),2)`))
-    put(at("O", r), c.feeKind === "none" ? num(0) : num(c.feeUsd, FEE_CELL[`${c.feeKind}:${c.poolKey}`]))
+    put(at("O", r), c.feeKind === "none" || c.feeKind === "sim" ? num(0) : num(c.feeUsd, FEE_CELL[`${c.feeKind}:${c.poolKey}`]))
     put(at("P", r), num(c.cogsUsd, `ROUNDUP(N${r}+O${r},2)`))
-    put(at("Q", r), num(c.cogsVnd, `ROUNDUP(P${r}*${P.vnd},0)`))
+    put(at("Q", r), num(c.cogsVnd, c.feeKind === "sim" ? `ROUNDUP(P${r}*${P.vnd},0)+$T$8` : `ROUNDUP(P${r}*${P.vnd},0)`))
   })
   calc["!ref"] = `A1:T${Math.max(result.costRows.length + 1, 18, CUSTOM_UNL_ROW0 + levelsOf(ctx.a).length)}`
   calc["!cols"] = [{ wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 9 }, { wch: 28 }, { wch: 10 }, { wch: 8 }, { wch: 7 }, { wch: 6 }, { wch: 12 }, { wch: 9 }, { wch: 12 }, { wch: 11 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 2 }, { wch: 2 }, { wch: 60 }, { wch: 12 }]

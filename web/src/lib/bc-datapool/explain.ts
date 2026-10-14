@@ -18,6 +18,8 @@ export interface ExplainInput {
   dataUsd: number
   feeKind: "esim" | "sim" | "none"
   feeUsd: number
+  /** SIM full: giá SIM trắng cộng bằng VND */
+  feeVnd?: number
   cogsUsd: number
   cogsVnd: number
   fx: Fx
@@ -44,9 +46,11 @@ export function explainCost(i: ExplainInput): CostExplain {
   const imsi = i.currency === "HKD" ? `IMSI ${n(i.imsiFee)} HKD ÷ ${n(i.fx.hkdPerUsd)}` : `IMSI ${n(i.imsiFee)} USD`
   const fee =
     i.feeKind === "esim" ? `ROUNDUP(phí eSIM ${n(i.esimFeeCny)} CNY ÷ ${n(i.fx.cnyPerUsd)} + ${imsi}, 2) = ${n(i.feeUsd)} USD`
-    : i.feeKind === "sim" ? `ROUNDUP(giá SIM trắng ${n(i.whiteSimVnd, 0)} VND ÷ ${n(i.fx.vndPerUsdInc, 2)} (tỷ giá Inc, VND→USD) + ${imsi}, 2) = ${n(i.feeUsd)} USD`
+    : i.feeKind === "sim" ? `SIM full (chỉ VN): cộng thẳng giá SIM trắng ${n(i.feeVnd ?? i.whiteSimVnd, 0)} VND (không đổi qua USD, không cộng IMSI)`
     : "Gói data rời (datapack): không cộng phí khung = 0"
-  const cogsUsd = i.feeKind === "none" ? `ROUNDUP(data ${n(i.dataUsd)}, 2) = ${n(i.cogsUsd)} USD` : `ROUNDUP(data ${n(i.dataUsd)} + phí khung ${n(i.feeUsd)}, 2) = ${n(i.cogsUsd)} USD`
-  const cogsVnd = `ROUNDUP(${n(i.cogsUsd)} USD × ${n(i.fx.vndPerUsd, 0)} (tỷ giá JSC, USD→VND), 0) = ${n(i.cogsVnd, 0)} VND`
+  const cogsUsd = i.feeKind === "none" || i.feeKind === "sim" ? `ROUNDUP(data ${n(i.dataUsd)}, 2) = ${n(i.cogsUsd)} USD` : `ROUNDUP(data ${n(i.dataUsd)} + phí khung ${n(i.feeUsd)}, 2) = ${n(i.cogsUsd)} USD`
+  const cogsVnd = i.feeKind === "sim"
+    ? `ROUNDUP(${n(i.cogsUsd)} USD × ${n(i.fx.vndPerUsd, 0)} (tỷ giá JSC, USD→VND), 0) + SIM trắng ${n(i.feeVnd ?? 0, 0)} VND = ${n(i.cogsVnd, 0)} VND`
+    : `ROUNDUP(${n(i.cogsUsd)} USD × ${n(i.fx.vndPerUsd, 0)} (tỷ giá JSC, USD→VND), 0) = ${n(i.cogsVnd, 0)} VND`
   return { dataPool, dataUsd, fee, cogsUsd, cogsVnd }
 }

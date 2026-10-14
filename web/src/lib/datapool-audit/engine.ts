@@ -30,7 +30,7 @@ export interface AuditCtx {
 /** Số liệu trung gian của 1 dòng — để file xuất dựng lại công thức Excel. */
 export interface AuditCalc {
   pricePerGb: number; poolCurrency: "HKD" | "USD"; amount: number; unit: "MB" | "GB"; days: number; kind: PlanKind
-  unlIdx?: number; dataPool: number; dataUsd: number; feeUsd: number; feeKind: "none" | "esim" | "sim"; cogsUsd: number; cogsVnd: number
+  unlIdx?: number; dataPool: number; dataUsd: number; feeUsd: number; feeVnd: number; feeKind: "none" | "esim" | "sim"; cogsUsd: number; cogsVnd: number
 }
 
 export type AuditVerdict = CogsVerdict | "nocogs" | "skip"
@@ -142,7 +142,7 @@ export function auditSku(sku: AuditSkuInput, product: AuditProductInput | undefi
   const dataUsd = dataCostUsd(line, days, pricePerGb, poolCurrency, ctx.fx, ctx.a)
 
   // ── phí khung theo loại ──
-  let feeUsd = 0, feeKind: AuditCalc["feeKind"] = "none", cogsUsd = dataUsd, cogsVnd = usdToVnd(dataUsd, ctx.fx)
+  let feeUsd = 0, feeVnd = 0, feeKind: AuditCalc["feeKind"] = "none", cogsUsd = dataUsd, cogsVnd = usdToVnd(dataUsd, ctx.fx)
   if (type !== "A") {
     if (vendor === "3HK") {
       const f = type === "C" ? ctx.frames.esimUsUsd : ctx.frames.simUsUsd
@@ -152,8 +152,9 @@ export function auditSku(sku: AuditSkuInput, product: AuditProductInput | undefi
     } else {
       const sim = type === "C" ? "eSIM" : "SIM"
       if (sim === "SIM" && !(ctx.whiteSimVnd && ctx.whiteSimVnd > 0)) return skipRow(base, "thiếu giá SIM trắng trong hệ thống")
-      feeUsd = frameFeeUsd(sim, ctx.priceList!.pools[pool!], ctx.fx, ctx.whiteSimVnd ?? 0); feeKind = sim === "eSIM" ? "esim" : "sim"
-      cogsUsd = ceil2(dataUsd + feeUsd); cogsVnd = usdToVnd(cogsUsd, ctx.fx)
+      feeKind = sim === "eSIM" ? "esim" : "sim"
+      if (sim === "eSIM") { feeUsd = frameFeeUsd("eSIM", ctx.priceList!.pools[pool!], ctx.fx); cogsUsd = ceil2(dataUsd + feeUsd); cogsVnd = usdToVnd(cogsUsd, ctx.fx) }
+      else { feeVnd = ctx.whiteSimVnd!; cogsUsd = dataUsd; cogsVnd = usdToVnd(dataUsd, ctx.fx) + feeVnd }
     }
   }
   const expected = tenant === "US" ? cogsUsd : cogsVnd
@@ -164,7 +165,7 @@ export function auditSku(sku: AuditSkuInput, product: AuditProductInput | undefi
   const explain = `${pricePerGb} ${poolCurrency}/GB × (${how}) = ${Math.round(dataPool * 1e4) / 1e4} ${poolCurrency} → ${poolCurrency === "HKD" ? `÷ ${ctx.fx.hkdPerUsd} ` : ""}= ${dataUsd} USD`
     + (feeKind !== "none" ? ` + khung ${feeUsd} = ${cogsUsd} USD` : "")
     + (tenant === "VN" ? ` → × ${ctx.fx.vndPerUsd.toLocaleString("en-US")}${vendor === "3HK" && type === "E" ? ` (data) + khung SIM VN ${ctx.frames.simVnVnd}` : ""} = ${cogsVnd.toLocaleString("en-US")} VND` : "")
-  const calc: AuditCalc = { pricePerGb, poolCurrency, amount: kind === "Unlimited" ? hsMb : amount, unit: kind === "Unlimited" ? "MB" : unit, days, kind, unlIdx, dataPool, dataUsd, feeUsd, feeKind, cogsUsd, cogsVnd }
+  const calc: AuditCalc = { pricePerGb, poolCurrency, amount: kind === "Unlimited" ? hsMb : amount, unit: kind === "Unlimited" ? "MB" : unit, days, kind, unlIdx, dataPool, dataUsd, feeUsd, feeVnd, feeKind, cogsUsd, cogsVnd }
   if (base.current == null) return { ...base, expected, diff: null, diffPct: null, verdict: "nocogs", note: "hệ thống chưa có giá vốn", explain, calc }
   const cmp = compareCogs(base.current, expected, currency)
   return { ...base, expected, diff: cmp.diff, diffPct: cmp.diffPct, verdict: cmp.verdict, note, explain, calc }

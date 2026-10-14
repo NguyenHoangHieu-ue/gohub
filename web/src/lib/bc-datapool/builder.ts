@@ -43,6 +43,8 @@ export interface CostRow {
   explain: CostExplain
   dataUsd: number
   feeUsd: number
+  /** SIM full (E, chỉ VN): giá SIM trắng cộng thẳng bằng VND (không đổi qua USD, không IMSI) — khớp giá đang lưu trong hệ thống */
+  feeVnd: number
   cogsUsd: number
   cogsVnd: number
 }
@@ -113,7 +115,8 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
     const covs = Array.from(new Set(chosen.map(r => r.coverage)))
     const opsOf = (rows: typeof chosen) => Array.from(new Set(rows.map(r => r.operator))).join("/")
     const onsite = covs.length > 1 ? covs.map(c => `${c}: ${opsOf(chosen.filter(r => r.coverage === c))}`).join("\n") : opsOf(chosen)
-    const fee = frameFeeUsd(p.simType, pool, fx, opt.whiteSimVnd)
+    const fee = p.simType === "eSIM" ? frameFeeUsd("eSIM", pool, fx) : 0
+    const whiteVnd = p.simType === "SIM" ? (opt.whiteSimVnd ?? 0) : 0
     const kycOps = chosen.filter(r => r.kyc)
     if (kycOps.length) out.warnings.push(`${label}: nhà mạng ${kycOps.map(r => r.operator).join(", ")} có KYC trong bảng giá — kiểm tra kycNeeded/kycCode`)
 
@@ -182,9 +185,9 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
         const dataMbCell: number | string = pl.kind === "Unlimited" ? toMb(pl.dataAmount, pl.unit) : ""
         const speedCell: number | string = pl.kind === "Unlimited" ? (speed as number) : ""
         const pid = pl.productId.trim()
-        const push = (type: ProductTypeChar, cogsUsd: number, feeUsd: number) => {
+        const push = (type: ProductTypeChar, cogsUsd: number, feeUsd: number, feeVnd = 0) => {
           const cUS = code("US", type)!, cVN = code("VN", type)!
-          const cogsVnd = usdToVnd(cogsUsd, fx)
+          const cogsVnd = usdToVnd(cogsUsd, fx) + feeVnd
           const useUs = tenantsOf(type).includes("US"), useVn = tenantsOf(type).includes("VN")
           const row = (tenant: "US" | "VN", sku: string, cogs: number, cur: string) => {
             const us = tenant === "US"
@@ -204,19 +207,19 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
           out.costRows.push({
             type: typeLabel(type), skuUS: useUs ? cUS : "—", skuVN: useVn ? cVN : "—", productId: pid, pool: p.pool, operator: `${top.operator} (${top.coverage})`,
             pricePerGb: top.pricePerGb, currency: pool.currency, kind: pl.kind, dataAmount: pl.dataAmount, unit: pl.unit, days: d,
-            feeKind: feeUsd === 0 ? "none" : p.simType === "eSIM" ? "esim" : "sim", poolKey: p.pool, speedMbps: speed, unlIdx: unl?.idx,
-            dataPool: dataCostPool(pl, d, top.pricePerGb, a), dataUsd, feeUsd, cogsUsd, cogsVnd,
+            feeKind: feeUsd === 0 && feeVnd === 0 ? "none" : p.simType === "eSIM" ? "esim" : "sim", poolKey: p.pool, speedMbps: speed, unlIdx: unl?.idx,
+            dataPool: dataCostPool(pl, d, top.pricePerGb, a), dataUsd, feeUsd, feeVnd, cogsUsd, cogsVnd,
             explain: explainCost({
               kind: pl.kind, dataAmount: pl.dataAmount, unit: pl.unit, days: d, pricePerGb: top.pricePerGb, currency: pool.currency,
-              dataPool: dataCostPool(pl, d, top.pricePerGb, a), dataUsd, feeKind: feeUsd === 0 ? "none" : p.simType === "eSIM" ? "esim" : "sim",
-              feeUsd, cogsUsd, cogsVnd, fx, a, imsiFee: pool.imsiFee, esimFeeCny: pool.esimFeeCny, whiteSimVnd: opt.whiteSimVnd ?? 0,
+              dataPool: dataCostPool(pl, d, top.pricePerGb, a), dataUsd, feeKind: feeUsd === 0 && feeVnd === 0 ? "none" : p.simType === "eSIM" ? "esim" : "sim",
+              feeUsd, feeVnd, cogsUsd, cogsVnd, fx, a, imsiFee: pool.imsiFee, esimFeeCny: pool.esimFeeCny, whiteSimVnd: opt.whiteSimVnd ?? 0,
               unl: unl ? { gbPerDay: unl.gbPerDay, label: unl.label } : undefined,
             }),
           })
         }
         const full = ceil2(dataUsd + fee)
         if (p.simType === "eSIM") { push("C", full, fee); if (esimA) push("A", dataUsd, 0) }
-        else { push("A", dataUsd, 0); push("E", full, fee) }
+        else { push("A", dataUsd, 0); push("E", dataUsd, 0, whiteVnd) }
       }
     })
   })

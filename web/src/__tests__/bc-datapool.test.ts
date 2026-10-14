@@ -129,7 +129,7 @@ describe("build()", () => {
     expect(r.sheets.productVN.map(x => x[17])).toEqual(["GMT+8", "Count 24h", "GMT+8"])
   })
 
-  test("SIM: datapack (A) cho cả US/VN, SIM full (E) chỉ VN; khung 1D000WDK00000; phí = giá SIM trắng DB + IMSI", () => {
+  test("SIM: datapack (A) cho cả US/VN, SIM full (E) chỉ VN; khung 1D000WDK00000; VND = data×JSC + giá SIM trắng DB (không IMSI)", () => {
     const p = product({ simType: "SIM", plans: [plan({ productId: "777" })] })
     const r = build([p], list, FX_JP, A, { whiteSimVnd: 16028 })
     expect(r.warnings).toEqual([])
@@ -145,9 +145,9 @@ describe("build()", () => {
     expect([aUS[18], aUS[19]]).toEqual(["", "777"])
     expect([aVN[18], aVN[19]]).toEqual(["", "EAJPNWDT5HM01"])
     expect([eVN[18], eVN[19]]).toEqual(["", ""])
-    // datapack = chỉ data (0.13); full = data + ROUNDUP(16028/26490 + 0.5/7.802 = 0.6691) = 0.13 + 0.67 = 0.80
+    // datapack = chỉ data (0.13); SIM full VN = ROUNDUP(0.13 × JSC) + giá SIM trắng 16028 VND (cộng thẳng, không IMSI — khớp giá hệ thống)
     expect(aUS[10]).toBe(0.13)
-    expect(aVN[10]).toBe(usdToVnd(0.13, FX_JP)); expect(eVN[10]).toBe(usdToVnd(0.8, FX_JP))
+    expect(aVN[10]).toBe(usdToVnd(0.13, FX_JP)); expect(eVN[10]).toBe(usdToVnd(0.13, FX_JP) + 16028)
   })
 
   test("SIM mà thiếu giá SIM trắng → cảnh báo, không sinh dòng", () => {

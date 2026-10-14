@@ -152,7 +152,7 @@ describe("file xuất: ô giá là công thức", () => {
     expect(val(CALC_SHEET, `Q${i + 2}`)).not.toBe(r.costRows[i].cogsVnd)
   })
 
-  test("SIM: SIM full (VN) và datapack cũng dùng công thức; phí SIM = giá SIM trắng + IMSI", () => {
+  test("SIM: SIM full (VN) và datapack cũng dùng công thức; VND SIM full = data×JSC + giá SIM trắng", () => {
     const rs = build([jp({ simType: "SIM", plans: [plan({ productId: "9", days: [1] })] })], list, FX, A, { whiteSimVnd: 16028 })
     const w = buildWorkbook(rs, { fx: FX, a: A, list, whiteSimVnd: 16028 })
     const { run } = evaluator(w)
@@ -167,9 +167,10 @@ describe("file xuất: ô giá là công thức", () => {
     expect(n).toBeGreaterThan(8)
     const e = rs.costRows.find(c => c.type.startsWith("SIM full"))!
     const a = rs.costRows.find(c => c.type.startsWith("SIM datapack"))!
-    expect(e.feeUsd).toBeGreaterThan(0.6)
-    expect(a.feeUsd).toBe(0)
-    expect(e.cogsUsd).toBeCloseTo(a.cogsUsd + e.feeUsd, 2)
+    expect(e.feeUsd).toBe(0)
+    expect(e.feeVnd).toBe(16028)
+    expect(a.feeVnd).toBe(0)
+    expect(e.cogsVnd).toBe(Math.ceil(a.cogsUsd * FX.vndPerUsd - 1e-9) + 16028)
   })
 })
 
@@ -177,22 +178,22 @@ describe("tỷ giá theo chiều đổi (JSC / Inc)", () => {
   const fx = { hkdPerUsd: 7.801, cnyPerUsd: 6.687, vndPerUsd: 26266, vndPerUsdInc: 25731.22 }
   const sim = () => build([jp({ simType: "SIM", plans: [plan({ productId: "9", days: [1] })] })], list, fx, A, { whiteSimVnd: 16028 })
 
-  test("giá SIM trắng VND→USD dùng tỷ giá Inc (25731.22); COGS VN USD→VND dùng tỷ giá JSC (26266)", () => {
+  test("SIM full VN = ROUNDUP(data USD × JSC 26266) + giá SIM trắng VND (không qua tỷ giá Inc, không IMSI)", () => {
     const e = sim().costRows.find(c => c.type.startsWith("SIM full"))!
-    expect(e.feeUsd).toBe(0.69)   // ROUNDUP(16028/25731.22 + 0.5/7.801) = ROUNDUP(0.6870) — nếu dùng 26266 sẽ là 0.67
-    expect(e.cogsVnd).toBe(Math.ceil(e.cogsUsd * 26266 - 1e-9))
-    expect(e.explain.fee).toContain("25.731,22")
-    expect(e.explain.fee).toContain("Inc")
+    expect(e.feeUsd).toBe(0)
+    expect(e.cogsVnd).toBe(Math.ceil(e.cogsUsd * 26266 - 1e-9) + 16028)
+    expect(e.explain.fee).toContain("16.028")
     expect(e.explain.cogsVnd).toContain("JSC")
   })
 
-  test("file xuất: tham số riêng cho 2 chiều VND/USD; công thức SIM dùng ô Inc và tính lại khớp", () => {
+  test("file xuất: tham số riêng cho 2 chiều VND/USD; công thức SIM full cộng ô giá SIM trắng và tính lại khớp", () => {
     const rs = sim()
     const wb = buildWorkbook(rs, { fx, a: A, list, whiteSimVnd: 16028 })
     const calc = wb.Sheets[CALC_SHEET]
     expect((calc.T4 as XLSX.CellObject).v).toBe(26266)
     expect((calc.T9 as XLSX.CellObject).v).toBe(25731.22)
-    expect((calc.T17 as XLSX.CellObject).f).toBe("ROUNDUP($T$8/$T$9+T10/$T$2,2)")
+    const q = rs.costRows.findIndex(c => c.type.startsWith("SIM full"))
+    expect((calc[`Q${q + 2}`] as XLSX.CellObject).f).toBe(`ROUNDUP(P${q + 2}*$T$4,0)+$T$8`)
     const { run } = evaluator(wb)
     for (const [addr, c] of Object.entries(calc)) {
       const cell = c as XLSX.CellObject

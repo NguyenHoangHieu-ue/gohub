@@ -551,7 +551,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
                     <td className="px-2 py-1 whitespace-nowrap">{r.type}</td><td className="px-2 py-1 font-mono">{r.skuUS}</td><td className="px-2 py-1 font-mono">{r.skuVN}</td><td className="px-2 py-1 font-mono">{r.productId}</td><td className="px-2 py-1">{r.pool}</td><td className="px-2 py-1">{r.operator}</td>
                     <td className="px-2 py-1" title={r.explain.dataPool}>{r.pricePerGb} {r.currency}</td>
                     <td className="px-2 py-1 cursor-help underline decoration-dotted" title={`${r.explain.dataPool}\n${r.explain.dataUsd}`}>{r.dataUsd}</td>
-                    <td className="px-2 py-1 cursor-help underline decoration-dotted" title={r.explain.fee}>{r.feeUsd}</td>
+                    <td className="px-2 py-1 cursor-help underline decoration-dotted" title={r.explain.fee}>{r.feeVnd ? `${r.feeVnd.toLocaleString("vi-VN")}đ` : r.feeUsd}</td>
                     <td className="px-2 py-1 font-semibold cursor-help underline decoration-dotted" title={r.explain.cogsUsd}>{r.cogsUsd}</td>
                     <td className="px-2 py-1 font-semibold cursor-help underline decoration-dotted" title={`${r.explain.cogsUsd}\n${r.explain.cogsVnd}`}>{r.cogsVnd.toLocaleString("vi-VN")}</td>
                   </tr>))}</tbody>
