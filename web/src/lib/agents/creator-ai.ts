@@ -12,7 +12,7 @@ import { ALL_TOOL_DECLARATIONS } from "./creator/declarations"
 import { dispatchTool }          from "./creator/tools/dispatch"
 import { toGenaiSchema } from "./genai-stream"
 import { runAgentLoop } from "./core/agent-loop"
-import { GEMINI_MODEL } from "@/lib/ai-models"
+import { GEMINI_MODEL_GAU_PRO } from "@/lib/ai-models"
 import { buildMemoryBlock } from "@/lib/assistant-memory"
 import { personalFeaturesEnabled } from "@/lib/assistant-memory-auto"
 import { isMemoryOff } from "@/lib/assistant-memory-rights"
@@ -561,6 +561,7 @@ export async function runCreatorAI(
     timeBudgetMs?: number          // G2 việc nền: hết ngân sách thời gian → dừng giữa các vòng, trả checkpoint để chạy chặng sau
     resume?: JobCheckpoint         // G2 việc nền: chạy tiếp từ checkpoint chặng trước
     conversationKey?: string       // khoá cuộc chat để cổng duyệt nhớ "nhiễm" đúng cuộc chat (web: id hội thoại, Lark DM: thread)
+    model?: string                 // eval: so sánh model cho vòng chat chính (mặc định GEMINI_MODEL_GAU_PRO)
     personal?: boolean             // eval trí nhớ: ép bật/tắt trí nhớ cá nhân, bỏ qua cờ gp_personal_features
   } = {},
 ): Promise<{
@@ -723,7 +724,7 @@ export async function runCreatorAI(
 
   // Function calling loop — max 20 iterations. Tools run in parallel per turn.
   const loop = await runAgentLoop({
-    model: GEMINI_MODEL, contents, configFor: () => makeConfig(), runTool, maxRounds: 20, onChunk,
+    model: opts.model ?? GEMINI_MODEL_GAU_PRO, contents, configFor: () => makeConfig(), runTool, maxRounds: 20, onChunk,
     signal: opts.signal, timeBudgetMs: opts.timeBudgetMs, startedAt: t0,
     onRound: x => steps.push({ r: x.r, model_ms: x.ms, tin: x.tin, tout: x.tout, calls: x.calls }),
   })

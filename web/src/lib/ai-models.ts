@@ -4,6 +4,8 @@
 // Cron gau-pro-digest tự DM creator khi API có model mới (lib/gemini-model-watch.ts) → đổi env sau khi thử.
 // ⚠️ Model mới có thể từ chối thinkingLevel cũ (vd 3.8-flash không nhận "minimal" khi có tool) — test trước.
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash"
+// Model riêng cho vòng chat chính của Gấu Pro (Bé Gấu giữ GEMINI_MODEL). Mặc định = GEMINI_MODEL; đổi bằng env sau khi eval.
+export const GEMINI_MODEL_GAU_PRO = process.env.GEMINI_MODEL_GAU_PRO || GEMINI_MODEL
 export const GEMINI_MODEL_PRO = process.env.GEMINI_MODEL_PRO || GEMINI_MODEL
 // G5 Gấu Pro phiên giọng nói/màn hình (Gemini Live API, bidiGenerateContent). Kiểm model có sẵn: ListModels lọc bidiGenerateContent.
 export const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-3.8-live"
