@@ -102,7 +102,7 @@ export function ChatPanel({ projectId, runs, setRuns, enabledCount, onAppendNote
               <div className="flex justify-end"><div className="max-w-[85%] rounded-2xl rounded-br-md bg-violet-600 text-white px-3.5 py-2 text-sm whitespace-pre-wrap">{r.prompt}</div></div>
               <div className="rounded-2xl rounded-bl-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3">
                 {r.answer ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none"><ReactMarkdown remarkPlugins={[remarkGfm]}>{r.answer}</ReactMarkdown></div>
+                  <div className="prose prose-sm dark:prose-invert max-w-none [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-gray-200 [&_td]:px-2 [&_td]:py-1"><ReactMarkdown remarkPlugins={[remarkGfm]}>{r.answer}</ReactMarkdown></div>
                 ) : <div className="text-sm text-gray-400 inline-flex items-center gap-2"><Brain size={14} className="animate-pulse" />Argon đang đọc và suy luận…</div>}
                 {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
                 {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}

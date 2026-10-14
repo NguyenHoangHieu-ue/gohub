@@ -168,7 +168,7 @@ export function SourceViewer({ source, onClose, onChanged, onError }: {
                   {sheets[sheet].rows.length >= 500 && <div className="text-xs text-gray-400 mt-1">Chỉ hiện 500 dòng đầu — Argon vẫn đọc đủ.</div>}
                 </div>
               ) : source.kind === "note" || /markdown|\.md$/i.test(mime + source.name) ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none"><ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown></div>
+                <div className="prose prose-sm dark:prose-invert max-w-none [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-gray-200 [&_td]:px-2 [&_td]:py-1"><ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown></div>
               ) : <pre className="text-sm whitespace-pre-wrap font-sans">{text}</pre>
             )}
           </div>
