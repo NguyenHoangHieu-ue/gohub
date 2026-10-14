@@ -15,11 +15,15 @@ const { facts, cases } = JSON.parse(fs.readFileSync(path.join(ROOT, "eval/be-gau
 const OUT_DIR = path.join(ROOT, "eval/results")
 fs.mkdirSync(OUT_DIR, { recursive: true })
 
+const ENDPOINT = arg("endpoint", "be-gau")      // "gau-pro" = chạy qua Gấu Pro (xem api/admin/eval/gau-pro)
+const MODEL = arg("model")                       // chỉ Gấu Pro: model Gemini cần thử
+const EXCLUDE = (arg("exclude", "") || "").split(",").filter(Boolean).map(Number)
+
 async function ask(base, c, question, history) {
-  const res = await fetch(`${base}/api/admin/eval/be-gau`, {
+  const res = await fetch(`${base}/api/admin/eval/${ENDPOINT}`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${env.CRON_SECRET}` },
-    body: JSON.stringify({ question, history, role: c.role }),
+    body: JSON.stringify({ question, history, role: c.role, model: MODEL }),
   })
   const d = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
   if (!res.ok || d.error) throw new Error(d.error || `HTTP ${res.status}`)
@@ -114,7 +118,7 @@ if (judgeOnly) {
   const base = arg("base", "https://stg-intel-v2.gohub.cloud")
   label = arg("label", `run-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "")}`)
   const only = arg("only")?.split(",").map(Number)
-  const todo = cases.filter(c => !only || only.includes(c.id))
+  const todo = cases.filter(c => (!only || only.includes(c.id)) && !EXCLUDE.includes(c.id))
   console.log(`Chạy ${todo.length} câu trên ${base} …`)
   results = await pool(todo, Number(arg("concurrency", 3)), async c => {
     const r = await runCase(base, c)
