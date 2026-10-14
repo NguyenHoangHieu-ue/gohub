@@ -8,3 +8,14 @@ export function estimateCostUsd(tokensIn: number, tokensOut: number): number {
              + (tokensOut / 1_000_000) * GEMINI_FLASH_PRICE_PER_1M_USD.output
   return Math.round(cost * 10_000) / 10_000
 }
+
+// Gemini 4 Argon — giá giới thiệu (ai.google.dev, 2026-10): $2/1M vào · $10/1M ra; token vào trúng cache ngầm giảm 95%.
+// Sau giai đoạn giới thiệu Google nói tăng lên $4/$20 — cập nhật 2 hằng số dưới khi đó.
+export const GEMINI_ARGON_PRICE_PER_1M_USD = { input: 2, output: 10, cachedInputFactor: 0.05 }
+
+export function estimateArgonCostUsd(tokensIn: number, tokensOut: number, cachedIn = 0): number {
+  const fresh = Math.max(0, tokensIn - cachedIn)
+  const p = GEMINI_ARGON_PRICE_PER_1M_USD
+  const cost = (fresh / 1_000_000) * p.input + (cachedIn / 1_000_000) * p.input * p.cachedInputFactor + (tokensOut / 1_000_000) * p.output
+  return Math.round(cost * 10_000) / 10_000
+}

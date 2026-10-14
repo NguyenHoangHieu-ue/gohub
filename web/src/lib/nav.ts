@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react"
 import {
   Users, Gift, Package, Truck, Globe, Sparkles, LayoutDashboard, PieChart, Globe2, Building2,
   ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, Terminal, Activity, TrendingUp,
-  Clock, Settings, Crown, Cpu, BarChart2, MessageCircle, Plug, Layers,
+  Clock, Settings, Crown, Cpu, Atom, BarChart2, MessageCircle, Plug, Layers,
 } from "lucide-react"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 
@@ -66,6 +66,7 @@ export const MANAGEMENT_GROUP: NavGroup = { label: "Management", items: [
 export const CREATOR_GROUP: NavGroup = { label: "Creator", items: [
   { href: "/analytics/creator",            label: "Creator Settings", icon: Crown    },
   { href: "/analytics/creator/ai",         label: "Gấu Pro",          icon: Cpu      },
+  { href: "/analytics/creator/argon",      label: "Phòng Argon",      icon: Atom     },
   { href: "/analytics/creator/devtools",   label: "Dữ liệu & API",   icon: Terminal },
   { href: "/analytics/creator/usage",      label: "Usage Analytics",  icon: BarChart2},
   { href: "/analytics/creator/bridge",     label: "Bridge",           icon: Plug     },

@@ -17,6 +17,7 @@ const FRIENDLY: Record<string, string> = {
   "/skus": "System SKUs (Sản phẩm hệ thống)",
   "/analytics/fulfillment": "Inventory (Tồn kho)",
   "/analytics/creator/ai": "Gấu Pro",
+  "/analytics/creator/argon": "Phòng Argon",
 }
 
 const SYNC_LABEL = "Đồng bộ dữ liệu sản phẩm (chạy nền)"
@@ -53,7 +54,7 @@ const SHARED: [string, string][] = [
   ["components/to-gau/", "/analytics/to-gau"], ["components/channels/", "/analytics/channels"],
   ["components/inventory/", "/analytics/fulfillment"], ["components/b2c", "/analytics/b2c"],
   ["lib/agents/be-gau", "/chatbot"], ["lib/agents/creator", "/analytics/creator/ai"],
-  ["lib/b2b-", "/analytics/b2b"], ["lib/weekly-report/", "/analytics/scheduled"],
+  ["lib/argon/", "/analytics/creator/argon"], ["lib/b2b-", "/analytics/b2b"], ["lib/weekly-report/", "/analytics/scheduled"],
   ["lib/scheduled-", "/analytics/scheduled"],
 ]
 

@@ -4,7 +4,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, Database, Clock, Settings, Crown, Cpu, MessageCircle, Plug, Layers } from "lucide-react"
+import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, BarChart2, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, Database, Clock, Settings, Crown, Cpu, Atom, MessageCircle, Plug, Layers } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
@@ -97,6 +97,7 @@ const CREATOR_GROUP = {
   items: [
     { href: "/analytics/creator",           label: "Creator Settings", icon: Crown    },
     { href: "/analytics/creator/ai",        label: "Gấu Pro",          icon: Cpu      },
+    { href: "/analytics/creator/argon",     label: "Phòng Argon",      icon: Atom     },
     { href: "/analytics/creator/devtools",  label: "Dữ liệu & API",   icon: Terminal },
     { href: "/analytics/creator/usage",     label: "Usage Analytics",  icon: BarChart2},
     { href: "/analytics/creator/bridge",    label: "Bridge",           icon: Plug     },

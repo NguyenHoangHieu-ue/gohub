@@ -6,7 +6,9 @@ import { loadGpAllowed } from "@/lib/gp-access"
 
 // Scope app chưa bật chỉ hiện ở mục "không thể cấp" trên màn authorize, các scope còn lại vẫn cấp bình thường (đã thấy thực tế).
 const LARK_OAUTH_SCOPES = "offline_access task:task:read task:task:write task:tasklist:read " +
-  "drive:drive docx:document docx:document.block:convert sheets:spreadsheet wiki:wiki"
+  "drive:drive docx:document docx:document.block:convert sheets:spreadsheet wiki:wiki bitable:app:readonly " +
+  // Phòng Argon (đọc mail Lark của Creator): đo 2026-10-14 token thiếu mail:user_mailbox.message:readonly + mail:user_mailbox.folder:read (+ bitable:app:readonly)
+  "mail:user_mailbox.folder:read mail:user_mailbox.message:readonly mail:user_mailbox.message.body:read mail:user_mailbox.message.subject:read mail:user_mailbox.message.address:read"
 
 // Người dùng Gấu Pro thường chỉ xin quyền task (Gấu là trợ lý cá nhân: xem/tạo/sửa task trong CHÍNH tài khoản Lark của họ).
 const MEMBER_OAUTH_SCOPES = "offline_access task:task:read task:task:write task:tasklist:read bitable:app:readonly"

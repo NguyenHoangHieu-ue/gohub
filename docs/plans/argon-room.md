@@ -1,0 +1,24 @@
+# Plan: Phòng Argon — trợ lý toàn diện chạy Gemini 4 Argon (tab riêng của Creator)
+
+> File TẠM. Xong hết mốc (hoặc Hiếu bỏ plan) thì xoá file + dòng trong CLAUDE.md, chuyển kiến thức sang wiki `docs/wiki/system/tabs/creator-argon-room.md`.
+> Lập 2026-10-14 (s233). Hiếu chốt: tab riêng trong web hiện tại; mail không cần báo pháp chế; scope Lark Hiếu đã thêm trong Developer Console; sửa docx theo "bản nháp qua Argon + so khác biệt" (nếu không quá nặng thì sửa thẳng trong tab); hạn mức Argon không phải lo. Động cơ: Gấu Pro chưa đáp ứng "trợ lý AI hỗ trợ toàn diện" — Phòng Argon phải đáp ứng.
+
+## Vì sao tách khỏi Gấu Pro
+Eval (2026-10-14, `web/eval/results/gp-*`, `gps-*`): chat có công cụ chạy Argon chậm gấp ~2,4× và 7/7 việc nhiều bước quá trần 300s → không thay flash được. Argon ngang flash ở debug mã + đọc tài liệu dài (10/10). Phòng Argon tránh vòng công cụ: **nạp tài liệu trước, suy luận sau**, nên dùng được ngữ cảnh 1M, output dài, đa phương thức, cache ngầm (token vào trúng cache giảm 95%).
+
+## Kiến trúc (P0 đã code, chưa chạy migration)
+- Trang `/analytics/creator/argon` (menu Creator, chỉ role creator). Dự án → nguồn → lượt chạy.
+- Bảng v73: `argon_projects` (sổ dự án `notes` + `instructions`), `argon_sources` (file/lark/mail/note, `extracted_text`, `send_binary`, `tokens`, `enabled`, `pinned`, `version`), `argon_source_versions`, `argon_runs`. Bucket Storage riêng `argon-room`.
+- Tải file 2 bước (prepare → trình duyệt tải thẳng Storage → register) vì Vercel body ~4,5MB. Tối đa 20MB/file; file gốc nhúng vào request tối đa 18MB/lượt.
+- PDF/ảnh/video/âm thanh gửi nguyên file cho model; docx/xlsx/pptx/md/csv/json trích chữ (`lib/agents/file-parser.ts`).
+- Ngữ cảnh (`lib/argon/context.ts`): [sổ dự án][nguồn ghim → nguồn thường theo ngày][≤6 lượt trước] + yêu cầu. Nguồn bọc `<nguon>` (dữ liệu, chống prompt injection). Thứ tự ổn định để cache ngầm trúng.
+- Chạy: SSE (`projects/[id]/runs`), mỗi đoạn ≤265s hoặc 32.768 token ra; hết đoạn → `partial` → client tự "Tiếp tục viết" (tối đa 6 đoạn, cộng dồn cùng 1 run). Không công cụ, chỉ đọc. Chi phí ước lượng ghi từng run (giá giới thiệu $2/$10).
+- Sửa chữ nguồn = phiên bản mới (không ghi đè), khôi phục được.
+
+## Tiến độ
+- [x] P0 code: migration v73, API, trang (dự án, upload, xem PDF/ảnh/video/âm thanh/bảng xlsx/markdown, sửa chữ + phiên bản, ghim/bật tắt, đếm token, chat stream + tiếp tục, vào sổ dự án, lưu câu trả lời thành nguồn). Test `argon-context`.
+- [ ] **Hiếu chạy `web/db/migrations/v73_argon_room.sql` + Reload schema** → em QA sống (upload, chạy, tiếp tục, phiên bản).
+- [ ] P1: link Lark (docx/sheet/wiki/Base/thư mục; snapshot + đồng bộ nền theo hash; dùng `larkDocs` + token Creator) · bản nháp Argon cho docx/xlsx (so khác biệt, duyệt rồi thành phiên bản) · file >20MB qua Gemini Files API · nguồn tích hợp "Wiki nghiệp vụ GoHub" (từ `kb_wiki_pages`).
+- [ ] P2: mail Lark (chỉ đọc; quy tắc nạp theo thư mục/người gửi/từ khoá/ngày; đính kèm thành nguồn). **Token Creator hiện thiếu** `mail:user_mailbox.message:readonly` + `mail:user_mailbox.folder:read` + `bitable:app:readonly` (đo 2026-10-14, Lark trả 99991679). Đã thêm vào `LARK_OAUTH_SCOPES` (start route) → **Hiếu bấm "Kết nối Lark" lại** (nếu Vercel có env `LARK_OAUTH_SCOPES` thì env đè code — phải sửa env). Token `lark_oauth_user:hieu` chỉ có quyền task, không dùng.
+- [ ] P3: việc nền không giới hạn (worker), báo cáo BOD "gói dữ liệu" lấy sẵn từ API nội bộ, video/họp, "Soát lại" kết quả Gấu Pro, công cụ đọc dữ liệu có kiểm soát (nếu Hiếu muốn Argon tự lấy số).
+- [ ] So mù flash vs Argon trên 3–5 việc thật (Hiếu chấm) để quyết bàn nào giữ Argon.
