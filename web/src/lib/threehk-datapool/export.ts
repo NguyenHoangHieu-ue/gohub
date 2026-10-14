@@ -38,7 +38,7 @@ export function buildWorkbook(result: ThkBuildResult, ctx: { fx: Fx; a: Assumpti
   result.costRows.forEach((c, i) => {
     const r = i + 2
     const gb = `IF(F${r}="MB",E${r}/1024,E${r})`
-    const dataF = c.kind === "Daily" ? `ROUNDUP(H${r}*${gb}*G${r}*${P.daily},2)` : c.kind === "Fixed" ? `ROUNDUP(H${r}*${gb}*${P.fixed},2)` : `ROUNDUP(H${r}*${unlRef(c)}*G${r},2)`
+    const dataF = c.kind === "Daily" ? `H${r}*${gb}*G${r}*${P.daily}` : c.kind === "Fixed" ? `H${r}*${gb}*${P.fixed}` : `H${r}*${unlRef(c)}*G${r}`
     const feeRef = c.typeChar === "C" ? P.esim : c.typeChar === "E" ? P.simUs : null
     put(`A${r}`, str(c.type)); put(`B${r}`, str(c.skuUS)); put(`C${r}`, str(c.skuVN)); put(`D${r}`, str(c.policy === "X" ? `Unlimited ${c.speedMbps ?? 10}Mbps` : c.kind))
     put(`E${r}`, num(c.dataAmount)); put(`F${r}`, str(c.unit)); put(`G${r}`, num(c.days)); put(`H${r}`, num(c.pricePerGbHkd)); put(`I${r}`, str(c.network))

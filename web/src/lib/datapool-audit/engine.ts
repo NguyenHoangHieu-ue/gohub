@@ -161,7 +161,7 @@ export function auditSku(sku: AuditSkuInput, product: AuditProductInput | undefi
   const how = kind === "Daily" ? `${fmtAmount(amount)}${unit}/ngày × ${days} ngày × ${pct(ctx.a.dailyPct)}`
     : kind === "Fixed" ? `${fmtAmount(amount)}${unit} × ${pct(ctx.a.fixedPct)}`
     : `${levelsOf(ctx.a)[unlIdx!].gbPerDay} GB/ngày × ${days} ngày`
-  const explain = `${pricePerGb} ${poolCurrency}/GB × (${how}) = ${dataPool} ${poolCurrency} → ${poolCurrency === "HKD" ? `÷ ${ctx.fx.hkdPerUsd} ` : ""}= ${dataUsd} USD`
+  const explain = `${pricePerGb} ${poolCurrency}/GB × (${how}) = ${Math.round(dataPool * 1e4) / 1e4} ${poolCurrency} → ${poolCurrency === "HKD" ? `÷ ${ctx.fx.hkdPerUsd} ` : ""}= ${dataUsd} USD`
     + (feeKind !== "none" ? ` + khung ${feeUsd} = ${cogsUsd} USD` : "")
     + (tenant === "VN" ? ` → × ${ctx.fx.vndPerUsd.toLocaleString("en-US")}${vendor === "3HK" && type === "E" ? ` (data) + khung SIM VN ${ctx.frames.simVnVnd}` : ""} = ${cogsVnd.toLocaleString("en-US")} VND` : "")
   const calc: AuditCalc = { pricePerGb, poolCurrency, amount: kind === "Unlimited" ? hsMb : amount, unit: kind === "Unlimited" ? "MB" : unit, days, kind, unlIdx, dataPool, dataUsd, feeUsd, feeKind, cogsUsd, cogsVnd }

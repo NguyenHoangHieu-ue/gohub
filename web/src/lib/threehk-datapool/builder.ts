@@ -186,7 +186,7 @@ export function build(products: { input: ThkProductInput; price: ThkPrice | null
         const nm = names(p.simType, p.countryNameVn, p.countryNameEn, pl.policy, pl.amount, pl.unit, d, speed)
         const how = pl.policy === "F" ? `${fmt(pl.amount)}${pl.unit} × ${a.fixedPct * 100}% data thực dùng`
           : isX ? `${unl!.gbPerDay} GB/ngày × ${d} ngày` : `${fmt(pl.amount)}${pl.unit}/ngày × ${d} ngày × ${a.dailyPct * 100}%`
-        const base = `${how} × ${price.pricePerGbHkd} HKD/GB = ${dataPool} HKD → ÷ ${fx.hkdPerUsd} = ${dataUsd} USD`
+        const base = `${how} × ${price.pricePerGbHkd} HKD/GB = ${Math.round(dataPool * 1e4) / 1e4} HKD → ÷ ${fx.hkdPerUsd} = ${dataUsd} USD`
 
         for (const type of usable) {
           const cUS = sku("US", type), cVN = sku("VN", type)

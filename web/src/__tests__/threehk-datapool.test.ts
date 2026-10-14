@@ -159,7 +159,7 @@ describe("3HK Unlimited tự thêm ở Công Thức Datapool", () => {
     const r = runA([{ policy: "X", amount: 1, unit: "GB", speedMbps: 5, days: [5] }])
     const ws = buildWorkbook(r, { fx: FX, a: A2, frames: FRAMES }).Sheets[CALC_SHEET]
     expect(ws["R11"].v).toBe(2); expect(ws["R12"].v).toBe(2.1); expect(ws["R13"].v).toBe(1.9)
-    expect(ws["J2"].f).toBe("ROUNDUP(H2*$R$12*G2,2)")
+    expect(ws["J2"].f).toBe("H2*$R$12*G2")
     expect(ws["D2"].v).toBe("Unlimited 5Mbps")
   })
 })

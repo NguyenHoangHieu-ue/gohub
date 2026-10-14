@@ -56,8 +56,8 @@ export function buildAuditWorkbook(rows: AuditRow[], ctx: AuditCtx): XLSX.WorkBo
     const gb = `IF(G${r}="MB",F${r}/1024,F${r})`
     const hs = c.kind === "Daily" ? P(R.daily) : c.kind === "Fixed" ? P(R.fixed) : P(LEVEL_ROW0 + (c.unlIdx ?? 0))
     put(ws, `K${r}`, num(c.kind === "Daily" ? ctx.a.dailyPct : c.kind === "Fixed" ? ctx.a.fixedPct : levels[c.unlIdx ?? 0]?.gbPerDay ?? 0, hs))
-    put(ws, `L${r}`, num(c.dataPool, c.kind === "Daily" ? `ROUNDUP(I${r}*${gb}*H${r}*K${r},2)` : c.kind === "Fixed" ? `ROUNDUP(I${r}*${gb}*K${r},2)` : `ROUNDUP(I${r}*K${r}*H${r},2)`))
-    put(ws, `M${r}`, num(c.dataUsd, `IF(J${r}="HKD",ROUNDUP(L${r}/${P(R.hkd)},2),L${r})`))
+    put(ws, `L${r}`, num(c.dataPool, c.kind === "Daily" ? `I${r}*${gb}*H${r}*K${r}` : c.kind === "Fixed" ? `I${r}*${gb}*K${r}` : `I${r}*K${r}*H${r}`))
+    put(ws, `M${r}`, num(c.dataUsd, `ROUNDUP(IF(J${r}="HKD",L${r}/${P(R.hkd)},L${r}),2)`))
     const pool = x.vendor === "BC_CMHK" ? "cmhk" : "st"
     const imsi = x.vendor === "BC_CMHK" ? `${P(R.cmhkImsi)}/${P(R.hkd)}` : P(R.stImsi)
     const feeF = c.feeKind === "none" ? null

@@ -120,15 +120,15 @@ describe("file xuất: ô giá là công thức", () => {
         expect(t.length).toBeGreaterThan(10)
         expect(t).not.toMatch(/\bROUND\(/)
       }
-      expect(c.explain.dataPool).toContain("ROUNDUP(")
+      expect(c.explain.dataUsd).toContain("ROUNDUP(")
       expect(c.explain.cogsVnd).toContain(`${c.cogsVnd.toLocaleString("vi-VN")} VND`)
     }
     const jp = r.costRows.find(c => c.skuUS === "ECJPNWDT5HM01")!
-    expect(jp.explain.dataPool).toBe("ROUNDUP(giá/GB 5.5 × (500/1024) GB × 1 ngày × 38%, 2) = 1.03 HKD")
-    expect(jp.explain.dataUsd).toBe("ROUNDUP(1.03 HKD ÷ 7.801, 2) = 0.14 USD")
+    expect(jp.explain.dataPool).toBe("(giá/GB 5.5 × (500/1024) GB × 1 ngày × 38%) = 1.0205 HKD")
+    expect(jp.explain.dataUsd).toBe("ROUNDUP(1.0205 HKD ÷ 7.801, 2) = 0.14 USD")
     expect(jp.explain.fee).toBe("ROUNDUP(phí eSIM 2 CNY ÷ 6.687 + IMSI 0.5 HKD ÷ 7.801, 2) = 0.37 USD")
     expect(jp.explain.cogsUsd).toBe("ROUNDUP(data 0.14 + phí khung 0.37, 2) = 0.51 USD")
-    expect(r.costRows.find(c => c.skuUS === "ECTWNW1F01001")!.explain.dataUsd).toContain("Pool tính bằng USD")
+    expect(r.costRows.find(c => c.skuUS === "ECTWNW1F01001")!.explain.dataUsd).toContain("USD, 2)")
   })
 
   test("ghi ra .xlsx rồi đọc lại vẫn còn công thức + giá trị (đúng như người dùng sẽ mở trong Excel)", () => {
@@ -138,7 +138,8 @@ describe("file xuất: ô giá là công thức", () => {
     expect(k2.f).toMatch(/^'Tính giá'!P\d+$/)
     expect(typeof k2.v).toBe("number")
     const m2 = back.Sheets["Tính giá"].M2 as XLSX.CellObject
-    expect(m2.f).toContain("ROUNDUP(")
+    expect(m2.f).not.toContain("ROUND")   // data theo tiền pool KHÔNG làm tròn trung gian
+    expect((back.Sheets["Tính giá"].N2 as XLSX.CellObject).f).toContain("ROUNDUP(")
     expect(back.Sheets["Tính giá"].T15.f).toBe("ROUNDUP(T11/$T$3+T10/$T$2,2)")
   })
 

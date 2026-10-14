@@ -61,15 +61,15 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
   result.costRows.forEach((c, i) => {
     const r = i + 2
     const gb = `IF(I${r}="MB",H${r}/1024,H${r})`
-    const dataF = c.kind === "Daily" ? `ROUNDUP(K${r}*${gb}*J${r}*${P.daily},2)`
-      : c.kind === "Fixed" ? `ROUNDUP(K${r}*${gb}*${P.fixed},2)`
-      : `ROUNDUP(K${r}*${unlCellOf(c)}*J${r},2)`   // ô hệ số theo (dung lượng tốc độ cao, tốc độ Unlimited)
+    const dataF = c.kind === "Daily" ? `K${r}*${gb}*J${r}*${P.daily}`
+      : c.kind === "Fixed" ? `K${r}*${gb}*${P.fixed}`
+      : `K${r}*${unlCellOf(c)}*J${r}`   // ô hệ số theo (dung lượng tốc độ cao, tốc độ Unlimited)
     put(at("A", r), str(c.type)); put(at("B", r), str(c.skuUS)); put(at("C", r), str(c.skuVN)); put(at("D", r), str(c.productId))
     put(at("E", r), str(c.pool)); put(at("F", r), str(c.operator)); put(at("G", r), str(c.kind === "Unlimited" ? `Unlimited ${c.speedMbps}Mbps` : c.kind))
     put(at("H", r), num(c.dataAmount)); put(at("I", r), str(c.unit)); put(at("J", r), num(c.days))
     put(at("K", r), num(c.pricePerGb)); put(at("L", r), str(c.currency))
     put(at("M", r), num(c.dataPool, dataF))
-    put(at("N", r), num(c.dataUsd, `IF(L${r}="HKD",ROUNDUP(M${r}/${P.hkd},2),M${r})`))
+    put(at("N", r), num(c.dataUsd, `ROUNDUP(IF(L${r}="HKD",M${r}/${P.hkd},M${r}),2)`))
     put(at("O", r), c.feeKind === "none" ? num(0) : num(c.feeUsd, FEE_CELL[`${c.feeKind}:${c.poolKey}`]))
     put(at("P", r), num(c.cogsUsd, `ROUNDUP(N${r}+O${r},2)`))
     put(at("Q", r), num(c.cogsVnd, `ROUNDUP(P${r}*${P.vnd},0)`))

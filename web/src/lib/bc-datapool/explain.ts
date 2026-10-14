@@ -35,12 +35,12 @@ export interface CostExplain { dataPool: string; dataUsd: string; fee: string; c
 export function explainCost(i: ExplainInput): CostExplain {
   const gb = i.unit === "MB" ? `(${n(i.dataAmount, 0)}/1024)` : n(i.dataAmount)
   const dataPool =
-    i.kind === "Daily" ? `ROUNDUP(giá/GB ${n(i.pricePerGb)} × ${gb} GB × ${i.days} ngày × ${pct(i.a.dailyPct)}, 2) = ${n(i.dataPool)} ${i.currency}`
-    : i.kind === "Fixed" ? `ROUNDUP(giá/GB ${n(i.pricePerGb)} × ${gb} GB × ${pct(i.a.fixedPct)}, 2) = ${n(i.dataPool)} ${i.currency}`
-    : `ROUNDUP(giá/GB ${n(i.pricePerGb)} × ${n(i.unl?.gbPerDay ?? 0)} GB/ngày (${i.unl?.label ?? "?"}) × ${i.days} ngày, 2) = ${n(i.dataPool)} ${i.currency}`
+    i.kind === "Daily" ? `(giá/GB ${n(i.pricePerGb)} × ${gb} GB × ${i.days} ngày × ${pct(i.a.dailyPct)}) = ${n(i.dataPool)} ${i.currency}`
+    : i.kind === "Fixed" ? `(giá/GB ${n(i.pricePerGb)} × ${gb} GB × ${pct(i.a.fixedPct)}) = ${n(i.dataPool)} ${i.currency}`
+    : `(giá/GB ${n(i.pricePerGb)} × ${n(i.unl?.gbPerDay ?? 0)} GB/ngày (${i.unl?.label ?? "?"}) × ${i.days} ngày) = ${n(i.dataPool)} ${i.currency}`
   const dataUsd = i.currency === "HKD"
     ? `ROUNDUP(${n(i.dataPool)} HKD ÷ ${n(i.fx.hkdPerUsd)}, 2) = ${n(i.dataUsd)} USD`
-    : `Pool tính bằng USD nên giữ nguyên = ${n(i.dataUsd)} USD`
+    : `ROUNDUP(${n(i.dataPool)} USD, 2) = ${n(i.dataUsd)} USD`
   const imsi = i.currency === "HKD" ? `IMSI ${n(i.imsiFee)} HKD ÷ ${n(i.fx.hkdPerUsd)}` : `IMSI ${n(i.imsiFee)} USD`
   const fee =
     i.feeKind === "esim" ? `ROUNDUP(phí eSIM ${n(i.esimFeeCny)} CNY ÷ ${n(i.fx.cnyPerUsd)} + ${imsi}, 2) = ${n(i.feeUsd)} USD`
