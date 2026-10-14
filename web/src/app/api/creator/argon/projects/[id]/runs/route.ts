@@ -7,6 +7,7 @@ import { estimateArgonCostUsd } from "@/lib/agents/gemini-pricing"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { ownProject, requireArgonUser, type ArgonRun, type ArgonSource } from "@/lib/argon/server"
 import { buildRunContext } from "@/lib/argon/context"
+import { syncMany } from "@/lib/argon/lark-sync"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -39,7 +40,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const { data: srcRows } = await supabaseAdmin.from("argon_sources").select("*").eq("project_id", params.id).eq("enabled", true)
   const pick = resume ? new Set(resume.source_ids) : b.sourceIds ? new Set(b.sourceIds) : null
-  const sources = ((srcRows ?? []) as ArgonSource[]).filter(s => !pick || pick.has(s.id))
+  let sources = ((srcRows ?? []) as ArgonSource[]).filter(s => !pick || pick.has(s.id))
+  // Nguồn Lark chế độ "live": đọc lại ngay trước khi chạy (nội dung mới nhất); lỗi thì dùng bản đã lưu.
+  const live = sources.filter(s => s.kind === "lark" && s.sync_mode === "live")
+  if (live.length) {
+    await syncMany(live)
+    const { data: fresh } = await supabaseAdmin.from("argon_sources").select("*").in("id", live.map(s => s.id))
+    const byId = new Map(((fresh ?? []) as ArgonSource[]).map(s => [s.id, s]))
+    sources = sources.map(s => byId.get(s.id) ?? s)
+  }
 
   const ctx = await buildRunContext({ project, sources, priorRuns: runs, prompt, resumeRun: resume })
   const t0 = Date.now()

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { FileText, FileSpreadsheet, Image as ImageIcon, Film, Music, File as FileIcon, StickyNote, Link2, Mail, Pin, PinOff, Trash2, Upload, Eye, Plus, Loader2, FileType2 } from "lucide-react"
+import { FileText, FileSpreadsheet, Image as ImageIcon, Film, Music, File as FileIcon, StickyNote, Link2, Mail, Pin, PinOff, Trash2, Upload, Eye, Plus, Loader2, FileType2, RefreshCw } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { api, jsonInit, fmtBytes, fmtTokens, CONTEXT_LIMIT, type Source } from "./argon-types"
@@ -32,6 +32,9 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError }
   const [drag, setDrag] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
   const [note, setNote] = useState({ name: "", text: "" })
+  const [larkOpen, setLarkOpen] = useState(false)
+  const [lark, setLark] = useState({ url: "", mode: "snapshot" as "snapshot" | "live" })
+  const [info, setInfo] = useState<string | null>(null)
 
   const total = sources.filter(s => s.enabled).reduce((n, s) => n + s.tokens, 0)
 
@@ -63,6 +66,42 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError }
       const r = await api<{ sources: Source[] }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "note", name: note.name, text: note.text }))
       setSources(prev => [...prev, ...r.sources])
       setNote({ name: "", text: "" }); setNoteOpen(false)
+    } catch (e) { onError((e as Error).message) }
+    setBusy(null)
+  }
+
+  async function addLark() {
+    if (!lark.url.trim()) return
+    setBusy("Đang đọc tài liệu Lark…"); setInfo(null)
+    try {
+      const r = await api<{ sources: Source[]; errors: string[]; skipped: string[] }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "lark", url: lark.url.trim(), mode: lark.mode }))
+      setSources(prev => [...prev, ...r.sources])
+      const msg = [r.sources.length ? `Đã thêm ${r.sources.length} nguồn từ Lark` : "", ...r.skipped, ...r.errors].filter(Boolean).join("\n")
+      if (r.errors.length) onError(msg); else setInfo(msg || null)
+      if (r.sources.length) { setLark(l => ({ ...l, url: "" })); setLarkOpen(false) }
+    } catch (e) { onError((e as Error).message) }
+    setBusy(null)
+  }
+
+  async function syncAll() {
+    setBusy("Đang đồng bộ Lark…"); setInfo(null)
+    try {
+      const r = await api<{ results: { name: string; status: string; note?: string }[]; sources: Source[] }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "sync" }))
+      setSources(prev => prev.map(x => r.sources.find(n => n.id === x.id) ?? x))
+      const ch = r.results.filter(x => x.status === "changed").length, er = r.results.filter(x => x.status === "error")
+      setInfo(`Đồng bộ ${r.results.length} nguồn: ${ch} có thay đổi${er.length ? `, ${er.length} lỗi` : ""}`)
+      if (er.length) onError(er.map(x => `${x.name}: ${x.note}`).join("\n"))
+    } catch (e) { onError((e as Error).message) }
+    setBusy(null)
+  }
+
+  async function syncOne(s: Source) {
+    setBusy(`Đồng bộ "${s.name}"…`); setInfo(null)
+    try {
+      const r = await api<{ result: { status: string; note?: string }; source: Source }>(`/api/creator/argon/sources/${s.id}`, { method: "POST" })
+      setSources(prev => prev.map(x => (x.id === s.id ? r.source : x)))
+      if (r.result.status === "error" || r.result.status === "skipped") onError(`${s.name}: ${r.result.note}`)
+      else setInfo(r.result.status === "changed" ? `"${s.name}" đã cập nhật (${r.result.note})` : `"${s.name}" không có thay đổi`)
     } catch (e) { onError((e as Error).message) }
     setBusy(null)
   }
@@ -103,8 +142,24 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError }
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}{busy ?? "Tải file lên hoặc kéo thả"}
         </button>
         <div className="text-gray-500 mt-1">docx · xlsx · pptx · pdf · ảnh · video · âm thanh · md/csv/json — tối đa 20MB/file</div>
-        <button onClick={() => setNoteOpen(v => !v)} className="mt-2 inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Plus size={12} />Thêm ghi chú / dán văn bản</button>
+        <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
+          <button onClick={() => { setLarkOpen(v => !v); setNoteOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Link2 size={12} />Thêm link Lark</button>
+          <button onClick={() => { setNoteOpen(v => !v); setLarkOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Plus size={12} />Ghi chú / dán văn bản</button>
+          {sources.some(x => x.kind === "lark") && <button onClick={syncAll} disabled={!!busy} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline disabled:opacity-50"><RefreshCw size={12} />Đồng bộ Lark</button>}
+        </div>
       </div>
+
+      {info && <div className="mx-3 mb-2 text-xs rounded-lg bg-emerald-50 text-emerald-800 px-2.5 py-1.5 whitespace-pre-wrap">{info}</div>}
+      {larkOpen && (
+        <div className="mx-3 mb-3 space-y-2">
+          <input value={lark.url} onChange={e => setLark(l => ({ ...l, url: e.target.value }))} placeholder="Dán link docx / sheets / wiki / base / thư mục Lark" className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" />
+          <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-300">
+            <label className="inline-flex items-center gap-1"><input type="radio" checked={lark.mode === "snapshot"} onChange={() => setLark(l => ({ ...l, mode: "snapshot" }))} />Chụp lại (đồng bộ hằng đêm)</label>
+            <label className="inline-flex items-center gap-1"><input type="radio" checked={lark.mode === "live"} onChange={() => setLark(l => ({ ...l, mode: "live" }))} />Đọc mới mỗi lần chạy</label>
+          </div>
+          <button onClick={addLark} disabled={!!busy || !lark.url.trim()} className="px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50">Thêm</button>
+        </div>
+      )}
 
       {noteOpen && (
         <div className="mx-3 mb-3 space-y-2">
@@ -130,6 +185,8 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError }
               </div>
               <div className="pl-6 text-[11px] text-gray-500 flex gap-2">
                 <span>{fmtTokens(s.tokens)} token</span>{s.size_bytes ? <span>{fmtBytes(s.size_bytes)}</span> : null}
+                {s.kind === "lark" && s.synced_at ? <span title={s.sync_mode === "live" ? "Đọc mới mỗi lần chạy" : "Đồng bộ hằng đêm"}>{s.sync_mode === "live" ? "live" : "chụp"} · {new Date(s.synced_at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span> : null}
+                {s.kind === "lark" && <button onClick={() => syncOne(s)} disabled={!!busy} className="text-violet-600 hover:underline inline-flex items-center gap-0.5 disabled:opacity-50"><RefreshCw size={10} />đồng bộ</button>}
                 {s.version > 1 ? <span>v{s.version}</span> : null}{s.meta?.edited ? <span className="text-amber-600">đã sửa</span> : null}
               </div>
             </div>
