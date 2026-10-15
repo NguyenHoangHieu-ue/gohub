@@ -5,6 +5,7 @@ export interface CogsCompare { current: number; expected: number; diff: number; 
 
 // Hiếu chốt (2026-10-15): MỌI bước làm tròn dùng ROUNDUP, giá vốn phải đúng bằng giá tính lại — KHÔNG còn ngưỡng "chênh làm tròn". Lệch dù 1 đồng / 1 cent
 // (vd 5.155 SKU 3HK cũ tính bằng ROUND) cũng là LỆCH và vào sheet cập nhật. Kiểu "rounding" giữ trong type cho tương thích nhưng không còn được tạo ra.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function compareCogs(current: number, expected: number, _currency?: string): CogsCompare {
   const diff = Math.round((current - expected) * 10000) / 10000
   const abs = Math.abs(diff)
