@@ -74,7 +74,7 @@ export async function runBackgroundSegment(runId: string, origin: string): Promi
       },
     })
     const cost = Math.round(((Number(run.cost_usd) || 0) + estimateArgonCostUsd(seg.tokensIn, seg.tokensOut, seg.cachedIn)) * 10_000) / 10_000
-    const segments = (run.segments ?? 0) + 1
+    const segments = (answer.trim() && run.answer.trim() ? run.segments ?? 0 : 0) + 1   // cột segments mặc định 1 → lượt mới chưa có chữ tính từ 0
     const { data: cur } = await supabaseAdmin.from("argon_runs").select("status").eq("id", runId).maybeSingle()
     const cancelled = cur?.status === "stopped" || seg.status === "stopped"
     const base = {
