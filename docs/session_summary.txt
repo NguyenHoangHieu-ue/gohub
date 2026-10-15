@@ -11027,3 +11027,4 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
 s234e (2026-10-15) — chốt plan Phòng Argon
 - (s234e) QA sống staging: việc nền nhiều đoạn (3HK 481k token, đoạn 1 ~270s → tự sang đoạn 2), huỷ → stopped; quét việc kẹt (nhịp tim cũ 1h + cron argon-sync → resumedBackground 1, lượt xong); giao diện Soát lại, chọn nhóm vendor, lưới sửa ô (ghi nhận khi rời ô).
 - (s234e) Sửa ước lượng token gói SKU 3HK (250k → 481k đo thật) + ô chọn nhóm vendor tràn khung (w-full). Xoá docs/plans/argon-room.md; wiki creator-argon-room.md §s234e. Còn mở: Minutes thật, thư mục Lark con/Base, so mù flash vs Argon, cron argon-sync.
+- (s234f) Thư mục Lark: dán link → liệt kê file để tự tick (≤30/lần), tuỳ chọn tự thêm file mới khi đồng bộ đêm (meta.rootFolder chỉ khi bật). Hiếu thêm cron-job.org argon-sync. Merge main 07141995 (staging:main fast-forward). Chưa thử với thư mục Lark thật.
