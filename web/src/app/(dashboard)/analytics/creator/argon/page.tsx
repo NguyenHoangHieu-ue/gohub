@@ -10,7 +10,7 @@ import { SourceViewer } from "./source-viewer"
 import { ChatPanel } from "./chat-panel"
 import { api, jsonInit, fmtTokens, type Project, type ProjectRow, type Run, type Source } from "./argon-types"
 
-// Phòng Argon — CHỈ Creator. Kho tài liệu + trợ lý Gemini 4 Argon nạp nguyên tài liệu vào ngữ cảnh (plan docs/plans/argon-room.md).
+// Phòng Argon — CHỈ Creator. Kho tài liệu + trợ lý Gemini 4 Argon nạp nguyên tài liệu vào ngữ cảnh (wiki creator-argon-room.md).
 export default function ArgonRoomPage() {
   const { data: session, status } = useSession()
   const router = useRouter()

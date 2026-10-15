@@ -11023,3 +11023,7 @@ qua nhiều lượt, Lark DM hiện kế hoạch + tóm tắt hội thoại). Hi
 - (s234) Soát giá vốn: gói Daily 1 ngày BC đổi giá 2–8% (~500đ) lọt ngưỡng "làm tròn" ≤600đ nên không vào sheet cập nhật (BC CMHK 22/37, Singtel 15/84 gói bị che) → ngưỡng 1 cent; rồi Hiếu chốt ROUNDUP hết → bỏ ngưỡng, 3HK 5.155 SKU ROUND cũ thành LỆCH. File xuất sắp xếp vendor/loại/kiểu gói/Product + cột Product, Quốc gia; GET API cắt "làm tròn" trước khi vượt 4.000 dòng. Staging đo: 3HK 5.155 lệch, CMHK 613, Singtel 2.123. Merge main →2eed4cf7.
 - (s234) Quarter Report xuất Excel bảng KH nhóm: 3HK Rev/%3HK theo tháng trống vì API quarterly-b2b-customers không trả hk3Rev trong monthSummary của KH (web cũng hiện 0 ở ô 3HK từng tháng). Thêm hk3Rev + actualHk3Rev vào API, sửa web + exportCustomerDetail (Q Pro-rata = số web). Đối chiếu file thật Strategic: M Service 644.449.924/73,4%; TỔNG 33 KH 2.937.487.326 khớp tổng nhóm API. Merge main →12ff8790.
 
+
+s234e (2026-10-15) — chốt plan Phòng Argon
+- (s234e) QA sống staging: việc nền nhiều đoạn (3HK 481k token, đoạn 1 ~270s → tự sang đoạn 2), huỷ → stopped; quét việc kẹt (nhịp tim cũ 1h + cron argon-sync → resumedBackground 1, lượt xong); giao diện Soát lại, chọn nhóm vendor, lưới sửa ô (ghi nhận khi rời ô).
+- (s234e) Sửa ước lượng token gói SKU 3HK (250k → 481k đo thật) + ô chọn nhóm vendor tràn khung (w-full). Xoá docs/plans/argon-room.md; wiki creator-argon-room.md §s234e. Còn mở: Minutes thật, thư mục Lark con/Base, so mù flash vs Argon, cron argon-sync.

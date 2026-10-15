@@ -21,7 +21,7 @@ export const PACKS: PackDef[] = [
   { id: "period-overview", label: "Tổng quan kỳ — BOD + KPI tháng + target", description: "Tổng doanh thu/GP/GPM2/3HK so kỳ trước, KPI theo tháng, tiến độ target — từ đầu quý đến hôm qua." },
   { id: "channels", label: "Kênh bán — doanh thu / GP / CM1 theo kênh", description: "Từng kênh: doanh thu, GP, GPM2, số đơn, doanh thu kỳ trước và %MoM — từ đầu quý đến hôm qua (cùng số với bảng kênh ở tab Channels; không có CM1)." },
   { id: "product-catalog", label: "Danh mục Product (sync từ database)", description: "Mọi Product trừ Deleted: vendor, loại, quốc gia, nhà mạng, KYC, số SKU và khoảng giá vốn — để so sánh cấu hình/giá giữa Product, vendor.", noQuarter: true, noTool: true },
-  { id: "skus-by-vendor", label: "SKU theo vendor (sync từ database)", description: "Từng SKU ĐANG ACTIVE của 1 nhóm vendor: data, thời hạn, throttle, giá vốn hiện tại, vendorSku. Chọn nhóm vendor; 3HK ~8.000 SKU (~250k token).", scopes: SKU_SCOPES.map(x => ({ id: x.id, label: x.label })), noTool: true },
+  { id: "skus-by-vendor", label: "SKU theo vendor (sync từ database)", description: "Từng SKU ĐANG ACTIVE của 1 nhóm vendor: data, thời hạn, throttle, giá vốn hiện tại, vendorSku. Chọn nhóm vendor; 3HK ~8.200 SKU (~480k token, gần nửa cửa sổ 1M — thêm khi cần).", scopes: SKU_SCOPES.map(x => ({ id: x.id, label: x.label })), noTool: true },
   { id: "wiki-business", label: "Wiki nghiệp vụ GoHub (từ Wiki trong hệ thống)", description: "Các trang Wiki nghiệp vụ hiện hành (chính sách, vendor, quy tắc giá, quy trình…), không gồm hướng dẫn kỹ thuật các tab. Không theo quý.", noQuarter: true },
 ]
 

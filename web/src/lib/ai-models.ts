@@ -23,5 +23,5 @@ export const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-nano
 export const GEMINI_IMAGE_MODEL_PRO = process.env.GEMINI_IMAGE_MODEL_PRO || "gemini-3-pro-image"
 export const GEMINI_VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL || "veo-3.1-fast-generate-preview"
 export const GEMINI_VIDEO_MODEL_HQ = process.env.GEMINI_VIDEO_MODEL_HQ || "veo-3.1-generate-preview"
-// Phòng Argon (tab riêng của Creator, không công cụ, nạp nguyên tài liệu vào ngữ cảnh 1M) — plan docs/plans/argon-room.md.
+// Phòng Argon (tab riêng của Creator, không công cụ, nạp nguyên tài liệu vào ngữ cảnh 1M); wiki creator-argon-room.md.
 export const GEMINI_MODEL_ARGON = process.env.GEMINI_MODEL_ARGON || "gemini-4-argon"

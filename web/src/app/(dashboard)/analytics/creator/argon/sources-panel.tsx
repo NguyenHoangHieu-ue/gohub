@@ -235,7 +235,7 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
           </select>
           <div className="text-gray-400">{packs.find(p => p.id === pack.id)?.description}</div>
           <div className="flex flex-wrap items-center gap-2">
-            {packs.find(p => p.id === pack.id)?.scopes && <select value={pack.scope || packs.find(p => p.id === pack.id)!.scopes![0].id} onChange={e => setPack(p => ({ ...p, scope: e.target.value }))} className="px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent">
+            {packs.find(p => p.id === pack.id)?.scopes && <select value={pack.scope || packs.find(p => p.id === pack.id)!.scopes![0].id} onChange={e => setPack(p => ({ ...p, scope: e.target.value }))} className="w-full min-w-0 px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent">
               {packs.find(p => p.id === pack.id)!.scopes!.map(sc => <option key={sc.id} value={sc.id}>{sc.label}</option>)}
             </select>}
             {!packs.find(p => p.id === pack.id)?.noQuarter && !packs.find(p => p.id === pack.id)?.scopes && <select value={pack.quarter} onChange={e => setPack(p => ({ ...p, quarter: e.target.value }))} className="px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent">
