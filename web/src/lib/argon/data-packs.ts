@@ -13,7 +13,7 @@ export const PACKS: PackDef[] = [
   { id: "squad-progress", label: "Squad Progress — tiến độ target", description: "Từng squad: doanh thu/GP/CM1/3HK so với target, mức rủi ro, vòng đời khách, và 40 khách lớn nhất mỗi squad." },
   { id: "market", label: "Thị trường — doanh thu theo nước / vendor / loại gói", description: "Doanh thu, GP, %GM, số lượng và so quý trước, gộp theo thị trường (top 30), vendor và kiểu gói." },
   { id: "period-overview", label: "Tổng quan kỳ — BOD + KPI tháng + target", description: "Tổng doanh thu/GP/GPM2/3HK so kỳ trước, KPI theo tháng, tiến độ target — từ đầu quý đến hôm qua." },
-  { id: "channels", label: "Kênh bán — doanh thu / GP / CM1 theo kênh", description: "Từng kênh và sub-channel: doanh thu, GP, chi phí, CM1 so kỳ trước — từ đầu quý đến hôm qua (cùng số với tab Channels)." },
+  { id: "channels", label: "Kênh bán — doanh thu / GP / CM1 theo kênh", description: "Từng kênh: doanh thu, GP, GPM2, số đơn, doanh thu kỳ trước và %MoM — từ đầu quý đến hôm qua (cùng số với bảng kênh ở tab Channels; không có CM1)." },
   { id: "wiki-business", label: "Wiki nghiệp vụ GoHub (từ Wiki trong hệ thống)", description: "Các trang Wiki nghiệp vụ hiện hành (chính sách, vendor, quy tắc giá, quy trình…), không gồm hướng dẫn kỹ thuật các tab. Không theo quý.", noQuarter: true },
 ]
 
@@ -97,7 +97,7 @@ export async function buildPack(id: string, quarterLabel: string, origin: string
     }
     case "channels": {
       const perf = await call(origin, `/api/analytics/channels/performance?startDate=${r.start}&endDate=${r.end}`)
-      return { title: `📊 Kênh bán ${r.start} → ${r.end}`, text: `${note}\n\n${digest(perf, "Channel Performance", { maxRows: 100 })}` }
+      return { title: `📊 Kênh bán ${r.start} → ${r.end}`, text: `${note}\n\n${digest({ kenh: perf }, "Channel Performance", { maxRows: 100 })}` }
     }
     default:
       throw new Error(`Gói dữ liệu không có: ${id}`)
