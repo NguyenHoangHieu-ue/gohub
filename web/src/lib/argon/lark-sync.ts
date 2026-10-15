@@ -61,8 +61,11 @@ async function addFolderFiles(projectId: string, rootToken: string, mode: "snaps
   if (!quiet && !fresh.length) out.skipped.push("Mọi file trong thư mục đã có trong dự án")
 }
 
-/** Thêm 1 link: tài liệu → 1 nguồn; thư mục → mỗi docx/sheet/Base con (kể cả thư mục con, ≤3 cấp) 1 nguồn. */
-export async function addLarkLink(projectId: string, url: string, mode: "snapshot" | "live"): Promise<{ sources: ArgonSource[]; skipped: string[]; errors: string[] }> {
+export interface FolderPickItem { token: string; type: string; name: string; have: boolean }
+
+/** Thêm 1 link: tài liệu → 1 nguồn. Thư mục: chưa chọn file (opts.pick) → chỉ liệt kê để người dùng chọn; đã chọn → thêm đúng các file đó
+ *  (autoNew = đồng bộ hằng đêm thêm cả file mới xuất hiện trong thư mục). */
+export async function addLarkLink(projectId: string, url: string, mode: "snapshot" | "live", opts: { pick?: string[]; autoNew?: boolean } = {}): Promise<{ sources: ArgonSource[]; skipped: string[]; errors: string[]; folder?: { items: FolderPickItem[]; limit: number } }> {
   const ref = parseLarkUrl(url)
   if (ref.kind === "unknown") throw new Error("Không nhận ra link Lark (cần docx / sheets / wiki / base / folder)")
   const out = { sources: [] as ArgonSource[], skipped: [] as string[], errors: [] as string[] }
@@ -71,7 +74,22 @@ export async function addLarkLink(projectId: string, url: string, mode: "snapsho
     if (s) out.sources.push(s); else out.skipped.push(`${url} — đã có trong dự án`)
     return out
   }
-  await addFolderFiles(projectId, ref.token, mode, await larkToken(), out)
+  const token = await larkToken()
+  const items = await listFolderDeep(token, ref.token)
+  if (!items.length) throw new Error("Thư mục không có docx / sheet / Base nào")
+  if (!opts.pick) {
+    const { data: have } = await supabaseAdmin.from("argon_sources").select("external_id").eq("project_id", projectId).not("external_id", "is", null)
+    const known = new Set((have ?? []).map(r => r.external_id as string))
+    return { ...out, folder: { items: items.map(f => ({ token: f.token, type: f.type, name: f.name, have: known.has(f.token) })), limit: MAX_FOLDER_FILES } }
+  }
+  const chosen = items.filter(f => opts.pick!.includes(f.token)).slice(0, MAX_FOLDER_FILES)
+  for (const f of chosen) {
+    try {
+      const fUrl = f.url ?? `https://larksuite.com/${f.type === "docx" ? "docx" : f.type === "sheet" ? "sheets" : "base"}/${f.token}`
+      const s = await addLarkSource(projectId, fUrl, mode, await readLark(fUrl, token), opts.autoNew ? { folderToken: ref.token, rootFolder: ref.token } : { folderToken: ref.token })
+      if (s) out.sources.push(s); else out.skipped.push(`${f.name} — đã có`)
+    } catch (e) { out.errors.push(`${f.name}: ${(e as Error).message}`) }
+  }
   return out
 }
 

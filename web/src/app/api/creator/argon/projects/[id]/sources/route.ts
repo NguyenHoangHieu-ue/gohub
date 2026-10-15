@@ -14,7 +14,7 @@ export const maxDuration = 120
 //   POST { action:"prepare", files:[{name,size}] } → trả đường ký sẵn để trình duyệt tải thẳng lên Storage
 //   POST { action:"register", items:[{path,name,mime,size}] } → server đọc file, trích chữ, đếm token, tạo nguồn
 //   POST { action:"note", name, text } → nguồn ghi chú (văn bản dán tay)
-//   POST { action:"lark", url, mode } → nguồn từ link Lark (docx/sheet/wiki/base; thư mục → mỗi file con 1 nguồn)
+//   POST { action:"lark", url, mode } → nguồn từ link Lark (docx/sheet/wiki/base; thư mục → liệt kê để chọn file, rồi mỗi file chọn 1 nguồn)
 //   POST { action:"sync" } → đồng bộ lại mọi nguồn Lark + gói dữ liệu của dự án (chỉ tạo phiên bản mới khi nội dung đổi)
 //   POST { action:"data", pack, quarter, mode } → thêm "gói dữ liệu" (số liệu hệ thống mới nhất từ các endpoint analytics)
 const safe = (n: string) => n.replace(/[^\w.\-]+/g, "_").slice(-120)
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (!(await ownProject(params.id, username))) return NextResponse.json({ error: "Không tìm thấy dự án" }, { status: 404 })
   const b = (await req.json().catch(() => ({}))) as {
-    action?: string; url?: string; mode?: string; pack?: string; quarter?: string; files?: { name: string; size: number }[]; items?: { path: string; name: string; mime: string; size: number }[]; name?: string; text?: string
+    action?: string; url?: string; mode?: string; pack?: string; quarter?: string; files?: { name: string; size: number }[]; pick?: string[]; autoNew?: boolean; items?: { path: string; name: string; mime: string; size: number }[]; name?: string; text?: string
   }
 
   if (b.action === "prepare") {
@@ -86,9 +86,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
         return NextResponse.json({ sources: v ? [strip(v)] : [], errors: [], skipped: v ? [] : ["Video này đã có trong dự án"] })
       }
-      const r = await addLarkLink(params.id, String(b.url ?? ""), b.mode === "live" ? "live" : "snapshot")
+      const r = await addLarkLink(params.id, String(b.url ?? ""), b.mode === "live" ? "live" : "snapshot", { pick: Array.isArray(b.pick) ? b.pick.map(String) : undefined, autoNew: !!b.autoNew })
       await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
-      return NextResponse.json({ sources: r.sources.map(strip), errors: r.errors, skipped: r.skipped })
+      return NextResponse.json({ sources: r.sources.map(strip), errors: r.errors, skipped: r.skipped, folder: r.folder })
     } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }) }
   }
 

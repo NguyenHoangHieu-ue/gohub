@@ -36,6 +36,7 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
   const [note, setNote] = useState({ name: "", text: "" })
   const [larkOpen, setLarkOpen] = useState(false)
   const [lark, setLark] = useState({ url: "", mode: "snapshot" as "snapshot" | "live" })
+  const [folderPick, setFolderPick] = useState<{ items: { token: string; type: string; name: string; have: boolean }[]; limit: number; picked: string[]; autoNew: boolean } | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [dataOpen, setDataOpen] = useState(false)
   const [packs, setPacks] = useState<{ id: string; label: string; description: string; noQuarter?: boolean; scopes?: { id: string; label: string }[] }[]>([])
@@ -146,15 +147,16 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
     setBusy(null)
   }
 
-  async function addLark() {
+  async function addLark(pick?: string[]) {
     if (!lark.url.trim()) return
-    setBusy("Đang đọc tài liệu Lark…"); setInfo(null)
+    setBusy(pick ? "Đang đọc các file đã chọn…" : "Đang đọc tài liệu Lark…"); setInfo(null)
     try {
-      const r = await api<{ sources: Source[]; errors: string[]; skipped: string[] }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "lark", url: lark.url.trim(), mode: lark.mode }))
+      const r = await api<{ sources: Source[]; errors: string[]; skipped: string[]; folder?: { items: { token: string; type: string; name: string; have: boolean }[]; limit: number } }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "lark", url: lark.url.trim(), mode: lark.mode, pick, autoNew: folderPick?.autoNew }))
+      if (r.folder) { setFolderPick({ ...r.folder, picked: [], autoNew: false }); setBusy(null); return }
       setSources(prev => [...prev, ...r.sources])
       const msg = [r.sources.length ? `Đã thêm ${r.sources.length} nguồn từ Lark` : "", ...r.skipped, ...r.errors].filter(Boolean).join("\n")
       if (r.errors.length) onError(msg); else setInfo(msg || null)
-      if (r.sources.length) { setLark(l => ({ ...l, url: "" })); setLarkOpen(false) }
+      if (r.sources.length) { setLark(l => ({ ...l, url: "" })); setLarkOpen(false); setFolderPick(null) }
     } catch (e) { onError((e as Error).message) }
     setBusy(null)
   }
@@ -276,12 +278,28 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
       {info && <div className="mx-3 mb-2 text-xs rounded-lg bg-emerald-50 text-emerald-800 px-2.5 py-1.5 whitespace-pre-wrap">{info}</div>}
       {larkOpen && (
         <div className="mx-3 mb-3 space-y-2">
-          <input value={lark.url} onChange={e => setLark(l => ({ ...l, url: e.target.value }))} placeholder="Dán link Lark (docx / sheets / wiki / base / thư mục / biên bản họp minutes) hoặc video YouTube" className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" />
+          <input value={lark.url} onChange={e => { setFolderPick(null); setLark(l => ({ ...l, url: e.target.value })) }} placeholder="Dán link Lark (docx / sheets / wiki / base / thư mục / biên bản họp minutes) hoặc video YouTube" className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" />
           <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-300">
             <label className="inline-flex items-center gap-1"><input type="radio" checked={lark.mode === "snapshot"} onChange={() => setLark(l => ({ ...l, mode: "snapshot" }))} />Chụp lại (đồng bộ hằng đêm)</label>
             <label className="inline-flex items-center gap-1"><input type="radio" checked={lark.mode === "live"} onChange={() => setLark(l => ({ ...l, mode: "live" }))} />Đọc mới mỗi lần chạy</label>
           </div>
-          <button onClick={addLark} disabled={!!busy || !lark.url.trim()} className="px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50">Thêm</button>
+          <button onClick={() => void addLark()} disabled={!!busy || !lark.url.trim()} className="px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50">Thêm</button>
+          {folderPick && (
+            <div className="rounded-lg border border-gray-200 dark:border-slate-600 p-2 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between"><span className="font-medium">Thư mục có {folderPick.items.length} file — chọn file cần thêm (tối đa {folderPick.limit})</span>
+                <button className="text-violet-600" onClick={() => setFolderPick(f => f && ({ ...f, picked: f.picked.length ? [] : f.items.filter(i => !i.have).slice(0, f.limit).map(i => i.token) }))}>{folderPick.picked.length ? "Bỏ chọn" : "Chọn tất cả"}</button></div>
+              <div className="max-h-48 overflow-y-auto space-y-0.5">
+                {folderPick.items.map(i => (
+                  <label key={i.token} className={`flex items-center gap-1.5 ${i.have ? "opacity-50" : ""}`}>
+                    <input type="checkbox" disabled={i.have} checked={folderPick.picked.includes(i.token)} onChange={e => setFolderPick(f => f && ({ ...f, picked: e.target.checked ? [...f.picked, i.token].slice(0, f.limit) : f.picked.filter(t => t !== i.token) }))} />
+                    <span className="truncate">{i.name}</span><span className="text-gray-400 shrink-0">{i.type}{i.have ? " · đã có" : ""}</span>
+                  </label>
+                ))}
+              </div>
+              <label className="flex items-center gap-1.5"><input type="checkbox" checked={folderPick.autoNew} onChange={e => setFolderPick(f => f && ({ ...f, autoNew: e.target.checked }))} />Đồng bộ đêm tự thêm file MỚI trong thư mục này</label>
+              <button onClick={() => void addLark(folderPick.picked)} disabled={!!busy || !folderPick.picked.length} className="px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50">Thêm {folderPick.picked.length} file đã chọn</button>
+            </div>
+          )}
         </div>
       )}
 
