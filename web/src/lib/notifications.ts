@@ -10,8 +10,6 @@ export async function createNotification(
   data: Record<string, any> = {},
   visibility: Visibility = "all",
 ) {
-  await (supabaseAdmin
-    .from("notifications")
-    .insert({ type, title, body, data, visibility }) as any)
-    .catch(() => {})
+  // Builder của supabase-js chỉ có .then (không có .catch) → gọi .catch làm TypeError sau khi việc chính đã xong (vd upload bảng giá BC lưu được nhưng trả 500).
+  try { await supabaseAdmin.from("notifications").insert({ type, title, body, data, visibility }) } catch { /* thông báo là phụ, không làm hỏng việc chính */ }
 }
