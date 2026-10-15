@@ -109,7 +109,7 @@ export default function ArgonRoomPage() {
             {projects.map(p => (
               <button key={p.id} onClick={() => setActiveId(p.id)} className={cn("w-full text-left rounded-lg px-2.5 py-2 text-sm", p.id === activeId ? "bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-200" : "hover:bg-gray-50 dark:hover:bg-slate-700")}>
                 <div className="truncate font-medium">{p.name}</div>
-                <div className="text-[11px] text-gray-500">{p.id === activeId && project ? sources.length : p.sources} nguồn · {fmtTokens(p.id === activeId && project ? enabled.reduce((n, x) => n + x.tokens, 0) : p.tokens)} token</div>
+                <div className="text-[11px] text-gray-500">{p.id === activeId && project && !p.hub ? sources.length : p.sources} nguồn · {fmtTokens(p.id === activeId && project && !p.hub ? enabled.reduce((n, x) => n + x.tokens, 0) : p.tokens)} token{p.hub ? " (đọc mọi dự án)" : ""}</div>
               </button>
             ))}
           </div>
@@ -135,6 +135,7 @@ export default function ArgonRoomPage() {
               </div>
             )}
             <div className="flex-1 min-h-0">
+              {projects.find(x => x.id === project.id)?.hub && <div className="mx-4 mt-3 text-xs rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-200 px-3 py-2">Dự án Tổng hợp tự đọc sổ, nguồn đang bật và vài kết quả gần đây của MỌI dự án khác (vượt 700k token thì bỏ bớt nguồn cũ không ghim). Hỏi chéo ở đây; dự án thường vẫn tách biệt nhau.</div>}
               <ChatPanel projectId={project.id} runs={runs} setRuns={fn => setRuns(fn)} enabledCount={enabled.length} onAppendNotes={appendNotes} onSaveAsSource={saveAsSource} onError={onError} />
             </div>
           </>}

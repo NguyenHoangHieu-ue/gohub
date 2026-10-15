@@ -1,5 +1,5 @@
 export interface Project { id: string; name: string; notes: string; instructions: string; updated_at: string }
-export interface ProjectRow { id: string; name: string; updated_at: string; sources: number; tokens: number }
+export interface ProjectRow { id: string; name: string; updated_at: string; sources: number; tokens: number; hub?: boolean }
 export interface Source {
   id: string; project_id: string; kind: "file" | "lark" | "mail" | "note"; name: string; mime: string | null; size_bytes: number | null
   send_binary: boolean; tokens: number; external_url: string | null; sync_mode: "snapshot" | "live" | null; synced_at: string | null

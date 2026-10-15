@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { estimateArgonCostUsd } from "@/lib/agents/gemini-pricing"
 import { getCreatorLarkOpenId, sendLarkDM } from "@/lib/lark"
 import { buildRunContext } from "./context"
+import { getHubId, HUB_TOKEN_BUDGET, loadHubMaterial, pickHubSources } from "./hub"
 import { syncMany } from "./lark-sync"
 import { runSegment } from "./run-engine"
 import { BG_STALE_MS, MAX_BG_COST_USD, MAX_BG_SEGMENTS, deleteBg, getBg, getToolLog, saveToolLog, touchBg, triggerWorker } from "./bg"
@@ -10,9 +11,13 @@ import type { ArgonProject, ArgonRun, ArgonSource } from "./server"
 export const SEGMENT_MS = 265_000     // hết ngân sách đoạn → lưu dở, đoạn sau viết tiếp
 export const MAX_OUT = 32_768         // trần output mỗi đoạn; chạm trần cũng đi qua đoạn sau
 
-/** Nguồn đang bật của dự án (lọc theo pick nếu có). Nguồn Lark/gói dữ liệu chế độ "live" được đọc lại ngay trước khi chạy. */
-export async function loadRunSources(projectId: string, pick: Set<string> | null, origin: string): Promise<ArgonSource[]> {
-  const { data } = await supabaseAdmin.from("argon_sources").select("*").eq("project_id", projectId).eq("enabled", true)
+/** Nguồn đang bật của dự án (lọc theo pick nếu có). Nguồn Lark/gói dữ liệu chế độ "live" được đọc lại ngay trước khi chạy.
+ *  Dự án Tổng hợp (hub): gom nguồn của MỌI dự án khác trong ngân sách token + sổ ghép; dự án thường: như cũ. */
+export async function loadRunMaterial(project: ArgonProject, pick: Set<string> | null, origin: string): Promise<{ sources: ArgonSource[]; project: ArgonProject; warnings: string[] }> {
+  const isHub = (await getHubId(project.username)) === project.id
+  const mat = isHub ? await loadHubMaterial(project) : null
+  const ids = mat ? mat.projectIds : [project.id]
+  const { data } = await supabaseAdmin.from("argon_sources").select("*").in("project_id", ids).eq("enabled", true)
   let sources = ((data ?? []) as ArgonSource[]).filter(s => !pick || pick.has(s.id))
   const live = sources.filter(s => (s.kind === "lark" || s.external_id?.startsWith("datapack:")) && s.sync_mode === "live")
   if (live.length) {
@@ -21,7 +26,12 @@ export async function loadRunSources(projectId: string, pick: Set<string> | null
     const byId = new Map(((fresh ?? []) as ArgonSource[]).map(s => [s.id, s]))
     sources = sources.map(s => byId.get(s.id) ?? s)
   }
-  return sources
+  if (!mat) return { sources, project, warnings: [] }
+  const { data: names } = await supabaseAdmin.from("argon_projects").select("id,name").in("id", ids)
+  const nameOf = new Map((names ?? []).map(n => [n.id as string, n.name as string]))
+  const picked = pickHubSources(sources.map(s => ({ ...s, projectName: s.project_id === project.id ? "Tổng hợp" : nameOf.get(s.project_id) ?? "?" })))
+  const warnings = picked.dropped.length ? [`Tổng hợp vượt ngân sách ${HUB_TOKEN_BUDGET / 1000}k token — bỏ bớt nguồn cũ/không ghim: ${picked.dropped.join("; ")}. Ghim nguồn quan trọng ở dự án gốc để luôn được đọc.`] : []
+  return { sources: picked.sources, project: mat.project, warnings }
 }
 
 async function notifyDone(run: ArgonRun, project: ArgonProject | null, status: string, cost: number, segments: number, error: string | null, origin: string) {
@@ -59,9 +69,9 @@ export async function runBackgroundSegment(runId: string, origin: string): Promi
   try {
     const { data: allRuns } = await supabaseAdmin.from("argon_runs").select("*").eq("project_id", run.project_id).order("created_at")
     const pick = new Set(run.source_ids)
-    const sources = await loadRunSources(run.project_id, pick.size ? pick : null, origin)
+    const mat = await loadRunMaterial(project, pick.size ? pick : null, origin)
     const ctx = await buildRunContext({
-      project, sources, priorRuns: ((allRuns ?? []) as ArgonRun[]).filter(r => r.id !== runId), prompt: run.prompt,
+      project: mat.project, sources: mat.sources, priorRuns: ((allRuns ?? []) as ArgonRun[]).filter(r => r.id !== runId), prompt: run.prompt,
       resumeRun: answer.trim() ? { ...run, answer } : undefined, allowTools: bg.allowTools, toolLog,
     })
     const seg = await runSegment({

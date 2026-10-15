@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireArgonUser } from "@/lib/argon/server"
+import { ensureHub } from "@/lib/argon/hub"
 
 export const dynamic = "force-dynamic"
 
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic"
 export async function GET() {
   const username = await requireArgonUser()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  const hubId = await ensureHub(username).catch(() => null)
   const { data: projects, error } = await supabaseAdmin.from("argon_projects").select("id,name,updated_at,created_at").eq("username", username).order("updated_at", { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const ids = (projects ?? []).map(p => p.id)
@@ -20,7 +22,15 @@ export async function GET() {
       if (s.enabled) st.tokens += s.tokens
     }
   }
-  return NextResponse.json({ projects: (projects ?? []).map(p => ({ ...p, ...(stats[p.id] ?? { sources: 0, tokens: 0 }) })) })
+  const rows = (projects ?? []).map(p => ({ ...p, ...(stats[p.id] ?? { sources: 0, tokens: 0 }), hub: p.id === hubId }))
+  // Tổng hợp: số nguồn/token = của mọi dự án khác (đó là thứ nó đọc); luôn xếp đầu danh sách.
+  const hub = rows.find(r => r.hub)
+  if (hub) {
+    const others = rows.filter(r => !r.hub)
+    hub.sources += others.reduce((n, r) => n + r.sources, 0)
+    hub.tokens += others.reduce((n, r) => n + r.tokens, 0)
+  }
+  return NextResponse.json({ projects: [...rows.filter(r => r.hub), ...rows.filter(r => !r.hub)] })
 }
 
 export async function POST(req: NextRequest) {

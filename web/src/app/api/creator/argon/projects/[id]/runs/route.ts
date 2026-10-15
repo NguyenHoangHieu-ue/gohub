@@ -6,7 +6,7 @@ import { checkRateLimit } from "@/lib/rate-limit"
 import { ownProject, requireArgonUser, type ArgonRun } from "@/lib/argon/server"
 import { buildRunContext } from "@/lib/argon/context"
 import { LEVELS, runSegment } from "@/lib/argon/run-engine"
-import { MAX_OUT, SEGMENT_MS, loadRunSources } from "@/lib/argon/bg-worker"
+import { MAX_OUT, SEGMENT_MS, loadRunMaterial } from "@/lib/argon/bg-worker"
 import { deleteBg, deleteToolLog, getToolLog, saveToolLog, setBg, triggerWorker } from "@/lib/argon/bg"
 
 export const dynamic = "force-dynamic"
@@ -57,9 +57,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ runId, background: true })
   }
 
-  const sources = await loadRunSources(params.id, pick, req.nextUrl.origin)
+  const mat = await loadRunMaterial(project, pick, req.nextUrl.origin)
   const toolLog = resume ? await getToolLog(resume.id) : []
-  const ctx = await buildRunContext({ project, sources, priorRuns: runs, prompt, resumeRun: resume, allowTools, toolLog })
+  const ctx = await buildRunContext({ project: mat.project, sources: mat.sources, priorRuns: runs, prompt, resumeRun: resume, allowTools, toolLog })
+  ctx.warnings.push(...mat.warnings)
   const t0 = Date.now()
   let runId = resume?.id ?? ""
   let answer = resume?.answer ?? ""

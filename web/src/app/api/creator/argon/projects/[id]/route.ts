@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { ARGON_BUCKET, ownProject, requireArgonUser } from "@/lib/argon/server"
 import { deleteRules } from "@/lib/argon/mail-sync"
 import { deleteBg, deleteToolLog } from "@/lib/argon/bg"
+import { getHubId } from "@/lib/argon/hub"
 
 export const dynamic = "force-dynamic"
 
@@ -18,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       .eq("project_id", params.id).order("created_at"),
     supabaseAdmin.from("argon_runs").select("*").eq("project_id", params.id).order("created_at"),
   ])
-  return NextResponse.json({ project, sources: sources ?? [], runs: runs ?? [] })
+  return NextResponse.json({ project, sources: sources ?? [], runs: runs ?? [], hub: (await getHubId(username)) === params.id })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
