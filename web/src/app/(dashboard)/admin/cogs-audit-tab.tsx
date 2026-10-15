@@ -73,7 +73,7 @@ export default function CogsAuditTab({ onNotify }: { onNotify: Notify }) {
     <div className="space-y-5">
       <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl text-sm text-gray-600 dark:text-slate-300 space-y-1">
         <div className="font-semibold text-gray-900 dark:text-slate-100">Soát giá vốn các gói Datapool đang có</div>
-        <div>Tính lại giá vốn từng SKU bằng đúng công thức của tab Tạo sản phẩm (tỷ giá nội bộ hiện tại + giả định Công Thức Datapool + bảng giá 3HK/BC hiện tại) rồi so với giá đang lưu trong hệ thống. Chênh ≤ 1 cent (≈ 275 VND) coi là do làm tròn ROUNDUP; lớn hơn là thay đổi thật (kể cả gói nhỏ như Daily 1 ngày).</div>
+        <div>Tính lại giá vốn từng SKU bằng đúng công thức của tab Tạo sản phẩm (tỷ giá nội bộ hiện tại + giả định Công Thức Datapool + bảng giá 3HK/BC hiện tại) rồi so với giá đang lưu trong hệ thống. Mọi bước làm tròn dùng ROUNDUP nên giá phải khớp tuyệt đối: lệch dù 1 đồng / 1 cent cũng là LỆCH (kể cả gói nhỏ như Daily 1 ngày).</div>
         <div>Hệ thống tự soát hằng ngày và <b>nhắn DM Lark cho anh</b> khi tỷ giá / giả định / bảng giá đổi làm giá lệch (không nhắn lặp nếu không có gì mới).</div>
       </div>
 
