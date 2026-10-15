@@ -37,6 +37,8 @@ export type AuditVerdict = CogsVerdict | "nocogs" | "skip"
 export interface AuditRow {
   sku: string; product: string; vendor: AuditVendor; tenant: "US" | "VN"; status: string; type: "A" | "C" | "E"; policy: string
   label: string; countries: string; currency: string
+  /** Để sắp xếp / lọc: kiểu gói, dung lượng quy MB (Unlimited = data tốc độ cao), số ngày */
+  kind: PlanKind; amountMb: number; days: number
   current: number | null; expected: number | null; diff: number | null; diffPct: number | null
   verdict: AuditVerdict
   /** Lý do bỏ qua / ghi chú giả định (vd không khớp nhà mạng nên lấy nhà mạng đắt nhất) */
@@ -99,7 +101,7 @@ export function auditSku(sku: AuditSkuInput, product: AuditProductInput | undefi
   const currency = tenant === "US" ? "USD" : "VND"
   const label = kind === "Unlimited" ? `${TYPE_LABEL[type]} · Unlimited ${hsMb % 1024 === 0 ? `${hsMb / 1024}GB` : `${hsMb}MB`} + ${speed || "?"}Mbps × ${days} ngày`
     : `${TYPE_LABEL[type]} · ${kind} ${fmtAmount(amount)}${unit} × ${days} ngày`
-  const base = { sku: code, product: sku.product_code, vendor, tenant, status: sku.status, type, policy, label, countries: product?.supported_countries ?? "", currency, current: sku.latest_cogs == null ? null : Number(sku.latest_cogs) }
+  const base = { sku: code, product: sku.product_code, vendor, tenant, status: sku.status, type, policy, label, countries: product?.supported_countries ?? "", currency, kind, amountMb: kind === "Unlimited" ? hsMb : unit === "GB" ? amount * 1024 : amount, days, current: sku.latest_cogs == null ? null : Number(sku.latest_cogs) }
   if (!(amount > 0) || !(days > 0)) return skipRow(base, "thiếu dung lượng/số ngày trong hệ thống")
   if (sku.latest_cogs != null && sku.latest_cogs_currency && sku.latest_cogs_currency !== currency) return skipRow(base, `hệ thống ghi giá vốn bằng ${sku.latest_cogs_currency}, kỳ vọng ${currency}`)
   if (!product) return skipRow(base, "không tìm thấy Product của SKU")
@@ -171,12 +173,21 @@ export function auditSku(sku: AuditSkuInput, product: AuditProductInput | undefi
   return { ...base, expected, diff: cmp.diff, diffPct: cmp.diffPct, verdict: cmp.verdict, note, explain, calc }
 }
 
+const KIND_ORDER: Record<PlanKind, number> = { Fixed: 0, Daily: 1, Unlimited: 2 }
+const TYPE_ORDER = { A: 0, C: 1, E: 2 } as const
+const VENDOR_ORDER: Record<AuditVendor, number> = { "3HK": 0, BC_CMHK: 1, BC_SINGTEL: 2 }
+/** Thứ tự dễ soát: vendor → loại (data rời / eSIM full / SIM full) → kiểu gói (Fixed / Daily / Unlimited) → Product (quốc gia) → dung lượng → số ngày → tenant. */
+export function compareAuditRows(a: AuditRow, b: AuditRow): number {
+  return VENDOR_ORDER[a.vendor] - VENDOR_ORDER[b.vendor] || TYPE_ORDER[a.type] - TYPE_ORDER[b.type] || KIND_ORDER[a.kind] - KIND_ORDER[b.kind]
+    || a.product.localeCompare(b.product) || a.amountMb - b.amountMb || a.days - b.days || a.tenant.localeCompare(b.tenant) || a.sku.localeCompare(b.sku)
+}
+
 export function auditAll(skus: AuditSkuInput[], products: AuditProductInput[], ctx: AuditCtx): AuditRow[] {
   const idx = buildIndex(ctx)
   const byCode = new Map(products.map(p => [p.product_code, p]))
   const out: AuditRow[] = []
   for (const s of skus) { const r = auditSku(s, byCode.get(s.product_code), ctx, idx); if (r) out.push(r) }
-  return out
+  return out.sort(compareAuditRows)
 }
 
 export interface AuditSummary {

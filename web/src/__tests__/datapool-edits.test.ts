@@ -46,6 +46,9 @@ describe("so giá vốn (compareCogs)", () => {
   })
   test("VND: chênh ≤ 600 là làm tròn; lớn hơn là lệch; diffPct tính theo giá tính lại", () => {
     expect(compareCogs(54187, 54187 + 265, "VND").verdict).toBe("rounding")
+    // Gói nhỏ (Daily 1 ngày): chênh 2–8% chỉ vài trăm đồng nhưng là thay đổi thật, không được coi là làm tròn
+    expect(compareCogs(7062, 6539, "VND").verdict).toBe("diff")
+    expect(compareCogs(15760, 15169, "VND").verdict).toBe("diff")
     const c = compareCogs(54187, 48645, "VND")
     expect(c.verdict).toBe("diff"); expect(c.diffPct).toBeCloseTo(11.39, 1)
   })

@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams
     const [run, state] = await Promise.all([runAudit(vendorsOf(sp.get("vendor")), statusesOf(sp.get("status"))), loadState()])
-    const shown = run.rows.filter(r => r.verdict !== "match")
+    // Bị cắt ở MAX_ROWS thì phải cắt phần ÍT quan trọng: lệch / chưa có giá lên đầu, "làm tròn" (hàng nghìn SKU 3HK) xuống cuối; trong mỗi nhóm giữ thứ tự soát (vendor → loại → kiểu gói → Product …).
+    const PRIO: Record<string, number> = { diff: 0, nocogs: 1, skip: 2, rounding: 3, match: 4 }
+    const shown = run.rows.filter(r => r.verdict !== "match").map((r, i) => [r, i] as const).sort((a, b) => PRIO[a[0].verdict] - PRIO[b[0].verdict] || a[1] - b[1]).map(x => x[0])
     const levels = run.inputs.levels
     return NextResponse.json({
       summary: run.summary,

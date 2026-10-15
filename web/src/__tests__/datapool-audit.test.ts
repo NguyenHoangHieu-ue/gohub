@@ -104,7 +104,7 @@ describe("soát giá vốn: engine tính lại ĐÚNG như lúc tạo sản ph�
   test("SKU chưa có giá vốn → nocogs; khung SIM/eSIM profile bị loại; chữ ký lệch ổn định và đổi khi tình trạng đổi", () => {
     const { skus, products } = dbAll()
     const withNull = skus.map((s, i) => (i === 0 ? { ...s, latest_cogs: null } : s))
-    expect(auditAll(withNull, products, CTX)[0].verdict).toBe("nocogs")
+    expect(auditAll(withNull, products, CTX).find(r => r.sku === skus[0].sku_code && r.tenant === (skus[0].tenant === "US" ? "US" : "VN"))!.verdict).toBe("nocogs")
     expect(auditAll([{ ...skus[0], product_type: "SIM frame" }], products, CTX)).toHaveLength(0)
     const r1 = auditAll(skus, products, { ...CTX, a: { ...A, dailyPct: 0.45 } }), r2 = auditAll(skus, products, { ...CTX, a: { ...A, dailyPct: 0.45 } }), r3 = auditAll(skus, products, { ...CTX, a: { ...A, dailyPct: 0.5 } })
     expect(mismatchSignature(r1)).toBe(mismatchSignature(r2)); expect(mismatchSignature(r1)).not.toBe(mismatchSignature(r3))
@@ -168,5 +168,17 @@ describe("file xuất soát giá vốn", () => {
     const i = rows.findIndex(r => r.calc?.kind === "Daily" && r.tenant === "US"), r = i + 2
     const { run: run2 } = evaluator(wb)
     expect(run2(AUDIT_SHEET, (sh[`Q${r}`] as XLSX.CellObject).f!)).toBeCloseTo(rows[i].current!, 6)
+  })
+})
+
+describe("thứ tự soát + ngưỡng làm tròn", () => {
+  test("sắp xếp: vendor → loại → kiểu gói → Product → dung lượng → ngày", () => {
+    const { skus, products } = dbAll()
+    const rows = auditAll(skus, products, CTX)
+    const key = (r: (typeof rows)[number]) => [r.vendor, r.type, r.kind, r.product]
+    for (let i = 1; i < rows.length; i++) {
+      const a = rows[i - 1], b = rows[i]
+      if (JSON.stringify(key(a)) === JSON.stringify(key(b))) expect(a.amountMb < b.amountMb || (a.amountMb === b.amountMb && a.days <= b.days)).toBe(true)
+    }
   })
 })

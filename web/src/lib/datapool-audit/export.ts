@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx"
 import { levelsOf, customUnlimitedLabel } from "@/lib/datapool-formula"
 import type { AuditCtx, AuditRow } from "./engine"
-import { VENDOR_LABEL } from "./engine"
+import { VENDOR_LABEL, compareAuditRows } from "./engine"
 
 // File "Soát giá vốn": mỗi SKU 1 dòng, từng bước tính là CÔNG THỨC Excel (ROUNDUP) dùng chung sheet "Tham số" — sửa tham số là giá tính lại đổi theo,
 // kèm giá hệ thống, chênh lệch và kết luận. Sheet "Cập nhật latestCogs" chỉ liệt kê SKU lệch với giá tính lại (công thức trỏ sheet soát) để đem đi cập nhật.
@@ -17,7 +17,7 @@ const num = (v: number, f?: string, z?: string): Cell => ({ t: "n", v, ...(f ? {
 const str = (v: string): Cell => ({ t: "s", v })
 
 const HEADERS = ["SKU", "Tenant", "Vendor", "Loại", "Gói", "Data", "Đơn vị", "Ngày", "Giá/GB", "Tiền pool", "Hệ số (%/GB-ngày)", "Data (tiền pool)", "Data (USD)", "Phí khung (USD)", "COGS US (USD)", "COGS VN (VND)",
-  "Giá mới (tính lại)", "Giá cũ (hệ thống)", "Chênh (mới − cũ)", "Tăng/giảm % (so giá cũ)", "Kết luận", "Ghi chú"]
+  "Giá mới (tính lại)", "Giá cũ (hệ thống)", "Chênh (mới − cũ)", "Tăng/giảm % (so giá cũ)", "Kết luận", "Ghi chú", "Product", "Quốc gia"]
 const VERDICT: Record<string, string> = { match: "Khớp", rounding: "Khớp (chênh do làm tròn)", diff: "LỆCH", nocogs: "Hệ thống chưa có giá", skip: "Không tính lại được" }
 
 export function buildAuditWorkbook(rows: AuditRow[], ctx: AuditCtx): XLSX.WorkBook {
@@ -43,13 +43,13 @@ export function buildAuditWorkbook(rows: AuditRow[], ctx: AuditCtx): XLSX.WorkBo
 
   const ws: XLSX.WorkSheet = {}
   HEADERS.forEach((h, i) => put(ws, XLSX.utils.encode_cell({ r: 0, c: i }), str(h)))
-  const usable = rows
+  const usable = [...rows].sort(compareAuditRows)   // vendor → loại → kiểu gói → Product → dung lượng → ngày: nhóm giống nhau nằm cạnh nhau để dễ soát
   const rowOf = new Map<string, number>()
   usable.forEach((x, i) => {
     const r = i + 2
     rowOf.set(`${x.sku}|${x.tenant}`, r)
     put(ws, `A${r}`, str(x.sku)); put(ws, `B${r}`, str(x.tenant)); put(ws, `C${r}`, str(VENDOR_LABEL[x.vendor])); put(ws, `D${r}`, str(x.type)); put(ws, `E${r}`, str(x.label))
-    put(ws, `R${r}`, x.current == null ? str("") : num(x.current)); put(ws, `U${r}`, str(VERDICT[x.verdict] ?? x.verdict)); put(ws, `V${r}`, str(x.note ?? ""))
+    put(ws, `R${r}`, x.current == null ? str("") : num(x.current)); put(ws, `U${r}`, str(VERDICT[x.verdict] ?? x.verdict)); put(ws, `V${r}`, str(x.note ?? "")); put(ws, `W${r}`, str(x.product)); put(ws, `X${r}`, str(x.countries))
     const c = x.calc
     if (!c) return
     put(ws, `F${r}`, num(c.amount)); put(ws, `G${r}`, str(c.unit)); put(ws, `H${r}`, num(c.days)); put(ws, `I${r}`, num(c.pricePerGb)); put(ws, `J${r}`, str(c.poolCurrency))
@@ -72,20 +72,21 @@ export function buildAuditWorkbook(rows: AuditRow[], ctx: AuditCtx): XLSX.WorkBo
       put(ws, `T${r}`, num(x.current ? (x.expected! - x.current) / x.current : 0, `IF(R${r}=0,0,S${r}/R${r})`, "0.00%"))
     }
   })
-  ws["!ref"] = `A1:V${Math.max(usable.length + 1, 2)}`
-  ws["!cols"] = [{ wch: 16 }, { wch: 7 }, { wch: 20 }, { wch: 6 }, { wch: 40 }, { wch: 7 }, { wch: 6 }, { wch: 6 }, { wch: 9 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 11 }, { wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 14 }, { wch: 9 }, { wch: 22 }, { wch: 50 }]
-  ws["!autofilter"] = { ref: `A1:V${Math.max(usable.length + 1, 2)}` }
+  ws["!ref"] = `A1:X${Math.max(usable.length + 1, 2)}`
+  ws["!cols"] = [{ wch: 16 }, { wch: 7 }, { wch: 20 }, { wch: 6 }, { wch: 40 }, { wch: 7 }, { wch: 6 }, { wch: 6 }, { wch: 9 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 11 }, { wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 14 }, { wch: 9 }, { wch: 22 }, { wch: 50 }, { wch: 11 }, { wch: 16 }]
+  ws["!autofilter"] = { ref: `A1:X${Math.max(usable.length + 1, 2)}` }
 
   const up: XLSX.WorkSheet = {}
-  ;["tenant*", "skuCode", "latestCogs (giá MỚI)", "latestCogsCurrency", "Giá CŨ (hệ thống)", "Tăng/giảm %", "Ghi chú"].forEach((h, i) => put(up, XLSX.utils.encode_cell({ r: 0, c: i }), str(h)))
+  ;["tenant*", "skuCode", "latestCogs (giá MỚI)", "latestCogsCurrency", "Giá CŨ (hệ thống)", "Tăng/giảm %", "Ghi chú", "Gói", "Product", "Vendor", "Loại"].forEach((h, i) => put(up, XLSX.utils.encode_cell({ r: 0, c: i }), str(h)))
   const bad = usable.filter(x => (x.verdict === "diff" || x.verdict === "nocogs") && x.expected != null)
   bad.forEach((x, i) => {
     const r = i + 2, src = rowOf.get(`${x.sku}|${x.tenant}`)!
     put(up, `A${r}`, str(x.tenant)); put(up, `B${r}`, str(x.sku)); put(up, `C${r}`, num(x.expected!, `'${AUDIT_SHEET}'!Q${src}`)); put(up, `D${r}`, str(x.currency))
-    put(up, `E${r}`, x.current == null ? str("") : num(x.current)); put(up, `F${r}`, num(x.current ? (x.expected! - x.current) / x.current : 0, `IF(E${r}=0,0,(C${r}-E${r})/E${r})`, "0.00%")); put(up, `G${r}`, str(x.note ?? ""))
+    put(up, `E${r}`, x.current == null ? str("") : num(x.current)); put(up, `F${r}`, num(x.current ? (x.expected! - x.current) / x.current : 0, `IF(E${r}=0,0,(C${r}-E${r})/E${r})`, "0.00%")); put(up, `G${r}`, str(x.note ?? "")); put(up, `H${r}`, str(x.label)); put(up, `I${r}`, str(x.product)); put(up, `J${r}`, str(VENDOR_LABEL[x.vendor])); put(up, `K${r}`, str(x.type))
   })
-  up["!ref"] = `A1:G${Math.max(bad.length + 1, 2)}`
-  up["!cols"] = [{ wch: 8 }, { wch: 16 }, { wch: 16 }, { wch: 10 }, { wch: 16 }, { wch: 10 }, { wch: 50 }]
+  up["!ref"] = `A1:K${Math.max(bad.length + 1, 2)}`
+  up["!autofilter"] = { ref: `A1:K${Math.max(bad.length + 1, 2)}` }
+  up["!cols"] = [{ wch: 8 }, { wch: 16 }, { wch: 16 }, { wch: 10 }, { wch: 16 }, { wch: 10 }, { wch: 50 }, { wch: 40 }, { wch: 11 }, { wch: 20 }, { wch: 6 }]
 
   XLSX.utils.book_append_sheet(wb, pr, PARAM_SHEET)
   XLSX.utils.book_append_sheet(wb, ws, AUDIT_SHEET)
