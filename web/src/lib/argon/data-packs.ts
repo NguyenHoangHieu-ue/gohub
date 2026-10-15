@@ -1,9 +1,15 @@
 import { digest, fmtNum } from "./digest"
+import { SKU_SCOPES, buildProductCatalog, buildSkuPack } from "./catalog-packs"
 import { gmPct, groupBy, type Dimension, type MarketData } from "@/lib/market-breakdown"
 
 // "Gói dữ liệu" của Phòng Argon: số liệu hệ thống MỚI NHẤT lấy từ chính các endpoint của tab analytics (cùng logic, cùng số với tab) qua Bearer CRON_SECRET
 // (cùng cơ chế prewarm), rút gọn thành văn bản rồi lưu thành nguồn của dự án. Chỉ GỌI endpoint trong danh sách dưới (chỉ đọc).
-export interface PackDef { id: string; label: string; description: string; noQuarter?: boolean }
+export interface PackDef {
+  id: string; label: string; description: string
+  noQuarter?: boolean                         // gói không theo quý (quý giả "all")
+  scopes?: { id: string; label: string }[]    // gói theo NHÓM (vd vendor): giá trị chọn nằm ở trường quarter của nguồn
+  noTool?: boolean                            // quá lớn / không phải số liệu kỳ → không đưa vào công cụ lấy số liệu của Argon
+}
 /** Quý giả cho gói không theo quý (vd Wiki) — đi vào external_id/meta để dùng chung đường thêm + đồng bộ. */
 export const NO_QUARTER = "all"
 
@@ -14,6 +20,8 @@ export const PACKS: PackDef[] = [
   { id: "market", label: "Thị trường — doanh thu theo nước / vendor / loại gói", description: "Doanh thu, GP, %GM, số lượng và so quý trước, gộp theo thị trường (top 30), vendor và kiểu gói." },
   { id: "period-overview", label: "Tổng quan kỳ — BOD + KPI tháng + target", description: "Tổng doanh thu/GP/GPM2/3HK so kỳ trước, KPI theo tháng, tiến độ target — từ đầu quý đến hôm qua." },
   { id: "channels", label: "Kênh bán — doanh thu / GP / CM1 theo kênh", description: "Từng kênh: doanh thu, GP, GPM2, số đơn, doanh thu kỳ trước và %MoM — từ đầu quý đến hôm qua (cùng số với bảng kênh ở tab Channels; không có CM1)." },
+  { id: "product-catalog", label: "Danh mục Product (sync từ database)", description: "Mọi Product trừ Deleted: vendor, loại, quốc gia, nhà mạng, KYC, số SKU và khoảng giá vốn — để so sánh cấu hình/giá giữa Product, vendor.", noQuarter: true, noTool: true },
+  { id: "skus-by-vendor", label: "SKU theo vendor (sync từ database)", description: "Từng SKU ĐANG ACTIVE của 1 nhóm vendor: data, thời hạn, throttle, giá vốn hiện tại, vendorSku. Chọn nhóm vendor; 3HK ~8.000 SKU (~250k token).", scopes: SKU_SCOPES.map(x => ({ id: x.id, label: x.label })), noTool: true },
   { id: "wiki-business", label: "Wiki nghiệp vụ GoHub (từ Wiki trong hệ thống)", description: "Các trang Wiki nghiệp vụ hiện hành (chính sách, vendor, quy tắc giá, quy trình…), không gồm hướng dẫn kỹ thuật các tab. Không theo quý.", noQuarter: true },
 ]
 
@@ -56,6 +64,8 @@ function marketTable(title: string, rows: ReturnType<typeof groupBy>): string {
 /** Dựng nội dung 1 gói cho 1 quý. `origin` = gốc URL của chính server này (vd https://intel-v2.gohub.cloud). */
 export async function buildPack(id: string, quarterLabel: string, origin: string, range?: { start: string; end: string }): Promise<{ title: string; text: string }> {
   if (id === "wiki-business") return buildWikiPack()
+  if (id === "product-catalog") return buildProductCatalog()
+  if (id === "skus-by-vendor") return buildSkuPack(quarterLabel)   // với gói theo nhóm, trường "quarter" chứa id nhóm vendor
   // Khoảng ngày tuỳ chọn (công cụ của Argon): chỉ các gói tính theo khoảng ngày, bỏ qua quý.
   if (range && !RANGE_PACKS.includes(id)) throw new Error(`Báo cáo "${id}" chỉ theo quý, không theo khoảng ngày`)
   const r: QuarterRef = range ? { q: 0, year: 0, label: `${range.start} → ${range.end}`, start: range.start, end: range.end } : parseQuarter(quarterLabel)

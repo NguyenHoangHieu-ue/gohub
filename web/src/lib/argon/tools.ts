@@ -9,11 +9,12 @@ const MAX_RANGE_DAYS = 400
 
 export interface ToolLogEntry { name: string; args: Record<string, unknown>; ok: boolean; chars: number; result: string; at: string }
 
-const REPORTS = PACKS.filter(p => p.id !== "wiki-business").map(p => p.id)
+const TOOL_PACKS = PACKS.filter(p => !p.noQuarter && !p.noTool && !p.scopes)
+const REPORTS = TOOL_PACKS.map(p => p.id)
 
 export const ARGON_TOOLS: FunctionDeclaration[] = [{
   name: "layDuLieuHeThong",
-  description: `Lấy số liệu MỚI NHẤT của hệ thống GoHub (chỉ đọc). Báo cáo: ${PACKS.filter(p => p.id !== "wiki-business").map(p => `"${p.id}" (${p.label})`).join("; ")}. ` +
+  description: `Lấy số liệu MỚI NHẤT của hệ thống GoHub (chỉ đọc). Báo cáo: ${TOOL_PACKS.map(p => `"${p.id}" (${p.label})`).join("; ")}. ` +
     `Báo cáo theo quý: truyền quarter dạng "Q4-2026". Riêng ${RANGE_PACKS.map(i => `"${i}"`).join(" và ")} có thể truyền startDate + endDate (YYYY-MM-DD) thay cho quarter. Dùng khi cần số mà tài liệu trong dự án không có hoặc đã cũ; không bịa số.`,
   parameters: {
     type: Type.OBJECT,

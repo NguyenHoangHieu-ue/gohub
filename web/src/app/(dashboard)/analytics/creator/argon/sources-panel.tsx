@@ -38,9 +38,9 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
   const [lark, setLark] = useState({ url: "", mode: "snapshot" as "snapshot" | "live" })
   const [info, setInfo] = useState<string | null>(null)
   const [dataOpen, setDataOpen] = useState(false)
-  const [packs, setPacks] = useState<{ id: string; label: string; description: string; noQuarter?: boolean }[]>([])
+  const [packs, setPacks] = useState<{ id: string; label: string; description: string; noQuarter?: boolean; scopes?: { id: string; label: string }[] }[]>([])
   const [quarters, setQuarters] = useState<string[]>([])
-  const [pack, setPack] = useState({ id: "", quarter: "", mode: "snapshot" as "snapshot" | "live" })
+  const [pack, setPack] = useState({ id: "", quarter: "", scope: "", mode: "snapshot" as "snapshot" | "live" })
   const [mailOpen, setMailOpen] = useState(false)
 
   async function openData() {
@@ -48,17 +48,19 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
     setDataOpen(opening); setLarkOpen(false); setNoteOpen(false); setMailOpen(false)
     if (!opening || packs.length) return
     try {
-      const r = await api<{ packs: { id: string; label: string; description: string; noQuarter?: boolean }[]; quarters: string[] }>("/api/creator/argon/data-packs")
+      const r = await api<{ packs: { id: string; label: string; description: string; noQuarter?: boolean; scopes?: { id: string; label: string }[] }[]; quarters: string[] }>("/api/creator/argon/data-packs")
       setPacks(r.packs); setQuarters(r.quarters); setPack(p => ({ ...p, id: r.packs[0]?.id ?? "", quarter: r.quarters[0] ?? "" }))
     } catch (e) { onError((e as Error).message) }
   }
 
   async function addPack() {
-    const noQ = packs.find(p => p.id === pack.id)?.noQuarter
-    if (!pack.id || (!pack.quarter && !noQ)) return
+    const def = packs.find(p => p.id === pack.id)
+    const noQ = !!def?.noQuarter
+    const scopeId = def?.scopes ? (pack.scope || def.scopes[0]?.id) : undefined
+    if (!pack.id || (!pack.quarter && !noQ && !scopeId)) return
     setBusy("Đang lấy số liệu hệ thống… (có thể mất ~30 giây)"); setInfo(null)
     try {
-      const r = await api<{ sources: Source[]; skipped: string[] }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "data", pack: pack.id, quarter: noQ ? "all" : pack.quarter, mode: pack.mode }))
+      const r = await api<{ sources: Source[]; skipped: string[] }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "data", pack: pack.id, quarter: scopeId ?? (noQ ? "all" : pack.quarter), mode: pack.mode }))
       setSources(prev => [...prev, ...r.sources])
       setInfo(r.sources.length ? `Đã thêm gói dữ liệu (${fmtTokens(r.sources[0].tokens)} token)` : r.skipped.join(", "))
       if (r.sources.length) setDataOpen(false)
@@ -233,7 +235,10 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
           </select>
           <div className="text-gray-400">{packs.find(p => p.id === pack.id)?.description}</div>
           <div className="flex flex-wrap items-center gap-2">
-            {!packs.find(p => p.id === pack.id)?.noQuarter && <select value={pack.quarter} onChange={e => setPack(p => ({ ...p, quarter: e.target.value }))} className="px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent">
+            {packs.find(p => p.id === pack.id)?.scopes && <select value={pack.scope || packs.find(p => p.id === pack.id)!.scopes![0].id} onChange={e => setPack(p => ({ ...p, scope: e.target.value }))} className="px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent">
+              {packs.find(p => p.id === pack.id)!.scopes!.map(sc => <option key={sc.id} value={sc.id}>{sc.label}</option>)}
+            </select>}
+            {!packs.find(p => p.id === pack.id)?.noQuarter && !packs.find(p => p.id === pack.id)?.scopes && <select value={pack.quarter} onChange={e => setPack(p => ({ ...p, quarter: e.target.value }))} className="px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent">
               {quarters.map(q => <option key={q} value={q}>{q}</option>)}
             </select>}
             <label className="inline-flex items-center gap-1"><input type="radio" checked={pack.mode === "snapshot"} onChange={() => setPack(p => ({ ...p, mode: "snapshot" }))} />Chụp lại (hằng đêm)</label>
