@@ -219,7 +219,7 @@ export async function GET(req: NextRequest) {
     const hasProjected = monthMeta.some(mr => mr.isProjected)
 
     // Aggregate customer data — lưu giá trị PROJECTED + rawRevenue/rawGm (actual, để tính actual vs PR).
-    interface CustMonth { revenue: number; gm: number; hk3: number; rawRevenue: number; rawGm: number; factor: number }
+    interface CustMonth { revenue: number; gm: number; hk3: number; rawRevenue: number; rawGm: number; rawHk3: number; factor: number }
     interface CustomerAgg {
       code: string; name: string; priceListName: string | null; currencyCode: string | null
       tier: string; region: string; orgKey: string; orgName: string
@@ -259,10 +259,11 @@ export async function GET(req: NextRequest) {
         existing.hk3 += hk3Act * factor
         existing.rawRevenue += revAct
         existing.rawGm += gmAct
+        existing.rawHk3 += hk3Act
       } else {
         cust.months.set(row.month, {
           revenue: revAct * factor, gm: gmAct * factor, hk3: hk3Act * factor,
-          rawRevenue: revAct, rawGm: gmAct, factor,
+          rawRevenue: revAct, rawGm: gmAct, rawHk3: hk3Act, factor,
         })
       }
     })
@@ -279,8 +280,9 @@ export async function GET(req: NextRequest) {
     interface CustMonthCost { cost_lines: string; cost_type: string; cost_value: number; revenue: number }
     interface CustMonthSummary {
       revenue: number; gm: number; cc: number; cm1: number; cm1Pct: number; hk3Pct: number
+      hk3Rev: number          // doanh thu 3HK của tháng (cùng cơ sở chiếu với revenue)
       isProjected: boolean
-      actualRevenue?: number; actualGm?: number; actualCc?: number; actualCm1?: number
+      actualRevenue?: number; actualGm?: number; actualCc?: number; actualCm1?: number; actualHk3Rev?: number
     }
     interface CustRow {
       code: string; name: string; region: string; priceListName: string | null
@@ -291,7 +293,7 @@ export async function GET(req: NextRequest) {
       monthsCost: Record<string, CustMonthCost>
       monthSummary: Record<string, CustMonthSummary>   // per-month breakdown
       hasProjected: boolean
-      actualRevenue: number; actualGm: number; actualCc: number; actualCm1: number
+      actualRevenue: number; actualGm: number; actualCc: number; actualCm1: number; actualHk3Rev: number
     }
     const tierMap = new Map<string, {
       tier: string
@@ -309,7 +311,7 @@ export async function GET(req: NextRequest) {
       const tier = tierMap.get(cust.tier) ?? tierMap.get("Strategic")!
       const reg: "VN" | "US" = cust.region === "US" ? "US" : "VN"
       let totRev = 0, totGm = 0, totCc = 0, totHk3 = 0
-      let totActRev = 0, totActGm = 0, totActCc = 0
+      let totActRev = 0, totActGm = 0, totActCc = 0, totActHk3 = 0
       const monthsCost: Record<string, CustMonthCost> = {}
       const monthSummary: Record<string, CustMonthSummary> = {}
 
@@ -349,16 +351,16 @@ export async function GET(req: NextRequest) {
           const isRunning = !!(meta && !meta.isFuture && meta.elapsed > 0 && meta.elapsed < meta.dim)
           monthSummary[m] = {
             revenue: r2(md.revenue), gm: r2(md.gm), cc: r2(monthCost),
-            cm1: r2(mCm1), cm1Pct: pct(mCm1, md.revenue), hk3Pct: pct(md.hk3, md.revenue),
+            cm1: r2(mCm1), cm1Pct: pct(mCm1, md.revenue), hk3Pct: pct(md.hk3, md.revenue), hk3Rev: r2(md.hk3),
             isProjected: isProj,
             ...(isRunning && {
-              ...(isProj && { actualRevenue: r2(md.rawRevenue), actualGm: r2(md.rawGm) }),
+              ...(isProj && { actualRevenue: r2(md.rawRevenue), actualGm: r2(md.rawGm), actualHk3Rev: r2(md.rawHk3) }),
               actualCc: r2(rawCc),
               actualCm1: r2(md.rawGm - rawCc),
             }),
           }
           totRev += md.revenue; totGm += md.gm; totCc += monthCost; totHk3 += md.hk3
-          totActRev += md.rawRevenue; totActGm += md.rawGm; totActCc += rawCc
+          totActRev += md.rawRevenue; totActGm += md.rawGm; totActCc += rawCc; totActHk3 += md.rawHk3
 
           const acc = (map: Map<string, MAgg>) => {
             const ta = map.get(m) || emptyMAgg()
@@ -391,7 +393,7 @@ export async function GET(req: NextRequest) {
         prevCm1: r2(prevCm1 ?? 0),
         monthsCost, monthSummary,
         hasProjected,
-        actualRevenue: r2(totActRev), actualGm: r2(totActGm),
+        actualRevenue: r2(totActRev), actualGm: r2(totActGm), actualHk3Rev: r2(totActHk3),
         actualCc: r2(totActCc), actualCm1: r2(totActGm - totActCc),
       })
     })

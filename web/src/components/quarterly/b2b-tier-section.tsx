@@ -423,7 +423,8 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
   // rồi xuất số 3 kênh (s225: user cần Ch.Cost đúng như bảng, Bé Gấu/Gấu Pro tính sai). Cùng công thức với hàng mở rộng bên dưới.
   const exportCustomerDetail = async () => {
     if (!selectedTierData) return
-    type Vals = { rev: number; gm: number; cc: number; cm1: number; hk3: number }
+    // hk3Den = mẫu số của 3HK% (mặc định = rev). Tổng Quý Pro-rata hiện đúng như web: c.hk3Rev / c.hk3Pct (cùng cơ sở chiếu với nhau, KHÔNG phải với Revenue × futureScale).
+    type Vals = { rev: number; gm: number; cc: number; cm1: number; hk3: number; hk3Den?: number }
     const custs: { c: any; reg: string }[] = []
     regionsToShow.forEach(reg => (selectedTierData.byRegion?.[reg]?.customers ?? []).filter(matchSearch).forEach((c: any) => custs.push({ c, reg })))
     if (!custs.length) { notify?.(false, "Không có khách hàng nào để xuất"); return }
@@ -434,20 +435,20 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       const ms: Record<string, any> = c.monthSummary ?? {}
       const pr = custPr(c)
       const out: Record<string, Vals | null> = {}
-      const act = (m: any): Vals => ({ rev: m.actualRevenue ?? m.revenue, gm: m.actualGm ?? m.gm, cc: m.actualCc ?? m.cc, cm1: m.actualCm1 ?? m.cm1, hk3: m.hk3Rev ?? 0 })
+      const act = (m: any): Vals => ({ rev: m.actualRevenue ?? m.revenue, gm: m.actualGm ?? m.gm, cc: m.actualCc ?? m.cc, cm1: m.actualCm1 ?? m.cm1, hk3: m.actualHk3Rev ?? m.hk3Rev ?? 0 })
       quarterMonths.forEach(m => {
         const d = ms[m]
         if ((monthKpiFactor[m] ?? 1) > 1) {
           const f = monthKpiFactor[m]
           out[`${m}|act`] = d ? act(d) : null
-          out[`${m}|pr`] = d ? { rev: act(d).rev * f, gm: act(d).gm * f, cc: act(d).cc * f, cm1: act(d).cm1 * f, hk3: d.hk3Rev ?? 0 } : null
+          out[`${m}|pr`] = d ? { rev: act(d).rev * f, gm: act(d).gm * f, cc: act(d).cc * f, cm1: act(d).cm1 * f, hk3: act(d).hk3 * f } : null
         } else if (d) out[`${m}|one`] = { rev: d.revenue, gm: d.gm, cc: d.actualCc ?? d.cc, cm1: d.actualCm1 ?? d.cm1, hk3: d.hk3Rev ?? 0 }
         else out[`${m}|one`] = futureMonthsFE.includes(m)
-          ? { rev: pr.exRev * futRatio(m), gm: pr.exGm * futRatio(m), cc: pr.exCc * futRatio(m), cm1: pr.exCm1 * futRatio(m), hk3: 0 } : null
+          ? { rev: pr.exRev * futRatio(m), gm: pr.exGm * futRatio(m), cc: pr.exCc * futRatio(m), cm1: pr.exCm1 * futRatio(m), hk3: pr.exHk3 * futRatio(m) } : null
       })
       const hp = c.hasProjected === true
-      out["Q|pr"] = { rev: pr.prRev, gm: pr.prGm, cc: pr.prGm - pr.prCm1, cm1: pr.prCm1, hk3: c.hk3Rev ?? 0 }
-      out["Q|act"] = { rev: hp ? (c.actualRevenue ?? c.revenue) : c.revenue, gm: hp ? (c.actualGm ?? c.gm) : c.gm, cc: hp ? (c.actualCc ?? c.cc) : c.cc, cm1: hp ? (c.actualCm1 ?? c.cm1) : c.cm1, hk3: c.hk3Rev ?? 0 }
+      out["Q|pr"] = { rev: pr.prRev, gm: pr.prGm, cc: pr.prGm - pr.prCm1, cm1: pr.prCm1, hk3: c.hk3Rev ?? 0, hk3Den: c.revenue }
+      out["Q|act"] = { rev: hp ? (c.actualRevenue ?? c.revenue) : c.revenue, gm: hp ? (c.actualGm ?? c.gm) : c.gm, cc: hp ? (c.actualCc ?? c.cc) : c.cc, cm1: hp ? (c.actualCm1 ?? c.cm1) : c.cm1, hk3: hp ? (c.actualHk3Rev ?? c.hk3Rev ?? 0) : (c.hk3Rev ?? 0) }
       return out
     }
     // Mỗi KH = 1 HÀNG; mỗi chỉ số có 2 cột liền nhau (Pro-rata, Thực tế) cho từng tháng + Tổng Quý.
@@ -465,7 +466,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
     const METRICS = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "3HK Rev", "3HK%"]
     const pctOf = (a: number, b: number) => b ? Number((a / b * 100).toFixed(1)) : ""
     const cells = (v: Vals | null): (string | number)[] => v
-      ? [Math.round(v.rev), Math.round(v.gm), Math.round(v.cc), Math.round(v.cm1), pctOf(v.cm1, v.rev), Math.round(v.hk3), pctOf(v.hk3, v.rev)]
+      ? [Math.round(v.rev), Math.round(v.gm), Math.round(v.cc), Math.round(v.cm1), pctOf(v.cm1, v.rev), Math.round(v.hk3), pctOf(v.hk3, v.hk3Den ?? v.rev)]
       : METRICS.map(() => "")
     const weave = (p: Pair): (string | number)[] => {
       const a = cells(p.pr), b = cells(p.act)
@@ -477,7 +478,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
     const rows: (string | number)[][] = []
     const sum = slots.map(() => ({ pr: null as Vals | null, act: null as Vals | null }))
     const addTo = (acc: Vals | null, v: Vals | null): Vals | null =>
-      !v ? acc : { rev: (acc?.rev ?? 0) + v.rev, gm: (acc?.gm ?? 0) + v.gm, cc: (acc?.cc ?? 0) + v.cc, cm1: (acc?.cm1 ?? 0) + v.cm1, hk3: (acc?.hk3 ?? 0) + v.hk3 }
+      !v ? acc : { rev: (acc?.rev ?? 0) + v.rev, gm: (acc?.gm ?? 0) + v.gm, cc: (acc?.cc ?? 0) + v.cc, cm1: (acc?.cm1 ?? 0) + v.cm1, hk3: (acc?.hk3 ?? 0) + v.hk3, ...(v.hk3Den != null || acc?.hk3Den != null ? { hk3Den: (acc?.hk3Den ?? acc?.rev ?? 0) + (v.hk3Den ?? v.rev) } : {}) }
     custs.forEach(({ c, reg }) => {
       const vals = valuesOf(c)
       const row: (string | number)[] = [selectedTierData.tier, reg, c.code, c.name]
@@ -1139,6 +1140,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                   const isFut = (mk: string) => futureMonthsFE.includes(mk)
                                   // accessor actual per metric (tháng hiện tại)
                                   const aRev = (m: any) => m.actualRevenue ?? m.revenue
+                                  const aHk3 = (m: any) => m.actualHk3Rev ?? m.hk3Rev ?? 0
                                   const aGm  = (m: any) => m.actualGm ?? m.gm
                                   const aCc  = (m: any) => m.actualCc ?? m.cc
                                   const aCm1 = (m: any) => m.actualCm1 ?? m.cm1
@@ -1188,8 +1190,8 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                       single:  (mk) => { const m = ms[mk]; if (m) return <span className={cn("text-[10px]", cm1Color(m.cm1))}>{pct(m.cm1Pct)}</span>; return isFut(mk) ? <span className={cn("text-[10px] italic", cm1Color(pr.exCm1))}>{pct(pr.prCm1Pct)}</span> : <span className="text-slate-200">—</span> },
                                       tot: <span className={cn("text-[10px]", cm1Color(cPrCm1))}>{pct(cPrRev > 0 ? cPrCm1 / cPrRev * 100 : 0)}</span> },
                                     { label: "3HK",
-                                      actCell: (mk) => <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(ms[mk].hk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(ms[mk].hk3Pct)})</span></span>,
-                                      prCell:  (mk) => <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(ms[mk].hk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(ms[mk].hk3Pct)})</span></span>,
+                                      actCell: (mk) => <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(Math.round(aHk3(ms[mk])))} <span className="text-[9px] text-slate-400">({pct(ms[mk].hk3Pct)})</span></span>,
+                                      prCell:  (mk) => <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(Math.round(aHk3(ms[mk]) * mf(mk)))} <span className="text-[9px] text-slate-400">({pct(ms[mk].hk3Pct)})</span></span>,
                                       single:  (mk) => { const m = ms[mk]; if (m) return <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.hk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(m.hk3Pct)})</span></span>; return isFut(mk) ? <span className="tabular-nums text-slate-400 text-[10px] italic">{pct(c.hk3Pct)}</span> : <span className="text-slate-200">—</span> },
                                       tot: <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(c.hk3Rev)} <span className="text-[9px] text-slate-400">({pct(c.hk3Pct)})</span></span> },
                                   ]
