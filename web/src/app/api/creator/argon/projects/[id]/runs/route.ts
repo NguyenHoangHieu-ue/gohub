@@ -1,25 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
-import { ThinkingLevel, type Part } from "@google/genai"
 import { supabaseAdmin } from "@/lib/supabase"
-import { genai } from "@/lib/agents/genai-stream"
 import { GEMINI_MODEL_ARGON } from "@/lib/ai-models"
 import { estimateArgonCostUsd } from "@/lib/agents/gemini-pricing"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { ownProject, requireArgonUser, type ArgonRun, type ArgonSource } from "@/lib/argon/server"
+import { ownProject, requireArgonUser, type ArgonRun } from "@/lib/argon/server"
 import { buildRunContext } from "@/lib/argon/context"
-import { syncMany } from "@/lib/argon/lark-sync"
+import { LEVELS, runSegment } from "@/lib/argon/run-engine"
+import { MAX_OUT, SEGMENT_MS, loadRunSources } from "@/lib/argon/bg-worker"
+import { deleteBg, deleteToolLog, getToolLog, saveToolLog, setBg, triggerWorker } from "@/lib/argon/bg"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
 
-const SEGMENT_MS = 265_000          // hết ngân sách đoạn → lưu dở (status partial), giao diện tự "Tiếp tục"
-const MAX_OUT = 32_768              // trần output mỗi đoạn của key hiện tại; chạm trần cũng đi qua "Tiếp tục"
-const LEVELS: Record<string, ThinkingLevel> = { low: ThinkingLevel.LOW, medium: ThinkingLevel.MEDIUM, high: ThinkingLevel.HIGH }
-const TRANSIENT = /429|rate|quota|resource.?exhausted|500|503|overload|unavailable|deadline|ECONNRESET|fetch failed/i
-
-// POST { prompt, thinking?: low|medium|high, sourceIds?: string[], resumeRunId? } → SSE:
-//   {type:"start",runId,warnings,sources} · {type:"delta",text} · {type:"done",run} · {type:"error",message}
-// resumeRunId = viết tiếp câu trả lời dở của lượt đó (cùng run, cộng dồn).
+// POST { prompt, thinking?: low|medium|high, sourceIds?, resumeRunId?, allowTools?, background? }
+//   mặc định → SSE: {type:"start",runId,warnings,sources} · {type:"delta",text} · {type:"tool",...} · {type:"done",run} · {type:"error",message}
+//   background:true → tạo lượt (status queued) + giao worker chạy nền (không giới hạn đoạn), trả JSON {runId}; xong thì nhắn Lark.
+//   resumeRunId = viết tiếp câu trả lời dở của lượt đó (cùng run, cộng dồn). allowTools = cho Argon tự lấy số liệu hệ thống (chỉ đọc).
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const username = await requireArgonUser()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
@@ -28,7 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const rl = await checkRateLimit(`argon:${username}`, 20, 60_000)
   if (!rl.allowed) return NextResponse.json({ error: `Quá nhiều yêu cầu, chờ ${Math.ceil(rl.resetMs / 1000)}s` }, { status: 429 })
 
-  const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string }
+  const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string; allowTools?: boolean; background?: boolean }
   const thinking = b.thinking && LEVELS[b.thinking] ? b.thinking : "medium"
 
   const { data: allRuns } = await supabaseAdmin.from("argon_runs").select("*").eq("project_id", params.id).order("created_at")
@@ -37,20 +33,33 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (b.resumeRunId && !resume) return NextResponse.json({ error: "Không tìm thấy lượt cần tiếp tục" }, { status: 404 })
   const prompt = resume ? resume.prompt : String(b.prompt ?? "").trim()
   if (!prompt) return NextResponse.json({ error: "Thiếu yêu cầu" }, { status: 400 })
+  const allowTools = !!b.allowTools
 
-  const { data: srcRows } = await supabaseAdmin.from("argon_sources").select("*").eq("project_id", params.id).eq("enabled", true)
   const pick = resume ? new Set(resume.source_ids) : b.sourceIds ? new Set(b.sourceIds) : null
-  let sources = ((srcRows ?? []) as ArgonSource[]).filter(s => !pick || pick.has(s.id))
-  // Nguồn Lark / gói dữ liệu chế độ "live": đọc lại ngay trước khi chạy (nội dung mới nhất); lỗi thì dùng bản đã lưu.
-  const live = sources.filter(s => (s.kind === "lark" || s.external_id?.startsWith("datapack:")) && s.sync_mode === "live")
-  if (live.length) {
-    await syncMany(live, req.nextUrl.origin)
-    const { data: fresh } = await supabaseAdmin.from("argon_sources").select("*").in("id", live.map(s => s.id))
-    const byId = new Map(((fresh ?? []) as ArgonSource[]).map(s => [s.id, s]))
-    sources = sources.map(s => byId.get(s.id) ?? s)
+
+  // ── Việc nền: chỉ tạo lượt + giao worker (nguồn live được đọc lại ở đoạn đầu của worker) ──
+  if (b.background) {
+    let runId = resume?.id ?? ""
+    if (resume) {
+      await supabaseAdmin.from("argon_runs").update({ status: "queued", error: null, finished_at: null }).eq("id", runId)
+    } else {
+      const { data: enabled } = await supabaseAdmin.from("argon_sources").select("id").eq("project_id", params.id).eq("enabled", true)
+      const ids = (enabled ?? []).map(s => s.id as string).filter(id => !pick || pick.has(id))
+      const { data, error } = await supabaseAdmin.from("argon_runs").insert({
+        project_id: params.id, username, prompt, status: "queued", model: GEMINI_MODEL_ARGON, thinking, source_ids: ids,
+      }).select("id").single()
+      if (error || !data) return NextResponse.json({ error: error?.message ?? "Không tạo được lượt chạy" }, { status: 500 })
+      runId = data.id
+    }
+    const now = new Date().toISOString()
+    await setBg(runId, { username, projectId: params.id, allowTools, thinking, startedAt: now, heartbeat: now })
+    await triggerWorker(req.nextUrl.origin, runId)
+    return NextResponse.json({ runId, background: true })
   }
 
-  const ctx = await buildRunContext({ project, sources, priorRuns: runs, prompt, resumeRun: resume })
+  const sources = await loadRunSources(params.id, pick, req.nextUrl.origin)
+  const toolLog = resume ? await getToolLog(resume.id) : []
+  const ctx = await buildRunContext({ project, sources, priorRuns: runs, prompt, resumeRun: resume, allowTools, toolLog })
   const t0 = Date.now()
   let runId = resume?.id ?? ""
   let answer = resume?.answer ?? ""
@@ -68,63 +77,55 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const stream = new ReadableStream({
     async start(controller) {
       const send = (o: unknown) => { try { controller.enqueue(enc.encode(`data: ${JSON.stringify(o)}\n\n`)) } catch { /* client đã đóng */ } }
-      const ac = new AbortController()
-      const onAbort = () => ac.abort()
-      req.signal.addEventListener("abort", onAbort)
-      const timer = setTimeout(() => ac.abort(new Error("segment-timeout")), SEGMENT_MS)
-      let tokensIn = 0, tokensOut = 0, cachedIn = 0, finish = "", lastSave = Date.now(), status = "done", errMsg: string | null = null
       send({ type: "start", runId, warnings: ctx.warnings, sources: ctx.usedSourceIds.length })
       const save = (extra: Record<string, unknown> = {}) => supabaseAdmin.from("argon_runs").update({ answer, ...extra }).eq("id", runId)
-      try {
-        for (let attempt = 0; attempt < 3; attempt++) {
-          let emitted = false
-          try {
-            const res = await genai().models.generateContentStream({
-              model: GEMINI_MODEL_ARGON, contents: ctx.contents,
-              config: { systemInstruction: ctx.systemInstruction, thinkingConfig: { thinkingLevel: LEVELS[thinking] }, maxOutputTokens: MAX_OUT, abortSignal: ac.signal },
-            })
-            for await (const chunk of res) {
-              const parts: Part[] = chunk.candidates?.[0]?.content?.parts ?? []
-              for (const p of parts) {
-                if (typeof p.text === "string" && p.text && !p.thought) { emitted = true; answer += p.text; send({ type: "delta", text: p.text }) }
-              }
-              const u = chunk.usageMetadata
-              if (u) { tokensIn = u.promptTokenCount ?? tokensIn; tokensOut = u.candidatesTokenCount ?? tokensOut; cachedIn = u.cachedContentTokenCount ?? cachedIn }
-              finish = chunk.candidates?.[0]?.finishReason ?? finish
-              if (Date.now() - lastSave > 4000) { lastSave = Date.now(); void save() }
-            }
-            break
-          } catch (e) {
-            if (emitted || ac.signal.aborted || !TRANSIENT.test(String((e as Error)?.message)) || attempt === 2) throw e
-            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
-          }
-        }
-        if (/MAX_TOKENS/i.test(finish)) status = "partial"
-        else if (finish && !/STOP/i.test(finish)) { status = "error"; errMsg = `Model dừng với lý do ${finish}` }
-      } catch (e) {
-        const timedOut = String(ac.signal.reason?.message ?? "").includes("segment-timeout")
-        if (timedOut) status = "partial"
-        else if (req.signal.aborted) status = "stopped"
-        else { status = "error"; errMsg = (e as Error)?.message?.slice(0, 500) ?? "Lỗi không rõ" }
-      } finally {
-        clearTimeout(timer)
-        req.signal.removeEventListener("abort", onAbort)
-      }
+      const log = [...toolLog]
+      const seg = await runSegment({
+        ctx, thinking, segmentMs: SEGMENT_MS, maxOut: MAX_OUT, signal: req.signal,
+        tools: allowTools ? { origin: req.nextUrl.origin, log, onTool: async e => { send({ type: "tool", name: e.name, args: e.args, ok: e.ok, chars: e.chars }); await saveToolLog(runId, log) } } : undefined,
+        onDelta: t => { answer += t; send({ type: "delta", text: t }) },
+        onProgress: () => { void save() },
+      })
       const prev = resume
-      const inTotal = (prev?.tokens_in ?? 0) + tokensIn, outTotal = (prev?.tokens_out ?? 0) + tokensOut, cachedTotal = (prev?.cached_in ?? 0) + cachedIn
       const patch = {
-        status, error: errMsg, tokens_in: inTotal, tokens_out: outTotal, cached_in: cachedTotal,
-        cost_usd: Math.round(((prev?.cost_usd ?? 0) + estimateArgonCostUsd(tokensIn, tokensOut, cachedIn)) * 10_000) / 10_000,
+        status: seg.status, error: seg.error, tokens_in: (prev?.tokens_in ?? 0) + seg.tokensIn, tokens_out: (prev?.tokens_out ?? 0) + seg.tokensOut, cached_in: (prev?.cached_in ?? 0) + seg.cachedIn,
+        cost_usd: Math.round(((prev?.cost_usd ?? 0) + estimateArgonCostUsd(seg.tokensIn, seg.tokensOut, seg.cachedIn)) * 10_000) / 10_000,
         duration_ms: (prev?.duration_ms ?? 0) + (Date.now() - t0), segments: (prev?.segments ?? 0) + 1,
-        finished_at: status === "partial" ? null : new Date().toISOString(),
+        finished_at: seg.status === "partial" ? null : new Date().toISOString(),
       }
       await save(patch)
       await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
-      send(status === "error" && !answer ? { type: "error", message: errMsg } : { type: "done", run: { id: runId, answer, ...patch } })
+      send(seg.status === "error" && !answer ? { type: "error", message: seg.error } : { type: "done", run: { id: runId, answer, ...patch } })
       try { controller.close() } catch { /* đã đóng */ }
     },
   })
   return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no" } })
+}
+
+// GET ?runId=…&tools=1 → nhật ký công cụ của lượt (tên, tham số, thành công?, kích thước; kèm kết quả nếu &full=1).
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const username = await requireArgonUser()
+  if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!(await ownProject(params.id, username))) return NextResponse.json({ error: "Không tìm thấy dự án" }, { status: 404 })
+  const runId = req.nextUrl.searchParams.get("runId")
+  if (!runId) return NextResponse.json({ error: "Thiếu runId" }, { status: 400 })
+  const { data: run } = await supabaseAdmin.from("argon_runs").select("id").eq("id", runId).eq("project_id", params.id).maybeSingle()
+  if (!run) return NextResponse.json({ error: "Không tìm thấy lượt" }, { status: 404 })
+  const full = req.nextUrl.searchParams.get("full") === "1"
+  const log = await getToolLog(runId)
+  return NextResponse.json({ tools: log.map(t => ({ name: t.name, args: t.args, ok: t.ok, chars: t.chars, at: t.at, ...(full ? { result: t.result } : {}) })) })
+}
+
+// PATCH { runId, action:"cancel" } → dừng lượt đang chạy nền (worker thấy "stopped" ở nhịp lưu kế tiếp, tối đa vài giây).
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const username = await requireArgonUser()
+  if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!(await ownProject(params.id, username))) return NextResponse.json({ error: "Không tìm thấy dự án" }, { status: 404 })
+  const b = (await req.json().catch(() => ({}))) as { runId?: string; action?: string }
+  if (!b.runId || b.action !== "cancel") return NextResponse.json({ error: "Cần runId và action:\"cancel\"" }, { status: 400 })
+  const { data } = await supabaseAdmin.from("argon_runs").update({ status: "stopped", finished_at: new Date().toISOString() }).eq("id", b.runId).eq("project_id", params.id).in("status", ["queued", "running"]).select("id")
+  if (data?.length) await deleteBg(b.runId)
+  return NextResponse.json({ ok: !!data?.length })
 }
 
 // DELETE ?runId= → xoá 1 lượt khỏi lịch sử dự án.
@@ -135,5 +136,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const runId = req.nextUrl.searchParams.get("runId")
   if (!runId) return NextResponse.json({ error: "Thiếu runId" }, { status: 400 })
   await supabaseAdmin.from("argon_runs").delete().eq("id", runId).eq("project_id", params.id)
+  await Promise.all([deleteBg(runId), deleteToolLog(runId)])
   return NextResponse.json({ ok: true })
 }

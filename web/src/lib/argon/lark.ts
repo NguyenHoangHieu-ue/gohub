@@ -8,9 +8,9 @@ const MAX_SHEET_COLS = 60
 const ROWS_PER_CALL = 500
 const MAX_BASE_RECORDS = 5000
 
-export type LarkKind = "docx" | "sheet" | "wiki" | "base" | "folder" | "unknown"
+export type LarkKind = "docx" | "sheet" | "wiki" | "base" | "folder" | "minutes" | "unknown"
 export interface LarkRef { kind: LarkKind; token: string; tableId?: string }
-export interface LarkContent { kind: "docx" | "sheet" | "base"; token: string; title: string; text: string; url?: string }
+export interface LarkContent { kind: "docx" | "sheet" | "base" | "minutes"; token: string; title: string; text: string; url?: string }
 export interface LarkFolderItem { token: string; type: string; name: string; url?: string }
 
 async function lk(token: string, path: string, init: RequestInit = {}): Promise<any> {
@@ -26,7 +26,7 @@ async function lk(token: string, path: string, init: RequestInit = {}): Promise<
 export function parseLarkUrl(input: string): LarkRef {
   const s = input.trim()
   const table = s.match(/[?&]table=([A-Za-z0-9]+)/)?.[1]
-  const m = s.match(/\/(docx|docs|sheets|wiki|base|folder)\/([A-Za-z0-9]+)/)
+  const m = s.match(/\/(docx|docs|sheets|wiki|base|folder|minutes)\/([A-Za-z0-9]+)/)
   if (!m) return { kind: "unknown", token: s }
   const kind: LarkKind = m[1] === "sheets" ? "sheet" : m[1] === "docs" ? "docx" : (m[1] as LarkKind)
   return { kind, token: m[2], tableId: table }
@@ -106,6 +106,23 @@ async function readBase(token: string, appToken: string, tableId?: string): Prom
   return { title, text: parts.join("\n\n") || "(Base trống)" }
 }
 
+/** Biên bản họp Lark Minutes: tiêu đề + thông tin + bản ghi lời (có người nói, mốc thời gian). Cần scope minutes (Kết nối Lark lại nếu thiếu). */
+async function readMinutes(token: string, minuteToken: string): Promise<{ title: string; text: string }> {
+  const meta = await lk(token, `/minutes/v1/minutes/${minuteToken}`)
+  const m = (meta.minute ?? meta) as { title?: string; duration?: string | number; create_time?: string | number; owner_id?: string }
+  const res = await fetch(`${L}/minutes/v1/minutes/${minuteToken}/transcript?need_speaker=true&need_timestamp=true&file_format=txt`, { headers: { Authorization: `Bearer ${token}` } })
+  const ct = res.headers.get("content-type") ?? ""
+  const raw = await res.text()
+  if (ct.includes("json")) {
+    const d = JSON.parse(raw) as { code?: number; msg?: string }
+    if (d.code) throw new Error(d.code === 99991679 ? `Token Lark thiếu quyền Minutes — bấm "Kết nối Lark" lại ở Creator Settings (${d.msg ?? ""})` : `Lark ${d.code}: ${d.msg}`)
+  }
+  if (!res.ok) throw new Error(`Lark Minutes HTTP ${res.status}`)
+  const title = String(m.title ?? "Cuộc họp Lark")
+  const dur = m.duration != null ? ` · thời lượng ${Math.round(Number(m.duration) / 60000)} phút` : ""
+  return { title, text: `Biên bản họp: ${title}${dur}\n\n${raw.trim() || "(Chưa có bản ghi lời)"}` }
+}
+
 /** Liệt kê file trong thư mục Lark (1 cấp; thư mục con trả về với type "folder" để gọi tiếp). */
 export async function listFolder(token: string, folderToken: string): Promise<LarkFolderItem[]> {
   const out: LarkFolderItem[] = []
@@ -123,6 +140,7 @@ export async function readLark(input: string | LarkRef, token?: string): Promise
   const tk = token ?? (await getLarkUserToken())
   if (!tk) throw new Error('Chưa kết nối Lark của Creator — bấm "Kết nối Lark" ở Creator Settings')
   const ref = await resolveWiki(tk, typeof input === "string" ? parseLarkUrl(input) : input)
+  if (ref.kind === "minutes") return { kind: "minutes", token: ref.token, ...(await readMinutes(tk, ref.token)) }
   if (ref.kind === "sheet") return { kind: "sheet", token: ref.token, ...(await readSheet(tk, ref.token)) }
   if (ref.kind === "base") return { kind: "base", token: ref.token, ...(await readBase(tk, ref.token, ref.tableId)) }
   if (ref.kind === "docx" || ref.kind === "unknown") return { kind: "docx", token: ref.token, ...(await readDocx(tk, ref.token)) }

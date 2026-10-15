@@ -17,6 +17,9 @@ export const PACKS: PackDef[] = [
   { id: "wiki-business", label: "Wiki nghiệp vụ GoHub (từ Wiki trong hệ thống)", description: "Các trang Wiki nghiệp vụ hiện hành (chính sách, vendor, quy tắc giá, quy trình…), không gồm hướng dẫn kỹ thuật các tab. Không theo quý.", noQuarter: true },
 ]
 
+/** Gói tính được theo khoảng ngày tuỳ chọn (đã đủ tham số startDate/endDate ở endpoint). */
+export const RANGE_PACKS = ["period-overview", "channels"]
+
 export interface QuarterRef { q: number; year: number; label: string; start: string; end: string }
 
 const pad = (n: number) => String(n).padStart(2, "0")
@@ -51,9 +54,11 @@ function marketTable(title: string, rows: ReturnType<typeof groupBy>): string {
 }
 
 /** Dựng nội dung 1 gói cho 1 quý. `origin` = gốc URL của chính server này (vd https://intel-v2.gohub.cloud). */
-export async function buildPack(id: string, quarterLabel: string, origin: string): Promise<{ title: string; text: string }> {
+export async function buildPack(id: string, quarterLabel: string, origin: string, range?: { start: string; end: string }): Promise<{ title: string; text: string }> {
   if (id === "wiki-business") return buildWikiPack()
-  const r = parseQuarter(quarterLabel)
+  // Khoảng ngày tuỳ chọn (công cụ của Argon): chỉ các gói tính theo khoảng ngày, bỏ qua quý.
+  if (range && !RANGE_PACKS.includes(id)) throw new Error(`Báo cáo "${id}" chỉ theo quý, không theo khoảng ngày`)
+  const r: QuarterRef = range ? { q: 0, year: 0, label: `${range.start} → ${range.end}`, start: range.start, end: range.end } : parseQuarter(quarterLabel)
   const note = `Lấy lúc ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC · ${r.label} · dữ liệu đến ${r.end} (hôm qua). Đơn vị tiền: VND. "pro-rata/PR" = chiếu cả tháng/quý theo số ngày đã qua.`
   switch (id) {
     case "quarter-report": {

@@ -7,6 +7,8 @@ import { Send, Square, Copy, Trash2, BookmarkPlus, FilePlus2, Play, Loader2, Bra
 import { cn } from "@/lib/utils"
 import { api, jsonInit, fmtTokens, type Run } from "./argon-types"
 
+interface ToolChip { name: string; args: Record<string, unknown>; ok: boolean; chars: number }
+const toolLabel = (t: ToolChip) => `${String(t.args.report ?? t.name)} ${String(t.args.quarter || (t.args.startDate ? `${t.args.startDate}→${t.args.endDate}` : ""))}`.trim()
 type Thinking = "low" | "medium" | "high"
 const THINK_LABEL: Record<Thinking, string> = { low: "Nhanh", medium: "Cân bằng", high: "Suy luận sâu" }
 const MAX_AUTO_SEGMENTS = 6
@@ -40,6 +42,9 @@ export function ChatPanel({ projectId, runs, setRuns, enabledCount, onAppendNote
   const [thinking, setThinking] = useState<Thinking>("medium")
   const [busy, setBusy] = useState(false)
   const [warn, setWarn] = useState<string[]>([])
+  const [bgMode, setBgMode] = useState(false)       // chạy nền: worker chạy không giới hạn đoạn, xong nhắn Lark
+  const [useTools, setUseTools] = useState(false)   // cho Argon tự lấy số liệu hệ thống (chỉ đọc)
+  const [toolsOf, setToolsOf] = useState<Record<string, ToolChip[]>>({})
   const acRef = useRef<AbortController | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
@@ -61,6 +66,8 @@ export function ChatPanel({ projectId, runs, setRuns, enabledCount, onAppendNote
             else patchRun(rid, { status: "running" })
           } else if (e.type === "delta") {
             setRuns(prev => prev.map(r => (r.id === rid ? { ...r, answer: r.answer + e.text } : r)))
+          } else if (e.type === "tool") {
+            setToolsOf(prev => ({ ...prev, [rid]: [...(prev[rid] ?? []), { name: e.name, args: e.args, ok: e.ok, chars: e.chars }] }))
           } else if (e.type === "done") { final = e.run } else if (e.type === "error") { throw new Error(e.message) }
         })
         if (final) patchRun(rid, final)
@@ -78,8 +85,39 @@ export function ChatPanel({ projectId, runs, setRuns, enabledCount, onAppendNote
     const p = prompt.trim()
     if (!p || busy) return
     setPrompt(""); stick.current = true
-    await run({ prompt: p, thinking })
+    if (bgMode) return startBackground({ prompt: p, thinking, allowTools: useTools })
+    await run({ prompt: p, thinking, allowTools: useTools })
   }
+
+  async function startBackground(body: Record<string, unknown>) {
+    try {
+      const r = await api<{ runId: string }>(`/api/creator/argon/projects/${projectId}/runs`, jsonInit("POST", { ...body, background: true }))
+      if (body.resumeRunId) patchRun(String(body.resumeRunId), { status: "queued" })
+      else setRuns(prev => [...prev, { id: r.runId, prompt: String(body.prompt), answer: "", status: "queued", model: null, thinking: String(body.thinking), source_ids: [], tokens_in: 0, tokens_out: 0, cached_in: 0, cost_usd: 0, duration_ms: 0, segments: 0, error: null, created_at: new Date().toISOString() }])
+    } catch (e) { onError((e as Error).message) }
+  }
+
+  async function cancelBg(id: string) {
+    try { await api(`/api/creator/argon/projects/${projectId}/runs`, jsonInit("PATCH", { runId: id, action: "cancel" })); patchRun(id, { status: "stopped" }) } catch (e) { onError((e as Error).message) }
+  }
+
+  async function showTools(id: string) {
+    try {
+      const r = await api<{ tools: ToolChip[] }>(`/api/creator/argon/projects/${projectId}/runs?runId=${id}`)
+      setToolsOf(prev => ({ ...prev, [id]: r.tools }))
+      if (!r.tools.length) setWarn(["Lượt này không gọi công cụ nào."])
+    } catch (e) { onError((e as Error).message) }
+  }
+
+  // Có lượt chạy nền đang chờ/đang chạy (kể cả sau khi tải lại trang) → hỏi lại trạng thái mỗi 5 giây.
+  const bgActive = runs.some(r => r.status === "queued" || (r.status === "running" && !busy))
+  useEffect(() => {
+    if (!bgActive || busy) return
+    const t = setInterval(() => {
+      api<{ runs: Run[] }>(`/api/creator/argon/projects/${projectId}`).then(r => setRuns(() => r.runs)).catch(() => { /* lần sau thử lại */ })
+    }, 5000)
+    return () => clearInterval(t)
+  }, [bgActive, busy, projectId, setRuns])
 
   // "Soát lại": dán kết quả của Gấu Pro/AI khác vào ô chat → Argon đối chiếu với nguồn của dự án và chỉ ra chỗ sai/thiếu/không có căn cứ.
   async function review() {
@@ -107,7 +145,8 @@ ${t}
           </div>
         )}
         {runs.map(r => {
-          const live = busy && r.id === runs[runs.length - 1]?.id
+          const bgLive = !busy && (r.status === "queued" || r.status === "running")
+          const live = (busy && r.id === runs[runs.length - 1]?.id) || bgLive
           return (
             <div key={r.id} className="space-y-2">
               <div className="flex justify-end"><div className="max-w-[85%] rounded-2xl rounded-br-md bg-violet-600 text-white px-3.5 py-2 text-sm whitespace-pre-wrap">{r.prompt}</div></div>
@@ -118,9 +157,12 @@ ${t}
                 {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
                 {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}
                 <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
-                  {live && <span className="inline-flex items-center gap-1 text-violet-600"><Loader2 size={11} className="animate-spin" />đang chạy</span>}
+                  {live && <span className="inline-flex items-center gap-1 text-violet-600"><Loader2 size={11} className="animate-spin" />{bgLive ? (r.status === "queued" ? "chạy nền · đang chờ đoạn kế" : `chạy nền · đoạn ${r.segments + 1}`) : "đang chạy"}</span>}
+                  {bgLive && <button onClick={() => cancelBg(r.id)} className="inline-flex items-center gap-1 text-red-600 hover:underline"><Square size={10} />Dừng việc nền</button>}
+                  {(toolsOf[r.id] ?? []).map((t, i) => <span key={i} title={`${t.ok ? "đã lấy" : "lỗi"} · ${fmtTokens(t.chars)} ký tự`} className={cn("px-1.5 py-0.5 rounded border", t.ok ? "border-emerald-300 text-emerald-700" : "border-red-300 text-red-700")}>📊 {toolLabel(t)}</span>)}
+                  {!live && !toolsOf[r.id] && <button onClick={() => showTools(r.id)} className="hover:text-gray-800" title="Xem Argon đã lấy số liệu hệ thống nào ở lượt này">Số liệu đã lấy</button>}
                   {r.tokens_in > 0 && <span>{fmtTokens(r.tokens_in)} vào{r.cached_in ? ` (cache ${fmtTokens(r.cached_in)})` : ""} · {fmtTokens(r.tokens_out)} ra · ~${r.cost_usd.toFixed(2)} · {Math.round(r.duration_ms / 1000)}s{r.segments > 1 ? ` · ${r.segments} đoạn` : ""}</span>}
-                  {!live && r.status === "partial" && <button onClick={() => run({ resumeRunId: r.id, thinking: r.thinking ?? thinking })} disabled={busy} className="inline-flex items-center gap-1 text-violet-600 font-medium"><Play size={11} />Tiếp tục viết</button>}
+                  {!live && r.status === "partial" && <button onClick={() => (bgMode ? startBackground({ resumeRunId: r.id, thinking: r.thinking ?? thinking, allowTools: useTools }) : run({ resumeRunId: r.id, thinking: r.thinking ?? thinking, allowTools: useTools }))} disabled={busy} className="inline-flex items-center gap-1 text-violet-600 font-medium"><Play size={11} />Tiếp tục viết</button>}
                   {!live && r.answer && <>
                     <button onClick={() => navigator.clipboard.writeText(r.answer)} className="inline-flex items-center gap-1 hover:text-gray-800"><Copy size={11} />Sao chép</button>
                     <button onClick={() => onAppendNotes(`### ${r.prompt.slice(0, 80)}\n${r.answer}`)} className="inline-flex items-center gap-1 hover:text-gray-800" title="Thêm vào sổ dự án (luôn nằm đầu ngữ cảnh)"><BookmarkPlus size={11} />Vào sổ dự án</button>
@@ -148,6 +190,10 @@ ${t}
           {busy
             ? <button onClick={() => acRef.current?.abort()} className="h-10 px-3 rounded-xl bg-red-600 text-white inline-flex items-center gap-1.5 text-sm"><Square size={14} />Dừng</button>
             : <button onClick={send} disabled={!prompt.trim()} className="h-10 px-3 rounded-xl bg-violet-600 text-white inline-flex items-center gap-1.5 text-sm disabled:opacity-50"><Send size={14} />Gửi</button>}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+          <label className="inline-flex items-center gap-1.5" title="Worker chạy không giới hạn đoạn (đến 40 đoạn / $10), đóng trang vẫn chạy; xong nhắn Lark cho Hiếu"><input type="checkbox" checked={bgMode} onChange={e => setBgMode(e.target.checked)} />Chạy nền (xong nhắn Lark)</label>
+          <label className="inline-flex items-center gap-1.5" title="Argon được gọi công cụ chỉ-đọc lấy số liệu mới nhất của hệ thống (tối đa 8 lần/lượt, ghi lại để xem)"><input type="checkbox" checked={useTools} onChange={e => setUseTools(e.target.checked)} />Cho Argon tự lấy số liệu hệ thống</label>
         </div>
         <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
           <span>Mức suy luận:</span>

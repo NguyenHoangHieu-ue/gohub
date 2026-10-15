@@ -3,6 +3,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { isCronReq } from "@/lib/analytics-helpers"
 import { supabaseAdmin } from "@/lib/supabase"
+import { listBgRunIds } from "@/lib/argon/bg"
+import { resumeStuckBackground } from "@/lib/argon/bg-worker"
 import { syncFolders, syncMany } from "@/lib/argon/lark-sync"
 import { allProjectIdsWithRules, syncAllRules } from "@/lib/argon/mail-sync"
 import type { ArgonSource } from "@/lib/argon/server"
@@ -16,6 +18,8 @@ async function run(req: NextRequest) {
   const sources = (data ?? []) as ArgonSource[]
   if (req.nextUrl.searchParams.get("dryRun") === "1") return NextResponse.json({ dryRun: true, sources: sources.length })
   const t0 = Date.now()
+  // Việc nền kẹt (đoạn chết / chưa ai nhận) → gọi worker chạy lại.
+  const resumed = await resumeStuckBackground(req.nextUrl.origin, listBgRunIds).catch(() => 0)
   const results: Awaited<ReturnType<typeof syncMany>> = []
   // Chia lô nhỏ để chắc chắn dừng trước trần thời gian; phần còn lại để đêm sau.
   for (let i = 0; i < sources.length && Date.now() - t0 < 240_000; i += 9) results.push(...(await syncMany(sources.slice(i, i + 9), req.nextUrl.origin)))
@@ -42,6 +46,7 @@ async function run(req: NextRequest) {
   return NextResponse.json({
     total: sources.length, done: results.length, changed: count("changed"), same: count("same"), skipped: count("skipped"), error: count("error"),
     errors: results.filter(r => r.status === "error").slice(0, 10).map(r => `${r.name}: ${r.note}`),
+    resumedBackground: resumed,
     folders: folderAdds,
     mail,
   })

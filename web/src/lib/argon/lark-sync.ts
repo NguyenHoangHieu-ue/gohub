@@ -5,7 +5,7 @@ import { buildPack } from "./data-packs"
 import { listFolder, larkToken, parseLarkUrl, readLark, type LarkContent, type LarkFolderItem } from "./lark"
 import type { ArgonSource } from "./server"
 
-const MIME_BY_KIND: Record<LarkContent["kind"], string> = { docx: "text/plain", sheet: "text/csv", base: "text/csv" }
+const MIME_BY_KIND: Record<LarkContent["kind"], string> = { docx: "text/plain", sheet: "text/csv", base: "text/csv", minutes: "text/plain" }
 const FOLDER_TYPES = new Set(["docx", "sheet", "bitable"])
 export const MAX_FOLDER_FILES = 30
 

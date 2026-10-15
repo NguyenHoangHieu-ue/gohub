@@ -217,7 +217,7 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
         </button>
         <div className="text-gray-500 mt-1">docx · xlsx · pptx · pdf · ảnh · video · âm thanh · md/csv/json — tối đa 45MB/file (file lớn hơn 8MB đi qua Gemini Files API)</div>
         <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
-          <button onClick={() => { setLarkOpen(v => !v); setNoteOpen(false); setMailOpen(false); setDataOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Link2 size={12} />Thêm link Lark</button>
+          <button onClick={() => { setLarkOpen(v => !v); setNoteOpen(false); setMailOpen(false); setDataOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Link2 size={12} />Thêm link (Lark / video)</button>
           <button onClick={() => { setNoteOpen(v => !v); setLarkOpen(false); setMailOpen(false); setDataOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Plus size={12} />Ghi chú / dán văn bản</button>
           <button onClick={openData} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><BarChart3 size={12} />Số liệu hệ thống</button>
           <button onClick={openMail} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Mail size={12} />Mail Lark</button>
@@ -271,7 +271,7 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
       {info && <div className="mx-3 mb-2 text-xs rounded-lg bg-emerald-50 text-emerald-800 px-2.5 py-1.5 whitespace-pre-wrap">{info}</div>}
       {larkOpen && (
         <div className="mx-3 mb-3 space-y-2">
-          <input value={lark.url} onChange={e => setLark(l => ({ ...l, url: e.target.value }))} placeholder="Dán link docx / sheets / wiki / base / thư mục Lark" className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" />
+          <input value={lark.url} onChange={e => setLark(l => ({ ...l, url: e.target.value }))} placeholder="Dán link Lark (docx / sheets / wiki / base / thư mục / biên bản họp minutes) hoặc video YouTube" className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" />
           <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-300">
             <label className="inline-flex items-center gap-1"><input type="radio" checked={lark.mode === "snapshot"} onChange={() => setLark(l => ({ ...l, mode: "snapshot" }))} />Chụp lại (đồng bộ hằng đêm)</label>
             <label className="inline-flex items-center gap-1"><input type="radio" checked={lark.mode === "live"} onChange={() => setLark(l => ({ ...l, mode: "live" }))} />Đọc mới mỗi lần chạy</label>

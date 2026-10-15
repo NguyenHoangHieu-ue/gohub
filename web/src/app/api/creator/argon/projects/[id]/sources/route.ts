@@ -3,6 +3,8 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { ARGON_BUCKET, MAX_UPLOAD_BYTES, ensureArgonBucket, ownProject, requireArgonUser, type ArgonSource } from "@/lib/argon/server"
 import { extractFile } from "@/lib/argon/extract"
 import { countTokens, sourceParts } from "@/lib/argon/context"
+import { addYoutubeSource } from "@/lib/argon/video"
+import { youtubeId } from "@/lib/argon/video-url"
 import { addDataPack, addLarkLink, syncFolders, syncMany } from "@/lib/argon/lark-sync"
 
 export const dynamic = "force-dynamic"
@@ -79,6 +81,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   if (b.action === "lark") {
     try {
+      if (youtubeId(String(b.url ?? ""))) {
+        const v = await addYoutubeSource(params.id, String(b.url))
+        await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
+        return NextResponse.json({ sources: v ? [strip(v)] : [], errors: [], skipped: v ? [] : ["Video này đã có trong dự án"] })
+      }
       const r = await addLarkLink(params.id, String(b.url ?? ""), b.mode === "live" ? "live" : "snapshot")
       await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
       return NextResponse.json({ sources: r.sources.map(strip), errors: r.errors, skipped: r.skipped })
