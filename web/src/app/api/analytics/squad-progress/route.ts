@@ -1,3 +1,4 @@
+import { ORG_PREFIX, allocateOrgTargets, type Tgt } from "@/lib/analytics-engine/org-targets"
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
@@ -218,23 +219,36 @@ export async function GET(req: NextRequest) {
 
     // Load targets + chi phí KH song song
     const custCodes = [...new Set(custRows.map(r => r.customer_code))]
-    let targetMap: Record<string, { rev: number; cm1: number; hk3rev: number; hk3pct: number }> = {}
+    const targetMap: Record<string, { rev: number; cm1: number; hk3rev: number; hk3pct: number }> = {}
     let costMap = new Map<string, import("@/lib/b2b-customer-cost").CostRecord>()
+    // Target theo Organization (khoá "ORG::<orgKey>", xem lib/analytics-engine/org-targets.ts): chia xuống mã con theo doanh thu để phần tính %TGT/cộng squad phía dưới giữ nguyên.
+    const orgMembers = (() => {
+      const m = new Map<string, { code: string; orgKey: string; revenue: number }>()
+      for (const r of custRows) {
+        const cur = m.get(r.customer_code) ?? { code: r.customer_code, orgKey: r.org_key || r.customer_code, revenue: 0 }
+        cur.revenue += Number(r.revenue) || 0
+        m.set(r.customer_code, cur)
+      }
+      return [...m.values()]
+    })()
     await Promise.all([
       custCodes.length > 0
-        ? supabaseAdmin
-            .from("b2b_customer_targets")
-            .select("customer_code, target_rev, target_cm1, target_3hk_rev, target_3hk_pct")
-            .eq("quarter", quarter).eq("year", String(year)).in("customer_code", custCodes)
-            .then(({ data: tgts }) => {
-              for (const t of tgts ?? []) {
-                targetMap[t.customer_code] = {
+        ? Promise.all([
+            supabaseAdmin.from("b2b_customer_targets").select("customer_code, target_rev, target_cm1, target_3hk_rev, target_3hk_pct")
+              .eq("quarter", quarter).eq("year", String(year)).in("customer_code", custCodes),
+            supabaseAdmin.from("b2b_customer_targets").select("customer_code, target_rev, target_cm1, target_3hk_rev, target_3hk_pct")
+              .eq("quarter", quarter).eq("year", String(year)).like("customer_code", `${ORG_PREFIX}*`),
+          ]).then(([a, b]) => {
+              const rawTargets: Record<string, Tgt> = {}
+              for (const t of [...(a.data ?? []), ...(b.data ?? [])]) {
+                rawTargets[t.customer_code] = {
                   rev:    Number(t.target_rev)     || 0,
                   cm1:    Number(t.target_cm1)     || 0,
                   hk3rev: Number(t.target_3hk_rev) || 0,
-                  hk3pct: Number(t.target_3hk_pct) || 0,
+                  thk:    Number(t.target_3hk_pct) || 0,
                 }
               }
+              for (const [code, t] of Object.entries(allocateOrgTargets(rawTargets, orgMembers))) targetMap[code] = { rev: t.rev, cm1: t.cm1, hk3rev: t.hk3rev, hk3pct: t.thk }
             })
         : Promise.resolve(),
       fetchCustomerCosts(months).then(m => { costMap = m }).catch(() => {}),

@@ -8,6 +8,7 @@ import { fc, pct, parseFmt, fmtInput, cm1Color } from "@/lib/quarterly-format"
 import { ColInfo } from "@/components/quarterly/col-info"
 import { CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 import type { MonthSummary } from "@/lib/quarterly-types"
+import { allocateOrgTargets, orgSizes, orgTargetKey } from "@/lib/analytics-engine/org-targets"
 
 const TIER_COLORS: Record<string, { bg: string; text: string; badge: string }> = {
   Strategic: { bg: "bg-blue-50", text: "text-[#0f4c81]", badge: "bg-blue-100 text-[#0f4c81]" },
@@ -299,6 +300,13 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
   const existingDaysFE = summary.reduce((s, m) => s + m.dim, 0)
   const futureMonthsFE = quarterMonths.filter(m => !summary.some(s => s.month === m))
   const allTiers: any[] = b2bTiers?.tiers ?? []
+  // Target theo Organization (Hiếu chốt 2026-10-15): Organization >1 mã KH chỉ nhập ở dòng Organization (khoá "ORG::<orgKey>"); mã con nhận phần chia theo doanh thu
+  // (effTargets) để các phép tính %Tgt phía dưới giữ nguyên. Xem lib/analytics-engine/org-targets.ts.
+  const orgMembersAll = useMemo(() => allTiers.flatMap((t: any) => Object.values(t.byRegion ?? {}).flatMap((rd: any) => rd.customers ?? [])).map((c: any) => ({
+    code: c.code as string, orgKey: (c.orgKey || c.code) as string, revenue: Number(c.hasProjected === true ? (c.actualRevenue ?? c.revenue) : c.revenue) || 0,
+  })), [allTiers])
+  const effTargets = useMemo(() => allocateOrgTargets(customerTargets, orgMembersAll), [customerTargets, orgMembersAll])
+  const orgSizeOf = useMemo(() => { const sz = orgSizes(orgMembersAll); return (orgKey: string) => sz.get(orgKey) ?? 1 }, [orgMembersAll])
 
   // Load customer targets khi đổi quý
   useEffect(() => {
@@ -508,37 +516,38 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
     setEditMode(false)
   }
   // ── Per-customer target save ──
-  const startEditTarget = (c: any) => {
-    const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0, rev: 0, hk3rev: 0 }
-    setTargetInputs(prev => ({ ...prev, [c.code]: {
+  // key = mã KH (KH đơn lẻ) hoặc "ORG::<orgKey>" (Organization nhiều mã — chỉ nhập ở cấp này)
+  const startEditTarget = (key: string) => {
+    const tgt = customerTargets[key] ?? { cm1: 0, thk: 0, rev: 0, hk3rev: 0 }
+    setTargetInputs(prev => ({ ...prev, [key]: {
       cm1:    fmtInput(tgt.cm1),
       thk:    tgt.thk > 0 ? tgt.thk.toString() : "",
       rev:    fmtInput(tgt.rev),
       hk3rev: fmtInput(tgt.hk3rev),
     }}))
-    setEditingTargetCode(c.code)
+    setEditingTargetCode(key)
   }
   const cancelEditTarget = () => { setEditingTargetCode(null) }
-  const saveTarget = async (c: any) => {
+  const saveTarget = async (key: string, label: string) => {
     if (!quarterLabel) return
     const parts = quarterLabel.split("-")
     if (parts.length !== 2) return
-    setSavingTargetCode(c.code)
+    setSavingTargetCode(key)
     try {
-      const inp = targetInputs[c.code] ?? { cm1: "", thk: "", rev: "", hk3rev: "" }
+      const inp = targetInputs[key] ?? { cm1: "", thk: "", rev: "", hk3rev: "" }
       const cm1Val    = parseFmt(inp.cm1 ?? "")
       const thkVal    = parseFloat(inp.thk || "0") || 0
       const revVal    = parseFmt(inp.rev ?? "")
       const hk3revVal = parseFmt(inp.hk3rev ?? "")
       const res = await fetch("/api/analytics/b2b-customer-targets", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quarter: parts[0], year: parseInt(parts[1]), customer_code: c.code, target_cm1: cm1Val, target_3hk_pct: thkVal, target_rev: revVal, target_3hk_rev: hk3revVal }),
+        body: JSON.stringify({ quarter: parts[0], year: parseInt(parts[1]), customer_code: key, target_cm1: cm1Val, target_3hk_pct: thkVal, target_rev: revVal, target_3hk_rev: hk3revVal }),
       })
       const d = await res.json().catch(() => ({}))
       if (res.ok && d?.ok) {
-        setCustomerTargets(prev => ({ ...prev, [c.code]: { cm1: cm1Val, thk: thkVal, rev: revVal, hk3rev: hk3revVal } }))
+        setCustomerTargets(prev => ({ ...prev, [key]: { cm1: cm1Val, thk: thkVal, rev: revVal, hk3rev: hk3revVal } }))
         setEditingTargetCode(null)
-        notify?.(true, `Đã lưu target KH ${c.name}`)
+        notify?.(true, `Đã lưu target ${key.startsWith("ORG::") ? "Organization" : "KH"} ${label}`)
       } else notify?.(false, d?.error || "Lưu thất bại")
     } catch (e: any) { notify?.(false, e?.message || "Lỗi kết nối") }
     finally { setSavingTargetCode(null) }
@@ -921,13 +930,32 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                               const oCc  = prs.reduce((s, p) => s + (p.prGm - p.prCm1), 0)
                               const oCm1 = prs.reduce((s, p) => s + p.prCm1, 0)
                               const oHk3 = prs.reduce((s, p) => s + p.prHk3, 0)
+                              // Target Organization: tổng phần chia của các mã trong dòng này (đủ cả Organization khi không bị tách tier/vùng).
+                              const orgTk = orgTargetKey(item.orgKey)
+                              const effs = item.members.map((m: any) => effTargets[m.code] ?? { cm1: 0, thk: 0, rev: 0, hk3rev: 0 })
+                              const oTgtCm1 = effs.reduce((s: number, t: any) => s + t.cm1, 0)
+                              const oTgt3hk = effs.reduce((s: number, t: any) => s + (t.hk3rev > 0 ? t.hk3rev : (t.rev > 0 && t.thk > 0 ? Math.round(t.rev * t.thk / 100) : 0)), 0)
+                              const orgMonthMode = tierViewMonth !== "QUARTER"
+                              const badgeCls = (p: number) => cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#0f4c81]" : "bg-amber-50 text-amber-600")
+                              const orgEditing = editingTargetCode === orgTk
+                              const orgSaving = savingTargetCode === orgTk
+                              const oInp = targetInputs[orgTk] ?? { cm1: "", thk: "", rev: "", hk3rev: "" }
+                              const setOInp = (patch: Partial<{ cm1: string; thk: string; rev: string; hk3rev: string }>) => setTargetInputs(prev => ({ ...prev, [orgTk]: { ...(prev[orgTk] ?? { cm1: "", thk: "", rev: "", hk3rev: "" }), ...patch } }))
+                              const orgTgtRaw = customerTargets[orgTk]
                               return (
-                                <tr key={`org-${item.orgKey}`} className="border-t border-slate-100 bg-amber-50/40 hover:bg-amber-50/70 cursor-pointer" onClick={() => toggleOrg(item.orgKey)}>
+                                <React.Fragment key={`org-${item.orgKey}`}>
+                                <tr className="border-t border-slate-100 bg-amber-50/40 hover:bg-amber-50/70 cursor-pointer" onClick={() => toggleOrg(item.orgKey)}>
                                   <td colSpan={isCreator ? 2 : 1} className="px-1.5 py-1.5">
                                     <div className="flex items-center gap-1">
                                       <ChevronRight className={cn("w-3 h-3 text-amber-600 flex-shrink-0 transition-transform", isOpen && "rotate-90")} />
                                       <span className="truncate text-[10px] font-bold text-amber-800" title={item.orgName}>{stripOrgPrefix(item.orgName)}</span>
                                       <span className="text-[9px] px-1 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 flex-shrink-0">{item.members.length} mã KH</span>
+                                      {canEditCost && !orgEditing && (
+                                        <button onClick={e => { e.stopPropagation(); startEditTarget(orgTk) }} title="Nhập target cho cả Organization (mã con không nhập riêng)"
+                                          className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-white hover:bg-blue-50 rounded-md flex-shrink-0">
+                                          <Pencil className="w-2 h-2" />{orgTgtRaw && (orgTgtRaw.rev > 0 || orgTgtRaw.cm1 > 0 || orgTgtRaw.hk3rev > 0 || orgTgtRaw.thk > 0) ? "Sửa target" : "Nhập target"}
+                                        </button>
+                                      )}
                                     </div>
                                   </td>
                                   {isCreator && <td />}
@@ -936,13 +964,31 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                   <td className="px-1.5 py-1.5 text-right text-slate-500 text-[10px]">{pct(oRev > 0 ? oGm / oRev * 100 : 0)}</td>
                                   <td className="px-1.5 py-1.5 text-right text-slate-500 tabular-nums text-[10px] whitespace-nowrap">{oCc > 0 ? fc(oCc) : "—"}</td>
                                   <td className={cn("px-1.5 py-1.5 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(oCm1))}>{fc(oCm1)}</td>
-                                  <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-300">—</td>
+                                  <td className="px-1.5 py-1.5 text-right text-[10px]">{!orgMonthMode && oTgtCm1 > 0 ? <span className={badgeCls(oCm1 / oTgtCm1 * 100)}>{(oCm1 / oTgtCm1 * 100).toFixed(1)}%</span> : <span className="text-slate-300">—</span>}</td>
                                   <td className={cn("px-1.5 py-1.5 text-right text-[10px]", cm1Color(oCm1))}>{pct(oRev > 0 ? oCm1 / oRev * 100 : 0)}</td>
                                   <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-300">—</td>
                                   <td className="px-1.5 py-1.5 text-right text-slate-500 text-[10px] whitespace-nowrap">{fc(oHk3)} <span className="text-[9px] text-slate-400">({pct(oRev > 0 ? oHk3 / oRev * 100 : 0)})</span></td>
-                                  <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-300">—</td>
-                                  <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-300">—</td>
+                                  <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-600 tabular-nums whitespace-nowrap">{!orgMonthMode && oTgt3hk > 0 ? fc(oTgt3hk) : <span className="text-slate-300">—</span>}</td>
+                                  <td className="px-1.5 py-1.5 text-right text-[10px]">{!orgMonthMode && oTgt3hk > 0 ? <span className={badgeCls(oHk3 / oTgt3hk * 100)}>{(oHk3 / oTgt3hk * 100).toFixed(1)}%</span> : <span className="text-slate-300">—</span>}</td>
                                 </tr>
+                                {orgEditing && (
+                                  <tr className="bg-amber-50/60 border-t border-amber-100">
+                                    <td colSpan={12 + (isCreator ? 2 : 0)} className="px-3 py-2">
+                                      <div className="flex flex-wrap items-end gap-3 text-[10px]">
+                                        <span className="font-bold text-amber-800">Target Organization «{stripOrgPrefix(item.orgName)}» ({item.members.length} mã KH — cả quý, chia xuống mã con theo doanh thu)</span>
+                                        <label className="flex flex-col gap-0.5">Doanh thu<input type="text" value={oInp.rev} placeholder="VD: 2.000.000.000" onChange={e => setOInp({ rev: e.target.value })} className="w-36 border border-slate-300 rounded px-1.5 py-0.5 text-right tabular-nums" /></label>
+                                        <label className="flex flex-col gap-0.5">CM1<input type="text" value={oInp.cm1} placeholder="VD: 500.000.000" onChange={e => setOInp({ cm1: e.target.value })} className="w-36 border border-slate-300 rounded px-1.5 py-0.5 text-right tabular-nums" /></label>
+                                        <label className="flex flex-col gap-0.5">3HK %<input type="number" min="0" max="100" step="0.1" value={oInp.thk} placeholder="VD: 70.0" onChange={e => setOInp({ thk: e.target.value })} className="w-20 border border-slate-300 rounded px-1.5 py-0.5 text-right tabular-nums" /></label>
+                                        <label className="flex flex-col gap-0.5">3HK Revenue (tuỳ chọn)<input type="text" value={oInp.hk3rev} placeholder="để trống = Doanh thu × 3HK%" onChange={e => setOInp({ hk3rev: e.target.value })} className="w-44 border border-slate-300 rounded px-1.5 py-0.5 text-right tabular-nums" /></label>
+                                        <button onClick={() => saveTarget(orgTk, stripOrgPrefix(item.orgName))} disabled={orgSaving} className={cn("flex items-center gap-1 px-2 py-1 font-bold rounded-md", !orgSaving ? "bg-[#0f4c81] text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
+                                          {orgSaving ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : <Save className="w-2.5 h-2.5" />}Lưu
+                                        </button>
+                                        <button onClick={cancelEditTarget} className="flex items-center gap-1 px-2 py-1 font-bold border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-md"><X className="w-2.5 h-2.5" />Hủy</button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                                </React.Fragment>
                               )
                             }
                             if (item.hidden) return null
@@ -976,9 +1022,14 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                             const qoqCls = rowPr.qoqPct == null ? "text-slate-300" : rowPr.qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
                             // Target: chỉ có ở quý (không có breakdown target theo tháng) — ẩn badge %Tgt khi
                             // đang xem 1 tháng cụ thể, tránh so nhầm CM1/3HK của 1 THÁNG với target CẢ QUÝ.
-                            const tgt = customerTargets[c.code] ?? { cm1: 0, thk: 0, rev: 0, hk3rev: 0 }
-                            const isEditingTgt = editingTargetCode === c.code
-                            const isSavingTgt  = savingTargetCode  === c.code
+                            const tgt = effTargets[c.code] ?? { cm1: 0, thk: 0, rev: 0, hk3rev: 0 }
+                            // Mã thuộc Organization nhiều mã: không nhập riêng (target nằm ở dòng Organization). Chỉ khi mã đứng lẻ trên bảng (không nằm dưới dòng Organization) mới cho sửa target Organization tại đây.
+                            const orgKeyOfC = c.orgKey || c.code
+                            const inMultiOrg = orgSizeOf(orgKeyOfC) > 1
+                            const tkey = inMultiOrg ? orgTargetKey(orgKeyOfC) : c.code
+                            const canEditTgtHere = !!canEditCost && (!inMultiOrg || !item.member)
+                            const isEditingTgt = editingTargetCode === tkey
+                            const isSavingTgt  = savingTargetCode  === tkey
                             const colSpanAll = 12 + (isCreator ? 2 : 0)
                             if (monthMode && !mv) {
                               // KH không phát sinh trong đúng tháng đang chọn — hiện dòng "—" (giống dòng Nhóm
@@ -1205,14 +1256,15 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                             <div>
                                               <div className="flex items-center gap-2 mb-2">
                                                 <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Target & Progress</p>
-                                                {canEditCost && !isEditingTgt && (
-                                                  <button onClick={() => startEditTarget(c)} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-white hover:bg-blue-50 rounded-md">
-                                                    <Pencil className="w-2.5 h-2.5" />Sửa target
+                                                {canEditTgtHere && !isEditingTgt && (
+                                                  <button onClick={() => startEditTarget(tkey)} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-white hover:bg-blue-50 rounded-md">
+                                                    <Pencil className="w-2.5 h-2.5" />{inMultiOrg ? "Sửa target Organization" : "Sửa target"}
                                                   </button>
                                                 )}
+                                                {inMultiOrg && !canEditTgtHere && <span className="text-[9px] text-amber-700">Target nhập ở dòng Organization — số dưới là phần chia theo doanh thu</span>}
                                                 {isEditingTgt && (
                                                   <div className="flex gap-1.5 ml-auto">
-                                                    <button onClick={() => saveTarget(c)} disabled={isSavingTgt}
+                                                    <button onClick={() => saveTarget(tkey, inMultiOrg ? stripOrgPrefix(c.orgName || c.name) : c.name)} disabled={isSavingTgt}
                                                       className={cn("flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-md", !isSavingTgt ? "bg-[#0f4c81] text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
                                                       {isSavingTgt ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : <Save className="w-2.5 h-2.5" />}Lưu
                                                     </button>
@@ -1227,8 +1279,8 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                 <div className="flex items-center justify-between gap-3">
                                                   <span className="text-slate-500 flex-shrink-0">Revenue Target</span>
                                                   {isEditingTgt ? (
-                                                    <input type="text" value={targetInputs[c.code]?.rev ?? ""} placeholder="VD: 2.000.000.000"
-                                                      onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? { cm1: "", thk: "", rev: "" }), rev: e.target.value } }))}
+                                                    <input type="text" value={targetInputs[tkey]?.rev ?? ""} placeholder="VD: 2.000.000.000"
+                                                      onChange={e => setTargetInputs(prev => ({ ...prev, [tkey]: { ...(prev[tkey] ?? { cm1: "", thk: "", rev: "" }), rev: e.target.value } }))}
                                                       className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                                   ) : tgt.rev > 0 ? (
                                                     <div className="text-right space-y-0.5">
@@ -1252,8 +1304,8 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                 <div className="flex items-center justify-between gap-3">
                                                   <span className="text-slate-500 flex-shrink-0">CM1 Target</span>
                                                   {isEditingTgt ? (
-                                                    <input type="text" value={targetInputs[c.code]?.cm1 ?? ""} placeholder="VD: 500.000.000"
-                                                      onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? { cm1: "", thk: "", rev: "" }), cm1: e.target.value } }))}
+                                                    <input type="text" value={targetInputs[tkey]?.cm1 ?? ""} placeholder="VD: 500.000.000"
+                                                      onChange={e => setTargetInputs(prev => ({ ...prev, [tkey]: { ...(prev[tkey] ?? { cm1: "", thk: "", rev: "" }), cm1: e.target.value } }))}
                                                       className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                                   ) : tgt.cm1 > 0 ? (
                                                     <div className="text-right space-y-0.5">
@@ -1277,8 +1329,8 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                 <div className="flex items-center justify-between gap-3">
                                                   <span className="text-slate-500 flex-shrink-0">3HK% Target</span>
                                                   {isEditingTgt ? (
-                                                    <input type="number" min="0" max="100" step="0.1" value={targetInputs[c.code]?.thk ?? ""} placeholder="VD: 70.0"
-                                                      onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? { cm1: "", thk: "", rev: "" }), thk: e.target.value } }))}
+                                                    <input type="number" min="0" max="100" step="0.1" value={targetInputs[tkey]?.thk ?? ""} placeholder="VD: 70.0"
+                                                      onChange={e => setTargetInputs(prev => ({ ...prev, [tkey]: { ...(prev[tkey] ?? { cm1: "", thk: "", rev: "" }), thk: e.target.value } }))}
                                                       className="w-24 px-2 py-1 text-[11px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                                   ) : tgt.thk > 0 ? (
                                                     <div className="text-right space-y-0.5 text-[10px]">
@@ -1298,8 +1350,8 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                   <span className="text-slate-500 flex-shrink-0 text-[11px]">3HK Rev Target</span>
                                                   {isEditingTgt ? (
                                                     <div className="flex flex-col items-end gap-0.5">
-                                                      <input type="text" value={targetInputs[c.code]?.hk3rev ?? ""} placeholder="VD: 1.500.000.000"
-                                                        onChange={e => setTargetInputs(prev => ({ ...prev, [c.code]: { ...(prev[c.code] ?? { cm1: "", thk: "", rev: "", hk3rev: "" }), hk3rev: e.target.value } }))}
+                                                      <input type="text" value={targetInputs[tkey]?.hk3rev ?? ""} placeholder="VD: 1.500.000.000"
+                                                        onChange={e => setTargetInputs(prev => ({ ...prev, [tkey]: { ...(prev[tkey] ?? { cm1: "", thk: "", rev: "", hk3rev: "" }), hk3rev: e.target.value } }))}
                                                         className="w-40 px-2 py-1 text-[11px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                                       {tgt.rev > 0 && tgt.thk > 0 && (
                                                         <span className="text-[9px] text-slate-300">auto: {fc(Math.round(tgt.rev * tgt.thk / 100))}</span>
