@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { ARGON_BUCKET, MAX_UPLOAD_BYTES, ensureArgonBucket, ownProject, requireArgonUser, type ArgonSource } from "@/lib/argon/server"
 import { extractFile } from "@/lib/argon/extract"
 import { countTokens, sourceParts } from "@/lib/argon/context"
-import { addDataPack, addLarkLink, syncMany } from "@/lib/argon/lark-sync"
+import { addDataPack, addLarkLink, syncFolders, syncMany } from "@/lib/argon/lark-sync"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 120
@@ -88,6 +88,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (b.action === "sync") {
     const { data } = await supabaseAdmin.from("argon_sources").select("*").eq("project_id", params.id).or("kind.eq.lark,external_id.like.datapack:%")
     const results = await syncMany((data ?? []) as ArgonSource[], req.nextUrl.origin)
+    const folders = await syncFolders(params.id)
+    for (const s of folders.added) results.push({ id: s.id, name: s.name, status: "changed", note: "file mới trong thư mục" })
+    for (const e of folders.errors) results.push({ id: "", name: "thư mục", status: "error", note: e })
     const { data: fresh } = await supabaseAdmin.from("argon_sources")
       .select("id,project_id,kind,name,mime,size_bytes,send_binary,tokens,external_url,sync_mode,synced_at,enabled,pinned,version,meta,created_at,updated_at").eq("project_id", params.id).or("kind.eq.lark,external_id.like.datapack:%")
     return NextResponse.json({ results, sources: fresh ?? [] })

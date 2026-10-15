@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { isCronReq } from "@/lib/analytics-helpers"
 import { supabaseAdmin } from "@/lib/supabase"
-import { syncMany } from "@/lib/argon/lark-sync"
+import { syncFolders, syncMany } from "@/lib/argon/lark-sync"
 import { allProjectIdsWithRules, syncAllRules } from "@/lib/argon/mail-sync"
 import type { ArgonSource } from "@/lib/argon/server"
 
@@ -19,6 +19,14 @@ async function run(req: NextRequest) {
   const results: Awaited<ReturnType<typeof syncMany>> = []
   // Chia lô nhỏ để chắc chắn dừng trước trần thời gian; phần còn lại để đêm sau.
   for (let i = 0; i < sources.length && Date.now() - t0 < 240_000; i += 9) results.push(...(await syncMany(sources.slice(i, i + 9), req.nextUrl.origin)))
+  // Thư mục Lark đã thêm: tìm file mới (kể cả thư mục con) rồi thêm thành nguồn.
+  const folderAdds: { project: string; added: number; errors: string[] }[] = []
+  const { data: folderProjects } = await supabaseAdmin.from("argon_sources").select("project_id,meta").eq("kind", "lark").not("meta->>rootFolder", "is", null)
+  for (const pid of Array.from(new Set((folderProjects ?? []).map(r => r.project_id as string)))) {
+    if (Date.now() - t0 > 245_000) break
+    const r = await syncFolders(pid)
+    folderAdds.push({ project: pid, added: r.added.length, errors: r.errors.slice(0, 3) })
+  }
   // Quy tắc mail Lark: mỗi dự án có quy tắc → nạp lại (chỉ đọc), dừng trước trần thời gian.
   const mail: { project: string; threads: number; created: number; updated: number; attachments: number; errors: string[] }[] = []
   for (const pid of await allProjectIdsWithRules()) {
@@ -34,6 +42,7 @@ async function run(req: NextRequest) {
   return NextResponse.json({
     total: sources.length, done: results.length, changed: count("changed"), same: count("same"), skipped: count("skipped"), error: count("error"),
     errors: results.filter(r => r.status === "error").slice(0, 10).map(r => `${r.name}: ${r.note}`),
+    folders: folderAdds,
     mail,
   })
 }

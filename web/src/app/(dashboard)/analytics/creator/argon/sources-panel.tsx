@@ -38,7 +38,7 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
   const [lark, setLark] = useState({ url: "", mode: "snapshot" as "snapshot" | "live" })
   const [info, setInfo] = useState<string | null>(null)
   const [dataOpen, setDataOpen] = useState(false)
-  const [packs, setPacks] = useState<{ id: string; label: string; description: string }[]>([])
+  const [packs, setPacks] = useState<{ id: string; label: string; description: string; noQuarter?: boolean }[]>([])
   const [quarters, setQuarters] = useState<string[]>([])
   const [pack, setPack] = useState({ id: "", quarter: "", mode: "snapshot" as "snapshot" | "live" })
   const [mailOpen, setMailOpen] = useState(false)
@@ -48,16 +48,17 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
     setDataOpen(opening); setLarkOpen(false); setNoteOpen(false); setMailOpen(false)
     if (!opening || packs.length) return
     try {
-      const r = await api<{ packs: { id: string; label: string; description: string }[]; quarters: string[] }>("/api/creator/argon/data-packs")
+      const r = await api<{ packs: { id: string; label: string; description: string; noQuarter?: boolean }[]; quarters: string[] }>("/api/creator/argon/data-packs")
       setPacks(r.packs); setQuarters(r.quarters); setPack(p => ({ ...p, id: r.packs[0]?.id ?? "", quarter: r.quarters[0] ?? "" }))
     } catch (e) { onError((e as Error).message) }
   }
 
   async function addPack() {
-    if (!pack.id || !pack.quarter) return
+    const noQ = packs.find(p => p.id === pack.id)?.noQuarter
+    if (!pack.id || (!pack.quarter && !noQ)) return
     setBusy("Đang lấy số liệu hệ thống… (có thể mất ~30 giây)"); setInfo(null)
     try {
-      const r = await api<{ sources: Source[]; skipped: string[] }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "data", pack: pack.id, quarter: pack.quarter, mode: pack.mode }))
+      const r = await api<{ sources: Source[]; skipped: string[] }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "data", pack: pack.id, quarter: noQ ? "all" : pack.quarter, mode: pack.mode }))
       setSources(prev => [...prev, ...r.sources])
       setInfo(r.sources.length ? `Đã thêm gói dữ liệu (${fmtTokens(r.sources[0].tokens)} token)` : r.skipped.join(", "))
       if (r.sources.length) setDataOpen(false)
@@ -214,7 +215,7 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
         <button onClick={() => fileRef.current?.click()} disabled={!!busy} className="inline-flex items-center gap-1.5 text-violet-700 dark:text-violet-300 font-medium hover:underline disabled:opacity-50">
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}{busy ?? "Tải file lên hoặc kéo thả"}
         </button>
-        <div className="text-gray-500 mt-1">docx · xlsx · pptx · pdf · ảnh · video · âm thanh · md/csv/json — tối đa 20MB/file</div>
+        <div className="text-gray-500 mt-1">docx · xlsx · pptx · pdf · ảnh · video · âm thanh · md/csv/json — tối đa 45MB/file (file lớn hơn 8MB đi qua Gemini Files API)</div>
         <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
           <button onClick={() => { setLarkOpen(v => !v); setNoteOpen(false); setMailOpen(false); setDataOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Link2 size={12} />Thêm link Lark</button>
           <button onClick={() => { setNoteOpen(v => !v); setLarkOpen(false); setMailOpen(false); setDataOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Plus size={12} />Ghi chú / dán văn bản</button>
@@ -232,9 +233,9 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
           </select>
           <div className="text-gray-400">{packs.find(p => p.id === pack.id)?.description}</div>
           <div className="flex flex-wrap items-center gap-2">
-            <select value={pack.quarter} onChange={e => setPack(p => ({ ...p, quarter: e.target.value }))} className="px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent">
+            {!packs.find(p => p.id === pack.id)?.noQuarter && <select value={pack.quarter} onChange={e => setPack(p => ({ ...p, quarter: e.target.value }))} className="px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent">
               {quarters.map(q => <option key={q} value={q}>{q}</option>)}
-            </select>
+            </select>}
             <label className="inline-flex items-center gap-1"><input type="radio" checked={pack.mode === "snapshot"} onChange={() => setPack(p => ({ ...p, mode: "snapshot" }))} />Chụp lại (hằng đêm)</label>
             <label className="inline-flex items-center gap-1"><input type="radio" checked={pack.mode === "live"} onChange={() => setPack(p => ({ ...p, mode: "live" }))} />Mới mỗi lần chạy</label>
           </div>

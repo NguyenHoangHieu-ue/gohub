@@ -10,21 +10,32 @@ import { api, jsonInit, fmtTokens, type Source } from "./argon-types"
 
 interface Detail { source: Source & { extracted_text: string | null }; versions: { version: number; note: string | null; author: string | null; created_at: string }[]; fileUrl: string | null }
 
-// "=== Sheet: Tên ===\ncsv…" → các bảng để xem như Excel (chỉ xem; sửa ở tab Sửa dưới dạng CSV).
-function parseSheets(text: string): { name: string; rows: string[][] }[] {
-  const out: { name: string; rows: string[][] }[] = []
-  for (const block of text.split(/^=== Sheet: /m).filter(Boolean)) {
-    const nl = block.indexOf("\n")
-    const name = block.slice(0, nl).replace(/ ===$/, "")
-    const rows = block.slice(nl + 1).split("\n").filter(l => l.length).slice(0, 500).map(l => {
-      const cells: string[] = []; let cur = "", q = false
-      for (const ch of l) { if (ch === '"') q = !q; else if (ch === "," && !q) { cells.push(cur); cur = "" } else cur += ch }
-      cells.push(cur); return cells
-    })
-    out.push({ name, rows })
+// Khối "=== Sheet: Tên ===" + CSV → các bảng để xem/sửa như Excel. Đọc ĐỦ mọi dòng (ô có ngoặc kép/xuống dòng được xử lý) để ghi lại không mất dữ liệu.
+type SheetData = { name: string; rows: string[][] }
+function parseCsv(body: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = [], cur = "", q = false
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i]
+    if (q) { if (ch === '"') { if (body[i + 1] === '"') { cur += '"'; i++ } else q = false } else cur += ch }
+    else if (ch === '"') q = true
+    else if (ch === ",") { row.push(cur); cur = "" }
+    else if (ch === NL) { row.push(cur); rows.push(row); row = []; cur = "" }
+    else cur += ch
   }
-  return out
+  if (cur.length || row.length) { row.push(cur); rows.push(row) }
+  return rows
 }
+const NL = String.fromCharCode(10)
+const csvCell = (c: string) => (c.includes(",") || c.includes('"') || c.includes(NL) ? `"${c.replace(/"/g, '""')}"` : c)
+function parseSheets(text: string): SheetData[] {
+  return text.split(/^=== Sheet: /m).filter(Boolean).map(block => {
+    const nl = block.indexOf(NL)
+    return { name: block.slice(0, nl).replace(/ ===$/, ""), rows: parseCsv(block.slice(nl + 1).replace(/\n+$/, "")) }
+  })
+}
+const serializeSheets = (sheets: SheetData[]) => sheets.map(s => `=== Sheet: ${s.name} ===${NL}${s.rows.map(r => r.map(csvCell).join(",")).join(NL)}`).join(NL + NL)
+const GRID_ROWS = 500
 
 export function SourceViewer({ source, onClose, onChanged, onError }: {
   source: Source; onClose: () => void; onChanged: (s: Source) => void; onError: (m: string) => void
@@ -34,6 +45,7 @@ export function SourceViewer({ source, onClose, onChanged, onError }: {
   const [text, setText] = useState("")
   const [saving, setSaving] = useState(false)
   const [sheet, setSheet] = useState(0)
+  const [grid, setGrid] = useState(true)
   const [instr, setInstr] = useState("")
   const [drafting, setDrafting] = useState(false)
   const [draft, setDraft] = useState<{ text: string; instruction: string; truncated: boolean; costUsd: number } | null>(null)
@@ -48,6 +60,12 @@ export function SourceViewer({ source, onClose, onChanged, onError }: {
   const sheets = useMemo(() => (/spreadsheet|csv/.test(mime) || /\.xlsx?$/i.test(source.name)) && text.startsWith("=== Sheet") ? parseSheets(text) : [], [text, mime, source.name])
   const binary = source.send_binary
   const dirty = !!d && text !== (d.source.extracted_text ?? "")
+
+  function setCell(si: number, ri: number, ci: number, v: string) {
+    if (sheets[si].rows[ri]?.[ci] === v) return
+    const next = sheets.map((sh, i) => (i !== si ? sh : { ...sh, rows: sh.rows.map((r, j) => (j !== ri ? r : r.map((c, k) => (k === ci ? v : c)))) }))
+    setText(serializeSheets(next))
+  }
 
   async function save() {
     setSaving(true)
@@ -155,7 +173,24 @@ export function SourceViewer({ source, onClose, onChanged, onError }: {
               : mime.startsWith("audio/") ? <audio src={d.fileUrl} controls className="w-full" />
               : <a href={d.fileUrl} className="text-violet-600 underline">Tải file về</a>
             )}
-            {!draft && d && !binary && mode === "edit" && (
+            {!draft && d && !binary && mode === "edit" && sheets.length > 0 && grid && (
+              <div>
+                <div className="flex items-center gap-1 mb-2 flex-wrap">
+                  {sheets.map((sh, i) => <button key={sh.name} onClick={() => setSheet(i)} className={cn("px-2 py-1 text-xs rounded-md border", i === sheet ? "bg-violet-600 text-white border-violet-600" : "border-gray-300 dark:border-slate-600")}>{sh.name}</button>)}
+                  <button onClick={() => setGrid(false)} className="ml-auto text-xs text-violet-600 hover:underline">Sửa dạng CSV</button>
+                </div>
+                <div className="overflow-auto border border-gray-200 dark:border-slate-700 rounded-lg max-h-[65vh]">
+                  <table className="text-xs"><tbody>{sheets[sheet].rows.slice(0, GRID_ROWS).map((r, i) => (
+                    <tr key={i} className={i === 0 ? "bg-gray-50 dark:bg-slate-800" : "border-t border-gray-100 dark:border-slate-800"}>
+                      {r.map((c, j) => <td key={`${sheet}-${i}-${j}-${c}`} className="p-0"><input defaultValue={c} onBlur={e => setCell(sheet, i, j, e.target.value)} className={cn("px-2 py-1 bg-transparent min-w-[6rem] w-full focus:outline-none focus:bg-violet-50 dark:focus:bg-slate-700", i === 0 && "font-semibold")} /></td>)}
+                    </tr>
+                  ))}</tbody></table>
+                </div>
+                {sheets[sheet].rows.length > GRID_ROWS && <div className="text-xs text-gray-400 mt-1">Chỉ sửa được {GRID_ROWS} dòng đầu dạng bảng — các dòng sau giữ nguyên (sửa dạng CSV nếu cần).</div>}
+                <div className="text-xs text-gray-400 mt-1">Sửa ô rồi bấm ra ngoài ô để ghi nhận, sau đó "Lưu bản mới". Công thức/định dạng của file gốc không được giữ — Argon đọc giá trị.</div>
+              </div>
+            )}
+            {!draft && d && !binary && mode === "edit" && !(sheets.length > 0 && grid) && (
               <textarea value={text} onChange={e => setText(e.target.value)} className="w-full h-full min-h-[60vh] p-3 text-sm font-mono border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" />
             )}
             {!draft && d && !binary && mode === "view" && (

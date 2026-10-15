@@ -29,7 +29,39 @@ export async function addLarkSource(projectId: string, url: string, mode: "snaps
   return { ...(src as ArgonSource), tokens }
 }
 
-/** Thêm 1 link: tài liệu → 1 nguồn; thư mục → mỗi docx/sheet/Base con 1 nguồn (tối đa MAX_FOLDER_FILES). */
+const MAX_FOLDER_DEPTH = 3
+const MAX_FOLDER_LISTED = 300
+
+/** Liệt kê đệ quy (tối đa MAX_FOLDER_DEPTH cấp, MAX_FOLDER_LISTED file) các docx/sheet/Base trong thư mục. */
+async function listFolderDeep(token: string, folderToken: string, depth = 0, acc: LarkFolderItem[] = []): Promise<LarkFolderItem[]> {
+  for (const f of await listFolder(token, folderToken)) {
+    if (acc.length >= MAX_FOLDER_LISTED) break
+    if (f.type === "folder") { if (depth + 1 < MAX_FOLDER_DEPTH) await listFolderDeep(token, f.token, depth + 1, acc) }
+    else if (FOLDER_TYPES.has(f.type)) acc.push(f)
+  }
+  return acc
+}
+
+/** Thêm file CHƯA có của 1 thư mục (kể cả thư mục con): tối đa MAX_FOLDER_FILES file mới mỗi lần. */
+async function addFolderFiles(projectId: string, rootToken: string, mode: "snapshot" | "live", token: string, out: { sources: ArgonSource[]; skipped: string[]; errors: string[] }, quiet = false) {
+  const items = await listFolderDeep(token, rootToken)
+  if (!items.length) { if (!quiet) throw new Error("Thư mục không có docx / sheet / Base nào"); return }
+  const { data: have } = await supabaseAdmin.from("argon_sources").select("external_id").eq("project_id", projectId).not("external_id", "is", null)
+  const known = new Set((have ?? []).map(r => r.external_id as string))
+  const fresh = items.filter(f => !known.has(f.token))
+  for (const f of fresh.slice(0, MAX_FOLDER_FILES)) {
+    try {
+      const fUrl = f.url ?? `https://larksuite.com/${f.type === "docx" ? "docx" : f.type === "sheet" ? "sheets" : "base"}/${f.token}`
+      const content = await readLark(fUrl, token)
+      const s = await addLarkSource(projectId, fUrl, mode, content, { folderToken: rootToken, rootFolder: rootToken })
+      if (s) out.sources.push(s); else out.skipped.push(`${f.name} — đã có`)
+    } catch (e) { out.errors.push(`${f.name}: ${(e as Error).message}`) }
+  }
+  if (fresh.length > MAX_FOLDER_FILES) out.skipped.push(`Còn ${fresh.length - MAX_FOLDER_FILES} file chưa thêm (giới hạn ${MAX_FOLDER_FILES}/lần — đồng bộ lại để thêm tiếp)`)
+  if (!quiet && !fresh.length) out.skipped.push("Mọi file trong thư mục đã có trong dự án")
+}
+
+/** Thêm 1 link: tài liệu → 1 nguồn; thư mục → mỗi docx/sheet/Base con (kể cả thư mục con, ≤3 cấp) 1 nguồn. */
 export async function addLarkLink(projectId: string, url: string, mode: "snapshot" | "live"): Promise<{ sources: ArgonSource[]; skipped: string[]; errors: string[] }> {
   const ref = parseLarkUrl(url)
   if (ref.kind === "unknown") throw new Error("Không nhận ra link Lark (cần docx / sheets / wiki / base / folder)")
@@ -39,19 +71,26 @@ export async function addLarkLink(projectId: string, url: string, mode: "snapsho
     if (s) out.sources.push(s); else out.skipped.push(`${url} — đã có trong dự án`)
     return out
   }
-  const token = await larkToken()
-  const items: LarkFolderItem[] = (await listFolder(token, ref.token)).filter(f => FOLDER_TYPES.has(f.type))
-  if (!items.length) throw new Error("Thư mục không có docx / sheet / Base nào (thư mục con chưa được đọc — thêm từng thư mục con)")
-  for (const f of items.slice(0, MAX_FOLDER_FILES)) {
-    try {
-      const fUrl = f.url ?? `https://larksuite.com/${f.type === "docx" ? "docx" : f.type === "sheet" ? "sheets" : "base"}/${f.token}`
-      const content = await readLark(fUrl, token)
-      const s = await addLarkSource(projectId, fUrl, mode, content, { folderToken: ref.token })
-      if (s) out.sources.push(s); else out.skipped.push(`${f.name} — đã có`)
-    } catch (e) { out.errors.push(`${f.name}: ${(e as Error).message}`) }
-  }
-  if (items.length > MAX_FOLDER_FILES) out.skipped.push(`Còn ${items.length - MAX_FOLDER_FILES} file chưa thêm (giới hạn ${MAX_FOLDER_FILES}/lần)`)
+  await addFolderFiles(projectId, ref.token, mode, await larkToken(), out)
   return out
+}
+
+/** Quét lại các thư mục đã thêm của dự án, thêm file mới xuất hiện. Lỗi từng thư mục không chặn việc khác. */
+export async function syncFolders(projectId: string): Promise<{ added: ArgonSource[]; errors: string[] }> {
+  const { data } = await supabaseAdmin.from("argon_sources").select("meta,sync_mode,enabled").eq("project_id", projectId).eq("kind", "lark")
+  const roots = new Map<string, "snapshot" | "live">()
+  for (const r of data ?? []) {
+    const root = (r.meta as Record<string, unknown> | null)?.rootFolder
+    if (typeof root === "string" && r.enabled && !roots.has(root)) roots.set(root, r.sync_mode === "live" ? "live" : "snapshot")
+  }
+  const out = { sources: [] as ArgonSource[], skipped: [] as string[], errors: [] as string[] }
+  if (!roots.size) return { added: [], errors: [] }
+  let token: string
+  try { token = await larkToken() } catch (e) { return { added: [], errors: [(e as Error).message] } }
+  for (const [root, mode] of roots) {
+    try { await addFolderFiles(projectId, root, mode, token, out, true) } catch (e) { out.errors.push(`thư mục ${root}: ${(e as Error).message}`) }
+  }
+  return { added: out.sources, errors: out.errors }
 }
 
 /** Đồng bộ 1 nguồn Lark: đọc lại, chỉ tạo phiên bản mới khi nội dung đổi (so hash). Nguồn đã sửa tay thì bỏ qua để không ghi đè. */

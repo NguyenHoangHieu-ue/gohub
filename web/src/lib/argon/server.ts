@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 
 // Phòng Argon — CHỈ Creator (kho chứa tài liệu/mail riêng của Hiếu, không cấp cho người khác).
 export const ARGON_BUCKET = "argon-room"
-export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+export const MAX_UPLOAD_BYTES = 45 * 1024 * 1024   // file >8MB đi qua Gemini Files API (context.ts); 45MB để nằm dưới trần 50MB của Supabase Storage
 
 /** Trả username nếu là Creator, null nếu không. */
 export async function requireArgonUser(): Promise<string | null> {
@@ -18,6 +18,7 @@ export async function requireArgonUser(): Promise<string | null> {
 export async function ensureArgonBucket() {
   const { data } = await supabaseAdmin.storage.getBucket(ARGON_BUCKET)
   if (!data) await supabaseAdmin.storage.createBucket(ARGON_BUCKET, { public: false, fileSizeLimit: MAX_UPLOAD_BYTES })
+  else if (data.file_size_limit !== MAX_UPLOAD_BYTES) await supabaseAdmin.storage.updateBucket(ARGON_BUCKET, { public: false, fileSizeLimit: MAX_UPLOAD_BYTES })
 }
 
 /** Dự án thuộc đúng người dùng? (Creator chỉ thấy dự án của chính mình) */

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 vi.mock("@/lib/supabase", () => ({ supabaseAdmin: { storage: { from: () => ({ download: async () => ({ data: null, error: { message: "x" } }) }) } } }))
 vi.mock("@/lib/agents/genai-stream", () => ({ genai: () => ({ models: { countTokens: async () => ({ totalTokens: 1 }) } }) }))
 
-import { buildRunContext } from "@/lib/argon/context"
+import { buildRunContext, sourceParts } from "@/lib/argon/context"
 import type { ArgonProject, ArgonRun, ArgonSource } from "@/lib/argon/server"
 
 const project: ArgonProject = { id: "p", username: "hieu", name: "Dự án thử", notes: "Quyết định: giữ 3HK trước.", instructions: "", created_at: "", updated_at: "" }
@@ -40,10 +40,11 @@ describe("buildRunContext", () => {
     expect(texts[texts.length - 2]).toBe("Phần 1…")
     expect(texts[texts.length - 1]).toMatch(/Tiếp tục NGAY/)
   })
-  it("file gốc quá lớn so với ngân sách nhúng thì bỏ và cảnh báo", async () => {
-    const big = src("1", "Video", "", { kind: "file", send_binary: true, storage_path: "x", size_bytes: 25 * 1024 * 1024, mime: "video/mp4" })
-    const ctx = await buildRunContext({ project, sources: [big], priorRuns: [], prompt: "?" })
-    expect(ctx.warnings[0]).toMatch(/quá lớn/)
-    expect(ctx.usedSourceIds).toEqual([])
+  it("file gốc vượt ngân sách nhúng còn lại thì bỏ và cảnh báo", async () => {
+    const f = src("1", "Video", "", { kind: "file", send_binary: true, storage_path: "x", size_bytes: 5 * 1024 * 1024, mime: "video/mp4" })
+    const warnings: string[] = []
+    const parts = await sourceParts(f, { left: 1024 * 1024 }, warnings)
+    expect(warnings[0]).toMatch(/quá lớn/)
+    expect(parts).toEqual([])
   })
 })

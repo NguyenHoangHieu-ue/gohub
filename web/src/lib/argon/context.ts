@@ -7,6 +7,8 @@ import { ARGON_BUCKET, type ArgonProject, type ArgonRun, type ArgonSource } from
 // Ngữ cảnh của 1 lượt chạy Phòng Argon: [sổ dự án + chỉ dẫn][nguồn đang bật — ghim trước][các lượt trước] rồi yêu cầu mới.
 // Phần ĐẦU luôn giữ nguyên thứ tự giữa các lượt để cache ngầm của Argon trúng tiền tố (token vào được giảm 95%).
 export const MAX_INLINE_BYTES = 18 * 1024 * 1024   // tổng file gốc nhúng vào 1 request (giới hạn inline của Gemini ~20MB)
+export const INLINE_MAX_FILE = 8 * 1024 * 1024    // file gốc lớn hơn mức này đi qua Gemini Files API (tải lên 1 lần, dùng lại tới khi hết hạn 48h)
+const FILE_REUSE_MARGIN_MS = 2 * 3600_000
 const HISTORY_RUNS = 6
 const esc = (s: string) => s.replace(/"/g, "'")
 
@@ -29,10 +31,38 @@ async function download(path: string): Promise<{ buf: Buffer; size: number } | n
   return { buf, size: buf.length }
 }
 
+interface GeminiFileRef { uri: string; name: string; mimeType: string; expiresAt: string }
+
+/** Tải file gốc của nguồn lên Gemini Files API (hoặc dùng lại bản còn hạn), chờ xử lý xong (video/PDF lớn cần thời gian). Lưu tham chiếu ở meta.geminiFile. */
+export async function ensureGeminiFile(s: ArgonSource): Promise<GeminiFileRef> {
+  const cur = s.meta?.geminiFile as GeminiFileRef | undefined
+  if (cur && Date.parse(cur.expiresAt) - Date.now() > FILE_REUSE_MARGIN_MS) return cur
+  const f = await download(s.storage_path!)
+  if (!f) throw new Error(`Không tải được "${s.name}" từ kho`)
+  const mimeType = s.mime || "application/octet-stream"
+  const ai = genai()
+  let file = await ai.files.upload({ file: new Blob([new Uint8Array(f.buf)], { type: mimeType }), config: { mimeType, displayName: s.name.slice(0, 100) } })
+  for (let i = 0; i < 60 && String(file.state) === "PROCESSING"; i++) {
+    await new Promise(r => setTimeout(r, 3000))
+    file = await ai.files.get({ name: file.name! })
+  }
+  if (String(file.state) !== "ACTIVE" || !file.uri) throw new Error(`Gemini chưa xử lý xong "${s.name}" (trạng thái ${file.state ?? "?"})`)
+  const ref: GeminiFileRef = { uri: file.uri, name: file.name!, mimeType: file.mimeType ?? mimeType, expiresAt: file.expirationTime ?? new Date(Date.now() + 47 * 3600_000).toISOString() }
+  s.meta = { ...(s.meta ?? {}), geminiFile: ref }
+  await supabaseAdmin.from("argon_sources").update({ meta: s.meta }).eq("id", s.id)
+  return ref
+}
+
 /** Các phần (parts) của 1 nguồn. binaryBudget.left giảm dần; hết ngân sách thì bỏ file gốc và báo ở warnings. */
 export async function sourceParts(s: ArgonSource, binaryBudget: { left: number }, warnings: string[]): Promise<Part[]> {
   if (s.send_binary && s.storage_path) {
     const size = s.size_bytes ?? 0
+    if (size > INLINE_MAX_FILE) {
+      try {
+        const ref = await ensureGeminiFile(s)
+        return [{ text: sourceHeader(s) }, { fileData: { fileUri: ref.uri, mimeType: ref.mimeType } }, { text: "</nguon>" }]
+      } catch (e) { warnings.push(`Bỏ "${s.name}": ${(e as Error).message}`); return [] }
+    }
     if (size > binaryBudget.left) { warnings.push(`Bỏ "${s.name}": file gốc quá lớn để nhúng (${(size / 1048576).toFixed(1)}MB, còn ${(binaryBudget.left / 1048576).toFixed(1)}MB).`); return [] }
     const f = await download(s.storage_path)
     if (!f) { warnings.push(`Không tải được "${s.name}" từ kho.`); return [] }

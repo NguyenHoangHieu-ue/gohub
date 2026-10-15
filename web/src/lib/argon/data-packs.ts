@@ -3,7 +3,9 @@ import { gmPct, groupBy, type Dimension, type MarketData } from "@/lib/market-br
 
 // "Gói dữ liệu" của Phòng Argon: số liệu hệ thống MỚI NHẤT lấy từ chính các endpoint của tab analytics (cùng logic, cùng số với tab) qua Bearer CRON_SECRET
 // (cùng cơ chế prewarm), rút gọn thành văn bản rồi lưu thành nguồn của dự án. Chỉ GỌI endpoint trong danh sách dưới (chỉ đọc).
-export interface PackDef { id: string; label: string; description: string }
+export interface PackDef { id: string; label: string; description: string; noQuarter?: boolean }
+/** Quý giả cho gói không theo quý (vd Wiki) — đi vào external_id/meta để dùng chung đường thêm + đồng bộ. */
+export const NO_QUARTER = "all"
 
 export const PACKS: PackDef[] = [
   { id: "quarter-report", label: "Quarter Report — tổng quan quý", description: "Doanh thu, GP, CH.Cost, Group Cost, CM1, %3HK theo tháng (thực tế + pro-rata) cho tổng/B2B/B2C, quý trước, bảng kênh B2B/B2C." },
@@ -11,6 +13,8 @@ export const PACKS: PackDef[] = [
   { id: "squad-progress", label: "Squad Progress — tiến độ target", description: "Từng squad: doanh thu/GP/CM1/3HK so với target, mức rủi ro, vòng đời khách, và 40 khách lớn nhất mỗi squad." },
   { id: "market", label: "Thị trường — doanh thu theo nước / vendor / loại gói", description: "Doanh thu, GP, %GM, số lượng và so quý trước, gộp theo thị trường (top 30), vendor và kiểu gói." },
   { id: "period-overview", label: "Tổng quan kỳ — BOD + KPI tháng + target", description: "Tổng doanh thu/GP/GPM2/3HK so kỳ trước, KPI theo tháng, tiến độ target — từ đầu quý đến hôm qua." },
+  { id: "channels", label: "Kênh bán — doanh thu / GP / CM1 theo kênh", description: "Từng kênh và sub-channel: doanh thu, GP, chi phí, CM1 so kỳ trước — từ đầu quý đến hôm qua (cùng số với tab Channels)." },
+  { id: "wiki-business", label: "Wiki nghiệp vụ GoHub (từ Wiki trong hệ thống)", description: "Các trang Wiki nghiệp vụ hiện hành (chính sách, vendor, quy tắc giá, quy trình…), không gồm hướng dẫn kỹ thuật các tab. Không theo quý.", noQuarter: true },
 ]
 
 export interface QuarterRef { q: number; year: number; label: string; start: string; end: string }
@@ -48,6 +52,7 @@ function marketTable(title: string, rows: ReturnType<typeof groupBy>): string {
 
 /** Dựng nội dung 1 gói cho 1 quý. `origin` = gốc URL của chính server này (vd https://intel-v2.gohub.cloud). */
 export async function buildPack(id: string, quarterLabel: string, origin: string): Promise<{ title: string; text: string }> {
+  if (id === "wiki-business") return buildWikiPack()
   const r = parseQuarter(quarterLabel)
   const note = `Lấy lúc ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC · ${r.label} · dữ liệu đến ${r.end} (hôm qua). Đơn vị tiền: VND. "pro-rata/PR" = chiếu cả tháng/quý theo số ngày đã qua.`
   switch (id) {
@@ -90,7 +95,23 @@ export async function buildPack(id: string, quarterLabel: string, origin: string
       ])
       return { title: `📊 Tổng quan kỳ ${r.start} → ${r.end}`, text: `${note}\n\n${digest(bod, "BOD Summary")}\n\n${digest(kpi, "KPI theo tháng")}\n\n${digest(tgt, "Target")}` }
     }
+    case "channels": {
+      const perf = await call(origin, `/api/analytics/channels/performance?startDate=${r.start}&endDate=${r.end}`)
+      return { title: `📊 Kênh bán ${r.start} → ${r.end}`, text: `${note}\n\n${digest(perf, "Channel Performance", { maxRows: 100 })}` }
+    }
     default:
       throw new Error(`Gói dữ liệu không có: ${id}`)
   }
+}
+
+/** Wiki nghiệp vụ: các trang không ẩn của kb_wiki_pages (trang kỹ thuật theo tab `is_hidden` bỏ — quá dài, không phải tri thức nghiệp vụ). */
+async function buildWikiPack(): Promise<{ title: string; text: string }> {
+  const { supabaseAdmin } = await import("@/lib/supabase")   // nạp muộn: các test thuần của gói dữ liệu không cần env Supabase
+  const { data, error } = await supabaseAdmin.from("kb_wiki_pages").select("title,content,page_type,department,updated_at").eq("is_hidden", false).order("page_type").order("title")
+  if (error) throw new Error(`Đọc Wiki lỗi: ${error.message}`)
+  const pages = (data ?? []) as { title: string; content: string; page_type: string; department: string; updated_at: string }[]
+  if (!pages.length) throw new Error("Wiki không có trang nghiệp vụ nào")
+  const note = `Lấy lúc ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC · ${pages.length} trang Wiki nghiệp vụ hiện hành.`
+  const body = pages.map(p => `## ${p.title}\n(loại: ${p.page_type} · bộ phận: ${p.department} · sửa lần cuối ${p.updated_at.slice(0, 10)})\n\n${p.content.trim()}`).join("\n\n---\n\n")
+  return { title: "📚 Wiki nghiệp vụ GoHub", text: `${note}\n\n${body}` }
 }

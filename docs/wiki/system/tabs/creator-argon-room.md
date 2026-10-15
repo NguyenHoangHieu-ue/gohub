@@ -29,9 +29,15 @@ Bảng `argon_projects`, `argon_sources`, `argon_source_versions`, `argon_runs` 
 ## Mail Lark (P2, chỉ đọc)
 `lib/argon/mail.ts` (đọc: thư mục, danh sách thư mới→cũ, nội dung base64url → chữ, đính kèm), `lib/argon/mail-sync.ts` (quy tắc + đồng bộ), API `projects/[id]/mail` (GET quy tắc + thư mục · POST {rule} lưu + nạp ngay, {action:"sync"} nạp lại tất cả · DELETE ?ruleId). Quy tắc lưu `app_settings` key `argon_mail_rules:<projectId>` (xoá cùng dự án). Quét tối đa 150 thư từ mới → cũ, dừng khi quá `sinceDays`; lọc theo người gửi/từ khoá; gom theo `thread_id`, giữ `maxThreads` luồng mới nhất. Luồng đổi (hash) → phiên bản mới; đính kèm tải về qua `download_url` rồi `ingestBuffer` (`lib/argon/ingest.ts`). Cần scope `mail:user_mailbox.folder:read` + `mail:user_mailbox.message:readonly` (+ `.body/.subject/.address` đã xin ở `LARK_OAUTH_SCOPES`); thiếu → Lark 99991679, báo tên scope. Mail chứa thông tin bên thứ ba và được gửi tới Gemini API khi chạy (Hiếu chốt 2026-10-14: không cần báo pháp chế). Cron `/api/cron/argon-sync` cũng nạp lại các quy tắc.
 
+## s234 — P1b + P3 phần còn lại
+- **Thư mục Lark đệ quy** (≤3 cấp, ≤300 file liệt kê, ≤30 file mới/lần): nguồn con mang `meta.rootFolder`; `syncFolders(projectId)` (nút "Đồng bộ" + cron `argon-sync`, mục `folders` trong kết quả) quét lại thư mục gốc và thêm file mới.
+- **Gói dữ liệu mới:** `channels` (Channel Performance từ đầu quý đến hôm qua) và `wiki-business` (các trang `kb_wiki_pages` `is_hidden=false`, ~87k ký tự; không theo quý, quý giả `all`; trang kỹ thuật theo tab ẩn bị bỏ vì ~800k ký tự).
+- **Sửa ô xlsx tại chỗ:** `source-viewer.tsx` chế độ Sửa hiện lưới ô (500 dòng đầu, còn lại giữ nguyên); parse CSV đủ dòng + escape ngoặc kép; công thức/định dạng file gốc không giữ. Có nút chuyển "Sửa dạng CSV".
+- **Soát lại:** nút trong khung chat — dán kết quả Gấu Pro/AI khác → Argon đối chiếu với nguồn dự án (ĐÚNG/SAI/THIẾU/KHÔNG CÓ CĂN CỨ + trích nguồn).
+
 ## Gotchas
 - Client component KHÔNG import `@/lib/supabase` (tạo client admin cần `SUPABASE_SERVICE_KEY`, không có ở trình duyệt → trắng cả trang; sự cố 2026-10-14). Dùng `@/lib/supabase-browser`; test `argon-client-imports` chặn lại.
-- PDF/ảnh/video/âm thanh (`send_binary`) không sửa chữ được; tổng file gốc nhúng ≤18MB/lượt, vượt thì bỏ + cảnh báo. File >20MB chưa hỗ trợ (cần Gemini Files API — P1).
+- PDF/ảnh/video/âm thanh (`send_binary`) không sửa chữ được; tổng file gốc nhúng ≤18MB/lượt, vượt thì bỏ + cảnh báo. File gốc >8MB (`INLINE_MAX_FILE`) không nhúng base64 mà tải lên Gemini Files API (`ensureGeminiFile` trong `context.ts`, tham chiếu lưu `meta.geminiFile`, dùng lại tới khi còn <2h trước hạn 48h); trần tải lên 45MB (Supabase Storage free 50MB). Đã thử sống: file text 17,5MB = 857k token, Argon trả đúng mã trong file.
 - `thinkingLevel "minimal"` bị Argon từ chối (chỉ low/medium/high).
 - Giá ước lượng `estimateArgonCostUsd` là giá giới thiệu ($2/$10 trên 1M token); Google nói sẽ tăng — cập nhật ở `lib/agents/gemini-pricing.ts`.
 - Eval so model: `web/scripts/eval-be-gau.mjs --endpoint gau-pro --model …` và `eval-gau-pro-strength.mjs`; kết quả `web/eval/results/gp-*`, `gps-*`.
