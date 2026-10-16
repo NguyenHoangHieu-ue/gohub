@@ -1,4 +1,4 @@
-// Kế hoạch quý tự đo (My Metrics › Kế hoạch quý, mốc M3 của plan my-metrics-plan-quy.md). Logic thuần, không I/O:
+// Kế hoạch quý tự đo (My Metrics › Kế hoạch quý, mốc M3 — wiki analytics-my-metrics.md §s227). Logic thuần, không I/O:
 // đo số thực tế của từng việc từ doanh thu theo SKU (MarketData — cùng nguồn tab Thị trường & Báo giá) và đánh giá
 // tiến độ so với mức "lẽ ra phải đạt hôm nay" (tuyến tính từ đầu quý tới hạn).
 import { OTHER_MARKET, type MarketData } from "@/lib/market-breakdown"

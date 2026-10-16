@@ -1,4 +1,4 @@
-// "Đánh giá hôm nay" của My Metrics (M4, plan my-metrics-plan-quy.md): KPI so mục tiêu + nhịp tới hôm nay, việc kế hoạch chậm/quá hạn,
+// "Đánh giá hôm nay" của My Metrics (M4 — wiki analytics-my-metrics.md §s227b): KPI so mục tiêu + nhịp tới hôm nay, việc kế hoạch chậm/quá hạn,
 // cảnh báo thị trường/SKU, thread Lark chưa chốt. Logic thuần (không I/O) — dùng chung khối trên trang và Lark DM 8:30.
 import { OTHER_MARKET, type MarketData } from "@/lib/market-breakdown"
 import { WEIGHTS, type OkrTargets } from "@/lib/my-metrics-types"
