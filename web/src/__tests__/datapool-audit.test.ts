@@ -58,6 +58,18 @@ describe("soát giá vốn: engine tính lại ĐÚNG như lúc tạo sản ph�
     expect(summarize(rows).diff).toBe(0)
   })
 
+  test("SIM full (E) VN: phí khung VND được cộng và hiện rõ (calc.feeVnd + chú giải), 3HK = khung SIM VN, BC = SIM trắng", () => {
+    const { skus, products } = dbAll()
+    const e = auditAll(skus, products, CTX).filter(r => r.type === "E" && r.tenant === "VN")
+    expect(e.some(r => r.vendor === "3HK")).toBe(true)
+    expect(e.some(r => r.vendor !== "3HK")).toBe(true)
+    for (const r of e) {
+      expect(r.calc!.feeVnd).toBe(r.vendor === "3HK" ? FRAMES.simVnVnd : 16028)
+      expect(r.calc!.cogsVnd).toBe(Math.ceil(r.calc!.dataUsd * FX.vndPerUsd - 1e-9) + r.calc!.feeVnd)
+      expect(r.explain).toContain(r.vendor === "3HK" ? "khung SIM VN" : "SIM trắng")
+    }
+  })
+
   test("đổi giả định Daily % → chỉ SKU Daily lệch (kèm %), Fixed/Unlimited vẫn khớp", () => {
     const { skus, products } = dbAll()
     const rows = auditAll(skus, products, { ...CTX, a: { ...A, dailyPct: 0.45 } })

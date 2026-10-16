@@ -17,7 +17,7 @@ const num = (v: number, f?: string, z?: string): Cell => ({ t: "n", v, ...(f ? {
 const str = (v: string): Cell => ({ t: "s", v })
 
 const HEADERS = ["SKU", "Tenant", "Vendor", "Loại", "Gói", "Data", "Đơn vị", "Ngày", "Giá/GB", "Tiền pool", "Hệ số (%/GB-ngày)", "Data (tiền pool)", "Data (USD)", "Phí khung (USD)", "COGS US (USD)", "COGS VN (VND)",
-  "Giá mới (tính lại)", "Giá cũ (hệ thống)", "Chênh (mới − cũ)", "Tăng/giảm % (so giá cũ)", "Kết luận", "Ghi chú", "Product", "Quốc gia"]
+  "Giá mới (tính lại)", "Giá cũ (hệ thống)", "Chênh (mới − cũ)", "Tăng/giảm % (so giá cũ)", "Kết luận", "Ghi chú", "Product", "Quốc gia", "Phí khung SIM full (VND)"]
 const VERDICT: Record<string, string> = { match: "Khớp", rounding: "Khớp (chênh do làm tròn)", diff: "LỆCH", nocogs: "Hệ thống chưa có giá", skip: "Không tính lại được" }
 
 export function buildAuditWorkbook(rows: AuditRow[], ctx: AuditCtx): XLSX.WorkBook {
@@ -65,16 +65,17 @@ export function buildAuditWorkbook(rows: AuditRow[], ctx: AuditCtx): XLSX.WorkBo
       : `ROUNDUP(${P(pool === "cmhk" ? R.cmhkEsimCny : R.stEsimCny)}/${P(R.cny)}+${imsi},2)`
     put(ws, `N${r}`, num(c.feeUsd, feeF ?? undefined))
     put(ws, `O${r}`, num(c.cogsUsd, `ROUNDUP(M${r}+N${r},2)`))
-    put(ws, `P${r}`, num(c.cogsVnd, x.type === "E" ? `ROUNDUP(M${r}*${P(R.vndJsc)},0)+${P(x.vendor === "3HK" ? R.simVn3hk : R.white)}` : `ROUNDUP(O${r}*${P(R.vndJsc)},0)`))
+    if (x.type === "E") put(ws, `Y${r}`, num(c.feeVnd, P(x.vendor === "3HK" ? R.simVn3hk : R.white)))
+    put(ws, `P${r}`, num(c.cogsVnd, x.type === "E" ? `ROUNDUP(M${r}*${P(R.vndJsc)},0)+Y${r}` : `ROUNDUP(O${r}*${P(R.vndJsc)},0)`))
     put(ws, `Q${r}`, num(x.expected ?? 0, x.tenant === "US" ? `O${r}` : `P${r}`))
     if (x.current != null) {
       put(ws, `S${r}`, num(x.expected != null ? x.expected - x.current : 0, `Q${r}-R${r}`))
       put(ws, `T${r}`, num(x.current ? (x.expected! - x.current) / x.current : 0, `IF(R${r}=0,0,S${r}/R${r})`, "0.00%"))
     }
   })
-  ws["!ref"] = `A1:X${Math.max(usable.length + 1, 2)}`
-  ws["!cols"] = [{ wch: 16 }, { wch: 7 }, { wch: 20 }, { wch: 6 }, { wch: 40 }, { wch: 7 }, { wch: 6 }, { wch: 6 }, { wch: 9 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 11 }, { wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 14 }, { wch: 9 }, { wch: 22 }, { wch: 50 }, { wch: 11 }, { wch: 16 }]
-  ws["!autofilter"] = { ref: `A1:X${Math.max(usable.length + 1, 2)}` }
+  ws["!ref"] = `A1:Y${Math.max(usable.length + 1, 2)}`
+  ws["!cols"] = [{ wch: 16 }, { wch: 7 }, { wch: 20 }, { wch: 6 }, { wch: 40 }, { wch: 7 }, { wch: 6 }, { wch: 6 }, { wch: 9 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 11 }, { wch: 12 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 14 }, { wch: 9 }, { wch: 22 }, { wch: 50 }, { wch: 11 }, { wch: 16 }, { wch: 14 }]
+  ws["!autofilter"] = { ref: `A1:Y${Math.max(usable.length + 1, 2)}` }
 
   const up: XLSX.WorkSheet = {}
   ;["tenant*", "skuCode", "latestCogs (giá MỚI)", "latestCogsCurrency", "Giá CŨ (hệ thống)", "Tăng/giảm %", "Ghi chú", "Gói", "Product", "Vendor", "Loại"].forEach((h, i) => put(up, XLSX.utils.encode_cell({ r: 0, c: i }), str(h)))

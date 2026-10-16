@@ -150,7 +150,8 @@ export function auditSku(sku: AuditSkuInput, product: AuditProductInput | undefi
       const f = type === "C" ? ctx.frames.esimUsUsd : ctx.frames.simUsUsd
       if (f == null || (type === "E" && ctx.frames.simVnVnd == null)) return skipRow(base, "thiếu giá khung trong hệ thống")
       feeUsd = f; feeKind = type === "C" ? "esim" : "sim"; cogsUsd = ceil2(dataUsd + feeUsd)
-      cogsVnd = type === "C" ? usdToVnd(cogsUsd, ctx.fx) : usdToVnd(dataUsd, ctx.fx) + ctx.frames.simVnVnd!
+      if (type === "E") feeVnd = ctx.frames.simVnVnd!
+      cogsVnd = type === "C" ? usdToVnd(cogsUsd, ctx.fx) : usdToVnd(dataUsd, ctx.fx) + feeVnd
     } else {
       const sim = type === "C" ? "eSIM" : "SIM"
       if (sim === "SIM" && !(ctx.whiteSimVnd && ctx.whiteSimVnd > 0)) return skipRow(base, "thiếu giá SIM trắng trong hệ thống")
@@ -165,8 +166,8 @@ export function auditSku(sku: AuditSkuInput, product: AuditProductInput | undefi
     : kind === "Fixed" ? `${fmtAmount(amount)}${unit} × ${pct(ctx.a.fixedPct)}`
     : `${levelsOf(ctx.a)[unlIdx!].gbPerDay} GB/ngày × ${days} ngày`
   const explain = `${pricePerGb} ${poolCurrency}/GB × (${how}) = ${Math.round(dataPool * 1e4) / 1e4} ${poolCurrency} → ${poolCurrency === "HKD" ? `÷ ${ctx.fx.hkdPerUsd} ` : ""}= ${dataUsd} USD`
-    + (feeKind !== "none" ? ` + khung ${feeUsd} = ${cogsUsd} USD` : "")
-    + (tenant === "VN" ? ` → × ${ctx.fx.vndPerUsd.toLocaleString("en-US")}${vendor === "3HK" && type === "E" ? ` (data) + khung SIM VN ${ctx.frames.simVnVnd}` : ""} = ${cogsVnd.toLocaleString("en-US")} VND` : "")
+    + (feeUsd > 0 ? ` + khung ${feeUsd} = ${cogsUsd} USD` : "")
+    + (tenant === "VN" ? ` → × ${ctx.fx.vndPerUsd.toLocaleString("en-US")}${feeVnd > 0 ? ` (data) + ${vendor === "3HK" ? "khung SIM VN" : "SIM trắng"} ${feeVnd.toLocaleString("en-US")}` : ""} = ${cogsVnd.toLocaleString("en-US")} VND` : "")
   const calc: AuditCalc = { pricePerGb, poolCurrency, amount: kind === "Unlimited" ? hsMb : amount, unit: kind === "Unlimited" ? "MB" : unit, days, kind, unlIdx, dataPool, dataUsd, feeUsd, feeVnd, feeKind, cogsUsd, cogsVnd }
   if (base.current == null) return { ...base, expected, diff: null, diffPct: null, verdict: "nocogs", note: "hệ thống chưa có giá vốn", explain, calc }
   const cmp = compareCogs(base.current, expected, currency)
