@@ -27,7 +27,7 @@ export default function CogsAuditTab({ onNotify }: { onNotify: Notify }) {
   const [data, setData] = useState<AuditResp | null>(null)
   const [busy, setBusy] = useState<"" | "load" | "xlsx" | "dm">("load")
   const [err, setErr] = useState<string | null>(null)
-  const [show, setShow] = useState<Set<Verdict>>(new Set(["diff", "nocogs"]))
+  const [show, setShow] = useState<Set<Verdict>>(new Set(["diff", "nocogs", "skip"]))
   const [q, setQ] = useState("")
 
   const load = useCallback(async () => {
@@ -104,7 +104,6 @@ export default function CogsAuditTab({ onNotify }: { onNotify: Notify }) {
                   <div className="flex flex-wrap gap-1.5">
                     <span className={cn("px-2 py-0.5 rounded-md", x.diff + x.nocogs ? VERDICT_CLS.diff : VERDICT_CLS.match)}>{x.diff + x.nocogs} lệch</span>
                     <span className={cn("px-2 py-0.5 rounded-md", VERDICT_CLS.match)}>{x.match} khớp</span>
-                    <span className={cn("px-2 py-0.5 rounded-md", VERDICT_CLS.rounding)}>{x.rounding} làm tròn</span>
                     {x.skip > 0 && <span className={cn("px-2 py-0.5 rounded-md", VERDICT_CLS.skip)}>{x.skip} không tính lại được</span>}
                   </div>
                 </div>
@@ -127,7 +126,7 @@ export default function CogsAuditTab({ onNotify }: { onNotify: Notify }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            {(["diff", "nocogs", "rounding", "skip"] as Verdict[]).map(v => (
+            {(["diff", "nocogs", "skip"] as Verdict[]).map(v => (
               <button key={v} onClick={() => toggle(v)} className={cn("px-2.5 py-1 rounded-md border", show.has(v) ? `${VERDICT_CLS[v]} border-transparent font-semibold` : "border-gray-300 text-gray-500")}>{VERDICT_LABEL[v]}</button>
             ))}
             <input value={q} onChange={e => setQ(e.target.value)} placeholder="Tìm mã SKU / nước / ghi chú…" className="ml-2 px-2.5 py-1 border border-gray-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 w-64" />

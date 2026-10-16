@@ -3,6 +3,7 @@ import * as XLSX from "xlsx"
 import { requireAdmin } from "@/lib/bc-datapool/server"
 import { buildAuditWorkbook } from "@/lib/datapool-audit/export"
 import { ALL_VENDORS, runAudit, loadState, diffInputs, runAuditAndNotify, ACTIVE_STATUSES } from "@/lib/datapool-audit/server"
+import { changePct } from "@/lib/datapool-audit/compare"
 import type { AuditVendor } from "@/lib/datapool-audit/engine"
 
 export const dynamic = "force-dynamic"
@@ -22,9 +23,13 @@ export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams
     const [run, state] = await Promise.all([runAudit(vendorsOf(sp.get("vendor")), statusesOf(sp.get("status"))), loadState()])
-    // Bị cắt ở MAX_ROWS thì phải cắt phần ÍT quan trọng: lệch / chưa có giá lên đầu, "làm tròn" (hàng nghìn SKU 3HK) xuống cuối; trong mỗi nhóm giữ thứ tự soát (vendor → loại → kiểu gói → Product …).
-    const PRIO: Record<string, number> = { diff: 0, nocogs: 1, skip: 2, rounding: 3, match: 4 }
-    const shown = run.rows.filter(r => r.verdict !== "match").map((r, i) => [r, i] as const).sort((a, b) => PRIO[a[0].verdict] - PRIO[b[0].verdict] || a[1] - b[1]).map(x => x[0])
+    // Bị cắt ở MAX_ROWS thì phải cắt phần ÍT quan trọng: chưa có giá / không tính lại được lên đầu, rồi LỆCH (vendor ít SKU lệch trước, trong vendor xếp % chênh giảm dần) để hàng nghìn SKU 3HK lệch ~0,7% do ROUND cũ không che mấy chục SKU BC lệch thật;
+    // hòa nhau thì giữ thứ tự soát (vendor → loại → kiểu gói → Product …).
+    const PRIO: Record<string, number> = { nocogs: 0, skip: 1, diff: 2, rounding: 3, match: 4 }
+    const mag = (r: { current: number | null; expected: number | null }) => Math.abs(changePct(r.current, r.expected) ?? 0)
+    const perVendor: Record<string, number> = {}
+    for (const r of run.rows) if (r.verdict === "diff") perVendor[r.vendor] = (perVendor[r.vendor] ?? 0) + 1
+    const shown = run.rows.filter(r => r.verdict !== "match").map((r, i) => [r, i] as const).sort((a, b) => PRIO[a[0].verdict] - PRIO[b[0].verdict] || (a[0].verdict === "diff" ? (perVendor[a[0].vendor] ?? 0) - (perVendor[b[0].vendor] ?? 0) : 0) || mag(b[0]) - mag(a[0]) || a[1] - b[1]).map(x => x[0])
     const levels = run.inputs.levels
     return NextResponse.json({
       summary: run.summary,
