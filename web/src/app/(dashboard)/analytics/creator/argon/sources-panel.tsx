@@ -1,13 +1,27 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { FileText, FileSpreadsheet, Image as ImageIcon, Film, Music, File as FileIcon, StickyNote, Link2, Mail, Pin, PinOff, Trash2, Upload, Eye, Plus, Loader2, FileType2, RefreshCw, BarChart3 } from "lucide-react"
+import { FileText, FileSpreadsheet, Image as ImageIcon, Film, Music, File as FileIcon, StickyNote, Link2, Mail, Pin, PinOff, Trash2, Upload, Eye, Plus, Loader2, FileType2, RefreshCw, BarChart3, MessagesSquare, Search, ChevronDown, ChevronRight } from "lucide-react"
 import { supabaseBrowser } from "@/lib/supabase-browser"
 import { cn } from "@/lib/utils"
-import { api, jsonInit, fmtBytes, fmtTokens, CONTEXT_LIMIT, type MailRuleUi, type Source } from "./argon-types"
+import { api, jsonInit, fmtBytes, fmtTokens, CONTEXT_LIMIT, type MailRuleUi, type Source, type ThreadRuleUi } from "./argon-types"
+
+// Nhóm hiển thị trong cột nguồn: mail/thread có hàng chục nguồn nên gom lại, có nút bật/tắt cả nhóm.
+const GROUPS = [
+  { id: "mail", label: "Mail Lark" },
+  { id: "thread", label: "Thread Lark" },
+  { id: "data", label: "Số liệu hệ thống" },
+  { id: "lark", label: "Tài liệu Lark" },
+  { id: "file", label: "File & ghi chú" },
+] as const
+type GroupId = (typeof GROUPS)[number]["id"]
+const groupOf = (s: Source): GroupId => (s.kind === "mail" ? "mail" : s.meta?.larkThread && s.kind === "note" ? "thread" : s.meta?.dataPack ? "data" : s.kind === "lark" ? "lark" : "file")
+const metaDate = (s: Source) => String(s.meta?.lastDate ?? s.updated_at ?? "")
+const shortDate = (iso: string) => (iso ? new Date(iso).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }) : "")
 
 function iconFor(s: Source) {
   const m = s.mime ?? ""
+  if (s.meta?.larkThread && s.kind === "note") return MessagesSquare
   if (s.meta?.dataPack) return BarChart3
   if (s.kind === "note") return StickyNote
   if (s.kind === "lark") return Link2
@@ -43,10 +57,13 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
   const [quarters, setQuarters] = useState<string[]>([])
   const [pack, setPack] = useState({ id: "", quarter: "", scope: "", mode: "snapshot" as "snapshot" | "live" })
   const [mailOpen, setMailOpen] = useState(false)
+  const [threadOpen, setThreadOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
   async function openData() {
     const opening = !dataOpen
-    setDataOpen(opening); setLarkOpen(false); setNoteOpen(false); setMailOpen(false)
+    setDataOpen(opening); setLarkOpen(false); setNoteOpen(false); setMailOpen(false); setThreadOpen(false)
     if (!opening || packs.length) return
     try {
       const r = await api<{ packs: { id: string; label: string; description: string; noQuarter?: boolean; scopes?: { id: string; label: string }[] }[]; quarters: string[] }>("/api/creator/argon/data-packs")
@@ -74,7 +91,7 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
 
   async function openMail() {
     const opening = !mailOpen
-    setMailOpen(opening); setLarkOpen(false); setNoteOpen(false); setDataOpen(false)
+    setMailOpen(opening); setLarkOpen(false); setNoteOpen(false); setDataOpen(false); setThreadOpen(false)
     if (!opening) return
     try {
       const r = await api<{ rules: MailRuleUi[]; folders: { id: string; name: string }[]; error?: string }>(`/api/creator/argon/projects/${projectId}/mail`)
@@ -113,7 +130,63 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
     try { const r = await api<{ rules: MailRuleUi[] }>(`/api/creator/argon/projects/${projectId}/mail?ruleId=${id}`, { method: "DELETE" }); setRules(r.rules) } catch (e) { onError((e as Error).message) }
   }
 
+  const [tRules, setTRules] = useState<ThreadRuleUi[]>([])
+  const [chats, setChats] = useState<{ id: string; name: string }[]>([])
+  const blankT: ThreadRuleUi = { id: "", name: "", chatId: "", chatName: "", sinceDays: 14, maxThreads: 30, minReplies: 1, files: true, images: false }
+  const [tRule, setTRule] = useState<ThreadRuleUi>(blankT)
+
+  async function openThreads() {
+    const opening = !threadOpen
+    setThreadOpen(opening); setLarkOpen(false); setNoteOpen(false); setDataOpen(false); setMailOpen(false)
+    if (!opening) return
+    try {
+      const r = await api<{ rules: ThreadRuleUi[]; chats: { id: string; name: string }[]; error?: string }>(`/api/creator/argon/projects/${projectId}/threads?chats=1`)
+      setTRules(r.rules); setChats(r.chats)
+      if (!tRule.chatId && r.chats[0]) setTRule(t => ({ ...t, chatId: r.chats[0].id, chatName: r.chats[0].name }))
+      if (r.error) onError(r.error)
+    } catch (e) { onError((e as Error).message) }
+  }
+
+  const threadInfo = (results: { rule: string; threads: number; created: number; updated: number; attachments: number; skipped: number; errors: string[] }[]) => {
+    const sum = (k: "threads" | "created" | "updated" | "attachments" | "skipped") => results.reduce((n, x) => n + x[k], 0)
+    setInfo(`Thread: ${sum("threads")} thread · ${sum("created")} mới · ${sum("updated")} cập nhật · ${sum("attachments")} file đính kèm${sum("skipped") ? ` · ${sum("skipped")} chưa kịp nạp (bấm nạp lại)` : ""}`)
+    const errs = results.flatMap(x => x.errors)
+    if (errs.length) onError(errs.join("\n"))
+  }
+
+  async function saveThreadRule() {
+    if (!tRule.chatId) return
+    setBusy("Đang đọc thread trong group Lark… (có thể mất 1–3 phút)"); setInfo(null)
+    try {
+      const r = await api<{ results: Parameters<typeof threadInfo>[0]; rules: ThreadRuleUi[] }>(`/api/creator/argon/projects/${projectId}/threads`, jsonInit("POST", { rule: tRule }))
+      setTRules(r.rules); threadInfo(r.results); onReload(); setTRule(t => ({ ...blankT, chatId: t.chatId, chatName: t.chatName }))
+    } catch (e) { onError((e as Error).message) }
+    setBusy(null)
+  }
+
+  async function syncThreads() {
+    setBusy("Đang đọc lại thread Lark…")
+    try {
+      const r = await api<{ results: Parameters<typeof threadInfo>[0] }>(`/api/creator/argon/projects/${projectId}/threads`, jsonInit("POST", { action: "sync" }))
+      threadInfo(r.results); onReload()
+    } catch (e) { onError((e as Error).message) }
+    setBusy(null)
+  }
+
+  async function deleteThreadRule(id: string) {
+    try { const r = await api<{ rules: ThreadRuleUi[] }>(`/api/creator/argon/projects/${projectId}/threads?ruleId=${id}`, { method: "DELETE" }); setTRules(r.rules) } catch (e) { onError((e as Error).message) }
+  }
+
+  async function bulkToggle(ids: string[], enabled: boolean) {
+    setSources(prev => prev.map(x => (ids.includes(x.id) ? { ...x, enabled } : x)))
+    try { await api(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "bulk", ids, enabled })) }
+    catch (e) { onError((e as Error).message); setSources(prev => prev.map(x => (ids.includes(x.id) ? { ...x, enabled: !enabled } : x))) }
+  }
+
   const total = sources.filter(s => s.enabled).reduce((n, s) => n + s.tokens, 0)
+  const q = query.trim().toLowerCase()
+  const shown = sources.filter(s => !q || `${s.name} ${String(s.meta?.mailFrom ?? "")} ${String(s.meta?.startedBy ?? "")}`.toLowerCase().includes(q))
+  const grouped = GROUPS.map(g => ({ ...g, items: shown.filter(s => groupOf(s) === g.id).sort((a, b) => ((g.id === "mail" || g.id === "thread") ? metaDate(b).localeCompare(metaDate(a)) : 0)) })).filter(g => g.items.length)
 
   async function upload(files: File[]) {
     if (!files.length) return
@@ -210,6 +283,13 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
         </div>
       </div>
 
+      {sources.length > 6 && (
+        <div className="mx-3 mt-2 relative">
+          <Search size={13} className="absolute left-2 top-2 text-gray-400" />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Tìm nguồn (tên, người gửi…)" className="w-full pl-7 pr-2 py-1.5 text-xs border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" />
+        </div>
+      )}
+
       <div
         onDragOver={e => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)}
         onDrop={e => { e.preventDefault(); setDrag(false); void upload(Array.from(e.dataTransfer.files)) }}
@@ -221,10 +301,11 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
         </button>
         <div className="text-gray-500 mt-1">docx · xlsx · pptx · pdf · ảnh · video · âm thanh · md/csv/json — tối đa 45MB/file (file lớn hơn 8MB đi qua Gemini Files API)</div>
         <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
-          <button onClick={() => { setLarkOpen(v => !v); setNoteOpen(false); setMailOpen(false); setDataOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Link2 size={12} />Thêm link (Lark / video)</button>
-          <button onClick={() => { setNoteOpen(v => !v); setLarkOpen(false); setMailOpen(false); setDataOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Plus size={12} />Ghi chú / dán văn bản</button>
+          <button onClick={() => { setLarkOpen(v => !v); setNoteOpen(false); setMailOpen(false); setDataOpen(false); setThreadOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Link2 size={12} />Thêm link (Lark / video)</button>
+          <button onClick={() => { setNoteOpen(v => !v); setLarkOpen(false); setMailOpen(false); setDataOpen(false); setThreadOpen(false) }} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Plus size={12} />Ghi chú / dán văn bản</button>
           <button onClick={openData} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><BarChart3 size={12} />Số liệu hệ thống</button>
           <button onClick={openMail} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><Mail size={12} />Mail Lark</button>
+          <button onClick={openThreads} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline"><MessagesSquare size={12} />Thread Lark</button>
           {sources.some(x => x.kind === "lark" || !!x.meta?.dataPack) && <button onClick={syncAll} disabled={!!busy} className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-300 hover:underline disabled:opacity-50"><RefreshCw size={12} />Đồng bộ Lark</button>}
         </div>
       </div>
@@ -275,6 +356,34 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
           </div>
         </div>
       )}
+      {threadOpen && (
+        <div className="mx-3 mb-3 space-y-2 text-xs">
+          <div className="text-gray-500">Bot Bé Gấu (phải ở trong group) đọc thread: tin gốc + mọi trả lời + người nói. Mỗi thread thành 1 nguồn; file đính kèm thành nguồn riêng gắn tên thread. Chỉ đọc.</div>
+          {tRules.map(r => (
+            <div key={r.id} className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 px-2 py-1">
+              <span className="flex-1 truncate" title={`${r.chatName} · ${r.sinceDays} ngày · ≤${r.maxThreads} thread`}>{r.name} <span className="text-gray-400">· {r.sinceDays}n · ≤{r.maxThreads}{r.files ? " · file" : ""}{r.images ? " · ảnh" : ""}</span></span>
+              <button onClick={() => deleteThreadRule(r.id)} className="text-gray-400 hover:text-red-600"><Trash2 size={12} /></button>
+            </div>
+          ))}
+          {tRules.length > 0 && <button onClick={syncThreads} disabled={!!busy} className="inline-flex items-center gap-1 text-violet-600 hover:underline disabled:opacity-50"><RefreshCw size={11} />Nạp lại mọi quy tắc</button>}
+          <div className="pt-1 border-t border-gray-100 dark:border-slate-700 space-y-1.5">
+            <select value={tRule.chatId} onChange={e => setTRule(t => ({ ...t, chatId: e.target.value, chatName: chats.find(c => c.id === e.target.value)?.name ?? "" }))} className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent">
+              {chats.length === 0 && <option value="">(bot chưa ở group nào / thiếu quyền)</option>}
+              {chats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex items-center gap-1">Trong <input type="number" min={1} max={180} value={tRule.sinceDays} onChange={e => setTRule(t => ({ ...t, sinceDays: Number(e.target.value) }))} className="w-14 px-1.5 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" /> ngày</label>
+              <label className="inline-flex items-center gap-1">tối đa <input type="number" min={1} max={80} value={tRule.maxThreads} onChange={e => setTRule(t => ({ ...t, maxThreads: Number(e.target.value) }))} className="w-14 px-1.5 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" /> thread</label>
+              <label className="inline-flex items-center gap-1" title="Bỏ thread có ít trả lời hơn mức này; 0 = lấy cả tin lẻ không ai trả lời">≥ <input type="number" min={0} max={20} value={tRule.minReplies} onChange={e => setTRule(t => ({ ...t, minReplies: Number(e.target.value) }))} className="w-12 px-1.5 py-1 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent" /> trả lời</label>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={tRule.files} onChange={e => setTRule(t => ({ ...t, files: e.target.checked }))} className="accent-violet-600" />Tải file đính kèm (≤15MB)</label>
+              <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={tRule.images} onChange={e => setTRule(t => ({ ...t, images: e.target.checked }))} className="accent-violet-600" />Tải cả ảnh</label>
+            </div>
+            <div><button onClick={saveThreadRule} disabled={!!busy || !tRule.chatId} className="px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50">Lưu & nạp thread</button></div>
+          </div>
+        </div>
+      )}
       {info && <div className="mx-3 mb-2 text-xs rounded-lg bg-emerald-50 text-emerald-800 px-2.5 py-1.5 whitespace-pre-wrap">{info}</div>}
       {larkOpen && (
         <div className="mx-3 mb-3 space-y-2">
@@ -313,7 +422,23 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
 
       <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
         {sources.length === 0 && <div className="text-xs text-gray-400 text-center py-6">Chưa có nguồn nào. Argon chỉ trả lời dựa trên nguồn bật ở đây.</div>}
-        {sources.map(s => {
+        {sources.length > 0 && shown.length === 0 && <div className="text-xs text-gray-400 text-center py-6">Không có nguồn khớp “{query}”.</div>}
+        {grouped.map(g => {
+          const open = q ? true : !collapsed[g.id]
+          const onCount = g.items.filter(x => x.enabled).length
+          const groupTokens = g.items.filter(x => x.enabled).reduce((n, x) => n + x.tokens, 0)
+          return (
+            <div key={g.id} className="space-y-1">
+              {(grouped.length > 1 || g.items.length > 3) && (
+                <div className="flex items-center gap-1.5 px-1 pt-1.5 text-[11px] font-semibold text-gray-600 dark:text-slate-300">
+                  <button onClick={() => setCollapsed(c => ({ ...c, [g.id]: !c[g.id] }))} className="inline-flex items-center gap-1 hover:underline">{open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}{g.label} <span className="font-normal text-gray-400">({onCount}/{g.items.length} bật · {fmtTokens(groupTokens)})</span></button>
+                  <span className="ml-auto inline-flex gap-2 font-normal">
+                    <button onClick={() => bulkToggle(g.items.map(x => x.id), true)} className="text-violet-600 hover:underline">bật hết</button>
+                    <button onClick={() => bulkToggle(g.items.map(x => x.id), false)} className="text-gray-500 hover:underline">tắt hết</button>
+                  </span>
+                </div>
+              )}
+              {open && g.items.map(s => {
           const Icon = iconFor(s)
           return (
             <div key={s.id} className={cn("group rounded-lg border px-2 py-1.5 text-sm", s.enabled ? "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800" : "border-dashed border-gray-300 dark:border-slate-700 opacity-60")}>
@@ -326,11 +451,16 @@ export function SourcesPanel({ projectId, sources, setSources, onOpen, onError, 
                 <button onClick={() => remove(s)} title="Xoá" className="shrink-0 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><Trash2 size={13} /></button>
               </div>
               <div className="pl-6 text-[11px] text-gray-500 flex gap-2">
+                {groupOf(s) === "mail" && (s.meta?.mailFrom || s.meta?.lastDate) ? <span className="truncate max-w-[150px]" title={String(s.meta?.mailFrom ?? "")}>{String(s.meta?.mailFrom ?? "").replace(/<.*>/, "").trim()} {shortDate(String(s.meta?.lastDate ?? ""))}</span> : null}
+                {groupOf(s) === "thread" ? <span className="truncate max-w-[170px]">{String(s.meta?.startedBy ?? "")} · {String(s.meta?.replies ?? 0)} trả lời · {shortDate(String(s.meta?.lastDate ?? ""))}</span> : null}
                 <span>{fmtTokens(s.tokens)} token</span>{s.size_bytes ? <span>{fmtBytes(s.size_bytes)}</span> : null}
                 {(s.kind === "lark" || !!s.meta?.dataPack) && s.synced_at ? <span title={s.sync_mode === "live" ? "Đọc mới mỗi lần chạy" : "Đồng bộ hằng đêm"}>{s.sync_mode === "live" ? "live" : "chụp"} · {new Date(s.synced_at).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span> : null}
                 {(s.kind === "lark" || !!s.meta?.dataPack) && <button onClick={() => syncOne(s)} disabled={!!busy} className="text-violet-600 hover:underline inline-flex items-center gap-0.5 disabled:opacity-50"><RefreshCw size={10} />đồng bộ</button>}
                 {s.version > 1 ? <span>v{s.version}</span> : null}{s.meta?.edited ? <span className="text-amber-600">đã sửa</span> : null}
               </div>
+            </div>
+          )
+              })}
             </div>
           )
         })}

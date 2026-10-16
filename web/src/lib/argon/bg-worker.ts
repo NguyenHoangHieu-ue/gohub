@@ -5,6 +5,8 @@ import { buildRunContext } from "./context"
 import { getHubId, HUB_TOKEN_BUDGET, loadHubMaterial, pickHubSources } from "./hub"
 import { syncMany } from "./lark-sync"
 import { runSegment } from "./run-engine"
+import { stripReports } from "./report"
+import { autoSaveReports, getReportHtml, templateSuffix } from "./report-store"
 import { BG_STALE_MS, MAX_BG_COST_USD, MAX_BG_SEGMENTS, deleteBg, getBg, getToolLog, saveToolLog, touchBg, triggerWorker } from "./bg"
 import type { ArgonProject, ArgonRun, ArgonSource } from "./server"
 
@@ -39,7 +41,7 @@ async function notifyDone(run: ArgonRun, project: ArgonProject | null, status: s
     const openId = await getCreatorLarkOpenId()
     if (!openId) return
     const head = status === "done" ? "✅ Argon xong việc nền" : status === "stopped" ? "⏹ Việc nền Argon đã dừng" : "⚠️ Việc nền Argon lỗi"
-    const body = status === "error" ? `Lỗi: ${error ?? "không rõ"}\n` : `${run.answer.replace(/\s+/g, " ").slice(0, 700)}${run.answer.length > 700 ? "…" : ""}\n`
+    const body = status === "error" ? `Lỗi: ${error ?? "không rõ"}\n` : `${stripReports(run.answer).replace(/\s+/g, " ").slice(0, 700)}${stripReports(run.answer).length > 700 ? "…" : ""}\n`
     await sendLarkDM(openId, `${head}: "${run.prompt.replace(/\s+/g, " ").slice(0, 70)}"${project ? ` (dự án ${project.name})` : ""}\n${segments} đoạn · ~$${cost.toFixed(2)}\n\n${body}\nXem đầy đủ: ${origin}/analytics/creator/argon`)
   } catch (e) { console.error("[argon worker] notify:", (e as Error).message) }
 }
@@ -70,8 +72,10 @@ export async function runBackgroundSegment(runId: string, origin: string): Promi
     const { data: allRuns } = await supabaseAdmin.from("argon_runs").select("*").eq("project_id", run.project_id).order("created_at")
     const pick = new Set(run.source_ids)
     const mat = await loadRunMaterial(project, pick.size ? pick : null, origin)
+    const tpl = bg.templateReportId ? await getReportHtml(bg.username, bg.templateReportId) : null
+    const tplSuffix = tpl ? templateSuffix(tpl.meta.title, tpl.html) : ""
     const ctx = await buildRunContext({
-      project: mat.project, sources: mat.sources, priorRuns: ((allRuns ?? []) as ArgonRun[]).filter(r => r.id !== runId), prompt: run.prompt,
+      project: mat.project, sources: mat.sources, priorRuns: ((allRuns ?? []) as ArgonRun[]).filter(r => r.id !== runId), prompt: run.prompt + tplSuffix,
       resumeRun: answer.trim() ? { ...run, answer } : undefined, allowTools: bg.allowTools, toolLog,
     })
     const seg = await runSegment({
@@ -102,6 +106,7 @@ export async function runBackgroundSegment(runId: string, origin: string): Promi
     await save({ ...base, status: seg.status === "partial" && !cancelled ? "partial" : finalStatus, error: err, finished_at: new Date().toISOString() })
     await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", run.project_id)
     await deleteBg(runId)
+    if (!cancelled && seg.status !== "error") await autoSaveReports(bg.username, run.project_id, runId, answer)
     await notifyDone({ ...run, answer }, project, finalStatus === "error" && seg.status === "partial" ? "error" : finalStatus, cost, segments, err, origin)
     return "finished"
   } catch (e) {

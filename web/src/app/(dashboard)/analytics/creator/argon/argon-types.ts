@@ -12,6 +12,11 @@ export interface Run {
 
 export interface MailRuleUi { id: string; name: string; folder: string; from?: string; keywords?: string; sinceDays: number; maxThreads: number; attachments: boolean }
 
+export interface ThreadRuleUi { id: string; name: string; chatId: string; chatName: string; sinceDays: number; maxThreads: number; minReplies: number; files: boolean; images: boolean }
+export interface AutorunUi { enabled: boolean; prompt: string; thinking: string; lastRunDate?: string }
+
+export interface ReportMetaUi { id: string; title: string; projectId: string | null; projectName: string; runId: string | null; createdAt: string; size: number; template: boolean }
+
 export const CONTEXT_LIMIT = 1_000_000
 export const fmtTokens = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n))
 export const fmtBytes = (n: number | null) => (n == null ? "" : n >= 1_048_576 ? `${(n / 1_048_576).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`)

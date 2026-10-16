@@ -1,11 +1,11 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
-import { Send, Square, Copy, Trash2, BookmarkPlus, FilePlus2, Play, Loader2, Brain } from "lucide-react"
+import { Send, Square, Copy, Trash2, BookmarkPlus, FilePlus2, Play, Loader2, Brain, Download, BarChart3, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { api, jsonInit, fmtTokens, type Run } from "./argon-types"
+import { api, jsonInit, fmtTokens, type ReportMetaUi, type Run } from "./argon-types"
+import { ArgonMarkdown } from "./argon-markdown"
+import type { QuickPrompt } from "@/lib/argon/templates"
 
 interface ToolChip { name: string; args: Record<string, unknown>; ok: boolean; chars: number }
 const toolLabel = (t: ToolChip) => `${String(t.args.report ?? t.name)} ${String(t.args.quarter || (t.args.startDate ? `${t.args.startDate}→${t.args.endDate}` : ""))}`.trim()
@@ -29,11 +29,15 @@ async function streamRun(projectId: string, body: Record<string, unknown>, signa
   }
 }
 
-export function ChatPanel({ projectId, runs, setRuns, enabledCount, onAppendNotes, onSaveAsSource, onError }: {
+export function ChatPanel({ projectId, runs, setRuns, enabledCount, quickPrompts, reportTemplates, pendingTpl, setPendingTpl, onAppendNotes, onSaveAsSource, onError }: {
   projectId: string
   runs: Run[]
   setRuns: (fn: (prev: Run[]) => Run[]) => void
   enabledCount: number
+  quickPrompts: QuickPrompt[]
+  reportTemplates: ReportMetaUi[]            // report đã đánh dấu "mẫu" — hiện thành nút dựng lại với số liệu mới
+  pendingTpl: ReportMetaUi | null            // mẫu sẽ gửi kèm lượt kế tiếp
+  setPendingTpl: (r: ReportMetaUi | null) => void
   onAppendNotes: (text: string) => void
   onSaveAsSource: (name: string, text: string) => void
   onError: (m: string) => void
@@ -47,9 +51,18 @@ export function ChatPanel({ projectId, runs, setRuns, enabledCount, onAppendNote
   const [toolsOf, setToolsOf] = useState<Record<string, ToolChip[]>>({})
   const acRef = useRef<AbortController | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const tplOf = useRef<Record<string, string>>({})   // runId -> report mẫu (để lượt "Tiếp tục viết" vẫn có mẫu trong ngữ cảnh)
   const stick = useRef(true)
 
   useEffect(() => { if (stick.current) endRef.current?.scrollIntoView({ block: "end" }) }, [runs])
+
+  // Nút "Nhờ sửa" trên thẻ report (argon-markdown.tsx) điền sẵn câu mở đầu vào ô chat.
+  useEffect(() => {
+    const on = (e: Event) => { setPrompt(String((e as CustomEvent).detail ?? "")); inputRef.current?.focus() }
+    window.addEventListener("argon-prefill", on)
+    return () => window.removeEventListener("argon-prefill", on)
+  }, [])
 
   const patchRun = (id: string, p: Partial<Run>) => setRuns(prev => prev.map(r => (r.id === id ? { ...r, ...p } : r)))
 
@@ -62,6 +75,7 @@ export function ChatPanel({ projectId, runs, setRuns, enabledCount, onAppendNote
         await streamRun(projectId, resumeId ? { ...body, resumeRunId: resumeId } : body, ac.signal, e => {
           if (e.type === "start") {
             rid = e.runId; if (e.warnings?.length) setWarn(e.warnings)
+            if (body.templateReportId) tplOf.current[rid] = String(body.templateReportId)
             if (!resumeId) setRuns(prev => [...prev, { id: rid, prompt: String(body.prompt), answer: "", status: "running", model: null, thinking, source_ids: [], tokens_in: 0, tokens_out: 0, cached_in: 0, cost_usd: 0, duration_ms: 0, segments: 0, error: null, created_at: new Date().toISOString() }])
             else patchRun(rid, { status: "running" })
           } else if (e.type === "delta") {
@@ -81,17 +95,26 @@ export function ChatPanel({ projectId, runs, setRuns, enabledCount, onAppendNote
     setBusy(false); acRef.current = null
   }
 
-  async function send() {
-    const p = prompt.trim()
+  async function send(override?: string) {
+    const p = (override ?? prompt).trim()
     if (!p || busy) return
-    setPrompt(""); stick.current = true
-    if (bgMode) return startBackground({ prompt: p, thinking, allowTools: useTools })
-    await run({ prompt: p, thinking, allowTools: useTools })
+    const templateReportId = pendingTpl?.id
+    setPrompt(""); stick.current = true; setPendingTpl(null)
+    if (bgMode) return startBackground({ prompt: p, thinking, allowTools: useTools, templateReportId }, templateReportId)
+    await run({ prompt: p, thinking, allowTools: useTools, templateReportId })
   }
 
-  async function startBackground(body: Record<string, unknown>) {
+  // "Làm report": gõ chủ đề vào ô rồi bấm — Argon viết 1 trang HTML (mở bằng nút trên câu trả lời, tự vào Kho báo cáo).
+  async function makeReport() {
+    const t = prompt.trim()
+    if (!t) { setWarn(["Gõ chủ đề cần làm report vào ô chat (vd: “doanh thu theo vendor quý này”), rồi bấm Làm report."]); return }
+    await send(`Làm report HTML trực quan (dashboard: số lớn, biểu đồ, bảng sắp xếp/lọc được, animation nhẹ) về: ${t}`)
+  }
+
+  async function startBackground(body: Record<string, unknown>, templateReportId?: string) {
     try {
       const r = await api<{ runId: string }>(`/api/creator/argon/projects/${projectId}/runs`, jsonInit("POST", { ...body, background: true }))
+      if (templateReportId) tplOf.current[r.runId] = templateReportId
       if (body.resumeRunId) patchRun(String(body.resumeRunId), { status: "queued" })
       else setRuns(prev => [...prev, { id: r.runId, prompt: String(body.prompt), answer: "", status: "queued", model: null, thinking: String(body.thinking), source_ids: [], tokens_in: 0, tokens_out: 0, cached_in: 0, cost_usd: 0, duration_ms: 0, segments: 0, error: null, created_at: new Date().toISOString() }])
     } catch (e) { onError((e as Error).message) }
@@ -152,7 +175,7 @@ ${t}
               <div className="flex justify-end"><div className="max-w-[85%] rounded-2xl rounded-br-md bg-violet-600 text-white px-3.5 py-2 text-sm whitespace-pre-wrap">{r.prompt}</div></div>
               <div className="rounded-2xl rounded-bl-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3">
                 {r.answer ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_th]:border [&_th]:border-gray-300 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-gray-200 [&_td]:px-2 [&_td]:py-1"><ReactMarkdown remarkPlugins={[remarkGfm]}>{r.answer}</ReactMarkdown></div>
+                  <ArgonMarkdown text={r.answer} />
                 ) : <div className="text-sm text-gray-400 inline-flex items-center gap-2"><Brain size={14} className="animate-pulse" />Argon đang đọc và suy luận…</div>}
                 {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
                 {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}
@@ -162,11 +185,13 @@ ${t}
                   {(toolsOf[r.id] ?? []).map((t, i) => <span key={i} title={`${t.ok ? "đã lấy" : "lỗi"} · ${fmtTokens(t.chars)} ký tự`} className={cn("px-1.5 py-0.5 rounded border", t.ok ? "border-emerald-300 text-emerald-700" : "border-red-300 text-red-700")}>📊 {toolLabel(t)}</span>)}
                   {!live && !toolsOf[r.id] && <button onClick={() => showTools(r.id)} className="hover:text-gray-800" title="Xem Argon đã lấy số liệu hệ thống nào ở lượt này">Số liệu đã lấy</button>}
                   {r.tokens_in > 0 && <span>{fmtTokens(r.tokens_in)} vào{r.cached_in ? ` (cache ${fmtTokens(r.cached_in)})` : ""} · {fmtTokens(r.tokens_out)} ra · ~${r.cost_usd.toFixed(2)} · {Math.round(r.duration_ms / 1000)}s{r.segments > 1 ? ` · ${r.segments} đoạn` : ""}</span>}
-                  {!live && r.status === "partial" && <button onClick={() => (bgMode ? startBackground({ resumeRunId: r.id, thinking: r.thinking ?? thinking, allowTools: useTools }) : run({ resumeRunId: r.id, thinking: r.thinking ?? thinking, allowTools: useTools }))} disabled={busy} className="inline-flex items-center gap-1 text-violet-600 font-medium"><Play size={11} />Tiếp tục viết</button>}
+                  {!live && r.status === "partial" && <button onClick={() => (bgMode ? startBackground({ resumeRunId: r.id, thinking: r.thinking ?? thinking, allowTools: useTools, templateReportId: tplOf.current[r.id] }) : run({ resumeRunId: r.id, thinking: r.thinking ?? thinking, allowTools: useTools, templateReportId: tplOf.current[r.id] }))} disabled={busy} className="inline-flex items-center gap-1 text-violet-600 font-medium"><Play size={11} />Tiếp tục viết</button>}
                   {!live && r.answer && <>
                     <button onClick={() => navigator.clipboard.writeText(r.answer)} className="inline-flex items-center gap-1 hover:text-gray-800"><Copy size={11} />Sao chép</button>
                     <button onClick={() => onAppendNotes(`### ${r.prompt.slice(0, 80)}\n${r.answer}`)} className="inline-flex items-center gap-1 hover:text-gray-800" title="Thêm vào sổ dự án (luôn nằm đầu ngữ cảnh)"><BookmarkPlus size={11} />Vào sổ dự án</button>
                     <button onClick={() => onSaveAsSource(r.prompt.slice(0, 60), r.answer)} className="inline-flex items-center gap-1 hover:text-gray-800" title="Lưu câu trả lời thành nguồn mới của dự án"><FilePlus2 size={11} />Lưu thành nguồn</button>
+                    <a href={`/api/creator/argon/runs/${r.id}/export?format=docx`} className="inline-flex items-center gap-1 hover:text-gray-800" title="Tải câu trả lời thành file Word"><Download size={11} />.docx</a>
+                    <a href={`/api/creator/argon/runs/${r.id}/export?format=md`} className="inline-flex items-center gap-1 hover:text-gray-800" title="Tải câu trả lời dạng markdown"><Download size={11} />.md</a>
                   </>}
                   {!live && <button onClick={() => del(r.id)} className="inline-flex items-center gap-1 hover:text-red-600 ml-auto"><Trash2 size={11} /></button>}
                 </div>
@@ -180,16 +205,32 @@ ${t}
       {warn.length > 0 && <div className="mx-4 mb-2 text-xs rounded-lg bg-amber-50 text-amber-800 px-3 py-2 whitespace-pre-wrap">{warn.join("\n")}</div>}
 
       <div className="border-t border-gray-200 dark:border-slate-700 p-3">
+        {pendingTpl && (
+          <div className="mb-2 inline-flex items-center gap-2 rounded-lg border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-950/40 px-2.5 py-1 text-xs text-violet-800 dark:text-violet-200">
+            <BarChart3 size={13} />Dựng lại theo mẫu: <b className="font-semibold">{pendingTpl.title}</b>
+            <button onClick={() => setPendingTpl(null)} title="Bỏ mẫu"><X size={12} /></button>
+          </div>
+        )}
+        {reportTemplates.length > 0 && !busy && !pendingTpl && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {reportTemplates.slice(0, 6).map(t => <button key={t.id} onClick={() => { setPendingTpl(t); setPrompt("Dựng lại report này với số liệu mới nhất từ các nguồn của dự án."); inputRef.current?.focus() }} title="Dựng lại report mẫu này bằng số liệu mới" className="px-2 py-0.5 text-xs rounded-full border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30">⭐ {t.title.slice(0, 40)}</button>)}
+          </div>
+        )}
+        {quickPrompts.length > 0 && !busy && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {quickPrompts.map(q => <button key={q.label} onClick={() => { setPrompt(q.prompt); inputRef.current?.focus() }} title={q.prompt} className="px-2 py-0.5 text-xs rounded-full border border-violet-300 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40">{q.label}</button>)}
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <textarea
-            value={prompt} onChange={e => setPrompt(e.target.value)} rows={3}
+            ref={inputRef} value={prompt} onChange={e => setPrompt(e.target.value)} rows={3}
             onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send() } }}
             placeholder={enabledCount ? `Giao việc cho Argon (đang dùng ${enabledCount} nguồn) — Ctrl+Enter để gửi` : "Chưa bật nguồn nào — Argon sẽ trả lời chỉ từ kiến thức chung. Ctrl+Enter để gửi"}
             className="flex-1 resize-none px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-violet-500"
           />
           {busy
             ? <button onClick={() => acRef.current?.abort()} className="h-10 px-3 rounded-xl bg-red-600 text-white inline-flex items-center gap-1.5 text-sm"><Square size={14} />Dừng</button>
-            : <button onClick={send} disabled={!prompt.trim()} className="h-10 px-3 rounded-xl bg-violet-600 text-white inline-flex items-center gap-1.5 text-sm disabled:opacity-50"><Send size={14} />Gửi</button>}
+            : <button onClick={() => void send()} disabled={!prompt.trim()} className="h-10 px-3 rounded-xl bg-violet-600 text-white inline-flex items-center gap-1.5 text-sm disabled:opacity-50"><Send size={14} />Gửi</button>}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
           <label className="inline-flex items-center gap-1.5" title="Worker chạy không giới hạn đoạn (đến 40 đoạn / $10), đóng trang vẫn chạy; xong nhắn Lark cho Hiếu"><input type="checkbox" checked={bgMode} onChange={e => setBgMode(e.target.checked)} />Chạy nền (xong nhắn Lark)</label>
@@ -200,6 +241,7 @@ ${t}
           {(Object.keys(THINK_LABEL) as Thinking[]).map(t => (
             <button key={t} onClick={() => setThinking(t)} className={cn("px-2 py-0.5 rounded-md border", thinking === t ? "bg-violet-600 text-white border-violet-600" : "border-gray-300 dark:border-slate-600")}>{THINK_LABEL[t]}</button>
           ))}
+          <button onClick={makeReport} disabled={busy} className="px-2 py-0.5 rounded-md border border-emerald-400 text-emerald-700 dark:text-emerald-300 disabled:opacity-50" title="Gõ chủ đề vào ô chat rồi bấm — Argon viết 1 trang report HTML trực quan (biểu đồ, bảng lọc được, animation)">📊 Làm report</button>
           <button onClick={review} disabled={busy} className="px-2 py-0.5 rounded-md border border-violet-400 text-violet-700 dark:text-violet-300 disabled:opacity-50" title="Dán kết quả của Gấu Pro/AI khác vào ô chat rồi bấm — Argon đối chiếu với nguồn của dự án">Soát lại</button>
           <span className="ml-auto">Gemini 4 Argon · việc dài tự nối nhiều đoạn (tối đa {MAX_AUTO_SEGMENTS})</span>
         </div>

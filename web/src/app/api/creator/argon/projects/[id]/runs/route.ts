@@ -8,6 +8,7 @@ import { buildRunContext } from "@/lib/argon/context"
 import { LEVELS, runSegment } from "@/lib/argon/run-engine"
 import { MAX_OUT, SEGMENT_MS, loadRunMaterial } from "@/lib/argon/bg-worker"
 import { deleteBg, deleteToolLog, getToolLog, saveToolLog, setBg, triggerWorker } from "@/lib/argon/bg"
+import { autoSaveReports, getReportHtml, templateSuffix } from "@/lib/argon/report-store"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const rl = await checkRateLimit(`argon:${username}`, 20, 60_000)
   if (!rl.allowed) return NextResponse.json({ error: `Quá nhiều yêu cầu, chờ ${Math.ceil(rl.resetMs / 1000)}s` }, { status: 429 })
 
-  const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string; allowTools?: boolean; background?: boolean }
+  const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string; allowTools?: boolean; background?: boolean; templateReportId?: string }
   const thinking = b.thinking && LEVELS[b.thinking] ? b.thinking : "medium"
 
   const { data: allRuns } = await supabaseAdmin.from("argon_runs").select("*").eq("project_id", params.id).order("created_at")
@@ -34,6 +35,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const prompt = resume ? resume.prompt : String(b.prompt ?? "").trim()
   if (!prompt) return NextResponse.json({ error: "Thiếu yêu cầu" }, { status: 400 })
   const allowTools = !!b.allowTools
+  const tpl = b.templateReportId ? await getReportHtml(username, b.templateReportId) : null
+  if (b.templateReportId && !tpl) return NextResponse.json({ error: "Không tìm thấy report mẫu" }, { status: 404 })
+  const withTpl = (p: string) => (tpl ? p + templateSuffix(tpl.meta.title, tpl.html) : p)   // prompt lưu trong lịch sử vẫn là câu gốc; HTML mẫu chỉ đi vào ngữ cảnh lượt này
 
   const pick = resume ? new Set(resume.source_ids) : b.sourceIds ? new Set(b.sourceIds) : null
 
@@ -52,14 +56,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       runId = data.id
     }
     const now = new Date().toISOString()
-    await setBg(runId, { username, projectId: params.id, allowTools, thinking, startedAt: now, heartbeat: now })
+    await setBg(runId, { username, projectId: params.id, allowTools, templateReportId: tpl?.meta.id, thinking, startedAt: now, heartbeat: now })
     await triggerWorker(req.nextUrl.origin, runId)
     return NextResponse.json({ runId, background: true })
   }
 
   const mat = await loadRunMaterial(project, pick, req.nextUrl.origin)
   const toolLog = resume ? await getToolLog(resume.id) : []
-  const ctx = await buildRunContext({ project: mat.project, sources: mat.sources, priorRuns: runs, prompt, resumeRun: resume, allowTools, toolLog })
+  const ctx = await buildRunContext({ project: mat.project, sources: mat.sources, priorRuns: runs, prompt: withTpl(prompt), resumeRun: resume ? { ...resume, prompt: withTpl(resume.prompt) } : undefined, allowTools, toolLog })
   ctx.warnings.push(...mat.warnings)
   const t0 = Date.now()
   let runId = resume?.id ?? ""
@@ -95,6 +99,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         finished_at: seg.status === "partial" ? null : new Date().toISOString(),
       }
       await save(patch)
+      if (seg.status !== "error") await autoSaveReports(username, params.id, runId, answer)
       await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
       send(seg.status === "error" && !answer ? { type: "error", message: seg.error } : { type: "done", run: { id: runId, answer, ...patch } })
       try { controller.close() } catch { /* đã đóng */ }

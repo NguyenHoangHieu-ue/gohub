@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireArgonUser } from "@/lib/argon/server"
 import { ensureHub } from "@/lib/argon/hub"
+import { templateById } from "@/lib/argon/templates"
+import { saveAutorun } from "@/lib/argon/autorun"
 
 export const dynamic = "force-dynamic"
 
@@ -36,10 +38,12 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const username = await requireArgonUser()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  const { name } = (await req.json().catch(() => ({}))) as { name?: string }
-  const n = String(name ?? "").trim().slice(0, 120)
+  const { name, template } = (await req.json().catch(() => ({}))) as { name?: string; template?: string }
+  const tpl = templateById(template)
+  const n = String(name ?? "").trim().slice(0, 120) || tpl?.name || ""
   if (!n) return NextResponse.json({ error: "Thiếu tên dự án" }, { status: 400 })
-  const { data, error } = await supabaseAdmin.from("argon_projects").insert({ username, name: n }).select("*").single()
+  const { data, error } = await supabaseAdmin.from("argon_projects").insert({ username, name: n, ...(tpl ? { notes: tpl.notes, instructions: tpl.instructions } : {}) }).select("*").single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (tpl) await saveAutorun(data.id, { enabled: false, prompt: tpl.autorunPrompt, thinking: "medium" })
   return NextResponse.json({ project: data })
 }

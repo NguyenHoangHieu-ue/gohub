@@ -7,6 +7,8 @@ import { listBgRunIds } from "@/lib/argon/bg"
 import { resumeStuckBackground } from "@/lib/argon/bg-worker"
 import { syncFolders, syncMany } from "@/lib/argon/lark-sync"
 import { allProjectIdsWithRules, syncAllRules } from "@/lib/argon/mail-sync"
+import { allProjectIdsWithThreadRules, syncAllThreadRules } from "@/lib/argon/threads"
+import { projectIdsWithAutorun, startAutorun } from "@/lib/argon/autorun"
 import type { ArgonSource } from "@/lib/argon/server"
 
 export const maxDuration = 300
@@ -42,6 +44,22 @@ async function run(req: NextRequest) {
       mail.push({ project: pid, threads: r.reduce((n, x) => n + x.threads, 0), created: r.reduce((n, x) => n + x.created, 0), updated: r.reduce((n, x) => n + x.updated, 0), attachments: r.reduce((n, x) => n + x.attachments, 0), errors: r.flatMap(x => x.errors).slice(0, 3) })
     } catch (e) { mail.push({ project: pid, threads: 0, created: 0, updated: 0, attachments: 0, errors: [(e as Error).message] }) }
   }
+  // Thread trong group Lark: nạp lại theo quy tắc (bot đọc, chỉ đọc).
+  const threads: { project: string; threads: number; created: number; updated: number; attachments: number; errors: string[] }[] = []
+  for (const pid of await allProjectIdsWithThreadRules()) {
+    if (Date.now() - t0 > 250_000) break
+    const { data: proj } = await supabaseAdmin.from("argon_projects").select("username").eq("id", pid).maybeSingle()
+    if (!proj) continue
+    try {
+      const r = await syncAllThreadRules(pid, proj.username, t0 + 255_000)
+      threads.push({ project: pid, threads: r.reduce((n, x) => n + x.threads, 0), created: r.reduce((n, x) => n + x.created, 0), updated: r.reduce((n, x) => n + x.updated, 0), attachments: r.reduce((n, x) => n + x.attachments, 0), errors: r.flatMap(x => x.errors).slice(0, 3) })
+    } catch (e) { threads.push({ project: pid, threads: 0, created: 0, updated: 0, attachments: 0, errors: [(e as Error).message] }) }
+  }
+  // "Tự chạy hằng đêm": sau khi mail/thread đã nạp, giao worker chạy yêu cầu cố định (1 lần/ngày/dự án) rồi DM Lark.
+  const autorun: { project: string; runId: string | null; error?: string }[] = []
+  for (const pid of await projectIdsWithAutorun()) {
+    try { autorun.push({ project: pid, runId: await startAutorun(pid, req.nextUrl.origin) }) } catch (e) { autorun.push({ project: pid, runId: null, error: (e as Error).message }) }
+  }
   const count = (s: string) => results.filter(r => r.status === s).length
   return NextResponse.json({
     total: sources.length, done: results.length, changed: count("changed"), same: count("same"), skipped: count("skipped"), error: count("error"),
@@ -49,6 +67,8 @@ async function run(req: NextRequest) {
     resumedBackground: resumed,
     folders: folderAdds,
     mail,
+    threads,
+    autorun,
   })
 }
 

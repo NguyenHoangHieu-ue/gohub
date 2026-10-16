@@ -8,7 +8,7 @@ export const MAX_BG_SEGMENTS = 40            // ≈ 3 giờ chạy thật
 export const MAX_BG_COST_USD = 10
 export const BG_STALE_MS = 6 * 60_000        // đoạn "running" quá lâu không có nhịp tim = request đã chết → cho chạy lại
 
-export interface BgState { username: string; projectId: string; allowTools: boolean; thinking: string; startedAt: string; heartbeat: string }
+export interface BgState { username: string; projectId: string; allowTools: boolean; templateReportId?: string; thinking: string; startedAt: string; heartbeat: string }
 
 const bgKey = (runId: string) => `argon_bg:${runId}`
 const toolsKey = (runId: string) => `argon_run_tools:${runId}`

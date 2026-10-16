@@ -25,7 +25,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (!(await ownProject(params.id, username))) return NextResponse.json({ error: "Không tìm thấy dự án" }, { status: 404 })
   const b = (await req.json().catch(() => ({}))) as {
-    action?: string; url?: string; mode?: string; pack?: string; quarter?: string; files?: { name: string; size: number }[]; pick?: string[]; autoNew?: boolean; items?: { path: string; name: string; mime: string; size: number }[]; name?: string; text?: string
+    action?: string; url?: string; mode?: string; pack?: string; quarter?: string; files?: { name: string; size: number }[]; pick?: string[]; autoNew?: boolean; items?: { path: string; name: string; mime: string; size: number }[]; name?: string; text?: string; ids?: string[]; enabled?: boolean
+  }
+
+  if (b.action === "bulk") {   // bật/tắt nhiều nguồn cùng lúc (nhóm mail/thread có hàng chục nguồn)
+    const ids = (b.ids ?? []).filter(i => typeof i === "string").slice(0, 500)
+    if (!ids.length || typeof b.enabled !== "boolean") return NextResponse.json({ error: "Cần ids và enabled" }, { status: 400 })
+    const { error } = await supabaseAdmin.from("argon_sources").update({ enabled: b.enabled }).eq("project_id", params.id).in("id", ids)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, count: ids.length })
   }
 
   if (b.action === "prepare") {
@@ -112,5 +120,5 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }) }
   }
 
-  return NextResponse.json({ error: "action phải là prepare | register | note | lark | data | sync" }, { status: 400 })
+  return NextResponse.json({ error: "action phải là prepare | register | note | lark | data | sync | bulk" }, { status: 400 })
 }

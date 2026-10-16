@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ARGON_BUCKET, ownProject, requireArgonUser } from "@/lib/argon/server"
 import { deleteRules } from "@/lib/argon/mail-sync"
+import { deleteThreadRules } from "@/lib/argon/threads"
+import { deleteAutorun } from "@/lib/argon/autorun"
 import { deleteBg, deleteToolLog } from "@/lib/argon/bg"
 import { getHubId } from "@/lib/argon/hub"
 
@@ -45,7 +47,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const { data: vers } = ids.length ? await supabaseAdmin.from("argon_source_versions").select("storage_path").in("source_id", ids) : { data: [] as { storage_path: string | null }[] }
   const paths = [...(files ?? []).map(f => f.storage_path), ...(vers ?? []).map(v => v.storage_path)].filter((p): p is string => !!p)
   if (paths.length) await supabaseAdmin.storage.from(ARGON_BUCKET).remove(Array.from(new Set(paths)))
-  await deleteRules(params.id)
+  await Promise.all([deleteRules(params.id), deleteThreadRules(params.id), deleteAutorun(params.id)])
   const { data: runRows } = await supabaseAdmin.from("argon_runs").select("id").eq("project_id", params.id)
   await Promise.all((runRows ?? []).flatMap(r => [deleteBg(r.id), deleteToolLog(r.id)]))
   const { error } = await supabaseAdmin.from("argon_projects").delete().eq("id", params.id)
