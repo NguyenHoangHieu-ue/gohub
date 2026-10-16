@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     const mag = (r: { current: number | null; expected: number | null }) => Math.abs(changePct(r.current, r.expected) ?? 0)
     const perVendor: Record<string, number> = {}
     for (const r of run.rows) if (r.verdict === "diff") perVendor[r.vendor] = (perVendor[r.vendor] ?? 0) + 1
-    const shown = run.rows.filter(r => r.verdict !== "match").map((r, i) => [r, i] as const).sort((a, b) => PRIO[a[0].verdict] - PRIO[b[0].verdict] || (a[0].verdict === "diff" ? (perVendor[a[0].vendor] ?? 0) - (perVendor[b[0].vendor] ?? 0) : 0) || mag(b[0]) - mag(a[0]) || a[1] - b[1]).map(x => x[0])
+    const shown = run.rows.filter(r => r.verdict !== "match" && r.verdict !== "rounding").map((r, i) => [r, i] as const).sort((a, b) => PRIO[a[0].verdict] - PRIO[b[0].verdict] || (a[0].verdict === "diff" ? (perVendor[a[0].vendor] ?? 0) - (perVendor[b[0].vendor] ?? 0) : 0) || mag(b[0]) - mag(a[0]) || a[1] - b[1]).map(x => x[0])
     const levels = run.inputs.levels
     return NextResponse.json({
       summary: run.summary,

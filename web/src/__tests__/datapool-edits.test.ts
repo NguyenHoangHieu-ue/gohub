@@ -39,13 +39,15 @@ describe("chỉnh tay ô trước khi xuất", () => {
 })
 
 describe("so giá vốn (compareCogs)", () => {
-  test("USD: khớp tuyệt đối mới là khớp, chênh 1 cent cũng là lệch (ROUNDUP hết)", () => {
+  test("USD: khớp / chênh làm tròn ≤ 1 cent / lệch", () => {
     expect(compareCogs(1.76, 1.76, "USD").verdict).toBe("match")
-    expect(compareCogs(1.76, 1.77, "USD").verdict).toBe("diff")
+    expect(compareCogs(1.76, 1.77, "USD").verdict).toBe("rounding")
+    expect(compareCogs(1.76, 1.78, "USD").verdict).toBe("diff")
     expect(compareCogs(1.7, 1.77, "USD").verdict).toBe("diff")
   })
-  test("VND: chênh bao nhiêu cũng là lệch; diffPct tính theo giá tính lại", () => {
-    expect(compareCogs(54187, 54187 + 265, "VND").verdict).toBe("diff")
+  test("VND: chênh ≤ 275 là làm tròn; lớn hơn là lệch; diffPct tính theo giá tính lại", () => {
+    expect(compareCogs(54187, 54187 + 265, "VND").verdict).toBe("rounding")
+    expect(compareCogs(54187, 54187 + 300, "VND").verdict).toBe("diff")
     expect(compareCogs(54187, 54187, "VND").verdict).toBe("match")
     // Gói nhỏ (Daily 1 ngày): chênh 2–8% chỉ vài trăm đồng nhưng là thay đổi thật, không được coi là làm tròn
     expect(compareCogs(7062, 6539, "VND").verdict).toBe("diff")

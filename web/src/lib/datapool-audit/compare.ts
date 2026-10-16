@@ -3,13 +3,16 @@ export type CogsVerdict = "match" | "rounding" | "diff"
 
 export interface CogsCompare { current: number; expected: number; diff: number; diffPct: number; verdict: CogsVerdict }
 
-// Hiếu chốt (2026-10-15): MỌI bước làm tròn dùng ROUNDUP, giá vốn phải đúng bằng giá tính lại — KHÔNG còn ngưỡng "chênh làm tròn". Lệch dù 1 đồng / 1 cent
-// (vd 5.155 SKU 3HK cũ tính bằng ROUND) cũng là LỆCH và vào sheet cập nhật. Kiểu "rounding" giữ trong type cho tương thích nhưng không còn được tạo ra.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function compareCogs(current: number, expected: number, _currency?: string): CogsCompare {
+// Chênh ≤ 1 cent USD (1 bước ROUNDUP 2 chữ số) ≈ ≤ 275 VND là "chênh làm tròn" (coi như khớp, không vào danh sách LỆCH / sheet cập nhật). Lớn hơn là THAY ĐỔI THẬT —
+// kể cả gói nhỏ Daily 1 ngày (vài % = vài trăm đồng, vượt 275). Hiếu chốt lại 2026-10-16 sau khi bỏ ngưỡng hoàn toàn (2026-10-15) làm 5.155 SKU 3HK ROUND cũ hiện LỆCH dù chỉ 1 cent.
+const USD_TOL = 0.0100001
+const VND_TOL = 275
+
+export function compareCogs(current: number, expected: number, currency?: string): CogsCompare {
   const diff = Math.round((current - expected) * 10000) / 10000
   const abs = Math.abs(diff)
-  const verdict: CogsVerdict = abs < 1e-9 ? "match" : "diff"
+  const tol = currency === "VND" ? VND_TOL : USD_TOL
+  const verdict: CogsVerdict = abs < 1e-9 ? "match" : abs <= tol ? "rounding" : "diff"
   return { current, expected, diff, diffPct: expected ? Math.round((diff / expected) * 10000) / 100 : 0, verdict }
 }
 

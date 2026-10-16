@@ -447,7 +447,7 @@ describe("SKU đã có: so giá vốn hệ thống với giá tính lại", () =
     const status = new Map([[code, "Active"]])
     const verdictFor = (cogs: number | null) => dropExisting(built, status, new Map(), new Map([[code, { cogs }]])).skipped.skus[0]
     expect(verdictFor(computed).verdict).toBe("match")
-    expect(verdictFor(Math.round((computed - 0.01) * 100) / 100).verdict).toBe("diff")   // ROUNDUP hết: lệch 1 cent cũng là lệch
+    expect(verdictFor(Math.round((computed - 0.01) * 100) / 100).verdict).toBe("rounding")   // lệch 1 cent = chênh làm tròn
     const bad = verdictFor(Math.round(computed * 0.9 * 100) / 100)
     expect(bad.verdict).toBe("diff"); expect(bad.diffPct).toBeLessThan(-8)
     expect(verdictFor(null).verdict).toBeUndefined()
