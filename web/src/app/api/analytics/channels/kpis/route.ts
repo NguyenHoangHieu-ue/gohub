@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       : "TRUE"
 
   try {
-    const key = `ch-kpis5:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+    const key = `ch-kpis6:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
     const [cur, prv] = await Promise.all([
       queryAnalytics<Record<string, string>>(
@@ -130,28 +130,31 @@ export async function GET(req: NextRequest) {
       custRevRows.forEach(r => { if (Number(r.in_scope) === 1) subRev.set(r.sub, (subRev.get(r.sub) || 0) + parseFloat(r.revenue || "0")) })
       subRev.forEach((rev, sub) => { subChannelCosts[sub] = { revenue: rev, b2bCustomer: subCost.get(sub) || 0 } })
 
-      // B2C: channel-level costs (theo channelName hoặc tất cả channels nếu không filter). Bỏ qua hoàn
-      // toàn khi scope không có doanh thu B2C (channel/kênh 100% B2B) — B2B đã tính qua Turso ở trên, cộng
-      // thêm channel-cost Supabase (nếu lỡ có config cùng tên channel) sẽ DOUBLE-COUNT (đo thực tế: 3 kênh
-      // B2B lệch 166-208tr so với channels/performance trước khi thêm guard này).
-      if (cB2CRev !== 0) {
-        const relevantChannelCosts = channelName
-          ? channelCosts.filter(cc => cc.channel === channelName)
-          : channelCosts  // all channels (group aggregate)
-        relevantChannelCosts.forEach(cc => {
+      // Chi phí kênh (analytics_channel_costs) tính THEO TỪNG KÊNH không-B2B với doanh thu của chính kênh đó —
+      // cùng cách channels/performance (bảng cùng trang). B2B dùng Turso ở trên nên bỏ qua để khỏi double-count.
+      // Trước: cộng chi phí MỌI kênh (kể cả kênh B2B) khi scope có doanh thu B2C + percent nhân doanh thu cả scope →
+      // kỳ có tháng 7 (platformFee kênh B2B 2,46 tỷ) thẻ CM1 âm trong khi bảng dương (đo Q3: -1,32 tỷ vs 5,66 tỷ).
+      const nonB2BChannels = await queryAnalytics<{ channel: string; revenue: string }>(
+        `SELECT TRIM(s.channel_name) as channel, SUM(f.${source.revenueCol}) as revenue
+         FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+         WHERE ${filter} ${chFilter} ${sfx} AND UPPER(COALESCE(s.group_name,'')) NOT LIKE 'B2B%'
+         GROUP BY 1`
+      )
+      nonB2BChannels.forEach(ch => {
+        const chRev = parseFloat(ch.revenue || "0")
+        channelCosts.filter(cc => cc.channel === ch.channel).forEach(cc => {
           const dayRatio = getDaysInMonth(cc.month) > 0
             ? getDaysInRange(startDate || "", endDate || "", cc.month) / getDaysInMonth(cc.month) : 0
           COST_KEYS.forEach(key => {
             const cv = cc[key]
-            // percent type: dùng cB2CRev (doanh thu B2C thực trong scope) — B2B đã tính riêng ở trên.
             if (cv?.value) {
-              const amt = cv.type === "amount" ? cv.value * dayRatio : (cB2CRev * cv.value) / 100
+              const amt = cv.type === "amount" ? cv.value * dayRatio : (chRev * cv.value) / 100
               opCost += amt
               opCostBreakdown[key] += amt
             }
           })
         })
-      }
+      })
 
       // Group-level costs (B2B / B2C) — phân bổ theo tỷ trọng doanh thu scope/toàn công ty cùng kỳ
       // (revShare=1 khi scope = toàn công ty, đúng công thức bod-data.ts `finalizeGroupMargin`).

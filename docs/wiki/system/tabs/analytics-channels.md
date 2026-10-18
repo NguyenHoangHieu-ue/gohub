@@ -192,3 +192,9 @@ Hiếu thấy CM1 âm ở Shopeepay MY/SG/PH. Gốc: chi phí khách B2B (Turso 
 - Áp tại: `channels/performance` (bảng All Channels), `bod-data.ts` `fetchBODChannelPerformanceData` (BOD theo kênh), `channels/kpis` (thẻ + `sub_channel_costs` cho từng sub-channel). Trang Channels: mỗi dòng sub-channel nhận đúng chi phí khách của nó (`metrics.rowOpCostMap`), chi phí còn lại (kênh B2C, group cost) chia theo doanh thu; bỏ code "subchannels" chết. Khoá cache: `ch-perf2`, `ch-kpis5`, `bod-channel-perf2`.
 - KHÔNG đổi: BOD theo nhóm (Strategic/Non, đã theo khách), BOD theo ngày, Quarter Report, group cost (vẫn chia theo tỷ trọng doanh thu).
 - ⚠️ CM1 các kênh có khách chưa nhập chi phí (vd Shopeepay ID/MY/SG/PH) sẽ CAO hơn trước cho tới khi nhập chi phí khách.
+
+## s236 (2026-10-18) — Thẻ CM1 (`channels/kpis`) cộng chi phí kênh B2B → âm khi kỳ có tháng 7
+- Đo staging: Q3 thẻ CM1 −1,318 tỷ, Σ bảng `channels/performance` = Quarter Report = 5,658 tỷ. T7: −518tr vs +2,035 tỷ. T8/T9/T10 khớp (không có chi phí kênh nhập).
+- Nguyên nhân: `analytics_channel_costs` tháng 7 có platformFee kênh B2B (2,46 tỷ); `channels/kpis` cộng chi phí MỌI kênh khi scope có doanh thu B2C, percent nhân doanh thu cả scope.
+- Sửa: chi phí kênh tính theo từng kênh không-B2B (query doanh thu theo kênh, `group_name NOT LIKE 'B2B%'`), percent × doanh thu của chính kênh — cùng cách `channels/performance`. Cache key `ch-kpis6`.
+- Còn lệch nhỏ chưa sửa: Channels/Staff không lọc KH Inactive (+161k Q3 so với Quarter/BOD); `/api/analytics/kpis` không lọc ship/nội bộ (+10,2tr T7).
