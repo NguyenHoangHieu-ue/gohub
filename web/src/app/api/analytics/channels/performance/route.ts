@@ -4,10 +4,10 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getStrategicPartnersList, shipFilter, internalOpsFilter, excludeInactiveCustomers, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
-import { fetchCosts, getDaysInRange, getDaysInMonth, monthsBetween } from "@/lib/bod-data"
+import { fetchCosts, monthsBetween } from "@/lib/bod-data"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
-import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
+import { COST_KEYS, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -110,8 +110,7 @@ export async function GET(req: NextRequest) {
       let opCost = 0
       if (!isB2B) {
         channelCosts.filter(cc => cc.channel === r.channel).forEach(cc => {
-          const ratio = getDaysInMonth(cc.month) > 0
-            ? getDaysInRange(startDate || "", endDate || "", cc.month) / getDaysInMonth(cc.month) : 0
+          const ratio = rangeDayRatio(startDate || "", endDate || "", cc.month)
           COST_KEYS.forEach(key => {
             const v = (cc as any)[key]
             if (v) opCost += v.type === "amount" ? (v.value || 0) * ratio : (rev * (v.value || 0)) / 100
@@ -123,8 +122,7 @@ export async function GET(req: NextRequest) {
       const revShare = (groupRevTotals[tursoGroup] || 0) > 0 ? rev / groupRevTotals[tursoGroup] : 0
       if (isB2B) opCost += b2bCostByChannel.get(r.channel) || 0
       groupCosts.filter(gc => gc.group_name === tursoGroup).forEach(gc => {
-        const ratio = getDaysInMonth(gc.month) > 0
-          ? getDaysInRange(startDate || "", endDate || "", gc.month) / getDaysInMonth(gc.month) : 0
+        const ratio = rangeDayRatio(startDate || "", endDate || "", gc.month)
         opCost += gc.amount * ratio * revShare
       })
 

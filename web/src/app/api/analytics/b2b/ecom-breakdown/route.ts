@@ -6,8 +6,7 @@ import {
   getAnalyticsSource, getDateFilter, shipFilter, getMonthsInRange,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
-import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
-import { calcChCostForPeriod, type CostLine } from "@/lib/analytics-engine/cost-engine"
+import { calcChCostForPeriod, type CostLine, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { fetchEcomCosts, ecomCostKey } from "@/lib/b2b-ecom-cost"
 import { SHOP_STAFF } from "@/lib/b2b-ecom-timeline"
 
@@ -98,8 +97,7 @@ export async function GET(req: NextRequest) {
         for (const mo of item.monthly) {
           const rec = ecomCosts.get(ecomCostKey(mo.month, custName, shopName, subshopName))
           if (!rec) continue
-          const dayRatio = getDaysInMonth(mo.month) > 0
-            ? getDaysInRange(startDate || "", endDate || "", mo.month) / getDaysInMonth(mo.month) : 0
+          const dayRatio = rangeDayRatio(startDate || "", endDate || "", mo.month)
           chCost += calcChCostForPeriod(rec, mo.revenue, dayRatio)
           if (rec.cost_lines) {
             try {

@@ -3,9 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
-import { analyticsGuard, getMonthsInRange, getGroupCostsForMonths, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, excludeInactiveCustomers, cachedQuery } from "@/lib/analytics-helpers"
+import { analyticsGuard, getMonthsInRange, getGroupCostsForMonths, shipFilter, internalOpsFilter, excludeInactiveCustomers, cachedQuery } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
-import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { filterGroupCostsByCompany } from "@/lib/bod-data"
 
 export const maxDuration = 60
@@ -162,8 +162,7 @@ export async function GET(req: NextRequest) {
     const groupCosts = filterGroupCostsByCompany(groupCostsRaw as Array<{ group_name: string; month: string; amount: number; item_name?: string | null }>, companyCode)
     let totalB2BCost = 0, totalB2CCost = 0
     for (const gc of groupCosts) {
-      const ratio = getDaysInMonth(gc.month) > 0
-        ? getDaysInRange(startDate, endDate, gc.month) / getDaysInMonth(gc.month) : 0
+      const ratio = rangeDayRatio(startDate, endDate, gc.month)
       if (gc.group_name === "B2B") totalB2BCost += gc.amount * ratio
       else if (gc.group_name === "B2C") totalB2CCost += gc.amount * ratio
     }
@@ -211,9 +210,7 @@ export async function GET(req: NextRequest) {
       for (const cr of custBreakdownMap[r.staff_code] || []) {
         const rec = (customerCosts as Map<string, any>).get(`${cr.month}_${cr.customer_code}`)
         if (!rec) continue
-        const dayRatio = getDaysInMonth(cr.month) > 0
-          ? getDaysInRange(startDate, endDate, cr.month) / getDaysInMonth(cr.month)
-          : 0
+        const dayRatio = rangeDayRatio(startDate, endDate, cr.month)
         chCost += calcChCostForPeriod(rec, cr.revenue, dayRatio)
       }
 

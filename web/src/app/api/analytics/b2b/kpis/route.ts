@@ -4,14 +4,14 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter,
-  getMonthsInRange, getDaysInRange, getDaysInMonth,
+  getMonthsInRange,
   shipFilter, internalOpsFilter, excludeOpsByCode, excludeInactiveCustomers,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
-import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -99,14 +99,14 @@ export async function GET(req: NextRequest) {
         if (currentMonths.includes(mo)) {
           const cRev = custRevMapCur[`${mo}_${code}`] || 0
           if (cRev !== 0) {
-            const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(startDate!, endDate!, mo) / getDaysInMonth(mo) : 0
+            const ratio = rangeDayRatio(startDate!, endDate!, mo)
             totalOpCost += calcChCostForPeriod(rec, cRev, ratio)
           }
         }
         if (prevMonths.includes(mo)) {
           const pRev = custRevMapPrv[`${mo}_${code}`] || 0
           if (pRev !== 0) {
-            const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(pStartString, pEndString, mo) / getDaysInMonth(mo) : 0
+            const ratio = rangeDayRatio(pStartString, pEndString, mo)
             prevTotalOpCost += calcChCostForPeriod(rec, pRev, ratio)
           }
         }
@@ -123,11 +123,11 @@ export async function GET(req: NextRequest) {
         const mo = String(gc.month)
         const amt = parseFloat(gc.amount || "0")
         if (currentMonths.includes(mo)) {
-          const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(startDate!, endDate!, mo) / getDaysInMonth(mo) : 0
+          const ratio = rangeDayRatio(startDate!, endDate!, mo)
           totalOpCost += amt * ratio
         }
         if (prevMonths.includes(mo)) {
-          const ratio = getDaysInMonth(mo) > 0 ? getDaysInRange(pStartString, pEndString, mo) / getDaysInMonth(mo) : 0
+          const ratio = rangeDayRatio(pStartString, pEndString, mo)
           prevTotalOpCost += amt * ratio
         }
       }

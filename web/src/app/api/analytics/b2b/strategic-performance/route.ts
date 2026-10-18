@@ -5,11 +5,11 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter, getPartnerTiers,
   getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths,
-  getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, excludeOpsByCode, excludeInactiveCustomers,
+  shipFilter, internalOpsFilter, excludeOpsByCode, excludeInactiveCustomers,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
-import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
+import { COST_KEYS, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
 type Metrics = { revenue: number; margin: number; units: number; orders?: number }
 type Item = {
@@ -155,7 +155,7 @@ export async function GET(req: NextRequest) {
         const mRev = monthRow.revenue
         const mMonth = monthRow.month
         const mode = settingsMap.get(`${r.name}_${mMonth}`) || "total"
-        const ratio = getDaysInMonth(mMonth) > 0 ? getDaysInRange(startDate, endDate, mMonth) / getDaysInMonth(mMonth) : 0
+        const ratio = rangeDayRatio(startDate, endDate, mMonth)
 
         if (mode === "subchannels") {
           channelCosts.filter(c => c.channel.startsWith(`${r.name} - `) && c.month === mMonth).forEach(c => {

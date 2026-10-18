@@ -3,9 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode, getMonthsInRange, getDaysInRange, getDaysInMonth, getChannelCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode, getMonthsInRange, getChannelCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, exclHash, excludedForB2C } from "@/lib/quarterly-settings"
-import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
+import { COST_KEYS, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { matchChannelCost } from "@/lib/bod-data"
 
 // Port intel /api/analytics/b2c/kpis: 7 KPI [Revenue, Units, Gross Profit, Margin %, Total Orders, CM1, CM1 %].
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
         const apply = (months: string[], rangeStart: string, rangeEnd: string, rev: number, add: (v: number) => void) => {
           months.forEach(month => {
             matchChannelCost(channelCosts, row.channel, month, row.source_code).forEach((c: any) => {
-              const ratio = getDaysInMonth(month) > 0 ? getDaysInRange(rangeStart, rangeEnd, month) / getDaysInMonth(month) : 0
+              const ratio = rangeDayRatio(rangeStart, rangeEnd, month)
               COST_KEYS.forEach(key => {
                 const v = c[key]
                 // amount: pro-rata theo số ngày trong kỳ (× ratio). percent: áp thẳng trên revenue của kỳ (rev đã
@@ -115,11 +115,11 @@ export async function GET(req: NextRequest) {
         const month = String(r.month)
         const amount = parseFloat(r.amount || "0")
         if (currentMonths.includes(month)) {
-          const ratio = getDaysInMonth(month) > 0 ? getDaysInRange(startDate, endDate, month) / getDaysInMonth(month) : 0
+          const ratio = rangeDayRatio(startDate, endDate, month)
           totalOpCost += amount * ratio
         }
         if (prevMonths.includes(month)) {
-          const ratio = getDaysInMonth(month) > 0 ? getDaysInRange(pStartStr, pEndStr, month) / getDaysInMonth(month) : 0
+          const ratio = rangeDayRatio(pStartStr, pEndStr, month)
           prevTotalOpCost += amount * ratio
         }
       })

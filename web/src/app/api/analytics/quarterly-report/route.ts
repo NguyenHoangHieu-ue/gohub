@@ -3,12 +3,13 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
-import { fetchCosts, filterGroupCostsByCompany, getDaysInMonth, getDaysInRange, matchChannelCost } from "@/lib/bod-data"
+import { fetchCosts, filterGroupCostsByCompany, matchChannelCost } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash, QREPORT_CACHE_PREFIX } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts, type CostRecord } from "@/lib/b2b-customer-cost"
 import { splitQuarterRows } from "@/lib/analytics-engine/quarter-rows"
 import { buildQuarterMonthMeta, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
 import { fetchB2BLifecycleRows, classifyB2BLifecycle } from "@/lib/analytics-engine/b2b-lifecycle"
+import { rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
@@ -51,8 +52,7 @@ function computeChannelCost(
   sourceCode?: string,
 ): number {
   let amtCost = 0, pctCost = 0
-  const dim = getDaysInMonth(month)
-  const ratio = dim > 0 ? getDaysInRange(startD, endD, month) / dim : 0
+  const ratio = rangeDayRatio(startD, endD, month)
   matchChannelCost(channelCosts, channel, month, sourceCode).forEach(c => {
     COST_KEYS.forEach(key => {
       const v = (c as any)[key]

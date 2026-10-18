@@ -4,12 +4,12 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getPrevDateFilter, shipFilter, internalOpsFilter, excludeInactiveCustomers,
-  getMonthsInRange, getChannelCostsForMonths, getGroupCostsForMonths, getDaysInRange, getDaysInMonth,
+  getMonthsInRange, getChannelCostsForMonths, getGroupCostsForMonths,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
-import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
+import { COST_KEYS, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
 
@@ -145,8 +145,7 @@ export async function GET(req: NextRequest) {
       nonB2BChannels.forEach(ch => {
         const chRev = parseFloat(ch.revenue || "0")
         channelCosts.filter(cc => cc.channel === ch.channel).forEach(cc => {
-          const dayRatio = getDaysInMonth(cc.month) > 0
-            ? getDaysInRange(startDate || "", endDate || "", cc.month) / getDaysInMonth(cc.month) : 0
+          const dayRatio = rangeDayRatio(startDate || "", endDate || "", cc.month)
           COST_KEYS.forEach(key => {
             const cv = cc[key]
             if (cv?.value) {
@@ -169,8 +168,7 @@ export async function GET(req: NextRequest) {
       groupCosts.forEach(gc => {
         const share = gc.group_name === "B2B" ? revShareOf(cB2BRev, "B2B") : gc.group_name === "B2C" ? revShareOf(cB2CRev, "B2C") : 0
         if (share === 0) return
-        const dayRatio = getDaysInMonth(gc.month) > 0
-          ? getDaysInRange(startDate || "", endDate || "", gc.month) / getDaysInMonth(gc.month) : 0
+        const dayRatio = rangeDayRatio(startDate || "", endDate || "", gc.month)
         const amt = parseFloat(gc.amount || "0") * dayRatio * share
         opCost += amt
         opCostBreakdown.group += amt

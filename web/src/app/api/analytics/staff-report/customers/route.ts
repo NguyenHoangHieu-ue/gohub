@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, shipFilter, internalOpsFilter, excludeInactiveCustomers, getMonthsInRange, getDaysInRange, getDaysInMonth } from "@/lib/analytics-helpers"
+import { analyticsGuard, shipFilter, internalOpsFilter, excludeInactiveCustomers, getMonthsInRange } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
-import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -135,9 +135,7 @@ export async function GET(req: NextRequest) {
       for (const mo of monthly) {
         const rec = (customerCosts as Map<string, any>).get(`${mo.month}_${r.customer_code}`)
         if (!rec) continue
-        const dayRatio = getDaysInMonth(mo.month) > 0
-          ? getDaysInRange(startDate, endDate, mo.month) / getDaysInMonth(mo.month)
-          : 0
+        const dayRatio = rangeDayRatio(startDate, endDate, mo.month)
         chCost += calcChCostForPeriod(rec, mo.revenue, dayRatio)
       }
 

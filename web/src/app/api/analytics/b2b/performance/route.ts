@@ -6,13 +6,13 @@ import {
   getAnalyticsSource, getDateFilter,
   getSkuDestinationRule, getDestinationSQL, getCountryMappings,
   getMonthsInRange, getChannelCostsForMonths, getCostSettingsForMonths,
-  getGroupCostsForMonths, getDaysInRange, getDaysInMonth,
+  getGroupCostsForMonths,
   shipFilter, internalOpsFilter, excludeOpsByCode, excludeInactiveCustomers,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
-import { calcChCostForPeriod, COST_KEYS, type CostRecord, type CostLine } from "@/lib/analytics-engine/cost-engine"
+import { calcChCostForPeriod, COST_KEYS, type CostRecord, type CostLine, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -164,8 +164,7 @@ export async function GET(req: NextRequest) {
     for (const r of finalRows) {
       const share = totalB2BRevenue > 0 ? r.revenue / totalB2BRevenue : 0
       for (const gc of b2bGroupCosts) {
-        const ratio = getDaysInMonth(gc.month) > 0
-          ? getDaysInRange(startDate || "", endDate || "", gc.month) / getDaysInMonth(gc.month) : 0
+        const ratio = rangeDayRatio(startDate || "", endDate || "", gc.month)
         groupCostPerChannel[r.name] = (groupCostPerChannel[r.name] || 0) + parseFloat(gc.amount || "0") * ratio * share
       }
     }
@@ -210,8 +209,7 @@ export async function GET(req: NextRequest) {
         const mode = settingsMap.get(`${r.name}_${mMonth}`) || "total"
 
         if (mode === "subchannels") {
-          const subRatio = getDaysInMonth(mMonth) > 0
-            ? getDaysInRange(startDate || "", endDate || "", mMonth) / getDaysInMonth(mMonth) : 0
+          const subRatio = rangeDayRatio(startDate || "", endDate || "", mMonth)
           ;(subCostByBaseMonth.get(`${r.name}_${mMonth}`) ?? []).forEach(c => {
             const subName = c.channel.replace(`${r.name} - `, "")
             const subRev = r.sub_channel_breakdown[mMonth]?.[subName]?.revenue || 0
@@ -227,8 +225,7 @@ export async function GET(req: NextRequest) {
           })
         } else {
           (costByChannelMonth.get(`${r.name}_${mMonth}`) ?? []).forEach(c => {
-            const ratio = getDaysInMonth(mMonth) > 0
-              ? getDaysInRange(startDate || "", endDate || "", mMonth) / getDaysInMonth(mMonth) : 0
+            const ratio = rangeDayRatio(startDate || "", endDate || "", mMonth)
             COST_KEYS.forEach(key => {
               const cv = c[key]
               if (cv) gpm2 -= cv.type === "amount" ? (cv.value || 0) * ratio : (mRev * (cv.value || 0)) / 100
@@ -248,9 +245,7 @@ export async function GET(req: NextRequest) {
         for (const mo of r.monthly_data) {
           const rec = customerCosts.get(`${mo.month}_${r.customer_code}`)
           if (!rec) continue
-          const dayRatio = getDaysInMonth(mo.month) > 0
-            ? getDaysInRange(startDate || "", endDate || "", mo.month) / getDaysInMonth(mo.month)
-            : 0
+          const dayRatio = rangeDayRatio(startDate || "", endDate || "", mo.month)
           chCost += calcChCostForPeriod(rec, mo.revenue, dayRatio)
           // Gom cost_lines từ tất cả tháng để FE hiển thị breakdown
           if (rec.cost_lines) {

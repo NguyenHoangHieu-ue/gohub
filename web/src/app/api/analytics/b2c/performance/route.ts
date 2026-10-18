@@ -5,12 +5,12 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import {
   getAnalyticsSource, getDateFilter, getSkuDestinationRule, getDestinationSQL,
   getCountryMappings, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode,
-  getDaysInMonth, getDaysInRange,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, exclHash, excludedForB2C } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { fetchCosts, matchChannelCost } from "@/lib/bod-data"
+import { rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
 // s195+19: số dòng detail trả về (bảng/CSV) — KHÔNG dùng để tính "Tổng cộng" (xem `total` riêng, luôn
 // tính từ TOÀN BỘ nhóm, không cap). Trước đây cap 50 áp luôn vào phép SUM tổng → groupBy=sku (thường
@@ -29,8 +29,7 @@ function computeChCost(
   sourceCode?: string, projected = false,
 ): number {
   let amtCost = 0, pctCost = 0
-  const dim = getDaysInMonth(month)
-  const ratio = projected ? 1 : (dim > 0 ? getDaysInRange(startDate, endDate, month) / dim : 0)
+  const ratio = projected ? 1 : rangeDayRatio(startDate, endDate, month)
   matchChannelCost(channelCosts, channel, month, sourceCode).forEach((c: any) => {
     COST_KEYS_CH.forEach(key => {
       const v = c[key]; if (!v) return

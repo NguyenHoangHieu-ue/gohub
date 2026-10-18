@@ -1,6 +1,6 @@
 import type { CostRecord } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "./cost-engine"
-import { getDaysInMonth, getDaysInRange } from "./date-math"
+import { rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
 export interface CustKeyRev {
   customer_code: string
@@ -36,8 +36,7 @@ export function allocateCustomerCostByKey(
     const month = ck.slice(0, 7)
     const total = list.reduce((s, r) => s + r.revenue, 0)
     if (total === 0) return
-    const dim = getDaysInMonth(month)
-    const ratio = dim > 0 ? getDaysInRange(startDate, endDate, month) / dim : 0
+    const ratio = rangeDayRatio(startDate, endDate, month)
     const cost = calcChCostForPeriod(rec, total, ratio)
     for (const r of list) {
       if (r.inScope === false || r.revenue === 0) continue

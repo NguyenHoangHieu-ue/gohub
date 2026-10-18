@@ -2,7 +2,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { getChannelCostsForMonths, getGroupCostsForMonths, getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode, excludeInactiveCustomers } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, makeExcludeSqlByCode } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
-import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
 import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
 
@@ -112,7 +112,7 @@ export function finalizeGroupMargin(
     if (custRev === 0) return
     const custGroup = custRevRows.find(r => r.month === month && r.customer_code === code)?.group
     if (!custGroup || !(custGroup in b2bTursoCostByGroup)) return
-    const ratio = getDaysInMonth(month) > 0 ? getDaysInRange(startDate, endDate, month) / getDaysInMonth(month) : 0
+    const ratio = rangeDayRatio(startDate, endDate, month)
     b2bTursoCostByGroup[custGroup] += calcChCostForPeriod(rec, custRev, ratio)
   })
 
@@ -146,7 +146,7 @@ export function finalizeGroupMargin(
         const rev = parseFloat(row.revenue || "0")
         const chShare = channelTotalRev[row.channel] > 0 ? rev / channelTotalRev[row.channel] : 0
         channelCosts.filter(c => c.channel === row.channel).forEach(c => {
-          const ratio = getDaysInMonth(c.month) > 0 ? getDaysInRange(startDate, endDate, c.month) / getDaysInMonth(c.month) : 0
+          const ratio = rangeDayRatio(startDate, endDate, c.month)
           COST_KEYS.forEach(key => {
             const v = (c as any)[key]
             if (!v) return
@@ -161,7 +161,7 @@ export function finalizeGroupMargin(
     const tursoGroupName = groupName.startsWith("B2B") ? "B2B" : groupName
     const groupCostShare = tursoRevenueMap[tursoGroupName] > 0 ? revenue / tursoRevenueMap[tursoGroupName] : 0
     opCost += groupCosts.filter(c => c.group_name === tursoGroupName).reduce((s, c) => {
-      const ratio = getDaysInMonth(c.month) > 0 ? getDaysInRange(startDate, endDate, c.month) / getDaysInMonth(c.month) : 0
+      const ratio = rangeDayRatio(startDate, endDate, c.month)
       return s + c.amount * ratio
     }, 0) * groupCostShare
 
@@ -341,7 +341,7 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
   })
   const groupPool: Record<string, number> = {}
   groupCosts.forEach(c => {
-    const ratio = getDaysInMonth(c.month) > 0 ? getDaysInRange(startDate, endDate, c.month) / getDaysInMonth(c.month) : 0
+    const ratio = rangeDayRatio(startDate, endDate, c.month)
     groupPool[c.group_name] = (groupPool[c.group_name] || 0) + c.amount * ratio
   })
   const groupCostOfChannel = (channel: string) => {
@@ -363,7 +363,7 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
       if (isB2B) return  // B2B dùng Turso cost ở trên, bỏ analytics_channel_costs tránh double-count
       const mRev = parseFloat(mRow.revenue || "0")
       channelCosts.filter(c => c.channel === row.channel && c.month === mRow.month).forEach(c => {
-        const ratio = getDaysInMonth(c.month) > 0 ? getDaysInRange(startDate, endDate, c.month) / getDaysInMonth(c.month) : 0
+        const ratio = rangeDayRatio(startDate, endDate, c.month)
         COST_KEYS.forEach(key => {
           const v = (c as any)[key]
           if (v) opCost += v.type === "amount" ? (v.value || 0) * ratio : (mRev * (v.value || 0)) / 100

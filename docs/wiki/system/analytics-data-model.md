@@ -190,3 +190,6 @@ SUM thẳng mọi dòng của `fact_fulfillment_revenue`.
 - Hàng chi phí kênh có `source_code` → `matchChannelCost` (b2c/kpis, b2c/performance, quarterly-report) khớp được kênh đổi tên; trước `b2c/kpis` nạp bằng bộ không có `source_code` nên bước khớp này không bao giờ trúng.
 - Lỗi đọc Supabase giờ `console.error` (vẫn trả [] như cũ).
 - CÒN bản đọc riêng có chủ đích (lọc `B2C_CHANNELS`, parse khác): `b2c/monthly`, `b2c/metric`, `lib/b2c-report-snapshot.ts`, `lib/b2c-channel-budget.ts`. `channels/kpis` + `channels/performance` vẫn khớp tên kênh chính xác (không qua `matchChannelCost`).
+
+### s236 — Tỷ lệ ngày pro-rata chỉ còn một hàm
+`rangeDayRatio(start, end, "YYYY-MM")` (`lib/analytics-engine/cost-engine.ts`) = số ngày của tháng nằm trong [start, end] / số ngày của tháng (0 nếu tháng không chạm). Thay 28 bản copy `getDaysInMonth(m) > 0 ? getDaysInRange(...) / getDaysInMonth(m) : 0` ở b2b/*, b2c/kpis+performance, channels/*, staff-report/*, quarterly-report, bod-data, customer-cost-allocation. KHÔNG đổi: tỷ lệ kiểu khác có chủ đích — `elapsed/totalDays` (b2c/metric, b2c/monthly, b2c-report-snapshot, cron refresh-monthly-kpis), chiếu tháng đang chạy (monthly-kpis), chia theo bucket ngày/tuần (b2b/trend), đoạn cắt (b2b-ecom-timeline). Đừng viết lại công thức này inline — import từ cost-engine.
