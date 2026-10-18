@@ -211,3 +211,8 @@ không gửi Lark, không ghi `last_run_at`) mất **~32s** ⇒ ~30s là Gemini.
 
 **Gotcha đã vá cùng đợt**: Lark custom-bot webhook trả HTTP 200 kèm `{"code":19024,...}` khi lỗi từ khoá/chữ ký/token — trước đây `runScheduledMessage` chỉ kiểm `res.ok` nên báo cáo
 "thành công" giả (claim đã ghi, không alert). Nay đọc body và ném lỗi khi `code !== 0` → nhả claim + alert Lark.
+
+## s236 (2026-10-18) — Weekly Report: bảng MoM theo kênh B2C bị loại nhầm KH dùng chung
+- `fetchChannelMoM("B2C")` (lib/weekly-report/data.ts) dùng danh sách `quarterly_excluded_customers` nguyên bản qua `excludeOpsByCode`. Danh sách đang lưu có "B2C Customer US/VN", "VN B2C Website", "VN B2C Customer" — gần như mọi đơn B2C nằm dưới các mã này → MoM từng kênh B2C thiếu gần hết (cùng lỗi từng làm B2C tụt ~10× ở route b2c/*; xem `excludedForB2C`).
+- Sửa: nhánh B2C truyền `excludedForB2C(excludedCustomers)`; B2B giữ nguyên. Các số khác trong báo cáo (BOD, card tháng/tuần) không dùng danh sách này nên không đổi.
+- Chưa đo số trước/sau (route cần session, mỗi lần gọi tốn Gemini): lần tạo báo cáo kế tiếp so bảng B2C với tab B2C cùng kỳ.

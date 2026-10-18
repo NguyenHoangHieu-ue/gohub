@@ -8,7 +8,7 @@ import {
   excludeInactiveCustomers, excludeOpsByCode,
 } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginData, type BODGroup } from "@/lib/bod-data"
-import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings, excludedForB2C } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { getReportPeriods, pctChange, addDaysStr, daysBetweenStr, type ReportPeriods } from "./period"
 
@@ -196,7 +196,7 @@ export async function buildWeeklyReportData(): Promise<WeeklyReportData> {
     fetchBODGroupMarginData(monthStart, cutoffDate, "fulfiled_date", "", false, false),
     fetchBODGroupMarginData(prevMonthStart, prevMonthEnd, "fulfiled_date", "", false, false),
     fetchChannelMoM("B2B", monthStart, cutoffDate, prevMonthStart, prevMonthEnd, projFactor, excludedCustomers),
-    fetchChannelMoM("B2C", monthStart, cutoffDate, prevMonthStart, prevMonthEnd, projFactor, excludedCustomers),
+    fetchChannelMoM("B2C", monthStart, cutoffDate, prevMonthStart, prevMonthEnd, projFactor, excludedForB2C(excludedCustomers)),
     fetchKpiTotals(monthStart, cutoffDate),
     fetchKpiTotals(prevMonthStart, prevMonthEnd),
     fetchHk3Totals(monthStart, cutoffDate),
