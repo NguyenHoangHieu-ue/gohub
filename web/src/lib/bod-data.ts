@@ -171,7 +171,8 @@ export function finalizeGroupMargin(
       margin_percent: revenue > 0 ? (margin / revenue) * 100 : 0,
       gpm2, gpm2_percent: revenue > 0 ? (gpm2 / revenue) * 100 : 0,
     }
-  }).filter(g => g.revenue > 0)
+  // Giữ nhóm doanh thu 0 nhưng còn lãi/lỗ gộp (vd INTERNAL-TRANSACTION): bỏ đi thì thẻ CM1 lệch Σ CM1 các kênh (QA B-02).
+  }).filter(g => g.revenue > 0 || g.margin !== 0)
 
   const totalRevenue = finalData.reduce((s, g) => s + g.revenue, 0)
   const totalMargin  = finalData.reduce((s, g) => s + g.margin, 0)
