@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
   const { excludedCustomers } = await fetchQuarterlySettings()
   try {
-    const key = `bod-report3:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const key = `bod-report4:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
       const current = await fetchBODReport(startDate, endDate, extraFilters, includeShip, includeInternalOps)
       if (comparisonType === "none") return current

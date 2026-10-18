@@ -427,6 +427,9 @@ export async function fetchBODReportData(startDate: string, endDate: string, ext
   ])
   const custDayRevMap = new Map<string, number>()
   custDailyRows.forEach(r => custDayRevMap.set(`${r.date}_${r.customer_code}`, parseFloat(r.revenue || "0")))
+  const custMonthRev = new Map<string, number>()
+  custDailyRows.forEach(r => { const k = `${r.date.slice(0, 7)}_${r.customer_code}`; custMonthRev.set(k, (custMonthRev.get(k) || 0) + parseFloat(r.revenue || "0")) })
+  const custMonthActive = new Set([...custMonthRev.entries()].filter(([, v]) => v !== 0).map(([k]) => k))
   const customerCostByMonth = new Map<string, Array<{ code: string; rec: import("@/lib/b2b-customer-cost").CostRecord }>>()
   customerCostMap.forEach((rec, key) => {
     const month = key.slice(0, 7), code = key.slice(8)
@@ -485,10 +488,12 @@ export async function fetchBODReportData(startDate: string, endDate: string, ext
       })
     })
     // B2B per-customer cost (Turso), rải theo ngày
+    // amount: rải đều MỌI ngày cho KH có doanh thu trong tháng (như finalizeGroupMargin); percent: theo doanh thu KH đúng ngày — QA B-03.
     ;(customerCostByMonth.get(month) || []).forEach(({ code, rec }) => {
+      if (!custMonthActive.has(`${month}_${code}`)) return
+      dayOpCost += calcChCostForPeriod(rec, 0, 1 / monthDays)
       const dayCustRev = custDayRevMap.get(`${date}_${code}`) || 0
-      if (dayCustRev === 0) return
-      dayOpCost += calcChCostForPeriod(rec, dayCustRev, 1 / monthDays)
+      if (dayCustRev !== 0) dayOpCost += calcChCostForPeriod(rec, dayCustRev, 0)
     })
 
     // BOD-1: cộng chi phí nhóm mỗi tursoGroupName ĐÚNG 1 lần (B2B-Strategic + Non-Strategic dùng chung nhóm "B2B").
