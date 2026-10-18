@@ -447,6 +447,14 @@ export async function fetchBODReportData(startDate: string, endDate: string, ext
   }
   const channelGroupMap = new Map(channelInfo.map(r => [r.channel, r.group_name]))
 
+  // Nhóm có doanh thu trong CẢ KỲ → chịu chi phí nhóm MỌI ngày (khớp finalizeGroupMargin: chia theo doanh thu cả kỳ, không theo ngày có đơn) — QA B-03.
+  const periodTursoGroups = new Set(channelDaily.filter(cr => parseFloat(cr.revenue || "0") > 0).map(cr => {
+    const g = getGroup(cr.channel, String(channelGroupMap.get(cr.channel) || "Other"))
+    return g.startsWith("B2B") ? "B2B" : g
+  }))
+
+  const periodNonB2BChannels = [...new Set(channelDaily.filter(cr => parseFloat(cr.revenue || "0") > 0 && String(channelGroupMap.get(cr.channel) || "Other") !== "B2B").map(cr => cr.channel))]
+
   return dailyRows.map(r => {
     const date = r.date
     const month = date.slice(0, 7)
@@ -456,6 +464,15 @@ export async function fetchBODReportData(startDate: string, endDate: string, ext
     const dayChannels = channelDaily.filter(cr => cr.date === date)
 
     let dayOpCost = 0
+    // Chi phí kênh dạng amount rải đều MỌI ngày cho kênh có doanh thu trong kỳ (như finalizeGroupMargin); dạng percent theo doanh thu ngày — QA B-03.
+    periodNonB2BChannels.forEach(ch => {
+      channelCosts.filter(c => c.channel === ch && c.month === month).forEach(c => {
+        COST_KEYS.forEach(key => {
+          const v = (c as any)[key]
+          if (v && v.type === "amount") dayOpCost += (v.value || 0) / monthDays
+        })
+      })
+    })
     dayChannels.forEach(dc => {
       const dcGroup = String(channelGroupMap.get(dc.channel) || "Other")
       if (dcGroup === "B2B") return  // B2B dùng Turso cost (dưới), bỏ analytics_channel_costs tránh double-count
@@ -463,7 +480,7 @@ export async function fetchBODReportData(startDate: string, endDate: string, ext
       channelCosts.filter(c => c.channel === dc.channel && c.month === month).forEach(c => {
         COST_KEYS.forEach(key => {
           const v = (c as any)[key]
-          if (v) dayOpCost += v.type === "amount" ? (v.value || 0) / monthDays : (dcRev * (v.value || 0)) / 100
+          if (v && v.type !== "amount") dayOpCost += (dcRev * (v.value || 0)) / 100
         })
       })
     })
@@ -474,11 +491,8 @@ export async function fetchBODReportData(startDate: string, endDate: string, ext
       dayOpCost += calcChCostForPeriod(rec, dayCustRev, 1 / monthDays)
     })
 
-    const dayGroups = Array.from(new Set(dayChannels.map(dc => getGroup(dc.channel, String(channelGroupMap.get(dc.channel) || "Other")))))
-    // BOD-1: dayOpCost là TỔNG toàn nhóm → cộng group cost mỗi tursoGroupName ĐÚNG 1 lần (dedupe). Trước lặp
-    // theo dayGroups nên B2B group cost bị cộng 2 lần khi cả B2B-Strategic + B2B-Non-Strategic cùng xuất hiện.
-    const dayTursoGroups = Array.from(new Set(dayGroups.map(g => g.startsWith("B2B") ? "B2B" : g)))
-    dayTursoGroups.forEach(tursoGroupName => {
+    // BOD-1: cộng chi phí nhóm mỗi tursoGroupName ĐÚNG 1 lần (B2B-Strategic + Non-Strategic dùng chung nhóm "B2B").
+    periodTursoGroups.forEach(tursoGroupName => {
       const totalGroupMonthCost = groupCosts.filter(c => c.group_name === tursoGroupName && c.month === month).reduce((s, c) => s + c.amount, 0)
       dayOpCost += totalGroupMonthCost / monthDays
     })

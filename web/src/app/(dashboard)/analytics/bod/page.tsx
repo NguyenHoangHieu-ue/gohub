@@ -216,6 +216,8 @@ export default function BODReport() {
             startDate: formatDateToISO(prevMonthFirstDay), endDate: formatDateToISO(prevMonthLastDay), comparisonType: "none",
             vendors: selectedVendors.join(","), subChannels: selectedSubChannels.join(","),
             channelGroups: selectedChannelGroups.join(","), productTypes: selectedProductTypes.join(","), dateColumn,
+            ...(includeShip ? { includeShip: "1" } : {}),
+            ...(includeInternalOps ? { includeInternalOps: "1" } : {}),
           })
           const prevSummaryRes = await fetch(`/api/analytics/bod-summary?${prevQueryParams}`)
           if (prevSummaryRes.ok) setPrevMonthSummary(await prevSummaryRes.json())

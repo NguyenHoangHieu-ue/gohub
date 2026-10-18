@@ -30,13 +30,14 @@ function csvEscape(v: string | number | null) {
 }
 
 export function CustomerLifecycleSection({
-  quarter, year, companyCode, includeShip, includeInternalOps, b2b, loading, canViewB2c,
+  quarter, year, companyCode, includeShip, includeInternalOps, b2b, loading, canViewB2c, refreshTick = 0,
 }: {
   quarter: string; year: number; companyCode: string
   includeShip: boolean; includeInternalOps: boolean
   b2b: B2bSummary
   loading?: boolean
   canViewB2c: boolean
+  refreshTick?: number   // tăng khi bấm "Tải lại mới" → bỏ cache, lấy lại số
 }) {
   const [open, setOpen] = useState<{ segment: Segment; state: LifecycleStateKey } | null>(null)
   const [detail, setDetail] = useState<Record<Segment, Load<LifecycleDetail>>>({ b2b: { status: "idle" }, b2c: { status: "idle" } })
@@ -48,8 +49,9 @@ export function CustomerLifecycleSection({
     const p = new URLSearchParams({ quarter, year: String(year), companyCode })
     if (includeShip) p.set("includeShip", "1")
     if (includeInternalOps) p.set("includeInternalOps", "1")
+    if (refreshTick > 0) p.set("nocache", "1")
     return p
-  }, [quarter, year, companyCode, includeShip, includeInternalOps])
+  }, [quarter, year, companyCode, includeShip, includeInternalOps, refreshTick])
 
   const call = useCallback(async (segment: Segment, mode: "summary" | "detail") => {
     const p = new URLSearchParams(params); p.set("segment", segment); p.set("mode", mode)

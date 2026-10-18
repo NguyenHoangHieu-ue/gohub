@@ -199,4 +199,15 @@ describeLive("So cặp tab — cùng kỳ, cùng số", () => {
       close(cur.prevQuarterTotals.b2cCm1, prv.quarterTotal.b2c.cm1, "CM1 B2C quý trước", 2)
     }, 180_000)
   })
+  describe("BOD: Σ CM1 theo ngày = thẻ CM1 (B-03)", () => {
+    for (const per of [P.lastQuarter, P.lastMonth]) {
+      it(per.name, async () => {
+        const q = `startDate=${per.start}&endDate=${per.end}&includeShip=1&includeInternalOps=0`
+        const sm = await api(`/api/analytics/bod-summary?${q}`)
+        const rp = await api(`/api/analytics/bod-report?${q}`)
+        const days = Array.isArray(rp) ? rp : rp.data ?? rp
+        close(sm.total_gpm2, sum(days, "gpm2"), "thẻ CM1 vs Σ CM1 ngày", 1000)
+      }, 120_000)
+    }
+  })
 })

@@ -406,12 +406,14 @@ function QuarterlyContent() {
     } catch {} finally { if (b2bTiersAbortRef.current === ctrl) setB2bTiersLoading(false) }
   }, [selQ, selYear, includeShip, includeInternalOps])
 
+  const [refreshTick, setRefreshTick] = useState(0)
   const refreshAll = useCallback(async () => {
     // Xóa L2 Supabase cache quarterly trước, sau đó fetch fresh
     await fetch("/api/analytics/quarterly-cache-flush", { method: "POST" }).catch(() => {})
-    await Promise.all([fetchReport(true), fetchB2BTiers(true)])
+    setRefreshTick(t => t + 1)
+    await Promise.all([fetchReport(true), fetchB2BTiers(true), ...(editTarget ? [] : [loadTargets()])])
     notify(true, "Đã tải lại dữ liệu mới nhất từ database")
-  }, [fetchReport, fetchB2BTiers])
+  }, [fetchReport, fetchB2BTiers, loadTargets, editTarget])
 
   useEffect(() => { fetchReport(); loadTargets() }, [fetchReport, loadTargets])
   useEffect(() => { fetchB2BTiers() }, [fetchB2BTiers])
@@ -1064,7 +1066,7 @@ function QuarterlyContent() {
         <CustomerLifecycleSection
           quarter={selQ} year={selYear} companyCode={companyCode}
           includeShip={includeShip} includeInternalOps={includeInternalOps}
-          b2b={report.customerLifecycle} loading={loading}
+          b2b={report.customerLifecycle} loading={loading} refreshTick={refreshTick}
           canViewB2c={["admin", "creator", "bod", "b2c"].includes(userRole)}
         />
       )}
