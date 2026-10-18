@@ -54,7 +54,7 @@ export async function fetchQuarterlySettings(): Promise<QuarterlySettings> {
  *   - customer_code (alphanumeric không khoảng trắng): match trực tiếp f.customer_code → ổn định khi đổi tên
  *   - Tên KH (có khoảng trắng / ký tự đặc biệt): match qua dim_customer.name → backward-compat với cài đặt cũ
  */
-export function makeExcludeSql(excludedCustomers: string[]): string {
+export function makeExcludeSql(excludedCustomers: string[], b2bGroupCond = "UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2B'"): string {
   if (excludedCustomers.length === 0) return ""
 
   // code: không có khoảng trắng, chỉ alphanumeric/- (vd: wHWSYmE541)
@@ -72,7 +72,12 @@ export function makeExcludeSql(excludedCustomers: string[]): string {
     parts.push(`EXISTS (SELECT 1 FROM dim_customer cx WHERE cx.code = TRIM(f.customer_code) AND COALESCE(cx.name, '') IN (${esc}))`)
   }
   if (parts.length === 0) return ""
-  return `AND NOT (UPPER(COALESCE(s.group_name, 'OTHER')) = 'B2B' AND (${parts.join(" OR ")}))`
+  return `AND NOT (${b2bGroupCond} AND (${parts.join(" OR ")}))`
+}
+
+/** Như makeExcludeSql nhưng KHÔNG cần JOIN dim_order_source (query chỉ có alias f) — nhóm B2B tra bằng subquery theo f.order_source_code. */
+export function makeExcludeSqlByCode(excludedCustomers: string[]): string {
+  return makeExcludeSql(excludedCustomers, "f.order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(COALESCE(group_name,'')) = 'B2B')")
 }
 
 /** Danh sách loại trừ cho các route B2C. Danh sách gốc (Quarter Report) chứa CẢ các mã khách B2C dùng chung

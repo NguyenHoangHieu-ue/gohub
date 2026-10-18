@@ -1,5 +1,6 @@
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getChannelCostsForMonths, getGroupCostsForMonths, getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode, excludeInactiveCustomers } from "@/lib/analytics-helpers"
+import { fetchQuarterlySettings, makeExcludeSqlByCode } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
@@ -277,7 +278,8 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
   const filter = getDateFilter(startDate, endDate, source.dateCol)
   const strategicList = await getStrategicPartnersList()
   const groupCaseSQL = getGroupCaseSQL(strategicList)
-  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()}`
+  const { excludedCustomers } = await fetchQuarterlySettings()
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()} ${makeExcludeSqlByCode(excludedCustomers)}`
 
   // s203: 2 query fact + 2 nguồn chi phí độc lập → song song (trước nối tiếp).
   const months = monthsBetween(startDate, endDate)
@@ -357,7 +359,8 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
 // (amount: value/sốNgàyTháng; percent: dcRevenue*value/100) + group-cost/sốNgàyTháng.
 export async function fetchBODReportData(startDate: string, endDate: string, extraFilters = "", includeShip = false, includeInternalOps = false) {
   const filter = getDateFilter(startDate, endDate, "fulfiled_date")
-  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()}`
+  const { excludedCustomers } = await fetchQuarterlySettings()
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()} ${makeExcludeSqlByCode(excludedCustomers)}`
 
   // s203: mọi nguồn dữ liệu độc lập (3 query + chi phí + strategic + KH×ngày + chi phí KH Turso) trong 1 Promise.all
   // — trước 3 lần await nối tiếp thêm sau đợt đầu.

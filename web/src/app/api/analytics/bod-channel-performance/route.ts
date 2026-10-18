@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { fetchBODChannelPerformanceData } from "@/lib/bod-data"
 
 // Port intel bod-channel-performance: từng kênh + CM1 (margin − op-cost theo kênh/tháng prorate).
@@ -22,8 +23,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
   }
 
+  const { excludedCustomers } = await fetchQuarterlySettings()
   try {
-    const key = `bod-channel-perf2:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+    const key = `bod-channel-perf3:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
       const current = await fetchBODChannelPerformanceData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps)
       if (comparisonType === "none") return current

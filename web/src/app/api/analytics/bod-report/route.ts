@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { fetchBODReportData as fetchBODReport } from "@/lib/bod-data"
 
 export async function GET(req: NextRequest) {
@@ -20,8 +21,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
   }
 
+  const { excludedCustomers } = await fetchQuarterlySettings()
   try {
-    const key = `bod-report:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+    const key = `bod-report2:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
       const current = await fetchBODReport(startDate, endDate, extraFilters, includeShip, includeInternalOps)
       if (comparisonType === "none") return current

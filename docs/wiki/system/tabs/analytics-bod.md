@@ -124,3 +124,8 @@ Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm 
 ## s232 (2026-10-12) — Bảng BOD theo kênh: chi phí khách B2B chia theo khách thật
 
 `fetchBODChannelPerformanceData` chia chi phí khách B2B (Turso) về từng kênh theo doanh thu của KHÁCH trong kênh (hàm `allocateCustomerCostByKey`), thay vì gộp toàn công ty rồi chia theo doanh thu kênh. Tổng không đổi; CM1 từng kênh B2B đổi theo khách thật. Khoá cache `bod-channel-perf2`. Chi tiết: wiki `analytics-channels.md` s232(b).
+
+## s236 (2026-10-18) — Bảng kênh BOD lệch tổng CM1 (Q3: 433 triệu) — 2 nguyên nhân
+- Đo: Σ `gpm2` bảng kênh (`bod-channel-performance`) Q3 = 6.091.601.870 vs Total CM1 (`bod-group-margin`/Quarter Report) 5.658.242.347 → Δ 433.359.523 = **chi phí nhóm B2B/B2C 433.243.392** + **GP của KH trong danh sách loại trừ 116.131** (T9/T10 chỉ còn đúng chi phí nhóm).
+- (1) Chi phí nhóm KHÔNG chia về từng kênh trong bảng kênh BOD (CM1 kênh = margin − chi phí kênh/KH, trước chi phí nhóm) — trong khi `channels/performance` chia theo tỷ trọng doanh thu nên Σ kênh = tổng. **Chưa đổi** (chờ Hiếu chốt: chia như Channels hay ghi chú "CM1 trước chi phí nhóm").
+- (2) `fetchBODChannelPerformanceData` và `fetchBODReportData` (biểu đồ ngày) không loại KH trong `quarterly_excluded_customers` (+161k doanh thu/+116k GP Q3 so với group-margin). Đã thêm `makeExcludeSqlByCode` (mới, `quarterly-settings.ts`: loại KH chỉ trong nhóm B2B, không cần JOIN dim_order_source). Cache key `bod-channel-perf3`, `bod-report2` (có `exclHash`).
