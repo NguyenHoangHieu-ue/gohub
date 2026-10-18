@@ -60,6 +60,8 @@ describe("Tab analytics — không tái tạo logic dùng chung", () => {
       "app/api/analytics/channels/trend/route.ts": /makeExcludeSql\(/,
       "app/api/analytics/staff-report/route.ts": /makeExcludeSql\(/,
       "app/api/analytics/staff-report/customers/route.ts": /makeExcludeSql\(/,
+      "app/api/analytics/monthly-kpis/route.ts": /makeExcludeSql\(/,
+      "app/api/cron/refresh-monthly-kpis/route.ts": /makeExcludeSql\(/,
       "lib/bod-data.ts": /makeExcludeSqlByCode\(/,
     }
     for (const [r, re] of Object.entries(need)) expect(read(join(SRC, r)), `${r} thiếu bộ lọc KH loại trừ`).toMatch(re)
