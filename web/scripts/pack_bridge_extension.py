@@ -19,7 +19,11 @@ with zipfile.ZipFile(OUT_ZIP, "w", zipfile.ZIP_STORED) as z:
     for name in sorted(os.listdir(EXT)):
         path = os.path.join(EXT, name)
         if os.path.isfile(path):
-            z.write(path, f"gau-pro-bridge/{name}")
+            if name.endswith((".js", ".json", ".html", ".css", ".md", ".txt")):
+                # LF cố định: git trên máy Windows (autocrlf) checkout CRLF → zip đóng ở đây lệch với bản LF trên CI/Linux
+                z.writestr(f"gau-pro-bridge/{name}", io.open(path, "rb").read().replace(b"\r\n", b"\n"))
+            else:
+                z.write(path, f"gau-pro-bridge/{name}")
 io.open(OUT_TS, "w", encoding="utf-8", newline="\n").write(
     "// SINH TỰ ĐỘNG bởi web/scripts/pack_bridge_extension.py — không sửa tay.\n"
     "// Bản extension Bridge mới nhất: server trả cho popup để báo \"có bản mới\"; zip ở /downloads/gau-pro-bridge.zip.\n"

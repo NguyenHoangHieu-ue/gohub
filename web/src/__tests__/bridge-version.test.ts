@@ -12,7 +12,7 @@ describe("Extension Bridge — phiên bản đồng bộ", () => {
     expect(BRIDGE_LATEST_VERSION).toBe(manifest.version)
     const zip = readFileSync(join(root, "web", "public", "downloads", "gau-pro-bridge.zip")).toString("utf8")
     expect(zip).toContain(`"version": "${manifest.version}"`)
-    const bg = readFileSync(join(root, "browser-extension", "background.js"), "utf8")
+    const bg = readFileSync(join(root, "browser-extension", "background.js"), "utf8").replace(/\r\n/g, "\n")   // máy Windows checkout CRLF, zip luôn LF
     expect(zip).toContain(bg.slice(0, 200))   // zip chứa background.js hiện tại (đóng gói không nén)
   })
 })
