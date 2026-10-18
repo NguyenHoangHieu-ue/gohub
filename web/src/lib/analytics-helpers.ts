@@ -694,6 +694,7 @@ export function getMonthsInRange(startDate: string, endDate: string): string[] {
 export type CostValue = { type: "amount" | "percent"; value: number }
 export type ChannelCostRow = {
   channel: string; month: string
+  source_code?: string  // dim_order_source.code — ổn định khi kênh đổi tên (matchChannelCost bước 2)
   ads: CostValue; platformFee: CostValue; sponsorProducts: CostValue; media: CostValue
 }
 
@@ -703,22 +704,27 @@ function parseCostJSON(v: unknown): CostValue {
   try { return JSON.parse(v as string) } catch { return { type: "amount", value: 0 } }
 }
 
+/**
+ * NGUỒN DUY NHẤT nạp chi phí kênh (analytics_channel_costs) cho mọi route analytics/BOD — trước có thêm `fetchCosts` (bod-data)
+ * và vài bản sao rải rác (all-time, planning) với select/parse khác nhau → card và bảng cùng tab ra số khác nhau.
+ * Có `source_code` để `matchChannelCost` khớp kênh đổi tên. Lỗi đọc → log + [] (giữ hành vi cũ, nhưng không còn im lặng).
+ */
 export async function getChannelCostsForMonths(months: string[]): Promise<ChannelCostRow[]> {
   if (!months.length) return []
-  try {
-    const { data } = await supabaseAdmin
-      .from("analytics_channel_costs")
-      .select("channel, month, ads, platform_fee, sponsor_products, media")
-      .in("month", months)
-    return (data || []).map(r => ({
-      channel:         r.channel,
-      month:           r.month,
-      ads:             parseCostJSON(r.ads),
-      platformFee:     parseCostJSON(r.platform_fee),
-      sponsorProducts: parseCostJSON(r.sponsor_products),
-      media:           parseCostJSON(r.media),
-    }))
-  } catch { return [] }
+  const { data, error } = await supabaseAdmin
+    .from("analytics_channel_costs")
+    .select("channel, month, source_code, ads, platform_fee, sponsor_products, media")
+    .in("month", months)
+  if (error) { console.error("[getChannelCostsForMonths]", error.message); return [] }
+  return (data || []).map(r => ({
+    channel:         r.channel,
+    month:           String(r.month),
+    source_code:     r.source_code || undefined,
+    ads:             parseCostJSON(r.ads),
+    platformFee:     parseCostJSON(r.platform_fee),
+    sponsorProducts: parseCostJSON(r.sponsor_products),
+    media:           parseCostJSON(r.media),
+  }))
 }
 
 export async function getCostSettingsForMonths(months: string[]): Promise<Map<string, string>> {
@@ -736,13 +742,12 @@ export async function getCostSettingsForMonths(months: string[]): Promise<Map<st
 
 export async function getGroupCostsForMonths(months: string[]): Promise<Array<Record<string, unknown>>> {
   if (!months.length) return []
-  try {
-    const { data } = await supabaseAdmin
-      .from("analytics_channel_group_costs")
-      .select("*")
-      .in("month", months)
-    return data || []
-  } catch { return [] }
+  const { data, error } = await supabaseAdmin
+    .from("analytics_channel_group_costs")
+    .select("*")
+    .in("month", months)
+  if (error) { console.error("[getGroupCostsForMonths]", error.message); return [] }
+  return data || []
 }
 
 // ── Target planning (from Supabase) ───────────────────────────────────────────

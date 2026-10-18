@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { flushAnalyticsCache, shipFilter, internalOpsFilter, excludeInactiveCustomers, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
+import { flushAnalyticsCache, getChannelCostsForMonths, shipFilter, internalOpsFilter, excludeInactiveCustomers, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 import { canWrite } from "@/lib/writable-tabs"
 
 const WRITE_ROLES = ["admin", "creator"]
@@ -59,16 +59,8 @@ export async function GET(req: NextRequest) {
     ), QUERY_TTL_MIN, false, ["b2b-cost"])
 
     // Op-cost theo kênh/tháng (full-month, prevMonths đều là tháng đủ → không prorate, giống intel)
-    const ccP = supabaseAdmin
-      .from("analytics_channel_costs")
-      .select("channel, month, ads, platform_fee, sponsor_products, media")
-      .in("month", prevMonths)
-    const [actualsRows, { data: ccData }] = await Promise.all([actualsP, ccP])
-    const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
-    const channelCosts = (ccData || []).map((r: any) => ({
-      channel: r.channel, month: String(r.month),
-      ads: parseJson(r.ads), platformFee: parseJson(r.platform_fee), sponsorProducts: parseJson(r.sponsor_products), media: parseJson(r.media),
-    }))
+    const ccP = getChannelCostsForMonths(prevMonths)
+    const [actualsRows, channelCosts] = await Promise.all([actualsP, ccP])
 
     // Saved targets từ Supabase. Defensive: cột target_gpm2 cần migration v18 — nếu chưa có thì đọc không kèm.
     let targetsRows: any[] = []

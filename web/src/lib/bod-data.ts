@@ -1,6 +1,5 @@
 import { queryAnalytics } from "@/lib/analytics-db"
-import { supabaseAdmin } from "@/lib/supabase"
-import { getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode, excludeInactiveCustomers } from "@/lib/analytics-helpers"
+import { getChannelCostsForMonths, getGroupCostsForMonths, getAnalyticsSource, getDateFilter, getStrategicPartnersList, getGroupCaseSQL, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode, excludeInactiveCustomers } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
@@ -22,7 +21,6 @@ export function monthsBetween(startDate: string, endDate: string) {
   while (curr <= end) { m.push(curr.toISOString().slice(0, 7)); curr.setMonth(curr.getMonth() + 1) }
   return m
 }
-const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 
 interface ChannelCost {
   channel: string; month: string
@@ -32,15 +30,8 @@ interface ChannelCost {
 
 export async function fetchCosts(months: string[]): Promise<{ channelCosts: ChannelCost[]; groupCosts: any[] }> {
   if (months.length === 0) return { channelCosts: [], groupCosts: [] }
-  const [{ data: ccData }, { data: gcData }] = await Promise.all([
-    supabaseAdmin.from("analytics_channel_costs").select("channel, month, source_code, ads, platform_fee, sponsor_products, media").in("month", months),
-    supabaseAdmin.from("analytics_channel_group_costs").select("group_name, month, amount, item_name").in("month", months),
-  ])
-  const channelCosts = (ccData || []).map((r: any) => ({
-    channel: r.channel, month: String(r.month), source_code: r.source_code || undefined,
-    ads: parseJson(r.ads), platformFee: parseJson(r.platform_fee), sponsorProducts: parseJson(r.sponsor_products), media: parseJson(r.media),
-  }))
-  return { channelCosts, groupCosts: (gcData || []).map((r: any) => ({ ...r, month: String(r.month), amount: parseFloat(r.amount || "0") })) }
+  const [channelCosts, gcData] = await Promise.all([getChannelCostsForMonths(months), getGroupCostsForMonths(months)])
+  return { channelCosts, groupCosts: gcData.map((r: any) => ({ ...r, month: String(r.month), amount: parseFloat(r.amount || "0") })) }
 }
 
 // Group cost nhập 1 bảng cho cả công ty; tên khoản có "Global" là chi phí pháp nhân US, còn lại là VN

@@ -3,11 +3,10 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
-import { cachedQuery, CACHE_HEADERS, getCustomerStrategicSql, safeDate, noCache, analyticsGuard, shipFilter, internalOpsFilter, excludeInactiveCustomers } from "@/lib/analytics-helpers"
+import { getChannelCostsForMonths, cachedQuery, CACHE_HEADERS, getCustomerStrategicSql, safeDate, noCache, analyticsGuard, shipFilter, internalOpsFilter, excludeInactiveCustomers } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
-const parseJson = (v: unknown) => { try { return typeof v === "string" ? JSON.parse(v) : (v || {}) } catch { return {} } }
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
 export async function GET(req: NextRequest) {
@@ -84,14 +83,11 @@ export async function GET(req: NextRequest) {
       let channelCosts: any[] = []
       let groupCosts: any[] = []
       if (months.length > 0) {
-        const [{ data: ccData }, { data: gcData }] = await Promise.all([
-          supabaseAdmin.from("analytics_channel_costs").select("channel, month, ads, platform_fee, sponsor_products, media").in("month", months),
+        const [ccRows, { data: gcData }] = await Promise.all([
+          getChannelCostsForMonths(months),
           supabaseAdmin.from("analytics_channel_group_costs").select("group_name, month, amount").in("month", months),
         ])
-        channelCosts = (ccData || []).map((r: any) => ({
-          channel: r.channel, month: String(r.month),
-          ads: parseJson(r.ads), platformFee: parseJson(r.platform_fee), sponsorProducts: parseJson(r.sponsor_products), media: parseJson(r.media),
-        }))
+        channelCosts = ccRows
         groupCosts = (gcData || []).map((r: any) => ({ group_name: r.group_name, month: String(r.month), amount: parseFloat(r.amount || "0") }))
       }
 
