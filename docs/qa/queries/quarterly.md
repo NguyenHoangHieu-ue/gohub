@@ -1,0 +1,33 @@
+# Kiểm kê dữ liệu: Quarter Report
+
+> Sinh bởi `web/scripts/qa/queries.mjs`. Ký hiệu «ᴸ» = nguồn nằm trong thư viện (lib) mà route import (một cấp). Mỗi route phải được QA ở G1: tham số → SQL → số, với nguồn đối chiếu độc lập.
+
+Route quét: 15
+
+| Route | Phương thức | Tham số đọc | Bảng gohub_dw | Supabase | Turso | Nguồn ngoài | Hàm lọc | Hàm chi phí/pro-rata | Cache (nocache) | Quyền |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `/api/user/me` | GET |  |  | users, app_settings, app_settingsᴸ |  |  |  |  | 0× (không nocache) | getServerSession |
+| `/api/config/squad-config` | GET, POST |  |  | app_settings, users, app_settingsᴸ |  |  |  |  | 0× (không nocache) | getServerSession |
+| `/api/analytics/squad-progress` | GET | year, quarter, companyCode | fact_fulfillment_revenue, dim_order_source, dim_customer, dim_sku, dim_staff, dim_customerᴸ, fact_fulfillment_revenueᴸ, fact_sales_revenueᴸ, dim_order_sourceᴸ, dim_skuᴸ, dim_locationᴸ | app_settings, b2b_customer_targets, analytics_query_cacheᴸ, app_settingsᴸ, analytics_channel_costsᴸ, analytics_cost_input_settingsᴸ, analytics_channel_group_costsᴸ, analytics_target_planningᴸ, b2b_customer_cost_monthlyᴸ | country_codesᴸ, b2b_customer_cost_monthlyᴸ |  | makeExcludeSql | fetchCustomerCosts, fetchCosts, filterGroupCostsByCompany, buildQuarterMonthMeta | 1× (noCache(req)) | getServerSession, analyticsGuard |
+| `/api/analytics/squad-targets` | GET, POST | quarter, year |  | app_settings, app_settingsᴸ |  |  |  |  | 0× (không nocache) | getServerSession |
+| `/api/analytics/quarterly-settings` | GET, POST |  | dim_customerᴸ, dim_order_sourceᴸ | app_settings, app_settingsᴸ |  |  |  |  | 0× (không nocache) | getServerSession |
+| `/api/analytics/quarterly-report` | GET | year, quarter, companyCode, includeShip, includeInternalOps | fact_fulfillment_revenue, dim_customer, dim_sku, dim_order_source, fact_fulfillment_revenueᴸ, fact_sales_revenueᴸ, dim_order_sourceᴸ, dim_customerᴸ, dim_skuᴸ, dim_locationᴸ | analytics_query_cacheᴸ, app_settingsᴸ, analytics_channel_costsᴸ, analytics_cost_input_settingsᴸ, analytics_channel_group_costsᴸ, analytics_target_planningᴸ, b2b_customer_cost_monthlyᴸ | country_codesᴸ, b2b_customer_cost_monthlyᴸ |  | shipFilter, internalOpsFilter, makeExcludeSql | fetchCosts, filterGroupCostsByCompany, matchChannelCost, fetchCustomerCosts, buildQuarterMonthMeta, rangeDayRatio | 1× (noCache(req)) · 60s | getServerSession, analyticsGuard |
+| `/api/analytics/quarterly-targets` | GET, POST | quarter, year |  | app_settingsᴸ | target_planning_quarter |  |  |  | 0× (không nocache) | getServerSession |
+| `/api/analytics/quarterly-b2b-customers` | GET | year, quarter, region, companyCode, includeShip, includeInternalOps, refresh | fact_fulfillment_revenue, dim_order_source, dim_customer, dim_sku, fact_fulfillment_revenueᴸ, fact_sales_revenueᴸ, dim_order_sourceᴸ, dim_customerᴸ, dim_skuᴸ, dim_locationᴸ | analytics_query_cacheᴸ, app_settingsᴸ, analytics_channel_costsᴸ, analytics_cost_input_settingsᴸ, analytics_channel_group_costsᴸ, analytics_target_planningᴸ, b2b_customer_cost_monthlyᴸ | country_codesᴸ, b2b_customer_cost_monthlyᴸ |  | shipFilter, internalOpsFilter, customerExcludedSql, makeExcludeSql | fetchCosts, filterGroupCostsByCompany, fetchCustomerCosts, buildQuarterMonthMeta | 1× (noCache(req)) · 60s | getServerSession, analyticsGuard |
+| `/api/analytics/quarterly-cache-flush` | POST |  | fact_fulfillment_revenueᴸ, fact_sales_revenueᴸ, dim_order_sourceᴸ, dim_customerᴸ, dim_skuᴸ, dim_locationᴸ | analytics_query_cacheᴸ, app_settingsᴸ, analytics_channel_costsᴸ, analytics_cost_input_settingsᴸ, analytics_channel_group_costsᴸ, analytics_target_planningᴸ | country_codesᴸ |  |  |  | 0× (tuỳ biến) | getServerSession |
+| `/api/analytics/quarterly-settings/search-customers` | GET | q | dim_customer, fact_fulfillment_revenueᴸ, fact_sales_revenueᴸ, dim_order_sourceᴸ, dim_customerᴸ, dim_skuᴸ, dim_locationᴸ | analytics_query_cacheᴸ, app_settingsᴸ, analytics_channel_costsᴸ, analytics_cost_input_settingsᴸ, analytics_channel_group_costsᴸ, analytics_target_planningᴸ | country_codesᴸ |  |  |  | 0× (không nocache) | getServerSession, analyticsGuard |
+| `/api/analytics/b2b-customer-costs` | GET, DELETE, POST | month, customer_code, id, repair | fact_fulfillment_revenueᴸ, fact_sales_revenueᴸ, dim_order_sourceᴸ, dim_customerᴸ, dim_skuᴸ, dim_locationᴸ | b2b_customers_cache, b2b_customer_cost_monthlyᴸ, app_settingsᴸ, analytics_query_cacheᴸ, analytics_channel_costsᴸ, analytics_cost_input_settingsᴸ, analytics_channel_group_costsᴸ, analytics_target_planningᴸ | b2b_customer_cost_monthly, b2b_customer_cost_monthlyᴸ, country_codesᴸ |  |  |  | 0× (không nocache) | getServerSession |
+| `/api/analytics/b2b-customer-orders` | GET | customer_code, quarter, year, groupBy | fact_fulfillment_revenue, dim_sku, dim_order_source, fact_fulfillment_revenueᴸ, fact_sales_revenueᴸ, dim_order_sourceᴸ, dim_customerᴸ, dim_skuᴸ, dim_locationᴸ | analytics_query_cacheᴸ, app_settingsᴸ, analytics_channel_costsᴸ, analytics_cost_input_settingsᴸ, analytics_channel_group_costsᴸ, analytics_target_planningᴸ | country_codesᴸ |  |  |  | 0× (không nocache) | getServerSession, analyticsGuard |
+| `/api/analytics/b2b-customer-targets` | GET, POST | quarter, year |  | b2b_customer_targets, app_settingsᴸ |  |  |  |  | 0× (không nocache) | getServerSession |
+| `/api/analytics/quarterly-customer-lifecycle` | GET | year, quarter, companyCode, segment, mode, includeShip, includeInternalOps | dim_customer, fact_fulfillment_revenue, dim_order_source, dim_staff, fact_fulfillment_revenueᴸ, fact_sales_revenueᴸ, dim_order_sourceᴸ, dim_customerᴸ, dim_skuᴸ, dim_locationᴸ | analytics_query_cacheᴸ, app_settingsᴸ, analytics_channel_costsᴸ, analytics_cost_input_settingsᴸ, analytics_channel_group_costsᴸ, analytics_target_planningᴸ | country_codesᴸ | Admin GoHub API, Admin GoHub APIᴸ | shipFilter, internalOpsFilter, makeExcludeSql |  | 1× (noCache(req)) · 300s | getServerSession, analyticsGuard |
+| `/api/analytics/company-monthly-targets` | GET, POST | quarter, year |  | app_settings, app_settingsᴸ |  |  |  |  | 0× (không nocache) | getServerSession |
+
+## Khoá cache khai báo
+
+- `/api/analytics/quarterly-report`: `${QREPORT_CACHE_PREFIX}${quarter}:${year}:${companyCode}:${qEndDate}:${exclHash(`
+- `/api/analytics/quarterly-b2b-customers`: `${QB2B_CACHE_PREFIX}${quarter}:${year}:${companyCode}:${qEndDate}:${exclHash(exc`
+- `/api/analytics/company-monthly-targets`: `${quarter}_${year}`
+
+## Điểm cần chú ý khi QA (tự phát hiện từ quét)
+
+- `/api/analytics/quarterly-settings`: đọc gohub_dw nhưng không import hàm lọc chuẩn → kiểm bộ lọc ship/nội bộ/Inactive/loại trừ.
