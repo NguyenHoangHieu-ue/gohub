@@ -305,7 +305,7 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
      WHERE ${filter} ${extraFilters} ${sfx} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
      GROUP BY 1, 2, 3`
   )
-  const [rows, { channelCosts }, custRevRows, customerCostMap] = await Promise.all([rowsP, costsP, custRevP, fetchCustomerCosts(months)])
+  const [rows, { channelCosts, groupCosts }, custRevRows, customerCostMap] = await Promise.all([rowsP, costsP, custRevP, fetchCustomerCosts(months)])
 
   const agg = new Map<string, any>()
   rows.forEach(row => {
@@ -328,6 +328,31 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
     customerCostMap, startDate, endDate,
   )
 
+  // Chi phí nhóm (analytics_channel_group_costs, group_name 'B2B'/'B2C') chia về từng kênh theo tỷ trọng doanh thu của kênh trong nhóm —
+  // cùng cách channels/performance và finalizeGroupMargin → Σ CM1 các kênh = Total CM1 (trước bảng kênh bỏ sót khoản này: Q3 lệch 433tr).
+  const tursoOf = (g: string) => (g || "").startsWith("B2B") ? "B2B" : g
+  const tursoRev: Record<string, number> = {}
+  const chInTurso = new Map<string, number>()
+  rows.forEach(r => {
+    const t = tursoOf(r.group), rev = parseFloat(r.revenue || "0")
+    tursoRev[t] = (tursoRev[t] || 0) + rev
+    const k = `${t}|${r.channel}`
+    chInTurso.set(k, (chInTurso.get(k) || 0) + rev)
+  })
+  const groupPool: Record<string, number> = {}
+  groupCosts.forEach(c => {
+    const ratio = getDaysInMonth(c.month) > 0 ? getDaysInRange(startDate, endDate, c.month) / getDaysInMonth(c.month) : 0
+    groupPool[c.group_name] = (groupPool[c.group_name] || 0) + c.amount * ratio
+  })
+  const groupCostOfChannel = (channel: string) => {
+    let tot = 0
+    Object.keys(tursoRev).forEach(t => {
+      if (!(tursoRev[t] > 0) || !groupPool[t]) return
+      tot += groupPool[t] * ((chInTurso.get(`${t}|${channel}`) || 0) / tursoRev[t])
+    })
+    return tot
+  }
+
   return Array.from(agg.values()).map(row => {
     const isB2B = (row.group || "").startsWith("B2B")
     let opCost = 0
@@ -345,9 +370,10 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
         })
       })
     })
-    const gpm2 = row.margin - opCost
+    const groupCost = groupCostOfChannel(row.channel)
+    const gpm2 = row.margin - opCost - groupCost
     return {
-      group: row.group, channel: row.channel, revenue: row.revenue, cogs: row.cogs, margin: row.margin,
+      group: row.group, channel: row.channel, group_cost: groupCost, revenue: row.revenue, cogs: row.cogs, margin: row.margin,
       units: row.units, orders: row.orders,
       margin_percent: row.revenue > 0 ? (row.margin / row.revenue) * 100 : 0,
       gpm2, gpm2_percent: row.revenue > 0 ? (gpm2 / row.revenue) * 100 : 0,
