@@ -180,4 +180,12 @@ describeLive("So cặp tab — cùng kỳ, cùng số", () => {
       }, 120_000)
     }
   })
+  describe("BOD: Σ CM1 kênh = thẻ CM1 khi gồm đơn nội bộ (B-02)", () => {
+    it("Q3 includeInternalOps=1", async () => {
+      const q = `startDate=${P.lastQuarter.start}&endDate=${P.lastQuarter.end}&includeShip=1&includeInternalOps=1`
+      const sm = await api(`/api/analytics/bod-summary?${q}`)
+      const ch = await api(`/api/analytics/bod-channel-performance?${q}`)
+      close(sm.total_gpm2, sum(ch.channels ?? ch, "gpm2"), "thẻ CM1 vs Σ CM1 kênh")
+    }, 120_000)
+  })
 })

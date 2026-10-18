@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
     // Cache 12h (data gohub_dw đổi 1 lần/ngày). Trước: ~20 query, nhiều cái await TUẦN TỰ → 25-50s.
     // Nay gom HẾT query độc lập vào 1 Promise.all (giảm critical path) + cache toàn bộ payload.
     const stratHash = await getStrategicSettingsHash()
-    const key = `bod-summary3:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+    const key = `bod-summary4:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
       const [[groupResult, prev, prevYear], agg, targetData] = await Promise.all([
         fetchBODGroupMarginMulti(periods, dateColumn, extraFilters, includeShip, includeInternalOps),

@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const stratHash = await getStrategicSettingsHash()
-    const key = `bod-group-margin2:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+    const key = `bod-group-margin3:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
       if (comparisonType === "none") {
         return (await fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps)).groups
