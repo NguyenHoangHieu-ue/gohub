@@ -219,7 +219,7 @@ export async function GET(req: NextRequest) {
 
     const groupCosts = filterGroupCostsByCompany(allGroupCosts, companyCode)
     const prevGroupCosts = filterGroupCostsByCompany(allPrevGroupCosts, companyCode)
-    const { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows, prevCustRevRows, srcRows } = rawData
+    const { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows, prevCustRevRows, prevCustRevByMonth, srcRows } = rawData
 
     // Index revenue B2B theo `${month}_${code}` để áp chi phí per-customer đúng (percent × revenue KH đó).
     const custRevMap = new Map<string, number>()
@@ -261,12 +261,12 @@ export async function GET(req: NextRequest) {
     // Lý do: nếu customer có Turso cost entry nhưng không có đơn hàng trong tháng, quarterly-b2b-customers
     // KHÔNG đưa họ vào customerMap (chỉ query từ fact orders) → cost đó không xuất hiện trong Bảng 3.
     // Để đồng nhất: bỏ amount cost của customer không có orders trong tháng đó.
-    const b2bCustCostByMonth = (month: string, dayRatio: number): number => {
+    const custCostByMonth = (costMap: Map<string, CostRecord>, revMap: Map<string, number>, month: string, dayRatio: number): number => {
       let tot = 0
-      customerCostMap.forEach((rec, key) => {
+      costMap.forEach((rec, key) => {
         const [cm, code] = [key.slice(0, 7), key.slice(8)]
         if (cm !== month) return
-        const custRev = custRevMap.get(`${month}_${code}`) || 0
+        const custRev = revMap.get(`${month}_${code}`) || 0
         if (custRev === 0) return  // skip KH không có orders tháng này → nhất quán với Bảng 3
         let lines: Array<{ type: string; value: number }> = []
         if (rec.cost_lines) { try { lines = JSON.parse(rec.cost_lines) } catch {} }
@@ -279,6 +279,7 @@ export async function GET(req: NextRequest) {
       })
       return tot
     }
+    const b2bCustCostByMonth = (month: string, dayRatio: number) => custCostByMonth(customerCostMap, custRevMap, month, dayRatio)
 
     const monthMeta = buildQuarterMonthMeta(months, asOf, todayStr)
 
@@ -517,8 +518,7 @@ export async function GET(req: NextRequest) {
     const prevB2C = (prevGroupRows as any[]).find((row: any) => row.bg === "B2C")
 
     // prevB2BCm1/prevB2CCm1: dùng Supabase channel costs cho B2C (nhất quán current Q).
-    // B2B prev Q: dùng Turso per-customer costs (amount only, vì không có per-customer revenue Q trước).
-    // Nếu Turso Q trước không có data → prevB2BCm1 = GP (không trừ cost), QoQ sẽ lệch — chấp nhận.
+    // B2B prev Q: Turso per-customer costs × doanh thu KH theo tháng quý trước (cùng công thức quý hiện tại).
     let prevB2BCm1 = 0, prevB2CCm1 = 0
     const prevB2BGpByMonth = new Map<string, number>()
       ; (prevChannelRows as any[]).forEach((row: any) => {
@@ -534,17 +534,13 @@ export async function GET(req: NextRequest) {
         }
       })
     prevB2BGpByMonth.forEach((gp) => { prevB2BCm1 += gp })
+    const prevCustRevMap = new Map<string, number>()
+    ;(prevCustRevByMonth as Array<{ month: string; customer_code: string; revenue: string }>).forEach(r => {
+      prevCustRevMap.set(`${r.month}_${r.customer_code}`, parseFloat(r.revenue || "0"))
+    })
     prevQMonths.forEach(m => {
-      // Trừ Turso B2B customer costs quý trước (amount type only — không có per-customer revenue Q trước)
-      prevCustomerCostMap.forEach((rec: CostRecord, key: string) => {
-        if (key.slice(0, 7) !== m) return
-        let lines: Array<{ type: string; value: number }> = []
-        if (rec.cost_lines) { try { lines = JSON.parse(rec.cost_lines) } catch {} }
-        const amountCost = lines.length > 0
-          ? lines.filter(l => l?.type === "amount").reduce((s, l) => s + (Number(l?.value) || 0), 0)
-          : (rec.cost_type === "amount" ? (Number(rec.cost_value) || 0) : 0)
-        prevB2BCm1 -= amountCost
-      })
+      // Cùng công thức quý hiện tại (QA Q-01): chỉ KH có đơn trong tháng, percent × doanh thu KH; quý trước đã đóng → ratio 1.
+      prevB2BCm1 -= custCostByMonth(prevCustomerCostMap, prevCustRevMap, m, 1)
       prevB2BCm1 -= prevGroupCosts.filter((c: any) => c.group_name === "B2B" && c.month === m).reduce((s: number, c: any) => s + c.amount, 0)
       prevB2CCm1 -= prevGroupCosts.filter((c: any) => c.group_name === "B2C" && c.month === m).reduce((s: number, c: any) => s + c.amount, 0)
     })

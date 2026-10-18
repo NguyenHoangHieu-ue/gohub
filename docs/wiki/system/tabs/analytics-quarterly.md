@@ -783,3 +783,7 @@ Hiếu chốt: Organization có >1 mã KH thì CHỈ nhập target ở dòng Org
 ## s234b (2026-10-15) — Xuất Excel bảng KH nhóm: 3HK Rev / %3HK theo tháng bị trống
 - **Lỗi:** API `quarterly-b2b-customers` chỉ trả `hk3Pct` trong `monthSummary` của từng KH (KHÔNG có `hk3Rev`), nên mọi cột 3HK theo tháng của file xuất (`exportCustomerDetail`, và dòng KH của `exportTierTable`) ra 0/trống; ô 3HK từng tháng ở hàng mở rộng trên web cũng hiện 0. (Dòng Nhóm không bị vì `tier.months` có `hk3Rev`.)
 - **Sửa:** API thêm `hk3Rev` (cùng cơ sở chiếu với `revenue`) + `actualHk3Rev` (tháng đang chạy, như `actualRevenue`) vào `monthSummary`, và `actualHk3Rev` ở cấp KH. Web: ô 3HK theo tháng dùng `aHk3` (thực tế) và `aHk3 × mf` (pro-rata) như Revenue. File xuất: tháng đang chạy Pro-rata = thực tế × hệ số chiếu, tháng tương lai = ước tính `exHk3`; Tổng Quý Pro-rata = đúng số web (`c.hk3Rev`, %3HK mẫu số = `c.revenue` nên % = `c.hk3Pct` của web), Tổng Quý Thực tế = `actualHk3Rev`; dòng TỔNG cộng cùng cơ sở.
+
+## s236 (QA Q-01): %QoQ CM1 B2B
+
+`prevQuarterTotals.b2bCm1` trước đây chỉ trừ chi phí khách dạng amount của MỌI KH (kể cả KH không có đơn tháng đó) nên lệch `quarterTotal.b2b.cm1` của quý trước (Q4 so Q3 lệch 919tr). Nay dùng cùng hàm `custCostByMonth` với quý hiện tại: chỉ KH có đơn trong tháng, percent × doanh thu KH theo tháng (`prevCustRevByMonth` từ `splitQuarterRows`), quý trước đã đóng nên ratio 1. Cache raw `qreport_raw_v12`. Test sống: `prevQuarterTotals` = `quarterTotal` quý liền trước.

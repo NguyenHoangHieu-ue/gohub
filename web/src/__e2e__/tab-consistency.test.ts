@@ -188,4 +188,15 @@ describeLive("So cặp tab — cùng kỳ, cùng số", () => {
       close(sm.total_gpm2, sum(ch.channels ?? ch, "gpm2"), "thẻ CM1 vs Σ CM1 kênh")
     }, 120_000)
   })
+  describe("Quarter Report: prevQuarterTotals = quarterTotal của quý liền trước (Q-01)", () => {
+    it("CM1 B2B / B2C và doanh thu", async () => {
+      const m = /quarter=Q(d)&year=(d+)/.exec(P.quarterParam)!
+      let q = Number(m[1]) - 1, y = Number(m[2]); if (q < 1) { q = 4; y -= 1 }
+      const cur = await api(`/api/analytics/quarterly-report?${P.quarterParam}&companyCode=ALL`)
+      const prv = await api(`/api/analytics/quarterly-report?quarter=Q${q}&year=${y}&companyCode=ALL`)
+      close(cur.prevQuarterTotals.b2bRevenue, prv.quarterTotal.b2b.revenue, "doanh thu B2B quý trước", 2)
+      close(cur.prevQuarterTotals.b2bCm1, prv.quarterTotal.b2b.cm1, "CM1 B2B quý trước", 2)
+      close(cur.prevQuarterTotals.b2cCm1, prv.quarterTotal.b2c.cm1, "CM1 B2C quý trước", 2)
+    }, 180_000)
+  })
 })

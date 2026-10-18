@@ -72,7 +72,9 @@ export function splitQuarterRows(
     if (!prev.has(r.month)) continue
     prevCustAcc.set(r.customer_code, (prevCustAcc.get(r.customer_code) ?? 0) + num(r.revenue))
   }
+  // Theo tháng: chi phí khách quý trước chỉ tính cho KH có đơn trong tháng đó (như quý hiện tại).
+  const prevCustRevByMonth = custRows.filter(r => prev.has(r.month))
   const prevCustRevRows = [...prevCustAcc.entries()].map(([customer_code, revenue]) => ({ customer_code, revenue: String(revenue) }))
 
-  return { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows, prevCustRevRows }
+  return { groupRows, channelRows, hk3Rows, prevGroupRows, prevChannelRows, custRevRows, prevCustRevRows, prevCustRevByMonth }
 }
