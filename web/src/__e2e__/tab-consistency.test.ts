@@ -171,4 +171,13 @@ describeLive("So cặp tab — cùng kỳ, cùng số", () => {
       await api(`/api/analytics/monthly-kpis?companyCode=ALL&dateColumn=created_date&startDate=${P.lastQuarter.start}&endDate=${P.lastQuarter.end}`)
     }, 120_000)
   })
+  describe("BOD summary: COGS / units theo cùng bộ lọc với Revenue (B-01)", () => {
+    for (const ship of [0, 1]) {
+      it(`Revenue − COGS = Gross Margin khi includeShip=${ship}, loại đơn nội bộ`, async () => {
+        const q = `startDate=${P.lastQuarter.start}&endDate=${P.lastQuarter.end}&includeShip=${ship}&includeInternalOps=0`
+        const b = await api(`/api/analytics/bod-summary?${q}`)
+        close(b.total_revenue - b.total_cogs, b.total_margin, "Revenue − COGS vs Margin")
+      }, 120_000)
+    }
+  })
 })

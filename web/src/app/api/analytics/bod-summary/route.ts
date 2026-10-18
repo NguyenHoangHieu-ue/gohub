@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache, getStrategicSettingsHash } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache, getStrategicSettingsHash, shipFilter, internalOpsFilterByCode, excludeInactiveCustomers } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginMulti } from "@/lib/bod-data"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 
@@ -44,6 +44,8 @@ export async function GET(req: NextRequest) {
     // (2 cho nhóm-biên đa kỳ, 1 cho cogs/units/3HK dùng FILTER theo kỳ). gohub_dw chạy gần như tuần tự nên đây mới là chỗ ăn thời gian.
     const conds = periods.map(p => getDateFilter(p.startDate, p.endDate, source.dateCol))
     const hk3In = `TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL')`
+    // Cùng bộ lọc chuẩn với fetchBODGroupMarginMulti, nếu không COGS/units/3HK lệch Revenue/Margin (QA B-01).
+    const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()}`
     const fetchAggregates = async () => {
       const cols = [
         `SUM(f.${source.cogsCol}) FILTER (WHERE (${conds[0]})) as total_cogs`,
@@ -51,7 +53,7 @@ export async function GET(req: NextRequest) {
         ...conds.map((c, i) => `SUM(CASE WHEN ${hk3In} THEN f.${source.revenueCol} ELSE 0 END) FILTER (WHERE (${c})) as hk3_${i}`),
       ].join(", ")
       const rows = await queryAnalytics<Record<string, string>>(
-        `SELECT ${cols} FROM ${source.mainTable} f WHERE (${conds.map(c => `(${c})`).join(" OR ")}) ${extraFilters}`
+        `SELECT ${cols} FROM ${source.mainTable} f WHERE (${conds.map(c => `(${c})`).join(" OR ")}) ${extraFilters} ${sfx}`
       )
       const r = rows[0] ?? {}
       return {
@@ -63,7 +65,7 @@ export async function GET(req: NextRequest) {
     // Cache 12h (data gohub_dw đổi 1 lần/ngày). Trước: ~20 query, nhiều cái await TUẦN TỰ → 25-50s.
     // Nay gom HẾT query độc lập vào 1 Promise.all (giảm critical path) + cache toàn bộ payload.
     const stratHash = await getStrategicSettingsHash()
-    const key = `bod-summary2:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+    const key = `bod-summary3:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
       const [[groupResult, prev, prevYear], agg, targetData] = await Promise.all([
         fetchBODGroupMarginMulti(periods, dateColumn, extraFilters, includeShip, includeInternalOps),
