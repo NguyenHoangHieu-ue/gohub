@@ -4,6 +4,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { alertCronFailure } from "@/lib/cron-alert"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { filterGroupCostsByCompany } from "@/lib/bod-data"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 import { getDaysInMonth } from "@/lib/analytics-engine/date-math"
@@ -52,8 +53,9 @@ export async function computeMonthlyKpis(month: string, companyCode: string) {
   const hk3     = parseFloat(rows[0]?.hk3     || "0")
 
   const { data: gcData } = await supabaseAdmin
-    .from("analytics_channel_group_costs").select("amount").eq("month", month)
-  const totalBudget = (gcData || []).reduce((s, c: any) => s + parseFloat(c.amount || "0"), 0)
+    .from("analytics_channel_group_costs").select("amount, item_name").eq("month", month)
+  // Chi phí nhóm nhập 1 bảng cho cả công ty; "Global" = pháp nhân US, còn lại VN — snapshot VN/US phải chỉ gánh phần của mình (khớp monthly-kpis).
+  const totalBudget = filterGroupCostsByCompany((gcData || []) as { amount: string; item_name: string | null }[], companyCode).reduce((s, c: any) => s + parseFloat(c.amount || "0"), 0)
   const dayRatio = isCurrent ? elapsed / dim : 1
 
   // B2B per-customer cost (Turso b2b_customer_cost_monthly) — khớp Quarter Report/b2b-kpis,
