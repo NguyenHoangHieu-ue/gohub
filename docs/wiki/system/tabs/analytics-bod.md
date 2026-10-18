@@ -132,3 +132,7 @@ Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm 
 
 ### s236(b) — Hiếu chọn A: chi phí nhóm chia về từng kênh
 `fetchBODChannelPerformanceData` trừ thêm chi phí nhóm (B2B/B2C, pro-rata ngày) chia theo tỷ trọng doanh thu của kênh trong nhóm (B2B-Strategic + Non-Strategic gộp thành 'B2B'), trả thêm field `group_cost`. Σ CM1 các kênh = Total CM1 (`bod-group-margin`). CM1 từng kênh trên bảng kênh BOD giảm tương ứng. Thay mục "(1) Chưa đổi" ở trên.
+
+## s236 (QA B-01/B-02)
+
+`bod-summary` (COGS, units, 3HK) và `bod-group-margin`/`fetchBODGroupMarginMulti` nay dùng cùng bộ lọc với bảng kênh: Phí ship, Đơn nội bộ, KH Inactive, KH loại trừ (B2B). `finalizeGroupMargin` giữ nhóm có doanh thu 0 nhưng lãi/lỗ gộp khác 0 (đơn nội bộ), nên thẻ CM1 = Σ CM1 kênh khi bật "Đơn nội bộ". Cache key: `bod-summary5`, `bod-group-margin4` (kèm `exclHash`). Test sống: `test:consistency` nhóm "(B-01)", "(B-02)".
