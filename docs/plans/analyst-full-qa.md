@@ -1,7 +1,7 @@
 # Plan: QA toàn diện nhóm tab Analyst
 
 > File TẠM (docs/plans). Khi xong hoặc Hiếu bỏ plan: chuyển kiến thức còn giá trị sang wiki `docs/wiki/system/` rồi xoá file này.
-> Soạn 2026-10-18. Trạng thái: ĐÃ CHỐT HƯỚNG (2026-10-18), chưa bắt đầu G0.
+> Soạn 2026-10-18. Trạng thái: G0 XONG (2026-10-18, commit a5466fe4; sản phẩm ở docs/qa/). Tiếp theo: G1 (Quarter Report, BOD, Channels).
 
 ## 0. Mục tiêu và phạm vi
 
