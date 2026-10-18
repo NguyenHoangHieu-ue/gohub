@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, shipFilter, internalOpsFilter, getMonthsInRange, getDaysInRange, getDaysInMonth } from "@/lib/analytics-helpers"
+import { analyticsGuard, shipFilter, internalOpsFilter, excludeInactiveCustomers, getMonthsInRange, getDaysInRange, getDaysInMonth } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, makeClassifyTier } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
     AND ${staffKey} = $3
     ${shipFilter(includeShip)}
     ${internalOpsFilter(includeInternalOps)}
+    ${excludeInactiveCustomers()}
     AND UPPER(COALESCE(s.group_name,'')) IN ('B2B','B2C')
     AND f.customer_code IS NOT NULL`
 

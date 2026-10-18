@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { getAnalyticsSource, getDateFilter , CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, shipFilter, internalOpsFilter, excludeInactiveCustomers, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
       : ""
 
   try {
-    const key = `ch-trend:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}`
+    const key = `ch-trend2:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}`
     const payload = await cachedQuery(key, async () => {
     const rows = await queryAnalytics<Record<string, string>>(
       `SELECT TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM-DD') as name,
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
               SUM(f.${source.marginCol})  as margin
        FROM ${source.mainTable} f
        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-       WHERE ${filter} ${chFilter}
+       WHERE ${filter} ${chFilter} ${shipFilter(false)} ${internalOpsFilter(false)} ${excludeInactiveCustomers()}
        GROUP BY 1 ORDER BY 1`
     )
     return rows.map(r => ({

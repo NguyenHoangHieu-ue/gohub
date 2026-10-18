@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, getMonthsInRange, getGroupCostsForMonths, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, cachedQuery } from "@/lib/analytics-helpers"
+import { analyticsGuard, getMonthsInRange, getGroupCostsForMonths, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, excludeInactiveCustomers, cachedQuery } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 import { filterGroupCostsByCompany } from "@/lib/bod-data"
@@ -45,6 +45,7 @@ export async function GET(req: NextRequest) {
     AND COALESCE(st.name, ${staffKey}) != 'Auto ESIM'
     ${shipFilter(includeShip)}
     ${internalOpsFilter(includeInternalOps)}
+    ${excludeInactiveCustomers()}
     AND UPPER(COALESCE(s.group_name,'')) IN ('B2B','B2C')
     AND ${staffKey} IS NOT NULL`
 
@@ -134,7 +135,7 @@ export async function GET(req: NextRequest) {
     // (pool max=3, chỗ nghẽn thật) chạy lại tươi mỗi lượt đổi filter/xem trang — cache riêng nhóm này.
     // groupCosts/customerCosts (Supabase/Turso, ngoài pool gohub_dw) giữ nguyên không cache — customerCosts
     // là Map, JSON-serialize qua L2 (Supabase JSONB) sẽ hỏng shape nên không đưa vào cachedQuery.
-    const cacheKey = `staff-report:v2:${startDate}:${endDate}:${channelGroup}:${channel}:${companyCode}:${dataSource}:${includeShip}:${includeInternalOps}`
+    const cacheKey = `staff-report:v3:${startDate}:${endDate}:${channelGroup}:${channel}:${companyCode}:${dataSource}:${includeShip}:${includeInternalOps}`
     const [[summaryRows, monthlyRows, groupTotalRows, custBreakdownRows], groupCostsRaw, customerCosts] = await Promise.all([
       cachedQuery(
         cacheKey,

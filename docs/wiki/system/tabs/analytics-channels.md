@@ -198,3 +198,8 @@ Hiếu thấy CM1 âm ở Shopeepay MY/SG/PH. Gốc: chi phí khách B2B (Turso 
 - Nguyên nhân: `analytics_channel_costs` tháng 7 có platformFee kênh B2B (2,46 tỷ); `channels/kpis` cộng chi phí MỌI kênh khi scope có doanh thu B2C, percent nhân doanh thu cả scope.
 - Sửa: chi phí kênh tính theo từng kênh không-B2B (query doanh thu theo kênh, `group_name NOT LIKE 'B2B%'`), percent × doanh thu của chính kênh — cùng cách `channels/performance`. Cache key `ch-kpis6`.
 - Còn lệch nhỏ chưa sửa: Channels/Staff không lọc KH Inactive (+161k Q3 so với Quarter/BOD); `/api/analytics/kpis` không lọc ship/nội bộ (+10,2tr T7).
+
+## s236(b) (2026-10-18) — Channels/Staff lọc KH Inactive + trend cùng bộ lọc mặc định
+- Đo Q3: Quarter Report = BOD = 22.900.622.128; Channels/Staff 22.900.783.129 (+161k, toàn ở T7) vì thiếu `excludeInactiveCustomers()`. Đã thêm vào `channels/kpis`, `channels/performance`, `channels/trend`, `staff-report`, `staff-report/customers` (cache key `ch-kpis7`, `ch-perf3`, `ch-trend2`, `staff-report:v3`).
+- `channels/trend` trước không có bộ lọc ship/nội bộ nào → nay luôn loại phí ship + đơn nội bộ như `channels/performance`/`kpis` mặc định (đổi số biểu đồ xu hướng).
+- Lưu ý khi so sánh: UI Quarter/BOD mặc định `includeShip=true`, còn API mặc định false; Dashboard (`kpis`, `monthly-kpis`) gồm phí ship (T7: 10,22tr = SHIPPINGFEE0) nên khớp Quarter UI mặc định, KHÔNG phải lỗi. Channels luôn loại ship (không có toggle) nên thấp hơn Dashboard đúng phần ship.

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import {
-  getAnalyticsSource, getDateFilter, getPrevDateFilter, shipFilter, internalOpsFilter,
+  getAnalyticsSource, getDateFilter, getPrevDateFilter, shipFilter, internalOpsFilter, excludeInactiveCustomers,
   getMonthsInRange, getChannelCostsForMonths, getGroupCostsForMonths, getDaysInRange, getDaysInMonth,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   const source     = getAnalyticsSource(dateColumn)
   const filter     = getDateFilter(startDate, endDate, source.dateCol)
   const prevFilter = getPrevDateFilter(startDate, endDate, "none", source.dateCol)
-  const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)}`
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeInactiveCustomers()}`
 
   const chFilter = channelName
     ? `AND TRIM(s.channel_name) = '${channelName.replace(/'/g, "''")}'`
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       : "TRUE"
 
   try {
-    const key = `ch-kpis6:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+    const key = `ch-kpis7:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
     const [cur, prv] = await Promise.all([
       queryAnalytics<Record<string, string>>(
