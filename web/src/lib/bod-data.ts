@@ -209,7 +209,9 @@ export async function fetchBODGroupMarginMulti(
   const source = getAnalyticsSource(dateColumn)
   // Strategic/Non phân theo KHÁCH (price_list_name), cấu hình chung quarterly-settings (ISSUE-DASH-4, s131).
   const { groupCaseSql: groupCaseSQL } = await getCustomerStrategicSql()
-  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()}`
+  // Cùng bộ lọc với channel-performance/report (gồm KH loại trừ) để thẻ CM1 = Σ CM1 kênh (QA B-02).
+  const { excludedCustomers } = await fetchQuarterlySettings()
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()} ${makeExcludeSqlByCode(excludedCustomers)}`
 
   const conds = periods.map(p => getDateFilter(p.startDate, p.endDate, source.dateCol))
   const periodCase = `CASE ${conds.map((c, i) => `WHEN (${c}) THEN ${i}`).join(" ")} END`

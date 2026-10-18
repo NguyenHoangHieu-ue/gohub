@@ -190,7 +190,7 @@ describeLive("So cặp tab — cùng kỳ, cùng số", () => {
   })
   describe("Quarter Report: prevQuarterTotals = quarterTotal của quý liền trước (Q-01)", () => {
     it("CM1 B2B / B2C và doanh thu", async () => {
-      const m = /quarter=Q(d)&year=(d+)/.exec(P.quarterParam)!
+      const m = /quarter=Q([0-9])&year=([0-9]+)/.exec(P.quarterParam)!
       let q = Number(m[1]) - 1, y = Number(m[2]); if (q < 1) { q = 4; y -= 1 }
       const cur = await api(`/api/analytics/quarterly-report?${P.quarterParam}&companyCode=ALL`)
       const prv = await api(`/api/analytics/quarterly-report?quarter=Q${q}&year=${y}&companyCode=ALL`)
