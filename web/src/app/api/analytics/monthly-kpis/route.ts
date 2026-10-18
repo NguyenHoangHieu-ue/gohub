@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, getAnalyticsSource, getStrategicPartnersList, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, excludeOpsByCode, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
+import { analyticsGuard, getAnalyticsSource, getStrategicPartnersList, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, excludeOpsByCode, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
@@ -210,7 +210,7 @@ export async function GET(req: NextRequest) {
         .slice(0, 12)
 
       return { summary, channels }
-    }, QUERY_TTL_MIN, undefined, ["b2b-cost"])
+    }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
     return NextResponse.json(data, { headers: CACHE_HEADERS })
   } catch (err: any) {

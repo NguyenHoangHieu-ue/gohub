@@ -88,3 +88,7 @@ ngày/tuần không ai biết). So cho tháng hiện tại + tháng trước, co
 ## 4. Phân quyền
 Chỉ `creator`. Không thêm vào `analytics-roles.ts`/`role_permissions` — admin/BOD/manager KHÔNG thấy tab
 này kể cả được cấp quyền riêng qua Settings (khác cơ chế thường của mọi tab analytics khác).
+
+## s236 (2026-10-18) — Đối chiếu chéo: thêm cột "Trang Dashboard" (nguồn độc lập)
+- Trước chỉ so LIVE (`computeMonthlyKpis`) với SNAPSHOT — cả hai cùng công thức nên không bắt được lỗi nằm trong chính `computeMonthlyKpis` (vd cron gồm GP âm INTERNAL-TRANSACTION, lệch trang 12,6tr = 0,88% < ngưỡng 1% nên vẫn "Khớp").
+- Nay route `cross-check` gọi nội bộ `/api/analytics/monthly-kpis` (Bearer cron, `nocache=1`) lấy số thực (`actualRevenue/actualCm1/actualHk3`) và so với LIVE bằng ngưỡng chặt (≤0,05% khớp, ≤0,5% lệch nhẹ, còn lại lệch nhiều; % thì tính theo điểm %). Trạng thái = xấu hơn của (LIVE↔SNAPSHOT, LIVE↔TRANG). Lỗi lấy số trang → hiện dòng cảnh báo, không chặn đối chiếu cũ. `monthly-kpis` nay nhận `nocache=1`.

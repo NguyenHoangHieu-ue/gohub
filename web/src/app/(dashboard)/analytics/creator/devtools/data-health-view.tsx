@@ -196,7 +196,7 @@ function AnomalyTab() {
 // ─── Khối 3 — Đối chiếu chéo ─────────────────────────────────────────────────
 
 interface CrossCheckRow {
-  month: string; field?: string; live?: number; snapshot?: number; diffPct?: number
+  month: string; field?: string; live?: number; snapshot?: number; diffPct?: number; page?: number | null; pageDiffPct?: number | null
   snapshotRefreshedAt?: string | null; status?: "ok" | "warn" | "bad"; error?: string
 }
 
@@ -251,6 +251,8 @@ function CrossCheckTab() {
             { key: "live", label: "Live", align: "right", render: r => r.field?.includes("%") ? `${r.live}%` : formatCurrency(r.live ?? 0) },
             { key: "snapshot", label: "Snapshot", align: "right", render: r => r.field?.includes("%") ? `${r.snapshot}%` : formatCurrency(r.snapshot ?? 0) },
             { key: "diffPct", label: "Lệch", align: "right", render: r => `${(r.diffPct ?? 0) > 0 ? "+" : ""}${r.diffPct}${r.field?.includes("%") ? "đ" : "%"}` },
+            { key: "page", label: "Trang Dashboard", align: "right", render: r => r.page == null ? "—" : r.field?.includes("%") ? `${r.page}%` : formatCurrency(r.page) },
+            { key: "pageDiffPct", label: "Live vs Trang", align: "right", render: r => r.pageDiffPct == null ? "—" : `${r.pageDiffPct > 0 ? "+" : ""}${r.pageDiffPct}${r.field?.includes("%") ? "đ" : "%"}` },
             {
               key: "status", label: "Trạng thái", align: "center",
               render: r => (
