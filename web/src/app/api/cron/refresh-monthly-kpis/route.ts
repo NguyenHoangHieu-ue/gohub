@@ -44,7 +44,10 @@ export async function computeMonthlyKpis(month: string, companyCode: string) {
             WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL'
           ) THEN f.fulfilled_revenue_amount_vnd ELSE 0 END) as hk3
     FROM fact_fulfillment_revenue f
+    LEFT JOIN dim_order_source s ON f.order_source_code = s.code
     WHERE f.fulfiled_date::date >= '${startDate}' AND f.fulfiled_date::date <= '${endDate}'
+      -- CHỈ B2B + B2C (khớp monthly-kpis/Quarter Report/BOD): nhóm INTERNAL-TRANSACTION có GP âm (hoàn/huỷ SIM nội bộ) không được vào tổng
+      AND UPPER(COALESCE(s.group_name,'')) IN ('B2B','B2C')
       ${companyFilter}
   `)
 

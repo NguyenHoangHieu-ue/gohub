@@ -126,3 +126,8 @@ Hiếu yêu cầu soi lại toàn bộ tab dùng công thức khác Quarter Repo
 ## s236 (2026-10-18) — Snapshot `analytics_monthly_kpis` VN/US gánh chi phí nhóm nguyên bảng
 - `computeMonthlyKpis` (cron `refresh-monthly-kpis`, nguồn Bé Gấu/Data Health) lấy toàn bộ `analytics_channel_group_costs` của tháng cho mọi `company_code` → snapshot VN và US đều trừ cả phần của nhau (VN + US ≠ ALL, CM1 US âm). `monthly-kpis` (trang) đã lọc từ s226 nên lệch với snapshot. Nay cron cũng `filterGroupCostsByCompany` (tên khoản có "Global" = US, còn lại VN). Snapshot cũ chỉ sửa khi cron chạy lại.
 - Rà soát: các route khác dùng chi phí nhóm (`channels/*`, `b2b/*`, `b2c/*`, `all-time`, BOD) KHÔNG có bộ lọc công ty trên giao diện (chỉ Quarter/Staff/Orders có) nên không cần lọc; `b2c/monthly` + `b2c-report-snapshot` là báo cáo B2C toàn công ty (VN/US chỉ là cột breakdown).
+
+### s236(b) — Snapshot `analytics_monthly_kpis` gồm GP âm của INTERNAL-TRANSACTION
+- Đo: snapshot ALL T9 `cm1` 1.435.504.448 vs route `monthly-kpis` 1.448.104.259 (Δ 12.599.811); T8 Δ 13.541.857 — đúng bằng GP của nhóm INTERNAL-TRANSACTION (`channels/kpis includeInternalOps=1` cho cùng Δ). Doanh thu bằng nhau (nhóm đó revenue=0), chi phí bằng nhau.
+- Nguyên nhân: `computeMonthlyKpis` (cron) không lọc `group_name IN ('B2B','B2C')` — s211d chỉ sửa route trang, bỏ sót cron. Đã thêm JOIN `dim_order_source` + lọc nhóm. Snapshot cũ tự đúng lại ở lần cron kế (hằng đêm).
+- Lưu ý: `data-health/cross-check` so snapshot với CHÍNH `computeMonthlyKpis` nên không bắt được kiểu lệch này (cả hai cùng sai) — nên so thêm với route `monthly-kpis`.
