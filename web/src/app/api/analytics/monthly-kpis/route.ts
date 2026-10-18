@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, getAnalyticsSource, getStrategicPartnersList, shipFilter, internalOpsFilter, excludeOpsByCode, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
+import { analyticsGuard, getAnalyticsSource, getStrategicPartnersList, shipFilter, internalOpsFilter, excludeOpsByCode, excludeInactiveCustomers, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
-import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings, exclHash, makeExcludeSql } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   // excludedCustomers fetch TRƯỚC cacheKey (thay vì trong callback) để hash vào key — đổi danh sách loại
   // trừ ở Quarter Report Settings phải tự làm mới cache route này (xem cache-architecture audit).
   const { excludedCustomers } = await fetchQuarterlySettings()
-  const cacheKey = `monthly-kpis3:${companyCode}:${dateColumn}:${startDate}:${endDate}:${exclHash(excludedCustomers)}`
+  const cacheKey = `monthly-kpis4:${companyCode}:${dateColumn}:${startDate}:${endDate}:${exclHash(excludedCustomers)}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -79,6 +79,8 @@ export async function GET(req: NextRequest) {
         WHERE f.${source.dateCol}::date >= '${startDate}'
           AND f.${source.dateCol}::date <= '${endDate}'
           AND UPPER(COALESCE(s.group_name,'')) IN ('B2B','B2C')
+          -- cùng Quarter Report/BOD/Channels: loại KH Inactive + KH trong danh sách loại trừ (nhánh B2B)
+          ${excludeInactiveCustomers()} ${makeExcludeSql(excludedCustomers)}
           ${companyFilter}
         GROUP BY 1 ORDER BY 1
       `)
@@ -97,6 +99,7 @@ export async function GET(req: NextRequest) {
           WHERE f.${source.dateCol}::date >= '${startDate}'
             AND f.${source.dateCol}::date <= '${endDate}'
             AND s.channel_name ILIKE ANY(ARRAY[${strategicList}]::text[])
+            ${excludeInactiveCustomers()} ${makeExcludeSql(excludedCustomers)}
             ${companyFilter}
           GROUP BY 1, 2 ORDER BY 1, 3 DESC
         `)

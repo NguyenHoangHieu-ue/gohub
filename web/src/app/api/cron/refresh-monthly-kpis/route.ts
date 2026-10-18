@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { isCronReq, shipFilter, internalOpsFilter, excludeOpsByCode } from "@/lib/analytics-helpers"
+import { isCronReq, shipFilter, internalOpsFilter, excludeOpsByCode, excludeInactiveCustomers } from "@/lib/analytics-helpers"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { alertCronFailure } from "@/lib/cron-alert"
-import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings, makeExcludeSql } from "@/lib/quarterly-settings"
 import { filterGroupCostsByCompany } from "@/lib/bod-data"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
@@ -34,6 +34,7 @@ export async function computeMonthlyKpis(month: string, companyCode: string) {
   const elapsed = isCurrent ? today.getDate() : dim
 
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
+  const { excludedCustomers } = await fetchQuarterlySettings()
 
   const rows = await queryAnalytics<{ revenue: string; gp: string; hk3: string }>(`
     SELECT
@@ -48,6 +49,8 @@ export async function computeMonthlyKpis(month: string, companyCode: string) {
     WHERE f.fulfiled_date::date >= '${startDate}' AND f.fulfiled_date::date <= '${endDate}'
       -- CHỈ B2B + B2C (khớp monthly-kpis/Quarter Report/BOD): nhóm INTERNAL-TRANSACTION có GP âm (hoàn/huỷ SIM nội bộ) không được vào tổng
       AND UPPER(COALESCE(s.group_name,'')) IN ('B2B','B2C')
+      -- cùng Quarter Report/BOD/Channels: loại KH Inactive + KH trong danh sách loại trừ (nhánh B2B)
+      ${excludeInactiveCustomers()} ${makeExcludeSql(excludedCustomers)}
       ${companyFilter}
   `)
 
@@ -63,7 +66,6 @@ export async function computeMonthlyKpis(month: string, companyCode: string) {
 
   // B2B per-customer cost (Turso b2b_customer_cost_monthly) — khớp Quarter Report/b2b-kpis,
   // KHÔNG dùng analytics_channel_costs cho B2B (tránh double-count).
-  const { excludedCustomers } = await fetchQuarterlySettings()
   const b2bSfx = `${shipFilter(false)} ${internalOpsFilter(false)} ${excludeOpsByCode(excludedCustomers)}`
   const [custRevRows, customerCostMap] = await Promise.all([
     queryAnalytics<{ customer_code: string; revenue: string }>(`
