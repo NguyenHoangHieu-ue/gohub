@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { fetchBODChannelPerformanceData } from "@/lib/bod-data"
 
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
   const { excludedCustomers } = await fetchQuarterlySettings()
   try {
-    const key = `bod-channel-perf3:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const key = `bod-channel-perf4:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
       const current = await fetchBODChannelPerformanceData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps)
       if (comparisonType === "none") return current
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
         const prev = previous.find(p => p.channel === curr.channel)
         return { ...curr, prev_revenue: prev ? prev.revenue : 0 }
       })
-    }, QUERY_TTL_MIN, undefined, ["b2b-cost"])
+    }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
