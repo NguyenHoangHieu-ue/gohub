@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getStrategicPartnersList, shipFilter, internalOpsFilter, excludeInactiveCustomers, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
 import { fetchCosts, getDaysInRange, getDaysInMonth, monthsBetween } from "@/lib/bod-data"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
@@ -26,10 +27,11 @@ export async function GET(req: NextRequest) {
     : ""
   // Trang Channels không có toggle Phí ship/Đơn nội bộ riêng (khác BOD/B2B/B2C) — luôn loại mặc định,
   // khớp channels/kpis (CM1 card cùng trang) — s197 audit toàn hệ thống logic dữ liệu.
-  const sfx = `${shipFilter(false)} ${internalOpsFilter(false)} ${excludeInactiveCustomers()}`
+  const { excludedCustomers } = await fetchQuarterlySettings()
+  const sfx = `${shipFilter(false)} ${internalOpsFilter(false)} ${excludeInactiveCustomers()} ${makeExcludeSql(excludedCustomers)}`
 
   try {
-    const key = `ch-perf3:${dateColumn}:${startDate}:${endDate}:${channelGroup}`
+    const key = `ch-perf4:${dateColumn}:${startDate}:${endDate}:${channelGroup}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
     const strategicList = await getStrategicPartnersList()
 

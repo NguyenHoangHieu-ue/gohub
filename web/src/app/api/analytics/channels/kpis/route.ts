@@ -7,6 +7,7 @@ import {
   getMonthsInRange, getChannelCostsForMonths, getGroupCostsForMonths, getDaysInRange, getDaysInMonth,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
+import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { COST_KEYS } from "@/lib/analytics-engine/cost-engine"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
@@ -28,7 +29,8 @@ export async function GET(req: NextRequest) {
   const source     = getAnalyticsSource(dateColumn)
   const filter     = getDateFilter(startDate, endDate, source.dateCol)
   const prevFilter = getPrevDateFilter(startDate, endDate, "none", source.dateCol)
-  const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeInactiveCustomers()}`
+  const { excludedCustomers } = await fetchQuarterlySettings()
+  const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeInactiveCustomers()} ${makeExcludeSql(excludedCustomers)}`
 
   const chFilter = channelName
     ? `AND TRIM(s.channel_name) = '${channelName.replace(/'/g, "''")}'`
@@ -43,7 +45,7 @@ export async function GET(req: NextRequest) {
       : "TRUE"
 
   try {
-    const key = `ch-kpis7:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+    const key = `ch-kpis8:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
     const [cur, prv] = await Promise.all([
       queryAnalytics<Record<string, string>>(

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, shipFilter, internalOpsFilter, excludeInactiveCustomers, getMonthsInRange, getDaysInRange, getDaysInMonth } from "@/lib/analytics-helpers"
-import { fetchQuarterlySettings, makeClassifyTier } from "@/lib/quarterly-settings"
+import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 
@@ -53,6 +53,10 @@ export async function GET(req: NextRequest) {
   } else if (channelGroup && channelGroup !== "All") {
     params.push(channelGroup); where += ` AND UPPER(s.group_name) = UPPER($${params.length})`
   }
+
+  // Loại KH trong danh sách loại trừ (nhánh B2B) — cùng Quarter Report/BOD/B2B
+  const { excludedCustomers } = await fetchQuarterlySettings()
+  where += ` ${makeExcludeSql(excludedCustomers)}`
 
   // dim_customer join cần có trong cả summary lẫn monthly (where tham chiếu dc)
   const baseJoins = `
