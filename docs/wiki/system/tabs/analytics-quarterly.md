@@ -787,3 +787,5 @@ Hiếu chốt: Organization có >1 mã KH thì CHỈ nhập target ở dòng Org
 ## s236 (QA Q-01): %QoQ CM1 B2B
 
 `prevQuarterTotals.b2bCm1` trước đây chỉ trừ chi phí khách dạng amount của MỌI KH (kể cả KH không có đơn tháng đó) nên lệch `quarterTotal.b2b.cm1` của quý trước (Q4 so Q3 lệch 919tr). Nay dùng cùng hàm `custCostByMonth` với quý hiện tại: chỉ KH có đơn trong tháng, percent × doanh thu KH theo tháng (`prevCustRevByMonth` từ `splitQuarterRows`), quý trước đã đóng nên ratio 1. Cache raw `qreport_raw_v12`. Test sống: `prevQuarterTotals` = `quarterTotal` quý liền trước.
+
+**Q-02:** nút "Tải lại mới" làm mới cả lifecycle (`refreshTick` → `nocache=1`) và target (bỏ qua target khi đang sửa).

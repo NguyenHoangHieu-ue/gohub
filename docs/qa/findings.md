@@ -12,9 +12,9 @@ Chi tiết và bằng chứng nằm ở `results/<tab>.md`. Trạng thái: MỞ 
 | **B-01** | **P1** | BOD | Total COGS, Units Sold, 3HK doanh thu không áp bộ lọc chuẩn nào; tắt Phí ship chỉ đổi Revenue và Margin | `fetchAggregates()` trong `bod-summary` thiếu `sfx` | ĐÃ SỬA (test sống đạt) |
 | **B-02** | **P1** | BOD | Hộp tích "Đơn nội bộ" chỉ có tác dụng khi nhóm nội bộ có doanh thu > 0; Σ CM1 kênh ≠ thẻ CM1 (Q3 −36,78 triệu) | `finalizeGroupMargin` `.filter(g => g.revenue > 0)` | ĐÃ SỬA (test sống đạt) |
 | B-04 | P1 | BOD | Created: 3/5 request 500, giao diện giữ số Fulfillment (hệ quả F-01 + nuốt lỗi) | như F-01 | ĐÃ SỬA do F-01 (UI còn nuốt lỗi) |
-| Q-02 | P2 | Quarter Report | "Tải lại mới" không làm mới lifecycle và target; "Xem báo cáo" chỉ tải lại báo cáo | `refreshAll` | MỞ |
-| B-03 | P2 | BOD | Σ CM1 biểu đồ ngày ≠ thẻ CM1 (Q3 +2,9 triệu, T9 +0,69 triệu) | cách rải chi phí theo ngày | MỞ |
-| B-05 | P2 | BOD | Thẻ "so với tháng trước" gọi tháng trước không kèm cờ ship/nội bộ | `bod/page.tsx` | MỞ |
+| Q-02 | P2 | Quarter Report | "Tải lại mới" không làm mới lifecycle và target; "Xem báo cáo" chỉ tải lại báo cáo | `refreshAll` | ĐÃ SỬA (test sống đạt; Q-02, B-05 chưa kiểm trình duyệt) |
+| B-03 | P2 | BOD | Σ CM1 biểu đồ ngày ≠ thẻ CM1 (Q3 +2,9 triệu, T9 +0,69 triệu) | cách rải chi phí theo ngày | ĐÃ SỬA (test sống đạt; Q-02, B-05 chưa kiểm trình duyệt) |
+| B-05 | P2 | BOD | Thẻ "so với tháng trước" gọi tháng trước không kèm cờ ship/nội bộ | `bod/page.tsx` | ĐÃ SỬA (test sống đạt; Q-02, B-05 chưa kiểm trình duyệt) |
 | G0-1..4 | P2 | Dashboard, B2C, Channels, BOD, Customers, Products, Manage Costs | Nhiều route có cache nhưng không nhận `nocache=1` (gợi ý của bộ quét; chưa xác nhận từng route) | thiếu `noCache(req)` | NGHI |
 | Q-03 | P3 | Quarter Report | ALL/VN/US đầu trang không đổi bảng B2B (có ô riêng) | thiết kế | MỞ |
 | Q-04 | P3 | Quarter Report | Lifecycle 220 khách vs 222 ở bảng hạng; "mới 62" gồm 1 khách 0 doanh thu B2B; định nghĩa khách mới theo đơn đầu có doanh thu | `b2b_lifecycle` | NGHI |
