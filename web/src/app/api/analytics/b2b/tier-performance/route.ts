@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   // ISSUE-DASH-5: dùng getAnalyticsSource để Created mode đọc ĐÚNG nguồn (fact_sales_revenue + created_date,
   // GP=0) thay vì trước hardcode cột fulfilled nhưng lọc theo created_date (trộn 2 nguồn). Fulfillment KHÔNG đổi.
   const source = getAnalyticsSource(dateColumn)
-  const gpExpr = source.marginCol === "0" ? "0" : `SUM(f.${source.marginCol})`
+  const gpExpr = `SUM(f.${source.marginCol})`
   const includeShip        = searchParams.get("includeShip")        === "1"
   const includeInternalOps = searchParams.get("includeInternalOps") === "1"
   const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""

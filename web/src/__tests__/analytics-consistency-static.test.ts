@@ -66,4 +66,10 @@ describe("Tab analytics — không tái tạo logic dùng chung", () => {
     }
     for (const [r, re] of Object.entries(need)) expect(read(join(SRC, r)), `${r} thiếu bộ lọc KH loại trừ`).toMatch(re)
   })
+
+  it("getAnalyticsSource: Created không dùng literal số làm tên cột (SUM(f.0) → lỗi 500)", () => {
+    const helpers = readFileSync(join(__dirname, "..", "lib", "analytics-helpers.ts"), "utf8")
+    const block = helpers.slice(helpers.indexOf("export function getAnalyticsSource"))
+    expect(block).not.toMatch(/(marginCol|cogsCol):s*isSales ? "d+"/)
+  })
 })

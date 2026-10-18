@@ -421,12 +421,13 @@ export function getPrevDateFilter(
 export function getAnalyticsSource(dateColumn: string) {
   const isSales = dateColumn === "created_date"
   return {
-    mainTable:   isSales ? "fact_sales_revenue"        : "fact_fulfillment_revenue",
+    // Created: fact_sales_revenue không có cột lãi/giá vốn → bọc subquery gắn cột 0, mọi route dùng `f.${marginCol}` đều hợp lệ.
+    mainTable:   isSales ? "(SELECT s.*, 0::numeric AS zero_gp_vnd, 0::numeric AS zero_cogs_vnd FROM fact_sales_revenue s)" : "fact_fulfillment_revenue",
     revenueCol:  isSales ? "sales_revenue_amount_vnd"  : "fulfilled_revenue_amount_vnd",
     quantityCol: isSales ? "quantity"                  : "fulfilled_quantity",
     dateCol:     isSales ? "created_date"              : "fulfiled_date",
-    marginCol:   isSales ? "0"                         : "gross_profit_vnd",
-    cogsCol:     isSales ? "0"                         : "cogs_amount_vnd",
+    marginCol:   isSales ? "zero_gp_vnd"               : "gross_profit_vnd",
+    cogsCol:     isSales ? "zero_cogs_vnd"             : "cogs_amount_vnd",
   }
 }
 

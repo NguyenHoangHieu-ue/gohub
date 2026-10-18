@@ -331,7 +331,7 @@ export default function ProductPerformancePage() {
 
       const channelQuery = `
         SELECT s.channel_name, s.group_name, SUM(f.${revCol}) as revenue, SUM(f.${qtyCol}) as units_sold,
-          COUNT(DISTINCT f.order_code) as orders, SUM(f.${marginCol}) as margin
+          COUNT(DISTINCT f.order_code) as orders, SUM(${isSales ? "0" : "f." + marginCol}) as margin
         FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
         WHERE ${filterSQL} GROUP BY 1, 2 ORDER BY revenue DESC`
 
@@ -340,7 +340,7 @@ export default function ProductPerformancePage() {
       // Base query (KHÔNG LIMIT) — lưu để export FULL; bảng chỉ hiển thị top 50.
       const skuBreakdownBase = `
         SELECT f.sku, v.category_name as category, v.vendor, ${regionExpr} as region,
-          SUM(f.${revCol}) as revenue, SUM(f.${qtyCol}) as units, COUNT(DISTINCT f.order_code) as orders, SUM(f.${marginCol}) as margin
+          SUM(f.${revCol}) as revenue, SUM(f.${qtyCol}) as units, COUNT(DISTINCT f.order_code) as orders, SUM(${isSales ? "0" : "f." + marginCol}) as margin
         FROM ${mainTable} f LEFT JOIN dim_sku v ON f.sku = v.sku
         WHERE ${filterSQL} GROUP BY 1, 2, 3, 4 ORDER BY revenue DESC`
       skuFullQueryRef.current = skuBreakdownBase

@@ -154,4 +154,21 @@ describeLive("So cặp tab — cùng kỳ, cùng số", () => {
       close(sum(mk.summary, "actualCm1"), ch.cm1, "CM1")
     }, 300_000)
   })
+  describe("Chế độ Created không được lỗi 500", () => {
+    // Từng lỗi: SUM(f.0) → 500 ở 13 route khi dateColumn=created_date (F-01).
+    const routes = [
+      "channels/performance", "channels/kpis", "channels/trend", "bod-summary", "bod-group-margin",
+      "bod-channel-performance", "bod-report", "b2b/kpis", "b2b/performance", "b2b/trend",
+      "b2c/kpis", "b2c/performance", "b2c/trend", "b2b/tier-performance", "b2b/strategic-performance",
+    ]
+    for (const r of routes) {
+      it(r, async () => {
+        const q = `startDate=${P.lastQuarter.start}&endDate=${P.lastQuarter.end}&dateColumn=created_date`
+        await api(`/api/analytics/${r}?${q}`)
+      }, 120_000)
+    }
+    it("monthly-kpis", async () => {
+      await api(`/api/analytics/monthly-kpis?companyCode=ALL&dateColumn=created_date&startDate=${P.lastQuarter.start}&endDate=${P.lastQuarter.end}`)
+    }, 120_000)
+  })
 })

@@ -661,7 +661,7 @@ export default function ChannelPerformancePage() {
           MAX(sk.category_name) as category,
           UPPER(SUBSTRING(${mt}.sku, 3, 3)) as destination,
           SUM(${mt}.${revenueCol}) as revenue,
-          SUM(${mt}.${marginCol}) as margin,
+          SUM(${isSales ? "0" : mt + "." + marginCol}) as margin,
           COUNT(DISTINCT ${mt}.order_code) as orders,
           SUM(${mt}.${quantityCol}) as units
         FROM ${mt}
@@ -690,7 +690,7 @@ export default function ChannelPerformancePage() {
           SELECT
             COALESCE(TRIM(s.sapo_name), TRIM(s.name)) as sub_channel,
             SUM(f.${revenueCol}) as revenue,
-            SUM(f.${marginCol}) as margin,
+            SUM(${isSales ? "0" : "f." + marginCol}) as margin,
             COUNT(DISTINCT f.order_code) as orders,
             SUM(f.${quantityCol}) as units
           FROM ${mainTable} f
@@ -706,7 +706,7 @@ export default function ChannelPerformancePage() {
           SELECT
             COALESCE(TRIM(s.sapo_name), TRIM(s.name)) as sub_channel,
             SUM(f.${revenueCol}) as revenue,
-            SUM(f.${marginCol}) as margin,
+            SUM(${isSales ? "0" : "f." + marginCol}) as margin,
             COUNT(DISTINCT f.order_code) as orders,
             SUM(f.${quantityCol}) as units
           FROM ${mainTable} f

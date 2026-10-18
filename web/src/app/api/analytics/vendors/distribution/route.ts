@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
       if (channelGroup !== "All Groups") chanFilter += ` AND f.order_source_code IN (SELECT code FROM dim_order_source WHERE UPPER(group_name) = '${channelGroup}')`
       const std = `AND f.sku != 'SHIPPINGFEE0' AND f.order_source_code NOT IN (SELECT code FROM dim_order_source WHERE UPPER(COALESCE(group_name,'')) = 'INTERNAL-TRANSACTION')`
       const vendorList = vendors.map(v => `'${esc(v)}'`).join(",")
-      const marginExpr = source.marginCol === "0" ? "0" : `f.${source.marginCol}`
+      const marginExpr = `f.${source.marginCol}`
 
       const [bizExpr, unitKey, unitName] = view === "customer"
         ? [groupCase,

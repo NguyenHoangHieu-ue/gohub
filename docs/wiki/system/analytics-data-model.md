@@ -49,10 +49,12 @@ Hầu hết tab có toggle **"Fulfillment" vs "Created"** (nút ở đầu trang
 | `revenueCol` | `fulfilled_revenue_amount_vnd` | `sales_revenue_amount_vnd` |
 | `quantityCol` | `fulfilled_quantity` | `quantity` |
 | `dateCol` | `fulfiled_date` | `created_date` |
-| `marginCol` (Gross Profit) | `gross_profit_vnd` | `0` *(bảng sales không có margin/cogs)* |
+| `marginCol` (Gross Profit) | `gross_profit_vnd` | `zero_gp_vnd` *(cột 0 do subquery thêm vào; bảng sales không có margin/cogs)* |
 | `cogsCol` | `cogs_amount_vnd` | `0` |
 
 → **Khi ở chế độ "Created", margin/COGS = 0** (bảng sales không có). Chỉ Fulfillment mới có Gross Profit/CM1.
+
+> **s236 (QA F-01):** `mainTable` ở Created là subquery `(SELECT s.*, 0::numeric AS zero_gp_vnd, 0::numeric AS zero_cogs_vnd FROM fact_sales_revenue s)`. Trước đây `marginCol = "0"` làm `SUM(f.0)` → HTTP 500 ở 13 route. Luôn viết `f.${source.marginCol}`, không kiểm `=== "0"`. Test: `analytics-consistency-static` + nhóm "Chế độ Created" trong `test:consistency`.
 
 ## 5. Lọc ngày & so sánh kỳ (`lib/analytics-helpers.ts`)
 - `getDateFilter(sd, ed, dateCol)` → `f.<dateCol>::date BETWEEN sd AND ed` (hoặc mặc định N ngày gần nhất).
