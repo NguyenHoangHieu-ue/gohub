@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { analyticsGuard, getAnalyticsSource, getStrategicPartnersList, getDaysInRange, getDaysInMonth, shipFilter, internalOpsFilter, excludeOpsByCode, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
+import { analyticsGuard, getAnalyticsSource, getStrategicPartnersList, shipFilter, internalOpsFilter, excludeOpsByCode, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache } from "@/lib/analytics-helpers"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
-import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
+import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { supabaseAdmin } from "@/lib/supabase"
 import { filterGroupCostsByCompany } from "@/lib/bod-data"
 
@@ -153,7 +153,7 @@ export async function GET(req: NextRequest) {
         const monthStart = `${m}-01`
         const factor = getProjectionFactor(monthStart, todayStr)
         const isProjected = factor > 1
-        const dayRatio = isProjected ? getDaysInRange(monthStart, todayStr, m) / getDaysInMonth(m) : 1
+        const dayRatio = isProjected ? rangeDayRatio(monthStart, todayStr, m) : 1
         const b2bCCAct = b2bCustCostByMonth(m, dayRatio)
 
         // Actual CM1 (op cost prorated for partial month; percent-cost dùng revenue thực tới hôm nay)

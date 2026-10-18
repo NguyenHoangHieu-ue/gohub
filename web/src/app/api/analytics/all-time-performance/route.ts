@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { supabaseAdmin } from "@/lib/supabase"
-import { getChannelCostsForMonths, cachedQuery, CACHE_HEADERS, getCustomerStrategicSql, safeDate, noCache, analyticsGuard, shipFilter, internalOpsFilter, excludeInactiveCustomers } from "@/lib/analytics-helpers"
+import { getChannelCostsForMonths, getGroupCostsForMonths, cachedQuery, CACHE_HEADERS, getCustomerStrategicSql, safeDate, noCache, analyticsGuard, shipFilter, internalOpsFilter, excludeInactiveCustomers } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
@@ -83,12 +82,12 @@ export async function GET(req: NextRequest) {
       let channelCosts: any[] = []
       let groupCosts: any[] = []
       if (months.length > 0) {
-        const [ccRows, { data: gcData }] = await Promise.all([
+        const [ccRows, gcRows] = await Promise.all([
           getChannelCostsForMonths(months),
-          supabaseAdmin.from("analytics_channel_group_costs").select("group_name, month, amount").in("month", months),
+          getGroupCostsForMonths(months),
         ])
         channelCosts = ccRows
-        groupCosts = (gcData || []).map((r: any) => ({ group_name: r.group_name, month: String(r.month), amount: parseFloat(r.amount || "0") }))
+        groupCosts = gcRows.map((r: any) => ({ group_name: r.group_name, month: String(r.month), amount: parseFloat(r.amount || "0") }))
       }
 
       // Revenue-share theo (tháng, channel) để chia amount-type channel cost khi 1 channel span 2 tier KH.

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, getStrategicSettingsHash } from "@/lib/analytics-helpers"
+import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, getStrategicSettingsHash, noCache } from "@/lib/analytics-helpers"
 import { fetchBODGroupMarginData } from "@/lib/bod-data"
 
 // Port intel bod-group-margin: nhóm B2B-Strategic/B2B-Non-Strategic/B2C/Other + CM1 (margin − op-cost).
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
         const prev = previous.find(p => p.group === curr.group)
         return { ...curr, prev_revenue: prev?.revenue || 0, prev_margin: prev?.margin || 0 }
       })
-    }, QUERY_TTL_MIN, undefined, ["b2b-cost"])
+    }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {

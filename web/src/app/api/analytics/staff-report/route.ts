@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
-import { analyticsGuard, getMonthsInRange, getGroupCostsForMonths, shipFilter, internalOpsFilter, excludeInactiveCustomers, cachedQuery } from "@/lib/analytics-helpers"
+import { analyticsGuard, getMonthsInRange, getGroupCostsForMonths, shipFilter, internalOpsFilter, excludeInactiveCustomers, cachedQuery, noCache } from "@/lib/analytics-helpers"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { filterGroupCostsByCompany } from "@/lib/bod-data"
@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
           queryAnalytics(custBreakdownSQL, params),
         ]),
         30,
-        false,
+        noCache(req),
         ["staff-report"],
       ),
       months.length ? getGroupCostsForMonths(months) : Promise.resolve([]),

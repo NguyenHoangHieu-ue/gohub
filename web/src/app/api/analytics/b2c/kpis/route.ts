@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { supabaseAdmin } from "@/lib/supabase"
-import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode, getMonthsInRange, getChannelCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode, getMonthsInRange, getChannelCostsForMonths, getGroupCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, exclHash, excludedForB2C } from "@/lib/quarterly-settings"
 import { COST_KEYS, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { matchChannelCost } from "@/lib/bod-data"
@@ -83,9 +82,9 @@ export async function GET(req: NextRequest) {
 
     let totalOpCost = 0, prevTotalOpCost = 0
     if (allMonths.length > 0) {
-      const [channelCosts, { data: gcData }] = await Promise.all([
+      const [channelCosts, gcAll] = await Promise.all([
         getChannelCostsForMonths(allMonths),
-        supabaseAdmin.from("analytics_channel_group_costs").select("month, amount").eq("group_name", "B2C").in("month", allMonths),
+        getGroupCostsForMonths(allMonths),
       ])
 
       // s195+19: dùng matchChannelCost() dùng chung (sub-channel prefix / source_code / exact / không
@@ -111,7 +110,7 @@ export async function GET(req: NextRequest) {
       })
 
       // Group-level B2C costs
-      ;(gcData || []).forEach((r: any) => {
+      ;gcAll.filter((r: any) => r.group_name === "B2C").forEach((r: any) => {
         const month = String(r.month)
         const amount = parseFloat(r.amount || "0")
         if (currentMonths.includes(month)) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard } from "@/lib/analytics-helpers"
+import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { fetchBODReportData as fetchBODReport } from "@/lib/bod-data"
 
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
             })
         return { ...curr, prev_revenue: prev?.revenue || 0 }
       })
-    }, QUERY_TTL_MIN)
+    }, QUERY_TTL_MIN, noCache(req))
 
     return NextResponse.json(payload, { headers: CACHE_HEADERS })
   } catch (err: any) {
