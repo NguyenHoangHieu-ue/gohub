@@ -37,6 +37,21 @@ const stepTitle = "flex items-center gap-2 text-base font-semibold text-gray-900
 const stepNo = "inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-600 text-white text-xs font-bold"
 const field = "px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500"
 
+/** Nhà mạng: nhóm nhiều nước thì gập gọn thành 1 dòng, bấm để xem đủ từng nước. */
+function OperatorCell({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  const lines = text.split(String.fromCharCode(10)).map(s => s.trim()).filter(Boolean)
+  if (lines.length <= 1) return <span>{lines[0] ?? ""}</span>
+  return (
+    <div className="max-w-[200px]">
+      <button onClick={() => setOpen(o => !o)} className="text-left text-brand-700 hover:underline">
+        {open ? "Thu gọn ▲" : `${lines.length} nước · xem nhà mạng ▼`}
+      </button>
+      {open && <ul className="mt-1 space-y-0.5 max-h-48 overflow-auto pr-1">{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>}
+    </div>
+  )
+}
+
 export default function PriceCalc() {
   const [opts, setOpts] = useState<Options | null>(null)
   const [loadErr, setLoadErr] = useState<string | null>(null)
@@ -269,7 +284,7 @@ export default function PriceCalc() {
                       <tr key={`${g.key}-${r.vendor}-${i}`} className={`border-t border-gray-100 dark:border-slate-800 ${i === 0 ? "border-t-2 border-t-gray-200" : ""} ${best ? "bg-emerald-50/60 dark:bg-emerald-950/20" : ""}`}>
                         <td className="px-3 py-2 min-w-[240px]">{i === 0 ? <span className="font-medium">{planName(r)}</span> : <span className="text-gray-300">↳ cùng gói</span>}</td>
                         <td className="px-3 py-2 whitespace-nowrap">{r.vendorLabel}{best && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-emerald-600 text-white font-semibold">Rẻ nhất</span>}{r.note && <div className="text-[11px] text-amber-700">{r.note}</div>}</td>
-                        <td className="px-3 py-2 text-gray-600 whitespace-pre-line text-xs">{r.operator}</td>
+                        <td className="px-3 py-2 text-gray-600 text-xs align-top"><OperatorCell text={r.operator} /></td>
                         <td className="px-3 py-2 text-right whitespace-nowrap">{r.pricePerGb} {r.currency}</td>
                         <td className="px-3 py-2 text-right">{usd(r.dataUsd)}</td>
                         <td className="px-3 py-2 text-right whitespace-nowrap">{r.feeVnd ? `${vnd(r.feeVnd)} đ` : usd(r.feeUsd)}</td>
