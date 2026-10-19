@@ -16,7 +16,7 @@ Chi tiết và bằng chứng nằm ở `results/<tab>.md`. Trạng thái: MỞ 
 | B-03 | P2 | BOD | Σ CM1 biểu đồ ngày ≠ thẻ CM1 (Q3 +2,9 triệu, T9 +0,69 triệu) | cách rải chi phí theo ngày | ĐÃ SỬA (test sống đạt; Q-02, B-05 chưa kiểm trình duyệt) |
 | B-05 | P2 | BOD | Thẻ "so với tháng trước" gọi tháng trước không kèm cờ ship/nội bộ | `bod/page.tsx` | ĐÃ SỬA (test sống đạt; Q-02, B-05 chưa kiểm trình duyệt) |
 | G0-1..4 | P2 | Dashboard, B2C, Channels, BOD, Customers, Products, Manage Costs | Nhiều route có cache nhưng không nhận `nocache=1` (gợi ý của bộ quét; chưa xác nhận từng route) | thiếu `noCache(req)` | NGHI |
-| **B-07** | **P1** | BOD | Tải nguội: `bod-summary` hết 25 giây (HTTP 500 `Query read timeout`), giao diện hiện toàn 0 không báo lỗi | `bod-summary` và `bod-group-margin` cùng quét nặng, pool gohub_dw 3 kết nối | MỞ |
+| **B-07** | **P1** | BOD | Tải nguội: `bod-summary` hết 25 giây (HTTP 500 `Query read timeout`), giao diện hiện toàn 0 không báo lỗi | `bod-summary` và `bod-group-margin` cùng quét nặng, pool gohub_dw 3 kết nối | ĐÃ SỬA (chia sẻ quét 3 kỳ, `lite`, UI thử lại + báo lỗi) |
 | B-08 | P3 | BOD | Dòng "Other" có Margin % −1465,0% (doanh thu nhỏ) | hiển thị | MỞ |
 | Q-03 | P3 | Quarter Report | ALL/VN/US đầu trang không đổi bảng B2B (có ô riêng) | thiết kế | MỞ |
 | Q-04 | P3 | Quarter Report | Lifecycle 220 khách vs 222 ở bảng hạng; "mới 62" gồm 1 khách 0 doanh thu B2B; định nghĩa khách mới theo đơn đầu có doanh thu | `b2b_lifecycle` | NGHI |

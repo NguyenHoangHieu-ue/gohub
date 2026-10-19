@@ -140,3 +140,7 @@ Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm 
 ## s236 (QA B-03/B-05)
 
 `fetchBODReportData` (biểu đồ ngày): chi phí nhóm, chi phí kênh dạng amount và chi phí khách dạng amount rải đều MỌI ngày cho nhóm/kênh/khách có doanh thu trong kỳ (tháng, với khách), thay vì chỉ ngày có đơn → Σ CM1 ngày = thẻ CM1 (sai lệch còn lại chỉ do ngày không có dòng nào). Chi phí percent vẫn theo doanh thu từng ngày. Cache `bod-report4`. Thẻ "so với tháng trước" gửi cùng `includeShip`/`includeInternalOps`.
+
+## s236 (QA B-07): tải nguội không còn hết 25 giây
+
+Trang BOD bắn 5 request nặng cùng lúc lên pool gohub_dw 3 kết nối (giới hạn truy vấn 25s) → `bod-summary` có lúc 500 `Query read timeout`, giao diện hiện 0. Nay: (1) `bod-summary` và `bod-group-margin` dùng chung một lần quét 3 kỳ (`fetchBODGroupMarginTripleShared`, gộp lời gọi đang chạy + giữ 30s, kỳ tính bằng `bodTriplePeriods`); (2) số "tháng trước" dùng `bod-summary?lite=1` (1 kỳ, ~4s thay ~13s) và chỉ gọi SAU 5 request chính; (3) `fetchJson` của trang thử lại 1 lần sau 3s khi 5xx, vẫn lỗi thì hiện banner "Hiếu đang fix, vui lòng đợi". Đo: 5 request song song nocache, tải nguội 21s (trước >25s lỗi), lần hai 9s.

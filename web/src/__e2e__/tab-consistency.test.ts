@@ -210,4 +210,12 @@ describeLive("So cặp tab — cùng kỳ, cùng số", () => {
       }, 120_000)
     }
   })
+  describe("BOD: tải nguội song song không hết 25 giây (B-07)", () => {
+    it("5 request như trang BOD, nocache, đều 200", async () => {
+      const q = `startDate=${P.lastMonth.start}&endDate=${P.lastMonth.end}&comparisonType=none&dateColumn=fulfiled_date&includeShip=1&includeInternalOps=1`
+      const urls = ["bod-summary", "bod-report", "bod-group-margin", "bod-channel-performance", "b2b/strategic-performance"]
+      const res = await Promise.all(urls.map(u => api(`/api/analytics/${u}?${q}`).then(() => 200, (e: any) => String(e.message).slice(0, 80))))
+      expect(res).toEqual([200, 200, 200, 200, 200])
+    }, 180_000)
+  })
 })
