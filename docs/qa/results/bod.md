@@ -50,3 +50,12 @@
 | B-08 | P3 | Dòng "Other" ở bảng nhóm có Margin % = −1465,0% (doanh thu 401.585 đ, lỗ 5,88 tr) | bảng nhóm 01–18/10 | Đúng toán học nhưng khó đọc; ẩn % khi doanh thu quá nhỏ |
 
 Chưa làm: biểu đồ Revenue vs COGS, bảng "Daily Financial Breakdown" từng ô, xuất CSV, bộ lọc Vendors / Channel Groups / Sub Channels thao tác thật, nút Created trên giao diện (đã kiểm ở API).
+
+## Bổ sung giao diện lần 2 (2026-10-19)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Tải nguội trang BOD sau sửa B-07: 4 thẻ KPI và 3 bảng có số ngay, không còn thẻ 0 | ĐẠT |
+| Bảng "Daily Financial Breakdown" 18 ngày × (revenue, COGS, margin, CM1, %) so với `bod-report` | ĐẠT, 0 lệch |
+
+Chưa làm: biểu đồ Revenue vs COGS và Margin Analysis (đọc số liệu biểu đồ), xuất CSV, bộ lọc Vendors / Channel Groups / Sub Channels thao tác thật trên BOD.

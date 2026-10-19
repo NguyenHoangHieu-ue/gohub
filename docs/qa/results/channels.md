@@ -44,3 +44,18 @@
 | Trang này không có hộp tích Phí ship / Đơn nội bộ (API mặc định loại cả hai) | ghi nhận, khác các tab BOD, Quarter Report |
 
 Chưa làm: lọc Vendor, Sub Channels, Product Type bằng thao tác thật; xuất 3 bảng; chọn Prev Period / Prev Year (chọn bằng mã không kích hoạt tải lại).
+
+## Bổ sung giao diện lần 2 (2026-10-19)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Single Channel VN-Wholesales + Vendor "3HK DATAPOOL": bảng Sub-channel Total (250 đơn, 3.268 units, 437.384.858 đ, GP 97.190.070 đ) so với SQL độc lập | ĐẠT |
+| So sánh Prev Period sau Apply Filters: doanh thu +14%, đơn +15% so với SQL kỳ trước (13–30/09: 217 đơn, 384.200.700 đ) | ĐẠT |
+
+### Phát hiện mới (Channels)
+
+| # | Mức | Mô tả | Bằng chứng | Nguyên nhân gốc | Đề xuất |
+|---|---|---|---|---|---|
+| **Ch-03** | **P2** | **Vendors, Product Type và Sub Channels không có tác dụng ở chế độ All Channels (Overview):** chọn vendor "3HK DATAPOOL" rồi Apply, bảng và TOTAL giữ nguyên (4.007.872.234 đ, 17.034 đơn) | Request `channels/performance` chỉ gửi `startDate`, `endDate`, `dateColumn`, không gửi bộ lọc | Bộ lọc chỉ áp dụng trong truy vấn của chế độ một kênh (`page.tsx` khoảng dòng 507); route `channels/performance` không đọc `vendors`, `productTypes` | Cho route nhận `getBODFilters` như BOD, hoặc ẩn các bộ lọc ở Overview |
+| **Ch-04** | **P2** | **Chế độ một kênh: chọn Vendor hoặc Product Type thì "Top Selling Products" trống ("No product data available for this period")** dù kênh có doanh thu (VN-Wholesales + 3HK DATAPOOL: 437 triệu) | SQL top products trả lỗi HTTP 400 `column reference "sku" is ambiguous`, giao diện nuốt lỗi | `vendorFilter` và `productTypeFilter` viết `TRIM(sku)` không tiền tố, trong khi truy vấn top products JOIN `dim_sku sk` (cả hai bảng đều có `sku`) | Qualify `TRIM(${mt}.sku)` riêng cho truy vấn top products; hiện lỗi thay vì "No product data" |
+| Ch-05 | P3 | Đổi ô "Compare" (nằm ngoài panel Filters) không tải lại: các thẻ hiện "So sánh +0%" và chú giải CURRENT/PREVIOUS cho tới khi bấm Apply Filters | Chọn Prev Period, chờ 20 giây: +0% ở cả 6 thẻ; sau Apply: +14%, +56%, +56%, +15%, +26%, −1% | Chọn so sánh không kích hoạt tải lại | Tải lại khi đổi ô Compare, hoặc đưa ô vào panel |

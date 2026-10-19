@@ -60,3 +60,16 @@ Cách kiểm xuất file không lưu file: chặn `URL.createObjectURL` và `HTM
 
 Ghi nhận P3: số KH ở tile Lifecycle không có dấu chấm nghìn ("112081", "4679") trong khi nơi khác có.
 Chưa làm: bảng B2C theo Kênh × Tháng, drill Tháng/Ngày/Sản phẩm, Organization, Template/Import, xuất lifecycle CSV, Squad Progress xuất Excel.
+
+## Bổ sung giao diện lần 2 (2026-10-19, Q3-2026 ALL)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Bảng "B2C — Chi tiết theo Kênh × Tháng": 6 kênh × 3 tháng × (revenue, GM, ch.cost, CM1, %CM1, %3HK) so với `quarterly-report`; Σ kênh = `quarterTotal.b2c.revenue` (5.107.979.434) | ĐẠT, 0 lệch |
+| Squad Progress: thẻ Squad 1 (192 KH, doanh thu 12,0 tỷ = 64% target, GP 3,1 tỷ) so với `squad-progress` | ĐẠT |
+| Xuất Excel Squad Progress (`squad_progress_Q3_2026.xlsx`): sheet Squad Summary (2 squad) và Customer Detail (208 KH: revenue, PR, CM1 PR) so với API | ĐẠT, 0 lệch |
+| Tab Performance: doanh thu, GP, CM1 Q3; Q2 (B2B 19.736.039.253, CM1 B2B 3.466.403.051, CM1 B2C 2.649.397.212) so với `quarterTotal`, `prevQuarterTotals` | ĐẠT (1 đ làm tròn ở tổng doanh thu Q2). %QoQ CM1 B2B thẻ "Chỉ số Quý" = −6,9% khớp Performance −7% (Q-01 đã sửa) |
+
+| # | Mức | Mô tả | Đề xuất |
+|---|---|---|---|
+| Q-06 | P3 | Xuất Excel Squad Progress: cột "Leader" ghi mã Lark thô (`lark_ou_d7c1…`) trong khi giao diện hiện tên ("Ngoc Han") | Tra tên như giao diện khi xuất |
