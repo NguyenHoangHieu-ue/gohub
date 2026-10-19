@@ -46,3 +46,17 @@
 - Đối chiếu DOM từng ô: bảng B2B theo Nhóm × Tháng (4 hạng × 3 tháng + Cả Quý, Organization, mã con), B2C theo Kênh × Tháng, lifecycle (bấm từng ô), `Hướng dẫn`, biểu đồ.
 - Thao tác ghi (G6): Target quý, target từng khách và Organization, CH.Cost (Sửa chi tiết, Import), Cài đặt (loại trừ, tier), Cấu hình Squad, Target Squad, Target tháng cấp công ty.
 - Biến thể còn chưa quét: US và VN cho bảng khách; so sánh quý khác (Q1, Q4 đầy đủ).
+
+## Bổ sung giao diện (2026-10-19, Chrome, staging, Creator, Q3-2026 ALL)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Bảng "B2B — Chi tiết theo Nhóm × Tháng" (Cả Quý): 4 hạng × (số KH, revenue, GM, ch.cost, CM1, %CM1, %QoQ, 3HK) so với `quarterly-b2b-customers` | ĐẠT, 0 lệch |
+| Danh sách KH hạng Strategic mở ra: 17 KH hiển thị theo mã (còn lại gom trong Organization) so với API | ĐẠT (lệch tối đa 1 đ do làm tròn hiển thị) |
+| Tile Lifecycle: B2B mới 62 / quay lại 158 / rời bỏ 112.081; B2C mới 4.679 / quay lại 2.546 | Khớp API |
+| Xuất Excel bảng B2B Nhóm × Tháng (`b2b_nhom_thang_Q3-2026_ALL.xlsx`): 227 dòng = 1 tiêu đề + 4 hạng + 222 KH; revenue, GM, ch.cost, CM1, 3HK so với API | ĐẠT, 0 lệch |
+
+Cách kiểm xuất file không lưu file: chặn `URL.createObjectURL` và `HTMLAnchorElement.click` rồi đọc Blob xlsx (zip không nén).
+
+Ghi nhận P3: số KH ở tile Lifecycle không có dấu chấm nghìn ("112081", "4679") trong khi nơi khác có.
+Chưa làm: bảng B2C theo Kênh × Tháng, drill Tháng/Ngày/Sản phẩm, Organization, Template/Import, xuất lifecycle CSV, Squad Progress xuất Excel.

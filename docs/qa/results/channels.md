@@ -27,3 +27,20 @@
 
 - Phép đối chiếu theo cặp `(kênh, nhóm)`; lần chạy đầu em khớp theo tên kênh nên báo lệch giả ở "Misc." — đã loại trừ, không phải lỗi sản phẩm.
 - Sau s236 các cặp thẻ KPI = Σ bảng = BOD (tổ hợp loại ship, loại nội bộ) vẫn đạt; riêng tổ hợp BOD "gồm nội bộ" xem B-02.
+
+## Bổ sung giao diện (2026-10-19, Chrome, staging, Creator)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Bảng All Channels Overview (kỳ 01–18/10, mặc định giao diện): 22 dòng × doanh thu, GP, margin%, CM1, CM1%, orders, units | ĐẠT, 0 lệch so với `channels/performance` |
+| Cột MoM: giá trị tuyệt đối đúng; dấu nằm ở mũi tên | ĐẠT |
+| `prev_revenue` từng kênh (22) so với SQL kỳ trước (13–30/09) | ĐẠT |
+| Single Channel VN-Wholesales: thẻ KPI (doanh thu, GP, CM1, orders, units) = `channels/kpis` = dòng bảng | ĐẠT |
+| Bảng Sub-channel: 2 dòng + Total = kênh (296 đơn, 4.029 units, 543,9 tr); Dự phóng = × 31/18; Contribution 76,0% + 24,0% | ĐẠT |
+| Daily Performance Details: 18 ngày, Σ doanh thu, đơn, units = kênh | ĐẠT |
+| Top Selling Products: 10 SKU (đơn, units, doanh thu, GP) so với SQL | ĐẠT, khớp từng đồng |
+| Thẻ Month-End Projection: đơn 510, units 6.939, AOV (× 31/18) | ĐẠT |
+| Chế độ Created trên giao diện: 3 bảng + `channels/kpis` đều 200, GP và CM1 = 0, có cảnh báo "orders created but not yet fulfilled" | ĐẠT (sau sửa F-01) |
+| Trang này không có hộp tích Phí ship / Đơn nội bộ (API mặc định loại cả hai) | ghi nhận, khác các tab BOD, Quarter Report |
+
+Chưa làm: lọc Vendor, Sub Channels, Product Type bằng thao tác thật; xuất 3 bảng; chọn Prev Period / Prev Year (chọn bằng mã không kích hoạt tải lại).

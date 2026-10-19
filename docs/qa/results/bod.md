@@ -32,3 +32,21 @@
 
 - Phát hiện B-01 và B-02 chỉ hiện khi chạy tổ hợp hộp tích khác mặc định hoặc kỳ có nhóm nội bộ doanh thu 0. Test so cặp tab hiện chỉ chạy `includeShip`/`includeInternalOps` mặc định API (loại): cần thêm biến thể tích sẵn (giao diện mặc định).
 - Bảng "Channel Performance Breakdown": Σ kênh = Total CM1 chỉ khi mọi nhóm đều có doanh thu > 0 (xem B-02).
+
+## Bổ sung giao diện (2026-10-19, Chrome, staging, Creator, 01–18/10)
+
+| Hạng mục | Kết quả |
+|---|---|
+| Thẻ KPI (doanh thu 4.008.273.819, margin, COGS, units, CM1, %): bằng `bod-summary` | ĐẠT |
+| "vs Prev Period +10,2%" và "vs Prev Year −5,9%" so với `previous_period`, `previous_year` | ĐẠT |
+| Bảng Performance by Channel Group: giao diện gộp B2B-Strategic + Non-Strategic thành "B2B": orders, units, revenue, GM, CM1 = tổng hai nhóm từ `bod-group-margin`; Grand Total | ĐẠT |
+| Xuất xlsx "Channel Performance" (21 dòng): units, revenue, COGS, margin, CM1 so với `bod-channel-performance`; Projected Revenue = × 31/18 | ĐẠT, 0 lệch |
+
+### Phát hiện mới
+
+| # | Mức | Mô tả | Bằng chứng | Đề xuất |
+|---|---|---|---|---|
+| **B-07** | **P1** | **Tải nguội trang BOD: `bod-summary` có thể hết 25 giây (`{"error":"Query read timeout"}`, HTTP 500); giao diện không báo lỗi, mọi thẻ hiện 0 đ / 0,00%** (đã thấy khi vào trang lần đầu và tái hiện bằng 5 request song song `nocache=1`: `bod-summary` kỳ tháng trước 500 sau 25,8 giây; `bod-group-margin` 27 giây). Tải lại lần hai (cache ấm) thì đúng. | Console: `bod-summary 26489ms 500` ×2. Pool gohub_dw chỉ có 3 kết nối và giới hạn `statement_timeout/query_timeout = 25s` trong `analytics-db.ts` | Tránh quét trùng (`bod-summary` và `bod-group-margin` cùng quét `fetchBODGroupMarginMulti`), dùng chung lời gọi đang chạy; trên giao diện hiện lỗi "Hiếu đang fix, vui lòng đợi" thay vì 0; cân nhắc làm nóng cache hằng ngày (cron prewarm đã có cho quý) |
+| B-08 | P3 | Dòng "Other" ở bảng nhóm có Margin % = −1465,0% (doanh thu 401.585 đ, lỗ 5,88 tr) | bảng nhóm 01–18/10 | Đúng toán học nhưng khó đọc; ẩn % khi doanh thu quá nhỏ |
+
+Chưa làm: biểu đồ Revenue vs COGS, bảng "Daily Financial Breakdown" từng ô, xuất CSV, bộ lọc Vendors / Channel Groups / Sub Channels thao tác thật, nút Created trên giao diện (đã kiểm ở API).
