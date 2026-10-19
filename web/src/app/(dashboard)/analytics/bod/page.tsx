@@ -65,6 +65,7 @@ export default function BODReport() {
   const [partnerTiers, setPartnerTiers] = useState<Record<string, string[]>>({ Strategic: [] })
   const [channelPerformance, setChannelPerformance] = useState<BODChannelPerformance[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [dateRange, setDateRange] = useState(() => {
     const defaultRange = getDefaultDateRange()
     return { start: defaultRange.startDate, end: defaultRange.endDate }
@@ -192,6 +193,7 @@ export default function BODReport() {
 
   const fetchData = async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const queryParams = new URLSearchParams({
         startDate: dateRange.start, endDate: dateRange.end, comparisonType,
@@ -200,8 +202,10 @@ export default function BODReport() {
         ...(includeShip ? { includeShip: "1" } : {}),
         ...(includeInternalOps ? { includeInternalOps: "1" } : {}),
       })
+      // Cache nguội + DB bận có thể hết 25s (500) — thử lại 1 lần sau 3s (lúc đó các truy vấn kia đã nạp cache) rồi mới báo lỗi.
       const fetchJson = async (url: string, name: string) => {
-        const res = await fetch(url)
+        let res = await fetch(url)
+        if (res.status >= 500) { await new Promise(r => setTimeout(r, 3000)); res = await fetch(url) }
         if (!res.ok) throw new Error(`Failed to fetch ${name}: ${res.statusText}`)
         return res.json()
       }
@@ -241,6 +245,7 @@ export default function BODReport() {
       void prevMonthPromise
     } catch (error) {
       console.error("Error fetching BOD data:", error)
+      setLoadError(error instanceof Error ? error.message : "Lỗi tải dữ liệu")
     } finally {
       setLoading(false)
     }
@@ -342,6 +347,11 @@ export default function BODReport() {
 
   return (
     <div className="space-y-6 p-6">
+      {loadError && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Hiếu đang fix, vui lòng đợi. <span className="text-red-400">({loadError})</span>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Board of Directors Report</h1>

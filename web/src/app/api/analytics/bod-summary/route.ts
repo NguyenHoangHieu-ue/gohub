@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache, getStrategicSettingsHash, shipFilter, internalOpsFilterByCode, excludeInactiveCustomers } from "@/lib/analytics-helpers"
-import { fetchBODGroupMarginMulti } from "@/lib/bod-data"
+import { fetchBODGroupMarginTripleShared, bodTriplePeriods } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSqlByCode, exclHash } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 
@@ -27,19 +27,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const source = getAnalyticsSource(dateColumn)
-    // previous period + previous year (summary only)
-    const s = new Date(startDate); const e = new Date(endDate)
-    const diff = e.getTime() - s.getTime()
-    const prevEnd = new Date(s.getTime() - 86400000)
-    const prevStart = new Date(prevEnd.getTime() - diff)
-    const lyStart = new Date(s.getFullYear() - 1, s.getMonth(), s.getDate())
-    const lyEnd   = new Date(e.getFullYear() - 1, e.getMonth(), e.getDate())
-    const iso = (d: Date) => d.toISOString().split("T")[0]
-    const periods = [
-      { startDate, endDate },
-      { startDate: iso(prevStart), endDate: iso(prevEnd) },
-      { startDate: iso(lyStart), endDate: iso(lyEnd) },
-    ]
+    const periods = bodTriplePeriods(startDate, endDate)  // kỳ này / kỳ trước / cùng kỳ năm ngoái
 
     // s203: 3 kỳ × (2 query nhóm-biên + 1 query 3HK) + 1 query cogs/units = 10 lần quét fact → gộp còn 3 lần
     // (2 cho nhóm-biên đa kỳ, 1 cho cogs/units/3HK dùng FILTER theo kỳ). gohub_dw chạy gần như tuần tự nên đây mới là chỗ ăn thời gian.
@@ -70,7 +58,7 @@ export async function GET(req: NextRequest) {
     const key = `bod-summary5:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
       const [[groupResult, prev, prevYear], agg, targetData] = await Promise.all([
-        fetchBODGroupMarginMulti(periods, dateColumn, extraFilters, includeShip, includeInternalOps),
+        fetchBODGroupMarginTripleShared(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps),
         fetchAggregates(),
         getTargetSummary(startDate, endDate),
       ])

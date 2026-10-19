@@ -271,6 +271,38 @@ export async function fetchBODGroupMarginMulti(
   })
 }
 
+/** Kỳ hiện tại + kỳ trước (cùng độ dài) + cùng kỳ năm ngoái — MỘT định nghĩa cho bod-summary và bod-group-margin. */
+export function bodTriplePeriods(startDate: string, endDate: string): BODPeriod[] {
+  const s = new Date(startDate); const e = new Date(endDate)
+  const diff = e.getTime() - s.getTime()
+  const prevEnd = new Date(s.getTime() - 86400000)
+  const prevStart = new Date(prevEnd.getTime() - diff)
+  const lyStart = new Date(s.getFullYear() - 1, s.getMonth(), s.getDate())
+  const lyEnd   = new Date(e.getFullYear() - 1, e.getMonth(), e.getDate())
+  const iso = (d: Date) => d.toISOString().split("T")[0]
+  return [
+    { startDate, endDate },
+    { startDate: iso(prevStart), endDate: iso(prevEnd) },
+    { startDate: iso(lyStart), endDate: iso(lyEnd) },
+  ]
+}
+
+// bod-summary và bod-group-margin cùng cần 3 kỳ trên; trang BOD gọi cả hai CÙNG LÚC khi cache nguội → trước đây quét fact 2 lần song song
+// trên pool gohub_dw 3 kết nối và hết 25s (QA B-07). Dùng chung lời gọi đang chạy (và giữ kết quả 30s) theo tham số.
+const tripleInflight = new Map<string, { at: number; p: Promise<BODGroupMarginResult[]> }>()
+export function fetchBODGroupMarginTripleShared(
+  startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "", includeShip = false, includeInternalOps = false,
+): Promise<BODGroupMarginResult[]> {
+  const key = JSON.stringify([startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps])
+  const hit = tripleInflight.get(key)
+  if (hit && Date.now() - hit.at < 30_000) return hit.p
+  const p = fetchBODGroupMarginMulti(bodTriplePeriods(startDate, endDate), dateColumn, extraFilters, includeShip, includeInternalOps)
+  tripleInflight.set(key, { at: Date.now(), p })
+  p.catch(() => { if (tripleInflight.get(key)?.p === p) tripleInflight.delete(key) })
+  if (tripleInflight.size > 50) for (const [k, v] of tripleInflight) if (Date.now() - v.at >= 30_000) tripleInflight.delete(k)
+  return p
+}
+
 export async function fetchBODGroupMarginData(startDate: string, endDate: string, dateColumn = "fulfiled_date", extraFilters = "", includeShip = false, includeInternalOps = false) {
   const [r] = await fetchBODGroupMarginMulti([{ startDate, endDate }], dateColumn, extraFilters, includeShip, includeInternalOps)
   return r

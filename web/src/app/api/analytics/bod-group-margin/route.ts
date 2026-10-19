@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, getStrategicSettingsHash, noCache } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
-import { fetchBODGroupMarginData } from "@/lib/bod-data"
+import { fetchBODGroupMarginTripleShared } from "@/lib/bod-data"
 
 // Port intel bod-group-margin: nhóm B2B-Strategic/B2B-Non-Strategic/B2C/Other + CM1 (margin − op-cost).
 export async function GET(req: NextRequest) {
@@ -28,27 +28,11 @@ export async function GET(req: NextRequest) {
     const { excludedCustomers } = await fetchQuarterlySettings()
     const key = `bod-group-margin4:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
-      if (comparisonType === "none") {
-        return (await fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps)).groups
-      }
-
-      const s = new Date(startDate); const e = new Date(endDate)
-      let prevStart: Date, prevEnd: Date
-      if (comparisonType === "previous_period") {
-        const diff = e.getTime() - s.getTime()
-        prevEnd = new Date(s.getTime() - 86400000); prevStart = new Date(prevEnd.getTime() - diff)
-      } else {
-        prevStart = new Date(s.getFullYear() - 1, s.getMonth(), s.getDate())
-        prevEnd = new Date(e.getFullYear() - 1, e.getMonth(), e.getDate())
-      }
-      // Kỳ hiện tại + kỳ trước độc lập → fetch song song
-      const [currentRes, previousRes] = await Promise.all([
-        fetchBODGroupMarginData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps),
-        fetchBODGroupMarginData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], dateColumn, extraFilters, includeShip, includeInternalOps),
-      ])
-      const current = currentRes.groups
-      const previous = previousRes.groups
-      return current.map(curr => {
+      // Dùng chung 3 kỳ với bod-summary (một lần quét, xem fetchBODGroupMarginTripleShared).
+      const [currentRes, prevRes, lyRes] = await fetchBODGroupMarginTripleShared(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps)
+      if (comparisonType === "none") return currentRes.groups
+      const previous = (comparisonType === "previous_period" ? prevRes : lyRes).groups
+      return currentRes.groups.map(curr => {
         const prev = previous.find(p => p.group === curr.group)
         return { ...curr, prev_revenue: prev?.revenue || 0, prev_margin: prev?.margin || 0 }
       })
