@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   // excludedCustomers fetch TRƯỚC cacheKey (thay vì trong callback) để hash vào key — đổi danh sách loại
   // trừ ở Quarter Report Settings phải tự làm mới cache route này (xem cache-architecture audit).
   const { excludedCustomers } = await fetchQuarterlySettings()
-  const cacheKey = `monthly-kpis4:${companyCode}:${dateColumn}:${startDate}:${endDate}:${exclHash(excludedCustomers)}`
+  const cacheKey = `monthly-kpis5:${companyCode}:${dateColumn}:${startDate}:${endDate}:${exclHash(excludedCustomers)}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
@@ -154,9 +154,12 @@ export async function GET(req: NextRequest) {
 
         // Projection for current month (shared logic from analytics-engine/projection)
         const monthStart = `${m}-01`
-        const factor = getProjectionFactor(monthStart, todayStr)
+        // Số ngày đã có dữ liệu = tới endDate của khoảng đang xem (Dashboard dừng ở T-1), KHÔNG phải hôm nay:
+        // dùng hôm nay thì hệ số 31/19 thay vì 31/18 và lệch thẻ Month-End Projection cùng trang.
+        const cutoff = m === endDate.slice(0, 7) ? endDate : todayStr
+        const factor = getProjectionFactor(monthStart, cutoff)
         const isProjected = factor > 1
-        const dayRatio = isProjected ? rangeDayRatio(monthStart, todayStr, m) : 1
+        const dayRatio = isProjected ? rangeDayRatio(monthStart, cutoff, m) : 1
         const b2bCCAct = b2bCustCostByMonth(m, dayRatio)
 
         // Actual CM1 (op cost prorated for partial month; percent-cost dùng revenue thực tới hôm nay)

@@ -63,7 +63,8 @@ export async function GET(req: NextRequest) {
     LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = dc.code
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code`
 
-  const skuJoin = `LEFT JOIN (SELECT DISTINCT ON (TRIM(sku)) * FROM dim_sku ORDER BY TRIM(sku)) sk ON TRIM(f.sku) = TRIM(sk.sku)`
+  // Chỉ cần vendor: gom nhẹ theo sku (trước đây DISTINCT ON + SELECT * sắp xếp cả dim_sku 2 lần mỗi lượt → hết 25s)
+  const skuJoin = `LEFT JOIN (SELECT TRIM(sku) AS sku, MAX(vendor) AS vendor FROM dim_sku GROUP BY TRIM(sku)) sk ON TRIM(f.sku) = sk.sku`
 
   try {
     // Q1: customer-level aggregates

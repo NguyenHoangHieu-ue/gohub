@@ -256,4 +256,28 @@ describeLive("So cặp tab — cùng kỳ, cùng số", () => {
       }
     }, 180_000)
   })
+  describe("Dashboard monthly-kpis: hệ số chiếu theo ngày dữ liệu cuối (G2-12)", () => {
+    it("tháng đang chạy: factor = số ngày tháng / số ngày tới endDate", async () => {
+      const now = new Date()
+      const y = now.getFullYear(), mo = now.getMonth() + 1
+      const day = now.getDate() - 1
+      if (day < 2) return
+      const pad = (n: number) => String(n).padStart(2, "0")
+      const start = `${y}-${pad(mo)}-01`, end = `${y}-${pad(mo)}-${pad(day)}`
+      const r = await api(`/api/analytics/monthly-kpis?startDate=${start}&endDate=${end}&includeShip=1&includeInternalOps=1&nocache=1`)
+      const cur = r.summary.find((s: any) => s.month === `${y}-${pad(mo)}`)
+      const dim = new Date(y, mo, 0).getDate()
+      expect(Math.abs(cur.factor - dim / day)).toBeLessThan(0.01)
+    }, 120_000)
+  })
+  describe("Staff: mở nhân viên tải được danh sách KH và khớp tổng (G2 Staff)", () => {
+    it("Σ doanh thu KH của nhân viên lớn nhất = doanh thu nhân viên (≤50 KH)", async () => {
+      const q = `startDate=${P.lastMonth.start}&endDate=${P.lastMonth.end}`
+      const staff = await api(`/api/analytics/staff-report?${q}`)
+      const top = [...staff].sort((a: any, b: any) => b.total_revenue - a.total_revenue)[0]
+      const cust = await api(`/api/analytics/staff-report/customers?${q}&staffCode=${top.staff_code}`)
+      expect(cust.length).toBeGreaterThan(0)
+      if (cust.length < 50) close(sum(cust, "revenue"), top.total_revenue, `Σ KH vs ${top.staff_name}`)
+    }, 120_000)
+  })
 })

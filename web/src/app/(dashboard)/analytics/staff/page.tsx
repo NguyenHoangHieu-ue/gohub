@@ -213,6 +213,7 @@ function StaffPageInner() {
   const [expandedStaff, setExpandedStaff] = useState<string | null>(null)
   const [customers,     setCustomers]     = useState<CustomerRow[]>([])
   const [custLoading,   setCustLoading]   = useState(false)
+  const [custError,     setCustError]     = useState(false)
 
   // Targets: targets[staffCode][month]
   const [targets,      setTargets]      = useState<Record<string, Record<string, StaffTarget>>>({})
@@ -339,7 +340,7 @@ function StaffPageInner() {
 
   const toggleExpand = async (code: string) => {
     if (expandedStaff === code) { setExpandedStaff(null); setCustomers([]); return }
-    setExpandedStaff(code); setCustomers([]); setCustLoading(true)
+    setExpandedStaff(code); setCustomers([]); setCustLoading(true); setCustError(false)
     try {
       const custParams = new URLSearchParams({
         staffCode: code,
@@ -352,7 +353,8 @@ function StaffPageInner() {
       if (includeInternalOps) custParams.set("includeInternalOps", "1")
       const r = await fetch(`/api/analytics/staff-report/customers?${custParams}`)
       if (r.ok) setCustomers(await r.json())
-    } catch {} finally { setCustLoading(false) }
+      else setCustError(true)
+    } catch { setCustError(true) } finally { setCustLoading(false) }
   }
 
   const displayed = selectedCodes.length > 0
@@ -919,6 +921,8 @@ function StaffPageInner() {
                         <div className="bg-brand-50/60 border-b border-brand-100 px-6 py-4">
                           {custLoading ? (
                             <div className="text-xs text-slate-400 py-4 text-center">Đang tải KH…</div>
+                          ) : custError ? (
+                            <div className="text-xs text-rose-500 py-4 text-center">Hiếu đang fix, vui lòng đợi (không tải được danh sách KH)</div>
                           ) : customers.length === 0 ? (
                             <div className="text-xs text-slate-400 py-4 text-center">Không có dữ liệu KH</div>
                           ) : (
