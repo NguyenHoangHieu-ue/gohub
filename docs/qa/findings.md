@@ -22,6 +22,8 @@ Chi tiết và bằng chứng nằm ở `results/<tab>.md`. Trạng thái: MỞ 
 | **Ch-04** | P2 | Channels | Một kênh + Vendor hoặc Product Type: Top Selling Products trống (SQL `sku` ambiguous, UI nuốt lỗi) | `TRIM(sku)` không tiền tố khi JOIN `dim_sku` | ĐÃ SỬA (kiểm sống) |
 | Ch-05 | P3 | Channels | Đổi ô Compare không tải lại, thẻ hiện "+0%" tới khi Apply | chọn so sánh không kích hoạt tải | MỞ |
 | Q-06 | P3 | Quarter Report | Xuất Excel Squad: cột Leader là mã Lark thô | thiếu tra tên | MỞ |
+| B2B-4 | P3 | B2B (view tháng) | Thẻ tổng luôn là ALL, không đổi theo ALL/VN/US của bảng hạng | thiết kế | MỞ |
+| B2B-5 | P3 | B2B (view tháng) | Modal Sửa chi phí khách hiện cả 3 tháng của quý | dùng chung component quý | MỞ |
 | Q-03 | P3 | Quarter Report | ALL/VN/US đầu trang không đổi bảng B2B (có ô riêng) | thiết kế | MỞ |
 | Q-04 | P3 | Quarter Report | Lifecycle 220 khách vs 222 ở bảng hạng; "mới 62" gồm 1 khách 0 doanh thu B2B; định nghĩa khách mới theo đơn đầu có doanh thu | `b2b_lifecycle` | NGHI |
 | Q-05 | P3 | Quarter Report | Lệch 1 đồng (B2B + B2C đã làm tròn) so với Dashboard | làm tròn từng phần | MỞ |
