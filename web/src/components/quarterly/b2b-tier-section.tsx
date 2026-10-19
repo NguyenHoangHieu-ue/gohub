@@ -55,9 +55,11 @@ function stripOrgPrefix(name: string): string {
   return name.replace(/^(VN|US)_Org\s*/i, "")
 }
 
-export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify, quarterLabel, qFactor = 1, summary = [], futureScale = 1 }:
+export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, onRegionChange, expanded, onToggle, canEditCost, isCreator, onSaved, notify, quarterLabel, qFactor = 1, summary = [], futureScale = 1, fixedMonth }:
   { b2bTiers: any; loading: boolean; months: string[]; allMonths?: string[]; region: string; onRegionChange: (r: string) => void; expanded: boolean; onToggle: () => void
-    canEditCost?: boolean; isCreator?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void; quarterLabel?: string; qFactor?: number; summary?: MonthSummary[]; futureScale?: number }) {
+    canEditCost?: boolean; isCreator?: boolean; onSaved?: () => void; notify?: (ok: boolean, text: string) => void; quarterLabel?: string; qFactor?: number; summary?: MonthSummary[]; futureScale?: number
+    /** View tháng (tab B2B Performance): khoá bảng ở đúng 1 tháng "YYYY-MM", ẩn Tổng Quý, QoQ và mọi target; %MoM thay %QoQ. */
+    fixedMonth?: string }) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [custSearch, setCustSearch] = useState("")
   const [editMode, setEditMode] = useState(false)
@@ -72,7 +74,8 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
   // "Tổng Quý" ở cuối cùng, phải cuộn ngang mới thấy tổng. Nay chọn 1 khung nhìn tại 1 thời điểm — mặc định
   // "Cả Quý" (dùng đúng số Tổng Quý đã tính sẵn bên dưới, không tính lại). Chỉ đổi RENDER của bảng tổng hợp
   // theo Nhóm (Strategic/VIP/Gold/Silver) — modal sửa chi phí per-customer vẫn dùng đủ `quarterMonths` như cũ.
-  const [tierViewMonth, setTierViewMonth] = useState<string>("QUARTER")
+  const [tierViewMonth, setTierViewMonth] = useState<string>(fixedMonth ?? "QUARTER")
+  useEffect(() => { if (fixedMonth) setTierViewMonth(fixedMonth) }, [fixedMonth])
 
   const downloadTemplate = async () => {
     const XLSX = await import("xlsx")
@@ -288,6 +291,19 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
     }
   }
 
+  // %MoM doanh thu của 1 KH ở view tháng: tháng này (PR nếu đang chạy) vs tháng LIỀN TRƯỚC (actual). Tháng đầu quý → c.prevMonthRevenue (BE).
+  const custPrevMonthRev = (c: any, month: string): number | null => {
+    const idx = quarterMonths.indexOf(month)
+    if (idx < 0) return null
+    if (idx === 0) return c.prevMonthRevenue ?? 0
+    const pm = c.monthSummary?.[quarterMonths[idx - 1]]
+    return pm ? (pm.actualRevenue ?? pm.revenue ?? 0) : 0
+  }
+  const momOf = (cur: number, prev: number | null): number | null => prev != null && prev > 0 ? (cur - prev) / prev * 100 : null
+  const momCell = (m: number | null, cls = "px-1.5 py-1 text-right text-[10px]") => (
+    <td className={cn(cls, m == null ? "text-slate-300" : m >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold")}>{m != null ? `${m >= 0 ? "+" : ""}${m.toFixed(1)}%` : "—"}</td>
+  )
+
   // Stacked PR (xanh) / Actual (đen nhạt) — dùng chung cho cả dòng Nhóm lẫn dòng Khách hàng.
   const dual = (pr: number, act: number | undefined, cls = "text-slate-700") => act != null ? (
     <div className="flex flex-col items-end leading-snug gap-0">
@@ -375,7 +391,9 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
     { label: "%MoM",         tip: "So Revenue tháng này (PR nếu đang chạy) vs Revenue tháng liền trước (Actual)\nCT: (Rev_tháng - Rev_tháng_trước) / Rev_tháng_trước\nTháng đầu quý (vd T7) so với tháng cuối quý trước (vd T6, BE fetch riêng)\nChỉ có ở cột theo tháng, không áp dụng cho Tổng Quý (đã có %QoQ)" },
     { label: "3HK%",         tip: "3HK Revenue / Tier Revenue × 100%" },
   ]
-  const SUB = SUB_COLS.map(c => c.label)  // backward compat cho chỗ dùng SUB.length
+  // View tháng: bỏ cột %QoQ (QoQ là chỉ số quý)
+  const SUB_VIEW = fixedMonth ? SUB_COLS.filter(c => c.label !== "%QoQ(CM1)") : SUB_COLS
+  const SUB = SUB_VIEW.map(c => c.label)  // backward compat cho chỗ dùng SUB.length
   const colCount = SUB.length
 
   // Lấy view theo region hiện tại: ALL → dùng tổng tier; VN/US → dùng byRegion
@@ -644,7 +662,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       <button className="w-full px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between hover:bg-slate-100 transition-colors" onClick={onToggle}>
         <div className="flex items-center gap-2">
           <Building2 className="w-5 h-5 text-slate-400" />
-          <h2 className="text-lg font-bold text-slate-900">B2B — Chi tiết theo Nhóm (Hàng) × Tháng (Cột)</h2>
+          <h2 className="text-lg font-bold text-slate-900">{fixedMonth ? `B2B — Chi tiết theo Nhóm — T${parseInt(fixedMonth.split("-")[1])}/${fixedMonth.split("-")[0]}` : "B2B — Chi tiết theo Nhóm (Hàng) × Tháng (Cột)"}</h2>
         </div>
         <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
           {/* Region filter */}
@@ -659,7 +677,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
           </div>
           {/* Khung nhìn tháng — mặc định Cả Quý (dùng cột Tổng Quý đã tính sẵn), chọn 1 tháng để bảng gọn,
               không phải cuộn ngang qua mọi tháng mới thấy tổng (đề xuất Hiếu đã duyệt qua mockup). */}
-          <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
+          <div hidden={!!fixedMonth} className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
             {quarterMonths.map(m => (
               <button key={m} onClick={() => setTierViewMonth(m)}
                 className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
@@ -721,7 +739,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
         <div>
           {/* Tier pivot table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + (visibleMonths.length + 1) * colCount * 72)}px` }}>
+            <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + (visibleMonths.length + (fixedMonth ? 0 : 1)) * colCount * 72)}px` }}>
               <thead>
                 <tr className="bg-[#0f4c81]">
                   <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#0f4c81] border-r border-[#0a3560] min-w-[160px]">Nhóm</th>
@@ -735,18 +753,18 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                       </th>
                     )
                   })}
-                  <th colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-blue-200 border-l border-[#0a3560] whitespace-nowrap bg-[#1e3a8a]">
+                  <th hidden={!!fixedMonth} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-blue-200 border-l border-[#0a3560] whitespace-nowrap bg-[#1e3a8a]">
                     Tổng Quý<ColInfo tip={"Tổng Quý (PR)\nRevenue: Σ(PR monthly)\nGM: Σ(GP × factor)\nCh.Cost: Σ(custCost) + GroupCost × (tier_rev/total_B2B_rev)\nCM1: Σ(custCM1) - GroupCost × revenue-share"} />
                   </th>
                 </tr>
                 <tr className="bg-[#1565c0] text-[9px] text-blue-100 uppercase">
                   <th className="px-4 py-1.5 sticky left-0 bg-[#1565c0] border-r border-[#2e7dd4]" />
-                  {visibleMonths.flatMap(m => SUB_COLS.map((col, i) => (
+                  {visibleMonths.flatMap(m => SUB_VIEW.map((col, i) => (
                     <th key={`${m}-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#2e7dd4]", col.label === "CM1" && "text-blue-300")}>
                       {col.label}{col.tip && <ColInfo tip={col.tip} />}
                     </th>
                   )))}
-                  {SUB_COLS.map((col, i) => (
+                  {!fixedMonth && SUB_COLS.map((col, i) => (
                     <th key={`qt-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right bg-[#072448]", i === 0 && "border-l border-[#2e7dd4]", col.label === "CM1" && "text-blue-300")}>
                       {col.label}{col.tip && <ColInfo tip={col.tip} />}
                     </th>
@@ -755,12 +773,12 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={1 + (visibleMonths.length + 1) * colCount} className="px-4 py-8 text-center text-slate-400 text-xs">
+                  <tr><td colSpan={1 + (visibleMonths.length + (fixedMonth ? 0 : 1)) * colCount} className="px-4 py-8 text-center text-slate-400 text-xs">
                     <RefreshCw className="w-4 h-4 animate-spin inline mr-2" />Đang tải dữ liệu nhóm...
                   </td></tr>
                 )}
                 {!loading && tiers.length === 0 && (
-                  <tr><td colSpan={1 + (visibleMonths.length + 1) * colCount} className="px-4 py-8 text-center text-slate-400 text-xs italic">Chưa có dữ liệu B2B {region !== "ALL" ? `${REGION_META[region]?.flag} ${region} ` : ""}cho kỳ này.</td></tr>
+                  <tr><td colSpan={1 + (visibleMonths.length + (fixedMonth ? 0 : 1)) * colCount} className="px-4 py-8 text-center text-slate-400 text-xs italic">Chưa có dữ liệu B2B {region !== "ALL" ? `${REGION_META[region]?.flag} ${region} ` : ""}cho kỳ này.</td></tr>
                 )}
                 {!loading && tiers.map((tierRaw: any, ri: number) => {
                   const tier = pickView(tierRaw)
@@ -821,7 +839,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                           <td key="cc"  className="px-2 py-2.5 text-right text-slate-500 tabular-nums">{d.cc > 0 ? (d.actualCc != null ? (pr ? dual(d.cc, d.actualCc, "text-slate-500") : fc(d.actualCc)) : fc(d.cc)) : "—"}</td>,
                           <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold", cm1Color(d.cm1))}>{dual(d.cm1, pr ? d.actualCm1 : undefined, cm1Color(d.cm1))}</td>,
                           <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
-                          <td key="qoq" className="px-2 py-2.5 text-right text-slate-300">—</td>,
+                          ...(fixedMonth ? [] : [<td key="qoq" className="px-2 py-2.5 text-right text-slate-300">—</td>]),
                           <td key="mom" className={cn("px-2 py-2.5 text-right font-semibold tabular-nums", momPct == null ? "text-slate-300" : momPct >= 0 ? "text-green-600" : "text-red-500")}>
                             {momPct != null ? `${momPct >= 0 ? "+" : ""}${momPct.toFixed(1)}%` : "—"}
                           </td>,
@@ -829,6 +847,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                         ]
                       })}
                       {/* Tổng Quý: PR = BE per-month projected sum, Act = actualYTD */}
+                      {!fixedMonth && (<>
                       <td className="px-2 py-2.5 text-right border-l border-blue-200 bg-blue-50/60">{dual(qPrRev, hasProjectedMonth ? qActRev : undefined, "text-slate-700")}</td>
                       <td className="px-2 py-2.5 text-right bg-blue-50/60">{dual(qPrGm, hasProjectedMonth ? qActGm : undefined, "text-slate-600")}</td>
                       <td className="px-2 py-2.5 text-right text-slate-500 tabular-nums bg-blue-50/60">{qPrCc > 0 ? dual(qPrCc, hasProjectedMonth ? qActCc : undefined, "text-slate-500") : "—"}</td>
@@ -846,6 +865,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                       {/* %MoM không áp dụng cho Tổng Quý (đã có %QoQ ở cột trước) */}
                       <td className="px-2 py-2.5 text-right text-slate-300 bg-blue-50/60">—</td>
                       <td className="px-2 py-2.5 text-right text-slate-500 bg-blue-50/60 whitespace-nowrap">{fc(tier.totalHk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(tier.totalHk3Pct)})</span></td>
+                      </>)}
                     </tr>
                   )
                 })}
@@ -913,19 +933,24 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                             <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide">GM%</th>
                             <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Ch.Cost</th>
                             <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide">CM1</th>
-                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">%Tgt CM1</th>
+                            {!fixedMonth && <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">%Tgt CM1</th>}
                             <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide">%CM1</th>
-                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">%QoQ</th>
+                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">{fixedMonth ? "%MoM" : "%QoQ"}</th>
                             <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide">3HK%</th>
-                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">3HK Rev TGT</th>
-                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">%TGT 3HK</th>
+                            {!fixedMonth && <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">3HK Rev TGT</th>}
+                            {!fixedMonth && <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">%TGT 3HK</th>}
                           </tr>
                         </thead>
                         <tbody>
                           {buildDisplayList(custs).map((item: DisplayItem, i: number) => {
                             if (item.kind === "org-header") {
                               const isOpen = expandedOrgs.has(item.orgKey)
-                              const prs = item.members.map((m: any) => custPr(m))
+                              const prs = item.members.map((m: any) => {
+                                if (!fixedMonth) return custPr(m)
+                                const v = custMonthView(m, tierViewMonth)
+                                return { prRev: v?.prRev ?? 0, prGm: v?.prGm ?? 0, prCm1: v?.prCm1 ?? 0, prHk3: v?.prHk3 ?? 0 } as any
+                              })
+                              const oPrevRev = fixedMonth ? item.members.reduce((s: number, m: any) => s + (custPrevMonthRev(m, tierViewMonth) ?? 0), 0) : null
                               const oRev = prs.reduce((s, p) => s + p.prRev, 0)
                               const oGm  = prs.reduce((s, p) => s + p.prGm, 0)
                               const oCc  = prs.reduce((s, p) => s + (p.prGm - p.prCm1), 0)
@@ -951,7 +976,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                       <ChevronRight className={cn("w-3 h-3 text-amber-600 flex-shrink-0 transition-transform", isOpen && "rotate-90")} />
                                       <span className="truncate text-[10px] font-bold text-amber-800" title={item.orgName}>{stripOrgPrefix(item.orgName)}</span>
                                       <span className="text-[9px] px-1 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 flex-shrink-0">{item.members.length} mã KH</span>
-                                      {canEditCost && !orgEditing && (
+                                      {canEditCost && !fixedMonth && !orgEditing && (
                                         <button onClick={e => { e.stopPropagation(); startEditTarget(orgTk) }} title="Nhập target cho cả Organization (mã con không nhập riêng)"
                                           className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-white hover:bg-blue-50 rounded-md flex-shrink-0">
                                           <Pencil className="w-2 h-2" />{orgTgtRaw && (orgTgtRaw.rev > 0 || orgTgtRaw.cm1 > 0 || orgTgtRaw.hk3rev > 0 || orgTgtRaw.thk > 0) ? "Sửa target" : "Nhập target"}
@@ -965,12 +990,12 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                   <td className="px-1.5 py-1.5 text-right text-slate-500 text-[10px]">{pct(oRev > 0 ? oGm / oRev * 100 : 0)}</td>
                                   <td className="px-1.5 py-1.5 text-right text-slate-500 tabular-nums text-[10px] whitespace-nowrap">{oCc > 0 ? fc(oCc) : "—"}</td>
                                   <td className={cn("px-1.5 py-1.5 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(oCm1))}>{fc(oCm1)}</td>
-                                  <td className="px-1.5 py-1.5 text-right text-[10px]">{!orgMonthMode && oTgtCm1 > 0 ? <span className={badgeCls(oCm1 / oTgtCm1 * 100)}>{(oCm1 / oTgtCm1 * 100).toFixed(1)}%</span> : <span className="text-slate-300">—</span>}</td>
+                                  {!fixedMonth && (<td className="px-1.5 py-1.5 text-right text-[10px]">{!orgMonthMode && oTgtCm1 > 0 ? <span className={badgeCls(oCm1 / oTgtCm1 * 100)}>{(oCm1 / oTgtCm1 * 100).toFixed(1)}%</span> : <span className="text-slate-300">—</span>}</td>)}
                                   <td className={cn("px-1.5 py-1.5 text-right text-[10px]", cm1Color(oCm1))}>{pct(oRev > 0 ? oCm1 / oRev * 100 : 0)}</td>
-                                  <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-300">—</td>
+                                  {fixedMonth ? momCell(momOf(oRev, oPrevRev), "px-1.5 py-1.5 text-right text-[10px]") : <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-300">—</td>}
                                   <td className="px-1.5 py-1.5 text-right text-slate-500 text-[10px] whitespace-nowrap">{fc(oHk3)} <span className="text-[9px] text-slate-400">({pct(oRev > 0 ? oHk3 / oRev * 100 : 0)})</span></td>
-                                  <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-600 tabular-nums whitespace-nowrap">{!orgMonthMode && oTgt3hk > 0 ? fc(oTgt3hk) : <span className="text-slate-300">—</span>}</td>
-                                  <td className="px-1.5 py-1.5 text-right text-[10px]">{!orgMonthMode && oTgt3hk > 0 ? <span className={badgeCls(oHk3 / oTgt3hk * 100)}>{(oHk3 / oTgt3hk * 100).toFixed(1)}%</span> : <span className="text-slate-300">—</span>}</td>
+                                  {!fixedMonth && (<td className="px-1.5 py-1.5 text-right text-[10px] text-slate-600 tabular-nums whitespace-nowrap">{!orgMonthMode && oTgt3hk > 0 ? fc(oTgt3hk) : <span className="text-slate-300">—</span>}</td>)}
+                                  {!fixedMonth && (<td className="px-1.5 py-1.5 text-right text-[10px]">{!orgMonthMode && oTgt3hk > 0 ? <span className={badgeCls(oHk3 / oTgt3hk * 100)}>{(oHk3 / oTgt3hk * 100).toFixed(1)}%</span> : <span className="text-slate-300">—</span>}</td>)}
                                 </tr>
                                 {orgEditing && (
                                   <tr className="bg-amber-50/60 border-t border-amber-100">
@@ -1031,7 +1056,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                             const canEditTgtHere = !!canEditCost && (!inMultiOrg || !item.member)
                             const isEditingTgt = editingTargetCode === tkey
                             const isSavingTgt  = savingTargetCode  === tkey
-                            const colSpanAll = 12 + (isCreator ? 2 : 0)
+                            const colSpanAll = (fixedMonth ? 9 : 12) + (isCreator ? 2 : 0)
                             if (monthMode && !mv) {
                               // KH không phát sinh trong đúng tháng đang chọn — hiện dòng "—" (giống dòng Nhóm
                               // khi !d.hasData), KHÔNG ẩn hẳn (vẫn cần thấy KH tồn tại, chỉ tháng này không có).
@@ -1085,20 +1110,20 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                       </>
                                     )
                                   })()}
-                                  <td className="px-1.5 py-1 text-right text-[10px]">
+                                  {!fixedMonth && (<td className="px-1.5 py-1 text-right text-[10px]">
                                     {/* Target chỉ có ở mức QUÝ — ẩn khi đang xem 1 tháng cụ thể (tránh so nhầm
                                         CM1 của 1 tháng với target cả quý, xem comment monthMode ở trên). */}
                                     {!monthMode && tgt.cm1 > 0 ? (() => { const p = rowPr.prCm1 / tgt.cm1 * 100; return <span className={cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#0f4c81]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span> })() : <span className="text-slate-300">—</span>}
-                                  </td>
+                                  </td>)}
                                   <td className={cn("px-1.5 py-1 text-right text-[10px]", cm1Color(rowPr.prCm1))}>{pct(rowPr.prCm1Pct)}</td>
-                                  <td className={cn("px-1.5 py-1 text-right text-[10px]", qoqCls)}>{rowPr.qoqPct != null ? `${rowPr.qoqPct >= 0 ? "+" : ""}${rowPr.qoqPct.toFixed(1)}%` : "—"}</td>
+                                  {fixedMonth ? momCell(momOf(rowPr.prRev, custPrevMonthRev(c, tierViewMonth))) : (<td className={cn("px-1.5 py-1 text-right text-[10px]", qoqCls)}>{rowPr.qoqPct != null ? `${rowPr.qoqPct >= 0 ? "+" : ""}${rowPr.qoqPct.toFixed(1)}%` : "—"}</td>)}
                                   <td className="px-1.5 py-1 text-right text-slate-500 text-[10px] whitespace-nowrap">
                                     {monthMode
                                       ? <>{fc(mv?.prHk3 ?? 0)} <span className="text-[9px] text-slate-400">({pct(c.monthSummary?.[tierViewMonth]?.hk3Pct ?? 0)})</span></>
                                       : <>{fc(c.hk3Rev)} <span className="text-[9px] text-slate-400">({pct(c.hk3Pct)})</span></>}
                                   </td>
                                   {/* Target 3HK Revenue: dùng hk3rev nếu nhập, fallback computed — chỉ ở Cả Quý */}
-                                  {(() => {
+                                  {!fixedMonth && (() => {
                                     const tgt3hk = tgt.hk3rev > 0 ? tgt.hk3rev
                                       : (tgt.rev > 0 && tgt.thk > 0 ? Math.round(tgt.rev * tgt.thk / 100) : 0)
                                     return (
@@ -1255,7 +1280,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                           {/* ── Bottom: Target + Creator explorer ── */}
                                           <div className="px-4 pb-3 grid grid-cols-2 gap-6 border-t border-slate-100 pt-2.5">
                                             {/* Target & Progress */}
-                                            <div>
+                                            <div hidden={!!fixedMonth}>
                                               <div className="flex items-center gap-2 mb-2">
                                                 <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Target & Progress</p>
                                                 {canEditTgtHere && !isEditingTgt && (

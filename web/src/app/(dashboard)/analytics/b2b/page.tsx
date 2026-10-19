@@ -14,6 +14,7 @@ import {
 import { domToCanvas } from "modern-screenshot"
 import { cn } from "@/lib/utils"
 import { DatePresets } from "@/components/date-presets"
+import { B2BMonthView } from "@/components/b2b/b2b-month-view"
 import { exportWithDateRange, exportToExcel } from "@/lib/export-excel"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { StatTile, MetricAccent, DeltaKind, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle, SubChannelTable } from "@/components/dashboard-kit"
@@ -81,6 +82,8 @@ export default function B2BPerformance() {
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Mặc định "Theo tháng" (giống Quarter Report, dùng chung nguồn số); "Khoảng ngày" = bản cũ.
+  const [viewMode, setViewMode] = useState<"month" | "range">("month")
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
   const [granularity, setGranularity] = useState<"day" | "week" | "month">("week")
   const [includeShip,        setIncludeShip]        = useState(true)
@@ -284,7 +287,7 @@ export default function B2BPerformance() {
     }
   }
 
-  useEffect(() => { fetchData() }, [dateColumn, granularity, includeShip, includeInternalOps, includeOpsCustomers]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (viewMode === "range") fetchData() }, [viewMode, dateColumn, granularity, includeShip, includeInternalOps, includeOpsCustomers]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const formatCurrency = (value: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(value)
   const formatNumber = (value: number) => new Intl.NumberFormat("vi-VN").format(value)
@@ -387,9 +390,36 @@ export default function B2BPerformance() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const nonStrategicMemo = useMemo(() => getFilteredOtherTiers(), [wholesaleCustomers, strategicPerformance, partnerTiers])
 
+  const modeToggle = (
+    <div className="flex bg-white border border-slate-200 p-1 rounded-xl w-fit shadow-sm">
+      {([["month", "Theo tháng"], ["range", "Khoảng ngày (cũ)"]] as ["month" | "range", string][]).map(([k, label]) => (
+        <button key={k} onClick={() => setViewMode(k)}
+          className={cn("px-3 py-1.5 text-xs font-bold rounded-lg transition-all", viewMode === k ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-50")}>{label}</button>
+      ))}
+    </div>
+  )
+
+  if (viewMode === "month") {
+    return (
+      <div className="flex-1 overflow-auto bg-slate-50 p-4 lg:p-8">
+        <div className="max-w-7xl mx-auto space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 font-sans tracking-tight">B2B Performance Summary</h1>
+              <p className="text-slate-500 font-medium tracking-tight">Báo cáo B2B theo tháng — cùng nguồn số với Quarter Report.</p>
+            </div>
+            {modeToggle}
+          </div>
+          <B2BMonthView />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 overflow-auto bg-slate-50 p-4 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-8" ref={reportRef}>
+        <div className="flex justify-end">{modeToggle}</div>
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>

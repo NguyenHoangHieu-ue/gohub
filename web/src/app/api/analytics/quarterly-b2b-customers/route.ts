@@ -180,6 +180,7 @@ export async function GET(req: NextRequest) {
     const { customerRows, prevQuarterRows, prevMonthRows } = rawData
 
     // Aggregate tháng liền trước quý (vd T6) theo tier × region — dùng cho %MoM của tháng đầu quý (T7).
+    const prevMonthCustRev = new Map<string, number>()  // doanh thu tháng liền trước quý theo KH — %MoM tháng đầu quý ở view tháng B2B
     const prevMonthTierRev: Record<string, number> = { Strategic: 0, VIP: 0, Gold: 0, Silver: 0 }
     const prevMonthTierRevByRegion: { VN: Record<string, number>; US: Record<string, number> } = {
       VN: { Strategic: 0, VIP: 0, Gold: 0, Silver: 0 }, US: { Strategic: 0, VIP: 0, Gold: 0, Silver: 0 },
@@ -188,6 +189,7 @@ export async function GET(req: NextRequest) {
       const tier = classifyTier(r.price_list_name)
       const region: "VN" | "US" = classifyRegion(r.price_list_name, r.currency_code) === "US" ? "US" : "VN"
       const rev = parseFloat(r.revenue || "0")
+      prevMonthCustRev.set(r.customer_code, (prevMonthCustRev.get(r.customer_code) ?? 0) + rev)
       prevMonthTierRev[tier] = (prevMonthTierRev[tier] ?? 0) + rev
       prevMonthTierRevByRegion[region][tier] = (prevMonthTierRevByRegion[region][tier] ?? 0) + rev
     })
@@ -289,6 +291,7 @@ export async function GET(req: NextRequest) {
       orgKey: string; orgName: string
       revenue: number; gm: number; gmPct: number; cc: number; cm1: number
       cm1Pct: number; qoqPct: number | null; hk3Rev: number; hk3Pct: number
+      prevMonthRevenue: number   // doanh thu tháng liền trước quý (chỉ dùng cho %MoM của tháng ĐẦU quý)
       prevCm1: number   // CM1 quý trước (để FE recompute QoQ với CM1 gồm ước tính T9)
       monthsCost: Record<string, CustMonthCost>
       monthSummary: Record<string, CustMonthSummary>   // per-month breakdown
@@ -391,6 +394,7 @@ export async function GET(req: NextRequest) {
         cc: r2(ccForSummary), cm1: r2(cm1ForSummary), cm1Pct: pct(cm1ForSummary, totRev),
         qoqPct, hk3Rev: r2(totHk3), hk3Pct: pct(totHk3, totRev),
         prevCm1: r2(prevCm1 ?? 0),
+        prevMonthRevenue: r2(prevMonthCustRev.get(cust.code) ?? 0),
         monthsCost, monthSummary,
         hasProjected,
         actualRevenue: r2(totActRev), actualGm: r2(totActGm), actualHk3Rev: r2(totActHk3),
