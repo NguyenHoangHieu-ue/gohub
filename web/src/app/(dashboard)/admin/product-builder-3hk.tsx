@@ -121,7 +121,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl text-xs space-y-1 text-gray-600 dark:text-slate-300">
           <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">Tỷ giá nội bộ{fx?.month ? ` (${fx.month})` : ""}</div>
           {fx ? <><div>HKD/USD (Inc): <b>{fx.hkdPerUsd}</b> · VND/USD (JSC): <b>{fx.vndPerUsd.toLocaleString("vi-VN")}</b></div></> : <div className="text-red-600">{opts.fxError || "Chưa có tỷ giá"}</div>}
-          <div>Công thức Datapool: Fixed <b>{a.fixedPct * 100}%</b> · Daily <b>{a.dailyPct * 100}%</b> · Unlimited:{levelsOf(a).map(c => <span key={`${c.dataMb}:${c.speedMbps}`}> · {customUnlimitedLabel(c).replace(" tốc độ cao + Unlimited ", " + ")} <b>{c.gbPerDay} GB/ngày</b></span>)}</div>
+          <div>Công thức Datapool: Fixed <b>{Number((a.fixedPct * 100).toFixed(2))}%</b> · Daily <b>{Number((a.dailyPct * 100).toFixed(2))}%</b> · Unlimited:{levelsOf(a).map(c => <span key={`${c.dataMb}:${c.speedMbps}`}> · {customUnlimitedLabel(c).replace(" tốc độ cao + Unlimited ", " + ")} <b>{c.gbPerDay} GB/ngày</b></span>)}</div>
         </div>
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl text-xs space-y-1 text-gray-600 dark:text-slate-300">
           <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">Giá khung (từ hệ thống)</div>
