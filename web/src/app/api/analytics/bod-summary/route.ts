@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache, getStrategicSettingsHash, shipFilter, internalOpsFilterByCode, excludeInactiveCustomers } from "@/lib/analytics-helpers"
-import { fetchBODGroupMarginTripleShared, bodTriplePeriods } from "@/lib/bod-data"
+import { fetchBODGroupMarginMulti, fetchBODGroupMarginTripleShared, bodTriplePeriods } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSqlByCode, exclHash } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 
@@ -20,6 +20,8 @@ export async function GET(req: NextRequest) {
   const extraFilters = getBODFilters(searchParams)
   const includeShip        = searchParams.get("includeShip")        === "1"
   const includeInternalOps = searchParams.get("includeInternalOps") === "1"
+  // lite=1: chỉ kỳ hiện tại (không kỳ trước / cùng kỳ năm ngoái) — trang BOD dùng để lấy số tháng trước, nhẹ hơn ~3 lần (QA B-07).
+  const lite = searchParams.get("lite") === "1"
 
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate required" }, { status: 400 })
@@ -27,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const source = getAnalyticsSource(dateColumn)
-    const periods = bodTriplePeriods(startDate, endDate)  // kỳ này / kỳ trước / cùng kỳ năm ngoái
+    const periods = lite ? [{ startDate, endDate }] : bodTriplePeriods(startDate, endDate)  // kỳ này / kỳ trước / cùng kỳ năm ngoái
 
     // s203: 3 kỳ × (2 query nhóm-biên + 1 query 3HK) + 1 query cogs/units = 10 lần quét fact → gộp còn 3 lần
     // (2 cho nhóm-biên đa kỳ, 1 cho cogs/units/3HK dùng FILTER theo kỳ). gohub_dw chạy gần như tuần tự nên đây mới là chỗ ăn thời gian.
@@ -48,17 +50,19 @@ export async function GET(req: NextRequest) {
       const r = rows[0] ?? {}
       return {
         total_cogs: parseFloat(r.total_cogs || "0"), total_units: parseFloat(r.total_units || "0"),
-        hk3: [0, 1, 2].map(i => parseFloat(r[`hk3_${i}`] || "0")),
+        hk3: conds.map((_, i) => parseFloat(r[`hk3_${i}`] || "0")),
       }
     }
 
     // Cache 12h (data gohub_dw đổi 1 lần/ngày). Trước: ~20 query, nhiều cái await TUẦN TỰ → 25-50s.
     // Nay gom HẾT query độc lập vào 1 Promise.all (giảm critical path) + cache toàn bộ payload.
     const stratHash = await getStrategicSettingsHash()
-    const key = `bod-summary5:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const key = `bod-summary5${lite ? "L" : ""}:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
       const [[groupResult, prev, prevYear], agg, targetData] = await Promise.all([
-        fetchBODGroupMarginTripleShared(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps),
+        lite
+          ? fetchBODGroupMarginMulti(periods, dateColumn, extraFilters, includeShip, includeInternalOps)
+          : fetchBODGroupMarginTripleShared(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps),
         fetchAggregates(),
         getTargetSummary(startDate, endDate),
       ])
@@ -70,6 +74,7 @@ export async function GET(req: NextRequest) {
       current.total_3hk_revenue = cur3hk
       current.total_3hk_contribution = current.total_revenue > 0 ? (cur3hk / current.total_revenue) * 100 : 0
       current.total_target_revenue = targetData.proRataTarget
+      if (lite) return { ...current, projection_factor: getProjectionFactor(startDate, endDate) }
       ;(prev.summary as any).total_3hk_contribution = prev.summary.total_revenue > 0 ? (prev3hk / prev.summary.total_revenue) * 100 : 0
       ;(prevYear.summary as any).total_3hk_contribution = prevYear.summary.total_revenue > 0 ? (ly3hk / prevYear.summary.total_revenue) * 100 : 0
 

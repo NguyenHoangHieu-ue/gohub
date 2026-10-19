@@ -209,9 +209,8 @@ export default function BODReport() {
         if (!res.ok) throw new Error(`Failed to fetch ${name}: ${res.statusText}`)
         return res.json()
       }
-      // Tháng trước (cho so sánh MoM) KHÔNG phụ thuộc kết quả 6 request dưới → bắn CÙNG LÚC và gắn kết quả khi nó về,
-      // không chặn trang. Trước đây nối tiếp SAU Promise.all nên cộng thêm cả thời gian bod-summary (12-18s khi cache nguội).
-      const prevMonthPromise = (async () => {
+      // Tháng trước (cho so sánh MoM): bản lite (1 kỳ), gọi SAU khi 5 request chính xong và không chặn trang.
+      const fetchPrevMonth = async () => {
         try {
           const date = new Date(dateRange.start)
           const prevMonthLastDay = new Date(date.getFullYear(), date.getMonth(), 0)
@@ -219,14 +218,14 @@ export default function BODReport() {
           const prevQueryParams = new URLSearchParams({
             startDate: formatDateToISO(prevMonthFirstDay), endDate: formatDateToISO(prevMonthLastDay), comparisonType: "none",
             vendors: selectedVendors.join(","), subChannels: selectedSubChannels.join(","),
-            channelGroups: selectedChannelGroups.join(","), productTypes: selectedProductTypes.join(","), dateColumn,
+            channelGroups: selectedChannelGroups.join(","), productTypes: selectedProductTypes.join(","), dateColumn, lite: "1",
             ...(includeShip ? { includeShip: "1" } : {}),
             ...(includeInternalOps ? { includeInternalOps: "1" } : {}),
           })
           const prevSummaryRes = await fetch(`/api/analytics/bod-summary?${prevQueryParams}`)
           if (prevSummaryRes.ok) setPrevMonthSummary(await prevSummaryRes.json())
         } catch (e) { console.error("Error fetching prev month summary:", e) }
-      })()
+      }
       const [summaryData, reportData, groupData, channelData, stratData, tiersData] = await Promise.all([
         fetchJson(`/api/analytics/bod-summary?${queryParams}`, "Summary"),
         fetchJson(`/api/analytics/bod-report?${queryParams}`, "Report"),
@@ -242,7 +241,7 @@ export default function BODReport() {
       setChannelPerformance(channelData)
       setStrategicPerformance(stratData)
       setPartnerTiers(tiersData)
-      void prevMonthPromise
+      void fetchPrevMonth()  // sau 5 request chính: gohub_dw chỉ có 3 kết nối, chạy cùng lúc làm các request chính hết 25s (QA B-07)
     } catch (error) {
       console.error("Error fetching BOD data:", error)
       setLoadError(error instanceof Error ? error.message : "Lỗi tải dữ liệu")
