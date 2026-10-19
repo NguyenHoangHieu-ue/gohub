@@ -248,7 +248,10 @@ describeLive("So cặp tab — cùng kỳ, cùng số", () => {
         for (const m of monthly.months) {
           const c = monthly.customerChannels[m]
           const web = metric.data[m].customers.web.total
-          expect(web, `khách web ${m}`).toBe(c.vnWeb.total.count + c.usWeb.total.count)
+          const exp = c.vnWeb.total.count + c.usWeb.total.count
+          // tháng đang chạy: hai route cache riêng nên có thể lệch vài khách; tháng đóng phải đúng từng người
+          if (m === monthly.currentMonth) expect(Math.abs(web - exp) / Math.max(exp, 1), `khách web ${m}`).toBeLessThan(0.01)
+          else expect(web, `khách web ${m}`).toBe(exp)
         }
       }
     }, 180_000)
