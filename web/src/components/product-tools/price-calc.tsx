@@ -130,7 +130,7 @@ export default function PriceCalc() {
       ? `Không giới hạn ${dataLabel(r.dataAmount, r.unit)} tốc độ cao + ${r.speedMbps ?? 10}Mbps`
       : `${r.kind === "Daily" ? "Theo ngày" : "Cố định"} ${dataLabel(r.dataAmount, r.unit)}`
     const form = r.form === "data" ? " (chỉ gói data rời)" : ""
-    return `${simLabel} ${result?.label ?? ""} · ${kind} · ${r.days} ngày${form}`
+    return `${simLabel} ${result?.short ?? ""} · ${kind} · ${r.days} ngày${form}`
   }
 
   // Nhóm theo (dòng gói, số ngày, loại) → đánh dấu nhà cung cấp rẻ nhất (theo giá vốn VN)
@@ -193,7 +193,7 @@ export default function PriceCalc() {
             </button>
           ))}
         </div>
-        {dest && <div className="mt-2 text-sm text-gray-700 dark:text-slate-300">Đã chọn: <b>{dest.label}</b>{dest.kyc && <span className="ml-2 text-red-600 font-semibold">⚠ Có nhà mạng cần KYC (xác minh danh tính khách)</span>}</div>}
+        {dest && <div className="mt-2 text-sm text-gray-700 dark:text-slate-300">Đã chọn: <b>{dest.short}</b>{dest.region && <span className="text-gray-500"> ({dest.label.replace(/^.*? — /, "").slice(0, 110)}{dest.label.length > 150 ? "…" : ""})</span>}{dest.kyc && <span className="ml-2 text-red-600 font-semibold">⚠ Có nhà mạng cần KYC (xác minh danh tính khách)</span>}</div>}
       </div>
 
       <div className={card}>

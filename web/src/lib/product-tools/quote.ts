@@ -17,6 +17,8 @@ export type VendorKey = keyof typeof VENDOR_LABEL
 export interface Destination {
   key: string
   label: string
+  /** Tên ngắn để hiện trong tên gói / dòng "Đã chọn" (nhóm nước: "W22 · 42 nước") */
+  short: string
   /** Gói gộp nhiều nước (đa vùng) */
   region: boolean
   /** Nhà cung cấp có giá cho điểm đến này, theo loại SIM */
@@ -48,9 +50,9 @@ const titleCase = (s: string) => s.replace(/\b([a-z])/g, c => c.toUpperCase())
 export function buildDestinations(ctx: QuoteContext): { dests: Destination[]; sources: Map<string, DestSource> } {
   const dests = new Map<string, Destination>()
   const sources = new Map<string, DestSource>()
-  const touch = (key: string, label: string, region: boolean): [Destination, DestSource] => {
+  const touch = (key: string, label: string, region: boolean, short = label): [Destination, DestSource] => {
     let d = dests.get(key)
-    if (!d) { d = { key, label, region, vendors: { eSIM: [], SIM: [] }, kyc: false }; dests.set(key, d); sources.set(key, { bc: {} }) }
+    if (!d) { d = { key, label, short, region, vendors: { eSIM: [], SIM: [] }, kyc: false }; dests.set(key, d); sources.set(key, { bc: {} }) }
     return [d, sources.get(key)!]
   }
   const addVendor = (d: Destination, sim: SimType, v: VendorKey) => { if (!d.vendors[sim].includes(v)) d.vendors[sim].push(v) }
@@ -71,7 +73,7 @@ export function buildDestinations(ctx: QuoteContext): { dests: Destination[]; so
         for (const m of multiRegions(ctx.catalog, sim, pool)) {
           const covs = m.countries.map(c => names.find(n => canonCountry(n) === canonCountry(c)))
           if (!covs.every(Boolean)) continue
-          const [d, s] = touch(m.key, m.label, true)
+          const [d, s] = touch(m.key, m.label, true, `${m.label.includes(" — ") ? m.label.split(" — ")[0] : "Nhóm"} · ${m.countries.length} nước`)
           const cur = s.bc[pool] ?? (s.bc[pool] = { coverages: covs as string[], sims: new Set() })
           cur.sims.add(sim); addVendor(d, sim, pool)
           if (rows.some(r => (covs as string[]).includes(r.coverage) && r.kyc)) d.kyc = true
@@ -88,13 +90,13 @@ export function buildDestinations(ctx: QuoteContext): { dests: Destination[]; so
     if (r.is_kyc) d.kyc = true
   }
   for (const g of coveredGroups(ctx.ncc, ctx.groups, ctx.refs)) {
-    const [d, s] = touch(regionKey(g.countries), `${g.code} — ${g.countries.length} nước (${g.en.slice(0, 50)})`, true)
+    const [d, s] = touch(regionKey(g.countries), `${g.code} — ${g.countries.length} nước (${g.en.slice(0, 50)})`, true, `${g.code} · ${g.countries.length} nước`)
     s.thk = g.countries; addVendor(d, "eSIM", "THK"); addVendor(d, "SIM", "THK")
     if (g.countries.some(c => ctx.ncc.find(r => r.country === c)?.is_kyc)) d.kyc = true
   }
 
   // Nhãn nước đơn viết hoa đẹp (BC có khi để chữ thường)
-  const out = Array.from(dests.values()).map(d => ({ ...d, label: d.region ? d.label : titleCase(d.label) }))
+  const out = Array.from(dests.values()).map(d => (d.region ? d : { ...d, label: titleCase(d.label), short: titleCase(d.short) }))
   return { dests: out.sort((a, b) => Number(a.region) - Number(b.region) || a.label.localeCompare(b.label)), sources }
 }
 
@@ -111,7 +113,7 @@ export interface QuoteRow extends Omit<PriceRow, "pool"> {
   usApplicable: boolean
   note?: string
 }
-export interface QuoteResult { rows: QuoteRow[]; notes: string[]; kyc: boolean; label: string }
+export interface QuoteResult { rows: QuoteRow[]; notes: string[]; kyc: boolean; label: string; short: string }
 
 const unlBcAmount = (p: PlanReq) => p.amount * 2   // gói BC thật thường = 2× dung lượng tốc độ cao (3GB → Daily 6GB Throttle 1Mbps)
 
@@ -180,7 +182,7 @@ export function quote(ctx: QuoteContext, req: QuoteReq): QuoteResult {
 
   const keep = rows.filter(r => req.includeDataOnly || r.form === "full")
   if (!keep.length && !notes.length) notes.push("Chưa có nhà cung cấp nào tính được gói này")
-  return { rows: keep, notes: Array.from(new Set(notes)), kyc: dest.kyc, label: dest.label }
+  return { rows: keep, notes: Array.from(new Set(notes)), kyc: dest.kyc, label: dest.label, short: dest.short }
 }
 
 /** Mức Unlimited chọn được (từ Công Thức Datapool). */
