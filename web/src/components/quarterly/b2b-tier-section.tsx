@@ -105,6 +105,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
   // Xuất đúng dữ liệu đang hiển thị trên bảng pivot (theo region + khung tháng/Cả Quý đang chọn) —
   // gồm cả dòng tổng Nhóm lẫn breakdown từng Khách hàng bên trong nhóm đó (Hiếu yêu cầu).
   const exportTierTable = async () => {
+    if (fixedMonth) { await exportMonthTable(fixedMonth); return }
     const EXPORT_SUB_LABELS = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%QoQ(CM1)", "3HK Rev", "3HK%"]
     const headers: string[] = ["Loại", "Nhóm", "Region", "Mã KH", "Tên KH", "Số KH"]
     visibleMonths.forEach(m => {
@@ -161,6 +162,34 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
       })
     })
     await exportAOA(headers, rows, `b2b_nhom_thang_${(quarterLabel || "quarter").replace(/[^A-Za-z0-9-]/g, "_")}_${region}`, "B2B Nhom x Thang")
+  }
+
+  // View tháng (fixedMonth): chỉ cột của tháng đó + %MoM (doanh thu), KHÔNG Tổng Quý / %QoQ / target — khớp bảng đang hiển thị.
+  const exportMonthTable = async (m: string) => {
+    const [y, mo] = m.split("-")
+    const label = `T${parseInt(mo)}/${y}`
+    const headers = ["Loại", "Nhóm", "Region", "Mã KH", "Tên KH", "Số KH", ...["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK Rev", "3HK%"].map(l => `${label} - ${l}`)]
+    const mIdx = quarterMonths.indexOf(m)
+    const cols = (d: any | undefined, mom: number | null): (string | number)[] => !d ? ["", "", "", "", "", "", "", ""] : [
+      Math.round(d.revenue ?? 0), Math.round(d.gm ?? 0), (d.cc ?? 0) > 0 ? Math.round(d.cc) : "", Math.round(d.cm1 ?? 0),
+      Number((d.cm1Pct ?? 0).toFixed(1)), mom != null ? Number(mom.toFixed(1)) : "", Math.round(d.hk3Rev ?? 0), Number((d.hk3Pct ?? 0).toFixed(1)),
+    ]
+    const rows: (string | number)[][] = []
+    tiers.forEach((tierRaw: any) => {
+      const tier = pickView(tierRaw)
+      const d = tier.months.find((x: any) => x.month === m)
+      const prevD = mIdx > 0 ? tier.months.find((x: any) => x.month === quarterMonths[mIdx - 1]) : null
+      const prevRev = mIdx > 0 ? (prevD?.hasData ? prevD.revenue : null) : (tier.prevMonthRevenue ?? 0)
+      rows.push(["Nhóm", tierRaw.tier, "", "", "", tier.customerCount, ...cols(d?.hasData ? d : undefined, d?.hasData ? momOf(d.revenue, prevRev) : null)])
+      const regionsForExport: ("VN" | "US")[] = region === "ALL" ? ["VN", "US"] : [region as "VN" | "US"]
+      regionsForExport.forEach(reg => {
+        ;(tierRaw.byRegion?.[reg]?.customers ?? []).forEach((c: any) => {
+          const ms = c.monthSummary?.[m]
+          rows.push(["Khách hàng", tierRaw.tier, reg, c.code, c.name, "", ...cols(ms, ms ? momOf(ms.revenue ?? 0, custPrevMonthRev(c, m)) : null)])
+        })
+      })
+    })
+    await exportAOA(headers, rows, `b2b_thang_${m}_${region}`, "B2B theo thang")
   }
 
   const handleImportFile = async (file: File) => {

@@ -119,7 +119,8 @@ export function B2BMonthView({ initialMonth }: { initialMonth?: string }) {
       momGp: delta(gp, p?.gp ?? null),
       momCm1: delta(cm1, p?.cm1 ?? null),
       momHk3: delta(hk3, p?.hk3Rev ?? null),
-      momCm1Pct: p ? b2b.cm1Pct - p.cm1Pct : null,
+      // Tháng trước không có lãi gộp (dữ liệu cũ, vd 12/2025) thì %CM1 tháng trước vô nghĩa → không so điểm %.
+      momCm1Pct: p && p.gp !== 0 ? b2b.cm1Pct - p.cm1Pct : null,
       momGpPct: p ? b2b.gpPct - p.gpPct : null,
       momHk3Pct: p && p.hk3Pct != null && b2b.hk3Pct != null ? b2b.hk3Pct - p.hk3Pct : null,
     }
