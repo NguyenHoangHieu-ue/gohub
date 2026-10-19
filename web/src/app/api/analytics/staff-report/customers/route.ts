@@ -63,8 +63,10 @@ export async function GET(req: NextRequest) {
     LEFT JOIN dim_customer dc ON TRIM(f.customer_code) = dc.code
     LEFT JOIN dim_order_source s ON f.order_source_code = s.code`
 
-  // Chỉ cần vendor: gom nhẹ theo sku (trước đây DISTINCT ON + SELECT * sắp xếp cả dim_sku 2 lần mỗi lượt → hết 25s)
-  const skuJoin = `LEFT JOIN (SELECT TRIM(sku) AS sku, MAX(vendor) AS vendor FROM dim_sku GROUP BY TRIM(sku)) sk ON TRIM(f.sku) = sk.sku`
+  // Vendor 3HK qua IN (subquery) — KHÔNG join dim_sku: join (kể cả gom nhẹ) kết hợp bộ lọc loại trừ làm planner
+  // chọn plan chậm, hết 25s (đo 2026-10-19: join 25s, IN 1,3s)
+  const skuJoin = ``
+  const hk3Cond = `TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)), ' ', '') = '3HKDATAPOOL')`
 
   try {
     // Q1: customer-level aggregates
@@ -74,7 +76,7 @@ export async function GET(req: NextRequest) {
         COALESCE(dc.name, f.customer_code) AS customer_name,
         MAX(dc.price_list_name) AS price_list_name,
         SUM(f.${revCol}) AS revenue,
-        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
+        SUM(CASE WHEN ${hk3Cond} THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         SUM(${gpCol}) AS gross_profit,
         COUNT(DISTINCT f.order_code) AS order_count
       FROM ${mainTable} f
@@ -92,7 +94,7 @@ export async function GET(req: NextRequest) {
         f.customer_code,
         TO_CHAR(f.${dateCol}::date, 'YYYY-MM') AS month,
         SUM(f.${revCol}) AS revenue,
-        SUM(CASE WHEN REPLACE(UPPER(TRIM(sk.vendor)), ' ', '') = '3HKDATAPOOL' THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
+        SUM(CASE WHEN ${hk3Cond} THEN f.${revCol} ELSE 0 END) AS hk3_revenue,
         SUM(${gpCol}) AS gross_profit
       FROM ${mainTable} f
       ${baseJoins}
