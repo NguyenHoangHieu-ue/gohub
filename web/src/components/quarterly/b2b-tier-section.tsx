@@ -677,7 +677,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
           </div>
           {/* Khung nhìn tháng — mặc định Cả Quý (dùng cột Tổng Quý đã tính sẵn), chọn 1 tháng để bảng gọn,
               không phải cuộn ngang qua mọi tháng mới thấy tổng (đề xuất Hiếu đã duyệt qua mockup). */}
-          <div hidden={!!fixedMonth} className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
+          <div className={cn("items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5", fixedMonth ? "hidden" : "flex")}>
             {quarterMonths.map(m => (
               <button key={m} onClick={() => setTierViewMonth(m)}
                 className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
