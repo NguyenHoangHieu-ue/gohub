@@ -31,6 +31,12 @@ Chi tiết và bằng chứng nằm ở `results/<tab>.md`. Trạng thái: MỞ 
 | Q-05 | P3 | Quarter Report | Lệch 1 đồng (B2B + B2C đã làm tròn) so với Dashboard | làm tròn từng phần | MỞ |
 | B-06 | P3 | BOD | `subChannels=Klook` ra 0 (khớp `sapo_name`) | `getBODFilters` | NGHI |
 | Ch-02 | P3 | Channels | Hai dòng cùng tên "Misc." (B2B và B2C) | tên kênh trùng giữa hai nhóm | MỞ |
+| **G2-7** | **P1** | B2C (tab Metric) | CM1 các tháng 1 đến 7 sai nặng: T4 −871 triệu, T5 −3,6 tỷ, T6 −1,8 tỷ, T7 −1,7 tỷ, trong khi tab Advanced cùng dữ liệu ra +1.050, +723, +873, +895 triệu. Tháng 8 đến 10 trùng nhau vì chưa nhập chi phí kênh khác | route `b2c/metric` cộng chi phí của TẤT CẢ kênh trong `analytics_channel_costs` (cả VN-Ecom, Traveloka, Momo, BIDV... là kênh B2B) và áp chi phí dạng phần trăm lên doanh thu B2C | MỞ |
+| G2-6 | P2 | B2B (bản khoảng ngày) | Xuất Excel "B2B Tier Performance": cột CM1 và CM1 % bằng Gross Profit và Margin % (M Service JSC: CM1 240,2 triệu / 47,6% trong file, 109,4 triệu / 12,6% trên màn hình); "Projected CM1" bằng Projected GP; thiếu cột CH.Cost | `exportToExcel` dùng `d.gpm2` thay vì `d.cm1` và không có `ch_cost` (`b2b/page.tsx` ~780) | MỞ |
+| G2-5 | P3 | B2B (VN Ecom) | "Orders" của `ecom-breakdown` và `ecom-timeline` đếm dòng chứ không đếm đơn: Q3 Shopee 6.321 dòng so với 5.966 đơn (+6%) | `COUNT(*)` thay vì `COUNT(DISTINCT order_code)` | MỞ |
+| G2-8 | P3 | B2C | Tab Metric tính tháng hiện tại đến ngày 19/10 (doanh thu 1.068.201.394) còn Advanced và Performance dừng ở 18/10 (1.037.899.005) | mốc dữ liệu khác nhau giữa route | MỞ |
+| G2-9 | P3 | B2C (Advanced) | Huy hiệu %MoM của tháng đang chạy so MTD với CẢ tháng trước (T10 ↓26,1%) trong khi thẻ trên cùng so đúng cùng kỳ (+13,6%) | huy hiệu dùng tháng đầy đủ | MỞ |
+| G2-10 | P3 | B2C | Khối Customer lấy từ API admin GoHub (T9: 1.211.078.432) lệch DW (1.403.609.143, −13,7%); trong Metric, Customer chỉ có 2 đến 3 khách vì DW gộp khách B2C vào vài mã khách vãng lai | nguồn ngoài, khác định nghĩa | NGHI |
 
 ## Bài học cho test tự động
 
