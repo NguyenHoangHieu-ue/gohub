@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { CACHE_HEADERS, cachedQuery } from "@/lib/analytics-helpers"
+import { CACHE_HEADERS, cachedQuery, analyticsGuard } from "@/lib/analytics-helpers"
 import { runGA4Report, ga4Sites } from "@/lib/ga4"
 import { supabaseAdmin } from "@/lib/supabase"
 import { B2C_CHANNELS } from "@/lib/b2c-channel-budget"
@@ -55,7 +55,7 @@ function initMonth(): MonthData {
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const guard = analyticsGuard(req, session); if (guard) return guard
 
   const now = new Date()
   const year = now.getFullYear()
