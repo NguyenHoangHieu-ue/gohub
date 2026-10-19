@@ -24,6 +24,8 @@ Chi tiết và bằng chứng nằm ở `results/<tab>.md`. Trạng thái: MỞ 
 | Q-06 | P3 | Quarter Report | Xuất Excel Squad: cột Leader là mã Lark thô | thiếu tra tên | MỞ |
 | B2B-4 | P3 | B2B (view tháng) | Thẻ tổng luôn là ALL, không đổi theo ALL/VN/US của bảng hạng | thiết kế | MỞ |
 | B2B-5 | P3 | B2B (view tháng) | Modal Sửa chi phí khách hiện cả 3 tháng của quý | dùng chung component quý | MỞ |
+| G2-1 | P3 | Dashboard | Tổng doanh thu Dashboard hơn All-Time và Staff đúng phần nhóm INTERNAL-TRANSACTION (401.585 đ ở 01–18/10), chưa có chú thích | số thô theo thiết kế | MỞ |
+| G2-2 | P3 | Dashboard | region-chart chỉ 15 nước, không gom "Khác" | giới hạn 15 | MỞ |
 | Q-03 | P3 | Quarter Report | ALL/VN/US đầu trang không đổi bảng B2B (có ô riêng) | thiết kế | MỞ |
 | Q-04 | P3 | Quarter Report | Lifecycle 220 khách vs 222 ở bảng hạng; "mới 62" gồm 1 khách 0 doanh thu B2B; định nghĩa khách mới theo đơn đầu có doanh thu | `b2b_lifecycle` | NGHI |
 | Q-05 | P3 | Quarter Report | Lệch 1 đồng (B2B + B2C đã làm tròn) so với Dashboard | làm tròn từng phần | MỞ |
