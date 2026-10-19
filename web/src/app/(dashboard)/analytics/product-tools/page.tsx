@@ -11,14 +11,14 @@ type Mode = "price" | "create"
 
 // Tính giá & Tạo sản phẩm (s236): Creator có cả hai; người khác tuỳ quyền Creator cấp (tính giá / tạo sản phẩm).
 export default function ProductToolsPage() {
-  const [me, setMe] = useState<{ pricing: boolean; create: boolean } | null>(null)
+  const [me, setMe] = useState<{ pricing: boolean; create: boolean; creator: boolean } | null>(null)
   const [mode, setMode] = useState<Mode>("price")
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
   useEffect(() => {
     fetch("/api/user/me", { cache: "no-store" }).then(r => (r.ok ? r.json() : null))
-      .then(d => setMe({ pricing: d?.pricing_enabled === true, create: d?.product_create_enabled === true }))
-      .catch(() => setMe({ pricing: false, create: false }))
+      .then(d => setMe({ pricing: d?.pricing_enabled === true, create: d?.product_create_enabled === true, creator: d?.role === "creator" }))
+      .catch(() => setMe({ pricing: false, create: false, creator: false }))
   }, [])
   useEffect(() => {
     const m = new URLSearchParams(window.location.search).get("mode")
@@ -54,7 +54,7 @@ export default function ProductToolsPage() {
 
       {msg && <div className={`p-3 rounded-xl text-sm ${msg.type === "success" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>{msg.text}</div>}
 
-      {active === "price" ? <PriceCalc /> : <CreateProducts onNotify={notify} />}
+      {active === "price" ? <PriceCalc /> : <CreateProducts onNotify={notify} canUpload={me.creator} />}
     </div>
   )
 }

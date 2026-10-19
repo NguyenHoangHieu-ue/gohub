@@ -90,3 +90,10 @@ export async function requireProductTools(mode: "price" | "create"): Promise<boo
   const username = session?.user?.username
   return mode === "create" ? canCreateProducts(username) : canUsePricing(username)
 }
+
+/** Chỉ Creator được chỉnh giả định giá vốn ngay trên form tạo sản phẩm; người khác luôn dùng giả định đã lưu. */
+export async function isCreatorUser(): Promise<boolean> {
+  const session = await getServerSession(authOptions)
+  const username = session?.user?.username
+  return !!username && (await getDbRole(username)) === "creator"
+}

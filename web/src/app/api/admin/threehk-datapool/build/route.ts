@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import * as XLSX from "xlsx"
 import { dropExisting } from "@/lib/bc-datapool/dedupe"
 import { findExisting, findSkuCogs, loadAssumptions, loadFx, loadRefCountries, loadSupportCountries } from "@/lib/bc-datapool/server"
-import { requireProductTools } from "@/lib/creator-access"
+import { isCreatorUser, requireProductTools } from "@/lib/creator-access"
 import type { Assumptions, SimType } from "@/lib/bc-datapool/types"
 import { build, type ThkPlanInput } from "@/lib/threehk-datapool/builder"
 import { buildWorkbook } from "@/lib/threehk-datapool/export"
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as Body
     const inputs = Array.isArray(body.products) ? body.products : []
     if (!inputs.length) return NextResponse.json({ error: "Chưa có sản phẩm nào" }, { status: 400 })
-    const a: Assumptions = { ...(await loadAssumptions()), ...(body.assumptions ?? {}) }
+    const a: Assumptions = { ...(await loadAssumptions()), ...((await isCreatorUser()) ? body.assumptions ?? {} : {}) }
 
     const [fx, ncc, groups, refs, frames] = await Promise.all([loadFx(), loadNcc3hk(), loadSupportCountries(), loadRefCountries(), loadFrames()])
     const resolved = inputs.map(p => {

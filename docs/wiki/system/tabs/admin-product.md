@@ -234,3 +234,7 @@ Quét code + chạy thật (DB sống, ~730 tổ hợp builder). Bất biến gi
 ## s236 (2026-10-19) — QA tab "Tạo sản phẩm" (BC Datapool và 3HK)
 
 Kiểm sống trên staging bằng API build + tự tính lại độc lập (bảng giá, tỷ giá, giả định lưu trong DB): BC CMHK eSIM Japan (Daily, Fixed, Unlimited 3GB+10Mbps), SIM full và datapack (VND = ROUNDUP(data USD × JSC) + giá SIM trắng 17.236), Singtel Thailand (cảnh báo đúng khi Portal không bán gói); 3HK eSIM Austria (Fixed, Daily, Unlimited, cả Datapack A và eSIM full). Mọi dòng giá vốn khớp từng đồng; SKU đã có được bỏ khỏi file và báo kèm so sánh giá hệ thống (khớp / chênh làm tròn). Giả định đang lưu trong DB: Fixed 55%, Daily 35% (không phải 38% như ghi ở trên), Unlimited 2 GB/ngày cho mức 500MB+10Mbps và 3GB+10Mbps, 1,9 cho 500MB+5Mbps. Đã sửa hiển thị "Fixed 55.00000000000001%" ở khối công thức của tab 3HK.
+
+## s236 (2026-10-19) — "Tạo sản phẩm" tách khỏi Admin
+
+Tab "Tạo sản phẩm" (BC Datapool, 3HK) đã chuyển sang trang riêng `/analytics/product-tools` cùng chức năng Tính giá, phân quyền riêng — xem `product-tools.md`. Admin chỉ còn Cài đặt, Soát giá vốn, Khuyến mãi...; `admin?tab=product-builder` tự chuyển hướng sang trang mới. Code UI nằm ở `components/product-tools/` (`create-products.tsx`, `product-builder-3hk.tsx`, `price-calc.tsx`).

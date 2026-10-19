@@ -17,6 +17,9 @@ describe("cổng quyền route Tính giá & Tạo sản phẩm", () => {
   ])("%s cần quyền tạo sản phẩm", p => {
     expect(src(p)).toContain('requireProductTools("create")')
   })
+  test.each(["admin/bc-datapool/build/route.ts", "admin/threehk-datapool/build/route.ts"])("%s: giả định giá vốn gửi từ form chỉ có hiệu lực với Creator", p => {
+    expect(src(p)).toContain("isCreatorUser()")
+  })
   test.each(["admin/bc-datapool/price-list/route.ts", "admin/bc-datapool/plan-catalog/route.ts"])("%s (upload dữ liệu nền) vẫn chỉ Admin/Creator", p => {
     expect(src(p)).toContain("requireAdmin()")
   })

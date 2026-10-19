@@ -9,7 +9,7 @@ import type { Assumptions, ProductInput } from "@/lib/bc-datapool/types"
 import { resolvePlans } from "@/lib/bc-datapool/plan-catalog"
 import { FRAME_SKU } from "@/lib/bc-datapool/codes"
 import { findExisting, findSkuCogs, loadAssumptions, loadFx, loadPlanCatalog, loadPriceList, loadSupportCountries, loadWhiteSimVnd } from "@/lib/bc-datapool/server"
-import { requireProductTools } from "@/lib/creator-access"
+import { isCreatorUser, requireProductTools } from "@/lib/creator-access"
 
 export const dynamic = "force-dynamic"
 
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const products: ProductInput[] = Array.isArray(body.products) ? body.products : []
-    const a: Assumptions = { ...(await loadAssumptions()), ...(body.assumptions ?? {}) }
+    const a: Assumptions = { ...(await loadAssumptions()), ...((await isCreatorUser()) ? body.assumptions ?? {} : {}) }
     if (!products.length) return NextResponse.json({ error: "Chưa có sản phẩm nào" }, { status: 400 })
 
     const [list, fx, catalog] = await Promise.all([loadPriceList(), loadFx(), loadPlanCatalog()])

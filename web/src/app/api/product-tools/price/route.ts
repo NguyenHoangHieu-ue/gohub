@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
     const ctx = await loadQuoteContext()
     return NextResponse.json({ ...quote(ctx, { destKey, sim, plans, includeDataOnly: b.includeDataOnly === true }), fx: { month: ctx.fx.month } })
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+    const msg = (e as Error).message
+    return NextResponse.json({ error: msg }, { status: /^Không tìm thấy/.test(msg) ? 404 : 500 })
   }
 }

@@ -83,7 +83,7 @@ const catalogGroups = (d?: CatalogDiff | null): DiffGroup[] => !d ? [] : [
   { label: "Gói đổi số ngày/tốc độ/nhà mạng", tone: "amber", total: d.counts.changed, items: d.changed.map(p => `${p.label} — ${p.id}: ${p.detail}`) },
 ]
 
-function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
+function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUpload: boolean }) {
   const [opts, setOpts] = useState<Options | null>(null)
   const [loadErr, setLoadErr] = useState<string | null>(null)
   const [assumptions, setAssumptions] = useState<Assumptions>(DEFAULT_ASSUMPTIONS)
@@ -276,10 +276,10 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
             </div>
           ) : <div className="text-xs text-amber-700">Chưa có bảng báo giá — upload file có sheet &quot;cmhk&quot; và &quot;Singtel&quot;.</div>}
           <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = "" }} />
-          <button onClick={() => fileRef.current?.click()} disabled={busy === "upload"}
+          {canUpload && <button onClick={() => fileRef.current?.click()} disabled={busy === "upload"}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
             <Upload size={14} /> {list ? "Upload bảng giá mới" : "Upload bảng giá"}
-          </button>
+          </button>}
           <DiffBox diff={list?.lastDiff} groups={priceGroups(list?.lastDiff)} />
         </div>
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-2">
@@ -291,10 +291,10 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
             </div>
           ) : <div className="text-xs text-amber-700">Chưa có — upload 2 file &quot;Purchase information&quot; (eSIM và SIM) để tự điền ProductID.</div>}
           <input ref={catRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={e => { if (e.target.files?.length) uploadCatalog(e.target.files); e.target.value = "" }} />
-          <button onClick={() => catRef.current?.click()} disabled={busy === "catalog"}
+          {canUpload && <button onClick={() => catRef.current?.click()} disabled={busy === "catalog"}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
             <Upload size={14} /> {busy === "catalog" ? "Đang đọc file..." : opts.planCatalog ? "Upload file Portal mới" : "Upload file Portal"}
-          </button>
+          </button>}
           <DiffBox diff={opts.planCatalog?.lastDiff} groups={catalogGroups(opts.planCatalog?.lastDiff)} />
         </div>
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-1 text-sm">
@@ -316,14 +316,14 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
             {([["fixedPct", "Fixed %", 100], ["dailyPct", "Daily %", 100]] as const).map(([k, l, mul]) => (
               <div key={k}>
                 <label className={label}>{l}</label>
-                <input className={`${input} w-full`} type="number" step="any" value={Number((assumptions[k] * mul).toFixed(4))}
+                <input className={`${input} w-full`} type="number" step="any" disabled={!canUpload} value={Number((assumptions[k] * mul).toFixed(4))}
                   onChange={e => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) { setAssumptions(a => ({ ...a, [k]: v / mul })); touch() } }} />
               </div>
             ))}
             {levelsOf(assumptions).map((lv, li) => (
               <div key={`${lv.dataMb}:${lv.speedMbps}`}>
                 <label className={label}>Unl {customUnlimitedLabel(lv).replace(" tốc độ cao + Unlimited ", " + ")} (GB/ngày)</label>
-                <input className={`${input} w-full`} type="number" step="any" value={lv.gbPerDay}
+                <input className={`${input} w-full`} type="number" step="any" disabled={!canUpload} value={lv.gbPerDay}
                   onChange={e => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) { setAssumptions(a => ({ ...a, unlLevels: levelsOf(a).map((x, xi) => (xi === li ? { ...x, gbPerDay: v } : x)) })); touch() } }} />
               </div>
             ))}
@@ -388,7 +388,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
               </div>
             )}
 
-            <details open={!p.code || !!p.codeHint} className="border border-gray-100 dark:border-slate-800 rounded-lg p-2">
+            {p.coverage && <details open={!p.code || !!p.codeHint} className="border border-gray-100 dark:border-slate-800 rounded-lg p-2">
             <summary className="cursor-pointer select-none text-xs font-semibold text-gray-600">Thông tin nước {p.code ? `(đã tự điền: ${p.code})` : <span className="text-amber-700">(cần điền mã nước)</span>} <span className="font-normal text-gray-400">— chỉ sửa khi có cảnh báo</span></summary>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mt-2">
               <div><label className={label}>Mã nước/nhóm nước (3 ký tự)</label><input className={`${input} w-full uppercase`} maxLength={3} value={p.code} onChange={e => patchProduct(i, { code: e.target.value, codeHint: "" })} placeholder="JPN" />{p.codeHint && <div className="mt-1 text-[11px] text-amber-700">{p.codeHint}</div>}</div>
@@ -396,7 +396,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
               <div><label className={label}>Tên nước (EN)</label><input className={`${input} w-full`} value={p.en} onChange={e => patchProduct(i, { en: e.target.value })} placeholder="Japan" /></div>
               <div><label className={label}>Tên nước (VN)</label><input className={`${input} w-full`} value={p.vn} onChange={e => patchProduct(i, { vn: e.target.value })} placeholder="Nhật Bản" /></div>
             </div>
-            </details>
+            </details>}
 
             <div className="text-xs text-gray-600 dark:text-slate-300 space-y-1">
               <div>Mặc định — {p.simType === "eSIM" ? "eSIM full (cả đầu US và VN)" : "SIM: gói data rời (A) cả 2 đầu + SIM full (E, chỉ đầu VN)"}</div>
@@ -597,7 +597,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
 type Vendor = "bc" | "3hk"
 const VENDORS: { id: Vendor; label: string }[] = [{ id: "bc", label: "BC Datapool" }, { id: "3hk", label: "3HK Datapool" }]
 
-export default function CreateProducts({ onNotify }: { onNotify: Notify }) {
+export default function CreateProducts({ onNotify, canUpload = false }: { onNotify: Notify; canUpload?: boolean }) {
   const [vendor, setVendor] = useState<Vendor>("bc")
   return (
     <div className="space-y-4">
@@ -609,7 +609,7 @@ export default function CreateProducts({ onNotify }: { onNotify: Notify }) {
           ))}
         </div>
       </div>
-      {vendor === "bc" ? <BcDatapoolBuilder onNotify={onNotify} /> : <ProductBuilder3hk onNotify={onNotify} />}
+      {vendor === "bc" ? <BcDatapoolBuilder onNotify={onNotify} canUpload={canUpload} /> : <ProductBuilder3hk onNotify={onNotify} />}
     </div>
   )
 }
