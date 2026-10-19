@@ -1,0 +1,66 @@
+name: Broadcast hẹn giờ (gửi đúng giờ)
+
+# DM Lark hàng loạt MỘT LẦN đúng giờ hẹn (lời chúc 20/10/2026, 09:30 ICT = 02:30 UTC).
+# Cách làm: GitHub Actions không chạy đúng phút (hay lệch 15-120 phút) nên KHÔNG dùng giờ của cron để gửi.
+# Thay vào đó khởi động SỚM (06:30 / 07:30 / 09:00 ICT, 3 lần dự phòng), rồi NGỦ cho tới đúng giây hẹn mới gọi
+# endpoint. Phía server (lib/broadcast-once.ts) từ chối gọi sớm, không gửi nếu gọi trễ quá 90 giây, và chiếm slot
+# nguyên tử nên 3 lần chạy chỉ gửi đúng 1 lần.
+# Chạy tay (workflow_dispatch) để thử: truyền job_id + target_utc.
+
+on:
+  schedule:
+    - cron: "30 23 19 10 *"   # 06:30 ICT 20/10
+    - cron: "30 0 20 10 *"    # 07:30 ICT 20/10
+    - cron: "0 2 20 10 *"     # 09:00 ICT 20/10
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "id job trong app_settings (broadcast_once:<id>)"
+        default: "chuc-20-10-2026"
+      target_utc:
+        description: "giờ hẹn UTC, dạng YYYY-MM-DD HH:MM:SS"
+        default: "2026-10-20 02:30:00"
+
+concurrency:
+  group: broadcast-once-${{ inputs.job_id || 'chuc-20-10-2026' }}
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Chờ đúng giờ rồi gọi endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          JOB_ID: ${{ inputs.job_id || 'chuc-20-10-2026' }}
+          TARGET_UTC: ${{ inputs.target_utc || '2026-10-20 02:30:00' }}
+        run: |
+          set -u
+          TARGET=$(date -u -d "$TARGET_UTC" +%s)
+          NOW=$(date -u +%s)
+          echo "Giờ hẹn: $TARGET_UTC UTC · bây giờ: $(date -u '+%F %T') UTC"
+          # Chạy theo lịch năm sau (cùng ngày 19-20/10) hoặc sau giờ hẹn hơn 3 giờ → bỏ qua, không làm gì
+          if [ $((NOW - TARGET)) -gt 10800 ]; then echo "Đã quá giờ hẹn hơn 3 giờ — bỏ qua"; exit 0; fi
+          if [ "$NOW" -lt "$TARGET" ]; then
+            WAIT=$((TARGET - NOW))
+            echo "Chờ ${WAIT}s tới giờ hẹn"
+            [ "$WAIT" -gt 3 ] && sleep $((WAIT - 2))
+          fi
+          # Sát giờ: chờ tới ĐÚNG giây hẹn (không bao giờ gọi sớm)
+          while [ "$(date -u +%s)" -lt "$TARGET" ]; do sleep 0.1; done
+          for i in 1 2 3 4 5 6; do
+            OUT=$(curl -sS -m 90 -w "\n%{http_code}" -H "Authorization: Bearer $CRON_SECRET" \
+              "https://intel-v2.gohub.cloud/api/cron/broadcast-once?id=${JOB_ID}") || OUT=$'\n000'
+            CODE=$(echo "$OUT" | tail -n 1)
+            echo "lần $i · $(date -u '+%T') UTC · HTTP $CODE"
+            echo "$OUT" | head -n -1
+            case "$CODE" in
+              200) exit 0 ;;                       # gửi xong hoặc đã có lần chạy khác gửi
+              410) echo "::error::Gọi trễ quá dung sai — server KHÔNG gửi"; exit 1 ;;
+              404|401) echo "::error::HTTP $CODE (job không tồn tại hoặc sai secret)"; exit 1 ;;
+              425) sleep 1 ;;                      # đồng hồ server chậm hơn vài trăm ms → gọi lại
+              *) sleep 3 ;;
+            esac
+          done
+          echo "::error::Không gọi được endpoint sau 6 lần"; exit 1
