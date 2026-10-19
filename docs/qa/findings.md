@@ -18,8 +18,8 @@ Chi tiết và bằng chứng nằm ở `results/<tab>.md`. Trạng thái: MỞ 
 | G0-1..4 | P2 | Dashboard, B2C, Channels, BOD, Customers, Products, Manage Costs | Nhiều route có cache nhưng không nhận `nocache=1` (gợi ý của bộ quét; chưa xác nhận từng route) | thiếu `noCache(req)` | NGHI |
 | **B-07** | **P1** | BOD | Tải nguội: `bod-summary` hết 25 giây (HTTP 500 `Query read timeout`), giao diện hiện toàn 0 không báo lỗi | `bod-summary` và `bod-group-margin` cùng quét nặng, pool gohub_dw 3 kết nối | ĐÃ SỬA (chia sẻ quét 3 kỳ, `lite`, UI thử lại + báo lỗi) |
 | B-08 | P3 | BOD | Dòng "Other" có Margin % −1465,0% (doanh thu nhỏ) | hiển thị | MỞ |
-| **Ch-03** | P2 | Channels | Vendors / Product Type / Sub Channels không có tác dụng ở chế độ Overview (bảng và TOTAL không đổi) | `channels/performance` không nhận bộ lọc | MỞ |
-| **Ch-04** | P2 | Channels | Một kênh + Vendor hoặc Product Type: Top Selling Products trống (SQL `sku` ambiguous, UI nuốt lỗi) | `TRIM(sku)` không tiền tố khi JOIN `dim_sku` | MỞ |
+| **Ch-03** | P2 | Channels | Vendors / Product Type / Sub Channels không có tác dụng ở chế độ Overview (bảng và TOTAL không đổi) | `channels/performance` không nhận bộ lọc | ĐÃ SỬA (kiểm sống) |
+| **Ch-04** | P2 | Channels | Một kênh + Vendor hoặc Product Type: Top Selling Products trống (SQL `sku` ambiguous, UI nuốt lỗi) | `TRIM(sku)` không tiền tố khi JOIN `dim_sku` | ĐÃ SỬA (kiểm sống) |
 | Ch-05 | P3 | Channels | Đổi ô Compare không tải lại, thẻ hiện "+0%" tới khi Apply | chọn so sánh không kích hoạt tải | MỞ |
 | Q-06 | P3 | Quarter Report | Xuất Excel Squad: cột Leader là mã Lark thô | thiếu tra tên | MỞ |
 | Q-03 | P3 | Quarter Report | ALL/VN/US đầu trang không đổi bảng B2B (có ô riêng) | thiết kế | MỞ |
