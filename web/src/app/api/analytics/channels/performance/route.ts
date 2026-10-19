@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
-import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getStrategicPartnersList, shipFilter, internalOpsFilter, excludeInactiveCustomers, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getBODFilters, getDateFilter, getPrevDateFilter, getStrategicPartnersList, shipFilter, internalOpsFilter, excludeInactiveCustomers, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 import { fetchCosts, monthsBetween } from "@/lib/bod-data"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
@@ -19,6 +19,8 @@ export async function GET(req: NextRequest) {
   const dateColumn   = searchParams.get("dateColumn")   || "fulfiled_date"
   const channelGroup = searchParams.get("channelGroup") || "All"
 
+  // Vendors / Product Type (cùng chuẩn BOD) — trước đây route bỏ qua, bộ lọc ở trang không có tác dụng ở chế độ Overview (QA Ch-03).
+  const extraFilters = getBODFilters(searchParams)
   const source     = getAnalyticsSource(dateColumn)
   const filter     = getDateFilter(startDate, endDate, source.dateCol)
   const prevFilter = getPrevDateFilter(startDate, endDate, "none", source.dateCol)
@@ -31,7 +33,7 @@ export async function GET(req: NextRequest) {
   const sfx = `${shipFilter(false)} ${internalOpsFilter(false)} ${excludeInactiveCustomers()} ${makeExcludeSql(excludedCustomers)}`
 
   try {
-    const key = `ch-perf4:${dateColumn}:${startDate}:${endDate}:${channelGroup}:${exclHash(excludedCustomers)}`
+    const key = `ch-perf5:${dateColumn}:${startDate}:${endDate}:${channelGroup}:${extraFilters}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
     const strategicList = await getStrategicPartnersList()
 
@@ -46,7 +48,7 @@ export async function GET(req: NextRequest) {
                 COUNT(DISTINCT f.order_code) as orders
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         WHERE ${filter} ${groupFilter} ${sfx}
+         WHERE ${filter} ${groupFilter} ${extraFilters} ${sfx}
          GROUP BY TRIM(s.channel_name), UPPER(s.group_name), is_strategic
        ),
        prv AS (
@@ -54,7 +56,7 @@ export async function GET(req: NextRequest) {
                 SUM(f.${source.revenueCol}) as revenue
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-         WHERE ${prevFilter} ${groupFilter} ${sfx}
+         WHERE ${prevFilter} ${groupFilter} ${extraFilters} ${sfx}
          GROUP BY TRIM(s.channel_name)
        )
        SELECT c.channel, c.group_name, c.is_strategic,
@@ -87,7 +89,7 @@ export async function GET(req: NextRequest) {
           SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
                  TRIM(s.channel_name) as channel, SUM(f.${source.revenueCol}) as revenue
           FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
-          WHERE ${filter} ${sfx} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
+          WHERE ${filter} ${extraFilters} ${sfx} AND UPPER(COALESCE(s.group_name,'')) = 'B2B'
           GROUP BY 1, 2, 3
         `),
         fetchCustomerCosts(months),

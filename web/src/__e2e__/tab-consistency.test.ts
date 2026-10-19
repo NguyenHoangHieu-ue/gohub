@@ -218,4 +218,15 @@ describeLive("So cặp tab — cùng kỳ, cùng số", () => {
       expect(res).toEqual([200, 200, 200, 200, 200])
     }, 180_000)
   })
+  describe("Channels Overview áp bộ lọc Vendors như BOD (Ch-03)", () => {
+    it("Σ doanh thu kênh theo vendor = BOD cùng vendor, nhỏ hơn không lọc", async () => {
+      const q = `startDate=${P.lastMonth.start}&endDate=${P.lastMonth.end}`
+      const v = "vendors=3HK%20DATAPOOL"
+      const all = await api(`/api/analytics/channels/performance?${q}`)
+      const ch = await api(`/api/analytics/channels/performance?${q}&${v}`)
+      const bod = await api(`/api/analytics/bod-summary?${q}&${v}`)
+      expect(sum(ch, "revenue")).toBeLessThan(sum(all, "revenue"))
+      close(sum(ch, "revenue"), bod.total_revenue, "doanh thu Channels vs BOD (vendor 3HK DATAPOOL)")
+    }, 180_000)
+  })
 })

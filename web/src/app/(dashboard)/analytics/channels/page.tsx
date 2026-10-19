@@ -406,6 +406,8 @@ export default function ChannelPerformancePage() {
       if (endDate) params.append("endDate", endDate)
       params.append("dateColumn", dateColumn)
       if (channelGroup !== "All") params.append("channelGroup", channelGroup)
+      if (selectedVendors.length > 0) params.append("vendors", selectedVendors.join(","))
+      if (selectedProductTypes.length > 0) params.append("productTypes", selectedProductTypes.join(","))
       const res = await fetch(`/api/analytics/channels/performance?${params}`)
       if (res.ok) setAllChannelsData(await res.json())
     } catch (e) { console.error("fetchAllChannels error:", e) } finally { setLoadingAll(false) }
@@ -668,8 +670,8 @@ export default function ChannelPerformancePage() {
         LEFT JOIN dim_sku sk ON TRIM(${mt}.sku) = TRIM(sk.sku)
         WHERE ${channelFilter}
         ${dateFilter}
-        ${vendorFilter}
-        ${productTypeFilter}
+        ${vendorFilter.replace("TRIM(sku) IN", `TRIM(${mt}.sku) IN`)}
+        ${productTypeFilter.replace("TRIM(sku) IN", `TRIM(${mt}.sku) IN`)}
         AND ${mt}.sku != 'SHIPPINGFEE0' AND ${mt}.order_source_code NOT IN (SELECT code FROM dim_order_source WHERE UPPER(COALESCE(group_name,'')) = 'INTERNAL-TRANSACTION')
         GROUP BY 1, 3
         ORDER BY 4 DESC
@@ -1148,7 +1150,7 @@ export default function ChannelPerformancePage() {
                 {loading ? "Updating data..." : "Data updated"}
               </div>
               <button
-                onClick={() => { fetchChannelData(); setShowFilters(false) }}
+                onClick={() => { if (selectedChannel) fetchChannelData(); else fetchAllChannels(); setShowFilters(false) }}
                 className="px-6 py-2 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-200"
               >
                 Apply Filters
