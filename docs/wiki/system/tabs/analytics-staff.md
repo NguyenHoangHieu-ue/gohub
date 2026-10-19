@@ -164,3 +164,7 @@ Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm 
 
 Cùng root cause với Dashboard (`analytics-dashboard.md` §s211d): đơn `INTERNAL-TRANSACTION` (GP âm, revenue=0) **CÓ gán `sales_pic_code`/`staff_code` thật** (không bị lọc bởi `staffKey IS NOT NULL`) nên lẫn vào GP của nhân viên phụ trách khách đó. Kể từ s210 (mặc định tick "Đơn nội bộ") lỗi này lộ rõ hơn vì `internalOpsFilter` không còn loại nhóm này theo mặc định.
 **Fix**: thêm `AND UPPER(COALESCE(s.group_name,'')) IN ('B2B','B2C')` vào `where` dùng chung cho cả 4 query (`route.ts` + `customers/route.ts` drill-down theo KH) — khớp quy ước Quarter Report "total = b2bRev + b2cRev, không cộng nhóm khác bất kể toggle". Cache key `staff-report:v1` → `v2`.
+
+## s236 (2026-10-19) — danh sách KH của nhân viên hết 25 giây (QA G2)
+
+`staff-report/customers` đo thật: `LEFT JOIN dim_sku` (kể cả gom nhẹ theo sku) kết hợp bộ lọc loại trừ khách làm planner chọn plan chậm, hết 25 giây (HTTP 500, giao diện từng báo "Không có dữ liệu KH"). Nay vendor 3HK tính bằng `TRIM(f.sku) IN (SELECT DISTINCT TRIM(sku) FROM dim_sku WHERE ...)` (1,3 giây) và giao diện hiện "Hiếu đang fix" khi lỗi. Bài học chung: trong gohub_dw tránh JOIN dim_sku khi đã có nhiều điều kiện, dùng IN (subquery).

@@ -131,3 +131,7 @@ Hiếu yêu cầu soi lại toàn bộ tab dùng công thức khác Quarter Repo
 - Đo: snapshot ALL T9 `cm1` 1.435.504.448 vs route `monthly-kpis` 1.448.104.259 (Δ 12.599.811); T8 Δ 13.541.857 — đúng bằng GP của nhóm INTERNAL-TRANSACTION (`channels/kpis includeInternalOps=1` cho cùng Δ). Doanh thu bằng nhau (nhóm đó revenue=0), chi phí bằng nhau.
 - Nguyên nhân: `computeMonthlyKpis` (cron) không lọc `group_name IN ('B2B','B2C')` — s211d chỉ sửa route trang, bỏ sót cron. Đã thêm JOIN `dim_order_source` + lọc nhóm. Snapshot cũ tự đúng lại ở lần cron kế (hằng đêm).
 - Lưu ý: `data-health/cross-check` so snapshot với CHÍNH `computeMonthlyKpis` nên không bắt được kiểu lệch này (cả hai cùng sai) — nên so thêm với route `monthly-kpis`.
+
+## s236 (2026-10-19) — hệ số chiếu của bảng Performance Summary (QA G2-12)
+
+`monthly-kpis` nay chiếu theo ngày dữ liệu cuối (`endDate` của khoảng đang xem, thường T-1) thay vì hôm nay: T10 tính đến 18/10 ra ×1,72 (31/18) thay vì ×1,63, khớp thẻ Month-End Projection cùng trang. Khoá cache `monthly-kpis5`.
