@@ -11,13 +11,15 @@ const WRITABLE_TABS_KEY = "permissions.writable_tabs"
 // Quyền vừa đổi hiện ra sau tối đa 20s (instance khác) — chấp nhận được cho cờ hiển thị menu/nút.
 async function loadMe(username: string, sessionRole: string) {
 
-  const [userRes, configRes, gpRes, portalRes, myMetricsRes, marketRes] = await Promise.all([
+  const [userRes, configRes, gpRes, portalRes, myMetricsRes, marketRes, pricingRes, productCreateRes] = await Promise.all([
     supabaseAdmin.from("users").select("role, department, allowed_analytics, allowed_tabs").eq("username", username).single(),
     supabaseAdmin.from("app_settings").select("value").eq("key", WRITABLE_TABS_KEY).maybeSingle(),
     supabaseAdmin.from("app_settings").select("value").eq("key", "gp_allowed_users").maybeSingle(),
     supabaseAdmin.from("app_settings").select("value").eq("key", "portal_access_users").maybeSingle(),
     supabaseAdmin.from("app_settings").select("value").eq("key", "my_metrics_users").maybeSingle(),
     supabaseAdmin.from("app_settings").select("value").eq("key", "market_users").maybeSingle(),
+    supabaseAdmin.from("app_settings").select("value").eq("key", "pricing_users").maybeSingle(),
+    supabaseAdmin.from("app_settings").select("value").eq("key", "product_create_users").maybeSingle(),
   ])
 
   let writableTabs: string[] = []
@@ -67,6 +69,11 @@ async function loadMe(username: string, sessionRole: string) {
     try { marketEnabled = (JSON.parse(marketRes.data.value) as string[]).includes(username) } catch {}
   }
 
+  // Tab Tính giá & Tạo sản phẩm (s236): 2 quyền riêng, creator có cả hai; "tạo sản phẩm" kéo theo "tính giá"
+  const inList = (v: string | null | undefined) => { try { return v ? (JSON.parse(v) as string[]).includes(username) : false } catch { return false } }
+  const productCreateEnabled = data?.role === "creator" || inList(productCreateRes.data?.value)
+  const pricingEnabled = productCreateEnabled || inList(pricingRes.data?.value)
+
   return {
     role:                data?.role              ?? sessionRole,
     department:          data?.department        ?? "none",
@@ -78,6 +85,8 @@ async function loadMe(username: string, sessionRole: string) {
     portal_enabled:      portalEnabled,
     my_metrics_enabled:  myMetricsEnabled,
     market_enabled:      marketEnabled,
+    pricing_enabled:     pricingEnabled,
+    product_create_enabled: productCreateEnabled,
   }
 }
 

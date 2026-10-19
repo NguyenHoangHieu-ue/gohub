@@ -244,6 +244,10 @@ function CreatorSettings() {
       <MyMetricsAccessSection />
       <MyMetricsAccessSection endpoint="/api/creator/market-access" title="Thị trường & Báo giá — Phân quyền xem"
         desc="Ngoài Creator, chỉ user được thêm vào đây mới thấy tab Thị trường & Báo giá (gồm báo giá nhà cung cấp)" />
+      <MyMetricsAccessSection endpoint="/api/creator/pricing-access" title="Tính giá & Tạo sản phẩm — quyền TÍNH GIÁ"
+        desc="User được thêm vào đây thấy tab Tính giá & Tạo sản phẩm với chức năng Tính giá (chỉ tên gói + giá vốn, không có file/mã sản phẩm). Creator luôn có cả hai quyền." />
+      <MyMetricsAccessSection endpoint="/api/creator/product-create-access" title="Tính giá & Tạo sản phẩm — quyền TẠO SẢN PHẨM"
+        desc="User được thêm vào đây thêm chức năng Tạo sản phẩm (mã SKU/Product, xuất file import). Quyền này đã gồm Tính giá." />
 
       {/* Audit Log */}
       <AuditLogSection />

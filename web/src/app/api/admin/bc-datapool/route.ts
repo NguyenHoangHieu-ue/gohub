@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server"
 import { loadAssumptions } from "@/lib/bc-datapool/server"
-import { catalogSummary, loadFx, loadPlanCatalog, loadPriceList, loadRefCountries, loadSupportCountries, requireAdmin } from "@/lib/bc-datapool/server"
+import { catalogSummary, loadFx, loadPlanCatalog, loadPriceList, loadRefCountries, loadSupportCountries } from "@/lib/bc-datapool/server"
+import { requireProductTools } from "@/lib/creator-access"
 
 export const dynamic = "force-dynamic"
 
 /** Dữ liệu nền cho màn "Tạo sản phẩm": bảng báo giá đã lưu, tỷ giá nội bộ, danh sách nước/nhóm nước GoHub. */
 export async function GET() {
-  if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!(await requireProductTools("create"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   try {
     const [priceList, supportCountries, refCountries, catalog] = await Promise.all([loadPriceList(), loadSupportCountries(), loadRefCountries(), loadPlanCatalog()])
     let fx = null, fxError: string | null = null

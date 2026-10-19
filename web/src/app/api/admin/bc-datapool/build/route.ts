@@ -8,7 +8,8 @@ import { buildWorkbook } from "@/lib/bc-datapool/export"
 import type { Assumptions, ProductInput } from "@/lib/bc-datapool/types"
 import { resolvePlans } from "@/lib/bc-datapool/plan-catalog"
 import { FRAME_SKU } from "@/lib/bc-datapool/codes"
-import { findExisting, findSkuCogs, loadAssumptions, loadFx, loadPlanCatalog, loadPriceList, loadSupportCountries, loadWhiteSimVnd, requireAdmin } from "@/lib/bc-datapool/server"
+import { findExisting, findSkuCogs, loadAssumptions, loadFx, loadPlanCatalog, loadPriceList, loadSupportCountries, loadWhiteSimVnd } from "@/lib/bc-datapool/server"
+import { requireProductTools } from "@/lib/creator-access"
 
 export const dynamic = "force-dynamic"
 
@@ -18,7 +19,8 @@ export const dynamic = "force-dynamic"
  * bằng tỷ giá nội bộ mới nhất nên file xuất luôn khớp với logic, không tin số client gửi lên.
  */
 export async function POST(req: NextRequest) {
-  if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  // Tạo sản phẩm (xem trước đầy đủ / xuất file) cần quyền "tạo sản phẩm"; tính giá dùng /api/product-tools/price
+  if (!(await requireProductTools("create"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   try {
     const body = await req.json()
     const products: ProductInput[] = Array.isArray(body.products) ? body.products : []

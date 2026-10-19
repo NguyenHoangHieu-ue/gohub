@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import * as XLSX from "xlsx"
 import { dropExisting } from "@/lib/bc-datapool/dedupe"
-import { findExisting, findSkuCogs, loadAssumptions, loadFx, loadRefCountries, loadSupportCountries, requireAdmin } from "@/lib/bc-datapool/server"
+import { findExisting, findSkuCogs, loadAssumptions, loadFx, loadRefCountries, loadSupportCountries } from "@/lib/bc-datapool/server"
+import { requireProductTools } from "@/lib/creator-access"
 import type { Assumptions, SimType } from "@/lib/bc-datapool/types"
 import { build, type ThkPlanInput } from "@/lib/threehk-datapool/builder"
 import { buildWorkbook } from "@/lib/threehk-datapool/export"
@@ -25,7 +26,8 @@ interface Body {
  * Server tự tính lại bằng tỷ giá/giá khung mới nhất — không tin số client gửi lên.
  */
 export async function POST(req: NextRequest) {
-  if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  // Tạo sản phẩm (xem trước đầy đủ / xuất file) cần quyền "tạo sản phẩm"; tính giá dùng /api/product-tools/price
+  if (!(await requireProductTools("create"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   try {
     const body = (await req.json()) as Body
     const inputs = Array.isArray(body.products) ? body.products : []

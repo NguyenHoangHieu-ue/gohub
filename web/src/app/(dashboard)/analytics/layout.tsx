@@ -5,7 +5,7 @@ import { headers }          from "next/headers"
 import { supabaseAdmin }    from "@/lib/supabase"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
 import { memo } from "@/lib/memo"
-import { hasCreatorGrant, MARKET_USERS_KEY } from "@/lib/creator-access"
+import { canUsePricing, hasCreatorGrant, MARKET_USERS_KEY } from "@/lib/creator-access"
 
 // /analytics → "dashboard"; /analytics/bod → "bod"
 function pathToAnalyticsId(pathname: string): string {
@@ -67,6 +67,12 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   // Tab Creator cấp riêng từng người (không thuộc ma trận quyền role)
   if (id === "market") {
     if (await hasCreatorGrant(username, MARKET_USERS_KEY)) return <>{children}</>
+    redirect("/chatbot")
+  }
+
+  // Tính giá & Tạo sản phẩm: Creator + người được cấp "tính giá" hoặc "tạo sản phẩm"
+  if (id === "product-tools") {
+    if (await canUsePricing(username)) return <>{children}</>
     redirect("/chatbot")
   }
 

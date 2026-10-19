@@ -112,7 +112,12 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 lg:grid-cols-3">
+      {(!fx || !frameOk) && (
+        <div className="p-3 rounded-xl border border-amber-300 bg-amber-50 text-sm text-amber-900">Thiếu dữ liệu nền ({[!fx && "tỷ giá", !frameOk && "giá khung SIM/eSIM trong hệ thống"].filter(Boolean).join(", ")}) — mở mục &quot;Dữ liệu nền&quot; bên dưới để xem chi tiết, báo Creator cập nhật.</div>
+      )}
+      <details className="border border-gray-200 dark:border-slate-700 rounded-2xl">
+        <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-gray-700 dark:text-slate-200">Dữ liệu nền: bảng giá 3HK, tỷ giá, công thức, giá khung <span className="font-normal text-gray-400">(bấm để xem)</span></summary>
+      <div className="grid gap-4 lg:grid-cols-3 p-4 pt-0">
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl text-xs space-y-1 text-gray-600 dark:text-slate-300">
           <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">Bảng giá 3HK</div>
           <div>{opts.ncc.length} nước trong bảng <span className="font-mono">ncc_3hk</span> (HKD/GB) — giá gói = nước đắt nhất trong các nước đã chọn.</div>
@@ -131,6 +136,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
           {!frameOk && <div className="text-amber-700">Thiếu giá khung → loại eSIM full/SIM full tương ứng bị bỏ qua.</div>}
         </div>
       </div>
+      </details>
 
       {products.map((p, i) => {
         const top = priceOf(p.countries)
@@ -147,7 +153,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
                 <select className={input} value={p.simType} onChange={e => patchProduct(i, { simType: e.target.value as SimType })}><option>eSIM</option><option>SIM</option></select>
               </div>
               <div className="md:col-span-2">
-                <label className={label}>Nước (thêm nhiều nước = gói đa vùng)</label>
+                <label className={label}>Nước / khu vực (chọn nhiều nước = gói đa vùng)</label>
                 <select className={input} value="" onChange={e => { if (e.target.value && !p.countries.includes(e.target.value)) patchProduct(i, { countries: [...p.countries, e.target.value], codeOverride: "" }) }}>
                   <option value="">+ Thêm nước…</option>
                   {countries.filter(c => !p.countries.includes(c)).map(c => <option key={c} value={c}>{c}</option>)}
@@ -171,7 +177,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
                 </div>
               </div>
               <div>
-                <label className={label}>Mã nước/nhóm 3 ký tự (để trống = tự tìm)</label>
+                <label className={label}>Mã nước 3 ký tự (để trống = hệ thống tự tìm, chỉ điền khi có cảnh báo)</label>
                 <input className={`${input} font-mono uppercase`} maxLength={3} value={p.codeOverride} onChange={e => patchProduct(i, { codeOverride: e.target.value })} placeholder={sup?.code || "VD THA"} />
               </div>
             </div>
@@ -222,7 +228,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
                   </div>
                 </div>
               ))}
-              <button onClick={() => patchProduct(i, { plans: [...p.plans, newPlan()] })} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"><Plus size={12} /> Thêm dòng gói</button>
+              <button onClick={() => patchProduct(i, { plans: [...p.plans, newPlan()] })} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"><Plus size={12} /> Thêm gói khác</button>
             </div>
           </div>
         )
@@ -230,9 +236,9 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
 
       <div className="flex flex-wrap items-center gap-3">
         <button onClick={() => { setProducts(prev => [...prev, newProduct()]); touch() }} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800"><Plus size={14} /> Thêm sản phẩm</button>
-        <button onClick={runPreview} disabled={!fx || busy === "preview" || products.some(p => !p.countries.length)} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-600 hover:bg-brand-700 text-white rounded-xl disabled:opacity-50"><Eye size={14} /> {busy === "preview" ? "Đang tính..." : "Xem trước"}</button>
-        <button onClick={() => runExport()} disabled={!preview || stale || busy === "export"} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-50"><Download size={14} /> {busy === "export" ? "Đang xuất..." : "Xuất file Excel"}</button>
-        {stale && preview && <span className="text-xs text-amber-700">Form đã đổi — bấm &quot;Xem trước&quot; lại trước khi xuất.</span>}
+        <button onClick={runPreview} disabled={!fx || busy === "preview" || products.some(p => !p.countries.length)} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-600 hover:bg-brand-700 text-white rounded-xl disabled:opacity-50"><Eye size={14} /> {busy === "preview" ? "Đang tính..." : "Bước 1: Xem trước"}</button>
+        <button onClick={() => runExport()} disabled={!preview || stale || busy === "export"} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-50"><Download size={14} /> {busy === "export" ? "Đang xuất..." : "Bước 2: Tải file Excel"}</button>
+        {stale && preview && <span className="text-xs text-amber-700">Form đã đổi — bấm &quot;Bước 1: Xem trước&quot; lại trước khi tải file.</span>}
       </div>
 
       {preview && sheets && (

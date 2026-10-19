@@ -8,6 +8,9 @@ import { getDbRole } from "@/lib/db-role"
 import { memo, memoInvalidate } from "@/lib/memo"
 
 export const MARKET_USERS_KEY = "market_users"
+// Tab "Tính giá & Tạo sản phẩm" (s236): 2 quyền tách riêng, Creator luôn có cả hai.
+export const PRICING_USERS_KEY = "pricing_users"            // chỉ xem/tính giá vốn
+export const PRODUCT_CREATE_USERS_KEY = "product_create_users" // tạo sản phẩm (xuất file import); gồm cả quyền tính giá
 
 async function loadList(key: string): Promise<string[]> {
   const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", key).maybeSingle()
@@ -72,4 +75,18 @@ export function accessListRoute(key: string, targetType: string) {
   }
 
   return { GET, POST }
+}
+
+/** Quyền tính giá: Creator, người được cấp "tính giá", hoặc người được cấp "tạo sản phẩm" (tạo sản phẩm cần tính giá). */
+export async function canUsePricing(username: string | undefined | null): Promise<boolean> {
+  return (await hasCreatorGrant(username, PRICING_USERS_KEY)) || (await hasCreatorGrant(username, PRODUCT_CREATE_USERS_KEY))
+}
+export async function canCreateProducts(username: string | undefined | null): Promise<boolean> {
+  return hasCreatorGrant(username, PRODUCT_CREATE_USERS_KEY)
+}
+/** Dùng ở route API: "price" = tính giá (hoặc tạo sản phẩm), "create" = tạo sản phẩm. */
+export async function requireProductTools(mode: "price" | "create"): Promise<boolean> {
+  const session = await getServerSession(authOptions)
+  const username = session?.user?.username
+  return mode === "create" ? canCreateProducts(username) : canUsePricing(username)
 }

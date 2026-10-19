@@ -259,8 +259,13 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
 
   return (
     <div className="space-y-5">
-      {/* Nền: bảng báo giá + tỷ giá + giả định */}
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+      {/* Dữ liệu nền: bảng báo giá + Portal + tỷ giá + giả định. Gập lại mặc định — chỉ Creator cập nhật. */}
+      {(!list || !catalog || !opts.fx) && (
+        <div className="p-3 rounded-xl border border-amber-300 bg-amber-50 text-sm text-amber-900">Thiếu dữ liệu nền ({[!list && "bảng báo giá BC", !catalog && "file Portal", !opts.fx && "tỷ giá"].filter(Boolean).join(", ")}) — mở mục &quot;Dữ liệu nền&quot; bên dưới để cập nhật (chỉ Creator).</div>
+      )}
+      <details className="group border border-gray-200 dark:border-slate-700 rounded-2xl">
+        <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-gray-700 dark:text-slate-200">Dữ liệu nền: bảng báo giá, danh mục gói Portal, tỷ giá, giả định giá vốn <span className="font-normal text-gray-400">(bấm để xem / cập nhật — chỉ Creator)</span></summary>
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4 p-4 pt-0">
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-2">
           <div className="text-sm font-semibold">Bảng báo giá BC Datapool</div>
           {list ? (
@@ -325,6 +330,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
           </div>
         </div>
       </div>
+      </details>
 
       {/* Sản phẩm */}
       {products.map((p, i) => {
@@ -343,7 +349,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <label className={label}>Pool</label>
+                <label className={label}>Nhóm giá BC</label>
                 <select className={`${input} w-full`} value={p.pool} onChange={e => { const pool = e.target.value as Pool; patchProduct(i, { pool, coverage: "", covs: [], operators: [], plans: [] }) }}>
                   {(Object.keys(POOL_LABEL) as Pool[]).map(k => <option key={k} value={k}>{POOL_LABEL[k]}</option>)}
                 </select>
@@ -355,7 +361,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
                 </select>
               </div>
               <div className="sm:col-span-2">
-                <label className={label}>Khu vực (chỉ hiện nơi BC Portal có bán ở pool + loại SIM này · 1 nước hoặc 1 gói đa vùng, 1 pool)</label>
+                <label className={label}>Nước / khu vực (chỉ hiện nơi BC đang bán đúng loại SIM này)</label>
                 <select className={`${input} w-full`} value={p.coverage} disabled={!catalog} onChange={e => pickCoverage(i, p.pool, p.simType, e.target.value)}>
                   <option value="">{catalog ? `— chọn (${coveragesOf(p.pool, p.simType).length} nước · ${regionsOf(p.pool, p.simType).length} gói đa vùng) —` : "— chưa có file Portal —"}</option>
                   {regionsOf(p.pool, p.simType).length > 0 && <optgroup label="Gói đa vùng (nhiều nước trong 1 gói)">{regionsOf(p.pool, p.simType).map(m => <option key={m.key} value={m.key}>{m.label}</option>)}</optgroup>}
@@ -366,7 +372,7 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
 
             {rows.length > 0 && (
               <div>
-                <label className={label}>Nhà mạng (giá áp dụng = nhà mạng ĐẮT NHẤT trong số đã chọn)</label>
+                <label className={label}>Nhà mạng (giá tính theo nhà mạng ĐẮT NHẤT trong số đã tick)</label>
                 <div className="flex flex-wrap gap-2">
                   {rows.map(r => {
                     const key = `${r.coverage}|${r.operator}`, on = p.operators.includes(key)
@@ -382,12 +388,15 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
               </div>
             )}
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <details open={!p.code || !!p.codeHint} className="border border-gray-100 dark:border-slate-800 rounded-lg p-2">
+            <summary className="cursor-pointer select-none text-xs font-semibold text-gray-600">Thông tin nước {p.code ? `(đã tự điền: ${p.code})` : <span className="text-amber-700">(cần điền mã nước)</span>} <span className="font-normal text-gray-400">— chỉ sửa khi có cảnh báo</span></summary>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mt-2">
               <div><label className={label}>Mã nước/nhóm nước (3 ký tự)</label><input className={`${input} w-full uppercase`} maxLength={3} value={p.code} onChange={e => patchProduct(i, { code: e.target.value, codeHint: "" })} placeholder="JPN" />{p.codeHint && <div className="mt-1 text-[11px] text-amber-700">{p.codeHint}</div>}</div>
               <div><label className={label}>supportedCountries (ISO 2)</label><input className={`${input} w-full uppercase`} value={p.iso} onChange={e => patchProduct(i, { iso: e.target.value })} placeholder="JP" /></div>
               <div><label className={label}>Tên nước (EN)</label><input className={`${input} w-full`} value={p.en} onChange={e => patchProduct(i, { en: e.target.value })} placeholder="Japan" /></div>
               <div><label className={label}>Tên nước (VN)</label><input className={`${input} w-full`} value={p.vn} onChange={e => patchProduct(i, { vn: e.target.value })} placeholder="Nhật Bản" /></div>
             </div>
+            </details>
 
             <div className="text-xs text-gray-600 dark:text-slate-300 space-y-1">
               <div>Mặc định — {p.simType === "eSIM" ? "eSIM full (cả đầu US và VN)" : "SIM: gói data rời (A) cả 2 đầu + SIM full (E, chỉ đầu VN)"}</div>
@@ -401,8 +410,8 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
             </div>
 
             <div className="space-y-2">
-              <label className={label}>Gói (chỉ chọn được gói BC Portal đang bán · mỗi dòng = 1 loại × 1 dung lượng · ProductID tự điền từ Portal)</label>
-              {!p.coverage && <div className="text-xs text-gray-400">Chọn khu vực để hiện các gói Portal có bán.</div>}
+              <label className={label}>Các gói cần tạo (chỉ chọn được gói BC đang bán · mỗi dòng = 1 loại gói × 1 dung lượng · mã BC tự điền)</label>
+              {!p.coverage && <div className="text-xs text-gray-400">Chọn nước / khu vực ở trên để hiện các gói BC đang bán.</div>}
               {p.plans.map((pl, j) => {
                 const offs = offersOf(p, pl.kind)
                 const offered = offerDays(p, pl)
@@ -499,11 +508,11 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
       })}
 
       <div className="flex flex-wrap items-center gap-3">
-        {!catalog && <span className="text-xs text-red-600 font-semibold">Chưa upload file Portal — chưa thể tạo sản phẩm (Portal cho biết BC đang bán gói nào).</span>}
+        {!catalog && <span className="text-xs text-red-600 font-semibold">Chưa có danh mục gói Portal — chưa thể tạo sản phẩm (báo Creator cập nhật ở mục Dữ liệu nền).</span>}
         <button onClick={() => { setProducts(prev => [...prev, newProduct()]); touch() }} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800"><Plus size={14} /> Thêm sản phẩm</button>
-        <button onClick={runPreview} disabled={!list || !catalog || !opts.fx || busy === "preview"} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-600 hover:bg-brand-700 text-white rounded-xl disabled:opacity-50"><Eye size={14} /> {busy === "preview" ? "Đang tính..." : "Xem trước"}</button>
-        <button onClick={() => runExport()} disabled={!preview || previewStale || !catalog || busy === "export"} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-50"><Download size={14} /> {busy === "export" ? "Đang xuất..." : "Xuất file Excel"}</button>
-        {previewStale && preview && <span className="text-xs text-amber-700">Form đã đổi — bấm &quot;Xem trước&quot; lại trước khi xuất.</span>}
+        <button onClick={runPreview} disabled={!list || !catalog || !opts.fx || busy === "preview"} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-600 hover:bg-brand-700 text-white rounded-xl disabled:opacity-50"><Eye size={14} /> {busy === "preview" ? "Đang tính..." : "Bước 1: Xem trước"}</button>
+        <button onClick={() => runExport()} disabled={!preview || previewStale || !catalog || busy === "export"} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-50"><Download size={14} /> {busy === "export" ? "Đang xuất..." : "Bước 2: Tải file Excel"}</button>
+        {previewStale && preview && <span className="text-xs text-amber-700">Form đã đổi — bấm &quot;Bước 1: Xem trước&quot; lại trước khi tải file.</span>}
       </div>
 
       {/* Xem trước */}
@@ -588,12 +597,12 @@ function BcDatapoolBuilder({ onNotify }: { onNotify: Notify }) {
 type Vendor = "bc" | "3hk"
 const VENDORS: { id: Vendor; label: string }[] = [{ id: "bc", label: "BC Datapool" }, { id: "3hk", label: "3HK Datapool" }]
 
-export default function ProductBuilderTab({ onNotify }: { onNotify: Notify }) {
+export default function CreateProducts({ onNotify }: { onNotify: Notify }) {
   const [vendor, setVendor] = useState<Vendor>("bc")
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <span className="text-sm text-gray-500">Vendor</span>
+        <span className="text-sm font-semibold text-gray-700 dark:text-slate-200">Nhà cung cấp</span>
         <div className="flex gap-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-xl">
           {VENDORS.map(v => (
             <button key={v.id} onClick={() => setVendor(v.id)} className={`px-3 py-1.5 text-sm font-medium rounded-lg ${vendor === v.id ? "bg-white dark:bg-slate-700 text-brand-700 shadow-sm" : "text-gray-500"}`}>{v.label}</button>
