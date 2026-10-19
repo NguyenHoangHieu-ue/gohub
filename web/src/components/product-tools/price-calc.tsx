@@ -43,6 +43,7 @@ export default function PriceCalc() {
   const [sim, setSim] = useState<Sim>("eSIM")
   const [destKey, setDestKey] = useState("")
   const [search, setSearch] = useState("")
+  const [scope, setScope] = useState<"single" | "group">("single")
   const [rows, setRows] = useState<PlanRow[]>([newRow()])
   const [includeData, setIncludeData] = useState(false)
   const [result, setResult] = useState<QuoteResult | null>(null)
@@ -61,8 +62,13 @@ export default function PriceCalc() {
   const shown = useMemo(() => {
     if (!opts) return []
     const q = search.trim().toLowerCase()
-    return opts.destinations.filter(d => d.vendors[sim].length > 0 && (!q || d.label.toLowerCase().includes(q))).slice(0, 80)
-  }, [opts, sim, search])
+    return opts.destinations.filter(d => d.vendors[sim].length > 0 && d.region === (scope === "group") && (!q || d.label.toLowerCase().includes(q))).slice(0, 80)
+  }, [opts, sim, search, scope])
+  const counts = useMemo(() => {
+    const c = { single: 0, group: 0 }
+    for (const d of opts?.destinations ?? []) if (d.vendors[sim].length > 0) c[d.region ? "group" : "single"]++
+    return c
+  }, [opts, sim])
 
   // Đổi loại SIM: giữ nước nếu vẫn có bán, không thì bỏ chọn
   useEffect(() => { if (dest && dest.vendors[sim].length === 0) setDestKey("") }, [sim, dest])
@@ -152,16 +158,23 @@ export default function PriceCalc() {
 
       <div className={card}>
         <div className={stepTitle}><span className={stepNo}>2</span>Chọn nước / khu vực</div>
+        <div className="grid grid-cols-2 gap-3 max-w-xl mb-3">
+          {([["single", "Một nước", `${counts.single} nước`, "VD: Nhật Bản, Thái Lan"], ["group", "Nhóm nước", `${counts.group} nhóm`, "Một gói dùng được ở nhiều nước"]] as const).map(([v, t, n, d]) => (
+            <button key={v} onClick={() => { setScope(v); setSearch(""); if (dest && dest.region !== (v === "group")) setDestKey("") }} className={`text-left p-3 rounded-xl border-2 transition ${scope === v ? "border-brand-600 bg-brand-50 dark:bg-brand-950/30" : "border-gray-200 dark:border-slate-700 hover:border-gray-300"}`}>
+              <div className="font-semibold text-gray-900 dark:text-slate-100">{t} <span className="text-xs font-normal text-gray-400">· {n}</span></div><div className="text-xs text-gray-500 mt-0.5">{d}</div>
+            </button>
+          ))}
+        </div>
         <div className="relative max-w-xl">
           <Search size={15} className="absolute left-3 top-3 text-gray-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Gõ tên nước để tìm (VD: Nhật, Japan, Thailand...)" className={`${field} w-full pl-9`} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={scope === "group" ? "Gõ tên nhóm hoặc tên một nước trong nhóm (VD: Asia, Japan, EU...)" : "Gõ tên nước để tìm (VD: Japan, Thailand...)"} className={`${field} w-full pl-9`} />
         </div>
         <div className="mt-2 max-h-56 overflow-auto border border-gray-200 dark:border-slate-700 rounded-xl divide-y divide-gray-100 dark:divide-slate-800">
-          {shown.length === 0 && <div className="p-3 text-sm text-gray-400">Không có nước nào khớp. Thử gõ tên tiếng Anh.</div>}
+          {shown.length === 0 && <div className="p-3 text-sm text-gray-400">{scope === "group" ? "Không có nhóm nước nào khớp." : "Không có nước nào khớp. Thử gõ tên tiếng Anh."}</div>}
           {shown.map(d => (
             <button key={d.key} onClick={() => setDestKey(d.key)} className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 hover:bg-gray-50 dark:hover:bg-slate-800 ${destKey === d.key ? "bg-brand-50 dark:bg-brand-950/30 font-semibold" : ""}`}>
-              <span className="flex items-center gap-1.5 min-w-0">{destKey === d.key && <Check size={14} className="text-brand-600 shrink-0" />}<span className="truncate">{d.label}</span>{d.region && <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 shrink-0">đa nước</span>}</span>
-              <span className="text-[11px] text-gray-400 shrink-0">{d.vendors[sim].length} nhà cung cấp</span>
+              <span className="flex items-center gap-1.5 min-w-0">{destKey === d.key && <Check size={14} className="text-brand-600 shrink-0" />}<span className="truncate">{d.label}</span></span>
+              <span className="text-[11px] text-gray-400 shrink-0">{d.vendors[sim].map(v => (v === "THK" ? "3HK" : v === "CMHK" ? "BC-CMHK" : "BC-Singtel")).join(" · ")}</span>
             </button>
           ))}
         </div>
