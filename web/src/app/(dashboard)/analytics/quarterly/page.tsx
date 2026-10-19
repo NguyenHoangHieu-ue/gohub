@@ -49,6 +49,7 @@ const TH_COLS: { label: string; tip: string }[] = [
   { label: "CM1",          tip: "CM1 = GP - Channel Cost - Group Cost (thực tế)\nSố thực (actual): elapsed=0..dim-1\nActual = GP_act - CC_act - GC_act" },
   { label: "PR CM1",       tip: "CM1 chiếu cả tháng\nCT: CM1_actual × factor\nChỉ hiện khi elapsed ≥ 7 ngày\nfactor = dim / elapsed" },
   { label: "CM1%",         tip: "CM1 / Revenue × 100%\nDùng CM1 thực tế / Revenue thực tế" },
+  { label: "%MoM",         tip: "So CM1 PR (chiếu cả tháng) của tháng này vs CM1 thực tế của tháng liền trước\nCT: (CM1_PR_tháng - CM1_TT_tháng_trước) / CM1_TT_tháng_trước\nTháng xong: PR = actual\nTháng đầu quý so với tháng cuối quý trước" },
   { label: "%QoQ CM1",     tip: "So sánh CM1 PR quý này vs CM1 TT quý trước\nCT: (CM1_PR_Q_này - CM1_TT_Q_trước) / |CM1_TT_Q_trước|\nCùng hàng cho tất cả tháng (quarter-level)" },
   { label: "3HK%",         tip: "Doanh thu 3HK / Tổng Revenue × 100%\nNguồn: dim_sku WHERE vendor='3HKDATAPOOL'" },
 ]
@@ -436,6 +437,23 @@ function QuarterlyContent() {
   const summary  = report?.summary ?? []
   const qt       = report?.quarterTotal
 
+  // Tháng cuối của quý TRƯỚC — để %MoM của tháng đầu quý có cơ sở so (summary chỉ có các tháng trong quý đang xem).
+  const [prevQLast, setPrevQLast] = useState<MonthSummary | null>(null)
+  useEffect(() => {
+    let alive = true
+    setPrevQLast(null)
+    const q = parseInt(selQ.replace("Q", ""))
+    const pq = q === 1 ? 4 : q - 1, py = q === 1 ? selYear - 1 : selYear
+    const p = new URLSearchParams({ quarter: `Q${pq}`, year: String(py), companyCode })
+    if (includeShip) p.set("includeShip", "1")
+    if (includeInternalOps) p.set("includeInternalOps", "1")
+    fetch(`/api/analytics/quarterly-report?${p}`).then(r => r.ok ? r.json() : null).then(d => {
+      const s: MonthSummary[] = d?.summary ?? []
+      if (alive && s.length > 0) setPrevQLast(s[s.length - 1])
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [selQ, selYear, includeShip, includeInternalOps, companyCode])
+
   // MoM: so sánh tháng hiện tại vs tháng trước trong cùng quý.
   // Tháng hiện tại CHƯA hết tháng → phải so PRO-RATA (dim/elapsed) của tháng này với ACTUAL (đã hoàn thành)
   // tháng trước, không so actual-vs-actual (actual tháng chưa xong luôn thấp hơn actual tháng đã xong → %MoM
@@ -444,8 +462,8 @@ function QuarterlyContent() {
     const chg = (a: number, b: number) => b > 0 ? ((a - b) / b) * 100 : null
     const prFactor = (m: MonthSummary) => m.elapsed > 0 && m.elapsed < m.dim ? m.dim / m.elapsed : 1
     return summary.map((m, i) => {
-      if (i === 0) return { rev: null as number | null, cm1: null as number | null, b2bRev: null as number | null, b2bCm1: null as number | null, b2cRev: null as number | null, b2cCm1: null as number | null }
-      const p = summary[i - 1]
+      const p = i === 0 ? prevQLast : summary[i - 1]
+      if (!p) return { rev: null as number | null, cm1: null as number | null, b2bRev: null as number | null, b2bCm1: null as number | null, b2cRev: null as number | null, b2cCm1: null as number | null }
       const f    = prFactor(m)
       const aR   = (m.total.actualRevenue ?? m.total.revenue) * f
       const pR   = p.total.actualRevenue ?? p.total.revenue
@@ -460,7 +478,7 @@ function QuarterlyContent() {
         b2cCm1: chg((m.b2c.actualCm1 ?? m.b2c.cm1) * f, p.b2c.actualCm1 ?? p.b2c.cm1),
       }
     })
-  }, [summary])
+  }, [summary, prevQLast])
   const activeMonths = summary.map(m => m.month)
 
   // ── Reference computeSummary() logic (gohub.html) ─────────────────────────
@@ -957,6 +975,7 @@ function QuarterlyContent() {
                               ) : <span className="text-slate-300">—</span>}
                             </td>
                             <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(m.total.cm1))}>{pct(m.total.cm1Pct)}</td>
+                            <td className={cn("px-4 py-3 text-right text-[11px] font-bold tabular-nums", mom.cm1 == null ? "text-slate-300" : mom.cm1 >= 0 ? "text-green-600" : "text-red-500")}>{mom.cm1 != null ? `${mom.cm1 >= 0 ? "+" : ""}${mom.cm1.toFixed(1)}%` : "—"}</td>
                             <td className="px-4 py-3 text-right text-slate-300">—</td>
                             <td className="px-4 py-3 text-right text-slate-500 whitespace-nowrap">{fc(m.hk3Rev ?? 0)} <span className="text-slate-400 text-[10px]">({pct(m.hk3Pct ?? 0)})</span></td>
                           </tr>

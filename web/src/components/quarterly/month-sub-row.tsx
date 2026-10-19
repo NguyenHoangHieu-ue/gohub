@@ -43,6 +43,10 @@ export function MonthSubRow({ label, stats, showPr = false, kpiFactor = 1, momRe
       </td>
       <td className={cn("px-4 py-2 text-right font-semibold", cm1Color(stats.cm1))}>{pct(stats.cm1Pct)}</td>
       <td className={cn("px-4 py-2 text-right text-[11px] font-bold tabular-nums",
+        momCm1 == null ? "text-slate-300" : momCm1 >= 0 ? "text-green-600" : "text-red-500")}>
+        {momCm1 != null ? `${momCm1 >= 0 ? "+" : ""}${momCm1.toFixed(1)}%` : "—"}
+      </td>
+      <td className={cn("px-4 py-2 text-right text-[11px] font-bold tabular-nums",
         qoqCm1 == null ? "text-slate-300" : qoqCm1 >= 0 ? "text-green-600" : "text-red-500")}>
         {qoqCm1 != null ? `${qoqCm1 >= 0 ? "+" : ""}${qoqCm1.toFixed(1)}%` : "—"}
       </td>

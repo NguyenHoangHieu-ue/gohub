@@ -789,3 +789,7 @@ Hiếu chốt: Organization có >1 mã KH thì CHỈ nhập target ở dòng Org
 `prevQuarterTotals.b2bCm1` trước đây chỉ trừ chi phí khách dạng amount của MỌI KH (kể cả KH không có đơn tháng đó) nên lệch `quarterTotal.b2b.cm1` của quý trước (Q4 so Q3 lệch 919tr). Nay dùng cùng hàm `custCostByMonth` với quý hiện tại: chỉ KH có đơn trong tháng, percent × doanh thu KH theo tháng (`prevCustRevByMonth` từ `splitQuarterRows`), quý trước đã đóng nên ratio 1. Cache raw `qreport_raw_v12`. Test sống: `prevQuarterTotals` = `quarterTotal` quý liền trước.
 
 **Q-02:** nút "Tải lại mới" làm mới cả lifecycle (`refreshTick` → `nocache=1`) và target (bỏ qua target khi đang sửa).
+
+## s236 — Cột "%MoM" ở bảng "Tổng hợp theo Tháng"
+
+Bảng "Xem bảng số liệu gốc theo tháng" thêm cột **%MoM** ngay sau CM1%: `(CM1 PR tháng này − CM1 thực tế tháng liền trước) / CM1 tháng trước` (tháng đã xong PR = actual; tháng đang chạy dùng CM1 actual × dim/elapsed, cùng công thức badge dưới cột PR CM1; chỉ tính khi CM1 tháng trước > 0). Áp cho dòng tổng và dòng con B2B/B2C. Tháng đầu quý so với tháng cuối của quý trước: trang gọi thêm `quarterly-report` quý trước ở nền (`prevQLast`), nên %MoM của tháng đầu quý hiện sau vài giây và cả badge ▲▼ của tháng đầu quý cũng có số thay vì N/A.
