@@ -419,3 +419,7 @@ của các khối tính toán; `nocache=1` chỉ còn cho làm mới chủ độ
 ## s210 (2026-09-25) — Filter Phí ship / Đơn nội bộ / KH Ops MẶC ĐỊNH TICK (gồm hết)
 
 Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm phí ship + đơn nội bộ, và KH Ops ở B2B/B2C) — số mặc định khớp raw `gohub_dw`; bỏ tick để về "doanh thu SP thuần". **Thay thế** cột "Default = Off" của bảng "Filter Chuẩn" cũ ở trang này (bản chép ở các wiki tab khác cũng vậy). Áp cho 8 nơi: B2B, B2C (`b2c-performance.tsx`), BOD, Quarter Report (kéo theo tab Performance), Quarter Report (Organization), Staff, All-Time, Orders (dropdown Yes/No mặc định Yes). API KHÔNG đổi: thiếu tham số vẫn = loại (chỉ FE truyền cờ). Tab không có bộ lọc (Channels, Vendors, Customers, Dashboard, Squad Progress...) vẫn cố định loại ship/nội bộ → số không còn khớp tab đã tick mặc định.
+
+## s236 (2026-10-19) — sửa CM1 tab Metric (QA G2, G2-7)
+
+Route `b2c/metric` trước đây cộng chi phí của MỌI kênh trong `analytics_channel_costs` (cả kênh B2B/ecom như VN-Ecom, Traveloka, Momo) và áp chi phí dạng phần trăm lên doanh thu cả B2C, nên CM1 tháng 1 đến 7 âm hàng tỷ. Nay chỉ lấy chi phí kênh thuộc `B2C_CHANNELS` và nhân phần trăm với doanh thu CỦA CHÍNH KÊNH đó (thêm truy vấn doanh thu theo `channel_name`, khoá cache `b2c-metric:v2`). CM1 mỗi tháng đóng = Advanced (`b2c/monthly`). Test: `tab-consistency` nhóm "B2C Metric". Còn mở: Metric tính tháng hiện tại đến hôm nay trong khi Advanced đến ngày dữ liệu cuối (G2-8).

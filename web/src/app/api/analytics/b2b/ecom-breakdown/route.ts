@@ -39,13 +39,13 @@ export async function GET(req: NextRequest) {
   const filter = getDateFilter(startDate || null, endDate || null, source.dateCol)
 
   try {
-    const key = `b2b-ecom2:${dateColumn}:${startDate}:${endDate}:${includeShip ? 1 : 0}`
+    const key = `b2b-ecom3:${dateColumn}:${startDate}:${endDate}:${includeShip ? 1 : 0}`
     const payload = await cachedQuery(key, async () => {
       const rows = await queryAnalytics<Record<string, string>>(
         `SELECT c.name AS customer_name, ds.type_of_sim AS sim_type, st.name AS staff_name,
                 TO_CHAR(f.${source.dateCol}::DATE, 'YYYY-MM') AS month,
                 SUM(f.${source.revenueCol}) AS revenue, SUM(f.${source.marginCol}) AS margin,
-                SUM(f.${source.quantityCol}) AS units, COUNT(*) AS orders
+                SUM(f.${source.quantityCol}) AS units, COUNT(DISTINCT f.order_code) AS orders
          FROM ${source.mainTable} f
          JOIN dim_customer c ON f.customer_code = c.code
          LEFT JOIN dim_sku ds ON f.sku = ds.sku

@@ -309,3 +309,8 @@ Tab B2B có toggle **"Theo tháng" (mặc định) | "Khoảng ngày (cũ)"**. B
 - Bảng "Chi tiết theo Nhóm" chính là `B2BTierSection` của Quarter Report với prop `fixedMonth`: hạng Strategic/VIP/Gold/Silver theo bảng giá, drill Organization → mã KH, Sửa chi tiết/Import/Template/Export giữ nguyên. Ở `fixedMonth`: ẩn nút chọn tháng và "Tổng Quý", bỏ cột %QoQ, ẩn mọi target (cột %Tgt, 3HK Rev TGT, %TGT 3HK, nhập target Organization, khối Target & Progress), cột %MoM (doanh thu so tháng liền trước; tháng đầu quý dùng `prevMonthRevenue` từng KH do `quarterly-b2b-customers` trả thêm).
 - Sửa kèm: dòng Organization ở view một tháng trước đây cộng số cả quý; nay cộng đúng tháng đang xem.
 - Đã kiểm sống T9/2026 và T10/2026 (tháng đang chạy, PR/Act): tổng các hạng = thẻ, từng KH khớp `quarterly-b2b-customers`, thẻ T10 khớp bản cũ (doanh thu chiếu 5.114.287.826, CM1 952.784.589).
+
+## s236 (2026-10-19) — QA G2: xuất Excel hạng và đếm đơn VN Ecom
+
+- Xuất Excel "B2B Tier Performance" (bản khoảng ngày): cột CM1, CM1 %, Projected CM1 nay lấy `cm1`, `cm1_percent` của backend (đã trừ CH.Cost), thêm cột CH.Cost. Trước đó file xuất CM1 = Gross Profit.
+- `ecom-breakdown` và `ecom-timeline`: "Orders" nay là `COUNT(DISTINCT order_code)` (trước là số dòng, cao hơn khoảng 6%); khoá cache `b2b-ecom3` và `b2b-ecom-tl2`. Đơn có cả SIM và eSIM vẫn được tính ở từng shop.

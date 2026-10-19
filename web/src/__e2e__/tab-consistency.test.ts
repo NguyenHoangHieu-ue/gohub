@@ -229,4 +229,15 @@ describeLive("So cặp tab — cùng kỳ, cùng số", () => {
       close(sum(ch, "revenue"), bod.total_revenue, "doanh thu Channels vs BOD (vendor 3HK DATAPOOL)")
     }, 180_000)
   })
+  describe("B2C Metric: CM1 tháng đóng = Advanced, chỉ chi phí kênh B2C (G2-7)", () => {
+    it("CM1 các tháng đã đóng của năm khớp Σ cm1 kênh ở b2c/monthly", async () => {
+      const metric = await api("/api/analytics/b2c/metric?nocache=1")
+      const monthly = await api("/api/analytics/b2c/monthly?nocache=1")
+      const cur = monthly.currentMonth
+      for (const m of monthly.months.filter((x: string) => x !== cur)) {
+        const adv = Object.values(monthly.profitByChannel[m] || {}).reduce((a: number, c: any) => a + c.cm1, 0) as number
+        close(metric.data[m]?.cm1, adv, `CM1 ${m} Metric vs Advanced`, 1000)
+      }
+    }, 180_000)
+  })
 })

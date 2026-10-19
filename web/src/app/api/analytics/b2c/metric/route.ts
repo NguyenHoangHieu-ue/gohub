@@ -5,6 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { CACHE_HEADERS, cachedQuery } from "@/lib/analytics-helpers"
 import { runGA4Report, ga4Sites } from "@/lib/ga4"
 import { supabaseAdmin } from "@/lib/supabase"
+import { B2C_CHANNELS } from "@/lib/b2c-channel-budget"
 
 export const maxDuration = 60
 
@@ -77,8 +78,8 @@ export async function GET(req: NextRequest) {
     // Cache TTL 60' (s196+20 — cùng lớp bug timeout đã fix cho B2C Advanced s195+15): trước đây 2 CTE
     // này (đặc biệt customerRows với JOIN first_order quét toàn lịch sử fact_fulfillment_revenue) chạy
     // lại tươi mỗi lượt xem trang, không cache — dễ chạm ngưỡng timeout 60s khi data lớn dần.
-    const [businessRows, customerRows] = await cachedQuery(
-      `b2c-metric:v1:${windowStart}:${windowEnd}`,
+    const [businessRows, channelRevRows, customerRows] = await cachedQuery(
+      `b2c-metric:v2:${windowStart}:${windowEnd}`,
       () => Promise.all([
       queryAnalytics<{ month: string; ctype: string; revenue: string; gross_profit: string; orders: string }>(
         `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -89,6 +90,19 @@ export async function GET(req: NextRequest) {
                 SUM(COALESCE(f.gross_profit_vnd,
                     COALESCE(f.fulfilled_revenue_amount_vnd, 0) - COALESCE(f.cogs_amount_vnd, 0), 0)) AS gross_profit,
                 COUNT(DISTINCT f.order_code)              AS orders
+         FROM fact_fulfillment_revenue f
+         JOIN dim_order_source s ON f.order_source_code = s.code
+         WHERE UPPER(s.group_name) = 'B2C'
+           AND f.fulfiled_date::date >= $1
+           AND f.fulfiled_date::date <= $2
+         GROUP BY 1, 2`,
+        [windowStart, windowEnd]
+      ),
+      // doanh thu theo kênh thật: chi phí % của từng kênh phải nhân với doanh thu CỦA kênh đó
+      queryAnalytics<{ month: string; channel: string; revenue: string }>(
+        `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
+                COALESCE(NULLIF(TRIM(s.channel_name), ''), 'Khác') AS channel,
+                SUM(f.fulfilled_revenue_amount_vnd) AS revenue
          FROM fact_fulfillment_revenue f
          JOIN dim_order_source s ON f.order_source_code = s.code
          WHERE UPPER(s.group_name) = 'B2C'
@@ -159,12 +173,16 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const channelRev: Record<string, number> = {}
+    for (const r of channelRevRows) channelRev[`${r.month}|${r.channel}`] = parseFloat(r.revenue || "0")
+
     // 2. CM1 = total GP - OpCost từ Supabase (channel_costs + group_costs) per month
     try {
       const { data: chCosts } = await supabaseAdmin
         .from("analytics_channel_costs")
         .select("channel, month, ads, platform_fee, sponsor_products, media")
         .in("month", months)
+        .in("channel", B2C_CHANNELS)
       const { data: gcRows } = await supabaseAdmin
         .from("analytics_channel_group_costs")
         .select("month, amount")
@@ -178,7 +196,7 @@ export async function GET(req: NextRequest) {
 
         for (const r of chCosts ?? []) {
           if (String(r.month) !== m) continue
-          const rev = d.revenue.total
+          const rev = channelRev[`${m}|${String(r.channel)}`] ?? 0
           opCost += costAmount(parseCostValue(r.ads), rev, ratio)
           opCost += costAmount(parseCostValue(r.platform_fee), rev, ratio)
           opCost += costAmount(parseCostValue(r.sponsor_products), rev, ratio)

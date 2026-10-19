@@ -777,12 +777,13 @@ export default function B2BPerformance() {
                           revenue: d.revenue,
                           projected_revenue: Math.round(d.revenue * projectionFactor),
                           projected_margin: Math.round(d.margin * projectionFactor),
-                          projected_gpm2: Math.round((d.gpm2 ?? 0) * projectionFactor),
+                          projected_gpm2: Math.round((d.cm1 ?? d.gpm2 ?? 0) * projectionFactor),
                           units: d.units,
                           margin: d.margin,
                           margin_percent: Math.round(d.margin_percent * 10) / 10,
-                          gpm2: d.gpm2,
-                          gpm2_percent: Math.round(d.gpm2_percent * 10) / 10,
+                          ch_cost: d.ch_cost ?? 0,
+                          gpm2: d.cm1 ?? d.gpm2,
+                          gpm2_percent: Math.round((d.cm1_percent ?? d.gpm2_percent) * 10) / 10,
                         })),
                       ]
                       const columns: { label: string; key: string }[] = [
@@ -801,6 +802,7 @@ export default function B2BPerformance() {
                         { label: "Units Sold", key: "units" },
                         { label: "Gross Profit", key: "margin" },
                         { label: "Margin %", key: "margin_percent" },
+                        { label: "CH.Cost", key: "ch_cost" },
                         { label: "CM1", key: "gpm2" },
                         { label: "CM1 %", key: "gpm2_percent" },
                       )
