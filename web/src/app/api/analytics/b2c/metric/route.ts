@@ -5,6 +5,8 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { CACHE_HEADERS, cachedQuery, analyticsGuard } from "@/lib/analytics-helpers"
 import { runGA4Report, ga4Sites } from "@/lib/ga4"
 import { supabaseAdmin } from "@/lib/supabase"
+import { getSafeReportDate } from "@/lib/analytics-engine/date-math"
+import { adminGohubConfigured, adminGohubCustomerChannelRows } from "@/lib/admin-gohub"
 import { B2C_CHANNELS } from "@/lib/b2c-channel-budget"
 
 export const maxDuration = 60
@@ -57,17 +59,17 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   const guard = analyticsGuard(req, session); if (guard) return guard
 
-  const now = new Date()
-  const year = now.getFullYear()
+  // Cutoff T-1 giờ VN như b2c/monthly (Advanced/Performance): dữ liệu hôm nay chưa đủ
+  const dataAsOf = getSafeReportDate(1)
+  const [year, cutoffM, elapsedDays] = dataAsOf.split("-").map(Number)
   const months: string[] = []
-  for (let i = 0; i <= now.getMonth(); i++) {
-    months.push(`${year}-${String(i + 1).padStart(2, "0")}`)
+  for (let i = 1; i <= cutoffM; i++) {
+    months.push(`${year}-${String(i).padStart(2, "0")}`)
   }
   const windowStart = `${months[0]}-01`
-  const elapsedDays = now.getDate()
-  const totalDays = new Date(year, now.getMonth() + 1, 0).getDate()
+  const totalDays = new Date(Date.UTC(year, cutoffM, 0)).getUTCDate()
   const currentMonth = months[months.length - 1]
-  const windowEnd = `${currentMonth}-${String(elapsedDays).padStart(2, "0")}`
+  const windowEnd = dataAsOf
   const yearStart = `${year}-01-01`
 
   const result: Record<string, MonthData> = {}
@@ -79,7 +81,7 @@ export async function GET(req: NextRequest) {
     // này (đặc biệt customerRows với JOIN first_order quét toàn lịch sử fact_fulfillment_revenue) chạy
     // lại tươi mỗi lượt xem trang, không cache — dễ chạm ngưỡng timeout 60s khi data lớn dần.
     const [businessRows, channelRevRows, customerRows] = await cachedQuery(
-      `b2c-metric:v2:${windowStart}:${windowEnd}`,
+      `b2c-metric:v3:${windowStart}:${windowEnd}`,
       () => Promise.all([
       queryAnalytics<{ month: string; ctype: string; revenue: string; gross_profit: string; orders: string }>(
         `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -173,6 +175,34 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Khách hàng thật (Web/App, mới/quay lại) lấy từ Admin GoHub như Advanced. Bản DW đếm customer_code
+    // (mã chung của kênh, chỉ 2-3 "khách"/tháng) nên chỉ là phương án dự phòng khi Admin lỗi/chưa cấu hình.
+    let customerSource: "admin-gohub" | "analytics-db" = "analytics-db"
+    if (adminGohubConfigured()) {
+      try {
+        const rows = await cachedQuery(
+          `b2c-metric-cust-admin:v1:${windowStart}:${windowEnd}`,
+          () => adminGohubCustomerChannelRows(months),
+          60,
+          false,
+          ["b2c-customer"],
+        )
+        for (const m of months) result[m].customers = { web: { new: 0, returning: 0, total: 0 }, app: { new: 0, returning: 0, total: 0 } }
+        for (const r of rows) {
+          const m = result[r.month]
+          if (!m) continue
+          const target = r.bucket === "vnWeb" || r.bucket === "usWeb" ? m.customers.web : r.bucket === "usApp" ? m.customers.app : null
+          if (!target) continue
+          const cnt = parseInt(r.count || "0")
+          target[r.type === "new" ? "new" : "returning"] += cnt
+          target.total += cnt
+        }
+        customerSource = "admin-gohub"
+      } catch (e) {
+        console.error("[b2c/metric] admin gohub customer -> dùng DW", (e as Error).message)
+      }
+    }
+
     const channelRev: Record<string, number> = {}
     for (const r of channelRevRows) channelRev[`${r.month}|${r.channel}`] = parseFloat(r.revenue || "0")
 
@@ -251,7 +281,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { months, currentMonth, elapsedDays, totalDays, data: result },
+      { months, currentMonth, elapsedDays, totalDays, customerSource, data: result },
       { headers: CACHE_HEADERS }
     )
   } catch (err: any) {

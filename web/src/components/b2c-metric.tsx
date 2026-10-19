@@ -26,6 +26,7 @@ interface MonthData {
   customers: { web: CustGroup; app: CustGroup }
 }
 interface MetricResponse {
+  customerSource?: "admin-gohub" | "analytics-db"
   months: string[]
   currentMonth: string
   elapsedDays: number
@@ -166,7 +167,7 @@ export function B2CMetric() {
       </div>
 
       <LogicNote>
-        Revenue / GP / Orders / Customer: gohub_dw (fact_fulfillment_revenue · sub_group_name: Websites=Web, Mobile-App=App).
+        Revenue / GP / Orders: gohub_dw (fact_fulfillment_revenue · sub_group_name: Websites=Web, Mobile-App=App). Customer: {data?.customerSource === "admin-gohub" ? "Admin GoHub (khách thật, mới/quay lại)" : "gohub_dw (chỉ đếm mã khách chung của kênh, không phải khách thật; Admin GoHub đang không khả dụng)"}.
         CM1 = GP tổng – OpCost (channel + group costs). Traffic / User: GA4 yearMonth.
       </LogicNote>
 

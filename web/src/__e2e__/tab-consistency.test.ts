@@ -239,5 +239,18 @@ describeLive("So cặp tab — cùng kỳ, cùng số", () => {
         close(metric.data[m]?.cm1, adv, `CM1 ${m} Metric vs Advanced`, 1000)
       }
     }, 180_000)
+    it("cùng mốc dữ liệu và cùng số khách hàng với Advanced (G2-8, G2-10)", async () => {
+      const metric = await api("/api/analytics/b2c/metric?nocache=1")
+      const monthly = await api("/api/analytics/b2c/monthly?nocache=1")
+      expect(metric.months).toEqual(monthly.months)
+      expect(metric.elapsedDays).toBe(monthly.elapsedDays)
+      if (monthly.customerSource === "admin-gohub" && metric.customerSource === "admin-gohub") {
+        for (const m of monthly.months) {
+          const c = monthly.customerChannels[m]
+          const web = metric.data[m].customers.web.total
+          expect(web, `khách web ${m}`).toBe(c.vnWeb.total.count + c.usWeb.total.count)
+        }
+      }
+    }, 180_000)
   })
 })

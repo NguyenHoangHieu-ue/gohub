@@ -1005,7 +1005,17 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
     const idx = mktReportMonths.indexOf(month)
     if (idx <= 0) return <div className="mt-0.5 text-[11px] text-slate-300">—</div>
     const currentValue = mktMetric(month, metric)
-    const prevValue = mktMetric(mktReportMonths[idx - 1], metric)
+    let prevValue = mktMetric(mktReportMonths[idx - 1], metric)
+    // Tháng đang chạy: so MTD với CÙNG KỲ tháng trước (không phải cả tháng trước). Doanh thu dùng số thật
+    // (revenueComparison.previousSamePeriod), các cột cộng dồn khác chia theo tỷ lệ ngày; tỷ lệ % giữ nguyên.
+    const additive = ["meta", "google", "totalMkt", "revenue", "grossProfit", "cm1"].includes(metric)
+    if (month === data?.currentMonth && additive && prevValue) {
+      const prevKey = mktReportMonths[idx - 1]
+      const prevDays = daysInMonthKey(prevKey)
+      prevValue = metric === "revenue" && data?.revenueComparison
+        ? data.revenueComparison.previousSamePeriod
+        : prevValue * Math.min(data?.elapsedDays ?? prevDays, prevDays) / prevDays
+    }
     if (currentValue === null || !prevValue) return <div className="mt-0.5 text-[11px] text-slate-300">—</div>
     const diff = currentValue - prevValue
     const change = (diff / Math.abs(prevValue)) * 100
