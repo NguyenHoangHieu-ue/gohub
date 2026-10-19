@@ -10,7 +10,8 @@ on:
 jobs:
   notify:
     runs-on: ubuntu-latest
-    if: github.event.commits != null && github.event.commits[0] != null
+    # Commit cuối của lần push có chứa [skip notify] → không báo Lark (dùng cho thay đổi không cần thông báo mọi người)
+    if: github.event.commits != null && github.event.commits[0] != null && !contains(github.event.head_commit.message, '[skip notify]')
     steps:
       - uses: actions/checkout@v4
         with:
