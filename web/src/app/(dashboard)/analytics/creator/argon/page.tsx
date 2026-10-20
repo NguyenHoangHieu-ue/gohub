@@ -110,6 +110,11 @@ export default function ArgonMissionsPage() {
     setSelected(null); setPanel("center")
     setAutoSend({ text: `Chạy lại ${path}: đọc docstring để biết đầu vào; nếu cần dữ liệu mới thì lấy lại bằng sql (saveAs) trước, rồi chạy run_code script="${path}" và báo kết quả ngắn gọn.`, k: Date.now() })
   }
+  async function decidePatch(id: string, action: "approve" | "reject") {
+    if (!activeId) return
+    await api(`/api/creator/argon/missions/${activeId}/patches`, jsonInit("POST", { id, action }))
+    refreshAll()
+  }
   async function unlink(sourceId: string) {
     if (!activeId) return
     try { await api(`/api/creator/argon/missions/${activeId}/sources?sourceId=${sourceId}`, { method: "DELETE" }); refreshAll() } catch (e) { onError((e as Error).message) }
@@ -176,7 +181,7 @@ export default function ArgonMissionsPage() {
                   <FileViewer missionId={m.id} path={selected} reloadKey={reloadKey} onSaved={refreshAll} onDeleted={() => { setSelected(null); refreshAll() }} onError={onError} />
                 </div>
               </> : (
-                <MissionChat autoSend={autoSend} phase={m.phase} pendingAsk={detail.pendingAsk} runs={runs} runner={runner} onPhase={changePhase} onStep={(id, n) => void showStep(id, n)} onError={onError} />
+                <MissionChat autoSend={autoSend} phase={m.phase} pendingAsk={detail.pendingAsk} patches={detail.patches ?? []} onPatch={decidePatch} runs={runs} runner={runner} onPhase={changePhase} onStep={(id, n) => void showStep(id, n)} onError={onError} />
               )}
             </div>
           </>}

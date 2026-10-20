@@ -5,11 +5,12 @@ import type { ToolLogEntry } from "./tools"
 import { SQL_TOOL_NAME, execSql } from "./sql-tool"
 import { RUN_CODE_NAME, execRunCode } from "./code-tool"
 import { ASK_TOOL_NAME, execAsk, setPendingAsk } from "./ask-tool"
+import { PATCH_TOOL_NAME, execPropose, getPatches, savePatches } from "./patch-tool"
 
 // Công cụ workspace của Sứ mệnh: Argon đọc/ghi file TRONG workspace của đúng sứ mệnh đang chạy (không chạm file hay dữ liệu nơi khác).
 // Quyền ghi theo pha (canArgonWrite): làm rõ chỉ brief.md; kế hoạch thêm notes/; chạy ghi mọi nơi; tạm dừng/xong không ghi.
 export const WS_TOOL_NAMES = ["docFile", "ghiFile", "lietKeFile"] as const
-export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME, RUN_CODE_NAME, ASK_TOOL_NAME]
+export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME, RUN_CODE_NAME, ASK_TOOL_NAME, PATCH_TOOL_NAME]
 export const MAX_WS_READ_CHARS = 60_000
 const LOG_CONTENT_CHARS = 1_500
 
@@ -128,5 +129,21 @@ export async function execMissionAsk(args: Record<string, unknown>, missionId: s
     })
   } catch (e) {
     return { name: ASK_TOOL_NAME, args, ok: false, chars: 0, result: `Lỗi hoiHieu: ${(e as Error).message}`, at: new Date().toISOString() }
+  }
+}
+
+/** Công cụ `deXuatSuaCode`: ghi đề xuất chờ Hiếu duyệt (KHÔNG tự sửa/đẩy code) + nhắn Lark cho Hiếu. */
+export async function execMissionPatch(args: Record<string, unknown>, missionId: string, origin: string): Promise<ToolLogEntry> {
+  try {
+    const mission = await missionById(missionId)
+    if (!mission) return { name: PATCH_TOOL_NAME, args, ok: false, chars: 0, result: "Sứ mệnh không còn tồn tại", at: new Date().toISOString() }
+    const { getCreatorLarkOpenId, sendLarkDM } = await import("@/lib/lark")
+    return await execPropose(args, { missionId, missionName: mission.name, phase: mission.phase, origin }, {
+      load: getPatches, save: savePatches,
+      notify: async t => { const id = await getCreatorLarkOpenId(); if (id) await sendLarkDM(id, t) },
+      newId: () => `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    })
+  } catch (e) {
+    return { name: PATCH_TOOL_NAME, args, ok: false, chars: 0, result: `Lỗi deXuatSuaCode: ${(e as Error).message}`, at: new Date().toISOString() }
   }
 }

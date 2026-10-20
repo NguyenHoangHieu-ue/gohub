@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Brain, Check, Copy, Loader2, Pause, Play, Rotate
 import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
-import { PHASE_LABEL, type MissionPhase, type PendingAskUi } from "./mission-types"
+import { PHASE_LABEL, type MissionPhase, type PatchUi, type PendingAskUi } from "./mission-types"
 import type { ModelKey, SendOpts, Thinking, useMissionRunner } from "./use-mission-runner"
 
 // Chat của sứ mệnh: chỉ hiện KẾT QUẢ và điều cần Hiếu quyết; các bước làm việc nằm ở Bàn làm việc. Thanh pha dẫn Hiếu qua Làm rõ → Kế hoạch → Chốt và chạy.
@@ -21,10 +21,12 @@ const QUICK: Record<MissionPhase, string[]> = {
   done: ["Tóm tắt kết quả cuối cùng"],
 }
 
-export function MissionChat({ autoSend, phase, pendingAsk, runs, runner, onPhase, onStep, onError }: {
+export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError }: {
   autoSend: { text: string; k: number } | null   // câu lệnh tự gửi (vd ▶ chạy lại script); mỗi k mới = một lần gửi
   phase: MissionPhase
   pendingAsk: PendingAskUi | null
+  patches: PatchUi[]
+  onPatch: (id: string, action: "approve" | "reject") => Promise<void>   // Hiếu duyệt/bỏ đề xuất sửa code của Argon
   runs: Run[]
   runner: Runner
   onPhase: (to: MissionPhase) => Promise<void>
@@ -41,6 +43,11 @@ export function MissionChat({ autoSend, phase, pendingAsk, runs, runner, onPhase
   const [confirmChot, setConfirmChot] = useState(false)
   const [autoRun, setAutoRun] = useState(true)   // Chốt xong tự giao Argon chạy nền theo kế hoạch
   const [phaseBusy, setPhaseBusy] = useState(false)
+  const [patchBusy, setPatchBusy] = useState<string | null>(null)
+  async function decidePatch(id: string, action: "approve" | "reject") {
+    setPatchBusy(id)
+    try { await onPatch(id, action) } catch (e) { onError((e as Error).message) } finally { setPatchBusy(null) }
+  }
   const endRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
   const opts: SendOpts = { thinking, allowTools, background, model }
@@ -135,6 +142,21 @@ export function MissionChat({ autoSend, phase, pendingAsk, runs, runner, onPhase
         <div ref={endRef} />
       </div>
 
+      {patches.some(x => x.status === "pending") && (
+        <div role="group" aria-label="Đề xuất sửa code của Argon" className="mx-4 mb-2 space-y-2">
+          {patches.filter(x => x.status === "pending").map(x => (
+            <div key={x.id} className="rounded-lg border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/30 p-3 text-sm">
+              <div className="font-medium text-sky-900 dark:text-sky-200">Argon đề xuất sửa code: {x.title}</div>
+              <details className="mt-1 text-gray-700 dark:text-slate-200"><summary className="cursor-pointer text-xs text-sky-700 dark:text-sky-300">Xem nội dung đề xuất</summary><p className="mt-1 whitespace-pre-wrap text-[13px]">{x.request}</p>{x.plan && <p className="mt-1 whitespace-pre-wrap text-[13px] text-gray-500">Hướng sửa gợi ý: {x.plan}</p>}</details>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button type="button" disabled={patchBusy === x.id} onClick={() => void decidePatch(x.id, "approve")} className="px-3 py-1 text-xs rounded-lg bg-sky-600 text-white disabled:opacity-50">Duyệt, giao Claude Code sửa</button>
+                <button type="button" disabled={patchBusy === x.id} onClick={() => void decidePatch(x.id, "reject")} className="px-3 py-1 text-xs rounded-lg border border-gray-300 dark:border-slate-600">Bỏ qua</button>
+                <span className="text-[11px] text-gray-500">Duyệt xong Claude Code viết patch và mở PR vào nhánh staging (không vào main). Anh xem PR rồi merge.</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {pendingAsk && !busy && !bgActive && (
         <div role="group" aria-label="Argon đang chờ anh trả lời" className="mx-4 mb-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm">
           <div className="font-medium text-amber-900 dark:text-amber-200">Argon đang chờ anh quyết</div>

@@ -4,6 +4,7 @@ import { requireArgonUser } from "@/lib/argon/server"
 import { buildTree } from "@/lib/argon/missions"
 import { deleteMission, linkedSources, listFiles, ownMission, updateMission } from "@/lib/argon/missions-db"
 import { getPendingAsk } from "@/lib/argon/ask-tool"
+import { getPatches } from "@/lib/argon/patch-tool"
 
 export const dynamic = "force-dynamic"
 
@@ -13,12 +14,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const mission = await ownMission(params.id, username)
   if (!mission) return NextResponse.json({ error: "Không tìm thấy sứ mệnh" }, { status: 404 })
-  const [files, sources, pendingAsk, runs] = await Promise.all([
-    listFiles(mission.id), linkedSources(mission.id), getPendingAsk(mission.id),
+  const [files, sources, pendingAsk, patches, runs] = await Promise.all([
+    listFiles(mission.id), linkedSources(mission.id), getPendingAsk(mission.id), getPatches(mission.id),
     supabaseAdmin.from("argon_runs").select("*").eq("project_id", mission.project_id).order("created_at"),
   ])
   const spent = (runs.data ?? []).reduce((n, r) => n + (Number(r.cost_usd) || 0), 0)
-  return NextResponse.json({ mission, pendingAsk, tree: buildTree(files), files, sources, runs: runs.data ?? [], spent_usd: Math.round(spent * 10_000) / 10_000 })
+  return NextResponse.json({ mission, pendingAsk, patches, tree: buildTree(files), files, sources, runs: runs.data ?? [], spent_usd: Math.round(spent * 10_000) / 10_000 })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
