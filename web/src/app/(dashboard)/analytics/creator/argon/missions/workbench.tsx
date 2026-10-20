@@ -6,6 +6,16 @@ import { cn } from "@/lib/utils"
 import { stepLabel, type Step } from "./use-mission-runner"
 import { fmtUsd } from "./mission-types"
 
+// Tham số bước: câu SQL / code Python hiện nguyên văn nhiều dòng (không bị JSON thoát ký tự xuống dòng), tham số còn lại hiện dạng JSON gọn.
+function StepArgs({ args }: { args: Record<string, unknown> }) {
+  const { query, code, content, ...rest } = args
+  const block = (label: string, text: unknown) => typeof text === "string" && text ? <div key={label} className="mb-2"><div className="text-[10px] uppercase tracking-wide text-slate-500 mb-0.5">{label}</div><pre className="text-[11.5px] leading-relaxed font-mono whitespace-pre-wrap break-words">{text}</pre></div> : null
+  return <>
+    {block("SQL", query)}{block("Python", code)}{block("Nội dung ghi", content)}
+    {Object.keys(rest).length > 0 && <pre className="text-[11.5px] leading-relaxed font-mono whitespace-pre-wrap break-words">{JSON.stringify(rest, null, 2)}</pre>}
+  </>
+}
+
 // Bàn làm việc: dòng thời gian các bước Argon làm trong lượt (đọc/ghi file workspace, lấy số liệu hệ thống). Chat chỉ hiện kết quả.
 // Bấm một bước để xem tham số và kết quả đầy đủ; bước ghi/đọc file mở thẳng file đó ở khung giữa.
 export function Workbench({ steps, busy, bgActive, spentUsd, runCount, focus, sandbox, building, onBuild, onStop, onOpenFile, onLoadFull }: {
@@ -86,7 +96,7 @@ export function Workbench({ steps, busy, bgActive, spentUsd, runCount, focus, sa
       {cur && (
         <div className="border-t border-gray-200 dark:border-slate-700 bg-slate-900 text-slate-200 max-h-[40%] overflow-auto p-3">
           <div className="text-[11px] text-slate-400 mb-1.5">{stepLabel(cur).text} · {cur.ok ? "thành công" : "lỗi"} · {cur.chars.toLocaleString("vi-VN")} ký tự</div>
-          <pre className="text-[11.5px] leading-relaxed font-mono whitespace-pre-wrap break-words">{JSON.stringify(cur.args, null, 2)}</pre>
+          <StepArgs args={cur.args} />
           {cur.result != null
             ? <pre className="mt-2 pt-2 border-t border-slate-700 text-[11.5px] leading-relaxed font-mono whitespace-pre-wrap break-words text-slate-300">{cur.result.length > 6000 ? `${cur.result.slice(0, 6000)}\n…(xem phần còn lại trong file hoặc nhật ký)` : cur.result}</pre>
             : <div className="mt-2 text-[11px] text-slate-500">Đang tải kết quả…</div>}
