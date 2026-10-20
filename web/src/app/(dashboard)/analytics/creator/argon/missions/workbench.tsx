@@ -8,12 +8,13 @@ import { fmtUsd } from "./mission-types"
 
 // Bàn làm việc: dòng thời gian các bước Argon làm trong lượt (đọc/ghi file workspace, lấy số liệu hệ thống). Chat chỉ hiện kết quả.
 // Bấm một bước để xem tham số và kết quả đầy đủ; bước ghi/đọc file mở thẳng file đó ở khung giữa.
-export function Workbench({ steps, busy, bgActive, spentUsd, runCount, onStop, onOpenFile, onLoadFull }: {
+export function Workbench({ steps, busy, bgActive, spentUsd, runCount, focus, onStop, onOpenFile, onLoadFull }: {
   steps: Step[]
   busy: boolean
   bgActive: boolean
   spentUsd: number
   runCount: number
+  focus: { id: string; k: number } | null   // chip [#N] trong chat bấm vào → chọn bước này (k đổi mỗi lần bấm)
   onStop: () => void
   onOpenFile: (path: string) => void
   onLoadFull: (runId: string) => void
@@ -26,6 +27,7 @@ export function Workbench({ steps, busy, bgActive, spentUsd, runCount, onStop, o
     const t0 = Date.now(); const t = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000)
     return () => clearInterval(t)
   }, [running])
+  useEffect(() => { if (focus) setSel(focus.id) }, [focus])
   const cur = steps.find(s => s.id === sel) ?? null
   function pick(s: Step) {
     if (sel === s.id) { setSel(null); return }
@@ -63,7 +65,7 @@ export function Workbench({ steps, busy, bgActive, spentUsd, runCount, onStop, o
                   className={cn("w-full text-left rounded-lg border px-2.5 py-1.5 text-xs grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-2 items-baseline",
                     sel === s.id ? "border-violet-400 bg-violet-50 dark:bg-violet-950/40" : "border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50",
                     !s.ok && "border-red-300 dark:border-red-800")}>
-                  <span className={cn("font-mono text-[10px] px-1 rounded border", s.ok ? "text-gray-500 border-gray-300 dark:border-slate-600" : "text-red-600 border-red-300")}>{l.tag}</span>
+                  <span className={cn("font-mono text-[10px] px-1 rounded border", s.ok ? "text-gray-500 border-gray-300 dark:border-slate-600" : "text-red-600 border-red-300")}>#{s.idx + 1} {l.tag}</span>
                   <span className="truncate text-gray-800 dark:text-slate-100">{l.text}</span>
                   <span className="shrink-0">{s.ok ? <Check size={12} className="text-emerald-600" /> : <X size={12} className="text-red-600" />}</span>
                 </button>

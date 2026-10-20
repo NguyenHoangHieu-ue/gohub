@@ -3,7 +3,8 @@ import { genai } from "@/lib/agents/genai-stream"
 import { GEMINI_MODEL_ARGON } from "@/lib/ai-models"
 import type { RunContext } from "./context"
 import { ARGON_TOOLS, MAX_TOOL_CALLS, execArgonTool, type ToolLogEntry } from "./tools"
-import { WS_TOOLS, WS_TOOL_NAMES, execWsTool } from "./ws-tools"
+import { MISSION_TOOL_NAMES, WS_TOOLS, execMissionSql, execWsTool } from "./ws-tools"
+import { SQL_TOOL, SQL_TOOL_NAME } from "./sql-tool"
 
 // Lõi chạy 1 ĐOẠN của Phòng Argon, dùng chung cho SSE (runs/route.ts) và worker việc nền (worker/route.ts).
 // Hết ngân sách thời gian đoạn → status "partial" (câu trả lời dở được lưu, đoạn sau viết tiếp). Có công cụ → vòng gọi công cụ ngay trong đoạn.
@@ -40,9 +41,9 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
   const contents: Content[] = [...i.ctx.contents]
   const dataTools = i.tools?.dataTools !== false
   const missionId = i.tools?.missionId
-  const decls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? WS_TOOLS : [])]
+  const decls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? [...WS_TOOLS, SQL_TOOL] : [])]
   const maxCalls = missionId ? MAX_MISSION_TOOL_CALLS : MAX_TOOL_CALLS   // sứ mệnh còn đọc/ghi file nên cần nhiều lượt gọi hơn
-  const isData = (n: string) => !(WS_TOOL_NAMES as readonly string[]).includes(n)
+  const isData = (n: string) => !MISSION_TOOL_NAMES.includes(n)
   let lastProgress = Date.now()
   try {
     for (let turn = 0; turn <= maxCalls; turn++) {
@@ -86,13 +87,14 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
           const fc = c.functionCall!
           const fname = String(fc.name), fargs = (fc.args ?? {}) as Record<string, unknown>
           const dataCalls = i.tools!.log.filter(t => isData(t.name)).length
-          const entry = !isData(fname) && missionId ? await execWsTool(fname, fargs, missionId)
+          const entry = fname === SQL_TOOL_NAME && missionId ? await execMissionSql(fargs, missionId, i.tools!.log.filter(t => t.name === SQL_TOOL_NAME).length)
+            : !isData(fname) && missionId ? await execWsTool(fname, fargs, missionId)
             : isData(fname) && dataTools && dataCalls >= MAX_TOOL_CALLS ? { name: fname, args: fargs, ok: false, chars: 0, result: `Đã dùng hết ${MAX_TOOL_CALLS} lần lấy số liệu hệ thống trong lượt này`, at: new Date().toISOString() }
             : isData(fname) && !dataTools ? { name: fname, args: fargs, ok: false, chars: 0, result: "Công cụ lấy số liệu hệ thống đang tắt", at: new Date().toISOString() }
             : await execArgonTool(fname, fargs, i.tools!.origin)
           i.tools!.log.push(entry)
           await i.tools!.onTool(entry)
-          responses.push({ functionResponse: { name: String(fc.name), response: entry.ok ? { ketQua: entry.result } : { loi: entry.result } } })
+          responses.push({ functionResponse: { name: String(fc.name), response: entry.ok ? { buoc: i.tools!.log.length, ketQua: entry.result } : { buoc: i.tools!.log.length, loi: entry.result } } })
         }
         contents.push({ role: "model", parts: modelParts }, { role: "user", parts: responses })
         continue

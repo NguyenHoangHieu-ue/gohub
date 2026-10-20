@@ -2,10 +2,12 @@ import { Type, type FunctionDeclaration } from "@google/genai"
 import { canArgonWrite, cleanPath } from "./missions"
 import { listFiles, missionById, readFile, writeFile } from "./missions-db"
 import type { ToolLogEntry } from "./tools"
+import { SQL_TOOL_NAME, execSql } from "./sql-tool"
 
 // Công cụ workspace của Sứ mệnh: Argon đọc/ghi file TRONG workspace của đúng sứ mệnh đang chạy (không chạm file hay dữ liệu nơi khác).
 // Quyền ghi theo pha (canArgonWrite): làm rõ chỉ brief.md; kế hoạch thêm notes/; chạy ghi mọi nơi; tạm dừng/xong không ghi.
 export const WS_TOOL_NAMES = ["docFile", "ghiFile", "lietKeFile"] as const
+export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME]
 export const MAX_WS_READ_CHARS = 60_000
 const LOG_CONTENT_CHARS = 1_500
 
@@ -71,5 +73,22 @@ export async function execWsTool(name: string, args: Record<string, unknown>, mi
     return done(false, `Công cụ không có: ${name}`)
   } catch (e) {
     return done(false, `Lỗi workspace: ${(e as Error).message}`)
+  }
+}
+
+/** Công cụ `sql` của sứ mệnh: chỉ đọc gohub_dw; saveAs lưu CSV vào workspace theo quyền ghi của pha hiện tại. */
+export async function execMissionSql(args: Record<string, unknown>, missionId: string, callsSoFar: number): Promise<ToolLogEntry> {
+  const at = new Date().toISOString()
+  try {
+    const mission = await missionById(missionId)
+    if (!mission) return { name: SQL_TOOL_NAME, args, ok: false, chars: 0, result: "Sứ mệnh không còn tồn tại", at }
+    const { getAnalyticsPool } = await import("@/lib/analytics-db")
+    if (!process.env.ANALYTICS_DB_PASSWORD) return { name: SQL_TOOL_NAME, args, ok: false, chars: 0, result: "Chưa cấu hình kết nối gohub_dw (ANALYTICS_DB_PASSWORD)", at }
+    return await execSql(args, { missionId, phase: mission.phase, callsSoFar }, {
+      pool: () => getAnalyticsPool() as never,
+      write: async (id, path, content) => { const r = await writeFile(id, path, content, "argon"); return r.error ? { error: r.error } : {} },
+    })
+  } catch (e) {
+    return { name: SQL_TOOL_NAME, args, ok: false, chars: 0, result: `Lỗi sql: ${(e as Error).message}`, at }
   }
 }

@@ -19,3 +19,17 @@ describe("Bàn làm việc — nhãn bước", () => {
     expect(isFileTool("layDuLieuHeThong")).toBe(false)
   })
 })
+
+import { linkSteps } from "@/app/(dashboard)/analytics/creator/argon/argon-markdown"
+describe("nguồn gốc số liệu — chip [#N]", () => {
+  it("[#3] và [#2,#5] thành liên kết nội bộ từng bước", () => {
+    expect(linkSteps("Doanh thu 100 tỷ [#3].")).toBe("Doanh thu 100 tỷ [#3](#argon-step-3).")
+    expect(linkSteps("Tổng [#2,#5]")).toBe("Tổng [#2](#argon-step-2)[#5](#argon-step-5)")
+    expect(linkSteps("không đổi [ghi chú] và [#abc]")).toBe("không đổi [ghi chú] và [#abc]")
+  })
+  it("nhãn bước SQL rút gọn câu truy vấn và hiện nơi lưu", () => {
+    const l = stepLabel({ name: "sql", args: { query: "SELECT  vendor,\n sum(rev) FROM t", saveAs: "data/rev.csv" } })
+    expect(l.tag).toBe("SQL")
+    expect(l.text).toBe("SQL: SELECT vendor, sum(rev) FROM t → data/rev.csv")
+  })
+})

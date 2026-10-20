@@ -1,6 +1,6 @@
 "use client"
 
-import { Children, isValidElement, useState, type ReactNode } from "react"
+import { Children, createContext, isValidElement, useContext, useState, type ReactNode } from "react"
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Check, Copy, Download, ExternalLink, FileCode2, Wand2 } from "lucide-react"
@@ -76,7 +76,7 @@ const components: Components = {
     if (/^\((nguồn|theo|xem)\b/i.test(t)) return <em className="not-italic ml-0.5 px-1.5 py-px rounded bg-gray-100 dark:bg-slate-700 text-[11.5px] text-gray-500 dark:text-slate-300 whitespace-normal">{children}</em>
     return <em className="italic">{children}</em>
   },
-  a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-300 underline underline-offset-2 hover:text-violet-800 break-words">{children}</a>,
+  a: ({ href, children }) => href?.startsWith(STEP_HREF) ? <StepChip n={Number(href.slice(STEP_HREF.length))} /> : <a href={href} target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-300 underline underline-offset-2 hover:text-violet-800 break-words">{children}</a>,
   ul: ({ children, className }) => <ul className={cn("my-2 space-y-1 [&_li>p]:my-0.5 text-[14px] leading-relaxed", className?.includes("contains-task-list") ? "list-none pl-1" : "list-disc pl-5 marker:text-violet-400")}>{children}</ul>,
   ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 [&_li>p]:my-0.5 pl-5 text-[14px] leading-relaxed marker:font-semibold marker:text-violet-500">{children}</ol>,
   li: ({ children, className }) => <li className={cn("pl-0.5", className?.includes("task-list-item") && "flex items-start gap-2")}>{children}</li>,
@@ -95,6 +95,19 @@ const components: Components = {
   code: ({ children }) => <code className="rounded bg-gray-100 dark:bg-slate-700 px-1 py-px text-[0.86em] font-mono text-pink-700 dark:text-pink-300">{children}</code>,
 }
 
-export function ArgonMarkdown({ text }: { text: string }) {
-  return <div className="argon-md text-gray-800 dark:text-slate-200 min-w-0 break-words"><ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{text}</ReactMarkdown></div>
+// Nguồn gốc số liệu: Argon ghi [#N] sau con số lấy/tính từ công cụ (N = số bước ở Bàn làm việc). Đổi thành chip bấm được nếu trang cung cấp onStep.
+const STEP_HREF = "#argon-step-"
+const StepCtx = createContext<((n: number) => void) | null>(null)
+function StepChip({ n }: { n: number }) {
+  const on = useContext(StepCtx)
+  if (!on) return <span className="text-[10px] align-super text-gray-400">[#{n}]</span>
+  return <button type="button" onClick={() => on(n)} title={`Xem bước ${n} ở Bàn làm việc: câu SQL / số liệu / code đã cho ra con số này`} className="mx-0.5 align-baseline rounded bg-violet-100 dark:bg-violet-900/50 px-1 text-[10.5px] font-mono text-violet-700 dark:text-violet-200 hover:bg-violet-600 hover:text-white">#{n}</button>
+}
+/** `[#3]`, `[#2,#5]` → liên kết nội bộ #argon-step-N (mỗi bước một chip). */
+export function linkSteps(text: string): string {
+  return text.replace(/\[#(\d+(?:\s*,\s*#?\d+)*)\]/g, (_m, g: string) => g.split(",").map(x => `[#${x.trim().replace("#", "")}](${STEP_HREF}${x.trim().replace("#", "")})`).join(""))
+}
+
+export function ArgonMarkdown({ text, onStep }: { text: string; onStep?: (n: number) => void }) {
+  return <StepCtx.Provider value={onStep ?? null}><div className="argon-md text-gray-800 dark:text-slate-200 min-w-0 break-words"><ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{linkSteps(text)}</ReactMarkdown></div></StepCtx.Provider>
 }

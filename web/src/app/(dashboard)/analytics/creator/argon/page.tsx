@@ -31,6 +31,7 @@ export default function ArgonMissionsPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [panel, setPanel] = useState<Panel>("center")
   const [linkOpen, setLinkOpen] = useState(false)
+  const [focus, setFocus] = useState<{ id: string; k: number } | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const loadSeq = useRef(0)
   const busyRef = useRef(false)
@@ -88,6 +89,10 @@ export default function ArgonMissionsPage() {
     if (!activeId) return
     await api(`/api/creator/argon/missions/${activeId}/phase`, jsonInit("POST", { to }))
     refreshAll()
+  }
+  async function showStep(runId: string, n: number) {
+    await runner.loadSteps(runId, true)
+    setFocus({ id: `${runId}:${n - 1}`, k: Date.now() }); setPanel("right")
   }
   async function unlink(sourceId: string) {
     if (!activeId) return
@@ -154,14 +159,14 @@ export default function ArgonMissionsPage() {
                   <FileViewer missionId={m.id} path={selected} reloadKey={reloadKey} onSaved={refreshAll} onDeleted={() => { setSelected(null); refreshAll() }} onError={onError} />
                 </div>
               </> : (
-                <MissionChat phase={m.phase} runs={runs} runner={runner} onPhase={changePhase} onError={onError} />
+                <MissionChat phase={m.phase} runs={runs} runner={runner} onPhase={changePhase} onStep={(id, n) => void showStep(id, n)} onError={onError} />
               )}
             </div>
           </>}
         </main>
 
         <aside className={colCls("right")} aria-label="Bàn làm việc">
-          <Workbench steps={runner.steps} busy={runner.busy} bgActive={runner.bgActive} spentUsd={detail?.spent_usd ?? 0} runCount={runs.length}
+          <Workbench steps={runner.steps} busy={runner.busy} bgActive={runner.bgActive} spentUsd={detail?.spent_usd ?? 0} runCount={runs.length} focus={focus}
             onStop={runner.stop} onOpenFile={p => { setSelected(p); setPanel("center") }} onLoadFull={id => void runner.loadSteps(id, true)} />
         </aside>
       </div>

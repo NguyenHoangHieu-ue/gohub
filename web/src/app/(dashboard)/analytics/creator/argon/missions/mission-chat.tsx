@@ -20,11 +20,12 @@ const QUICK: Record<MissionPhase, string[]> = {
   done: ["Tóm tắt kết quả cuối cùng"],
 }
 
-export function MissionChat({ phase, runs, runner, onPhase, onError }: {
+export function MissionChat({ phase, runs, runner, onPhase, onStep, onError }: {
   phase: MissionPhase
   runs: Run[]
   runner: Runner
   onPhase: (to: MissionPhase) => Promise<void>
+  onStep: (runId: string, n: number) => void   // bấm chip [#N] trong câu trả lời → Bàn làm việc chọn bước N của lượt đó
   onError: (m: string) => void
 }) {
   const [prompt, setPrompt] = useState("")
@@ -103,7 +104,7 @@ export function MissionChat({ phase, runs, runner, onPhase, onError }: {
             <div key={r.id} className="space-y-2">
               <div className="flex justify-end"><div className="max-w-[85%] rounded-2xl rounded-br-md bg-violet-600 text-white px-3.5 py-2 text-sm whitespace-pre-wrap">{r.prompt}</div></div>
               <div className="rounded-2xl rounded-bl-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3">
-                {r.answer ? <ArgonMarkdown text={r.answer} /> : <div className="text-sm text-gray-400 inline-flex items-center gap-2"><Brain size={14} className="animate-pulse" />Argon đang làm việc, xem từng bước ở Bàn làm việc…</div>}
+                {r.answer ? <ArgonMarkdown text={r.answer} onStep={n => onStep(r.id, n)} /> : <div className="text-sm text-gray-400 inline-flex items-center gap-2"><Brain size={14} className="animate-pulse" />Argon đang làm việc, xem từng bước ở Bàn làm việc…</div>}
                 {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
                 {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}
                 <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
