@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { BRIEF_PATH, buildTree, canArgonWrite, canTransition, cleanPath, missionContextBlock, phaseInstruction, PHASES } from "@/lib/argon/missions"
+import { BRIEF_PATH, MAX_WORKSPACE_FILES, buildTree, canArgonWrite, canTransition, checkWrite, cleanPath, isProtectedPath, missionContextBlock, phaseInstruction, PHASES } from "@/lib/argon/missions"
 
 describe("cleanPath", () => {
   it("chấp nhận file gốc và file trong thư mục chuẩn", () => {
@@ -62,5 +62,20 @@ describe("missionContextBlock", () => {
     expect(s).not.toContain("- brief.md")
     expect(s).toContain(`ten="Giữ 'DP' 75%"`)
     expect(s).toContain("(chưa ghi)")
+  })
+})
+
+describe("checkWrite / isProtectedPath", () => {
+  it("báo lỗi đường dẫn sai, file chữ >1MB, workspace đầy (file mới); ghi đè file có sẵn khi đầy vẫn được", () => {
+    expect(checkWrite({ path: null, content: "x", exists: false, fileCount: 0 })).toMatch(/Đường dẫn/)
+    expect(checkWrite({ path: "data/a.csv", content: "x".repeat(1024 * 1024 + 1), exists: false, fileCount: 0 })).toMatch(/1MB/)
+    expect(checkWrite({ path: "data/a.csv", content: "x", exists: false, fileCount: MAX_WORKSPACE_FILES })).toMatch(/đủ/)
+    expect(checkWrite({ path: "data/a.csv", content: "x", exists: true, fileCount: MAX_WORKSPACE_FILES })).toBeNull()
+    expect(checkWrite({ path: "data/a.csv", content: "tiếng Việt", exists: false, fileCount: 3 })).toBeNull()
+  })
+  it("brief.md và decisions.md được bảo vệ khỏi xoá", () => {
+    expect(isProtectedPath("brief.md")).toBe(true)
+    expect(isProtectedPath("decisions.md")).toBe(true)
+    expect(isProtectedPath("notes/brief.md")).toBe(false)
   })
 })

@@ -67,7 +67,7 @@ export function hubNotes(hub: Pick<ArgonProject, "notes">, projects: ArgonProjec
 /** Nguyên liệu chạy cho dự án Tổng hợp: id các dự án cần đọc nguồn (kèm hub) + dự án với sổ ghép. */
 export async function loadHubMaterial(hub: ArgonProject): Promise<{ projectIds: string[]; project: ArgonProject }> {
   const supabaseAdmin = await db()
-  const { data: ps } = await supabaseAdmin.from("argon_projects").select("*").eq("username", hub.username).neq("id", hub.id).order("updated_at", { ascending: false })
+  const { data: ps } = await supabaseAdmin.from("argon_projects").select("*").eq("username", hub.username).eq("kind", "project").neq("id", hub.id).order("updated_at", { ascending: false })
   const projects = (ps ?? []) as ArgonProject[]
   const ids = projects.map(p => p.id)
   const { data: rs } = ids.length ? await supabaseAdmin.from("argon_runs").select("*").in("project_id", ids).order("created_at") : { data: [] }

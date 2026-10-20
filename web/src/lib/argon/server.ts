@@ -35,7 +35,7 @@ export async function ownSource(id: string, username: string) {
   return src as unknown as ArgonSource
 }
 
-export interface ArgonProject { id: string; username: string; name: string; notes: string; instructions: string; created_at: string; updated_at: string }
+export interface ArgonProject { id: string; username: string; name: string; kind?: "project" | "mission"; notes: string; instructions: string; created_at: string; updated_at: string }
 export interface ArgonSource {
   id: string; project_id: string; kind: "file" | "lark" | "mail" | "note"; name: string; mime: string | null; size_bytes: number | null
   storage_path: string | null; extracted_text: string | null; send_binary: boolean; tokens: number; content_hash: string | null

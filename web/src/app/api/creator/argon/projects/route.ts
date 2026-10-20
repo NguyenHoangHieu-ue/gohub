@@ -12,7 +12,7 @@ export async function GET() {
   const username = await requireArgonUser()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const hubId = await ensureHub(username).catch(() => null)
-  const { data: projects, error } = await supabaseAdmin.from("argon_projects").select("id,name,updated_at,created_at").eq("username", username).order("updated_at", { ascending: false })
+  const { data: projects, error } = await supabaseAdmin.from("argon_projects").select("id,name,updated_at,created_at").eq("username", username).eq("kind", "project").order("updated_at", { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const ids = (projects ?? []).map(p => p.id)
   const stats: Record<string, { sources: number; tokens: number }> = {}

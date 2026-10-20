@@ -99,3 +99,14 @@ export function phaseInstruction(phase: MissionPhase): string {
       return "SỨ MỆNH ĐÃ XONG: trả lời câu hỏi về kết quả; việc mới cần Hiếu mở lại sứ mệnh."
   }
 }
+
+/** Kiểm một lần ghi file workspace. Trả thông báo lỗi tiếng Việt, hoặc null nếu hợp lệ. */
+export function checkWrite(i: { path: string | null; content: string; exists: boolean; fileCount: number }): string | null {
+  if (!i.path) return "Đường dẫn file không hợp lệ (chỉ file gốc hoặc trong data/, scripts/, reports/, notes/; tối đa 5 cấp)"
+  if (Buffer.byteLength(i.content, "utf8") > MAX_TEXT_FILE_BYTES) return "File chữ quá lớn (tối đa 1MB)"
+  if (!i.exists && i.fileCount >= MAX_WORKSPACE_FILES) return `Workspace đã đủ ${MAX_WORKSPACE_FILES} file`
+  return null
+}
+
+/** brief.md và decisions.md là xương sống của sứ mệnh: được sửa, không được xoá. */
+export const isProtectedPath = (path: string) => path === BRIEF_PATH || path === DECISIONS_PATH
