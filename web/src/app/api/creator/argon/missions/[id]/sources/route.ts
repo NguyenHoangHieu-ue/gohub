@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireArgonUser } from "@/lib/argon/server"
-import { linkSource, linkedSources, ownMission, unlinkSource } from "@/lib/argon/missions-db"
+import { linkSource, linkedSources, listLinkable, ownMission, unlinkSource } from "@/lib/argon/missions-db"
 
 export const dynamic = "force-dynamic"
 
-// GET → nguồn đã gắn vào sứ mệnh · POST { sourceId } → gắn nguồn từ Kho nguồn · DELETE ?sourceId= → gỡ (không xoá nguồn gốc).
+// GET → nguồn đã gắn vào sứ mệnh (?available=1 → mọi nguồn trong Kho nguồn kèm cờ linked) · POST { sourceId } → gắn nguồn từ Kho nguồn · DELETE ?sourceId= → gỡ (không xoá nguồn gốc).
 async function guard(id: string) {
   const username = await requireArgonUser()
   if (!username) return { res: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
@@ -12,8 +12,9 @@ async function guard(id: string) {
   return mission ? { mission } : { res: NextResponse.json({ error: "Không tìm thấy sứ mệnh" }, { status: 404 }) }
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const g = await guard(params.id); if (!g.mission) return g.res
+  if (req.nextUrl.searchParams.get("available") === "1") return NextResponse.json({ candidates: await listLinkable(g.mission.username, g.mission.id) })
   return NextResponse.json({ sources: await linkedSources(g.mission.id) })
 }
 

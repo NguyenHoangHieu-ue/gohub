@@ -1,18 +1,20 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronRight, FileText, Folder, FilePlus2, Link2 } from "lucide-react"
+import { ChevronDown, ChevronRight, FileText, Folder, FilePlus2, Link2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fmtBytes } from "../argon-types"
 import type { TreeNode } from "./mission-types"
 
 // Cây workspace của sứ mệnh. Thư mục là ảo (suy từ đường dẫn). "sources/" chỉ liệt kê nguồn đã gắn từ Kho nguồn, bấm để mở trong Kho nguồn.
-export function WorkspaceTree({ tree, selected, linked, onSelect, onCreate }: {
+export function WorkspaceTree({ tree, selected, linked, onSelect, onCreate, onManageSources, onUnlink }: {
   tree: TreeNode[]
   selected: string | null
   linked: { id: string; name: string }[]
   onSelect: (path: string) => void
   onCreate: (path: string) => void
+  onManageSources: () => void
+  onUnlink: (sourceId: string) => void
 }) {
   const [closed, setClosed] = useState<Set<string>>(new Set())
   const [adding, setAdding] = useState(false)
@@ -69,10 +71,10 @@ export function WorkspaceTree({ tree, selected, linked, onSelect, onCreate }: {
       )}
       <ul>
         <li>
-          <div className="flex items-center gap-1.5 py-1 px-2 text-sm text-gray-700 dark:text-slate-200"><Link2 size={13} className="text-violet-500" />sources/<span className="ml-auto text-[10px] text-gray-400">{linked.length || ""}</span></div>
+          <div className="flex items-center gap-1.5 py-1 px-2 text-sm text-gray-700 dark:text-slate-200"><Link2 size={13} className="text-violet-500" />sources/<span className="text-[10px] text-gray-400">{linked.length || ""}</span><button type="button" onClick={onManageSources} className="ml-auto text-[11px] text-violet-700 dark:text-violet-300 hover:underline">+ Gắn</button></div>
           {linked.length === 0
-            ? <div className="pl-7 pr-2 pb-1 text-[11px] text-gray-400">Chưa gắn nguồn nào.</div>
-            : <ul>{linked.map(s => <li key={s.id} className="pl-7 pr-2 py-0.5 text-xs text-gray-600 dark:text-slate-300 truncate" title={s.name}>{s.name}</li>)}</ul>}
+            ? <div className="pl-7 pr-2 pb-1 text-[11px] text-gray-400">Chưa gắn nguồn nào. Bấm “+ Gắn” để chọn từ Kho nguồn.</div>
+            : <ul>{linked.map(s => <li key={s.id} className="group pl-7 pr-2 py-0.5 text-xs text-gray-600 dark:text-slate-300 flex items-center gap-1"><span className="truncate flex-1" title={s.name}>{s.name}</span><button type="button" onClick={() => onUnlink(s.id)} aria-label={`Gỡ ${s.name}`} title="Gỡ khỏi sứ mệnh" className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-gray-400 hover:text-red-600"><X size={11} /></button></li>)}</ul>}
         </li>
         {dirs.map(n => row(n, 0))}
         {files.map(n => row(n, 0))}

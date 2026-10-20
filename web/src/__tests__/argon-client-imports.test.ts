@@ -7,7 +7,8 @@ import path from "node:path"
 const DIR = path.resolve(__dirname, "../app/(dashboard)/analytics/creator/argon")
 
 describe("Phòng Argon: file giao diện", () => {
-  const files = fs.readdirSync(DIR).filter(f => /\.tsx?$/.test(f))
+  const walk = (d: string): string[] => fs.readdirSync(path.join(DIR, d), { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(path.join(d, e.name)) : /\.tsx?$/.test(e.name) ? [path.join(d, e.name)] : []))
+  const files = walk("")
   it("có file giao diện để kiểm tra", () => { expect(files.length).toBeGreaterThan(3) })
   for (const f of files) {
     it(`${f} không import @/lib/supabase (server-only)`, () => {

@@ -165,3 +165,22 @@ export async function linkedSourceIdsForProject(projectId: string): Promise<stri
   const { data } = await supabaseAdmin.from("argon_mission_sources").select("source_id").eq("mission_id", m.id)
   return (data ?? []).map(r => r.source_id as string)
 }
+
+export interface LinkableSource { id: string; name: string; kind: string; tokens: number; enabled: boolean; project_id: string; projectName: string; linked: boolean }
+
+/** Mọi nguồn trong Kho nguồn (các dự án thường của người dùng) kèm cờ đã gắn vào sứ mệnh này chưa. Hai truy vấn gom, không lặp theo dự án. */
+export async function listLinkable(username: string, missionId: string): Promise<LinkableSource[]> {
+  const { data: projs } = await supabaseAdmin.from("argon_projects").select("id,name,updated_at").eq("username", username).eq("kind", "project").order("updated_at", { ascending: false })
+  const ps = projs ?? []
+  if (!ps.length) return []
+  const [{ data: srcs }, { data: links }] = await Promise.all([
+    supabaseAdmin.from("argon_sources").select("id,name,kind,tokens,enabled,project_id").in("project_id", ps.map(p => p.id)).order("created_at"),
+    supabaseAdmin.from("argon_mission_sources").select("source_id").eq("mission_id", missionId),
+  ])
+  const linked = new Set((links ?? []).map(l => l.source_id as string))
+  const rank = new Map(ps.map((p, i) => [p.id as string, i]))
+  const name = new Map(ps.map(p => [p.id as string, p.name as string]))
+  return (srcs ?? [])
+    .map(s => ({ id: s.id as string, name: s.name as string, kind: s.kind as string, tokens: Number(s.tokens) || 0, enabled: !!s.enabled, project_id: s.project_id as string, projectName: name.get(s.project_id as string) ?? "?", linked: linked.has(s.id as string) }))
+    .sort((a, b) => (rank.get(a.project_id) ?? 0) - (rank.get(b.project_id) ?? 0))
+}
