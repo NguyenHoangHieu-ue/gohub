@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireArgonUser } from "@/lib/argon/server"
 import { buildTree } from "@/lib/argon/missions"
 import { listFiles, ownMission, readFile, readFileBuffer, removeFile, writeFile } from "@/lib/argon/missions-db"
+import { isXlsxPath, previewWorkbook } from "@/lib/argon/xlsx-preview"
 
 export const dynamic = "force-dynamic"
 
@@ -16,6 +17,12 @@ async function guard(id: string) {
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const g = await guard(params.id); if (!g.mission) return g.res
   const path = req.nextUrl.searchParams.get("path")
+  if (path && req.nextUrl.searchParams.get("preview") === "1") {   // xem trước .xlsx: các sheet đã cắt gọn (tối đa 200 dòng × 30 cột)
+    if (!isXlsxPath(path)) return NextResponse.json({ error: "Chỉ xem trước được file .xlsx" }, { status: 400 })
+    const f = await readFileBuffer(g.mission.id, path)
+    if (!f) return NextResponse.json({ error: "Không tìm thấy file" }, { status: 404 })
+    try { return NextResponse.json({ preview: previewWorkbook(f.data) }) } catch (e) { return NextResponse.json({ error: `Không đọc được file Excel: ${(e as Error).message.slice(0, 200)}` }, { status: 422 }) }
+  }
   if (path && req.nextUrl.searchParams.get("download") === "1") {   // tải file (chữ hoặc nhị phân) nguyên bản; ảnh dùng làm src xem trước
     const f = await readFileBuffer(g.mission.id, path)
     if (!f) return NextResponse.json({ error: "Không tìm thấy file" }, { status: 404 })

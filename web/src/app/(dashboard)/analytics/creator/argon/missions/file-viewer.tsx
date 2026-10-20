@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Download, Eye, Loader2, Pencil, Save, Trash2 } from "lucide-react"
 import { api, fmtBytes, jsonInit } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
+import { XlsxView } from "./xlsx-view"
 import { PROTECTED_FILES, type WsFile } from "./mission-types"
 
 // Xem / sửa 1 file chữ trong workspace. File .md xem dạng đã dựng, bấm Sửa để chỉnh. Hiếu ghi mọi lúc (không phụ thuộc pha); mỗi lần lưu tăng phiên bản.
@@ -69,6 +70,7 @@ export function FileViewer({ missionId, path, reloadKey, onSaved, onDeleted, onE
         {binary
           ? <div className="p-6 space-y-3 text-sm text-gray-600 dark:text-slate-300">
               {/^image\/(png|jpe?g)$/.test(file.mime ?? "") && <img src={`${url}?path=${encodeURIComponent(file.path)}&download=1&v=${file.version}`} alt={file.path} className="max-w-full max-h-[60vh] rounded-lg border border-gray-200 dark:border-slate-700" />}
+              {/\.xlsx$/i.test(file.path) && <XlsxView url={url} path={file.path} version={file.version} />}
               <div>File nhị phân ({fmtBytes(file.size_bytes)}) do Argon hoặc code tạo ra.</div>
               <a href={`${url}?path=${encodeURIComponent(file.path)}&download=1`} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg"><Download size={14} />Tải xuống</a>
             </div>
