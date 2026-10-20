@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
 import { PHASE_LABEL, type MissionPhase, type PendingAskUi } from "./mission-types"
-import type { SendOpts, Thinking, useMissionRunner } from "./use-mission-runner"
+import type { ModelKey, SendOpts, Thinking, useMissionRunner } from "./use-mission-runner"
 
 // Chat của sứ mệnh: chỉ hiện KẾT QUẢ và điều cần Hiếu quyết; các bước làm việc nằm ở Bàn làm việc. Thanh pha dẫn Hiếu qua Làm rõ → Kế hoạch → Chốt và chạy.
 type Runner = ReturnType<typeof useMissionRunner>
@@ -33,13 +33,16 @@ export function MissionChat({ phase, pendingAsk, runs, runner, onPhase, onStep, 
   const [prompt, setPrompt] = useState("")
   const [thinking, setThinking] = useState<Thinking>("medium")
   const [background, setBackground] = useState(false)
+  const [model, setModel] = useState<ModelKey>("fast")   // Nhanh = model nhanh chung (nhanh ~4-7 lần, rẻ ~1/2); Sâu = Gemini 4 Argon cho việc cần suy luận kỹ/viết dài
+  useEffect(() => { try { const v = localStorage.getItem("argon_model"); if (v === "fast" || v === "deep") setModel(v) } catch { /* trình duyệt chặn lưu: dùng mặc định */ } }, [])
+  const pickModel = (m: ModelKey) => { setModel(m); try { localStorage.setItem("argon_model", m) } catch { /* bỏ qua */ } }
   const [allowTools, setAllowTools] = useState(true)
   const [confirmChot, setConfirmChot] = useState(false)
   const [autoRun, setAutoRun] = useState(true)   // Chốt xong tự giao Argon chạy nền theo kế hoạch
   const [phaseBusy, setPhaseBusy] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
-  const opts: SendOpts = { thinking, allowTools, background }
+  const opts: SendOpts = { thinking, allowTools, background, model }
   const { busy, bgActive } = runner
   useEffect(() => { if (stick.current) endRef.current?.scrollIntoView({ block: "end" }) }, [runs])
 
@@ -47,7 +50,7 @@ export function MissionChat({ phase, pendingAsk, runs, runner, onPhase, onStep, 
     setPhaseBusy(true)
     try {
       await onPhase(to); setConfirmChot(false)
-      if (to === "run" && phase === "plan" && autoRun) void runner.send(CHOT_PROMPT, { thinking: "medium", allowTools: true, background: true })
+      if (to === "run" && phase === "plan" && autoRun) void runner.send(CHOT_PROMPT, { thinking: "medium", allowTools: true, background: true, model })
     } catch (e) { onError((e as Error).message) } finally { setPhaseBusy(false) }
   }
   async function send(text?: string) {
@@ -117,6 +120,7 @@ export function MissionChat({ phase, pendingAsk, runs, runner, onPhase, onStep, 
                 <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
                   {live && <span className="inline-flex items-center gap-1 text-violet-600"><Loader2 size={11} className="animate-spin" />{bgLive ? (r.status === "queued" ? "chạy nền · chờ đoạn kế" : `chạy nền · đoạn ${r.segments + 1}`) : "đang chạy"}</span>}
                   {bgLive && <button type="button" onClick={() => runner.cancelBg(r.id)} className="inline-flex items-center gap-1 text-red-600 hover:underline"><Square size={10} />Dừng việc nền</button>}
+                  {r.model && <span className="px-1 rounded bg-gray-100 dark:bg-slate-700">{/flash/i.test(r.model) ? "Nhanh" : "Sâu"}</span>}
                   {r.tokens_in > 0 && <span>{fmtTokens(r.tokens_in)} vào · {fmtTokens(r.tokens_out)} ra · ~${r.cost_usd.toFixed(2)} · {Math.round(r.duration_ms / 1000)}s{r.segments > 1 ? ` · ${r.segments} đoạn` : ""}</span>}
                   {!live && r.status === "partial" && <button type="button" disabled={busy} onClick={() => runner.resume(r.id, opts)} className="inline-flex items-center gap-1 text-violet-600 font-medium"><Play size={11} />Tiếp tục viết</button>}
                   {!live && r.answer && <button type="button" onClick={() => void navigator.clipboard?.writeText(r.answer)} className="inline-flex items-center gap-1 hover:text-gray-800"><Copy size={11} />Sao chép</button>}
@@ -156,6 +160,9 @@ export function MissionChat({ phase, pendingAsk, runs, runner, onPhase, onStep, 
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
           <label className="inline-flex items-center gap-1.5" title="Worker chạy không giới hạn đoạn, đóng trang vẫn chạy; xong nhắn Lark cho Hiếu"><input type="checkbox" checked={background} onChange={e => setBackground(e.target.checked)} />Chạy nền (xong nhắn Lark)</label>
           <label className="inline-flex items-center gap-1.5" title="Argon được gọi công cụ chỉ-đọc lấy số liệu mới nhất của hệ thống"><input type="checkbox" checked={allowTools} onChange={e => setAllowTools(e.target.checked)} />Cho Argon lấy số liệu hệ thống</label>
+          <span className="inline-flex items-center gap-1.5" title="Nhanh: việc nhiều bước công cụ, SQL, file (nhanh ~4-7 lần, rẻ ~1/2). Sâu (Gemini 4 Argon): phân tích khó, viết dài, ngữ cảnh lớn">Mô hình:
+            {(["fast", "deep"] as ModelKey[]).map(k => <button key={k} type="button" onClick={() => pickModel(k)} className={cn("px-2 py-0.5 rounded-md border", model === k ? "bg-violet-600 text-white border-violet-600" : "border-gray-300 dark:border-slate-600")}>{k === "fast" ? "Nhanh" : "Sâu"}</button>)}
+          </span>
           <span className="inline-flex items-center gap-1.5">Suy luận:
             {(Object.keys(THINK_LABEL) as Thinking[]).map(t => <button key={t} type="button" onClick={() => setThinking(t)} className={cn("px-2 py-0.5 rounded-md border", thinking === t ? "bg-violet-600 text-white border-violet-600" : "border-gray-300 dark:border-slate-600")}>{THINK_LABEL[t]}</button>)}
           </span>

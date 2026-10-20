@@ -17,6 +17,7 @@ const TRANSIENT = /429|rate|quota|resource.?exhausted|500|503|overload|unavailab
 export interface SegmentIn {
   ctx: RunContext
   thinking: string
+  model?: string                              // id model (mặc định Gemini 4 Argon); xem lib/argon/models.ts
   segmentMs: number
   maxOut: number
   signal?: AbortSignal                        // huỷ từ ngoài (client đóng / người dùng bấm Dừng)
@@ -56,7 +57,7 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
         let emitted = false
         try {
           const res = await genai().models.generateContentStream({
-            model: GEMINI_MODEL_ARGON, contents,
+            model: i.model ?? GEMINI_MODEL_ARGON, contents,
             config: {
               systemInstruction: i.ctx.systemInstruction, thinkingConfig: { thinkingLevel: LEVELS[i.thinking] ?? LEVELS.medium }, maxOutputTokens: i.maxOut, abortSignal: ac.signal,
               ...(toolsOn ? { tools: [{ functionDeclarations: decls }] } : {}),

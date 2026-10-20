@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { GEMINI_MODEL_ARGON } from "@/lib/ai-models"
-import { estimateArgonCostUsd } from "@/lib/agents/gemini-pricing"
+import { costOf, resolveModel } from "@/lib/argon/models"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { ownProject, requireArgonUser, type ArgonRun } from "@/lib/argon/server"
 import { buildRunContext } from "@/lib/argon/context"
@@ -27,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const rl = await checkRateLimit(`argon:${username}`, 20, 60_000)
   if (!rl.allowed) return NextResponse.json({ error: `Quá nhiều yêu cầu, chờ ${Math.ceil(rl.resetMs / 1000)}s` }, { status: 429 })
 
-  const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string; allowTools?: boolean; background?: boolean; templateReportId?: string }
+  const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string; allowTools?: boolean; background?: boolean; templateReportId?: string; model?: string }
   const thinking = b.thinking && LEVELS[b.thinking] ? b.thinking : "medium"
 
   const { data: allRuns } = await supabaseAdmin.from("argon_runs").select("*").eq("project_id", params.id).order("created_at")
@@ -42,6 +41,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const withTpl = (p: string) => (tpl ? p + templateSuffix(tpl.meta.title, tpl.html) : p)   // prompt lưu trong lịch sử vẫn là câu gốc; HTML mẫu chỉ đi vào ngữ cảnh lượt này
 
   if (project.kind === "mission" && !resume) { const mid = await missionIdForProject(project.id); if (mid) await clearPendingAsk(mid).catch(() => undefined) }   // lượt mới = Hiếu đã trả lời câu hỏi đang chờ
+  // Mô hình: "tiếp tục viết" giữ model của lượt gốc; lượt mới theo yêu cầu, mặc định NHANH cho sứ mệnh (nhiều lượt công cụ, nhanh gấp ~4-7 lần Argon) và SÂU cho dự án thường.
+  const model = resume?.model ?? resolveModel(b.model ?? (project.kind === "mission" ? "fast" : "deep"))
   const pick = resume ? new Set(resume.source_ids) : b.sourceIds ? new Set(b.sourceIds) : null
 
   // ── Việc nền: chỉ tạo lượt + giao worker (nguồn live được đọc lại ở đoạn đầu của worker) ──
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const linked = project.kind === "mission" ? await linkedSourceIdsForProject(params.id) : []   // nguồn gắn từ Kho nguồn
       const ids = [...own, ...linked].filter(id => !pick || pick.has(id))
       const { data, error } = await supabaseAdmin.from("argon_runs").insert({
-        project_id: params.id, username, prompt, status: "queued", model: GEMINI_MODEL_ARGON, thinking, source_ids: ids,
+        project_id: params.id, username, prompt, status: "queued", model, thinking, source_ids: ids,
       }).select("id").single()
       if (error || !data) return NextResponse.json({ error: error?.message ?? "Không tạo được lượt chạy" }, { status: 500 })
       runId = data.id
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   let answer = resume?.answer ?? ""
   if (!resume) {
     const { data, error } = await supabaseAdmin.from("argon_runs").insert({
-      project_id: params.id, username, prompt, status: "running", model: GEMINI_MODEL_ARGON, thinking, source_ids: ctx.usedSourceIds,
+      project_id: params.id, username, prompt, status: "running", model, thinking, source_ids: ctx.usedSourceIds,
     }).select("id").single()
     if (error || !data) return NextResponse.json({ error: error?.message ?? "Không tạo được lượt chạy" }, { status: 500 })
     runId = data.id
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const save = (extra: Record<string, unknown> = {}) => supabaseAdmin.from("argon_runs").update({ answer, ...extra }).eq("id", runId)
       const log = [...toolLog]
       const seg = await runSegment({
-        ctx, thinking, segmentMs: SEGMENT_MS, maxOut: MAX_OUT, signal: req.signal,
+        ctx, thinking, model, segmentMs: SEGMENT_MS, maxOut: MAX_OUT, signal: req.signal,
         tools: allowTools || mctx ? { origin: req.nextUrl.origin, log, dataTools: allowTools, missionId: mctx?.mission.id, onTool: async e => { send({ type: "tool", name: e.name, args: e.args, ok: e.ok, chars: e.chars }); await saveToolLog(runId, log) } } : undefined,
         onDelta: t => { answer += t; send({ type: "delta", text: t }) },
         onProgress: () => { void save() },
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const prev = resume
       const patch = {
         status: seg.status, error: seg.error, tokens_in: (prev?.tokens_in ?? 0) + seg.tokensIn, tokens_out: (prev?.tokens_out ?? 0) + seg.tokensOut, cached_in: (prev?.cached_in ?? 0) + seg.cachedIn,
-        cost_usd: Math.round(((prev?.cost_usd ?? 0) + estimateArgonCostUsd(seg.tokensIn, seg.tokensOut, seg.cachedIn)) * 10_000) / 10_000,
+        cost_usd: Math.round(((prev?.cost_usd ?? 0) + costOf(model, seg.tokensIn, seg.tokensOut, seg.cachedIn)) * 10_000) / 10_000,
         duration_ms: (prev?.duration_ms ?? 0) + (Date.now() - t0), segments: (prev?.segments ?? 0) + 1,
         finished_at: seg.status === "partial" ? null : new Date().toISOString(),
       }

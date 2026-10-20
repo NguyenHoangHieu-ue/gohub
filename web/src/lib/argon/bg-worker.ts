@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { estimateArgonCostUsd } from "@/lib/agents/gemini-pricing"
+import { costOf } from "./models"
 import { getCreatorLarkOpenId, sendLarkDM } from "@/lib/lark"
 import { buildRunContext } from "./context"
 import { getHubId, HUB_TOKEN_BUDGET, loadHubMaterial, pickHubSources } from "./hub"
@@ -83,7 +83,7 @@ export async function runBackgroundSegment(runId: string, origin: string): Promi
       resumeRun: answer.trim() ? { ...run, answer } : undefined, allowTools: bg.allowTools, toolLog, mission: mctx ?? undefined,
     })
     const seg = await runSegment({
-      ctx, thinking: bg.thinking, segmentMs: SEGMENT_MS, maxOut: MAX_OUT, signal: stopAc.signal,
+      ctx, thinking: bg.thinking, model: run.model ?? undefined, segmentMs: SEGMENT_MS, maxOut: MAX_OUT, signal: stopAc.signal,
       tools: bg.allowTools || mctx ? { origin, log: toolLog, onTool: () => saveToolLog(runId, toolLog), dataTools: bg.allowTools, missionId: mctx?.mission.id } : undefined,
       onDelta: t => { answer += t },
       onProgress: () => {
@@ -91,7 +91,7 @@ export async function runBackgroundSegment(runId: string, origin: string): Promi
         void supabaseAdmin.from("argon_runs").select("status").eq("id", runId).maybeSingle().then(({ data }) => { if (data?.status === "stopped") stopAc.abort() })
       },
     })
-    const cost = Math.round(((Number(run.cost_usd) || 0) + estimateArgonCostUsd(seg.tokensIn, seg.tokensOut, seg.cachedIn)) * 10_000) / 10_000
+    const cost = Math.round(((Number(run.cost_usd) || 0) + costOf(run.model, seg.tokensIn, seg.tokensOut, seg.cachedIn)) * 10_000) / 10_000
     const segments = (answer.trim() && run.answer.trim() ? run.segments ?? 0 : 0) + 1   // cột segments mặc định 1 → lượt mới chưa có chữ tính từ 0
     const { data: cur } = await supabaseAdmin.from("argon_runs").select("status").eq("id", runId).maybeSingle()
     const cancelled = cur?.status === "stopped" || seg.status === "stopped"

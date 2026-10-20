@@ -6,7 +6,8 @@ import { api, jsonInit, type Run } from "../argon-types"
 // Chạy lượt của sứ mệnh: SSE tới dự án nền (tự nối đoạn dở), gom các bước công cụ cho Bàn làm việc, thăm dò việc nền. Chat chỉ nhận câu trả lời, mọi bước đi vào `steps`.
 export interface Step { id: string; runId: string; idx: number; name: string; args: Record<string, unknown>; ok: boolean; chars: number; at: string; result?: string }
 export type Thinking = "low" | "medium" | "high"
-export interface SendOpts { thinking: Thinking; allowTools: boolean; background: boolean }
+export type ModelKey = "fast" | "deep"
+export interface SendOpts { thinking: Thinking; allowTools: boolean; background: boolean; model: ModelKey }
 const MAX_AUTO_SEGMENTS = 6
 
 const FILE_TOOLS = ["docFile", "ghiFile", "lietKeFile"]
@@ -116,7 +117,7 @@ export function useMissionRunner(o: {
     } catch (e) { onError((e as Error).message) }
   }
 
-  const send = (prompt: string, opts: SendOpts) => (opts.background ? startBackground({ prompt, thinking: opts.thinking, allowTools: opts.allowTools }) : run({ prompt, thinking: opts.thinking, allowTools: opts.allowTools }))
+  const send = (prompt: string, opts: SendOpts) => (opts.background ? startBackground({ prompt, thinking: opts.thinking, allowTools: opts.allowTools, model: opts.model }) : run({ prompt, thinking: opts.thinking, allowTools: opts.allowTools, model: opts.model }))
   const resume = (runId: string, opts: SendOpts) => (opts.background ? startBackground({ resumeRunId: runId, thinking: opts.thinking, allowTools: opts.allowTools }) : run({ resumeRunId: runId, thinking: opts.thinking, allowTools: opts.allowTools }))
   const stop = () => acRef.current?.abort()
   async function cancelBg(runId: string) {
