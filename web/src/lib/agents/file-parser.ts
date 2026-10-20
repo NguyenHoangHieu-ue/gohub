@@ -34,27 +34,11 @@ export async function parseUploadedFile(file: File): Promise<FileContext> {
     return { name, type: "text", content: parts.join("\n\n") || "(File Excel trống)" }
   }
 
-  // ── PowerPoint (.pptx) → text via jszip ──────────────────────────────────
+  // ── PowerPoint (.pptx) → text từng slide + ghi chú diễn giả (lib/pptx-text.ts) ──
   if (mime.includes("presentationml") || ext === "pptx" || ext === "ppt") {
     try {
-      const JSZip = (await import("jszip")).default
-      const buf   = await file.arrayBuffer()
-      const zip   = await JSZip.loadAsync(buf)
-      // Extract text from each slide XML
-      const slideFiles = Object.keys(zip.files)
-        .filter(f => /ppt\/slides\/slide\d+\.xml$/i.test(f))
-        .sort((a, b) => {
-          const na = parseInt(a.match(/slide(\d+)/)?.[1] || "0")
-          const nb = parseInt(b.match(/slide(\d+)/)?.[1] || "0")
-          return na - nb
-        })
-      if (!slideFiles.length) throw new Error("Không tìm thấy slide")
-      const slides = await Promise.all(slideFiles.map(async (f, i) => {
-        const xml  = await zip.files[f].async("text")
-        const text = xml.replace(/<a:t>/g, "\n").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim()
-        return `=== Slide ${i + 1} ===\n${text}`
-      }))
-      return { name, type: "text", content: slides.join("\n\n") }
+      const { extractPptxText } = await import("@/lib/pptx-text")
+      return { name, type: "text", content: await extractPptxText(await file.arrayBuffer()) }
     } catch (e: any) {
       throw new Error(`Không đọc được file PPTX "${name}": ${e.message}`)
     }
