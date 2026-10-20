@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronRight, FileText, Folder, FilePlus2, Link2, Play, X } from "lucide-react"
+import { ChevronDown, ChevronRight, FileCode2, FilePlus2, FileSpreadsheet, FileText, Folder, FolderOpen, Image as ImageIcon, Link2, Play, Sparkles, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fmtBytes } from "../argon-types"
 import type { TreeNode } from "./mission-types"
@@ -28,6 +28,12 @@ export function WorkspaceTree({ tree, selected, linked, onSelect, onCreate, onMa
     onCreate(p); setNewPath(""); setAdding(false)
   }
 
+  const fileIcon = (name: string) => {
+    if (/\.(xlsx|csv|tsv)$/i.test(name)) return <FileSpreadsheet size={13} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+    if (/\.(py|js|ts|sql|json|html?)$/i.test(name)) return <FileCode2 size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
+    if (/\.(png|jpe?g|svg|gif)$/i.test(name)) return <ImageIcon size={13} className="text-fuchsia-600 dark:text-fuchsia-400 shrink-0" />
+    return <FileText size={13} className="text-gray-400 shrink-0" />
+  }
   const row = (n: TreeNode, depth: number): React.ReactNode => {
     const pad = { paddingLeft: 8 + depth * 14 }
     if (n.type === "dir") {
@@ -36,7 +42,7 @@ export function WorkspaceTree({ tree, selected, linked, onSelect, onCreate, onMa
         <li key={n.path}>
           <button type="button" onClick={() => toggle(n.path)} style={pad} className="w-full flex items-center gap-1.5 py-1 pr-2 text-sm text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 rounded">
             {open ? <ChevronDown size={13} className="shrink-0" /> : <ChevronRight size={13} className="shrink-0" />}
-            <Folder size={13} className="text-violet-500 shrink-0" /><span className="truncate">{n.name}/</span>
+            {open ? <FolderOpen size={13} className="text-violet-500 shrink-0" /> : <Folder size={13} className="text-violet-500 shrink-0" />}<span className="truncate">{n.name}/</span>
             <span className="ml-auto text-[10px] text-gray-400">{n.children?.length ? n.children.length : ""}</span>
           </button>
           {open && <ul>{n.children?.map(c => row(c, depth + 1))}</ul>}
@@ -47,8 +53,8 @@ export function WorkspaceTree({ tree, selected, linked, onSelect, onCreate, onMa
       <li key={n.path} className="group/s relative">
         <button type="button" onClick={() => onSelect(n.path)} style={pad} aria-current={selected === n.path}
           className={cn("w-full flex items-center gap-1.5 py-1 pr-2 text-sm rounded", selected === n.path ? "bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-200" : "text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700")}>
-          <FileText size={13} className="text-gray-400 shrink-0" /><span className="truncate">{n.name}</span>
-          {n.author === "argon" && <span className="text-[9px] px-1 rounded bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300">Argon</span>}
+          {fileIcon(n.name)}<span className="truncate">{n.name}</span>
+          {n.author === "argon" && <span title="Argon ghi" className="inline-flex items-center gap-0.5 text-[9px] px-1 rounded-full bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300"><Sparkles size={8} />Argon</span>}
           <span className="ml-auto text-[10px] text-gray-400 shrink-0">{fmtBytes(n.size ?? null)}</span>
         </button>
         {n.path.startsWith("scripts/") && /\.py$/i.test(n.path) && <button type="button" onClick={() => onRunScript(n.path)} title={`Nhờ Argon chạy lại ${n.path}`} aria-label={`Chạy lại ${n.path}`} className="absolute right-1 top-0.5 hidden group-hover/s:inline-flex p-1 rounded bg-violet-600 text-white"><Play size={10} /></button>}

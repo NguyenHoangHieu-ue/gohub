@@ -9,6 +9,7 @@ import { stripReports } from "./report"
 import { autoSaveReports, getReportHtml, templateSuffix } from "./report-store"
 import { BG_STALE_MS, MAX_BG_COST_USD, MAX_BG_SEGMENTS, deleteBg, getBg, getToolLog, saveToolLog, touchBg, triggerWorker } from "./bg"
 import type { ArgonProject, ArgonRun, ArgonSource } from "./server"
+import { droppedWarning, pickByBudget } from "./source-tools"
 import { linkedSourceIdsForProject, loadMissionContext } from "./missions-db"
 
 export const SEGMENT_MS = 265_000     // hết ngân sách đoạn → lưu dở, đoạn sau viết tiếp
@@ -30,6 +31,11 @@ export async function loadRunMaterial(project: ArgonProject, pick: Set<string> |
     const { data: fresh } = await supabaseAdmin.from("argon_sources").select("*").in("id", live.map(s => s.id))
     const byId = new Map(((fresh ?? []) as ArgonSource[]).map(s => [s.id, s]))
     sources = sources.map(s => byId.get(s.id) ?? s)
+  }
+  if (!mat && project.kind === "mission") {   // sứ mệnh: nguồn (thread/mail/file) có thể vượt 1M token → chọn theo ngân sách, phần còn lại Argon tự tìm/đọc bằng công cụ
+    const p = pickByBudget(sources)
+    const w = droppedWarning(p.dropped)
+    return { sources: p.keep, project, warnings: w ? [w] : [] }
   }
   if (!mat) return { sources, project, warnings: [] }
   const { data: names } = await supabaseAdmin.from("argon_projects").select("id,name").in("id", ids)

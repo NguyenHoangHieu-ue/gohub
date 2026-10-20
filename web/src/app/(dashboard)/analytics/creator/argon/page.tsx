@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Archive, ArchiveRestore, ArrowLeft, Atom, Database, Moon, FolderOpen, MessageSquare, Pencil, Trash2, Workflow } from "lucide-react"
+import { Archive, ArchiveRestore, ArrowLeft, Atom, Database, Moon, FolderOpen, MessageSquare, Pencil, Target, Trash2, Workflow } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api, jsonInit, type Run } from "./argon-types"
 import { PHASE_LABEL, PHASE_PILL, fmtUsd, type MissionDetail, type MissionPhase, type MissionRowUi } from "./missions/mission-types"
@@ -135,17 +135,17 @@ export default function ArgonMissionsPage() {
     <button type="button" role="tab" aria-selected={panel === p} onClick={() => setPanel(p)}
       className={cn("flex-1 inline-flex items-center justify-center gap-1.5 py-2 text-sm rounded-lg border", panel === p ? "bg-violet-600 text-white border-violet-600" : "border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200")}><Icon size={14} />{label}</button>
   )
-  const colCls = (p: Panel) => cn("rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-col min-h-0 min-w-0", panel === p ? "flex" : "hidden", "lg:flex")
+  const colCls = (p: Panel) => cn("rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden flex-col min-h-0 min-w-0", panel === p ? "flex" : "hidden", "lg:flex")
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-[1700px] mx-auto">
-      <div className="flex items-center gap-3 px-4 py-3">
-        <div className="w-9 h-9 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0"><Atom size={18} /></div>
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className="w-10 h-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shrink-0 shadow-sm"><Atom size={20} /></div>
         <div className="min-w-0">
-          <h1 className="font-semibold text-gray-900 dark:text-slate-100 leading-tight">Phòng Tham mưu · Argon</h1>
-          <div className="text-xs text-gray-500 truncate">Sứ mệnh dài hạn · hỏi cho rõ, Hiếu Chốt rồi Argon mới làm</div>
+          <h1 className="text-[17px] font-semibold tracking-tight text-gray-900 dark:text-slate-100 leading-tight">Phòng Tham mưu</h1>
+          <div className="text-xs text-gray-500 truncate">Giao Argon một sứ mệnh dài hạn: hỏi cho rõ, anh Chốt rồi Argon mới làm</div>
         </div>
-        <Link href="/analytics/creator/argon/kho-nguon" className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-950/40"><Database size={14} />Kho nguồn</Link>
+        <Link href="/analytics/creator/argon/kho-nguon" className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 rounded-xl hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors"><Database size={14} />Kho nguồn</Link>
       </div>
       {err && <div className="mx-4 mb-2 text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">✕</button></div>}
       <div className="lg:hidden flex gap-2 px-4 pb-2" role="tablist">{tabBtn("left", "Sứ mệnh", FolderOpen)}{tabBtn("center", "Chat", MessageSquare)}{tabBtn("right", "Bàn làm việc", Workflow)}</div>
@@ -154,7 +154,7 @@ export default function ArgonMissionsPage() {
         <aside className={colCls("left")} aria-label="Sứ mệnh và workspace">
           <div className="flex-1 overflow-y-auto">
             <MissionList missions={missions} activeId={activeId} onSelect={id => { setActiveId(id); setPanel("center") }} onCreate={createMission} showArchived={showArchived} setShowArchived={setShowArchived} />
-            {detail && <div className="border-t border-gray-200 dark:border-slate-700 mt-1 pt-2 pb-3">
+            {detail && <div className="border-t border-gray-200 dark:border-slate-700 mt-1 pt-3 pb-3 px-1">
               <WorkspaceTree tree={detail.tree} selected={selected} linked={detail.sources.map(s => ({ id: s.id, name: s.name }))} onSelect={p => { setSelected(p); setPanel("center") }} onCreate={createFile} onManageSources={() => setLinkOpen(true)} onUnlink={unlink} onRunScript={runScript} />
             </div>}
           </div>
@@ -162,18 +162,22 @@ export default function ArgonMissionsPage() {
 
         <main className={cn(colCls("center"), "bg-gray-50/50 dark:bg-slate-900")}>
           {!m || !detail ? <div className="m-auto text-sm text-gray-400 px-6 text-center">Chọn hoặc tạo một sứ mệnh.</div> : <>
-            <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-t-xl">
-              <div className="font-semibold truncate">{m.name}</div>
-              <button type="button" onClick={rename} title="Đổi tên" className="text-gray-400 hover:text-gray-700"><Pencil size={13} /></button>
-              <span className={cn("text-[11px] px-2 py-0.5 rounded-full", PHASE_PILL[m.phase])}>{PHASE_LABEL[m.phase]}</span>
-              <span className="text-xs text-gray-500">Đã dùng {fmtUsd(detail.spent_usd)}</span>
-              <span className="ml-auto flex items-center gap-1">
-                <button type="button" onClick={() => setPatrolOpen(true)} title="Tuần tra đêm: Argon tự chạy nền mỗi đêm" className="p-1.5 text-gray-400 hover:text-violet-600"><Moon size={15} /></button>
-                <button type="button" onClick={() => patchMission({ archived: !m.archived })} title={m.archived ? "Bỏ lưu trữ" : "Lưu trữ"} className="p-1.5 text-gray-400 hover:text-gray-700">{m.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}</button>
-                <button type="button" onClick={remove} title="Xoá hẳn" className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={15} /></button>
-              </span>
+            <div className="px-4 pt-3 pb-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+              <div className="flex items-center gap-2">
+                <h2 className="min-w-0 truncate text-[15px] font-semibold text-gray-900 dark:text-slate-100">{m.name}</h2>
+                <button type="button" onClick={rename} title="Đổi tên" aria-label="Đổi tên sứ mệnh" className="text-gray-400 hover:text-gray-700 dark:hover:text-slate-200"><Pencil size={13} /></button>
+                <span className={cn("shrink-0 text-[11px] px-2 py-0.5 rounded-full font-medium", PHASE_PILL[m.phase])}>{PHASE_LABEL[m.phase]}</span>
+                <span className="ml-auto flex items-center gap-1">
+                  <button type="button" onClick={() => setPatrolOpen(true)} title="Tuần tra đêm: Argon tự chạy nền mỗi đêm và chấm sổ dự đoán" className="inline-flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-slate-300 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-950/40 hover:text-violet-700"><Moon size={14} /><span className="hidden xl:inline">Tuần tra đêm</span></button>
+                  <button type="button" onClick={() => patchMission({ archived: !m.archived })} title={m.archived ? "Bỏ lưu trữ" : "Lưu trữ"} aria-label={m.archived ? "Bỏ lưu trữ" : "Lưu trữ"} className="p-1.5 text-gray-400 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-700">{m.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}</button>
+                  <button type="button" onClick={remove} title="Xoá hẳn" aria-label="Xoá hẳn sứ mệnh" className="p-1.5 text-gray-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600"><Trash2 size={15} /></button>
+                </span>
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-gray-500">
+                <span>{detail.files.length} file</span><span>{detail.sources.length} nguồn gắn</span><span>{runs.length} lượt chạy</span><span title="Chi phí token Gemini (chỉ để xem, không giới hạn)">{fmtUsd(detail.spent_usd)}</span>
+              </div>
+              {m.goal && <div className="mt-2 flex items-start gap-2 rounded-xl bg-gray-50 dark:bg-slate-900/50 px-3 py-2 text-[12.5px] leading-relaxed text-gray-700 dark:text-slate-300"><Target size={14} className="mt-0.5 shrink-0 text-violet-600 dark:text-violet-300" /><span className="line-clamp-2" title={m.goal}>{m.goal}</span></div>}
             </div>
-            {m.goal && <div className="px-4 py-2 text-sm text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700 bg-white/60 dark:bg-slate-800/60"><span className="text-xs text-gray-500">Mục tiêu: </span>{m.goal}</div>}
             <div className="flex-1 min-h-0 flex flex-col">
               {selected ? <>
                 <button type="button" onClick={() => setSelected(null)} className="self-start m-2 inline-flex items-center gap-1 text-xs text-violet-700 dark:text-violet-300 hover:underline"><ArrowLeft size={12} />Về chat</button>

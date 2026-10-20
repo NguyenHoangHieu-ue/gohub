@@ -1,17 +1,18 @@
 import { Type, type FunctionDeclaration } from "@google/genai"
 import { canArgonWrite, cleanPath } from "./missions"
-import { listFiles, missionById, readFile, readFileBuffer, writeBinaryFile, writeFile } from "./missions-db"
+import { allMissionSources, listFiles, missionById, readFile, readFileBuffer, readMissionSource, searchMissionSources, writeBinaryFile, writeFile } from "./missions-db"
 import type { ToolLogEntry } from "./tools"
 import { SQL_TOOL_NAME, execSql } from "./sql-tool"
 import { RUN_CODE_NAME, execRunCode } from "./code-tool"
 import { ASK_TOOL_NAME, execAsk, setPendingAsk } from "./ask-tool"
 import { PATCH_TOOL_NAME, execPropose, getPatches, savePatches } from "./patch-tool"
 import { FORECAST_TOOL_NAME, SCORE_TOOL_NAME, execRecord, execScore, getForecasts, saveForecasts } from "./forecast-tool"
+import { LIST_NAME, READ_NAME, SEARCH_NAME, execSourceTool, pickByBudget } from "./source-tools"
 
 // Công cụ workspace của Sứ mệnh: Argon đọc/ghi file TRONG workspace của đúng sứ mệnh đang chạy (không chạm file hay dữ liệu nơi khác).
 // Quyền ghi theo pha (canArgonWrite): làm rõ chỉ brief.md; kế hoạch thêm notes/; chạy ghi mọi nơi; tạm dừng/xong không ghi.
 export const WS_TOOL_NAMES = ["docFile", "ghiFile", "lietKeFile"] as const
-export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME, RUN_CODE_NAME, ASK_TOOL_NAME, PATCH_TOOL_NAME, FORECAST_TOOL_NAME, SCORE_TOOL_NAME]
+export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME, RUN_CODE_NAME, ASK_TOOL_NAME, PATCH_TOOL_NAME, FORECAST_TOOL_NAME, SCORE_TOOL_NAME, LIST_NAME, READ_NAME, SEARCH_NAME]
 export const MAX_WS_READ_CHARS = 60_000
 const LOG_CONTENT_CHARS = 1_500
 
@@ -160,4 +161,19 @@ export async function execMissionForecast(name: string, args: Record<string, unk
   } catch (e) {
     return { name, args, ok: false, chars: 0, result: `Lỗi ${name}: ${(e as Error).message}`, at: new Date().toISOString() }
   }
+}
+
+/** lietKeNguon / timTrongNguon / docNguon: đọc nguồn của đúng sứ mệnh này (kể cả nguồn không nằm sẵn trong ngữ cảnh). */
+export async function execMissionSourceTool(name: string, args: Record<string, unknown>, missionId: string): Promise<ToolLogEntry> {
+  const mission = await missionById(missionId)
+  if (!mission) return { name, args, ok: false, chars: 0, result: "Sứ mệnh không còn tồn tại", at: new Date().toISOString() }
+  return execSourceTool(name, args, {
+    list: async () => {
+      const all = await allMissionSources(mission)
+      const inCtx = new Set(pickByBudget(all).keep.map(s => s.id))
+      return all.sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map(s => ({ ...s, inContext: inCtx.has(s.id) }))
+    },
+    search: kw => searchMissionSources(mission, kw),
+    read: id => readMissionSource(mission, id),
+  })
 }

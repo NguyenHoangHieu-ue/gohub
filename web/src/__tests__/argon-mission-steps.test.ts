@@ -33,3 +33,24 @@ describe("nguồn gốc số liệu — chip [#N]", () => {
     expect(l.text).toBe("SQL: SELECT vendor, sum(rev) FROM t → data/rev.csv")
   })
 })
+
+import { MISSION_TEMPLATES, phaseIndex, relTime, tagStyle } from "@/app/(dashboard)/analytics/creator/argon/missions/mission-types"
+describe("giao diện sứ mệnh: mẫu, thời gian, nhãn", () => {
+  it("relTime: vừa xong / phút / giờ / ngày", () => {
+    const now = Date.parse("2026-10-20T12:00:00Z")
+    expect(relTime("2026-10-20T11:59:40Z", now)).toBe("vừa xong")
+    expect(relTime("2026-10-20T11:30:00Z", now)).toBe("30 phút trước")
+    expect(relTime("2026-10-20T09:00:00Z", now)).toBe("3 giờ trước")
+    expect(relTime("2026-10-18T12:00:00Z", now)).toBe("2 ngày trước")
+  })
+  it("mẫu sứ mệnh: có thread + mail + chỉ số + trống; mẫu có sẵn mục tiêu (trừ mẫu trống)", () => {
+    expect(MISSION_TEMPLATES.map(t => t.id)).toEqual(["thread", "mail", "chart", "blank"])
+    for (const t of MISSION_TEMPLATES.filter(x => x.id !== "blank")) { expect(t.goal.length).toBeGreaterThan(60); expect(t.name.length).toBeGreaterThan(3) }
+    expect(MISSION_TEMPLATES.find(t => t.id === "thread")!.goal).toContain("mọi trả lời")
+  })
+  it("chỉ số pha và nhãn màu (nhãn lạ vẫn có kiểu mặc định; nhãn nguồn riêng)", () => {
+    expect(["clarify", "plan", "run", "paused", "done"].map(p => phaseIndex(p as never))).toEqual([0, 1, 2, 2, 2])
+    expect(tagStyle("SQL")).toContain("sky"); expect(tagStyle("NGUỒN")).toContain("teal"); expect(tagStyle("LẠ")).toContain("gray")
+    expect(stepLabel({ name: "timTrongNguon", args: { tuKhoa: "Momo" } })).toEqual({ tag: "NGUỒN", text: 'Tìm "Momo" trong các nguồn' })
+  })
+})

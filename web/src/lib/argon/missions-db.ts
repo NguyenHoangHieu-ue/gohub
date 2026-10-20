@@ -242,3 +242,44 @@ export async function missionIdForProject(projectId: string): Promise<string | n
   const { data } = await supabaseAdmin.from("argon_missions").select("id").eq("project_id", projectId).maybeSingle()
   return (data?.id as string | undefined) ?? null
 }
+
+export interface MissionSourceRow { id: string; name: string; kind: string; tokens: number; pinned: boolean; updated_at: string }
+/** Mọi nguồn ĐANG BẬT của sứ mệnh: nguồn của dự án nền + nguồn gắn từ Kho nguồn. */
+export async function allMissionSources(m: ArgonMission): Promise<MissionSourceRow[]> {
+  const linked = await linkedSourceIdsForProject(m.project_id)
+  const [own, more] = await Promise.all([
+    supabaseAdmin.from("argon_sources").select("id,name,kind,tokens,pinned,updated_at").eq("project_id", m.project_id).eq("enabled", true),
+    linked.length ? supabaseAdmin.from("argon_sources").select("id,name,kind,tokens,pinned,updated_at").in("id", linked).eq("enabled", true) : Promise.resolve({ data: [] as MissionSourceRow[] }),
+  ])
+  return [...((own.data ?? []) as MissionSourceRow[]), ...((more.data ?? []) as MissionSourceRow[])]
+}
+
+/** Tìm từ khoá trong văn bản của nguồn thuộc sứ mệnh (ILIKE phía DB, chỉ trả nguồn khớp). */
+export async function searchMissionSources(m: ArgonMission, kw: string, limit = 20) {
+  const ids = (await allMissionSources(m)).map(s => s.id)
+  if (!ids.length) return []
+  const esc = kw.replace(/[\\%_]/g, c => `\\${c}`)
+  const { data } = await supabaseAdmin.from("argon_sources").select("id,name,kind,tokens,updated_at,extracted_text").in("id", ids).ilike("extracted_text", `%${esc}%`).order("updated_at", { ascending: false }).limit(limit)
+  return (data ?? []) as { id: string; name: string; kind: string; tokens: number; updated_at: string; extracted_text: string | null }[]
+}
+
+export async function readMissionSource(m: ArgonMission, id: string) {
+  const ids = (await allMissionSources(m)).map(s => s.id)
+  if (!ids.includes(id)) return null
+  const { data } = await supabaseAdmin.from("argon_sources").select("id,name,kind,tokens,updated_at,extracted_text").eq("id", id).maybeSingle()
+  return (data as { id: string; name: string; kind: string; tokens: number; updated_at: string; extracted_text: string | null } | null) ?? null
+}
+
+/** Gắn nhiều nguồn một lượt (vd cả dự án "Hộp thư Lark"): chỉ nhận nguồn thuộc dự án thường của chính người dùng. Trả số nguồn đã gắn. */
+export async function linkSourcesBulk(m: ArgonMission, sourceIds: string[]): Promise<{ linked: number; error?: string }> {
+  const ids = Array.from(new Set(sourceIds)).slice(0, 500)
+  if (!ids.length) return { linked: 0 }
+  const { data: srcs } = await supabaseAdmin.from("argon_sources").select("id,project_id").in("id", ids)
+  const pids = Array.from(new Set((srcs ?? []).map(s => s.project_id as string)))
+  const { data: projs } = pids.length ? await supabaseAdmin.from("argon_projects").select("id").in("id", pids).eq("username", m.username).eq("kind", "project") : { data: [] as { id: string }[] }
+  const okP = new Set((projs ?? []).map(p => p.id as string))
+  const rows = (srcs ?? []).filter(s => okP.has(s.project_id as string)).map(s => ({ mission_id: m.id, source_id: s.id as string }))
+  if (!rows.length) return { linked: 0, error: "Không có nguồn hợp lệ để gắn" }
+  const { error } = await supabaseAdmin.from("argon_mission_sources").upsert(rows, { onConflict: "mission_id,source_id" })
+  return error ? { linked: 0, error: error.message } : { linked: rows.length }
+}

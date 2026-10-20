@@ -3,7 +3,8 @@ import { genai } from "@/lib/agents/genai-stream"
 import { GEMINI_MODEL_ARGON } from "@/lib/ai-models"
 import type { RunContext } from "./context"
 import { ARGON_TOOLS, MAX_TOOL_CALLS, execArgonTool, type ToolLogEntry } from "./tools"
-import { MISSION_TOOL_NAMES, WS_TOOLS, execMissionAsk, execMissionCode, execMissionForecast, execMissionPatch, execMissionSql, execWsTool } from "./ws-tools"
+import { MISSION_TOOL_NAMES, WS_TOOLS, execMissionAsk, execMissionCode, execMissionForecast, execMissionPatch, execMissionSourceTool, execMissionSql, execWsTool } from "./ws-tools"
+import { LIST_NAME, READ_NAME, SEARCH_NAME, SOURCE_TOOLS } from "./source-tools"
 import { FORECAST_TOOL, FORECAST_TOOL_NAME, SCORE_TOOL, SCORE_TOOL_NAME } from "./forecast-tool"
 import { PATCH_TOOL, PATCH_TOOL_NAME } from "./patch-tool"
 import { ASK_TOOL, ASK_TOOL_NAME, askBlock } from "./ask-tool"
@@ -46,7 +47,7 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
   const contents: Content[] = [...i.ctx.contents]
   const dataTools = i.tools?.dataTools !== false
   const missionId = i.tools?.missionId
-  const decls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? [...WS_TOOLS, SQL_TOOL, RUN_CODE_TOOL, ASK_TOOL, PATCH_TOOL, FORECAST_TOOL, SCORE_TOOL] : [])]
+  const decls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? [...WS_TOOLS, SQL_TOOL, RUN_CODE_TOOL, ASK_TOOL, PATCH_TOOL, FORECAST_TOOL, SCORE_TOOL, ...SOURCE_TOOLS] : [])]
   const maxCalls = missionId ? MAX_MISSION_TOOL_CALLS : MAX_TOOL_CALLS   // sứ mệnh còn đọc/ghi file nên cần nhiều lượt gọi hơn
   const isData = (n: string) => !MISSION_TOOL_NAMES.includes(n)
   let lastProgress = Date.now()
@@ -92,7 +93,8 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
           const fc = c.functionCall!
           const fname = String(fc.name), fargs = (fc.args ?? {}) as Record<string, unknown>
           const dataCalls = i.tools!.log.filter(t => isData(t.name)).length
-          const entry = (fname === FORECAST_TOOL_NAME || fname === SCORE_TOOL_NAME) && missionId ? await execMissionForecast(fname, fargs, missionId)
+          const entry = (fname === LIST_NAME || fname === READ_NAME || fname === SEARCH_NAME) && missionId ? await execMissionSourceTool(fname, fargs, missionId)
+            : (fname === FORECAST_TOOL_NAME || fname === SCORE_TOOL_NAME) && missionId ? await execMissionForecast(fname, fargs, missionId)
             : fname === PATCH_TOOL_NAME && missionId ? await execMissionPatch(fargs, missionId, i.tools!.origin)
             : fname === ASK_TOOL_NAME && missionId ? await execMissionAsk(fargs, missionId, i.tools!.origin)
             : fname === RUN_CODE_NAME && missionId ? await execMissionCode(fargs, missionId, i.tools!.log.filter(t => t.name === RUN_CODE_NAME).length)
