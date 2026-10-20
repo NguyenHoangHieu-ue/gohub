@@ -6,11 +6,12 @@ import { SQL_TOOL_NAME, execSql } from "./sql-tool"
 import { RUN_CODE_NAME, execRunCode } from "./code-tool"
 import { ASK_TOOL_NAME, execAsk, setPendingAsk } from "./ask-tool"
 import { PATCH_TOOL_NAME, execPropose, getPatches, savePatches } from "./patch-tool"
+import { FORECAST_TOOL_NAME, SCORE_TOOL_NAME, execRecord, execScore, getForecasts, saveForecasts } from "./forecast-tool"
 
 // Công cụ workspace của Sứ mệnh: Argon đọc/ghi file TRONG workspace của đúng sứ mệnh đang chạy (không chạm file hay dữ liệu nơi khác).
 // Quyền ghi theo pha (canArgonWrite): làm rõ chỉ brief.md; kế hoạch thêm notes/; chạy ghi mọi nơi; tạm dừng/xong không ghi.
 export const WS_TOOL_NAMES = ["docFile", "ghiFile", "lietKeFile"] as const
-export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME, RUN_CODE_NAME, ASK_TOOL_NAME, PATCH_TOOL_NAME]
+export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME, RUN_CODE_NAME, ASK_TOOL_NAME, PATCH_TOOL_NAME, FORECAST_TOOL_NAME, SCORE_TOOL_NAME]
 export const MAX_WS_READ_CHARS = 60_000
 const LOG_CONTENT_CHARS = 1_500
 
@@ -145,5 +146,18 @@ export async function execMissionPatch(args: Record<string, unknown>, missionId:
     })
   } catch (e) {
     return { name: PATCH_TOOL_NAME, args, ok: false, chars: 0, result: `Lỗi deXuatSuaCode: ${(e as Error).message}`, at: new Date().toISOString() }
+  }
+}
+
+/** Sổ dự đoán: `ghiDuDoan` (ghi) và `chamDuDoan` (chấm khi đến hạn) — chỉ ở pha chạy, lưu app_settings theo sứ mệnh. */
+export async function execMissionForecast(name: string, args: Record<string, unknown>, missionId: string): Promise<ToolLogEntry> {
+  try {
+    const mission = await missionById(missionId)
+    if (!mission) return { name, args, ok: false, chars: 0, result: "Sứ mệnh không còn tồn tại", at: new Date().toISOString() }
+    const { vnDate } = await import("./patrol")
+    const deps = { load: getForecasts, save: saveForecasts, newId: () => `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, today: () => vnDate() }
+    return await (name === FORECAST_TOOL_NAME ? execRecord : execScore)(args, { missionId, phase: mission.phase }, deps)
+  } catch (e) {
+    return { name, args, ok: false, chars: 0, result: `Lỗi ${name}: ${(e as Error).message}`, at: new Date().toISOString() }
   }
 }

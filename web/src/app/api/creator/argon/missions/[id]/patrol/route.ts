@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireArgonUser } from "@/lib/argon/server"
 import { ownMission } from "@/lib/argon/missions-db"
 import { PATROL_PRESETS, getPatrol, savePatrol, startPatrol } from "@/lib/argon/patrol"
+import { getForecasts, summarize } from "@/lib/argon/forecast-tool"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
@@ -16,7 +17,8 @@ async function guard(id: string) {
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const g = await guard(params.id); if (!g.mission) return g.res
-  return NextResponse.json({ patrol: (await getPatrol(g.mission.id)) ?? { enabled: false, prompt: "" }, presets: PATROL_PRESETS })
+  const forecasts = await getForecasts(g.mission.id)
+  return NextResponse.json({ patrol: (await getPatrol(g.mission.id)) ?? { enabled: false, prompt: "" }, presets: PATROL_PRESETS, forecasts: forecasts.slice(-15).reverse(), forecastSummary: summarize(forecasts) })
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {

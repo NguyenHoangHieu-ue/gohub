@@ -5,16 +5,21 @@ import { Moon, Play, Save, X } from "lucide-react"
 import { api, jsonInit } from "../argon-types"
 
 interface Patrol { enabled: boolean; prompt: string; lastRunDate?: string }
+interface ForecastUi { id: string; text: string; expected?: number; unit?: string; checkDate: string; status: "open" | "scored"; actual?: number; errorPct?: number; verdict?: "dung" | "gan_dung" | "sai"; note?: string }
+interface Summary { scored: number; open: number; right: number; near: number; wrong: number; accuracyPct: number | null; avgErrorPct: number | null }
+const VERDICT = { dung: ["Đúng", "text-emerald-700 dark:text-emerald-300"], gan_dung: ["Gần đúng", "text-amber-700 dark:text-amber-300"], sai: ["Sai", "text-red-700 dark:text-red-300"] } as const
 interface Preset { id: string; label: string; prompt: string }
 
 // Tuần tra đêm của sứ mệnh: một yêu cầu cố định, cron đêm giao Argon chạy nền (model Nhanh) khi sứ mệnh đang ở pha chạy; báo cáo vào notes/tuan-tra-<ngày>.md + tin Lark.
 export function PatrolPanel({ missionId, phase, onClose, onStarted, onError }: { missionId: string; phase: string; onClose: () => void; onStarted: () => void; onError: (m: string) => void }) {
   const [p, setP] = useState<Patrol | null>(null)
   const [presets, setPresets] = useState<Preset[]>([])
+  const [forecasts, setForecasts] = useState<ForecastUi[]>([])
+  const [sum, setSum] = useState<Summary | null>(null)
   const [busy, setBusy] = useState(false)
   const url = `/api/creator/argon/missions/${missionId}/patrol`
 
-  useEffect(() => { api<{ patrol: Patrol; presets: Preset[] }>(url).then(r => { setP(r.patrol); setPresets(r.presets) }).catch(e => { onError((e as Error).message); onClose() }) }, [url]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { api<{ patrol: Patrol; presets: Preset[]; forecasts: ForecastUi[]; forecastSummary: Summary }>(url).then(r => { setP(r.patrol); setPresets(r.presets); setForecasts(r.forecasts ?? []); setSum(r.forecastSummary ?? null) }).catch(e => { onError((e as Error).message); onClose() }) }, [url]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function save(next: Patrol) {
     setBusy(true)
@@ -44,6 +49,20 @@ export function PatrolPanel({ missionId, phase, onClose, onStarted, onError }: {
               className="w-full px-2.5 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent text-gray-800 dark:text-slate-100" />
             <label className="inline-flex items-center gap-2 font-medium"><input type="checkbox" checked={p.enabled} onChange={e => setP({ ...p, enabled: e.target.checked })} className="accent-violet-600" />Bật tuần tra hằng đêm</label>
             {p.lastRunDate && <div className="text-xs text-gray-500">Lần gần nhất: {p.lastRunDate}</div>}
+            <div className="border-t border-gray-200 dark:border-slate-700 pt-3">
+              <div className="flex items-baseline gap-2"><span className="font-medium">Sổ dự đoán của Argon</span>
+                {sum && sum.scored > 0 && <span className="text-xs text-gray-500">đã chấm {sum.scored}: {sum.right} đúng · {sum.near} gần đúng · {sum.wrong} sai{sum.accuracyPct !== null ? ` → độ đúng ${sum.accuracyPct}%` : ""}{sum.avgErrorPct !== null ? `, sai số TB ${sum.avgErrorPct}%` : ""}</span>}
+                {sum && sum.open > 0 && <span className="text-xs text-gray-500">{sum.open} đang chờ đến hạn</span>}
+              </div>
+              {forecasts.length === 0
+                ? <p className="mt-1 text-xs text-gray-500">Chưa có dự đoán nào. Khi Argon đưa ra ước tính có con số (vd "chuyển sang BC thì %Datapool lên ~76%") nó ghi vào đây, tới hạn tuần tra đêm đo lại và chấm đúng/sai.</p>
+                : <ul className="mt-1.5 space-y-1.5 max-h-48 overflow-y-auto">{forecasts.map(f => (
+                    <li key={f.id} className="text-xs rounded-lg border border-gray-200 dark:border-slate-700 px-2.5 py-1.5">
+                      <div className="text-gray-800 dark:text-slate-100">{f.text}</div>
+                      <div className="mt-0.5 text-gray-500">{f.expected !== undefined ? `dự kiến ${f.expected}${f.unit ? " " + f.unit : ""} · ` : ""}hạn {f.checkDate} · {f.status === "open" ? "chờ chấm" : <span className={VERDICT[f.verdict ?? "sai"][1]}>{VERDICT[f.verdict ?? "sai"][0]}{f.actual !== undefined ? ` (thực tế ${f.actual}${f.errorPct !== undefined ? `, sai số ${f.errorPct}%` : ""})` : ""}</span>}</div>
+                      {f.note && <div className="mt-0.5 text-gray-500">{f.note}</div>}
+                    </li>))}</ul>}
+            </div>
             <div className="flex gap-2">
               <button type="button" onClick={() => void save(p)} disabled={busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white rounded-lg disabled:opacity-50"><Save size={14} />Lưu</button>
               <button type="button" onClick={() => void runNow()} disabled={busy || !p.prompt.trim() || phase !== "run"} title={phase !== "run" ? "Chỉ chạy thử được khi sứ mệnh ở pha Đang chạy" : "Chạy ngay 1 lượt nền theo yêu cầu này"} className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-violet-400 text-violet-700 dark:text-violet-300 rounded-lg disabled:opacity-50"><Play size={14} />Chạy thử ngay</button>

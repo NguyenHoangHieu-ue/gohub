@@ -83,7 +83,8 @@ export async function deleteMission(m: ArgonMission): Promise<{ error?: string }
   const { deletePatrol } = await import("./patrol")
   const { clearPendingAsk } = await import("./ask-tool")
   const { deletePatches } = await import("./patch-tool")
-  await Promise.all([deletePatrol(m.id), clearPendingAsk(m.id), deletePatches(m.id)]).catch(() => undefined)
+  const { deleteForecasts } = await import("./forecast-tool")
+  await Promise.all([deletePatrol(m.id), clearPendingAsk(m.id), deletePatches(m.id), deleteForecasts(m.id)]).catch(() => undefined)
   return deleteProjectCascade(m.project_id)   // xoá dự án nền kéo theo sứ mệnh, file, nguồn gắn (ON DELETE CASCADE)
 }
 

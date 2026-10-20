@@ -9,7 +9,8 @@ import { syncFolders, syncMany } from "@/lib/argon/lark-sync"
 import { allProjectIdsWithRules, syncAllRules } from "@/lib/argon/mail-sync"
 import { allProjectIdsWithThreadRules, syncAllThreadRules } from "@/lib/argon/threads"
 import { projectIdsWithAutorun, startAutorun } from "@/lib/argon/autorun"
-import { MAX_PATROLS_PER_NIGHT, missionIdsWithPatrol, startPatrol } from "@/lib/argon/patrol"
+import { MAX_PATROLS_PER_NIGHT, missionIdsWithPatrol, startPatrol, vnDate } from "@/lib/argon/patrol"
+import { missionIdsWithDueForecasts } from "@/lib/argon/forecast-tool"
 import type { ArgonSource } from "@/lib/argon/server"
 
 export const maxDuration = 300
@@ -64,7 +65,7 @@ async function run(req: NextRequest) {
   // "Tuần tra đêm" của sứ mệnh đang chạy: giao worker chạy nền (model Nhanh), tối đa MAX_PATROLS_PER_NIGHT lượt/đêm để không đốt quota Sandbox/DB.
   const patrol: { mission: string; runId?: string; skipped?: string; error?: string }[] = []
   let started = 0
-  for (const mid of await missionIdsWithPatrol()) {
+  for (const mid of Array.from(new Set([...(await missionIdsWithPatrol()), ...(await missionIdsWithDueForecasts(vnDate()))]))) {
     if (started >= MAX_PATROLS_PER_NIGHT) { patrol.push({ mission: mid, skipped: "quá số lượt tuần tra mỗi đêm" }); continue }
     try { const r = await startPatrol(mid, req.nextUrl.origin); if (r.runId) started++; patrol.push({ mission: mid, ...r }) } catch (e) { patrol.push({ mission: mid, error: (e as Error).message }) }
   }

@@ -3,6 +3,7 @@ import { setBg, triggerWorker } from "./bg"
 import { missionById } from "./missions-db"
 import { resolveModel } from "./models"
 import type { MissionPhase } from "./missions"
+import { dueBlock, dueForecasts, getForecasts } from "./forecast-tool"
 
 // "Tuần tra đêm": mỗi sứ mệnh đang CHẠY có thể có 1 yêu cầu cố định (vd kiểm toán chéo số liệu, đo lại thước đo theo brief). Cron argon-sync mỗi đêm giao worker chạy nền
 // (model Nhanh, có sql/file/run_code), kết quả ghi vào notes/tuan-tra-<ngày>.md + tin Lark cho Hiếu (worker lo). Lưu ở app_settings `argon_patrol:<missionId>` (không migration).
@@ -47,17 +48,18 @@ export async function startPatrol(missionId: string, origin: string, force = fal
   const p = await getPatrol(missionId)
   const m = await missionById(missionId)
   if (!m) return { skipped: "Sứ mệnh không còn tồn tại" }
-  if (!p?.prompt.trim()) return { skipped: "Chưa có yêu cầu tuần tra" }
   if (m.phase !== "run") return { skipped: `Sứ mệnh đang ở pha "${m.phase}" — tuần tra chỉ chạy khi đã Chốt và đang chạy` }
   const today = vnDate()
-  if (!force && !patrolDue(p, m.phase, today)) return { skipped: p.lastRunDate === today ? "Hôm nay đã tuần tra" : "Chưa bật tuần tra" }
+  const due = dueForecasts(await getForecasts(missionId), today)   // dự đoán đến hạn được chấm trong cùng lượt tuần tra (kể cả khi chưa bật tuần tra)
+  const wantPatrol = force ? !!p?.prompt.trim() : patrolDue(p, m.phase, today)
+  if (!wantPatrol && !due.length) return { skipped: !p?.prompt.trim() ? "Chưa có yêu cầu tuần tra" : p.lastRunDate === today ? "Hôm nay đã tuần tra" : "Chưa bật tuần tra" }
   const { data, error } = await supabaseAdmin.from("argon_runs").insert({
-    project_id: m.project_id, username: m.username, prompt: patrolPrompt(p.prompt, today), status: "queued", model: resolveModel("fast"), thinking: "medium", source_ids: [],
+    project_id: m.project_id, username: m.username, prompt: patrolPrompt(wantPatrol && p ? p.prompt : "Chỉ chấm các dự đoán đến hạn trong sổ (không cần việc khác).", today) + dueBlock(due), status: "queued", model: resolveModel("fast"), thinking: "medium", source_ids: [],
   }).select("id").single()
   if (error || !data) throw new Error(error?.message ?? "Không tạo được lượt tuần tra")
   const now = new Date().toISOString()
   await setBg(data.id, { username: m.username, projectId: m.project_id, allowTools: true, thinking: "medium", startedAt: now, heartbeat: now })
-  await savePatrol(missionId, { ...p, lastRunDate: today, lastRunId: data.id })
+  if (p && wantPatrol) await savePatrol(missionId, { ...p, lastRunDate: today, lastRunId: data.id })
   await triggerWorker(origin, data.id)
   return { runId: data.id }
 }
