@@ -3,15 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Archive, ArchiveRestore, Atom, FolderOpen, MessageSquare, Pencil, Trash2, Workflow } from "lucide-react"
+import { Archive, ArchiveRestore, ArrowLeft, Atom, FolderOpen, MessageSquare, Pencil, Trash2, Workflow } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { api, jsonInit } from "../argon-types"
-import { BRIEF, PHASE_LABEL, PHASE_PILL, fmtUsd, type MissionDetail, type MissionRowUi } from "./mission-types"
+import { api, jsonInit, type Run } from "../argon-types"
+import { PHASE_LABEL, PHASE_PILL, fmtUsd, type MissionDetail, type MissionPhase, type MissionRowUi } from "./mission-types"
 import { MissionList } from "./mission-list"
 import { WorkspaceTree } from "./workspace-tree"
 import { FileViewer } from "./file-viewer"
+import { MissionChat } from "./mission-chat"
+import { Workbench } from "./workbench"
+import { useMissionRunner } from "./use-mission-runner"
 
-// Phòng Argon — Sứ mệnh (plan docs/plans/argon-missions.md, commit 4: khung + workspace). Chat theo sứ mệnh, thanh pha/Chốt và Bàn làm việc đến ở commit 5.
+// Phòng Argon — Sứ mệnh (plan docs/plans/argon-missions.md). Trái: sứ mệnh + workspace · Giữa: chat (chỉ kết quả) hoặc file · Phải: Bàn làm việc (các bước Argon làm).
 type Panel = "left" | "center" | "right"
 export default function ArgonMissionsPage() {
   const { data: session, status } = useSession()
@@ -21,11 +24,13 @@ export default function ArgonMissionsPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [detail, setDetail] = useState<MissionDetail | null>(null)
-  const [selected, setSelected] = useState<string | null>(null)
-  const [reloadKey] = useState(0)   // commit 5: Bàn làm việc tăng số này khi Argon vừa ghi file
+  const [runs, setRuns] = useState<Run[]>([])
+  const [selected, setSelected] = useState<string | null>(null)   // file đang mở ở khung giữa; null = chat
+  const [reloadKey, setReloadKey] = useState(0)
   const [panel, setPanel] = useState<Panel>("center")
   const [err, setErr] = useState<string | null>(null)
   const loadSeq = useRef(0)
+  const busyRef = useRef(false)
   const onError = useCallback((m: string) => setErr(m), [])
 
   useEffect(() => {
@@ -41,13 +46,26 @@ export default function ArgonMissionsPage() {
 
   const loadDetail = useCallback((id: string) => {
     const seq = ++loadSeq.current
-    api<MissionDetail>(`/api/creator/argon/missions/${id}`).then(r => { if (seq === loadSeq.current) setDetail(r) }).catch(e => onError(e.message))
+    api<MissionDetail>(`/api/creator/argon/missions/${id}`).then(r => {
+      if (seq !== loadSeq.current) return
+      setDetail(r)
+      if (!busyRef.current) setRuns(r.runs)   // đang stream thì giữ bản cục bộ (đang nhận chữ)
+    }).catch(e => onError(e.message))
   }, [onError])
   useEffect(() => {
-    if (!activeId) { setDetail(null); setSelected(null); return }
-    setSelected(BRIEF)
+    setSelected(null); setRuns([])
+    if (!activeId) { setDetail(null); return }
     loadDetail(activeId)
   }, [activeId, loadDetail])
+
+  const refreshAll = useCallback(() => { if (activeId) loadDetail(activeId); void loadMissions() }, [activeId, loadDetail, loadMissions])
+  const runner = useMissionRunner({
+    projectId: detail?.mission.project_id ?? null, runs, setRuns, onError,
+    onWorkspaceChanged: () => { setReloadKey(k => k + 1); refreshAll() },
+    onFinished: refreshAll,
+    onPoll: () => { if (activeId) loadDetail(activeId); setReloadKey(k => k + 1) },
+  })
+  busyRef.current = runner.busy
 
   async function createMission(name: string, goal: string) {
     try {
@@ -61,7 +79,12 @@ export default function ArgonMissionsPage() {
   }
   async function patchMission(patch: Record<string, unknown>) {
     if (!activeId) return
-    try { await api(`/api/creator/argon/missions/${activeId}`, jsonInit("PATCH", patch)); loadDetail(activeId); void loadMissions() } catch (e) { onError((e as Error).message) }
+    try { await api(`/api/creator/argon/missions/${activeId}`, jsonInit("PATCH", patch)); refreshAll() } catch (e) { onError((e as Error).message) }
+  }
+  async function changePhase(to: MissionPhase) {
+    if (!activeId) return
+    await api(`/api/creator/argon/missions/${activeId}/phase`, jsonInit("POST", { to }))
+    refreshAll()
   }
   async function rename() {
     const n = window.prompt("Tên sứ mệnh", detail?.mission.name ?? "")
@@ -87,7 +110,7 @@ export default function ArgonMissionsPage() {
         <div className="w-9 h-9 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0"><Atom size={18} /></div>
         <div className="min-w-0">
           <h1 className="font-semibold text-gray-900 dark:text-slate-100 leading-tight">Phòng Tham mưu · Argon</h1>
-          <div className="text-xs text-gray-500 truncate">Sứ mệnh dài hạn · hỏi cho rõ, Hiếu Chốt rồi Argon mới làm · bản đang dựng (commit 4: workspace)</div>
+          <div className="text-xs text-gray-500 truncate">Sứ mệnh dài hạn · hỏi cho rõ, Hiếu Chốt rồi Argon mới làm · bản đang dựng</div>
         </div>
       </div>
       {err && <div className="mx-4 mb-2 text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">✕</button></div>}
@@ -104,32 +127,34 @@ export default function ArgonMissionsPage() {
         </aside>
 
         <main className={cn(colCls("center"), "bg-gray-50/50 dark:bg-slate-900")}>
-          {!m ? <div className="m-auto text-sm text-gray-400 px-6 text-center">Chọn hoặc tạo một sứ mệnh.</div> : <>
+          {!m || !detail ? <div className="m-auto text-sm text-gray-400 px-6 text-center">Chọn hoặc tạo một sứ mệnh.</div> : <>
             <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-t-xl">
               <div className="font-semibold truncate">{m.name}</div>
               <button type="button" onClick={rename} title="Đổi tên" className="text-gray-400 hover:text-gray-700"><Pencil size={13} /></button>
               <span className={cn("text-[11px] px-2 py-0.5 rounded-full", PHASE_PILL[m.phase])}>{PHASE_LABEL[m.phase]}</span>
-              <span className="text-xs text-gray-500">Đã dùng {fmtUsd(detail.spent_usd)} · {detail.runs.length} lượt chạy</span>
+              <span className="text-xs text-gray-500">Đã dùng {fmtUsd(detail.spent_usd)}</span>
               <span className="ml-auto flex items-center gap-1">
                 <button type="button" onClick={() => patchMission({ archived: !m.archived })} title={m.archived ? "Bỏ lưu trữ" : "Lưu trữ"} className="p-1.5 text-gray-400 hover:text-gray-700">{m.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}</button>
                 <button type="button" onClick={remove} title="Xoá hẳn" className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={15} /></button>
               </span>
             </div>
             {m.goal && <div className="px-4 py-2 text-sm text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700 bg-white/60 dark:bg-slate-800/60"><span className="text-xs text-gray-500">Mục tiêu: </span>{m.goal}</div>}
-            <div className="flex-1 min-h-0">
-              {selected
-                ? <FileViewer missionId={m.id} path={selected} reloadKey={reloadKey} onSaved={() => { loadDetail(m.id); void loadMissions() }} onDeleted={() => { setSelected(BRIEF); loadDetail(m.id); void loadMissions() }} onError={onError} />
-                : <div className="p-6 text-sm text-gray-400">Chọn một file ở cột trái.</div>}
+            <div className="flex-1 min-h-0 flex flex-col">
+              {selected ? <>
+                <button type="button" onClick={() => setSelected(null)} className="self-start m-2 inline-flex items-center gap-1 text-xs text-violet-700 dark:text-violet-300 hover:underline"><ArrowLeft size={12} />Về chat</button>
+                <div className="flex-1 min-h-0">
+                  <FileViewer missionId={m.id} path={selected} reloadKey={reloadKey} onSaved={refreshAll} onDeleted={() => { setSelected(null); refreshAll() }} onError={onError} />
+                </div>
+              </> : (
+                <MissionChat phase={m.phase} runs={runs} runner={runner} onPhase={changePhase} onError={onError} />
+              )}
             </div>
           </>}
         </main>
 
         <aside className={colCls("right")} aria-label="Bàn làm việc">
-          <div className="px-3 py-2 border-b border-gray-200 dark:border-slate-700 text-[11px] uppercase tracking-wide text-gray-500">Bàn làm việc</div>
-          <div className="p-4 text-sm text-gray-500 space-y-2">
-            <p>Các bước Argon làm (đọc file, ghi file, lấy số liệu) sẽ hiện ở đây theo thời gian thực cùng thanh chat và nút Chốt.</p>
-            <p className="text-xs text-gray-400">Đang dựng ở commit 5. Hiện tại workspace đã dùng được: tạo, xem, sửa file; Argon đã đọc/ghi được qua API.</p>
-          </div>
+          <Workbench steps={runner.steps} busy={runner.busy} bgActive={runner.bgActive} spentUsd={detail?.spent_usd ?? 0} runCount={runs.length}
+            onStop={runner.stop} onOpenFile={p => { setSelected(p); setPanel("center") }} onLoadFull={id => void runner.loadSteps(id, true)} />
         </aside>
       </div>
     </div>
