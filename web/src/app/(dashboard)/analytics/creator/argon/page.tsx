@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Archive, ArchiveRestore, ArrowLeft, Atom, Database, FolderOpen, MessageSquare, Pencil, Trash2, Workflow } from "lucide-react"
+import { Archive, ArchiveRestore, ArrowLeft, Atom, Database, Moon, FolderOpen, MessageSquare, Pencil, Trash2, Workflow } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api, jsonInit, type Run } from "./argon-types"
 import { PHASE_LABEL, PHASE_PILL, fmtUsd, type MissionDetail, type MissionPhase, type MissionRowUi } from "./missions/mission-types"
@@ -14,6 +14,7 @@ import { FileViewer } from "./missions/file-viewer"
 import { MissionChat } from "./missions/mission-chat"
 import { Workbench } from "./missions/workbench"
 import { LinkSourcesModal } from "./missions/link-sources-modal"
+import { PatrolPanel } from "./missions/patrol-panel"
 import { useMissionRunner } from "./missions/use-mission-runner"
 
 // Phòng Argon — Sứ mệnh (plan docs/plans/argon-missions.md). Trái: sứ mệnh + workspace · Giữa: chat (chỉ kết quả) hoặc file · Phải: Bàn làm việc (các bước Argon làm).
@@ -31,6 +32,7 @@ export default function ArgonMissionsPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [panel, setPanel] = useState<Panel>("center")
   const [linkOpen, setLinkOpen] = useState(false)
+  const [patrolOpen, setPatrolOpen] = useState(false)
   const [sandbox, setSandbox] = useState<{ cpuMs: number; limitMs: number; snapshot: { at: string } | null } | null>(null)
   const [building, setBuilding] = useState(false)
   const [focus, setFocus] = useState<{ id: string; k: number } | null>(null)
@@ -155,6 +157,7 @@ export default function ArgonMissionsPage() {
               <span className={cn("text-[11px] px-2 py-0.5 rounded-full", PHASE_PILL[m.phase])}>{PHASE_LABEL[m.phase]}</span>
               <span className="text-xs text-gray-500">Đã dùng {fmtUsd(detail.spent_usd)}</span>
               <span className="ml-auto flex items-center gap-1">
+                <button type="button" onClick={() => setPatrolOpen(true)} title="Tuần tra đêm: Argon tự chạy nền mỗi đêm" className="p-1.5 text-gray-400 hover:text-violet-600"><Moon size={15} /></button>
                 <button type="button" onClick={() => patchMission({ archived: !m.archived })} title={m.archived ? "Bỏ lưu trữ" : "Lưu trữ"} className="p-1.5 text-gray-400 hover:text-gray-700">{m.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}</button>
                 <button type="button" onClick={remove} title="Xoá hẳn" className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={15} /></button>
               </span>
@@ -178,6 +181,7 @@ export default function ArgonMissionsPage() {
             onStop={runner.stop} onOpenFile={p => { setSelected(p); setPanel("center") }} onLoadFull={id => void runner.loadSteps(id, true)} />
         </aside>
       </div>
+      {patrolOpen && m && <PatrolPanel missionId={m.id} phase={m.phase} onClose={() => setPatrolOpen(false)} onStarted={refreshAll} onError={onError} />}
       {linkOpen && m && <LinkSourcesModal missionId={m.id} onClose={() => setLinkOpen(false)} onChanged={refreshAll} onError={onError} />}
     </div>
   )

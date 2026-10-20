@@ -80,6 +80,9 @@ export async function deleteMission(m: ArgonMission): Promise<{ error?: string }
   const { data: files } = await supabaseAdmin.from("argon_workspace_files").select("storage_path").eq("mission_id", m.id)
   const paths = (files ?? []).map(f => f.storage_path).filter((p): p is string => !!p)
   if (paths.length) await supabaseAdmin.storage.from(ARGON_BUCKET).remove(paths)
+  const { deletePatrol } = await import("./patrol")
+  const { clearPendingAsk } = await import("./ask-tool")
+  await Promise.all([deletePatrol(m.id), clearPendingAsk(m.id)]).catch(() => undefined)
   return deleteProjectCascade(m.project_id)   // xoá dự án nền kéo theo sứ mệnh, file, nguồn gắn (ON DELETE CASCADE)
 }
 

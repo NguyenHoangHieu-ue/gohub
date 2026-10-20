@@ -9,6 +9,7 @@ import { syncFolders, syncMany } from "@/lib/argon/lark-sync"
 import { allProjectIdsWithRules, syncAllRules } from "@/lib/argon/mail-sync"
 import { allProjectIdsWithThreadRules, syncAllThreadRules } from "@/lib/argon/threads"
 import { projectIdsWithAutorun, startAutorun } from "@/lib/argon/autorun"
+import { MAX_PATROLS_PER_NIGHT, missionIdsWithPatrol, startPatrol } from "@/lib/argon/patrol"
 import type { ArgonSource } from "@/lib/argon/server"
 
 export const maxDuration = 300
@@ -60,6 +61,13 @@ async function run(req: NextRequest) {
   for (const pid of await projectIdsWithAutorun()) {
     try { autorun.push({ project: pid, runId: await startAutorun(pid, req.nextUrl.origin) }) } catch (e) { autorun.push({ project: pid, runId: null, error: (e as Error).message }) }
   }
+  // "Tuần tra đêm" của sứ mệnh đang chạy: giao worker chạy nền (model Nhanh), tối đa MAX_PATROLS_PER_NIGHT lượt/đêm để không đốt quota Sandbox/DB.
+  const patrol: { mission: string; runId?: string; skipped?: string; error?: string }[] = []
+  let started = 0
+  for (const mid of await missionIdsWithPatrol()) {
+    if (started >= MAX_PATROLS_PER_NIGHT) { patrol.push({ mission: mid, skipped: "quá số lượt tuần tra mỗi đêm" }); continue }
+    try { const r = await startPatrol(mid, req.nextUrl.origin); if (r.runId) started++; patrol.push({ mission: mid, ...r }) } catch (e) { patrol.push({ mission: mid, error: (e as Error).message }) }
+  }
   const count = (s: string) => results.filter(r => r.status === s).length
   return NextResponse.json({
     total: sources.length, done: results.length, changed: count("changed"), same: count("same"), skipped: count("skipped"), error: count("error"),
@@ -69,6 +77,7 @@ async function run(req: NextRequest) {
     mail,
     threads,
     autorun,
+    patrol,
   })
 }
 
