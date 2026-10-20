@@ -149,3 +149,33 @@ describe("execRunCode", () => {
     expect(String(r.args.code).length).toBeLessThan(1700)
   })
 })
+
+describe("execRunCode — chạy lại script trong thư viện", () => {
+  const scriptDeps = (over: Partial<CodeDeps> = {}) => deps({
+    readInput: async p => (p === "scripts/tong.py" ? { path: p, content: "print('tong')" } : p === "data/rev.csv" ? { path: p, content: "a,b" } : null),
+    ...over,
+  })
+  it("script=scripts/x.py: đọc file từ workspace và chạy đúng nội dung, không cần code", async () => {
+    const run = vi.fn(async (_code: string, _files: unknown[]) => ({ exitCode: 0, stdout: "tong", stderr: "", outputs: [], cpuMs: 100, durationMs: 150, skipped: [] }))
+    const r = await execRunCode({ script: "scripts/tong.py", inputs: ["data/rev.csv"] }, ctx, scriptDeps({ run }))
+    expect(r.ok).toBe(true)
+    expect(run.mock.calls[0][0]).toBe("print('tong')")
+    expect(run.mock.calls[0][1]).toHaveLength(1)
+  })
+  it("từ chối script ngoài scripts/ hoặc không phải .py; báo khi script chưa có; không đụng sandbox", async () => {
+    const run = vi.fn()
+    for (const bad of ["data/rev.csv", "scripts/x.txt", "../scripts/x.py", "brief.md"]) {
+      const r = await execRunCode({ script: bad }, ctx, scriptDeps({ run }))
+      expect(r.ok, bad).toBe(false); expect(r.result).toContain("scripts/")
+    }
+    const missing = await execRunCode({ script: "scripts/khong_co.py" }, ctx, scriptDeps({ run }))
+    expect(missing.result).toContain("Không có script")
+    expect(run).not.toHaveBeenCalled()
+  })
+  it("thiếu cả code lẫn script → báo thiếu; script ưu tiên hơn code", async () => {
+    expect((await execRunCode({}, ctx, scriptDeps())).result).toContain("Thiếu code")
+    const run = vi.fn(async (_c: string, _f: unknown[]) => ({ exitCode: 0, stdout: "", stderr: "", outputs: [], cpuMs: 1, durationMs: 1, skipped: [] }))
+    await execRunCode({ code: "print('code')", script: "scripts/tong.py" }, ctx, scriptDeps({ run }))
+    expect(run.mock.calls[0][0]).toBe("print('tong')")
+  })
+})

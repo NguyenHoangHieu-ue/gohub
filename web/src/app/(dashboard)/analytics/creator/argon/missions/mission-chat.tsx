@@ -21,7 +21,8 @@ const QUICK: Record<MissionPhase, string[]> = {
   done: ["Tóm tắt kết quả cuối cùng"],
 }
 
-export function MissionChat({ phase, pendingAsk, runs, runner, onPhase, onStep, onError }: {
+export function MissionChat({ autoSend, phase, pendingAsk, runs, runner, onPhase, onStep, onError }: {
+  autoSend: { text: string; k: number } | null   // câu lệnh tự gửi (vd ▶ chạy lại script); mỗi k mới = một lần gửi
   phase: MissionPhase
   pendingAsk: PendingAskUi | null
   runs: Run[]
@@ -45,6 +46,8 @@ export function MissionChat({ phase, pendingAsk, runs, runner, onPhase, onStep, 
   const opts: SendOpts = { thinking, allowTools, background, model }
   const { busy, bgActive } = runner
   useEffect(() => { if (stick.current) endRef.current?.scrollIntoView({ block: "end" }) }, [runs])
+  const lastAuto = useRef(0)
+  useEffect(() => { if (autoSend && autoSend.k !== lastAuto.current && !busy) { lastAuto.current = autoSend.k; void runner.send(autoSend.text, opts) } }) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function go(to: MissionPhase) {
     setPhaseBusy(true)

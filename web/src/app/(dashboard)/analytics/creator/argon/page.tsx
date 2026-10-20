@@ -33,6 +33,7 @@ export default function ArgonMissionsPage() {
   const [panel, setPanel] = useState<Panel>("center")
   const [linkOpen, setLinkOpen] = useState(false)
   const [patrolOpen, setPatrolOpen] = useState(false)
+  const [autoSend, setAutoSend] = useState<{ text: string; k: number } | null>(null)   // ▶ chạy lại script → câu lệnh tự gửi ở chat
   const [sandbox, setSandbox] = useState<{ cpuMs: number; limitMs: number; snapshot: { at: string } | null } | null>(null)
   const [building, setBuilding] = useState(false)
   const [focus, setFocus] = useState<{ id: string; k: number } | null>(null)
@@ -104,6 +105,11 @@ export default function ArgonMissionsPage() {
     setBuilding(true)
     try { await api("/api/creator/argon/sandbox", jsonInit("POST", { action: "build" })); loadSandbox() } catch (e) { onError((e as Error).message) } finally { setBuilding(false) }
   }
+  function runScript(path: string) {
+    if (detail?.mission.phase !== "run") { onError('Chạy lại script chỉ dùng được khi sứ mệnh đang ở pha "Đang chạy" (sau khi Chốt).'); return }
+    setSelected(null); setPanel("center")
+    setAutoSend({ text: `Chạy lại ${path}: đọc docstring để biết đầu vào; nếu cần dữ liệu mới thì lấy lại bằng sql (saveAs) trước, rồi chạy run_code script="${path}" và báo kết quả ngắn gọn.`, k: Date.now() })
+  }
   async function unlink(sourceId: string) {
     if (!activeId) return
     try { await api(`/api/creator/argon/missions/${activeId}/sources?sourceId=${sourceId}`, { method: "DELETE" }); refreshAll() } catch (e) { onError((e as Error).message) }
@@ -144,7 +150,7 @@ export default function ArgonMissionsPage() {
           <div className="flex-1 overflow-y-auto">
             <MissionList missions={missions} activeId={activeId} onSelect={id => { setActiveId(id); setPanel("center") }} onCreate={createMission} showArchived={showArchived} setShowArchived={setShowArchived} />
             {detail && <div className="border-t border-gray-200 dark:border-slate-700 mt-1 pt-2 pb-3">
-              <WorkspaceTree tree={detail.tree} selected={selected} linked={detail.sources.map(s => ({ id: s.id, name: s.name }))} onSelect={p => { setSelected(p); setPanel("center") }} onCreate={createFile} onManageSources={() => setLinkOpen(true)} onUnlink={unlink} />
+              <WorkspaceTree tree={detail.tree} selected={selected} linked={detail.sources.map(s => ({ id: s.id, name: s.name }))} onSelect={p => { setSelected(p); setPanel("center") }} onCreate={createFile} onManageSources={() => setLinkOpen(true)} onUnlink={unlink} onRunScript={runScript} />
             </div>}
           </div>
         </aside>
@@ -170,7 +176,7 @@ export default function ArgonMissionsPage() {
                   <FileViewer missionId={m.id} path={selected} reloadKey={reloadKey} onSaved={refreshAll} onDeleted={() => { setSelected(null); refreshAll() }} onError={onError} />
                 </div>
               </> : (
-                <MissionChat phase={m.phase} pendingAsk={detail.pendingAsk} runs={runs} runner={runner} onPhase={changePhase} onStep={(id, n) => void showStep(id, n)} onError={onError} />
+                <MissionChat autoSend={autoSend} phase={m.phase} pendingAsk={detail.pendingAsk} runs={runs} runner={runner} onPhase={changePhase} onStep={(id, n) => void showStep(id, n)} onError={onError} />
               )}
             </div>
           </>}

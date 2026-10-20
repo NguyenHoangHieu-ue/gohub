@@ -17,14 +17,15 @@ export const RUN_CODE_TOOL: FunctionDeclaration = {
     "Chạy một đoạn Python (3.14, có sẵn pandas, numpy, openpyxl, xlsxwriter, matplotlib) trong sandbox CÔ LẬP, KHÔNG có mạng, tối đa ~2 phút. " +
     "inputs = danh sách file workspace cần dùng (vd data/rev.csv); script đọc chúng ở ĐÚNG đường dẫn đó (tương đối với thư mục chạy). " +
     "Ghi MỌI kết quả cần giữ vào thư mục out/ (vd out/so_sanh.xlsx, out/data/ket_qua.csv, out/bieu_do.png): file trong out/ tự lưu vào workspace (out/x → reports/x; out/data/x giữ nguyên data/x). " +
-    "In kết quả quan trọng ra stdout để thấy ngay. Chỉ dùng được ở pha chạy (sau khi Hiếu Chốt).",
+    "In kết quả quan trọng ra stdout để thấy ngay. Chỉ dùng được ở pha chạy (sau khi Hiếu Chốt). " +
+    "THƯ VIỆN SCRIPT: đoạn code dùng lại được thì ghi vào scripts/<ten>.py bằng ghiFile (đầu file có docstring: mục đích, inputs, outputs), rồi lần sau chạy bằng script=\"scripts/<ten>.py\" thay vì gửi lại code.",
   parameters: {
     type: Type.OBJECT,
     properties: {
-      code: { type: Type.STRING, description: "Mã Python hoàn chỉnh (chạy như main.py)" },
+      code: { type: Type.STRING, description: "Mã Python hoàn chỉnh (chạy như main.py). Bỏ trống nếu dùng script" },
+      script: { type: Type.STRING, description: "Đường dẫn script đã lưu trong workspace (vd scripts/doanh_thu_tuan.py) để chạy lại, thay cho code" },
       inputs: { type: Type.ARRAY, items: { type: Type.STRING }, description: "File workspace cần nạp vào sandbox, vd [\"data/rev7.csv\"]" },
     },
-    required: ["code"],
   },
 }
 
@@ -58,14 +59,23 @@ export async function execRunCode(args: Record<string, unknown>, ctx: { phase: M
   const done = (ok: boolean, result: string): ToolLogEntry => ({ name: RUN_CODE_NAME, args: logArgs, ok, chars: result.length, result, at })
   if (ctx.phase !== "run") return done(false, `Chạy code chỉ dùng được ở pha chạy (sau khi Hiếu bấm Chốt). Sứ mệnh đang ở pha "${ctx.phase}".`)
   if (ctx.callsSoFar >= MAX_RUN_CODE_CALLS) return done(false, `Đã chạy code ${MAX_RUN_CODE_CALLS} lần trong lượt này. Gộp bước hoặc để lượt sau.`)
-  const code = typeof args.code === "string" ? args.code : ""
-  if (!code.trim()) return done(false, "Thiếu code")
-  if (code.length > 60_000) return done(false, "Code quá dài (tối đa 60.000 ký tự)")
+  let code = typeof args.code === "string" ? args.code : ""
+  const scriptRaw = typeof args.script === "string" ? args.script.trim() : ""
+  if (!scriptRaw && !code.trim()) return done(false, "Thiếu code (hoặc script)")
   const inputs = Array.isArray(args.inputs) ? args.inputs.map(String) : []
   if (inputs.length > MAX_INPUT_FILES) return done(false, `Tối đa ${MAX_INPUT_FILES} file đầu vào`)
   try {
     const q = deps.quota((await deps.usage()).cpuMs)
     if (!q.ok) return done(false, q.message)
+    if (scriptRaw) {   // chạy lại script trong thư viện của sứ mệnh
+      const sp = cleanPath(scriptRaw)
+      if (!sp || !sp.startsWith("scripts/") || !/\.py$/i.test(sp)) return done(false, 'script phải là file .py trong scripts/ (vd "scripts/doanh_thu_tuan.py")')
+      const f = await deps.readInput(sp)
+      if (!f) return done(false, `Không có script "${sp}". Gọi lietKeFile để xem thư viện script.`)
+      code = typeof f.content === "string" ? f.content : Buffer.from(f.content).toString("utf8")
+    }
+    if (!code.trim()) return done(false, "Script rỗng")
+    if (code.length > 60_000) return done(false, "Code quá dài (tối đa 60.000 ký tự)")
     const files: CodeFile[] = []
     let bytes = 0
     for (const p of inputs) {

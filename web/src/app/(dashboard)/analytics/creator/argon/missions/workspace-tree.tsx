@@ -1,13 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronRight, FileText, Folder, FilePlus2, Link2, X } from "lucide-react"
+import { ChevronDown, ChevronRight, FileText, Folder, FilePlus2, Link2, Play, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fmtBytes } from "../argon-types"
 import type { TreeNode } from "./mission-types"
 
 // Cây workspace của sứ mệnh. Thư mục là ảo (suy từ đường dẫn). "sources/" chỉ liệt kê nguồn đã gắn từ Kho nguồn, bấm để mở trong Kho nguồn.
-export function WorkspaceTree({ tree, selected, linked, onSelect, onCreate, onManageSources, onUnlink }: {
+export function WorkspaceTree({ tree, selected, linked, onSelect, onCreate, onManageSources, onUnlink, onRunScript }: {
   tree: TreeNode[]
   selected: string | null
   linked: { id: string; name: string }[]
@@ -15,6 +15,7 @@ export function WorkspaceTree({ tree, selected, linked, onSelect, onCreate, onMa
   onCreate: (path: string) => void
   onManageSources: () => void
   onUnlink: (sourceId: string) => void
+  onRunScript: (path: string) => void   // ▶ trên script trong scripts/: nhờ Argon chạy lại
 }) {
   const [closed, setClosed] = useState<Set<string>>(new Set())
   const [adding, setAdding] = useState(false)
@@ -43,13 +44,14 @@ export function WorkspaceTree({ tree, selected, linked, onSelect, onCreate, onMa
       )
     }
     return (
-      <li key={n.path}>
+      <li key={n.path} className="group/s relative">
         <button type="button" onClick={() => onSelect(n.path)} style={pad} aria-current={selected === n.path}
           className={cn("w-full flex items-center gap-1.5 py-1 pr-2 text-sm rounded", selected === n.path ? "bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-200" : "text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700")}>
           <FileText size={13} className="text-gray-400 shrink-0" /><span className="truncate">{n.name}</span>
           {n.author === "argon" && <span className="text-[9px] px-1 rounded bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300">Argon</span>}
           <span className="ml-auto text-[10px] text-gray-400 shrink-0">{fmtBytes(n.size ?? null)}</span>
         </button>
+        {n.path.startsWith("scripts/") && /\.py$/i.test(n.path) && <button type="button" onClick={() => onRunScript(n.path)} title={`Nhờ Argon chạy lại ${n.path}`} aria-label={`Chạy lại ${n.path}`} className="absolute right-1 top-0.5 hidden group-hover/s:inline-flex p-1 rounded bg-violet-600 text-white"><Play size={10} /></button>}
       </li>
     )
   }
