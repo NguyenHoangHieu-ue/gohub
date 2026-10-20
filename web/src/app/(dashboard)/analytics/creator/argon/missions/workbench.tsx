@@ -8,13 +8,16 @@ import { fmtUsd } from "./mission-types"
 
 // Bàn làm việc: dòng thời gian các bước Argon làm trong lượt (đọc/ghi file workspace, lấy số liệu hệ thống). Chat chỉ hiện kết quả.
 // Bấm một bước để xem tham số và kết quả đầy đủ; bước ghi/đọc file mở thẳng file đó ở khung giữa.
-export function Workbench({ steps, busy, bgActive, spentUsd, runCount, focus, onStop, onOpenFile, onLoadFull }: {
+export function Workbench({ steps, busy, bgActive, spentUsd, runCount, focus, sandbox, building, onBuild, onStop, onOpenFile, onLoadFull }: {
   steps: Step[]
   busy: boolean
   bgActive: boolean
   spentUsd: number
   runCount: number
   focus: { id: string; k: number } | null   // chip [#N] trong chat bấm vào → chọn bước này (k đổi mỗi lần bấm)
+  sandbox: { cpuMs: number; limitMs: number; snapshot: { at: string } | null } | null
+  building: boolean
+  onBuild: () => void
   onStop: () => void
   onOpenFile: (path: string) => void
   onLoadFull: (runId: string) => void
@@ -74,6 +77,11 @@ export function Workbench({ steps, busy, bgActive, spentUsd, runCount, focus, on
           })}
           {running && steps.length > 0 && <li className="px-2 py-1 text-xs text-gray-400 inline-flex items-center gap-1.5"><Loader2 size={11} className="animate-spin" />đang làm bước tiếp…</li>}
         </ol>
+      </div>
+      <div className="border-t border-gray-200 dark:border-slate-700 px-3 py-2 text-[11px] text-gray-500 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span title="CPU Sandbox đã dùng trong tháng (gói Hobby 5 giờ/tháng). Chạy code ở sandbox cô lập, không có mạng.">Sandbox: {sandbox ? `${(sandbox.cpuMs / 3_600_000).toFixed(2)} / ${(sandbox.limitMs / 3_600_000).toFixed(1)} giờ CPU` : "…"}</span>
+        {sandbox && !sandbox.snapshot && <button type="button" onClick={onBuild} disabled={building} className="px-2 py-0.5 border border-violet-400 text-violet-700 dark:text-violet-300 rounded disabled:opacity-50">{building ? "Đang chuẩn bị (1–3 phút)…" : "Chuẩn bị Sandbox"}</button>}
+        {sandbox?.snapshot && <span className="text-emerald-600">đã sẵn sàng (Python + pandas)</span>}
       </div>
       {cur && (
         <div className="border-t border-gray-200 dark:border-slate-700 bg-slate-900 text-slate-200 max-h-[40%] overflow-auto p-3">

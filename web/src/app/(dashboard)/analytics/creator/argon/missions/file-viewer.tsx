@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Eye, Loader2, Pencil, Save, Trash2 } from "lucide-react"
+import { Download, Eye, Loader2, Pencil, Save, Trash2 } from "lucide-react"
 import { api, fmtBytes, jsonInit } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
 import { PROTECTED_FILES, type WsFile } from "./mission-types"
@@ -67,7 +67,11 @@ export function FileViewer({ missionId, path, reloadKey, onSaved, onDeleted, onE
       </div>
       <div className="flex-1 min-h-0 overflow-auto">
         {binary
-          ? <div className="p-6 text-sm text-gray-500">File nhị phân ({fmtBytes(file.size_bytes)}), chưa xem được trong trình duyệt.</div>
+          ? <div className="p-6 space-y-3 text-sm text-gray-600 dark:text-slate-300">
+              {/^image\/(png|jpe?g)$/.test(file.mime ?? "") && <img src={`${url}?path=${encodeURIComponent(file.path)}&download=1&v=${file.version}`} alt={file.path} className="max-w-full max-h-[60vh] rounded-lg border border-gray-200 dark:border-slate-700" />}
+              <div>File nhị phân ({fmtBytes(file.size_bytes)}) do Argon hoặc code tạo ra.</div>
+              <a href={`${url}?path=${encodeURIComponent(file.path)}&download=1`} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg"><Download size={14} />Tải xuống</a>
+            </div>
           : editing
             ? <textarea value={text} onChange={e => setText(e.target.value)} spellCheck={false} aria-label={`Nội dung ${file.path}`} className="w-full h-full min-h-[300px] p-4 font-mono text-[13px] leading-relaxed bg-transparent text-gray-800 dark:text-slate-100 resize-none outline-none" />
             : isMd

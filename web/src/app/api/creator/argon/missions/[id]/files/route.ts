@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireArgonUser } from "@/lib/argon/server"
 import { buildTree } from "@/lib/argon/missions"
-import { listFiles, ownMission, readFile, removeFile, writeFile } from "@/lib/argon/missions-db"
+import { listFiles, ownMission, readFile, readFileBuffer, removeFile, writeFile } from "@/lib/argon/missions-db"
 
 export const dynamic = "force-dynamic"
 
@@ -16,6 +16,13 @@ async function guard(id: string) {
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const g = await guard(params.id); if (!g.mission) return g.res
   const path = req.nextUrl.searchParams.get("path")
+  if (path && req.nextUrl.searchParams.get("download") === "1") {   // tải file (chữ hoặc nhị phân) nguyên bản; ảnh dùng làm src xem trước
+    const f = await readFileBuffer(g.mission.id, path)
+    if (!f) return NextResponse.json({ error: "Không tìm thấy file" }, { status: 404 })
+    const name = path.split("/").pop() ?? "file"
+    const inline = /^image\/(png|jpe?g)$/.test(f.mime)   // SVG/HTML KHÔNG inline (cùng origin → có thể chạy script)
+    return new Response(new Uint8Array(f.data), { headers: { "Content-Type": f.mime, "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(name)}`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } })
+  }
   if (path) {
     const f = await readFile(g.mission.id, path)
     return f ? NextResponse.json({ file: f }) : NextResponse.json({ error: "Không tìm thấy file" }, { status: 404 })

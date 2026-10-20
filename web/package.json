@@ -21,6 +21,7 @@
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.4",
     "@vercel/functions": "^3.6.2",
+    "@vercel/sandbox": "3.8.0",
     "bcryptjs": "^2.4.3",
     "date-fns": "^4.4.0",
     "docx": "^9.7.1",

@@ -31,6 +31,8 @@ export default function ArgonMissionsPage() {
   const [reloadKey, setReloadKey] = useState(0)
   const [panel, setPanel] = useState<Panel>("center")
   const [linkOpen, setLinkOpen] = useState(false)
+  const [sandbox, setSandbox] = useState<{ cpuMs: number; limitMs: number; snapshot: { at: string } | null } | null>(null)
+  const [building, setBuilding] = useState(false)
   const [focus, setFocus] = useState<{ id: string; k: number } | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const loadSeq = useRef(0)
@@ -62,7 +64,9 @@ export default function ArgonMissionsPage() {
     loadDetail(activeId)
   }, [activeId, loadDetail])
 
-  const refreshAll = useCallback(() => { if (activeId) loadDetail(activeId); void loadMissions() }, [activeId, loadDetail, loadMissions])
+  const loadSandbox = useCallback(() => { api<{ cpuMs: number; limitMs: number; snapshot: { at: string } | null }>("/api/creator/argon/sandbox").then(setSandbox).catch(() => { /* đồng hồ phụ: lỗi thì bỏ qua */ }) }, [])
+  useEffect(() => { if (role === "creator") loadSandbox() }, [role, loadSandbox])
+  const refreshAll = useCallback(() => { if (activeId) loadDetail(activeId); void loadMissions(); loadSandbox() }, [activeId, loadDetail, loadMissions, loadSandbox])
   const runner = useMissionRunner({
     projectId: detail?.mission.project_id ?? null, runs, setRuns, onError,
     onWorkspaceChanged: () => { setReloadKey(k => k + 1); refreshAll() },
@@ -93,6 +97,10 @@ export default function ArgonMissionsPage() {
   async function showStep(runId: string, n: number) {
     await runner.loadSteps(runId, true)
     setFocus({ id: `${runId}:${n - 1}`, k: Date.now() }); setPanel("right")
+  }
+  async function buildSandbox() {
+    setBuilding(true)
+    try { await api("/api/creator/argon/sandbox", jsonInit("POST", { action: "build" })); loadSandbox() } catch (e) { onError((e as Error).message) } finally { setBuilding(false) }
   }
   async function unlink(sourceId: string) {
     if (!activeId) return
@@ -166,7 +174,7 @@ export default function ArgonMissionsPage() {
         </main>
 
         <aside className={colCls("right")} aria-label="Bàn làm việc">
-          <Workbench steps={runner.steps} busy={runner.busy} bgActive={runner.bgActive} spentUsd={detail?.spent_usd ?? 0} runCount={runs.length} focus={focus}
+          <Workbench steps={runner.steps} busy={runner.busy} bgActive={runner.bgActive} spentUsd={detail?.spent_usd ?? 0} runCount={runs.length} focus={focus} sandbox={sandbox} building={building} onBuild={() => void buildSandbox()}
             onStop={runner.stop} onOpenFile={p => { setSelected(p); setPanel("center") }} onLoadFull={id => void runner.loadSteps(id, true)} />
         </aside>
       </div>

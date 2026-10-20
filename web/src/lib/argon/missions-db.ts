@@ -184,3 +184,42 @@ export async function listLinkable(username: string, missionId: string): Promise
     .map(s => ({ id: s.id as string, name: s.name as string, kind: s.kind as string, tokens: Number(s.tokens) || 0, enabled: !!s.enabled, project_id: s.project_id as string, projectName: name.get(s.project_id as string) ?? "?", linked: linked.has(s.id as string) }))
     .sort((a, b) => (rank.get(a.project_id) ?? 0) - (rank.get(b.project_id) ?? 0))
 }
+
+export const MAX_BINARY_FILE_BYTES = 15 * 1024 * 1024
+const BIN_MIME: Record<string, string> = { xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", pdf: "application/pdf", svg: "image/svg+xml", zip: "application/zip", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation" }
+export const mimeOf = (path: string) => BIN_MIME[path.split(".").pop()?.toLowerCase() ?? ""] ?? "application/octet-stream"
+
+/** Ghi file nhị phân (xlsx, ảnh…) vào workspace: nội dung ở Storage `missions/<id>/<path>`, dòng DB giữ storage_path (content = null). */
+export async function writeBinaryFile(missionId: string, rawPath: string, data: Buffer, author: "user" | "argon"): Promise<{ file?: { path: string; version: number; size_bytes: number }; error?: string }> {
+  const path = cleanPath(rawPath)
+  if (!path) return { error: "Đường dẫn file không hợp lệ" }
+  if (data.length > MAX_BINARY_FILE_BYTES) return { error: `File quá lớn (tối đa ${MAX_BINARY_FILE_BYTES / 1024 / 1024}MB)` }
+  const { data: cur } = await supabaseAdmin.from("argon_workspace_files").select("id,version,storage_path").eq("mission_id", missionId).eq("path", path).maybeSingle()
+  const { count } = await supabaseAdmin.from("argon_workspace_files").select("id", { count: "exact", head: true }).eq("mission_id", missionId)
+  const bad = checkWrite({ path, content: "", exists: !!cur, fileCount: count ?? 0 })
+  if (bad) return { error: bad }
+  const { ensureArgonBucket } = await import("./server")
+  await ensureArgonBucket()
+  const storage = `missions/${missionId}/${path}`
+  const up = await supabaseAdmin.storage.from(ARGON_BUCKET).upload(storage, data, { upsert: true, contentType: mimeOf(path) })
+  if (up.error) return { error: `Không tải lên Storage: ${up.error.message}` }
+  const now = new Date().toISOString()
+  const row = { content: null, mime: mimeOf(path), storage_path: storage, size_bytes: data.length, author, updated_at: now }
+  const { error } = cur
+    ? await supabaseAdmin.from("argon_workspace_files").update({ ...row, version: cur.version + 1 }).eq("id", cur.id)
+    : await supabaseAdmin.from("argon_workspace_files").insert({ mission_id: missionId, path, ...row })
+  if (error) return { error: error.message }
+  await supabaseAdmin.from("argon_missions").update({ updated_at: now }).eq("id", missionId)
+  return { file: { path, version: (cur?.version ?? 0) + 1, size_bytes: data.length } }
+}
+
+/** Đọc nội dung file workspace dưới dạng Buffer (chữ hoặc nhị phân). Null nếu không có. */
+export async function readFileBuffer(missionId: string, rawPath: string): Promise<{ data: Buffer; mime: string } | null> {
+  const f = await readFile(missionId, rawPath)
+  if (!f) return null
+  if (f.content != null) return { data: Buffer.from(f.content, "utf8"), mime: f.mime ?? "text/plain" }
+  if (!f.storage_path) return null
+  const d = await supabaseAdmin.storage.from(ARGON_BUCKET).download(f.storage_path)
+  if (d.error || !d.data) return null
+  return { data: Buffer.from(await d.data.arrayBuffer()), mime: f.mime ?? mimeOf(f.path) }
+}

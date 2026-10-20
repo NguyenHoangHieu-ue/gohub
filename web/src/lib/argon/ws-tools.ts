@@ -1,13 +1,14 @@
 import { Type, type FunctionDeclaration } from "@google/genai"
 import { canArgonWrite, cleanPath } from "./missions"
-import { listFiles, missionById, readFile, writeFile } from "./missions-db"
+import { listFiles, missionById, readFile, readFileBuffer, writeBinaryFile, writeFile } from "./missions-db"
 import type { ToolLogEntry } from "./tools"
 import { SQL_TOOL_NAME, execSql } from "./sql-tool"
+import { RUN_CODE_NAME, execRunCode } from "./code-tool"
 
 // Công cụ workspace của Sứ mệnh: Argon đọc/ghi file TRONG workspace của đúng sứ mệnh đang chạy (không chạm file hay dữ liệu nơi khác).
 // Quyền ghi theo pha (canArgonWrite): làm rõ chỉ brief.md; kế hoạch thêm notes/; chạy ghi mọi nơi; tạm dừng/xong không ghi.
 export const WS_TOOL_NAMES = ["docFile", "ghiFile", "lietKeFile"] as const
-export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME]
+export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME, RUN_CODE_NAME]
 export const MAX_WS_READ_CHARS = 60_000
 const LOG_CONTENT_CHARS = 1_500
 
@@ -90,5 +91,26 @@ export async function execMissionSql(args: Record<string, unknown>, missionId: s
     })
   } catch (e) {
     return { name: SQL_TOOL_NAME, args, ok: false, chars: 0, result: `Lỗi sql: ${(e as Error).message}`, at }
+  }
+}
+
+/** Công cụ `run_code` của sứ mệnh: Python trong Vercel Sandbox, chỉ ở pha chạy; đọc/ghi file qua workspace của đúng sứ mệnh này. */
+export async function execMissionCode(args: Record<string, unknown>, missionId: string, callsSoFar: number): Promise<ToolLogEntry> {
+  try {
+    const mission = await missionById(missionId)
+    if (!mission) return { name: RUN_CODE_NAME, args, ok: false, chars: 0, result: "Sứ mệnh không còn tồn tại", at: new Date().toISOString() }
+    const sb = await import("./sandbox")
+    const backend = await sb.realBackend()
+    return await execRunCode(args, { phase: mission.phase, callsSoFar }, {
+      readInput: async p => { const f = await readFileBuffer(missionId, p); return f ? { path: p, content: f.data } : null },
+      saveText: async (path, content) => { const r = await writeFile(missionId, path, content, "argon"); return r.error ? { error: r.error } : {} },
+      saveBinary: async (path, data) => { const r = await writeBinaryFile(missionId, path, data, "argon"); return r.error ? { error: r.error } : {} },
+      usage: sb.getUsage,
+      addUsage: async ms => { await sb.addUsage(ms) },
+      quota: used => sb.quotaState(used),
+      run: (code, files) => sb.runPython(backend, code, files),
+    })
+  } catch (e) {
+    return { name: RUN_CODE_NAME, args, ok: false, chars: 0, result: `Lỗi run_code: ${(e as Error).message}`, at: new Date().toISOString() }
   }
 }
