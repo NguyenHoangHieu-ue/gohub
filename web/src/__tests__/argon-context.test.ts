@@ -48,3 +48,15 @@ describe("buildRunContext", () => {
     expect(parts).toEqual([])
   })
 })
+
+describe("buildRunContext — sứ mệnh", () => {
+  it("khối sổ tay sứ mệnh đứng đầu tài liệu; chỉ dẫn theo pha + ghi chú sứ mệnh nằm trong system prompt; không có mission thì không có", async () => {
+    const withM = await buildRunContext({ project, sources: [], priorRuns: [], prompt: "hỏi", mission: { block: "<su_menh pha=\"plan\">X</su_menh>", instruction: "PHA KẾ HOẠCH: soạn kế hoạch" } })
+    const lead = withM.contents[0].parts!.map(p => p.text).join("\n")
+    expect(lead.indexOf("<su_menh")).toBeLessThan(lead.indexOf("<so_du_an>"))
+    expect(withM.systemInstruction).toContain("PHA KẾ HOẠCH")
+    expect(withM.systemInstruction).toContain("SỨ MỆNH")
+    const without = await buildRunContext({ project, sources: [], priorRuns: [], prompt: "hỏi" })
+    expect(without.systemInstruction).not.toContain("lietKeFile")
+  })
+})

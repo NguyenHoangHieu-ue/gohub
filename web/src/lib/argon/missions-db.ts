@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { ARGON_BUCKET, ownSource, type ArgonSource } from "./server"
-import { BRIEF_PATH, DECISIONS_PATH, briefTemplate, canTransition, checkWrite, cleanPath, decisionsTemplate, isProtectedPath, type MissionPhase, type WsFileRow } from "./missions"
+import { BRIEF_PATH, DECISIONS_PATH, briefTemplate, canTransition, checkWrite, cleanPath, decisionsTemplate, isProtectedPath, missionContextBlock, phaseInstruction, type MissionPhase, type WsFileRow } from "./missions"
 import { deleteProjectCascade } from "./project-delete"
 
 export interface ArgonMission {
@@ -142,3 +142,26 @@ export async function unlinkSource(missionId: string, sourceId: string) {
   await supabaseAdmin.from("argon_mission_sources").delete().eq("mission_id", missionId).eq("source_id", sourceId)
 }
 
+
+/** Sứ mệnh theo id — chỉ cho code phía server đã biết id hợp lệ (công cụ trong lượt chạy); API người dùng dùng ownMission. */
+export async function missionById(id: string): Promise<ArgonMission | null> {
+  const { data } = await supabaseAdmin.from("argon_missions").select("*").eq("id", id).maybeSingle()
+  return (data as ArgonMission | null) ?? null
+}
+
+/** Ngữ cảnh sứ mệnh cho 1 lượt chạy của dự án nền: khối sổ tay (mục tiêu, brief, decisions, danh sách file) + chỉ dẫn theo pha. Null nếu không phải dự án nền. */
+export async function loadMissionContext(projectId: string): Promise<{ mission: ArgonMission; block: string; instruction: string } | null> {
+  const { data } = await supabaseAdmin.from("argon_missions").select("*").eq("project_id", projectId).maybeSingle()
+  const mission = data as ArgonMission | null
+  if (!mission) return null
+  const [files, brief, decisions] = await Promise.all([listFiles(mission.id), readFile(mission.id, BRIEF_PATH), readFile(mission.id, DECISIONS_PATH)])
+  return { mission, block: missionContextBlock(mission, brief?.content ?? "", decisions?.content ?? "", files), instruction: phaseInstruction(mission.phase) }
+}
+
+/** Id các nguồn (của dự án khác trong Kho nguồn) đã gắn vào sứ mệnh của dự án nền này. */
+export async function linkedSourceIdsForProject(projectId: string): Promise<string[]> {
+  const { data: m } = await supabaseAdmin.from("argon_missions").select("id").eq("project_id", projectId).maybeSingle()
+  if (!m) return []
+  const { data } = await supabaseAdmin.from("argon_mission_sources").select("source_id").eq("mission_id", m.id)
+  return (data ?? []).map(r => r.source_id as string)
+}

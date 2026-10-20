@@ -9,6 +9,7 @@ import { stripReports } from "./report"
 import { autoSaveReports, getReportHtml, templateSuffix } from "./report-store"
 import { BG_STALE_MS, MAX_BG_COST_USD, MAX_BG_SEGMENTS, deleteBg, getBg, getToolLog, saveToolLog, touchBg, triggerWorker } from "./bg"
 import type { ArgonProject, ArgonRun, ArgonSource } from "./server"
+import { linkedSourceIdsForProject, loadMissionContext } from "./missions-db"
 
 export const SEGMENT_MS = 265_000     // hết ngân sách đoạn → lưu dở, đoạn sau viết tiếp
 export const MAX_OUT = 32_768         // trần output mỗi đoạn; chạm trần cũng đi qua đoạn sau
@@ -20,7 +21,9 @@ export async function loadRunMaterial(project: ArgonProject, pick: Set<string> |
   const mat = isHub ? await loadHubMaterial(project) : null
   const ids = mat ? mat.projectIds : [project.id]
   const { data } = await supabaseAdmin.from("argon_sources").select("*").in("project_id", ids).eq("enabled", true)
-  let sources = ((data ?? []) as ArgonSource[]).filter(s => !pick || pick.has(s.id))
+  const linked = mat ? [] : await linkedSourceIdsForProject(project.id)   // dự án nền của sứ mệnh: thêm nguồn gắn từ Kho nguồn
+  const { data: more } = linked.length ? await supabaseAdmin.from("argon_sources").select("*").in("id", linked).eq("enabled", true) : { data: [] }
+  let sources = [...((data ?? []) as ArgonSource[]), ...((more ?? []) as ArgonSource[])].filter(s => !pick || pick.has(s.id))
   const live = sources.filter(s => (s.kind === "lark" || s.external_id?.startsWith("datapack:")) && s.sync_mode === "live")
   if (live.length) {
     await syncMany(live, origin)
@@ -74,13 +77,14 @@ export async function runBackgroundSegment(runId: string, origin: string): Promi
     const mat = await loadRunMaterial(project, pick.size ? pick : null, origin)
     const tpl = bg.templateReportId ? await getReportHtml(bg.username, bg.templateReportId) : null
     const tplSuffix = tpl ? templateSuffix(tpl.meta.title, tpl.html) : ""
+    const mctx = project.kind === "mission" ? await loadMissionContext(project.id) : null
     const ctx = await buildRunContext({
       project: mat.project, sources: mat.sources, priorRuns: ((allRuns ?? []) as ArgonRun[]).filter(r => r.id !== runId), prompt: run.prompt + tplSuffix,
-      resumeRun: answer.trim() ? { ...run, answer } : undefined, allowTools: bg.allowTools, toolLog,
+      resumeRun: answer.trim() ? { ...run, answer } : undefined, allowTools: bg.allowTools, toolLog, mission: mctx ?? undefined,
     })
     const seg = await runSegment({
       ctx, thinking: bg.thinking, segmentMs: SEGMENT_MS, maxOut: MAX_OUT, signal: stopAc.signal,
-      tools: bg.allowTools ? { origin, log: toolLog, onTool: () => saveToolLog(runId, toolLog) } : undefined,
+      tools: bg.allowTools || mctx ? { origin, log: toolLog, onTool: () => saveToolLog(runId, toolLog), dataTools: bg.allowTools, missionId: mctx?.mission.id } : undefined,
       onDelta: t => { answer += t },
       onProgress: () => {
         void save(); void touchBg(runId, bg)

@@ -1,12 +1,14 @@
-import { ThinkingLevel, type Content, type Part } from "@google/genai"
+import { ThinkingLevel, type Content, type FunctionDeclaration, type Part } from "@google/genai"
 import { genai } from "@/lib/agents/genai-stream"
 import { GEMINI_MODEL_ARGON } from "@/lib/ai-models"
 import type { RunContext } from "./context"
 import { ARGON_TOOLS, MAX_TOOL_CALLS, execArgonTool, type ToolLogEntry } from "./tools"
+import { WS_TOOLS, WS_TOOL_NAMES, execWsTool } from "./ws-tools"
 
 // Lõi chạy 1 ĐOẠN của Phòng Argon, dùng chung cho SSE (runs/route.ts) và worker việc nền (worker/route.ts).
 // Hết ngân sách thời gian đoạn → status "partial" (câu trả lời dở được lưu, đoạn sau viết tiếp). Có công cụ → vòng gọi công cụ ngay trong đoạn.
 export const LEVELS: Record<string, ThinkingLevel> = { low: ThinkingLevel.LOW, medium: ThinkingLevel.MEDIUM, high: ThinkingLevel.HIGH }
+const MAX_MISSION_TOOL_CALLS = 30
 const TRANSIENT = /429|rate|quota|resource.?exhausted|500|503|overload|unavailable|deadline|ECONNRESET|fetch failed/i
 
 export interface SegmentIn {
@@ -15,7 +17,8 @@ export interface SegmentIn {
   segmentMs: number
   maxOut: number
   signal?: AbortSignal                        // huỷ từ ngoài (client đóng / người dùng bấm Dừng)
-  tools?: { origin: string; log: ToolLogEntry[]; onTool: (e: ToolLogEntry) => void | Promise<void> }
+  // dataTools=false: tắt layDuLieuHeThong (mặc định bật). missionId: bật thêm công cụ workspace của sứ mệnh đó (docFile/ghiFile/lietKeFile).
+  tools?: { origin: string; log: ToolLogEntry[]; onTool: (e: ToolLogEntry) => void | Promise<void>; dataTools?: boolean; missionId?: string }
   onDelta: (text: string) => void
   onProgress?: () => void                     // gọi định kỳ (≥4s) để lưu câu trả lời dở / nhịp tim
 }
@@ -35,10 +38,15 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
   const timer = setTimeout(() => ac.abort(new Error("segment-timeout")), i.segmentMs)
   const out: SegmentOut = { added: "", tokensIn: 0, tokensOut: 0, cachedIn: 0, status: "done", error: null }
   const contents: Content[] = [...i.ctx.contents]
+  const dataTools = i.tools?.dataTools !== false
+  const missionId = i.tools?.missionId
+  const decls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? WS_TOOLS : [])]
+  const maxCalls = missionId ? MAX_MISSION_TOOL_CALLS : MAX_TOOL_CALLS   // sứ mệnh còn đọc/ghi file nên cần nhiều lượt gọi hơn
+  const isData = (n: string) => !(WS_TOOL_NAMES as readonly string[]).includes(n)
   let lastProgress = Date.now()
   try {
-    for (let turn = 0; turn <= MAX_TOOL_CALLS; turn++) {
-      const toolsOn = !!i.tools && i.tools.log.length < MAX_TOOL_CALLS
+    for (let turn = 0; turn <= maxCalls; turn++) {
+      const toolsOn = !!i.tools && decls.length > 0 && i.tools.log.length < maxCalls
       const modelParts: Part[] = []
       let finish = "", tIn = 0, tOut = 0, tCached = 0
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -48,7 +56,7 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
             model: GEMINI_MODEL_ARGON, contents,
             config: {
               systemInstruction: i.ctx.systemInstruction, thinkingConfig: { thinkingLevel: LEVELS[i.thinking] ?? LEVELS.medium }, maxOutputTokens: i.maxOut, abortSignal: ac.signal,
-              ...(toolsOn ? { tools: [{ functionDeclarations: ARGON_TOOLS }] } : {}),
+              ...(toolsOn ? { tools: [{ functionDeclarations: decls }] } : {}),
             },
           })
           for await (const chunk of res) {
@@ -76,7 +84,12 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
         const responses: Part[] = []
         for (const c of calls) {
           const fc = c.functionCall!
-          const entry = await execArgonTool(String(fc.name), (fc.args ?? {}) as Record<string, unknown>, i.tools!.origin)
+          const fname = String(fc.name), fargs = (fc.args ?? {}) as Record<string, unknown>
+          const dataCalls = i.tools!.log.filter(t => isData(t.name)).length
+          const entry = !isData(fname) && missionId ? await execWsTool(fname, fargs, missionId)
+            : isData(fname) && dataTools && dataCalls >= MAX_TOOL_CALLS ? { name: fname, args: fargs, ok: false, chars: 0, result: `Đã dùng hết ${MAX_TOOL_CALLS} lần lấy số liệu hệ thống trong lượt này`, at: new Date().toISOString() }
+            : isData(fname) && !dataTools ? { name: fname, args: fargs, ok: false, chars: 0, result: "Công cụ lấy số liệu hệ thống đang tắt", at: new Date().toISOString() }
+            : await execArgonTool(fname, fargs, i.tools!.origin)
           i.tools!.log.push(entry)
           await i.tools!.onTool(entry)
           responses.push({ functionResponse: { name: String(fc.name), response: entry.ok ? { ketQua: entry.result } : { loi: entry.result } } })

@@ -9,6 +9,7 @@ import { LEVELS, runSegment } from "@/lib/argon/run-engine"
 import { MAX_OUT, SEGMENT_MS, loadRunMaterial } from "@/lib/argon/bg-worker"
 import { deleteBg, deleteToolLog, getToolLog, saveToolLog, setBg, triggerWorker } from "@/lib/argon/bg"
 import { autoSaveReports, getReportHtml, templateSuffix } from "@/lib/argon/report-store"
+import { linkedSourceIdsForProject, loadMissionContext } from "@/lib/argon/missions-db"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -48,7 +49,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       await supabaseAdmin.from("argon_runs").update({ status: "queued", error: null, finished_at: null }).eq("id", runId)
     } else {
       const { data: enabled } = await supabaseAdmin.from("argon_sources").select("id").eq("project_id", params.id).eq("enabled", true)
-      const ids = (enabled ?? []).map(s => s.id as string).filter(id => !pick || pick.has(id))
+      const own = (enabled ?? []).map(s => s.id as string)
+      const linked = project.kind === "mission" ? await linkedSourceIdsForProject(params.id) : []   // nguồn gắn từ Kho nguồn
+      const ids = [...own, ...linked].filter(id => !pick || pick.has(id))
       const { data, error } = await supabaseAdmin.from("argon_runs").insert({
         project_id: params.id, username, prompt, status: "queued", model: GEMINI_MODEL_ARGON, thinking, source_ids: ids,
       }).select("id").single()
@@ -63,7 +66,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const mat = await loadRunMaterial(project, pick, req.nextUrl.origin)
   const toolLog = resume ? await getToolLog(resume.id) : []
-  const ctx = await buildRunContext({ project: mat.project, sources: mat.sources, priorRuns: runs, prompt: withTpl(prompt), resumeRun: resume ? { ...resume, prompt: withTpl(resume.prompt) } : undefined, allowTools, toolLog })
+  const mctx = project.kind === "mission" ? await loadMissionContext(project.id) : null
+  const ctx = await buildRunContext({ project: mat.project, sources: mat.sources, priorRuns: runs, prompt: withTpl(prompt), resumeRun: resume ? { ...resume, prompt: withTpl(resume.prompt) } : undefined, allowTools, toolLog, mission: mctx ?? undefined })
   ctx.warnings.push(...mat.warnings)
   const t0 = Date.now()
   let runId = resume?.id ?? ""
@@ -87,7 +91,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const log = [...toolLog]
       const seg = await runSegment({
         ctx, thinking, segmentMs: SEGMENT_MS, maxOut: MAX_OUT, signal: req.signal,
-        tools: allowTools ? { origin: req.nextUrl.origin, log, onTool: async e => { send({ type: "tool", name: e.name, args: e.args, ok: e.ok, chars: e.chars }); await saveToolLog(runId, log) } } : undefined,
+        tools: allowTools || mctx ? { origin: req.nextUrl.origin, log, dataTools: allowTools, missionId: mctx?.mission.id, onTool: async e => { send({ type: "tool", name: e.name, args: e.args, ok: e.ok, chars: e.chars }); await saveToolLog(runId, log) } } : undefined,
         onDelta: t => { answer += t; send({ type: "delta", text: t }) },
         onProgress: () => { void save() },
       })
