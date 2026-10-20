@@ -34,6 +34,13 @@ status: active
 - Wave 1 (s138): thêm `getTrendSnapshots` + `generateImage` (Pollinations AI FLUX)
 - Cron `refresh-trends` chạy 8h ICT → trend_snapshots Supabase
 
+**Phòng Argon (creator only, s233–s237)** = tham mưu chiến lược theo **Sứ mệnh** (`/analytics/creator/argon`; chi tiết `tabs/creator-argon-room.md`). Khác Bé Gấu (tra nhanh) và Gấu Pro (làm theo lệnh):
+- Mỗi sứ mệnh có workspace thư mục/file (brief, kế hoạch, decisions, data, scripts, reports) và đi qua 4 pha: làm rõ → kế hoạch → **Hiếu Chốt** → chạy. Trước Chốt chỉ đọc; sau Chốt Argon tự làm trong hàng rào (hỏi lại khi mơ hồ bằng `hoiHieu`).
+- Công cụ tổng quát thay vì hàm viết sẵn: `sql` chỉ đọc gohub_dw (READ ONLY + timeout), `run_code` Python trong Vercel Sandbox (mạng đóng), file workspace, `layDuLieuHeThong`. Mọi con số kèm `[#N]` dẫn về đúng bước sinh ra nó.
+- Model: Nhanh (`GEMINI_MODEL`, mặc định cho sứ mệnh) hoặc Sâu (Gemini 4 Argon, 1M ngữ cảnh).
+- Tự chạy: cron `argon-sync` đêm giao worker "tuần tra" + chấm sổ dự đoán đến hạn; Argon không tự sửa/đẩy code, chỉ đề xuất → Hiếu duyệt → phiếu `dev_tickets` → PR vào staging.
+- Dự án cũ (nguồn Lark/mail/thread/file) là **Kho nguồn** `/analytics/creator/argon/kho-nguon`, sứ mệnh gắn nguồn từ đó.
+
 ### Analytics — OOP pattern (s133+)
 
 Tất cả tính toán projection + cost chuyển về BE (route.ts), FE chỉ display:
