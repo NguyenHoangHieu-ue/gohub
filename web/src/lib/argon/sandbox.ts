@@ -44,10 +44,11 @@ export function quotaState(usedMs: number, limitMs = cpuLimitMs()): { ok: boolea
   return { ok: usedMs < limitMs, fraction, message: usedMs < limitMs ? "" : `Đã dùng ${(usedMs / 3_600_000).toFixed(2)} giờ CPU Sandbox tháng này (trần ${(limitMs / 3_600_000).toFixed(1)} giờ trên gói Hobby). Chờ sang tháng sau hoặc nâng gói Vercel.` }
 }
 
-/** Backend thật: SDK @vercel/sandbox. Trên Vercel dùng OIDC tự động; chạy local cần VERCEL_TOKEN hợp lệ (+ VERCEL_TEAM_ID, VERCEL_PROJECT_ID). */
+/** Backend thật: SDK @vercel/sandbox. Chạy trên Vercel (env VERCEL=1) → để SDK tự dùng OIDC của request (KHÔNG truyền VERCEL_TOKEN: env này có thể là token cũ đã bị thu hồi → 403 "Not authorized", sự cố 2026-10-20).
+ *  Chạy local: ARGON_SANDBOX_TOKEN hoặc VERCEL_TOKEN hợp lệ (+ VERCEL_TEAM_ID, VERCEL_PROJECT_ID). */
 export async function realBackend(): Promise<SbxBackend> {
   const { Sandbox } = await import("@vercel/sandbox")
-  const token = process.env.VERCEL_TOKEN
+  const token = process.env.ARGON_SANDBOX_TOKEN || (process.env.VERCEL ? undefined : process.env.VERCEL_TOKEN)
   const creds = token ? { token, teamId: process.env.VERCEL_TEAM_ID || "team_lMxryomejKn2jwP8RGumsufl", projectId: process.env.VERCEL_PROJECT_ID || "prj_De4l9p8QAKIu2YMbofI01p6H040f" } : {}
   return {
     async create(o) {
