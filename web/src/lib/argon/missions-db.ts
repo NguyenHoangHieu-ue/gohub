@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { ARGON_BUCKET, ownSource, type ArgonSource } from "./server"
-import { BRIEF_PATH, DECISIONS_PATH, briefTemplate, canTransition, checkWrite, cleanPath, decisionsTemplate, isProtectedPath, missionContextBlock, phaseInstruction, type MissionPhase, type WsFileRow } from "./missions"
+import { BRIEF_PATH, DECISIONS_PATH, briefTemplate, canTransition, checkWrite, cleanPath, decisionsTemplate, isProtectedPath, missionContextBlock, phaseInstruction, chotLine, PLAN_PATH, type MissionPhase, type WsFileRow } from "./missions"
 import { deleteProjectCascade } from "./project-delete"
 
 export interface ArgonMission {
@@ -65,7 +65,15 @@ export async function setPhase(m: ArgonMission, to: MissionPhase): Promise<{ mis
   const patch: Record<string, unknown> = { phase: to, updated_at: new Date().toISOString() }
   if (to === "run" && !m.committed_at) patch.committed_at = new Date().toISOString()
   const { data, error } = await supabaseAdmin.from("argon_missions").update(patch).eq("id", m.id).select("*").single()
-  return error || !data ? { error: error?.message ?? "Không đổi được pha" } : { mission: data as ArgonMission }
+  if (error || !data) return { error: error?.message ?? "Không đổi được pha" }
+  if (to === "run" && !m.committed_at) {   // Chốt lần đầu → ghi dấu vào decisions.md để mọi lượt sau biết kế hoạch nào đã được Chốt
+    try {
+      const [plan, dec] = await Promise.all([readFile(m.id, PLAN_PATH), readFile(m.id, DECISIONS_PATH)])
+      const body = (dec?.content ?? "").split("\n").filter(l => !l.startsWith("(chưa có mục nào")).join("\n").replace(/\s+$/, "")   // bỏ dòng mẫu khi có mục thật đầu tiên
+      await writeFile(m.id, DECISIONS_PATH, [body, chotLine(new Date(), plan?.version ?? null), ""].join("\n"), "user")
+    } catch { /* ghi dấu lỗi không được chặn việc Chốt */ }
+  }
+  return { mission: data as ArgonMission }
 }
 
 export async function deleteMission(m: ArgonMission): Promise<{ error?: string }> {
@@ -222,4 +230,10 @@ export async function readFileBuffer(missionId: string, rawPath: string): Promis
   const d = await supabaseAdmin.storage.from(ARGON_BUCKET).download(f.storage_path)
   if (d.error || !d.data) return null
   return { data: Buffer.from(await d.data.arrayBuffer()), mime: f.mime ?? mimeOf(f.path) }
+}
+
+/** Id sứ mệnh của một dự án nền (null nếu không phải dự án nền). */
+export async function missionIdForProject(projectId: string): Promise<string | null> {
+  const { data } = await supabaseAdmin.from("argon_missions").select("id").eq("project_id", projectId).maybeSingle()
+  return (data?.id as string | undefined) ?? null
 }

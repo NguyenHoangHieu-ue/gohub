@@ -9,7 +9,8 @@ import { LEVELS, runSegment } from "@/lib/argon/run-engine"
 import { MAX_OUT, SEGMENT_MS, loadRunMaterial } from "@/lib/argon/bg-worker"
 import { deleteBg, deleteToolLog, getToolLog, saveToolLog, setBg, triggerWorker } from "@/lib/argon/bg"
 import { autoSaveReports, getReportHtml, templateSuffix } from "@/lib/argon/report-store"
-import { linkedSourceIdsForProject, loadMissionContext } from "@/lib/argon/missions-db"
+import { linkedSourceIdsForProject, loadMissionContext, missionIdForProject } from "@/lib/argon/missions-db"
+import { clearPendingAsk } from "@/lib/argon/ask-tool"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (b.templateReportId && !tpl) return NextResponse.json({ error: "Không tìm thấy report mẫu" }, { status: 404 })
   const withTpl = (p: string) => (tpl ? p + templateSuffix(tpl.meta.title, tpl.html) : p)   // prompt lưu trong lịch sử vẫn là câu gốc; HTML mẫu chỉ đi vào ngữ cảnh lượt này
 
+  if (project.kind === "mission" && !resume) { const mid = await missionIdForProject(project.id); if (mid) await clearPendingAsk(mid).catch(() => undefined) }   // lượt mới = Hiếu đã trả lời câu hỏi đang chờ
   const pick = resume ? new Set(resume.source_ids) : b.sourceIds ? new Set(b.sourceIds) : null
 
   // ── Việc nền: chỉ tạo lượt + giao worker (nguồn live được đọc lại ở đoạn đầu của worker) ──

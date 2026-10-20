@@ -4,11 +4,12 @@ import { listFiles, missionById, readFile, readFileBuffer, writeBinaryFile, writ
 import type { ToolLogEntry } from "./tools"
 import { SQL_TOOL_NAME, execSql } from "./sql-tool"
 import { RUN_CODE_NAME, execRunCode } from "./code-tool"
+import { ASK_TOOL_NAME, execAsk, setPendingAsk } from "./ask-tool"
 
 // Công cụ workspace của Sứ mệnh: Argon đọc/ghi file TRONG workspace của đúng sứ mệnh đang chạy (không chạm file hay dữ liệu nơi khác).
 // Quyền ghi theo pha (canArgonWrite): làm rõ chỉ brief.md; kế hoạch thêm notes/; chạy ghi mọi nơi; tạm dừng/xong không ghi.
 export const WS_TOOL_NAMES = ["docFile", "ghiFile", "lietKeFile"] as const
-export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME, RUN_CODE_NAME]
+export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME, RUN_CODE_NAME, ASK_TOOL_NAME]
 export const MAX_WS_READ_CHARS = 60_000
 const LOG_CONTENT_CHARS = 1_500
 
@@ -112,5 +113,20 @@ export async function execMissionCode(args: Record<string, unknown>, missionId: 
     })
   } catch (e) {
     return { name: RUN_CODE_NAME, args, ok: false, chars: 0, result: `Lỗi run_code: ${(e as Error).message}`, at: new Date().toISOString() }
+  }
+}
+
+/** Công cụ `hoiHieu`: lưu câu hỏi chờ trả lời + nhắn Lark cho Hiếu (chỉ nhắn chính Hiếu). */
+export async function execMissionAsk(args: Record<string, unknown>, missionId: string, origin: string): Promise<ToolLogEntry> {
+  try {
+    const mission = await missionById(missionId)
+    if (!mission) return { name: ASK_TOOL_NAME, args, ok: false, chars: 0, result: "Sứ mệnh không còn tồn tại", at: new Date().toISOString() }
+    const { getCreatorLarkOpenId, sendLarkDM } = await import("@/lib/lark")
+    return await execAsk(args, { missionId, missionName: mission.name, phase: mission.phase, origin }, {
+      save: setPendingAsk,
+      notify: async text => { const id = await getCreatorLarkOpenId(); if (id) await sendLarkDM(id, text) },
+    })
+  } catch (e) {
+    return { name: ASK_TOOL_NAME, args, ok: false, chars: 0, result: `Lỗi hoiHieu: ${(e as Error).message}`, at: new Date().toISOString() }
   }
 }

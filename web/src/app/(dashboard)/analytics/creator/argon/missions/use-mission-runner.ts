@@ -16,6 +16,8 @@ export function stepLabel(s: Pick<Step, "name" | "args">): { tag: string; text: 
   if (s.name === "ghiFile") return { tag: "GHI", text: `${a.append === true ? "Ghi thêm vào" : "Ghi"} ${String(a.path ?? "")}` }
   if (s.name === "lietKeFile") return { tag: "FILE", text: "Liệt kê file workspace" }
   if (s.name === "sql") return { tag: "SQL", text: `SQL: ${String(a.query ?? "").replace(/\s+/g, " ").slice(0, 70)}${a.saveAs ? ` → ${String(a.saveAs)}` : ""}` }
+  if (s.name === "hoiHieu") return { tag: "HỎI", text: `Hỏi Hiếu: ${String(a.cauHoi ?? "").replace(/\s+/g, " ").slice(0, 70)}` }
+  if (s.name === "run_code") return { tag: "PY", text: `Chạy Python${Array.isArray(a.inputs) && a.inputs.length ? ` (${a.inputs.length} file vào)` : ""}` }
   if (s.name === "layDuLieuHeThong") return { tag: "SỐ", text: `Lấy số liệu ${String(a.report ?? "")} ${String(a.quarter || (a.startDate ? `${a.startDate}→${a.endDate}` : ""))}`.trim() }
   return { tag: "TOOL", text: s.name }
 }

@@ -5,13 +5,14 @@ import { ArrowLeft, ArrowRight, Brain, Check, Copy, Loader2, Pause, Play, Rotate
 import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
-import { PHASE_LABEL, type MissionPhase } from "./mission-types"
+import { PHASE_LABEL, type MissionPhase, type PendingAskUi } from "./mission-types"
 import type { SendOpts, Thinking, useMissionRunner } from "./use-mission-runner"
 
 // Chat của sứ mệnh: chỉ hiện KẾT QUẢ và điều cần Hiếu quyết; các bước làm việc nằm ở Bàn làm việc. Thanh pha dẫn Hiếu qua Làm rõ → Kế hoạch → Chốt và chạy.
 type Runner = ReturnType<typeof useMissionRunner>
 const THINK_LABEL: Record<Thinking, string> = { low: "Nhanh", medium: "Cân bằng", high: "Suy luận sâu" }
 const STEPS: { phase: MissionPhase; label: string }[] = [{ phase: "clarify", label: "Làm rõ" }, { phase: "plan", label: "Kế hoạch" }, { phase: "run", label: "Chốt và chạy" }]
+const CHOT_PROMPT = "Anh đã Chốt. Đọc notes/ke-hoach.md và brief.md rồi thực hiện kế hoạch từ đầu đến cuối, tự làm hết các bước. Ghi kết quả vào workspace, ghi quyết định vào decisions.md, xong thì ghi tổng kết vào notes/tong-ket.md. Gặp chỗ mơ hồ ngoài brief thì hỏi anh bằng hoiHieu rồi dừng."
 const QUICK: Record<MissionPhase, string[]> = {
   clarify: ["Hãy hỏi anh để làm rõ sứ mệnh này", "Đọc brief.md và các nguồn đã gắn, nói em còn thiếu gì"],
   plan: ["Soạn kế hoạch chi tiết dựa trên brief.md", "Liệt kê rủi ro và chỗ còn mơ hồ trước khi anh Chốt"],
@@ -20,8 +21,9 @@ const QUICK: Record<MissionPhase, string[]> = {
   done: ["Tóm tắt kết quả cuối cùng"],
 }
 
-export function MissionChat({ phase, runs, runner, onPhase, onStep, onError }: {
+export function MissionChat({ phase, pendingAsk, runs, runner, onPhase, onStep, onError }: {
   phase: MissionPhase
+  pendingAsk: PendingAskUi | null
   runs: Run[]
   runner: Runner
   onPhase: (to: MissionPhase) => Promise<void>
@@ -33,6 +35,7 @@ export function MissionChat({ phase, runs, runner, onPhase, onStep, onError }: {
   const [background, setBackground] = useState(false)
   const [allowTools, setAllowTools] = useState(true)
   const [confirmChot, setConfirmChot] = useState(false)
+  const [autoRun, setAutoRun] = useState(true)   // Chốt xong tự giao Argon chạy nền theo kế hoạch
   const [phaseBusy, setPhaseBusy] = useState(false)
   const endRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
@@ -42,7 +45,10 @@ export function MissionChat({ phase, runs, runner, onPhase, onStep, onError }: {
 
   async function go(to: MissionPhase) {
     setPhaseBusy(true)
-    try { await onPhase(to); setConfirmChot(false) } catch (e) { onError((e as Error).message) } finally { setPhaseBusy(false) }
+    try {
+      await onPhase(to); setConfirmChot(false)
+      if (to === "run" && phase === "plan" && autoRun) void runner.send(CHOT_PROMPT, { thinking: "medium", allowTools: true, background: true })
+    } catch (e) { onError((e as Error).message) } finally { setPhaseBusy(false) }
   }
   async function send(text?: string) {
     const p = (text ?? prompt).trim()
@@ -87,6 +93,7 @@ export function MissionChat({ phase, runs, runner, onPhase, onStep, onError }: {
         {confirmChot && (
           <div role="alertdialog" aria-label="Xác nhận Chốt" className="mt-2 rounded-lg border border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-950/40 p-3 text-sm">
             <p className="text-gray-800 dark:text-slate-100">Sau khi Chốt, Argon tự làm theo <b>brief.md</b> và kế hoạch: ghi file, lấy số liệu hệ thống, không hỏi lại từng bước. Chỗ nào mơ hồ ngoài brief thì nó dừng và hỏi anh. Anh vẫn bấm Dừng hoặc Tạm dừng được bất cứ lúc nào.</p>
+            <label className="mt-2 flex items-center gap-1.5 text-xs text-gray-700 dark:text-slate-300"><input type="checkbox" checked={autoRun} onChange={e => setAutoRun(e.target.checked)} className="accent-violet-600" />Giao Argon chạy ngay theo kế hoạch (chạy nền, xong nhắn Lark)</label>
             <div className="mt-2 flex gap-2">
               <button type="button" disabled={phaseBusy} onClick={() => go("run")} className={primary}><Rocket size={14} />Chốt</button>
               <button type="button" onClick={() => setConfirmChot(false)} className={ghost}>Chưa</button>
@@ -121,6 +128,16 @@ export function MissionChat({ phase, runs, runner, onPhase, onStep, onError }: {
         <div ref={endRef} />
       </div>
 
+      {pendingAsk && !busy && !bgActive && (
+        <div role="group" aria-label="Argon đang chờ anh trả lời" className="mx-4 mb-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm">
+          <div className="font-medium text-amber-900 dark:text-amber-200">Argon đang chờ anh quyết</div>
+          <p className="mt-1 text-gray-800 dark:text-slate-100 whitespace-pre-wrap">{pendingAsk.question}</p>
+          {pendingAsk.options.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">
+            {pendingAsk.options.map(o => <button key={o} type="button" onClick={() => void send(o)} className="px-2.5 py-1 text-xs rounded-lg border border-amber-400 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40">{o}</button>)}
+          </div>}
+          <div className="mt-1.5 text-[11px] text-gray-500">Bấm một lựa chọn, hoặc gõ câu trả lời ở ô dưới. Argon sẽ làm tiếp từ chỗ đã dừng.</div>
+        </div>
+      )}
       {runner.warn.length > 0 && <div className="mx-4 mb-2 text-xs rounded-lg bg-amber-50 text-amber-800 px-3 py-2 whitespace-pre-wrap">{runner.warn.join("\n")}</div>}
 
       <div className="border-t border-gray-200 dark:border-slate-700 p-3">

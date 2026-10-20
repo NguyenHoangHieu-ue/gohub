@@ -9,7 +9,8 @@ export interface MissionRowUi {
 }
 export interface MissionUi { id: string; project_id: string; name: string; goal: string; phase: MissionPhase; committed_at: string | null; archived: boolean; updated_at: string }
 export interface WsFileInfo { id: string; path: string; size_bytes: number; author: "user" | "argon"; version: number; updated_at: string }
-export interface MissionDetail { mission: MissionUi; tree: TreeNode[]; files: WsFileInfo[]; sources: Source[]; runs: Run[]; spent_usd: number }
+export interface PendingAskUi { question: string; options: string[]; at: string }
+export interface MissionDetail { mission: MissionUi; pendingAsk: PendingAskUi | null; tree: TreeNode[]; files: WsFileInfo[]; sources: Source[]; runs: Run[]; spent_usd: number }
 export interface WsFile { id: string; path: string; mime: string | null; content: string | null; storage_path: string | null; size_bytes: number; author: "user" | "argon"; version: number; updated_at: string }
 
 export const PHASE_LABEL: Record<MissionPhase, string> = { clarify: "Làm rõ", plan: "Kế hoạch", run: "Đang chạy", done: "Đã xong", paused: "Tạm dừng" }

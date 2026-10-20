@@ -8,6 +8,8 @@ export const MAX_TEXT_FILE_BYTES = 1024 * 1024
 export const MAX_PATH_LEN = 200
 export const BRIEF_PATH = "brief.md"
 export const DECISIONS_PATH = "decisions.md"
+export const PLAN_PATH = "notes/ke-hoach.md"
+export const SUMMARY_PATH = "notes/tong-ket.md"
 export const TOP_FOLDERS = ["data", "scripts", "reports", "notes"] as const
 
 // Pha chuyển được. "run" chỉ từ "plan" hoặc "paused" (nút Chốt / Tiếp tục); không nhảy thẳng clarify→run.
@@ -90,9 +92,9 @@ export function phaseInstruction(phase: MissionPhase): string {
     case "clarify":
       return "PHA LÀM RÕ: chỉ hỏi và làm rõ với Hiếu (mục tiêu, thước đo, phạm vi, ràng buộc, thế nào là xong). Mỗi lượt tối đa 3 câu hỏi, có gợi ý đáp án. Cập nhật brief.md bằng công cụ ghiFile khi đã rõ thêm. KHÔNG đưa kết luận, KHÔNG chạy việc dài. Khi brief đủ rõ, đề nghị Hiếu chuyển sang pha Kế hoạch."
     case "plan":
-      return "PHA KẾ HOẠCH: soạn kế hoạch từng bước (nguồn dữ liệu, việc làm, đầu ra, rủi ro, ước tính thời gian). Chưa làm việc thật. Chờ Hiếu bấm Chốt. Mọi chỗ còn mơ hồ phải hỏi ngay."
+      return "PHA KẾ HOẠCH: soạn kế hoạch và GHI vào notes/ke-hoach.md bằng ghiFile (ghi đè bản mới nhất): mục tiêu cuối, các bước đánh số (nguồn dữ liệu, việc làm, đầu ra), file sẽ tạo, rủi ro, ước tính thời gian và số lượt chạy code/sql, và danh sách điều còn mơ hồ cần Hiếu trả lời. Trong chat chỉ tóm tắt ngắn và nêu câu cần Hiếu quyết. Chưa làm việc thật. Chờ Hiếu bấm Chốt."
     case "run":
-      return "PHA CHẠY (Hiếu đã Chốt): làm theo kế hoạch đã chốt và brief.md. Gặp chỗ mơ hồ ngoài brief thì dừng và hỏi, không đoán. Ghi kết quả vào workspace (reports/, data/, notes/) và ghi quyết định vào decisions.md."
+      return "PHA CHẠY (Hiếu đã Chốt): ĐỌC notes/ke-hoach.md và brief.md trước, rồi làm đúng kế hoạch đó, tự làm hết các bước. Ghi kết quả vào workspace (data/, reports/, notes/); ghi mỗi quyết định quan trọng vào decisions.md (ghiFile append, kèm ngày và lý do). Gặp chỗ mơ hồ NGOÀI brief/kế hoạch (thiếu dữ liệu, hai cách hiểu, việc có rủi ro) thì gọi hoiHieu một lần (kèm lựa chọn nếu có) rồi DỪNG, không đoán. Khi xong hết, ghi tổng kết vào notes/tong-ket.md và báo kết quả ngắn gọn trong chat."
     case "paused":
       return "SỨ MỆNH ĐANG TẠM DỪNG: chỉ trả lời câu hỏi, không làm việc mới."
     case "done":
@@ -110,3 +112,10 @@ export function checkWrite(i: { path: string | null; content: string; exists: bo
 
 /** brief.md và decisions.md là xương sống của sứ mệnh: được sửa, không được xoá. */
 export const isProtectedPath = (path: string) => path === BRIEF_PATH || path === DECISIONS_PATH
+
+/** Dòng tự ghi vào decisions.md khi Hiếu Chốt (ngày theo giờ VN, kèm phiên bản kế hoạch đang có). */
+export function chotLine(now: Date, planVersion: number | null): string {
+  const vn = new Date(now.getTime() + 7 * 3_600_000)
+  const d = `${String(vn.getUTCDate()).padStart(2, "0")}/${String(vn.getUTCMonth() + 1).padStart(2, "0")}/${vn.getUTCFullYear()}`
+  return `- ${d}: Hiếu CHỐT kế hoạch (${planVersion ? `${PLAN_PATH} bản v${planVersion}` : "chưa có file kế hoạch, chạy theo brief.md"}). Argon bắt đầu làm.`
+}

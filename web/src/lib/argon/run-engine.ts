@@ -3,7 +3,8 @@ import { genai } from "@/lib/agents/genai-stream"
 import { GEMINI_MODEL_ARGON } from "@/lib/ai-models"
 import type { RunContext } from "./context"
 import { ARGON_TOOLS, MAX_TOOL_CALLS, execArgonTool, type ToolLogEntry } from "./tools"
-import { MISSION_TOOL_NAMES, WS_TOOLS, execMissionCode, execMissionSql, execWsTool } from "./ws-tools"
+import { MISSION_TOOL_NAMES, WS_TOOLS, execMissionAsk, execMissionCode, execMissionSql, execWsTool } from "./ws-tools"
+import { ASK_TOOL, ASK_TOOL_NAME, askBlock } from "./ask-tool"
 import { RUN_CODE_NAME, RUN_CODE_TOOL } from "./code-tool"
 import { SQL_TOOL, SQL_TOOL_NAME } from "./sql-tool"
 
@@ -42,7 +43,7 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
   const contents: Content[] = [...i.ctx.contents]
   const dataTools = i.tools?.dataTools !== false
   const missionId = i.tools?.missionId
-  const decls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? [...WS_TOOLS, SQL_TOOL, RUN_CODE_TOOL] : [])]
+  const decls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? [...WS_TOOLS, SQL_TOOL, RUN_CODE_TOOL, ASK_TOOL] : [])]
   const maxCalls = missionId ? MAX_MISSION_TOOL_CALLS : MAX_TOOL_CALLS   // sứ mệnh còn đọc/ghi file nên cần nhiều lượt gọi hơn
   const isData = (n: string) => !MISSION_TOOL_NAMES.includes(n)
   let lastProgress = Date.now()
@@ -88,7 +89,8 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
           const fc = c.functionCall!
           const fname = String(fc.name), fargs = (fc.args ?? {}) as Record<string, unknown>
           const dataCalls = i.tools!.log.filter(t => isData(t.name)).length
-          const entry = fname === RUN_CODE_NAME && missionId ? await execMissionCode(fargs, missionId, i.tools!.log.filter(t => t.name === RUN_CODE_NAME).length)
+          const entry = fname === ASK_TOOL_NAME && missionId ? await execMissionAsk(fargs, missionId, i.tools!.origin)
+            : fname === RUN_CODE_NAME && missionId ? await execMissionCode(fargs, missionId, i.tools!.log.filter(t => t.name === RUN_CODE_NAME).length)
             : fname === SQL_TOOL_NAME && missionId ? await execMissionSql(fargs, missionId, i.tools!.log.filter(t => t.name === SQL_TOOL_NAME).length)
             : !isData(fname) && missionId ? await execWsTool(fname, fargs, missionId)
             : isData(fname) && dataTools && dataCalls >= MAX_TOOL_CALLS ? { name: fname, args: fargs, ok: false, chars: 0, result: `Đã dùng hết ${MAX_TOOL_CALLS} lần lấy số liệu hệ thống trong lượt này`, at: new Date().toISOString() }
@@ -98,6 +100,9 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
           await i.tools!.onTool(entry)
           responses.push({ functionResponse: { name: String(fc.name), response: entry.ok ? { buoc: i.tools!.log.length, ketQua: entry.result } : { buoc: i.tools!.log.length, loi: entry.result } } })
         }
+        // Argon vừa hỏi Hiếu (hoiHieu thành công) → kết thúc lượt NGAY, hiện câu hỏi trong chat; không để model làm tiếp khi chưa có câu trả lời.
+        const asked = i.tools!.log.slice(-calls.length).find(t => t.name === ASK_TOOL_NAME && t.ok)
+        if (asked) { const blk = askBlock(asked.args); if (blk) { out.added += blk; i.onDelta(blk) } return out }
         contents.push({ role: "model", parts: modelParts }, { role: "user", parts: responses })
         continue
       }

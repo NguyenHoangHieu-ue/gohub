@@ -167,7 +167,7 @@ export default function ArgonMissionsPage() {
                   <FileViewer missionId={m.id} path={selected} reloadKey={reloadKey} onSaved={refreshAll} onDeleted={() => { setSelected(null); refreshAll() }} onError={onError} />
                 </div>
               </> : (
-                <MissionChat phase={m.phase} runs={runs} runner={runner} onPhase={changePhase} onStep={(id, n) => void showStep(id, n)} onError={onError} />
+                <MissionChat phase={m.phase} pendingAsk={detail.pendingAsk} runs={runs} runner={runner} onPhase={changePhase} onStep={(id, n) => void showStep(id, n)} onError={onError} />
               )}
             </div>
           </>}
