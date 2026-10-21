@@ -12,7 +12,7 @@ interface Cust { name: string; revenue: number; cm1Pct?: number }
 
 export function B2BCharts({ months, customers, currentMonth }: { months: MonthSummary[]; customers: Cust[]; currentMonth: string }) {
   const trend = useMemo(() => months.filter(m => m.b2b).map(m => ({ label: mLabel(m.month) + (m.isProjected ? " (PR)" : ""), month: m.month, revenue: m.b2b.revenue, cm1: m.b2b.cm1 })), [months])
-  const top = useMemo(() => customers.filter(c => c.revenue > 0).sort((a, b) => b.revenue - a.revenue).slice(0, 8).map(c => ({ name: c.name, revenue: c.revenue, cm1Pct: Number((c.cm1Pct ?? 0).toFixed(1)) })), [customers])
+  const top = useMemo(() => customers.filter(c => c.revenue > 0).sort((a, b) => b.revenue - a.revenue).slice(0, 8).map(c => ({ name: c.name.length > 16 ? c.name.slice(0, 15).trimEnd() + "…" : c.name, full: c.name, revenue: c.revenue, cm1Pct: Number((c.cm1Pct ?? 0).toFixed(1)) })), [customers])
   const avg = useMemo(() => { const t = top.reduce((s, r) => s + r.revenue, 0); return t ? Math.round(top.reduce((s, r) => s + r.revenue * r.cm1Pct, 0) / t * 10) / 10 : 0 }, [top])
   if (trend.length === 0 && top.length === 0) return null
   return (
@@ -47,7 +47,7 @@ export function B2BCharts({ months, customers, currentMonth }: { months: MonthSu
               <CartesianGrid stroke={CHART_GRID_COLOR} horizontal={false} />
               <XAxis type="number" hide />
               <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12.5, fill: "#14233a" }} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ fill: "rgba(15,76,129,0.05)" }} contentStyle={chartTooltipStyle} formatter={(v: number, _n: string, p: any) => [`${formatCompactNumber(v)} · %CM1 ${p.payload.cm1Pct}%`, "Doanh thu"]} />
+              <Tooltip cursor={{ fill: "rgba(15,76,129,0.05)" }} contentStyle={chartTooltipStyle} formatter={(v: number, _n: string, p: any) => [`${formatCompactNumber(v)} · %CM1 ${p.payload.cm1Pct}%`, p.payload.full]} />
               <Bar dataKey="revenue" radius={[0, 6, 6, 0]} maxBarSize={18}>
                 {top.map((r, i) => <Cell key={i} fill={r.cm1Pct < avg ? "#eb6834" : "#2a78d6"} />)}
                 <LabelList dataKey="revenue" position="right" formatter={(v: number) => formatCompactNumber(v)} style={{ fontSize: 12, fill: "#475569" }} />
