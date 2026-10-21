@@ -18,6 +18,8 @@ export interface OrgRow {
 export interface TierRow extends Omit<OrgRow, "orgKey" | "orgName" | "customers"> { tier: string; orgs: OrgRow[] }
 
 const TIER_ORDER = ["Strategic", "VIP", "Gold", "Silver"]
+// Tên tổ chức trong gohub_dw có tiền tố pháp nhân ("VN_Org ...", "US_Org ..."); Quarter Report bỏ tiền tố này, BOD làm giống.
+const cleanOrg = (n: string) => n.replace(/^(VN|US)_Org\s+/i, "")
 
 export async function fetchBODB2BTiers(startDate: string, endDate: string, dateColumn: string, extraFilters: string, includeShip: boolean, includeInternalOps: boolean): Promise<TierRow[]> {
   const source = getAnalyticsSource(dateColumn)
@@ -63,7 +65,7 @@ export async function fetchBODB2BTiers(startDate: string, endDate: string, dateC
 
   const toOrg = (key: string, a: Acc): OrgRow => {
     const cm1 = a.margin - (custCost.get(key) || 0) - (totalRev > 0 ? groupPool * a.revenue / totalRev : 0)
-    return { orgKey: a.orgKey, orgName: a.orgName, customers: a.customers.size, revenue: a.revenue, cogs: a.cogs, margin: a.margin, units: a.units, orders: a.orders,
+    return { orgKey: a.orgKey, orgName: cleanOrg(a.orgName), customers: a.customers.size, revenue: a.revenue, cogs: a.cogs, margin: a.margin, units: a.units, orders: a.orders,
       marginPct: a.revenue > 0 ? a.margin / a.revenue * 100 : 0, cm1, cm1Pct: a.revenue > 0 ? cm1 / a.revenue * 100 : 0 }
   }
   const byTier = new Map<string, OrgRow[]>()
