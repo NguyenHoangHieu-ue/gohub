@@ -242,7 +242,7 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
               <UserCog className="w-5 h-5 text-brand-600" />
               <h2 className="font-bold text-slate-800">Người dùng ({users.length})</h2>
               {Object.keys(onlineUsers).length > 0 && (
-                <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-bold">
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[11.5px] font-bold">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />{Object.keys(onlineUsers).length} online
                 </span>
               )}
@@ -271,7 +271,7 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
                         <p className="text-xs text-slate-400 truncate">{u.email || u.username}</p>
                       </div>
                     </div>
-                    <span className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider shrink-0", roleBadge(u.role))}>{u.role}</span>
+                    <span className={cn("px-2.5 py-1 rounded-md text-[11.5px] font-bold uppercase tracking-wider shrink-0", roleBadge(u.role))}>{u.role}</span>
                     <select value={u.role} onChange={e => updateUser(u.username, { role: e.target.value })} className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold focus:ring-2 focus:ring-brand-500 outline-none" title="Role">
                       {ROLES.filter(r => {
                         if (r === "creator" && creatorStatus?.hasCreator && u.role !== "creator") return false
@@ -303,13 +303,13 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
                   {isExpanded && u.role !== "admin" && (
                     <div className="px-6 pb-5 pt-1 bg-brand-50/10 space-y-4">
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Trang báo cáo cấp THÊM (ngoài quyền nền role) · cộng dồn</p>
+                        <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-2">Trang báo cáo cấp THÊM (ngoài quyền nền role) · cộng dồn</p>
                         <div className="flex flex-wrap gap-2">
                           {REPORTS.map(rep => {
                             const on = granted.has(rep.id)
                             const baseOn = (matrix[u.role] || []).includes(rep.id)
                             return (
-                              <button key={rep.id} onClick={() => toggleUserReport(u, rep.id)} className={cn("px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all flex items-center gap-1", on ? "bg-brand-600 text-white border-brand-600" : baseOn ? "bg-slate-100 text-slate-400 border-slate-200" : "bg-white text-slate-500 border-slate-200 hover:border-brand-300")} title={baseOn ? "Đã có sẵn theo role" : ""}>
+                              <button key={rep.id} onClick={() => toggleUserReport(u, rep.id)} className={cn("px-2.5 py-1 rounded-lg text-[12px] font-bold border transition-all flex items-center gap-1", on ? "bg-brand-600 text-white border-brand-600" : baseOn ? "bg-slate-100 text-slate-400 border-slate-200" : "bg-white text-slate-500 border-slate-200 hover:border-brand-300")} title={baseOn ? "Đã có sẵn theo role" : ""}>
                                 {on && <Check className="w-3 h-3" />}{rep.label}
                               </button>
                             )
@@ -317,12 +317,12 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
                         </div>
                       </div>
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Tab quản lý (PM) — áp dụng cho Standard</p>
+                        <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-2">Tab quản lý (PM) — áp dụng cho Standard</p>
                         <div className="flex flex-wrap gap-2">
                           {PM_TABS.map(t => {
                             const on = tabsSet.has(t.key)
                             return (
-                              <button key={t.key} onClick={() => toggleUserTab(u, t.key)} className={cn("px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all flex items-center gap-1", on ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-500 border-slate-200 hover:border-emerald-300")}>
+                              <button key={t.key} onClick={() => toggleUserTab(u, t.key)} className={cn("px-2.5 py-1 rounded-lg text-[12px] font-bold border transition-all flex items-center gap-1", on ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-500 border-slate-200 hover:border-emerald-300")}>
                                 {on && <Check className="w-3 h-3" />}{t.label}
                               </button>
                             )
@@ -361,7 +361,7 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="bg-slate-50 text-slate-500"><th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider">Report</th>{MATRIX_ROLES.map(r => <th key={r} className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider">{ROLE_LABELS[r] ?? r}</th>)}<th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-amber-600">admin</th></tr></thead>
+              <thead><tr className="bg-slate-50 text-slate-500"><th className="px-4 py-3 text-left text-[11.5px] font-bold uppercase tracking-wider">Report</th>{MATRIX_ROLES.map(r => <th key={r} className="px-4 py-3 text-center text-[11.5px] font-bold uppercase tracking-wider">{ROLE_LABELS[r] ?? r}</th>)}<th className="px-4 py-3 text-center text-[11.5px] font-bold uppercase tracking-wider text-amber-600">admin</th></tr></thead>
               <tbody className="divide-y divide-slate-50">
                 {REPORTS.map(rep => (
                   <tr key={rep.id} className="hover:bg-slate-50/50">
@@ -397,12 +397,12 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">User</th>
-                  <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-3 text-left text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-3 text-left text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Role</th>
                   {WRITABLE_TAB_DEFS.map(t => (
-                    <th key={t.key} className="px-6 py-3 text-center text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t.label}</th>
+                    <th key={t.key} className="px-6 py-3 text-center text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">{t.label}</th>
                   ))}
-                  <th className="px-6 py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-wider">Lưu</th>
+                  <th className="px-6 py-3 text-right text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Lưu</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -429,9 +429,9 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
                     <tr key={u.username} className="hover:bg-slate-50/50">
                       <td className="px-6 py-3">
                         <p className="font-semibold text-slate-800 text-sm">{u.name || u.username}</p>
-                        <p className="text-[11px] text-slate-400">{u.username}</p>
+                        <p className="text-[12px] text-slate-400">{u.username}</p>
                       </td>
-                      <td className="px-6 py-3"><span className={cn("px-2 py-0.5 rounded text-[10px] font-bold uppercase", roleBadge(u.role))}>{u.role}</span></td>
+                      <td className="px-6 py-3"><span className={cn("px-2 py-0.5 rounded text-[11.5px] font-bold uppercase", roleBadge(u.role))}>{u.role}</span></td>
                       {WRITABLE_TAB_DEFS.map(t => {
                         const on = userTabs.includes(t.key)
                         return (

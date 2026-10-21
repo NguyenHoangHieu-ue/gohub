@@ -189,7 +189,7 @@ export default function PriceCalc() {
           {shown.map(d => (
             <button key={d.key} onClick={() => setDestKey(d.key)} className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 hover:bg-gray-50 dark:hover:bg-slate-800 ${destKey === d.key ? "bg-brand-50 dark:bg-brand-950/30 font-semibold" : ""}`}>
               <span className="flex items-center gap-1.5 min-w-0">{destKey === d.key && <Check size={14} className="text-brand-600 shrink-0" />}<span className="truncate">{d.label}</span></span>
-              <span className="text-[11px] text-gray-400 shrink-0">{d.vendors[sim].map(v => (v === "THK" ? "3HK" : v === "CMHK" ? "BC-CMHK" : "BC-Singtel")).join(" · ")}</span>
+              <span className="text-[12px] text-gray-400 shrink-0">{d.vendors[sim].map(v => (v === "THK" ? "3HK" : v === "CMHK" ? "BC-CMHK" : "BC-Singtel")).join(" · ")}</span>
             </button>
           ))}
         </div>
@@ -283,7 +283,7 @@ export default function PriceCalc() {
                     return (
                       <tr key={`${g.key}-${r.vendor}-${i}`} className={`border-t border-gray-100 dark:border-slate-800 ${i === 0 ? "border-t-2 border-t-gray-200" : ""} ${best ? "bg-emerald-50/60 dark:bg-emerald-950/20" : ""}`}>
                         <td className="px-3 py-2 min-w-[240px]">{i === 0 ? <span className="font-medium">{planName(r)}</span> : <span className="text-gray-300">↳ cùng gói</span>}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{r.vendorLabel}{best && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-emerald-600 text-white font-semibold">Rẻ nhất</span>}{r.note && <div className="text-[11px] text-amber-700">{r.note}</div>}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{r.vendorLabel}{best && <span className="ml-1.5 text-[11.5px] px-1.5 py-0.5 rounded bg-emerald-600 text-white font-semibold">Rẻ nhất</span>}{r.note && <div className="text-[12px] text-amber-700">{r.note}</div>}</td>
                         <td className="px-3 py-2 text-gray-600 text-xs align-top"><OperatorCell text={r.operator} /></td>
                         <td className="px-3 py-2 text-right whitespace-nowrap">{r.pricePerGb} {r.currency}</td>
                         <td className="px-3 py-2 text-right">{usd(r.dataUsd)}</td>
@@ -296,7 +296,7 @@ export default function PriceCalc() {
                 </tbody>
               </table>
             </div>
-            <div className="mt-2 text-[11px] text-gray-400">Giá vốn đã làm tròn lên theo công thức nội bộ, tính bằng tỷ giá tháng {opts.fx.month ? `${opts.fx.month.slice(5)}/${opts.fx.month.slice(0, 4)}` : "hiện tại"} (1 USD = {vnd(opts.fx.vndPerUsd)} VND). Rê chuột vào giá vốn để xem cách tính. "Rẻ nhất" so theo giá vốn VN giữa các nhà cung cấp bán được gói đó.</div>
+            <div className="mt-2 text-[12px] text-gray-400">Giá vốn đã làm tròn lên theo công thức nội bộ, tính bằng tỷ giá tháng {opts.fx.month ? `${opts.fx.month.slice(5)}/${opts.fx.month.slice(0, 4)}` : "hiện tại"} (1 USD = {vnd(opts.fx.vndPerUsd)} VND). Rê chuột vào giá vốn để xem cách tính. "Rẻ nhất" so theo giá vốn VN giữa các nhà cung cấp bán được gói đó.</div>
           </>
         )}
         {result && result.rows.length === 0 && !calcErr && !loading && <div className="text-sm text-gray-500">Chưa tính được dòng giá nào cho lựa chọn này — xem ghi chú phía trên.</div>}

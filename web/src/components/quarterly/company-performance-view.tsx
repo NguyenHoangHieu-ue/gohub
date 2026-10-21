@@ -286,7 +286,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
                           : (
                             <th key={c.id} className={cn(th, headTone(c.kind))}>
                               {c.header}
-                              {c.tag && <span className={cn("ml-1 text-[11px] font-semibold", c.kind === "tgt" || c.tag.startsWith("chưa") ? "text-amber-600" : "text-blue-600")}>({c.tag})</span>}
+                              {c.tag && <span className={cn("ml-1 text-[12px] font-semibold", c.kind === "tgt" || c.tag.startsWith("chưa") ? "text-amber-600" : "text-blue-600")}>({c.tag})</span>}
                             </th>
                           ))}
                       </tr>

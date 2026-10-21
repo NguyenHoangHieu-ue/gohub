@@ -615,8 +615,8 @@ export default function ProductPerformancePage() {
               {showVendorDropdown && (
                 <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl max-h-64 overflow-y-auto p-2 min-w-[200px]">
                   <div className="flex items-center justify-between p-2 mb-2 border-b border-slate-100 sticky top-0 bg-white z-10">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Select Vendors</span>
-                    <button onClick={() => setSelectedVendors([])} className="text-[10px] text-brand-600 font-bold hover:underline">Clear</button>
+                    <span className="text-[11.5px] font-bold text-slate-400 uppercase">Select Vendors</span>
+                    <button onClick={() => setSelectedVendors([])} className="text-[11.5px] text-brand-600 font-bold hover:underline">Clear</button>
                   </div>
                   {vendors.map(v => (
                     <div key={v} onClick={() => toggleItem(v, selectedVendors, setSelectedVendors)}
@@ -793,7 +793,7 @@ export default function ProductPerformancePage() {
                 </div>
                 <button onClick={() => exportToCSV(group.data, group.id.replace(/-/g, "_"), [
                   { label: "Channel", key: "channel_name" }, { label: "Revenue", key: "revenue" }, { label: "Units Sold", key: "units_sold" }, { label: "Orders", key: "orders" }, { label: "Gross Margin", key: "margin" },
-                ])} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px]">
+                ])} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[11.5px]">
                   <Download className="w-3 h-3" /> Export
                 </button>
               </div>
@@ -845,7 +845,7 @@ export default function ProductPerformancePage() {
               <h2 className="text-lg font-bold text-slate-900">SKU Breakdown</h2>
               <span className="text-xs text-slate-500">Bảng hiển thị top 50 theo doanh thu · Export xuất TẤT CẢ SKU</span>
             </div>
-            <button onClick={exportSkuBreakdownFull} disabled={exportingSku} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[10px] disabled:opacity-50">
+            <button onClick={exportSkuBreakdownFull} disabled={exportingSku} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[11.5px] disabled:opacity-50">
               <Download className="w-3 h-3" /> {exportingSku ? "Exporting..." : "Export"}
             </button>
           </div>
@@ -874,7 +874,7 @@ export default function ProductPerformancePage() {
                         <td className="px-6 py-4 font-medium text-slate-700">{sku.sku}</td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
-                            <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase">{sku.region}</span>
+                            <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded text-[11.5px] font-bold uppercase">{sku.region}</span>
                             <span className="text-slate-500 text-xs truncate max-w-[100px]">{countryMappings[sku.region] || "-"}</span>
                           </div>
                         </td>
@@ -984,7 +984,7 @@ export default function ProductPerformancePage() {
                     <thead>
                       <tr className="bg-indigo-600">
                         {["SKU", "Vendor", "Ngày tạo", "Deadline Win", "Tuổi (ngày)", "Trạng thái", `Đơn ${wrData.config?.win_days ?? 14}d đầu`, "Win%", "Tổng đơn"].map(h => (
-                          <th key={h} className="px-4 py-3 text-left text-[10px] font-semibold text-slate-200 uppercase tracking-wider whitespace-nowrap first:pl-5">{h}</th>
+                          <th key={h} className="px-4 py-3 text-left text-[11.5px] font-semibold text-slate-200 uppercase tracking-wider whitespace-nowrap first:pl-5">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -994,12 +994,12 @@ export default function ProductPerformancePage() {
                         return (
                           <tr key={s.sku_code} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
                             <td className="px-5 py-3 font-mono font-semibold text-slate-800">{s.sku_code}</td>
-                            <td className="px-4 py-3 text-slate-500 text-[11px]">{s.vendor || "—"}</td>
+                            <td className="px-4 py-3 text-slate-500 text-[12px]">{s.vendor || "—"}</td>
                             <td className="px-4 py-3 text-slate-500">{s.created_at}</td>
                             <td className="px-4 py-3 text-slate-500">{s.win_deadline}</td>
                             <td className="px-4 py-3 text-slate-600 tabular-nums">{s.age_days}</td>
                             <td className="px-4 py-3">
-                              <span className={cn("px-2 py-0.5 rounded-full text-[11px] font-bold", statusCls)}>{s.status}</span>
+                              <span className={cn("px-2 py-0.5 rounded-full text-[12px] font-bold", statusCls)}>{s.status}</span>
                             </td>
                             <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-800">{s.orders_14d}</td>
                             <td className="px-4 py-3">
@@ -1008,7 +1008,7 @@ export default function ProductPerformancePage() {
                                   <div className={cn("h-full rounded-full", s.win_pct >= 100 ? "bg-emerald-500" : "bg-indigo-400")}
                                     style={{ width: `${Math.min(s.win_pct, 100)}%` }} />
                                 </div>
-                                <span className="text-[11px] text-slate-600 tabular-nums">{s.win_pct}%</span>
+                                <span className="text-[12px] text-slate-600 tabular-nums">{s.win_pct}%</span>
                               </div>
                             </td>
                             <td className="px-4 py-3 text-right tabular-nums text-slate-600">{s.total_orders}</td>

@@ -37,7 +37,7 @@ const KIND_LABEL: Record<PlanKind, string> = { Daily: "Daily (theo ngày)", Fixe
 const POOL_LABEL: Record<Pool, string> = { CMHK: "CMHK (WD · HKD)", SINGTEL: "Singtel (W1 · USD)" }
 
 const input = "px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white dark:bg-slate-800 dark:border-slate-600"
-const label = "block text-[11px] font-semibold text-gray-500 mb-1"
+const label = "block text-[12px] font-semibold text-gray-500 mb-1"
 
 const HS_DEFAULT = { hs: "3", hsUnit: "GB" as const, speed: 10 as const }
 const newProduct = (): ProductForm => ({ pool: "CMHK", simType: "eSIM", coverage: "", covs: [], operators: [], code: "", iso: "", en: "", vn: "", plans: [] })
@@ -52,14 +52,14 @@ const TONE = { red: "text-red-700", green: "text-emerald-700", amber: "text-ambe
 function DiffBox({ diff, groups }: { diff: { at: string; compared: boolean } | null | undefined; groups: DiffGroup[] }) {
   if (!diff) return null
   const when = new Date(diff.at).toLocaleString("vi-VN")
-  if (!diff.compared) return <div className="text-[11px] text-gray-400">Lần upload đầu tiên ({when}) — chưa có bản cũ để so sánh.</div>
+  if (!diff.compared) return <div className="text-[12px] text-gray-400">Lần upload đầu tiên ({when}) — chưa có bản cũ để so sánh.</div>
   const active = groups.filter(g => g.total > 0)
-  if (!active.length) return <div className="text-[11px] text-emerald-700">✓ Không có thay đổi so với bản trước ({when}).</div>
+  if (!active.length) return <div className="text-[12px] text-emerald-700">✓ Không có thay đổi so với bản trước ({when}).</div>
   return (
     <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-2 space-y-1">
-      <div className="text-[11px] font-semibold text-amber-900 dark:text-amber-200">Thay đổi so với bản trước ({when}) — sản phẩm/giá đã tạo trước đó có thể cần cập nhật</div>
+      <div className="text-[12px] font-semibold text-amber-900 dark:text-amber-200">Thay đổi so với bản trước ({when}) — sản phẩm/giá đã tạo trước đó có thể cần cập nhật</div>
       {active.map(g => (
-        <details key={g.label} className="text-[11px]">
+        <details key={g.label} className="text-[12px]">
           <summary className={`cursor-pointer font-semibold ${TONE[g.tone]}`}>{g.label}: {g.total}</summary>
           <ul className="mt-1 ml-4 list-disc max-h-48 overflow-auto space-y-0.5 text-gray-700 dark:text-slate-300">
             {g.items.map((t, k) => <li key={k}>{t}</li>)}
@@ -306,7 +306,7 @@ function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUploa
                 <div>VND → USD (Inc): 1 USD = <b>{opts.fx.vndPerUsdInc.toLocaleString("vi-VN")}</b> VND</div>
                 <div>1 USD = <b>{opts.fx.hkdPerUsd}</b> HKD · <b>{opts.fx.cnyPerUsd}</b> CNY (Inc)</div>
               </div>
-              <div className="text-[11px] text-gray-400">Tháng {opts.fx.month ? opts.fx.month.slice(5) + "/" + opts.fx.month.slice(0, 4) : "hiện tại"} · muốn đổi: Cài đặt › Tỷ Giá Nội Bộ.</div>
+              <div className="text-[12px] text-gray-400">Tháng {opts.fx.month ? opts.fx.month.slice(5) + "/" + opts.fx.month.slice(0, 4) : "hiện tại"} · muốn đổi: Cài đặt › Tỷ Giá Nội Bộ.</div>
             </>
           ) : <div className="text-xs text-red-600">{opts.fxError}</div>}
         </div>
@@ -384,14 +384,14 @@ function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUploa
                     )
                   })}
                 </div>
-                <div className="mt-1 text-[11px] text-gray-500">{top ? `Giá áp dụng: ${top.pricePerGb} ${cur}/GB (${top.operator})` : "Chọn ít nhất 1 nhà mạng"}</div>
+                <div className="mt-1 text-[12px] text-gray-500">{top ? `Giá áp dụng: ${top.pricePerGb} ${cur}/GB (${top.operator})` : "Chọn ít nhất 1 nhà mạng"}</div>
               </div>
             )}
 
             {p.coverage && <details open={!p.code || !!p.codeHint} className="border border-gray-100 dark:border-slate-800 rounded-lg p-2">
             <summary className="cursor-pointer select-none text-xs font-semibold text-gray-600">Thông tin nước {p.code ? `(đã tự điền: ${p.code})` : <span className="text-amber-700">(cần điền mã nước)</span>} <span className="font-normal text-gray-400">— chỉ sửa khi có cảnh báo</span></summary>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mt-2">
-              <div><label className={label}>Mã nước/nhóm nước (3 ký tự)</label><input className={`${input} w-full uppercase`} maxLength={3} value={p.code} onChange={e => patchProduct(i, { code: e.target.value, codeHint: "" })} placeholder="JPN" />{p.codeHint && <div className="mt-1 text-[11px] text-amber-700">{p.codeHint}</div>}</div>
+              <div><label className={label}>Mã nước/nhóm nước (3 ký tự)</label><input className={`${input} w-full uppercase`} maxLength={3} value={p.code} onChange={e => patchProduct(i, { code: e.target.value, codeHint: "" })} placeholder="JPN" />{p.codeHint && <div className="mt-1 text-[12px] text-amber-700">{p.codeHint}</div>}</div>
               <div><label className={label}>supportedCountries (ISO 2)</label><input className={`${input} w-full uppercase`} value={p.iso} onChange={e => patchProduct(i, { iso: e.target.value })} placeholder="JP" /></div>
               <div><label className={label}>Tên nước (EN)</label><input className={`${input} w-full`} value={p.en} onChange={e => patchProduct(i, { en: e.target.value })} placeholder="Japan" /></div>
               <div><label className={label}>Tên nước (VN)</label><input className={`${input} w-full`} value={p.vn} onChange={e => patchProduct(i, { vn: e.target.value })} placeholder="Nhật Bản" /></div>
@@ -462,35 +462,35 @@ function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUploa
                             {Array.from(new Set([pl.speed, ...levelsOf(assumptions).map(c => c.speedMbps)])).sort((x, y) => y - x).map(v => <option key={v} value={v}>{v} Mbps</option>)}
                           </select>
                         </div>
-                        <div className="text-[11px] text-gray-500 pb-1.5">
+                        <div className="text-[12px] text-gray-500 pb-1.5">
                           Hiển thị cho khách: <b>{pl.hs || "?"} {pl.hsUnit} tốc độ cao, Unlimited {pl.speed}Mbps</b> · dataMB = <b>{Math.round((parseFloat(pl.hs.replace(",", ".")) || 0) * (pl.hsUnit === "GB" ? 1024 : 1))}</b> · speedMbps = <b>{pl.speed}</b><br />
                           Bản chất: {pl.hs || "?"} {pl.hsUnit} tốc độ cao + phần còn lại của gói BC ở {pl.speed}Mbps + Unlimited 1Mbps (tổng = gói BC đã chọn).
                         </div>
                         {!unlimitedFactor(assumptions, parseFloat(pl.hs.replace(",", ".")) || 0, pl.hsUnit, pl.speed) && (
-                          <div className="w-full text-[11px] text-red-600">
+                          <div className="w-full text-[12px] text-red-600">
                             Tổ hợp này chưa có hệ số GB/ngày — hiện có mức: {levelsOf(assumptions).map(customUnlimitedLabel).join(" · ") || "(bảng mức trống)"}. Thêm mức mới ở Admin › Cài đặt › Công Thức Datapool; chưa xuất được.
                           </div>
                         )}
                       </div>
                     )}
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] text-gray-500 mr-1">Số ngày (chỉ ngày Portal bán):</span>
+                      <span className="text-[12px] text-gray-500 mr-1">Số ngày (chỉ ngày Portal bán):</span>
                       {offered.map(d => {
                         const on = pl.days.includes(d)
                         return <button key={d} type="button" onClick={() => patchPlan(i, j, { days: on ? pl.days.filter(x => x !== d) : [...pl.days, d] })}
                           className={`min-w-[32px] px-1.5 py-0.5 text-xs border rounded-md ${on ? "bg-brand-600 border-brand-600 text-white" : "border-gray-300 text-gray-600 hover:bg-gray-50 dark:hover:bg-slate-800"}`}>{d}</button>
                       })}
-                      <button type="button" className="ml-1 px-2 py-0.5 text-[11px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { days: commonOf(offered) })} title="1–7, 10, 15, 20, 25, 30 (giao với ngày Portal bán)">Bộ phổ biến</button>
-                      <button type="button" className="px-2 py-0.5 text-[11px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { days: [...offered] })}>Chọn hết</button>
-                      <button type="button" className="px-2 py-0.5 text-[11px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { days: [] })}>Bỏ hết</button>
-                      <span className="text-[11px] text-gray-400">đã chọn {pl.days.length}/{offered.length}</span>
+                      <button type="button" className="ml-1 px-2 py-0.5 text-[12px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { days: commonOf(offered) })} title="1–7, 10, 15, 20, 25, 30 (giao với ngày Portal bán)">Bộ phổ biến</button>
+                      <button type="button" className="px-2 py-0.5 text-[12px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { days: [...offered] })}>Chọn hết</button>
+                      <button type="button" className="px-2 py-0.5 text-[12px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800" onClick={() => patchPlan(i, j, { days: [] })}>Bỏ hết</button>
+                      <span className="text-[12px] text-gray-400">đã chọn {pl.days.length}/{offered.length}</span>
                     </div>
-                    {manual && manualBad.length > 0 && <div className="text-[11px] text-red-600">ProductID nhập tay {manual} {manualPlan ? `không khớp: ${manualBad.join("; ")}` : "không có trong file Portal"} — xoá ô này để dùng ProductID tự động.</div>}
-                    {!manual && auto && auto.duplicates.length > 1 && <div className="text-[11px] text-amber-700">⚠ Portal có {auto.duplicates.length} Plan ID giống hệt nhau ({auto.duplicates.map(x => x.id).join(", ")}) — đã chọn ID mới nhất ({auto.plan.id}).</div>}
-                    {!manual && auto && auto.duplicates.length <= 1 && <div className="text-[11px] text-emerald-700">ProductID từ Portal: {auto.plan.id}</div>}
+                    {manual && manualBad.length > 0 && <div className="text-[12px] text-red-600">ProductID nhập tay {manual} {manualPlan ? `không khớp: ${manualBad.join("; ")}` : "không có trong file Portal"} — xoá ô này để dùng ProductID tự động.</div>}
+                    {!manual && auto && auto.duplicates.length > 1 && <div className="text-[12px] text-amber-700">⚠ Portal có {auto.duplicates.length} Plan ID giống hệt nhau ({auto.duplicates.map(x => x.id).join(", ")}) — đã chọn ID mới nhất ({auto.plan.id}).</div>}
+                    {!manual && auto && auto.duplicates.length <= 1 && <div className="text-[12px] text-emerald-700">ProductID từ Portal: {auto.plan.id}</div>}
                     {!previewStale && (() => {
                       const pi = preview?.planInfo.find(x => x.product === i && x.line === j)
-                      return pi?.planName ? <div className="text-[11px] text-gray-500">{pi.planName}</div> : null
+                      return pi?.planName ? <div className="text-[12px] text-gray-500">{pi.planName}</div> : null
                     })()}
                   </div>
                 )
@@ -545,7 +545,7 @@ function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUploa
               <button onClick={ed.clear} className="px-2 py-0.5 border border-amber-400 rounded-md hover:bg-amber-100">Bỏ hết chỉnh sửa</button>
             </div>
           )}
-          <div className="text-[11px] text-gray-500">Bấm đúp vào một ô của SKU/Product để sửa tay trước khi xuất (ô mã bị khoá).</div>
+          <div className="text-[12px] text-gray-500">Bấm đúp vào một ô của SKU/Product để sửa tay trước khi xuất (ô mã bị khoá).</div>
           <div className="flex flex-wrap gap-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
             {([["cost", `Tính giá (${preview.costRows.length})`], ["skuUS", `SKU US (${preview.sheets.skuUS.length})`], ["skuVN", `SKU VN (${preview.sheets.skuVN.length})`], ["productUS", `Product US (${preview.sheets.productUS.length})`], ["productVN", `Product VN (${preview.sheets.productVN.length})`]] as const).map(([id, l]) => (
               <button key={id} onClick={() => setSheet(id)} className={`px-3 py-1.5 text-xs font-medium rounded-lg ${sheet === id ? "bg-white dark:bg-slate-700 text-brand-700 shadow-sm" : "text-gray-500"}`}>{l}</button>
@@ -586,8 +586,8 @@ function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUploa
               </table>
             )}
           </div>
-          {(preview.costRows.length > 1000 || Object.values(sheets).some(sh => sh.rows.length > 1000)) && <div className="text-[11px] text-amber-700">Bảng xem trước chỉ hiện 1.000 dòng đầu mỗi tab — file xuất vẫn đủ toàn bộ.</div>}
-          <div className="text-[11px] text-gray-400">Rê chuột vào giá (gạch chấm) để xem công thức đã thế số — mọi công thức dùng ROUNDUP. Bản xem trước tính bằng tỷ giá nội bộ hiện tại; file xuất sẽ tính lại y hệt. Hiển thị tối đa 1000 dòng/sheet, file xuất đủ tất cả.</div>
+          {(preview.costRows.length > 1000 || Object.values(sheets).some(sh => sh.rows.length > 1000)) && <div className="text-[12px] text-amber-700">Bảng xem trước chỉ hiện 1.000 dòng đầu mỗi tab — file xuất vẫn đủ toàn bộ.</div>}
+          <div className="text-[12px] text-gray-400">Rê chuột vào giá (gạch chấm) để xem công thức đã thế số — mọi công thức dùng ROUNDUP. Bản xem trước tính bằng tỷ giá nội bộ hiện tại; file xuất sẽ tính lại y hệt. Hiển thị tối đa 1000 dòng/sheet, file xuất đủ tất cả.</div>
         </div>
       )}
     </div>

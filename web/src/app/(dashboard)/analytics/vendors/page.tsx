@@ -436,7 +436,7 @@ export default function VendorPerformancePage() {
   )
 
   return (
-    <div className="p-4 lg:p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-4 lg:p-8 space-y-8 max-w-[1480px] mx-auto">
       {error && (
         <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
           <AlertCircle className="w-4 h-4" />
@@ -490,8 +490,8 @@ export default function VendorPerformancePage() {
                 <div className="flex items-center justify-between p-2 mb-2 border-b border-slate-100 sticky top-0 bg-white z-10">
                   <span className="text-xs font-bold text-slate-400 uppercase">Select Vendors</span>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setSelectedVendors(vendors)} className="text-[10px] text-brand-600 font-bold hover:underline">All</button>
-                    <button onClick={() => setSelectedVendors([])} className="text-[10px] text-rose-600 font-bold hover:underline">Clear</button>
+                    <button onClick={() => setSelectedVendors(vendors)} className="text-[11.5px] text-brand-600 font-bold hover:underline">All</button>
+                    <button onClick={() => setSelectedVendors([])} className="text-[11.5px] text-rose-600 font-bold hover:underline">Clear</button>
                   </div>
                 </div>
                 {vendors.map(v => (
@@ -556,7 +556,7 @@ export default function VendorPerformancePage() {
               </p>
             </div>
             <div className="bg-white/10 px-4 py-2 rounded-xl backdrop-blur-md border border-white/10">
-              <p className="text-[10px] font-bold text-brand-100 uppercase tracking-wider">Projection Factor</p>
+              <p className="text-[11.5px] font-bold text-brand-100 uppercase tracking-wider">Projection Factor</p>
               <p className="text-xl font-bold">x{projection.factor.toFixed(2)}</p>
             </div>
           </div>
@@ -569,16 +569,16 @@ export default function VendorPerformancePage() {
               { label: "Projected Units", value: formatNumber(Math.round(projection.units)), change: projection.unitsChange },
             ].map(({ label, value, change }) => (
               <div key={label} className="bg-white/10 p-4 rounded-xl border border-white/10 backdrop-blur-md">
-                <p className="text-[10px] font-bold text-brand-100 uppercase tracking-wider mb-1">{label}</p>
+                <p className="text-[11.5px] font-bold text-brand-100 uppercase tracking-wider mb-1">{label}</p>
                 <div className="flex items-baseline justify-between">
                   <p className="text-lg font-bold">{value}</p>
-                  <div className={cn("flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                  <div className={cn("flex items-center gap-0.5 text-[11.5px] font-bold px-1.5 py-0.5 rounded-full",
                     change >= 0 ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300")}>
                     {change >= 0 ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
                     {Math.abs(change).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[9px] text-brand-200 mt-1">vs Last Month Actual</p>
+                <p className="text-[11px] text-brand-200 mt-1">vs Last Month Actual</p>
               </div>
             ))}
           </div>
@@ -588,7 +588,7 @@ export default function VendorPerformancePage() {
       {showFilters && (
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
           <div className="flex-1 space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Channel Group</label>
+            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Channel Group</label>
             <select value={selectedChannelGroup} onChange={(e) => setSelectedChannelGroup(e.target.value)}
               className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
               <option value="All Groups">All Groups</option>
@@ -597,25 +597,25 @@ export default function VendorPerformancePage() {
             </select>
           </div>
           <div className="flex-1 space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Channel</label>
+            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Channel</label>
             <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}
               className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
               {channels.map(c => (<option key={c} value={c}>{c}</option>))}
             </select>
           </div>
           <div className="flex-1 space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
+            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
               className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all" />
           </div>
           <div className="flex-1 space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
+            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
               className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all" />
           </div>
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="self-end" />
           <div className="flex-1 space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Comparison</label>
+            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Comparison</label>
             <select value={comparisonType} onChange={(e) => setComparisonType(e.target.value as any)}
               className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
               <option value="none">No Comparison</option>

@@ -25,8 +25,8 @@ export function PivotTable({ title, icon: Icon, channels, months, expanded, onTo
     const pr = (d as any).isProjected
     const dualC = (prVal: number, actVal: number | undefined, cls = "text-slate-700") => actVal != null ? (
       <div className="flex flex-col items-end leading-snug">
-        <span className={cn("tabular-nums font-semibold text-[12px]", cls)}>{fck(prVal)}<sup className="text-[11px] font-bold text-blue-400 ml-0.5">PR</sup></span>
-        <span className="tabular-nums font-semibold text-[11.5px] text-blue-600">{fck(actVal)}<sup className="text-[11px] font-bold text-blue-400 ml-0.5">Act</sup></span>
+        <span className={cn("tabular-nums font-semibold text-[12px]", cls)}>{fck(prVal)}<sup className="text-[12px] font-bold text-blue-400 ml-0.5">PR</sup></span>
+        <span className="tabular-nums font-semibold text-[11.5px] text-blue-600">{fck(actVal)}<sup className="text-[12px] font-bold text-blue-400 ml-0.5">Act</sup></span>
       </div>
     ) : <span className={cn("tabular-nums", cls)}>{fc(prVal)}</span>
     return [
@@ -69,7 +69,7 @@ export function PivotTable({ title, icon: Icon, channels, months, expanded, onTo
                   )
                 })}
               </tr>
-              <tr className="bg-[#1565c0] text-[11px] text-blue-100 uppercase">
+              <tr className="bg-[#1565c0] text-[12px] text-blue-100 uppercase">
                 <th className="px-4 py-1.5 sticky left-0 bg-[#1565c0] border-r border-[#2e7dd4]" />
                 {months.flatMap(m => SUB.map((h, i) => (
                   <th key={`${m}-${h}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#2e7dd4]", h === "CM1" && "text-blue-300")}>

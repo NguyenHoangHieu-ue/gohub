@@ -337,7 +337,7 @@ export function DataTable<T>({ columns, rows, rowKey, pageSize = 20, emptyLabel 
           <thead className="bg-slate-50">
             <tr>
               {columns.map(c => (
-                <th key={c.key} className={cn("px-2.5 py-2 font-black text-slate-500 uppercase tracking-wider text-[11px] whitespace-nowrap",
+                <th key={c.key} className={cn("px-2.5 py-2 font-black text-slate-500 uppercase tracking-wider text-[12px] whitespace-nowrap",
                   c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left",
                   c.sortValue && "cursor-pointer select-none hover:text-slate-700")}
                   onClick={c.sortValue ? () => toggleSort(c.key) : undefined}>

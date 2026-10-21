@@ -393,7 +393,7 @@ export function B2CPerformance() {
           {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
           {Math.abs(diff).toFixed(1)}%
         </div>
-        <span className="text-[11px] text-slate-400 font-medium whitespace-nowrap">{label}</span>
+        <span className="text-[12px] text-slate-400 font-medium whitespace-nowrap">{label}</span>
       </div>
     )
   }
@@ -955,7 +955,7 @@ export function B2CPerformance() {
                     {Math.abs(projection.revenueChange).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[12px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
               <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
                 <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected Units</p>
@@ -969,7 +969,7 @@ export function B2CPerformance() {
                     {Math.abs(projection.unitsChange).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[12px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
               <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
                 <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected Margin</p>
@@ -983,7 +983,7 @@ export function B2CPerformance() {
                     {Math.abs(projection.marginChange).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[12px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
               <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
                 <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected CM1</p>
@@ -997,12 +997,12 @@ export function B2CPerformance() {
                     {Math.abs(projection.gpm2Change).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[12px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
               <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
                 <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected CM1 %</p>
                 <p className="text-lg font-bold text-blue-600">{projection.gpm2Percent.toFixed(2)}%</p>
-                <p className="text-[11px] text-slate-400 mt-1">Full Month Estimate</p>
+                <p className="text-[12px] text-slate-400 mt-1">Full Month Estimate</p>
               </div>
             </div>
           </div>

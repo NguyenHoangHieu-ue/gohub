@@ -220,7 +220,7 @@ function AnalyticsSettings() {
             <button onClick={syncB2BCustomers} disabled={syncingB2B} title={b2bCacheInfo ? `Cache: ${b2bCacheInfo.cached_count} KH · Cập nhật: ${b2bCacheInfo.last_synced_at ? new Date(b2bCacheInfo.last_synced_at).toLocaleString("vi-VN") : "chưa có"}` : "Sync danh sách B2B customers vào Supabase"} className="flex items-center gap-2 px-3 py-2 bg-blue-700 text-white rounded-xl text-xs font-bold hover:bg-blue-800 disabled:opacity-50">
               {syncingB2B ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
               {"Sync B2B KH"}
-              {b2bCacheInfo && <span className="ml-1 bg-blue-500/50 px-1.5 py-0.5 rounded text-[10px]">{b2bCacheInfo.cached_count}</span>}
+              {b2bCacheInfo && <span className="ml-1 bg-blue-500/50 px-1.5 py-0.5 rounded text-[11.5px]">{b2bCacheInfo.cached_count}</span>}
             </button>
             <button onClick={checkDb} disabled={dbLoading} className="flex items-center gap-2 px-3 py-2 bg-brand-600 text-white rounded-xl text-xs font-bold hover:bg-brand-700 disabled:opacity-50">
               {dbLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{"Kiểm tra"}
@@ -235,7 +235,7 @@ function AnalyticsSettings() {
 
                 {/* Fact tables */}
                 <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Fact Tables (gohub_dw)</p>
+                  <p className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider mb-2">Fact Tables (gohub_dw)</p>
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                     {(db.warehouse || []).map((w: any) => (
                       <div key={w.table} className="border border-slate-100 rounded-lg p-3 bg-slate-50/40">
@@ -244,7 +244,7 @@ function AnalyticsSettings() {
                           <>
                             <p className="text-slate-500 text-xs mt-1">{w.rows.toLocaleString("vi-VN")} dòng</p>
                             <p className="text-slate-500 text-xs">Mới nhất: <span className="font-medium text-slate-700">{w.latest ? w.latest.slice(0, 10) : "—"}</span></p>
-                            {w.lastLoaded && <p className="text-slate-400 text-[11px]">ETL: {fmtTime(w.lastLoaded)}</p>}
+                            {w.lastLoaded && <p className="text-slate-400 text-[12px]">ETL: {fmtTime(w.lastLoaded)}</p>}
                           </>
                         )}
                       </div>
@@ -255,7 +255,7 @@ function AnalyticsSettings() {
                 {/* Dim + reference tables */}
                 {db.dims && db.dims.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Dim &amp; Reference Tables (gohub_dw)</p>
+                    <p className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider mb-2">Dim &amp; Reference Tables (gohub_dw)</p>
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       {(db.dims as any[]).map((d: any) => (
                         <div key={d.table} className={cn("border rounded-lg p-3", d.error ? "border-rose-200 bg-rose-50/30" : d.rows === 0 ? "border-amber-200 bg-amber-50/30" : "border-slate-100 bg-slate-50/40")}>
@@ -270,12 +270,12 @@ function AnalyticsSettings() {
                               {d.columns && d.columns.length > 0 && (
                                 <div className="mt-1.5 flex flex-wrap gap-0.5">
                                   {(d.columns as { name: string; type: string }[]).slice(0, 6).map((col) => (
-                                    <span key={col.name} className="text-[9px] bg-slate-200 text-slate-600 px-1 py-0.5 rounded font-mono" title={col.type}>
+                                    <span key={col.name} className="text-[11px] bg-slate-200 text-slate-600 px-1 py-0.5 rounded font-mono" title={col.type}>
                                       {col.name}
                                     </span>
                                   ))}
                                   {d.columns.length > 6 && (
-                                    <span className="text-[9px] text-slate-400">+{d.columns.length - 6}</span>
+                                    <span className="text-[11px] text-slate-400">+{d.columns.length - 6}</span>
                                   )}
                                 </div>
                               )}
@@ -321,7 +321,7 @@ function AnalyticsSettings() {
             <Shield className="w-5 h-5 text-brand-600" />
             <div>
               <h2 className="font-bold text-slate-800">Channel &amp; Customer Tiers (Partner Tiers)</h2>
-              <p className="text-[11px] text-slate-400 mt-0.5">Phân loại đối tác chiến lược. Mỗi nhóm hiển thị riêng trong báo cáo B2B / BOD / Dashboard / All-Time.</p>
+              <p className="text-[12px] text-slate-400 mt-0.5">Phân loại đối tác chiến lược. Mỗi nhóm hiển thị riêng trong báo cáo B2B / BOD / Dashboard / All-Time.</p>
             </div>
           </div>
           <button onClick={() => savePost("tiers", "/api/config/partner-tiers", tiers)} disabled={saving === "tiers" || !dirtyTiers} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyTiers ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
@@ -337,7 +337,7 @@ function AnalyticsSettings() {
           {/* Thêm nhóm mới */}
           <div className="flex items-end gap-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
             <div className="flex-1">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tên nhóm mới</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Tên nhóm mới</label>
               <input value={newTier} onChange={e => setNewTier(e.target.value)} onKeyDown={e => e.key === "Enter" && addTier()}
                 placeholder="VD: Strategic, Preferred..."
                 className="mt-1 w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-600" />
@@ -356,13 +356,13 @@ function AnalyticsSettings() {
                   <div className="p-3 border-b border-slate-100 flex items-center justify-between">
                     <span className="text-sm font-bold text-slate-800 uppercase tracking-tight">{tier}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold bg-white border border-slate-200 px-2 py-0.5 rounded-full text-slate-500">{list.length} đối tác</span>
+                      <span className="text-[11.5px] font-bold bg-white border border-slate-200 px-2 py-0.5 rounded-full text-slate-500">{list.length} đối tác</span>
                       <button onClick={() => deleteTier(tier)} title="Xóa nhóm" className="text-slate-300 hover:text-rose-500"><X className="w-4 h-4" /></button>
                     </div>
                   </div>
                   <div className="p-3 flex-1 space-y-1.5 max-h-56 overflow-y-auto">
                     {list.length === 0 ? (
-                      <p className="text-[11px] text-slate-400 text-center py-4">Chưa có đối tác nào</p>
+                      <p className="text-[12px] text-slate-400 text-center py-4">Chưa có đối tác nào</p>
                     ) : list.map(p => (
                       <div key={p} className="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-slate-100">
                         <span className="text-xs text-slate-600 truncate">{p}</span>
@@ -397,7 +397,7 @@ function AnalyticsSettings() {
             <Shield className="w-4 h-4 text-rose-500 mt-0.5 shrink-0" />
             <div>
               <p className="text-xs font-bold text-rose-700">Nội bộ hệ thống — chỉ admin/creator (s190)</p>
-              <p className="text-[11px] text-rose-600 mt-0.5">Câu hỏi về code / cách build hệ thống / credential / quy trình kỹ thuật nội bộ → CHỈ admin/creator được hỏi (qua web/Lark cá nhân đã xác thực); vai trò khác → chatbot từ chối lịch sự, không tiết lộ. Riêng nhắn qua Lark group luôn từ chối, kể cả admin/creator (không xác thực được ai đang gõ). Ranh giới này CỐ ĐỊNH trong code, không cấu hình được qua trang này.</p>
+              <p className="text-[12px] text-rose-600 mt-0.5">Câu hỏi về code / cách build hệ thống / credential / quy trình kỹ thuật nội bộ → CHỈ admin/creator được hỏi (qua web/Lark cá nhân đã xác thực); vai trò khác → chatbot từ chối lịch sự, không tiết lộ. Riêng nhắn qua Lark group luôn từ chối, kể cả admin/creator (không xác thực được ai đang gõ). Ranh giới này CỐ ĐỊNH trong code, không cấu hình được qua trang này.</p>
             </div>
           </div>
           {/* Open policy info */}
@@ -405,14 +405,14 @@ function AnalyticsSettings() {
             <Shield className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
             <div>
               <p className="text-xs font-bold text-emerald-700">Mọi dữ liệu kinh doanh đều mở, ai cũng như nhau (mặc định)</p>
-              <p className="text-[11px] text-emerald-600 mt-0.5">Revenue, CM1, COGS, HR, KH, KB… — tất cả vai trò đều được hỏi ngang nhau, không phân biệt. Dùng Role Filters bên dưới nếu muốn giới hạn SQL theo role cụ thể.</p>
+              <p className="text-[12px] text-emerald-600 mt-0.5">Revenue, CM1, COGS, HR, KH, KB… — tất cả vai trò đều được hỏi ngang nhau, không phân biệt. Dùng Role Filters bên dưới nếu muốn giới hạn SQL theo role cụ thể.</p>
             </div>
           </div>
           {/* Custom rules */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Hướng dẫn tùy chỉnh cho Chatbot (tùy chọn)</label>
-              <button onClick={() => savePost("custom-rules", "/api/config/chatbot-rules", { rules: customRules })} disabled={saving === "custom-rules" || !dirtyCustomRules} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all disabled:opacity-50", dirtyCustomRules ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
+              <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">Hướng dẫn tùy chỉnh cho Chatbot (tùy chọn)</label>
+              <button onClick={() => savePost("custom-rules", "/api/config/chatbot-rules", { rules: customRules })} disabled={saving === "custom-rules" || !dirtyCustomRules} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-bold transition-all disabled:opacity-50", dirtyCustomRules ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
                 {saving === "custom-rules" ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}Lưu
               </button>
             </div>
@@ -423,7 +423,7 @@ function AnalyticsSettings() {
               placeholder={"Nhập hướng dẫn bổ sung cho chatbot (tiếng Việt hoặc tiếng Anh).\nVí dụ: \"Staff chỉ được xem doanh thu của kênh họ phụ trách.\"\nĐể trống = chatbot chạy theo mặc định."}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-brand-500 outline-none resize-none"
             />
-            <p className="text-[11px] text-slate-400 mt-1.5">Text này được inject vào system prompt của chatbot BI — viết bằng ngôn ngữ tự nhiên, chatbot sẽ hiểu và áp dụng.</p>
+            <p className="text-[12px] text-slate-400 mt-1.5">Text này được inject vào system prompt của chatbot BI — viết bằng ngôn ngữ tự nhiên, chatbot sẽ hiểu và áp dụng.</p>
           </div>
         </div>
       </div>
@@ -435,7 +435,7 @@ function AnalyticsSettings() {
             <Boxes className="w-5 h-5 text-brand-600" />
             <div>
               <h2 className="font-bold text-slate-800">Ngưỡng cảnh báo tồn kho (Inventory)</h2>
-              <p className="text-[11px] text-slate-400 mt-0.5">Áp cho tab Inventory → sub-tab Tồn kho. Dựa trên số ngày còn hàng ước tính (tồn hiện tại ÷ tốc độ bán/ngày).</p>
+              <p className="text-[12px] text-slate-400 mt-0.5">Áp cho tab Inventory → sub-tab Tồn kho. Dựa trên số ngày còn hàng ước tính (tồn hiện tại ÷ tốc độ bán/ngày).</p>
             </div>
           </div>
           <button onClick={saveInvThresholds} disabled={saving === "inv-thresholds" || !dirtyInvThresholds} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyInvThresholds ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
@@ -449,7 +449,7 @@ function AnalyticsSettings() {
             ["warningDays", "Cần chú ý — từ (ngày), dưới mức này = Nguy hiểm", "amber"],
           ] as const).map(([key, label]) => (
             <div key={key}>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</label>
+              <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">{label}</label>
               <input type="number" min={1} value={invThresholds[key]}
                 onChange={e => setInvThresholds(prev => ({ ...prev, [key]: Number(e.target.value) || 0 }))}
                 className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-brand-500" />
@@ -470,7 +470,7 @@ function AnalyticsSettings() {
         <div className="p-6 space-y-4">
           {FILTER_ROLES.map(role => (
             <div key={role}>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Role: {ROLE_LABELS[role] ?? role}</label>
+              <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Role: {ROLE_LABELS[role] ?? role}</label>
               <textarea value={filters[role] || ""} onChange={e => setFilters(prev => ({ ...prev, [role]: e.target.value }))} rows={2} placeholder="Điều kiện SQL WHERE thêm cho role này (vd: f.company_code = 'VN'). Để trống = không lọc." className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none resize-none" />
             </div>
           ))}
@@ -531,7 +531,7 @@ function AnalyticsSettings() {
             <Tag className="w-5 h-5 text-brand-600" />
             <div>
               <h2 className="font-bold text-slate-800">Phân loại Item Type theo Kênh</h2>
-              <p className="text-[11px] text-slate-400 mt-0.5">Chatbot dùng danh sách prefix này để lọc giá bán đúng kênh B2C/B2B</p>
+              <p className="text-[12px] text-slate-400 mt-0.5">Chatbot dùng danh sách prefix này để lọc giá bán đúng kênh B2C/B2B</p>
             </div>
           </div>
           <button
@@ -554,7 +554,7 @@ function AnalyticsSettings() {
                   <span className={cn("px-2 py-0.5 rounded text-xs font-bold",
                     channel === "B2C" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"
                   )}>{channel}</span>
-                  <span className="text-[11px] text-slate-400">{prefixes.length} prefix</span>
+                  <span className="text-[12px] text-slate-400">{prefixes.length} prefix</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {prefixes.map(p => (
@@ -610,13 +610,13 @@ function AnalyticsSettings() {
                     )?.[0] ?? null
                     return (
                       <tr key={t} className="hover:bg-slate-50/50">
-                        <td className="px-3 py-1.5 text-slate-700 font-mono text-[11px]">{t}</td>
+                        <td className="px-3 py-1.5 text-slate-700 font-mono text-[12px]">{t}</td>
                         <td className="px-3 py-1.5 text-center">
                           {matchedChannel ? (
-                            <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-bold",
+                            <span className={cn("px-1.5 py-0.5 rounded text-[11.5px] font-bold",
                               matchedChannel === "B2C" ? "bg-sky-50 text-sky-600" : "bg-violet-50 text-violet-600"
                             )}>{matchedChannel}</span>
-                          ) : <span className="text-slate-300 text-[10px]">—</span>}
+                          ) : <span className="text-slate-300 text-[11.5px]">—</span>}
                         </td>
                       </tr>
                     )

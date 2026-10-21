@@ -19,7 +19,7 @@ interface TooltipProps {
 
 export function Tooltip({ content, children, side = "top", className }: TooltipProps) {
   const popover = cn(
-    "absolute z-50 w-52 px-3 py-2 text-[11px] leading-snug text-white bg-slate-800 rounded-lg shadow-xl",
+    "absolute z-50 w-52 px-3 py-2 text-[12px] leading-snug text-white bg-slate-800 rounded-lg shadow-xl",
     "pointer-events-none opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150",
     "whitespace-normal text-left",
     side === "bottom"

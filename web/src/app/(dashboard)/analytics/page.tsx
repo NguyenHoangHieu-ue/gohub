@@ -292,11 +292,11 @@ export default function DashboardHome() {
       {showFilters && (
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
           <div className="flex-1 space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
+            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
           </div>
           <div className="flex-1 space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
+            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all" />
           </div>
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="sm:self-end" />
@@ -354,9 +354,9 @@ export default function DashboardHome() {
               <p className="text-sm text-slate-500">Comparing actual revenue vs. planned targets for the selected period.</p>
             </div>
             <div className="flex flex-wrap gap-8">
-              <div className="space-y-1"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Actual Revenue</p><p className="text-xl font-bold text-slate-900">{formatCurrency(targetProgress.totalActual)}</p></div>
-              <div className="space-y-1"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Target</p><p className="text-xl font-bold text-slate-700">{formatCurrency(targetProgress.totalTarget)}</p></div>
-              <div className="space-y-1"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Projected Revenue</p><p className="text-xl font-bold text-blue-600">{projection ? formatCurrency(projection.revenue) : formatCurrency(targetProgress.proRataTarget)}</p></div>
+              <div className="space-y-1"><p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Actual Revenue</p><p className="text-xl font-bold text-slate-900">{formatCurrency(targetProgress.totalActual)}</p></div>
+              <div className="space-y-1"><p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Total Target</p><p className="text-xl font-bold text-slate-700">{formatCurrency(targetProgress.totalTarget)}</p></div>
+              <div className="space-y-1"><p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Projected Revenue</p><p className="text-xl font-bold text-blue-600">{projection ? formatCurrency(projection.revenue) : formatCurrency(targetProgress.proRataTarget)}</p></div>
             </div>
           </div>
           <div className="px-6 pb-6 space-y-4">
@@ -366,7 +366,7 @@ export default function DashboardHome() {
             </div>
             <div className="space-y-2">
               <div className="flex justify-between items-end">
-                <div className="flex items-center gap-2"><span className="text-sm font-bold text-blue-700">Projection Progress</span><span className="text-[10px] text-slate-400 font-normal">(Projected vs. Total Target)</span></div>
+                <div className="flex items-center gap-2"><span className="text-sm font-bold text-blue-700">Projection Progress</span><span className="text-[11.5px] text-slate-400 font-normal">(Projected vs. Total Target)</span></div>
                 <span className="text-sm font-bold text-blue-900">{targetProgress.proRataProgress.toFixed(1)}%</span>
               </div>
               <div className="h-3 bg-blue-50 rounded-full overflow-hidden"><div className={cn("h-full transition-all duration-1000 ease-out", targetProgress.proRataProgress >= 100 ? "bg-emerald-500" : targetProgress.proRataProgress >= 90 ? "bg-blue-600" : targetProgress.proRataProgress >= 75 ? "bg-amber-500" : "bg-rose-500")} style={{ width: `${Math.min(100, targetProgress.proRataProgress)}%` }} /></div>
@@ -393,14 +393,14 @@ export default function DashboardHome() {
               { label: "Projected Units", val: Math.round(projection.units).toLocaleString(), chg: projection.unitsChange },
             ]).map(c => (
               <div key={c.label} className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{c.label}</p>
+                <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">{c.label}</p>
                 <div className="flex items-baseline justify-between">
                   <p className="text-lg font-bold text-blue-600">{c.val}</p>
-                  <div className={cn("flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full", c.chg >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
+                  <div className={cn("flex items-center gap-0.5 text-[11.5px] font-bold px-1.5 py-0.5 rounded-full", c.chg >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
                     {c.chg >= 0 ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}{Math.abs(c.chg).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[9px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
             ))}
           </div>
@@ -464,7 +464,7 @@ export default function DashboardHome() {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
             <h3 className="font-bold text-slate-800 text-sm">Performance Summary ({startDate.slice(0,7)} → {endDate.slice(0,7)})</h3>
-            <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+            <div className="flex items-center gap-1.5 text-[11.5px] text-slate-400">
               <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />prorata = dự phóng nguyên tháng
             </div>
           </div>
@@ -476,7 +476,7 @@ export default function DashboardHome() {
                   {monthlyKpis.summary.map(m => (
                     <th key={m.month} className="px-4 py-2.5 text-right font-bold text-slate-600 whitespace-nowrap">
                       <span>{m.label}/{m.year}</span>
-                      {m.isProjected && <span className="ml-1 text-[9px] text-blue-500 font-bold">(×{m.factor})</span>}
+                      {m.isProjected && <span className="ml-1 text-[11px] text-blue-500 font-bold">(×{m.factor})</span>}
                     </th>
                   ))}
                 </tr>
@@ -500,7 +500,7 @@ export default function DashboardHome() {
                         <td key={m.month} className={cn("px-4 py-2.5 text-right", row.cls, m.isProjected && "bg-blue-50/30")}>
                           <span>{row.fmt(val)}</span>
                           {trend !== null && (
-                            <span className={cn("ml-1.5 text-[9px] font-bold", trend >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                            <span className={cn("ml-1.5 text-[11px] font-bold", trend >= 0 ? "text-emerald-500" : "text-rose-500")}>
                               {trend >= 0 ? "▲" : "▼"}{Math.abs(trend * 100).toFixed(0)}%
                             </span>
                           )}
@@ -513,7 +513,7 @@ export default function DashboardHome() {
                 {monthlyKpis.channels.length > 0 && (
                   <>
                     <tr className="bg-slate-50">
-                      <td colSpan={monthlyKpis.summary.length + 1} className="px-4 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Strategic Channels</td>
+                      <td colSpan={monthlyKpis.summary.length + 1} className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-widest">Strategic Channels</td>
                     </tr>
                     {monthlyKpis.channels.map(ch => (
                       <tr key={ch.name} className="hover:bg-slate-50/40">
@@ -539,7 +539,7 @@ export default function DashboardHome() {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex justify-between items-center">
             <h3 className="font-bold text-slate-800">Performance by Business Groups</h3>
-            <span className="text-[10px] font-bold text-slate-400 uppercase">B2B / B2C / Other</span>
+            <span className="text-[11.5px] font-bold text-slate-400 uppercase">B2B / B2C / Other</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -565,7 +565,7 @@ export default function DashboardHome() {
                         <td className="px-4 py-3 font-medium text-slate-700">
                           <div className="flex items-center gap-2">
                             {row.group === "B2B" && <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", expandedGroups.includes("B2B") && "rotate-180")} />}
-                            <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold", row.group === "B2B" ? "bg-blue-600 text-white" : row.group === "B2C" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500")}>{row.group}</span>
+                            <span className={cn("px-2 py-0.5 rounded text-[11.5px] font-bold", row.group === "B2B" ? "bg-blue-600 text-white" : row.group === "B2C" ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500")}>{row.group}</span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right text-slate-600">{formatNumber(row.totalOrder)}</td>
@@ -597,11 +597,11 @@ export default function DashboardHome() {
           <div className="p-4 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
             <h3 className="font-bold text-slate-800">Performance by Channels</h3>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">B2B:</span>
+              <span className="text-[11.5px] font-bold text-slate-400 uppercase">B2B:</span>
               <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
                 {(["ALL", "VN", "US"] as const).map(r => (
                   <button key={r} onClick={() => setB2bRegion(r)}
-                    className={cn("px-2.5 py-1 text-[10px] font-bold rounded-md transition-all",
+                    className={cn("px-2.5 py-1 text-[11.5px] font-bold rounded-md transition-all",
                       b2bRegion === r ? "bg-[#003B95] text-white" : "text-slate-500 hover:bg-white")}>
                     {r === "ALL" ? "ALL" : r === "VN" ? "🇻🇳 VN" : "🇺🇸 US"}
                   </button>
@@ -643,14 +643,14 @@ export default function DashboardHome() {
                       return (
                         <>
                           <tr className="bg-[#003B95]/10">
-                            <td className="px-4 py-2 font-bold text-[#003B95] text-[10px] uppercase tracking-widest">
+                            <td className="px-4 py-2 font-bold text-[#003B95] text-[11.5px] uppercase tracking-widest">
                               <div className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" />B2B — Phân khúc{b2bRegion !== "ALL" && ` (${b2bRegion})`}</div>
                             </td>
-                            <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(tot.orders)}</td>
-                            <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(tot.units)}</td>
-                            <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatCurrency(tot.rev)}</td>
-                            <td className="px-4 py-2 text-right font-bold text-[10px] text-blue-600">{projection ? formatCurrency(tot.rev * projection.factor) : "-"}</td>
-                            <td className="px-4 py-2 text-right text-[10px] text-slate-400">SUBTOTAL</td>
+                            <td className="px-4 py-2 text-right font-bold text-[11.5px] text-slate-600">{formatNumber(tot.orders)}</td>
+                            <td className="px-4 py-2 text-right font-bold text-[11.5px] text-slate-600">{formatNumber(tot.units)}</td>
+                            <td className="px-4 py-2 text-right font-bold text-[11.5px] text-slate-600">{formatCurrency(tot.rev)}</td>
+                            <td className="px-4 py-2 text-right font-bold text-[11.5px] text-blue-600">{projection ? formatCurrency(tot.rev * projection.factor) : "-"}</td>
+                            <td className="px-4 py-2 text-right text-[11.5px] text-slate-400">SUBTOTAL</td>
                           </tr>
                           {(b2bTierData.tiers as any[]).map((tier: any) => {
                             const d = pick(tier)
@@ -659,7 +659,7 @@ export default function DashboardHome() {
                             return (
                               <tr key={tier.tier} className={cn("hover:brightness-95 transition-colors border-l-4 border-[#003B95]/20", clr.row)}>
                                 <td className="px-4 py-3 pl-10">
-                                  <span className={cn("px-2 py-0.5 rounded text-[10px] font-bold", clr.badge)}>{tier.tier}</span>
+                                  <span className={cn("px-2 py-0.5 rounded text-[11.5px] font-bold", clr.badge)}>{tier.tier}</span>
                                 </td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatNumber(d.orders)}</td>
                                 <td className="px-4 py-3 text-right text-slate-600">{formatNumber(d.units)}</td>
@@ -681,12 +681,12 @@ export default function DashboardHome() {
                       return (
                         <React.Fragment key="B2C">
                           <tr className="bg-slate-100/80">
-                            <td className="px-4 py-2 font-bold text-slate-800 text-[10px] uppercase tracking-widest">B2C Channels</td>
-                            <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(gOrd)}</td>
-                            <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatNumber(gUnt)}</td>
-                            <td className="px-4 py-2 text-right font-bold text-[10px] text-slate-600">{formatCurrency(gRev)}</td>
-                            <td className="px-4 py-2 text-right font-bold text-[10px] text-blue-600">{projection ? formatCurrency(gRev * projection.factor) : "-"}</td>
-                            <td className="px-4 py-2 text-right text-[10px] text-slate-400">SUBTOTAL</td>
+                            <td className="px-4 py-2 font-bold text-slate-800 text-[11.5px] uppercase tracking-widest">B2C Channels</td>
+                            <td className="px-4 py-2 text-right font-bold text-[11.5px] text-slate-600">{formatNumber(gOrd)}</td>
+                            <td className="px-4 py-2 text-right font-bold text-[11.5px] text-slate-600">{formatNumber(gUnt)}</td>
+                            <td className="px-4 py-2 text-right font-bold text-[11.5px] text-slate-600">{formatCurrency(gRev)}</td>
+                            <td className="px-4 py-2 text-right font-bold text-[11.5px] text-blue-600">{projection ? formatCurrency(gRev * projection.factor) : "-"}</td>
+                            <td className="px-4 py-2 text-right text-[11.5px] text-slate-400">SUBTOTAL</td>
                           </tr>
                           {groupData.items.map(row => (
                             <tr key={row.group} className="hover:bg-slate-50 transition-colors group">

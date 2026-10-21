@@ -118,14 +118,14 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
                     {quarterMonths.map((m, i) => (
                       <th key={m} className={cn(th, "bg-amber-50 text-slate-700")}>
                         {monthNum(m)}
-                        {cur[i].state === "current" && <span className="ml-1 text-[11px] font-semibold text-blue-600">(pro-rata)</span>}
+                        {cur[i].state === "current" && <span className="ml-1 text-[12px] font-semibold text-blue-600">(pro-rata)</span>}
                       </th>
                     ))}
                     <th className={cn(th, "bg-[#0f4c81]/10 text-[#0f4c81]")}>{quarterLabel}{anyNotDone ? " (PR)" : ""}</th>
                     <th className="w-3 bg-slate-100" aria-hidden />
                     {nextQuarter.months.map(m => (
                       <th key={m} className={cn(th, "bg-amber-50 text-slate-700")}>
-                        {monthNum(m)} <span className="text-[11px] font-semibold text-amber-600">(target)</span>
+                        {monthNum(m)} <span className="text-[12px] font-semibold text-amber-600">(target)</span>
                       </th>
                     ))}
                     <th className={cn(th, "bg-[#0f4c81]/10 text-[#0f4c81]")}>{nextQuarter.label}</th>
@@ -157,7 +157,7 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
                               isPct ? "text-slate-500 text-[12px]" : valueCls(v, isCm1))}
                               title={c.state === "none" ? "Tháng chưa bắt đầu" : undefined}>
                               {fmt(row, v)}
-                              {act != null && <div className="text-[11px] font-normal text-slate-400">TT {fc(act)}</div>}
+                              {act != null && <div className="text-[12px] font-normal text-slate-400">TT {fc(act)}</div>}
                             </td>
                           )
                         })}

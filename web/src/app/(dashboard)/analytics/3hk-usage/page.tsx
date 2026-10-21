@@ -1053,7 +1053,7 @@ export default function ThreeHKDataUsagePage() {
   }
 
   return (
-    <div className="p-4 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 lg:p-8 space-y-6 max-w-[1480px] mx-auto">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -1114,7 +1114,7 @@ export default function ThreeHKDataUsagePage() {
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="p-2 bg-brand-50 rounded-xl text-brand-600"><BarChart3 className="w-5 h-5" /></div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Usage</span>
+            <span className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Total Usage</span>
           </div>
           <p className="text-2xl font-bold text-slate-900">{formatNumber(totals.totalUsage)} GB</p>
           <p className="text-xs text-slate-500 mt-1">Actual data consumed</p>
@@ -1123,7 +1123,7 @@ export default function ThreeHKDataUsagePage() {
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600"><Database className="w-5 h-5" /></div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Capacity</span>
+            <span className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Total Capacity</span>
           </div>
           <p className="text-2xl font-bold text-slate-900">{formatNumber(totals.totalCapacity)} GB</p>
           <p className="text-xs text-slate-500 mt-1">Total data allocated in plans</p>
@@ -1132,7 +1132,7 @@ export default function ThreeHKDataUsagePage() {
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="p-2 bg-amber-50 rounded-xl text-amber-600"><RefreshCw className="w-5 h-5" /></div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            <span className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">
               {activeTab === "Unlimited" ? "Avg. GB/ngày/SIM" : "Avg. Usage %"}
             </span>
           </div>
@@ -1156,7 +1156,7 @@ export default function ThreeHKDataUsagePage() {
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="p-2 bg-purple-50 rounded-xl text-purple-600"><Package className="w-5 h-5" /></div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active SIMs</span>
+            <span className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Active SIMs</span>
           </div>
           <p className="text-2xl font-bold text-slate-900">{formatNumber(totals.count)}</p>
           <p className="text-xs text-slate-500 mt-1">Sim tracks in this period</p>
@@ -1182,7 +1182,7 @@ export default function ThreeHKDataUsagePage() {
           </div>
           <div className="flex items-center gap-3">
             {countryMonths.length > 0 && (
-              <span className="text-[11px] font-semibold text-brand-700 bg-brand-50 border border-brand-100 rounded-lg px-3 py-1.5 whitespace-nowrap">
+              <span className="text-[12px] font-semibold text-brand-700 bg-brand-50 border border-brand-100 rounded-lg px-3 py-1.5 whitespace-nowrap">
                 RUN-RATE 12M = {monthLabel(countryMonths[countryMonths.length - 1], countryMultiYear)} × 12 = {fmtTB(zoneGrand.runRate)} TB
               </span>
             )}
@@ -1224,7 +1224,7 @@ export default function ThreeHKDataUsagePage() {
                         <span className="inline-flex items-center gap-1.5">
                           {expanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
                           {zoneLabel(row.country)}
-                          <span className="text-[10px] font-normal text-slate-400">({members.length} nước)</span>
+                          <span className="text-[11.5px] font-normal text-slate-400">({members.length} nước)</span>
                         </span>
                       </td>
                       {countryMonths.map((m) => (
@@ -1289,12 +1289,12 @@ export default function ThreeHKDataUsagePage() {
                   { key: "total_usage_gb" as const, label: "Total Actual (GB)", align: "text-right" },
                   { key: "avg_usage_pct" as const, label: "Avg. Usage %", align: "text-right" },
                 ]).map(col => (
-                  <th key={col.key} className={cn("px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-600 transition-colors", col.align)}
+                  <th key={col.key} className={cn("px-6 py-3 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-600 transition-colors", col.align)}
                     onClick={() => setSkuTypeSort(prev => ({ key: col.key, direction: prev.key === col.key && prev.direction === "asc" ? "desc" : "asc" }))}>
                     {col.label} {skuTypeSort.key === col.key && (skuTypeSort.direction === "asc" ? "↑" : "↓")}
                   </th>
                 ))}
-                <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Efficiency</th>
+                <th className="px-6 py-3 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Efficiency</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -1342,19 +1342,19 @@ export default function ThreeHKDataUsagePage() {
               <BarChart3 className="w-4 h-4 text-indigo-600" />
               Unlimited — Breakdown theo mã
             </h2>
-            <p className="text-[11px] text-slate-400 mt-1">Gom theo gói THẬT (ký tự phân loại SKU + ngưỡng data/tốc độ tra từ Supabase `skus.data`/`skus.speed`) — cùng 1 mã (VD B) có thể tách thành nhiều dòng nếu là gói khác nhau (VD 500MB vs 1GB trước khi giảm tốc).</p>
+            <p className="text-[12px] text-slate-400 mt-1">Gom theo gói THẬT (ký tự phân loại SKU + ngưỡng data/tốc độ tra từ Supabase `skus.data`/`skus.speed`) — cùng 1 mã (VD B) có thể tách thành nhiều dòng nếu là gói khác nhau (VD 500MB vs 1GB trước khi giảm tốc).</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mã</th>
-                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">Active SIMs</th>
-                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Plan (GB)</th>
-                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Actual (GB)</th>
-                  <th className="px-6 py-3 text-[10px] font-bold text-indigo-500 uppercase tracking-wider text-right">GB/ngày/SIM</th>
-                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Thực tế / Kế hoạch %</th>
-                  <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Efficiency</th>
+                  <th className="px-6 py-3 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Mã</th>
+                  <th className="px-6 py-3 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-center">Active SIMs</th>
+                  <th className="px-6 py-3 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Plan (GB)</th>
+                  <th className="px-6 py-3 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Actual (GB)</th>
+                  <th className="px-6 py-3 text-[11.5px] font-bold text-indigo-500 uppercase tracking-wider text-right">GB/ngày/SIM</th>
+                  <th className="px-6 py-3 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Thực tế / Kế hoạch %</th>
+                  <th className="px-6 py-3 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Efficiency</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -1375,7 +1375,7 @@ export default function ThreeHKDataUsagePage() {
                           <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100 text-xs font-mono" title="Ký tự/mã nhóm phân loại trên SKU (vị trí 8 mã mới, hoặc field Loại P1/P2 mã cũ)">
                             {sg.speed_group}
                           </span>
-                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded", isNew ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
+                          <span className={cn("text-[11.5px] font-semibold px-1.5 py-0.5 rounded", isNew ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
                             {vintageLabel(sg.vintage)}
                           </span>
                         </div>
@@ -1404,7 +1404,7 @@ export default function ThreeHKDataUsagePage() {
                               style={{ width: `${Math.min(100, sg.avg_usage_pct)}%` }} />
                           </div>
                           <button onClick={() => setExpandedGroup(expanded ? null : sg.key)}
-                            className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 whitespace-nowrap">
+                            className="flex items-center gap-1 text-[12px] font-bold text-indigo-600 hover:text-indigo-800 whitespace-nowrap">
                             Chi tiết ({members.length})
                             {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                           </button>
@@ -1414,7 +1414,7 @@ export default function ThreeHKDataUsagePage() {
                     {expanded && (
                       <tr className="bg-slate-50/40">
                         <td colSpan={7} className="px-6 py-3">
-                          <p className="text-[11px] text-slate-400 mb-2">
+                          <p className="text-[12px] text-slate-400 mb-2">
                             Kế hoạch (GB/ngày/SIM) = data_amount_gb ÷ số ngày gói (mức 3HK cấp/ngày, từ DB).
                             Thực tế = Total Actual ÷ Active SIMs ÷ số ngày gói.
                             <span className="text-rose-600 font-semibold"> Đỏ</span> = thực tế vượt kế hoạch (SIM dùng quá mức 3HK cấp → chi phí datapool cao hơn dự kiến),
@@ -1424,13 +1424,13 @@ export default function ThreeHKDataUsagePage() {
                             <table className="w-full text-left border-collapse">
                               <thead>
                                 <tr className="border-b border-slate-100 bg-slate-50/60">
-                                  <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">SKU</th>
-                                  <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">Active SIMs</th>
-                                  <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Plan (GB)</th>
-                                  <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Kế hoạch (GB/ngày/SIM)</th>
-                                  <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Actual (GB)</th>
-                                  <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Avg. Usage %</th>
-                                  <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">GB/ngày/SIM</th>
+                                  <th className="px-4 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">SKU</th>
+                                  <th className="px-4 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-center">Active SIMs</th>
+                                  <th className="px-4 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Plan (GB)</th>
+                                  <th className="px-4 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Kế hoạch (GB/ngày/SIM)</th>
+                                  <th className="px-4 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Actual (GB)</th>
+                                  <th className="px-4 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Avg. Usage %</th>
+                                  <th className="px-4 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">GB/ngày/SIM</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-50">
@@ -1489,7 +1489,7 @@ export default function ThreeHKDataUsagePage() {
                     <td className="px-6 py-3">
                       <div className="flex items-center justify-end gap-3">
                         <button onClick={() => setOtherLengthExpanded(v => !v)}
-                          className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 whitespace-nowrap">
+                          className="flex items-center gap-1 text-[12px] font-bold text-indigo-600 hover:text-indigo-800 whitespace-nowrap">
                           Chi tiết ({otherLengthGroup.members.length})
                           {otherLengthExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                         </button>
@@ -1503,11 +1503,11 @@ export default function ThreeHKDataUsagePage() {
                           <table className="w-full text-left border-collapse">
                             <thead>
                               <tr className="border-b border-slate-100 bg-slate-50/60">
-                                <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">SKU</th>
-                                <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">Active SIMs</th>
-                                <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Plan (GB)</th>
-                                <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Actual (GB)</th>
-                                <th className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Avg. Usage %</th>
+                                <th className="px-4 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">SKU</th>
+                                <th className="px-4 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-center">Active SIMs</th>
+                                <th className="px-4 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Plan (GB)</th>
+                                <th className="px-4 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Actual (GB)</th>
+                                <th className="px-4 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Avg. Usage %</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
@@ -1542,7 +1542,7 @@ export default function ThreeHKDataUsagePage() {
               <BarChart3 className="w-4 h-4 text-indigo-600" />
               So sánh mức sử dụng theo mã — Thực tế (GB/ngày/SIM) vs Kế hoạch
             </h2>
-            <p className="text-[11px] text-slate-400 mt-1">Cột Thực tế <span className="text-rose-600 font-semibold">đỏ</span> = vượt mức 3HK cấp/ngày của mã (chi phí datapool cao hơn dự kiến), <span className="text-emerald-600 font-semibold">xanh</span> = trong kế hoạch. Cột xám = mức kế hoạch/ngày (data_amount_gb ÷ ngày).</p>
+            <p className="text-[12px] text-slate-400 mt-1">Cột Thực tế <span className="text-rose-600 font-semibold">đỏ</span> = vượt mức 3HK cấp/ngày của mã (chi phí datapool cao hơn dự kiến), <span className="text-emerald-600 font-semibold">xanh</span> = trong kế hoạch. Cột xám = mức kế hoạch/ngày (data_amount_gb ÷ ngày).</p>
           </div>
           <div className="p-4" style={{ height: 320 }}>
             <SpeedComparisonChart data={speedChart} />
@@ -1558,7 +1558,7 @@ export default function ThreeHKDataUsagePage() {
               <BarChart3 className="w-4 h-4 text-indigo-600" />
               Phân bố mức data sử dụng/ngày — theo mã gói Unlimited
             </h2>
-            <p className="text-[11px] text-slate-400 mt-1">Trục X = dải GB dùng/ngày/SIM, trục Y = số SIM (Active). Cột chồng theo mã (A/B/C/.../X).</p>
+            <p className="text-[12px] text-slate-400 mt-1">Trục X = dải GB dùng/ngày/SIM, trục Y = số SIM (Active). Cột chồng theo mã (A/B/C/.../X).</p>
           </div>
           <div className="p-4" style={{ height: 340 }}>
             <UsageDistChart rows={usageDist.rows} groups={usageDist.groups} />
@@ -1574,7 +1574,7 @@ export default function ThreeHKDataUsagePage() {
               <Package className="w-4 h-4 text-brand-600" />
               Mã loại gói chiếm bao nhiêu SIM
             </h2>
-            <p className="text-[11px] text-slate-400 mt-1">Số lượng SIM (Active) theo ký tự phân loại — vị trí 8 (mã 13 ký tự) hoặc vị trí 10 (mã 14 ký tự) trong kỳ đang xem.</p>
+            <p className="text-[12px] text-slate-400 mt-1">Số lượng SIM (Active) theo ký tự phân loại — vị trí 8 (mã 13 ký tự) hoặc vị trí 10 (mã 14 ký tự) trong kỳ đang xem.</p>
           </div>
           <div className="p-4" style={{ height: Math.max(260, typeLetterChart.length * 30) }}>
             <SkuCountChart data={typeLetterChart} />
@@ -1606,12 +1606,12 @@ export default function ThreeHKDataUsagePage() {
                   { key: "total_usage_gb" as const, label: "Total Actual (GB)", align: "text-right" },
                   { key: "avg_usage_pct" as const, label: activeTab === "Unlimited" ? "GB/ngày/SIM" : "Avg. Usage %", align: "text-right" },
                 ]).map(col => (
-                  <th key={col.key} className={cn("px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-600 transition-colors", col.align)}
+                  <th key={col.key} className={cn("px-6 py-3 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-600 transition-colors", col.align)}
                     onClick={() => setSkuSort(prev => ({ key: col.key, direction: prev.key === col.key && prev.direction === "asc" ? "desc" : "asc" }))}>
                     {col.label} {skuSort.key === col.key && (skuSort.direction === "asc" ? "↑" : "↓")}
                   </th>
                 ))}
-                <th className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Efficiency</th>
+                <th className="px-6 py-3 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider text-right">Efficiency</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -1695,7 +1695,7 @@ export default function ThreeHKDataUsagePage() {
                   { key: "total_data_gb" as const, label: "Actual (GB)", align: "text-right" },
                   { key: "usage_pct" as const, label: "Usage %", align: "text-right" },
                 ]).map(col => (
-                  <th key={col.key} className={cn("px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-600 transition-colors", col.align)}
+                  <th key={col.key} className={cn("px-6 py-4 text-[11.5px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-slate-600 transition-colors", col.align)}
                     onClick={() => handleSort(col.key)}>
                     {col.label} {sortConfig.key === col.key && (sortConfig.direction === "asc" ? "↑" : "↓")}
                   </th>
@@ -1715,13 +1715,13 @@ export default function ThreeHKDataUsagePage() {
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="text-sm text-slate-600 font-medium">{record.sku}</span>
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">{record.sku_type}</span>
+                        <span className="text-[11.5px] text-slate-400 font-bold uppercase">{record.sku_type}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="text-xs text-slate-600 font-bold">{formatDate(record.first_report_date)}</span>
-                        <span className="text-[10px] text-slate-400 italic">Acts: {formatDate(record.activation_date)}</span>
+                        <span className="text-[11.5px] text-slate-400 italic">Acts: {formatDate(record.activation_date)}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-slate-600 text-sm">{fmtDec(record.data_amount_gb, 2)}</td>

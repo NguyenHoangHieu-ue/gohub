@@ -110,7 +110,7 @@ export function SquadCustomerSummary({ sq, picName }: Props) {
             <div className="overflow-x-auto max-h-80 overflow-y-auto">
               <table className="w-full text-[12px] border-collapse">
                 <thead className="sticky top-0 bg-slate-100">
-                  <tr className="text-slate-500 uppercase text-[11px]">
+                  <tr className="text-slate-500 uppercase text-[12px]">
                     <th className="px-3 py-2 text-left font-semibold">Khách hàng</th>
                     <th className="px-3 py-2 text-left font-semibold">{view === "inactive" ? "PIC" : "Tier · PIC"}</th>
                     {view === "inactive" ? (
@@ -130,7 +130,7 @@ export function SquadCustomerSummary({ sq, picName }: Props) {
                 <tbody className="divide-y divide-slate-100">
                   {shown.map((c: any, i: number) => view === "inactive" ? (
                     <tr key={c.code} className={i % 2 ? "bg-slate-50/50" : "bg-white"}>
-                      <td className="px-3 py-1.5 font-medium text-slate-700">{c.name}<span className="ml-1.5 text-[11px] text-slate-400">{c.code}</span></td>
+                      <td className="px-3 py-1.5 font-medium text-slate-700">{c.name}<span className="ml-1.5 text-[12px] text-slate-400">{c.code}</span></td>
                       <td className="px-3 py-1.5 text-slate-500">{c.sales_pic ? picName(c.sales_pic) : "—"}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{fc(c.lastRevenue)}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-slate-400">{c.first_order_date || "—"}</td>
@@ -139,7 +139,7 @@ export function SquadCustomerSummary({ sq, picName }: Props) {
                     <tr key={c.customer_code} className={i % 2 ? "bg-slate-50/50" : "bg-white"}>
                       <td className="px-3 py-1.5 font-medium text-slate-700">
                         {c.customer_name}
-                        <span className={cn("ml-1.5 text-[11px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
+                        <span className={cn("ml-1.5 text-[12px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
                       </td>
                       <td className="px-3 py-1.5 text-slate-500">{c.tier}<span className="text-slate-300 mx-1">·</span>{picName(c.sales_pic)}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-blue-600 font-medium">{fc(c.revenue_pr)}</td>

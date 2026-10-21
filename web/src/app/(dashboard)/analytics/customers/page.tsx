@@ -168,7 +168,7 @@ export default function CustomerPerformancePage() {
 
   return (
     <div className="flex-1 overflow-auto bg-slate-50 p-4 lg:p-8">
-      <div className="max-w-7xl mx-auto space-y-8 font-sans">
+      <div className="max-w-[1480px] mx-auto space-y-8 font-sans">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -200,10 +200,10 @@ export default function CustomerPerformancePage() {
               {showCustomerDropdown && (
                 <div className="absolute z-[100] top-full right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 min-w-[280px] space-y-4 animate-in fade-in slide-in-from-top-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Filter Customers</span>
+                    <span className="text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-center">Filter Customers</span>
                     <button
                       onClick={() => setSelectedCustomers([])}
-                      className="text-[10px] font-black text-rose-500 uppercase hover:underline"
+                      className="text-[11.5px] font-black text-rose-500 uppercase hover:underline"
                     >
                       Clear All
                     </button>
@@ -257,7 +257,7 @@ export default function CustomerPerformancePage() {
                     {!searching && customers.length === 0 && searchQuery.trim() && (
                       <div className="py-8 text-center">
                         <Users className="w-8 h-8 text-slate-100 mx-auto mb-2" />
-                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">No customers found</p>
+                        <p className="text-[11.5px] font-black text-slate-300 uppercase tracking-widest">No customers found</p>
                       </div>
                     )}
                   </div>
@@ -329,7 +329,7 @@ export default function CustomerPerformancePage() {
                        kpi.label.includes("ARPU") ? <Activity className="w-5 h-5" /> :
                        <TrendingUp className="w-5 h-5" />}
                     </div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{kpi.label}</p>
+                    <p className="text-[11.5px] font-black text-slate-400 uppercase tracking-widest mb-1">{kpi.label}</p>
                     <h3 className="text-2xl font-black text-slate-900 tabular-nums">
                       {kpi.isCurrency ? formatCompact(kpi.value).replace("₫", "VND") : kpi.value}
                     </h3>
@@ -350,19 +350,19 @@ export default function CustomerPerformancePage() {
                   <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-100">
                     <button
                       onClick={() => setPeriod("day")}
-                      className={cn("px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all", period === "day" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600")}
+                      className={cn("px-4 py-1.5 text-[11.5px] font-black uppercase tracking-widest rounded-lg transition-all", period === "day" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600")}
                     >
                       Daily
                     </button>
                     <button
                       onClick={() => setPeriod("week")}
-                      className={cn("px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all", period === "week" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600")}
+                      className={cn("px-4 py-1.5 text-[11.5px] font-black uppercase tracking-widest rounded-lg transition-all", period === "week" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600")}
                     >
                       Weekly
                     </button>
                     <button
                       onClick={() => setPeriod("month")}
-                      className={cn("px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all", period === "month" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600")}
+                      className={cn("px-4 py-1.5 text-[11.5px] font-black uppercase tracking-widest rounded-lg transition-all", period === "month" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400 hover:text-slate-600")}
                     >
                       Monthly
                     </button>
@@ -428,9 +428,9 @@ export default function CustomerPerformancePage() {
                     <table className="w-full text-left">
                       <thead className="sticky top-0 bg-white z-10">
                         <tr>
-                          <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Product</th>
-                          <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Qty</th>
-                          <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Revenue</th>
+                          <th className="pb-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest">Product</th>
+                          <th className="pb-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">Qty</th>
+                          <th className="pb-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">Revenue</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -438,7 +438,7 @@ export default function CustomerPerformancePage() {
                           <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                             <td className="py-4">
                               <p className="text-sm font-bold text-slate-700 leading-tight">{prod.product_name || prod.sku}</p>
-                              <p className="text-[10px] text-slate-400 font-mono mt-0.5">{prod.sku}</p>
+                              <p className="text-[11.5px] text-slate-400 font-mono mt-0.5">{prod.sku}</p>
                             </td>
                             <td className="py-4 text-right">
                               <span className="text-sm font-black text-slate-500 tabular-nums">{prod.quantity}</span>
@@ -480,12 +480,12 @@ export default function CustomerPerformancePage() {
                     <table className="w-full text-left">
                       <thead className="sticky top-0 bg-white z-10">
                         <tr>
-                          <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Order Code</th>
-                          <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Product</th>
-                          <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer Name</th>
-                          <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Date</th>
-                          <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Items</th>
-                          <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
+                          <th className="pb-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest">Order Code</th>
+                          <th className="pb-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest">Product</th>
+                          <th className="pb-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest">Customer Name</th>
+                          <th className="pb-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">Date</th>
+                          <th className="pb-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">Items</th>
+                          <th className="pb-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">Amount</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -535,7 +535,7 @@ export default function CustomerPerformancePage() {
                       </div>
                       <div>
                         <h2 className="text-2xl font-black text-slate-900 tracking-tight italic uppercase">{tierName} Partners Performance</h2>
-                        <p className="text-[10px] text-indigo-600 font-black uppercase tracking-[0.3em]">Priority Business Verticals</p>
+                        <p className="text-[11.5px] text-indigo-600 font-black uppercase tracking-[0.3em]">Priority Business Verticals</p>
                       </div>
                     </div>
                   </div>
@@ -543,11 +543,11 @@ export default function CustomerPerformancePage() {
                     <table className="w-full text-left">
                       <thead>
                         <tr className="bg-indigo-50/20">
-                          <th className="px-10 py-5 text-[10px] font-black text-indigo-600 uppercase tracking-widest">Partner Name</th>
-                          <th className="px-10 py-5 text-[10px] font-black text-indigo-600 uppercase tracking-widest text-right">Revenue</th>
-                          <th className="px-10 py-5 text-[10px] font-black text-indigo-600 uppercase tracking-widest text-right">Margin %</th>
-                          <th className="px-10 py-5 text-[10px] font-black text-indigo-600 uppercase tracking-widest text-right">Orders</th>
-                          <th className="px-10 py-5 text-[10px] font-black text-indigo-600 uppercase tracking-widest text-right">Last Order</th>
+                          <th className="px-10 py-5 text-[11.5px] font-black text-indigo-600 uppercase tracking-widest">Partner Name</th>
+                          <th className="px-10 py-5 text-[11.5px] font-black text-indigo-600 uppercase tracking-widest text-right">Revenue</th>
+                          <th className="px-10 py-5 text-[11.5px] font-black text-indigo-600 uppercase tracking-widest text-right">Margin %</th>
+                          <th className="px-10 py-5 text-[11.5px] font-black text-indigo-600 uppercase tracking-widest text-right">Orders</th>
+                          <th className="px-10 py-5 text-[11.5px] font-black text-indigo-600 uppercase tracking-widest text-right">Last Order</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-indigo-50">
@@ -612,15 +612,15 @@ export default function CustomerPerformancePage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-white border-b border-slate-100">
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Customer</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tier</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Revenue</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">GP</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">GM%</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">CM1</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">CM1%</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">3HK%</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Orders</th>
+                      <th className="px-6 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest">Customer</th>
+                      <th className="px-6 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest">Tier</th>
+                      <th className="px-6 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">Revenue</th>
+                      <th className="px-6 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">GP</th>
+                      <th className="px-6 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">GM%</th>
+                      <th className="px-6 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">CM1</th>
+                      <th className="px-6 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">CM1%</th>
+                      <th className="px-6 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">3HK%</th>
+                      <th className="px-6 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">Orders</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -642,7 +642,7 @@ export default function CustomerPerformancePage() {
                           <span className="text-sm font-bold text-slate-700 truncate max-w-[180px] block">{row.name}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand-50 text-brand-600">{row.tier ?? "—"}</span>
+                          <span className="text-[11.5px] font-bold px-1.5 py-0.5 rounded bg-brand-50 text-brand-600">{row.tier ?? "—"}</span>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <span className="text-sm font-bold text-slate-900 tabular-nums">{formatCurrency(row.revenue)}</span>

@@ -37,9 +37,9 @@ const COMPANY_CFG: Record<string, { label: string; flag: string; bg: string; tex
 function CompanyBadge({ code }: { code: string | null }) {
   if (!code) return null
   const cfg = COMPANY_CFG[code.toUpperCase()]
-  if (!cfg) return <span className="text-[9px] font-bold text-slate-400">{code}</span>
+  if (!cfg) return <span className="text-[11px] font-bold text-slate-400">{code}</span>
   return (
-    <span className={cn("text-[9px] font-black px-1 py-0.5 rounded uppercase tracking-wider", cfg.bg, cfg.text)}>
+    <span className={cn("text-[11px] font-black px-1 py-0.5 rounded uppercase tracking-wider", cfg.bg, cfg.text)}>
       {cfg.flag} {cfg.label}
     </span>
   )
@@ -68,7 +68,7 @@ function TierBadge({ pln, kws }: { pln: string | null; kws: Record<string, strin
   const c = TIER_CFG[tier]
   if (!c) return null
   return (
-    <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider", c.bg, c.text)}>
+    <span className={cn("text-[11px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider", c.bg, c.text)}>
       {tier}
     </span>
   )
@@ -335,7 +335,7 @@ export default function OrdersPage() {
         <div className="flex flex-wrap items-end gap-3">
           {/* Entity pills — đầu dòng */}
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Entity</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Entity</label>
             <div className="flex gap-1">
               {[
                 { code: "",   label: "All" },
@@ -358,7 +358,7 @@ export default function OrdersPage() {
           <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 self-end mb-0.5" />
 
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date mode</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date mode</label>
             <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
               {(["day", "range"] as const).map(m => (
                 <button key={m} onClick={() => setDateMode(m)}
@@ -372,7 +372,7 @@ export default function OrdersPage() {
 
           {dateMode === "day" ? (
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1">
+              <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide flex items-center gap-1">
                 <Calendar className="h-3 w-3" /> Date
               </label>
               <input type="date" value={singleDate}
@@ -383,13 +383,13 @@ export default function OrdersPage() {
           ) : (
             <div className="flex items-end gap-2">
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">From</label>
+                <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">From</label>
                 <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
                   className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
               </div>
               <span className="text-slate-400 dark:text-slate-500 pb-1.5">→</span>
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">To</label>
+                <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">To</label>
                 <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
                   className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
               </div>
@@ -397,7 +397,7 @@ export default function OrdersPage() {
           )}
 
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">By date</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">By date</label>
             <select value={dataSource} onChange={e => setDataSource(e.target.value)}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
               <option value="fulfilled">Fulfilled</option>
@@ -409,7 +409,7 @@ export default function OrdersPage() {
 
           {/* Include ShippingFee: Yes/No — default Yes (gồm phí ship) */}
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm phí ship vào doanh thu">Include ShippingFee</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm phí ship vào doanh thu">Include ShippingFee</label>
             <select value={includeShip ? "yes" : "no"} onChange={e => setIncludeShip(e.target.value === "yes")}
               className={cn("text-xs border rounded-lg px-2.5 py-1.5 font-semibold",
                 includeShip ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
@@ -421,7 +421,7 @@ export default function OrdersPage() {
 
           {/* Include Internal Ops: Yes/No — default Yes (gồm đơn nội bộ) */}
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm đơn chuyển nội bộ (INTERNAL-TRANSACTION, revenue=0)">Include Internal Ops</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm đơn chuyển nội bộ (INTERNAL-TRANSACTION, revenue=0)">Include Internal Ops</label>
             <select value={includeInternalOps ? "yes" : "no"} onChange={e => setIncludeInternalOps(e.target.value === "yes")}
               className={cn("text-xs border rounded-lg px-2.5 py-1.5 font-semibold",
                 includeInternalOps ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
@@ -435,7 +435,7 @@ export default function OrdersPage() {
         {/* Row 2: other filters + Apply */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Group</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Group</label>
             <select value={channelGroup} onChange={e => { setChannelGroup(e.target.value); setChannel("") }}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
               <option value="">All groups</option>
@@ -444,7 +444,7 @@ export default function OrdersPage() {
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Channel</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Channel</label>
             <select value={channel} onChange={e => setChannel(e.target.value)}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[120px]">
               <option value="">All channels</option>
@@ -452,7 +452,7 @@ export default function OrdersPage() {
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">PIC</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">PIC</label>
             <select value={staffCode} onChange={e => setStaffCode(e.target.value)}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[130px]">
               <option value="">All PIC</option>
@@ -460,7 +460,7 @@ export default function OrdersPage() {
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Source</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Source</label>
             <select value={orderSource} onChange={e => setOrderSource(e.target.value)}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[120px]">
               <option value="">All sources</option>
@@ -503,7 +503,7 @@ export default function OrdersPage() {
           <div key={k.label} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-sm">
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{k.label}</p>
             <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{k.value}</p>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{k.sub}</p>
+            <p className="text-[11.5px] text-slate-400 dark:text-slate-500 mt-0.5">{k.sub}</p>
           </div>
         ))}
       </div>
@@ -533,7 +533,7 @@ export default function OrdersPage() {
               {!loading && filtered.map((r, i) => (
                 <tr key={`${r.order_code || i}-${i}`}
                   className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                  <td className="px-3 py-2 whitespace-nowrap font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                  <td className="px-3 py-2 whitespace-nowrap font-mono text-[12px] text-slate-600 dark:text-slate-300">
                     {fmtDate(r.order_date)}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap font-medium text-slate-800 dark:text-slate-200">
@@ -548,11 +548,11 @@ export default function OrdersPage() {
                     {r.customer_name || "—"}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
-                    <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400">{r.order_code || "—"}</span>
+                    <span className="font-mono text-[11.5px] text-slate-500 dark:text-slate-400">{r.order_code || "—"}</span>
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {r.sim_type ? (
-                      <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded",
+                      <span className={cn("text-[11px] font-semibold px-1.5 py-0.5 rounded",
                         r.sim_type.toLowerCase().includes("esim")
                           ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                           : "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
@@ -624,7 +624,7 @@ export default function OrdersPage() {
         )}
       </div>
 
-      <p className="mt-3 text-[10px] text-slate-400 dark:text-slate-500 text-center">
+      <p className="mt-3 text-[11.5px] text-slate-400 dark:text-slate-500 text-center">
         GP = Gross Profit (Revenue − COGS). Source:{" "}
         {dataSource === "created" ? "fact_sales_revenue · created_date" : "fact_fulfillment_revenue · fulfiled_date"}
       </p>

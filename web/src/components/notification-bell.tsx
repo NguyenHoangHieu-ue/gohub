@@ -51,14 +51,14 @@ function NotifCard({ notif, isNew }: { notif: Notification; isNew: boolean }) {
             {isNew && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-0.5" />}
           </div>
           {notif.body && (
-            <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{notif.body}</p>
+            <p className="text-[12px] text-gray-500 mt-0.5 leading-snug">{notif.body}</p>
           )}
-          <p className="text-[10px] text-gray-400 mt-1">{fmtDate(notif.created_at)}</p>
+          <p className="text-[11.5px] text-gray-400 mt-1">{fmtDate(notif.created_at)}</p>
 
           {notif.type === "sync" && changes.length > 0 && (
             <button
               onClick={() => setExpanded(e => !e)}
-              className="flex items-center gap-1 text-[10px] text-brand-600 mt-1.5 hover:underline"
+              className="flex items-center gap-1 text-[11.5px] text-brand-600 mt-1.5 hover:underline"
             >
               {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
               {expanded ? "Thu gọn" : `Xem ${changes.length} thay đổi`}
@@ -67,7 +67,7 @@ function NotifCard({ notif, isNew }: { notif: Notification; isNew: boolean }) {
 
           {expanded && changes.length > 0 && (
             <div className="mt-2 rounded-lg border border-gray-200 overflow-hidden">
-              <table className="w-full text-[10px]">
+              <table className="w-full text-[11.5px]">
                 <thead>
                   <tr className="bg-gray-50 text-left text-gray-400">
                     <th className="px-2 py-1 font-medium">Status</th>
@@ -80,8 +80,8 @@ function NotifCard({ notif, isNew }: { notif: Notification; isNew: boolean }) {
                   {changes.slice(0, 20).map((c, i) => (
                     <tr key={i} className="text-gray-600">
                       <td className="px-2 py-0.5">{c.status}</td>
-                      <td className="px-2 py-0.5 font-mono text-[9px]">{c.sku_code}</td>
-                      <td className="px-2 py-0.5 font-mono text-[9px]">{c.product_code}</td>
+                      <td className="px-2 py-0.5 font-mono text-[11px]">{c.sku_code}</td>
+                      <td className="px-2 py-0.5 font-mono text-[11px]">{c.product_code}</td>
                       <td className="px-2 py-0.5">{c.changed}</td>
                     </tr>
                   ))}
@@ -152,7 +152,7 @@ export function NotificationBell({ collapsed }: { collapsed: boolean }) {
         <div className="relative flex-shrink-0">
           <Bell size={16} className="text-slate-400" />
           {unread > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+            <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-red-500 text-white text-[11px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
               {unread > 9 ? "9+" : unread}
             </span>
           )}
@@ -161,7 +161,7 @@ export function NotificationBell({ collapsed }: { collapsed: boolean }) {
           <>
             <span className="flex-1 whitespace-nowrap text-left">Thông báo</span>
             {unread > 0 && (
-              <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-[10px] font-semibold rounded-full">
+              <span className="px-1.5 py-0.5 bg-red-100 text-red-600 text-[11.5px] font-semibold rounded-full">
                 {unread}
               </span>
             )}
@@ -187,7 +187,7 @@ export function NotificationBell({ collapsed }: { collapsed: boolean }) {
                 <Bell size={15} className="text-brand-600" />
                 <h2 className="text-sm font-semibold text-gray-900">Thông báo</h2>
                 {unread === 0 && notifications.length > 0 && (
-                  <span className="text-[10px] text-gray-400">Đã đọc hết</span>
+                  <span className="text-[11.5px] text-gray-400">Đã đọc hết</span>
                 )}
               </div>
               <button

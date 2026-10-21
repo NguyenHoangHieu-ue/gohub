@@ -1433,7 +1433,7 @@ function QuarterlyContent() {
                 const rm = RISK_META[level] ?? RISK_META["no_target"]
                 return (
                   <span className={cn("inline-flex items-center gap-1.5 rounded-full font-bold whitespace-nowrap ring-1 ring-inset",
-                    rm.bg, rm.color, rm.ring, dense ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-[11.5px]")}>
+                    rm.bg, rm.color, rm.ring, dense ? "px-2 py-0.5 text-[12px]" : "px-2.5 py-1 text-[11.5px]")}>
                     <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", rm.dot)} />
                     {dense ? rm.short : rm.label}
                   </span>
@@ -1554,7 +1554,7 @@ function QuarterlyContent() {
                       <div className="overflow-x-auto">
                         <table className="w-full text-[12px] border-collapse">
                           <thead>
-                            <tr className="bg-slate-50 text-slate-500 uppercase text-[11px] border-b-2 border-slate-100">
+                            <tr className="bg-slate-50 text-slate-500 uppercase text-[12px] border-b-2 border-slate-100">
                               <th className="px-4 py-2.5 text-left">{sortBtn("customer_name","Khách hàng")}</th>
                               <th className="px-3 py-2.5 text-left font-semibold">Squad · PIC</th>
                               <th className="px-3 py-2.5 text-left font-semibold">Tier</th>
@@ -1577,8 +1577,8 @@ function QuarterlyContent() {
                                 <tr key={ci} className={cn("border-l-[3px]", rm.border, ci % 2 === 0 ? "bg-white" : "bg-slate-50/50")}>
                                   <td className="px-4 py-2.5 font-medium text-slate-700">
                                     {c.customer_name}
-                                    <span className={cn("ml-1.5 text-[11px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
-                                    {c.lifecycle_state === "new" && <span title="KH mới trong quý" className="ml-1 text-[11px] px-1 py-0.5 rounded font-bold bg-sky-100 text-sky-600">🆕 Mới</span>}
+                                    <span className={cn("ml-1.5 text-[12px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
+                                    {c.lifecycle_state === "new" && <span title="KH mới trong quý" className="ml-1 text-[12px] px-1 py-0.5 rounded font-bold bg-sky-100 text-sky-600">🆕 Mới</span>}
                                   </td>
                                   <td className="px-3 py-2.5 text-slate-500 text-[12px]">
                                     <span className="font-medium text-slate-700">{c.squad_name}</span>
@@ -1667,7 +1667,7 @@ function QuarterlyContent() {
                                 <div className="overflow-x-auto border-t border-slate-100 bg-slate-50/50">
                                   <table className="w-full text-[12px] border-collapse">
                                     <thead>
-                                      <tr className="bg-slate-100 text-slate-500 uppercase text-[11px] border-b-2 border-slate-200">
+                                      <tr className="bg-slate-100 text-slate-500 uppercase text-[12px] border-b-2 border-slate-200">
                                         <th className="px-4 py-2.5 text-left font-semibold">Khách hàng</th>
                                         <th className="px-3 py-2.5 text-left font-semibold">PIC · Tier</th>
                                         <th className="px-3 py-2.5 text-right font-semibold">Rev PR</th>
@@ -1698,8 +1698,8 @@ function QuarterlyContent() {
                                                   <span className="underline decoration-dotted decoration-slate-300 underline-offset-2">{c.customer_name}</span>
                                                 </button>
                                               ) : c.customer_name}
-                                              <span className={cn("ml-1.5 text-[11px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
-                                              {c.lifecycle_state === "new" && <span title="KH mới trong quý" className="ml-1 text-[11px] px-1 py-0.5 rounded font-bold bg-sky-100 text-sky-600">🆕 Mới</span>}
+                                              <span className={cn("ml-1.5 text-[12px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
+                                              {c.lifecycle_state === "new" && <span title="KH mới trong quý" className="ml-1 text-[12px] px-1 py-0.5 rounded font-bold bg-sky-100 text-sky-600">🆕 Mới</span>}
                                             </td>
                                             <td className="px-3 py-2.5 text-slate-500">
                                               {picInfo?.name ?? c.sales_pic}

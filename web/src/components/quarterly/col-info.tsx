@@ -26,7 +26,7 @@ export function ColInfo({ tip }: { tip: string }) {
         onMouseEnter={show}
         onMouseLeave={() => setOpen(false)}
         onClick={e => { e.stopPropagation(); if (!open) show(); else setOpen(false) }}
-        className="w-3 h-3 rounded-full bg-blue-400/25 text-[11px] font-black text-blue-200 hover:bg-blue-400/60 transition-colors inline-flex items-center justify-center leading-none select-none"
+        className="w-3 h-3 rounded-full bg-blue-400/25 text-[12px] font-black text-blue-200 hover:bg-blue-400/60 transition-colors inline-flex items-center justify-center leading-none select-none"
       >i</button>
       {open && typeof window !== "undefined" && createPortal(
         <div

@@ -45,7 +45,7 @@ const ALERT_CFG: Record<AlertLevel, { cls: string; label: string }> = {
 }
 function AlertBadge({ level }: { level: AlertLevel }) {
   const c = ALERT_CFG[level]
-  return <span className={cn("inline-flex text-[11px] font-black px-2 py-0.5 rounded-full whitespace-nowrap", c.cls)}>{c.label}</span>
+  return <span className={cn("inline-flex text-[12px] font-black px-2 py-0.5 rounded-full whitespace-nowrap", c.cls)}>{c.label}</span>
 }
 
 export function InventoryStockView() {
@@ -133,10 +133,10 @@ export function InventoryStockView() {
           Dữ liệu tồn kho thật (Sapo sync){data.asOfDate && <> · cập nhật {fmtDate(data.asOfDate)}</>}
         </p>
         <div className="flex items-center gap-3">
-          <button onClick={exportExcel} className="flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-800">
+          <button onClick={exportExcel} className="flex items-center gap-1 text-[12px] font-bold text-slate-500 hover:text-slate-800">
             <Download className="w-3 h-3" />Export Excel
           </button>
-          <button onClick={load} className="flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-800">
+          <button onClick={load} className="flex items-center gap-1 text-[12px] font-bold text-slate-500 hover:text-slate-800">
             <RefreshCw className="w-3 h-3" />Tải lại
           </button>
         </div>
@@ -148,7 +148,7 @@ export function InventoryStockView() {
 
       {data.trend.length > 1 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Tổng tồn kho theo ngày (mọi SKU × mọi kho)</p>
+          <p className="text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-2">Tổng tồn kho theo ngày (mọi SKU × mọi kho)</p>
           <div className="h-[140px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data.trend.map(t => ({ name: fmtDayLabel(t.date), qty: t.totalQty }))}>
@@ -198,7 +198,7 @@ export function InventoryStockView() {
       <div className="flex gap-2 flex-wrap">
         {(["critical", "warning", "normal", "safe"] as AlertLevel[]).map(lv => counts[lv] > 0 && (
           <button key={lv} onClick={() => setFilter(filter === lv ? null : lv)}
-            className={cn("text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all",
+            className={cn("text-[12px] font-bold px-3 py-1.5 rounded-lg border transition-all",
               filter === lv ? ALERT_CFG[lv].cls + " border-transparent" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50")}>
             {ALERT_CFG[lv].label} ({counts[lv]})
           </button>
@@ -211,7 +211,7 @@ export function InventoryStockView() {
             <thead className="bg-slate-50">
               <tr>
                 {["", "SKU", "Sản phẩm / Vendor", "Loại", "TT", "Tồn kho", "Tốc độ bán/ngày", "Bán tuần trước", "Ước tính hết hàng", "Hạn dùng gần nhất", "Cảnh báo"].map(h => (
-                  <th key={h} className="px-3 py-2.5 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-2.5 text-center text-[12px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -228,7 +228,7 @@ export function InventoryStockView() {
                       <td className="px-3 py-2.5 text-center font-mono font-bold text-slate-900 whitespace-nowrap">{s.sku}</td>
                       <td className="px-3 py-2.5 text-center text-slate-600 max-w-[220px] truncate">{s.productName || "—"} <span className="text-slate-400">· {s.vendor || "—"}</span></td>
                       <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                        {s.simType ? <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded", s.simType === "eSIM" ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600")}>{s.simType}</span> : "—"}
+                        {s.simType ? <span className={cn("text-[11.5px] font-bold px-1.5 py-0.5 rounded", s.simType === "eSIM" ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600")}>{s.simType}</span> : "—"}
                       </td>
                       <td className="px-3 py-2.5 text-center text-slate-500 font-bold whitespace-nowrap">{s.market ?? "—"}</td>
                       <td className="px-3 py-2.5 font-bold text-slate-900 text-center whitespace-nowrap">{n0(s.totalQty)}</td>
@@ -240,7 +240,7 @@ export function InventoryStockView() {
                       <td className="px-3 py-2.5 text-center whitespace-nowrap">
                         {s.nearestExpiry ? (
                           <span className={cn("font-bold", s.daysToExpiry != null && s.daysToExpiry < 14 ? "text-red-600" : s.daysToExpiry != null && s.daysToExpiry < 30 ? "text-amber-600" : "text-slate-500")}>
-                            {fmtDate(s.nearestExpiry)}{s.daysToExpiry != null && <span className="block text-[10px] font-normal">còn {n0(s.daysToExpiry)} ngày</span>}
+                            {fmtDate(s.nearestExpiry)}{s.daysToExpiry != null && <span className="block text-[11.5px] font-normal">còn {n0(s.daysToExpiry)} ngày</span>}
                           </span>
                         ) : <span className="text-slate-300">—</span>}
                       </td>
@@ -250,8 +250,8 @@ export function InventoryStockView() {
                       <tr>
                         <td colSpan={11} className="p-0">
                           <div className="bg-slate-50 border-t border-b border-slate-200 px-4 py-3">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Chi tiết theo kho / lô</p>
-                            <table className="text-[11px] border-collapse w-full max-w-2xl">
+                            <p className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider mb-2">Chi tiết theo kho / lô</p>
+                            <table className="text-[12px] border-collapse w-full max-w-2xl">
                               <thead>
                                 <tr className="text-slate-400">
                                   <th className="text-center font-bold uppercase px-2 py-1">Kho</th>
@@ -276,7 +276,7 @@ export function InventoryStockView() {
                                 )}
                               </tbody>
                             </table>
-                            <p className="text-[10px] text-slate-400 mt-2">Mã lô hiện chưa có dữ liệu (ETL Sapo chưa sync batch) — cột sẽ tự hiện khi có.</p>
+                            <p className="text-[11.5px] text-slate-400 mt-2">Mã lô hiện chưa có dữ liệu (ETL Sapo chưa sync batch) — cột sẽ tự hiện khi có.</p>
                           </div>
                         </td>
                       </tr>

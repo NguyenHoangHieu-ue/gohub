@@ -180,7 +180,7 @@ function MarketInner() {
   const tableColumns = (dim: Dimension, base: number) => [
     { key: "key", label: DIMENSION_LABEL[dim], sortValue: (r: GroupRow) => r.key, render: (r: GroupRow) => {
       const cls = cn("font-medium text-left", dim === "sku" && "font-mono text-xs")
-      if (dim === "sku") return <span className="text-left"><span className={cls}>{r.key}</span><span className="block text-[11px] text-slate-400">{skuDesc.get(r.key)}</span></span>
+      if (dim === "sku") return <span className="text-left"><span className={cls}>{r.key}</span><span className="block text-[12px] text-slate-400">{skuDesc.get(r.key)}</span></span>
       const go = dim === "country" ? () => selectMarket(r.key) : () => drillTo(r.key)
       return <button onClick={go} className={cn(cls, "hover:text-brand-700 hover:underline")}>{r.key}</button>
     } },
@@ -309,7 +309,7 @@ function MarketInner() {
             <React.Fragment key={i}>
               <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
               <button onClick={() => setPath(path.slice(0, i + 1))} className={cn(i === path.length - 1 ? "text-slate-900" : "text-slate-500 hover:text-brand-700")}>
-                <span className="text-[11px] text-slate-400 mr-1">{DIMENSION_LABEL[p.dim]}</span>{p.key}
+                <span className="text-[12px] text-slate-400 mr-1">{DIMENSION_LABEL[p.dim]}</span>{p.key}
               </button>
             </React.Fragment>
           ))}

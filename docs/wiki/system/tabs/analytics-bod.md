@@ -144,3 +144,7 @@ Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm 
 ## s236 (QA B-07): tải nguội không còn hết 25 giây
 
 Trang BOD bắn 5 request nặng cùng lúc lên pool gohub_dw 3 kết nối (giới hạn truy vấn 25s) → `bod-summary` có lúc 500 `Query read timeout`, giao diện hiện 0. Nay: (1) `bod-summary` và `bod-group-margin` dùng chung một lần quét 3 kỳ (`fetchBODGroupMarginTripleShared`, gộp lời gọi đang chạy + giữ 30s, kỳ tính bằng `bodTriplePeriods`); (2) số "tháng trước" dùng `bod-summary?lite=1` (1 kỳ, ~4s thay ~13s) và chỉ gọi SAU 5 request chính; (3) `fetchJson` của trang thử lại 1 lần sau 3s khi 5xx, vẫn lỗi thì hiện banner "Hiếu đang fix, vui lòng đợi". Đo: 5 request song song nocache, tải nguội 21s (trước >25s lỗi), lần hai 9s.
+
+## s238 — Đổi giao diện
+
+Chữ nhỏ nâng lên 11–12px; nhãn tiếng Anh đổi sang tiếng Việt (Tổng doanh thu, Tổng giá vốn, Số lượng bán, Dự kiến cuối tháng, Hiệu quả theo nhóm kênh, So kỳ trước/năm trước); "Gross Margin" → "GP", "Margin %" → "%GP", "CM1 %" → "%CM1". Tên cột/sheet trong file xuất Excel giữ nguyên. Số liệu và công thức không đổi. Các tab Dashboard, All-Time, Website, Staff, Customers, Vendors, Orders, Inventory… chỉ được nâng cỡ chữ + mở rộng khung (`max-w-[1480px]`).

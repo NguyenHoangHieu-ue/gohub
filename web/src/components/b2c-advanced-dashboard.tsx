@@ -877,7 +877,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                   {row.mom && tablePrevFull && (
                     <div className="mt-0.5 flex items-center justify-end gap-1">
                       <Delta v={pct(proj(row.get(current), current), row.get(tablePrevFull))} />
-                      <span className="text-[11px] text-slate-400 uppercase">MoM</span>
+                      <span className="text-[12px] text-slate-400 uppercase">MoM</span>
                     </div>
                   )}
                   {row.sub && <div className="text-[12px] font-medium text-slate-500 mt-0.5">{row.sub(current)}</div>}
@@ -1220,7 +1220,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 {prevFull && (
                   <div className="mt-0.5 flex items-center justify-end gap-1">
                     <Delta v={pct(row.get(current), row.get(prevFull))} />
-                    <span className="text-[11px] text-slate-400 uppercase">MoM</span>
+                    <span className="text-[12px] text-slate-400 uppercase">MoM</span>
                   </div>
                 )}
               </td>

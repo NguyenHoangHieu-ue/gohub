@@ -104,7 +104,7 @@ export function DataLineageMap() {
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[10px]">
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11.5px]">
         {GROUP_ORDER.map(g => {
           const c = TAB_COLORS[g]
           return (
@@ -281,7 +281,7 @@ function EmptyPanel() {
           Click bảng DB (bên phải) → xem ảnh hưởng đến các tab
         </p>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2 w-full text-[10px]">
+      <div className="mt-2 grid grid-cols-2 gap-2 w-full text-[11.5px]">
         <div className="bg-slate-50 rounded-lg p-2 text-left">
           <p className="font-bold text-slate-500 mb-1">{TABS.length} Analytics Tabs</p>
           {GROUP_ORDER.map(g => (
@@ -314,9 +314,9 @@ function TabDetail({ tab, conns, siblingTabIds }: { tab: TabNode; conns: Connect
       {/* Header */}
       <div className="px-4 py-3.5 border-b border-slate-100" style={{ borderLeftWidth: 3, borderLeftStyle: "solid", borderLeftColor: c.stroke }}>
         <p className="font-bold text-slate-800 text-sm">{tab.label}</p>
-        <p className="text-[11px] font-mono text-slate-400 mt-0.5">{tab.route}</p>
-        <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">{tab.description}</p>
-        <span className="mt-2 inline-block text-[9px] font-bold px-2 py-0.5 rounded-full"
+        <p className="text-[12px] font-mono text-slate-400 mt-0.5">{tab.route}</p>
+        <p className="text-[12px] text-slate-500 mt-1.5 leading-relaxed">{tab.description}</p>
+        <span className="mt-2 inline-block text-[11px] font-bold px-2 py-0.5 rounded-full"
           style={{ background: c.fill, color: c.text }}>
           {GROUP_LABELS[tab.group]}
         </span>
@@ -324,7 +324,7 @@ function TabDetail({ tab, conns, siblingTabIds }: { tab: TabNode; conns: Connect
 
       {/* Tables used */}
       <div className="px-4 py-3 space-y-2.5">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+        <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">
           Nguồn dữ liệu ({conns.length} bảng)
         </p>
         {conns.map(conn => {
@@ -334,14 +334,14 @@ function TabDetail({ tab, conns, siblingTabIds }: { tab: TabNode; conns: Connect
             <div key={conn.tableId} className="border border-slate-100 rounded-xl overflow-hidden">
               <div className="px-3 py-2 flex items-center gap-1.5" style={{ background: sc.fill }}>
                 <Database className="w-3 h-3 shrink-0" style={{ color: sc.stroke }} />
-                <span className="text-[10px] font-bold font-mono flex-1" style={{ color: sc.text }}>{tbl.label}</span>
-                <span className="text-[8px] font-bold px-1.5 py-0.5 rounded" style={{ background: sc.stroke + "22", color: sc.text }}>
+                <span className="text-[11.5px] font-bold font-mono flex-1" style={{ color: sc.text }}>{tbl.label}</span>
+                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ background: sc.stroke + "22", color: sc.text }}>
                   {sc.label}
                 </span>
               </div>
               <div className="px-3 py-2 space-y-2">
                 <div>
-                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-1">Fields dùng</p>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Fields dùng</p>
                   <div className="flex flex-wrap gap-1">
                     {conn.fields.map(f => (
                       <code key={f} className="text-[8.5px] px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded font-mono">{f}</code>
@@ -349,10 +349,10 @@ function TabDetail({ tab, conns, siblingTabIds }: { tab: TabNode; conns: Connect
                   </div>
                 </div>
                 <div>
-                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-1">Metrics ảnh hưởng</p>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Metrics ảnh hưởng</p>
                   <ul className="space-y-0.5">
                     {conn.metrics.map(m => (
-                      <li key={m} className="text-[10px] text-slate-600 flex items-start gap-1">
+                      <li key={m} className="text-[11.5px] text-slate-600 flex items-start gap-1">
                         <span className="text-amber-400 mt-0.5 shrink-0">•</span>{m}
                       </li>
                     ))}
@@ -367,7 +367,7 @@ function TabDetail({ tab, conns, siblingTabIds }: { tab: TabNode; conns: Connect
       {/* Sibling tabs */}
       {siblings.length > 0 && (
         <div className="px-4 py-3 border-t border-slate-100 space-y-1.5">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+          <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">
             Tab dùng chung bảng ({siblings.length}) — cùng thay đổi khi data thay đổi
           </p>
           {siblings.map(sib => {
@@ -378,8 +378,8 @@ function TabDetail({ tab, conns, siblingTabIds }: { tab: TabNode; conns: Connect
             return (
               <div key={sib.id} className="flex items-center gap-2 py-0.5">
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: sc.stroke }} />
-                <span className="text-[11px] text-slate-700 font-medium">{sib.label}</span>
-                <span className="text-[9px] text-slate-400 ml-auto">{shared} bảng chung</span>
+                <span className="text-[12px] text-slate-700 font-medium">{sib.label}</span>
+                <span className="text-[11px] text-slate-400 ml-auto">{shared} bảng chung</span>
               </div>
             )
           })}
@@ -400,23 +400,23 @@ function TableImpact({ table, conns }: { table: DbTable; conns: Connection[] }) 
           <Database className="w-4 h-4 mt-0.5 shrink-0" style={{ color: c.stroke }} />
           <div>
             <p className="font-bold text-slate-800 text-sm font-mono">{table.label}</p>
-            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{table.description}</p>
+            <p className="text-[12px] text-slate-500 mt-1 leading-relaxed">{table.description}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 mt-2">
-          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ background: c.fill, color: c.text }}>
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: c.fill, color: c.text }}>
             {c.label}
           </span>
-          <span className="text-[10px] text-slate-400">Cập nhật: {table.updateFreq}</span>
+          <span className="text-[11.5px] text-slate-400">Cập nhật: {table.updateFreq}</span>
         </div>
       </div>
 
       {/* Key fields */}
       <div className="px-4 py-3 border-b border-slate-100 space-y-1.5">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Các trường chính</p>
+        <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Các trường chính</p>
         {table.keyFields.map(f => (
           <div key={f.name} className="flex items-start gap-2">
-            <code className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded font-mono shrink-0">{f.name}</code>
+            <code className="text-[11px] px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded font-mono shrink-0">{f.name}</code>
             <span className="text-[8.5px] font-bold text-slate-300 mt-0.5 shrink-0">{f.type}</span>
             {f.note && <span className="text-[9.5px] text-slate-400 leading-snug">{f.note}</span>}
           </div>
@@ -425,10 +425,10 @@ function TableImpact({ table, conns }: { table: DbTable; conns: Connection[] }) 
 
       {/* Impact */}
       <div className="px-4 py-3 space-y-2.5">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+        <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">
           Ảnh hưởng đến ({conns.length} tab)
         </p>
-        <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 text-[10px] text-amber-700">
+        <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 text-[11.5px] text-amber-700">
           <Info className="w-3 h-3 mt-0.5 shrink-0" />
           Khi dữ liệu bảng này sai hoặc trễ, các metrics dưới đây sẽ bị ảnh hưởng
         </div>
@@ -438,14 +438,14 @@ function TableImpact({ table, conns }: { table: DbTable; conns: Connection[] }) 
           return (
             <div key={conn.tabId} className="border border-slate-100 rounded-xl overflow-hidden">
               <div className="px-3 py-2 flex items-center gap-2" style={{ background: tc.fill }}>
-                <span className="text-[11px] font-bold flex-1" style={{ color: tc.text }}>{tab.label}</span>
-                <span className="text-[9px] font-mono text-slate-400">{tab.route}</span>
+                <span className="text-[12px] font-bold flex-1" style={{ color: tc.text }}>{tab.label}</span>
+                <span className="text-[11px] font-mono text-slate-400">{tab.route}</span>
               </div>
               <div className="px-3 py-2">
-                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-1">Metrics bị ảnh hưởng</p>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Metrics bị ảnh hưởng</p>
                 <ul className="space-y-0.5">
                   {conn.metrics.map(m => (
-                    <li key={m} className="text-[10px] text-slate-600 flex items-start gap-1">
+                    <li key={m} className="text-[11.5px] text-slate-600 flex items-start gap-1">
                       <ArrowRight className="w-2.5 h-2.5 text-amber-400 mt-0.5 shrink-0" />{m}
                     </li>
                   ))}

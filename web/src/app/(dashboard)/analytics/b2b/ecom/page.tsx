@@ -223,10 +223,10 @@ export default function B2BEcomTimelinePage() {
           {empty ? "—" : fmtVal(v, meta.money, compact)}
         </span>
         {!empty && meta.pctLabel && (
-          <span className="text-[11px] text-slate-400 tabular-nums">{pctOf(v, m.revenue)}</span>
+          <span className="text-[12px] text-slate-400 tabular-nums">{pctOf(v, m.revenue)}</span>
         )}
         {!empty && p.projected && (
-          <span className="text-[11px] font-bold text-cyan-600 tabular-nums">Est. {fmtVal(getVal(m.est, metric), meta.money, compact)}</span>
+          <span className="text-[12px] font-bold text-cyan-600 tabular-nums">Est. {fmtVal(getVal(m.est, metric), meta.money, compact)}</span>
         )}
       </div>
     )
@@ -373,15 +373,15 @@ export default function B2BEcomTimelinePage() {
                           <div className="flex flex-col items-end gap-0.5">
                             <span className="flex items-center gap-1 text-[12px] text-slate-700">
                               {p.label}
-                              {p.projected && <span className="px-1 py-px rounded bg-cyan-600 text-white text-[11px] font-black tracking-wide">PR</span>}
-                              {p.isCurrent && !p.projected && <span className="px-1 py-px rounded bg-amber-500 text-white text-[11px] font-black tracking-wide">ĐANG CHẠY</span>}
+                              {p.projected && <span className="px-1 py-px rounded bg-cyan-600 text-white text-[12px] font-black tracking-wide">PR</span>}
+                              {p.isCurrent && !p.projected && <span className="px-1 py-px rounded bg-amber-500 text-white text-[12px] font-black tracking-wide">ĐANG CHẠY</span>}
                             </span>
-                            <span className="text-[11px] font-semibold text-slate-400 normal-case tracking-normal">{p.sub}</span>
+                            <span className="text-[12px] font-semibold text-slate-400 normal-case tracking-normal">{p.sub}</span>
                           </div>
                         </th>
                       ))}
                       <th className={cn(thBase, "bg-slate-100/80 text-slate-700")}>
-                        <div className="flex flex-col items-end gap-0.5"><span className="text-[12px]">Tổng</span><span className="text-[11px] font-semibold text-slate-400 normal-case tracking-normal">{periods.length} kỳ</span></div>
+                        <div className="flex flex-col items-end gap-0.5"><span className="text-[12px]">Tổng</span><span className="text-[12px] font-semibold text-slate-400 normal-case tracking-normal">{periods.length} kỳ</span></div>
                       </th>
                     </tr>
                   </thead>
@@ -411,8 +411,8 @@ export default function B2BEcomTimelinePage() {
                           <td className="px-3 py-2.5 text-right bg-slate-100/60">
                             <div className="flex flex-col items-end leading-tight">
                               <span className="text-xs font-black text-slate-900 tabular-nums">{fmtVal(getVal(r.total, metric), meta.money, compact)}</span>
-                              {meta.pctLabel && <span className="text-[11px] text-slate-400 tabular-nums">{pctOf(getVal(r.total, metric), r.total.revenue)}</span>}
-                              {hasEst && <span className="text-[11px] font-bold text-cyan-600 tabular-nums">Est. {fmtVal(getVal(r.total.est, metric), meta.money, compact)}</span>}
+                              {meta.pctLabel && <span className="text-[12px] text-slate-400 tabular-nums">{pctOf(getVal(r.total, metric), r.total.revenue)}</span>}
+                              {hasEst && <span className="text-[12px] font-bold text-cyan-600 tabular-nums">Est. {fmtVal(getVal(r.total.est, metric), meta.money, compact)}</span>}
                             </div>
                           </td>
                         </tr>
@@ -429,8 +429,8 @@ export default function B2BEcomTimelinePage() {
                             <td key={p.key} className="px-3 py-3 text-right">
                               <div className="flex flex-col items-end gap-0.5 leading-tight">
                                 <span className="text-xs font-black tabular-nums">{fmtVal(getVal(m, metric), meta.money, compact)}</span>
-                                {meta.pctLabel && <span className="text-[11px] text-slate-400 tabular-nums">{pctOf(getVal(m, metric), m.revenue)}</span>}
-                                {p.projected && <span className="text-[11px] font-bold text-cyan-300 tabular-nums">Est. {fmtVal(cur, meta.money, compact)}</span>}
+                                {meta.pctLabel && <span className="text-[12px] text-slate-400 tabular-nums">{pctOf(getVal(m, metric), m.revenue)}</span>}
+                                {p.projected && <span className="text-[12px] font-bold text-cyan-300 tabular-nums">Est. {fmtVal(cur, meta.money, compact)}</span>}
                                 {i > 0 && <DeltaChip cur={cur} prev={prev} />}
                               </div>
                             </td>
@@ -439,8 +439,8 @@ export default function B2BEcomTimelinePage() {
                         <td className="px-3 py-3 text-right bg-slate-800">
                           <div className="flex flex-col items-end leading-tight">
                             <span className="text-xs font-black tabular-nums">{fmtVal(getVal(totals.total, metric), meta.money, compact)}</span>
-                            {meta.pctLabel && <span className="text-[11px] text-slate-400 tabular-nums">{pctOf(getVal(totals.total, metric), totals.total.revenue)}</span>}
-                            {hasEst && <span className="text-[11px] font-bold text-cyan-300 tabular-nums">Est. {fmtVal(getVal(totals.total.est, metric), meta.money, compact)}</span>}
+                            {meta.pctLabel && <span className="text-[12px] text-slate-400 tabular-nums">{pctOf(getVal(totals.total, metric), totals.total.revenue)}</span>}
+                            {hasEst && <span className="text-[12px] font-bold text-cyan-300 tabular-nums">Est. {fmtVal(getVal(totals.total.est, metric), meta.money, compact)}</span>}
                           </div>
                         </td>
                       </tr>

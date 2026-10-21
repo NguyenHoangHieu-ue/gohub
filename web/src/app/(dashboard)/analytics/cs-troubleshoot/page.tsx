@@ -139,14 +139,14 @@ export default function CSTroubleshootReport() {
             </div>
             <div className="flex flex-wrap items-center gap-2 md:gap-3">
               <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200 flex-1 md:flex-none">
-                <input type="date" value={dateRange.start} onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="bg-transparent border-none text-[10px] md:text-xs font-bold text-slate-600 px-2 md:px-3 py-1 md:py-1.5 focus:ring-0 cursor-pointer w-full" />
+                <input type="date" value={dateRange.start} onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="bg-transparent border-none text-[11.5px] md:text-xs font-bold text-slate-600 px-2 md:px-3 py-1 md:py-1.5 focus:ring-0 cursor-pointer w-full" />
                 <span className="text-slate-300">→</span>
-                <input type="date" value={dateRange.end} onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="bg-transparent border-none text-[10px] md:text-xs font-bold text-slate-600 px-2 md:px-3 py-1 md:py-1.5 focus:ring-0 cursor-pointer w-full" />
+                <input type="date" value={dateRange.end} onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="bg-transparent border-none text-[11.5px] md:text-xs font-bold text-slate-600 px-2 md:px-3 py-1 md:py-1.5 focus:ring-0 cursor-pointer w-full" />
               </div>
               <DatePresets onSelect={(s, e) => setDateRange(prev => ({ ...prev, start: s, end: e }))} />
-              <button onClick={() => fetchData()} className="px-4 py-2 md:py-2.5 bg-brand-600 text-white rounded-xl text-[10px] md:text-xs font-bold hover:bg-brand-700 transition-all shadow-sm active:scale-95">Lọc</button>
+              <button onClick={() => fetchData()} className="px-4 py-2 md:py-2.5 bg-brand-600 text-white rounded-xl text-[11.5px] md:text-xs font-bold hover:bg-brand-700 transition-all shadow-sm active:scale-95">Lọc</button>
               <div className="flex items-center gap-2 w-full md:w-auto">
-                <select value={channelGroup} onChange={e => setChannelGroup(e.target.value)} className="bg-slate-50 border border-slate-200 text-[10px] md:text-xs font-bold text-slate-600 px-3 md:px-4 py-2 md:py-2.5 rounded-xl focus:ring-2 focus:ring-brand-500/20 flex-1 md:flex-none">
+                <select value={channelGroup} onChange={e => setChannelGroup(e.target.value)} className="bg-slate-50 border border-slate-200 text-[11.5px] md:text-xs font-bold text-slate-600 px-3 md:px-4 py-2 md:py-2.5 rounded-xl focus:ring-2 focus:ring-brand-500/20 flex-1 md:flex-none">
                   <option value="All">All Channels</option>
                   <option value="B2B">B2B Performance</option>
                   <option value="B2C">B2C Performance</option>
@@ -154,7 +154,7 @@ export default function CSTroubleshootReport() {
                 <button onClick={fetchData} className="p-2 md:p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
                   <RefreshCcw className={cn("w-4 h-4 text-slate-600", loading && "animate-spin")} />
                 </button>
-                <button onClick={syncLarkData} disabled={syncing} className={cn("flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-bold transition-all shadow-sm", syncing ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-brand-600 text-white hover:bg-brand-700 shadow-brand-200")}>
+                <button onClick={syncLarkData} disabled={syncing} className={cn("flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[11.5px] md:text-xs font-bold transition-all shadow-sm", syncing ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-brand-600 text-white hover:bg-brand-700 shadow-brand-200")}>
                   <Database className={cn("w-3 h-3 md:w-4 md:h-4", syncing && "animate-spin")} />
                   <span className="hidden sm:inline">{syncing ? "Syncing..." : "Sync Lark"}</span>
                   <span className="sm:hidden">{syncing ? "Syncing..." : "Sync"}</span>
@@ -170,7 +170,7 @@ export default function CSTroubleshootReport() {
               { id: "source", label: "CS_ Source Performance", icon: LayoutList },
               { id: "invalid", label: "CS_ Invalid", icon: AlertTriangle },
             ].map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={cn("flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 text-[11px] md:text-sm font-bold transition-all relative whitespace-nowrap", activeTab === tab.id ? "text-brand-600" : "text-slate-400 hover:text-slate-600")}>
+              <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={cn("flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 text-[12px] md:text-sm font-bold transition-all relative whitespace-nowrap", activeTab === tab.id ? "text-brand-600" : "text-slate-400 hover:text-slate-600")}>
                 <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "text-brand-600" : "text-slate-400")} />
                 {tab.label}
                 {activeTab === tab.id && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-600 rounded-t-full shadow-[0_-2px_8px_rgba(15,76,129,0.3)]" />}
@@ -197,7 +197,7 @@ export default function CSTroubleshootReport() {
               <div className="text-xs font-bold text-red-600 space-y-1">
                 <div>⚠ Lark Base chưa kết nối — kiểm tra Vercel env vars và redeploy nếu vừa set</div>
                 {syncStatus.envCheck && (
-                  <div className="font-mono font-normal text-[11px] text-red-500 space-y-0.5">
+                  <div className="font-mono font-normal text-[12px] text-red-500 space-y-0.5">
                     {Object.entries(syncStatus.envCheck).map(([k, v]) => (
                       <div key={k}>{k}: {v}</div>
                     ))}
@@ -209,7 +209,7 @@ export default function CSTroubleshootReport() {
               Object.values(syncStatus.envCheck).some(v => v.includes("❌")) && (
                 <div className="text-xs text-amber-700 space-y-0.5">
                   <div>⚠ Base/Table set nhưng thiếu bot credentials:</div>
-                  <div className="font-mono text-[11px] space-y-0.5">
+                  <div className="font-mono text-[12px] space-y-0.5">
                     {Object.entries(syncStatus.envCheck).filter(([,v]) => v.includes("❌")).map(([k, v]) => (
                       <div key={k}>{k}: {v}</div>
                     ))}
@@ -266,7 +266,7 @@ function TBSOverview({ data, loading }: { data: CSTroubleshootData | null; loadi
                 </div>
                 <div className="w-10 h-10 bg-brand-100 rounded-lg flex items-center justify-center"><RefreshCcw className="w-5 h-5 text-brand-600" /></div>
               </div>
-              <p className="text-[10px] text-slate-400 leading-relaxed font-medium">Counted from &quot;Product Action&quot; field (contains &apos;replace&apos;).</p>
+              <p className="text-[11.5px] text-slate-400 leading-relaxed font-medium">Counted from &quot;Product Action&quot; field (contains &apos;replace&apos;).</p>
             </div>
             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
               <div className="flex justify-between items-start mb-4">
@@ -311,7 +311,7 @@ function BreakdownDetail({ row, colSpan }: { row: any; colSpan: number }) {
                 <div key={i}>
                   <div className="flex justify-between items-center mb-1.5 px-1">
                     <span className="text-xs font-bold text-slate-700 truncate max-w-[200px]">{item.name}</span>
-                    <span className="text-[10px] font-black text-slate-400">{item.count} cases ({item.percentage.toFixed(1)}%)</span>
+                    <span className="text-[11.5px] font-black text-slate-400">{item.count} cases ({item.percentage.toFixed(1)}%)</span>
                   </div>
                   <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-rose-400 rounded-full" style={{ width: `${item.percentage}%` }} /></div>
                 </div>
@@ -326,7 +326,7 @@ function BreakdownDetail({ row, colSpan }: { row: any; colSpan: number }) {
                 <div key={i}>
                   <div className="flex justify-between items-center mb-1.5 px-1">
                     <span className="text-xs font-bold text-slate-700 truncate max-w-[200px]">{item.name}</span>
-                    <span className="text-[10px] font-black text-slate-400">{item.count} cases ({item.percentage.toFixed(1)}%)</span>
+                    <span className="text-[11.5px] font-black text-slate-400">{item.count} cases ({item.percentage.toFixed(1)}%)</span>
                   </div>
                   <div className="h-2 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-emerald-400 rounded-full" style={{ width: `${item.percentage}%` }} /></div>
                 </div>
@@ -386,11 +386,11 @@ function SKUPerformance({ data, loading }: { data: CSTroubleshootData | null; lo
           <thead>
             <tr className="bg-slate-50 border-b border-slate-100">
               {COLS.map(([key, label, center]) => (
-                <th key={key} className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors" onClick={() => handleSort(key)}>
+                <th key={key} className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors" onClick={() => handleSort(key)}>
                   <div className={cn("flex items-center", center && "justify-center")}>{label} <SortIcon active={sortConfig.key === key} direction={sortConfig.direction} /></div>
                 </th>
               ))}
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
+              <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -438,11 +438,11 @@ function VendorPerformance({ data, loading }: { data: CSTroubleshootData | null;
           <thead>
             <tr className="bg-slate-50 border-b border-slate-100">
               {COLS.map(([key, label, center]) => (
-                <th key={key} className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors" onClick={() => handleSort(key)}>
+                <th key={key} className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors" onClick={() => handleSort(key)}>
                   <div className={cn("flex items-center", center && "justify-center")}>{label} <SortIcon active={sortConfig.key === key} direction={sortConfig.direction} /></div>
                 </th>
               ))}
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Detail</th>
+              <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">Detail</th>
             </tr>
           </thead>
           <tbody>
@@ -490,13 +490,13 @@ function SourcePerformance({ data, loading }: { data: CSTroubleshootData | null;
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Group</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Units Sold</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">TBS Volume</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">TBS Rate (%)</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Refunds</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Rf Rate (%)</th>
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Detail</th>
+                <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest">Group</th>
+                <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-center">Units Sold</th>
+                <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-center">TBS Volume</th>
+                <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-center">TBS Rate (%)</th>
+                <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-center">Refunds</th>
+                <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-center">Rf Rate (%)</th>
+                <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">Detail</th>
               </tr>
             </thead>
             <tbody>
@@ -528,11 +528,11 @@ function SourcePerformance({ data, loading }: { data: CSTroubleshootData | null;
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 {COLS.map(([key, label], i) => (
-                  <th key={key} className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors" onClick={() => handleSort(key)}>
+                  <th key={key} className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors" onClick={() => handleSort(key)}>
                     <div className={cn("flex items-center", i > 0 && "justify-center")}>{label} <SortIcon active={sortConfig.key === key} direction={sortConfig.direction} /></div>
                   </th>
                 ))}
-                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Detail</th>
+                <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest text-right">Detail</th>
               </tr>
             </thead>
             <tbody>
@@ -570,9 +570,9 @@ function InvalidTickets({ data, loading }: { data: CSTroubleshootData | null; lo
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-100">
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Ticket ID</th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Order No</th>
-              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Issue/Reason</th>
+              <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest">Ticket ID</th>
+              <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest">Order No</th>
+              <th className="px-8 py-4 text-[11.5px] font-black text-slate-400 uppercase tracking-widest">Issue/Reason</th>
             </tr>
           </thead>
           <tbody>
@@ -580,7 +580,7 @@ function InvalidTickets({ data, loading }: { data: CSTroubleshootData | null; lo
               <tr key={idx} className="border-b border-slate-50 hover:bg-rose-50/20 transition-colors">
                 <td className="px-8 py-4 font-bold text-slate-900 text-sm">{row.id}</td>
                 <td className="px-8 py-4 text-slate-500 font-medium text-xs">{row.orderNo}</td>
-                <td className="px-8 py-4"><span className="text-[10px] font-bold text-rose-600 bg-rose-100 px-2 py-0.5 rounded-full uppercase">{row.reason}</span></td>
+                <td className="px-8 py-4"><span className="text-[11.5px] font-bold text-rose-600 bg-rose-100 px-2 py-0.5 rounded-full uppercase">{row.reason}</span></td>
               </tr>
             ))}
           </tbody>

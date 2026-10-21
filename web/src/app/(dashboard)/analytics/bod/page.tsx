@@ -304,11 +304,11 @@ export default function BODReport() {
     const isPositive = diff >= 0
     return (
       <div className="flex items-center gap-1.5">
-        <div className={cn("flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md", isPositive ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
+        <div className={cn("flex items-center gap-0.5 text-[11.5px] font-bold px-1.5 py-0.5 rounded-md", isPositive ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
           {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
           {Math.abs(diff).toFixed(1)}%
         </div>
-        <span className="text-[9px] text-slate-400 font-medium whitespace-nowrap">{label}</span>
+        <span className="text-[11px] text-slate-400 font-medium whitespace-nowrap">{label}</span>
       </div>
     )
   }
@@ -329,9 +329,9 @@ export default function BODReport() {
     const deltas: { label: string; value: React.ReactNode; kind: DeltaKind }[] = []
     if (target !== undefined && target > 0) deltas.push({ label: "Goal", value: formatCurrency(target), kind: "flat" })
     const pDiff = pctDiff(value, prevPeriod)
-    if (pDiff !== null) deltas.push({ label: "vs Prev Period", value: `${pDiff >= 0 ? "+" : ""}${pDiff.toFixed(1)}%`, kind: pDiff >= 0 ? "up" : "down" })
+    if (pDiff !== null) deltas.push({ label: "So kỳ trước", value: `${pDiff >= 0 ? "+" : ""}${pDiff.toFixed(1)}%`, kind: pDiff >= 0 ? "up" : "down" })
     const yDiff = pctDiff(value, prevYear)
-    if (yDiff !== null) deltas.push({ label: "vs Prev Year", value: `${yDiff >= 0 ? "+" : ""}${yDiff.toFixed(1)}%`, kind: yDiff >= 0 ? "up" : "down" })
+    if (yDiff !== null) deltas.push({ label: "So năm trước", value: `${yDiff >= 0 ? "+" : ""}${yDiff.toFixed(1)}%`, kind: yDiff >= 0 ? "up" : "down" })
     return (
       <StatTile
         icon={<Icon className="w-5 h-5" />}
@@ -379,15 +379,15 @@ export default function BODReport() {
           <DatePresets onSelect={(s, e) => setDateRange(prev => ({ ...prev, start: s, end: e }))} />
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
               <input type="date" value={dateRange.start} onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
               <input type="date" value={dateRange.end} onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Comparison</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Comparison</label>
               <select value={comparisonType} onChange={(e: any) => setComparisonType(e.target.value)} className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all">
                 <option value="none">No Comparison</option>
                 <option value="previous_period">Previous Period</option>
@@ -395,7 +395,7 @@ export default function BODReport() {
               </select>
             </div>
             <div className="space-y-1.5 relative">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Vendors</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Vendors</label>
               <div className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all" onClick={() => setShowVendorDropdown(!showVendorDropdown)}>
                 <span className="truncate max-w-[150px]">{selectedVendors.length === 0 ? "All Vendors" : selectedVendors.length === 1 ? selectedVendors[0] : `${selectedVendors.length} Vendors`}</span>
                 <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", showVendorDropdown && "rotate-180")} />
@@ -403,8 +403,8 @@ export default function BODReport() {
               {showVendorDropdown && (
                 <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl max-h-64 overflow-y-auto p-2">
                   <div className="flex items-center justify-between p-2 mb-2 border-b border-slate-100">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Select Vendors</span>
-                    <button onClick={() => setSelectedVendors([])} className="text-[10px] text-blue-600 font-bold">Clear</button>
+                    <span className="text-[11.5px] font-bold text-slate-400 uppercase">Select Vendors</span>
+                    <button onClick={() => setSelectedVendors([])} className="text-[11.5px] text-blue-600 font-bold">Clear</button>
                   </div>
                   {vendors.map(v => (
                     <div key={v} onClick={() => toggleItem(v, selectedVendors, setSelectedVendors)} className={cn("flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer", selectedVendors.includes(v) ? "bg-blue-50 text-blue-600" : "hover:bg-slate-50")}>
@@ -415,7 +415,7 @@ export default function BODReport() {
               )}
             </div>
             <div className="space-y-1.5 relative">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Channel Groups</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Channel Groups</label>
               <div className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all" onClick={() => setShowChannelGroupDropdown(!showChannelGroupDropdown)}>
                 <span className="truncate max-w-[150px]">{selectedChannelGroups.length === 0 ? "All Groups" : selectedChannelGroups.length === 1 ? selectedChannelGroups[0] : `${selectedChannelGroups.length} Groups`}</span>
                 <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", showChannelGroupDropdown && "rotate-180")} />
@@ -431,7 +431,7 @@ export default function BODReport() {
               )}
             </div>
             <div className="space-y-1.5 relative">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Sub Channels</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Sub Channels</label>
               <div className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all" onClick={() => setShowSubChannelDropdown(!showSubChannelDropdown)}>
                 <span className="truncate max-w-[150px]">{selectedSubChannels.length === 0 ? "All Sub Channels" : selectedSubChannels.length === 1 ? selectedSubChannels[0] : `${selectedSubChannels.length} Sub Channels`}</span>
                 <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", showSubChannelDropdown && "rotate-180")} />
@@ -447,7 +447,7 @@ export default function BODReport() {
               )}
             </div>
             <div className="space-y-1.5 relative">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Product Type</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Product Type</label>
               <div className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all" onClick={() => setShowProductTypeDropdown(!showProductTypeDropdown)}>
                 <span className="truncate max-w-[150px]">{selectedProductTypes.length === 0 ? "All Types" : selectedProductTypes.length === 1 ? selectedProductTypes[0] : `${selectedProductTypes.length} Types`}</span>
                 <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", showProductTypeDropdown && "rotate-180")} />
@@ -489,14 +489,14 @@ export default function BODReport() {
           ))
         ) : (
           <>
-            <SummaryCard title="Total Revenue" value={summary?.total_revenue || 0} icon={DollarSign} color="blue" target={summary?.total_target_revenue} prevPeriod={summary?.previous_period?.total_revenue} prevYear={summary?.previous_year?.total_revenue} />
-            <SummaryCard title="Units Sold" value={summary?.total_units || 0} icon={PieChart} color="slate" format="number" prevPeriod={summary?.previous_period?.total_units} prevYear={summary?.previous_year?.total_units} />
-            <SummaryCard title="Total COGS" value={summary?.total_cogs || 0} icon={TrendingDown} color="orange" prevPeriod={summary?.previous_period?.total_cogs} prevYear={summary?.previous_year?.total_cogs} />
-            <SummaryCard title="Gross Margin" value={summary?.total_margin || 0} icon={TrendingUp} color="emerald" prevPeriod={summary?.previous_period?.total_margin} prevYear={summary?.previous_year?.total_margin} />
-            <SummaryCard title="Margin %" value={summary?.avg_margin_percent || 0} icon={PieChart} color="purple" format="percent" prevPeriod={summary?.previous_period?.avg_margin_percent} prevYear={summary?.previous_year?.avg_margin_percent} />
+            <SummaryCard title="Tổng doanh thu" value={summary?.total_revenue || 0} icon={DollarSign} color="blue" target={summary?.total_target_revenue} prevPeriod={summary?.previous_period?.total_revenue} prevYear={summary?.previous_year?.total_revenue} />
+            <SummaryCard title="Số lượng bán" value={summary?.total_units || 0} icon={PieChart} color="slate" format="number" prevPeriod={summary?.previous_period?.total_units} prevYear={summary?.previous_year?.total_units} />
+            <SummaryCard title="Tổng giá vốn" value={summary?.total_cogs || 0} icon={TrendingDown} color="orange" prevPeriod={summary?.previous_period?.total_cogs} prevYear={summary?.previous_year?.total_cogs} />
+            <SummaryCard title="GP" value={summary?.total_margin || 0} icon={TrendingUp} color="emerald" prevPeriod={summary?.previous_period?.total_margin} prevYear={summary?.previous_year?.total_margin} />
+            <SummaryCard title="%GP" value={summary?.avg_margin_percent || 0} icon={PieChart} color="purple" format="percent" prevPeriod={summary?.previous_period?.avg_margin_percent} prevYear={summary?.previous_year?.avg_margin_percent} />
             <SummaryCard title="Total CM1" value={summary?.total_gpm2 || 0} icon={TrendingUp} color="indigo" prevPeriod={summary?.previous_period?.total_gpm2} prevYear={summary?.previous_year?.total_gpm2} />
-            <SummaryCard title="CM1 %" value={summary?.avg_gpm2_percent || 0} icon={PieChart} color="pink" format="percent" prevPeriod={summary?.previous_period?.avg_gpm2_percent} prevYear={summary?.previous_year?.avg_gpm2_percent} />
-            <SummaryCard title="3HK Contribution %" value={summary?.total_3hk_contribution || 0} icon={PieChart} color="teal" format="percent" prevPeriod={summary?.previous_period?.total_3hk_contribution} prevYear={summary?.previous_year?.total_3hk_contribution} />
+            <SummaryCard title="%CM1" value={summary?.avg_gpm2_percent || 0} icon={PieChart} color="pink" format="percent" prevPeriod={summary?.previous_period?.avg_gpm2_percent} prevYear={summary?.previous_year?.avg_gpm2_percent} />
+            <SummaryCard title="Đóng góp 3HK (%)" value={summary?.total_3hk_contribution || 0} icon={PieChart} color="teal" format="percent" prevPeriod={summary?.previous_period?.total_3hk_contribution} prevYear={summary?.previous_year?.total_3hk_contribution} />
           </>
         )}
       </div>
@@ -506,7 +506,7 @@ export default function BODReport() {
         <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
-              <h3 className="text-lg font-bold text-indigo-900 flex items-center gap-2"><TrendingUp className="w-5 h-5" />Month-End Projection (Pro-rata)</h3>
+              <h3 className="text-lg font-bold text-indigo-900 flex items-center gap-2"><TrendingUp className="w-5 h-5" />Dự kiến cuối tháng (pro-rata)</h3>
               <p className="text-sm text-indigo-600">Based on <strong>{projection.daysElapsed} days</strong> of performance, projected for <strong>{projection.totalDays} total days</strong>.</p>
             </div>
             <div className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-indigo-900/20">{((projection.factor - 1) * 100).toFixed(0)}% Growth Expected</div>
@@ -519,20 +519,20 @@ export default function BODReport() {
               { label: "Projected CM1", val: formatCompactNumber(projection.gpm2), chg: projection.gpm2Change },
             ]).map(c => (
               <div key={c.label} className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{c.label}</p>
+                <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">{c.label}</p>
                 <div className="flex items-baseline justify-between">
                   <p className="text-lg font-bold text-indigo-600">{c.val}</p>
-                  <div className={cn("flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full", c.chg >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
+                  <div className={cn("flex items-center gap-0.5 text-[11.5px] font-bold px-1.5 py-0.5 rounded-full", c.chg >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600")}>
                     {c.chg >= 0 ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}{Math.abs(c.chg).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[9px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
             ))}
             <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected CM1 %</p>
+              <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected CM1 %</p>
               <p className="text-lg font-bold text-indigo-600">{projection.gpm2Percent.toFixed(2)}%</p>
-              <p className="text-[9px] text-slate-400 mt-1">Full Month Estimate</p>
+              <p className="text-[11px] text-slate-400 mt-1">Full Month Estimate</p>
             </div>
           </div>
         </div>
@@ -542,7 +542,7 @@ export default function BODReport() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm lg:col-span-3">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-slate-800">Revenue vs COGS</h3>
+            <h3 className="font-bold text-slate-800">Doanh thu và giá vốn</h3>
             <button onClick={exportRevenueCogsCSV} className="text-slate-400 hover:text-slate-600"><Download className="w-4 h-4" /></button>
           </div>
           <div className="h-[300px]">
@@ -557,7 +557,7 @@ export default function BODReport() {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <div>
-            <h3 className="text-lg font-bold text-slate-800">Performance by Channel Group</h3>
+            <h3 className="text-lg font-bold text-slate-800">Hiệu quả theo nhóm kênh</h3>
             <p className="text-sm text-slate-500">Revenue, Orders, Units and Margin analysis by business unit</p>
           </div>
           <button onClick={exportChannelPerformanceCSV} className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
@@ -569,13 +569,13 @@ export default function BODReport() {
             <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
               <tr>
                 <th className="px-6 py-4 font-semibold">Channel Group</th>
-                <th className="px-6 py-4 text-right font-semibold">Orders</th>
-                <th className="px-6 py-4 text-right font-semibold">Units Sold</th>
-                <th className="px-6 py-4 text-right font-semibold">Revenue</th>
-                <th className="px-6 py-4 text-right font-semibold">Gross Margin</th>
-                <th className="px-6 py-4 text-right font-semibold">Margin %</th>
+                <th className="px-6 py-4 text-right font-semibold">Số đơn</th>
+                <th className="px-6 py-4 text-right font-semibold">Số lượng</th>
+                <th className="px-6 py-4 text-right font-semibold">Doanh thu</th>
+                <th className="px-6 py-4 text-right font-semibold">GP</th>
+                <th className="px-6 py-4 text-right font-semibold">%GP</th>
                 <th className="px-6 py-4 text-right font-semibold">CM1</th>
-                <th className="px-6 py-4 text-right font-semibold">CM1 %</th>
+                <th className="px-6 py-4 text-right font-semibold">%CM1</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -609,9 +609,9 @@ export default function BODReport() {
                           <td className="px-6 py-3 text-right text-slate-500 text-xs font-mono">{formatCompactNumber(sub.units)}</td>
                           <td className="px-6 py-3 text-right text-slate-500 text-xs font-semibold">{formatCurrency(sub.revenue)}</td>
                           <td className="px-6 py-3 text-right text-emerald-600/70 text-xs font-bold">{formatCurrency(sub.margin)}</td>
-                          <td className="px-6 py-3 text-right"><span className="text-[10px] font-bold text-slate-400">{(sub.margin_percent || 0).toFixed(1)}%</span></td>
+                          <td className="px-6 py-3 text-right"><span className="text-[11.5px] font-bold text-slate-400">{(sub.margin_percent || 0).toFixed(1)}%</span></td>
                           <td className="px-6 py-3 text-right text-indigo-600/70 text-xs font-bold">{formatCurrency(sub.gpm2)}</td>
-                          <td className="px-6 py-3 text-right"><span className="text-[10px] font-bold text-slate-400">{(sub.gpm2_percent || 0).toFixed(1)}%</span></td>
+                          <td className="px-6 py-3 text-right"><span className="text-[11.5px] font-bold text-slate-400">{(sub.gpm2_percent || 0).toFixed(1)}%</span></td>
                         </tr>
                       ))}
                     </React.Fragment>
@@ -658,12 +658,12 @@ export default function BODReport() {
             <thead className="bg-slate-50 text-slate-500 font-medium">
               <tr>
                 <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3 text-right">Revenue</th>
+                <th className="px-4 py-3 text-right">Doanh thu</th>
                 <th className="px-4 py-3 text-right">COGS</th>
-                <th className="px-4 py-3 text-right">Gross Margin</th>
-                <th className="px-4 py-3 text-right">Margin %</th>
+                <th className="px-4 py-3 text-right">GP</th>
+                <th className="px-4 py-3 text-right">%GP</th>
                 <th className="px-4 py-3 text-right">CM1</th>
-                <th className="px-4 py-3 text-right">CM1 %</th>
+                <th className="px-4 py-3 text-right">%CM1</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -711,17 +711,17 @@ export default function BODReport() {
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-100">
               <tr>
-                <th className="px-4 py-3 font-semibold">Channel</th>
+                <th className="px-4 py-3 font-semibold">Kênh</th>
                 <th className="px-4 py-3 text-right font-semibold">Units</th>
-                <th className="px-4 py-3 text-right font-semibold">Revenue</th>
+                <th className="px-4 py-3 text-right font-semibold">Doanh thu</th>
                 {projection && <th className="px-4 py-3 text-right font-semibold">Doanh thu dự phóng</th>}
                 <th className="px-4 py-3 text-right font-semibold">COGS</th>
-                <th className="px-4 py-3 text-right font-semibold">Gross Margin</th>
-                <th className="px-4 py-3 text-right font-semibold">Margin %</th>
+                <th className="px-4 py-3 text-right font-semibold">GP</th>
+                <th className="px-4 py-3 text-right font-semibold">%GP</th>
                 <th className="px-4 py-3 text-right font-semibold">CM1</th>
                 {projection && <th className="px-4 py-3 text-right font-semibold">CM1 dự phóng</th>}
-                <th className="px-4 py-3 text-right font-semibold">CM1 %</th>
-                {projection && <th className="px-4 py-3 text-right font-semibold">CM1 % dự phóng</th>}
+                <th className="px-4 py-3 text-right font-semibold">%CM1</th>
+                {projection && <th className="px-4 py-3 text-right font-semibold">%CM1 dự phóng</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -787,11 +787,11 @@ export default function BODReport() {
                           {projection && <td className="px-4 py-3 text-right text-indigo-600 font-bold">{formatCurrency(row.revenue * projection.factor)}</td>}
                           <td className="px-4 py-3 text-right text-slate-500">{formatCurrency(row.cogs)}</td>
                           <td className="px-4 py-3 text-right font-bold text-emerald-600">{formatCurrency(row.margin)}</td>
-                          <td className="px-4 py-3 text-right"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.margin_percent > 20 ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600"}`}>{(row.margin_percent || 0).toFixed(1)}%</span></td>
+                          <td className="px-4 py-3 text-right"><span className={`px-2 py-0.5 rounded-full text-[11.5px] font-bold ${row.margin_percent > 20 ? "bg-emerald-50 text-emerald-600" : "bg-orange-50 text-orange-600"}`}>{(row.margin_percent || 0).toFixed(1)}%</span></td>
                           <td className="px-4 py-3 text-right font-bold text-indigo-600">{formatCurrency(row.gpm2)}</td>
                           {projection && <td className="px-4 py-3 text-right font-bold text-blue-600 bg-blue-50/30">{formatCurrency(row.margin * projection.factor - (row.margin - row.gpm2))}</td>}
-                          <td className="px-4 py-3 text-right"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${row.gpm2_percent > 15 ? "bg-indigo-50 text-indigo-600" : "bg-pink-50 text-pink-600"}`}>{(row.gpm2_percent || 0).toFixed(1)}%</span></td>
-                          {projection && <td className="px-4 py-3 text-right"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600">{(row.revenue * projection.factor) > 0 ? ((row.margin * projection.factor - (row.margin - row.gpm2)) / (row.revenue * projection.factor) * 100).toFixed(1) : (row.gpm2_percent || 0).toFixed(1)}%</span></td>}
+                          <td className="px-4 py-3 text-right"><span className={`px-2 py-0.5 rounded-full text-[11.5px] font-bold ${row.gpm2_percent > 15 ? "bg-indigo-50 text-indigo-600" : "bg-pink-50 text-pink-600"}`}>{(row.gpm2_percent || 0).toFixed(1)}%</span></td>
+                          {projection && <td className="px-4 py-3 text-right"><span className="px-2 py-0.5 rounded-full text-[11.5px] font-bold bg-blue-50 text-blue-600">{(row.revenue * projection.factor) > 0 ? ((row.margin * projection.factor - (row.margin - row.gpm2)) / (row.revenue * projection.factor) * 100).toFixed(1) : (row.gpm2_percent || 0).toFixed(1)}%</span></td>}
                         </tr>
                       ))}
                     </React.Fragment>

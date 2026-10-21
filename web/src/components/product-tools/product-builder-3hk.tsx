@@ -22,8 +22,8 @@ const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 20, 25, 30]
 const COMMON_DAYS = [1, 2, 3, 5, 7, 10, 15, 20, 30]
 const POLICIES: Policy[] = ["F", "P", "T", "X"]
 const input = "w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900"
-const label = "block text-[11px] text-gray-500 mb-0.5"
-const btn = "px-2 py-0.5 text-[11px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800"
+const label = "block text-[12px] text-gray-500 mb-0.5"
+const btn = "px-2 py-0.5 text-[12px] border border-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800"
 
 const newPlan = (policy: Policy = "F"): PlanForm => ({ policy, speed: 10, amount: policy === "X" ? "3" : policy === "F" ? "5" : "1", unit: "GB", days: policy === "X" ? [3, 5, 7, 10] : [3, 5, 7, 10, 15, 30] })
 const newProduct = (): ProductForm => ({ simType: "eSIM", countries: [], codeOverride: "", usSimFull: false, vnEsimData: false, plans: [newPlan()] })
@@ -188,7 +188,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
                 : <label className="flex items-center gap-1.5"><input type="checkbox" checked={p.vnEsimData} onChange={e => patchProduct(i, { vnEsimData: e.target.checked })} /> Tạo thêm eSIM data đầu VN (trường hợp đặc biệt)</label>}
             </div>
             {top && <div className="text-xs text-gray-600 dark:text-slate-300">Giá áp dụng: <b>{top.price_per_gb_hkd} HKD/GB</b> ({top.country}{top.is_kyc ? " · có KYC" : ""}) · nhà mạng: {p.countries.length > 1 ? "các nước đã chọn" : top.network}</div>}
-            {!stale && sup?.hint && <div className="text-[11px] text-amber-700">{sup.hint}</div>}
+            {!stale && sup?.hint && <div className="text-[12px] text-amber-700">{sup.hint}</div>}
 
             <div className="space-y-2">
               {p.plans.map((pl, j) => (
@@ -216,7 +216,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
                     <button onClick={() => patchProduct(i, { plans: p.plans.filter((_, m) => m !== j) })} className="pb-2 text-gray-400 hover:text-red-600" title="Xoá dòng"><Trash2 size={14} /></button>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px] text-gray-500 mr-1">Số ngày:</span>
+                    <span className="text-[12px] text-gray-500 mr-1">Số ngày:</span>
                     {ALL_DAYS.map(d => {
                       const on = pl.days.includes(d)
                       return <button key={d} type="button" onClick={() => patchPlan(i, j, { days: on ? pl.days.filter(x => x !== d) : [...pl.days, d] })}
@@ -224,7 +224,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
                     })}
                     <button type="button" className={`ml-1 ${btn}`} onClick={() => patchPlan(i, j, { days: COMMON_DAYS })}>Bộ phổ biến</button>
                     <button type="button" className={btn} onClick={() => patchPlan(i, j, { days: [] })}>Bỏ hết</button>
-                    <span className="text-[11px] text-gray-400">đã chọn {pl.days.length}</span>
+                    <span className="text-[12px] text-gray-400">đã chọn {pl.days.length}</span>
                   </div>
                 </div>
               ))}
@@ -268,7 +268,7 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
               <button onClick={ed.clear} className="px-2 py-0.5 border border-amber-400 rounded-md hover:bg-amber-100">Bỏ hết chỉnh sửa</button>
             </div>
           )}
-          <div className="text-[11px] text-gray-500">Bấm đúp vào một ô của SKU/Product để sửa tay trước khi xuất (ô mã bị khoá).</div>
+          <div className="text-[12px] text-gray-500">Bấm đúp vào một ô của SKU/Product để sửa tay trước khi xuất (ô mã bị khoá).</div>
           <div className="flex flex-wrap gap-1 bg-gray-100 dark:bg-slate-800 p-1 rounded-xl w-fit">
             {([["cost", `Tính giá (${preview.costRows.length})`], ["skuUS", `SKU US (${preview.sheets.skuUS.length})`], ["skuVN", `SKU VN (${preview.sheets.skuVN.length})`], ["productUS", `Product US (${preview.sheets.productUS.length})`], ["productVN", `Product VN (${preview.sheets.productVN.length})`]] as const).map(([id, l]) => (
               <button key={id} onClick={() => setSheet(id)} className={`px-3 py-1.5 text-xs font-medium rounded-lg ${sheet === id ? "bg-white dark:bg-slate-700 text-brand-700 shadow-sm" : "text-gray-500"}`}>{l}</button>
@@ -305,8 +305,8 @@ export default function ProductBuilder3hk({ onNotify }: { onNotify: Notify }) {
               </table>
             )}
           </div>
-          {(preview.costRows.length > 1000 || Object.values(sheets).some(sh => sh.rows.length > 1000)) && <div className="text-[11px] text-amber-700">Bảng xem trước chỉ hiện 1.000 dòng đầu mỗi tab — file xuất vẫn đủ toàn bộ.</div>}
-          <div className="text-[11px] text-gray-400">Rê chuột vào giá (gạch chấm) để xem công thức đã thế số — mọi công thức dùng ROUNDUP. File xuất tính lại y hệt, ô giá là công thức trỏ sheet &quot;Tính giá&quot;.</div>
+          {(preview.costRows.length > 1000 || Object.values(sheets).some(sh => sh.rows.length > 1000)) && <div className="text-[12px] text-amber-700">Bảng xem trước chỉ hiện 1.000 dòng đầu mỗi tab — file xuất vẫn đủ toàn bộ.</div>}
+          <div className="text-[12px] text-gray-400">Rê chuột vào giá (gạch chấm) để xem công thức đã thế số — mọi công thức dùng ROUNDUP. File xuất tính lại y hệt, ô giá là công thức trỏ sheet &quot;Tính giá&quot;.</div>
         </div>
       )}
     </div>

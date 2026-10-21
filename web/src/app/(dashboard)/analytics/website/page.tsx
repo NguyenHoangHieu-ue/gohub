@@ -729,12 +729,12 @@ export default function WebsiteAnalyticsPage() {
                   <div className="w-8 h-8 bg-white border border-slate-100 rounded-lg flex items-center justify-center text-xs font-bold text-slate-400 shrink-0">{idx + 1}</div>
                   <div className="overflow-hidden">
                     <p className="text-sm font-bold text-slate-800 truncate">{product.name}</p>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">{product.quantity} units sold</p>
+                    <p className="text-[11.5px] text-slate-400 uppercase font-bold">{product.quantity} units sold</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-right">
                   {compareEnabled && product.change !== null && (
-                    <div className={cn("flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded",
+                    <div className={cn("flex items-center gap-1 text-[11.5px] font-bold px-1.5 py-0.5 rounded",
                       product.change > 0 ? "text-emerald-600 bg-emerald-50" : product.change < 0 ? "text-rose-600 bg-rose-50" : "text-slate-600 bg-slate-50"
                     )}>
                       {product.change > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : product.change < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
@@ -753,7 +753,7 @@ export default function WebsiteAnalyticsPage() {
             {productPerformance.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Tag className="w-8 h-8 opacity-20 mb-2" />
-                <p className="text-[10px]">No ecommerce data found for this period</p>
+                <p className="text-[11.5px]">No ecommerce data found for this period</p>
               </div>
             )}
           </div>
@@ -783,7 +783,7 @@ export default function WebsiteAnalyticsPage() {
                 </div>
                 <div className="flex items-center gap-4 text-right shrink-0 ml-4">
                   {compareEnabled && country.change !== null && (
-                    <div className={cn("flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded",
+                    <div className={cn("flex items-center gap-1 text-[11.5px] font-bold px-1.5 py-0.5 rounded",
                       country.change > 0 ? "text-emerald-600 bg-emerald-50" : country.change < 0 ? "text-rose-600 bg-rose-50" : "text-slate-600 bg-slate-50"
                     )}>
                       {country.change > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : country.change < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
@@ -792,7 +792,7 @@ export default function WebsiteAnalyticsPage() {
                   )}
                   <div>
                     <p className="text-sm font-bold text-slate-900">{formatNumber(country.users)}</p>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">Users</p>
+                    <p className="text-[11.5px] text-slate-400 uppercase font-bold">Users</p>
                   </div>
                 </div>
               </div>
@@ -800,7 +800,7 @@ export default function WebsiteAnalyticsPage() {
             {countriesPerformace.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Globe className="w-8 h-8 opacity-20 mb-2" />
-                <p className="text-[10px]">No geographic data found</p>
+                <p className="text-[11.5px]">No geographic data found</p>
               </div>
             )}
           </div>
@@ -822,12 +822,12 @@ export default function WebsiteAnalyticsPage() {
                   <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center text-xs font-bold text-emerald-600 shrink-0">{idx + 1}</div>
                   <div className="overflow-hidden">
                     <p className="text-sm font-bold text-slate-800 truncate">{source.name}</p>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">{formatNumber(source.sessions)} sessions</p>
+                    <p className="text-[11.5px] text-slate-400 uppercase font-bold">{formatNumber(source.sessions)} sessions</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-right shrink-0 ml-4">
                   {compareEnabled && source.change !== null && (
-                    <div className={cn("flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded",
+                    <div className={cn("flex items-center gap-1 text-[11.5px] font-bold px-1.5 py-0.5 rounded",
                       source.change > 0 ? "text-emerald-600 bg-emerald-50" : source.change < 0 ? "text-rose-600 bg-rose-50" : "text-slate-600 bg-slate-50"
                     )}>
                       {source.change > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : source.change < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
@@ -836,7 +836,7 @@ export default function WebsiteAnalyticsPage() {
                   )}
                   <div>
                     <p className="text-sm font-bold text-slate-900">{formatNumber(source.users)}</p>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">Users</p>
+                    <p className="text-[11.5px] text-slate-400 uppercase font-bold">Users</p>
                   </div>
                 </div>
               </div>
@@ -844,7 +844,7 @@ export default function WebsiteAnalyticsPage() {
             {sourcesPerformance.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Activity className="w-8 h-8 opacity-20 mb-2" />
-                <p className="text-[10px]">No traffic data found</p>
+                <p className="text-[11.5px]">No traffic data found</p>
               </div>
             )}
           </div>
@@ -879,7 +879,7 @@ export default function WebsiteAnalyticsPage() {
                     <td className="p-3 text-sm font-bold text-brand-600 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {compareEnabled && q.change !== null && (
-                          <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-bold",
+                          <span className={cn("text-[11.5px] px-1.5 py-0.5 rounded font-bold",
                             q.change > 0 ? "text-emerald-600 bg-emerald-50" : q.change < 0 ? "text-rose-600 bg-rose-50" : "text-slate-600 bg-slate-50"
                           )}>
                             {q.change > 0 ? "+" : ""}{q.change.toFixed(1)}%
@@ -943,7 +943,7 @@ export default function WebsiteAnalyticsPage() {
                       <td className="p-3 text-sm text-slate-600 text-right">
                         <div className="flex items-center justify-end gap-2">
                           {compareEnabled && p.change !== null && (
-                            <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-bold",
+                            <span className={cn("text-[11.5px] px-1.5 py-0.5 rounded font-bold",
                               p.change > 0 ? "text-emerald-600 bg-emerald-50" : p.change < 0 ? "text-rose-600 bg-rose-50" : "text-slate-600 bg-slate-50"
                             )}>
                               {p.change > 0 ? "+" : ""}{p.change.toFixed(1)}%
@@ -960,7 +960,7 @@ export default function WebsiteAnalyticsPage() {
                         <td colSpan={4} className="p-0">
                           <div className="pl-12 pr-4 py-3 border-b border-slate-100 overflow-x-auto">
                             <table className="w-full text-left">
-                              <thead className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                              <thead className="text-[11.5px] text-slate-400 uppercase font-bold tracking-wider">
                                 <tr>
                                   <th className="py-2">Product Purchased</th>
                                   <th className="py-2 text-right">Views</th>
@@ -1021,7 +1021,7 @@ export default function WebsiteAnalyticsPage() {
                       <td className="p-3 text-sm text-slate-600 text-right">
                         <div className="flex items-center justify-end gap-2">
                           {compareEnabled && p.change !== null && (
-                            <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-bold",
+                            <span className={cn("text-[11.5px] px-1.5 py-0.5 rounded font-bold",
                               p.change > 0 ? "text-emerald-600 bg-emerald-50" : p.change < 0 ? "text-rose-600 bg-rose-50" : "text-slate-600 bg-slate-50"
                             )}>
                               {p.change > 0 ? "+" : ""}{p.change.toFixed(1)}%

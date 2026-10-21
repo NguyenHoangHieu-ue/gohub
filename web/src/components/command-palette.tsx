@@ -168,7 +168,7 @@ export function CommandPalette() {
             placeholder="Tìm trang, hành động, SKU, nước…"
             className="flex-1 py-3.5 text-sm bg-transparent outline-none text-gray-800 dark:text-slate-100 placeholder:text-gray-400"
           />
-          <kbd className="text-[10px] font-semibold text-gray-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">ESC</kbd>
+          <kbd className="text-[11.5px] font-semibold text-gray-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">ESC</kbd>
         </div>
 
         {/* Kết quả */}
@@ -177,7 +177,7 @@ export function CommandPalette() {
             <p className="px-4 py-8 text-center text-sm text-gray-400">Không có kết quả cho "{query}"</p>
           ) : groupsOrder.map(gr => (
             <div key={gr}>
-              <p className="px-4 pt-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{gr}</p>
+              <p className="px-4 pt-2 pb-1 text-[11.5px] font-semibold text-gray-400 uppercase tracking-wider">{gr}</p>
               {commands.map((c, i) => c.group === gr && (
                 <button
                   key={c.id} data-idx={i}
@@ -187,7 +187,7 @@ export function CommandPalette() {
                   <c.icon size={15} className={i === sel ? "text-brand-600 dark:text-brand-300" : "text-gray-400"} />
                   <span className="flex-1 min-w-0">
                     <span className={`block text-sm truncate ${i === sel ? "text-brand-800 dark:text-brand-200 font-medium" : "text-gray-700 dark:text-slate-200"}`}>{c.label}</span>
-                    {c.sub && <span className="block text-[11px] text-gray-400 truncate">{c.sub}</span>}
+                    {c.sub && <span className="block text-[12px] text-gray-400 truncate">{c.sub}</span>}
                   </span>
                   {i === sel && <CornerDownLeft size={13} className="text-brand-400 flex-shrink-0" />}
                 </button>
@@ -197,7 +197,7 @@ export function CommandPalette() {
         </div>
 
         {/* Footer gợi ý phím */}
-        <div className="flex items-center gap-3 px-4 py-2 border-t border-gray-100 dark:border-slate-800 text-[11px] text-gray-400">
+        <div className="flex items-center gap-3 px-4 py-2 border-t border-gray-100 dark:border-slate-800 text-[12px] text-gray-400">
           <span className="flex items-center gap-1"><ArrowUp size={11} /><ArrowDown size={11} /> di chuyển</span>
           <span className="flex items-center gap-1"><CornerDownLeft size={11} /> chọn</span>
           <span className="flex items-center gap-1 ml-auto"><CommandIcon size={11} /> K để mở</span>

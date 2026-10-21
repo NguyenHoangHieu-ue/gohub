@@ -623,7 +623,7 @@ export default function B2BPerformance() {
                                               <Check className="w-3 h-3 text-indigo-500" />
                                               <div className="flex flex-col">
                                                 <span className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{row.name}</span>
-                                                <span className="text-[11px] text-indigo-500 font-bold flex items-center gap-0.5">{isExpanded ? "Hide details" : "View details"}<ChevronDown className={cn("w-2.5 h-2.5 transition-transform", isExpanded && "rotate-180")} /></span>
+                                                <span className="text-[12px] text-indigo-500 font-bold flex items-center gap-0.5">{isExpanded ? "Hide details" : "View details"}<ChevronDown className={cn("w-2.5 h-2.5 transition-transform", isExpanded && "rotate-180")} /></span>
                                               </div>
                                             </div>
                                           </td>
@@ -661,7 +661,7 @@ export default function B2BPerformance() {
                                                     const amount = row.cost_breakdown?.[category] || 0
                                                     return (
                                                       <div key={category} className="bg-white/60 p-2.5 rounded-xl border border-indigo-100 shadow-sm backdrop-blur-sm">
-                                                        <p className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider mb-0.5">{category.replace(/([A-Z])/g, " $1")}</p>
+                                                        <p className="text-[12px] font-bold text-indigo-400 uppercase tracking-wider mb-0.5">{category.replace(/([A-Z])/g, " $1")}</p>
                                                         <div className="flex items-baseline justify-between"><p className="text-xs font-bold text-slate-700">{formatNumber(Math.round(amount))}</p></div>
                                                       </div>
                                                     )
@@ -897,7 +897,7 @@ export default function B2BPerformance() {
                                     <td className="px-8 py-4">
                                       <div className="flex flex-col">
                                         <span className="text-sm font-bold text-slate-900 group-hover:text-brand-600 transition-colors">{row.name}</span>
-                                        <span className="text-[11px] text-brand-500 font-bold flex items-center gap-0.5">{isExpanded ? "Hide details" : "View details"}<ChevronDown className={cn("w-2.5 h-2.5 transition-transform", isExpanded && "rotate-180")} /></span>
+                                        <span className="text-[12px] text-brand-500 font-bold flex items-center gap-0.5">{isExpanded ? "Hide details" : "View details"}<ChevronDown className={cn("w-2.5 h-2.5 transition-transform", isExpanded && "rotate-180")} /></span>
                                       </div>
                                     </td>
                                     <td className="px-8 py-4 text-right">
@@ -935,7 +935,7 @@ export default function B2BPerformance() {
                                             <div className={`grid grid-cols-${Math.min(costLines.length, 4)} gap-4`}>
                                               {costLines.map((line, li) => (
                                                 <div key={li} className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
-                                                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{line.label || "Chi phí"}</p>
+                                                  <p className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{line.label || "Chi phí"}</p>
                                                   <p className="text-xs font-bold text-slate-700">
                                                     {line.type === "percent"
                                                       ? `${line.value}%`
@@ -1077,7 +1077,7 @@ export default function B2BPerformance() {
                               <td className="px-8 py-3 text-sm font-black text-cyan-800">
                                 <div className="flex items-center gap-2">
                                   {c.name}
-                                  <button onClick={() => openEcomCostModal(c.name, "", "", c.name)} className="text-[11px] font-bold text-[#0f4c81] normal-case tracking-normal border border-[#0f4c81]/30 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100" title="Nhập chi phí">Cost</button>
+                                  <button onClick={() => openEcomCostModal(c.name, "", "", c.name)} className="text-[12px] font-bold text-[#0f4c81] normal-case tracking-normal border border-[#0f4c81]/30 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100" title="Nhập chi phí">Cost</button>
                                 </div>
                               </td>
                               <td className="px-8 py-3 text-right">
@@ -1110,13 +1110,13 @@ export default function B2BPerformance() {
                                   <td className="px-8 py-2.5 pl-14 text-xs font-bold text-slate-700">
                                     <div className="flex items-center gap-2">
                                       {s.name}
-                                      <button onClick={() => openEcomCostModal(c.name, s.name, "", `${c.name} · ${s.name}`)} className="text-[11px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100" title="Nhập chi phí">Cost</button>
+                                      <button onClick={() => openEcomCostModal(c.name, s.name, "", `${c.name} · ${s.name}`)} className="text-[12px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100" title="Nhập chi phí">Cost</button>
                                     </div>
                                   </td>
                                   <td className="px-8 py-2.5 text-right">
                                     <div className="flex flex-col items-end">
                                       <span className="text-xs font-bold text-slate-800">{formatCurrency(s.revenue).replace("₫", "VND")}</span>
-                                      {isProjectable && <span className="text-[11px] font-bold text-brand-500 mt-0.5">Est. {formatCurrency(s.revenue * projectionFactor).replace("₫", "")}</span>}
+                                      {isProjectable && <span className="text-[12px] font-bold text-brand-500 mt-0.5">Est. {formatCurrency(s.revenue * projectionFactor).replace("₫", "")}</span>}
                                     </div>
                                   </td>
                                   <td className="px-8 py-2.5 text-right text-xs text-slate-500">{formatNumber(s.orders)}</td>
@@ -1124,7 +1124,7 @@ export default function B2BPerformance() {
                                   <td className="px-8 py-2.5 text-right">
                                     <div className="flex flex-col items-end">
                                       <span className="text-xs font-bold text-emerald-600">{formatCurrency(s.margin).replace("₫", "VND")}</span>
-                                      {isProjectable && <span className="text-[11px] font-bold text-emerald-600/70 mt-0.5">Est. {formatCurrency(s.margin * projectionFactor).replace("₫", "")}</span>}
+                                      {isProjectable && <span className="text-[12px] font-bold text-emerald-600/70 mt-0.5">Est. {formatCurrency(s.margin * projectionFactor).replace("₫", "")}</span>}
                                     </div>
                                   </td>
                                   <td className="px-8 py-2.5 text-right text-xs text-slate-500">{(s.revenue > 0 ? (s.margin / s.revenue) * 100 : 0).toFixed(1)}%</td>
@@ -1132,7 +1132,7 @@ export default function B2BPerformance() {
                                   <td className="px-8 py-2.5 text-right">
                                     <div className="flex flex-col items-end">
                                       <span className="text-xs font-bold text-indigo-600">{formatCurrency(s.cm1).replace("₫", "VND")}</span>
-                                      {isProjectable && <span className="text-[11px] font-bold text-indigo-600/70 mt-0.5">Est. {formatCurrency(s.cm1 * projectionFactor).replace("₫", "")}</span>}
+                                      {isProjectable && <span className="text-[12px] font-bold text-indigo-600/70 mt-0.5">Est. {formatCurrency(s.cm1 * projectionFactor).replace("₫", "")}</span>}
                                     </div>
                                   </td>
                                   <td className="px-8 py-2.5 text-right text-xs text-slate-500">{s.cm1_percent.toFixed(1)}%</td>
@@ -1142,13 +1142,13 @@ export default function B2BPerformance() {
                                     <td className="px-8 py-2 pl-20 text-[12px] font-semibold text-slate-500">
                                       <div className="flex items-center gap-2">
                                         ↳ {sub.name}
-                                        <button onClick={() => openEcomCostModal(c.name, s.name, sub.name, `${c.name} · ${s.name} · ${sub.name}`)} className="text-[11px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100" title="Nhập chi phí">Cost</button>
+                                        <button onClick={() => openEcomCostModal(c.name, s.name, sub.name, `${c.name} · ${s.name} · ${sub.name}`)} className="text-[12px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-blue-50 rounded px-1.5 py-0.5 hover:bg-blue-100" title="Nhập chi phí">Cost</button>
                                       </div>
                                     </td>
                                     <td className="px-8 py-2 text-right">
                                       <div className="flex flex-col items-end">
                                         <span className="text-[12px] font-bold text-slate-600">{formatCurrency(sub.revenue).replace("₫", "VND")}</span>
-                                        {isProjectable && <span className="text-[11px] font-bold text-brand-500/80 mt-0.5">Est. {formatCurrency(sub.revenue * projectionFactor).replace("₫", "")}</span>}
+                                        {isProjectable && <span className="text-[12px] font-bold text-brand-500/80 mt-0.5">Est. {formatCurrency(sub.revenue * projectionFactor).replace("₫", "")}</span>}
                                       </div>
                                     </td>
                                     <td className="px-8 py-2 text-right text-[12px] text-slate-400">{formatNumber(sub.orders)}</td>
@@ -1156,7 +1156,7 @@ export default function B2BPerformance() {
                                     <td className="px-8 py-2 text-right">
                                       <div className="flex flex-col items-end">
                                         <span className="text-[12px] font-bold text-emerald-600/80">{formatCurrency(sub.margin).replace("₫", "VND")}</span>
-                                        {isProjectable && <span className="text-[11px] font-bold text-emerald-600/60 mt-0.5">Est. {formatCurrency(sub.margin * projectionFactor).replace("₫", "")}</span>}
+                                        {isProjectable && <span className="text-[12px] font-bold text-emerald-600/60 mt-0.5">Est. {formatCurrency(sub.margin * projectionFactor).replace("₫", "")}</span>}
                                       </div>
                                     </td>
                                     <td className="px-8 py-2 text-right text-[12px] text-slate-400">{(sub.revenue > 0 ? (sub.margin / sub.revenue) * 100 : 0).toFixed(1)}%</td>
@@ -1164,7 +1164,7 @@ export default function B2BPerformance() {
                                     <td className="px-8 py-2 text-right">
                                       <div className="flex flex-col items-end">
                                         <span className="text-[12px] font-bold text-indigo-600/80">{formatCurrency(sub.cm1).replace("₫", "VND")}</span>
-                                        {isProjectable && <span className="text-[11px] font-bold text-indigo-600/60 mt-0.5">Est. {formatCurrency(sub.cm1 * projectionFactor).replace("₫", "")}</span>}
+                                        {isProjectable && <span className="text-[12px] font-bold text-indigo-600/60 mt-0.5">Est. {formatCurrency(sub.cm1 * projectionFactor).replace("₫", "")}</span>}
                                       </div>
                                     </td>
                                     <td className="px-8 py-2 text-right text-[12px] text-slate-400">{sub.cm1_percent.toFixed(1)}%</td>

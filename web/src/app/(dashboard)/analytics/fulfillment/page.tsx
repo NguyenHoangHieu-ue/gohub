@@ -58,7 +58,7 @@ function AlertBadge({ level }: { level: AlertLevel }) {
   }
   const c = cfg[level]
   return (
-    <span className={cn("inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full whitespace-nowrap", c.cls)}>
+    <span className={cn("inline-flex items-center gap-1 text-[12px] font-black px-2 py-0.5 rounded-full whitespace-nowrap", c.cls)}>
       {c.icon}{c.label}
     </span>
   )
@@ -70,7 +70,7 @@ function StatusPill({ text }: { text: string }) {
     "Đã nhập kho": "bg-emerald-100 text-emerald-700", "Chờ nhận": "bg-brand-100 text-brand-700",
     "Chờ thanh toán": "bg-amber-100 text-amber-700",
   }
-  return <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap", cfg[text] ?? "bg-slate-100 text-slate-500")}>{text}</span>
+  return <span className={cn("text-[11.5px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap", cfg[text] ?? "bg-slate-100 text-slate-500")}>{text}</span>
 }
 
 // Component ở MODULE LEVEL (không định nghĩa trong .map()) — tránh remount/mất focus mỗi phím gõ
@@ -135,27 +135,27 @@ function SkuModal({ company, existing, onClose, onSaved }: {
         <div className="space-y-3">
           {!existing && (
             <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">SKU Code *</label>
+              <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">SKU Code *</label>
               <input value={form.sku_code} onChange={e => set("sku_code", e.target.value)} placeholder="vd. 1D0003DK00000"
                 className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
           )}
           <div>
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Vendor <span className="normal-case font-normal">(tự lookup nếu để trống)</span></label>
+            <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">Vendor <span className="normal-case font-normal">(tự lookup nếu để trống)</span></label>
             <input value={form.vendor} onChange={e => set("vendor", e.target.value)}
               className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[["Mục tiêu (tuần)", "target_weeks_coverage"], ["An toàn (tuần)", "safety_weeks"], ["Lead time (tuần)", "lead_time_weeks"]].map(([label, key]) => (
               <div key={key}>
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</label>
+                <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">{label}</label>
                 <input type="number" min={0} value={(form as any)[key]} onChange={e => set(key, Number(e.target.value))}
                   className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none" />
               </div>
             ))}
           </div>
           <div>
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ghi chú</label>
+            <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">Ghi chú</label>
             <textarea value={form.note} onChange={e => set("note", e.target.value)} rows={2}
               className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
@@ -197,14 +197,14 @@ function WeeklyGrid({ sku, onRefresh }: { sku: SkuRow; onRefresh: () => void }) 
   return (
     <div className="p-3 bg-slate-50 border-t border-slate-200">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+        <p className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">
           Lưới tuần · Vận tốc bán trung bình {n0(sku.velocity)}/tuần
         </p>
         {hasChanges && (
           <div className="flex gap-2">
-            <button onClick={() => setDrafts({})} className="text-[11px] font-bold text-slate-500 hover:text-slate-700 px-2 py-1">Hủy</button>
+            <button onClick={() => setDrafts({})} className="text-[12px] font-bold text-slate-500 hover:text-slate-700 px-2 py-1">Hủy</button>
             <button onClick={save} disabled={saving}
-              className="flex items-center gap-1 text-[11px] font-black bg-brand-600 text-white px-2.5 py-1 rounded hover:bg-brand-700 disabled:opacity-50">
+              className="flex items-center gap-1 text-[12px] font-black bg-brand-600 text-white px-2.5 py-1 rounded hover:bg-brand-700 disabled:opacity-50">
               <Save className="w-3 h-3" />{saving ? "Đang lưu…" : "Lưu"}
             </button>
           </div>
@@ -214,9 +214,9 @@ function WeeklyGrid({ sku, onRefresh }: { sku: SkuRow; onRefresh: () => void }) 
         <table className="text-xs border-collapse">
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 bg-slate-50 px-2 py-1 text-left text-[10px] font-bold text-slate-500 uppercase w-32">Tuần</th>
+              <th className="sticky left-0 z-10 bg-slate-50 px-2 py-1 text-left text-[11.5px] font-bold text-slate-500 uppercase w-32">Tuần</th>
               {sku.weeks.map(w => (
-                <th key={w.weekStart} className={cn("px-2 py-1 text-center text-[10px] font-bold whitespace-nowrap",
+                <th key={w.weekStart} className={cn("px-2 py-1 text-center text-[11.5px] font-bold whitespace-nowrap",
                   w.isActual ? "text-slate-400" : "text-brand-600")}>
                   {fmtWeek(w.weekStart)}<br /><span className="font-normal">{w.isActual ? "Actual" : "Forecast"}</span>
                 </th>
@@ -268,7 +268,7 @@ function WeeklyGrid({ sku, onRefresh }: { sku: SkuRow; onRefresh: () => void }) 
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-slate-400 mt-1.5">Ô nét đứt = số gợi ý tự động (chưa chỉnh tay). Gõ số để ghi đè — số đã ghi đè không bị gợi ý tính lại đè lên nữa.</p>
+      <p className="text-[11.5px] text-slate-400 mt-1.5">Ô nét đứt = số gợi ý tự động (chưa chỉnh tay). Gõ số để ghi đè — số đã ghi đè không bị gợi ý tính lại đè lên nữa.</p>
     </div>
   )
 }
@@ -337,17 +337,17 @@ function PoTracker({ company }: { company: Company }) {
         </div>
         {editMode ? (
           <div className="flex gap-2">
-            <button onClick={addRow} className="flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:text-brand-800 px-2 py-1">
+            <button onClick={addRow} className="flex items-center gap-1 text-[12px] font-bold text-brand-600 hover:text-brand-800 px-2 py-1">
               <Plus className="w-3 h-3" />Thêm PO
             </button>
-            <button onClick={() => setEditMode(false)} className="text-[11px] font-bold text-slate-500 px-2 py-1">Hủy</button>
+            <button onClick={() => setEditMode(false)} className="text-[12px] font-bold text-slate-500 px-2 py-1">Hủy</button>
             <button onClick={save} disabled={saving}
-              className="flex items-center gap-1 text-[11px] font-black bg-brand-600 text-white px-2.5 py-1 rounded hover:bg-brand-700 disabled:opacity-50">
+              className="flex items-center gap-1 text-[12px] font-black bg-brand-600 text-white px-2.5 py-1 rounded hover:bg-brand-700 disabled:opacity-50">
               <Save className="w-3 h-3" />{saving ? "Đang lưu…" : "Lưu"}
             </button>
           </div>
         ) : (
-          <button onClick={enterEdit} className="flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-slate-900 px-2 py-1">
+          <button onClick={enterEdit} className="flex items-center gap-1 text-[12px] font-bold text-slate-600 hover:text-slate-900 px-2 py-1">
             <Pencil className="w-3 h-3" />Sửa
           </button>
         )}
@@ -357,7 +357,7 @@ function PoTracker({ company }: { company: Company }) {
           <thead className="bg-slate-50">
             <tr>
               {["Vendor", "SKU", "SL", ...dateCols.map(c => c[0]), "TT Thanh toán", "TT Giao hàng", "Ghi chú", ""].map(h => (
-                <th key={h} className="px-2 py-2 text-left text-[10px] font-bold text-slate-500 uppercase whitespace-nowrap">{h}</th>
+                <th key={h} className="px-2 py-2 text-left text-[11.5px] font-bold text-slate-500 uppercase whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -374,20 +374,20 @@ function PoTracker({ company }: { company: Company }) {
                   {dateCols.map(([, key]) => (
                     <td key={key as string} className="px-2 py-1.5 whitespace-nowrap">
                       {editMode
-                        ? <input type="date" defaultValue={(r[key] as string) ?? ""} onChange={e => setDraft(r.id, key, e.target.value || null)} className="border rounded px-1 py-0.5 text-[11px]" />
+                        ? <input type="date" defaultValue={(r[key] as string) ?? ""} onChange={e => setDraft(r.id, key, e.target.value || null)} className="border rounded px-1 py-0.5 text-[12px]" />
                         : (r[key] ? String(r[key]) : "—")}
                     </td>
                   ))}
                   <td className="px-2 py-1.5">
                     {editMode
-                      ? <select defaultValue={r.payment_status} onChange={e => setDraft(r.id, "payment_status", e.target.value)} className="border rounded px-1 py-0.5 text-[11px]">
+                      ? <select defaultValue={r.payment_status} onChange={e => setDraft(r.id, "payment_status", e.target.value)} className="border rounded px-1 py-0.5 text-[12px]">
                           <option>Chưa thanh toán</option><option>Đã thanh toán</option>
                         </select>
                       : <StatusPill text={r.payment_status} />}
                   </td>
                   <td className="px-2 py-1.5">
                     {editMode
-                      ? <select defaultValue={r.delivery_status} onChange={e => setDraft(r.id, "delivery_status", e.target.value)} className="border rounded px-1 py-0.5 text-[11px]">
+                      ? <select defaultValue={r.delivery_status} onChange={e => setDraft(r.id, "delivery_status", e.target.value)} className="border rounded px-1 py-0.5 text-[12px]">
                           <option>Chờ thanh toán</option><option>Chờ nhận</option><option>Đã nhập kho</option>
                         </select>
                       : <StatusPill text={r.delivery_status} />}
@@ -403,15 +403,15 @@ function PoTracker({ company }: { company: Company }) {
                 <td className="px-2 py-1.5"><input value={nr.sku_code} onChange={e => setNewField(i, "sku_code", e.target.value)} placeholder="SKU" className="w-32 border rounded px-1 py-0.5" /></td>
                 <td className="px-2 py-1.5"><input type="number" value={nr.qty || ""} onChange={e => setNewField(i, "qty", e.target.value)} className="w-16 border rounded px-1 py-0.5 text-right" /></td>
                 {dateCols.map(([, key]) => (
-                  <td key={key as string} className="px-2 py-1.5"><input type="date" value={(nr as any)[key]} onChange={e => setNewField(i, key as string, e.target.value)} className="border rounded px-1 py-0.5 text-[11px]" /></td>
+                  <td key={key as string} className="px-2 py-1.5"><input type="date" value={(nr as any)[key]} onChange={e => setNewField(i, key as string, e.target.value)} className="border rounded px-1 py-0.5 text-[12px]" /></td>
                 ))}
                 <td className="px-2 py-1.5">
-                  <select value={nr.payment_status} onChange={e => setNewField(i, "payment_status", e.target.value)} className="border rounded px-1 py-0.5 text-[11px]">
+                  <select value={nr.payment_status} onChange={e => setNewField(i, "payment_status", e.target.value)} className="border rounded px-1 py-0.5 text-[12px]">
                     <option>Chưa thanh toán</option><option>Đã thanh toán</option>
                   </select>
                 </td>
                 <td className="px-2 py-1.5">
-                  <select value={nr.delivery_status} onChange={e => setNewField(i, "delivery_status", e.target.value)} className="border rounded px-1 py-0.5 text-[11px]">
+                  <select value={nr.delivery_status} onChange={e => setNewField(i, "delivery_status", e.target.value)} className="border rounded px-1 py-0.5 text-[12px]">
                     <option>Chờ thanh toán</option><option>Chờ nhận</option><option>Đã nhập kho</option>
                   </select>
                 </td>
@@ -526,7 +526,7 @@ function InventoryInner() {
           <thead className="bg-slate-50">
             <tr>
               {["", "SKU", "Vendor", "Tồn hiện tại", "Vận tốc bán/tuần", "Số nhập tuần này", "Cảnh báo", ""].map(h => (
-                <th key={h} className="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                <th key={h} className="px-3 py-2.5 text-left text-[12px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -546,7 +546,7 @@ function InventoryInner() {
                     <td className="px-3 py-2.5 text-slate-500">{n0(s.velocity)}</td>
                     <td className="px-3 py-2.5">
                       <span className="font-bold">{n0(thisWeek?.importQty ?? 0)}</span>
-                      {thisWeek?.importQtyAuto && thisWeek.importQty > 0 && <span className="ml-1 text-[10px] text-brand-500 font-bold">(gợi ý)</span>}
+                      {thisWeek?.importQtyAuto && thisWeek.importQty > 0 && <span className="ml-1 text-[11.5px] text-brand-500 font-bold">(gợi ý)</span>}
                     </td>
                     <td className="px-3 py-2.5"><AlertBadge level={s.alert} /></td>
                     <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>

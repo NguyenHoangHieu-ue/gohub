@@ -351,11 +351,11 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
               <div className="flex items-center gap-2 mt-1">
                 <button
                   onClick={() => toggleSubchannelMode(chanName, "total")}
-                  className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold transition-all", !isSubchannelMode ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-slate-300")}
+                  className={cn("text-[11.5px] px-2 py-0.5 rounded-full font-bold transition-all", !isSubchannelMode ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-slate-300")}
                 >Total Mode</button>
                 <button
                   onClick={() => toggleSubchannelMode(chanName, "subchannels")}
-                  className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold transition-all", isSubchannelMode ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-slate-300")}
+                  className={cn("text-[11.5px] px-2 py-0.5 rounded-full font-bold transition-all", isSubchannelMode ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-500 hover:bg-slate-300")}
                 >Sub-channel Mode</button>
               </div>
             )}
@@ -378,7 +378,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {(["ads", "platformFee", "sponsorProducts", "media"] as const).map(cat => (
             <div key={cat} className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              <label className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">
                 {cat === "platformFee" ? "Platform Fee" : cat === "sponsorProducts" ? "Sponsor Prods" : cat.charAt(0).toUpperCase() + cat.slice(1)}
               </label>
               <div className="flex gap-1">
@@ -395,7 +395,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                 <select
                   value={costs[cat]?.type ?? "amount"}
                   onChange={e => updateCost(chanName, cat, "type", e.target.value)}
-                  className="px-1 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] focus:ring-2 focus:ring-brand-500 outline-none"
+                  className="px-1 py-1.5 bg-white border border-slate-200 rounded-lg text-[11.5px] focus:ring-2 focus:ring-brand-500 outline-none"
                 >
                   <option value="amount">VND</option>
                   <option value="percent">%</option>
@@ -491,7 +491,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Channel Group</label>
+                      <label className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Channel Group</label>
                       <select
                         value={newGroupCost.group_name}
                         onChange={e => setNewGroupCost(prev => ({ ...prev, group_name: e.target.value as "B2C" | "B2B" }))}
@@ -502,7 +502,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                       </select>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tên mục *</label>
+                      <label className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Tên mục *</label>
                       <input
                         type="text"
                         placeholder="VD: Marketing Campaign"
@@ -512,7 +512,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Số tiền (VND) *</label>
+                      <label className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Số tiền (VND) *</label>
                       <input
                         type="number"
                         value={newGroupCost.amount || ""}
@@ -521,7 +521,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ghi chú</label>
+                      <label className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">Ghi chú</label>
                       <input
                         type="text"
                         placeholder="Tuỳ chọn..."
@@ -557,7 +557,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                       {groupCosts.map(cost => (
                         <div key={cost.id} className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center justify-between hover:shadow-md transition-shadow">
                           <div className="flex items-center gap-4">
-                            <div className={cn("px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider",
+                            <div className={cn("px-3 py-1 rounded-lg text-[11.5px] font-bold uppercase tracking-wider",
                               cost.group_name === "B2C" ? "bg-purple-50 text-purple-600" : "bg-brand-50 text-brand-600"
                             )}>
                               {cost.group_name}
@@ -572,7 +572,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                               <p className="text-sm font-bold text-slate-900">
                                 {new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(cost.amount)}
                               </p>
-                              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Amount</p>
+                              <p className="text-[11.5px] text-slate-400 uppercase font-bold tracking-wider">Amount</p>
                             </div>
                             <div className="flex items-center gap-1">
                               <button
@@ -619,7 +619,7 @@ export const CostManagementModal: React.FC<CostManagementModalProps> = ({
                       <div className="bg-brand-50 rounded-2xl p-4 border border-brand-100 flex items-center justify-between">
                         <div>
                           <h3 className="font-bold text-brand-800">{channel} (Sub-channel Mode)</h3>
-                          <p className="text-[10px] text-brand-600">Nhập chi phí cho từng sub-channel bên dưới.</p>
+                          <p className="text-[11.5px] text-brand-600">Nhập chi phí cho từng sub-channel bên dưới.</p>
                         </div>
                         <button
                           onClick={() => toggleSubchannelMode(channel, "total")}

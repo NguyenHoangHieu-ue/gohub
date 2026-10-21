@@ -11,14 +11,13 @@ export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, p
   const cm1PrPct = cm1Target > 0 ? (prCm1 / cm1Target) * 100 : 0
   const revPrPct = target    > 0 ? (prRev / target)    * 100 : 0
 
-  const colorFor = (p: number) =>
-    p >= 100 ? "text-green-600" : (expectedPct > 0 ? p >= expectedPct : p >= 75) ? "text-brand-700" : "text-amber-600"
+  // Cùng ngưỡng với bảng Squad Progress: ≥100% xanh, ≥85% vàng, còn lại đỏ (so dự phóng cả quý với target).
+  const tone = (p: number) => p >= 100 ? "good" : p >= 85 ? "warn" : "bad"
+  const colorFor = (p: number) => ({ good: "text-emerald-600", warn: "text-amber-600", bad: "text-red-500" })[tone(p)]
 
   const badge = (p: number) => (
     <span className={cn("px-1 py-0.5 rounded text-[11.5px] font-bold tabular-nums whitespace-nowrap",
-      p >= 100 ? "bg-green-100 text-green-700"
-               : (expectedPct > 0 ? p >= expectedPct : p >= 75) ? "bg-brand-100 text-brand-700"
-               : "bg-amber-50 text-amber-600")}>
+      { good: "bg-emerald-100 text-emerald-700", warn: "bg-amber-100 text-amber-700", bad: "bg-red-100 text-red-600" }[tone(p)])}>
       {pct(p)}
     </span>
   )
@@ -43,7 +42,7 @@ export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, p
           </span>
           {cm1Target > 0 && (
             <span className={cn("inline-block mt-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold",
-              cm1PrPct >= 100 ? "bg-green-100 text-green-700" : cm1PrPct >= 85 ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700")}>
+              { good: "bg-emerald-100 text-emerald-700", warn: "bg-amber-100 text-amber-700", bad: "bg-red-100 text-red-600" }[tone(cm1PrPct)])}>
               {cm1PrPct >= 100 ? "Đạt" : cm1PrPct >= 85 ? "Gần đạt" : "Chậm tiến độ"}
             </span>
           )}
@@ -73,7 +72,7 @@ export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, p
         </div>
         {/* Revenue */}
         <div className="grid grid-cols-[36px_1fr_1fr_1fr_46px] gap-x-1.5 py-1 border-b border-slate-50 items-center">
-          <span className="font-bold text-slate-400 uppercase text-[11px]">Rev</span>
+          <span className="font-bold text-slate-400 uppercase text-[12px]">Rev</span>
           <span className="text-right text-slate-700 font-semibold tabular-nums">{fck(actual)}</span>
           <span className="text-right text-slate-600 tabular-nums">{fck(prRev)}</span>
           <span className="text-right text-slate-500 tabular-nums">{target > 0 ? fck(target) : "—"}</span>
@@ -81,7 +80,7 @@ export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, p
         </div>
         {/* CM1 */}
         <div className="grid grid-cols-[36px_1fr_1fr_1fr_46px] gap-x-1.5 py-1 border-b border-slate-50 items-center">
-          <span className="font-bold text-slate-400 uppercase text-[11px]">CM1</span>
+          <span className="font-bold text-slate-400 uppercase text-[12px]">CM1</span>
           <span className={cn("text-right font-semibold tabular-nums", cm1Color(cm1Actual))}>{fck(cm1Actual)}</span>
           <span className={cn("text-right tabular-nums", cm1Color(prCm1))}>{fck(prCm1)}</span>
           <span className="text-right text-slate-500 tabular-nums">{cm1Target > 0 ? fck(cm1Target) : "—"}</span>
@@ -89,7 +88,7 @@ export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, p
         </div>
         {/* 3HK% + 3HK Rev */}
         <div className="grid grid-cols-[36px_1fr_1fr_1fr_46px] gap-x-1.5 py-1 items-center">
-          <span className="font-bold text-slate-400 uppercase text-[11px]">3HK</span>
+          <span className="font-bold text-slate-400 uppercase text-[12px]">3HK</span>
           <span className="text-right text-slate-700 font-semibold tabular-nums">
             {hk3Rev > 0 && <span className="block text-[11.5px]">{fck(hk3Rev)}</span>}
             <span className="text-slate-500 font-normal">{pct(hk3Pct)}</span>

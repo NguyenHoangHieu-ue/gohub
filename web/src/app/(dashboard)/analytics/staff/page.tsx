@@ -91,7 +91,7 @@ function TierBadge({ tier }: { tier: string }) {
   const c = TIER_CONFIG[tier]
   if (!c) return null
   return (
-    <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider mr-1.5 shrink-0", c.bg, c.text)}>
+    <span className={cn("text-[11px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider mr-1.5 shrink-0", c.bg, c.text)}>
       {tier}
     </span>
   )
@@ -134,8 +134,8 @@ function TargetCell({
             )}
             placeholder="0"
           />
-          {isNeg && <span className="text-[9px] text-red-500 mt-0.5">Không âm</span>}
-          {isInv && <span className="text-[9px] text-red-500 mt-0.5">Không hợp lệ</span>}
+          {isNeg && <span className="text-[11px] text-red-500 mt-0.5">Không âm</span>}
+          {isInv && <span className="text-[11px] text-red-500 mt-0.5">Không hợp lệ</span>}
         </div>
       ) : (
         <span className={cn("text-xs font-bold tabular-nums", displayVal ? "text-slate-700" : "text-slate-300")} title={tooltip}>
@@ -624,8 +624,8 @@ function StaffPageInner() {
                       prev.includes(s.staff_code) ? prev.filter(c => c !== s.staff_code) : [...prev, s.staff_code])}
                     className="w-3.5 h-3.5 rounded border-slate-300 text-brand-600" />
                   <div>
-                    <p className="text-[11px] font-bold text-slate-700">{s.staff_name}</p>
-                    <p className="text-[9px] text-slate-400">{s.staff_code}</p>
+                    <p className="text-[12px] font-bold text-slate-700">{s.staff_name}</p>
+                    <p className="text-[11px] text-slate-400">{s.staff_code}</p>
                   </div>
                 </label>
               ))}
@@ -638,7 +638,7 @@ function StaffPageInner() {
         {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
           <label key={label} className="flex items-center gap-1 cursor-pointer">
             <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3 h-3 accent-amber-500" />
-            <span className={cn("text-[10px] font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
+            <span className={cn("text-[11.5px] font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
           </label>
         ))}
         <button onClick={applyFilters}
@@ -809,10 +809,10 @@ function StaffPageInner() {
               {/* Row 1: group headers */}
               <tr className="bg-slate-50 border-b border-slate-100">
                 <th colSpan={8} />
-                <th colSpan={2} className="px-4 py-1.5 text-[10px] font-black text-rose-600 uppercase tracking-wider text-center border-l border-rose-200 bg-rose-50/60">
+                <th colSpan={2} className="px-4 py-1.5 text-[11.5px] font-black text-rose-600 uppercase tracking-wider text-center border-l border-rose-200 bg-rose-50/60">
                   CM1 Target
                 </th>
-                <th colSpan={2} className="px-4 py-1.5 text-[10px] font-black text-orange-600 uppercase tracking-wider text-center border-l border-orange-200 bg-orange-50/60">
+                <th colSpan={2} className="px-4 py-1.5 text-[11.5px] font-black text-orange-600 uppercase tracking-wider text-center border-l border-orange-200 bg-orange-50/60">
                   3HK Rev Target
                 </th>
                 <th colSpan={4} />
@@ -858,7 +858,7 @@ function StaffPageInner() {
                       className={cn("transition-colors group", !editMode && "cursor-pointer", isExp ? "bg-brand-50 border-l-2 border-l-brand-600" : "hover:bg-slate-50")}>
                       <td className="px-4 py-3">
                         <span className={cn("w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs",
-                          i < 3 ? RANK_STYLE[i] : "text-slate-400 text-[11px]")}>{i + 1}</span>
+                          i < 3 ? RANK_STYLE[i] : "text-slate-400 text-[12px]")}>{i + 1}</span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -866,7 +866,7 @@ function StaffPageInner() {
                                  : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 group-hover:text-brand-500" />}
                           <div>
                             <p className={cn("text-sm font-black", isExp ? "text-brand-700" : "text-slate-900")}>{s.staff_name}</p>
-                            <p className="text-[10px] text-slate-400 font-bold">{s.staff_code}</p>
+                            <p className="text-[11.5px] text-slate-400 font-bold">{s.staff_code}</p>
                           </div>
                         </div>
                       </td>
@@ -941,7 +941,7 @@ function StaffPageInner() {
                                   <thead>
                                     <tr className="bg-brand-50 border-b border-brand-100">
                                       {["#","Khách hàng","Revenue","3HK Rev","3HK%","GP","CM1","CM1%","% of Sales"].map(h => (
-                                        <th key={h} className={cn("px-4 py-2 text-[10px] font-bold text-brand-600 uppercase tracking-wider",
+                                        <th key={h} className={cn("px-4 py-2 text-[11.5px] font-bold text-brand-600 uppercase tracking-wider",
                                           h !== "#" && h !== "Khách hàng" && "text-right")}>{h}</th>
                                       ))}
                                     </tr>
@@ -952,25 +952,25 @@ function StaffPageInner() {
                                       const ofS = s.total_revenue > 0 ? (c.revenue / s.total_revenue) * 100 : 0
                                       return (
                                         <tr key={c.customer_code} className="hover:bg-brand-50/40 transition-colors">
-                                          <td className="px-4 py-2 text-[10px] font-bold text-slate-400">{ci + 1}</td>
+                                          <td className="px-4 py-2 text-[11.5px] font-bold text-slate-400">{ci + 1}</td>
                                           <td className="px-4 py-2">
                                             <div className="flex items-center gap-1">
                                               <TierBadge tier={c.tier} />
                                               <div>
                                                 <p className="text-xs font-bold text-slate-800">{c.customer_name}</p>
-                                                <p className="text-[9px] text-slate-400">{c.customer_code}</p>
+                                                <p className="text-[11px] text-slate-400">{c.customer_code}</p>
                                               </div>
                                             </div>
                                           </td>
                                           <td className="px-4 py-2 text-right text-xs font-black text-slate-900">{fck(c.revenue)}</td>
                                           <td className="px-4 py-2 text-right text-xs font-bold text-orange-600">{fck(c.hk3_revenue)}</td>
                                           <td className="px-4 py-2 text-right">
-                                            <span className={cn("text-[10px] font-black", h3p >= 50 ? "text-orange-600" : "text-slate-400")}>{pct(h3p)}</span>
+                                            <span className={cn("text-[11.5px] font-black", h3p >= 50 ? "text-orange-600" : "text-slate-400")}>{pct(h3p)}</span>
                                           </td>
                                           <td className="px-4 py-2 text-right text-xs font-bold text-emerald-600">{fck(c.gross_profit)}</td>
                                           <td className="px-4 py-2 text-right text-xs font-bold text-indigo-600">{fck(c.cm1)}</td>
                                           <td className="px-4 py-2 text-right">
-                                            <span className={cn("text-[10px] font-black",
+                                            <span className={cn("text-[11.5px] font-black",
                                               c.cm1_pct >= 10 ? "text-indigo-600" : c.cm1_pct > 0 ? "text-slate-500" : "text-rose-500")}>
                                               {pct(c.cm1_pct)}
                                             </span>
@@ -980,7 +980,7 @@ function StaffPageInner() {
                                               <div className="w-12 h-1 bg-brand-100 rounded-full overflow-hidden">
                                                 <div className="h-full bg-brand-400 rounded-full" style={{ width: `${ofS}%` }} />
                                               </div>
-                                              <span className="text-[10px] font-black text-brand-600">{pct(ofS)}</span>
+                                              <span className="text-[11.5px] font-black text-brand-600">{pct(ofS)}</span>
                                             </div>
                                           </td>
                                         </tr>

@@ -201,7 +201,7 @@ export function ProductDrawer({ code, index, contextCountry, onClose }: {
                         ))}
                       </tbody>
                     </table>
-                    {detail.canSeeCogs && <p className="border-t border-slate-100 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-400">Cột giá vốn chỉ hiện với vai trò được cấp quyền.</p>}
+                    {detail.canSeeCogs && <p className="border-t border-slate-100 bg-slate-50 px-3 py-1.5 text-[12px] text-slate-400">Cột giá vốn chỉ hiện với vai trò được cấp quyền.</p>}
                   </div>
                 )}
               </Section>

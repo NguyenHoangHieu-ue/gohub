@@ -1421,7 +1421,7 @@ export default function ChannelPerformancePage() {
                     {Math.abs(change).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[12px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
             ))}
           </div>

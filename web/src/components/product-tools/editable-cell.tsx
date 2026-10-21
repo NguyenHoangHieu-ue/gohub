@@ -20,7 +20,7 @@ export function EditableCell({ value, edited, locked, title, extraClass, onCommi
   return (
     <td title={locked ? "Ô khoá (mã)" : title ?? "Bấm đúp để sửa"} onDoubleClick={() => { if (!locked) setDraft(String(value)) }}
       className={`px-2 py-1 whitespace-nowrap ${edited ? "bg-amber-100 dark:bg-amber-900/40 font-semibold" : ""} ${locked ? "text-gray-500" : "cursor-text"} ${extraClass ?? ""}`}>
-      {String(value)}{edited && <button onClick={e => { e.stopPropagation(); onReset() }} className="ml-1 text-[10px] text-amber-700" title="Hoàn tác ô này">↺</button>}
+      {String(value)}{edited && <button onClick={e => { e.stopPropagation(); onReset() }} className="ml-1 text-[11.5px] text-amber-700" title="Hoàn tác ô này">↺</button>}
     </td>
   )
 }

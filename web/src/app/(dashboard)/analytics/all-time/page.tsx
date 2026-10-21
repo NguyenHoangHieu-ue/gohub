@@ -213,21 +213,21 @@ export default function AllTimeReport() {
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input type="date" className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all" value={startDate} onChange={e => setStartDate(e.target.value)} />
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input type="date" className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all" value={endDate} onChange={e => setEndDate(e.target.value)} />
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Channel Group</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Channel Group</label>
               <div className="relative">
                 <Package className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <select className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all appearance-none" value={selectedChannelGroup} onChange={e => setSelectedChannelGroup(e.target.value)}>
@@ -239,7 +239,7 @@ export default function AllTimeReport() {
             </div>
             {selectedChannelGroup === "B2B" && (
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Customer Tier</label>
+                <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Customer Tier</label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <select className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all appearance-none" value={selectedCustomerTier} onChange={e => setSelectedCustomerTier(e.target.value)}>
@@ -251,7 +251,7 @@ export default function AllTimeReport() {
               </div>
             )}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{selectedChannelGroup === "B2B" ? "Customer Name" : "Channel"}</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">{selectedChannelGroup === "B2B" ? "Customer Name" : "Channel"}</label>
               <div className="relative">
                 <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <select className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all appearance-none" value={selectedChannel} onChange={e => setSelectedChannel(e.target.value)}>
@@ -347,15 +347,15 @@ export default function AllTimeReport() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100" rowSpan={2}>Period</th>
-                <th className="px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 text-center" colSpan={3}>B2B Strategic</th>
-                <th className="px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 text-center" colSpan={3}>B2B Non-Strategic</th>
-                <th className="px-6 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 text-center" colSpan={3}>B2C Performance</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right" rowSpan={2}>Total Revenue</th>
+                <th className="px-6 py-4 text-[11.5px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100" rowSpan={2}>Period</th>
+                <th className="px-6 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 text-center" colSpan={3}>B2B Strategic</th>
+                <th className="px-6 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 text-center" colSpan={3}>B2B Non-Strategic</th>
+                <th className="px-6 py-2 text-[11.5px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 text-center" colSpan={3}>B2C Performance</th>
+                <th className="px-6 py-4 text-[11.5px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right" rowSpan={2}>Total Revenue</th>
               </tr>
               <tr className="bg-slate-50/30">
                 {["bg-brand-50/40", "bg-brand-50/20", "bg-emerald-50/40"].flatMap(bg => ["Rev", "GPM", "CM1"].map((h, i) => (
-                  <th key={`${bg}-${i}`} className={cn("px-2 py-2 text-[10px] font-bold text-slate-400 uppercase text-right border-b border-slate-100", bg)}>{h}</th>
+                  <th key={`${bg}-${i}`} className={cn("px-2 py-2 text-[11.5px] font-bold text-slate-400 uppercase text-right border-b border-slate-100", bg)}>{h}</th>
                 )))}
               </tr>
             </thead>
