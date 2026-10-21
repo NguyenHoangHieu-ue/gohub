@@ -47,9 +47,9 @@ const mom = (cur: number, prev: number): number | null => prev === 0 ? null : ((
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 
 function PctBadge({ v }: { v: number | null }) {
-  if (v === null) return <span className="text-slate-300 text-[10px]">—</span>
+  if (v === null) return <span className="text-slate-300 text-[11.5px]">—</span>
   return (
-    <span className={cn("text-[10px] font-bold", v > 0 ? "text-emerald-600" : v < 0 ? "text-rose-500" : "text-slate-400")}>
+    <span className={cn("text-[11.5px] font-bold", v > 0 ? "text-emerald-600" : v < 0 ? "text-rose-500" : "text-slate-400")}>
       {fmtPct(v)}
     </span>
   )
@@ -183,7 +183,7 @@ export function B2CMetric() {
                 return (
                   <th key={m} colSpan={i === 0 ? 1 : 2} className={cn("px-3 py-2.5 text-xs font-bold text-center whitespace-nowrap border-l border-brand-500/40", isCurrent && "bg-brand-800/40")}>
                     {label}
-                    {i > 0 && <span className="ml-2 text-brand-100/70 text-[10px] font-normal">%MoM</span>}
+                    {i > 0 && <span className="ml-2 text-brand-100/70 text-[11.5px] font-normal">%MoM</span>}
                   </th>
                 )
               })}

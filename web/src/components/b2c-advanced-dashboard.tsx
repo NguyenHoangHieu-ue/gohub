@@ -258,10 +258,10 @@ const pct = (cur: number, prev: number): number | null =>
   prev > 0 ? ((cur - prev) / prev) * 100 : null
 
 const Delta = ({ v }: { v: number | null }) => {
-  if (v === null) return <span className="text-slate-300 text-[11px]">—</span>
+  if (v === null) return <span className="text-slate-300 text-[12px]">—</span>
   const up = v >= 0
   return (
-    <span className={`inline-flex items-center gap-0.5 text-[11px] ${up ? "text-emerald-600" : "text-rose-500"}`}>
+    <span className={`inline-flex items-center gap-0.5 text-[12px] ${up ? "text-emerald-600" : "text-rose-500"}`}>
       {up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
       {Math.abs(v).toFixed(1)}%
     </span>
@@ -335,19 +335,19 @@ const RevenueCompareCard = ({ icon, label, value, caption, referenceLabel, refer
     <div className="min-w-0 rounded-lg border border-black/[0.09] bg-white/85 p-5 shadow-[0_12px_30px_rgba(0,0,0,0.055)] backdrop-blur">
       <div className="flex items-center gap-3">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#eaf4ff] text-[#0071e3]">{icon}</span>
-        <span className="text-[11px] font-[650] uppercase text-[#6e6e73]">{label}</span>
+        <span className="text-[12px] font-[650] uppercase text-[#6e6e73]">{label}</span>
       </div>
       <div className="mt-4 min-w-0 text-[clamp(22px,2.2vw,32px)] font-[650] leading-none text-[#1d1d1f] tabular-nums break-words">{value}</div>
-      <div className="mt-2 text-[11px] leading-snug text-[#86868b]">{caption}</div>
+      <div className="mt-2 text-[12px] leading-snug text-[#86868b]">{caption}</div>
       <div className="my-4 h-px bg-black/[0.06]" />
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
         <div className="min-w-0">
-          <div className="text-[10px] font-[560] uppercase text-[#9a9aa0]">{referenceLabel}</div>
+          <div className="text-[11.5px] font-[560] uppercase text-[#9a9aa0]">{referenceLabel}</div>
           <div className="mt-1 truncate text-[12px] font-[650] text-[#5f6368] tabular-nums" title={referenceValue}>{referenceValue}</div>
         </div>
         <div className="text-right">
-          <div className="text-[10px] font-[560] uppercase text-[#9a9aa0]">{metricLabel}</div>
-          <span className={`mt-1 inline-flex min-w-[64px] justify-center rounded-full px-2 py-1 text-[11px] font-[700] ${metricValue === null ? "bg-[#eef1f5] text-[#6e6e73]" : positive ? "bg-[#eaf6ee] text-[#2f9d55]" : "bg-[#fdecea] text-[#d93025]"}`}>
+          <div className="text-[11.5px] font-[560] uppercase text-[#9a9aa0]">{metricLabel}</div>
+          <span className={`mt-1 inline-flex min-w-[64px] justify-center rounded-full px-2 py-1 text-[12px] font-[700] ${metricValue === null ? "bg-[#eef1f5] text-[#6e6e73]" : positive ? "bg-[#eaf6ee] text-[#2f9d55]" : "bg-[#fdecea] text-[#d93025]"}`}>
             {metricText}
           </span>
         </div>
@@ -736,20 +736,20 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                   return (
                     <td key={m} className="px-4 py-4 text-right tabular-nums min-w-[170px]">
                       <div className="text-slate-800 font-semibold">{formatCompactNumber(v)}</div>
-                      <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[11px]">—</span>}</div>
-                      {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(m)}</div>}
+                      <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[12px]">—</span>}</div>
+                      {row.sub && <div className="text-[12px] font-medium text-slate-500 mt-0.5">{row.sub(m)}</div>}
                     </td>
                   )
                 })}
                 <td className="px-4 py-4 text-right tabular-nums bg-[#0071e3]/[0.06] min-w-[170px]">
                   <div className="text-slate-900 font-bold">{formatCompactNumber(mtd)}</div>
-                  <div className="text-[10px] text-[#0071e3] mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
-                  {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(current)}</div>}
+                  <div className="text-[11.5px] text-[#0071e3] mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
+                  {row.sub && <div className="text-[12px] font-medium text-slate-500 mt-0.5">{row.sub(current)}</div>}
                 </td>
                 <td className="px-4 py-4 text-right min-w-[120px]"><Delta v={pct(mtd, compareVal)} /></td>
                 <td className="px-4 py-4 text-right tabular-nums min-w-[150px]">
                   <div className="text-slate-800 font-semibold">{formatCompactNumber(prorata)}</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wide">run-rate</div>
+                  <div className="text-[11.5px] text-slate-400 mt-0.5 uppercase tracking-wide">run-rate</div>
                 </td>
                 <td className="px-4 py-4 text-right min-w-[120px]"><Delta v={pct(prorata, prevVal)} /></td>
               </tr>
@@ -774,10 +774,10 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
       { key: "total", label: "Total B2C", highlight: true },
     ]
     const Attain = ({ actual, target }: { actual: number; target: number }) => {
-      if (!target) return <span className="text-slate-300 text-[11px]">—</span>
+      if (!target) return <span className="text-slate-300 text-[12px]">—</span>
       const p = (actual / target) * 100
       const c = p >= 100 ? "text-emerald-600" : p >= 80 ? "text-amber-600" : "text-rose-500"
-      return <span className={`text-[11px] font-semibold ${c}`}>{p.toFixed(0)}%</span>
+      return <span className={`text-[12px] font-semibold ${c}`}>{p.toFixed(0)}%</span>
     }
     return (
       <div className="overflow-x-auto">
@@ -808,19 +808,19 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                     return (
                       <td key={m} className="px-4 py-4 text-right tabular-nums min-w-[170px]">
                         <div className="text-slate-800 font-semibold">{formatCompactNumber(v)}</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">KPI {tgt ? formatCompactNumber(tgt) : "—"}</div>
+                        <div className="text-[12px] text-slate-400 mt-0.5">KPI {tgt ? formatCompactNumber(tgt) : "—"}</div>
                         <div className="mt-0.5"><Attain actual={v} target={tgt} /></div>
                       </td>
                     )
                   })}
                   <td className="px-4 py-4 text-right tabular-nums bg-[#0071e3]/[0.06] min-w-[170px]">
                     <div className="text-slate-900 font-bold">{formatCompactNumber(mtd)}</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">KPI {tgtCur ? formatCompactNumber(tgtCur) : "—"}</div>
+                    <div className="text-[12px] text-slate-400 mt-0.5">KPI {tgtCur ? formatCompactNumber(tgtCur) : "—"}</div>
                     <div className="mt-0.5"><Attain actual={mtd} target={tgtCur} /></div>
                   </td>
                   <td className="px-4 py-4 text-right tabular-nums min-w-[150px]">
                     <div className="text-slate-800 font-semibold">{formatCompactNumber(prorata)}</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wide">run-rate</div>
+                    <div className="text-[11.5px] text-slate-400 mt-0.5 uppercase tracking-wide">run-rate</div>
                   </td>
                   <td className="px-4 py-4 text-right min-w-[120px]"><Attain actual={prorata} target={tgtCur} /></td>
                 </tr>
@@ -866,21 +866,21 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                   return (
                     <td key={m} className="px-4 py-4 text-right tabular-nums min-w-[170px]">
                       <div className="text-slate-800 font-semibold">{row.fmt(v)}</div>
-                      {row.delta !== false && <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[11px]">—</span>}</div>}
-                      {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(m)}</div>}
+                      {row.delta !== false && <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[12px]">—</span>}</div>}
+                      {row.sub && <div className="text-[12px] font-medium text-slate-500 mt-0.5">{row.sub(m)}</div>}
                     </td>
                   )
                 })}
                 <td className="px-4 py-4 text-right tabular-nums bg-[#0071e3]/[0.06] min-w-[170px]">
                   <div className="text-slate-900 font-bold">{row.fmt(row.get(current))}</div>
-                  <div className="text-[10px] text-[#0071e3] mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
+                  <div className="text-[11.5px] text-[#0071e3] mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
                   {row.mom && tablePrevFull && (
                     <div className="mt-0.5 flex items-center justify-end gap-1">
                       <Delta v={pct(proj(row.get(current), current), row.get(tablePrevFull))} />
-                      <span className="text-[9px] text-slate-400 uppercase">MoM</span>
+                      <span className="text-[11px] text-slate-400 uppercase">MoM</span>
                     </div>
                   )}
-                  {row.sub && <div className="text-[11px] font-medium text-slate-500 mt-0.5">{row.sub(current)}</div>}
+                  {row.sub && <div className="text-[12px] font-medium text-slate-500 mt-0.5">{row.sub(current)}</div>}
                 </td>
               </tr>
             ))}
@@ -1003,7 +1003,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
   }
   const MktDelta = ({ month, metric }: { month: string; metric: Parameters<typeof mktMetric>[1] }) => {
     const idx = mktReportMonths.indexOf(month)
-    if (idx <= 0) return <div className="mt-0.5 text-[11px] text-slate-300">—</div>
+    if (idx <= 0) return <div className="mt-0.5 text-[12px] text-slate-300">—</div>
     const currentValue = mktMetric(month, metric)
     let prevValue = mktMetric(mktReportMonths[idx - 1], metric)
     // Tháng đang chạy: so MTD với CÙNG KỲ tháng trước (không phải cả tháng trước). Doanh thu dùng số thật
@@ -1016,12 +1016,12 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
         ? data.revenueComparison.previousSamePeriod
         : prevValue * Math.min(data?.elapsedDays ?? prevDays, prevDays) / prevDays
     }
-    if (currentValue === null || !prevValue) return <div className="mt-0.5 text-[11px] text-slate-300">—</div>
+    if (currentValue === null || !prevValue) return <div className="mt-0.5 text-[12px] text-slate-300">—</div>
     const diff = currentValue - prevValue
     const change = (diff / Math.abs(prevValue)) * 100
     const positive = diff >= 0
     return (
-      <div className={`mt-0.5 text-[11px] font-semibold ${positive ? "text-emerald-600" : "text-rose-500"}`}>
+      <div className={`mt-0.5 text-[12px] font-semibold ${positive ? "text-emerald-600" : "text-rose-500"}`}>
         {positive ? "↑" : "↓"} {Math.abs(change).toFixed(1)}%
       </div>
     )
@@ -1063,7 +1063,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 <td key={month} className={`px-4 py-4 text-right tabular-nums min-w-[175px] ${month === data?.currentMonth ? "bg-[#0071e3]/[0.06]" : ""}`}>
                   <div className={row.highlight ? "font-bold text-slate-900" : "font-semibold text-slate-700"}>{(() => { const v = mktMetric(month, row.metric); return v === null ? <span className="text-slate-400 font-normal">Chưa tách</span> : row.fmt(v) })()}</div>
                   <MktDelta month={month} metric={row.metric} />
-                  {month === data?.currentMonth && <div className="text-[10px] text-[#0071e3] mt-0.5 uppercase tracking-wide">MTD</div>}
+                  {month === data?.currentMonth && <div className="text-[11.5px] text-[#0071e3] mt-0.5 uppercase tracking-wide">MTD</div>}
                 </td>
               ))}
             </tr>
@@ -1095,9 +1095,9 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
             <div className="flex items-center justify-between border-b border-black/[0.05] px-4 py-3">
               <div>
                 <h4 className="text-[14px] font-[700] text-slate-800">{site.name}</h4>
-                {site.siteUrl && <p className="text-[11px] text-slate-400">{site.siteUrl}</p>}
+                {site.siteUrl && <p className="text-[12px] text-slate-400">{site.siteUrl}</p>}
               </div>
-              <span className="text-[11px] font-[650] text-slate-400">MTD vs prev MTD</span>
+              <span className="text-[12px] font-[650] text-slate-400">MTD vs prev MTD</span>
             </div>
             {site.error ? (
               <div className="px-4 py-4 text-[12px] text-rose-500">{site.error}</div>
@@ -1105,7 +1105,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               <div className="overflow-x-auto">
                 <table className="min-w-[680px] w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/60 text-[11px] uppercase tracking-wider text-slate-400">
+                    <tr className="border-b border-slate-100 bg-slate-50/60 text-[12px] uppercase tracking-wider text-slate-400">
                       <th className="px-4 py-2.5 text-left font-semibold">Category</th>
                       <th className="px-4 py-2.5 text-right font-semibold">Traffic</th>
                       <th className="px-4 py-2.5 text-right font-semibold">CR</th>
@@ -1210,17 +1210,17 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                 return (
                   <td key={m} className="px-4 py-3 text-right tabular-nums min-w-[180px]">
                     <div className="text-slate-800 font-semibold">{row.fmt(v)}</div>
-                    <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[11px]">—</span>}</div>
+                    <div className="mt-0.5">{prev !== null ? <Delta v={pct(v, prev)} /> : <span className="text-slate-300 text-[12px]">—</span>}</div>
                   </td>
                 )
               })}
               <td className="px-4 py-3 text-right tabular-nums bg-[#0071e3]/[0.06] min-w-[180px]">
                 <div className="text-slate-900 font-bold">{row.fmt(row.get(current))}</div>
-                <div className="text-[10px] text-[#0071e3] mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
+                <div className="text-[11.5px] text-[#0071e3] mt-0.5 uppercase tracking-wide">{periodSuffix}</div>
                 {prevFull && (
                   <div className="mt-0.5 flex items-center justify-end gap-1">
                     <Delta v={pct(row.get(current), row.get(prevFull))} />
-                    <span className="text-[9px] text-slate-400 uppercase">MoM</span>
+                    <span className="text-[11px] text-slate-400 uppercase">MoM</span>
                   </div>
                 )}
               </td>
@@ -1244,7 +1244,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
         <div className={`flex flex-col items-end leading-tight ${tone}`}>
           <span className="font-semibold">{value.toFixed(1)}%</span>
           {diff !== null && (
-            <span className="mt-0.5 inline-flex items-center gap-0.5 text-[10px]">
+            <span className="mt-0.5 inline-flex items-center gap-0.5 text-[11.5px]">
               {diff >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
               {Math.abs(diff).toFixed(1)}%
             </span>
@@ -1390,7 +1390,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
               title="Revenue & Gross Profit Trend"
               action={
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wide text-[#0071e3]">Chọn tháng</span>
+                  <span className="text-[12px] font-bold uppercase tracking-wide text-[#0071e3]">Chọn tháng</span>
                   <select
                     value={selectedProfitMonth}
                     onChange={e => setProfitMonth(e.target.value)}
@@ -1606,7 +1606,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
                     <div key={s.name} className="rounded-lg border border-black/[0.06] overflow-hidden" style={{ background: "rgba(255,255,255,0.72)" }}>
                       <div className="flex items-center justify-between px-4 py-3 border-b border-black/[0.05]">
                         <h4 className="text-[14px] font-[650] text-[#6e6e73]">{s.name}</h4>
-                        <div className="flex items-center gap-3 text-[11px]">
+                        <div className="flex items-center gap-3 text-[12px]">
                           <span className="text-[#6e6e73]">Sessions</span>
                           <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-[#d93025] inline-block" />Revenue</span>
                           <span className="font-[650] text-[#2f9d55]">CR {s.cr.toFixed(2)}%</span>

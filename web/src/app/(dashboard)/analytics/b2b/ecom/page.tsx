@@ -85,11 +85,11 @@ function Stepper({ label, onPrev, onNext, prevDisabled, nextDisabled }: {
 }
 
 function DeltaChip({ cur, prev }: { cur: number; prev: number }) {
-  if (!(Math.abs(prev) > 0)) return <span className="text-[10px] text-slate-300">—</span>
+  if (!(Math.abs(prev) > 0)) return <span className="text-[11.5px] text-slate-300">—</span>
   const d = ((cur - prev) / Math.abs(prev)) * 100
   const up = d >= 0
   return (
-    <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold tabular-nums",
+    <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded-full text-[11.5px] font-bold tabular-nums",
       up ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-600")}>
       {up ? "▲" : "▼"} {Math.abs(d).toFixed(1)}%
     </span>
@@ -219,14 +219,14 @@ export default function B2BEcomTimelinePage() {
     const empty = m.revenue === 0 && m.orders === 0
     return (
       <div className="flex flex-col items-end leading-tight">
-        <span className={cn("tabular-nums", small ? "text-[11px]" : "text-xs", empty ? "text-slate-300" : "text-slate-800 font-semibold")}>
+        <span className={cn("tabular-nums", small ? "text-[12px]" : "text-xs", empty ? "text-slate-300" : "text-slate-800 font-semibold")}>
           {empty ? "—" : fmtVal(v, meta.money, compact)}
         </span>
         {!empty && meta.pctLabel && (
-          <span className="text-[9px] text-slate-400 tabular-nums">{pctOf(v, m.revenue)}</span>
+          <span className="text-[11px] text-slate-400 tabular-nums">{pctOf(v, m.revenue)}</span>
         )}
         {!empty && p.projected && (
-          <span className="text-[9px] font-bold text-cyan-600 tabular-nums">Est. {fmtVal(getVal(m.est, metric), meta.money, compact)}</span>
+          <span className="text-[11px] font-bold text-cyan-600 tabular-nums">Est. {fmtVal(getVal(m.est, metric), meta.money, compact)}</span>
         )}
       </div>
     )
@@ -241,7 +241,7 @@ export default function B2BEcomTimelinePage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <Link href="/analytics/b2b" className="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-cyan-700 transition-colors">
+            <Link href="/analytics/b2b" className="inline-flex items-center gap-1.5 text-[12px] font-bold text-slate-400 hover:text-cyan-700 transition-colors">
               <ArrowLeft className="w-3.5 h-3.5" />B2B Performance
             </Link>
             <div className="flex items-center gap-3 mt-2">
@@ -308,7 +308,7 @@ export default function B2BEcomTimelinePage() {
                 <h3 className="text-xs font-black text-slate-800 uppercase tracking-[0.2em] flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" />Tổng {scope}
                 </h3>
-                {hasEst && <span className="flex items-center gap-1 text-[10px] font-bold text-cyan-600"><Zap className="w-3 h-3" />Kỳ đang chạy có số dự kiến (Est.)</span>}
+                {hasEst && <span className="flex items-center gap-1 text-[11.5px] font-bold text-cyan-600"><Zap className="w-3 h-3" />Kỳ đang chạy có số dự kiến (Est.)</span>}
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {(() => {
@@ -328,7 +328,7 @@ export default function B2BEcomTimelinePage() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">{meta.label} theo {gran === "month" ? "tháng" : gran === "week" ? "tuần" : "quý"}</h3>
-                  <p className="text-[11px] text-slate-400 font-medium">Chia theo khách hàng · đơn vị {unitLabel}</p>
+                  <p className="text-[12px] text-slate-400 font-medium">Chia theo khách hàng · đơn vị {unitLabel}</p>
                 </div>
               </div>
               <div className="h-72">
@@ -356,32 +356,32 @@ export default function B2BEcomTimelinePage() {
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Chi tiết — {meta.label}</h3>
-                  <p className="text-[11px] text-slate-400 font-medium">Đơn vị {unitLabel}{meta.pctLabel ? ` · dòng nhỏ = ${meta.pctLabel} trên doanh thu` : ""}</p>
+                  <p className="text-[12px] text-slate-400 font-medium">Đơn vị {unitLabel}{meta.pctLabel ? ` · dòng nhỏ = ${meta.pctLabel} trên doanh thu` : ""}</p>
                 </div>
                 <button onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(allCollapsible))}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 font-bold text-[11px]">
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 font-bold text-[12px]">
                   <ChevronsUpDown className="w-3.5 h-3.5" />{allCollapsed ? "Mở rộng tất cả" : "Thu gọn tất cả"}
                 </button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse" style={{ minWidth: `${220 + (periods.length + 1) * 118}px` }}>
                   <thead>
-                    <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <tr className="bg-slate-50 text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">
                       <th className="sticky left-0 z-10 bg-slate-50 px-5 py-2.5 text-left min-w-[220px] border-r border-slate-100">Shop</th>
                       {periods.map(p => (
                         <th key={p.key} className={cn(thBase, p.isCurrent && "bg-amber-50/70")}>
                           <div className="flex flex-col items-end gap-0.5">
-                            <span className="flex items-center gap-1 text-[11px] text-slate-700">
+                            <span className="flex items-center gap-1 text-[12px] text-slate-700">
                               {p.label}
-                              {p.projected && <span className="px-1 py-px rounded bg-cyan-600 text-white text-[8px] font-black tracking-wide">PR</span>}
-                              {p.isCurrent && !p.projected && <span className="px-1 py-px rounded bg-amber-500 text-white text-[8px] font-black tracking-wide">ĐANG CHẠY</span>}
+                              {p.projected && <span className="px-1 py-px rounded bg-cyan-600 text-white text-[11px] font-black tracking-wide">PR</span>}
+                              {p.isCurrent && !p.projected && <span className="px-1 py-px rounded bg-amber-500 text-white text-[11px] font-black tracking-wide">ĐANG CHẠY</span>}
                             </span>
-                            <span className="text-[9px] font-semibold text-slate-400 normal-case tracking-normal">{p.sub}</span>
+                            <span className="text-[11px] font-semibold text-slate-400 normal-case tracking-normal">{p.sub}</span>
                           </div>
                         </th>
                       ))}
                       <th className={cn(thBase, "bg-slate-100/80 text-slate-700")}>
-                        <div className="flex flex-col items-end gap-0.5"><span className="text-[11px]">Tổng</span><span className="text-[9px] font-semibold text-slate-400 normal-case tracking-normal">{periods.length} kỳ</span></div>
+                        <div className="flex flex-col items-end gap-0.5"><span className="text-[12px]">Tổng</span><span className="text-[11px] font-semibold text-slate-400 normal-case tracking-normal">{periods.length} kỳ</span></div>
                       </th>
                     </tr>
                   </thead>
@@ -400,7 +400,7 @@ export default function B2BEcomTimelinePage() {
                               {canToggle
                                 ? <ChevronRight className={cn("w-3.5 h-3.5 text-slate-400 transition-transform shrink-0", open && "rotate-90")} />
                                 : <span className="w-3.5 shrink-0" />}
-                              <span className={cn(r.level === 0 ? "text-sm font-black text-cyan-800" : r.level === 1 ? "text-xs font-bold text-slate-700" : "text-[11px] font-semibold text-slate-600")}>
+                              <span className={cn(r.level === 0 ? "text-sm font-black text-cyan-800" : r.level === 1 ? "text-xs font-bold text-slate-700" : "text-[12px] font-semibold text-slate-600")}>
                                 {r.level === 0 ? r.customer : r.name}
                               </span>
                             </button>
@@ -411,8 +411,8 @@ export default function B2BEcomTimelinePage() {
                           <td className="px-3 py-2.5 text-right bg-slate-100/60">
                             <div className="flex flex-col items-end leading-tight">
                               <span className="text-xs font-black text-slate-900 tabular-nums">{fmtVal(getVal(r.total, metric), meta.money, compact)}</span>
-                              {meta.pctLabel && <span className="text-[9px] text-slate-400 tabular-nums">{pctOf(getVal(r.total, metric), r.total.revenue)}</span>}
-                              {hasEst && <span className="text-[9px] font-bold text-cyan-600 tabular-nums">Est. {fmtVal(getVal(r.total.est, metric), meta.money, compact)}</span>}
+                              {meta.pctLabel && <span className="text-[11px] text-slate-400 tabular-nums">{pctOf(getVal(r.total, metric), r.total.revenue)}</span>}
+                              {hasEst && <span className="text-[11px] font-bold text-cyan-600 tabular-nums">Est. {fmtVal(getVal(r.total.est, metric), meta.money, compact)}</span>}
                             </div>
                           </td>
                         </tr>
@@ -420,7 +420,7 @@ export default function B2BEcomTimelinePage() {
                     })}
                     {totals && (
                       <tr className="bg-slate-900 text-white">
-                        <td className="sticky left-0 z-[1] bg-slate-900 px-5 py-3 text-[11px] font-bold uppercase tracking-[0.18em]">TOTAL VN ECOM</td>
+                        <td className="sticky left-0 z-[1] bg-slate-900 px-5 py-3 text-[12px] font-bold uppercase tracking-[0.18em]">TOTAL VN ECOM</td>
                         {periods.map((p, i) => {
                           const m = totals.metrics[i]
                           const cur = getVal(m.est, metric)
@@ -429,8 +429,8 @@ export default function B2BEcomTimelinePage() {
                             <td key={p.key} className="px-3 py-3 text-right">
                               <div className="flex flex-col items-end gap-0.5 leading-tight">
                                 <span className="text-xs font-black tabular-nums">{fmtVal(getVal(m, metric), meta.money, compact)}</span>
-                                {meta.pctLabel && <span className="text-[9px] text-slate-400 tabular-nums">{pctOf(getVal(m, metric), m.revenue)}</span>}
-                                {p.projected && <span className="text-[9px] font-bold text-cyan-300 tabular-nums">Est. {fmtVal(cur, meta.money, compact)}</span>}
+                                {meta.pctLabel && <span className="text-[11px] text-slate-400 tabular-nums">{pctOf(getVal(m, metric), m.revenue)}</span>}
+                                {p.projected && <span className="text-[11px] font-bold text-cyan-300 tabular-nums">Est. {fmtVal(cur, meta.money, compact)}</span>}
                                 {i > 0 && <DeltaChip cur={cur} prev={prev} />}
                               </div>
                             </td>
@@ -439,8 +439,8 @@ export default function B2BEcomTimelinePage() {
                         <td className="px-3 py-3 text-right bg-slate-800">
                           <div className="flex flex-col items-end leading-tight">
                             <span className="text-xs font-black tabular-nums">{fmtVal(getVal(totals.total, metric), meta.money, compact)}</span>
-                            {meta.pctLabel && <span className="text-[9px] text-slate-400 tabular-nums">{pctOf(getVal(totals.total, metric), totals.total.revenue)}</span>}
-                            {hasEst && <span className="text-[9px] font-bold text-cyan-300 tabular-nums">Est. {fmtVal(getVal(totals.total.est, metric), meta.money, compact)}</span>}
+                            {meta.pctLabel && <span className="text-[11px] text-slate-400 tabular-nums">{pctOf(getVal(totals.total, metric), totals.total.revenue)}</span>}
+                            {hasEst && <span className="text-[11px] font-bold text-cyan-300 tabular-nums">Est. {fmtVal(getVal(totals.total.est, metric), meta.money, compact)}</span>}
                           </div>
                         </td>
                       </tr>

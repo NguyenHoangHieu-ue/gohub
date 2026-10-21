@@ -387,13 +387,13 @@ export function B2CPerformance() {
     return (
       <div className="flex items-center gap-1.5">
         <div className={cn(
-          "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md",
+          "flex items-center gap-0.5 text-[11.5px] font-bold px-1.5 py-0.5 rounded-md",
           isPositive ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
         )}>
           {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
           {Math.abs(diff).toFixed(1)}%
         </div>
-        <span className="text-[9px] text-slate-400 font-medium whitespace-nowrap">{label}</span>
+        <span className="text-[11px] text-slate-400 font-medium whitespace-nowrap">{label}</span>
       </div>
     )
   }
@@ -586,7 +586,7 @@ export function B2CPerformance() {
               <Filter className="w-4 h-4" />
               Filters
               {(selectedVendors.length > 0 || selectedSubChannels.length > 0 || selectedProductTypes.length > 0 || comparisonType !== "none") && (
-                <span className="flex items-center justify-center w-5 h-5 bg-blue-600 text-white text-[10px] rounded-full ml-1">
+                <span className="flex items-center justify-center w-5 h-5 bg-blue-600 text-white text-[11.5px] rounded-full ml-1">
                   {(selectedVendors.length > 0 ? 1 : 0) + (selectedSubChannels.length > 0 ? 1 : 0) + (selectedProductTypes.length > 0 ? 1 : 0) + (comparisonType !== "none" ? 1 : 0)}
                 </span>
               )}
@@ -607,7 +607,7 @@ export function B2CPerformance() {
             <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
+                <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
                 <input
                   type="date"
                   value={startDate}
@@ -616,7 +616,7 @@ export function B2CPerformance() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
+                <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
                 <input
                   type="date"
                   value={endDate}
@@ -626,7 +626,7 @@ export function B2CPerformance() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Comparison</label>
+                <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Comparison</label>
                 <select
                   value={comparisonType}
                   onChange={(e: any) => setComparisonType(e.target.value)}
@@ -640,7 +640,7 @@ export function B2CPerformance() {
 
               {/* Include filters: Phí ship / Đơn nội bộ / KH Ops */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Include</label>
+                <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Include</label>
                 <div className="flex flex-col gap-1.5">
                   {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps], ["KH Ops", includeOpsCustomers, setIncludeOpsCustomers]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
                     <label key={label} className="flex items-center gap-2 cursor-pointer">
@@ -652,7 +652,7 @@ export function B2CPerformance() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date Type</label>
+                <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Date Type</label>
                 <div className="flex bg-slate-100 p-1 rounded-lg">
                   <button
                     onClick={() => setDateColumn("fulfiled_date")}
@@ -676,7 +676,7 @@ export function B2CPerformance() {
               </div>
 
               <div className="space-y-1.5 relative">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Vendors</label>
+                <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Vendors</label>
                 <div
                   className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all"
                   onClick={() => setShowVendorDropdown(!showVendorDropdown)}
@@ -698,7 +698,7 @@ export function B2CPerformance() {
                           e.stopPropagation()
                           setSelectedVendors([])
                         }}
-                        className="text-[10px] text-blue-600 font-bold hover:underline"
+                        className="text-[11.5px] text-blue-600 font-bold hover:underline"
                       >
                         Clear All
                       </button>
@@ -726,7 +726,7 @@ export function B2CPerformance() {
               </div>
 
               <div className="space-y-1.5 relative">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Sub Channels</label>
+                <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Sub Channels</label>
                 <div
                   className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all"
                   onClick={() => setShowSubChannelDropdown(!showSubChannelDropdown)}
@@ -748,7 +748,7 @@ export function B2CPerformance() {
                           e.stopPropagation()
                           setSelectedSubChannels([])
                         }}
-                        className="text-[10px] text-blue-600 font-bold hover:underline"
+                        className="text-[11.5px] text-blue-600 font-bold hover:underline"
                       >
                         Clear All
                       </button>
@@ -776,7 +776,7 @@ export function B2CPerformance() {
               </div>
 
               <div className="space-y-1.5 relative">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Product Type</label>
+                <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Product Type</label>
                 <div
                   className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all"
                   onClick={() => setShowProductTypeDropdown(!showProductTypeDropdown)}
@@ -798,7 +798,7 @@ export function B2CPerformance() {
                           e.stopPropagation()
                           setSelectedProductTypes([])
                         }}
-                        className="text-[10px] text-blue-600 font-bold hover:underline"
+                        className="text-[11.5px] text-blue-600 font-bold hover:underline"
                       >
                         Clear All
                       </button>
@@ -944,65 +944,65 @@ export function B2CPerformance() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected Revenue</p>
+                <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected Revenue</p>
                 <div className="flex items-baseline justify-between">
                   <p className="text-lg font-bold text-blue-600">{formatCompact(projection.revenue)}</p>
                   <div className={cn(
-                    "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                    "flex items-center gap-0.5 text-[11.5px] font-bold px-1.5 py-0.5 rounded-full",
                     projection.revenueChange >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
                   )}>
                     {projection.revenueChange >= 0 ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
                     {Math.abs(projection.revenueChange).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[9px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
               <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected Units</p>
+                <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected Units</p>
                 <div className="flex items-baseline justify-between">
                   <p className="text-lg font-bold text-blue-600">{Math.round(projection.units).toLocaleString()}</p>
                   <div className={cn(
-                    "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                    "flex items-center gap-0.5 text-[11.5px] font-bold px-1.5 py-0.5 rounded-full",
                     projection.unitsChange >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
                   )}>
                     {projection.unitsChange >= 0 ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
                     {Math.abs(projection.unitsChange).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[9px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
               <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected Margin</p>
+                <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected Margin</p>
                 <div className="flex items-baseline justify-between">
                   <p className="text-lg font-bold text-blue-600">{formatCompact(projection.margin)}</p>
                   <div className={cn(
-                    "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                    "flex items-center gap-0.5 text-[11.5px] font-bold px-1.5 py-0.5 rounded-full",
                     projection.marginChange >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
                   )}>
                     {projection.marginChange >= 0 ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
                     {Math.abs(projection.marginChange).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[9px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
               <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected CM1</p>
+                <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected CM1</p>
                 <div className="flex items-baseline justify-between">
                   <p className="text-lg font-bold text-blue-600">{formatCompact(projection.gpm2)}</p>
                   <div className={cn(
-                    "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                    "flex items-center gap-0.5 text-[11.5px] font-bold px-1.5 py-0.5 rounded-full",
                     projection.gpm2Change >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
                   )}>
                     {projection.gpm2Change >= 0 ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
                     {Math.abs(projection.gpm2Change).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[9px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
               <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected CM1 %</p>
+                <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected CM1 %</p>
                 <p className="text-lg font-bold text-blue-600">{projection.gpm2Percent.toFixed(2)}%</p>
-                <p className="text-[9px] text-slate-400 mt-1">Full Month Estimate</p>
+                <p className="text-[11px] text-slate-400 mt-1">Full Month Estimate</p>
               </div>
             </div>
           </div>
@@ -1091,7 +1091,7 @@ export function B2CPerformance() {
               <h3 className="text-lg font-bold text-slate-900">Performance Breakdown</h3>
               <p className="text-sm text-slate-500">Detailed analysis by {groupBy}</p>
               {performanceTotalGroups > performanceData.length && (
-                <p className="text-[11px] text-amber-600 font-semibold mt-0.5">
+                <p className="text-[12px] text-amber-600 font-semibold mt-0.5">
                   Đang hiện {performanceData.length}/{performanceTotalGroups} dòng theo doanh thu — Tổng cộng &amp; % vẫn tính đủ 100%, chỉ bảng/CSV bị giới hạn dòng.
                 </p>
               )}
@@ -1230,7 +1230,7 @@ export function B2CPerformance() {
                             <div className="flex flex-col">
                               <span className="text-sm font-medium text-slate-700 truncate max-w-[200px]">{item.name}</span>
                               {groupBy === "channel" && (
-                                <span className="text-[10px] text-blue-600 font-medium flex items-center gap-1">
+                                <span className="text-[11.5px] text-blue-600 font-medium flex items-center gap-1">
                                   {isExpanded ? "Hide details" : "View cost breakdown"}
                                   <ChevronDown className={cn("w-3 h-3 transition-transform", isExpanded && "rotate-180")} />
                                 </span>
@@ -1295,9 +1295,9 @@ export function B2CPerformance() {
                               )}>
                                 {formatCurrency(item.gpm2 || 0)}
                               </span>
-                              <span className="text-[10px] text-slate-400">{(item.gpm2_percent || 0).toFixed(1)}%</span>
+                              <span className="text-[11.5px] text-slate-400">{(item.gpm2_percent || 0).toFixed(1)}%</span>
                               {item.projected_gpm2 !== undefined && item.projected_gpm2 !== item.gpm2 && (
-                                <div className="text-[11px] font-bold text-blue-600 mt-0.5" title="Projected full month CM1">
+                                <div className="text-[12px] font-bold text-blue-600 mt-0.5" title="Projected full month CM1">
                                   DP: {formatCurrency(item.projected_gpm2)}
                                 </div>
                               )}
@@ -1318,13 +1318,13 @@ export function B2CPerformance() {
 
                                 return (
                                   <div key={category} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                    <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">
                                       {category.replace(/([A-Z])/g, " $1")}
                                     </p>
                                     <div className="flex items-baseline justify-between">
                                       <p className="text-sm font-bold text-slate-700">{formatCompact(amount)}</p>
                                       {costInfo.type === "percent" && (
-                                        <p className="text-[10px] text-slate-400">{costInfo.value}%</p>
+                                        <p className="text-[11.5px] text-slate-400">{costInfo.value}%</p>
                                       )}
                                     </div>
                                   </div>
@@ -1367,7 +1367,7 @@ export function B2CPerformance() {
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-slate-900 truncate">Tổng cộng</span>
                             {groupBy === "channel" && (
-                              <span className="text-[10px] text-blue-600 font-medium flex items-center gap-1">
+                              <span className="text-[11.5px] text-blue-600 font-medium flex items-center gap-1">
                                 {expandedRow === "TOTAL" ? "Hide details" : "View cost breakdown"}
                                 <ChevronDown className={cn("w-3 h-3 transition-transform", expandedRow === "TOTAL" && "rotate-180")} />
                               </span>
@@ -1426,9 +1426,9 @@ export function B2CPerformance() {
                             )}>
                               {formatCurrency(totals.gpm2)}
                             </span>
-                            <span className="text-[10px] text-slate-500">{totalGpm2Percent.toFixed(1)}%</span>
+                            <span className="text-[11.5px] text-slate-500">{totalGpm2Percent.toFixed(1)}%</span>
                             {totals.projected_gpm2 !== undefined && totals.projected_gpm2 !== totals.gpm2 && (
-                              <div className="text-[11px] font-bold text-blue-600 mt-0.5" title="Projected full month CM1">
+                              <div className="text-[12px] font-bold text-blue-600 mt-0.5" title="Projected full month CM1">
                                 DP: {formatCurrency(totals.projected_gpm2)}
                               </div>
                             )}
@@ -1448,24 +1448,24 @@ export function B2CPerformance() {
 
                                 return (
                                   <div key={category} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                    <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">
                                       {category.replace(/([A-Z])/g, " $1")}
                                     </p>
                                     <div className="flex items-baseline justify-between">
                                       <p className="text-sm font-bold text-slate-700">{formatCompact(amount)}</p>
-                                      {totals.revenue > 0 && <p className="text-[10px] text-slate-400">{((amount / totals.revenue) * 100).toFixed(1)}%</p>}
+                                      {totals.revenue > 0 && <p className="text-[11.5px] text-slate-400">{((amount / totals.revenue) * 100).toFixed(1)}%</p>}
                                     </div>
                                   </div>
                                 )
                               })}
                               {groupCosts.map((gc, i) => (
                                 <div key={`gc-${i}`} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 line-clamp-1" title={gc.item_name}>
+                                  <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1 line-clamp-1" title={gc.item_name}>
                                     {gc.item_name}
                                   </p>
                                   <div className="flex items-baseline justify-between">
                                     <p className="text-sm font-bold text-slate-700">{formatCompact(gc.amount)}</p>
-                                    {totals.revenue > 0 && <p className="text-[10px] text-slate-400">{((gc.amount / totals.revenue) * 100).toFixed(1)}%</p>}
+                                    {totals.revenue > 0 && <p className="text-[11.5px] text-slate-400">{((gc.amount / totals.revenue) * 100).toFixed(1)}%</p>}
                                   </div>
                                 </div>
                               ))}

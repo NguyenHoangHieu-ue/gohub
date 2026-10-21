@@ -63,18 +63,18 @@ function PlanningTable({ title, metricType, targets, prevActuals, onChange, data
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Nhóm</th>
+              <th className="px-5 py-3 text-[11.5px] font-bold text-slate-500 uppercase tracking-widest">Nhóm</th>
               {data?.prevMonths?.map(m => (
-                <th key={m} className="px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">
+                <th key={m} className="px-5 py-3 text-[11.5px] font-bold text-slate-400 uppercase tracking-widest text-right">
                   {m}<br /><span className="text-slate-300">(Actual)</span>
                 </th>
               ))}
               {data?.currentMonths?.map(m => (
-                <th key={m} className="px-5 py-3 text-[10px] font-bold text-brand-600 uppercase tracking-widest text-right bg-brand-50/50">
+                <th key={m} className="px-5 py-3 text-[11.5px] font-bold text-brand-600 uppercase tracking-widest text-right bg-brand-50/50">
                   {m}<br /><span className="text-brand-400">Target</span>
                 </th>
               ))}
-              <th className="px-5 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">
+              <th className="px-5 py-3 text-[11.5px] font-bold text-slate-400 uppercase tracking-widest text-right">
                 {metricType === "currency" ? "Tăng trưởng" : "Avg vs Q trước"}
               </th>
             </tr>
@@ -210,10 +210,10 @@ function B2CKpiTargetSection({ canEdit, onNotify }: { canEdit: boolean; onNotify
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tháng</th>
-                <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">VN</th>
-                <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">US</th>
-                <th className="px-5 py-3 text-[10px] font-bold text-brand-600 uppercase tracking-widest text-right bg-brand-50/50">Total</th>
+                <th className="px-5 py-3 text-[11.5px] font-bold text-slate-500 uppercase tracking-widest">Tháng</th>
+                <th className="px-5 py-3 text-[11.5px] font-bold text-slate-500 uppercase tracking-widest text-right">VN</th>
+                <th className="px-5 py-3 text-[11.5px] font-bold text-slate-500 uppercase tracking-widest text-right">US</th>
+                <th className="px-5 py-3 text-[11.5px] font-bold text-brand-600 uppercase tracking-widest text-right bg-brand-50/50">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -297,10 +297,10 @@ function B2CMarketingBudgetSection({ canEdit, onNotify }: { canEdit: boolean; on
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-5 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Month</th>
-                <th className="px-5 py-3 text-[10px] font-bold text-brand-600 uppercase tracking-widest text-right bg-brand-50/50">🇻🇳 VN (VND)</th>
-                <th className="px-5 py-3 text-[10px] font-bold text-brand-600 uppercase tracking-widest text-right bg-brand-50/50">🇺🇸 US (VND)</th>
-                <th className="px-5 py-3 text-[10px] font-bold text-slate-700 uppercase tracking-widest text-right bg-slate-100">Total (VND)</th>
+                <th className="px-5 py-3 text-[11.5px] font-bold text-slate-500 uppercase tracking-widest">Month</th>
+                <th className="px-5 py-3 text-[11.5px] font-bold text-brand-600 uppercase tracking-widest text-right bg-brand-50/50">🇻🇳 VN (VND)</th>
+                <th className="px-5 py-3 text-[11.5px] font-bold text-brand-600 uppercase tracking-widest text-right bg-brand-50/50">🇺🇸 US (VND)</th>
+                <th className="px-5 py-3 text-[11.5px] font-bold text-slate-700 uppercase tracking-widest text-right bg-slate-100">Total (VND)</th>
               </tr>
             </thead>
             <tbody>
@@ -433,7 +433,7 @@ export function B2CManageCosts() {
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Target className="w-5 h-5 text-brand-600" />
-            Manage Costs
+            Chi phí & Target B2C
           </h1>
           <div className="flex items-center gap-2 mt-0.5">
             <p className="text-slate-500 text-sm">Target &amp; chi phí B2C (B2B quản ở Quarter Report)</p>
