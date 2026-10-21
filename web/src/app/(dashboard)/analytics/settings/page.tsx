@@ -1,5 +1,6 @@
 "use client"
 
+import { ApiKeysPanel } from "@/components/api-keys-panel"
 import React, { useState, useEffect } from "react"
 import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders, ChevronDown, Database, MapPin, Tag, Boxes } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -22,6 +23,8 @@ export default function SettingsPage() {
 }
 
 function AnalyticsSettings() {
+  // 4 tab thay cho 1 trang dài 7 khối; "API bên ngoài" chuyển từ trang Admin sang đây (s238).
+  const [tab, setTab] = useState<"data" | "chat" | "filters" | "api">("data")
   const [tiers, setTiers] = useState<Record<string, string[]>>({ Strategic: [] })
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
@@ -204,9 +207,19 @@ function AnalyticsSettings() {
         <button onClick={fetchAll} className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 shadow-sm"><RefreshCw className={cn("w-4 h-4 text-slate-600", loading && "animate-spin")} /></button>
       </div>
 
+      <div className="flex flex-wrap gap-1 border-b border-slate-200" role="tablist">
+        {([["data", "Dữ liệu và nhóm"], ["chat", "Chatbot và cảnh báo"], ["filters", "Lọc theo vai trò"], ["api", "API bên ngoài"]] as const).map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
+            className={cn("px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors", tab === id ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-700")}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       {msg && <div className={cn("px-4 py-3 rounded-xl text-sm font-medium", msg.ok ? "bg-emerald-50 border border-emerald-100 text-emerald-700" : "bg-rose-50 border border-rose-100 text-rose-700")}>{msg.text}</div>}
 
       {/* Database Status — kiểm tra nhanh kho dữ liệu còn cập nhật không */}
+      {tab === "data" && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2"><Database className="w-5 h-5 text-brand-600" /><h2 className="font-bold text-slate-800">Tình trạng Database</h2></div>
@@ -313,8 +326,10 @@ function AnalyticsSettings() {
         )}
         {!db && <div className="px-6 py-4 text-xs text-slate-400">Bấm "Kiểm tra" để xem toàn bộ kho dữ liệu gohub_dw (fact + dim + reference) và trạng thái sync.</div>}
       </div>
+      )}
 
       {/* Channel & Customer Tiers (Partner Tiers) — gộp từ Admin sang đây (s82) */}
+      {tab === "data" && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -384,8 +399,10 @@ function AnalyticsSettings() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Guardian — simplified */}
+      {tab === "chat" && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
           <Shield className="w-5 h-5 text-brand-600" />
@@ -427,8 +444,10 @@ function AnalyticsSettings() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Inventory Alert Thresholds — OPS tự set ngưỡng cảnh báo hết hàng tab Inventory */}
+      {tab === "chat" && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -458,8 +477,10 @@ function AnalyticsSettings() {
         </div>
         <p className="px-6 pb-5 text-xs text-slate-400">Phải theo thứ tự An toàn &gt; Bình thường &gt; Cần chú ý. Mặc định 90/60/30 ngày.</p>
       </div>
+      )}
 
       {/* Role Filters */}
+      {tab === "filters" && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2"><Filter className="w-5 h-5 text-brand-600" /><h2 className="font-bold text-slate-800">Lọc dòng BI theo Role (Role Filters)</h2></div>
@@ -477,8 +498,10 @@ function AnalyticsSettings() {
           <p className="text-xs text-slate-400">Điều kiện này được AND thêm vào truy vấn BI cho role tương ứng (admin không bị lọc).</p>
         </div>
       </div>
+      )}
 
       {/* SKU Destination Definition */}
+      {tab === "data" && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2"><MapPin className="w-5 h-5 text-brand-600" /><h2 className="font-bold text-slate-800">SKU Destination Definition</h2></div>
@@ -523,8 +546,10 @@ function AnalyticsSettings() {
         </div>
         <p className="px-6 py-3 text-xs text-slate-400 border-t border-slate-100">⚠️ Lưu ý: destination hiện được tính theo <b>HỌ SKU</b> trong code (<code>getDestinationSQL</code>: digit→ký tự 3-5, E→2-4, 3-letter→1-3) rồi map tên nước qua bảng Country Codes. Quy tắc startsWith + codeLength ở đây là <b>tham chiếu/cấu hình dự phòng</b>, không trực tiếp điều khiển báo cáo hiện tại.</p>
       </div>
+      )}
 
       {/* Item Type Classification */}
+      {tab === "data" && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -630,6 +655,9 @@ function AnalyticsSettings() {
           Chatbot dùng prefix này để lọc giá bán: B2B thấy giá OD/WS/Strategic/Tier, B2C thấy giá B2C Website. COGS kiểm soát riêng qua Guardian.
         </p>
       </div>
+      )}
+
+      {tab === "api" && <ApiKeysPanel onNotify={(type, text) => notify(type === "success", text)} />}
     </div>
   )
 }

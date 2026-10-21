@@ -15,7 +15,7 @@ interface ExternalApiKey {
   revoked_at: string | null
 }
 
-export default function ApiKeysTab({ onNotify }: {
+export function ApiKeysPanel({ onNotify }: {
   onNotify: (type: "success" | "error", text: string) => void
 }) {
   const [keys, setKeys]         = useState<ExternalApiKey[]>([])

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRoleGuard } from "@/lib/use-role-guard"
-import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog, Trash2, Search, Plus, Key, Lock, Edit3 } from "lucide-react"
+import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog, Trash2, Search, Plus, Edit3 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ALL_ROLES, CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 import { ConfirmModal } from "@/components/confirm-modal"
@@ -32,15 +32,12 @@ const PM_TABS = [
 const ROLES = ALL_ROLES
 const MATRIX_ROLES = CONFIGURABLE_ROLES
 
-type Section = "users" | "grants" | "add" | "password" | "matrix" | "advanced" | "edit-perms"
+type Section = "users" | "grants" | "account" | "matrix"
 const SECTIONS: { id: Section; label: string; icon: React.ReactNode; creatorOnly?: boolean }[] = [
   { id: "users",      label: "Người dùng",        icon: <Users    size={15} /> },
   { id: "grants",     label: "Quyền theo người",   icon: <Shield   size={15} />, creatorOnly: true },
-  { id: "add",        label: "Thêm user",          icon: <Plus     size={15} /> },
-  { id: "password",   label: "Đổi mật khẩu",       icon: <Key      size={15} /> },
+  { id: "account",    label: "Tài khoản",          icon: <Plus     size={15} /> },
   { id: "matrix",     label: "Vai trò × Quyền",    icon: <Shield   size={15} /> },
-  { id: "advanced",   label: "Nâng cao",           icon: <Lock     size={15} /> },
-  { id: "edit-perms", label: "Quyền chỉnh sửa",    icon: <Edit3    size={15} />, creatorOnly: true },
 ]
 
 // Tab có thể được creator gán quyền write per-user
@@ -250,7 +247,7 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
               )}
             </div>
             <div className="relative"><Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm tên / email / role…" className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:ring-2 focus:ring-brand-500 outline-none w-52" /></div>
-            <button onClick={() => setSection("add")} className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-bold hover:bg-brand-700">
+            <button onClick={() => setSection("account")} className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-bold hover:bg-brand-700">
               <Plus className="w-3.5 h-3.5" />Thêm user
             </button>
           </div>
@@ -350,10 +347,14 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
       {section === "grants" && isCreator && <UserGrantsMatrix onNotify={notify} />}
 
       {/* ── Thêm user ── */}
-      {section === "add" && <AddUserForm onNotify={notify} onAdded={() => { fetchAll(); setSection("users") }} />}
+      {section === "account" && (
+        <div className="grid gap-6 lg:grid-cols-2 items-start">
+          <AddUserForm onNotify={notify} onAdded={() => { fetchAll(); setSection("users") }} />
+          <ChangePasswordForm users={users} onNotify={notify} />
+        </div>
+      )}
 
       {/* ── Đổi mật khẩu ── */}
-      {section === "password" && <ChangePasswordForm users={users} onNotify={notify} />}
 
       {/* ── Vai trò × Quyền (Role × Report baseline) ── */}
       {section === "matrix" && (
@@ -388,11 +389,11 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
         </div>
       )}
 
-      {/* ── Nâng cao: ma trận hệ thống ── */}
-      {section === "advanced" && <SystemPermissionsMatrix onNotify={notify} />}
+      {/* ── Nâng cao (import NCC, trang sản phẩm theo phòng ban): gộp xuống dưới Vai trò × Quyền ── */}
+      {section === "matrix" && <SystemPermissionsMatrix onNotify={notify} />}
 
-      {/* ── Quyền chỉnh sửa (creator only) ── */}
-      {section === "edit-perms" && isCreator && (
+      {/* ── Quyền chỉnh sửa theo người (creator only): gộp xuống dưới Quyền theo người ── */}
+      {section === "grants" && isCreator && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
             <div className="flex items-center gap-2"><Edit3 className="w-5 h-5 text-brand-600" /><h2 className="font-bold text-slate-800">Quyền chỉnh sửa tab per-user</h2></div>
