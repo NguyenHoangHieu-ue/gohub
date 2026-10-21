@@ -161,7 +161,7 @@ export function B2BMonthView({ initialMonth }: { initialMonth?: string }) {
       {view && (
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <Card title={`Revenue ${mLabel(month)}`} main={fc(view.rev)} sub={running && view.revAct != null ? `Actual ${fc(view.revAct)}` : undefined} mom={view.momRev} />
-          <Card title="Gross Margin" main={fc(view.gp)} sub={`GM% ${pct(b2b!.gpPct)}${running && view.gpAct != null ? ` · Actual ${fc(view.gpAct)}` : ""}`} mom={view.momGp} />
+          <Card title="GP" main={fc(view.gp)} sub={`%GP ${pct(b2b!.gpPct)}${running && view.gpAct != null ? ` · Actual ${fc(view.gpAct)}` : ""}`} mom={view.momGp} />
           <Card title="CM1" main={fc(view.cm1)} accent={view.cm1 >= 0 ? "text-emerald-700" : "text-red-600"}
             sub={`%CM1 ${pct(b2b!.cm1Pct)} (${view.momCm1Pct != null ? `${view.momCm1Pct >= 0 ? "+" : ""}${view.momCm1Pct.toFixed(1)} đ.%` : "—"})${running && view.cm1Act != null ? ` · Actual ${fc(view.cm1Act)}` : ""}`} mom={view.momCm1} />
           <Card title="Ch.Cost + Group Cost" main={fc(view.cc)} sub={`Ch.Cost ${fc(b2b!.channelCost)} · Group ${fc(b2b!.groupCost)}`} mom={delta(view.cc, b2bPrev ? b2bPrev.channelCost + b2bPrev.groupCost : null)} />
@@ -170,7 +170,7 @@ export function B2BMonthView({ initialMonth }: { initialMonth?: string }) {
       )}
       {isFuture && <div className="text-sm text-slate-500 bg-white border border-slate-200 rounded-xl p-4">Tháng {mLabel(month)} chưa có dữ liệu.</div>}
       {view && (
-        <p className="text-[11.5px] text-slate-400">CM1 ở thẻ = Gross Margin − Ch.Cost − Group Cost (khớp dòng B2B của Quarter Report). Bảng Nhóm bên dưới là CM1 theo khách, chưa trừ Group Cost.</p>
+        <p className="text-[11.5px] text-slate-500">CM1 ở thẻ = GP − Ch.Cost − Group Cost (khớp dòng B2B của Quarter Report). Bảng Nhóm bên dưới là CM1 theo khách, chưa trừ Group Cost.</p>
       )}
 
       <B2BTierSection

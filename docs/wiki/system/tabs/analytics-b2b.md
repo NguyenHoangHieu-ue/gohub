@@ -314,3 +314,7 @@ Tab B2B có toggle **"Theo tháng" (mặc định) | "Khoảng ngày (cũ)"**. B
 
 - Xuất Excel "B2B Tier Performance" (bản khoảng ngày): cột CM1, CM1 %, Projected CM1 nay lấy `cm1`, `cm1_percent` của backend (đã trừ CH.Cost), thêm cột CH.Cost. Trước đó file xuất CM1 = Gross Profit.
 - `ecom-breakdown` và `ecom-timeline`: "Orders" nay là `COUNT(DISTINCT order_code)` (trước là số dòng, cao hơn khoảng 6%); khoá cache `b2b-ecom3` và `b2b-ecom-tl2`. Đơn có cả SIM và eSIM vẫn được tính ở từng shop.
+
+## s238 — Đổi giao diện
+
+Chữ nhỏ (7–11px) nâng lên 11–12px, trang rộng `max-w-[1480px]`, thẻ "Gross Margin" → "GP", "GM%" → "%GP". Số liệu và công thức không đổi. Font và cỡ chữ gốc theo `analytics-quarterly.md` §s238.
