@@ -9,7 +9,7 @@ import { featureOn } from "@/lib/assistant-features"
 // Prompt + tool lấy từ prepareBeGau (cùng lọc vai trò/giá vốn như chat), chỉ giữ tool ĐỌC: phiên live không có cổng duyệt.
 export const BE_GAU_LIVE_TOOLS = new Set([
   "executeSQL", "querySupabase", "listSupabaseTables", "queryProduct", "readKnowledgeBase", "searchKnowledgeBase",
-  "webSearch", "queryGA4", "queryGSC", "b2bCustomerCm1", "kpiSummary",
+  "webSearch", "queryGA4", "queryGSC", "b2bCustomerCm1",
 ])
 
 const LIVE_RULES = `━━━ PHIÊN GIỌNG NÓI TRỰC TIẾP (ưu tiên cao hơn mọi quy tắc định dạng bên dưới) ━━━
