@@ -27,8 +27,17 @@ Còn làm:
 - Đo lượt xem 60 ngày (`app_usage_events`, page_view): Quarter Report 753 lượt/19 người, Channels 285, B2C 281, B2B 271, Staff 181, Orders 105; BOD chỉ 36 lượt/10 người. **Đề xuất làm thật ở Quarter Report + Channels trước, không phải BOD.**
 - Thứ tự: token + kit → 2 tab thử → duyệt → lan ra theo nhóm (tiền, khách, sản phẩm, creator).
 
-## Việc 3 — Workflow bot (chưa bắt đầu)
-Baseline có sẵn: `web/scripts/eval-memory.mjs`, bộ eval Bé Gấu (9,88/10), bảng `gp_runs`. Đo trước rồi mới sửa: phân loại câu hỏi bằng model nhỏ, prompt cache, tool song song, truy xuất lai + xếp hạng lại, số liệu luôn từ SQL, hỏi lại đúng 1 câu khi thiếu ý.
+## Việc 3 — Workflow bot (đã đo baseline, chưa đổi code)
+Baseline Bé Gấu (eval 40 câu trên staging 2026-10-21, `web/eval/results/s238-base.*`):
+- Chất lượng 9,93/10 (bản 2026-10-08: 8,72) → hết chỗ cải thiện đo được; đòn bẩy còn lại là TỐC ĐỘ.
+- Thời gian TB 41s (trung vị 36s, p90 79s, tối đa 121s); token vào TB 191k/câu, ra 2,6k. TB 6,2 lượt model/câu.
+- 87% thời gian là lượt model, chỉ 13% là chạy tool (mỗi tool ~1s). Câu chậm nhất đều là câu HIGH thinking nhiều lượt (3: 121s, 40: 109s, 14: 96s).
+- Đã có sẵn: HIGH thinking chỉ lượt đầu, tool song song mỗi lượt, gộp truy vấn trong prompt (`business-facts.ts`), nén lịch sử, cache ngữ cảnh. Vẫn còn 75 lượt "1 executeSQL rồi lại 1 executeSQL" nối tiếp và 51 lượt querySupabase đơn lẻ (câu 19: 10 lượt liên tiếp, nhiều lượt trả kết quả rất nhỏ = thử sai cột).
+- updatePlan đứng riêng chỉ chiếm 3% thời gian (không đáng sửa).
+Thí nghiệm đề xuất (chưa làm, mỗi cái cần chạy lại eval để so):
+- E1 khối "cột thật của bảng Supabase hay dùng" trong prompt để giảm lượt thử sai (câu catalog).
+- E2 công cụ số liệu chuẩn (doanh thu/GP/CM1/3HK theo kỳ + bộ lọc) trả một lần, thay 3–6 lượt executeSQL.
+- E3 model nhẹ hơn cho lượt gọi tool LOW (rủi ro chất lượng, cần eval).
 
 ## Việc 2 — Tối giản Admin/Creator (chưa bắt đầu)
 Lượt xem 60 ngày: `/admin` 77 lượt/3 người; `creator/ai` 783/13; `my-metrics` 66/2; `creator/devtools` 39/1; `creator/argon` 28/1; `scheduled` 27/2; `users` 18/2; `market` 15/1; `creator` 13/1; `bridge` 11/6; `settings` 10/2; `creator/usage`, `data-health`, `bc-datapool` ~1. Đề xuất: gom Admin thành Thêm dữ liệu / Soát / Quyền; Creator Settings gom quyền Gấu Pro thành 1 ma trận; gộp nav trùng `sidebar.tsx` + `lib/nav.ts`.
