@@ -793,3 +793,10 @@ Hiếu chốt: Organization có >1 mã KH thì CHỈ nhập target ở dòng Org
 ## s236 — Cột "%MoM" ở bảng "Tổng hợp theo Tháng"
 
 Bảng "Xem bảng số liệu gốc theo tháng" thêm cột **%MoM** ngay sau CM1%: `(CM1 PR tháng này − CM1 thực tế tháng liền trước) / CM1 tháng trước` (tháng đã xong PR = actual; tháng đang chạy dùng CM1 actual × dim/elapsed, cùng công thức badge dưới cột PR CM1; chỉ tính khi CM1 tháng trước > 0). Áp cho dòng tổng và dòng con B2B/B2C. Tháng đầu quý so với tháng cuối của quý trước: trang gọi thêm `quarterly-report` quý trước ở nền (`prevQLast`), nên %MoM của tháng đầu quý hiện sau vài giây và cả badge ▲▼ của tháng đầu quý cũng có số thay vì N/A.
+
+## s238 — Đổi giao diện (không đổi số liệu)
+
+- Font toàn app Be Vietnam Pro (Outfit chỉ có latin nên dấu tiếng Việt rơi sang font hệ thống); gốc `html` 15px; chữ `text-[7..11px]` trong Quarter Report/Channels/kit nâng lên 11–12px; trang rộng `max-w-[1480px]`.
+- Thanh công cụ: "Bộ lọc" (popover) gom Phí ship + Đơn nội bộ (mặc định vẫn tính cả hai); "Tải lại mới" đổi sang nút viền; công tắc **Gọn / Chi tiết** (`qr_compact` trong localStorage; Gọn ẩn bảng "Tổng hợp theo Tháng" + thẻ vòng đời KH, mặc định Chi tiết).
+- Thẻ KPI: "CM1 Progress" → "Tiến độ CM1" + nhãn Đạt (PR ≥ 100% target) / Gần đạt (≥ 85%) / Chậm tiến độ. Màu phần trăm lớn vẫn dùng `colorFor` cũ (so với tỷ lệ ngày đã trôi), nên nhãn và màu có thể không cùng ý; chờ Hiếu chốt có đổi `colorFor` không.
+- Nhãn "Gross Margin" → "GP", "GM%" → "%GP" ở bảng hiển thị (file xuất Excel giữ tên cũ). Bảng B2B nhóm × tháng thêm dòng chú thích "PR = dự phóng cả kỳ, Act = thực tế đến hôm qua".

@@ -208,3 +208,7 @@ Hiếu thấy CM1 âm ở Shopeepay MY/SG/PH. Gốc: chi phí khách B2B (Turso 
 
 - `channels/performance` nhận `vendors`, `productTypes` (và `subChannels`, `channelGroups` nếu có) qua `getBODFilters` như BOD; trang gửi các tham số này ở chế độ All Channels và "Apply Filters" tải lại bảng Overview khi chưa chọn kênh. Cache `ch-perf5` (kèm bộ lọc). Lưu ý: chi phí kênh dạng amount và chi phí nhóm vẫn tính nguyên kênh, chỉ doanh thu/margin và chi phí dạng % theo doanh thu đã lọc, nên CM1 khi lọc vendor là ước lượng.
 - Top Selling Products (chế độ một kênh): `vendorFilter`/`productTypeFilter` dùng `TRIM(sku)` không tiền tố gây lỗi SQL "column reference sku is ambiguous" khi JOIN `dim_sku`; nay thay bằng `TRIM(<bảng>.sku)` riêng cho truy vấn này. Test sống: `test:consistency` nhóm "(Ch-03)".
+
+## s238 — Đổi nhãn giao diện
+
+Nhãn tiếng Anh đổi sang tiếng Việt (Tất cả nhóm, Tất cả kênh, Không so sánh, So với kỳ trước/năm trước, Bộ lọc); cột Margin% → %GP, CM1% → %CM1, MoM → %MoM. Chỉ đổi chữ hiển thị, không đổi dữ liệu. Font và cỡ chữ theo thay đổi chung ở `analytics-quarterly.md` §s238.

@@ -852,7 +852,7 @@ export default function ChannelPerformancePage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Channel Performance</h1>
-          <p className="text-slate-500">Analyze performance metrics for specific sales channels</p>
+          <p className="text-slate-500">Hiệu quả từng kênh bán: doanh thu, GP, CM1 và so sánh với kỳ trước</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -873,7 +873,7 @@ export default function ChannelPerformancePage() {
               }}
               className="bg-transparent text-sm font-medium focus:outline-none min-w-[70px]"
             >
-              <option value="All">All Groups</option>
+              <option value="All">Tất cả nhóm</option>
               <option value="B2B">B2B</option>
               <option value="B2C">B2C</option>
             </select>
@@ -898,7 +898,7 @@ export default function ChannelPerformancePage() {
               onChange={(e) => setSelectedChannel(e.target.value)}
               className="bg-transparent text-sm font-medium focus:outline-none min-w-[150px]"
             >
-              <option value="">All Channels (Overview)</option>
+              <option value="">Tất cả kênh (tổng quan)</option>
               {channels.map(c => (
                 <option key={c.channel_id} value={c.channel_id}>{c.channel_name}</option>
               ))}
@@ -919,9 +919,9 @@ export default function ChannelPerformancePage() {
               onChange={(e: any) => setComparisonType(e.target.value)}
               className="bg-transparent text-sm font-medium focus:outline-none min-w-[130px]"
             >
-              <option value="none">No Comparison</option>
-              <option value="previous_period">Compare: Prev Period</option>
-              <option value="previous_year">Compare: Prev Year</option>
+              <option value="none">Không so sánh</option>
+              <option value="previous_period">So với kỳ trước</option>
+              <option value="previous_year">So với năm trước</option>
             </select>
           </div>
 
@@ -933,7 +933,7 @@ export default function ChannelPerformancePage() {
             )}
           >
             <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />
-            <span className="text-sm font-medium">Filters</span>
+            <span className="text-sm font-medium">Bộ lọc</span>
           </button>
 
 
@@ -1289,8 +1289,8 @@ export default function ChannelPerformancePage() {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-bold text-slate-900">All Channels Overview</h3>
-              <p className="text-sm text-slate-500">Performance tổng hợp tất cả kênh — click vào kênh để xem chi tiết</p>
+              <h3 className="text-lg font-bold text-slate-900">Tổng quan tất cả kênh</h3>
+              <p className="text-sm text-slate-500">Số liệu tổng hợp tất cả kênh — click vào kênh để xem chi tiết</p>
             </div>
             <button onClick={fetchAllChannels} aria-label="Làm mới tổng hợp tất cả kênh" className="p-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors">
               <RefreshCw className={cn("w-4 h-4 text-slate-600", loadingAll && "animate-spin")} />
@@ -1300,16 +1300,16 @@ export default function ChannelPerformancePage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50">
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Channel</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Group</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Kênh</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Nhóm</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Doanh thu</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">GP</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Margin%</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">%GP</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">CM1</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">CM1%</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Orders</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">MoM</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">%CM1</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Số đơn</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Số lượng</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">%MoM</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
