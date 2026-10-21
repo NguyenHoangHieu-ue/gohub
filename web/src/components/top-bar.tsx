@@ -1,4 +1,5 @@
 "use client"
+import { fetchMe } from "@/lib/me-client"
 
 import { useSession, signOut } from "next-auth/react"
 import { LogOut, Search, Menu } from "lucide-react"
@@ -29,7 +30,7 @@ export function TopBar() {
   const [dbRole, setDbRole] = useState<string | null>(null)
   useEffect(() => {
     if (!username) return
-    fetch("/api/user/me", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(d => {
+    fetchMe().then(d => {
       if (d?.role) setDbRole(d.role)
     }).catch(() => {})
   }, [username])

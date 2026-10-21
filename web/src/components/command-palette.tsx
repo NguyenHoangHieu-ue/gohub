@@ -1,4 +1,5 @@
 "use client"
+import { fetchMe } from "@/lib/me-client"
 
 // Wave 0.3 — Command Palette (⌘K / Ctrl+K).
 // Điều hướng mọi tab theo quyền + hành động nhanh + tra cứu (SKU live, Note/Wiki, nước, đơn).
@@ -56,7 +57,7 @@ export function CommandPalette() {
   useEffect(() => {
     if (!open || permLoaded || !username) return
     Promise.all([
-      fetch("/api/user/me", { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetchMe(),
       fetch("/api/config/role-permissions", { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
       fetch("/api/config/tab-visibility", { cache: "no-store" }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
     ]).then(([me, perms, vis]) => {

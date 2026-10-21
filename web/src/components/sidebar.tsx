@@ -1,4 +1,5 @@
 "use client"
+import { fetchMe } from "@/lib/me-client"
 
 import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
@@ -139,7 +140,7 @@ function useSidebarData(username: string, sessionRole: string) {
     if (!username) return
     const isCreator = sessionRole === "creator"
     Promise.all([
-      fetch("/api/user/me",                  { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetchMe(),
       fetch("/api/config/role-permissions",  { cache: "no-store" }).then(r => r.ok ? r.json() : null).catch(() => null),
       isCreator ? Promise.resolve({}) : fetch("/api/config/tab-visibility", { cache: "no-store" }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
     ]).then(([me, perms, vis]) => {
