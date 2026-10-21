@@ -394,3 +394,7 @@ Kiến thức còn giá trị:
   agent, mọi biểu đồ hiện JSON thô. Cả Bé Gấu lẫn Gấu Pro chỉ vẽ khối ĐẦU TIÊN, khối sau bị bỏ.
 - Sửa: `lib/chat-charts.ts` `splitChartBlocks()` tách câu trả lời thành đoạn markdown + mọi khối chart (đúng thứ tự), dùng chung 2 trang;
   JSON lỗi giữ nguyên là chữ; khối chart chưa đóng khi đang stream bị ẩn (không nháy JSON). Test `__tests__/chat-charts.test.ts`.
+
+## s238 — Khối cột thật bảng catalog trong prompt (E1)
+
+`BUSINESS_FACTS` (lib/agents/business-facts.ts) thêm mục "Bảng catalog Supabase" (cột thật + giá trị thật của products/skus/listings/items/ref_*, đã kiểm 2026-10-21) để Bé Gấu gọi `querySupabase` đúng cột ngay lần đầu. Eval 40 câu: thời gian TB 41,0s → ~37,5s (2 lần chạy), câu liệt kê sản phẩm có số điện thoại 11 → 5 lượt. Thử công cụ `kpiSummary` (bọc bod-summary) rồi gỡ: bot ít gọi, không nhanh hơn, lệch định nghĩa doanh thu mặc định (phí ship + đơn nội bộ) so với SQL của bot. Chi tiết: docs/plans/intel-upgrade.md (xoá khi hết plan).

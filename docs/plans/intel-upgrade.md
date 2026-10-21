@@ -34,10 +34,16 @@ Baseline Bé Gấu (eval 40 câu trên staging 2026-10-21, `web/eval/results/s23
 - 87% thời gian là lượt model, chỉ 13% là chạy tool (mỗi tool ~1s). Câu chậm nhất đều là câu HIGH thinking nhiều lượt (3: 121s, 40: 109s, 14: 96s).
 - Đã có sẵn: HIGH thinking chỉ lượt đầu, tool song song mỗi lượt, gộp truy vấn trong prompt (`business-facts.ts`), nén lịch sử, cache ngữ cảnh. Vẫn còn 75 lượt "1 executeSQL rồi lại 1 executeSQL" nối tiếp và 51 lượt querySupabase đơn lẻ (câu 19: 10 lượt liên tiếp, nhiều lượt trả kết quả rất nhỏ = thử sai cột).
 - updatePlan đứng riêng chỉ chiếm 3% thời gian (không đáng sửa).
-Thí nghiệm đề xuất (chưa làm, mỗi cái cần chạy lại eval để so):
-- E1 khối "cột thật của bảng Supabase hay dùng" trong prompt để giảm lượt thử sai (câu catalog).
-- E2 công cụ số liệu chuẩn (doanh thu/GP/CM1/3HK theo kỳ + bộ lọc) trả một lần, thay 3–6 lượt executeSQL.
-- E3 model nhẹ hơn cho lượt gọi tool LOW (rủi ro chất lượng, cần eval).
+Kết quả thí nghiệm (cùng 40 câu, staging; mỗi lần chạy lệch nhau ~±0,1 điểm và ~±3s nên chỉ tin khi lặp lại):
+| Bản | Điểm | Thời gian TB | Lượt model | Token vào |
+|---|---|---|---|---|
+| baseline | 9,93 | 41,0s | 6,15 | 191k |
+| E1 (khối cột thật bảng catalog) lần 1 | 9,70 | 37,3s | 6,17 | 176k |
+| E1 lần 2 | 9,80 | 37,6s | 6,50 | 184k |
+| E1 + E2 (kpiSummary) | 9,68 | 37,5s | 6,17 | 164k |
+- E1 GIỮ: nhanh hơn ~8% ở cả hai lần chạy, câu 19 (sản phẩm có số điện thoại) từ 11 xuống 5 lượt; điểm thấp hơn baseline 0,1–0,2 nhưng các câu tụt điểm là câu không liên quan catalog (20, 21, 27, 30), nghi dao động giám khảo.
+- E2 BỎ (đã revert `73d6bea9`): model chỉ gọi kpiSummary 2/40 câu, không nhanh hơn, và câu 27 lệch Q2 26,03 vs 25,7 tỷ (tool mặc định tính phí ship + đơn nội bộ như tab BOD, còn đáp án chuẩn và SQL của bot thì không) → hai nguồn số khác định nghĩa, dễ làm bot tự mâu thuẫn. Muốn làm lại thì phải thống nhất định nghĩa "doanh thu" mặc định trước.
+- Chưa làm E3 (model nhẹ cho lượt gọi tool): rủi ro chất lượng, cần eval riêng.
 
 ## Việc 2 — Tối giản Admin/Creator (chưa bắt đầu)
 Lượt xem 60 ngày: `/admin` 77 lượt/3 người; `creator/ai` 783/13; `my-metrics` 66/2; `creator/devtools` 39/1; `creator/argon` 28/1; `scheduled` 27/2; `users` 18/2; `market` 15/1; `creator` 13/1; `bridge` 11/6; `settings` 10/2; `creator/usage`, `data-health`, `bc-datapool` ~1. Đề xuất: gom Admin thành Thêm dữ liệu / Soát / Quyền; Creator Settings gom quyền Gấu Pro thành 1 ma trận; gộp nav trùng `sidebar.tsx` + `lib/nav.ts`.
