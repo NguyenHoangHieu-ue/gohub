@@ -335,7 +335,7 @@ export default function OrdersPage() {
         <div className="flex flex-wrap items-end gap-3">
           {/* Entity pills — đầu dòng */}
           <div className="flex flex-col gap-1">
-            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Entity</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Pháp nhân</label>
             <div className="flex gap-1">
               {[
                 { code: "",   label: "All" },
@@ -358,7 +358,7 @@ export default function OrdersPage() {
           <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 self-end mb-0.5" />
 
           <div className="flex flex-col gap-1">
-            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Date mode</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Chế độ ngày</label>
             <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
               {(["day", "range"] as const).map(m => (
                 <button key={m} onClick={() => setDateMode(m)}
@@ -383,7 +383,7 @@ export default function OrdersPage() {
           ) : (
             <div className="flex items-end gap-2">
               <div className="flex flex-col gap-1">
-                <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">From</label>
+                <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Từ</label>
                 <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
                   className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200" />
               </div>
@@ -397,11 +397,11 @@ export default function OrdersPage() {
           )}
 
           <div className="flex flex-col gap-1">
-            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">By date</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Theo ngày</label>
             <select value={dataSource} onChange={e => setDataSource(e.target.value)}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
-              <option value="fulfilled">Fulfilled</option>
-              <option value="created">Created</option>
+              <option value="fulfilled">Đã giao</option>
+              <option value="created">Đã tạo</option>
             </select>
           </div>
 
@@ -409,7 +409,7 @@ export default function OrdersPage() {
 
           {/* Include ShippingFee: Yes/No — default Yes (gồm phí ship) */}
           <div className="flex flex-col gap-1">
-            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm phí ship vào doanh thu">Include ShippingFee</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm phí ship vào doanh thu">Tính phí ship</label>
             <select value={includeShip ? "yes" : "no"} onChange={e => setIncludeShip(e.target.value === "yes")}
               className={cn("text-xs border rounded-lg px-2.5 py-1.5 font-semibold",
                 includeShip ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
@@ -421,7 +421,7 @@ export default function OrdersPage() {
 
           {/* Include Internal Ops: Yes/No — default Yes (gồm đơn nội bộ) */}
           <div className="flex flex-col gap-1">
-            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm đơn chuyển nội bộ (INTERNAL-TRANSACTION, revenue=0)">Include Internal Ops</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Yes = gồm đơn chuyển nội bộ (INTERNAL-TRANSACTION, revenue=0)">Tính đơn nội bộ</label>
             <select value={includeInternalOps ? "yes" : "no"} onChange={e => setIncludeInternalOps(e.target.value === "yes")}
               className={cn("text-xs border rounded-lg px-2.5 py-1.5 font-semibold",
                 includeInternalOps ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700"
@@ -435,19 +435,19 @@ export default function OrdersPage() {
         {/* Row 2: other filters + Apply */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Group</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nhóm</label>
             <select value={channelGroup} onChange={e => { setChannelGroup(e.target.value); setChannel("") }}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
-              <option value="">All groups</option>
+              <option value="">Tất cả nhóm</option>
               <option value="B2B">B2B</option>
               <option value="B2C">B2C</option>
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Channel</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Kênh</label>
             <select value={channel} onChange={e => setChannel(e.target.value)}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[120px]">
-              <option value="">All channels</option>
+              <option value="">Tất cả kênh</option>
               {channelList.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
@@ -455,15 +455,15 @@ export default function OrdersPage() {
             <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">PIC</label>
             <select value={staffCode} onChange={e => setStaffCode(e.target.value)}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[130px]">
-              <option value="">All PIC</option>
+              <option value="">Tất cả PIC</option>
               {staffList.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Source</label>
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nguồn</label>
             <select value={orderSource} onChange={e => setOrderSource(e.target.value)}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[120px]">
-              <option value="">All sources</option>
+              <option value="">Tất cả nguồn</option>
               {orderSrcList.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>

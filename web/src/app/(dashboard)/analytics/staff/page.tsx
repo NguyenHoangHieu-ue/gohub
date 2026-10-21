@@ -584,12 +584,12 @@ function StaffPageInner() {
         </div>
         <select value={draft.channel} onChange={e => setDraft(d => ({ ...d, channel: e.target.value }))}
           className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-3 py-1">
-          <option value="">All Channels</option>
+          <option value="">Tất cả kênh</option>
           {channels.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={draft.companyCode} onChange={e => setDraft(d => ({ ...d, companyCode: e.target.value }))}
           className="bg-slate-50 border-slate-200 rounded-full text-xs font-bold text-slate-600 px-3 py-1">
-          <option value="ALL">All Companies</option>
+          <option value="ALL">Tất cả công ty</option>
           <option value="VN">VN</option><option value="US">US</option>
         </select>
         {/* Staff filter */}

@@ -661,11 +661,11 @@ export default function WebsiteAnalyticsPage() {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Traffic Overview</h2>
+              <h2 className="text-lg font-bold text-slate-900">Tổng quan truy cập</h2>
               <p className="text-sm text-slate-500">Người dùng và Phiên truy cập (GA4).</p>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-brand-500"></div><span className="text-xs font-medium text-slate-600">Users</span></div>
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-brand-500"></div><span className="text-xs font-medium text-slate-600">Người dùng</span></div>
             </div>
           </div>
           <div className="h-[300px] w-full">
@@ -676,12 +676,12 @@ export default function WebsiteAnalyticsPage() {
         {platform === "web" && <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Search Trends</h2>
+              <h2 className="text-lg font-bold text-slate-900">Xu hướng tìm kiếm</h2>
               <p className="text-sm text-slate-500">Clicks và Impressions (Search Console).</p>
             </div>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ background: CHART_PALETTE[0] }}></div><span className="text-xs font-medium text-slate-600">Clicks</span></div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-300"></div><span className="text-xs font-medium text-slate-600">Impressions</span></div>
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ background: CHART_PALETTE[0] }}></div><span className="text-xs font-medium text-slate-600">Lượt nhấp</span></div>
+              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-300"></div><span className="text-xs font-medium text-slate-600">Lượt hiển thị</span></div>
             </div>
           </div>
           <div className="h-[300px] w-full">
@@ -703,8 +703,8 @@ export default function WebsiteAnalyticsPage() {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Revenue Breakdown</h2>
-              <p className="text-sm text-slate-500">Ecommerce revenue tracking.</p>
+              <h2 className="text-lg font-bold text-slate-900">Cơ cấu doanh thu</h2>
+              <p className="text-sm text-slate-500">Theo dõi doanh thu bán hàng.</p>
             </div>
             <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center"><DollarSign className="w-5 h-5" /></div>
           </div>
@@ -717,8 +717,8 @@ export default function WebsiteAnalyticsPage() {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Top Selling Items</h2>
-              <p className="text-sm text-slate-500">Items contributing most to revenue.</p>
+              <h2 className="text-lg font-bold text-slate-900">Sản phẩm bán chạy</h2>
+              <p className="text-sm text-slate-500">Sản phẩm đóng góp doanh thu nhiều nhất.</p>
             </div>
             <div className="w-10 h-10 bg-brand-50 text-brand-600 rounded-xl flex items-center justify-center"><ShoppingBag className="w-5 h-5" /></div>
           </div>
@@ -753,7 +753,7 @@ export default function WebsiteAnalyticsPage() {
             {productPerformance.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Tag className="w-8 h-8 opacity-20 mb-2" />
-                <p className="text-[11.5px]">No ecommerce data found for this period</p>
+                <p className="text-[11.5px]">Chưa có dữ liệu bán hàng trong kỳ này</p>
               </div>
             )}
           </div>
@@ -765,8 +765,8 @@ export default function WebsiteAnalyticsPage() {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Top Countries</h2>
-              <p className="text-sm text-slate-500">Users distribution by country.</p>
+              <h2 className="text-lg font-bold text-slate-900">Quốc gia hàng đầu</h2>
+              <p className="text-sm text-slate-500">Phân bố người dùng theo quốc gia.</p>
             </div>
             <div className="w-10 h-10 bg-brand-50 text-brand-600 rounded-xl flex items-center justify-center"><Globe className="w-5 h-5" /></div>
           </div>
@@ -792,7 +792,7 @@ export default function WebsiteAnalyticsPage() {
                   )}
                   <div>
                     <p className="text-sm font-bold text-slate-900">{formatNumber(country.users)}</p>
-                    <p className="text-[11.5px] text-slate-400 uppercase font-bold">Users</p>
+                    <p className="text-[11.5px] text-slate-400 uppercase font-bold">Người dùng</p>
                   </div>
                 </div>
               </div>
@@ -800,7 +800,7 @@ export default function WebsiteAnalyticsPage() {
             {countriesPerformace.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Globe className="w-8 h-8 opacity-20 mb-2" />
-                <p className="text-[11.5px]">No geographic data found</p>
+                <p className="text-[11.5px]">Chưa có dữ liệu quốc gia</p>
               </div>
             )}
           </div>
@@ -810,8 +810,8 @@ export default function WebsiteAnalyticsPage() {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Traffic Sources</h2>
-              <p className="text-sm text-slate-500">Top user acquisition channels.</p>
+              <h2 className="text-lg font-bold text-slate-900">Nguồn truy cập</h2>
+              <p className="text-sm text-slate-500">Các kênh mang lại nhiều người dùng nhất.</p>
             </div>
             <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center"><Filter className="w-5 h-5" /></div>
           </div>
@@ -836,7 +836,7 @@ export default function WebsiteAnalyticsPage() {
                   )}
                   <div>
                     <p className="text-sm font-bold text-slate-900">{formatNumber(source.users)}</p>
-                    <p className="text-[11.5px] text-slate-400 uppercase font-bold">Users</p>
+                    <p className="text-[11.5px] text-slate-400 uppercase font-bold">Người dùng</p>
                   </div>
                 </div>
               </div>
@@ -844,7 +844,7 @@ export default function WebsiteAnalyticsPage() {
             {sourcesPerformance.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                 <Activity className="w-8 h-8 opacity-20 mb-2" />
-                <p className="text-[11.5px]">No traffic data found</p>
+                <p className="text-[11.5px]">Chưa có dữ liệu truy cập</p>
               </div>
             )}
           </div>
@@ -856,7 +856,7 @@ export default function WebsiteAnalyticsPage() {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Top Search Queries</h2>
+              <h2 className="text-lg font-bold text-slate-900">Từ khoá tìm kiếm hàng đầu</h2>
               <p className="text-sm text-slate-500">Queries driving traffic from Google Search.</p>
             </div>
             <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center"><MousePointer2 className="w-5 h-5" /></div>
@@ -865,9 +865,9 @@ export default function WebsiteAnalyticsPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 text-xs text-slate-500 bg-slate-50">
-                  <th className="p-3 font-semibold rounded-tl-xl w-1/3">Query</th>
-                  <th className="p-3 font-semibold text-right">Clicks</th>
-                  <th className="p-3 font-semibold text-right">Impressions</th>
+                  <th className="p-3 font-semibold rounded-tl-xl w-1/3">Từ khoá</th>
+                  <th className="p-3 font-semibold text-right">Lượt nhấp</th>
+                  <th className="p-3 font-semibold text-right">Lượt hiển thị</th>
                   <th className="p-3 font-semibold text-right">CTR</th>
                   <th className="p-3 font-semibold text-right rounded-tr-xl">Avg. Position</th>
                 </tr>
@@ -894,7 +894,7 @@ export default function WebsiteAnalyticsPage() {
                   </tr>
                 ))}
                 {topQueriesPerformance.length === 0 && (
-                  <tr><td colSpan={5} className="p-8 text-center text-slate-400">No search queries found for this period</td></tr>
+                  <tr><td colSpan={5} className="p-8 text-center text-slate-400">Chưa có từ khoá tìm kiếm trong kỳ này</td></tr>
                 )}
               </tbody>
             </table>
@@ -923,9 +923,9 @@ export default function WebsiteAnalyticsPage() {
               <thead>
                 <tr className="border-b border-slate-100 text-xs text-slate-500 bg-slate-50">
                   <th className="p-3 font-semibold rounded-tl-xl">Destination</th>
-                  <th className="p-3 font-semibold text-right">Views</th>
-                  <th className="p-3 font-semibold text-right">Purchases</th>
-                  <th className="p-3 font-semibold text-right rounded-tr-xl">Conv. Rate</th>
+                  <th className="p-3 font-semibold text-right">Lượt xem</th>
+                  <th className="p-3 font-semibold text-right">Lượt mua</th>
+                  <th className="p-3 font-semibold text-right rounded-tr-xl">Tỉ lệ mua</th>
                 </tr>
               </thead>
               <tbody>
@@ -962,10 +962,10 @@ export default function WebsiteAnalyticsPage() {
                             <table className="w-full text-left">
                               <thead className="text-[11.5px] text-slate-400 uppercase font-bold tracking-wider">
                                 <tr>
-                                  <th className="py-2">Product Purchased</th>
-                                  <th className="py-2 text-right">Views</th>
-                                  <th className="py-2 text-right">Purchases</th>
-                                  <th className="py-2 text-right">Conv. Rate</th>
+                                  <th className="py-2">Sản phẩm đã mua</th>
+                                  <th className="py-2 text-right">Lượt xem</th>
+                                  <th className="py-2 text-right">Lượt mua</th>
+                                  <th className="py-2 text-right">Tỉ lệ mua</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -986,7 +986,7 @@ export default function WebsiteAnalyticsPage() {
                   </React.Fragment>
                 ))}
                 {esimDestinations.length === 0 && (
-                  <tr><td colSpan={4} className="p-8 text-center text-slate-400">No destination grouping data found</td></tr>
+                  <tr><td colSpan={4} className="p-8 text-center text-slate-400">Chưa có dữ liệu theo điểm đến</td></tr>
                 )}
               </tbody>
             </table>
@@ -997,8 +997,8 @@ export default function WebsiteAnalyticsPage() {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Top eSIM Products</h2>
-              <p className="text-sm text-slate-500">Purchase performance by product items.</p>
+              <h2 className="text-lg font-bold text-slate-900">eSIM bán chạy</h2>
+              <p className="text-sm text-slate-500">Lượt mua theo sản phẩm.</p>
             </div>
             <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center"><Globe className="w-5 h-5" /></div>
           </div>
@@ -1006,10 +1006,10 @@ export default function WebsiteAnalyticsPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 text-xs text-slate-500 bg-slate-50">
-                  <th className="p-3 font-semibold rounded-tl-xl w-5/12">Product Name</th>
-                  <th className="p-3 font-semibold text-right">Views</th>
-                  <th className="p-3 font-semibold text-right">Purchases</th>
-                  <th className="p-3 font-semibold text-right rounded-tr-xl">Conv. Rate</th>
+                  <th className="p-3 font-semibold rounded-tl-xl w-5/12">Tên sản phẩm</th>
+                  <th className="p-3 font-semibold text-right">Lượt xem</th>
+                  <th className="p-3 font-semibold text-right">Lượt mua</th>
+                  <th className="p-3 font-semibold text-right rounded-tr-xl">Tỉ lệ mua</th>
                 </tr>
               </thead>
               <tbody>
@@ -1036,7 +1036,7 @@ export default function WebsiteAnalyticsPage() {
                   )
                 })}
                 {esimPagesPerformance.length === 0 && (
-                  <tr><td colSpan={4} className="p-8 text-center text-slate-400">No eSIM page data found for this period</td></tr>
+                  <tr><td colSpan={4} className="p-8 text-center text-slate-400">Chưa có dữ liệu trang eSIM trong kỳ này</td></tr>
                 )}
               </tbody>
             </table>

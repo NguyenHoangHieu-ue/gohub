@@ -488,10 +488,10 @@ export default function VendorPerformancePage() {
             {showVendorDropdown && (
               <div className="absolute z-50 top-full right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl max-h-80 overflow-y-auto p-2 min-w-[240px]">
                 <div className="flex items-center justify-between p-2 mb-2 border-b border-slate-100 sticky top-0 bg-white z-10">
-                  <span className="text-xs font-bold text-slate-400 uppercase">Select Vendors</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase">Chọn vendor</span>
                   <div className="flex items-center gap-2">
                     <button onClick={() => setSelectedVendors(vendors)} className="text-[11.5px] text-brand-600 font-bold hover:underline">All</button>
-                    <button onClick={() => setSelectedVendors([])} className="text-[11.5px] text-rose-600 font-bold hover:underline">Clear</button>
+                    <button onClick={() => setSelectedVendors([])} className="text-[11.5px] text-rose-600 font-bold hover:underline">Xoá</button>
                   </div>
                 </div>
                 {vendors.map(v => (
@@ -533,7 +533,7 @@ export default function VendorPerformancePage() {
             className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border shadow-sm transition-colors",
               showFilters ? "bg-brand-600 border-brand-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50")}>
             <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />
-            <span className="text-sm font-medium">Filters</span>
+            <span className="text-sm font-medium">Bộ lọc</span>
           </button>
 
           <button onClick={fetchData} aria-label="Làm mới dữ liệu" className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition-all shadow-sm">
@@ -556,7 +556,7 @@ export default function VendorPerformancePage() {
               </p>
             </div>
             <div className="bg-white/10 px-4 py-2 rounded-xl backdrop-blur-md border border-white/10">
-              <p className="text-[11.5px] font-bold text-brand-100 uppercase tracking-wider">Projection Factor</p>
+              <p className="text-[11.5px] font-bold text-brand-100 uppercase tracking-wider">Hệ số dự phóng</p>
               <p className="text-xl font-bold">x{projection.factor.toFixed(2)}</p>
             </div>
           </div>
@@ -588,39 +588,39 @@ export default function VendorPerformancePage() {
       {showFilters && (
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
           <div className="flex-1 space-y-1.5">
-            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Channel Group</label>
+            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Nhóm kênh</label>
             <select value={selectedChannelGroup} onChange={(e) => setSelectedChannelGroup(e.target.value)}
               className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
-              <option value="All Groups">All Groups</option>
+              <option value="All Groups">Tất cả nhóm</option>
               <option value="B2B">B2B</option>
               <option value="B2C">B2C</option>
             </select>
           </div>
           <div className="flex-1 space-y-1.5">
-            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Channel</label>
+            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Kênh</label>
             <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}
               className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
               {channels.map(c => (<option key={c} value={c}>{c}</option>))}
             </select>
           </div>
           <div className="flex-1 space-y-1.5">
-            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
+            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Từ ngày</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
               className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all" />
           </div>
           <div className="flex-1 space-y-1.5">
-            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
+            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Đến ngày</label>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
               className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all" />
           </div>
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} className="self-end" />
           <div className="flex-1 space-y-1.5">
-            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Comparison</label>
+            <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">So sánh</label>
             <select value={comparisonType} onChange={(e) => setComparisonType(e.target.value as any)}
               className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
-              <option value="none">No Comparison</option>
-              <option value="previous_period">Previous Period</option>
-              <option value="previous_year">Previous Year</option>
+              <option value="none">Không so sánh</option>
+              <option value="previous_period">Kỳ trước</option>
+              <option value="previous_year">Năm trước</option>
             </select>
           </div>
           <div className="flex items-center justify-between sm:justify-start gap-4">
@@ -669,7 +669,7 @@ export default function VendorPerformancePage() {
         {/* Revenue Trend */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-900">Revenue Trend</h2>
+            <h2 className="text-lg font-bold text-slate-900">Xu hướng doanh thu</h2>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-xs font-medium text-slate-500 bg-slate-50 px-3 py-1 rounded-full">
                 <div className="w-2 h-2 rounded-full" style={{ background: CHART_PALETTE[0] }}></div>
@@ -678,7 +678,7 @@ export default function VendorPerformancePage() {
               {comparisonType !== "none" && (
                 <div className="flex items-center gap-2 text-xs font-medium text-slate-500 bg-slate-50 px-3 py-1 rounded-full">
                   <div className="w-2 h-2 bg-slate-400 rounded-full"></div>
-                  Previous Period
+                  Kỳ trước
                 </div>
               )}
             </div>
@@ -702,7 +702,7 @@ export default function VendorPerformancePage() {
       <div ref={productsRef} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden scroll-mt-4">
         <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <h2 className="text-lg font-bold text-slate-900">Product Performance</h2>
+            <h2 className="text-lg font-bold text-slate-900">Hiệu quả sản phẩm</h2>
             {focus && (
               <span className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-brand-50 border border-brand-100 text-xs font-bold text-brand-700">
                 {focus.kind === "customer" ? "Khách hàng" : "Kênh"}: {focus.label}
@@ -721,22 +721,22 @@ export default function VendorPerformancePage() {
             <thead>
               <tr className="bg-slate-50/50">
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("sku")}>
-                  <div className="flex items-center">Product SKU <SortIcon column="sku" /></div>
+                  <div className="flex items-center">SKU sản phẩm <SortIcon column="sku" /></div>
                 </th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("revenue")}>
-                  <div className="flex items-center justify-end">Revenue (VND) <SortIcon column="revenue" /></div>
+                  <div className="flex items-center justify-end">Doanh thu (VND) <SortIcon column="revenue" /></div>
                 </th>
                 {comparisonType !== "none" && (
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Change</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Thay đổi</th>
                 )}
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("orders")}>
-                  <div className="flex items-center justify-end">Orders <SortIcon column="orders" /></div>
+                  <div className="flex items-center justify-end">Số đơn <SortIcon column="orders" /></div>
                 </th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("margin")}>
-                  <div className="flex items-center justify-end">Gross Margin <SortIcon column="margin" /></div>
+                  <div className="flex items-center justify-end">GP <SortIcon column="margin" /></div>
                 </th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort("marginPercent")}>
-                  <div className="flex items-center justify-end">Margin % <SortIcon column="marginPercent" /></div>
+                  <div className="flex items-center justify-end">%GP <SortIcon column="marginPercent" /></div>
                 </th>
               </tr>
             </thead>
