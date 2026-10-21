@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { Search, Check, X, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
 
-// Tách khỏi page.tsx (s196+21, tách admin/page.tsx 2120 dòng — cùng nguyên tắc Phase 5: chỉ move
-// nguyên khung JSX/logic, KHÔNG đổi hành vi). Nạp qua next/dynamic ở page.tsx.
+// Quản lý khuyến mãi (thêm/sửa/xoá). Trước ở trang Admin; s238 chuyển vào trang Khuyến mãi, chỉ admin/creator thấy và API cũng chỉ cho 2 vai trò này.
 
 interface PromoProduct {
   product_code:        string
@@ -20,7 +19,7 @@ interface PromoProduct {
 
 const PROMO_PAGE_SIZE = 50
 
-export default function PromotionsTab({ onNotify }: {
+export function PromotionsManager({ onNotify }: {
   onNotify: (type: "success" | "error", text: string) => void
 }) {
   const [items,    setItems]    = useState<PromoProduct[]>([])

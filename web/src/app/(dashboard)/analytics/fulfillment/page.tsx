@@ -8,6 +8,7 @@ import {
 import { cn } from "@/lib/utils"
 import { exportRawRows } from "@/lib/export-excel"
 import { InventoryStockView } from "@/components/inventory/stock-view"
+import { InventoryThresholdsPanel } from "@/components/inventory/thresholds-panel"
 import { LogicNote, TableRowsSkeleton } from "@/components/dashboard-kit"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -596,6 +597,7 @@ function FulfillmentInner() {
           ))}
         </div>
       </div>
+      {tab === "stock" && <InventoryThresholdsPanel />}
       {tab === "stock" ? <InventoryStockView /> : <InventoryInner />}
     </div>
   )

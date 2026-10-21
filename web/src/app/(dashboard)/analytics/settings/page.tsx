@@ -2,20 +2,17 @@
 
 import { ApiKeysPanel } from "@/components/api-keys-panel"
 import React, { useState, useEffect } from "react"
-import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Filter, Sliders, ChevronDown, Database, MapPin, Tag, Boxes } from "lucide-react"
+import { Settings as SettingsIcon, Shield, Save, RefreshCw, Plus, X, Database, MapPin } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 import { useRoleGuard } from "@/lib/use-role-guard"
 
 // Cấu hình Analytics — UI theo style intel Settings, backend web (app_settings).
-// 3 mục: Partner Tiers (đối tác chiến lược) · Access Policy (Guardian) · Role Filters (lọc dòng BI theo role).
+// 3 tab: Dữ liệu (tình trạng DB/cache, SKU Destination) · Chatbot (Guardian) · API bên ngoài. s238: bỏ Partner Tiers, Role Filters, Item Type theo kênh (DB trống/đã dùng cách khác); ngưỡng tồn kho chuyển sang tab Inventory.
 
 // s190: bỏ hẳn subsystem "policy grid" (CATEGORIES/DEFAULT_POLICY/Decision/cyclePolicy/fullPolicy) —
 // code thừa, chưa từng render (UI thật đã đơn giản hoá thành 2 info-box tĩnh bên dưới từ trước, khớp
 // guardian.ts hiện tại: chỉ 1 ranh giới thật system_internal, còn lại "ai cũng như nhau"). Xem
 // docs/session_summary.txt s190 phần audit dead-code.
-const FILTER_ROLES = CONFIGURABLE_ROLES
-
 export default function SettingsPage() {
   const { ready } = useRoleGuard(["admin", "creator"])   // role tươi từ DB (không dùng JWT stale)
   if (!ready) return null
@@ -24,22 +21,13 @@ export default function SettingsPage() {
 
 function AnalyticsSettings() {
   // 4 tab thay cho 1 trang dài 7 khối; "API bên ngoài" chuyển từ trang Admin sang đây (s238).
-  const [tab, setTab] = useState<"data" | "chat" | "filters" | "api">("data")
-  const [tiers, setTiers] = useState<Record<string, string[]>>({ Strategic: [] })
-  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [tab, setTab] = useState<"data" | "chat" | "api">("data")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [savedTiers,   setSavedTiers]   = useState<string>("{}")
-  const [savedFilters, setSavedFilters] = useState<string>("{}")
   const [customRules, setCustomRules]   = useState<string>("")
   const [savedCustomRules, setSavedCustomRules] = useState<string>("")
-  const dirtyTiers       = JSON.stringify(tiers)   !== savedTiers
-  const dirtyFilters     = JSON.stringify(filters) !== savedFilters
   const dirtyCustomRules = customRules !== savedCustomRules
-  const [availablePartners, setAvailablePartners] = useState<string[]>([])
-  const [newTier, setNewTier] = useState("")
-  const [addInputs, setAddInputs] = useState<Record<string, string>>({})
   const [db, setDb] = useState<any>(null)
   const [dbLoading, setDbLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -50,14 +38,6 @@ function AnalyticsSettings() {
   const [savedSkuRules, setSavedSkuRules] = useState<string>("[]")
   const dirtySkuRules = JSON.stringify(skuRules) !== savedSkuRules
   const [countryCodes, setCountryCodes] = useState<{ code: string; country: string }[]>([])
-  const [itemChannelTypes, setItemChannelTypes] = useState<Record<string, string[]>>({ B2C: ["B2C", "ECO"], B2B: ["OD", "WS", "Strategic", "TIER", "SILVER", "DEAL", "B2B"] })
-  const [savedItemChannelTypes, setSavedItemChannelTypes] = useState<string>("{}")
-  const [allItemTypes, setAllItemTypes] = useState<string[]>([])
-  const dirtyItemChannelTypes = JSON.stringify(itemChannelTypes) !== savedItemChannelTypes
-  const [newChannelPrefix, setNewChannelPrefix] = useState<Record<string, string>>({})
-  const [invThresholds, setInvThresholds] = useState({ safeDays: 90, normalDays: 60, warningDays: 30 })
-  const [savedInvThresholds, setSavedInvThresholds] = useState<string>("{}")
-  const dirtyInvThresholds = JSON.stringify(invThresholds) !== savedInvThresholds
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
 
@@ -111,36 +91,17 @@ function AnalyticsSettings() {
     setLoading(true)
     fetchB2BCacheInfo()  // parallel, non-blocking
     try {
-      const [t, f, ch, skuRule, cc, ict, crRes, invT] = await Promise.all([
-        fetch("/api/config/partner-tiers").then(r => r.ok ? r.json() : {}),
-        fetch("/api/config/role-filters").then(r => r.ok ? r.json() : {}),
-        fetch("/api/channels?channelGroup=B2B").then(r => r.ok ? r.json() : []),
+      const [skuRule, cc, crRes] = await Promise.all([
         fetch("/api/config/sku-destination-rule").then(r => r.ok ? r.json() : { rules: [] }).catch(() => ({ rules: [] })),
         fetch("/api/config/country-codes").then(r => r.ok ? r.json() : []),
-        fetch("/api/config/item-channel-types").then(r => r.ok ? r.json() : { config: {}, allTypes: [] }).catch(() => ({ config: {}, allTypes: [] })),
         fetch("/api/config/chatbot-rules").then(r => r.ok ? r.json() : { rules: "" }).catch(() => ({ rules: "" })),
-        fetch("/api/config/inventory-alert-thresholds").then(r => r.ok ? r.json() : { safeDays: 90, normalDays: 60, warningDays: 30 }).catch(() => ({ safeDays: 90, normalDays: 60, warningDays: 30 })),
       ])
       const parsedSkuRules = skuRule?.rules || []
       setSkuRules(parsedSkuRules)
       setSavedSkuRules(JSON.stringify(parsedSkuRules))
       setCountryCodes(Array.isArray(cc) ? cc : [])
-      const parsedIct = ict?.config || {}
-      setItemChannelTypes(parsedIct)
-      setSavedItemChannelTypes(JSON.stringify(parsedIct))
-      setAllItemTypes(Array.isArray(ict?.allTypes) ? ict.allTypes : [])
-      const parsedTiers = t && Object.keys(t).length ? t : { Strategic: [] }
-      const parsedFilters = f || {}
-      setTiers(parsedTiers)
-      setFilters(parsedFilters)
-      setSavedTiers(JSON.stringify(parsedTiers))
-      setSavedFilters(JSON.stringify(parsedFilters))
-      setAvailablePartners(Array.isArray(ch) ? ch.filter((c: any) => typeof c === "string") : [])
       const cr = crRes?.rules ?? ""
       setCustomRules(cr); setSavedCustomRules(cr)
-      const parsedInvT = { safeDays: invT?.safeDays ?? 90, normalDays: invT?.normalDays ?? 60, warningDays: invT?.warningDays ?? 30 }
-      setInvThresholds(parsedInvT)
-      setSavedInvThresholds(JSON.stringify(parsedInvT))
     } finally {
       setLoading(false)
     }
@@ -153,46 +114,13 @@ function AnalyticsSettings() {
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       if (res.ok) {
         // Reset dirty state sau khi lưu
-        if (key === "tiers")         setSavedTiers(JSON.stringify(body))
-        if (key === "filters")       setSavedFilters(JSON.stringify(body))
         if (key === "sku-dest")      setSavedSkuRules(JSON.stringify(body.rules ?? body))
-        if (key === "item-channel")  setSavedItemChannelTypes(JSON.stringify(body))
       }
       notify(res.ok, res.ok ? "Đã lưu" : "Lưu thất bại")
     } finally {
       setSaving(null)
     }
   }
-
-  const saveInvThresholds = async () => {
-    setSaving("inv-thresholds")
-    try {
-      const res = await fetch("/api/config/inventory-alert-thresholds", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(invThresholds),
-      })
-      const j = await res.json().catch(() => ({}))
-      if (res.ok) setSavedInvThresholds(JSON.stringify(invThresholds))
-      notify(res.ok, res.ok ? "Đã lưu" : (j.error || "Lưu thất bại"))
-    } finally {
-      setSaving(null)
-    }
-  }
-
-  const addPartner = (tier: string, v: string) => {
-    const val = v.trim()
-    if (!val) return
-    setTiers(prev => ({ ...prev, [tier]: Array.from(new Set([...(prev[tier] || []), val])) }))
-    setAddInputs(prev => ({ ...prev, [tier]: "" }))
-  }
-  const removePartner = (tier: string, name: string) => setTiers(prev => ({ ...prev, [tier]: (prev[tier] || []).filter(p => p !== name) }))
-  const addTier = () => {
-    const name = newTier.trim()
-    if (!name) return
-    if (tiers[name]) { notify(false, `Nhóm "${name}" đã tồn tại`); return }
-    setTiers(prev => ({ ...prev, [name]: [] }))
-    setNewTier("")
-  }
-  const deleteTier = (tier: string) => setTiers(prev => { const n = { ...prev }; delete n[tier]; return n })
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen max-w-[1200px] mx-auto">
@@ -208,7 +136,7 @@ function AnalyticsSettings() {
       </div>
 
       <div className="flex flex-wrap gap-1 border-b border-slate-200" role="tablist">
-        {([["data", "Dữ liệu và nhóm"], ["chat", "Chatbot và cảnh báo"], ["filters", "Lọc theo vai trò"], ["api", "API bên ngoài"]] as const).map(([id, label]) => (
+        {([["data", "Dữ liệu"], ["chat", "Chatbot"], ["api", "API bên ngoài"]] as const).map(([id, label]) => (
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
             className={cn("px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors", tab === id ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-700")}>
             {label}
@@ -328,79 +256,6 @@ function AnalyticsSettings() {
       </div>
       )}
 
-      {/* Channel & Customer Tiers (Partner Tiers) — gộp từ Admin sang đây (s82) */}
-      {tab === "data" && (
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-brand-600" />
-            <div>
-              <h2 className="font-bold text-slate-800">Channel &amp; Customer Tiers (Partner Tiers)</h2>
-              <p className="text-[12px] text-slate-400 mt-0.5">Phân loại đối tác chiến lược. Mỗi nhóm hiển thị riêng trong báo cáo B2B / BOD / Dashboard / All-Time.</p>
-            </div>
-          </div>
-          <button onClick={() => savePost("tiers", "/api/config/partner-tiers", tiers)} disabled={saving === "tiers" || !dirtyTiers} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyTiers ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
-            {saving === "tiers" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
-          </button>
-        </div>
-
-        <datalist id="channel-suggestions">
-          {availablePartners.map(c => <option key={c} value={c} />)}
-        </datalist>
-
-        <div className="p-6 space-y-4">
-          {/* Thêm nhóm mới */}
-          <div className="flex items-end gap-3 bg-slate-50 border border-slate-100 rounded-xl p-3">
-            <div className="flex-1">
-              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Tên nhóm mới</label>
-              <input value={newTier} onChange={e => setNewTier(e.target.value)} onKeyDown={e => e.key === "Enter" && addTier()}
-                placeholder="VD: Strategic, Preferred..."
-                className="mt-1 w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-600" />
-            </div>
-            <button onClick={addTier} className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg">
-              <Plus size={14} /> Thêm nhóm
-            </button>
-          </div>
-
-          {/* Các nhóm tier */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Object.keys(tiers).sort().map(tier => {
-              const list = tiers[tier] || []
-              return (
-                <div key={tier} className="flex flex-col bg-slate-50 rounded-xl border border-slate-100">
-                  <div className="p-3 border-b border-slate-100 flex items-center justify-between">
-                    <span className="text-sm font-bold text-slate-800 uppercase tracking-tight">{tier}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11.5px] font-bold bg-white border border-slate-200 px-2 py-0.5 rounded-full text-slate-500">{list.length} đối tác</span>
-                      <button onClick={() => deleteTier(tier)} title="Xóa nhóm" className="text-slate-300 hover:text-rose-500"><X className="w-4 h-4" /></button>
-                    </div>
-                  </div>
-                  <div className="p-3 flex-1 space-y-1.5 max-h-56 overflow-y-auto">
-                    {list.length === 0 ? (
-                      <p className="text-[12px] text-slate-400 text-center py-4">Chưa có đối tác nào</p>
-                    ) : list.map(p => (
-                      <div key={p} className="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-slate-100">
-                        <span className="text-xs text-slate-600 truncate">{p}</span>
-                        <button onClick={() => removePartner(tier, p)} className="text-slate-300 hover:text-rose-500 shrink-0"><X className="w-3.5 h-3.5" /></button>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="p-3 border-t border-slate-100 flex items-center gap-2">
-                    <input list="channel-suggestions" value={addInputs[tier] || ""}
-                      onChange={e => setAddInputs(prev => ({ ...prev, [tier]: e.target.value }))}
-                      onKeyDown={e => e.key === "Enter" && addPartner(tier, addInputs[tier] || "")}
-                      placeholder="Thêm đối tác (gõ hoặc chọn kênh)..."
-                      className="flex-1 text-xs bg-white border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-600" />
-                    <button onClick={() => addPartner(tier, addInputs[tier] || "")} className="px-2.5 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg shrink-0"><Plus size={13} /></button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-      )}
-
       {/* Guardian — simplified */}
       {tab === "chat" && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -442,60 +297,6 @@ function AnalyticsSettings() {
             />
             <p className="text-[12px] text-slate-400 mt-1.5">Text này được inject vào system prompt của chatbot BI — viết bằng ngôn ngữ tự nhiên, chatbot sẽ hiểu và áp dụng.</p>
           </div>
-        </div>
-      </div>
-      )}
-
-      {/* Inventory Alert Thresholds — OPS tự set ngưỡng cảnh báo hết hàng tab Inventory */}
-      {tab === "chat" && (
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Boxes className="w-5 h-5 text-brand-600" />
-            <div>
-              <h2 className="font-bold text-slate-800">Ngưỡng cảnh báo tồn kho (Inventory)</h2>
-              <p className="text-[12px] text-slate-400 mt-0.5">Áp cho tab Inventory → sub-tab Tồn kho. Dựa trên số ngày còn hàng ước tính (tồn hiện tại ÷ tốc độ bán/ngày).</p>
-            </div>
-          </div>
-          <button onClick={saveInvThresholds} disabled={saving === "inv-thresholds" || !dirtyInvThresholds} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyInvThresholds ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
-            {saving === "inv-thresholds" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
-          </button>
-        </div>
-        <div className="p-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {([
-            ["safeDays", "An toàn — từ (ngày)", "emerald"],
-            ["normalDays", "Bình thường — từ (ngày)", "sky"],
-            ["warningDays", "Cần chú ý — từ (ngày), dưới mức này = Nguy hiểm", "amber"],
-          ] as const).map(([key, label]) => (
-            <div key={key}>
-              <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">{label}</label>
-              <input type="number" min={1} value={invThresholds[key]}
-                onChange={e => setInvThresholds(prev => ({ ...prev, [key]: Number(e.target.value) || 0 }))}
-                className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-brand-500" />
-            </div>
-          ))}
-        </div>
-        <p className="px-6 pb-5 text-xs text-slate-400">Phải theo thứ tự An toàn &gt; Bình thường &gt; Cần chú ý. Mặc định 90/60/30 ngày.</p>
-      </div>
-      )}
-
-      {/* Role Filters */}
-      {tab === "filters" && (
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <div className="flex items-center gap-2"><Filter className="w-5 h-5 text-brand-600" /><h2 className="font-bold text-slate-800">Lọc dòng BI theo Role (Role Filters)</h2></div>
-          <button onClick={() => savePost("filters", "/api/config/role-filters", filters)} disabled={saving === "filters" || !dirtyFilters} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50", dirtyFilters ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
-            {saving === "filters" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
-          </button>
-        </div>
-        <div className="p-6 space-y-4">
-          {FILTER_ROLES.map(role => (
-            <div key={role}>
-              <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Role: {ROLE_LABELS[role] ?? role}</label>
-              <textarea value={filters[role] || ""} onChange={e => setFilters(prev => ({ ...prev, [role]: e.target.value }))} rows={2} placeholder="Điều kiện SQL WHERE thêm cho role này (vd: f.company_code = 'VN'). Để trống = không lọc." className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-brand-500 outline-none resize-none" />
-            </div>
-          ))}
-          <p className="text-xs text-slate-400">Điều kiện này được AND thêm vào truy vấn BI cho role tương ứng (admin không bị lọc).</p>
         </div>
       </div>
       )}
@@ -545,115 +346,6 @@ function AnalyticsSettings() {
           </div>
         </div>
         <p className="px-6 py-3 text-xs text-slate-400 border-t border-slate-100">⚠️ Lưu ý: destination hiện được tính theo <b>HỌ SKU</b> trong code (<code>getDestinationSQL</code>: digit→ký tự 3-5, E→2-4, 3-letter→1-3) rồi map tên nước qua bảng Country Codes. Quy tắc startsWith + codeLength ở đây là <b>tham chiếu/cấu hình dự phòng</b>, không trực tiếp điều khiển báo cáo hiện tại.</p>
-      </div>
-      )}
-
-      {/* Item Type Classification */}
-      {tab === "data" && (
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Tag className="w-5 h-5 text-brand-600" />
-            <div>
-              <h2 className="font-bold text-slate-800">Phân loại Item Type theo Kênh</h2>
-              <p className="text-[12px] text-slate-400 mt-0.5">Chatbot dùng danh sách prefix này để lọc giá bán đúng kênh B2C/B2B</p>
-            </div>
-          </div>
-          <button
-            onClick={() => savePost("item-channel", "/api/config/item-channel-types", itemChannelTypes)}
-            disabled={saving === "item-channel" || !dirtyItemChannelTypes}
-            className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50",
-              dirtyItemChannelTypes ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-slate-200 text-slate-400 cursor-not-allowed")}
-          >
-            {saving === "item-channel" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}Lưu
-          </button>
-        </div>
-
-        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left: editable channel → prefix config */}
-          <div className="space-y-4">
-            <p className="text-xs text-slate-500 font-medium">Item type có prefix nào thuộc về kênh nào (chatbot lọc giá theo đây):</p>
-            {Object.entries(itemChannelTypes).map(([channel, prefixes]) => (
-              <div key={channel} className="border border-slate-200 rounded-xl p-4 space-y-2 bg-slate-50/40">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={cn("px-2 py-0.5 rounded text-xs font-bold",
-                    channel === "B2C" ? "bg-sky-100 text-sky-700" : "bg-violet-100 text-violet-700"
-                  )}>{channel}</span>
-                  <span className="text-[12px] text-slate-400">{prefixes.length} prefix</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {prefixes.map(p => (
-                    <span key={p} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-slate-200 text-slate-700 rounded text-xs font-mono">
-                      {p}
-                      <button onClick={() => setItemChannelTypes(prev => ({ ...prev, [channel]: prev[channel].filter(x => x !== p) }))}
-                        className="text-slate-300 hover:text-rose-500"><X className="w-3 h-3" /></button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-2 mt-1">
-                  <input
-                    value={newChannelPrefix[channel] || ""}
-                    onChange={e => setNewChannelPrefix(prev => ({ ...prev, [channel]: e.target.value }))}
-                    onKeyDown={e => {
-                      if (e.key === "Enter") {
-                        const v = (newChannelPrefix[channel] || "").trim()
-                        if (v && !prefixes.includes(v)) setItemChannelTypes(prev => ({ ...prev, [channel]: [...prev[channel], v] }))
-                        setNewChannelPrefix(prev => ({ ...prev, [channel]: "" }))
-                      }
-                    }}
-                    placeholder="Thêm prefix rồi Enter…"
-                    className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
-                  />
-                  <button
-                    onClick={() => {
-                      const v = (newChannelPrefix[channel] || "").trim()
-                      if (v && !prefixes.includes(v)) setItemChannelTypes(prev => ({ ...prev, [channel]: [...prev[channel], v] }))
-                      setNewChannelPrefix(prev => ({ ...prev, [channel]: "" }))
-                    }}
-                    className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs hover:bg-slate-200"
-                  ><Plus className="w-3 h-3" /></button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Right: read-only reference — all distinct item_type values tagged by channel */}
-          <div>
-            <p className="text-xs text-slate-500 font-medium mb-3">Tất cả Item Type hiện có ({allItemTypes.length}) — tagged theo prefix config:</p>
-            <div className="border border-slate-100 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-slate-50 sticky top-0">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-bold text-slate-500">Item Type</th>
-                    <th className="px-3 py-2 text-center font-bold text-slate-500">Kênh</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {allItemTypes.map(t => {
-                    const matchedChannel = Object.entries(itemChannelTypes).find(([, prefixes]) =>
-                      prefixes.some(p => t.toLowerCase().includes(p.toLowerCase()))
-                    )?.[0] ?? null
-                    return (
-                      <tr key={t} className="hover:bg-slate-50/50">
-                        <td className="px-3 py-1.5 text-slate-700 font-mono text-[12px]">{t}</td>
-                        <td className="px-3 py-1.5 text-center">
-                          {matchedChannel ? (
-                            <span className={cn("px-1.5 py-0.5 rounded text-[11.5px] font-bold",
-                              matchedChannel === "B2C" ? "bg-sky-50 text-sky-600" : "bg-violet-50 text-violet-600"
-                            )}>{matchedChannel}</span>
-                          ) : <span className="text-slate-300 text-[11.5px]">—</span>}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-        <p className="px-6 py-3 text-xs text-slate-400 border-t border-slate-100">
-          Chatbot dùng prefix này để lọc giá bán: B2B thấy giá OD/WS/Strategic/Tier, B2C thấy giá B2C Website. COGS kiểm soát riêng qua Guardian.
-        </p>
       </div>
       )}
 

@@ -6,6 +6,8 @@ import { SkeletonTable } from "@/components/skeleton"
 import { EmptyState } from "@/components/empty-state"
 import { useUrlStates } from "@/hooks/use-url-state"
 import { DataTable } from "@/components/dashboard-kit"
+import { useSession } from "next-auth/react"
+import { PromotionsManager } from "@/components/promotions-manager"
 
 interface Promotion {
   product_code:        string
@@ -61,7 +63,7 @@ function fmtDate(d: string | null) {
   return `${day}/${m}/${y}`
 }
 
-export default function PromotionsPage() {
+function PromotionsList() {
   const [items,   setItems]   = useState<Promotion[]>([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useUrlStates({ q: "", vendor: "", sim: "" })
@@ -161,5 +163,28 @@ export default function PromotionsPage() {
         />
       )}
     </div>
+  )
+}
+
+// Mọi người xem danh sách; admin và creator có thêm tab "Quản lý" để thêm/sửa/xoá khuyến mãi (chuyển từ trang Admin, s238).
+export default function PromotionsPage() {
+  const { data: session } = useSession()
+  const canManage = ["admin", "creator"].includes(session?.user?.role ?? "")
+  const [view, setView] = useState<"list" | "manage">("list")
+  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const notify = (type: "success" | "error", text: string) => { setMsg({ type, text }); setTimeout(() => setMsg(null), 3000) }
+  return (
+    <>
+      {canManage && (
+        <div className="px-4 lg:px-8 pt-4 flex gap-1" role="tablist">
+          {([["list", "Danh sách"], ["manage", "Quản lý (admin)"]] as const).map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={view === id} onClick={() => setView(id)}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg ${view === id ? "bg-brand-600 text-white" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"}`}>{label}</button>
+          ))}
+        </div>
+      )}
+      {msg && <div className={`mx-4 lg:mx-8 mt-3 px-4 py-3 rounded-xl text-sm ${msg.type === "success" ? "bg-green-50 border border-green-200 text-green-700" : "bg-red-50 border border-red-200 text-red-700"}`}>{msg.text}</div>}
+      {canManage && view === "manage" ? <div className="p-4 lg:p-8"><PromotionsManager onNotify={notify} /></div> : <PromotionsList />}
+    </>
   )
 }

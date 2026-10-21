@@ -7,7 +7,7 @@ import { Users, Shield, Check, Save, RefreshCw, ChevronDown, UserCog, Trash2, Se
 import { cn } from "@/lib/utils"
 import { ALL_ROLES, CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 import { ConfirmModal } from "@/components/confirm-modal"
-import { AddUserForm, ChangePasswordForm, SystemPermissionsMatrix, type AdminUser } from "@/components/user-admin"
+import { AddUserForm, ChangePasswordForm, type AdminUser } from "@/components/user-admin"
 import { UserGrantsMatrix } from "@/components/user-grants-matrix"
 
 // Trang GỘP quản lý người dùng & phân quyền (1 cửa duy nhất). Gộp từ:
@@ -388,9 +388,6 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
           </div>
         </div>
       )}
-
-      {/* ── Nâng cao (import NCC, trang sản phẩm theo phòng ban): gộp xuống dưới Vai trò × Quyền ── */}
-      {section === "matrix" && <SystemPermissionsMatrix onNotify={notify} />}
 
       {/* ── Quyền chỉnh sửa theo người (creator only): gộp xuống dưới Quyền theo người ── */}
       {section === "grants" && isCreator && (

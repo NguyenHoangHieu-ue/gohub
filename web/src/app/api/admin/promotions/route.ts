@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
-import { canWrite } from "@/lib/writable-tabs"
 
 const PAGE_SIZE = 50
 const WRITE_ROLES = ["admin", "creator"]
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !(await canWrite(session, "promotions", WRITE_ROLES)))
+  if (!session || !WRITE_ROLES.includes(session.user.role))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const search  = req.nextUrl.searchParams.get("search") || ""
@@ -50,7 +49,7 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions)
-  if (!session || !(await canWrite(session, "promotions", WRITE_ROLES)))
+  if (!session || !WRITE_ROLES.includes(session.user.role))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { product_code, telco_perks, telco_perks_start, telco_perks_end } = await req.json()
