@@ -354,19 +354,19 @@ export default function BODReport() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Board of Directors Report</h1>
-          <p className="text-slate-500">Financial performance overview and margin analysis</p>
+          <p className="text-slate-500">Tổng quan tài chính và biên lợi nhuận</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex bg-white rounded-xl border border-slate-200 p-1 shadow-sm shrink-0 items-center h-[42px]">
-            <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-medium rounded-lg transition-all h-full flex items-center", dateColumn === "fulfiled_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>Fulfillment</button>
-            <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-medium rounded-lg transition-all h-full flex items-center", dateColumn === "created_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>Created</button>
+            <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-medium rounded-lg transition-all h-full flex items-center", dateColumn === "fulfiled_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>Đã giao</button>
+            <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-medium rounded-lg transition-all h-full flex items-center", dateColumn === "created_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>Đã tạo</button>
           </div>
           <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm h-[42px]">
             <Calendar className="w-4 h-4 text-slate-400" />
             <span className="text-sm font-medium whitespace-nowrap">{dateRange.start} - {dateRange.end}</span>
           </div>
           <button onClick={() => setShowFilters(!showFilters)} className={cn("flex items-center gap-2 px-4 py-2 rounded-xl border shadow-sm transition-all text-sm font-medium", showFilters ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50")}>
-            <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />Filters
+            <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />Bộ lọc
           </button>
           <button onClick={fetchData} className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
             <RefreshCw className={cn("w-5 h-5 text-slate-600", loading && "animate-spin")} />
@@ -494,7 +494,7 @@ export default function BODReport() {
             <SummaryCard title="Tổng giá vốn" value={summary?.total_cogs || 0} icon={TrendingDown} color="orange" prevPeriod={summary?.previous_period?.total_cogs} prevYear={summary?.previous_year?.total_cogs} />
             <SummaryCard title="GP" value={summary?.total_margin || 0} icon={TrendingUp} color="emerald" prevPeriod={summary?.previous_period?.total_margin} prevYear={summary?.previous_year?.total_margin} />
             <SummaryCard title="%GP" value={summary?.avg_margin_percent || 0} icon={PieChart} color="purple" format="percent" prevPeriod={summary?.previous_period?.avg_margin_percent} prevYear={summary?.previous_year?.avg_margin_percent} />
-            <SummaryCard title="Total CM1" value={summary?.total_gpm2 || 0} icon={TrendingUp} color="indigo" prevPeriod={summary?.previous_period?.total_gpm2} prevYear={summary?.previous_year?.total_gpm2} />
+            <SummaryCard title="Tổng CM1" value={summary?.total_gpm2 || 0} icon={TrendingUp} color="indigo" prevPeriod={summary?.previous_period?.total_gpm2} prevYear={summary?.previous_year?.total_gpm2} />
             <SummaryCard title="%CM1" value={summary?.avg_gpm2_percent || 0} icon={PieChart} color="pink" format="percent" prevPeriod={summary?.previous_period?.avg_gpm2_percent} prevYear={summary?.previous_year?.avg_gpm2_percent} />
             <SummaryCard title="Đóng góp 3HK (%)" value={summary?.total_3hk_contribution || 0} icon={PieChart} color="teal" format="percent" prevPeriod={summary?.previous_period?.total_3hk_contribution} prevYear={summary?.previous_year?.total_3hk_contribution} />
           </>
@@ -507,16 +507,16 @@ export default function BODReport() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
               <h3 className="text-lg font-bold text-indigo-900 flex items-center gap-2"><TrendingUp className="w-5 h-5" />Dự kiến cuối tháng (pro-rata)</h3>
-              <p className="text-sm text-indigo-600">Based on <strong>{projection.daysElapsed} days</strong> of performance, projected for <strong>{projection.totalDays} total days</strong>.</p>
+              <p className="text-sm text-indigo-600">Đã qua <strong>{projection.daysElapsed} ngày</strong> trên tổng <strong>{projection.totalDays} ngày</strong>. Dự báo giả định tốc độ bán giữ nguyên.</p>
             </div>
-            <div className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-indigo-900/20">{((projection.factor - 1) * 100).toFixed(0)}% Growth Expected</div>
+            <div className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-indigo-900/20">{((projection.factor - 1) * 100).toFixed(0)}% so với tháng trước (dự kiến)</div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {([
-              { label: "Projected Revenue", val: formatCompactNumber(projection.revenue), chg: projection.revenueChange },
-              { label: "Projected Units", val: formatCompactNumber(projection.units), chg: projection.unitsChange },
-              { label: "Projected Margin", val: formatCompactNumber(projection.margin), chg: projection.marginChange },
-              { label: "Projected CM1", val: formatCompactNumber(projection.gpm2), chg: projection.gpm2Change },
+              { label: "Doanh thu dự kiến", val: formatCompactNumber(projection.revenue), chg: projection.revenueChange },
+              { label: "Số lượng dự kiến", val: formatCompactNumber(projection.units), chg: projection.unitsChange },
+              { label: "GP dự kiến", val: formatCompactNumber(projection.margin), chg: projection.marginChange },
+              { label: "CM1 dự kiến", val: formatCompactNumber(projection.gpm2), chg: projection.gpm2Change },
             ]).map(c => (
               <div key={c.label} className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
                 <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">{c.label}</p>
@@ -526,13 +526,13 @@ export default function BODReport() {
                     {c.chg >= 0 ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}{Math.abs(c.chg).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[11px] text-slate-400 mt-1">So với thực tế tháng trước</p>
               </div>
             ))}
             <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
-              <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">Projected CM1 %</p>
+              <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">%CM1 dự kiến</p>
               <p className="text-lg font-bold text-indigo-600">{projection.gpm2Percent.toFixed(2)}%</p>
-              <p className="text-[11px] text-slate-400 mt-1">Full Month Estimate</p>
+              <p className="text-[11px] text-slate-400 mt-1">Ước tính cả tháng</p>
             </div>
           </div>
         </div>
