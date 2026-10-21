@@ -34,9 +34,6 @@
     "src/app/api/cron/bc-sync/route.ts": {
       "maxDuration": 60
     },
-    "src/app/api/cron/ca-thread-remind/route.ts": {
-      "maxDuration": 30
-    },
     "src/app/api/cron/my-metrics-lark-scan/route.ts": {
       "maxDuration": 300
     },
@@ -102,10 +99,6 @@
     {
       "path": "/api/cron/bc-sync",
       "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/ca-thread-remind",
-      "schedule": "0 3 * * 1"
     },
     {
       "path": "/api/cron/my-metrics-lark-scan",

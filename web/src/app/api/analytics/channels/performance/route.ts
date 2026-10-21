@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
-import { getAnalyticsSource, getBODFilters, getDateFilter, getPrevDateFilter, getStrategicPartnersList, shipFilter, internalOpsFilter, excludeInactiveCustomers, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
+import { getAnalyticsSource, getBODFilters, getDateFilter, getPrevDateFilter, shipFilter, internalOpsFilter, excludeInactiveCustomers, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 import { fetchCosts, monthsBetween } from "@/lib/bod-data"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
@@ -33,15 +33,12 @@ export async function GET(req: NextRequest) {
   const sfx = `${shipFilter(false)} ${internalOpsFilter(false)} ${excludeInactiveCustomers()} ${makeExcludeSql(excludedCustomers)}`
 
   try {
-    const key = `ch-perf5:${dateColumn}:${startDate}:${endDate}:${channelGroup}:${extraFilters}:${exclHash(excludedCustomers)}`
+    const key = `ch-perf6:${dateColumn}:${startDate}:${endDate}:${channelGroup}:${extraFilters}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
-    const strategicList = await getStrategicPartnersList()
-
     const rows = await queryAnalytics<Record<string, string>>(
       `WITH cur AS (
          SELECT TRIM(s.channel_name) as channel,
                 UPPER(s.group_name) as group_name,
-                CASE WHEN s.channel_name ILIKE ANY(ARRAY[${strategicList}]::text[]) THEN true ELSE false END as is_strategic,
                 SUM(f.${source.revenueCol}) as revenue,
                 SUM(f.${source.marginCol})  as margin,
                 SUM(f.${source.quantityCol}) as units,
@@ -49,7 +46,7 @@ export async function GET(req: NextRequest) {
          FROM ${source.mainTable} f
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
          WHERE ${filter} ${groupFilter} ${extraFilters} ${sfx}
-         GROUP BY TRIM(s.channel_name), UPPER(s.group_name), is_strategic
+         GROUP BY TRIM(s.channel_name), UPPER(s.group_name)
        ),
        prv AS (
          SELECT TRIM(s.channel_name) as channel,
@@ -59,7 +56,7 @@ export async function GET(req: NextRequest) {
          WHERE ${prevFilter} ${groupFilter} ${extraFilters} ${sfx}
          GROUP BY TRIM(s.channel_name)
        )
-       SELECT c.channel, c.group_name, c.is_strategic,
+       SELECT c.channel, c.group_name,
               c.revenue, c.margin, c.units, c.orders,
               COALESCE(p.revenue, 0) as prev_revenue
        FROM cur c LEFT JOIN prv p ON c.channel = p.channel
@@ -132,7 +129,6 @@ export async function GET(req: NextRequest) {
       return {
         channel:        r.channel,
         group_name:     grp,
-        is_strategic:   r.is_strategic === "true" || String(r.is_strategic) === "true",
         revenue:        rev,
         margin:         mar,
         margin_percent: rev > 0 ? (mar / rev) * 100 : 0,

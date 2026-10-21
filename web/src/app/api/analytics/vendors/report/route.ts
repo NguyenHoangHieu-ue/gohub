@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { cachedQuery, CACHE_HEADERS, getAnalyticsSource, getStrategicPartnersList, safeDate } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, getAnalyticsSource, safeDate } from "@/lib/analytics-helpers"
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -53,8 +53,6 @@ export async function POST(req: NextRequest) {
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
-      const strategicList = await getStrategicPartnersList()
-
       const [metrics, prevMetrics, allRev, trend, products, channels, prevMonthMetrics] = await Promise.all([
         // Current period metrics
         queryAnalytics<{ revenue: string; orders: string; units: string; margin: string }>(

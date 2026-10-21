@@ -58,3 +58,6 @@ Lượt xem 60 ngày: `/admin` 77 lượt/3 người; `creator/ai` 783/13; `my-m
 - Việc 2: bảng quyền theo người, Creator Settings 6 tab, Cấu hình hệ thống 4 tab (API ngoài chuyển về), Dữ liệu và giá 4 bước, Users 4 tab. Chờ Hiếu: xoá "Nâng cao" (import NCC, quyền theo phòng ban)? gộp "Lọc theo vai trò"?
 - Việc 3: E1 giữ, E2 bỏ (định nghĩa doanh thu mặc định cần Hiếu chốt), E3 chưa làm.
 - Việc 4: trang Argon gọn xong và QA sống 2 lượt (126s/$0,12 và 106s/$0,15, câu "Cập nhật bản tin hôm nay"). Hiếu cần điền "Target và nhiệm vụ", gắn nguồn Lark, quyết bật "Tự cập nhật mỗi đêm".
+
+## Eval lần 3 cho E1 (2026-10-21)
+E1 lần 3: 40,8s, điểm 9,78, 5,67 lượt, 156k token vào. Gộp 3 lần E1: điểm 9,70 / 9,80 / 9,78 (baseline 1 lần 9,93); thời gian 37,3 / 37,6 / 40,8s (baseline 41,0s); token vào giảm ~5–18%. Kết luận: tiết kiệm token có vẻ thật, tăng tốc nhỏ và nằm trong nhiễu (±3s), điểm thấp hơn baseline 0,1–0,2 ở cả 3 lần nhưng baseline chỉ chạy 1 lần nên chưa kết luận được. Giữ E1; muốn chắc phải chạy lại baseline 2 lần nữa.

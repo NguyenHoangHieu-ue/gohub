@@ -146,7 +146,7 @@ export async function replyLarkMessage(messageId: string, text: string) {
 }
 
 // Tìm open_id Lark của creator — chuỗi fallback dùng chung (trước đây chép lại y hệt ở learning.ts/
-// lark-scan-runner.ts/ca-thread-remind — s196+8 tách 1 nơi cho code path mới, không đụng 3 chỗ cũ).
+// lark-scan-runner.ts — s196+8 tách 1 nơi cho code path mới, không đụng 3 chỗ cũ).
 export async function getCreatorLarkOpenId(): Promise<string | null> {
   let id = process.env.LARK_CREATOR_USER_ID
   if (!id) {
