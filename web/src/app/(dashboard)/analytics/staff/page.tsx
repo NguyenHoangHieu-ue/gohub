@@ -885,6 +885,18 @@ function StaffPageInner() {
                           s.cm1_pct >= 15 ? "bg-indigo-100 text-indigo-700" : s.cm1_pct > 0 ? "text-indigo-600" : "text-rose-600")}>
                           {pct(s.cm1_pct)}
                         </span>
+                        {(() => {
+                          // Tiến độ CM1 thực tế so với target CM1 (strategic + non-strategic) của kỳ: xanh khi đạt, cam khi dưới 85%.
+                          const tgt = tgtVal("cm1_strategic") + tgtVal("cm1_non_strategic")
+                          if (!(tgt > 0)) return null
+                          const p = Math.max(0, s.cm1 / tgt * 100)
+                          return (
+                            <div className="mt-1.5 flex items-center justify-end gap-1.5" title={`CM1 thực tế ${pct(p)} so với target ${fck(tgt)}`}>
+                              <span className="h-1.5 w-14 rounded-full bg-slate-100 overflow-hidden"><i className="block h-full rounded-full" style={{ width: `${Math.min(100, p)}%`, background: p >= 100 ? "#1baf7a" : p >= 85 ? "#d98a1c" : "#eb6834" }} /></span>
+                              <span className="text-[11.5px] tabular-nums text-slate-500">{pct(p)} target</span>
+                            </div>
+                          )
+                        })()}
                       </td>
                       <TargetCell key={`${s.staff_code}-cm1s-${editMode}`}
                         editMode={editMode} draftVal={d.cm1_strategic} displayVal={tgtVal("cm1_strategic")}
