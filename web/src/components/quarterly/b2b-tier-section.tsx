@@ -775,31 +775,31 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + (visibleMonths.length + (fixedMonth ? 0 : 1)) * colCount * 72)}px` }}>
               <thead>
-                <tr className="bg-[#0f4c81]">
-                  <th className="px-4 py-2.5 text-left text-[11.5px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#0f4c81] border-r border-[#0a3560] min-w-[160px]">Nhóm</th>
+                <tr className="bg-[#e6eef8]">
+                  <th className="px-4 py-2.5 text-left text-[11.5px] font-semibold text-slate-700 uppercase sticky left-0 bg-[#e6eef8] border-r border-slate-200 min-w-[160px]">Nhóm</th>
                   {visibleMonths.map(m => {
                     const [y, mo] = m.split("-")
                     const tierMonth = allTiers[0]?.months.find((x: any) => x.month === m)
                     const isPr = tierMonth?.isProjected ?? false
                     return (
-                      <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[11.5px] font-semibold text-slate-300 border-l border-[#0a3560] whitespace-nowrap">
+                      <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[11.5px] font-semibold text-slate-700 border-l border-slate-200 whitespace-nowrap">
                         T{parseInt(mo)}/{y}{isPr ? " (PR)" : ""}
                       </th>
                     )
                   })}
-                  <th hidden={!!fixedMonth} colSpan={colCount} className="px-3 py-2.5 text-center text-[11.5px] font-semibold text-blue-200 border-l border-[#0a3560] whitespace-nowrap bg-[#1e3a8a]">
+                  <th hidden={!!fixedMonth} colSpan={colCount} className="px-3 py-2.5 text-center text-[11.5px] font-semibold text-brand-700 border-l border-slate-200 whitespace-nowrap bg-[#d3e3f6]">
                     Tổng Quý<ColInfo tip={"Tổng Quý (PR)\nRevenue: Σ(PR monthly)\nGM: Σ(GP × factor)\nCh.Cost: Σ(custCost) + GroupCost × (tier_rev/total_B2B_rev)\nCM1: Σ(custCM1) - GroupCost × revenue-share"} />
                   </th>
                 </tr>
-                <tr className="bg-[#1565c0] text-[12px] text-blue-100 uppercase">
-                  <th className="px-4 py-1.5 sticky left-0 bg-[#1565c0] border-r border-[#2e7dd4]" />
+                <tr className="bg-[#f2f7fd] text-[12px] text-slate-600 uppercase">
+                  <th className="px-4 py-1.5 sticky left-0 bg-[#f2f7fd] border-r border-slate-200" />
                   {visibleMonths.flatMap(m => SUB_VIEW.map((col, i) => (
-                    <th key={`${m}-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#2e7dd4]", col.label === "CM1" && "text-blue-300")}>
+                    <th key={`${m}-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-slate-200", col.label === "CM1" && "text-brand-600")}>
                       {col.label}{col.tip && <ColInfo tip={col.tip} />}
                     </th>
                   )))}
                   {!fixedMonth && SUB_COLS.map((col, i) => (
-                    <th key={`qt-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right bg-[#072448]", i === 0 && "border-l border-[#2e7dd4]", col.label === "CM1" && "text-blue-300")}>
+                    <th key={`qt-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right bg-[#e6eef8]", i === 0 && "border-l border-slate-200", col.label === "CM1" && "text-brand-600")}>
                       {col.label}{col.tip && <ColInfo tip={col.tip} />}
                     </th>
                   ))}

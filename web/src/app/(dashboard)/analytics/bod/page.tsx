@@ -351,9 +351,9 @@ export default function BODReport() {
           Hiếu đang fix, vui lòng đợi. <span className="text-red-400">({loadError})</span>
         </div>
       )}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Board of Directors Report</h1>
+          <h1 className="text-[26px] leading-tight font-bold tracking-tight text-slate-900">Board of Directors Report</h1>
           <p className="text-slate-500">Tổng quan tài chính và biên lợi nhuận</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

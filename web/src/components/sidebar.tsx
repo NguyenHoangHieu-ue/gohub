@@ -195,7 +195,8 @@ function useIsMobile() {
 type Accent = "brand" | "blue" | "violet" | "emerald"
 
 // ── Dark sidebar: nền tối, chữ trắng. Active = xanh brand sáng nổi trên nền tối, hover = trắng mờ ──
-const ACTIVE_ITEM = "bg-brand-600 text-white shadow-sm"
+// Mục đang mở: nền sáng nhẹ + vạch xanh bên trái (thay khối xanh đặc) cho nhẹ mắt hơn.
+const ACTIVE_ITEM = "bg-white/[0.09] text-white shadow-[inset_3px_0_0_#5f9de3]"
 const ACTIVE_BG: Record<Accent, string> = {
   brand: ACTIVE_ITEM, blue: ACTIVE_ITEM, violet: ACTIVE_ITEM, emerald: ACTIVE_ITEM,
 }
@@ -385,7 +386,7 @@ export function Sidebar() {
       />
     )}
     <aside className={`
-      fixed left-0 top-0 h-full bg-slate-900 border-r border-slate-800
+      fixed left-0 top-0 h-full bg-[#0c1a2e] border-r border-white/5
       flex flex-col z-50 select-none overflow-visible
       transition-all duration-200 ease-in-out
       ${isMobile
@@ -394,7 +395,7 @@ export function Sidebar() {
     `}>
 
       {/* Brand header */}
-      <div className={`bg-slate-950 border-b border-slate-800 flex-shrink-0
+      <div className={`bg-[#08121f] border-b border-white/5 flex-shrink-0
         ${effCollapsed ? "px-2 py-4" : "px-4 py-4"}`}>
         <div className={`flex items-center ${effCollapsed ? "justify-center" : "gap-3"}`}>
           <div className="w-8 h-8 bg-brand-500/40 rounded-lg flex items-center justify-center border border-brand-400/30 flex-shrink-0">

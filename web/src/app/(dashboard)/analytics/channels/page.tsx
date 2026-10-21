@@ -849,9 +849,9 @@ export default function ChannelPerformancePage() {
   return (
     <div className="p-4 lg:p-8 space-y-8 max-w-[1480px] mx-auto">
       {/* Header & Filters */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Channel Performance</h1>
+          <h1 className="text-[26px] leading-tight font-bold tracking-tight text-slate-900">Channel Performance</h1>
           <p className="text-slate-500">Hiệu quả từng kênh bán: doanh thu, GP, CM1 và so sánh với kỳ trước</p>
         </div>
 

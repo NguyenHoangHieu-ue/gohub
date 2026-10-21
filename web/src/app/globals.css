@@ -6,7 +6,8 @@
 html { font-size: 15px; }
 
 body {
-  @apply bg-gray-50 text-gray-900 antialiased;
+  @apply text-gray-900 antialiased;
+  background: #eef3f9;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
@@ -41,3 +42,8 @@ body {
   to   { transform: translateX(0)    }
 }
 .animate-slide-in-right { animation: slide-in-right 0.2s ease-out both }
+
+/* Khối card (nền trắng, có viền, bo góc) có bóng nhẹ mặc định để nổi khỏi nền; class shadow-* riêng vẫn ghi đè. */
+@layer components {
+  .bg-white.border.rounded-xl, .bg-white.border.rounded-2xl { box-shadow: 0 1px 2px rgba(15,35,70,0.05), 0 2px 8px rgba(15,35,70,0.04); }
+}

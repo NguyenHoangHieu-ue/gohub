@@ -571,10 +571,10 @@ function QuarterlyContent() {
   return (
     <div className="p-4 lg:p-8 space-y-8 max-w-[1480px] mx-auto">
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      {/* ── Header: tiêu đề + bộ điều khiển gom trong 1 thẻ (s238) ── */}
+      <div className="flex flex-col gap-4 rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Quarter Report</h1>
+          <h1 className="text-[26px] leading-tight font-bold tracking-tight text-slate-900">Quarter Report</h1>
           <p className="text-sm text-slate-500 mt-0.5">Doanh thu · Lợi nhuận · CM1 theo quý</p>
           {!isFutureQ && (
             <p className="text-[13px] mt-1.5 flex items-center gap-1.5 flex-wrap">
@@ -589,7 +589,7 @@ function QuarterlyContent() {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap pt-4 border-t border-slate-100">
           <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
             {quarters.map(q => (
               <button key={q} onClick={() => setSelQ(q)}
