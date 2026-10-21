@@ -31,11 +31,16 @@ Mỗi ngày đọc số liệu hệ thống và tin mới từ các nguồn Lark
 - Tối đa 3 đề xuất. Không suy đoán ngoài dữ liệu. Thiếu dữ liệu thì nói thẳng là thiếu, không điền số ước lượng.
 - Không đưa ra kỳ vọng vượt khả năng thực tế của số liệu hiện có.
 `
-const BRIEFING_PROMPT = `Cập nhật bản tin hôm nay và ghi vào notes/tin-hom-nay.md (ghi đè). Làm theo brief.md.
+const BRIEFING_MARK = "## Khi anh bảo \"Cập nhật bản tin hôm nay\""
+const BRIEFING_SECTION = `
+${BRIEFING_MARK}
+Ghi vào notes/tin-hom-nay.md (ghi đè). Làm theo các bước:
 1) Lấy số liệu 7 ngày gần nhất và quý hiện tại (doanh thu, GP, CM1) bằng công cụ lấy số liệu hệ thống, so với kỳ trước và với target.
 2) Nếu có nguồn Lark đã gắn (thread, mail, file), tìm tin mới đáng chú ý trong đó.
 3) Viết bản tin ngắn: "Đáng chú ý" (tối đa 3 ý, mỗi ý kèm số hoặc nguồn) rồi "Nên làm" (tối đa 3 việc, mỗi việc có lý do và mức chắc chắn).
-Không hỏi lại. Chỗ nào thiếu dữ liệu thì ghi rõ là thiếu.`
+Không hỏi lại. Chỗ nào thiếu dữ liệu thì ghi rõ là thiếu.
+`
+const BRIEFING_PROMPT = "Cập nhật bản tin hôm nay"
 const NIGHT_PROMPT = "Cập nhật bản tin hôm nay theo brief.md: lấy số liệu 7 ngày gần nhất và quý hiện tại, so với kỳ trước và target; tìm tin mới trong các nguồn Lark đã gắn; viết ngắn 'Đáng chú ý' (tối đa 3 ý) và 'Nên làm' (tối đa 3 việc, có lý do và mức chắc chắn). Thiếu dữ liệu thì nói rõ."
 const QUICK = ["Tuần này có gì đáng chú ý?", "So với target quý, chỗ nào đang chậm?", "Có tin mới nào từ Lark em nên báo anh không?"]
 const BRIEFING_RE = /^notes\/(tin-hom-nay|tuan-tra-)/
@@ -78,8 +83,13 @@ export default function ArgonHomePage() {
         m = (await api<{ mission: MissionRowUi }>("/api/creator/argon/missions", jsonInit("POST", { name: DAILY_NAME, goal: DAILY_GOAL }))).mission
         await api(`/api/creator/argon/missions/${m.id}/phase`, jsonInit("POST", { to: "plan" }))
         await api(`/api/creator/argon/missions/${m.id}/phase`, jsonInit("POST", { to: "run" }))
-        await api(`/api/creator/argon/missions/${m.id}/files`, jsonInit("PUT", { path: "brief.md", content: BRIEF_TEXT }))
-      } else if (m.phase !== "run") {
+        await api(`/api/creator/argon/missions/${m.id}/files`, jsonInit("PUT", { path: "brief.md", content: BRIEF_TEXT + BRIEFING_SECTION }))
+      } else {
+        // Brief cũ (tạo trước khi có mục bản tin) → thêm mục hướng dẫn để câu "Cập nhật bản tin hôm nay" đủ ý.
+        const f = await api<{ file: WsFile }>(`/api/creator/argon/missions/${m.id}/files?path=brief.md`).catch(() => null)
+        if (f && !(f.file.content ?? "").includes(BRIEFING_MARK)) await api(`/api/creator/argon/missions/${m.id}/files`, jsonInit("PUT", { path: "brief.md", content: (f.file.content ?? "") + BRIEFING_SECTION }))
+      }
+      if (m.phase !== "run") {
         if (m.phase === "done" || m.phase === "paused") await api(`/api/creator/argon/missions/${m.id}/phase`, jsonInit("POST", { to: "run" }))
       }
       setMissionId(m.id)
@@ -175,7 +185,7 @@ export default function ArgonHomePage() {
             <div className="px-4 py-4 max-h-[52vh] overflow-y-auto">
               {setting && !detail ? <p className="text-sm text-gray-400">Đang chuẩn bị Argon…</p>
                 : briefing ? <ArgonMarkdown text={briefing.text} />
-                : <div className="text-sm text-gray-500 leading-relaxed">Chưa có bản tin. Bấm <b>Cập nhật bản tin</b> để Argon đọc số liệu và tin mới rồi đề xuất việc nên làm. Làm một lần mất khoảng một phút.</div>}
+                : <div className="text-sm text-gray-500 leading-relaxed">Chưa có bản tin. Bấm <b>Cập nhật bản tin</b> để Argon đọc số liệu và tin mới rồi đề xuất việc nên làm. Làm một lần mất vài phút.</div>}
             </div>
             <label className="flex items-center gap-2 px-4 py-2.5 border-t border-gray-100 dark:border-slate-700 text-[13px] text-gray-600 dark:text-slate-300 cursor-pointer">
               <Moon size={14} className="text-violet-600" />
