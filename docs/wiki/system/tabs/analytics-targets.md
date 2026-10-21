@@ -55,3 +55,7 @@ status: active
 | B2C KPI Target | Supabase `app_settings` (key `b2c_kpi_targets`) | CAC/ROAS/Leads target per month |
 | B2C Marketing Budget | Supabase `analytics_channel_costs` | Budget B2C Channels per month |
 | Progress % | Actual / Target × 100 | So sánh live từ gohub_dw vs kế hoạch Supabase |
+
+## s238 — Gộp vào B2C
+
+"Manage Costs" không còn mục riêng trong menu; nội dung (Target & chi phí B2C) thành tab con **"Chi phí & Target"** của `/analytics/b2c` (`components/b2c-manage-costs.tsx`). Tab con chỉ hiện cho người có quyền tab `targets` (admin/creator, ma trận role_permissions ∪ allowed_analytics; hook `lib/use-analytics-access.ts`, server vẫn chặn qua layout). Route `/analytics/targets` giữ nguyên để link cũ không gãy; người có quyền `targets` nhưng không có `b2c` (vd role b2b) thấy mục "Chi phí & Target B2C" trong menu để vẫn vào được. Quyền, API (`/api/planning/targets`) và dữ liệu không đổi.

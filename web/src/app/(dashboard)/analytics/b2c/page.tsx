@@ -5,11 +5,15 @@ import { cn } from "@/lib/utils"
 import { B2CPerformance } from "@/components/b2c-performance"
 import { B2CAdvancedDashboard } from "@/components/b2c-advanced-dashboard"
 import { B2CMetric } from "@/components/b2c-metric"
+import { B2CManageCosts } from "@/components/b2c-manage-costs"
+import { useAnalyticsAccess } from "@/lib/use-analytics-access"
 
 // Default = Advanced (executive rolling-table dashboard, giống mockup).
 // Performance = intel-main style channel breakdown. Metric = YTD table Web+App.
 export default function B2CPage() {
-  const [view, setView] = useState<"advanced" | "main" | "metric">("advanced")
+  const [view, setView] = useState<"advanced" | "main" | "metric" | "costs">("advanced")
+  // "Chi phí & Target" = trang Manage Costs cũ, chỉ hiện cho người có quyền tab "targets" như trước.
+  const canCosts = useAnalyticsAccess("targets")
 
   return (
     <div className="flex flex-col">

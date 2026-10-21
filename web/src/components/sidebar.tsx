@@ -76,7 +76,6 @@ const ANALYTICS_GROUPS = [
     items: [
       { href: "/analytics/products",   label: "Products (BI)",      icon: BarChart3 },
       { href: "/analytics/catalogue",  label: "Product Catalogue",  icon: Layers    },
-      { href: "/analytics/targets",    label: "Manage Costs",       icon: Target    },
       { href: "/analytics/scheduled",  label: "Scheduled Messages", icon: Clock     },
     ],
   },
@@ -329,6 +328,13 @@ export function Sidebar() {
           items: group.items.filter(item => granted.has(analyticsId(item))),
         }))
         .filter(group => group.items.length > 0)
+      // Manage Costs nay nằm trong B2C › "Chi phí & Target". Người có quyền "targets" nhưng không có "b2c"
+      // (vd role b2b) không vào được B2C → giữ 1 lối vào riêng để không mất chức năng.
+      if (granted.has("targets") && !granted.has("b2c")) {
+        groups = groups.map(g => g.label === "Analytics & Planning"
+          ? { ...g, items: [...g.items, { href: "/analytics/targets", label: "Chi phí & Target B2C", icon: Target }] }
+          : g)
+      }
     }
     // Ẩn tab theo creator config (hiddenTabs cho role này)
     if (hiddenTabs.size > 0) {
