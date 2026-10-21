@@ -669,7 +669,7 @@ function QuarterlyContent() {
       )}
 
       {/* ── Tab bar ── */}
-      <div className="flex gap-1 border-b border-slate-200 -mb-4">
+      <div className="flex gap-1 border-b border-slate-200 -mb-2">
         {([["overview", Building2, "Tổng quan"], ["squad", Users, "Squad Progress"], ["performance", TrendingUp, "Performance"]] as const).map(([id, Icon, label]) => (
           <button key={id} onClick={() => setActiveSection(id as any)}
             className={cn("flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
@@ -682,7 +682,7 @@ function QuarterlyContent() {
       </div>
 
       {/* ── Overview content (ẩn khi tab = squad) ── */}
-      <div className={activeSection !== "overview" ? "hidden" : ""}>
+      <div className={activeSection !== "overview" ? "hidden" : "space-y-5"}>
 
       {/* Đề xuất K (P2, roadmap UI/UX audit s196+20 — finding #9) — trang nhiều filter/tầng, chưa có
           hướng dẫn cho người lần đầu dùng. Dùng LogicNote collapsible có sẵn (không tự vẽ pattern mới). */}
