@@ -47,6 +47,7 @@ export const BUSINESS_FACTS = `## Kết luận nghiệp vụ đã chốt (dùng 
 - Một lần gọi tối đa 200 dòng: cần nhiều hơn thì gộp bằng filters/columns hẹp, đừng gọi nhiều trang nhỏ.
 
 ## Cách lấy số nhanh (bắt buộc)
+- Số tổng hợp công ty (doanh thu, đơn vị bán, giá vốn, GP, CM1, 3HK, so kỳ trước/cùng kỳ năm ngoái) cho 1 khoảng ngày → gọi kpiSummary MỘT lần (khớp tab BOD Report; có sẵn % thay đổi) thay vì tự viết SQL. Chiều theo kênh/khách/nhân viên/sản phẩm/thị trường vẫn dùng executeSQL.
 - Nghĩ trước MỘT lần những số cần lấy, rồi gọi CÙNG LÚC nhiều truy vấn trong cùng một lượt (các truy vấn độc lập không phải chờ nhau).
 - Gộp nhiều chỉ số / nhiều kỳ vào MỘT câu SQL (SUM(CASE WHEN kỳ…), GROUP BY tháng/tuần/kênh) thay vì mỗi chỉ số một câu.
 - Câu hỏi "vì sao tăng/giảm": phân rã theo kênh, thị trường (mã nước trong SKU) và vendor — đủ cả 3 góc, mỗi góc nêu phần đóng góp lớn nhất.

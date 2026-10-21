@@ -68,7 +68,7 @@ export const OKR_HK3_BASELINE = 67.5
 export const DATA_TASK_TOOLS = [
   "executeSQL", "querySupabase", "queryProduct", "listSupabaseTables",
   "queryGA4", "queryGSC", "queryLarkBase",
-  "buildReport", "b2bCustomerCm1", "compareVendorQuotes", "trackSKUWinRate",
+  "buildReport", "b2bCustomerCm1", "kpiSummary", "compareVendorQuotes", "trackSKUWinRate",
 ] as const
 export const TASK_RULE_CHANGED_AT = "2026-10-11"
 export function isDataTask(tools: string[] | null | undefined, role?: string | null): boolean {

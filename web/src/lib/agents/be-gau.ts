@@ -34,6 +34,7 @@ import { buildReportDecl, runBuildReport } from "./report-tool"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 import { leakFilterStream, scrubLeaks } from "./core/leak-filter"
 import { b2bCustomerCm1Decl, runB2bCustomerCm1 } from "./b2b-cm1"
+import { kpiSummaryDecl, runKpiSummary } from "./kpi-summary"
 
 // webSearch có executor riêng ở dưới (gom nguồn trích dẫn); các tool tính năng khác chạy qua dispatchTool.
 const FEATURE_DECLS = ALL_TOOL_DECLARATIONS.filter(d => d.name !== "webSearch")
@@ -432,7 +433,7 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
     ...(featureTools.has("webSearch") ? [webSearchDecl] : []),
     larkWorkspaceDecl, searchKBDecl, buildReportDecl,
     // CM1 B2B theo KH (số tab Quarter Report) — chỉ vai trò xem được giá vốn và không bị giới hạn dữ liệu theo vai trò.
-    ...(seeCost && !dataFilter ? [b2bCustomerCm1Decl] : []),
+    ...(seeCost && !dataFilter ? [b2bCustomerCm1Decl, kpiSummaryDecl] : []),
     ...(featureTools.has("deepResearch") && username ? [deepResearchDecl] : []),
     ...featureDecls,
   ]
@@ -481,6 +482,9 @@ export async function prepareBeGau(opts: BeGauOpts & { promptless?: boolean }) {
     if (name === "deepResearch" && featureTools.has("deepResearch") && username)
       return wrap(await runDeepResearch(a, { username, ownerName: ownerName || username, isCreator: (role || "").toLowerCase() === "creator",
         origin: opts.origin || process.env.NEXTAUTH_URL || "" }))
+
+    if (name === "kpiSummary" && seeCost && !dataFilter)
+      return wrap(await runKpiSummary(a))
 
     if (name === "b2bCustomerCm1" && seeCost && !dataFilter)
       return wrap(await runB2bCustomerCm1(a))
