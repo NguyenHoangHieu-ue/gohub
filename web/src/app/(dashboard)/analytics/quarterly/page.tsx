@@ -20,6 +20,7 @@ import { B2BTierSection } from "@/components/quarterly/b2b-tier-section"
 import { CustomerLifecycleSection } from "@/components/quarterly/customer-lifecycle-section"
 import { QtVsTargetPanel } from "@/components/quarterly/qt-vs-target-bullets"
 import { MonthlyTrendChart } from "@/components/quarterly/monthly-trend-chart"
+import { CumulativeRevenueChart } from "@/components/quarterly/cumulative-chart"
 import { SquadMonthlyTable } from "@/components/quarterly/squad-monthly-table"
 import { SquadCustomerSummary } from "@/components/quarterly/squad-customer-summary"
 import { CompanyPerformanceView } from "@/components/quarterly/company-performance-view"
@@ -412,6 +413,8 @@ function QuarterlyContent() {
   }, [selQ, selYear, includeShip, includeInternalOps])
 
   const [refreshTick, setRefreshTick] = useState(0)
+  // Doanh thu theo ngày của quý đang xem (vẽ đường cộng dồn so với đường đạt target)
+  const [daily, setDaily] = useState<{ start: string; end: string; days: { d: string; rev: number }[] } | null>(null)
   const refreshAll = useCallback(async () => {
     // Xóa L2 Supabase cache quarterly trước, sau đó fetch fresh
     await fetch("/api/analytics/quarterly-cache-flush", { method: "POST" }).catch(() => {})
@@ -561,6 +564,17 @@ function QuarterlyContent() {
   // Mốc = hôm qua vì gohub_dw ETL theo ngày, hôm nay chưa đủ dữ liệu.
   const fmtD = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`
   const asOf = new Date(today); asOf.setDate(asOf.getDate() - 1)
+  useEffect(() => {
+    let alive = true
+    setDaily(null)
+    const p = new URLSearchParams({ quarter: selQ, year: String(selYear), companyCode })
+    if (includeShip) p.set("includeShip", "1")
+    if (includeInternalOps) p.set("includeInternalOps", "1")
+    if (refreshTick > 0) p.set("nocache", "1")
+    fetch(`/api/analytics/quarterly-daily?${p}`).then(r => (r.ok ? r.json() : null)).then(d => { if (alive && d?.days) setDaily({ start: d.start, end: d.end, days: d.days }) }).catch(() => {})
+    return () => { alive = false }
+  }, [selQ, selYear, companyCode, includeShip, includeInternalOps, refreshTick])
+
   const qNum = parseInt(selQ.replace("Q", "")) || 1
   const periodStart   = new Date(selYear, (qNum - 1) * 3, 1)
   const periodQEnd    = new Date(selYear, (qNum - 1) * 3 + 3, 0)   // ngày cuối quý
@@ -918,6 +932,20 @@ function QuarterlyContent() {
             actual={totRevRaw} prRev={totRevPr} target={targets.b2bRev + targets.b2cRev}
             cm1Actual={totCm1Raw} prCm1={totCm1Pr} cm1Target={targets.b2bCm1 + targets.b2cCm1}
             hk3Pct={totThkPct} hk3Rev={b2bThkAct + b2cThkAct} hk3Target={0} />
+        </div>
+      )}
+
+      {/* ── Doanh thu cộng dồn so với đường đạt target ── */}
+      {daily && (
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50">
+            <h2 className="text-lg font-bold text-slate-900">Doanh thu cộng dồn so với đường đạt target</h2>
+            <p className="text-[12.5px] text-slate-500 mt-0.5">Đường xanh nằm trên đường chấm đen là đang nhanh hơn target; nằm dưới là đang chậm. Đường cam nét đứt là dự phóng cuối quý.</p>
+          </div>
+          <div className="p-4">
+            <CumulativeRevenueChart days={daily.days} start={daily.start} end={daily.end} target={targets.b2bRev + targets.b2cRev} projected={isCurrentQ ? totRevPr : 0}
+              today={`${periodThrough.getFullYear()}-${String(periodThrough.getMonth() + 1).padStart(2, "0")}-${String(periodThrough.getDate()).padStart(2, "0")}`} />
+          </div>
         </div>
       )}
 

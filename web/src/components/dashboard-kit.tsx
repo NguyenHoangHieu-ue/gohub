@@ -225,7 +225,20 @@ const ACCENT_ICON_CLS: Record<MetricAccent, string> = {
   neutral:  "bg-slate-100 text-slate-500",
 }
 
-export function StatTile({ icon, label, value, unit, accent = "neutral", goalLabel, deltas, className }: {
+// Đường mini (sparkline) vẽ bằng SVG thuần: nhận dãy số theo ngày, tự co giãn.
+export function Sparkline({ values, className }: { values: number[]; className?: string }) {
+  const v = values.filter(x => Number.isFinite(x))
+  if (v.length < 2) return null
+  const mn = Math.min(...v), mx = Math.max(...v), span = mx - mn || 1
+  const pts = v.map((a, i) => `${((i * 100) / (v.length - 1)).toFixed(1)},${(30 - ((a - mn) / span) * 26).toFixed(1)}`).join(" ")
+  return (
+    <svg viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true" className={cn("h-8 w-full", className)}>
+      <polyline points={pts} fill="none" stroke="#2a78d6" strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function StatTile({ icon, label, value, unit, accent = "neutral", goalLabel, deltas, spark, className }: {
   icon?: React.ReactNode
   label: string
   value: React.ReactNode
@@ -233,6 +246,7 @@ export function StatTile({ icon, label, value, unit, accent = "neutral", goalLab
   accent?: MetricAccent
   goalLabel?: React.ReactNode                                            // vd "334.0% of Target" góc trên phải
   deltas?: { label: string; value: React.ReactNode; kind: DeltaKind }[]  // vd "vs Prev Period" / "vs Prev Year"
+  spark?: number[]                                                       // đường mini theo ngày dưới số chính
   className?: string
 }) {
   return (
@@ -260,6 +274,7 @@ export function StatTile({ icon, label, value, unit, accent = "neutral", goalLab
           {unit != null && <span className="ml-1 text-sm font-medium text-slate-400">{unit}</span>}
         </p>
       </div>
+      {spark && spark.length > 1 && <Sparkline values={spark} />}
       {deltas && deltas.length > 0 && (
         <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-2.5">
           {deltas.map((d, i) => (

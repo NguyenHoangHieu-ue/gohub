@@ -15,6 +15,7 @@ import { StatTile, type MetricAccent, type DeltaKind } from "@/components/dashbo
 
 // Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu, chỉ tải phía client.
 const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
+const BodWaterfall = dynamic(() => import("@/components/bod/waterfall-chart").then(m => m.BodWaterfall), { ssr: false, loading: chartLoading })
 const RevenueCompositeChart = dynamic(() => import("./bod-charts").then(m => m.RevenueCompositeChart), { ssr: false, loading: chartLoading })
 const MarginTrendChart      = dynamic(() => import("./bod-charts").then(m => m.MarginTrendChart),      { ssr: false, loading: chartLoading })
 
@@ -322,8 +323,8 @@ export default function BODReport() {
   const pctDiff = (current: number, previous?: number): number | null =>
     previous === undefined || previous === 0 ? null : ((current - previous) / previous) * 100
 
-  const SummaryCard = ({ title, value, icon: Icon, color, prevPeriod, prevYear, target, format = "currency" }: {
-    title: string, value: number, icon: any, color: string, prevPeriod?: number, prevYear?: number, target?: number, format?: "currency" | "number" | "percent"
+  const SummaryCard = ({ title, value, icon: Icon, color, prevPeriod, prevYear, target, format = "currency", spark }: {
+    title: string, value: number, icon: any, color: string, prevPeriod?: number, prevYear?: number, target?: number, format?: "currency" | "number" | "percent", spark?: number[]
   }) => {
     const formattedValue = format === "currency" ? formatCurrency(value) : format === "percent" ? `${value.toFixed(2)}%` : formatCompactNumber(value)
     const deltas: { label: string; value: React.ReactNode; kind: DeltaKind }[] = []
@@ -340,6 +341,7 @@ export default function BODReport() {
         accent={ACCENT_MAP[color] || "neutral"}
         goalLabel={target !== undefined && target > 0 ? `${((value / target) * 100).toFixed(1)}% of Target` : undefined}
         deltas={deltas}
+        spark={spark}
       />
     )
   }
@@ -489,13 +491,13 @@ export default function BODReport() {
           ))
         ) : (
           <>
-            <SummaryCard title="Tổng doanh thu" value={summary?.total_revenue || 0} icon={DollarSign} color="blue" target={summary?.total_target_revenue} prevPeriod={summary?.previous_period?.total_revenue} prevYear={summary?.previous_year?.total_revenue} />
+            <SummaryCard title="Tổng doanh thu" value={summary?.total_revenue || 0} icon={DollarSign} color="blue" target={summary?.total_target_revenue} prevPeriod={summary?.previous_period?.total_revenue} prevYear={summary?.previous_year?.total_revenue} spark={data.map(d => d.revenue)} />
             <SummaryCard title="Số lượng bán" value={summary?.total_units || 0} icon={PieChart} color="slate" format="number" prevPeriod={summary?.previous_period?.total_units} prevYear={summary?.previous_year?.total_units} />
-            <SummaryCard title="Tổng giá vốn" value={summary?.total_cogs || 0} icon={TrendingDown} color="orange" prevPeriod={summary?.previous_period?.total_cogs} prevYear={summary?.previous_year?.total_cogs} />
-            <SummaryCard title="GP" value={summary?.total_margin || 0} icon={TrendingUp} color="emerald" prevPeriod={summary?.previous_period?.total_margin} prevYear={summary?.previous_year?.total_margin} />
-            <SummaryCard title="%GP" value={summary?.avg_margin_percent || 0} icon={PieChart} color="purple" format="percent" prevPeriod={summary?.previous_period?.avg_margin_percent} prevYear={summary?.previous_year?.avg_margin_percent} />
-            <SummaryCard title="Tổng CM1" value={summary?.total_gpm2 || 0} icon={TrendingUp} color="indigo" prevPeriod={summary?.previous_period?.total_gpm2} prevYear={summary?.previous_year?.total_gpm2} />
-            <SummaryCard title="%CM1" value={summary?.avg_gpm2_percent || 0} icon={PieChart} color="pink" format="percent" prevPeriod={summary?.previous_period?.avg_gpm2_percent} prevYear={summary?.previous_year?.avg_gpm2_percent} />
+            <SummaryCard title="Tổng giá vốn" value={summary?.total_cogs || 0} icon={TrendingDown} color="orange" prevPeriod={summary?.previous_period?.total_cogs} prevYear={summary?.previous_year?.total_cogs} spark={data.map(d => d.cogs)} />
+            <SummaryCard title="GP" value={summary?.total_margin || 0} icon={TrendingUp} color="emerald" prevPeriod={summary?.previous_period?.total_margin} prevYear={summary?.previous_year?.total_margin} spark={data.map(d => d.margin)} />
+            <SummaryCard title="%GP" value={summary?.avg_margin_percent || 0} icon={PieChart} color="purple" format="percent" prevPeriod={summary?.previous_period?.avg_margin_percent} prevYear={summary?.previous_year?.avg_margin_percent} spark={data.map(d => d.margin_percent)} />
+            <SummaryCard title="Tổng CM1" value={summary?.total_gpm2 || 0} icon={TrendingUp} color="indigo" prevPeriod={summary?.previous_period?.total_gpm2} prevYear={summary?.previous_year?.total_gpm2} spark={data.map(d => d.gpm2)} />
+            <SummaryCard title="%CM1" value={summary?.avg_gpm2_percent || 0} icon={PieChart} color="pink" format="percent" prevPeriod={summary?.previous_period?.avg_gpm2_percent} prevYear={summary?.previous_year?.avg_gpm2_percent} spark={data.map(d => d.gpm2_percent)} />
             <SummaryCard title="Đóng góp 3HK (%)" value={summary?.total_3hk_contribution || 0} icon={PieChart} color="teal" format="percent" prevPeriod={summary?.previous_period?.total_3hk_contribution} prevYear={summary?.previous_year?.total_3hk_contribution} />
           </>
         )}
@@ -535,6 +537,17 @@ export default function BODReport() {
               <p className="text-[11px] text-slate-400 mt-1">Ước tính cả tháng</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Biểu đồ thác: doanh thu → giá vốn → GP → chi phí → CM1 */}
+      {summary && !loading && (
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+            <h3 className="font-bold text-slate-800">Từ doanh thu đến CM1</h3>
+            <span className="text-[13px] text-slate-500">Mỗi cột cam là một khoản trừ đi</span>
+          </div>
+          <BodWaterfall revenue={summary.total_revenue || 0} cogs={summary.total_cogs || 0} gp={summary.total_margin || 0} cm1={summary.total_gpm2 || 0} />
         </div>
       )}
 

@@ -5,7 +5,7 @@ import { pct, cm1Color, fck } from "@/lib/quarterly-format"
 
 // ─── KPI Progress Card — big % = PR CM1/Target, 3-row table (Rev/CM1/3HK) ────
 // Dùng số compact ("18.7 Tỷ") thay số đầy đủ để tránh chồng lấn trong grid.
-export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, cm1Target, hk3Pct, hk3Rev = 0, hk3Target, expectedPct = 0, accent = "#0f4c81" }:
+export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, prCm1, cm1Target, hk3Pct, hk3Rev = 0, hk3Target, accent = "#0f4c81" }:
   { label: string; icon: React.ElementType; actual: number; prRev: number; target: number; cm1Actual: number; prCm1: number; cm1Target: number; hk3Pct: number; hk3Rev?: number; hk3Target: number; expectedPct?: number; accent?: string }) {
 
   const cm1PrPct = cm1Target > 0 ? (prCm1 / cm1Target) * 100 : 0
@@ -49,16 +49,26 @@ export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, p
         </div>
       </div>
 
-      {/* Progress bar: PR CM1 / Target CM1 */}
-      <div className="relative h-2 bg-slate-100 rounded-full mb-3">
-        <div className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${Math.min(Math.max(cm1PrPct, 0), 100)}%`, background: accent }} />
-        {expectedPct > 0 && (
-          <div className="absolute -top-1 -bottom-1 w-[2px] bg-slate-700 rounded"
-            style={{ left: `${Math.min(expectedPct, 100)}%` }}
-            title={`Kỳ vọng pro-rata: ${pct(expectedPct)}`} />
-        )}
-      </div>
+      {/* Thanh 3 lớp: thực tế (đậm) · dự phóng cuối quý (nhạt) · target (vạch đen ở cuối). Tất cả tính trên CM1 so với target. */}
+      {(() => {
+        const acPct = cm1Target > 0 ? Math.max(0, (cm1Actual / cm1Target) * 100) : 0
+        return (
+          <div className="mb-3">
+            <div className="relative h-3.5 bg-slate-100 rounded-full mt-3 mb-1.5" role="img" aria-label={`CM1 thực tế ${pct(acPct)} target, dự phóng ${pct(cm1PrPct)} target`}>
+              <div className="absolute inset-y-0 left-0 rounded-full" title={`Dự phóng cả quý: ${pct(cm1PrPct)} target`}
+                style={{ width: `${Math.min(Math.max(cm1PrPct, 0), 100)}%`, background: accent, opacity: 0.28 }} />
+              <div className="absolute inset-y-0 left-0 rounded-full" title={`Thực tế đến hôm qua: ${pct(acPct)} target`}
+                style={{ width: `${Math.min(acPct, 100)}%`, background: accent }} />
+              <div className="absolute -top-1 -bottom-1 right-0 w-[2px] bg-slate-800 rounded" title="Target" />
+            </div>
+            <div className="flex items-center gap-3 text-[11.5px] text-slate-500">
+              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: accent }} />Thực tế {pct(acPct)}</span>
+              <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: accent, opacity: 0.28 }} />Dự phóng {pct(cm1PrPct)}</span>
+              <span className="inline-flex items-center gap-1 ml-auto"><i className="w-[3px] h-2.5 bg-slate-800 inline-block" />Target</span>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Table: 2 hàng header + 3 hàng data — mỗi hàng: label | Actual | Pro-rata | Target | % */}
       <div className="text-[11.5px]">

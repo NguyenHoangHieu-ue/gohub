@@ -872,7 +872,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                           <td key="gm"  className="px-2 py-2.5 text-right">{dual(d.gm, pr ? d.actualGm : undefined, "text-slate-600")}</td>,
                           <td key="cc"  className="px-2 py-2.5 text-right text-slate-500 tabular-nums">{d.cc > 0 ? (d.actualCc != null ? (pr ? dual(d.cc, d.actualCc, "text-slate-500") : fc(d.actualCc)) : fc(d.cc)) : "—"}</td>,
                           <td key="cm1" className={cn("px-2 py-2.5 text-right font-semibold", cm1Color(d.cm1))}>{dual(d.cm1, pr ? d.actualCm1 : undefined, cm1Color(d.cm1))}</td>,
-                          <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}>{pct(d.cm1Pct)}</td>,
+                          <td key="pct" className={cn("px-2 py-2.5 text-right", cm1Color(d.cm1))}><div className="flex items-center justify-end gap-1.5"><span className="hidden xl:inline-block w-12 h-1.5 rounded-full bg-slate-100 overflow-hidden"><i className="block h-full rounded-full bg-brand-500" style={{ width: `${Math.max(0, Math.min(100, (d.cm1Pct ?? 0) / 40 * 100))}%` }} /></span>{pct(d.cm1Pct)}</div></td>,
                           ...(fixedMonth ? [] : [<td key="qoq" className="px-2 py-2.5 text-right text-slate-300">—</td>]),
                           <td key="mom" className={cn("px-2 py-2.5 text-right font-semibold tabular-nums", momPct == null ? "text-slate-300" : momPct >= 0 ? "text-green-600" : "text-red-500")}>
                             {momPct != null ? `${momPct >= 0 ? "+" : ""}${momPct.toFixed(1)}%` : "—"}
