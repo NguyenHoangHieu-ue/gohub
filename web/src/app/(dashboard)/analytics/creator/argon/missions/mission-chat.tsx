@@ -51,7 +51,7 @@ function Seg<T extends string>({ value, onChange, options, label }: { value: T; 
   )
 }
 
-export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError }: {
+export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError, simple = false, quick }: {
   autoSend: { text: string; k: number } | null   // câu lệnh tự gửi (vd ▶ chạy lại script); mỗi k mới = một lần gửi
   phase: MissionPhase
   pendingAsk: PendingAskUi | null
@@ -62,6 +62,8 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   onPhase: (to: MissionPhase) => Promise<void>
   onStep: (runId: string, n: number) => void   // bấm chip [#N] trong câu trả lời → Bàn làm việc chọn bước N của lượt đó
   onError: (m: string) => void
+  simple?: boolean        // trang Argon gọn: ẩn thanh pha (sứ mệnh luôn ở pha chạy), chỉ còn khung chat
+  quick?: string[]        // câu gợi ý riêng thay cho gợi ý theo pha
 }) {
   const [prompt, setPrompt] = useState("")
   const [thinking, setThinking] = useState<Thinking>("medium")
@@ -109,7 +111,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Thanh pha: ba chặng nối nhau, chặng đã qua có dấu tích; nút chuyển pha bên phải */}
-      <div className="px-4 pt-3 pb-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      {!simple && <div className="px-4 pt-3 pb-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <ol className="flex items-center flex-1 min-w-[260px]" aria-label="Các pha của sứ mệnh">
             {STEPS.map((label, i) => {
@@ -154,7 +156,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6" onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
         {runs.length === 0 && (
@@ -223,7 +225,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
       {/* Ô nhắn: một khối bo tròn, hàng công cụ ngay dưới ô gõ */}
       <div className="px-4 pb-4 pt-2">
         {idle && <div className="mb-2 flex flex-wrap gap-1.5">
-          {QUICK[phase].map(q => <button key={q} type="button" onClick={() => setPrompt(q)} title={q} className="px-2.5 py-1 text-xs rounded-full border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors">{q}</button>)}
+          {(quick ?? QUICK[phase]).map(q => <button key={q} type="button" onClick={() => setPrompt(q)} title={q} className="px-2.5 py-1 text-xs rounded-full border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors">{q}</button>)}
         </div>}
         <div className="rounded-2xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-sm focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-violet-400 transition-shadow">
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={2} aria-label="Nhắn Argon"

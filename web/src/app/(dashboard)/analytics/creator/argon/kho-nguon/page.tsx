@@ -134,7 +134,7 @@ export default function ArgonRoomPage() {
           <h1 className="font-semibold text-gray-900 dark:text-slate-100 leading-tight">Kho nguồn · Phòng Argon</h1>
           <div className="text-xs text-gray-500">Nơi nạp và quản lý nguồn (file, Lark, mail, thread, gói số liệu). Gắn nguồn vào sứ mệnh ở trang Sứ mệnh.</div>
         </div>
-        <Link href="/analytics/creator/argon" className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg"><ArrowLeft size={14} />Về Sứ mệnh</Link>
+        <Link href="/analytics/creator/argon" className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg"><ArrowLeft size={14} />Về Argon</Link>
         <button onClick={() => setReportsOpen(true)} className=" inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-950/40"><LayoutDashboard size={14} />Kho báo cáo{reports.length ? ` (${reports.length})` : ""}</button>
       </div>
       {info && <div className="mx-4 mb-2 text-sm rounded-lg bg-emerald-50 text-emerald-800 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{info}</span><button onClick={() => setInfo(null)}>✕</button></div>}

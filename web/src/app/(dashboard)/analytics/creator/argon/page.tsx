@@ -1,43 +1,63 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Archive, ArchiveRestore, ArrowLeft, Atom, Database, Moon, FolderOpen, MessageSquare, Pencil, Target, Trash2, Workflow } from "lucide-react"
+import { Atom, ChevronDown, Database, Moon, RefreshCw, Settings2, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api, jsonInit, type Run } from "./argon-types"
-import { PHASE_LABEL, PHASE_PILL, fmtUsd, type MissionDetail, type MissionPhase, type MissionRowUi } from "./missions/mission-types"
-import { MissionList } from "./missions/mission-list"
-import { WorkspaceTree } from "./missions/workspace-tree"
-import { FileViewer } from "./missions/file-viewer"
+import type { MissionDetail, MissionRowUi, WsFile } from "./missions/mission-types"
 import { MissionChat } from "./missions/mission-chat"
 import { Workbench } from "./missions/workbench"
-import { LinkSourcesModal } from "./missions/link-sources-modal"
-import { PatrolPanel } from "./missions/patrol-panel"
 import { useMissionRunner } from "./missions/use-mission-runner"
+import { ArgonMarkdown } from "./argon-markdown"
 
-// Phòng Argon — Sứ mệnh (plan docs/plans/argon-missions.md). Trái: sứ mệnh + workspace · Giữa: chat (chỉ kết quả) hoặc file · Phải: Bàn làm việc (các bước Argon làm).
-type Panel = "left" | "center" | "right"
-export default function ArgonMissionsPage() {
+// Phòng Argon (gọn): một trợ lý tham mưu chạy liền. Trang này = "Đề xuất hôm nay" + khung hỏi đáp. Bên dưới vẫn là sứ mệnh
+// "Tham mưu hằng ngày" (tự tạo, luôn ở pha chạy); các pha, workspace, Bàn làm việc đầy đủ nằm ở /nang-cao, nguồn dữ liệu ở /kho-nguon.
+const DAILY_NAME = "Tham mưu hằng ngày"
+const DAILY_GOAL = "Theo dõi số liệu và tin mới của công ty mỗi ngày, đối chiếu với target và nhiệm vụ của Hiếu, rồi đề xuất tối đa 3 việc nên làm. Viết ngắn gọn, thực tế."
+const BRIEF_TEXT = `# Tham mưu hằng ngày
+
+## Mục tiêu
+Mỗi ngày đọc số liệu hệ thống và tin mới từ các nguồn Lark đã gắn (thread, mail, file), đối chiếu với target quý và nhiệm vụ bên dưới, rồi cho Hiếu biết: chuyện gì đáng chú ý, vì sao, nên làm gì.
+
+## Target và nhiệm vụ của Hiếu
+(Hiếu ghi vào đây: target quý, việc đang theo, điều cần ưu tiên. Argon luôn đọc phần này trước khi trả lời.)
+
+## Cách viết (bắt buộc)
+- Câu ngắn, từ thường. Không dùng thuật ngữ khi chưa giải thích.
+- Mỗi đề xuất có: việc cần làm, lý do bằng số liệu cụ thể kèm nguồn, mức chắc chắn (Chắc / Có thể / Chưa đủ dữ liệu).
+- Tối đa 3 đề xuất. Không suy đoán ngoài dữ liệu. Thiếu dữ liệu thì nói thẳng là thiếu, không điền số ước lượng.
+- Không đưa ra kỳ vọng vượt khả năng thực tế của số liệu hiện có.
+`
+const BRIEFING_PROMPT = `Cập nhật bản tin hôm nay và ghi vào notes/tin-hom-nay.md (ghi đè). Làm theo brief.md.
+1) Lấy số liệu 7 ngày gần nhất và quý hiện tại (doanh thu, GP, CM1) bằng công cụ lấy số liệu hệ thống, so với kỳ trước và với target.
+2) Nếu có nguồn Lark đã gắn (thread, mail, file), tìm tin mới đáng chú ý trong đó.
+3) Viết bản tin ngắn: "Đáng chú ý" (tối đa 3 ý, mỗi ý kèm số hoặc nguồn) rồi "Nên làm" (tối đa 3 việc, mỗi việc có lý do và mức chắc chắn).
+Không hỏi lại. Chỗ nào thiếu dữ liệu thì ghi rõ là thiếu.`
+const NIGHT_PROMPT = "Cập nhật bản tin hôm nay theo brief.md: lấy số liệu 7 ngày gần nhất và quý hiện tại, so với kỳ trước và target; tìm tin mới trong các nguồn Lark đã gắn; viết ngắn 'Đáng chú ý' (tối đa 3 ý) và 'Nên làm' (tối đa 3 việc, có lý do và mức chắc chắn). Thiếu dữ liệu thì nói rõ."
+const QUICK = ["Tuần này có gì đáng chú ý?", "So với target quý, chỗ nào đang chậm?", "Có tin mới nào từ Lark em nên báo anh không?"]
+const BRIEFING_RE = /^notes\/(tin-hom-nay|tuan-tra-)/
+
+const fmtAt = (iso: string) => new Date(iso).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })
+
+export default function ArgonHomePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [role, setRole] = useState<string | null>(null)
-  const [missions, setMissions] = useState<MissionRowUi[]>([])
-  const [showArchived, setShowArchived] = useState(false)
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [missionId, setMissionId] = useState<string | null>(null)
   const [detail, setDetail] = useState<MissionDetail | null>(null)
   const [runs, setRuns] = useState<Run[]>([])
-  const [selected, setSelected] = useState<string | null>(null)   // file đang mở ở khung giữa; null = chat
-  const [reloadKey, setReloadKey] = useState(0)
-  const [panel, setPanel] = useState<Panel>("center")
-  const [linkOpen, setLinkOpen] = useState(false)
-  const [patrolOpen, setPatrolOpen] = useState(false)
-  const [autoSend, setAutoSend] = useState<{ text: string; k: number } | null>(null)   // ▶ chạy lại script → câu lệnh tự gửi ở chat
-  const [sandbox, setSandbox] = useState<{ cpuMs: number; limitMs: number; snapshot: { at: string } | null } | null>(null)
-  const [building, setBuilding] = useState(false)
-  const [focus, setFocus] = useState<{ id: string; k: number } | null>(null)
+  const [briefing, setBriefing] = useState<{ text: string; at: string; path: string } | null>(null)
+  const [autoSend, setAutoSend] = useState<{ text: string; k: number } | null>(null)
+  const [nightly, setNightly] = useState<boolean | null>(null)
+  const [showBrief, setShowBrief] = useState(false)
+  const [briefText, setBriefText] = useState("")
+  const [briefDirty, setBriefDirty] = useState(false)
+  const [showBench, setShowBench] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [setting, setSetting] = useState(false)
   const loadSeq = useRef(0)
   const busyRef = useRef(false)
   const onError = useCallback((m: string) => setErr(m), [])
@@ -48,156 +68,164 @@ export default function ArgonMissionsPage() {
   }, [status, session])
   useEffect(() => { if (role && role !== "creator") router.push("/chatbot") }, [role, router])
 
-  const loadMissions = useCallback(async () => {
-    try { const r = await api<{ missions: MissionRowUi[] }>(`/api/creator/argon/missions${showArchived ? "?archived=1" : ""}`); setMissions(r.missions); return r.missions } catch (e) { onError((e as Error).message); return [] }
-  }, [showArchived, onError])
-  useEffect(() => { if (role === "creator") void loadMissions().then(ms => { if (ms.length && !activeId) setActiveId(ms[0].id) }) }, [role, showArchived]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Tìm sứ mệnh "Tham mưu hằng ngày"; chưa có thì tạo, Chốt luôn và ghi brief mẫu (chỉ lần đầu).
+  const ensureMission = useCallback(async () => {
+    setSetting(true)
+    try {
+      const list = await api<{ missions: MissionRowUi[] }>("/api/creator/argon/missions")
+      let m = list.missions.find(x => x.name === DAILY_NAME)
+      if (!m) {
+        m = (await api<{ mission: MissionRowUi }>("/api/creator/argon/missions", jsonInit("POST", { name: DAILY_NAME, goal: DAILY_GOAL }))).mission
+        await api(`/api/creator/argon/missions/${m.id}/phase`, jsonInit("POST", { to: "plan" }))
+        await api(`/api/creator/argon/missions/${m.id}/phase`, jsonInit("POST", { to: "run" }))
+        await api(`/api/creator/argon/missions/${m.id}/files`, jsonInit("PUT", { path: "brief.md", content: BRIEF_TEXT }))
+      } else if (m.phase !== "run") {
+        if (m.phase === "done" || m.phase === "paused") await api(`/api/creator/argon/missions/${m.id}/phase`, jsonInit("POST", { to: "run" }))
+      }
+      setMissionId(m.id)
+    } catch (e) { onError((e as Error).message) } finally { setSetting(false) }
+  }, [onError])
+  useEffect(() => { if (role === "creator") void ensureMission() }, [role, ensureMission])
 
   const loadDetail = useCallback((id: string) => {
     const seq = ++loadSeq.current
     api<MissionDetail>(`/api/creator/argon/missions/${id}`).then(r => {
       if (seq !== loadSeq.current) return
       setDetail(r)
-      if (!busyRef.current) setRuns(r.runs)   // đang stream thì giữ bản cục bộ (đang nhận chữ)
+      if (!busyRef.current) setRuns(r.runs)
     }).catch(e => onError(e.message))
   }, [onError])
-  useEffect(() => {
-    setSelected(null); setRuns([])
-    if (!activeId) { setDetail(null); return }
-    loadDetail(activeId)
-  }, [activeId, loadDetail])
+  useEffect(() => { if (missionId) loadDetail(missionId) }, [missionId, loadDetail])
 
-  const loadSandbox = useCallback(() => { api<{ cpuMs: number; limitMs: number; snapshot: { at: string } | null }>("/api/creator/argon/sandbox").then(setSandbox).catch(() => { /* đồng hồ phụ: lỗi thì bỏ qua */ }) }, [])
-  useEffect(() => { if (role === "creator") loadSandbox() }, [role, loadSandbox])
-  const refreshAll = useCallback(() => { if (activeId) loadDetail(activeId); void loadMissions(); loadSandbox() }, [activeId, loadDetail, loadMissions, loadSandbox])
+  // Bản tin = file ghi gần nhất trong notes/ (bản tin hôm nay hoặc tuần tra đêm).
+  const latest = useMemo(() => (detail?.files ?? []).filter(f => BRIEFING_RE.test(f.path)).sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0], [detail?.files])
+  useEffect(() => {
+    if (!missionId || !latest) { setBriefing(null); return }
+    api<{ file: WsFile }>(`/api/creator/argon/missions/${missionId}/files?path=${encodeURIComponent(latest.path)}`)
+      .then(r => setBriefing({ text: r.file.content ?? "", at: latest.updated_at, path: latest.path })).catch(() => setBriefing(null))
+  }, [missionId, latest?.path, latest?.updated_at]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!missionId) return
+    api<{ patrol: { enabled: boolean } }>(`/api/creator/argon/missions/${missionId}/patrol`).then(r => setNightly(!!r.patrol?.enabled)).catch(() => setNightly(false))
+  }, [missionId])
+  async function toggleNightly() {
+    if (!missionId || nightly == null) return
+    const next = !nightly
+    setNightly(next)
+    try { await api(`/api/creator/argon/missions/${missionId}/patrol`, jsonInit("PUT", { enabled: next, prompt: NIGHT_PROMPT })) } catch (e) { setNightly(!next); onError((e as Error).message) }
+  }
+
+  const loadBriefText = useCallback(async () => {
+    if (!missionId) return
+    try { const r = await api<{ file: WsFile }>(`/api/creator/argon/missions/${missionId}/files?path=brief.md`); setBriefText(r.file.content ?? ""); setBriefDirty(false) } catch (e) { onError((e as Error).message) }
+  }, [missionId, onError])
+  useEffect(() => { if (showBrief) void loadBriefText() }, [showBrief, loadBriefText])
+  async function saveBrief() {
+    if (!missionId) return
+    try { await api(`/api/creator/argon/missions/${missionId}/files`, jsonInit("PUT", { path: "brief.md", content: briefText })); setBriefDirty(false) } catch (e) { onError((e as Error).message) }
+  }
+
+  const refresh = useCallback(() => { if (missionId) loadDetail(missionId) }, [missionId, loadDetail])
   const runner = useMissionRunner({
     projectId: detail?.mission.project_id ?? null, runs, setRuns, onError,
-    onWorkspaceChanged: () => { setReloadKey(k => k + 1); refreshAll() },
-    onFinished: refreshAll,
-    onPoll: () => { if (activeId) loadDetail(activeId); setReloadKey(k => k + 1) },
+    onWorkspaceChanged: refresh, onFinished: refresh, onPoll: refresh,
   })
   busyRef.current = runner.busy
-
-  async function createMission(name: string, goal: string) {
-    try {
-      const r = await api<{ mission: MissionRowUi }>("/api/creator/argon/missions", jsonInit("POST", { name, goal }))
-      await loadMissions(); setActiveId(r.mission.id); setPanel("center")
-    } catch (e) { onError((e as Error).message); throw e }
-  }
-  async function createFile(path: string) {
-    if (!activeId) return
-    try { await api(`/api/creator/argon/missions/${activeId}/files`, jsonInit("PUT", { path, content: "" })); loadDetail(activeId); setSelected(path); void loadMissions() } catch (e) { onError((e as Error).message) }
-  }
-  async function patchMission(patch: Record<string, unknown>) {
-    if (!activeId) return
-    try { await api(`/api/creator/argon/missions/${activeId}`, jsonInit("PATCH", patch)); refreshAll() } catch (e) { onError((e as Error).message) }
-  }
-  async function changePhase(to: MissionPhase) {
-    if (!activeId) return
-    await api(`/api/creator/argon/missions/${activeId}/phase`, jsonInit("POST", { to }))
-    refreshAll()
-  }
-  async function showStep(runId: string, n: number) {
-    await runner.loadSteps(runId, true)
-    setFocus({ id: `${runId}:${n - 1}`, k: Date.now() }); setPanel("right")
-  }
-  async function buildSandbox() {
-    setBuilding(true)
-    try { await api("/api/creator/argon/sandbox", jsonInit("POST", { action: "build" })); loadSandbox() } catch (e) { onError((e as Error).message) } finally { setBuilding(false) }
-  }
-  function runScript(path: string) {
-    if (detail?.mission.phase !== "run") { onError('Chạy lại script chỉ dùng được khi sứ mệnh đang ở pha "Đang chạy" (sau khi Chốt).'); return }
-    setSelected(null); setPanel("center")
-    setAutoSend({ text: `Chạy lại ${path}: đọc docstring để biết đầu vào; nếu cần dữ liệu mới thì lấy lại bằng sql (saveAs) trước, rồi chạy run_code script="${path}" và báo kết quả ngắn gọn.`, k: Date.now() })
-  }
+  const [focus, setFocus] = useState<{ id: string; k: number } | null>(null)
+  async function showStep(runId: string, n: number) { await runner.loadSteps(runId, true); setFocus({ id: `${runId}:${n - 1}`, k: Date.now() }); setShowBench(true) }
   async function decidePatch(id: string, action: "approve" | "reject") {
-    if (!activeId) return
-    await api(`/api/creator/argon/missions/${activeId}/patches`, jsonInit("POST", { id, action }))
-    refreshAll()
+    if (!missionId) return
+    await api(`/api/creator/argon/missions/${missionId}/patches`, jsonInit("POST", { id, action }))
+    refresh()
   }
-  async function unlink(sourceId: string) {
-    if (!activeId) return
-    try { await api(`/api/creator/argon/missions/${activeId}/sources?sourceId=${sourceId}`, { method: "DELETE" }); refreshAll() } catch (e) { onError((e as Error).message) }
-  }
-  async function rename() {
-    const n = window.prompt("Tên sứ mệnh", detail?.mission.name ?? "")
-    if (n && n.trim()) await patchMission({ name: n.trim() })
-  }
-  async function remove() {
-    if (!detail || !window.confirm(`Xoá hẳn sứ mệnh "${detail.mission.name}" cùng workspace và lịch sử chạy? Không hoàn tác được.`)) return
-    try { await api(`/api/creator/argon/missions/${detail.mission.id}`, { method: "DELETE" }); setActiveId(null); const ms = await loadMissions(); if (ms.length) setActiveId(ms[0].id) } catch (e) { onError((e as Error).message) }
-  }
+  const updateBriefing = () => { setAutoSend({ text: BRIEFING_PROMPT, k: Date.now() }) }
 
   if (status === "loading" || !role) return <div className="p-6 text-sm text-gray-400">Đang tải…</div>
   if (role !== "creator") return null
   const m = detail?.mission
-  const tabBtn = (p: Panel, label: string, Icon: typeof Atom) => (
-    <button type="button" role="tab" aria-selected={panel === p} onClick={() => setPanel(p)}
-      className={cn("flex-1 inline-flex items-center justify-center gap-1.5 py-2 text-sm rounded-lg border", panel === p ? "bg-violet-600 text-white border-violet-600" : "border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200")}><Icon size={14} />{label}</button>
-  )
-  const colCls = (p: Panel) => cn("rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden flex-col min-h-0 min-w-0", panel === p ? "flex" : "hidden", "lg:flex")
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] max-w-[1700px] mx-auto">
-      <div className="flex items-center gap-3 px-4 py-3.5">
-        <div className="w-10 h-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shrink-0 shadow-sm"><Atom size={20} /></div>
+    <div className="max-w-[1400px] mx-auto px-4 py-5 space-y-4">
+      <header className="flex flex-wrap items-center gap-3">
+        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-sm"><Atom size={22} /></div>
         <div className="min-w-0">
-          <h1 className="text-[17px] font-semibold tracking-tight text-gray-900 dark:text-slate-100 leading-tight">Phòng Tham mưu</h1>
-          <div className="text-xs text-gray-500 truncate">Giao Argon một sứ mệnh dài hạn: hỏi cho rõ, anh Chốt rồi Argon mới làm</div>
+          <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-100 leading-tight">Argon</h1>
+          <p className="text-[13px] text-gray-500">Trợ lý tham mưu: đọc số liệu và tin mới, đề xuất việc nên làm</p>
         </div>
-        <Link href="/analytics/creator/argon/kho-nguon" className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 rounded-xl hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors"><Database size={14} />Kho nguồn</Link>
-      </div>
-      {err && <div className="mx-4 mb-2 text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">✕</button></div>}
-      <div className="lg:hidden flex gap-2 px-4 pb-2" role="tablist">{tabBtn("left", "Sứ mệnh", FolderOpen)}{tabBtn("center", "Chat", MessageSquare)}{tabBtn("right", "Bàn làm việc", Workflow)}</div>
+        <nav className="ml-auto flex items-center gap-2" aria-label="Chức năng khác">
+          <Link href="/analytics/creator/argon/kho-nguon" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><Database size={14} />Nguồn dữ liệu</Link>
+          <Link href="/analytics/creator/argon/nang-cao" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><Settings2 size={14} />Nâng cao</Link>
+        </nav>
+      </header>
+      {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}
 
-      <div className="flex-1 min-h-0 grid gap-3 px-4 pb-4 lg:grid-cols-[250px_minmax(0,1fr)_340px]">
-        <aside className={colCls("left")} aria-label="Sứ mệnh và workspace">
-          <div className="flex-1 overflow-y-auto">
-            <MissionList missions={missions} activeId={activeId} onSelect={id => { setActiveId(id); setPanel("center") }} onCreate={createMission} showArchived={showArchived} setShowArchived={setShowArchived} />
-            {detail && <div className="border-t border-gray-200 dark:border-slate-700 mt-1 pt-3 pb-3 px-1">
-              <WorkspaceTree tree={detail.tree} selected={selected} linked={detail.sources.map(s => ({ id: s.id, name: s.name }))} onSelect={p => { setSelected(p); setPanel("center") }} onCreate={createFile} onManageSources={() => setLinkOpen(true)} onUnlink={unlink} onRunScript={runScript} />
-            </div>}
-          </div>
-        </aside>
-
-        <main className={cn(colCls("center"), "bg-gray-50/50 dark:bg-slate-900")}>
-          {!m || !detail ? <div className="m-auto text-sm text-gray-400 px-6 text-center">Chọn hoặc tạo một sứ mệnh.</div> : <>
-            <div className="px-4 pt-3 pb-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-              <div className="flex items-center gap-2">
-                <h2 className="min-w-0 truncate text-[15px] font-semibold text-gray-900 dark:text-slate-100">{m.name}</h2>
-                <button type="button" onClick={rename} title="Đổi tên" aria-label="Đổi tên sứ mệnh" className="text-gray-400 hover:text-gray-700 dark:hover:text-slate-200"><Pencil size={13} /></button>
-                <span className={cn("shrink-0 text-[11px] px-2 py-0.5 rounded-full font-medium", PHASE_PILL[m.phase])}>{PHASE_LABEL[m.phase]}</span>
-                <span className="ml-auto flex items-center gap-1">
-                  <button type="button" onClick={() => setPatrolOpen(true)} title="Tuần tra đêm: Argon tự chạy nền mỗi đêm và chấm sổ dự đoán" className="inline-flex items-center gap-1 px-2 py-1 text-xs text-gray-600 dark:text-slate-300 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-950/40 hover:text-violet-700"><Moon size={14} /><span className="hidden xl:inline">Tuần tra đêm</span></button>
-                  <button type="button" onClick={() => patchMission({ archived: !m.archived })} title={m.archived ? "Bỏ lưu trữ" : "Lưu trữ"} aria-label={m.archived ? "Bỏ lưu trữ" : "Lưu trữ"} className="p-1.5 text-gray-400 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-700">{m.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}</button>
-                  <button type="button" onClick={remove} title="Xoá hẳn" aria-label="Xoá hẳn sứ mệnh" className="p-1.5 text-gray-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600"><Trash2 size={15} /></button>
-                </span>
-              </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-gray-500">
-                <span>{detail.files.length} file</span><span>{detail.sources.length} nguồn gắn</span><span>{runs.length} lượt chạy</span><span title="Chi phí token Gemini (chỉ để xem, không giới hạn)">{fmtUsd(detail.spent_usd)}</span>
-              </div>
-              {m.goal && <div className="mt-2 flex items-start gap-2 rounded-xl bg-gray-50 dark:bg-slate-900/50 px-3 py-2 text-[12.5px] leading-relaxed text-gray-700 dark:text-slate-300"><Target size={14} className="mt-0.5 shrink-0 text-violet-600 dark:text-violet-300" /><span className="line-clamp-2" title={m.goal}>{m.goal}</span></div>}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <div className="space-y-4 min-w-0">
+          <section className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden" aria-labelledby="dx-title">
+            <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gradient-to-r from-violet-50 to-white dark:from-slate-800 dark:to-slate-800">
+              <Sparkles size={16} className="text-violet-600" />
+              <h2 id="dx-title" className="font-semibold text-gray-900 dark:text-slate-100">Đề xuất hôm nay</h2>
+              {briefing && <span className="text-xs text-gray-500">cập nhật {fmtAt(briefing.at)}</span>}
+              <button type="button" onClick={updateBriefing} disabled={runner.busy || !detail || setting}
+                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50">
+                <RefreshCw size={13} className={cn(runner.busy && "animate-spin")} />{runner.busy ? "Đang cập nhật…" : "Cập nhật bản tin"}
+              </button>
             </div>
-            <div className="flex-1 min-h-0 flex flex-col">
-              {selected ? <>
-                <button type="button" onClick={() => setSelected(null)} className="self-start m-2 inline-flex items-center gap-1 text-xs text-violet-700 dark:text-violet-300 hover:underline"><ArrowLeft size={12} />Về chat</button>
-                <div className="flex-1 min-h-0">
-                  <FileViewer missionId={m.id} path={selected} reloadKey={reloadKey} onSaved={refreshAll} onDeleted={() => { setSelected(null); refreshAll() }} onError={onError} />
+            <div className="px-4 py-4 max-h-[52vh] overflow-y-auto">
+              {setting && !detail ? <p className="text-sm text-gray-400">Đang chuẩn bị Argon…</p>
+                : briefing ? <ArgonMarkdown text={briefing.text} />
+                : <div className="text-sm text-gray-500 leading-relaxed">Chưa có bản tin. Bấm <b>Cập nhật bản tin</b> để Argon đọc số liệu và tin mới rồi đề xuất việc nên làm. Làm một lần mất khoảng một phút.</div>}
+            </div>
+            <label className="flex items-center gap-2 px-4 py-2.5 border-t border-gray-100 dark:border-slate-700 text-[13px] text-gray-600 dark:text-slate-300 cursor-pointer">
+              <Moon size={14} className="text-violet-600" />
+              <input type="checkbox" checked={!!nightly} disabled={nightly == null} onChange={toggleNightly} className="w-4 h-4 accent-violet-600" />
+              Tự cập nhật mỗi đêm và nhắn Lark khi xong
+            </label>
+          </section>
+
+          <section className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
+            <button type="button" onClick={() => setShowBrief(v => !v)} aria-expanded={showBrief} className="w-full flex items-center gap-2 px-4 py-3 text-left">
+              <span className="font-semibold text-gray-900 dark:text-slate-100">Target và nhiệm vụ của anh</span>
+              <span className="text-xs text-gray-500">Argon đọc phần này trước khi trả lời</span>
+              <ChevronDown size={16} className={cn("ml-auto text-gray-400 transition-transform", showBrief && "rotate-180")} />
+            </button>
+            {showBrief && (
+              <div className="px-4 pb-4 space-y-2">
+                <textarea value={briefText} onChange={e => { setBriefText(e.target.value); setBriefDirty(true) }} rows={12} aria-label="Target và nhiệm vụ"
+                  className="w-full text-[13px] leading-relaxed font-mono rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-900 p-3 focus:outline-none focus:ring-2 focus:ring-violet-400" />
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={saveBrief} disabled={!briefDirty} className="px-3 py-1.5 text-[13px] rounded-lg bg-violet-600 text-white disabled:opacity-40">Lưu</button>
+                  <span className="text-xs text-gray-500">{briefDirty ? "Chưa lưu" : "Đã lưu"}</span>
                 </div>
-              </> : (
-                <MissionChat autoSend={autoSend} phase={m.phase} pendingAsk={detail.pendingAsk} patches={detail.patches ?? []} onPatch={decidePatch} runs={runs} runner={runner} onPhase={changePhase} onStep={(id, n) => void showStep(id, n)} onError={onError} />
-              )}
-            </div>
-          </>}
-        </main>
+              </div>
+            )}
+          </section>
+        </div>
 
-        <aside className={colCls("right")} aria-label="Bàn làm việc">
-          <Workbench steps={runner.steps} busy={runner.busy} bgActive={runner.bgActive} spentUsd={detail?.spent_usd ?? 0} runCount={runs.length} focus={focus} sandbox={sandbox} building={building} onBuild={() => void buildSandbox()}
-            onStop={runner.stop} onOpenFile={p => { setSelected(p); setPanel("center") }} onLoadFull={id => void runner.loadSteps(id, true)} />
-        </aside>
+        <section className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden flex flex-col min-h-[60vh] lg:h-[calc(100vh-11rem)] min-w-0" aria-label="Hỏi Argon">
+          {!m || !detail ? <div className="m-auto text-sm text-gray-400">Đang tải…</div> : (
+            <>
+              <div className="flex-1 min-h-0">
+                <MissionChat simple quick={QUICK} autoSend={autoSend} phase={m.phase} pendingAsk={detail.pendingAsk} patches={detail.patches ?? []} onPatch={decidePatch}
+                  runs={runs} runner={runner} onPhase={async to => { await api(`/api/creator/argon/missions/${m.id}/phase`, jsonInit("POST", { to })); refresh() }} onStep={showStep} onError={onError} />
+              </div>
+              <div className="border-t border-gray-100 dark:border-slate-700">
+                <button type="button" onClick={() => setShowBench(v => !v)} aria-expanded={showBench} className="w-full flex items-center gap-2 px-4 py-2 text-[13px] text-gray-600 dark:text-slate-300">
+                  Argon đang làm gì ({runner.steps.length} bước){runner.busy && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+                  <ChevronDown size={14} className={cn("ml-auto transition-transform", showBench && "rotate-180")} />
+                </button>
+                {showBench && (
+                  <div className="h-64 border-t border-gray-100 dark:border-slate-700">
+                    <Workbench steps={runner.steps} busy={runner.busy} bgActive={runner.bgActive} spentUsd={detail.spent_usd ?? 0} runCount={runs.length} focus={focus} sandbox={null} building={false} onBuild={() => {}}
+                      onStop={runner.stop} onOpenFile={() => {}} onLoadFull={id => void runner.loadSteps(id, true)} />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </section>
       </div>
-      {patrolOpen && m && <PatrolPanel missionId={m.id} phase={m.phase} onClose={() => setPatrolOpen(false)} onStarted={refreshAll} onError={onError} />}
-      {linkOpen && m && <LinkSourcesModal missionId={m.id} onClose={() => setLinkOpen(false)} onChanged={refreshAll} onError={onError} />}
     </div>
   )
 }
