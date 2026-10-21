@@ -41,10 +41,14 @@ export async function fetchCustomerNames(codes: string[]): Promise<Map<string, s
   const out = new Map<string, string>()
   if (uniq.length === 0) return out
   const list = uniq.map(c => `'${c.replace(/'/g, "''")}'`).join(",")
-  const rows = await queryAnalytics<{ code: string; name: string | null }>(
-    `SELECT TRIM(code::text) as code, MIN(name) as name FROM dim_customer WHERE TRIM(code::text) IN (${list}) GROUP BY 1`,
-  )
-  for (const r of rows) if (r.name) out.set(r.code, r.name)
+  // Tên khách đổi rất hiếm → cache 12h theo tập mã (trước đây mỗi lần mở Squad Progress là 1 query gohub_dw, ~1–2s khi nguội).
+  const pairs = await cachedQuery(`custnames_v1:${uniq.slice().sort().join("|")}`, async () => {
+    const rows = await queryAnalytics<{ code: string; name: string | null }>(
+      `SELECT TRIM(code::text) as code, MIN(name) as name FROM dim_customer WHERE TRIM(code::text) IN (${list}) GROUP BY 1`,
+    )
+    return rows.filter(r => r.name).map(r => [r.code, r.name as string] as [string, string])
+  }, 720)
+  for (const [code, name] of pairs) out.set(code, name)
   return out
 }
 
