@@ -2,6 +2,7 @@
 // View THÁNG của tab B2B Performance — dùng ĐÚNG nguồn và component của Quarter Report
 // (quarterly-report + quarterly-b2b-customers + B2BTierSection) để số hai tab luôn khớp cho cùng tháng.
 // Khác Quarter Report: chọn 1 tháng, %MoM thay %QoQ, không hiện target / Tổng Quý.
+import { B2BCharts } from "@/components/b2b/b2b-charts"
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -171,6 +172,14 @@ export function B2BMonthView({ initialMonth }: { initialMonth?: string }) {
       {isFuture && <div className="text-sm text-slate-500 bg-white border border-slate-200 rounded-xl p-4">Tháng {mLabel(month)} chưa có dữ liệu.</div>}
       {view && (
         <p className="text-[11.5px] text-slate-500">CM1 ở thẻ = GP − Ch.Cost − Group Cost (khớp dòng B2B của Quarter Report). Bảng Nhóm bên dưới là CM1 theo khách, chưa trừ Group Cost.</p>
+      )}
+
+      {!loading && (curSummary.length > 0 || tiers) && (
+        <B2BCharts
+          months={[...(prevSameQuarter ? [] : prevSummary), ...curSummary]}
+          currentMonth={month}
+          customers={((tiers?.tiers ?? []) as any[]).flatMap(t => (t.customers ?? []).map((c: any) => ({ name: c.name, revenue: c.revenue, cm1Pct: c.cm1Pct })))}
+        />
       )}
 
       <B2BTierSection
