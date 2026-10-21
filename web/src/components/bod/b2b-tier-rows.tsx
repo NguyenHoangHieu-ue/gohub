@@ -10,6 +10,7 @@ import type { TierRow } from "@/lib/bod-b2b-tiers"
 // Cột khớp bảng cha (Kênh · Units · Doanh thu · [Dự phóng] · COGS · GP · %GP · CM1 · [Dự phóng] · %CM1 · [Dự phóng]).
 export function BodB2BTierRows({ tiers, projectionFactor, colSpan }: { tiers: TierRow[]; projectionFactor: number | null; colSpan: number }) {
   const [open, setOpen] = useState<Record<string, boolean>>({ Strategic: true })
+  const [openOrg, setOpenOrg] = useState<Record<string, boolean>>({})   // tổ chức có nhiều mã con: bấm để xổ từng mã
   const proj = projectionFactor != null
   const cells = (r: { units: number; revenue: number; cogs: number; margin: number; marginPct: number; cm1: number; cm1Pct: number }, bold: boolean) => (
     <>
@@ -40,14 +41,32 @@ export function BodB2BTierRows({ tiers, projectionFactor, colSpan }: { tiers: Ti
             </td>
             {cells(t, true)}
           </tr>
-          {open[t.tier] && t.orgs.map(o => (
-            <tr key={o.orgKey} className="bg-slate-50/50 hover:bg-slate-50">
-              <td className="px-4 py-2 pl-11 text-slate-600 text-[13px]" title={o.orgName}>
-                <span className="inline-block max-w-[280px] truncate align-bottom">{o.orgName}</span>{o.customers > 1 && <span className="ml-1.5 text-[11.5px] text-slate-400">{o.customers} mã</span>}
-              </td>
-              {cells(o, false)}
-            </tr>
-          ))}
+          {open[t.tier] && t.orgs.map(o => {
+            const k = `${t.tier}||${o.orgKey}`
+            const multi = o.children.length > 0
+            return (
+              <React.Fragment key={k}>
+                <tr className={cn("bg-slate-50/50 hover:bg-slate-50", multi && "cursor-pointer")} onClick={() => multi && setOpenOrg(m => ({ ...m, [k]: !m[k] }))}>
+                  <td className="px-4 py-2 pl-9 text-slate-700 text-[13px]" title={o.orgName}>
+                    <span className="inline-flex items-center gap-1 max-w-full">
+                      {multi ? (openOrg[k] ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />) : <span className="w-3.5 shrink-0" />}
+                      <span className="inline-block max-w-[260px] truncate align-bottom">{o.orgName}</span>
+                      {multi && <span className="ml-1 text-[11.5px] text-slate-400 shrink-0">{o.customers} mã</span>}
+                    </span>
+                  </td>
+                  {cells(o, false)}
+                </tr>
+                {multi && openOrg[k] && o.children.map(c => (
+                  <tr key={c.code} className="bg-white hover:bg-slate-50">
+                    <td className="px-4 py-1.5 pl-16 text-slate-500 text-[12.5px]" title={`${c.name} (${c.code})`}>
+                      <span className="inline-block max-w-[260px] truncate align-bottom">{c.name}</span>
+                    </td>
+                    {cells(c, false)}
+                  </tr>
+                ))}
+              </React.Fragment>
+            )
+          })}
         </React.Fragment>
       ))}
     </>

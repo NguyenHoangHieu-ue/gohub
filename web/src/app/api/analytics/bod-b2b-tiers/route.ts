@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const includeInternalOps = sp.get("includeInternalOps") === "1"
   const { excludedCustomers } = await fetchQuarterlySettings()
   try {
-    const key = `bod-b2b-tiers1:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const key = `bod-b2b-tiers2:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const tiers = await cachedQuery(key, () => fetchBODB2BTiers(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps), QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
     return NextResponse.json({ tiers }, { headers: CACHE_HEADERS })
   } catch (e) {
