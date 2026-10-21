@@ -15,6 +15,8 @@ import { StatTile, type MetricAccent } from "@/components/dashboard-kit"
 
 // Icon + màu theo Ý NGHĨA từng KPI (đợt UI redesign s190+2) — khớp label thật trả về từ
 // /api/analytics/kpis/route.ts. Nhãn lạ (không có trong map) vẫn render được, chỉ không có icon.
+// Nhãn hiển thị tiếng Việt; khoá tra icon vẫn là nhãn tiếng Anh API trả về.
+const KPI_LABEL_VI: Record<string, string> = { "Total Revenue": "Tổng doanh thu", "Total Orders": "Tổng số đơn", "Avg. Order Value": "Giá trị đơn trung bình", "Unit Sold": "Số lượng bán" }
 const KPI_META: Record<string, { icon: React.ComponentType<{ className?: string }>; accent: MetricAccent }> = {
   "Total Revenue":    { icon: DollarSign,   accent: "revenue" },
   "Total Orders":     { icon: ShoppingCart, accent: "neutral" },
@@ -332,7 +334,7 @@ export default function DashboardHome() {
               <StatTile
                 key={kpi.label}
                 icon={meta && <meta.icon className="w-5 h-5" />}
-                label={kpi.label}
+                label={KPI_LABEL_VI[kpi.label] ?? kpi.label}
                 value={fmt(kpi.value)}
                 accent={meta?.accent ?? "neutral"}
                 deltas={[
@@ -547,7 +549,7 @@ export default function DashboardHome() {
                 <tr>
                   <th className="px-4 py-3">Group</th>
                   <th className="px-4 py-3 text-right">Total Order</th>
-                  <th className="px-4 py-3 text-right">Unit Sold</th>
+                  <th className="px-4 py-3 text-right">Số lượng bán</th>
                   <th className="px-4 py-3 text-right">Gross Revenue</th>
                   <th className="px-4 py-3 text-right">Doanh thu dự phóng</th>
                   <th className="px-4 py-3 text-right">%MoM</th>
@@ -615,7 +617,7 @@ export default function DashboardHome() {
                 <tr>
                   <th className="px-4 py-3">Channel / Phân khúc</th>
                   <th className="px-4 py-3 text-right">Total Order</th>
-                  <th className="px-4 py-3 text-right">Unit Sold</th>
+                  <th className="px-4 py-3 text-right">Số lượng bán</th>
                   <th className="px-4 py-3 text-right">Gross Revenue</th>
                   <th className="px-4 py-3 text-right">Doanh thu dự phóng</th>
                   <th className="px-4 py-3 text-right">%MoM</th>
