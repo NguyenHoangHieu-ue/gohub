@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, Legend } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from "recharts"
 import { formatCompactNumber } from "@/lib/analytics-formatters"
 import { CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 import type { MonthSummary } from "@/lib/quarterly-types"
@@ -41,19 +41,23 @@ export function B2BCharts({ months, customers, currentMonth }: { months: MonthSu
       {top.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 xl:col-span-2">
           <h3 className="font-bold text-slate-800 mb-1">Khách lớn nhất của quý</h3>
-          <p className="text-[12.5px] text-slate-500 mb-2">Cột cam: %CM1 thấp hơn trung bình nhóm này ({avg}%).</p>
-          <ResponsiveContainer width="100%" height={Math.max(220, top.length * 30 + 20)}>
-            <BarChart data={top} layout="vertical" margin={{ top: 2, right: 64, left: 4, bottom: 2 }} barCategoryGap="26%">
-              <CartesianGrid stroke={CHART_GRID_COLOR} horizontal={false} />
-              <XAxis type="number" hide />
-              <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12.5, fill: "#14233a" }} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ fill: "rgba(15,76,129,0.05)" }} contentStyle={chartTooltipStyle} formatter={(v: number, _n: string, p: any) => [`${formatCompactNumber(v)} · %CM1 ${p.payload.cm1Pct}%`, p.payload.full]} />
-              <Bar dataKey="revenue" radius={[0, 6, 6, 0]} maxBarSize={18}>
-                {top.map((r, i) => <Cell key={i} fill={r.cm1Pct < avg ? "#eb6834" : "#2a78d6"} />)}
-                <LabelList dataKey="revenue" position="right" formatter={(v: number) => formatCompactNumber(v)} style={{ fontSize: 12, fill: "#475569" }} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <p className="text-[12.5px] text-slate-500 mb-3">Thanh cam: %CM1 thấp hơn trung bình nhóm này ({avg}%). Rê chuột vào tên để xem tên đầy đủ.</p>
+          <ul className="space-y-3">
+            {top.map(r => (
+              <li key={r.full} title={`${r.full}: ${formatCompactNumber(r.revenue)} · %CM1 ${r.cm1Pct}%`}>
+                <div className="flex items-baseline justify-between gap-3 text-[13px]">
+                  <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{r.full}</span>
+                  <span className="shrink-0 tabular-nums font-semibold text-slate-700">{formatCompactNumber(r.revenue)}</span>
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <div className="h-2.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${Math.max(2, r.revenue / top[0].revenue * 100)}%`, background: r.cm1Pct < avg ? "#eb6834" : "#2a78d6" }} />
+                  </div>
+                  <span className="w-12 shrink-0 text-right text-[12px] tabular-nums text-slate-500">{r.cm1Pct}%</span>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

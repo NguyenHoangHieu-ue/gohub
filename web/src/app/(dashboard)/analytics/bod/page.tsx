@@ -1,5 +1,7 @@
 ﻿"use client"
 
+import { BodB2BTierRows } from "@/components/bod/b2b-tier-rows"
+import type { TierRow } from "@/lib/bod-b2b-tiers"
 import React, { useState, useEffect, useMemo } from "react"
 import dynamic from "next/dynamic"
 import {
@@ -64,6 +66,7 @@ export default function BODReport() {
   const [groupMargins, setGroupMargins] = useState<BODGroupMargin[]>([])
   const [strategicPerformance, setStrategicPerformance] = useState<any[]>([])
   const [partnerTiers, setPartnerTiers] = useState<Record<string, string[]>>({ Strategic: [] })
+  const [b2bTiers, setB2bTiers] = useState<TierRow[]>([])   // B2B theo tier → organization (bảng Channel Performance Breakdown)
   const [channelPerformance, setChannelPerformance] = useState<BODChannelPerformance[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -227,13 +230,14 @@ export default function BODReport() {
           if (prevSummaryRes.ok) setPrevMonthSummary(await prevSummaryRes.json())
         } catch (e) { console.error("Error fetching prev month summary:", e) }
       }
-      const [summaryData, reportData, groupData, channelData, stratData, tiersData] = await Promise.all([
+      const [summaryData, reportData, groupData, channelData, stratData, tiersData, b2bTierData] = await Promise.all([
         fetchJson(`/api/analytics/bod-summary?${queryParams}`, "Summary"),
         fetchJson(`/api/analytics/bod-report?${queryParams}`, "Report"),
         fetchJson(`/api/analytics/bod-group-margin?${queryParams}`, "Group"),
         fetchJson(`/api/analytics/bod-channel-performance?${queryParams}`, "Channel"),
         fetch(`/api/analytics/b2b/strategic-performance?${queryParams}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/config/partner-tiers`).then(r => r.ok ? r.json() : { Strategic: [] }).catch(() => ({ Strategic: [] })),
+        fetch(`/api/analytics/bod-b2b-tiers?${queryParams}`).then(r => r.ok ? r.json() : { tiers: [] }).catch(() => ({ tiers: [] })),
       ])
 
       setSummary(summaryData)
@@ -242,6 +246,7 @@ export default function BODReport() {
       setChannelPerformance(channelData)
       setStrategicPerformance(stratData)
       setPartnerTiers(tiersData)
+      setB2bTiers(b2bTierData?.tiers ?? [])
       void fetchPrevMonth()  // sau 5 request chính: gohub_dw chỉ có 3 kết nối, chạy cùng lúc làm các request chính hết 25s (QA B-07)
     } catch (error) {
       console.error("Error fetching BOD data:", error)
@@ -743,36 +748,10 @@ export default function BODReport() {
                   <tr key={i}>{Array(8).fill(0).map((_, j) => <td key={j} className="px-4 py-3 text-right"><Skeleton className="h-4 w-16 ml-auto" /></td>)}</tr>
                 ))
               ) : (
-                ["B2B-Strategic", "B2B-Non-Strategic", "B2C", "Other"].map(groupName => {
+                ["B2B", "B2C", "Other"].map(groupName => {
+                  if (groupName === "B2B") return <BodB2BTierRows key="b2b-tiers" tiers={b2bTiers} projectionFactor={projection ? projection.factor : null} colSpan={projection ? 11 : 8} />
                   let groupChannels: any[]
-                  if (groupName === "B2B-Strategic") {
-                    groupChannels = strategicPerformance.map(s => ({
-                      channel: s.name, orders: s.orders || 0, units: s.units, revenue: s.revenue,
-                      cogs: s.revenue - (s.margin || 0), margin: s.margin || 0, margin_percent: s.margin_percent,
-                      gpm2: s.gpm2 || 0, gpm2_percent: s.gpm2_percent, prev_revenue: s.prev_revenue, mom: s.mom || 0,
-                    }))
-                  } else if (groupName === "B2B-Non-Strategic") {
-                    groupChannels = channelPerformance
-                      .filter(cp => cp.group === "B2B-Non-Strategic" || cp.group?.startsWith("B2B"))
-                      .map(cp => {
-                        let adjRevenue = cp.revenue, adjUnits = cp.units, adjOrders = cp.orders || 0, adjMargin = cp.margin, adjGpm2 = cp.gpm2
-                        strategicPerformance.forEach(s => {
-                          if (s.channel_contributions && s.channel_contributions[cp.channel]) {
-                            const contrib = s.channel_contributions[cp.channel]
-                            adjRevenue -= (contrib.revenue || 0); adjUnits -= (contrib.units || 0); adjOrders -= (contrib.orders || 0)
-                            adjMargin -= (contrib.margin || 0); adjGpm2 -= (contrib.margin || 0)
-                          }
-                        })
-                        if (adjRevenue < 5000 && adjOrders < 1) return null
-                        return {
-                          ...cp, revenue: Math.max(0, adjRevenue), units: Math.max(0, adjUnits), orders: Math.max(0, adjOrders),
-                          margin: adjMargin, gpm2: adjGpm2,
-                          margin_percent: adjRevenue > 0 ? (adjMargin / adjRevenue) * 100 : 0,
-                          gpm2_percent: adjRevenue > 0 ? (adjGpm2 / adjRevenue) * 100 : 0,
-                        }
-                      })
-                      .filter(Boolean) as BODChannelPerformance[]
-                  } else if (groupName === "B2C") {
+                  if (groupName === "B2C") {
                     groupChannels = channelPerformance.filter(cp => cp.group === "B2C" || cp.group === "RETAIL")
                   } else {
                     groupChannels = channelPerformance.filter(cp => cp.group === groupName)
