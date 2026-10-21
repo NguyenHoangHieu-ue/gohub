@@ -57,6 +57,8 @@ export default function ProductPerformancePage() {
   })
   const [trendData, setTrendData] = useState<TrendData[]>([])
   const [channelData, setChannelData] = useState<ChannelData[]>([])
+  // B2B chia theo tier khách (Strategic, VIP, Gold, Silver) → tổ chức; cùng cách phân loại với Quarter Report/BOD (bảng giá khách).
+  const [b2bTierGroups, setB2bTierGroups] = useState<{ tier: string; data: ChannelData[] }[]>([])
   const [regionData, setRegionData] = useState<RegionData[]>([])
   const [skuPerformance, setSkuPerformance] = useState<SKUPerformance[]>([])
   const reportRef = React.useRef<HTMLDivElement>(null)
@@ -336,6 +338,17 @@ export default function ProductPerformancePage() {
         FROM ${mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
         WHERE ${filterSQL} GROUP BY 1, 2 ORDER BY revenue DESC`
 
+      const b2bCustQuery = `
+        SELECT COALESCE(NULLIF(TRIM(c.organization), ''), TRIM(f.customer_code)) as org_key,
+               MIN(COALESCE(NULLIF(TRIM(c.organization), ''), COALESCE(c.name, TRIM(f.customer_code)))) as org_name,
+               c.price_list_name, SUM(f.${revCol}) as revenue, SUM(f.${qtyCol}) as units_sold,
+               COUNT(DISTINCT f.order_code) as orders, SUM(${isSales ? "0" : "f." + marginCol}) as margin
+        FROM ${mainTable} f
+        LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+        LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
+        WHERE ${filterSQL} AND UPPER(COALESCE(s.group_name, '')) = 'B2B'
+        GROUP BY 1, 3`
+
       const regionQuery = `SELECT ${regionExpr} as region_code, SUM(${revCol}) as revenue, SUM(${qtyCol}) as units FROM ${mainTable} f WHERE ${filterSQL} GROUP BY 1 ORDER BY revenue DESC LIMIT 10`
 
       // Base query (KHÔNG LIMIT) — lưu để export FULL; bảng chỉ hiển thị top 50.
@@ -347,16 +360,16 @@ export default function ProductPerformancePage() {
       skuFullQueryRef.current = skuBreakdownBase
       const skuBreakdownQuery = `${skuBreakdownBase} LIMIT 50`
 
-      const [mRecords, pmRecords, trends, channels, regions, skus, strategicRes] = await Promise.all([
+      const [mRecords, pmRecords, trends, channels, regions, skus, b2bCust, qSettings] = await Promise.all([
         runQuery(metricsQuery),
         runQuery(prevMetricsQuery),
         runQuery(trendQuery),
         runQuery(channelQuery),
         runQuery(regionQuery),
         runQuery(skuBreakdownQuery),
-        fetch(`/api/analytics/b2b/strategic-performance?startDate=${startDate}&endDate=${endDate}&dateColumn=${dateColumn}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        runQuery(b2bCustQuery).catch(() => []),
+        fetch("/api/analytics/quarterly-settings").then(r => (r.ok ? r.json() : null)).catch(() => null),
       ])
-      const strategic = Array.isArray(strategicRes) ? strategicRes : []
 
       const m = mRecords[0] || {}
       const pm = pmRecords[0] || {}
@@ -387,26 +400,29 @@ export default function ProductPerformancePage() {
         revenue: parseFloat(c.revenue), units_sold: parseInt(c.units_sold), orders: parseInt(c.orders), margin: parseFloat(c.margin),
       }))
 
-      const adjustedChannels = rawChannels.map((rc: any) => {
-        let rev = rc.revenue, units = rc.units_sold, orders = rc.orders, margin = rc.margin
-        strategic.forEach((s: any) => {
-          if (s.channel_contributions && s.channel_contributions[rc.channel_name]) {
-            const contrib = s.channel_contributions[rc.channel_name]
-            rev -= (contrib.revenue || 0)
-            units -= (contrib.units || 0)
-            orders -= (contrib.orders || 0)
-            const marginRatio = rc.revenue > 0 ? rc.margin / rc.revenue : 0
-            margin -= (contrib.revenue || 0) * marginRatio
-          }
-        })
-        return { ...rc, revenue: rev, units_sold: units, orders, margin }
-      }).filter((c: any) => c.revenue > 1000 || c.orders > 0)
+      setChannelData(rawChannels.filter((c: any) => c.revenue > 1000 || c.orders > 0).sort((x: any, y: any) => y.revenue - x.revenue))
 
-      const strategicRows = strategic.map((s: any) => ({
-        channel_name: s.name, group_name: "Strategic", revenue: s.revenue, units_sold: s.units, orders: s.orders, margin: s.margin,
-      }))
-
-      setChannelData([...strategicRows, ...adjustedChannels].sort((a, b) => b.revenue - a.revenue))
+      // Tier theo bảng giá khách (giống makeClassifyTier của Quarter Report): khớp từ khoá tier nào thì vào tier đó, không khớp = Strategic.
+      const tierKw: Record<string, string[]> = qSettings?.tierKeywords ?? {}
+      const classify = (pl: string | null): string => {
+        if (!pl) return "Strategic"
+        const u = pl.toUpperCase()
+        for (const [tier, kws] of Object.entries(tierKw)) if ((kws as string[]).some(k => u.includes(k.toUpperCase()))) return tier
+        return "Strategic"
+      }
+      const byTier = new Map<string, Map<string, ChannelData>>()
+      for (const r of (b2bCust as any[])) {
+        const tier = classify(r.price_list_name)
+        const orgName = String(r.org_name ?? r.org_key ?? "").replace(/^(VN|US)_Org\s+/i, "")
+        const m = byTier.get(tier) ?? new Map<string, ChannelData>()
+        const cur = m.get(r.org_key) ?? { channel_name: orgName, group_name: tier, revenue: 0, units_sold: 0, orders: 0, margin: 0 }
+        cur.revenue += parseFloat(r.revenue || 0); cur.units_sold += parseInt(r.units_sold || 0); cur.orders += parseInt(r.orders || 0); cur.margin += parseFloat(r.margin || 0)
+        m.set(r.org_key, cur); byTier.set(tier, m)
+      }
+      const order = ["Strategic", "VIP", "Gold", "Silver"]
+      setB2bTierGroups([...new Set([...order, ...byTier.keys()])].filter(k => byTier.has(k)).map(k => ({
+        tier: k, data: [...byTier.get(k)!.values()].filter(c => c.revenue > 1000 || c.orders > 0).sort((x, y) => y.revenue - x.revenue),
+      })))
 
       setRegionData(regions.map((r: any) => ({
         region: countryMappings[r.region_code] || r.region_code,
@@ -438,15 +454,9 @@ export default function ProductPerformancePage() {
     }
   }
 
-  const groupedChannelData = useMemo(() => {
-    const groups = { b2c: [] as ChannelData[], b2bStrategic: [] as ChannelData[], b2bNonStrategic: [] as ChannelData[] }
-    channelData.forEach(channel => {
-      if (channel.group_name === "Strategic") groups.b2bStrategic.push(channel)
-      else if (channel.group_name?.toUpperCase() === "B2C") groups.b2c.push(channel)
-      else groups.b2bNonStrategic.push(channel)
-    })
-    return groups
-  }, [channelData])
+  const groupedChannelData = useMemo(() => ({
+    b2c: channelData.filter(c => c.group_name?.toUpperCase() === "B2C"),
+  }), [channelData])
 
   const filteredSkus = useMemo(() => {
     return availableSkus.filter(sku => (sku || "").toLowerCase().includes((skuSearch || "").toLowerCase())).slice(0, 100)
@@ -784,8 +794,7 @@ export default function ProductPerformancePage() {
         <div className="space-y-6">
           {[
             { id: "b2c", title: "B2C Performance", data: groupedChannelData.b2c, color: "indigo" },
-            { id: "b2b-strategic", title: "B2B - Strategic Performance", data: groupedChannelData.b2bStrategic, color: "blue" },
-            { id: "b2b-non-strategic", title: "B2B - Non-Strategic Performance", data: groupedChannelData.b2bNonStrategic, color: "slate" },
+            ...b2bTierGroups.map(g => ({ id: `b2b-${g.tier.toLowerCase()}`, title: `B2B - ${g.tier} (theo tổ chức khách)`, data: g.data, color: g.tier === "Strategic" ? "blue" : "slate" })),
           ].map((group) => (
             <div key={group.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-6 border-b border-slate-100 flex items-center justify-between">
