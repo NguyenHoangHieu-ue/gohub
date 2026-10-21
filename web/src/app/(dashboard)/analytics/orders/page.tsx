@@ -516,8 +516,8 @@ export default function OrdersPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                {["Date","PIC","Order Name","Customer","Order ID","Type","Channel","Qty","Unit Price","Revenue","GP","Entity","Tier"].map(h => (
-                  <th key={h} className="px-3 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{h}</th>
+                {["Date","PIC","Order Name","Customer","Order ID","Type","Channel","Qty","Unit Price","Revenue","GP","Entity","Tier"].map((h, hi) => (
+                  <th key={h} className={`px-3 py-2.5 font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap ${hi >= 7 && hi <= 10 ? "text-right" : "text-left"}`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -532,7 +532,8 @@ export default function OrdersPage() {
               )}
               {!loading && filtered.map((r, i) => (
                 <tr key={`${r.order_code || i}-${i}`}
-                  className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  title={(r.gross_profit || 0) < 0 ? "Đơn lỗ (GP âm)" : undefined}
+                  className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${(r.gross_profit || 0) < 0 ? "bg-rose-50/60" : ""}`}>
                   <td className="px-3 py-2 whitespace-nowrap font-mono text-[12px] text-slate-600 dark:text-slate-300">
                     {fmtDate(r.order_date)}
                   </td>
