@@ -11,6 +11,8 @@ function adminClient() {
   )
 }
 
+const ROLE_RECHECK_MS = 5 * 60 * 1000
+
 interface LarkProfile {
   open_id:    string
   name:       string
@@ -220,6 +222,21 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
+      // Đọc lại role/department từ DB mỗi 5 phút để đổi quyền có hiệu lực sớm (không đợi phiên hết hạn).
+      const now = Date.now()
+      if (token.username && (!token.roleCheckedAt || now - (token.roleCheckedAt as number) > ROLE_RECHECK_MS)) {
+        const { data: dbUser } = await adminClient()
+          .from("users")
+          .select("role, department")
+          .eq("username", token.username as string)
+          .maybeSingle()
+        if (dbUser) {
+          token.role       = dbUser.role
+          token.department = dbUser.department ?? "all"
+        }
+        token.roleCheckedAt = now
+      }
+
       return token
     },
 
@@ -232,6 +249,6 @@ export const authOptions: NextAuthOptions = {
   },
 
   pages:   { signIn: "/login" },
-  // maxAge 1 ngày: nếu role user thay đổi, JWT cũ hết hạn trong tối đa 24h (không phải 7 ngày).
-  session: { strategy: "jwt", maxAge: 24 * 60 * 60 },
+  // Phiên trượt: không hoạt động 4 giờ thì hết hạn; có hoạt động thì cookie được cấp lại mỗi ≥10 phút.
+  session: { strategy: "jwt", maxAge: 4 * 60 * 60, updateAge: 10 * 60 },
 }
