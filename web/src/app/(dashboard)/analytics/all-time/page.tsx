@@ -5,7 +5,7 @@ import {
   TrendingUp, Download, PieChart, Calendar, DollarSign, Filter, Globe, Package, User, Layout,
 } from "lucide-react"
 import {
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar,
 } from "recharts"
 import { formatCurrency, formatCompactNumber } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
@@ -17,15 +17,11 @@ import { CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 // Port "y hệt" gohub-intel AllTimeReport. Backend /api/analytics/all-time-performance (CM1 = margin − op-cost,
 // đã align) + /api/channels. Adapt: "use client"; bỏ motion; inline getDefaultDateRange.
 
+// Mặc định 12 tháng gần nhất đến hôm qua (trước đây chỉ tháng hiện tại nên biểu đồ "xu hướng lịch sử" chỉ có 1 điểm).
 function getDefaultDateRange() {
   const today = new Date()
   const fmt = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`
-  if (today.getDate() <= 7) {
-    const start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-    const end   = new Date(today.getFullYear(), today.getMonth(), 0)
-    return { startDate: fmt(start), endDate: fmt(end) }
-  }
-  const start = new Date(today.getFullYear(), today.getMonth(), 1)
+  const start = new Date(today.getFullYear(), today.getMonth() - 11, 1)
   const end   = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
   return { startDate: fmt(start), endDate: fmt(end) }
 }
@@ -289,14 +285,14 @@ export default function AllTimeReport() {
           <div className="flex items-center justify-between mb-2">
             <div className={cn("p-2 rounded-xl", metricView === "gpm" ? "bg-indigo-500" : "bg-indigo-50")}><PieChart className={cn("w-5 h-5", metricView === "gpm" ? "text-white" : "text-indigo-600")} /></div>
           </div>
-          <p className={cn("text-sm font-medium", metricView === "gpm" ? "text-indigo-100" : "text-slate-500")}>Avg. GPM %</p>
+          <p className={cn("text-sm font-medium", metricView === "gpm" ? "text-indigo-100" : "text-slate-500")}>%GP trung bình</p>
           <p className="text-xl font-bold">{kpis.gpmPct.toFixed(2)}%</p>
         </button>
         <button onClick={() => setMetricView("gpm2")} className={cn("p-4 rounded-2xl border transition-all text-left", metricView === "gpm2" ? "bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-200" : "bg-white border-slate-200 text-slate-600 hover:border-emerald-300")}>
           <div className="flex items-center justify-between mb-2">
             <div className={cn("p-2 rounded-xl", metricView === "gpm2" ? "bg-emerald-500" : "bg-emerald-50")}><TrendingUp className={cn("w-5 h-5", metricView === "gpm2" ? "text-white" : "text-emerald-600")} /></div>
           </div>
-          <p className={cn("text-sm font-medium", metricView === "gpm2" ? "text-emerald-100" : "text-slate-500")}>Avg. CM1 %</p>
+          <p className={cn("text-sm font-medium", metricView === "gpm2" ? "text-emerald-100" : "text-slate-500")}>%CM1 trung bình</p>
           <p className="text-xl font-bold">{kpis.cm1Pct.toFixed(2)}%</p>
         </button>
       </div>
@@ -316,6 +312,17 @@ export default function AllTimeReport() {
         </div>
         <div className="h-[400px] w-full">
           <ResponsiveContainer width="100%" height="100%">
+            {chartData.length < 2 ? (
+              <BarChart data={chartData} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={CHART_GRID_COLOR} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 600 }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12, fontWeight: 600 }} tickFormatter={(val) => metricView === "revenue" ? formatCompactNumber(val) : `${val.toFixed(1)}%`} />
+                <Tooltip contentStyle={chartTooltipStyle} formatter={(value: number) => [metricView === "revenue" ? formatCurrency(value) : `${value.toFixed(2)}%`, ""]} />
+                <Bar dataKey="b2bStrategic" name="B2B Strat" fill="#0f4c81" radius={[6, 6, 0, 0]} maxBarSize={56} />
+                <Bar dataKey="b2bNonStrategic" name="B2B Non-Strat" fill="#5f9de3" radius={[6, 6, 0, 0]} maxBarSize={56} />
+                <Bar dataKey="b2c" name="B2C" fill="#2f9d55" radius={[6, 6, 0, 0]} maxBarSize={56} />
+              </BarChart>
+            ) : (
             <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="colorB2BStrat" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0f4c81" stopOpacity={0.15} /><stop offset="95%" stopColor="#0f4c81" stopOpacity={0} /></linearGradient>
@@ -330,6 +337,7 @@ export default function AllTimeReport() {
               <Area type="monotone" dataKey="b2bNonStrategic" stroke="#5f9de3" strokeWidth={3} fillOpacity={1} fill="url(#colorB2BNonStrat)" />
               <Area type="monotone" dataKey="b2c" stroke="#2f9d55" strokeWidth={3} fillOpacity={1} fill="url(#colorB2C)" />
             </AreaChart>
+            )}
           </ResponsiveContainer>
         </div>
       </div>

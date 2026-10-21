@@ -505,11 +505,11 @@ export default function WebsiteAnalyticsPage() {
   const comparePurchases = compareEcoTimeSeries.reduce((acc: number, curr: any) => acc + curr.purchases, 0)
 
   const kpis: { label: string; value: string; change: number | null; icon: React.ElementType; accent: MetricAccent }[] = [
-    { label: "Sessions", value: formatNumber(currentSessions), change: calculateChange(currentSessions, compareSessions), icon: Users, accent: "neutral" },
-    { label: "Purchases", value: formatNumber(currentPurchases), change: calculateChange(currentPurchases, comparePurchases), icon: ShoppingBag, accent: "positive" },
-    { label: "Search Clicks", value: formatNumber(currentClicks), change: calculateChange(currentClicks, compareClicks), icon: MousePointer2, accent: "neutral" },
-    { label: "Avg. CTR", value: `${currentCtr.toFixed(2)}%`, change: calculateChange(currentCtr, compareCtr), icon: Activity, accent: "positive" },
-    { label: "Revenue", value: formatRevenue(currentRevenue), change: calculateChange(currentRevenue, compareRevenue), icon: DollarSign, accent: "revenue" },
+    { label: "Lượt truy cập", value: formatNumber(currentSessions), change: calculateChange(currentSessions, compareSessions), icon: Users, accent: "neutral" },
+    { label: "Lượt mua", value: formatNumber(currentPurchases), change: calculateChange(currentPurchases, comparePurchases), icon: ShoppingBag, accent: "positive" },
+    { label: "Lượt nhấp từ tìm kiếm", value: formatNumber(currentClicks), change: calculateChange(currentClicks, compareClicks), icon: MousePointer2, accent: "neutral" },
+    { label: "Tỉ lệ nhấp (CTR) TB", value: `${currentCtr.toFixed(2)}%`, change: calculateChange(currentCtr, compareCtr), icon: Activity, accent: "positive" },
+    { label: "Doanh thu (USD)", value: formatRevenue(currentRevenue), change: calculateChange(currentRevenue, compareRevenue), icon: DollarSign, accent: "revenue" },
   ]
 
   // Đề xuất H (P2, roadmap UI/UX audit s196+20 — finding #7) — trước tab này KHÔNG có nút export nào dù

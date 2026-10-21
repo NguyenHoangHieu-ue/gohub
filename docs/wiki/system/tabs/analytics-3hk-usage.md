@@ -677,3 +677,7 @@ data/speed — xem §3.1d):**
 | Sub-variant Unlimited (data/speed) | Supabase `skus.data`/`skus.speed`/`skus.throttle_speed` | Tra qua `POST /api/analytics/3hk-sku-meta` (merge client-side với `skuMetrics` từ gohub_dw — 2 DB tách biệt, không JOIN SQL được), xem §3.1d |
 | Zone × Month (TB) | Supabase `ncc_3hk` + `data_usage_log` (qua `countryRows`, không render riêng từ s200+10) | Zone A=A1+A2 gộp, B/C/D nguyên; alias tên nước USA/UK/Slovak Republic; bấm zone → drill-down nước (s200+9/+10). Cửa sổ tự tính `MAX(report_date)-23 tháng`, độc lập filter trang |
 | Vendor filter | `dim_sku.vendor` | `REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'` |
+
+## s238 — Giao diện
+
+Bảng "Data Usage by Zone × Month" dùng tiêu đề sáng (cùng kiểu các bảng khác) thay vì tiêu đề xám đậm; số liệu không đổi.

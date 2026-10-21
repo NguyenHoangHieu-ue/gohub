@@ -67,3 +67,7 @@ Tra cứu & phân tích ticket chăm sóc khách hàng (Lark) để tìm nhanh c
 | Ticket search | Supabase `lark_cs_tickets` | Full-text search theo nội dung / loại / trạng thái |
 | Sync source | Lark Base API | Cron `/api/admin/sync-lark-tickets` chạy 02:00 UTC |
 | Handler | `lark_cs_tickets.handler` | Field "Ticket Handler" từ Lark Base (page_size=500) |
+
+## s238 — Cảnh báo kỳ trống
+
+Khi kỳ chọn không có ticket, cảnh báo vàng nổi bật nêu ngày đồng bộ Lark gần nhất và có nút "Xem tháng có ticket gần nhất" (đặt khoảng ngày về tháng của lần sync cuối).

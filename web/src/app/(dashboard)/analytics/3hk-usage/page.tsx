@@ -1203,13 +1203,13 @@ export default function ThreeHKDataUsagePage() {
           <div className="overflow-x-auto">
             <table className="w-full text-right border-collapse text-sm">
               <thead>
-                <tr className="bg-slate-700 text-white">
-                  <th className="sticky left-0 z-10 bg-slate-700 px-3 py-2.5 text-left font-bold text-xs uppercase tracking-wider">Zone</th>
+                <tr className="bg-[#e6eef8] text-slate-800">
+                  <th className="sticky left-0 z-10 bg-[#e6eef8] px-3 py-2.5 text-left font-bold text-xs uppercase tracking-wider">Zone</th>
                   {countryMonths.map((m) => (
                     <th key={m} className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider whitespace-nowrap">{monthLabel(m, countryMultiYear)}</th>
                   ))}
-                  <th className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider bg-slate-800 whitespace-nowrap">Total</th>
-                  <th className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider bg-brand-700 whitespace-nowrap">Run-rate 12M</th>
+                  <th className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider bg-[#d3e3f6] whitespace-nowrap">Total</th>
+                  <th className="px-3 py-2.5 font-bold text-xs uppercase tracking-wider bg-[#c5daf2] whitespace-nowrap">Run-rate 12M</th>
                 </tr>
               </thead>
               <tbody>

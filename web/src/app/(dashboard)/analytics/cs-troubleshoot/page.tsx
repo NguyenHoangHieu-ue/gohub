@@ -220,9 +220,23 @@ export default function CSTroubleshootReport() {
           </div>
         )}
         {data && !data.hasTicketData && !loading && (
-          <div className="mb-4 flex items-center gap-3 rounded-xl px-4 py-3 bg-slate-50 border border-dashed border-slate-300 text-sm text-slate-500">
-            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span>Không có ticket nào trong kỳ đã chọn. Thử chọn kỳ khác hoặc nhấn <strong>Sync Lark</strong> để đồng bộ dữ liệu mới nhất.</span>
+          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl px-4 py-3.5 bg-amber-50 border border-amber-200 text-sm text-amber-900">
+            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <strong>Chưa có ticket nào trong kỳ này.</strong>{" "}
+              {syncStatus?.lastSync ? `Lần đồng bộ Lark gần nhất: ${new Date(syncStatus.lastSync).toLocaleDateString("vi-VN")}, nên số liệu ticket có thể đang cũ. ` : ""}
+              Bấm <strong>Sync Lark</strong> để lấy ticket mới, hoặc xem kỳ có ticket gần nhất.
+            </span>
+            {syncStatus?.lastSync && (
+              <button type="button" className="px-3 py-1.5 text-[13px] font-semibold rounded-lg bg-white border border-amber-300 hover:bg-amber-100"
+                onClick={() => {
+                  const d = new Date(syncStatus.lastSync as string)
+                  const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`
+                  setDateRange({ start: iso(new Date(d.getFullYear(), d.getMonth(), 1)), end: iso(d) })
+                }}>
+                Xem tháng có ticket gần nhất
+              </button>
+            )}
           </div>
         )}
         {activeTab === "tbs" && <TBSOverview data={data} loading={loading} />}

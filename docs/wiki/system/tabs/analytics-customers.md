@@ -67,3 +67,7 @@ Phân tích khách hàng **sỉ B2B**: doanh thu/margin/số lượng theo từn
 | Customer Code | `fact_fulfillment_revenue.customer_code` | Fallback: `TRIM(customer_code)` nếu không map được |
 | Channel | `dim_order_source.channel_name` | JOIN `f.order_source_code = dim_order_source.code` |
 | Product | `dim_sku.type_of_sim` | JOIN `f.sku = dim_sku.sku` |
+
+## s238 — Giao diện
+
+Bỏ kiểu chữ nghiêng/viết hoa đậm của trang; tiêu đề phụ và màn "chọn khách" bằng tiếng Việt; màn trống có 6 chip "khách lớn nhất quý này" (lấy từ `quarterly-b2b-customers` đã cache) — bấm chip là chọn khách đó và tải luôn.

@@ -113,3 +113,7 @@ s194 ở trên). Chạy đúng 1 lần (chạy lại sẽ thêm trùng entry) �
 | Search Clicks / Impressions | Google Search Console API | Chỉ Web platform |
 | Avg. Position | Google Search Console API | Top queries + pages |
 | App Traffic/Users | Firebase Analytics (GA4 property 465150028) | platform=ios\|android filter |
+
+## s238 — Nhãn
+
+5 thẻ chỉ số tiếng Việt (Lượt truy cập, Lượt mua, Lượt nhấp từ tìm kiếm, CTR TB, Doanh thu (USD)); so sánh kỳ trước vẫn bật bằng công tắc Compare như cũ.

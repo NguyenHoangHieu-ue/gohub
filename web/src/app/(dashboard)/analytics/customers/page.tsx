@@ -77,6 +77,17 @@ export default function CustomerPerformancePage() {
   const [period, setPeriod] = useState<"day" | "week" | "month">("day")
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
   const [partnerTiers, setPartnerTiers] = useState<Record<string, string[]>>({ Strategic: [] })
+  // Gợi ý nhanh: khách B2B lớn nhất quý hiện tại (số đã cache của Quarter Report). Bấm là chọn và tải luôn.
+  const [topCustomers, setTopCustomers] = useState<string[]>([])
+  const [pendingFetch, setPendingFetch] = useState(false)
+  useEffect(() => {
+    const d = new Date()
+    const q = `Q${Math.ceil((d.getMonth() + 1) / 3)}`
+    fetch(`/api/analytics/quarterly-b2b-customers?quarter=${q}&year=${d.getFullYear()}&companyCode=ALL`).then(r => (r.ok ? r.json() : null)).then(j => {
+      const list = ((j?.tiers ?? []) as any[]).flatMap(tr => (tr.customers ?? []) as { name: string; revenue: number }[])
+      setTopCustomers(list.filter(c => c.name && c.revenue > 0).sort((a, b) => b.revenue - a.revenue).slice(0, 6).map(c => c.name))
+    }).catch(() => {})
+  }, [])
 
   const fetchData = async () => {
     if (selectedCustomers.length === 0) return
@@ -115,6 +126,10 @@ export default function CustomerPerformancePage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (pendingFetch && selectedCustomers.length > 0) { setPendingFetch(false); void fetchData() }
+  }, [pendingFetch, selectedCustomers]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (selectedCustomers.length === 0) {
@@ -173,11 +188,11 @@ export default function CustomerPerformancePage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">Customer Performance</h1>
+              <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Customer Performance</h1>
               {loading && <div className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />}
             </div>
             <div className="flex items-center gap-2 mt-1">
-              <p className="text-slate-500 font-medium italic text-sm">Deep dive into B2B customer behavior and acquisition.</p>
+              <p className="text-slate-500 font-medium text-sm">Xem chi tiết hành vi mua hàng của khách B2B.</p>
               <SourceBadge source="admin" />
             </div>
           </div>
@@ -299,8 +314,16 @@ export default function CustomerPerformancePage() {
               <Users className="w-10 h-10 text-indigo-400" />
             </div>
             <div className="space-y-3 max-w-md mx-auto">
-              <h2 className="text-2xl font-black text-slate-800 tracking-tight italic uppercase">Select Customer(s)</h2>
-              <p className="text-slate-500 font-medium">Please choose one or more customers from the filter above to generate the analytics dashboard and deep dive into their performance.</p>
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Chọn khách hàng</h2>
+              <p className="text-slate-500 font-medium">Chọn một hoặc nhiều khách ở bộ lọc phía trên rồi bấm Apply Filters. Hoặc bấm nhanh một khách lớn của quý này:</p>
+              {topCustomers.length > 0 && (
+                <div className="flex flex-wrap justify-center gap-2 pt-2">
+                  {topCustomers.map(n => (
+                    <button key={n} type="button" onClick={() => { setSelectedCustomers([n]); setPendingFetch(true) }}
+                      className="max-w-[260px] truncate px-3 py-1.5 text-[13px] font-semibold rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100" title={n}>{n}</button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -344,7 +367,7 @@ export default function CustomerPerformancePage() {
               <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100">
                 <div className="flex items-center justify-between mb-8">
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight italic uppercase">Customer Revenue Trend</h3>
+                    <h3 className="text-xl font-bold text-slate-900 tracking-tight">Customer Revenue Trend</h3>
                     <p className="text-sm text-slate-400 font-medium">Revenue generation over time</p>
                   </div>
                   <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-100">
@@ -409,7 +432,7 @@ export default function CustomerPerformancePage() {
                     <ShoppingBag className="w-6 h-6 text-amber-600" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 italic uppercase">Top Products Purchased</h3>
+                    <h3 className="text-xl font-bold text-slate-900">Top Products Purchased</h3>
                     <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">By revenue contribution</p>
                   </div>
                 </div>
@@ -461,7 +484,7 @@ export default function CustomerPerformancePage() {
                     <ShoppingBag className="w-6 h-6 text-emerald-600" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 italic uppercase">Customer Orders</h3>
+                    <h3 className="text-xl font-bold text-slate-900">Customer Orders</h3>
                     <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">List of transactions</p>
                   </div>
                 </div>
@@ -534,7 +557,7 @@ export default function CustomerPerformancePage() {
                         <Sparkles className="w-6 h-6 text-white" />
                       </div>
                       <div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight italic uppercase">{tierName} Partners Performance</h2>
+                        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{tierName} Partners Performance</h2>
                         <p className="text-[11.5px] text-indigo-600 font-black uppercase tracking-[0.3em]">Priority Business Verticals</p>
                       </div>
                     </div>
@@ -557,7 +580,7 @@ export default function CustomerPerformancePage() {
                               <span className="text-lg font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{row.name}</span>
                             </td>
                             <td className="px-10 py-6 text-right">
-                              <span className="text-lg font-black text-slate-800 tracking-tighter tabular-nums">{formatCurrency(row.revenue)}</span>
+                              <span className="text-lg font-bold text-slate-800 tracking-tight tabular-nums">{formatCurrency(row.revenue)}</span>
                             </td>
                             <td className="px-10 py-6 text-right">
                               <div className="flex items-center justify-end gap-2">
@@ -586,8 +609,8 @@ export default function CustomerPerformancePage() {
             <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
               <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
                 <div>
-                  <h3 className="text-xl font-black text-slate-900 italic uppercase">All Customers Breakdown</h3>
-                  <p className="text-sm text-slate-400 font-medium italic">Comprehensive performance metrics per client.</p>
+                  <h3 className="text-xl font-bold text-slate-900">All Customers Breakdown</h3>
+                  <p className="text-sm text-slate-400 font-medium">Số liệu chi tiết của từng khách hàng.</p>
                 </div>
                 <button
                   onClick={() => {

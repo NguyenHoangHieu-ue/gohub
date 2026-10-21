@@ -94,6 +94,7 @@ export default function ProductPerformancePage() {
   const [skuRule, setSkuRule] = useState({ startsWith: "E", codeLength: 3, useGohubVietnamRule: true, useGohubIncRule: true })
   const [countryMappings, setCountryMappings] = useState<Record<string, string>>({})
   const [selectedDestination, setSelectedDestination] = useState<string>("all")
+  const [showAdv, setShowAdv] = useState(false)   // bộ lọc nâng cao (SKU, danh mục, vendor, kênh, điểm đến) mặc định đóng
   const [availableDestinations, setAvailableDestinations] = useState<{ code: string; name: string }[]>([])
 
   // Win Rate Tab
@@ -529,7 +530,7 @@ export default function ProductPerformancePage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-900">Product Performance</h1>
-              <p className="text-slate-500">Analyze performance by SKU, Channel, or Category</p>
+              <p className="text-slate-500">Hiệu quả theo SKU, kênh hoặc danh mục</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -560,8 +561,8 @@ export default function ProductPerformancePage() {
         <div className={cn("bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4", activeTab !== "performance" && "hidden")}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* SKU Multi-select */}
-            <div className="space-y-1.5 relative" ref={skuDropdownRef}>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select SKUs</label>
+            <div className={cn("space-y-1.5 relative", !showAdv && "hidden")} ref={skuDropdownRef}>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chọn SKU</label>
               <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-all" onClick={() => setShowSkuDropdown(!showSkuDropdown)}>
                 <div className="flex items-center gap-2 overflow-hidden">
                   <ShoppingBag className="w-4 h-4 text-slate-400 shrink-0" />
@@ -596,8 +597,8 @@ export default function ProductPerformancePage() {
             </div>
 
             {/* Category Filter */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Category</label>
+            <div className={cn("space-y-1.5", !showAdv && "hidden")}>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Danh mục</label>
               <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="all">All Categories</option>
@@ -606,8 +607,8 @@ export default function ProductPerformancePage() {
             </div>
 
             {/* Vendor Filter */}
-            <div className="space-y-1.5 relative" ref={vendorDropdownRef}>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Vendor</label>
+            <div className={cn("space-y-1.5 relative", !showAdv && "hidden")} ref={vendorDropdownRef}>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nhà cung cấp</label>
               <div className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all font-medium h-[38px]" onClick={() => setShowVendorDropdown(!showVendorDropdown)}>
                 <span className="truncate max-w-[150px]">{selectedVendors.length === 0 ? "All Vendors" : selectedVendors.length === 1 ? selectedVendors[0] : `${selectedVendors.length} Vendors`}</span>
                 <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", showVendorDropdown && "rotate-180")} />
@@ -631,7 +632,7 @@ export default function ProductPerformancePage() {
 
             {/* Date Range */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date Range</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Khoảng ngày</label>
               <div className="flex items-center gap-2">
                 <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
                 <span className="text-slate-400">-</span>
@@ -641,8 +642,8 @@ export default function ProductPerformancePage() {
             </div>
 
             {/* Channel Group Filter */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Channel Group</label>
+            <div className={cn("space-y-1.5", !showAdv && "hidden")}>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nhóm kênh</label>
               <select value={selectedChannelGroup} onChange={(e) => { setSelectedChannelGroup(e.target.value); setSelectedChannel("all") }}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="all">All Groups</option>
@@ -652,8 +653,8 @@ export default function ProductPerformancePage() {
             </div>
 
             {/* Channel Filter */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Channel</label>
+            <div className={cn("space-y-1.5", !showAdv && "hidden")}>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Kênh</label>
               <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
                 <option value="all">All Channels</option>
@@ -662,7 +663,7 @@ export default function ProductPerformancePage() {
             </div>
 
             {/* Destination Filter */}
-            <div className="space-y-1.5">
+            <div className={cn("space-y-1.5", !showAdv && "hidden")}>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Destination{availableDestinations.length > 0 && <span className="ml-1 text-slate-400 font-normal normal-case">({availableDestinations.length})</span>}
               </label>
@@ -677,18 +678,21 @@ export default function ProductPerformancePage() {
 
             {/* Comparison Filter */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Compare To</label>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">So sánh với</label>
               <select value={comparisonType} onChange={(e) => setComparisonType(e.target.value as any)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
-                <option value="none">No Comparison</option>
-                <option value="previous_period">Previous Period</option>
-                <option value="previous_year">Previous Year</option>
+                <option value="none">Không so sánh</option>
+                <option value="previous_period">Kỳ trước</option>
+                <option value="previous_year">Năm trước</option>
               </select>
             </div>
           </div>
-          <div className="flex justify-end pt-4 border-t border-slate-100 mt-4">
+          <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100 mt-4">
+            <button type="button" onClick={() => setShowAdv(v => !v)} aria-expanded={showAdv} className="text-sm font-semibold text-brand-700 hover:underline">
+              {showAdv ? "Ẩn bộ lọc nâng cao" : "Bộ lọc nâng cao (SKU, danh mục, vendor, kênh, điểm đến)"}{!showAdv && (selectedSkus.length > 0 || selectedVendors.length > 0 || selectedCategory !== "all" || selectedChannelGroup !== "all" || selectedChannel !== "all" || selectedDestination !== "all") ? " · đang lọc" : ""}
+            </button>
             <button onClick={fetchPerformanceData} className="px-6 py-2 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-all shadow-lg shadow-brand-200">
-              Apply Filters
+              Áp dụng
             </button>
           </div>
         </div>
@@ -698,11 +702,11 @@ export default function ProductPerformancePage() {
         {/* Summary Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {([
-            { label: "Revenue (VND)", value: metrics.revenue, change: metrics.revenueChange, icon: DollarSign,      accent: "revenue" },
-            { label: "Units Sold",    value: metrics.units,   change: metrics.unitsChange,   icon: Package,         accent: "neutral" },
-            { label: "Orders",        value: metrics.orders,  change: metrics.ordersChange,  icon: ShoppingCart,    accent: "neutral" },
-            { label: "ASP (VND)",     value: metrics.aov,     change: metrics.aovChange,     icon: TrendingUp,      accent: "positive" },
-            { label: "Gross Margin",  value: metrics.margin,  change: metrics.marginChange,  icon: LayoutDashboard, accent: "margin"  },
+            { label: "Doanh thu (VND)", value: metrics.revenue, change: metrics.revenueChange, icon: DollarSign,      accent: "revenue" },
+            { label: "Số lượng bán", value: metrics.units,   change: metrics.unitsChange,   icon: Package,         accent: "neutral" },
+            { label: "Số đơn",       value: metrics.orders,  change: metrics.ordersChange,  icon: ShoppingCart,    accent: "neutral" },
+            { label: "Giá bán TB (VND)", value: metrics.aov,     change: metrics.aovChange,     icon: TrendingUp,      accent: "positive" },
+            { label: "GP", value: metrics.margin,  change: metrics.marginChange,  icon: LayoutDashboard, accent: "margin"  },
           ] as { label: string; value: number; change: number; icon: React.ElementType; accent: MetricAccent }[]).map((item, idx) => (
             loading ? (
               <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
@@ -714,7 +718,7 @@ export default function ProductPerformancePage() {
                 key={idx}
                 icon={<item.icon className="w-5 h-5" />}
                 label={item.label}
-                value={item.label.includes("VND") ? formatCompactNumber(item.value) : formatNumber(item.value)}
+                value={item.label.includes("VND") || item.label === "GP" ? formatCompactNumber(item.value) : formatNumber(item.value)}
                 accent={item.accent}
                 deltas={comparisonType !== "none" ? [{ label: "So sánh", value: `${item.change >= 0 ? "+" : ""}${item.change}%`, kind: item.change >= 0 ? "up" : "down" }] : undefined}
               />
@@ -792,7 +796,7 @@ export default function ProductPerformancePage() {
                   <h2 className="text-lg font-bold text-slate-900">{group.title}</h2>
                 </div>
                 <button onClick={() => exportToCSV(group.data, group.id.replace(/-/g, "_"), [
-                  { label: "Channel", key: "channel_name" }, { label: "Revenue", key: "revenue" }, { label: "Units Sold", key: "units_sold" }, { label: "Orders", key: "orders" }, { label: "Gross Margin", key: "margin" },
+                  { label: "Channel", key: "channel_name" }, { label: "Revenue", key: "revenue" }, { label: "Units Sold", key: "units_sold" }, { label: "Orders", key: "orders" }, { label: "GP",key: "margin" },
                 ])} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all font-bold text-[11.5px]">
                   <Download className="w-3 h-3" /> Export
                 </button>
@@ -801,7 +805,7 @@ export default function ProductPerformancePage() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50/50">
-                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Channel</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Kênh</th>
                       <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
                       <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units Sold</th>
                       <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Orders</th>
@@ -855,8 +859,8 @@ export default function ProductPerformancePage() {
                 <tr className="bg-slate-50/50">
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">SKU</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Country</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Category</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Vendor</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Danh mục</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Nhà cung cấp</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Revenue</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Units</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Orders</th>

@@ -70,3 +70,7 @@ Doanh số bán theo **SKU**: revenue, units, orders, margin — kèm breakdown 
 | Vendor | `dim_sku.vendor` | JOIN `f.sku = dim_sku.sku` |
 | Region (nước đích) | `dim_sku.sku` + `country_codes` (Turso) | Suy từ mã SKU — KHÔNG phải `dim_location` |
 | Channel | `dim_order_source.channel_name` + `group_name` | JOIN `f.order_source_code = dim_order_source.code` |
+
+## s238 — Bộ lọc gọn
+
+Hàng lọc chính còn khoảng ngày + "So sánh với"; SKU, danh mục, vendor, nhóm kênh, kênh, điểm đến nằm trong "Bộ lọc nâng cao" (mặc định đóng, hiện "· đang lọc" khi có lọc ẩn). Nhãn bộ lọc và thẻ chỉ số tiếng Việt; GP hiển thị dạng rút gọn (vd 1,7 Tỷ) thay vì số lẻ thập phân.
