@@ -1,6 +1,8 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
+import { UserGrantsMatrix } from "@/components/user-grants-matrix"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Crown, Save, RefreshCw, Eye, EyeOff, Shield, Plus, Trash2, AlertTriangle, MessageSquare, CheckCircle, XCircle, Loader2, Send, ChevronDown, ChevronUp } from "lucide-react"
@@ -66,6 +68,9 @@ export default function CreatorPage() {
   return <CreatorSettings />
 }
 
+// Usage Analytics (trước là mục menu riêng, 1 lượt/60 ngày) nay nằm ở tab "Nhật ký và sử dụng".
+const UsageSection = dynamic(() => import("./usage/page"), { loading: () => <div className="py-8 text-center text-sm text-slate-400">Đang tải…</div> })
+
 function CreatorSettings() {
   const [visibility, setVisibility] = useState<Record<string, string[]>>({})
   const [savedSnap, setSavedSnap] = useState("")   // snapshot đã lưu → nút Lưu chỉ sáng khi khác snapshot
@@ -76,6 +81,9 @@ function CreatorSettings() {
 
   const dirty = JSON.stringify(visibility) !== savedSnap
   const [previewRole, setPreviewRole] = useState<string | null>(null)
+  // 6 tab thay cho 1 trang dài: mỗi tab 1 việc (s238).
+  type CsTab = "grants" | "assistant" | "visibility" | "docs" | "thread" | "log"
+  const [tab, setTab] = useState<CsTab>("grants")
 
   const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
 
@@ -149,12 +157,14 @@ function CreatorSettings() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Creator Settings</h1>
-            <p className="text-slate-500 text-sm">Quyền hạn cao nhất — ẩn/hiện tab cho từng role</p>
+            <p className="text-slate-500 text-sm">Quyền hạn cao nhất: cấp quyền, cấu hình trợ lý, ẩn/hiện tab, tài liệu</p>
           </div>
         </div>
+        {tab === "visibility" && (
         <button onClick={save} disabled={saving || !dirty} className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-bold hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm">
           {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}Lưu thay đổi
         </button>
+        )}
       </div>
 
       {msg && <div className={cn("px-4 py-3 rounded-xl text-sm font-medium", msg.ok ? "bg-emerald-50 border border-emerald-100 text-emerald-700" : "bg-rose-50 border border-rose-100 text-rose-700")}>{msg.text}</div>}
@@ -170,7 +180,16 @@ function CreatorSettings() {
         </div>
       )}
 
-      {loading ? <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" /></div> : (
+      <div className="flex flex-wrap gap-1 border-b border-slate-200" role="tablist">
+        {([["grants", "Quyền theo người"], ["assistant", "Bé Gấu và Gấu Pro"], ["visibility", "Hiển thị tab"], ["docs", "Tài liệu và Wiki"], ["thread", "Cà Thread"], ["log", "Nhật ký và sử dụng"]] as const).map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
+            className={cn("px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors", tab === id ? "border-amber-500 text-amber-700" : "border-transparent text-slate-500 hover:text-slate-700")}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "visibility" && (loading ? <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" /></div> : (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
             <h2 className="font-bold text-slate-800">Ma trận ẩn Tab</h2>
@@ -231,32 +250,23 @@ function CreatorSettings() {
             <span className="text-amber-600 font-medium">⚠️ "Dữ liệu & API" ẩn theo mặc định — bật để cấp quyền cho role tương ứng</span>
           </p>
         </div>
-      )}
+      ))}
 
-      <AssistantFeaturesSection />
+      {tab === "assistant" && <><AssistantFeaturesSection /><DevTicketsSection /></>}
 
-      <DevTicketsSection />
-
-      {/* Quyền theo người (Gấu Pro, My Metrics, Thị trường, Tính giá, Tạo sản phẩm) đã gộp thành 1 bảng ở Người dùng › Quyền theo người */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-wrap items-center gap-3">
-        <div className="mr-auto">
-          <h2 className="font-bold text-slate-800">Quyền theo người</h2>
-          <p className="text-[13px] text-slate-500">Gấu Pro, My Metrics, Thị trường, Tính giá, Tạo sản phẩm nay nằm chung một bảng, bật tắt từng người.</p>
-        </div>
-        <a href="/analytics/users" className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl">Mở bảng quyền</a>
-      </div>
+      {tab === "grants" && <UserGrantsMatrix onNotify={notify} />}
 
       {/* Audit Log */}
-      <AuditLogSection />
+      {tab === "log" && <><AuditLogSection /><UsageSection /></>}
 
       {/* Cà Thread */}
-      <CaThreadSection />
+      {tab === "thread" && <CaThreadSection />}
 
       {/* Upload tài liệu → AI đề xuất Wiki chính thức (gán nhóm trong Tổ Gấu) */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+      {tab === "docs" && <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
         <h2 className="font-bold text-slate-800 mb-4">Tài liệu chính thức — Upload & AI đề xuất Wiki</h2>
         <KbDocsSection />
-      </div>
+      </div>}
 
       {/* Preview modal — xem trước role này thấy gì */}
       {previewRole && (

@@ -145,3 +145,9 @@ web/src/app/(dashboard)/analytics/creator/page.tsx  ← CaThreadSection componen
 web/src/lib/lark.ts                          ← getLarkToken, getLarkUserToken, exchangeLarkCode
 web/src/app/api/lark/oauth/*/route.ts        ← Lark OAuth flow
 ```
+
+## s238 — Gọn lại Creator Settings và phần Quản trị
+
+- Menu: nhóm "Management" → **"Quản trị"**; Users → "Người dùng và quyền", Settings → "Cấu hình hệ thống", Admin (Product) → "Dữ liệu và giá" (đường dẫn không đổi). Usage Analytics bỏ khỏi menu, nằm ở Creator Settings › "Nhật ký và sử dụng" (route `/analytics/creator/usage` vẫn còn).
+- **Bảng "Quyền theo người"** (`components/user-grants-matrix.tsx`): hàng = người dùng, cột = Gấu Pro, My Metrics, Thị trường, Tính giá, Tạo sản phẩm; bật/tắt là lưu ngay qua đúng 5 API cũ (`/api/creator-ai/gp-access`, `/api/creator/{my-metrics,market,pricing,product-create}-access`), nên nhật ký `access_audit_log` và logic server không đổi. Quy tắc giữ nguyên: bật Tạo sản phẩm tự bật Tính giá; tắt Tính giá tự tắt Tạo sản phẩm. Có ở Người dùng và quyền › "Quyền theo người" và Creator Settings › tab đầu (cùng 1 component). 5 khối rời cũ (GpAccessSection, MyMetricsAccessSection ×4, UserSearchInput) đã xoá.
+- Creator Settings chia 6 tab: Quyền theo người · Bé Gấu và Gấu Pro (tính năng theo vai trò + phiếu sửa code) · Hiển thị tab (ma trận ẩn tab, nút Lưu chỉ hiện ở tab này) · Tài liệu và Wiki · Cà Thread · Nhật ký và sử dụng (nhật ký cấp/thu hồi + Usage Analytics).
