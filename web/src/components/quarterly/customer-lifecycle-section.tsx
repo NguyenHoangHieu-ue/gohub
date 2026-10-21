@@ -171,7 +171,7 @@ export function CustomerLifecycleSection({
                 {stateDetail && <span className="ml-2 font-normal text-slate-500">({stateDetail.count.toLocaleString("vi-VN")} KH{open.state === "inactive" && stateDetail.recentCount != null && stateDetail.recentCount !== stateDetail.count ? `, liệt kê ${stateDetail.recentCount.toLocaleString("vi-VN")} KH có mua quý trước` : ""})</span>}
               </p>
               {open.state === "inactive" && open.segment === "b2b" && (
-                <p className="text-[11px] text-slate-500">Số KH rời bỏ B2B tính trên toàn bộ lịch sử; bảng chỉ liệt kê KH có doanh thu ở quý liền trước (KH cần theo dõi).</p>
+                <p className="text-[12px] text-slate-500">Số KH rời bỏ B2B tính trên toàn bộ lịch sử; bảng chỉ liệt kê KH có doanh thu ở quý liền trước (KH cần theo dõi).</p>
               )}
             </div>
             <div className="relative">
@@ -199,7 +199,7 @@ export function CustomerLifecycleSection({
           {stateDetail && (
             <div className="max-h-[480px] overflow-auto">
               <table className="min-w-full text-xs">
-                <thead className="sticky top-0 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <thead className="sticky top-0 bg-slate-50 text-left text-[12px] font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-3 py-2">#</th>
                     <th className="px-3 py-2">Khách hàng</th>
@@ -217,7 +217,7 @@ export function CustomerLifecycleSection({
                       <td className="px-3 py-1.5 text-slate-400">{i + 1}</td>
                       <td className="px-3 py-1.5">
                         <div className="font-medium text-slate-800">{r.name}</div>
-                        <div className="text-[10px] text-slate-400">{r.id}</div>
+                        <div className="text-[11.5px] text-slate-400">{r.id}</div>
                       </td>
                       <td className="px-3 py-1.5">{r.tag || "—"}</td>
                       <td className="px-3 py-1.5 text-slate-600">{r.owner || "—"}</td>
@@ -235,7 +235,7 @@ export function CustomerLifecycleSection({
             </div>
           )}
           {stateDetail?.truncated && (
-            <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-500">
+            <p className="border-t border-slate-100 px-4 py-2 text-[12px] text-slate-500">
               Chỉ hiển thị {stateDetail.rows.length.toLocaleString("vi-VN")} KH đầu (sắp theo doanh thu giảm dần) trên tổng {stateDetail.count.toLocaleString("vi-VN")} KH.
             </p>
           )}

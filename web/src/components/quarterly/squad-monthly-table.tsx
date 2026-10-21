@@ -53,7 +53,7 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
 
   const anyNotDone = squads.some(sq => quarterMonths.some(m => sq.monthly?.find(x => x.month === m)?.status !== "done"))
 
-  const th = "px-2 py-2 text-center text-[11px] font-bold whitespace-nowrap"
+  const th = "px-2 py-2 text-center text-[12px] font-bold whitespace-nowrap"
   const valueCls = (v: number | undefined, isCm1: boolean) =>
     v == null ? "text-slate-300" : isCm1 && v < 0 ? "text-red-600" : "text-slate-800"
 
@@ -113,19 +113,19 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="sticky left-0 z-10 bg-amber-50 px-4 py-2 text-left text-[12px] font-bold text-slate-900 truncate">
                       {sq.name}
-                      {leader && <span className="ml-2 text-[10px] font-medium text-slate-500">{leader}</span>}
+                      {leader && <span className="ml-2 text-[11.5px] font-medium text-slate-500">{leader}</span>}
                     </th>
                     {quarterMonths.map((m, i) => (
                       <th key={m} className={cn(th, "bg-amber-50 text-slate-700")}>
                         {monthNum(m)}
-                        {cur[i].state === "current" && <span className="ml-1 text-[9px] font-semibold text-blue-600">(pro-rata)</span>}
+                        {cur[i].state === "current" && <span className="ml-1 text-[11px] font-semibold text-blue-600">(pro-rata)</span>}
                       </th>
                     ))}
                     <th className={cn(th, "bg-[#0f4c81]/10 text-[#0f4c81]")}>{quarterLabel}{anyNotDone ? " (PR)" : ""}</th>
                     <th className="w-3 bg-slate-100" aria-hidden />
                     {nextQuarter.months.map(m => (
                       <th key={m} className={cn(th, "bg-amber-50 text-slate-700")}>
-                        {monthNum(m)} <span className="text-[9px] font-semibold text-amber-600">(target)</span>
+                        {monthNum(m)} <span className="text-[11px] font-semibold text-amber-600">(target)</span>
                       </th>
                     ))}
                     <th className={cn(th, "bg-[#0f4c81]/10 text-[#0f4c81]")}>{nextQuarter.label}</th>
@@ -154,26 +154,26 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
                           const act = c.state === "current" && c.actual && row.metric ? c.actual[row.metric] : undefined
                           return (
                             <td key={i} className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap",
-                              isPct ? "text-slate-500 text-[11px]" : valueCls(v, isCm1))}
+                              isPct ? "text-slate-500 text-[12px]" : valueCls(v, isCm1))}
                               title={c.state === "none" ? "Tháng chưa bắt đầu" : undefined}>
                               {fmt(row, v)}
-                              {act != null && <div className="text-[9px] font-normal text-slate-400">TT {fc(act)}</div>}
+                              {act != null && <div className="text-[11px] font-normal text-slate-400">TT {fc(act)}</div>}
                             </td>
                           )
                         })}
                         <td className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap font-bold bg-[#0f4c81]/5",
-                          totalCur == null ? "text-slate-300" : isPct ? "text-slate-600 text-[11px]" : valueCls(totalCur, isCm1))}>
+                          totalCur == null ? "text-slate-300" : isPct ? "text-slate-600 text-[12px]" : valueCls(totalCur, isCm1))}>
                           {fmt(row, totalCur)}
                         </td>
                         <td className="w-3 bg-slate-100" aria-hidden />
                         {nextMonths.map((v, i) => (
                           <td key={i} className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap",
-                            isPct ? "text-slate-500 text-[11px]" : valueCls(cellOf(row, v), isCm1))}>
+                            isPct ? "text-slate-500 text-[12px]" : valueCls(cellOf(row, v), isCm1))}>
                             {fmt(row, cellOf(row, v))}
                           </td>
                         ))}
                         <td className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap font-bold bg-[#0f4c81]/5",
-                          totalNext == null ? "text-slate-300" : isPct ? "text-slate-600 text-[11px]" : valueCls(totalNext, isCm1))}>
+                          totalNext == null ? "text-slate-300" : isPct ? "text-slate-600 text-[12px]" : valueCls(totalNext, isCm1))}>
                           {fmt(row, totalNext)}
                         </td>
                         <td className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap font-bold bg-[#0f4c81]/5",
@@ -190,7 +190,7 @@ export function SquadMonthlyTable({ squads, quarterLabel, quarterMonths, nextQua
         })}
       </div>
 
-      <p className="px-5 py-2 text-[10px] text-slate-400 border-t border-slate-100">
+      <p className="px-5 py-2 text-[11.5px] text-slate-400 border-t border-slate-100">
         CM1 = GP − chi phí KH − group cost B2B (phân bổ theo tỷ trọng doanh thu quý). Cột {quarterLabel} = tổng Pro-rata cả quý, khớp thẻ Squad Progress.
         Target {nextQuarter.label} nhập ở nút <b className="text-slate-500">Target Squad</b> (admin/creator); %QoQ = (target − {quarterLabel}) / |{quarterLabel}|, tính tương đối cả với dòng %.
       </p>

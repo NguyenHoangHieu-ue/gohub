@@ -9,7 +9,7 @@ export function QtSummaryRow({ label, actRev, prRev, gmRaw, ccRaw, gcRaw, cm1Raw
   const cm1Pct = actRev > 0 ? cm1Raw / actRev * 100 : 0
   const qoqCls = qoqPct == null ? "text-slate-300" : qoqPct >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold"
   return (
-    <tr className="border-b border-slate-100 bg-white hover:bg-slate-50 text-[11px]">
+    <tr className="border-b border-slate-100 bg-white hover:bg-slate-50 text-[12px]">
       <td className="px-2 py-2 font-semibold text-slate-800">{label}</td>
       <td className="px-2 py-2 text-right font-semibold text-slate-800 tabular-nums">{fc(actRev)}</td>
       <td className={cn("px-2 py-2 text-right tabular-nums", prColor)}>{fc(prRev)}</td>
@@ -20,7 +20,7 @@ export function QtSummaryRow({ label, actRev, prRev, gmRaw, ccRaw, gcRaw, cm1Raw
       <td className={cn("px-2 py-2 text-right font-bold tabular-nums text-[12px]", cm1Color(cm1Raw))}>{fc(cm1Raw)}</td>
       <td className={cn("px-2 py-2 text-right tabular-nums", prColor)}>{fc(prCm1)}</td>
       <td className={cn("px-2 py-2 text-right font-semibold", cm1Color(cm1Raw))}>{pct(cm1Pct)}</td>
-      <td className="px-2 py-2 text-right text-slate-500 whitespace-nowrap">{hk3Rev > 0 ? <>{fc(hk3Rev)} <span className="text-[10px] text-slate-400">({pct(hk3Pct)})</span></> : pct(hk3Pct)}</td>
+      <td className="px-2 py-2 text-right text-slate-500 whitespace-nowrap">{hk3Rev > 0 ? <>{fc(hk3Rev)} <span className="text-[11.5px] text-slate-400">({pct(hk3Pct)})</span></> : pct(hk3Pct)}</td>
       <td className={cn("px-2 py-2 text-right tabular-nums", qoqCls)}>
         {qoqPct != null ? `${qoqPct >= 0 ? "+" : ""}${qoqPct.toFixed(1)}%` : "—"}
       </td>

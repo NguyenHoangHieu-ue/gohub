@@ -123,6 +123,10 @@ function QuarterlyContent() {
 
   // ── Squad Progress ──
   const [activeSection, setActiveSection]  = useState<"overview" | "squad" | "performance">("overview")
+  // "Gọn" ẩn biểu đồ theo tháng + thẻ khách hàng; "Chi tiết" (mặc định) hiện đủ như trước. Nhớ lựa chọn theo trình duyệt.
+  const [compact, setCompact] = useState(false)
+  useEffect(() => { try { setCompact(localStorage.getItem("qr_compact") === "1") } catch {} }, [])
+  const setDensity = (c: boolean) => { setCompact(c); try { localStorage.setItem("qr_compact", c ? "1" : "0") } catch {} }
   const [squadData,     setSquadData]      = useState<any>(null)
   const [squadLoading,  setSquadLoading]   = useState(false)
   const [squadConfig,   setSquadConfig]    = useState<{ squads: { name: string; leader?: string; sales_pics: string[] }[] } | null>(null)
@@ -565,13 +569,13 @@ function QuarterlyContent() {
   const isCurrentQ    = !isFutureQ && periodThrough < periodQEnd
 
   return (
-    <div className="p-4 lg:p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-4 lg:p-8 space-y-8 max-w-[1480px] mx-auto">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Quarter Report</h1>
-          <p className="text-sm text-slate-400 mt-0.5">Doanh thu · Lợi nhuận · CM1 theo quý</p>
+          <p className="text-sm text-slate-500 mt-0.5">Doanh thu · Lợi nhuận · CM1 theo quý</p>
           {!isFutureQ && (
             <p className="text-[13px] mt-1.5 flex items-center gap-1.5 flex-wrap">
               <CalendarDays className="w-3.5 h-3.5 text-[#0f4c81]" />
@@ -603,19 +607,26 @@ function QuarterlyContent() {
           <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
             {(["ALL", "VN", "US"] as const).map(code => (
               <button key={code} onClick={() => setTenantFilter(code)}
-                className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
+                className={cn("px-2.5 py-1 text-[12px] font-bold rounded-md transition-all",
                   companyCode === code ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-50")}>
                 {code === "VN" ? "🇻🇳 VN" : code === "US" ? "🇺🇸 US" : "ALL"}
               </button>
             ))}
           </div>
-          {/* Ship / Internal Ops toggles */}
-          {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
-            <label key={label} className="flex items-center gap-1 cursor-pointer">
-              <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3 h-3 accent-amber-500" />
-              <span className={cn("text-[10px] font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
-            </label>
-          ))}
+          {/* Bộ lọc: phí ship + đơn nội bộ gom vào 1 nút (mặc định cả hai đều tính, khớp số raw gohub_dw) */}
+          <details className="relative">
+            <summary className="list-none flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg cursor-pointer hover:bg-slate-50">
+              Bộ lọc{(!includeShip || !includeInternalOps) && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />} <ChevronDown className="w-3.5 h-3.5" />
+            </summary>
+            <div className="absolute z-30 mt-1.5 right-0 w-56 bg-white border border-slate-200 rounded-lg shadow-lg p-3 space-y-2.5">
+              {([["Tính phí ship", includeShip, setIncludeShip], ["Tính đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
+                <label key={label} className="flex items-center gap-2 cursor-pointer text-[13px] text-slate-700">
+                  <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-4 h-4 accent-[#0f4c81]" />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </details>
           <button onClick={() => fetchReport()} disabled={loading}
             className="flex items-center gap-1.5 px-4 py-1.5 bg-[#0f4c81] hover:bg-[#0a3560] text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50">
             <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
@@ -623,7 +634,7 @@ function QuarterlyContent() {
           </button>
           <button onClick={refreshAll} disabled={loading || b2bTiersLoading}
             title="Xóa cache cũ và tải lại dữ liệu mới nhất từ database"
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition-all disabled:opacity-50">
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold rounded-lg transition-all disabled:opacity-50">
             <RefreshCw className={cn("w-3.5 h-3.5", (loading || b2bTiersLoading) && "animate-spin")} />
             Tải lại mới
           </button>
@@ -635,8 +646,16 @@ function QuarterlyContent() {
               Cài đặt
             </button>
           )}
+          <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5" role="group" aria-label="Mức chi tiết">
+            {([["Gọn", true], ["Chi tiết", false]] as const).map(([label, val]) => (
+              <button key={label} onClick={() => setDensity(val)} aria-pressed={compact === val}
+                className={cn("px-2.5 py-1 text-[12px] font-semibold rounded-md transition-all", compact === val ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-50")}>
+                {label}
+              </button>
+            ))}
+          </div>
           {summary.some(m => m.isProjected) && (
-            <span className="text-[11px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-lg">
+            <span className="text-[12px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-lg">
               Pro-rata tháng hiện tại
             </span>
           )}
@@ -689,11 +708,11 @@ function QuarterlyContent() {
 
           {/* Excluded customers */}
           <div>
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">KH bị loại khỏi báo cáo B2B</p>
-            <p className="text-[10px] text-slate-400 mb-2">Lưu theo mã KH (ổn định khi đổi tên). Tìm theo tên hoặc mã → click để thêm.</p>
+            <p className="text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-1">KH bị loại khỏi báo cáo B2B</p>
+            <p className="text-[11.5px] text-slate-400 mb-2">Lưu theo mã KH (ổn định khi đổi tên). Tìm theo tên hoặc mã → click để thêm.</p>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {qSettings.excludedCustomers.map(entry => (
-                <span key={entry} className="flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full text-[11px] font-medium">
+                <span key={entry} className="flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full text-[12px] font-medium">
                   {entry}
                   <button onClick={() => updateSettings({ excludedCustomers: qSettings.excludedCustomers.filter(n => n !== entry) })}
                     className="hover:text-red-900 ml-0.5"><X className="w-3 h-3" /></button>
@@ -749,7 +768,7 @@ function QuarterlyContent() {
                         className={cn("w-full text-left px-3 py-2 text-xs flex items-center justify-between gap-2 hover:bg-slate-50 transition-colors",
                           alreadyAdded ? "opacity-40 cursor-not-allowed" : "cursor-pointer")}>
                         <span className="font-medium text-slate-800 truncate">{s.name}</span>
-                        <span className="font-mono text-[10px] text-slate-400 flex-shrink-0">{s.code}</span>
+                        <span className="font-mono text-[11.5px] text-slate-400 flex-shrink-0">{s.code}</span>
                       </button>
                     )
                   })}
@@ -760,14 +779,14 @@ function QuarterlyContent() {
 
           {/* Tier keywords */}
           <div>
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Phân loại tầng KH (từ khóa trong Bảng giá)</p>
+            <p className="text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-2">Phân loại tầng KH (từ khóa trong Bảng giá)</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {["Strategic", "VIP", "Gold", "Silver"].map(tier => (
                 <div key={tier} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
-                  <p className="text-[11px] font-bold text-slate-700 mb-1.5">{tier}</p>
+                  <p className="text-[12px] font-bold text-slate-700 mb-1.5">{tier}</p>
                   <div className="flex flex-wrap gap-1 mb-1.5">
                     {(qSettings.tierKeywords[tier] ?? []).map(kw => (
-                      <span key={kw} className="flex items-center gap-0.5 bg-white text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] font-medium">
+                      <span key={kw} className="flex items-center gap-0.5 bg-white text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded text-[11.5px] font-medium">
                         {kw}
                         <button onClick={() => updateSettings({ tierKeywords: { ...qSettings.tierKeywords, [tier]: qSettings.tierKeywords[tier].filter(k => k !== kw) } })}
                           className="hover:text-red-500 ml-0.5"><X className="w-2.5 h-2.5" /></button>
@@ -775,7 +794,7 @@ function QuarterlyContent() {
                     ))}
                   </div>
                   <input placeholder="+ từ khóa (Enter)"
-                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40 placeholder-slate-400"
+                    className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[12px] text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40 placeholder-slate-400"
                     onKeyDown={e => {
                       if (e.key === "Enter") {
                         const val = (e.target as HTMLInputElement).value.trim().toUpperCase()
@@ -788,7 +807,7 @@ function QuarterlyContent() {
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-slate-400 mt-1.5">* Strategic = mặc định khi không khớp từ khóa nào. Sau khi lưu, bấm "Tải lại mới" để áp dụng.</p>
+            <p className="text-[11.5px] text-slate-400 mt-1.5">* Strategic = mặc định khi không khớp từ khóa nào. Sau khi lưu, bấm "Tải lại mới" để áp dụng.</p>
           </div>
         </div>
       )}
@@ -800,14 +819,14 @@ function QuarterlyContent() {
           <div className="flex items-center gap-3">
             <h2 className="text-sm font-bold text-slate-800">Target {selQ}-{selYear}</h2>
             {!targetCardOpen && targets.b2bRev > 0 && (
-              <span className="text-[11px] text-slate-400 font-mono hidden md:flex items-center gap-2">
+              <span className="text-[12px] text-slate-400 font-mono hidden md:flex items-center gap-2">
                 <span>B2B Rev: {fck(targets.b2bRev)}</span>
                 {targets.b2bCm1 > 0 && <span>· CM1: {fck(targets.b2bCm1)}</span>}
                 {targets.b2cRev > 0 && <span>· B2C Rev: {fck(targets.b2cRev)}</span>}
               </span>
             )}
             {!targetCardOpen && targets.b2bRev === 0 && (
-              <span className="text-[11px] text-amber-500 font-medium">Chưa nhập target</span>
+              <span className="text-[12px] text-amber-500 font-medium">Chưa nhập target</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -844,7 +863,7 @@ function QuarterlyContent() {
                 { id: "b2cThk",  label: "B2C %3HK" },
               ].map(f => (
                 <div key={f.id} className="space-y-1">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">{f.label}</label>
+                  <label className="text-[11.5px] font-semibold text-slate-400 uppercase tracking-wider block">{f.label}</label>
                   <input
                     type="text" value={(tgtInputs as any)[f.id]} disabled={!editTarget}
                     onChange={e => setTgtInputs(prev => ({ ...prev, [f.id]: e.target.value }))}
@@ -903,7 +922,7 @@ function QuarterlyContent() {
       )}
 
       {/* ── Monthly summary table ── */}
-      {summary.length > 0 && (
+      {!compact && summary.length > 0 && (
         <div className={cn("bg-white border border-slate-200 rounded-xl overflow-hidden transition-opacity", loading && "opacity-50 pointer-events-none")}>
           <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
             <h2 className="text-lg font-bold text-slate-900">Tổng hợp theo Tháng</h2>
@@ -946,7 +965,7 @@ function QuarterlyContent() {
                           <tr className={cn("border-b border-slate-100", isCurrent ? "bg-blue-50/30" : "bg-white hover:bg-slate-50")}>
                             <td className="px-4 py-3 font-semibold text-slate-800">
                               {label}
-                              {factorLabel && <span className="ml-1.5 text-[10px] font-medium text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">PR {factorLabel}</span>}
+                              {factorLabel && <span className="ml-1.5 text-[11.5px] font-medium text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">PR {factorLabel}</span>}
                             </td>
                             <td className="px-4 py-3 text-right font-semibold text-slate-800 tabular-nums">
                               {fc(m.total.actualRevenue ?? m.total.revenue)}
@@ -975,9 +994,9 @@ function QuarterlyContent() {
                               ) : <span className="text-slate-300">—</span>}
                             </td>
                             <td className={cn("px-4 py-3 text-right font-semibold", cm1Color(m.total.cm1))}>{pct(m.total.cm1Pct)}</td>
-                            <td className={cn("px-4 py-3 text-right text-[11px] font-bold tabular-nums", mom.cm1 == null ? "text-slate-300" : mom.cm1 >= 0 ? "text-green-600" : "text-red-500")}>{mom.cm1 != null ? `${mom.cm1 >= 0 ? "+" : ""}${mom.cm1.toFixed(1)}%` : "—"}</td>
+                            <td className={cn("px-4 py-3 text-right text-[12px] font-bold tabular-nums", mom.cm1 == null ? "text-slate-300" : mom.cm1 >= 0 ? "text-green-600" : "text-red-500")}>{mom.cm1 != null ? `${mom.cm1 >= 0 ? "+" : ""}${mom.cm1.toFixed(1)}%` : "—"}</td>
                             <td className="px-4 py-3 text-right text-slate-300">—</td>
-                            <td className="px-4 py-3 text-right text-slate-500 whitespace-nowrap">{fc(m.hk3Rev ?? 0)} <span className="text-slate-400 text-[10px]">({pct(m.hk3Pct ?? 0)})</span></td>
+                            <td className="px-4 py-3 text-right text-slate-500 whitespace-nowrap">{fc(m.hk3Rev ?? 0)} <span className="text-slate-400 text-[11.5px]">({pct(m.hk3Pct ?? 0)})</span></td>
                           </tr>
                         )
                       })()}
@@ -1018,7 +1037,7 @@ function QuarterlyContent() {
               Xem bảng số liệu gốc
             </summary>
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse">
+            <table className="w-full text-[12px] border-collapse">
               <thead><TableHead cols={QT_COLS} compact /></thead>
               <tbody>
                 {qt.b2b && (
@@ -1057,7 +1076,7 @@ function QuarterlyContent() {
                     )}
                   </>
                 )}
-                <tr className="bg-[#0f4c81] text-white text-[11px]">
+                <tr className="bg-[#0f4c81] text-white text-[12px]">
                   <td className="px-2 py-2 font-bold text-white">Tổng {selQ}-{selYear}</td>
                   <td className="px-2 py-2 text-right font-bold tabular-nums">{fc(totRevRaw)}</td>
                   <td className="px-2 py-2 text-right tabular-nums text-slate-300">{fc(totRevPr)}</td>
@@ -1068,7 +1087,7 @@ function QuarterlyContent() {
                   <td className={cn("px-2 py-2 text-right font-bold tabular-nums text-[12px]", totCm1Raw >= 0 ? "text-blue-300" : "text-red-300")}>{fc(totCm1Raw)}</td>
                   <td className="px-2 py-2 text-right tabular-nums text-slate-300">{fc(totCm1Pr)}</td>
                   <td className={cn("px-2 py-2 text-right font-bold", totCm1Raw >= 0 ? "text-blue-300" : "text-red-300")}>{totRevRaw > 0 ? pct(totCm1Raw / totRevRaw * 100) : "—"}</td>
-                  <td className="px-2 py-2 text-right text-slate-300 whitespace-nowrap">{fc(b2bThkAct + b2cThkAct)} <span className="opacity-70 text-[10px]">({pct(totThkPct)})</span></td>
+                  <td className="px-2 py-2 text-right text-slate-300 whitespace-nowrap">{fc(b2bThkAct + b2cThkAct)} <span className="opacity-70 text-[11.5px]">({pct(totThkPct)})</span></td>
                   <td className={cn("px-2 py-2 text-right font-bold tabular-nums", totQoQ == null ? "text-slate-400" : totQoQ >= 0 ? "text-green-300" : "text-red-300")}>
                     {totQoQ != null ? `${totQoQ >= 0 ? "+" : ""}${totQoQ.toFixed(1)}%` : "—"}
                   </td>
@@ -1081,7 +1100,7 @@ function QuarterlyContent() {
       )}
 
       {/* ── Vòng đời KH (New/Recurring/Inactive) — tách B2B/B2C, bấm ô để xem danh sách từng KH (s200 → s203) ── */}
-      {report?.customerLifecycle && (
+      {!compact && report?.customerLifecycle && (
         <CustomerLifecycleSection
           quarter={selQ} year={selYear} companyCode={companyCode}
           includeShip={includeShip} includeInternalOps={includeInternalOps}
@@ -1137,7 +1156,7 @@ function QuarterlyContent() {
           {/* ── S1: Admin toolbar compact ── */}
           {canEditSettings && (
             <div className="flex items-center gap-2 flex-wrap bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Admin</span>
+              <span className="text-[11.5px] font-bold text-slate-400 uppercase tracking-widest">Admin</span>
               <div className="w-px h-4 bg-slate-200" />
               <button onClick={() => {
                 if (!editingSquad) {
@@ -1148,7 +1167,7 @@ function QuarterlyContent() {
                 editingSquad ? "bg-[#0f4c81] text-white border-[#0f4c81]" : "bg-white text-slate-600 border-slate-200 hover:border-[#0f4c81]/60 hover:text-[#0f4c81]")}>
                 <Shield className="w-3.5 h-3.5" />
                 Cấu hình Squad
-                {squadConfig && <span className="ml-1 opacity-60 text-[10px]">({squadConfig.squads.length})</span>}
+                {squadConfig && <span className="ml-1 opacity-60 text-[11.5px]">({squadConfig.squads.length})</span>}
               </button>
               {squadData?.squads?.length > 0 && (
                 <button onClick={() => { if (!editingTargets) openEditTargets(); else setEditingTargets(false) }}
@@ -1207,12 +1226,12 @@ function QuarterlyContent() {
                       )}
                       {availPics.length > 0 && (
                         <div>
-                          <p className="text-[10px] text-slate-400 mb-1">Click để thêm:</p>
+                          <p className="text-[11.5px] text-slate-400 mb-1">Click để thêm:</p>
                           <div className="flex flex-wrap gap-1">
                             {availPics.map((p: any) => (
                               <button key={p.code}
                                 onClick={() => setDraftSquads(prev => prev.map((s, i) => i === si ? { ...s, sales_pics: [...s.sales_pics, p.code] } : s))}
-                                className="px-2 py-0.5 text-[11px] bg-slate-100 text-slate-600 rounded-full hover:bg-[#0f4c81] hover:text-white transition-colors">
+                                className="px-2 py-0.5 text-[12px] bg-slate-100 text-slate-600 rounded-full hover:bg-[#0f4c81] hover:text-white transition-colors">
                                 <Plus className="w-2.5 h-2.5 inline-block mr-0.5" />{p.name}
                               </button>
                             ))}
@@ -1220,7 +1239,7 @@ function QuarterlyContent() {
                         </div>
                       )}
                       {availPics.length === 0 && sq.sales_pics.length > 0 && (
-                        <p className="text-[10px] text-slate-400">Tất cả PIC đã được phân vào squad.</p>
+                        <p className="text-[11.5px] text-slate-400">Tất cả PIC đã được phân vào squad.</p>
                       )}
                     </div>
                   </div>
@@ -1248,7 +1267,7 @@ function QuarterlyContent() {
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="text-slate-500 border-b border-slate-100 uppercase text-[10px]">
+                    <tr className="text-slate-500 border-b border-slate-100 uppercase text-[11.5px]">
                       <th className="px-3 py-2 text-left font-semibold">Squad</th>
                       <th className="px-3 py-2 text-right font-semibold">Target Revenue (VND)</th>
                       <th className="px-3 py-2 text-right font-semibold">Target GP (VND)</th>
@@ -1287,7 +1306,7 @@ function QuarterlyContent() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="text-slate-500 border-b border-slate-100 uppercase text-[10px]">
+                        <tr className="text-slate-500 border-b border-slate-100 uppercase text-[11.5px]">
                           <th className="px-3 py-2 text-left font-semibold">Squad</th>
                           <th className="px-3 py-2 text-left font-semibold">Chỉ số</th>
                           {squadData.next_quarter.months.map((m: string) => (
@@ -1328,7 +1347,7 @@ function QuarterlyContent() {
                   {savingTargets ? "Đang lưu…" : "Lưu target"}
                 </button>
                 <button onClick={() => setEditingTargets(false)} className="px-4 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">Huỷ</button>
-                <p className="text-[10px] text-slate-400 ml-2">Để trống / 0 = dùng tổng target 3 tháng, rồi tổng target per-customer (GP không có per-customer). Target squad được ưu tiên.</p>
+                <p className="text-[11.5px] text-slate-400 ml-2">Để trống / 0 = dùng tổng target 3 tháng, rồi tổng target per-customer (GP không có per-customer). Target squad được ưu tiên.</p>
               </div>
             </div>
           )}
@@ -1414,7 +1433,7 @@ function QuarterlyContent() {
                 const rm = RISK_META[level] ?? RISK_META["no_target"]
                 return (
                   <span className={cn("inline-flex items-center gap-1.5 rounded-full font-bold whitespace-nowrap ring-1 ring-inset",
-                    rm.bg, rm.color, rm.ring, dense ? "px-2 py-0.5 text-[9px]" : "px-2.5 py-1 text-[10px]")}>
+                    rm.bg, rm.color, rm.ring, dense ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-[11.5px]")}>
                     <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", rm.dot)} />
                     {dense ? rm.short : rm.label}
                   </span>
@@ -1439,16 +1458,16 @@ function QuarterlyContent() {
                     : pct >= 50 ? "border-amber-200 bg-amber-50/40"
                     : "border-red-200 bg-red-50/40")}>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
+                    <span className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">{label}</span>
                     {pct != null
-                      ? <span className={cn("text-[11px] font-bold tabular-nums", pctColor(pct))}>{pct}%</span>
-                      : <span className="text-[10px] text-slate-300">chưa target</span>}
+                      ? <span className={cn("text-[12px] font-bold tabular-nums", pctColor(pct))}>{pct}%</span>
+                      : <span className="text-[11.5px] text-slate-300">chưa target</span>}
                   </div>
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-lg font-bold text-slate-900 tabular-nums leading-none">{formatCompactNumber(pr ?? actual)}</span>
-                    {pr != null && <span className="text-[10px] text-blue-500 font-semibold">PR</span>}
+                    {pr != null && <span className="text-[11.5px] text-blue-500 font-semibold">PR</span>}
                   </div>
-                  <div className="text-[10px] text-slate-400 tabular-nums mt-1">
+                  <div className="text-[11.5px] text-slate-400 tabular-nums mt-1">
                     {pr != null ? `Thực tế ${formatCompactNumber(actual)}${actualNote ? ` · ${actualNote}` : ""}` : actualNote}
                     {target ? ` · Target ${formatCompactNumber(target)}` : ""}
                   </div>
@@ -1470,7 +1489,7 @@ function QuarterlyContent() {
                       <div className="flex items-center bg-slate-100 rounded-lg p-0.5 gap-0.5">
                         {(["ALL","VN","US"] as const).map(v => (
                           <button key={v} onClick={() => setSqFilterRegion(v)}
-                            className={cn("px-2 py-1 text-[11px] font-bold rounded-md transition-all", sqFilterRegion === v ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-200")}>
+                            className={cn("px-2 py-1 text-[12px] font-bold rounded-md transition-all", sqFilterRegion === v ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-200")}>
                             {v === "VN" ? "🇻🇳 VN" : v === "US" ? "🇺🇸 US" : "ALL"}
                           </button>
                         ))}
@@ -1511,14 +1530,14 @@ function QuarterlyContent() {
                     </div>
                     {/* S5: Flat view banner */}
                     {hasFilter && (
-                      <div className="mt-2 text-[11px] text-[#0f4c81] bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                      <div className="mt-2 text-[12px] text-[#0f4c81] bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-2">
                         <span className="font-semibold">Đang xem phẳng</span>
                         <span className="text-slate-300">·</span>
                         <span className="text-slate-500">{filtered.length} khách hàng phù hợp</span>
                       </div>
                     )}
                     {/* Legend đánh giá — dùng chung cho mọi chip/badge bên dưới (ưu tiên mức xấu nhất) */}
-                    <div className="mt-2 flex items-center gap-3 flex-wrap text-[10px] text-slate-500">
+                    <div className="mt-2 flex items-center gap-3 flex-wrap text-[11.5px] text-slate-500">
                       <span className="font-semibold text-slate-400">Đánh giá:</span>
                       {(["very_safe","safe","safe_low","danger_low","danger_high"] as const).map(k => (
                         <span key={k} className="inline-flex items-center gap-1">
@@ -1533,9 +1552,9 @@ function QuarterlyContent() {
                     {hasFilter ? (
                       /* ── S4: Flat filtered view — 10 cột (bỏ bớt Rev Actual, gộp 3HK) ── */
                       <div className="overflow-x-auto">
-                        <table className="w-full text-[11px] border-collapse">
+                        <table className="w-full text-[12px] border-collapse">
                           <thead>
-                            <tr className="bg-slate-50 text-slate-500 uppercase text-[9px] border-b-2 border-slate-100">
+                            <tr className="bg-slate-50 text-slate-500 uppercase text-[11px] border-b-2 border-slate-100">
                               <th className="px-4 py-2.5 text-left">{sortBtn("customer_name","Khách hàng")}</th>
                               <th className="px-3 py-2.5 text-left font-semibold">Squad · PIC</th>
                               <th className="px-3 py-2.5 text-left font-semibold">Tier</th>
@@ -1558,10 +1577,10 @@ function QuarterlyContent() {
                                 <tr key={ci} className={cn("border-l-[3px]", rm.border, ci % 2 === 0 ? "bg-white" : "bg-slate-50/50")}>
                                   <td className="px-4 py-2.5 font-medium text-slate-700">
                                     {c.customer_name}
-                                    <span className={cn("ml-1.5 text-[9px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
-                                    {c.lifecycle_state === "new" && <span title="KH mới trong quý" className="ml-1 text-[9px] px-1 py-0.5 rounded font-bold bg-sky-100 text-sky-600">🆕 Mới</span>}
+                                    <span className={cn("ml-1.5 text-[11px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
+                                    {c.lifecycle_state === "new" && <span title="KH mới trong quý" className="ml-1 text-[11px] px-1 py-0.5 rounded font-bold bg-sky-100 text-sky-600">🆕 Mới</span>}
                                   </td>
-                                  <td className="px-3 py-2.5 text-slate-500 text-[11px]">
+                                  <td className="px-3 py-2.5 text-slate-500 text-[12px]">
                                     <span className="font-medium text-slate-700">{c.squad_name}</span>
                                     {picInfo && <span className="text-slate-400"> · {picInfo.name}</span>}
                                   </td>
@@ -1571,9 +1590,9 @@ function QuarterlyContent() {
                                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
                                   <td className={cn("px-3 py-2.5 text-right tabular-nums", pctCol(c.cm1_tgt_pct))}>{pctV(c.cm1_tgt_pct)}</td>
                                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 border-l border-slate-100">
-                                    <span className="text-[10px] text-slate-500">{formatCompactNumber(c.hk3_pr)}</span>
-                                    <span className="text-slate-400 ml-0.5 text-[10px]">(TT {formatCompactNumber(c.hk3)})</span>
-                                    {c.target_hk3pct > 0 && <span className="text-slate-400 text-[10px]"> / {c.target_hk3pct}%</span>}
+                                    <span className="text-[11.5px] text-slate-500">{formatCompactNumber(c.hk3_pr)}</span>
+                                    <span className="text-slate-400 ml-0.5 text-[11.5px]">(TT {formatCompactNumber(c.hk3)})</span>
+                                    {c.target_hk3pct > 0 && <span className="text-slate-400 text-[11.5px]"> / {c.target_hk3pct}%</span>}
                                   </td>
                                   <td className={cn("px-3 py-2.5 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pctV(c.hk3_tgt_pct)}</td>
                                   <td className="px-3 py-2.5 text-center border-l border-slate-100">
@@ -1604,9 +1623,9 @@ function QuarterlyContent() {
                                     <ChevronRight className={cn("w-4 h-4 text-slate-400 transition-transform shrink-0 group-hover:text-[#0f4c81]", expanded && "rotate-90")} />
                                     <span className="font-bold text-slate-900 text-sm">{sq.name}</span>
                                     {leaderUser && (
-                                      <span className="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full shrink-0">{leaderUser.name}</span>
+                                      <span className="text-[12px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full shrink-0">{leaderUser.name}</span>
                                     )}
-                                    <span className="text-[11px] text-slate-400 shrink-0">{sq.customer_count} KH</span>
+                                    <span className="text-[12px] text-slate-400 shrink-0">{sq.customer_count} KH</span>
                                   </button>
                                   <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
                                     {(["danger_high","danger_low","safe_low","safe","very_safe"] as const).map(k => {
@@ -1615,7 +1634,7 @@ function QuarterlyContent() {
                                       const m = RISK_META[k]
                                       return (
                                         <span key={k} title={m.label}
-                                          className={cn("inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums ring-1 ring-inset", m.bg, m.color, m.ring)}>
+                                          className={cn("inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full text-[11.5px] font-bold tabular-nums ring-1 ring-inset", m.bg, m.color, m.ring)}>
                                           <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", m.dot)} />
                                           {cnt}
                                         </span>
@@ -1646,9 +1665,9 @@ function QuarterlyContent() {
                               {/* S4: Expanded customer table — 9 cột */}
                               {expanded && sq.customer_orgs?.length > 0 && (
                                 <div className="overflow-x-auto border-t border-slate-100 bg-slate-50/50">
-                                  <table className="w-full text-[11px] border-collapse">
+                                  <table className="w-full text-[12px] border-collapse">
                                     <thead>
-                                      <tr className="bg-slate-100 text-slate-500 uppercase text-[9px] border-b-2 border-slate-200">
+                                      <tr className="bg-slate-100 text-slate-500 uppercase text-[11px] border-b-2 border-slate-200">
                                         <th className="px-4 py-2.5 text-left font-semibold">Khách hàng</th>
                                         <th className="px-3 py-2.5 text-left font-semibold">PIC · Tier</th>
                                         <th className="px-3 py-2.5 text-right font-semibold">Rev PR</th>
@@ -1679,8 +1698,8 @@ function QuarterlyContent() {
                                                   <span className="underline decoration-dotted decoration-slate-300 underline-offset-2">{c.customer_name}</span>
                                                 </button>
                                               ) : c.customer_name}
-                                              <span className={cn("ml-1.5 text-[9px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
-                                              {c.lifecycle_state === "new" && <span title="KH mới trong quý" className="ml-1 text-[9px] px-1 py-0.5 rounded font-bold bg-sky-100 text-sky-600">🆕 Mới</span>}
+                                              <span className={cn("ml-1.5 text-[11px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
+                                              {c.lifecycle_state === "new" && <span title="KH mới trong quý" className="ml-1 text-[11px] px-1 py-0.5 rounded font-bold bg-sky-100 text-sky-600">🆕 Mới</span>}
                                             </td>
                                             <td className="px-3 py-2.5 text-slate-500">
                                               {picInfo?.name ?? c.sales_pic}
@@ -1689,13 +1708,13 @@ function QuarterlyContent() {
                                             </td>
                                             <td className="px-3 py-2.5 text-right tabular-nums text-blue-600 font-medium">{formatCompactNumber(c.revenue_pr)}</td>
                                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 border-l border-slate-100">{formatCompactNumber(c.cm1_pr)}</td>
-                                            <td className={cn("px-3 py-2.5 text-right tabular-nums text-[10px]", c.cm1_pct >= 0 ? "text-slate-500" : "text-red-500")}>{c.cm1_pct != null ? `${c.cm1_pct}%` : "—"}</td>
+                                            <td className={cn("px-3 py-2.5 text-right tabular-nums text-[11.5px]", c.cm1_pct >= 0 ? "text-slate-500" : "text-red-500")}>{c.cm1_pct != null ? `${c.cm1_pct}%` : "—"}</td>
                                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-400">{c.target_cm1 > 0 ? formatCompactNumber(c.target_cm1) : "—"}</td>
                                             <td className={cn("px-3 py-2.5 text-right tabular-nums", pctCol(c.cm1_tgt_pct))}>{pctV(c.cm1_tgt_pct)}</td>
                                             <td className="px-3 py-2.5 text-right tabular-nums text-slate-600 border-l border-slate-100">
-                                              <span className="font-medium text-[10px] text-slate-500">{formatCompactNumber(c.hk3_pr)}</span>
-                                              <span className="text-slate-400 ml-0.5 text-[10px]">(TT {formatCompactNumber(c.hk3)})</span>
-                                              {c.target_hk3pct > 0 && <span className="text-slate-400 text-[10px]"> / {c.target_hk3pct}%</span>}
+                                              <span className="font-medium text-[11.5px] text-slate-500">{formatCompactNumber(c.hk3_pr)}</span>
+                                              <span className="text-slate-400 ml-0.5 text-[11.5px]">(TT {formatCompactNumber(c.hk3)})</span>
+                                              {c.target_hk3pct > 0 && <span className="text-slate-400 text-[11.5px]"> / {c.target_hk3pct}%</span>}
                                             </td>
                                             <td className={cn("px-3 py-2.5 text-right tabular-nums", pctCol(c.hk3_tgt_pct))}>{pctV(c.hk3_tgt_pct)}</td>
                                             <td className="px-3 py-2.5 text-center border-l border-slate-100">
@@ -1726,37 +1745,37 @@ function QuarterlyContent() {
                         {/* B4: Total row + CM1 */}
                         {squadData.totals && (
                           <div className="px-5 py-4 bg-[#0f4c81] flex items-center gap-6 flex-wrap">
-                            <span className="text-[11px] font-bold text-white/60 uppercase tracking-wider shrink-0">
+                            <span className="text-[12px] font-bold text-white/60 uppercase tracking-wider shrink-0">
                               Tổng · {squadData.squads.reduce((s: number, sq: any) => s + sq.customer_count, 0)} KH
                             </span>
                             <div className="flex items-baseline gap-1.5">
-                              <span className="text-[10px] text-white/50 uppercase font-semibold">Rev PR</span>
+                              <span className="text-[11.5px] text-white/50 uppercase font-semibold">Rev PR</span>
                               <span className="text-base font-bold text-white tabular-nums">{formatCompactNumber(squadData.totals.revenue_pr)}</span>
-                              <span className="text-[10px] text-white/40 tabular-nums">(TT {formatCompactNumber(squadData.totals.revenue)})</span>
+                              <span className="text-[11.5px] text-white/40 tabular-nums">(TT {formatCompactNumber(squadData.totals.revenue)})</span>
                             </div>
                             <div className="w-px h-4 bg-white/20 shrink-0" />
                             <div className="flex items-baseline gap-1.5">
-                              <span className="text-[10px] text-white/50 uppercase font-semibold">GP PR</span>
+                              <span className="text-[11.5px] text-white/50 uppercase font-semibold">GP PR</span>
                               <span className="text-base font-bold text-white tabular-nums">{formatCompactNumber(squadData.totals.gp_pr)}</span>
-                              <span className="text-[10px] text-white/40 tabular-nums">(TT {formatCompactNumber(squadData.totals.gp)})</span>
+                              <span className="text-[11.5px] text-white/40 tabular-nums">(TT {formatCompactNumber(squadData.totals.gp)})</span>
                             </div>
                             <div className="w-px h-4 bg-white/20 shrink-0" />
                             <div className="flex items-baseline gap-1.5">
-                              <span className="text-[10px] text-white/50 uppercase font-semibold">CM1 PR</span>
+                              <span className="text-[11.5px] text-white/50 uppercase font-semibold">CM1 PR</span>
                               <span className="text-base font-bold text-white tabular-nums">{formatCompactNumber(squadData.totals.cm1_pr)}</span>
-                              <span className="text-[10px] text-white/40 tabular-nums">(TT {formatCompactNumber(squadData.totals.cm1)}{squadData.totals.cm1_pct != null ? ` · ${squadData.totals.cm1_pct}%` : ""})</span>
+                              <span className="text-[11.5px] text-white/40 tabular-nums">(TT {formatCompactNumber(squadData.totals.cm1)}{squadData.totals.cm1_pct != null ? ` · ${squadData.totals.cm1_pct}%` : ""})</span>
                             </div>
                             <div className="w-px h-4 bg-white/20 shrink-0" />
                             <div className="flex items-baseline gap-1.5">
-                              <span className="text-[10px] text-white/50 uppercase font-semibold">3HK</span>
+                              <span className="text-[11.5px] text-white/50 uppercase font-semibold">3HK</span>
                               <span className="text-base font-bold text-white tabular-nums">{formatCompactNumber(squadData.totals.hk3)}</span>
-                              <span className="text-[10px] text-white/40 tabular-nums">({squadData.totals.hk3_pct}%)</span>
+                              <span className="text-[11.5px] text-white/40 tabular-nums">({squadData.totals.hk3_pct}%)</span>
                             </div>
                           </div>
                         )}
                       </>
                     )}
-                    <p className="px-5 py-2 text-[10px] text-slate-400 border-t border-slate-100">
+                    <p className="px-5 py-2 text-[11.5px] text-slate-400 border-t border-slate-100">
                       CM1 = GP − chi phí KH (b2b_customer_cost_monthly). %TGT CM1 = CM1 PR / Target CM1 · %TGT 3HK = 3HK% / Target 3HK%.
                     </p>
                   </div>

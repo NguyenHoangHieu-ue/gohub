@@ -63,9 +63,9 @@ export function SquadCustomerSummary({ sq, picName }: Props) {
   return (
     <>
       <div className="ml-6 mt-2.5 rounded-lg border border-slate-200 bg-white p-3 space-y-2.5">
-        <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap text-[11px]">
+        <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap text-[12px]">
           <button type="button" onClick={() => toggle("all")} className={chipCls("all", false)} title="Xem danh sách KH đang mua">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">KH đang mua · {sq.customer_count}</span>
+            <span className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">KH đang mua · {sq.customer_count}</span>
           </button>
           {TIERS.map(t => {
             const n = sq.tier_counts?.[t] ?? 0
@@ -82,10 +82,10 @@ export function SquadCustomerSummary({ sq, picName }: Props) {
           {boxes.map(x => (
             <button key={x.k} type="button" title={x.tip} onClick={() => toggle(x.k)}
               className={cn("text-left rounded-md border px-2.5 py-2 transition-shadow hover:shadow-sm", x.cls, view === x.k && `ring-2 ${x.ring}`)}>
-              <div className="text-[10px] font-semibold leading-tight">{x.icon} {x.label}</div>
+              <div className="text-[11.5px] font-semibold leading-tight">{x.icon} {x.label}</div>
               <div className="flex items-baseline gap-1.5 mt-1">
                 <span className="text-base font-bold tabular-nums leading-none">{x.count}</span>
-                <span className="text-[10px] opacity-70 tabular-nums">{x.revLabel} {formatCompactNumber(x.rev)}</span>
+                <span className="text-[11.5px] opacity-70 tabular-nums">{x.revLabel} {formatCompactNumber(x.rev)}</span>
               </div>
             </button>
           ))}
@@ -95,7 +95,7 @@ export function SquadCustomerSummary({ sq, picName }: Props) {
       {view && (
         <div className="ml-6 mt-2 rounded-lg border border-slate-200 bg-white overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-100">
-            <span className="text-[11px] font-bold text-slate-700">
+            <span className="text-[12px] font-bold text-slate-700">
               {title} · {rows.length}
               {view === "inactive" && sq.lifecycle.inactive.count > rows.length && ` / ${sq.lifecycle.inactive.count}`}
               {rows.length > MAX_ROWS && <span className="ml-1 font-normal text-slate-400">(hiện {MAX_ROWS} đầu theo doanh thu)</span>}
@@ -105,12 +105,12 @@ export function SquadCustomerSummary({ sq, picName }: Props) {
             </button>
           </div>
           {shown.length === 0 ? (
-            <p className="px-3 py-4 text-center text-[11px] text-slate-400">Không có khách hàng nào.</p>
+            <p className="px-3 py-4 text-center text-[12px] text-slate-400">Không có khách hàng nào.</p>
           ) : (
             <div className="overflow-x-auto max-h-80 overflow-y-auto">
-              <table className="w-full text-[11px] border-collapse">
+              <table className="w-full text-[12px] border-collapse">
                 <thead className="sticky top-0 bg-slate-100">
-                  <tr className="text-slate-500 uppercase text-[9px]">
+                  <tr className="text-slate-500 uppercase text-[11px]">
                     <th className="px-3 py-2 text-left font-semibold">Khách hàng</th>
                     <th className="px-3 py-2 text-left font-semibold">{view === "inactive" ? "PIC" : "Tier · PIC"}</th>
                     {view === "inactive" ? (
@@ -130,7 +130,7 @@ export function SquadCustomerSummary({ sq, picName }: Props) {
                 <tbody className="divide-y divide-slate-100">
                   {shown.map((c: any, i: number) => view === "inactive" ? (
                     <tr key={c.code} className={i % 2 ? "bg-slate-50/50" : "bg-white"}>
-                      <td className="px-3 py-1.5 font-medium text-slate-700">{c.name}<span className="ml-1.5 text-[9px] text-slate-400">{c.code}</span></td>
+                      <td className="px-3 py-1.5 font-medium text-slate-700">{c.name}<span className="ml-1.5 text-[11px] text-slate-400">{c.code}</span></td>
                       <td className="px-3 py-1.5 text-slate-500">{c.sales_pic ? picName(c.sales_pic) : "—"}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{fc(c.lastRevenue)}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-slate-400">{c.first_order_date || "—"}</td>
@@ -139,7 +139,7 @@ export function SquadCustomerSummary({ sq, picName }: Props) {
                     <tr key={c.customer_code} className={i % 2 ? "bg-slate-50/50" : "bg-white"}>
                       <td className="px-3 py-1.5 font-medium text-slate-700">
                         {c.customer_name}
-                        <span className={cn("ml-1.5 text-[9px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
+                        <span className={cn("ml-1.5 text-[11px] px-1 py-0.5 rounded font-bold", c.region === "US" ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600")}>{c.region}</span>
                       </td>
                       <td className="px-3 py-1.5 text-slate-500">{c.tier}<span className="text-slate-300 mx-1">·</span>{picName(c.sales_pic)}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-blue-600 font-medium">{fc(c.revenue_pr)}</td>

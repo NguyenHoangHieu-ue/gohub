@@ -11,7 +11,7 @@ export function TableHead({ cols, compact = false }: { cols: { label: string; ti
         return (
           <th key={h} className={cn(
             compact ? "px-2 py-2" : "px-4 py-2.5",
-            "text-[10px] font-semibold text-slate-300 uppercase tracking-wider whitespace-nowrap",
+            "text-[11.5px] font-semibold text-slate-300 uppercase tracking-wider whitespace-nowrap",
             i === 0 ? "text-left" : "text-right"
           )}>
             {h}{tip && <ColInfo tip={tip} />}

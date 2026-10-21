@@ -47,7 +47,7 @@ export function DeltaPill({ kind = "flat", children, className }: {
 }) {
   return (
     <span className={cn(
-      "inline-flex items-center justify-center rounded-full px-2 py-[3px] text-[10px] font-semibold whitespace-nowrap",
+      "inline-flex items-center justify-center rounded-full px-2 py-[3px] text-[11.5px] font-semibold whitespace-nowrap",
       DELTA_CLS[kind], className,
     )}>
       {children}
@@ -81,7 +81,7 @@ export function SourceBadge({ source, label, className }: {
 }) {
   return (
     <span className={cn(
-      "inline-flex items-center rounded-full px-1.5 py-1 text-[10px] font-semibold whitespace-nowrap",
+      "inline-flex items-center rounded-full px-1.5 py-1 text-[11.5px] font-semibold whitespace-nowrap",
       SOURCE_CLS[source], className,
     )}>
       {label ?? SOURCE_LABEL[source]}
@@ -125,7 +125,7 @@ export function LogicNote({ children, className, collapsible, label = "Công th�
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="col-start-2 justify-self-start text-brand-600 text-[11px] font-medium hover:underline mt-1"
+          className="col-start-2 justify-self-start text-brand-600 text-[12px] font-medium hover:underline mt-1"
         >
           Ẩn công thức
         </button>
@@ -248,13 +248,13 @@ export function StatTile({ icon, label, value, unit, accent = "neutral", goalLab
           </span>
         )}
         {goalLabel && (
-          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700 whitespace-nowrap">
+          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[12px] font-semibold text-brand-700 whitespace-nowrap">
             {goalLabel}
           </span>
         )}
       </div>
       <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+        <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
         <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900 truncate">
           {value}
           {unit != null && <span className="ml-1 text-sm font-medium text-slate-400">{unit}</span>}
@@ -263,7 +263,7 @@ export function StatTile({ icon, label, value, unit, accent = "neutral", goalLab
       {deltas && deltas.length > 0 && (
         <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-2.5">
           {deltas.map((d, i) => (
-            <div key={i} className="flex items-center justify-between gap-2 text-[11px]">
+            <div key={i} className="flex items-center justify-between gap-2 text-[12px]">
               <span className="text-slate-400 truncate">{d.label}</span>
               <DeltaPill kind={d.kind}>{d.value}</DeltaPill>
             </div>
@@ -319,25 +319,25 @@ export function DataTable<T>({ columns, rows, rowKey, pageSize = 20, emptyLabel 
     else { setSortKey(key); setSortDir("asc") }
   }
 
-  if (rows.length === 0) return <p className="text-[11px] text-slate-400 text-center py-4">{emptyLabel}</p>
+  if (rows.length === 0) return <p className="text-[12px] text-slate-400 text-center py-4">{emptyLabel}</p>
   return (
     <div>
       {searchBy && (
         <div className="relative mb-2">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder={searchPlaceholder}
-            className="w-full pl-8 pr-2.5 py-1.5 text-[11px] rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600" />
+            className="w-full pl-8 pr-2.5 py-1.5 text-[12px] rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600" />
         </div>
       )}
       {sorted.length === 0 ? (
-        <p className="text-[11px] text-slate-400 text-center py-4">Không tìm thấy kết quả khớp &ldquo;{query}&rdquo;.</p>
+        <p className="text-[12px] text-slate-400 text-center py-4">Không tìm thấy kết quả khớp &ldquo;{query}&rdquo;.</p>
       ) : (
       <div className="overflow-x-auto rounded-xl border border-slate-100">
-        <table className="w-full text-[11px]">
+        <table className="w-full text-[12px]">
           <thead className="bg-slate-50">
             <tr>
               {columns.map(c => (
-                <th key={c.key} className={cn("px-2.5 py-2 font-black text-slate-500 uppercase tracking-wider text-[9px] whitespace-nowrap",
+                <th key={c.key} className={cn("px-2.5 py-2 font-black text-slate-500 uppercase tracking-wider text-[11px] whitespace-nowrap",
                   c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left",
                   c.sortValue && "cursor-pointer select-none hover:text-slate-700")}
                   onClick={c.sortValue ? () => toggleSort(c.key) : undefined}>
@@ -374,7 +374,7 @@ export function DataTable<T>({ columns, rows, rowKey, pageSize = 20, emptyLabel 
             className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 transition-colors">
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
-          <span className="text-[10px] font-bold text-slate-500">{page + 1}/{pages} · {sorted.length} dòng</span>
+          <span className="text-[11.5px] font-bold text-slate-500">{page + 1}/{pages} · {sorted.length} dòng</span>
           <button disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}
             className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 transition-colors">
             <ChevronRight className="w-3.5 h-3.5" />
@@ -442,7 +442,7 @@ export function SubChannelTable({ rows, theme = "indigo" }: { rows: SubChannelRo
   const t = SUB_CHANNEL_THEME[theme]
   return (
     <div className={t.wrap}>
-      <table className="w-full text-[10px]">
+      <table className="w-full text-[11.5px]">
         <thead>
           <tr className={t.headRow}>
             <th className={cn("px-3 py-1.5 font-bold uppercase tracking-wider text-left", t.headText)}>Sub-channel</th>

@@ -17,7 +17,7 @@ export function MonthSubRow({ label, stats, showPr = false, kpiFactor = 1, momRe
   const prRev  = Math.round(actRev  * kpiFactor)
   const prCm1  = Math.round(actCm1  * kpiFactor)
   return (
-    <tr className="border-b border-slate-100 bg-slate-50 text-[11px]">
+    <tr className="border-b border-slate-100 bg-slate-50 text-[12px]">
       <td className="px-4 py-2 pl-9 text-slate-500 font-medium">↳ {label}</td>
       <td className="px-4 py-2 text-right text-slate-600 tabular-nums">{fc(actRev)}</td>
       <td className="px-4 py-2 text-right tabular-nums text-slate-400">
@@ -42,15 +42,15 @@ export function MonthSubRow({ label, stats, showPr = false, kpiFactor = 1, momRe
         ) : <span className="text-slate-300">—</span>}
       </td>
       <td className={cn("px-4 py-2 text-right font-semibold", cm1Color(stats.cm1))}>{pct(stats.cm1Pct)}</td>
-      <td className={cn("px-4 py-2 text-right text-[11px] font-bold tabular-nums",
+      <td className={cn("px-4 py-2 text-right text-[12px] font-bold tabular-nums",
         momCm1 == null ? "text-slate-300" : momCm1 >= 0 ? "text-green-600" : "text-red-500")}>
         {momCm1 != null ? `${momCm1 >= 0 ? "+" : ""}${momCm1.toFixed(1)}%` : "—"}
       </td>
-      <td className={cn("px-4 py-2 text-right text-[11px] font-bold tabular-nums",
+      <td className={cn("px-4 py-2 text-right text-[12px] font-bold tabular-nums",
         qoqCm1 == null ? "text-slate-300" : qoqCm1 >= 0 ? "text-green-600" : "text-red-500")}>
         {qoqCm1 != null ? `${qoqCm1 >= 0 ? "+" : ""}${qoqCm1.toFixed(1)}%` : "—"}
       </td>
-      <td className="px-4 py-2 text-right text-slate-400 whitespace-nowrap">{fc((stats.hk3Rev as number | undefined) ?? 0)} <span className="text-[10px]">({pct((stats.hk3Pct as number | undefined) ?? 0)})</span></td>
+      <td className="px-4 py-2 text-right text-slate-400 whitespace-nowrap">{fc((stats.hk3Rev as number | undefined) ?? 0)} <span className="text-[11.5px]">({pct((stats.hk3Pct as number | undefined) ?? 0)})</span></td>
     </tr>
   )
 }

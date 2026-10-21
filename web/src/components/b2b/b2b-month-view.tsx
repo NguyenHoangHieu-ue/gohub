@@ -22,9 +22,9 @@ function delta(cur: number, prev: number | null): number | null {
 }
 
 function DeltaBadge({ v, pp }: { v: number | null; pp?: boolean }) {
-  if (v == null) return <span className="text-[10px] text-slate-300">—</span>
+  if (v == null) return <span className="text-[11.5px] text-slate-300">—</span>
   return (
-    <span className={cn("text-[10px] font-bold tabular-nums", v >= 0 ? "text-green-600" : "text-red-500")}>
+    <span className={cn("text-[11.5px] font-bold tabular-nums", v >= 0 ? "text-green-600" : "text-red-500")}>
       {v >= 0 ? "+" : ""}{v.toFixed(1)}{pp ? " đ.%" : "%"}
     </span>
   )
@@ -33,12 +33,12 @@ function DeltaBadge({ v, pp }: { v: number | null; pp?: boolean }) {
 function Card({ title, main, sub, mom, pp, accent }: { title: string; main: string; sub?: string; mom: number | null; pp?: boolean; accent?: string }) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-1">
-      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{title}</span>
+      <span className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider">{title}</span>
       <span className={cn("text-xl font-black tabular-nums", accent ?? "text-slate-800")}>{main}</span>
-      {sub && <span className="text-[10px] text-slate-400">{sub}</span>}
+      {sub && <span className="text-[11.5px] text-slate-400">{sub}</span>}
       <div className="flex items-center gap-1.5 mt-0.5">
         <DeltaBadge v={mom} pp={pp} />
-        <span className="text-[10px] text-slate-400">so với tháng trước</span>
+        <span className="text-[11.5px] text-slate-400">so với tháng trước</span>
       </div>
     </div>
   )
@@ -143,7 +143,7 @@ export function B2BMonthView({ initialMonth }: { initialMonth?: string }) {
           {([["Phí ship", includeShip, setIncludeShip], ["Đơn nội bộ", includeInternalOps, setIncludeInternalOps]] as [string, boolean, (v: boolean) => void][]).map(([label, val, set]) => (
             <label key={label} className="flex items-center gap-1 cursor-pointer select-none">
               <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-3 h-3 accent-amber-500" />
-              <span className={cn("text-[10px] font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
+              <span className={cn("text-[11.5px] font-semibold", val ? "text-amber-600" : "text-slate-500")}>{label}</span>
             </label>
           ))}
         </div>
@@ -151,7 +151,7 @@ export function B2BMonthView({ initialMonth }: { initialMonth?: string }) {
           className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 disabled:opacity-50">
           <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />Tải lại mới
         </button>
-        {running && <span className="text-[11px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-lg">Pro-rata tháng hiện tại</span>}
+        {running && <span className="text-[12px] font-medium text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-lg">Pro-rata tháng hiện tại</span>}
       </div>
 
       {msg && <div className={cn("p-3 rounded-xl text-xs font-semibold", msg.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600")}>{msg.text}</div>}
@@ -170,7 +170,7 @@ export function B2BMonthView({ initialMonth }: { initialMonth?: string }) {
       )}
       {isFuture && <div className="text-sm text-slate-500 bg-white border border-slate-200 rounded-xl p-4">Tháng {mLabel(month)} chưa có dữ liệu.</div>}
       {view && (
-        <p className="text-[10px] text-slate-400">CM1 ở thẻ = Gross Margin − Ch.Cost − Group Cost (khớp dòng B2B của Quarter Report). Bảng Nhóm bên dưới là CM1 theo khách, chưa trừ Group Cost.</p>
+        <p className="text-[11.5px] text-slate-400">CM1 ở thẻ = Gross Margin − Ch.Cost − Group Cost (khớp dòng B2B của Quarter Report). Bảng Nhóm bên dưới là CM1 theo khách, chưa trừ Group Cost.</p>
       )}
 
       <B2BTierSection

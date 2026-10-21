@@ -56,7 +56,7 @@ export function TopBar() {
       >
         <Search size={15} className="flex-shrink-0" />
         <span className="flex-1 text-left hidden sm:inline">Tìm nhanh…</span>
-        <kbd className="text-[10px] font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded hidden sm:inline">⌘K</kbd>
+        <kbd className="text-[11.5px] font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 px-1.5 py-0.5 rounded hidden sm:inline">⌘K</kbd>
       </button>
 
       <div className="flex items-center gap-3">
@@ -67,7 +67,7 @@ export function TopBar() {
           </div>
           <div className="text-right leading-tight hidden sm:block">
             <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[200px]">{name}</div>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${roleBadgeClass(role)}`}>
+            <span className={`text-[11.5px] px-1.5 py-0.5 rounded font-semibold ${roleBadgeClass(role)}`}>
               {ROLE_LABELS[role] ?? role}
             </span>
           </div>

@@ -847,7 +847,7 @@ export default function ChannelPerformancePage() {
   }
 
   return (
-    <div className="p-4 lg:p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-4 lg:p-8 space-y-8 max-w-[1480px] mx-auto">
       {/* Header & Filters */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -952,7 +952,7 @@ export default function ChannelPerformancePage() {
           <DatePresets onSelect={(s, e) => { setStartDate(s); setEndDate(e) }} />
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Start Date</label>
               <input
                 type="date"
                 value={startDate}
@@ -961,7 +961,7 @@ export default function ChannelPerformancePage() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">End Date</label>
               <input
                 type="date"
                 value={endDate}
@@ -971,7 +971,7 @@ export default function ChannelPerformancePage() {
             </div>
 
             <div className="space-y-1.5 relative">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Vendors</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Vendors</label>
               <div
                 className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all"
                 onClick={() => setShowVendorDropdown(!showVendorDropdown)}
@@ -990,7 +990,7 @@ export default function ChannelPerformancePage() {
                     <span className="text-xs font-bold text-slate-400 uppercase">Select Vendors</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedVendors([]) }}
-                      className="text-[10px] text-brand-600 font-bold hover:underline"
+                      className="text-[11.5px] text-brand-600 font-bold hover:underline"
                     >
                       Clear All
                     </button>
@@ -1015,7 +1015,7 @@ export default function ChannelPerformancePage() {
             </div>
 
             <div className="space-y-1.5 relative">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Sub Channels</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Sub Channels</label>
               <div
                 className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all"
                 onClick={() => setShowSubChannelDropdown(!showSubChannelDropdown)}
@@ -1034,7 +1034,7 @@ export default function ChannelPerformancePage() {
                     <span className="text-xs font-bold text-slate-400 uppercase">Select Sub Channels</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedSubChannels([]) }}
-                      className="text-[10px] text-brand-600 font-bold hover:underline"
+                      className="text-[11.5px] text-brand-600 font-bold hover:underline"
                     >
                       Clear All
                     </button>
@@ -1059,7 +1059,7 @@ export default function ChannelPerformancePage() {
             </div>
 
             <div className="space-y-1.5 relative">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Product Type</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Product Type</label>
               <div
                 className="flex items-center justify-between w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer hover:bg-slate-100 transition-all"
                 onClick={() => setShowProductTypeDropdown(!showProductTypeDropdown)}
@@ -1078,7 +1078,7 @@ export default function ChannelPerformancePage() {
                     <span className="text-xs font-bold text-slate-400 uppercase">Select Types</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedProductTypes([]) }}
-                      className="text-[10px] text-brand-600 font-bold hover:underline"
+                      className="text-[11.5px] text-brand-600 font-bold hover:underline"
                     >
                       Clear All
                     </button>
@@ -1103,7 +1103,7 @@ export default function ChannelPerformancePage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date Type</label>
+              <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Date Type</label>
               <div className="flex bg-slate-100 p-1 rounded-lg">
                 <button
                   onClick={() => setDateColumn("fulfiled_date")}
@@ -1365,7 +1365,7 @@ export default function ChannelPerformancePage() {
                   }), { revenue: 0, margin: 0, gpm2: 0, orders: 0, units: 0 })
                   return (
                     <tr className="bg-slate-100 font-black border-t-2 border-slate-200">
-                      <td className="px-6 py-4 text-[11px] uppercase tracking-widest text-slate-600" colSpan={2}>TOTAL</td>
+                      <td className="px-6 py-4 text-[12px] uppercase tracking-widest text-slate-600" colSpan={2}>TOTAL</td>
                       <td className="px-6 py-4 text-right text-sm font-black text-slate-900">{formatCurrency(tot.revenue)}</td>
                       <td className="px-6 py-4 text-right text-sm font-black text-emerald-700">{formatCurrency(tot.margin)}</td>
                       <td className="px-6 py-4 text-right text-sm text-slate-600">{tot.revenue>0?((tot.margin/tot.revenue)*100).toFixed(1):0}%</td>
@@ -1410,18 +1410,18 @@ export default function ChannelPerformancePage() {
               { label: "Projected Units", value: formatNumber(Math.round(projection.units)), change: projection.unitsChange },
             ].map(({ label, value, change }) => (
               <div key={label} className="bg-white p-4 rounded-xl border border-brand-100 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+                <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
                 <div className="flex items-baseline justify-between">
                   <p className="text-lg font-bold text-brand-600">{value}</p>
                   <div className={cn(
-                    "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full",
+                    "flex items-center gap-0.5 text-[11.5px] font-bold px-1.5 py-0.5 rounded-full",
                     change >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
                   )}>
                     {change >= 0 ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
                     {Math.abs(change).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[9px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
               </div>
             ))}
           </div>
@@ -1430,11 +1430,11 @@ export default function ChannelPerformancePage() {
 
       {/* KPI Cards */}
       <div className="flex items-center gap-2 mb-2">
-        <div className="px-2 py-1 bg-brand-50 text-brand-600 text-[10px] font-bold uppercase tracking-wider rounded border border-brand-100">
+        <div className="px-2 py-1 bg-brand-50 text-brand-600 text-[11.5px] font-bold uppercase tracking-wider rounded border border-brand-100">
           Viewing by: {dateColumn === "fulfiled_date" ? "Fulfillment Date" : "Created Date"}
         </div>
         {dateColumn === "created_date" && (
-          <div className="px-2 py-1 bg-amber-50 text-amber-600 text-[10px] font-bold uppercase tracking-wider rounded border border-amber-100">
+          <div className="px-2 py-1 bg-amber-50 text-amber-600 text-[11.5px] font-bold uppercase tracking-wider rounded border border-amber-100">
             Note: Orders created but not yet fulfilled are included
           </div>
         )}
@@ -1458,12 +1458,12 @@ export default function ChannelPerformancePage() {
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-brand-500 rounded-full"></div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Current</span>
+                  <span className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Current</span>
                 </div>
                 {comparisonType !== "none" && (
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 bg-slate-300 rounded-full"></div>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Previous</span>
+                    <span className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Previous</span>
                   </div>
                 )}
               </div>

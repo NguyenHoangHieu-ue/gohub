@@ -62,10 +62,10 @@ export function B2BCustomerDetail({ customer, startDate, endDate, dateColumn, co
         <p className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 bg-slate-50">Kênh bán hàng</p>
         <table className="w-full text-[12px] border-collapse">
           <thead><tr className="bg-slate-50 border-b border-slate-100">
-            <th className="px-5 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase">Kênh</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">Revenue</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">GP</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">Orders</th>
+            <th className="px-5 py-2.5 text-left text-[12px] font-bold text-slate-500 uppercase">Kênh</th>
+            <th className="px-4 py-2.5 text-right text-[12px] font-bold text-slate-500 uppercase">Revenue</th>
+            <th className="px-4 py-2.5 text-right text-[12px] font-bold text-slate-500 uppercase">GP</th>
+            <th className="px-4 py-2.5 text-right text-[12px] font-bold text-slate-500 uppercase">Orders</th>
           </tr></thead>
           <tbody className="divide-y divide-slate-50">
             {channels.map((c, i) => (
@@ -85,18 +85,18 @@ export function B2BCustomerDetail({ customer, startDate, endDate, dateColumn, co
         <p className="px-5 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100 bg-slate-50">Top sản phẩm</p>
         <table className="w-full text-[12px] border-collapse">
           <thead><tr className="bg-slate-50 border-b border-slate-100">
-            <th className="px-5 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase">SKU</th>
-            <th className="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase">Dest</th>
-            <th className="px-3 py-2.5 text-left text-[11px] font-bold text-slate-500 uppercase">Category</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">Revenue</th>
-            <th className="px-4 py-2.5 text-right text-[11px] font-bold text-slate-500 uppercase">Units</th>
+            <th className="px-5 py-2.5 text-left text-[12px] font-bold text-slate-500 uppercase">SKU</th>
+            <th className="px-3 py-2.5 text-left text-[12px] font-bold text-slate-500 uppercase">Dest</th>
+            <th className="px-3 py-2.5 text-left text-[12px] font-bold text-slate-500 uppercase">Category</th>
+            <th className="px-4 py-2.5 text-right text-[12px] font-bold text-slate-500 uppercase">Revenue</th>
+            <th className="px-4 py-2.5 text-right text-[12px] font-bold text-slate-500 uppercase">Units</th>
           </tr></thead>
           <tbody className="divide-y divide-slate-50">
             {products.map((p, i) => (
               <tr key={i} className="hover:bg-slate-50">
-                <td className="px-5 py-2.5 font-mono text-[11px] text-slate-700 truncate max-w-[140px]">{p.product_name}</td>
-                <td className="px-3 py-2.5 font-bold text-[11px] text-slate-600" title={p.destination || ""}>{p.destination ? (countryMap[p.destination] || p.destination) : "—"}</td>
-                <td className="px-3 py-2.5 text-[11px] text-slate-400 truncate max-w-[100px]">{p.category || "—"}</td>
+                <td className="px-5 py-2.5 font-mono text-[12px] text-slate-700 truncate max-w-[140px]">{p.product_name}</td>
+                <td className="px-3 py-2.5 font-bold text-[12px] text-slate-600" title={p.destination || ""}>{p.destination ? (countryMap[p.destination] || p.destination) : "—"}</td>
+                <td className="px-3 py-2.5 text-[12px] text-slate-400 truncate max-w-[100px]">{p.category || "—"}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{formatCurrency(p.revenue)}</td>
                 <td className="px-4 py-2.5 text-right text-slate-500">{formatNumber(p.units)}</td>
               </tr>

@@ -1,9 +1,10 @@
 import type { Metadata } from "next"
-import { Outfit } from "next/font/google"
+import { Be_Vietnam_Pro } from "next/font/google"
 import "./globals.css"
 import { SessionProvider } from "./session-provider"
 
-const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" })
+// Be Vietnam Pro có đủ dấu tiếng Việt (Outfit chỉ có latin nên dấu bị rơi sang font hệ thống, chữ không đều).
+const beVietnam = Be_Vietnam_Pro({ subsets: ["latin", "vietnamese"], weight: ["400", "500", "600", "700"], variable: "--font-sans" })
 
 export const metadata: Metadata = {
   title: "Gohub Intel",
@@ -23,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className={`${outfit.variable} font-sans`}>
+      <body className={`${beVietnam.variable} font-sans`}>
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>

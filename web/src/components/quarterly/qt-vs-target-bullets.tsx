@@ -50,7 +50,7 @@ export function QtVsTargetPanel({ label, actRev, prRev, targetRev, cm1Act, cm1Pr
       <div className="flex items-baseline justify-between mb-3">
         <h3 className="text-[13px] font-bold text-slate-800">{label}</h3>
         {qoqPct != null && (
-          <span className={cn("text-[11px] font-bold tabular-nums", qoqPct >= 0 ? "text-emerald-600" : "text-red-500")}>
+          <span className={cn("text-[12px] font-bold tabular-nums", qoqPct >= 0 ? "text-emerald-600" : "text-red-500")}>
             QoQ {qoqPct >= 0 ? "+" : ""}{qoqPct.toFixed(1)}%
           </span>
         )}

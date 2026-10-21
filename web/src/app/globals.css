@@ -2,8 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Giảm cỡ chữ toàn app một xíu — Tailwind dùng rem nên scale theo root (16px → 15px ≈ 94%) */
-html { font-size: 14px; }
+/* Cỡ chữ gốc 15px (trước 14px): chữ nhỏ nhất ~11px, dễ đọc hơn cho người ít quen. Tailwind dùng rem nên scale theo. */
+html { font-size: 15px; }
 
 body {
   @apply bg-gray-50 text-gray-900 antialiased;

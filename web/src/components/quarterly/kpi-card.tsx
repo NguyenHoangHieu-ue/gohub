@@ -15,7 +15,7 @@ export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, p
     p >= 100 ? "text-green-600" : (expectedPct > 0 ? p >= expectedPct : p >= 75) ? "text-brand-700" : "text-amber-600"
 
   const badge = (p: number) => (
-    <span className={cn("px-1 py-0.5 rounded text-[10px] font-bold tabular-nums whitespace-nowrap",
+    <span className={cn("px-1 py-0.5 rounded text-[11.5px] font-bold tabular-nums whitespace-nowrap",
       p >= 100 ? "bg-green-100 text-green-700"
                : (expectedPct > 0 ? p >= expectedPct : p >= 75) ? "bg-brand-100 text-brand-700"
                : "bg-amber-50 text-amber-600")}>
@@ -33,13 +33,23 @@ export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, p
           <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: `${accent}1a` }}>
             <Icon className="w-4 h-4" style={{ color: accent }} />
           </div>
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-tight">
-            {label}<br /><span className="text-slate-400 font-semibold">CM1 Progress</span>
+          <span className="text-[12px] font-bold text-slate-500 uppercase tracking-widest leading-tight">
+            {label}<br /><span className="text-slate-400 font-semibold">Tiến độ CM1</span>
           </span>
         </div>
-        <span className={cn("text-3xl font-extrabold tabular-nums", colorFor(cm1PrPct))}>
-          {cm1Target > 0 ? pct(cm1PrPct) : "—"}
-        </span>
+        <div className="text-right">
+          <span className={cn("text-3xl font-extrabold tabular-nums block leading-none", colorFor(cm1PrPct))}>
+            {cm1Target > 0 ? pct(cm1PrPct) : "—"}
+          </span>
+          {cm1Target > 0 && (
+            <span className={cn("inline-block mt-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold",
+              cm1PrPct >= 100 ? "bg-green-100 text-green-700"
+                : (expectedPct > 0 ? cm1PrPct >= expectedPct : cm1PrPct >= 75) ? "bg-brand-100 text-brand-700"
+                : "bg-amber-100 text-amber-700")}>
+              {cm1PrPct >= 100 ? "Đạt" : (expectedPct > 0 ? cm1PrPct >= expectedPct : cm1PrPct >= 75) ? "Đúng tiến độ" : "Chậm tiến độ"}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Progress bar: PR CM1 / Target CM1 */}
@@ -54,9 +64,9 @@ export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, p
       </div>
 
       {/* Table: 2 hàng header + 3 hàng data — mỗi hàng: label | Actual | Pro-rata | Target | % */}
-      <div className="text-[10px]">
+      <div className="text-[11.5px]">
         {/* Header */}
-        <div className="grid grid-cols-[36px_1fr_1fr_1fr_36px] gap-x-1.5 mb-1 pb-1 border-b border-slate-100">
+        <div className="grid grid-cols-[36px_1fr_1fr_1fr_46px] gap-x-1.5 mb-1 pb-1 border-b border-slate-100">
           <span />
           <span className="text-right font-bold text-slate-400 uppercase tracking-wide">Actual</span>
           <span className="text-right font-bold text-slate-400 uppercase tracking-wide">Pro-rata</span>
@@ -64,26 +74,26 @@ export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, p
           <span className="text-right font-bold text-slate-400 uppercase tracking-wide">%</span>
         </div>
         {/* Revenue */}
-        <div className="grid grid-cols-[36px_1fr_1fr_1fr_36px] gap-x-1.5 py-1 border-b border-slate-50 items-center">
-          <span className="font-bold text-slate-400 uppercase text-[9px]">Rev</span>
+        <div className="grid grid-cols-[36px_1fr_1fr_1fr_46px] gap-x-1.5 py-1 border-b border-slate-50 items-center">
+          <span className="font-bold text-slate-400 uppercase text-[11px]">Rev</span>
           <span className="text-right text-slate-700 font-semibold tabular-nums">{fck(actual)}</span>
           <span className="text-right text-slate-600 tabular-nums">{fck(prRev)}</span>
           <span className="text-right text-slate-500 tabular-nums">{target > 0 ? fck(target) : "—"}</span>
           <span className="text-right">{target > 0 ? badge(revPrPct) : <span className="text-slate-300">—</span>}</span>
         </div>
         {/* CM1 */}
-        <div className="grid grid-cols-[36px_1fr_1fr_1fr_36px] gap-x-1.5 py-1 border-b border-slate-50 items-center">
-          <span className="font-bold text-slate-400 uppercase text-[9px]">CM1</span>
+        <div className="grid grid-cols-[36px_1fr_1fr_1fr_46px] gap-x-1.5 py-1 border-b border-slate-50 items-center">
+          <span className="font-bold text-slate-400 uppercase text-[11px]">CM1</span>
           <span className={cn("text-right font-semibold tabular-nums", cm1Color(cm1Actual))}>{fck(cm1Actual)}</span>
           <span className={cn("text-right tabular-nums", cm1Color(prCm1))}>{fck(prCm1)}</span>
           <span className="text-right text-slate-500 tabular-nums">{cm1Target > 0 ? fck(cm1Target) : "—"}</span>
           <span className="text-right">{cm1Target > 0 ? badge(cm1PrPct) : <span className="text-slate-300">—</span>}</span>
         </div>
         {/* 3HK% + 3HK Rev */}
-        <div className="grid grid-cols-[36px_1fr_1fr_1fr_36px] gap-x-1.5 py-1 items-center">
-          <span className="font-bold text-slate-400 uppercase text-[9px]">3HK</span>
+        <div className="grid grid-cols-[36px_1fr_1fr_1fr_46px] gap-x-1.5 py-1 items-center">
+          <span className="font-bold text-slate-400 uppercase text-[11px]">3HK</span>
           <span className="text-right text-slate-700 font-semibold tabular-nums">
-            {hk3Rev > 0 && <span className="block text-[10px]">{fck(hk3Rev)}</span>}
+            {hk3Rev > 0 && <span className="block text-[11.5px]">{fck(hk3Rev)}</span>}
             <span className="text-slate-500 font-normal">{pct(hk3Pct)}</span>
           </span>
           <span className="text-right text-slate-300">—</span>

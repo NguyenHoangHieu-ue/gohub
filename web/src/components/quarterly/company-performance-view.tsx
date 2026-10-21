@@ -193,7 +193,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
 
   const fmtVal = (isPct: boolean, x: number | undefined) => (x == null ? "—" : isPct ? `${x.toFixed(1)}%` : fc(x))
 
-  const th = "px-2 py-2 text-center text-[11px] font-bold whitespace-nowrap"
+  const th = "px-2 py-2 text-center text-[12px] font-bold whitespace-nowrap"
   const headTone = (k: Col["kind"]) =>
     k === "month" || k === "tgt" ? "bg-amber-50 text-slate-700"
       : k === "qoq" ? "bg-slate-50 text-slate-500"
@@ -232,7 +232,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="text-slate-500 border-b border-slate-100 uppercase text-[10px]">
+                  <tr className="text-slate-500 border-b border-slate-100 uppercase text-[11.5px]">
                     <th className="px-3 py-2 text-left font-semibold">Nhóm</th>
                     <th className="px-3 py-2 text-left font-semibold">Chỉ số</th>
                     {[0, 1, 2].map(i => <th key={i} className="px-3 py-2 text-right font-semibold">T{(editQ.q - 1) * 3 + i + 1} (VND)</th>)}
@@ -286,7 +286,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
                           : (
                             <th key={c.id} className={cn(th, headTone(c.kind))}>
                               {c.header}
-                              {c.tag && <span className={cn("ml-1 text-[9px] font-semibold", c.kind === "tgt" || c.tag.startsWith("chưa") ? "text-amber-600" : "text-blue-600")}>({c.tag})</span>}
+                              {c.tag && <span className={cn("ml-1 text-[11px] font-semibold", c.kind === "tgt" || c.tag.startsWith("chưa") ? "text-amber-600" : "text-blue-600")}>({c.tag})</span>}
                             </th>
                           ))}
                       </tr>
@@ -315,7 +315,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
                               return (
                                 <td key={c.id} className={cn("px-2 py-2 text-right tabular-nums whitespace-nowrap",
                                   strong && "font-bold bg-[#0f4c81]/5",
-                                  v == null ? "text-slate-300" : isCm1 && v < 0 ? "text-red-600" : isPct ? "text-slate-600 text-[11px]" : "text-slate-800")}>
+                                  v == null ? "text-slate-300" : isCm1 && v < 0 ? "text-red-600" : isPct ? "text-slate-600 text-[12px]" : "text-slate-800")}>
                                   {fmtVal(isPct, v)}
                                 </td>
                               )
@@ -331,7 +331,7 @@ export function CompanyPerformanceView({ selQ, selYear, companyCode, includeShip
           </div>
         )}
 
-        <p className="px-5 py-2 text-[10px] text-slate-400 border-t border-slate-100">
+        <p className="px-5 py-2 text-[11.5px] text-slate-400 border-t border-slate-100">
           Số thực tế = báo cáo Quarter Report (cùng bộ lọc VN/US, Phí ship, Đơn nội bộ). Tháng đang chạy hiện Pro-rata; cột quý = tổng các tháng.
           CM1 gồm chi phí KH B2B + group cost + chi phí kênh B2C. %QoQ = thay đổi tương đối (mới − cũ)/|cũ|, cả dòng %.
           Cột {selYear} = các quý trước + quý đang xem{hasNext ? ` + target ${nextLabel} (cần nhập đủ target mới hiện)` : ""}; chỉ hiện từ Q3.

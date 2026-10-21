@@ -329,17 +329,17 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
     return pm ? (pm.actualRevenue ?? pm.revenue ?? 0) : 0
   }
   const momOf = (cur: number, prev: number | null): number | null => prev != null && prev > 0 ? (cur - prev) / prev * 100 : null
-  const momCell = (m: number | null, cls = "px-1.5 py-1 text-right text-[10px]") => (
+  const momCell = (m: number | null, cls = "px-1.5 py-1 text-right text-[11.5px]") => (
     <td className={cn(cls, m == null ? "text-slate-300" : m >= 0 ? "text-green-600 font-bold" : "text-red-500 font-bold")}>{m != null ? `${m >= 0 ? "+" : ""}${m.toFixed(1)}%` : "—"}</td>
   )
 
   // Stacked PR (xanh) / Actual (đen nhạt) — dùng chung cho cả dòng Nhóm lẫn dòng Khách hàng.
   const dual = (pr: number, act: number | undefined, cls = "text-slate-700") => act != null ? (
     <div className="flex flex-col items-end leading-snug gap-0">
-      <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cls)}>{fc(pr)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">PR</sup></span>
-      <span className="tabular-nums font-semibold text-[9px] text-blue-600 whitespace-nowrap">{fc(act)}<sup className="text-[8px] font-bold text-blue-400 ml-0.5">Act</sup></span>
+      <span className={cn("tabular-nums font-semibold text-[11.5px] whitespace-nowrap", cls)}>{fc(pr)}<sup className="text-[11px] font-bold text-blue-400 ml-0.5">PR</sup></span>
+      <span className="tabular-nums font-semibold text-[11px] text-blue-600 whitespace-nowrap">{fc(act)}<sup className="text-[11px] font-bold text-blue-400 ml-0.5">Act</sup></span>
     </div>
-  ) : <span className={cn("tabular-nums text-[10px] font-semibold", cls)}>{fc(pr)}</span>
+  ) : <span className={cn("tabular-nums text-[11.5px] font-semibold", cls)}>{fc(pr)}</span>
   // Ngày trong tháng "YYYY-MM" + tháng tương lai (chưa có trong summary) → để ước tính T9.
   const daysInMonthFE = (ym: string) => { const [yy, mm] = ym.split("-").map(Number); return new Date(yy, mm, 0).getDate() }
   const existingDaysFE = summary.reduce((s, m) => s + m.dim, 0)
@@ -698,7 +698,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
           <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5">
             {(["ALL", "VN", "US"] as const).map(r => (
               <button key={r} onClick={() => onRegionChange(r)}
-                className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
+                className={cn("px-2.5 py-1 text-[12px] font-bold rounded-md transition-all",
                   region === r ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-50")}>
                 {r === "ALL" ? "ALL" : `${REGION_META[r].flag} ${r}`}
               </button>
@@ -709,13 +709,13 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
           <div className={cn("items-center bg-white border border-slate-200 rounded-lg p-0.5 gap-0.5", fixedMonth ? "hidden" : "flex")}>
             {quarterMonths.map(m => (
               <button key={m} onClick={() => setTierViewMonth(m)}
-                className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
+                className={cn("px-2.5 py-1 text-[12px] font-bold rounded-md transition-all",
                   tierViewMonth === m ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-50")}>
                 T{parseInt(m.split("-")[1])}
               </button>
             ))}
             <button onClick={() => setTierViewMonth("QUARTER")}
-              className={cn("px-2.5 py-1 text-[11px] font-bold rounded-md transition-all",
+              className={cn("px-2.5 py-1 text-[12px] font-bold rounded-md transition-all",
                 tierViewMonth === "QUARTER" ? "bg-[#0f4c81] text-white" : "text-slate-500 hover:bg-slate-50")}>
               Cả Quý
             </button>
@@ -723,20 +723,20 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
           <input ref={importFileRef} type="file" accept=".xlsx,.xls" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f) }} />
           <button onClick={exportTierTable}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all">
+            className="flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-bold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all">
             <Download className="w-3 h-3" />Export
           </button>
           {canEditCost && !editMode && (
             <div className="flex items-center gap-1.5">
               <button onClick={downloadTemplate}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all">
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-bold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all">
                 <FileDown className="w-3 h-3" />Template
               </button>
               <button onClick={() => importFileRef.current?.click()} disabled={importLoading}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all disabled:opacity-50">
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[12px] font-bold rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all disabled:opacity-50">
                 {importLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}Import
               </button>
-              {importMsg && <span className="text-[10px] font-semibold text-slate-500 max-w-[200px] truncate">{importMsg}</span>}
+              {importMsg && <span className="text-[11.5px] font-semibold text-slate-500 max-w-[200px] truncate">{importMsg}</span>}
             </div>
           )}
           {canEditCost && (
@@ -768,25 +768,25 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
         <div>
           {/* Tier pivot table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + (visibleMonths.length + (fixedMonth ? 0 : 1)) * colCount * 72)}px` }}>
+            <table className="w-full text-[12px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + (visibleMonths.length + (fixedMonth ? 0 : 1)) * colCount * 72)}px` }}>
               <thead>
                 <tr className="bg-[#0f4c81]">
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#0f4c81] border-r border-[#0a3560] min-w-[160px]">Nhóm</th>
+                  <th className="px-4 py-2.5 text-left text-[11.5px] font-semibold text-slate-300 uppercase sticky left-0 bg-[#0f4c81] border-r border-[#0a3560] min-w-[160px]">Nhóm</th>
                   {visibleMonths.map(m => {
                     const [y, mo] = m.split("-")
                     const tierMonth = allTiers[0]?.months.find((x: any) => x.month === m)
                     const isPr = tierMonth?.isProjected ?? false
                     return (
-                      <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-slate-300 border-l border-[#0a3560] whitespace-nowrap">
+                      <th key={m} colSpan={colCount} className="px-3 py-2.5 text-center text-[11.5px] font-semibold text-slate-300 border-l border-[#0a3560] whitespace-nowrap">
                         T{parseInt(mo)}/{y}{isPr ? " (PR)" : ""}
                       </th>
                     )
                   })}
-                  <th hidden={!!fixedMonth} colSpan={colCount} className="px-3 py-2.5 text-center text-[10px] font-semibold text-blue-200 border-l border-[#0a3560] whitespace-nowrap bg-[#1e3a8a]">
+                  <th hidden={!!fixedMonth} colSpan={colCount} className="px-3 py-2.5 text-center text-[11.5px] font-semibold text-blue-200 border-l border-[#0a3560] whitespace-nowrap bg-[#1e3a8a]">
                     Tổng Quý<ColInfo tip={"Tổng Quý (PR)\nRevenue: Σ(PR monthly)\nGM: Σ(GP × factor)\nCh.Cost: Σ(custCost) + GroupCost × (tier_rev/total_B2B_rev)\nCM1: Σ(custCM1) - GroupCost × revenue-share"} />
                   </th>
                 </tr>
-                <tr className="bg-[#1565c0] text-[9px] text-blue-100 uppercase">
+                <tr className="bg-[#1565c0] text-[11px] text-blue-100 uppercase">
                   <th className="px-4 py-1.5 sticky left-0 bg-[#1565c0] border-r border-[#2e7dd4]" />
                   {visibleMonths.flatMap(m => SUB_VIEW.map((col, i) => (
                     <th key={`${m}-${col.label}`} className={cn("px-2 py-1.5 whitespace-nowrap font-medium text-right", i === 0 && "border-l border-[#2e7dd4]", col.label === "CM1" && "text-blue-300")}>
@@ -841,7 +841,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                         <div className="flex items-center gap-2">
                           {isSel ? <ChevronDown className="w-3.5 h-3.5 text-[#0f4c81]" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
                           <span className={cn("text-xs font-bold", colors.text)}>{tierRaw.tier}</span>
-                          <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-bold", colors.badge)}>{tier.customerCount} KH</span>
+                          <span className={cn("text-[11px] px-1.5 py-0.5 rounded-full font-bold", colors.badge)}>{tier.customerCount} KH</span>
                         </div>
                       </td>
                       {visibleMonths.flatMap((m: string) => {
@@ -872,7 +872,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                           <td key="mom" className={cn("px-2 py-2.5 text-right font-semibold tabular-nums", momPct == null ? "text-slate-300" : momPct >= 0 ? "text-green-600" : "text-red-500")}>
                             {momPct != null ? `${momPct >= 0 ? "+" : ""}${momPct.toFixed(1)}%` : "—"}
                           </td>,
-                          <td key="3hk" className="px-2 py-2.5 text-right text-slate-500 whitespace-nowrap">{fc(d.hk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(d.hk3Pct)})</span></td>,
+                          <td key="3hk" className="px-2 py-2.5 text-right text-slate-500 whitespace-nowrap">{fc(d.hk3Rev ?? 0)} <span className="text-[11px] text-slate-400">({pct(d.hk3Pct)})</span></td>,
                         ]
                       })}
                       {/* Tổng Quý: PR = BE per-month projected sum, Act = actualYTD */}
@@ -893,7 +893,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                       })()}
                       {/* %MoM không áp dụng cho Tổng Quý (đã có %QoQ ở cột trước) */}
                       <td className="px-2 py-2.5 text-right text-slate-300 bg-blue-50/60">—</td>
-                      <td className="px-2 py-2.5 text-right text-slate-500 bg-blue-50/60 whitespace-nowrap">{fc(tier.totalHk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(tier.totalHk3Pct)})</span></td>
+                      <td className="px-2 py-2.5 text-right text-slate-500 bg-blue-50/60 whitespace-nowrap">{fc(tier.totalHk3Rev ?? 0)} <span className="text-[11px] text-slate-400">({pct(tier.totalHk3Pct)})</span></td>
                       </>)}
                     </tr>
                   )
@@ -911,7 +911,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
                     Khách hàng nhóm: <span className={TIER_COLORS[selectedTierData.tier]?.text ?? "text-slate-700"}>{selectedTierData.tier}</span>
                   </h3>
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-[#0f4c81]">
+                  <span className="text-[11.5px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-[#0f4c81]">
                     {tierViewMonth === "QUARTER" ? "Cả Quý" : `T${parseInt(tierViewMonth.split("-")[1])}/${tierViewMonth.split("-")[0]}`}
                   </span>
                 </div>
@@ -932,7 +932,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                 </div>
               </div>
               {editMode && (
-                <p className="text-[11px] text-[#0f4c81] bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
+                <p className="text-[12px] text-[#0f4c81] bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
                   💡 Bấm vào ô <b>Ch.Cost</b> của từng khách hàng để nhập chi phí kênh theo tháng (nhiều dòng: số tiền hoặc %). CM1 = Gross Margin − Chi phí.
                 </p>
               )}
@@ -947,27 +947,27 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-base">{REGION_META[reg].flag}</span>
                       <span className="text-xs font-bold text-[#0f4c81] uppercase tracking-wide">{reg} — {REGION_META[reg].label}</span>
-                      <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full font-semibold">{rd.customerCount} KH</span>
-                      <span className="text-[10px] text-slate-400">Revenue {fc(rd.totalRevenue)} · CM1 <span className={cm1Color(rd.totalCm1)}>{fc(rd.totalCm1)}</span> ({pct(rd.totalCm1Pct)})</span>
+                      <span className="text-[11.5px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full font-semibold">{rd.customerCount} KH</span>
+                      <span className="text-[11.5px] text-slate-400">Revenue {fc(rd.totalRevenue)} · CM1 <span className={cm1Color(rd.totalCm1)}>{fc(rd.totalCm1)}</span> ({pct(rd.totalCm1Pct)})</span>
                     </div>
                     <div className="overflow-x-auto rounded-lg border border-slate-100">
-                      <table className="w-full text-[10px] border-collapse">
+                      <table className="w-full text-[11.5px] border-collapse">
                         <thead>
                           <tr className="bg-slate-100">
-                            {isCreator && <th className="px-1.5 py-1.5 text-left text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Mã KH</th>}
-                            <th className="px-1.5 py-1.5 text-left text-[9px] font-bold text-slate-500 uppercase tracking-wide">Tên KH</th>
-                            {isCreator && <th className="px-1.5 py-1.5 text-left text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Bảng giá</th>}
-                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Revenue</th>
-                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">G.Margin</th>
-                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide">GM%</th>
-                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Ch.Cost</th>
-                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide">CM1</th>
-                            {!fixedMonth && <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">%Tgt CM1</th>}
-                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide">%CM1</th>
-                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">{fixedMonth ? "%MoM" : "%QoQ"}</th>
-                            <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide">3HK%</th>
-                            {!fixedMonth && <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">3HK Rev TGT</th>}
-                            {!fixedMonth && <th className="px-1.5 py-1.5 text-right text-[9px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">%TGT 3HK</th>}
+                            {isCreator && <th className="px-1.5 py-1.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Mã KH</th>}
+                            <th className="px-1.5 py-1.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wide">Tên KH</th>
+                            {isCreator && <th className="px-1.5 py-1.5 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Bảng giá</th>}
+                            <th className="px-1.5 py-1.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Revenue</th>
+                            <th className="px-1.5 py-1.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">G.Margin</th>
+                            <th className="px-1.5 py-1.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wide">GM%</th>
+                            <th className="px-1.5 py-1.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Ch.Cost</th>
+                            <th className="px-1.5 py-1.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wide">CM1</th>
+                            {!fixedMonth && <th className="px-1.5 py-1.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">%Tgt CM1</th>}
+                            <th className="px-1.5 py-1.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wide">%CM1</th>
+                            <th className="px-1.5 py-1.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">{fixedMonth ? "%MoM" : "%QoQ"}</th>
+                            <th className="px-1.5 py-1.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wide">3HK%</th>
+                            {!fixedMonth && <th className="px-1.5 py-1.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">3HK Rev TGT</th>}
+                            {!fixedMonth && <th className="px-1.5 py-1.5 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">%TGT 3HK</th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -1003,33 +1003,33 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                   <td colSpan={isCreator ? 2 : 1} className="px-1.5 py-1.5">
                                     <div className="flex items-center gap-1">
                                       <ChevronRight className={cn("w-3 h-3 text-amber-600 flex-shrink-0 transition-transform", isOpen && "rotate-90")} />
-                                      <span className="truncate text-[10px] font-bold text-amber-800" title={item.orgName}>{stripOrgPrefix(item.orgName)}</span>
-                                      <span className="text-[9px] px-1 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 flex-shrink-0">{item.members.length} mã KH</span>
+                                      <span className="truncate text-[11.5px] font-bold text-amber-800" title={item.orgName}>{stripOrgPrefix(item.orgName)}</span>
+                                      <span className="text-[11px] px-1 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 flex-shrink-0">{item.members.length} mã KH</span>
                                       {canEditCost && !fixedMonth && !orgEditing && (
                                         <button onClick={e => { e.stopPropagation(); startEditTarget(orgTk) }} title="Nhập target cho cả Organization (mã con không nhập riêng)"
-                                          className="flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-white hover:bg-blue-50 rounded-md flex-shrink-0">
+                                          className="flex items-center gap-0.5 px-1.5 py-0.5 text-[11px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-white hover:bg-blue-50 rounded-md flex-shrink-0">
                                           <Pencil className="w-2 h-2" />{orgTgtRaw && (orgTgtRaw.rev > 0 || orgTgtRaw.cm1 > 0 || orgTgtRaw.hk3rev > 0 || orgTgtRaw.thk > 0) ? "Sửa target" : "Nhập target"}
                                         </button>
                                       )}
                                     </div>
                                   </td>
                                   {isCreator && <td />}
-                                  <td className="px-1.5 py-1.5 text-right text-slate-700 tabular-nums font-semibold text-[10px] whitespace-nowrap">{fc(oRev)}</td>
-                                  <td className="px-1.5 py-1.5 text-right text-slate-600 tabular-nums text-[10px] whitespace-nowrap">{fc(oGm)}</td>
-                                  <td className="px-1.5 py-1.5 text-right text-slate-500 text-[10px]">{pct(oRev > 0 ? oGm / oRev * 100 : 0)}</td>
-                                  <td className="px-1.5 py-1.5 text-right text-slate-500 tabular-nums text-[10px] whitespace-nowrap">{oCc > 0 ? fc(oCc) : "—"}</td>
-                                  <td className={cn("px-1.5 py-1.5 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(oCm1))}>{fc(oCm1)}</td>
-                                  {!fixedMonth && (<td className="px-1.5 py-1.5 text-right text-[10px]">{!orgMonthMode && oTgtCm1 > 0 ? <span className={badgeCls(oCm1 / oTgtCm1 * 100)}>{(oCm1 / oTgtCm1 * 100).toFixed(1)}%</span> : <span className="text-slate-300">—</span>}</td>)}
-                                  <td className={cn("px-1.5 py-1.5 text-right text-[10px]", cm1Color(oCm1))}>{pct(oRev > 0 ? oCm1 / oRev * 100 : 0)}</td>
-                                  {fixedMonth ? momCell(momOf(oRev, oPrevRev), "px-1.5 py-1.5 text-right text-[10px]") : <td className="px-1.5 py-1.5 text-right text-[10px] text-slate-300">—</td>}
-                                  <td className="px-1.5 py-1.5 text-right text-slate-500 text-[10px] whitespace-nowrap">{fc(oHk3)} <span className="text-[9px] text-slate-400">({pct(oRev > 0 ? oHk3 / oRev * 100 : 0)})</span></td>
-                                  {!fixedMonth && (<td className="px-1.5 py-1.5 text-right text-[10px] text-slate-600 tabular-nums whitespace-nowrap">{!orgMonthMode && oTgt3hk > 0 ? fc(oTgt3hk) : <span className="text-slate-300">—</span>}</td>)}
-                                  {!fixedMonth && (<td className="px-1.5 py-1.5 text-right text-[10px]">{!orgMonthMode && oTgt3hk > 0 ? <span className={badgeCls(oHk3 / oTgt3hk * 100)}>{(oHk3 / oTgt3hk * 100).toFixed(1)}%</span> : <span className="text-slate-300">—</span>}</td>)}
+                                  <td className="px-1.5 py-1.5 text-right text-slate-700 tabular-nums font-semibold text-[11.5px] whitespace-nowrap">{fc(oRev)}</td>
+                                  <td className="px-1.5 py-1.5 text-right text-slate-600 tabular-nums text-[11.5px] whitespace-nowrap">{fc(oGm)}</td>
+                                  <td className="px-1.5 py-1.5 text-right text-slate-500 text-[11.5px]">{pct(oRev > 0 ? oGm / oRev * 100 : 0)}</td>
+                                  <td className="px-1.5 py-1.5 text-right text-slate-500 tabular-nums text-[11.5px] whitespace-nowrap">{oCc > 0 ? fc(oCc) : "—"}</td>
+                                  <td className={cn("px-1.5 py-1.5 text-right font-semibold tabular-nums text-[11.5px] whitespace-nowrap", cm1Color(oCm1))}>{fc(oCm1)}</td>
+                                  {!fixedMonth && (<td className="px-1.5 py-1.5 text-right text-[11.5px]">{!orgMonthMode && oTgtCm1 > 0 ? <span className={badgeCls(oCm1 / oTgtCm1 * 100)}>{(oCm1 / oTgtCm1 * 100).toFixed(1)}%</span> : <span className="text-slate-300">—</span>}</td>)}
+                                  <td className={cn("px-1.5 py-1.5 text-right text-[11.5px]", cm1Color(oCm1))}>{pct(oRev > 0 ? oCm1 / oRev * 100 : 0)}</td>
+                                  {fixedMonth ? momCell(momOf(oRev, oPrevRev), "px-1.5 py-1.5 text-right text-[11.5px]") : <td className="px-1.5 py-1.5 text-right text-[11.5px] text-slate-300">—</td>}
+                                  <td className="px-1.5 py-1.5 text-right text-slate-500 text-[11.5px] whitespace-nowrap">{fc(oHk3)} <span className="text-[11px] text-slate-400">({pct(oRev > 0 ? oHk3 / oRev * 100 : 0)})</span></td>
+                                  {!fixedMonth && (<td className="px-1.5 py-1.5 text-right text-[11.5px] text-slate-600 tabular-nums whitespace-nowrap">{!orgMonthMode && oTgt3hk > 0 ? fc(oTgt3hk) : <span className="text-slate-300">—</span>}</td>)}
+                                  {!fixedMonth && (<td className="px-1.5 py-1.5 text-right text-[11.5px]">{!orgMonthMode && oTgt3hk > 0 ? <span className={badgeCls(oHk3 / oTgt3hk * 100)}>{(oHk3 / oTgt3hk * 100).toFixed(1)}%</span> : <span className="text-slate-300">—</span>}</td>)}
                                 </tr>
                                 {orgEditing && (
                                   <tr className="bg-amber-50/60 border-t border-amber-100">
                                     <td colSpan={12 + (isCreator ? 2 : 0)} className="px-3 py-2">
-                                      <div className="flex flex-wrap items-end gap-3 text-[10px]">
+                                      <div className="flex flex-wrap items-end gap-3 text-[11.5px]">
                                         <span className="font-bold text-amber-800">Target Organization «{stripOrgPrefix(item.orgName)}» ({item.members.length} mã KH — cả quý, chia xuống mã con theo doanh thu)</span>
                                         <label className="flex flex-col gap-0.5">Doanh thu<input type="text" value={oInp.rev} placeholder="VD: 2.000.000.000" onChange={e => setOInp({ rev: e.target.value })} className="w-36 border border-slate-300 rounded px-1.5 py-0.5 text-right tabular-nums" /></label>
                                         <label className="flex flex-col gap-0.5">CM1<input type="text" value={oInp.cm1} placeholder="VD: 500.000.000" onChange={e => setOInp({ cm1: e.target.value })} className="w-36 border border-slate-300 rounded px-1.5 py-0.5 text-right tabular-nums" /></label>
@@ -1091,11 +1091,11 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                               // khi !d.hasData), KHÔNG ẩn hẳn (vẫn cần thấy KH tồn tại, chỉ tháng này không có).
                               return (
                                 <tr key={c.code} className={cn("border-t border-slate-50", rowBgCls)}>
-                                  {isCreator && <td className="px-1.5 py-1 font-mono text-slate-400 whitespace-nowrap text-[9px]">{c.code}</td>}
-                                  <td className="px-1.5 py-1 text-slate-500 max-w-[130px]"><span className="truncate text-[10px]" title={c.name}>{c.name}</span></td>
+                                  {isCreator && <td className="px-1.5 py-1 font-mono text-slate-400 whitespace-nowrap text-[11px]">{c.code}</td>}
+                                  <td className="px-1.5 py-1 text-slate-500 max-w-[130px]"><span className="truncate text-[11.5px]" title={c.name}>{c.name}</span></td>
                                   {isCreator && <td className="px-1.5 py-1" />}
                                   {Array.from({ length: colSpanAll - (isCreator ? 2 : 0) - 1 }).map((_, ci) => (
-                                    <td key={ci} className="px-1.5 py-1 text-right text-slate-300 text-[10px]">—</td>
+                                    <td key={ci} className="px-1.5 py-1 text-right text-slate-300 text-[11.5px]">—</td>
                                   ))}
                                 </tr>
                               )
@@ -1104,17 +1104,17 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                               <React.Fragment key={c.code}>
                                 {/* ── Main row: Pro-rata values (mặc định) — bấm tên để expand xem chi tiết ── */}
                                 <tr className={cn("border-t border-slate-50 cursor-pointer", rowBgCls, item.member ? "hover:bg-sky-200/70" : "hover:bg-blue-50/10")}>
-                                  {isCreator && <td className="px-1.5 py-1 font-mono text-slate-500 whitespace-nowrap text-[9px]">{c.code}</td>}
+                                  {isCreator && <td className="px-1.5 py-1 font-mono text-slate-500 whitespace-nowrap text-[11px]">{c.code}</td>}
                                   <td className="px-1.5 py-1 text-slate-700 font-medium max-w-[130px]" onClick={toggleExpand}>
                                     <div className="flex items-center gap-1">
                                       <ChevronRight className={cn("w-3 h-3 text-slate-400 flex-shrink-0 transition-transform", isExpanded && "rotate-90")} />
-                                      <span className="truncate text-[10px]" title={c.name}>{c.name}</span>
+                                      <span className="truncate text-[11.5px]" title={c.name}>{c.name}</span>
                                       {editMode && dirtyCodes.has(c.code) && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
                                     </div>
                                   </td>
                                   {isCreator && (
                                     <td className="px-1.5 py-1 whitespace-nowrap">
-                                      {c.priceListName ? <span className="text-[9px] font-mono text-[#0f4c81] bg-blue-50 border border-blue-100 px-1 py-0.5 rounded">{c.priceListName}</span> : <span className="text-slate-300">—</span>}
+                                      {c.priceListName ? <span className="text-[11px] font-mono text-[#0f4c81] bg-blue-50 border border-blue-100 px-1 py-0.5 rounded">{c.priceListName}</span> : <span className="text-slate-300">—</span>}
                                     </td>
                                   )}
                                   {(() => {
@@ -1125,31 +1125,31 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                     const monthCc = monthMode ? (mv?.prCc ?? 0) : c.cc
                                     return (
                                       <>
-                                        <td className="px-1.5 py-1 text-right text-slate-700 tabular-nums font-semibold text-[10px] whitespace-nowrap">{dual(rowPr.prRev, showAct ? mv!.actRev : undefined)}</td>
-                                        <td className="px-1.5 py-1 text-right text-slate-600 tabular-nums text-[10px] whitespace-nowrap">{dual(rowPr.prGm, showAct ? mv!.actGm : undefined, "text-slate-600")}</td>
-                                        <td className="px-1.5 py-1 text-right text-slate-500 text-[10px]">{pct(prGmPct)}</td>
-                                        <td className="px-1.5 py-1 text-right tabular-nums text-[10px]">
+                                        <td className="px-1.5 py-1 text-right text-slate-700 tabular-nums font-semibold text-[11.5px] whitespace-nowrap">{dual(rowPr.prRev, showAct ? mv!.actRev : undefined)}</td>
+                                        <td className="px-1.5 py-1 text-right text-slate-600 tabular-nums text-[11.5px] whitespace-nowrap">{dual(rowPr.prGm, showAct ? mv!.actGm : undefined, "text-slate-600")}</td>
+                                        <td className="px-1.5 py-1 text-right text-slate-500 text-[11.5px]">{pct(prGmPct)}</td>
+                                        <td className="px-1.5 py-1 text-right tabular-nums text-[11.5px]">
                                           {editMode && canEditCost
-                                            ? <button onClick={() => openCostModal(c)} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#0f4c81]/30 bg-blue-50 text-[#0f4c81] font-semibold hover:bg-blue-100 text-[10px]" title="Nhập chi phí">
+                                            ? <button onClick={() => openCostModal(c)} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#0f4c81]/30 bg-blue-50 text-[#0f4c81] font-semibold hover:bg-blue-100 text-[11.5px]" title="Nhập chi phí">
                                                 <Pencil className="w-3 h-3" />{editedCustomerCost(c) > 0 ? fc(editedCustomerCost(c)) : "0"}
                                               </button>
                                             : <span className="text-slate-500 whitespace-nowrap">{monthCc > 0 ? dual(monthCc, showAct ? mv!.actCc : undefined, "text-slate-500") : "—"}</span>}
                                         </td>
-                                        <td className={cn("px-1.5 py-1 text-right font-semibold tabular-nums text-[10px] whitespace-nowrap", cm1Color(rowPr.prCm1))}>{dual(rowPr.prCm1, showAct ? mv!.actCm1 : undefined, cm1Color(rowPr.prCm1))}</td>
+                                        <td className={cn("px-1.5 py-1 text-right font-semibold tabular-nums text-[11.5px] whitespace-nowrap", cm1Color(rowPr.prCm1))}>{dual(rowPr.prCm1, showAct ? mv!.actCm1 : undefined, cm1Color(rowPr.prCm1))}</td>
                                       </>
                                     )
                                   })()}
-                                  {!fixedMonth && (<td className="px-1.5 py-1 text-right text-[10px]">
+                                  {!fixedMonth && (<td className="px-1.5 py-1 text-right text-[11.5px]">
                                     {/* Target chỉ có ở mức QUÝ — ẩn khi đang xem 1 tháng cụ thể (tránh so nhầm
                                         CM1 của 1 tháng với target cả quý, xem comment monthMode ở trên). */}
                                     {!monthMode && tgt.cm1 > 0 ? (() => { const p = rowPr.prCm1 / tgt.cm1 * 100; return <span className={cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#0f4c81]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span> })() : <span className="text-slate-300">—</span>}
                                   </td>)}
-                                  <td className={cn("px-1.5 py-1 text-right text-[10px]", cm1Color(rowPr.prCm1))}>{pct(rowPr.prCm1Pct)}</td>
-                                  {fixedMonth ? momCell(momOf(rowPr.prRev, custPrevMonthRev(c, tierViewMonth))) : (<td className={cn("px-1.5 py-1 text-right text-[10px]", qoqCls)}>{rowPr.qoqPct != null ? `${rowPr.qoqPct >= 0 ? "+" : ""}${rowPr.qoqPct.toFixed(1)}%` : "—"}</td>)}
-                                  <td className="px-1.5 py-1 text-right text-slate-500 text-[10px] whitespace-nowrap">
+                                  <td className={cn("px-1.5 py-1 text-right text-[11.5px]", cm1Color(rowPr.prCm1))}>{pct(rowPr.prCm1Pct)}</td>
+                                  {fixedMonth ? momCell(momOf(rowPr.prRev, custPrevMonthRev(c, tierViewMonth))) : (<td className={cn("px-1.5 py-1 text-right text-[11.5px]", qoqCls)}>{rowPr.qoqPct != null ? `${rowPr.qoqPct >= 0 ? "+" : ""}${rowPr.qoqPct.toFixed(1)}%` : "—"}</td>)}
+                                  <td className="px-1.5 py-1 text-right text-slate-500 text-[11.5px] whitespace-nowrap">
                                     {monthMode
-                                      ? <>{fc(mv?.prHk3 ?? 0)} <span className="text-[9px] text-slate-400">({pct(c.monthSummary?.[tierViewMonth]?.hk3Pct ?? 0)})</span></>
-                                      : <>{fc(c.hk3Rev)} <span className="text-[9px] text-slate-400">({pct(c.hk3Pct)})</span></>}
+                                      ? <>{fc(mv?.prHk3 ?? 0)} <span className="text-[11px] text-slate-400">({pct(c.monthSummary?.[tierViewMonth]?.hk3Pct ?? 0)})</span></>
+                                      : <>{fc(c.hk3Rev)} <span className="text-[11px] text-slate-400">({pct(c.hk3Pct)})</span></>}
                                   </td>
                                   {/* Target 3HK Revenue: dùng hk3rev nếu nhập, fallback computed — chỉ ở Cả Quý */}
                                   {!fixedMonth && (() => {
@@ -1157,10 +1157,10 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                       : (tgt.rev > 0 && tgt.thk > 0 ? Math.round(tgt.rev * tgt.thk / 100) : 0)
                                     return (
                                       <>
-                                        <td className="px-1.5 py-1 text-right text-slate-500 text-[10px] tabular-nums whitespace-nowrap">
+                                        <td className="px-1.5 py-1 text-right text-slate-500 text-[11.5px] tabular-nums whitespace-nowrap">
                                           {!monthMode && tgt3hk > 0 ? fc(tgt3hk) : <span className="text-slate-300">—</span>}
                                         </td>
-                                        <td className="px-1.5 py-1 text-right text-[10px]">
+                                        <td className="px-1.5 py-1 text-right text-[11.5px]">
                                           {!monthMode && tgt3hk > 0 ? (() => {
                                             const p = pr.prHk3 / tgt3hk * 100
                                             return <span className={cn("inline-flex px-1 py-0.5 rounded font-bold tabular-nums", p >= 100 ? "bg-green-100 text-green-700" : p >= 75 ? "bg-blue-100 text-[#0f4c81]" : "bg-amber-50 text-amber-600")}>{p.toFixed(1)}%</span>
@@ -1198,23 +1198,23 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                   const aGm  = (m: any) => m.actualGm ?? m.gm
                                   const aCc  = (m: any) => m.actualCc ?? m.cc
                                   const aCm1 = (m: any) => m.actualCm1 ?? m.cm1
-                                  const numC = (v: number, cls = "text-slate-700") => <span className={cn("tabular-nums text-[10px] font-semibold whitespace-nowrap", cls)}>{fc(v)}</span>
+                                  const numC = (v: number, cls = "text-slate-700") => <span className={cn("tabular-nums text-[11.5px] font-semibold whitespace-nowrap", cls)}>{fc(v)}</span>
                                   const prLine = (val: React.ReactNode, cls = "text-blue-700") => (
                                     <div className="flex items-baseline justify-end gap-1 leading-snug">
-                                      <span className="text-[9px] font-bold text-blue-400 flex-shrink-0">Pr.</span>
-                                      <span className={cn("tabular-nums font-semibold text-[10px] whitespace-nowrap", cls)}>{val}</span>
+                                      <span className="text-[11px] font-bold text-blue-400 flex-shrink-0">Pr.</span>
+                                      <span className={cn("tabular-nums font-semibold text-[11.5px] whitespace-nowrap", cls)}>{val}</span>
                                     </div>
                                   )
                                   const actLine = (val: React.ReactNode, cls = "text-slate-700") => (
                                     <div className="flex items-baseline justify-end gap-1 leading-snug">
-                                      <span className="text-[9px] font-bold text-slate-400 flex-shrink-0">Act.</span>
-                                      <span className={cn("tabular-nums font-semibold text-[9px] whitespace-nowrap", cls)}>{val}</span>
+                                      <span className="text-[11px] font-bold text-slate-400 flex-shrink-0">Act.</span>
+                                      <span className={cn("tabular-nums font-semibold text-[11px] whitespace-nowrap", cls)}>{val}</span>
                                     </div>
                                   )
                                   const estLine = (val: React.ReactNode, cls = "text-amber-600") => (
                                     <div className="flex items-baseline justify-end gap-1 leading-snug">
-                                      <span className="text-[9px] font-bold text-amber-400 flex-shrink-0">~ƯT</span>
-                                      <span className={cn("tabular-nums font-semibold text-[10px] italic whitespace-nowrap", cls)}>{val}</span>
+                                      <span className="text-[11px] font-bold text-amber-400 flex-shrink-0">~ƯT</span>
+                                      <span className={cn("tabular-nums font-semibold text-[11.5px] italic whitespace-nowrap", cls)}>{val}</span>
                                     </div>
                                   )
                                   const mRows: MRow[] = [
@@ -1232,22 +1232,22 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                       actCell: (mk) => { const v = Math.round(aCc(ms[mk])); return v > 0 ? numC(v, "text-slate-500") : <span className="text-slate-200">—</span> },
                                       prCell:  (mk) => { const v = Math.round(aCc(ms[mk]) * mf(mk)); return v > 0 ? numC(v, "text-slate-500") : <span className="text-slate-200">—</span> },
                                       single:  (mk) => { const m = ms[mk]; if (m) { const v = m.actualCc ?? m.cc; return v > 0 ? numC(Math.round(v), "text-slate-500") : <span className="text-slate-200">—</span> } return isFut(mk) && pr.exCc > 0 ? estLine(fc(Math.round(pr.exCc * futRatio(mk))), "text-slate-500") : <span className="text-slate-200">—</span> },
-                                      tot: hp ? <>{prLine(fc(cPrCc), "text-slate-500")}{actLine(fc(actCc), "text-slate-500")}</> : <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{actCc > 0 ? fc(actCc) : "—"}</span> },
+                                      tot: hp ? <>{prLine(fc(cPrCc), "text-slate-500")}{actLine(fc(actCc), "text-slate-500")}</> : <span className="tabular-nums text-slate-500 text-[11.5px] whitespace-nowrap">{actCc > 0 ? fc(actCc) : "—"}</span> },
                                     { label: "CM1",
                                       actCell: (mk) => { const v = Math.round(aCm1(ms[mk])); return numC(v, cm1Color(v)) },
                                       prCell:  (mk) => { const v = Math.round(aCm1(ms[mk]) * mf(mk)); return numC(v, cm1Color(v)) },
                                       single:  (mk) => { const m = ms[mk]; if (m) { const v = m.actualCm1 ?? m.cm1; return numC(Math.round(v), cm1Color(v)) } return isFut(mk) ? estLine(fc(Math.round(pr.exCm1 * futRatio(mk))), cm1Color(pr.exCm1)) : <span className="text-slate-200">—</span> },
                                       tot: hp ? <>{prLine(fc(cPrCm1), cm1Color(cPrCm1))}{actLine(fc(actCm1), cm1Color(actCm1))}</> : numC(actCm1, cm1Color(actCm1)) },
                                     { label: "CM1%",
-                                      actCell: (mk) => { const m = ms[mk]; const r = aRev(m) > 0 ? aCm1(m) / aRev(m) * 100 : 0; return <span className={cn("text-[10px]", cm1Color(r))}>{pct(r)}</span> },
-                                      prCell:  (mk) => { const m = ms[mk]; const r = aRev(m) > 0 ? aCm1(m) / aRev(m) * 100 : 0; return <span className={cn("text-[10px]", cm1Color(r))}>{pct(r)}</span> },
-                                      single:  (mk) => { const m = ms[mk]; if (m) return <span className={cn("text-[10px]", cm1Color(m.cm1))}>{pct(m.cm1Pct)}</span>; return isFut(mk) ? <span className={cn("text-[10px] italic", cm1Color(pr.exCm1))}>{pct(pr.prCm1Pct)}</span> : <span className="text-slate-200">—</span> },
-                                      tot: <span className={cn("text-[10px]", cm1Color(cPrCm1))}>{pct(cPrRev > 0 ? cPrCm1 / cPrRev * 100 : 0)}</span> },
+                                      actCell: (mk) => { const m = ms[mk]; const r = aRev(m) > 0 ? aCm1(m) / aRev(m) * 100 : 0; return <span className={cn("text-[11.5px]", cm1Color(r))}>{pct(r)}</span> },
+                                      prCell:  (mk) => { const m = ms[mk]; const r = aRev(m) > 0 ? aCm1(m) / aRev(m) * 100 : 0; return <span className={cn("text-[11.5px]", cm1Color(r))}>{pct(r)}</span> },
+                                      single:  (mk) => { const m = ms[mk]; if (m) return <span className={cn("text-[11.5px]", cm1Color(m.cm1))}>{pct(m.cm1Pct)}</span>; return isFut(mk) ? <span className={cn("text-[11.5px] italic", cm1Color(pr.exCm1))}>{pct(pr.prCm1Pct)}</span> : <span className="text-slate-200">—</span> },
+                                      tot: <span className={cn("text-[11.5px]", cm1Color(cPrCm1))}>{pct(cPrRev > 0 ? cPrCm1 / cPrRev * 100 : 0)}</span> },
                                     { label: "3HK",
-                                      actCell: (mk) => <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(Math.round(aHk3(ms[mk])))} <span className="text-[9px] text-slate-400">({pct(ms[mk].hk3Pct)})</span></span>,
-                                      prCell:  (mk) => <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(Math.round(aHk3(ms[mk]) * mf(mk)))} <span className="text-[9px] text-slate-400">({pct(ms[mk].hk3Pct)})</span></span>,
-                                      single:  (mk) => { const m = ms[mk]; if (m) return <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(m.hk3Rev ?? 0)} <span className="text-[9px] text-slate-400">({pct(m.hk3Pct)})</span></span>; return isFut(mk) ? <span className="tabular-nums text-slate-400 text-[10px] italic">{pct(c.hk3Pct)}</span> : <span className="text-slate-200">—</span> },
-                                      tot: <span className="tabular-nums text-slate-500 text-[10px] whitespace-nowrap">{fc(c.hk3Rev)} <span className="text-[9px] text-slate-400">({pct(c.hk3Pct)})</span></span> },
+                                      actCell: (mk) => <span className="tabular-nums text-slate-500 text-[11.5px] whitespace-nowrap">{fc(Math.round(aHk3(ms[mk])))} <span className="text-[11px] text-slate-400">({pct(ms[mk].hk3Pct)})</span></span>,
+                                      prCell:  (mk) => <span className="tabular-nums text-slate-500 text-[11.5px] whitespace-nowrap">{fc(Math.round(aHk3(ms[mk]) * mf(mk)))} <span className="text-[11px] text-slate-400">({pct(ms[mk].hk3Pct)})</span></span>,
+                                      single:  (mk) => { const m = ms[mk]; if (m) return <span className="tabular-nums text-slate-500 text-[11.5px] whitespace-nowrap">{fc(m.hk3Rev ?? 0)} <span className="text-[11px] text-slate-400">({pct(m.hk3Pct)})</span></span>; return isFut(mk) ? <span className="tabular-nums text-slate-400 text-[11.5px] italic">{pct(c.hk3Pct)}</span> : <span className="text-slate-200">—</span> },
+                                      tot: <span className="tabular-nums text-slate-500 text-[11.5px] whitespace-nowrap">{fc(c.hk3Rev)} <span className="text-[11px] text-slate-400">({pct(c.hk3Pct)})</span></span> },
                                   ]
                                   // Creator orders explorer state
                                   const gb = ordersGroupBy[c.code] ?? "month"
@@ -1269,28 +1269,28 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                         <div className="bg-slate-50 border-b border-slate-200">
                                           {/* ── Per-month breakdown table ── */}
                                           <div className="px-4 pt-3 pb-2 overflow-x-auto">
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Chi tiết theo Tháng</p>
-                                            <table className="text-[11px] border-collapse w-full" style={{ minWidth: 360 }}>
+                                            <p className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider mb-2">Chi tiết theo Tháng</p>
+                                            <table className="text-[12px] border-collapse w-full" style={{ minWidth: 360 }}>
                                               <thead>
                                                 <tr className="bg-[#0f4c81]">
-                                                  <th className="px-3 py-1.5 text-left text-[10px] text-slate-300 font-semibold uppercase w-20"></th>
+                                                  <th className="px-3 py-1.5 text-left text-[11.5px] text-slate-300 font-semibold uppercase w-20"></th>
                                                   {qm.map(m => isCurDetail(m) ? (
                                                     <React.Fragment key={m}>
-                                                      <th className="px-3 py-1.5 text-right text-[10px] text-slate-300 font-semibold whitespace-nowrap border-l border-[#1565c0]">{fmtM(m)}<sup className="text-slate-400 text-[8px] ml-0.5">Act</sup></th>
-                                                      <th className="px-3 py-1.5 text-right text-[10px] text-blue-200 font-semibold whitespace-nowrap">{fmtM(m)}<sup className="text-blue-300 text-[8px] ml-0.5">PR</sup></th>
+                                                      <th className="px-3 py-1.5 text-right text-[11.5px] text-slate-300 font-semibold whitespace-nowrap border-l border-[#1565c0]">{fmtM(m)}<sup className="text-slate-400 text-[11px] ml-0.5">Act</sup></th>
+                                                      <th className="px-3 py-1.5 text-right text-[11.5px] text-blue-200 font-semibold whitespace-nowrap">{fmtM(m)}<sup className="text-blue-300 text-[11px] ml-0.5">PR</sup></th>
                                                     </React.Fragment>
                                                   ) : (
-                                                    <th key={m} className="px-3 py-1.5 text-right text-[10px] text-slate-300 font-semibold whitespace-nowrap border-l border-[#1565c0]">
-                                                      {fmtM(m)}{futureMonthsFE.includes(m) ? <sup className="text-amber-300 text-[8px] ml-0.5">ƯT</sup> : ""}
+                                                    <th key={m} className="px-3 py-1.5 text-right text-[11.5px] text-slate-300 font-semibold whitespace-nowrap border-l border-[#1565c0]">
+                                                      {fmtM(m)}{futureMonthsFE.includes(m) ? <sup className="text-amber-300 text-[11px] ml-0.5">ƯT</sup> : ""}
                                                     </th>
                                                   ))}
-                                                  <th className="px-3 py-1.5 text-right text-[10px] text-blue-200 font-semibold border-l border-[#1565c0] bg-[#1e3a8a]">Tổng Quý</th>
+                                                  <th className="px-3 py-1.5 text-right text-[11.5px] text-blue-200 font-semibold border-l border-[#1565c0] bg-[#1e3a8a]">Tổng Quý</th>
                                                 </tr>
                                               </thead>
                                               <tbody>
                                                 {mRows.map((row, ri) => (
                                                   <tr key={row.label} className={ri % 2 === 0 ? "bg-white" : "bg-slate-50/60"}>
-                                                    <td className="px-3 py-1.5 font-bold text-slate-500 uppercase text-[9px] tracking-wider whitespace-nowrap">{row.label}</td>
+                                                    <td className="px-3 py-1.5 font-bold text-slate-500 uppercase text-[11px] tracking-wider whitespace-nowrap">{row.label}</td>
                                                     {qm.map(m => isCurDetail(m) ? (
                                                       <React.Fragment key={m}>
                                                         <td className="px-3 py-1.5 text-right border-l border-slate-100">{ms[m] ? row.actCell(m) : <span className="text-slate-200">—</span>}</td>
@@ -1311,43 +1311,43 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                             {/* Target & Progress */}
                                             <div hidden={!!fixedMonth}>
                                               <div className="flex items-center gap-2 mb-2">
-                                                <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Target & Progress</p>
+                                                <p className="text-[11.5px] font-bold text-slate-600 uppercase tracking-wider">Target & Progress</p>
                                                 {canEditTgtHere && !isEditingTgt && (
-                                                  <button onClick={() => startEditTarget(tkey)} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-white hover:bg-blue-50 rounded-md">
+                                                  <button onClick={() => startEditTarget(tkey)} className="flex items-center gap-1 px-2 py-0.5 text-[11.5px] font-bold text-[#0f4c81] border border-[#0f4c81]/30 bg-white hover:bg-blue-50 rounded-md">
                                                     <Pencil className="w-2.5 h-2.5" />{inMultiOrg ? "Sửa target Organization" : "Sửa target"}
                                                   </button>
                                                 )}
-                                                {inMultiOrg && !canEditTgtHere && <span className="text-[9px] text-amber-700">Target nhập ở dòng Organization — số dưới là phần chia theo doanh thu</span>}
+                                                {inMultiOrg && !canEditTgtHere && <span className="text-[11px] text-amber-700">Target nhập ở dòng Organization — số dưới là phần chia theo doanh thu</span>}
                                                 {isEditingTgt && (
                                                   <div className="flex gap-1.5 ml-auto">
                                                     <button onClick={() => saveTarget(tkey, inMultiOrg ? stripOrgPrefix(c.orgName || c.name) : c.name)} disabled={isSavingTgt}
-                                                      className={cn("flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-md", !isSavingTgt ? "bg-[#0f4c81] text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
+                                                      className={cn("flex items-center gap-1 px-2 py-0.5 text-[11.5px] font-bold rounded-md", !isSavingTgt ? "bg-[#0f4c81] text-white" : "bg-slate-200 text-slate-400 cursor-not-allowed")}>
                                                       {isSavingTgt ? <RefreshCw className="w-2.5 h-2.5 animate-spin" /> : <Save className="w-2.5 h-2.5" />}Lưu
                                                     </button>
-                                                    <button onClick={cancelEditTarget} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-md">
+                                                    <button onClick={cancelEditTarget} className="flex items-center gap-1 px-2 py-0.5 text-[11.5px] font-bold border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-md">
                                                       <X className="w-2.5 h-2.5" />Hủy
                                                     </button>
                                                   </div>
                                                 )}
                                               </div>
-                                              <div className="space-y-2 text-[11px]">
+                                              <div className="space-y-2 text-[12px]">
                                                 {/* Target Revenue */}
                                                 <div className="flex items-center justify-between gap-3">
                                                   <span className="text-slate-500 flex-shrink-0">Revenue Target</span>
                                                   {isEditingTgt ? (
                                                     <input type="text" value={targetInputs[tkey]?.rev ?? ""} placeholder="VD: 2.000.000.000"
                                                       onChange={e => setTargetInputs(prev => ({ ...prev, [tkey]: { ...(prev[tkey] ?? { cm1: "", thk: "", rev: "" }), rev: e.target.value } }))}
-                                                      className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
+                                                      className="flex-1 min-w-0 px-2 py-1 text-[12px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                                   ) : tgt.rev > 0 ? (
                                                     <div className="text-right space-y-0.5">
-                                                      <div className="text-slate-600 font-semibold tabular-nums text-[10px]">Target quý: {fc(tgt.rev)}</div>
-                                                      <div className="flex gap-2 justify-end text-[10px]">
+                                                      <div className="text-slate-600 font-semibold tabular-nums text-[11.5px]">Target quý: {fc(tgt.rev)}</div>
+                                                      <div className="flex gap-2 justify-end text-[11.5px]">
                                                         <span className="text-slate-400">Dự kiến:</span>
                                                         <span className={cn("font-bold", cPrRev / tgt.rev >= 1 ? "text-green-600" : cPrRev / tgt.rev >= 0.75 ? "text-[#0f4c81]" : "text-amber-600")}>
                                                           {pct(tgt.rev > 0 ? cPrRev / tgt.rev * 100 : 0)}
                                                         </span>
                                                       </div>
-                                                      <div className="flex gap-2 justify-end text-[10px]">
+                                                      <div className="flex gap-2 justify-end text-[11.5px]">
                                                         <span className="text-slate-400">Tiến độ TT:</span>
                                                         <span className={cn("font-bold", actRev / tgt.rev >= 1 ? "text-green-600" : actRev / tgt.rev >= 0.75 ? "text-[#0f4c81]" : "text-amber-600")}>
                                                           {pct(tgt.rev > 0 ? actRev / tgt.rev * 100 : 0)}
@@ -1362,17 +1362,17 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                   {isEditingTgt ? (
                                                     <input type="text" value={targetInputs[tkey]?.cm1 ?? ""} placeholder="VD: 500.000.000"
                                                       onChange={e => setTargetInputs(prev => ({ ...prev, [tkey]: { ...(prev[tkey] ?? { cm1: "", thk: "", rev: "" }), cm1: e.target.value } }))}
-                                                      className="flex-1 min-w-0 px-2 py-1 text-[11px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
+                                                      className="flex-1 min-w-0 px-2 py-1 text-[12px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                                   ) : tgt.cm1 > 0 ? (
                                                     <div className="text-right space-y-0.5">
-                                                      <div className="text-slate-600 font-semibold tabular-nums text-[10px]">Target quý: {fc(tgt.cm1)}</div>
-                                                      <div className="flex gap-2 justify-end text-[10px]">
+                                                      <div className="text-slate-600 font-semibold tabular-nums text-[11.5px]">Target quý: {fc(tgt.cm1)}</div>
+                                                      <div className="flex gap-2 justify-end text-[11.5px]">
                                                         <span className="text-slate-400">Dự kiến:</span>
                                                         <span className={cn("font-bold", cPrCm1 / tgt.cm1 >= 1 ? "text-green-600" : cPrCm1 / tgt.cm1 >= 0.75 ? "text-[#0f4c81]" : "text-amber-600")}>
                                                           {pct(tgt.cm1 > 0 ? cPrCm1 / tgt.cm1 * 100 : 0)}
                                                         </span>
                                                       </div>
-                                                      <div className="flex gap-2 justify-end text-[10px]">
+                                                      <div className="flex gap-2 justify-end text-[11.5px]">
                                                         <span className="text-slate-400">Tiến độ TT:</span>
                                                         <span className={cn("font-bold", actCm1 / tgt.cm1 >= 1 ? "text-green-600" : actCm1 / tgt.cm1 >= 0.75 ? "text-[#0f4c81]" : "text-amber-600")}>
                                                           {pct(tgt.cm1 > 0 ? actCm1 / tgt.cm1 * 100 : 0)}
@@ -1387,9 +1387,9 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                   {isEditingTgt ? (
                                                     <input type="number" min="0" max="100" step="0.1" value={targetInputs[tkey]?.thk ?? ""} placeholder="VD: 70.0"
                                                       onChange={e => setTargetInputs(prev => ({ ...prev, [tkey]: { ...(prev[tkey] ?? { cm1: "", thk: "", rev: "" }), thk: e.target.value } }))}
-                                                      className="w-24 px-2 py-1 text-[11px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
+                                                      className="w-24 px-2 py-1 text-[12px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                                   ) : tgt.thk > 0 ? (
-                                                    <div className="text-right space-y-0.5 text-[10px]">
+                                                    <div className="text-right space-y-0.5 text-[11.5px]">
                                                       <div className="flex gap-2 justify-end">
                                                         <span className="text-slate-400">Target:</span>
                                                         <span className="font-semibold text-slate-700">{pct(tgt.thk)}</span>
@@ -1403,24 +1403,24 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                 </div>
                                                 {/* Target 3HK Revenue — nhập tay hoặc fallback computed */}
                                                 <div className="flex items-center justify-between gap-3 pt-1 border-t border-slate-100">
-                                                  <span className="text-slate-500 flex-shrink-0 text-[11px]">3HK Rev Target</span>
+                                                  <span className="text-slate-500 flex-shrink-0 text-[12px]">3HK Rev Target</span>
                                                   {isEditingTgt ? (
                                                     <div className="flex flex-col items-end gap-0.5">
                                                       <input type="text" value={targetInputs[tkey]?.hk3rev ?? ""} placeholder="VD: 1.500.000.000"
                                                         onChange={e => setTargetInputs(prev => ({ ...prev, [tkey]: { ...(prev[tkey] ?? { cm1: "", thk: "", rev: "", hk3rev: "" }), hk3rev: e.target.value } }))}
-                                                        className="w-40 px-2 py-1 text-[11px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
+                                                        className="w-40 px-2 py-1 text-[12px] text-right border border-[#0f4c81]/40 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                                       {tgt.rev > 0 && tgt.thk > 0 && (
-                                                        <span className="text-[9px] text-slate-300">auto: {fc(Math.round(tgt.rev * tgt.thk / 100))}</span>
+                                                        <span className="text-[11px] text-slate-300">auto: {fc(Math.round(tgt.rev * tgt.thk / 100))}</span>
                                                       )}
                                                     </div>
                                                   ) : (() => {
                                                     const val = tgt.hk3rev > 0 ? tgt.hk3rev : (tgt.rev > 0 && tgt.thk > 0 ? Math.round(tgt.rev * tgt.thk / 100) : 0)
-                                                    if (val <= 0) return <span className="text-slate-300 text-[10px]">Chưa đặt</span>
+                                                    if (val <= 0) return <span className="text-slate-300 text-[11.5px]">Chưa đặt</span>
                                                     return (
-                                                      <div className="text-right text-[10px]">
+                                                      <div className="text-right text-[11.5px]">
                                                         <span className="font-semibold text-slate-600 tabular-nums">{fc(val)}</span>
                                                         {tgt.hk3rev <= 0 && tgt.rev > 0 && tgt.thk > 0 && (
-                                                          <span className="text-slate-300 ml-1 text-[9px]">(auto)</span>
+                                                          <span className="text-slate-300 ml-1 text-[11px]">(auto)</span>
                                                         )}
                                                       </div>
                                                     )
@@ -1433,31 +1433,31 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                 Sản phẩm (theo SKU, không tách kỳ — biết KH thường mua SKU/sản phẩm gì). */}
                                             <div>
                                               <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                                  <p className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Chi tiết số liệu</p>
+                                                  <p className="text-[11.5px] font-bold text-purple-700 uppercase tracking-wider">Chi tiết số liệu</p>
                                                   <div className="flex items-center gap-1 ml-auto">
                                                     {([["month", "Tháng"], ["day", "Ngày"], ["sku", "Sản phẩm"]] as const).map(([gbOpt, label]) => (
                                                       <button key={gbOpt} onClick={() => { setOrdersGroupBy(prev => ({ ...prev, [c.code]: gbOpt })); loadOrders(c, gbOpt) }}
-                                                        className={cn("px-2 py-0.5 text-[10px] font-bold rounded-md border transition-all", (ordersGroupBy[c.code] ?? "month") === gbOpt ? "bg-purple-700 text-white border-purple-700" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
+                                                        className={cn("px-2 py-0.5 text-[11.5px] font-bold rounded-md border transition-all", (ordersGroupBy[c.code] ?? "month") === gbOpt ? "bg-purple-700 text-white border-purple-700" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
                                                         {label}
                                                       </button>
                                                     ))}
                                                     <span className="w-px h-3.5 bg-slate-200 mx-0.5" />
                                                     <button onClick={() => setOrdersShowChart(prev => ({ ...prev, [c.code]: !prev[c.code] }))}
                                                       title="Hiện/ẩn biểu đồ"
-                                                      className={cn("flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-md border transition-all", ordersShowChart[c.code] ? "bg-purple-700 text-white border-purple-700" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
+                                                      className={cn("flex items-center gap-1 px-2 py-0.5 text-[11.5px] font-bold rounded-md border transition-all", ordersShowChart[c.code] ? "bg-purple-700 text-white border-purple-700" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
                                                       <BarChart3 className="w-3 h-3" />Biểu đồ
                                                     </button>
                                                   </div>
                                                 </div>
                                                 {!od ? (
                                                   <button onClick={() => loadOrders(c, "month")}
-                                                    className="text-[11px] text-purple-700 font-semibold hover:underline">
+                                                    className="text-[12px] text-purple-700 font-semibold hover:underline">
                                                     Tải số liệu →
                                                   </button>
                                                 ) : od.loading ? (
-                                                  <div className="flex items-center gap-1 text-[11px] text-slate-400"><RefreshCw className="w-3 h-3 animate-spin" />Đang tải…</div>
+                                                  <div className="flex items-center gap-1 text-[12px] text-slate-400"><RefreshCw className="w-3 h-3 animate-spin" />Đang tải…</div>
                                                 ) : od.rows.length === 0 ? (
-                                                  <p className="text-[11px] text-slate-400 italic">Không có dữ liệu</p>
+                                                  <p className="text-[12px] text-slate-400 italic">Không có dữ liệu</p>
                                                 ) : (
                                                   <div className="space-y-2">
                                                     {ordersShowChart[c.code] && (
@@ -1474,7 +1474,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                                       </div>
                                                     )}
                                                     <div className="overflow-x-auto max-h-48 overflow-y-auto">
-                                                      <table className="text-[10px] border-collapse w-full">
+                                                      <table className="text-[11.5px] border-collapse w-full">
                                                         <thead className="sticky top-0 bg-purple-50">
                                                           <tr>
                                                             <th className="px-2 py-1 text-left font-bold text-purple-700 uppercase">{gb === "sku" ? "SKU" : "Kỳ"}</th>
@@ -1539,7 +1539,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
             <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Chi phí kênh — <span className="text-[#0f4c81]">{costCust.name}</span></h3>
-                <p className="text-[11px] text-slate-400 font-mono">{costCust.code}{costCust.priceListName ? ` · ${costCust.priceListName}` : ""}{quarterLabel ? ` · ${quarterLabel}` : ""}</p>
+                <p className="text-[12px] text-slate-400 font-mono">{costCust.code}{costCust.priceListName ? ` · ${costCust.priceListName}` : ""}{quarterLabel ? ` · ${quarterLabel}` : ""}</p>
               </div>
               <button onClick={closeCostModal} className="text-slate-400 hover:text-slate-700"><X className="w-5 h-5" /></button>
             </div>
@@ -1554,24 +1554,24 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                     <div key={m} className={cn("border rounded-lg p-3 flex flex-col", hasData ? "border-slate-200" : "border-dashed border-slate-200 bg-slate-50/50")}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-bold text-slate-700">{mLabel(m)}</span>
-                        <button onClick={() => addLine(m)} className="flex items-center gap-1 text-[11px] font-bold text-[#0f4c81] hover:underline"><Plus className="w-3.5 h-3.5" />Thêm</button>
+                        <button onClick={() => addLine(m)} className="flex items-center gap-1 text-[12px] font-bold text-[#0f4c81] hover:underline"><Plus className="w-3.5 h-3.5" />Thêm</button>
                       </div>
                       {!hasData ? (
                         <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
                           <span className="text-2xl text-slate-300 font-bold">—</span>
-                          <span className="text-[10px] text-slate-400 mt-1">Chưa có dữ liệu</span>
+                          <span className="text-[11.5px] text-slate-400 mt-1">Chưa có dữ liệu</span>
                         </div>
                       ) : (
                         <>
-                          <p className="text-[10px] text-slate-400 mb-1.5">Revenue {fc(rev)}</p>
+                          <p className="text-[11.5px] text-slate-400 mb-1.5">Revenue {fc(rev)}</p>
                           <div className="space-y-1.5 flex-1">
-                            {lines.length === 0 && <p className="text-[11px] text-slate-400 italic">Chưa nhập. Bấm "Thêm".</p>}
+                            {lines.length === 0 && <p className="text-[12px] text-slate-400 italic">Chưa nhập. Bấm "Thêm".</p>}
                             {lines.map((l, idx) => (
                               <div key={idx} className="flex items-center gap-1">
                                 <input value={l.label} onChange={e => setLine(m, idx, { label: e.target.value })} placeholder="Ghi chú"
-                                  className="flex-1 min-w-0 px-1.5 py-1 text-[11px] border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
+                                  className="flex-1 min-w-0 px-1.5 py-1 text-[12px] border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-[#0f4c81]/40" />
                                 <select value={l.type} onChange={e => setLine(m, idx, { type: e.target.value as "amount" | "percent" })}
-                                  className="px-1 py-1 text-[11px] border border-slate-200 rounded bg-white focus:outline-none">
+                                  className="px-1 py-1 text-[12px] border border-slate-200 rounded bg-white focus:outline-none">
                                   <option value="amount">đ</option>
                                   <option value="percent">%</option>
                                 </select>
@@ -1579,13 +1579,13 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
                                   <input type="number" min="0" value={l.value || ""} onChange={e => setLine(m, idx, { value: parseFloat(e.target.value) || 0 })} placeholder="0"
                                     className={cn("w-24 px-2 py-1 text-[12px] text-right tabular-nums border rounded focus:outline-none focus:ring-1",
                                       (l.value as number) < 0 ? "border-red-400 bg-red-50 focus:ring-red-400/40" : "border-slate-200 focus:ring-[#0f4c81]/40")} />
-                                  {(l.value as number) < 0 && <span className="text-[9px] text-red-500 font-medium">Phải nhập số dương</span>}
+                                  {(l.value as number) < 0 && <span className="text-[11px] text-red-500 font-medium">Phải nhập số dương</span>}
                                 </div>
                                 <button onClick={() => removeLine(m, idx)} className="text-slate-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
                               </div>
                             ))}
                           </div>
-                          <div className="mt-2 pt-2 border-t border-slate-100 text-right text-[11px]">
+                          <div className="mt-2 pt-2 border-t border-slate-100 text-right text-[12px]">
                             Tổng: <span className="font-bold text-slate-800 tabular-nums">{fc(total)}</span>
                           </div>
                         </>
@@ -1596,7 +1596,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-slate-200 bg-slate-50">
-              <span className="mr-auto text-[11px] text-slate-400">Thay đổi sẽ được lưu khi bấm Lưu ở thanh chi tiết.</span>
+              <span className="mr-auto text-[12px] text-slate-400">Thay đổi sẽ được lưu khi bấm Lưu ở thanh chi tiết.</span>
               <button onClick={closeCostModal} className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100">Xong</button>
             </div>
           </div>

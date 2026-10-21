@@ -398,7 +398,7 @@ export function Sidebar() {
           {!effCollapsed && (
             <div className="overflow-hidden">
               <div className="text-white font-semibold text-sm leading-tight tracking-tight whitespace-nowrap">Gohub Intel</div>
-              <div className="text-brand-300/80 text-[11px] whitespace-nowrap tracking-wide uppercase">Intelligence Hub</div>
+              <div className="text-brand-300/80 text-[12px] whitespace-nowrap tracking-wide uppercase">Intelligence Hub</div>
             </div>
           )}
         </div>
@@ -474,7 +474,7 @@ export function Sidebar() {
                 <GroupToggle label="Analyst" Icon={BarChart3} open={analystOpen} onToggle={() => setAnalystOpen(o => !o)} accent="blue" />
                 {analystOpen && analyticsGroups.map(group => (
                   <div key={group.label} className="mt-0.5">
-                    <p className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">{group.label}</p>
+                    <p className="px-3 pt-2 pb-0.5 text-[11.5px] font-semibold text-slate-400 uppercase tracking-widest">{group.label}</p>
                     {group.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="blue" />
                     ))}
@@ -482,7 +482,7 @@ export function Sidebar() {
                 ))}
                 {analystOpen && (isAdminUser || isCreatorUser) && (
                   <div className="mt-0.5">
-                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">{MANAGEMENT_GROUP.label}</p>
+                    <p className="px-3 pt-1.5 pb-0.5 text-[11.5px] font-semibold text-slate-400 uppercase tracking-widest">{MANAGEMENT_GROUP.label}</p>
                     {MANAGEMENT_GROUP.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="brand" />
                     ))}
@@ -494,7 +494,7 @@ export function Sidebar() {
                 )}
                 {analystOpen && isCreatorUser && (
                   <div className="mt-0.5">
-                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-violet-600/80 uppercase tracking-wider">{CREATOR_GROUP.label}</p>
+                    <p className="px-3 pt-1.5 pb-0.5 text-[11.5px] font-bold text-violet-600/80 uppercase tracking-wider">{CREATOR_GROUP.label}</p>
                     {CREATOR_GROUP.items.map(it => (
                       <NavRow key={it.href} href={it.href} label={it.label} Icon={it.icon} active={isActive(it.href)} collapsed={false} accent="violet" />
                     ))}
@@ -502,14 +502,14 @@ export function Sidebar() {
                 )}
                 {analystOpen && gpEnabled && (
                   <div className="mt-0.5">
-                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-violet-600/80 uppercase tracking-wider">Private AI</p>
+                    <p className="px-3 pt-1.5 pb-0.5 text-[11.5px] font-bold text-violet-600/80 uppercase tracking-wider">Private AI</p>
                     <NavRow href="/analytics/creator/ai" label="Gấu Pro" Icon={Cpu} active={isActive("/analytics/creator/ai")} collapsed={false} accent="violet" />
                     <NavRow href="/analytics/creator/bridge" label="Bridge" Icon={Plug} active={isActive("/analytics/creator/bridge")} collapsed={false} accent="violet" />
                   </div>
                 )}
                 {analystOpen && (myMetricsEnabled || marketEnabled || pricingEnabled) && (
                   <div className="mt-0.5">
-                    <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-violet-600/80 uppercase tracking-wider">Personal</p>
+                    <p className="px-3 pt-1.5 pb-0.5 text-[11.5px] font-bold text-violet-600/80 uppercase tracking-wider">Personal</p>
                     {myMetricsEnabled && <NavRow href="/analytics/my-metrics" label="My Metrics" Icon={Target} active={isActive("/analytics/my-metrics")} collapsed={false} accent="violet" />}
                     {marketEnabled && <NavRow href="/analytics/market" label="Thị trường & Báo giá" Icon={Globe2} active={isActive("/analytics/market")} collapsed={false} accent="violet" />}
                     {pricingEnabled && <NavRow href="/analytics/product-tools" label="Tính giá & Tạo sản phẩm" Icon={Calculator} active={isActive("/analytics/product-tools")} collapsed={false} accent="violet" />}
