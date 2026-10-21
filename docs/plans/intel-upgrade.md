@@ -50,3 +50,11 @@ Lượt xem 60 ngày: `/admin` 77 lượt/3 người; `creator/ai` 783/13; `my-m
 
 ## Việc 4 — Argon tối giản (chưa bắt đầu)
 Đã duyệt: bỏ 4 pha và Bàn làm việc, giữ Kho nguồn, 1 ô chat + cột "đề xuất hôm nay", giao diện hiện đại hơn. Luật viết: câu ngắn, mỗi đề xuất có số kèm nguồn, ghi rõ "chưa chắc" khi thiếu dữ liệu; giữ sổ dự đoán tự chấm.
+
+
+## Cập nhật cuối phiên 2026-10-21 (staging `b8411e50`…, chưa merge `main`)
+- Việc 5: phiên 4h + role 5 phút xong (chưa kiểm sống 4h); `me` dùng chung; cache tên khách rời bỏ Squad Progress (warm 2,6s → ~1,7s). Đo thêm warm/cold: bod-summary 0,33s; channels/performance 3,7s → 0,07s; channels/kpis 4,8s → 0,09s; staff-report 1,7s → 0,57s; b2c/monthly 25s cold (tham số thử tay nên có thể là artifact) → 0,07s. Còn: hỏi bên gohub_dw bảng tổng hợp; Upstash; VERCEL_TOKEN.
+- Việc 1: tokens (nền xanh-xám, bo 14/18px, bóng nhẹ), đầu trang thành thẻ (CSS `:has` ở globals + class tay cho Quarter/Channels/BOD), biểu đồ tháng dạng cột, sidebar vạch active, bảng B2B tiêu đề sáng, Việt hoá nhãn BOD/Dashboard/Channels. Chưa: xem điện thoại thật (công cụ resize không đổi viewport), Việt hoá các tab còn lại.
+- Việc 2: bảng quyền theo người, Creator Settings 6 tab, Cấu hình hệ thống 4 tab (API ngoài chuyển về), Dữ liệu và giá 4 bước, Users 4 tab. Chờ Hiếu: xoá "Nâng cao" (import NCC, quyền theo phòng ban)? gộp "Lọc theo vai trò"?
+- Việc 3: E1 giữ, E2 bỏ (định nghĩa doanh thu mặc định cần Hiếu chốt), E3 chưa làm.
+- Việc 4: trang Argon gọn xong và QA sống 2 lượt (126s/$0,12 và 106s/$0,15, câu "Cập nhật bản tin hôm nay"). Hiếu cần điền "Target và nhiệm vụ", gắn nguồn Lark, quyết bật "Tự cập nhật mỗi đêm".
