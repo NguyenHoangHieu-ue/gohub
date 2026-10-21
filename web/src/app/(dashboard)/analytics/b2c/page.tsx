@@ -45,8 +45,19 @@ export default function B2CPage() {
         >
           Metric
         </button>
+        {canCosts && (
+          <button
+            onClick={() => setView("costs")}
+            className={cn(
+              "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
+              view === "costs" ? "bg-brand-600 text-white shadow-sm" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+            )}
+          >
+            Chi phí &amp; Target
+          </button>
+        )}
       </div>
-      {view === "advanced" ? <B2CAdvancedDashboard /> : view === "main" ? <B2CPerformance /> : <B2CMetric />}
+      {view === "advanced" ? <B2CAdvancedDashboard /> : view === "main" ? <B2CPerformance /> : view === "costs" && canCosts ? <B2CManageCosts /> : <B2CMetric />}
     </div>
   )
 }
