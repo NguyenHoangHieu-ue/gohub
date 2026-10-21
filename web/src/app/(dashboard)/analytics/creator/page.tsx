@@ -1,9 +1,9 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useCallback } from "react"
+import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Crown, Save, RefreshCw, Eye, EyeOff, Shield, Cpu, Plus, Trash2, AlertTriangle, MessageSquare, CheckCircle, XCircle, Loader2, Send, ChevronDown, ChevronUp } from "lucide-react"
+import { Crown, Save, RefreshCw, Eye, EyeOff, Shield, Plus, Trash2, AlertTriangle, MessageSquare, CheckCircle, XCircle, Loader2, Send, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ALL_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 import KbDocsSection from "./kb-docs-section"
@@ -237,17 +237,14 @@ function CreatorSettings() {
 
       <DevTicketsSection />
 
-      {/* Gấu Pro Access */}
-      <GpAccessSection />
-
-      {/* My Metrics Access */}
-      <MyMetricsAccessSection />
-      <MyMetricsAccessSection endpoint="/api/creator/market-access" title="Thị trường & Báo giá — Phân quyền xem"
-        desc="Ngoài Creator, chỉ user được thêm vào đây mới thấy tab Thị trường & Báo giá (gồm báo giá nhà cung cấp)" />
-      <MyMetricsAccessSection endpoint="/api/creator/pricing-access" title="Tính giá & Tạo sản phẩm — quyền TÍNH GIÁ"
-        desc="User được thêm vào đây thấy tab Tính giá & Tạo sản phẩm với chức năng Tính giá (chỉ tên gói + giá vốn, không có file/mã sản phẩm). Creator luôn có cả hai quyền." />
-      <MyMetricsAccessSection endpoint="/api/creator/product-create-access" title="Tính giá & Tạo sản phẩm — quyền TẠO SẢN PHẨM"
-        desc="User được thêm vào đây thêm chức năng Tạo sản phẩm (mã SKU/Product, xuất file import). Quyền này đã gồm Tính giá." />
+      {/* Quyền theo người (Gấu Pro, My Metrics, Thị trường, Tính giá, Tạo sản phẩm) đã gộp thành 1 bảng ở Người dùng › Quyền theo người */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-wrap items-center gap-3">
+        <div className="mr-auto">
+          <h2 className="font-bold text-slate-800">Quyền theo người</h2>
+          <p className="text-[13px] text-slate-500">Gấu Pro, My Metrics, Thị trường, Tính giá, Tạo sản phẩm nay nằm chung một bảng, bật tắt từng người.</p>
+        </div>
+        <a href="/analytics/users" className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold rounded-xl">Mở bảng quyền</a>
+      </div>
 
       {/* Audit Log */}
       <AuditLogSection />
@@ -290,261 +287,6 @@ function CreatorSettings() {
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function UserSearchInput({ value, onChange, onSelect, placeholder, wrapperClass, inputClass }: {
-  value: string
-  onChange: (v: string) => void
-  onSelect: (username: string) => void
-  placeholder?: string
-  wrapperClass?: string
-  inputClass?: string
-}) {
-  const [suggestions, setSuggestions] = useState<{ username: string; name: string; role: string }[]>([])
-  const [open, setOpen] = useState(false)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    if (timer.current) clearTimeout(timer.current)
-    if (value.length < 2) { setSuggestions([]); setOpen(false); return }
-    timer.current = setTimeout(async () => {
-      try {
-        const r = await fetch(`/api/users/search?q=${encodeURIComponent(value)}`)
-        const d = await r.json()
-        setSuggestions(d.users ?? [])
-        setOpen((d.users ?? []).length > 0)
-      } catch { setSuggestions([]); setOpen(false) }
-    }, 300)
-    return () => { if (timer.current) clearTimeout(timer.current) }
-  }, [value])
-
-  return (
-    <div className={cn("relative", wrapperClass)}>
-      <input
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        onKeyDown={e => e.key === "Escape" && setOpen(false)}
-        placeholder={placeholder}
-        className={inputClass}
-      />
-      {open && (
-        <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-          {suggestions.map(u => (
-            <button key={u.username} onMouseDown={() => { onChange(u.username); onSelect(u.username); setOpen(false) }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2">
-              <span className="font-medium text-slate-800">{u.name}</span>
-              <span className="text-slate-400 text-xs">@{u.username}</span>
-              <span className="ml-auto text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">{u.role}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function GpAccessSection() {
-  const [allowedUsers, setAllowedUsers] = useState<{ username: string; name: string; role: string }[]>([])
-  const [newUsername, setNewUsername]   = useState("")
-  const [loading, setLoading]           = useState(true)
-  const [adding, setAdding]             = useState(false)
-  const [msg, setMsg]                   = useState<{ ok: boolean; text: string } | null>(null)
-
-  const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
-
-  useEffect(() => {
-    fetch("/api/creator-ai/gp-access").then(r => r.ok ? r.json() : null).then(d => {
-      setAllowedUsers(d?.users ?? [])
-    }).finally(() => setLoading(false))
-  }, [])
-
-  const add = async () => {
-    if (!newUsername.trim()) return
-    setAdding(true)
-    try {
-      const r = await fetch("/api/creator-ai/gp-access", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "add", username: newUsername.trim() }),
-      })
-      const d = await r.json()
-      if (!r.ok) { notify(false, d.error || "Lỗi"); return }
-      setNewUsername("")
-      // Refresh list
-      const res = await fetch("/api/creator-ai/gp-access")
-      const data = await res.json()
-      setAllowedUsers(data?.users ?? [])
-      notify(true, `Đã cấp quyền cho "${newUsername.trim()}"`)
-    } finally { setAdding(false) }
-  }
-
-  const remove = async (username: string) => {
-    const r = await fetch("/api/creator-ai/gp-access", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "remove", username }),
-    })
-    if (r.ok) {
-      setAllowedUsers(prev => prev.filter(u => u.username !== username))
-      notify(true, `Đã thu hồi quyền của "${username}"`)
-    }
-  }
-
-  return (
-    <div className="bg-white rounded-2xl border border-violet-100 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-violet-50 bg-violet-50/50 flex items-center gap-3">
-        <div className="w-8 h-8 bg-violet-600 rounded-xl flex items-center justify-center">
-          <Cpu className="w-4 h-4 text-white" />
-        </div>
-        <div>
-          <h2 className="font-bold text-slate-800">Gấu Pro — Phân quyền theo user</h2>
-          <p className="text-xs text-slate-400">Chỉ những user được thêm ở đây mới thấy và dùng được Gấu Pro</p>
-        </div>
-      </div>
-
-      <div className="p-6 space-y-4">
-        {/* Warning */}
-        <div className="flex items-start gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
-          <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-700 leading-relaxed">
-            <strong>Lưu ý:</strong> Gấu Pro có quyền truy cập toàn bộ database và hệ thống.
-            Các câu hỏi về <strong>code, cấu trúc hệ thống, credential</strong> tự động bị chặn với non-creator user.
-            Chỉ cấp quyền cho người tin tưởng hoàn toàn.
-          </p>
-        </div>
-
-        {msg && (
-          <div className={cn("px-4 py-2.5 rounded-xl text-sm", msg.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100")}>
-            {msg.text}
-          </div>
-        )}
-
-        {/* Add user */}
-        <div className="flex gap-2">
-          <UserSearchInput
-            value={newUsername}
-            onChange={setNewUsername}
-            onSelect={setNewUsername}
-            placeholder="Tìm username hoặc tên…"
-            wrapperClass="flex-1"
-            inputClass="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-400"
-          />
-          <button onClick={add} disabled={adding || !newUsername.trim()}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-violet-600 text-white rounded-xl hover:bg-violet-500 disabled:opacity-40 transition-colors">
-            <Plus className="w-3.5 h-3.5" />
-            {adding ? "Đang thêm…" : "Thêm"}
-          </button>
-        </div>
-
-        {/* Allowed users list */}
-        {loading ? (
-          <div className="text-xs text-slate-400 py-2">Đang tải...</div>
-        ) : allowedUsers.length === 0 ? (
-          <div className="text-xs text-slate-400 py-4 text-center">
-            Chưa có user nào được cấp quyền (ngoài creator).
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {allowedUsers.map(u => (
-              <div key={u.username} className="flex items-center justify-between px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                <div>
-                  <span className="text-sm font-medium text-slate-800">{u.name}</span>
-                  <span className="ml-2 text-xs text-slate-400">@{u.username}</span>
-                  <span className="ml-2 text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">{u.role}</span>
-                </div>
-                <button onClick={() => remove(u.username)}
-                  className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function MyMetricsAccessSection({ endpoint = "/api/creator/my-metrics-access", title = "My Metrics — Phân quyền xem", desc = "Những user được thêm vào đây mới thấy tab My Metrics" }: {
-  endpoint?: string; title?: string; desc?: string
-}) {
-  const [users, setUsers]       = useState<{ username: string; name: string; role: string }[]>([])
-  const [newUsername, setNew]   = useState("")
-  const [loading, setLoading]   = useState(true)
-  const [adding, setAdding]     = useState(false)
-  const [msg, setMsg]           = useState<{ ok: boolean; text: string } | null>(null)
-
-  const notify = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 3000) }
-
-  const reload = useCallback(() => fetch(endpoint).then(r => r.ok ? r.json() : null).then(d => setUsers(d?.users ?? [])).finally(() => setLoading(false)), [endpoint])
-  useEffect(() => { reload() }, [reload])
-
-  const add = async () => {
-    if (!newUsername.trim()) return
-    setAdding(true)
-    try {
-      const r = await fetch(endpoint, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "add", username: newUsername.trim() }),
-      })
-      const d = await r.json()
-      if (!r.ok) { notify(false, d.error || "Lỗi"); return }
-      setNew(""); await reload(); notify(true, `Đã cấp quyền "${newUsername.trim()}"`)
-    } finally { setAdding(false) }
-  }
-
-  const remove = async (username: string) => {
-    await fetch(endpoint, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "remove", username }),
-    })
-    setUsers(prev => prev.filter(u => u.username !== username))
-    notify(true, `Đã thu hồi quyền "${username}"`)
-  }
-
-  return (
-    <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-emerald-50 bg-emerald-50/50 flex items-center gap-3">
-        <div className="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center">
-          <Shield className="w-4 h-4 text-white" />
-        </div>
-        <div>
-          <h2 className="font-bold text-slate-800">{title}</h2>
-          <p className="text-xs text-slate-400">{desc}</p>
-        </div>
-      </div>
-      <div className="p-6 space-y-4">
-        {msg && <div className={cn("px-4 py-2.5 rounded-xl text-sm", msg.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-rose-50 text-rose-700 border border-rose-100")}>{msg.text}</div>}
-        <div className="flex gap-2">
-          <UserSearchInput
-            value={newUsername}
-            onChange={setNew}
-            onSelect={setNew}
-            placeholder="Tìm username hoặc tên…"
-            wrapperClass="flex-1"
-            inputClass="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400"
-          />
-          <button onClick={add} disabled={adding || !newUsername.trim()}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-40 transition-colors">
-            <Plus className="w-3.5 h-3.5" />{adding ? "Đang thêm…" : "Thêm"}
-          </button>
-        </div>
-        {loading ? <div className="text-xs text-slate-400 py-2">Đang tải...</div>
-          : users.length === 0 ? <div className="text-xs text-slate-400 py-4 text-center">Chưa có user nào (ngoài creator).</div>
-          : <div className="space-y-2">{users.map(u => (
-              <div key={u.username} className="flex items-center justify-between px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                <div>
-                  <span className="text-sm font-medium text-slate-800">{u.name}</span>
-                  <span className="ml-2 text-xs text-slate-400">@{u.username}</span>
-                  <span className="ml-2 text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">{u.role}</span>
-                </div>
-                <button onClick={() => remove(u.username)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}</div>}
-      </div>
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { ALL_ROLES, CONFIGURABLE_ROLES, ROLE_LABELS } from "@/lib/agents/types"
 import { ConfirmModal } from "@/components/confirm-modal"
 import { AddUserForm, ChangePasswordForm, SystemPermissionsMatrix, type AdminUser } from "@/components/user-admin"
+import { UserGrantsMatrix } from "@/components/user-grants-matrix"
 
 // Trang GỘP quản lý người dùng & phân quyền (1 cửa duy nhất). Gộp từ:
 //  - tab "Users" (/analytics/users cũ): danh sách + ma trận Role × Report
@@ -31,9 +32,10 @@ const PM_TABS = [
 const ROLES = ALL_ROLES
 const MATRIX_ROLES = CONFIGURABLE_ROLES
 
-type Section = "users" | "add" | "password" | "matrix" | "advanced" | "edit-perms"
+type Section = "users" | "grants" | "add" | "password" | "matrix" | "advanced" | "edit-perms"
 const SECTIONS: { id: Section; label: string; icon: React.ReactNode; creatorOnly?: boolean }[] = [
   { id: "users",      label: "Người dùng",        icon: <Users    size={15} /> },
+  { id: "grants",     label: "Quyền theo người",   icon: <Shield   size={15} />, creatorOnly: true },
   { id: "add",        label: "Thêm user",          icon: <Plus     size={15} /> },
   { id: "password",   label: "Đổi mật khẩu",       icon: <Key      size={15} /> },
   { id: "matrix",     label: "Vai trò × Quyền",    icon: <Shield   size={15} /> },
@@ -210,7 +212,7 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center"><Users className="w-5 h-5 text-white" /></div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Quản lý Người dùng</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Người dùng và quyền</h1>
             <p className="text-slate-500 text-sm">Tài khoản, vai trò &amp; phân quyền truy cập — tất cả ở một nơi</p>
           </div>
         </div>
@@ -343,6 +345,9 @@ function UserAdmin({ currentUser, currentRole }: { currentUser: string; currentR
           </div>
         </div>
       )}
+
+      {/* ── Quyền theo người (Creator cấp riêng: Gấu Pro, My Metrics, Thị trường, Tính giá, Tạo sản phẩm) ── */}
+      {section === "grants" && isCreator && <UserGrantsMatrix onNotify={notify} />}
 
       {/* ── Thêm user ── */}
       {section === "add" && <AddUserForm onNotify={notify} onAdded={() => { fetchAll(); setSection("users") }} />}

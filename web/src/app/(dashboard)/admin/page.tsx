@@ -63,7 +63,7 @@ function AdminPanel() {
           <Shield size={18} className="text-brand-600" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 leading-tight">Quản Trị Hệ Thống</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100 leading-tight">Dữ liệu và giá</h1>
           <p className="text-xs text-gray-500 leading-tight">{TAB_META[tab].label}</p>
         </div>
       </div>

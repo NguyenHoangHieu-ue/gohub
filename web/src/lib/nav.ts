@@ -57,10 +57,10 @@ export const ANALYTICS_GROUPS: NavGroup[] = [
   ]},
 ]
 
-export const MANAGEMENT_GROUP: NavGroup = { label: "Management", items: [
-  { href: "/analytics/users",    label: "Users",           icon: Users    },
-  { href: "/analytics/settings", label: "Settings",        icon: Settings },
-  { href: "/admin",              label: "Admin (Product)", icon: Package  },
+export const MANAGEMENT_GROUP: NavGroup = { label: "Quản trị", items: [
+  { href: "/analytics/users",    label: "Người dùng và quyền", icon: Users    },
+  { href: "/analytics/settings", label: "Cấu hình hệ thống", icon: Settings },
+  { href: "/admin",              label: "Dữ liệu và giá", icon: Package  },
 ]}
 
 export const CREATOR_GROUP: NavGroup = { label: "Creator", items: [

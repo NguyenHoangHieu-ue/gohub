@@ -83,11 +83,11 @@ const ANALYTICS_GROUPS = [
 
 // Nhóm Management — CHỈ admin + creator
 const MANAGEMENT_GROUP = {
-  label: "Management",
+  label: "Quản trị",
   items: [
-    { href: "/analytics/users",      label: "Users",              icon: Users     },
-    { href: "/analytics/settings",   label: "Settings",           icon: Settings  },
-    { href: "/admin",                label: "Admin (Product)",    icon: Package   },
+    { href: "/analytics/users",      label: "Người dùng và quyền", icon: Users     },
+    { href: "/analytics/settings",   label: "Cấu hình hệ thống", icon: Settings  },
+    { href: "/admin",                label: "Dữ liệu và giá", icon: Package   },
   ],
 }
 
