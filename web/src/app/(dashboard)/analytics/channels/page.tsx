@@ -1,5 +1,6 @@
 ﻿"use client"
 
+import { ChannelOverviewCharts } from "@/components/channels/overview-charts"
 import React, { useState, useEffect, useMemo } from "react"
 import dynamic from "next/dynamic"
 import {
@@ -1160,6 +1161,10 @@ export default function ChannelPerformancePage() {
         </div>
       )}
 
+      {!selectedChannel && channelGroup !== "B2B" && !loadingAll && allChannelsData.length > 1 && (
+        <ChannelOverviewCharts data={allChannelsData} onSelect={setSelectedChannel} />
+      )}
+
       {!selectedChannel ? (
         /* All Channels Overview — B2B shows tier/customer view, others show channel table */
         channelGroup === "B2B" ? (
@@ -1341,7 +1346,7 @@ export default function ChannelPerformancePage() {
                       <td className="px-6 py-4 text-right"><span className={cn("text-sm font-bold", (ch.margin||0)>=0?"text-emerald-600":"text-rose-600")}>{formatCurrency(ch.margin||0)}</span></td>
                       <td className="px-6 py-4 text-sm text-slate-600 text-right">{(ch.margin_percent||0).toFixed(1)}%</td>
                       <td className="px-6 py-4 text-right"><span className={cn("text-sm font-bold", (ch.gpm2||0)>=0?"text-emerald-600":"text-rose-600")}>{formatCurrency(ch.gpm2||0)}</span></td>
-                      <td className="px-6 py-4 text-sm text-slate-600 text-right">{(ch.gpm2_percent||0).toFixed(1)}%</td>
+                      <td className="px-6 py-4 text-sm text-slate-600 text-right"><div className="flex items-center justify-end gap-2"><span className="hidden lg:inline-block w-14 h-1.5 rounded-full bg-slate-100 overflow-hidden"><i className="block h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, (ch.gpm2_percent||0) / 40 * 100))}%`, background: (ch.gpm2_percent||0) < 15 ? "#eb6834" : "#1baf7a" }} /></span>{(ch.gpm2_percent||0).toFixed(1)}%</div></td>
                       <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(ch.orders||0)}</td>
                       <td className="px-6 py-4 text-sm text-slate-600 text-right">{formatNumber(ch.units||0)}</td>
                       <td className="px-6 py-4 text-right">
