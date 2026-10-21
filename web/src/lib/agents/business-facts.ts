@@ -32,6 +32,20 @@ export const BUSINESS_FACTS = `## Kết luận nghiệp vụ đã chốt (dùng 
 - dim_staff st (JOIN st.code = TRIM(f.staff_code) hoặc = c.sales_pic_code): name.
 - dim_sku: sku, vendor, category_name — trùng dòng → dùng (SELECT DISTINCT ON (TRIM(sku)) TRIM(sku) sku, vendor FROM dim_sku ORDER BY TRIM(sku)).
 
+## Bảng catalog Supabase (NỘI BỘ — chỉ để gọi querySupabase đúng cột ngay lần đầu; KHÔNG viết tên bảng/cột ra câu trả lời. Đã kiểm cột và giá trị thật 2026-10-21)
+- products (1 dòng/product, ~1.200): product_code (8 ký tự), tenant (VN/US), status (Active/Inactive/Temporary/Preparing/Deleted — "đang bán" = Active), type_of_sim (eSIM/SIM),
+  product_type (JSON text {"key":"C","value":"eSIM full"}; A = SIM/eSIM data, C = eSIM full, E = SIM full, D = SIM frame), vendor_code (3D = 3HK, BC, JY, WM, WD, W1, GB, SS…),
+  purchase_type (API Purchase/Only Stock/Manual Purchase), supported_countries (mã nước ISO cách nhau dấu phẩy, vd "SG,MY,ID,TH"), local_phone_number (Yes/No — có số điện thoại nội địa),
+  local_phone_number_country, network_type, onsite_carrier, hotspot, kyc_needed, apn, top_up_options, daily_reset_time, activation_time, base_sim_esim_sku_code.
+- skus (~6.000+, nhiều dòng/product): sku_code (13 ký tự), product_code, tenant, status, sim_esim (eSIM/SIM), product_type (chữ thường: eSIM full / SIM/eSIM data / SIM full / SIM frame),
+  call (Yes/No — có nghe/gọi), call_sms_details, day_amount + day_amount_unit, data_amount + data_amount_unit, throttle_speed, data (GB đã chuẩn hoá), speed, vendor_sku, latest_cogs + latest_cogs_currency (giá vốn — người không có quyền giá vốn không thấy).
+- listings (bảng giá hiển thị web): listing_code, reference_product_code (= product_code), status, listing_name_en/vn, listing_type, type_of_sim, category_code, network_operator, call_en/vn, local_phone_number_en/vn, local_phone_number_country.
+- items (item bán B2B/WS): item_code, alias, sku_code, listing_code, category_code, status, item_type, item_name_en/vn, sales_channel, unitprice, currency.
+- ref_countries: code (ISO), name, name_vn, continent, sub_region, phone_code. ref_vendors: vendor_code, name. ref_categories: category_code (3 ký tự), name_en, name_vn, iso_code.
+  ref_support_countries: code, name, support_country, support_country_vn, country_codes.
+- Hỏi "danh sách product/SIM có số điện thoại" → products.local_phone_number='Yes' + status='Active' (JOIN skus qua product_code nếu cần dung lượng/ngày); lọc nước bằng supported_countries LIKE '%JP%'.
+- Một lần gọi tối đa 200 dòng: cần nhiều hơn thì gộp bằng filters/columns hẹp, đừng gọi nhiều trang nhỏ.
+
 ## Cách lấy số nhanh (bắt buộc)
 - Nghĩ trước MỘT lần những số cần lấy, rồi gọi CÙNG LÚC nhiều truy vấn trong cùng một lượt (các truy vấn độc lập không phải chờ nhau).
 - Gộp nhiều chỉ số / nhiều kỳ vào MỘT câu SQL (SUM(CASE WHEN kỳ…), GROUP BY tháng/tuần/kênh) thay vì mỗi chỉ số một câu.
