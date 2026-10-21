@@ -43,10 +43,8 @@ export function KpiCard({ label, icon: Icon, actual, prRev, target, cm1Actual, p
           </span>
           {cm1Target > 0 && (
             <span className={cn("inline-block mt-1.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold",
-              cm1PrPct >= 100 ? "bg-green-100 text-green-700"
-                : (expectedPct > 0 ? cm1PrPct >= expectedPct : cm1PrPct >= 75) ? "bg-brand-100 text-brand-700"
-                : "bg-amber-100 text-amber-700")}>
-              {cm1PrPct >= 100 ? "Đạt" : (expectedPct > 0 ? cm1PrPct >= expectedPct : cm1PrPct >= 75) ? "Đúng tiến độ" : "Chậm tiến độ"}
+              cm1PrPct >= 100 ? "bg-green-100 text-green-700" : cm1PrPct >= 85 ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700")}>
+              {cm1PrPct >= 100 ? "Đạt" : cm1PrPct >= 85 ? "Gần đạt" : "Chậm tiến độ"}
             </span>
           )}
         </div>

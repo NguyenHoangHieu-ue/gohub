@@ -412,7 +412,7 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
 
   const SUB_COLS: { label: string; tip: string }[] = [
     { label: "Revenue",      tip: "Doanh thu tier (PR)\nCT: Σ(actual_rev_KH × factor)\nfactor = dim/elapsed cho tháng đang chạy" },
-    { label: "Gross Margin", tip: "GP tier (PR)\nCT: Σ(actual_GP_KH × factor)" },
+    { label: "GP", tip: "GP tier (PR)\nCT: Σ(actual_GP_KH × factor)" },
     { label: "Ch.Cost",      tip: "Customer CH.Cost nhập tay (PR)\nTừ Turso b2b_customer_cost_monthly\namount: giữ nguyên (full budget tháng)\npercent: × revenue × factor\nKHÔNG gồm Group Cost (GC ở cột Tổng Quý)" },
     { label: "CM1",          tip: "CM1 tier per-month (PR)\n= GM - CH.Cost (customer-level)\nKHÔNG gồm Group Cost\nGroup Cost được khấu trừ ở cột Tổng Quý" },
     { label: "%CM1",         tip: "CM1 / Revenue × 100%\nDùng số PR (projected)" },
@@ -766,6 +766,11 @@ export function B2BTierSection({ b2bTiers, loading, months, allMonths, region, o
 
       {expanded && (
         <div>
+          {!fixedMonth && (
+            <p className="px-4 py-2 text-[12.5px] text-slate-500 bg-slate-50 border-b border-slate-100">
+              Mỗi ô có 2 dòng: <b className="text-slate-700">PR</b> là dự phóng cả kỳ, <b className="text-slate-700">Act</b> là số thực tế đến hôm qua. Bấm mũi tên ở đầu hàng để xem từng khách.
+            </p>
+          )}
           {/* Tier pivot table */}
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] border-collapse" style={{ minWidth: `${Math.max(500, 160 + (visibleMonths.length + (fixedMonth ? 0 : 1)) * colCount * 72)}px` }}>

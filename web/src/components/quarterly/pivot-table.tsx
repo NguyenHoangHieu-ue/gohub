@@ -7,7 +7,7 @@ import type { Channel } from "@/lib/quarterly-types"
 
 export function PivotTable({ title, icon: Icon, channels, months, expanded, onToggle }:
   { title: string; icon: React.ElementType; channels: Channel[]; months: string[]; expanded: boolean; onToggle: () => void }) {
-  const SUB = ["Revenue", "Gross Margin", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK Rev (%)"]
+  const SUB = ["Revenue", "GP", "Ch.Cost", "CM1", "%CM1", "%MoM", "3HK Rev (%)"]
   const colCount = SUB.length
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set())
   const toggleRow = (name: string) => setExpandedRows(prev => {
