@@ -253,14 +253,14 @@ export default function DashboardHome() {
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 lg:w-12 lg:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xl lg:text-2xl shrink-0">G</div>
           <div>
-            <h1 className="text-xl lg:text-2xl font-bold text-slate-800">Monthly Performance</h1>
+            <h1 className="text-xl lg:text-2xl font-bold text-slate-800">Hiệu quả theo tháng</h1>
             <p className="text-xs lg:text-sm text-slate-500">Gohub Business Intelligence</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto items-center">
           <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm shrink-0 h-[42px] items-center">
-            <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all h-full flex items-center", dateColumn === "fulfiled_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>Fulfillment</button>
-            <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all h-full flex items-center", dateColumn === "created_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>Created</button>
+            <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all h-full flex items-center", dateColumn === "fulfiled_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>Đã giao</button>
+            <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all h-full flex items-center", dateColumn === "created_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>Đã tạo</button>
           </div>
           <div className="flex-1 sm:flex-none flex items-center gap-2 bg-white px-3 lg:px-4 py-2 rounded-lg border border-slate-200 shadow-sm h-[42px]">
             <Calendar className="w-4 h-4 text-slate-400" />
@@ -268,7 +268,7 @@ export default function DashboardHome() {
           </div>
           <button onClick={() => setShowFilters(!showFilters)} className={cn("flex items-center gap-2 px-3 lg:px-4 py-2 rounded-lg border shadow-sm transition-colors", showFilters ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50")}>
             <Filter className={cn("w-4 h-4", showFilters ? "text-white" : "text-slate-400")} />
-            <span className="text-xs lg:text-sm font-medium">Filters</span>
+            <span className="text-xs lg:text-sm font-medium">Bộ lọc</span>
           </button>
         </div>
       </div>
@@ -336,8 +336,8 @@ export default function DashboardHome() {
                 value={fmt(kpi.value)}
                 accent={meta?.accent ?? "neutral"}
                 deltas={[
-                  { label: "Last period", value: fmt(kpi.lastPeriod), kind: "flat" },
-                  { label: "vs Last period", value: `${(kpi.change || 0).toFixed(1)}%`, kind: kpi.isPositive ? "up" : "down" },
+                  { label: "Kỳ trước", value: fmt(kpi.lastPeriod), kind: "flat" },
+                  { label: "So kỳ trước", value: `${(kpi.change || 0).toFixed(1)}%`, kind: kpi.isPositive ? "up" : "down" },
                 ]}
               />
             )
@@ -380,17 +380,17 @@ export default function DashboardHome() {
         <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
-              <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><TrendingUp className="w-5 h-5" />Month-End Projection (Pro-rata)</h3>
-              <p className="text-sm text-blue-600">Based on <strong>{projection.daysElapsed} days</strong> of performance, projected for <strong>{projection.totalDays} total days</strong>.</p>
+              <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><TrendingUp className="w-5 h-5" />Dự kiến cuối tháng (pro-rata)</h3>
+              <p className="text-sm text-blue-600">Đã qua <strong>{projection.daysElapsed} ngày</strong> trên tổng <strong>{projection.totalDays} ngày</strong>. Dự báo giả định tốc độ bán giữ nguyên.</p>
             </div>
-            <div className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-blue-900/20">{((projection.factor - 1) * 100).toFixed(0)}% Growth Expected</div>
+            <div className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-blue-900/20">{((projection.factor - 1) * 100).toFixed(0)}% so với tháng trước (dự kiến)</div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {([
-              { label: "Projected Revenue", val: formatCompactNumber(projection.revenue), chg: projection.revenueChange },
-              { label: "Projected Orders", val: Math.round(projection.orders).toLocaleString(), chg: projection.ordersChange },
-              { label: "Projected AOV", val: formatCurrency(projection.aov), chg: projection.aovChange },
-              { label: "Projected Units", val: Math.round(projection.units).toLocaleString(), chg: projection.unitsChange },
+              { label: "Doanh thu dự kiến", val: formatCompactNumber(projection.revenue), chg: projection.revenueChange },
+              { label: "Số đơn dự kiến", val: Math.round(projection.orders).toLocaleString(), chg: projection.ordersChange },
+              { label: "Giá trị đơn TB dự kiến", val: formatCurrency(projection.aov), chg: projection.aovChange },
+              { label: "Số lượng dự kiến", val: Math.round(projection.units).toLocaleString(), chg: projection.unitsChange },
             ]).map(c => (
               <div key={c.label} className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm">
                 <p className="text-[11.5px] font-bold text-slate-400 uppercase tracking-wider mb-1">{c.label}</p>
@@ -400,7 +400,7 @@ export default function DashboardHome() {
                     {c.chg >= 0 ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}{Math.abs(c.chg).toFixed(1)}%
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">vs Last Month Actual</p>
+                <p className="text-[11px] text-slate-400 mt-1">So với thực tế tháng trước</p>
               </div>
             ))}
           </div>
@@ -411,7 +411,7 @@ export default function DashboardHome() {
       <div className="flex flex-col gap-6">
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-slate-800">Monthly Gross Revenue by Sources</h3>
+            <h3 className="font-bold text-slate-800">Doanh thu gộp theo tháng và nguồn</h3>
             {!isLoading && (
               <div className="flex gap-2">
                 <span className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="w-2 h-2 rounded-full bg-blue-600"></span> B2B Strategic</span>
