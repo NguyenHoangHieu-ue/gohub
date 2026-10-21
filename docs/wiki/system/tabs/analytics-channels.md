@@ -212,3 +212,4 @@ Hiếu thấy CM1 âm ở Shopeepay MY/SG/PH. Gốc: chi phí khách B2B (Turso 
 ## s238 — Đổi nhãn giao diện
 
 Nhãn tiếng Anh đổi sang tiếng Việt (Tất cả nhóm, Tất cả kênh, Không so sánh, So với kỳ trước/năm trước, Bộ lọc); cột Margin% → %GP, CM1% → %CM1, MoM → %MoM. Chỉ đổi chữ hiển thị, không đổi dữ liệu. Font và cỡ chữ theo thay đổi chung ở `analytics-quarterly.md` §s238.
+- (s238 đợt 2) Chế độ tổng quan (không chọn nhóm B2B) có 2 biểu đồ đầu trang (`components/channels/overview-charts.tsx`): xếp hạng doanh thu 12 kênh đầu (cột cam = %CM1 dưới trung bình có trọng số doanh thu) và chấm "bán nhiều hay lãi cao" (doanh thu × %CM1, bấm chấm/cột để mở kênh). Bảng có thanh nhỏ cạnh %CM1 (cam khi dưới 15%).

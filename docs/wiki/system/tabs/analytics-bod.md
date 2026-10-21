@@ -148,3 +148,4 @@ Trang BOD bắn 5 request nặng cùng lúc lên pool gohub_dw 3 kết nối (gi
 ## s238 — Đổi giao diện
 
 Chữ nhỏ nâng lên 11–12px; nhãn tiếng Anh đổi sang tiếng Việt (Tổng doanh thu, Tổng giá vốn, Số lượng bán, Dự kiến cuối tháng, Hiệu quả theo nhóm kênh, So kỳ trước/năm trước); "Gross Margin" → "GP", "Margin %" → "%GP", "CM1 %" → "%CM1". Tên cột/sheet trong file xuất Excel giữ nguyên. Số liệu và công thức không đổi. Các tab Dashboard, All-Time, Website, Staff, Customers, Vendors, Orders, Inventory… chỉ được nâng cỡ chữ + mở rộng khung (`max-w-[1480px]`).
+- (s238 đợt 2) Thẻ chỉ số có **đường mini theo ngày** (`Sparkline`/`StatTile.spark` trong dashboard-kit; doanh thu, giá vốn, GP, %GP, CM1, %CM1 từ `data` theo ngày; số lượng, đóng góp 3HK chưa có dữ liệu ngày nên không vẽ). **Biểu đồ thác** doanh thu → giá vốn → GP → chi phí → CM1 (`components/bod/waterfall-chart.tsx`, chỉ dùng số tổng sẵn có: chi phí = GP − CM1).
