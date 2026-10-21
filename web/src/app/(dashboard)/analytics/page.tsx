@@ -385,7 +385,7 @@ export default function DashboardHome() {
               <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2"><TrendingUp className="w-5 h-5" />Dự kiến cuối tháng (pro-rata)</h3>
               <p className="text-sm text-blue-600">Đã qua <strong>{projection.daysElapsed} ngày</strong> trên tổng <strong>{projection.totalDays} ngày</strong>. Dự báo giả định tốc độ bán giữ nguyên.</p>
             </div>
-            <div className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-blue-900/20">{((projection.factor - 1) * 100).toFixed(0)}% so với tháng trước (dự kiến)</div>
+            <div className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-blue-900/20">{((projection.factor - 1) * 100).toFixed(0)}% so với số đã có (dự kiến)</div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {([

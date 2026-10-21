@@ -509,12 +509,12 @@ export default function BODReport() {
               <h3 className="text-lg font-bold text-indigo-900 flex items-center gap-2"><TrendingUp className="w-5 h-5" />Dự kiến cuối tháng (pro-rata)</h3>
               <p className="text-sm text-indigo-600">Đã qua <strong>{projection.daysElapsed} ngày</strong> trên tổng <strong>{projection.totalDays} ngày</strong>. Dự báo giả định tốc độ bán giữ nguyên.</p>
             </div>
-            <div className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-indigo-900/20">{((projection.factor - 1) * 100).toFixed(0)}% so với tháng trước (dự kiến)</div>
+            <div className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg shadow-indigo-900/20">{((projection.factor - 1) * 100).toFixed(0)}% so với số đã có (dự kiến)</div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {([
               { label: "Doanh thu dự kiến", val: formatCompactNumber(projection.revenue), chg: projection.revenueChange },
-              { label: "Số lượng dự kiến", val: formatCompactNumber(projection.units), chg: projection.unitsChange },
+              { label: "Số lượng dự kiến", val: Math.round(projection.units).toLocaleString("vi-VN"), chg: projection.unitsChange },
               { label: "GP dự kiến", val: formatCompactNumber(projection.margin), chg: projection.marginChange },
               { label: "CM1 dự kiến", val: formatCompactNumber(projection.gpm2), chg: projection.gpm2Change },
             ]).map(c => (
