@@ -8,6 +8,7 @@ import { ASK_TOOL_NAME, execAsk, setPendingAsk } from "./ask-tool"
 import { PATCH_TOOL_NAME, execPropose, getPatches, savePatches } from "./patch-tool"
 import { FORECAST_TOOL_NAME, SCORE_TOOL_NAME, execRecord, execScore, getForecasts, saveForecasts } from "./forecast-tool"
 import { LIST_NAME, READ_NAME, SEARCH_NAME, execSourceTool, pickByBudget } from "./source-tools"
+import { ensureIndexed, searchChunks } from "./index-db"
 
 // Công cụ workspace của Sứ mệnh: Argon đọc/ghi file TRONG workspace của đúng sứ mệnh đang chạy (không chạm file hay dữ liệu nơi khác).
 // Quyền ghi theo pha (canArgonWrite): làm rõ chỉ brief.md; kế hoạch thêm notes/; chạy ghi mọi nơi; tạm dừng/xong không ghi.
@@ -175,5 +176,12 @@ export async function execMissionSourceTool(name: string, args: Record<string, u
     },
     search: kw => searchMissionSources(mission, kw),
     read: id => readMissionSource(mission, id),
+    searchChunks: async q => {
+      const all = await allMissionSources(mission)
+      const ids = all.map(s => s.id)
+      await ensureIndexed(ids, { deadlineMs: 25_000 })
+      const meta = new Map(all.map(s => [s.id, s]))
+      return (await searchChunks(ids, q, 12)).map(h => ({ source_id: h.source_id, name: meta.get(h.source_id)?.name ?? h.source_id, kind: meta.get(h.source_id)?.kind ?? "", idx: h.idx, text: h.text }))
+    },
   })
 }

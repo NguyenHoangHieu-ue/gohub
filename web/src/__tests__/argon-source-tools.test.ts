@@ -58,7 +58,7 @@ describe("công cụ nguồn", () => {
   it("docNguon: đọc toàn văn theo id, cắt khi quá dài, báo khi không thuộc sứ mệnh hoặc không có chữ", async () => {
     expect((await execSourceTool("docNguon", { id: "t1" }, deps(rows))).result).toContain("Lan trả lời: OK")
     const long = await execSourceTool("docNguon", { id: "L" }, deps([row("L", "x".repeat(MAX_READ_CHARS + 100))]))
-    expect(long.result).toContain("đã cắt 100 ký tự")
+    expect(long.result).toContain("còn 100 ký tự")
     expect((await execSourceTool("docNguon", { id: "lạ" }, deps(rows))).ok).toBe(false)
     expect((await execSourceTool("docNguon", { id: "e" }, deps([row("e", "")]))).ok).toBe(false)
   })

@@ -11,8 +11,8 @@ const SNIP = 260
 
 export const SOURCE_TOOLS: FunctionDeclaration[] = [
   { name: LIST_NAME, description: "Liệt kê nguồn của sứ mệnh (thread Lark, mail, file, ghi chú đã gắn): id, tên, loại, số token, ngày cập nhật, có nằm sẵn trong ngữ cảnh không. Dùng khi nguồn nhiều và bạn cần biết có gì.", parameters: { type: Type.OBJECT, properties: {} } },
-  { name: SEARCH_NAME, description: "Tìm từ khoá trong NỘI DUNG mọi nguồn của sứ mệnh (kể cả nguồn không nằm sẵn trong ngữ cảnh). Trả tối đa 20 đoạn trích kèm tên nguồn và id. Dùng để lần theo một khách, mã SKU, tên người, quyết định qua nhiều thread/mail.", parameters: { type: Type.OBJECT, properties: { tuKhoa: { type: Type.STRING, description: "Từ khoá (không phân biệt hoa thường), tối thiểu 2 ký tự" } }, required: ["tuKhoa"] } },
-  { name: READ_NAME, description: "Đọc toàn văn 1 nguồn theo id (lấy từ lietKeNguon hoặc timTrongNguon), tối đa ~60.000 ký tự.", parameters: { type: Type.OBJECT, properties: { id: { type: Type.STRING, description: "Id nguồn" } }, required: ["id"] } },
+  { name: SEARCH_NAME, description: "Tìm trong NỘI DUNG mọi nguồn của sứ mệnh (kể cả nguồn không nằm sẵn trong ngữ cảnh), theo Ý NGHĨA lẫn từ khoá. Trả các đoạn liên quan nhất kèm tên nguồn, id và vị trí đoạn. Dùng để lần theo một khách, mã SKU, tên người, chủ đề, quyết định qua nhiều thread/mail/file; có thể là câu hỏi ngắn thay vì từ khoá.", parameters: { type: Type.OBJECT, properties: { tuKhoa: { type: Type.STRING, description: "Từ khoá hoặc câu hỏi ngắn, tối thiểu 2 ký tự" } }, required: ["tuKhoa"] } },
+  { name: READ_NAME, description: "Đọc toàn văn 1 nguồn theo id (lấy từ lietKeNguon hoặc timTrongNguon), mỗi lần tối đa ~60.000 ký tự; nguồn dài hơn thì đọc tiếp bằng batDau (vị trí ký tự bắt đầu, mặc định 0).", parameters: { type: Type.OBJECT, properties: { id: { type: Type.STRING, description: "Id nguồn" }, batDau: { type: Type.NUMBER, description: "Vị trí ký tự bắt đầu đọc (mặc định 0)" } }, required: ["id"] } },
 ]
 
 export interface PickableSource { id: string; name: string; tokens: number; pinned: boolean; updated_at: string }
@@ -49,6 +49,8 @@ export interface SourceDeps {
   list: () => Promise<(SrcRow & { inContext: boolean })[]>
   search: (kw: string) => Promise<SrcRow[]>
   read: (id: string) => Promise<SrcRow | null>
+  /** Tìm theo ý nghĩa + từ khoá trên chỉ mục (index-db). Lỗi hoặc rỗng → quay về ILIKE (search). */
+  searchChunks?: (q: string) => Promise<{ source_id: string; name: string; kind: string; idx: number; text: string }[]>
 }
 const done = (name: string, args: Record<string, unknown>) => (ok: boolean, result: string): ToolLogEntry => ({ name, args, ok, chars: result.length, result, at: new Date().toISOString() })
 
@@ -64,6 +66,12 @@ export async function execSourceTool(name: string, args: Record<string, unknown>
     if (name === SEARCH_NAME) {
       const kw = String(args.tuKhoa ?? "").trim()
       if (kw.length < 2) return d(false, "tuKhoa tối thiểu 2 ký tự")
+      if (deps.searchChunks) {
+        try {
+          const ch = await deps.searchChunks(kw)
+          if (ch.length) return d(true, `${ch.length} đoạn liên quan tới "${kw}" (xếp theo độ liên quan; đọc cả nguồn bằng docNguon):\n` + ch.map(h => `- ${h.source_id} · ${h.name} (${h.kind}) · đoạn ${h.idx + 1}\n  ${h.text.length > 900 ? `${h.text.slice(0, 900)}…` : h.text}`).join("\n"))
+        } catch { /* chỉ mục lỗi → dùng ILIKE bên dưới */ }
+      }
       const hits = (await deps.search(kw)).slice(0, MAX_HITS)
       if (!hits.length) return d(true, `Không nguồn nào chứa "${kw}".`)
       return d(true, `${hits.length} nguồn chứa "${kw}":\n` + hits.map(h => `- ${h.id} · ${h.name} (${h.kind}, ${h.updated_at.slice(0, 10)})\n  ${snippet(h.extracted_text ?? "", kw)}`).join("\n"))
@@ -74,7 +82,10 @@ export async function execSourceTool(name: string, args: Record<string, unknown>
       if (!s) return d(false, `Không có nguồn "${id}" trong sứ mệnh này. Gọi lietKeNguon để xem id.`)
       const t = s.extracted_text ?? ""
       if (!t) return d(false, `"${s.name}" không có văn bản đọc được (file nhị phân/ảnh chưa trích chữ).`)
-      return d(true, `# ${s.name}\n${t.length > MAX_READ_CHARS ? `${t.slice(0, MAX_READ_CHARS)}\n…(đã cắt ${t.length - MAX_READ_CHARS} ký tự)` : t}`)
+      const from = Math.max(0, Math.floor(Number(args.batDau) || 0))
+      const part = t.slice(from, from + MAX_READ_CHARS)
+      const left = t.length - (from + part.length)
+      return d(true, `# ${s.name}${from ? ` (từ ký tự ${from})` : ""}\n${part}${left > 0 ? `\n…(còn ${left} ký tự; đọc tiếp bằng batDau=${from + part.length})` : ""}`)
     }
     return d(false, `Công cụ không có: ${name}`)
   } catch (e) { return d(false, `Lỗi nguồn: ${(e as Error).message}`) }

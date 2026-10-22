@@ -11,6 +11,7 @@ import { allProjectIdsWithThreadRules, syncAllThreadRules } from "@/lib/argon/th
 import { projectIdsWithAutorun, startAutorun } from "@/lib/argon/autorun"
 import { MAX_PATROLS_PER_NIGHT, missionIdsWithPatrol, startPatrol, vnDate } from "@/lib/argon/patrol"
 import { missionIdsWithDueForecasts } from "@/lib/argon/forecast-tool"
+import { ensureIndexed, pruneOrphans } from "@/lib/argon/index-db"
 import type { ArgonSource } from "@/lib/argon/server"
 
 export const maxDuration = 300
@@ -57,6 +58,13 @@ async function run(req: NextRequest) {
       threads.push({ project: pid, threads: r.reduce((n, x) => n + x.threads, 0), created: r.reduce((n, x) => n + x.created, 0), updated: r.reduce((n, x) => n + x.updated, 0), attachments: r.reduce((n, x) => n + x.attachments, 0), errors: r.flatMap(x => x.errors).slice(0, 3) })
     } catch (e) { threads.push({ project: pid, threads: 0, created: 0, updated: 0, attachments: 0, errors: [(e as Error).message] }) }
   }
+  // Lập chỉ mục tìm kiếm cho nguồn mới/đổi (Turso riêng), dọn chỉ mục của nguồn đã xoá; làm trước autorun/tuần tra để chúng tìm được nội dung mới.
+  let search: { indexed: number; pending: number; pruned: number; errors: string[] } = { indexed: 0, pending: 0, pruned: 0, errors: [] }
+  try {
+    const { data: all } = await supabaseAdmin.from("argon_sources").select("id").eq("enabled", true)
+    const ix = await ensureIndexed((all ?? []).map(r => r.id as string), { deadlineMs: Math.max(5_000, t0 + 270_000 - Date.now()), max: 400 })
+    search = { ...ix, pruned: await pruneOrphans() }
+  } catch (e) { search.errors.push((e as Error).message) }
   // "Tự chạy hằng đêm": sau khi mail/thread đã nạp, giao worker chạy yêu cầu cố định (1 lần/ngày/dự án) rồi DM Lark.
   const autorun: { project: string; runId: string | null; error?: string }[] = []
   for (const pid of await projectIdsWithAutorun()) {
@@ -77,6 +85,7 @@ async function run(req: NextRequest) {
     folders: folderAdds,
     mail,
     threads,
+    search,
     autorun,
     patrol,
   })
