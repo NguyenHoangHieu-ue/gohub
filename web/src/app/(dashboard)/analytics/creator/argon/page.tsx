@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Atom, ChevronDown, Compass, Database, Moon, RefreshCw, Settings2, Sparkles } from "lucide-react"
+import { Atom, ChevronDown, Compass, Database, Network, Moon, RefreshCw, Settings2, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api, jsonInit, type Run } from "./argon-types"
 import type { MissionDetail, MissionRowUi, WsFile } from "./missions/mission-types"
@@ -140,6 +140,7 @@ export default function ArgonHomePage() {
         </div>
         <nav className="ml-auto flex items-center gap-2" aria-label="Chức năng khác">
           <Link href="/analytics/creator/argon/boi-canh" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><Compass size={14} />Bối cảnh và Kế hoạch</Link>
+          <Link href="/analytics/creator/argon/ban-do" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><Network size={14} />Bản đồ</Link>
           <Link href="/analytics/creator/argon/kho-nguon" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><Database size={14} />Nguồn dữ liệu</Link>
           <Link href="/analytics/creator/argon/nang-cao" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><Settings2 size={14} />Nâng cao</Link>
         </nav>

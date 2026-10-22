@@ -1,3 +1,4 @@
+import { createRunTrace } from "@/lib/agent-events"
 import { ThinkingLevel, FunctionCallingConfigMode, type Content } from "@google/genai"
 import { supabaseAdmin }      from "@/lib/supabase"
 import { ga4Sites }           from "@/lib/ga4"
@@ -723,11 +724,14 @@ export async function runCreatorAI(
   }
 
   // Function calling loop — max 20 iterations. Tools run in parallel per turn.
+  const evTrace = createRunTrace("gau-pro")
   const loop = await runAgentLoop({
     model: opts.model ?? GEMINI_MODEL_GAU_PRO, contents, configFor: () => makeConfig(), runTool, maxRounds: 20, onChunk,
     signal: opts.signal, timeBudgetMs: opts.timeBudgetMs, startedAt: t0,
     onRound: x => steps.push({ r: x.r, model_ms: x.ms, tin: x.tin, tout: x.tout, calls: x.calls }),
+    trace: evTrace,
   })
+  await evTrace.flush()   // sự kiện cho Bản đồ vận hành (chỉ tên tool + thời gian)
   let genResult = loop.last
   const toolsUsed = loop.toolsUsed
   const { stopped } = loop

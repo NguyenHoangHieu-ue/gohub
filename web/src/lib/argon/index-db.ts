@@ -21,7 +21,7 @@ const toArg = (v: Arg) => (v === null ? { type: "null" } : typeof v === "number"
 export function argonIndexConfigured() { return !!(process.env.ARGON_TURSO_URL && process.env.ARGON_TURSO_AUTH_TOKEN) }
 
 /** Chạy nhiều câu lệnh một request (batch tuần tự). Trả rows của câu cuối có kết quả. */
-async function turso(stmts: { sql: string; args?: Arg[] }[]): Promise<Record<string, string | number | null>[][]> {
+export async function turso(stmts: { sql: string; args?: Arg[] }[]): Promise<Record<string, string | number | null>[][]> {
   const url = (process.env.ARGON_TURSO_URL || "").replace(/^libsql:\/\//, "https://")
   const token = process.env.ARGON_TURSO_AUTH_TOKEN || ""
   if (!url || !token) throw new Error("Thiếu ARGON_TURSO_URL / ARGON_TURSO_AUTH_TOKEN")

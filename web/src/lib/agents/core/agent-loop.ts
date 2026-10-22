@@ -3,6 +3,7 @@
 // vai trò, mức suy nghĩ) và cách chạy 1 tool (cổng duyệt, kế hoạch, kỹ năng, chặn giá vốn…). Sửa vòng lặp ở đây là cả hai cùng có.
 import type { Content, FunctionCall, GenerateContentConfig, Part } from "@google/genai"
 import { streamTurn, type TurnResult } from "../genai-stream"
+import type { RunTrace } from "../../agent-events"
 
 export interface LoopRound { r: number; ms: number; tin: number; tout: number; calls: string[] }
 export interface LoopToolRun { r: number; name: string; ms: number; chars: number }
@@ -23,6 +24,8 @@ export interface AgentLoopOptions {
   timeBudgetMs?: number
   startedAt?: number
   onRound?: (round: LoopRound) => void
+  /** Ghi sự kiện cho Bản đồ vận hành (chỉ tên bước + thời gian, không nội dung). Không chặn, không bao giờ làm hỏng lượt. */
+  trace?: RunTrace
 }
 
 export interface AgentLoop {
@@ -54,11 +57,13 @@ export async function runAgentLoop(o: AgentLoopOptions): Promise<AgentLoop> {
     const round = { r: r0, ms: Date.now() - ts, tin: r.tokensIn, tout: r.tokensOut, calls: r.functionCalls.map(c => c.name ?? "") }
     rounds.push(round)
     o.onRound?.(round)
+    o.trace?.emit("model", undefined, { ms: round.ms })
     tokensIn += r.tokensIn; tokensOut += r.tokensOut; cachedIn += r.cachedIn ?? 0
     if (r.content.parts?.length) o.contents.push(r.content)
     return r
   }
 
+  o.trace?.emit("start")
   let last = await next()
   let stopped = false, unfinished = false
   for (let i = 0; i < o.maxRounds; i++) {
@@ -69,7 +74,9 @@ export async function runAgentLoop(o: AgentLoopOptions): Promise<AgentLoop> {
     const round = rounds.length - 1
     const results = await Promise.all(calls.map(async call => {
       const ts = Date.now()
+      o.trace?.emit("tool-start", call.name ?? "")
       const part = await o.runTool(call, round)
+      o.trace?.emit("tool", call.name ?? "", { ms: Date.now() - ts, ok: !(part as { functionResponse?: { response?: { error?: unknown } } }).functionResponse?.response?.error })
       tools.push({ r: round, name: call.name ?? "", ms: Date.now() - ts, chars: JSON.stringify({ ...part, __extra: undefined }).length })
       return part
     }))
@@ -82,6 +89,7 @@ export async function runAgentLoop(o: AgentLoopOptions): Promise<AgentLoop> {
     last = await next()
   }
 
+  o.trace?.emit("end")
   return {
     last, toolsUsed, stopped, unfinished, rounds, tools, next,
     get tokensIn() { return tokensIn },

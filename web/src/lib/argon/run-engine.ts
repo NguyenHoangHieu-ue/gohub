@@ -11,6 +11,7 @@ import { ASK_TOOL, ASK_TOOL_NAME, askBlock } from "./ask-tool"
 import { RUN_CODE_NAME, RUN_CODE_TOOL } from "./code-tool"
 import { SQL_TOOL, SQL_TOOL_NAME } from "./sql-tool"
 import { KHO_TOOLS, execKhoTool } from "./kho-tools"
+import { createRunTrace } from "@/lib/agent-events"
 
 // Lõi chạy 1 ĐOẠN của Phòng Argon, dùng chung cho SSE (runs/route.ts) và worker việc nền (worker/route.ts).
 // Hết ngân sách thời gian đoạn → status "partial" (câu trả lời dở được lưu, đoạn sau viết tiếp). Có công cụ → vòng gọi công cụ ngay trong đoạn.
@@ -55,8 +56,11 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
   const maxCalls = missionId ? MAX_MISSION_TOOL_CALLS : MAX_TOOL_CALLS   // sứ mệnh còn đọc/ghi file nên cần nhiều lượt gọi hơn
   const isData = (n: string) => !MISSION_TOOL_NAMES.includes(n)
   let lastProgress = Date.now()
+  const evTrace = createRunTrace("argon")   // sự kiện cho Bản đồ vận hành (chỉ tên công cụ + thời gian)
+  evTrace.emit("start")
   try {
     for (let turn = 0; turn <= maxCalls; turn++) {
+      const turnStart = Date.now()
       const toolsOn = !!i.tools && decls.length > 0 && i.tools.log.length < maxCalls
       const modelParts: Part[] = []
       let finish = "", tIn = 0, tOut = 0, tCached = 0
@@ -89,6 +93,7 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
         }
       }
       out.tokensIn += tIn; out.tokensOut += tOut; out.cachedIn += tCached
+      evTrace.emit("model", undefined, { ms: Date.now() - turnStart })
 
       const calls = modelParts.filter(p => p.functionCall)
       if (calls.length && toolsOn) {
@@ -97,6 +102,8 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
           const fc = c.functionCall!
           const fname = String(fc.name), fargs = (fc.args ?? {}) as Record<string, unknown>
           const dataCalls = i.tools!.log.filter(t => isData(t.name)).length
+          const toolStart = Date.now()
+          evTrace.emit("tool-start", fname)
           const entry = khoUser && khoNames.has(String(fname)) ? await execKhoTool(fname, fargs, khoUser)
             : (fname === LIST_NAME || fname === READ_NAME || fname === SEARCH_NAME) && missionId ? await execMissionSourceTool(fname, fargs, missionId)
             : (fname === FORECAST_TOOL_NAME || fname === SCORE_TOOL_NAME) && missionId ? await execMissionForecast(fname, fargs, missionId)
@@ -108,6 +115,7 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
             : isData(fname) && dataTools && dataCalls >= MAX_TOOL_CALLS ? { name: fname, args: fargs, ok: false, chars: 0, result: `Đã dùng hết ${MAX_TOOL_CALLS} lần lấy số liệu hệ thống trong lượt này`, at: new Date().toISOString() }
             : isData(fname) && !dataTools ? { name: fname, args: fargs, ok: false, chars: 0, result: "Công cụ lấy số liệu hệ thống đang tắt", at: new Date().toISOString() }
             : await execArgonTool(fname, fargs, i.tools!.origin)
+          evTrace.emit("tool", fname, { ms: Date.now() - toolStart, ok: entry.ok })
           i.tools!.log.push(entry)
           await i.tools!.onTool(entry)
           responses.push({ functionResponse: { name: String(fc.name), response: entry.ok ? { buoc: i.tools!.log.length, ketQua: entry.result } : { buoc: i.tools!.log.length, loi: entry.result } } })
@@ -130,6 +138,8 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
     else { out.status = "error"; out.error = (e as Error)?.message?.slice(0, 500) ?? "Lỗi không rõ" }
     return out
   } finally {
+    evTrace.emit("end")
+    await evTrace.flush()
     clearTimeout(timer)
     i.signal?.removeEventListener("abort", onAbort)
   }

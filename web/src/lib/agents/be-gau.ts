@@ -12,6 +12,7 @@ import { compressHistory }              from "./creator/compress"
 import { kbIndexBlock, relevantKbBlock } from "./creator/kb-recall"
 import { toGenaiSchema } from "./genai-stream"
 import { runAgentLoop } from "./core/agent-loop"
+import { createRunTrace } from "@/lib/agent-events"
 import { detectAndLogLearning }          from "./learning"
 import { larkWorkspaceDecl, runLarkWorkspace } from "./lark-workspace"
 import { BUSINESS_FACTS, ANSWER_STYLE } from "./business-facts"
@@ -329,6 +330,8 @@ async function execProduct(a: any): Promise<any> {
 
 // detectAndLogLearning() tách sang ./learning.ts (s196+4) — dùng chung cho Bé Gấu + Gấu Tổ.
 
+/** Tên các công cụ lõi của Bé Gấu (cộng công cụ tính năng theo vai trò từ ALL_TOOL_DECLARATIONS) — cho Bản đồ vận hành, tự theo code. */
+export const BE_GAU_CORE_TOOLS: string[] = [readKBDecl, executeSQLDecl, querySupabaseDecl, listTablesDecl, queryProductDecl, queryGA4Decl, queryGSCDecl, webSearchDecl, larkWorkspaceDecl, searchKBDecl, buildReportDecl, b2bCustomerCm1Decl, deepResearchDecl].map(d => String(d.name))
 export const LARK_CREATE_RE = /(t[aạ]o|l[aà]m|xu[aấ]t|[dđ][uư]a|ghi|g[uử]i).{0,40}(t[aà]i li[eệ]u|\bdoc|sheet|b[aả]ng t[ií]nh|b[aá]o c[aá]o|task|vi[eệ]c|nh[aắ]c).{0,60}lark|lark.{0,40}(t[aà]i li[eệ]u|\bdoc|sheet|b[aả]ng t[ií]nh|task)/i
 
 export interface BeGauTrace {
@@ -608,11 +611,13 @@ export async function runBeGau(opts: BeGauOpts): Promise<{ text: string; sources
 
   // U1b: vòng lặp chạy ở lõi chung core/agent-loop.ts (cùng Gấu Pro), tool song song mỗi lượt, tối đa 12 lượt.
   // toolsUsed = SỰ THẬT đã gọi tool gì — My Metrics dùng để phân biệt task tính KPI (DB_TASK_TOOLS ở lib/okr-helpers.ts) với trả lời chay.
+  const evTrace = createRunTrace("be-gau")
   const loop = await runAgentLoop({
     model: GEMINI_MODEL, contents, configFor: r => r === 0 ? config : lowConfig, runTool, maxRounds: 12, onChunk,
     timeBudgetMs: opts.job?.timeBudgetMs ?? 240_000,   // trần route 300s — chừa lượt chốt khi model chậm bất thường (QA 2026-10-08)
-    signal,
+    signal, trace: evTrace,
   })
+  await evTrace.flush()   // sự kiện cho Bản đồ vận hành (chỉ tên tool + thời gian)
   let genResult = loop.last
   if (loop.stopped) {
     leak?.flush()

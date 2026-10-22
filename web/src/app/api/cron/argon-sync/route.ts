@@ -13,6 +13,7 @@ import { MAX_PATROLS_PER_NIGHT, missionIdsWithPatrol, startPatrol, vnDate } from
 import { missionIdsWithDueForecasts } from "@/lib/argon/forecast-tool"
 import { ensureIndexed, pruneOrphans } from "@/lib/argon/index-db"
 import { digestPending } from "@/lib/argon/kho-digest"
+import { pruneEvents } from "@/lib/agent-events"
 import { argonUsernames, runFactsNightly } from "@/lib/argon/facts"
 import type { ArgonSource } from "@/lib/argon/server"
 
@@ -67,6 +68,7 @@ async function run(req: NextRequest) {
     const ix = await ensureIndexed((all ?? []).map(r => r.id as string), { deadlineMs: Math.max(5_000, t0 + 190_000 - Date.now()), max: 400 })
     search = { ...ix, pruned: await pruneOrphans() }
   } catch (e) { search.errors.push((e as Error).message) }
+  await pruneEvents().catch(() => undefined)   // sự kiện Bản đồ vận hành giữ 3 ngày
   // Sổ sự việc: tóm tắt + trích sự việc có hạn từ nguồn mới (mail/thread/file chưa xử lý), rồi đánh dấu hết hạn, nhắc tới hạn và gửi 1 tin tóm tắt "đã ghi gì" cho Hiếu.
   const facts: { user: string; digested: number; remaining: number; added: number; due: number; expired: number; sent: boolean; errors: string[] }[] = []
   try {
