@@ -85,7 +85,10 @@ export default function BoiCanhPage() {
   if (status === "loading" || !role) return <div className="p-6 text-sm text-gray-400">Đang tải…</div>
   if (role !== "creator") return null
   const running = !!snap?.running
-  const planEmpty = !snap || !/\S/.test(snap.plan.text.replace(/^#.*$/gm, "").replace(/\(Anh viết[^)]*\)/, ""))
+  // "Chưa có kế hoạch" = ngoài tiêu đề và dòng mẫu trong ngoặc, mục kế hoạch không có chữ nào (các mục "Cách viết" mặc định không tính)
+  const planEmpty = !snap || !/\S/.test((/##\s*(Kế hoạch và metric|Target và nhiệm vụ)[^
+]*
+([\s\S]*?)(?=^##\s|$(?![\s\S]))/m.exec(snap.plan.text)?.[2] ?? "").replace(/^\(.*\)\s*$/gm, ""))
   const card = "rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm"
 
   return (
