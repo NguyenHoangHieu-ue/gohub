@@ -12,6 +12,7 @@ import type { ArgonProject, ArgonRun, ArgonSource } from "./server"
 import { droppedWarning, pickByBudget } from "./source-tools"
 import { linkedSourceIdsForProject, loadMissionContext } from "./missions-db"
 import { KHO_MISSION_NAME, khoSources } from "./kho"
+import { usesKhoScope } from "./context-instruction"
 
 export const SEGMENT_MS = 265_000     // hết ngân sách đoạn → lưu dở, đoạn sau viết tiếp
 export const MAX_OUT = 32_768         // trần output mỗi đoạn; chạm trần cũng đi qua đoạn sau
@@ -33,7 +34,7 @@ export async function loadRunMaterial(project: ArgonProject, pick: Set<string> |
     const byId = new Map(((fresh ?? []) as ArgonSource[]).map(s => [s.id, s]))
     sources = sources.map(s => byId.get(s.id) ?? s)
   }
-  if (!mat && project.kind === "mission" && project.name === KHO_MISSION_NAME) {   // Thủ thư Kho: chỉ nạp sẵn nguồn GHIM; còn lại tìm bằng timTrongNguon/docNguon (Kho có thể rất lớn)
+  if (!mat && project.kind === "mission" && usesKhoScope(project.name)) {   // Thủ thư Kho: chỉ nạp sẵn nguồn GHIM; còn lại tìm bằng timTrongNguon/docNguon (Kho có thể rất lớn)
     const pinned = (await khoSources(project.username, { onlyEnabled: true })).filter(s => s.pinned).map(s => s.id).slice(0, 150)
     const { data: rows } = pinned.length ? await supabaseAdmin.from("argon_sources").select("*").in("id", pinned) : { data: [] }
     return { sources: pickByBudget((rows ?? []) as ArgonSource[], 150_000).keep, project, warnings: [] }
@@ -96,7 +97,7 @@ export async function runBackgroundSegment(runId: string, origin: string): Promi
     })
     const seg = await runSegment({
       ctx, thinking: bg.thinking, model: run.model ?? undefined, segmentMs: SEGMENT_MS, maxOut: MAX_OUT, signal: stopAc.signal,
-      tools: bg.allowTools || mctx ? { origin, log: toolLog, onTool: () => saveToolLog(runId, toolLog), dataTools: bg.allowTools, missionId: mctx?.mission.id, khoUser: mctx?.mission.name === KHO_MISSION_NAME ? mctx.mission.username : undefined } : undefined,
+      tools: bg.allowTools || mctx ? { origin, log: toolLog, onTool: () => saveToolLog(runId, toolLog), dataTools: bg.allowTools, missionId: mctx?.mission.id, khoUser: usesKhoScope(mctx?.mission.name ?? "") ? mctx!.mission.username : undefined, khoMode: mctx?.mission.name === KHO_MISSION_NAME ? "full" : "facts" } : undefined,
       onDelta: t => { answer += t },
       onProgress: () => {
         void save(); void touchBg(runId, bg)

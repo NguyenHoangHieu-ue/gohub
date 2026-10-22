@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Atom, ChevronDown, Database, Moon, RefreshCw, Settings2, Sparkles } from "lucide-react"
+import { Atom, ChevronDown, Compass, Database, Moon, RefreshCw, Settings2, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api, jsonInit, type Run } from "./argon-types"
 import type { MissionDetail, MissionRowUi, WsFile } from "./missions/mission-types"
@@ -12,36 +12,11 @@ import { MissionChat } from "./missions/mission-chat"
 import { Workbench } from "./missions/workbench"
 import { useMissionRunner } from "./missions/use-mission-runner"
 import { ArgonMarkdown } from "./argon-markdown"
+import { BRIEFING_MARK, BRIEFING_SECTION, BRIEF_TEXT, DAILY_GOAL, DAILY_MISSION_NAME as DAILY_NAME, NIGHTLY_PROMPT as NIGHT_PROMPT } from "@/lib/argon/context-pure"
 
 // Phòng Argon (gọn): một trợ lý tham mưu chạy liền. Trang này = "Đề xuất hôm nay" + khung hỏi đáp. Bên dưới vẫn là sứ mệnh
 // "Tham mưu hằng ngày" (tự tạo, luôn ở pha chạy); các pha, workspace, Bàn làm việc đầy đủ nằm ở /nang-cao, nguồn dữ liệu ở /kho-nguon.
-const DAILY_NAME = "Tham mưu hằng ngày"
-const DAILY_GOAL = "Theo dõi số liệu và tin mới của công ty mỗi ngày, đối chiếu với target và nhiệm vụ của Hiếu, rồi đề xuất tối đa 3 việc nên làm. Viết ngắn gọn, thực tế."
-const BRIEF_TEXT = `# Tham mưu hằng ngày
-
-## Mục tiêu
-Mỗi ngày đọc số liệu hệ thống và tin mới từ các nguồn Lark đã gắn (thread, mail, file), đối chiếu với target quý và nhiệm vụ bên dưới, rồi cho Hiếu biết: chuyện gì đáng chú ý, vì sao, nên làm gì.
-
-## Target và nhiệm vụ của Hiếu
-(Hiếu ghi vào đây: target quý, việc đang theo, điều cần ưu tiên. Argon luôn đọc phần này trước khi trả lời.)
-
-## Cách viết (bắt buộc)
-- Câu ngắn, từ thường. Không dùng thuật ngữ khi chưa giải thích.
-- Mỗi đề xuất có: việc cần làm, lý do bằng số liệu cụ thể kèm nguồn, mức chắc chắn (Chắc / Có thể / Chưa đủ dữ liệu).
-- Tối đa 3 đề xuất. Không suy đoán ngoài dữ liệu. Thiếu dữ liệu thì nói thẳng là thiếu, không điền số ước lượng.
-- Không đưa ra kỳ vọng vượt khả năng thực tế của số liệu hiện có.
-`
-const BRIEFING_MARK = "## Khi anh bảo \"Cập nhật bản tin hôm nay\""
-const BRIEFING_SECTION = `
-${BRIEFING_MARK}
-Ghi vào notes/tin-hom-nay.md (ghi đè). Làm theo các bước:
-1) Lấy số liệu 7 ngày gần nhất và quý hiện tại (doanh thu, GP, CM1) bằng công cụ lấy số liệu hệ thống, so với kỳ trước và với target.
-2) Nếu có nguồn Lark đã gắn (thread, mail, file), tìm tin mới đáng chú ý trong đó.
-3) Viết bản tin ngắn: "Đáng chú ý" (tối đa 3 ý, mỗi ý kèm số hoặc nguồn) rồi "Nên làm" (tối đa 3 việc, mỗi việc có lý do và mức chắc chắn).
-Không hỏi lại. Chỗ nào thiếu dữ liệu thì ghi rõ là thiếu.
-`
 const BRIEFING_PROMPT = "Cập nhật bản tin hôm nay"
-const NIGHT_PROMPT = "Cập nhật bản tin hôm nay theo brief.md: lấy số liệu 7 ngày gần nhất và quý hiện tại, so với kỳ trước và target; tìm tin mới trong các nguồn Lark đã gắn; viết ngắn 'Đáng chú ý' (tối đa 3 ý) và 'Nên làm' (tối đa 3 việc, có lý do và mức chắc chắn). Thiếu dữ liệu thì nói rõ."
 const QUICK = ["Tuần này có gì đáng chú ý?", "So với target quý, chỗ nào đang chậm?", "Có tin mới nào từ Lark em nên báo anh không?"]
 const BRIEFING_RE = /^notes\/(tin-hom-nay|tuan-tra-)/
 
@@ -164,6 +139,7 @@ export default function ArgonHomePage() {
           <p className="text-[13px] text-gray-500">Trợ lý tham mưu: đọc số liệu và tin mới, đề xuất việc nên làm</p>
         </div>
         <nav className="ml-auto flex items-center gap-2" aria-label="Chức năng khác">
+          <Link href="/analytics/creator/argon/boi-canh" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><Compass size={14} />Bối cảnh và Kế hoạch</Link>
           <Link href="/analytics/creator/argon/kho-nguon" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><Database size={14} />Nguồn dữ liệu</Link>
           <Link href="/analytics/creator/argon/nang-cao" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><Settings2 size={14} />Nâng cao</Link>
         </nav>

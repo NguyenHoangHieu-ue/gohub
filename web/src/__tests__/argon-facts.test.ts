@@ -80,3 +80,16 @@ describe("parseDigestFull", () => {
   })
   it("thiếu facts → mảng rỗng", () => { expect(parseDigestFull('{"summary":"x"}')?.facts).toEqual([]) })
 })
+
+import { auditProposals, usesKhoScope, NIGHTLY_PROMPT } from "@/lib/argon/context-pure"
+describe("auditProposals", () => {
+  const ok = `## Tác động tới kế hoạch\n- Chuyển Thái Lan sang BC: giá BC đổi (nguồn: Mail BC) → xấu\n\n## Đề xuất hôm nay\n### 1. Chốt giá BC trước 30/11 — Chắc\n- Vì sao: giá tăng 0.52→0.58\n- Nguồn: Mail BC 22/10\n- Liên quan kế hoạch: Chuyển Thái Lan sang BC\n\n### 2. Hỏi VNPT báo giá — Có thể\n- Vì sao: chưa có phản hồi\n- Nguồn: Thread VNPT\n- Liên quan kế hoạch: ngoài kế hoạch\n`
+  it("đề xuất đủ nhãn/nguồn/kế hoạch → ok", () => { const r = auditProposals(ok); expect(r).toMatchObject({ total: 2, ok: 2, empty: false }); expect(r.issues).toEqual([]) })
+  it("báo thiếu nhãn, thiếu nguồn, thiếu mục kế hoạch", () => {
+    const r = auditProposals("## Đề xuất hôm nay\n### 1. Làm A\n- Vì sao: x\n- Nguồn:\n\n### 2. Làm B — Chắc\n- Nguồn: Mail\n")
+    expect(r.total).toBe(2); expect(r.ok).toBe(0)
+    expect(r.issues[0]).toContain("thiếu nhãn"); expect(r.issues[0]).toContain("thiếu nguồn"); expect(r.issues[1]).toContain("thiếu mục kế hoạch")
+  })
+  it("không có đề xuất / không có mục → empty", () => { expect(auditProposals("## Đề xuất hôm nay\nChưa có đề xuất đủ căn cứ hôm nay.").empty).toBe(true); expect(auditProposals("").empty).toBe(true) })
+  it("usesKhoScope và câu lệnh đêm", () => { expect(usesKhoScope("Thủ thư Kho")).toBe(true); expect(usesKhoScope("Tham mưu hằng ngày")).toBe(true); expect(usesKhoScope("Sứ mệnh khác")).toBe(false); expect(NIGHTLY_PROMPT).toContain("notes/tac-dong.md") })
+})

@@ -3,6 +3,7 @@ import { ARGON_BUCKET, ownSource, type ArgonSource } from "./server"
 import { BRIEF_PATH, DECISIONS_PATH, briefTemplate, canTransition, checkWrite, cleanPath, decisionsTemplate, isProtectedPath, missionContextBlock, phaseInstruction, chotLine, PLAN_PATH, type MissionPhase, type WsFileRow } from "./missions"
 import { deleteProjectCascade } from "./project-delete"
 import { KHO_INSTRUCTION, KHO_MISSION_NAME, khoIndexBlock, khoSources } from "./kho"
+import { CONTEXT_INSTRUCTION, usesKhoScope } from "./context-instruction"
 
 export interface ArgonMission {
   id: string; username: string; project_id: string; name: string; goal: string; phase: MissionPhase
@@ -170,7 +171,7 @@ export async function loadMissionContext(projectId: string): Promise<{ mission: 
   if (!mission) return null
   const [files, brief, decisions] = await Promise.all([listFiles(mission.id), readFile(mission.id, BRIEF_PATH), readFile(mission.id, DECISIONS_PATH)])
   const base = missionContextBlock(mission, brief?.content ?? "", decisions?.content ?? "", files)
-  if (mission.name === KHO_MISSION_NAME) return { mission, block: `${base}\n${await khoIndexBlock(mission.username)}`, instruction: `${phaseInstruction(mission.phase)}\n${KHO_INSTRUCTION}` }
+  if (usesKhoScope(mission.name)) return { mission, block: `${base}\n${await khoIndexBlock(mission.username)}`, instruction: `${phaseInstruction(mission.phase)}\n${mission.name === KHO_MISSION_NAME ? KHO_INSTRUCTION : CONTEXT_INSTRUCTION}` }
   return { mission, block: base, instruction: phaseInstruction(mission.phase) }
 }
 
@@ -249,7 +250,7 @@ export async function missionIdForProject(projectId: string): Promise<string | n
 export interface MissionSourceRow { id: string; name: string; kind: string; tokens: number; pinned: boolean; updated_at: string }
 /** Mọi nguồn ĐANG BẬT của sứ mệnh: nguồn của dự án nền + nguồn gắn từ Kho nguồn. */
 export async function allMissionSources(m: ArgonMission): Promise<MissionSourceRow[]> {
-  if (m.name === KHO_MISSION_NAME) return (await khoSources(m.username, { onlyEnabled: true })).map(s => ({ id: s.id, name: s.name, kind: s.kind, tokens: s.tokens, pinned: s.pinned, updated_at: s.updated_at }))   // Thủ thư Kho: MỌI nguồn của người dùng
+  if (usesKhoScope(m.name)) return (await khoSources(m.username, { onlyEnabled: true })).map(s => ({ id: s.id, name: s.name, kind: s.kind, tokens: s.tokens, pinned: s.pinned, updated_at: s.updated_at }))   // Thủ thư Kho: MỌI nguồn của người dùng
   const linked = await linkedSourceIdsForProject(m.project_id)
   const [own, more] = await Promise.all([
     supabaseAdmin.from("argon_sources").select("id,name,kind,tokens,pinned,updated_at").eq("project_id", m.project_id).eq("enabled", true),

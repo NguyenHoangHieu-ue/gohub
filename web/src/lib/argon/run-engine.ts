@@ -10,7 +10,7 @@ import { PATCH_TOOL, PATCH_TOOL_NAME } from "./patch-tool"
 import { ASK_TOOL, ASK_TOOL_NAME, askBlock } from "./ask-tool"
 import { RUN_CODE_NAME, RUN_CODE_TOOL } from "./code-tool"
 import { SQL_TOOL, SQL_TOOL_NAME } from "./sql-tool"
-import { KHO_TOOLS, KHO_TOOL_NAMES, execKhoTool } from "./kho-tools"
+import { KHO_TOOLS, execKhoTool } from "./kho-tools"
 
 // Lõi chạy 1 ĐOẠN của Phòng Argon, dùng chung cho SSE (runs/route.ts) và worker việc nền (worker/route.ts).
 // Hết ngân sách thời gian đoạn → status "partial" (câu trả lời dở được lưu, đoạn sau viết tiếp). Có công cụ → vòng gọi công cụ ngay trong đoạn.
@@ -26,7 +26,7 @@ export interface SegmentIn {
   maxOut: number
   signal?: AbortSignal                        // huỷ từ ngoài (client đóng / người dùng bấm Dừng)
   // dataTools=false: tắt layDuLieuHeThong (mặc định bật). missionId: bật thêm công cụ workspace của sứ mệnh đó (docFile/ghiFile/lietKeFile).
-  tools?: { origin: string; log: ToolLogEntry[]; onTool: (e: ToolLogEntry) => void | Promise<void>; dataTools?: boolean; missionId?: string; khoUser?: string }
+  tools?: { origin: string; log: ToolLogEntry[]; onTool: (e: ToolLogEntry) => void | Promise<void>; dataTools?: boolean; missionId?: string; khoUser?: string; khoMode?: "full" | "facts" }
   onDelta: (text: string) => void
   onProgress?: () => void                     // gọi định kỳ (≥4s) để lưu câu trả lời dở / nhịp tim
 }
@@ -48,8 +48,10 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
   const contents: Content[] = [...i.ctx.contents]
   const dataTools = i.tools?.dataTools !== false
   const missionId = i.tools?.missionId
-  const khoUser = i.tools?.khoUser   // sứ mệnh "Thủ thư Kho": thêm công cụ xếp thư mục (kho-tools.ts)
-  const decls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? [...WS_TOOLS, SQL_TOOL, RUN_CODE_TOOL, ASK_TOOL, PATCH_TOOL, FORECAST_TOOL, SCORE_TOOL, ...SOURCE_TOOLS, ...(khoUser ? KHO_TOOLS : [])] : [])]
+  const khoUser = i.tools?.khoUser   // sứ mệnh đọc toàn Kho: "full" (Thủ thư Kho) thêm công cụ xếp thư mục + sổ sự việc; "facts" (Tham mưu hằng ngày) chỉ tra sổ sự việc (kho-tools.ts)
+  const khoDecls = khoUser ? (i.tools?.khoMode === "full" ? KHO_TOOLS : KHO_TOOLS.filter(t => t.name === "traSuViec")) : []
+  const khoNames = new Set(khoDecls.map(t => t.name))
+  const decls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? [...WS_TOOLS, SQL_TOOL, RUN_CODE_TOOL, ASK_TOOL, PATCH_TOOL, FORECAST_TOOL, SCORE_TOOL, ...SOURCE_TOOLS, ...khoDecls] : [])]
   const maxCalls = missionId ? MAX_MISSION_TOOL_CALLS : MAX_TOOL_CALLS   // sứ mệnh còn đọc/ghi file nên cần nhiều lượt gọi hơn
   const isData = (n: string) => !MISSION_TOOL_NAMES.includes(n)
   let lastProgress = Date.now()
@@ -95,7 +97,7 @@ export async function runSegment(i: SegmentIn): Promise<SegmentOut> {
           const fc = c.functionCall!
           const fname = String(fc.name), fargs = (fc.args ?? {}) as Record<string, unknown>
           const dataCalls = i.tools!.log.filter(t => isData(t.name)).length
-          const entry = khoUser && (KHO_TOOL_NAMES as readonly string[]).includes(fname) ? await execKhoTool(fname, fargs, khoUser)
+          const entry = khoUser && khoNames.has(String(fname)) ? await execKhoTool(fname, fargs, khoUser)
             : (fname === LIST_NAME || fname === READ_NAME || fname === SEARCH_NAME) && missionId ? await execMissionSourceTool(fname, fargs, missionId)
             : (fname === FORECAST_TOOL_NAME || fname === SCORE_TOOL_NAME) && missionId ? await execMissionForecast(fname, fargs, missionId)
             : fname === PATCH_TOOL_NAME && missionId ? await execMissionPatch(fargs, missionId, i.tools!.origin)
