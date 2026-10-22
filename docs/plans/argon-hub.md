@@ -35,3 +35,6 @@ Sứ mệnh/workspace/tuần tra/sổ dự đoán/đề xuất sửa code: giữ
 
 ## Rủi ro
 Turso thêm 1 hạ tầng (kiểm gói/dung lượng trước khi nạp lớn) · tóm tắt hằng đêm dài khi thread/mail nhiều (giới hạn theo ngày, chỉ phần mới) · trích sự việc sai (có lịch sử + tóm tắt để Hiếu sửa) · đổi giao diện lớn (giữ route cũ `/nang-cao`, `/kho-nguon` tới khi tab mới đủ chức năng).
+
+## Trạng thái (2026-10-22): bước 0–7 XONG trên `staging` (chưa merge `main`)
+Migration đã chạy: v75, v76, v77, v78, v79. Env mới: `ARGON_TURSO_URL`, `ARGON_TURSO_AUTH_TOKEN` (đã thêm local + Vercel). Còn mở: giao diện điện thoại; cron `argon-sync` đủ vòng qua cron-job.org (đã có mục `search`, `facts`); đối chiếu sổ sự việc với `vendor_quotes`/`ncc_*`; Gấu Pro thật trên Bản đồ. Xoá file này + dòng plan trong CLAUDE.md khi Hiếu chốt và merge.
