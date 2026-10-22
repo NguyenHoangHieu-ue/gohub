@@ -9,11 +9,12 @@ import { PATCH_TOOL_NAME, execPropose, getPatches, savePatches } from "./patch-t
 import { FORECAST_TOOL_NAME, SCORE_TOOL_NAME, execRecord, execScore, getForecasts, saveForecasts } from "./forecast-tool"
 import { LIST_NAME, READ_NAME, SEARCH_NAME, execSourceTool, pickByBudget } from "./source-tools"
 import { ensureIndexed, searchChunks } from "./index-db"
+import { KHO_TOOL_NAMES } from "./kho-tools"
 
 // Công cụ workspace của Sứ mệnh: Argon đọc/ghi file TRONG workspace của đúng sứ mệnh đang chạy (không chạm file hay dữ liệu nơi khác).
 // Quyền ghi theo pha (canArgonWrite): làm rõ chỉ brief.md; kế hoạch thêm notes/; chạy ghi mọi nơi; tạm dừng/xong không ghi.
 export const WS_TOOL_NAMES = ["docFile", "ghiFile", "lietKeFile"] as const
-export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME, RUN_CODE_NAME, ASK_TOOL_NAME, PATCH_TOOL_NAME, FORECAST_TOOL_NAME, SCORE_TOOL_NAME, LIST_NAME, READ_NAME, SEARCH_NAME]
+export const MISSION_TOOL_NAMES: readonly string[] = [...WS_TOOL_NAMES, SQL_TOOL_NAME, RUN_CODE_NAME, ASK_TOOL_NAME, PATCH_TOOL_NAME, FORECAST_TOOL_NAME, SCORE_TOOL_NAME, LIST_NAME, READ_NAME, SEARCH_NAME, ...KHO_TOOL_NAMES]
 export const MAX_WS_READ_CHARS = 60_000
 const LOG_CONTENT_CHARS = 1_500
 

@@ -10,6 +10,7 @@ import { deleteBg, deleteToolLog, getToolLog, saveToolLog, setBg, triggerWorker 
 import { autoSaveReports, getReportHtml, templateSuffix } from "@/lib/argon/report-store"
 import { linkedSourceIdsForProject, loadMissionContext, missionIdForProject } from "@/lib/argon/missions-db"
 import { clearPendingAsk } from "@/lib/argon/ask-tool"
+import { KHO_MISSION_NAME } from "@/lib/argon/kho"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const log = [...toolLog]
       const seg = await runSegment({
         ctx, thinking, model, segmentMs: SEGMENT_MS, maxOut: MAX_OUT, signal: req.signal,
-        tools: allowTools || mctx ? { origin: req.nextUrl.origin, log, dataTools: allowTools, missionId: mctx?.mission.id, onTool: async e => { send({ type: "tool", name: e.name, args: e.args, ok: e.ok, chars: e.chars }); await saveToolLog(runId, log) } } : undefined,
+        tools: allowTools || mctx ? { origin: req.nextUrl.origin, log, dataTools: allowTools, missionId: mctx?.mission.id, khoUser: mctx?.mission.name === KHO_MISSION_NAME ? username : undefined,onTool: async e => { send({ type: "tool", name: e.name, args: e.args, ok: e.ok, chars: e.chars }); await saveToolLog(runId, log) } } : undefined,
         onDelta: t => { answer += t; send({ type: "delta", text: t }) },
         onProgress: () => { void save() },
       })

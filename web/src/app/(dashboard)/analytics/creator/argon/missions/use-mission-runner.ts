@@ -23,6 +23,10 @@ export function stepLabel(s: Pick<Step, "name" | "args">): { tag: string; text: 
   if (s.name === "lietKeNguon") return { tag: "NGUỒN", text: "Liệt kê nguồn của sứ mệnh" }
   if (s.name === "timTrongNguon") return { tag: "NGUỒN", text: `Tìm "${String(a.tuKhoa ?? "")}" trong các nguồn` }
   if (s.name === "docNguon") return { tag: "NGUỒN", text: `Đọc nguồn ${String(a.id ?? "").slice(0, 8)}` }
+  if (s.name === "taoThuMuc") return { tag: "KHO", text: `Tạo thư mục ${String(a.duongDan ?? "")}` }
+  if (s.name === "chuyenNguon") return { tag: "KHO", text: `Chuyển ${Array.isArray(a.idNguon) ? a.idNguon.length : 0} nguồn vào ${String(a.thuMuc || "Chưa phân loại")}` }
+  if (s.name === "capNhatNguon") return { tag: "KHO", text: `Cập nhật nguồn ${String(a.id ?? "").slice(0, 8)}` }
+  if (s.name === "luuGhiChu") return { tag: "KHO", text: `Lưu ghi chú: ${String(a.ten ?? "").slice(0, 60)}` }
   if (s.name === "hoiHieu") return { tag: "HỎI", text: `Hỏi Hiếu: ${String(a.cauHoi ?? "").replace(/\s+/g, " ").slice(0, 70)}` }
   if (s.name === "run_code" && typeof a.script === "string" && a.script) return { tag: "PY", text: `Chạy script ${a.script}` }
   if (s.name === "run_code") return { tag: "PY", text: `Chạy Python${Array.isArray(a.inputs) && a.inputs.length ? ` (${a.inputs.length} file vào)` : ""}` }

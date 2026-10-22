@@ -4,36 +4,38 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Atom, ArrowLeft, Plus, Trash2, ChevronDown, ChevronRight, Save, Pencil, Mail, MessagesSquare, FolderPlus, Moon, Play, LayoutDashboard } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { SourcesPanel } from "../sources-panel"
+import { ArrowLeft, Atom, Database } from "lucide-react"
+import { api, jsonInit, type Run, type Source } from "../argon-types"
+import type { FolderRow, KhoSource } from "@/lib/argon/kho-pure"
+import type { MissionDetail } from "../missions/mission-types"
+import { MissionChat } from "../missions/mission-chat"
+import { useMissionRunner } from "../missions/use-mission-runner"
 import { SourceViewer } from "../source-viewer"
-import { ChatPanel } from "../chat-panel"
-import { api, jsonInit, fmtTokens, type AutorunUi, type Project, type ProjectRow, type ReportMetaUi, type Run, type Source } from "../argon-types"
-import { ReportsModal } from "../reports-modal"
-import { TEMPLATES, quickPromptsFor, type TemplateId } from "@/lib/argon/templates"
+import { KhoTree, type TreeSel } from "./kho-tree"
+import { KhoInbox } from "./kho-inbox"
 
-// Phòng Argon — CHỈ Creator. Kho tài liệu + trợ lý Gemini 4 Argon nạp nguyên tài liệu vào ngữ cảnh (wiki creator-argon-room.md).
-export default function ArgonRoomPage() {
+// Kho nguồn của Phòng Argon: trái = "drive" (thư mục/file), giữa = chat với Thủ thư Kho (tìm, tổng hợp, so sánh, đánh giá, xếp tài liệu),
+// phải = kéo thả file + tóm tắt nhanh file vừa nạp. Chat chạy trên sứ mệnh "Thủ thư Kho" (đọc MỌI nguồn của Kho bằng tìm kiếm ý nghĩa).
+const QUICK = ["Tóm tắt các tài liệu mới nạp gần đây", "So sánh các báo giá vendor trong Kho", "Xếp các nguồn Chưa phân loại vào thư mục phù hợp", "Tài liệu nào có ngày hết hạn sắp tới?"]
+interface KhoData { projectId: string; missionId: string; missionProjectId: string; folders: FolderRow[]; sources: KhoSource[] }
+
+const toSource = (k: KhoSource): Source => ({
+  id: k.id, project_id: k.project_id, kind: k.kind as Source["kind"], name: k.name, mime: k.mime, size_bytes: k.size_bytes, send_binary: false, tokens: k.tokens,
+  external_url: null, sync_mode: null, synced_at: null, enabled: k.enabled, pinned: k.pinned, version: 1, meta: {}, created_at: k.created_at, updated_at: k.updated_at,
+})
+
+export default function KhoPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [role, setRole] = useState<string | null>(null)
-  const [projects, setProjects] = useState<ProjectRow[]>([])
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const [project, setProject] = useState<Project | null>(null)
-  const [sources, setSources] = useState<Source[]>([])
-  const [runs, setRuns] = useState<Run[]>([])
+  const [data, setData] = useState<KhoData | null>(null)
+  const [sel, setSel] = useState<TreeSel>({ kind: "all" })
   const [viewing, setViewing] = useState<Source | null>(null)
+  const [detail, setDetail] = useState<MissionDetail | null>(null)
+  const [runs, setRuns] = useState<Run[]>([])
+  const [autoSend, setAutoSend] = useState<{ text: string; k: number } | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const [metaOpen, setMetaOpen] = useState(false)
-  const [notes, setNotes] = useState(""), [instr, setInstr] = useState(""), [metaDirty, setMetaDirty] = useState(false)
-  const [newOpen, setNewOpen] = useState(false)
-  const [autorun, setAutorun] = useState<AutorunUi>({ enabled: false, prompt: "", thinking: "medium" })
-  const [autoDirty, setAutoDirty] = useState(false)
-  const [info, setInfo] = useState<string | null>(null)
-  const [reports, setReports] = useState<ReportMetaUi[]>([])
-  const [reportsOpen, setReportsOpen] = useState(false)
-  const [pendingTpl, setPendingTpl] = useState<ReportMetaUi | null>(null)
+  const busyRef = useRef(false)
   const loadSeq = useRef(0)
   const onError = useCallback((m: string) => setErr(m), [])
 
@@ -43,176 +45,87 @@ export default function ArgonRoomPage() {
   }, [status, session])
   useEffect(() => { if (role && role !== "creator") router.push("/chatbot") }, [role, router])
 
-  const loadReports = useCallback(() => { api<{ reports: ReportMetaUi[] }>("/api/creator/argon/reports").then(r => setReports(r.reports)).catch(() => { /* kho lỗi không chặn trang */ }) }, [])
-  useEffect(() => { if (role === "creator") loadReports() }, [role, loadReports])
-  // Có lượt vừa xong (câu trả lời đổi) → kho có thể có report mới: tải lại khi số lượt hoàn tất thay đổi.
-  const doneRuns = runs.filter(r => r.status === "done" || r.status === "partial").length
-  useEffect(() => { if (role === "creator" && doneRuns) loadReports() }, [doneRuns, role, loadReports])
-
-  const loadProjects = useCallback(async () => {
-    try { const r = await api<{ projects: ProjectRow[] }>("/api/creator/argon/projects"); setProjects(r.projects); return r.projects } catch (e) { onError((e as Error).message); return [] }
+  const reload = useCallback(async () => {
+    try { setData(await api<KhoData>("/api/creator/argon/kho")) } catch (e) { onError((e as Error).message) }
   }, [onError])
+  useEffect(() => { if (role === "creator") void reload() }, [role, reload])
 
-  useEffect(() => { if (role === "creator") void loadProjects().then(ps => { if (ps.length && !activeId) setActiveId(ps[0].id) }) }, [role]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadDetail = useCallback((id: string, keepMeta = false) => {
+  const loadDetail = useCallback((id: string) => {
     const seq = ++loadSeq.current
-    api<{ project: Project; sources: Source[]; runs: Run[] }>(`/api/creator/argon/projects/${id}`).then(r => {
+    api<MissionDetail>(`/api/creator/argon/missions/${id}`).then(r => {
       if (seq !== loadSeq.current) return
-      setProject(r.project); setSources(r.sources); setRuns(r.runs)
-      if (!keepMeta) { setNotes(r.project.notes); setInstr(r.project.instructions); setMetaDirty(false) }
+      setDetail(r)
+      if (!busyRef.current) setRuns(r.runs)
     }).catch(e => onError(e.message))
   }, [onError])
+  useEffect(() => { if (data?.missionId) loadDetail(data.missionId) }, [data?.missionId, loadDetail])
 
-  useEffect(() => {
-    if (!activeId) { setProject(null); setSources([]); setRuns([]); return }
-    loadDetail(activeId)
-    setAutoDirty(false)
-    api<{ autorun: AutorunUi }>(`/api/creator/argon/projects/${activeId}/autorun`).then(r => setAutorun(r.autorun)).catch(() => setAutorun({ enabled: false, prompt: "", thinking: "medium" }))
-  }, [activeId, loadDetail])
+  const refreshAll = useCallback(() => { void reload(); if (data?.missionId) loadDetail(data.missionId) }, [reload, data?.missionId, loadDetail])
+  const runner = useMissionRunner({ projectId: detail?.mission.project_id ?? null, runs, setRuns, onError, onWorkspaceChanged: refreshAll, onFinished: refreshAll, onPoll: refreshAll })
+  busyRef.current = runner.busy
 
-  async function saveAutorun(next: AutorunUi = autorun) {
-    if (!project) return
-    try { const r = await api<{ autorun: AutorunUi }>(`/api/creator/argon/projects/${project.id}/autorun`, jsonInit("PUT", next)); setAutorun(r.autorun); setAutoDirty(false) } catch (e) { onError((e as Error).message) }
+  async function move(ids: string[], folderId: string | null) {
+    setData(d => (d ? { ...d, sources: d.sources.map(s => (ids.includes(s.id) ? { ...s, folder_id: folderId } : s)) } : d))   // cập nhật ngay, rồi đồng bộ lại
+    try { await api("/api/creator/argon/kho", jsonInit("POST", { action: "move", ids, folderId })) } catch (e) { onError((e as Error).message) }
+    await reload()
   }
-  async function runAutorunNow() {
-    if (!project) return
+  async function folderAction(a: { type: "create"; path: string } | { type: "rename"; id: string; name: string } | { type: "delete"; id: string }) {
     try {
-      if (autoDirty) await saveAutorun()
-      await api(`/api/creator/argon/projects/${project.id}/autorun`, jsonInit("POST", {}))
-      setInfo("Đã giao Argon chạy nền — xong sẽ nhắn Lark; kết quả hiện trong khung chat.")
-      loadDetail(project.id, true)
+      const body = a.type === "create" ? { action: "folder-create", path: a.path } : a.type === "rename" ? { action: "folder-rename", id: a.id, name: a.name } : { action: "folder-delete", id: a.id }
+      await api("/api/creator/argon/kho", jsonInit("POST", body))
+      if (a.type === "delete" && sel.kind === "folder" && sel.id === a.id) setSel({ kind: "all" })
     } catch (e) { onError((e as Error).message) }
+    await reload()
   }
-
-  async function createProject(template?: TemplateId) {
-    setNewOpen(false)
-    const tpl = TEMPLATES.find(t => t.id === template)
-    const name = prompt(tpl ? `Tên dự án (mẫu "${tpl.label}")` : "Tên dự án mới?", tpl?.name)?.trim()
-    if (!name) return
-    try {
-      const r = await api<{ project: Project }>("/api/creator/argon/projects", jsonInit("POST", { name, template }))
-      await loadProjects(); setActiveId(r.project.id)
-      if (tpl) { setMetaOpen(true); setInfo(tpl.id === "mail" ? "Đã tạo dự án mẫu. Bước tiếp: ở cột phải bấm “Mail Lark” → chọn thư mục/người gửi → Lưu & nạp mail; rồi bật “Tự chạy hằng đêm” ở Sổ dự án." : "Đã tạo dự án mẫu. Bước tiếp: ở cột phải bấm “Thread Lark” → chọn group → Lưu & nạp thread; rồi bật “Tự chạy hằng đêm” ở Sổ dự án.") }
-    } catch (e) { onError((e as Error).message) }
+  async function pin(s: KhoSource) {
+    setData(d => (d ? { ...d, sources: d.sources.map(x => (x.id === s.id ? { ...x, pinned: !s.pinned } : x)) } : d))
+    try { await api(`/api/creator/argon/sources/${s.id}`, jsonInit("PATCH", { pinned: !s.pinned })) } catch (e) { onError((e as Error).message); await reload() }
   }
-  async function renameProject() {
-    const name = prompt("Đổi tên dự án", project?.name)?.trim()
-    if (!name || !project) return
-    try { const r = await api<{ project: Project }>(`/api/creator/argon/projects/${project.id}`, jsonInit("PATCH", { name })); setProject(r.project); void loadProjects() } catch (e) { onError((e as Error).message) }
-  }
-  async function deleteProject() {
-    if (!project || !confirm(`Xoá dự án "${project.name}" cùng toàn bộ nguồn, file và lịch sử?`)) return
-    try { await api(`/api/creator/argon/projects/${project.id}`, { method: "DELETE" }); const ps = await loadProjects(); setActiveId(ps[0]?.id ?? null) } catch (e) { onError((e as Error).message) }
-  }
-  async function saveMeta(nextNotes = notes) {
-    if (!project) return
-    try {
-      const r = await api<{ project: Project }>(`/api/creator/argon/projects/${project.id}`, jsonInit("PATCH", { notes: nextNotes, instructions: instr }))
-      setProject(r.project); setNotes(r.project.notes); setMetaDirty(false)
-    } catch (e) { onError((e as Error).message) }
-  }
-  async function appendNotes(text: string) {
-    const next = `${notes.trim()}${notes.trim() ? "\n\n" : ""}${text}`
-    setNotes(next); setMetaOpen(true); await saveMeta(next)
-  }
-  async function saveAsSource(name: string, text: string) {
-    if (!project) return
-    try { const r = await api<{ sources: Source[] }>(`/api/creator/argon/projects/${project.id}/sources`, jsonInit("POST", { action: "note", name: `Argon: ${name}`, text })); setSources(prev => [...prev, ...r.sources]) } catch (e) { onError((e as Error).message) }
+  async function remove(s: KhoSource) {
+    if (!confirm(`Xoá "${s.name}" khỏi Kho? Không khôi phục được.`)) return
+    try { await api(`/api/creator/argon/sources/${s.id}`, { method: "DELETE" }) } catch (e) { onError((e as Error).message) }
+    await reload()
   }
 
   if (status === "loading" || !role) return <div className="p-6 text-sm text-gray-400">Đang tải…</div>
   if (role !== "creator") return null
-  const enabled = sources.filter(s => s.enabled)
-  const quickPrompts = quickPromptsFor({ mail: sources.some(s => s.kind === "mail"), threads: sources.some(s => !!s.meta?.larkThread && s.kind === "note") })
+  const m = detail?.mission
+  const targetFolder = sel.kind === "folder" ? sel.id : null
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] max-w-[1600px] mx-auto">
-      <div className="flex items-center gap-3 px-4 py-3">
-        <div className="w-9 h-9 rounded-xl bg-violet-600 text-white flex items-center justify-center"><Atom size={18} /></div>
+    <div className="flex flex-col max-w-[1600px] mx-auto px-4 py-4 gap-3 lg:h-[calc(100vh-4rem)]">
+      <header className="flex flex-wrap items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-sm"><Database size={20} /></div>
         <div>
-          <h1 className="font-semibold text-gray-900 dark:text-slate-100 leading-tight">Kho nguồn · Phòng Argon</h1>
-          <div className="text-xs text-gray-500">Nơi nạp và quản lý nguồn (file, Lark, mail, thread, gói số liệu). Gắn nguồn vào sứ mệnh ở trang Sứ mệnh.</div>
+          <h1 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-100 leading-tight">Kho</h1>
+          <p className="text-[13px] text-gray-500">Nạp tài liệu, hỏi Argon tìm / so sánh / đánh giá, tự sắp xếp thư mục</p>
         </div>
-        <Link href="/analytics/creator/argon" className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg"><ArrowLeft size={14} />Về Argon</Link>
-        <button onClick={() => setReportsOpen(true)} className=" inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-950/40"><LayoutDashboard size={14} />Kho báo cáo{reports.length ? ` (${reports.length})` : ""}</button>
-      </div>
-      {info && <div className="mx-4 mb-2 text-sm rounded-lg bg-emerald-50 text-emerald-800 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{info}</span><button onClick={() => setInfo(null)}>✕</button></div>}
-      {err && <div className="mx-4 mb-2 text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button onClick={() => setErr(null)}>✕</button></div>}
+        <Link href="/analytics/creator/argon" className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><ArrowLeft size={14} /><Atom size={14} />Về Argon</Link>
+      </header>
+      {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}
 
-      <div className="flex-1 min-h-0 grid gap-3 px-4 pb-4 lg:grid-cols-[220px_minmax(0,1fr)_340px]">
-        <aside className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col min-h-0">
-          <div className="p-2 border-b border-gray-200 dark:border-slate-700 relative">
-            <button onClick={() => setNewOpen(v => !v)} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg"><Plus size={14} />Dự án mới<ChevronDown size={13} /></button>
-            {newOpen && (
-              <div className="absolute left-2 right-2 top-full mt-1 z-20 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg p-1 text-sm">
-                <button onClick={() => void createProject()} className="w-full text-left px-2.5 py-2 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 inline-flex items-center gap-2"><FolderPlus size={14} className="text-gray-500" />Dự án trống</button>
-                {TEMPLATES.map(t => (
-                  <button key={t.id} onClick={() => void createProject(t.id)} className="w-full text-left px-2.5 py-2 rounded-md hover:bg-violet-50 dark:hover:bg-violet-950/40">
-                    <span className="inline-flex items-center gap-2 font-medium">{t.id === "mail" ? <Mail size={14} className="text-violet-600" /> : <MessagesSquare size={14} className="text-violet-600" />}{t.label}</span>
-                    <span className="block text-[11px] text-gray-500 mt-0.5 leading-snug">{t.hint}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="flex-1 overflow-y-auto p-1.5 space-y-1">
-            {projects.length === 0 && <div className="text-xs text-gray-400 text-center py-6">Chưa có dự án.</div>}
-            {projects.map(p => (
-              <button key={p.id} onClick={() => setActiveId(p.id)} className={cn("w-full text-left rounded-lg px-2.5 py-2 text-sm", p.id === activeId ? "bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-200" : "hover:bg-gray-50 dark:hover:bg-slate-700")}>
-                <div className="truncate font-medium">{p.name}</div>
-                <div className="text-[11px] text-gray-500">{p.id === activeId && project && !p.hub ? sources.length : p.sources} nguồn · {fmtTokens(p.id === activeId && project && !p.hub ? enabled.reduce((n, x) => n + x.tokens, 0) : p.tokens)} token{p.hub ? " (đọc mọi dự án)" : ""}</div>
-              </button>
-            ))}
-          </div>
+      <div className="flex-1 min-h-0 grid gap-3 lg:grid-cols-[270px_minmax(0,1fr)_330px]">
+        <aside className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden min-h-[320px] max-h-[60vh] lg:max-h-none" aria-label="Thư mục và file">
+          {data ? <KhoTree folders={data.folders} sources={data.sources} sel={sel} setSel={setSel} onOpen={k => setViewing(toSource(k))} onMove={move} onFolder={folderAction} onPin={pin} onRemove={remove} onAsk={t => setAutoSend({ text: t, k: Date.now() })} />
+            : <div className="p-4 text-sm text-gray-400">Đang tải Kho…</div>}
         </aside>
 
-        <main className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-900 flex flex-col min-h-0">
-          {!project ? <div className="m-auto text-sm text-gray-400">Chọn hoặc tạo một dự án.</div> : <>
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-t-xl">
-              <div className="font-semibold truncate">{project.name}</div>
-              <button onClick={renameProject} className="text-gray-400 hover:text-gray-700"><Pencil size={13} /></button>
-              <button onClick={() => setMetaOpen(v => !v)} className="ml-3 inline-flex items-center gap-1 text-xs text-gray-600 dark:text-slate-300 hover:underline">{metaOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}Sổ dự án & chỉ dẫn{project.notes ? ` · ${fmtTokens(Math.ceil(project.notes.length / 3))} token` : ""}</button>
-              <button onClick={deleteProject} className="ml-auto text-gray-400 hover:text-red-600" title="Xoá dự án"><Trash2 size={15} /></button>
-            </div>
-            {metaOpen && (
-              <div className="grid gap-3 p-3 md:grid-cols-2 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-                <label className="text-xs text-gray-500">Sổ dự án (tóm tắt, quyết định, câu hỏi mở — luôn nằm đầu ngữ cảnh)
-                  <textarea value={notes} onChange={e => { setNotes(e.target.value); setMetaDirty(true) }} rows={7} className="mt-1 w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent text-gray-800 dark:text-slate-100" />
-                </label>
-                <label className="text-xs text-gray-500">Chỉ dẫn riêng cho dự án (văn phong, ràng buộc, định dạng)
-                  <textarea value={instr} onChange={e => { setInstr(e.target.value); setMetaDirty(true) }} rows={7} className="mt-1 w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent text-gray-800 dark:text-slate-100" />
-                </label>
-                <div className="md:col-span-2"><button onClick={() => saveMeta()} disabled={!metaDirty} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50"><Save size={14} />Lưu</button></div>
-                <div className="md:col-span-2 rounded-lg border border-gray-200 dark:border-slate-700 p-3 space-y-2">
-                  <div className="flex flex-wrap items-center gap-3 text-sm">
-                    <label className="inline-flex items-center gap-2 font-medium"><input type="checkbox" checked={autorun.enabled} onChange={e => { const n = { ...autorun, enabled: e.target.checked }; setAutorun(n); void saveAutorun(n) }} className="accent-violet-600" /><Moon size={14} className="text-violet-600" />Tự chạy hằng đêm</label>
-                    <span className="text-xs text-gray-500">Sau khi cron đêm nạp mail/thread mới, Argon chạy nền yêu cầu cố định dưới đây (1 lần/ngày) và nhắn kết quả qua Lark. Dùng cache nên rẻ ({autorun.lastRunDate ? `lần gần nhất ${autorun.lastRunDate}` : "chưa chạy lần nào"}).</span>
-                  </div>
-                  <textarea value={autorun.prompt} onChange={e => { setAutorun(a => ({ ...a, prompt: e.target.value })); setAutoDirty(true) }} rows={3} placeholder="Yêu cầu cố định, vd: Bản tin mail: tóm tắt các luồng thư mới trong 3 ngày gần nhất…" className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-transparent text-gray-800 dark:text-slate-100" />
-                  <div className="flex gap-2">
-                    <button onClick={() => void saveAutorun()} disabled={!autoDirty} className="inline-flex items-center gap-1.5 px-3 py-1 text-sm bg-violet-600 text-white rounded-lg disabled:opacity-50"><Save size={13} />Lưu yêu cầu</button>
-                    <button onClick={runAutorunNow} disabled={!autorun.prompt.trim()} className="inline-flex items-center gap-1.5 px-3 py-1 text-sm border border-violet-400 text-violet-700 dark:text-violet-300 rounded-lg disabled:opacity-50"><Play size={13} />Chạy thử ngay</button>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div className="flex-1 min-h-0">
-              {projects.find(x => x.id === project.id)?.hub && <div className="mx-4 mt-3 text-xs rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-200 px-3 py-2">Dự án Tổng hợp tự đọc sổ, nguồn đang bật và vài kết quả gần đây của MỌI dự án khác (vượt 700k token thì bỏ bớt nguồn cũ không ghim). Hỏi chéo ở đây; dự án thường vẫn tách biệt nhau.</div>}
-              <ChatPanel projectId={project.id} runs={runs} setRuns={fn => setRuns(fn)} enabledCount={enabled.length} quickPrompts={quickPrompts} reportTemplates={reports.filter(r => r.template)} pendingTpl={pendingTpl} setPendingTpl={setPendingTpl} onAppendNotes={appendNotes} onSaveAsSource={saveAsSource} onError={onError} />
-            </div>
-          </>}
-        </main>
+        <section className="order-first lg:order-none rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden flex flex-col min-h-[60vh] min-w-0" aria-label="Hỏi Thủ thư Kho">
+          {!m || !detail ? <div className="m-auto text-sm text-gray-400">Đang chuẩn bị Thủ thư Kho…</div> : (
+            <MissionChat simple quick={QUICK} autoSend={autoSend} phase={m.phase} pendingAsk={detail.pendingAsk} patches={detail.patches ?? []}
+              onPatch={async (id, action) => { await api(`/api/creator/argon/missions/${m.id}/patches`, jsonInit("POST", { id, action })); refreshAll() }}
+              runs={runs} runner={runner} onPhase={async to => { await api(`/api/creator/argon/missions/${m.id}/phase`, jsonInit("POST", { to })); refreshAll() }}
+              onStep={async (runId) => { await runner.loadSteps(runId, true) }} onError={onError} />
+          )}
+        </section>
 
-        <aside className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 min-h-0 hidden lg:block">
-          {project && <SourcesPanel projectId={project.id} sources={sources} setSources={fn => { setSources(fn); void loadProjects() }} onOpen={setViewing} onError={onError} onReload={() => activeId && loadDetail(activeId, true)} />}
+        <aside className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden min-h-[320px]" aria-label="Nạp tài liệu">
+          {data ? <KhoInbox projectId={data.projectId} folders={data.folders} sources={data.sources} targetFolderId={targetFolder} onChanged={reload} onMove={move} onOpen={k => setViewing(toSource(k))} onError={onError} />
+            : <div className="p-4 text-sm text-gray-400">Đang tải…</div>}
         </aside>
       </div>
 
-      {project && <div className="lg:hidden px-4 pb-4"><div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 h-[60vh]"><SourcesPanel projectId={project.id} sources={sources} setSources={fn => { setSources(fn); void loadProjects() }} onOpen={setViewing} onError={onError} onReload={() => activeId && loadDetail(activeId, true)} /></div></div>}
-      {reportsOpen && <ReportsModal reports={reports} activeProject={activeId} onClose={() => setReportsOpen(false)} onChange={loadReports} onError={onError}
-        onUseTemplate={r => { setPendingTpl(r); setInfo(`Đã chọn mẫu “${r.title}”. Gõ yêu cầu (hoặc gửi luôn câu gợi ý) ở ô chat để dựng lại với số liệu mới của dự án đang mở.`) }} />}
-      {viewing && <SourceViewer source={viewing} onClose={() => setViewing(null)} onChanged={s => setSources(prev => prev.map(x => (x.id === s.id ? s : x)))} onError={onError} />}
+      {viewing && <SourceViewer source={viewing} onClose={() => setViewing(null)} onChanged={() => void reload()} onError={onError} />}
     </div>
   )
 }

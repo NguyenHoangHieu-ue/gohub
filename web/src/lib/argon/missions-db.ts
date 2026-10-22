@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { ARGON_BUCKET, ownSource, type ArgonSource } from "./server"
 import { BRIEF_PATH, DECISIONS_PATH, briefTemplate, canTransition, checkWrite, cleanPath, decisionsTemplate, isProtectedPath, missionContextBlock, phaseInstruction, chotLine, PLAN_PATH, type MissionPhase, type WsFileRow } from "./missions"
 import { deleteProjectCascade } from "./project-delete"
+import { KHO_INSTRUCTION, KHO_MISSION_NAME, khoIndexBlock, khoSources } from "./kho"
 
 export interface ArgonMission {
   id: string; username: string; project_id: string; name: string; goal: string; phase: MissionPhase
@@ -168,7 +169,9 @@ export async function loadMissionContext(projectId: string): Promise<{ mission: 
   const mission = data as ArgonMission | null
   if (!mission) return null
   const [files, brief, decisions] = await Promise.all([listFiles(mission.id), readFile(mission.id, BRIEF_PATH), readFile(mission.id, DECISIONS_PATH)])
-  return { mission, block: missionContextBlock(mission, brief?.content ?? "", decisions?.content ?? "", files), instruction: phaseInstruction(mission.phase) }
+  const base = missionContextBlock(mission, brief?.content ?? "", decisions?.content ?? "", files)
+  if (mission.name === KHO_MISSION_NAME) return { mission, block: `${base}\n${await khoIndexBlock(mission.username)}`, instruction: `${phaseInstruction(mission.phase)}\n${KHO_INSTRUCTION}` }
+  return { mission, block: base, instruction: phaseInstruction(mission.phase) }
 }
 
 /** Id các nguồn (của dự án khác trong Kho nguồn) đã gắn vào sứ mệnh của dự án nền này. */
@@ -246,6 +249,7 @@ export async function missionIdForProject(projectId: string): Promise<string | n
 export interface MissionSourceRow { id: string; name: string; kind: string; tokens: number; pinned: boolean; updated_at: string }
 /** Mọi nguồn ĐANG BẬT của sứ mệnh: nguồn của dự án nền + nguồn gắn từ Kho nguồn. */
 export async function allMissionSources(m: ArgonMission): Promise<MissionSourceRow[]> {
+  if (m.name === KHO_MISSION_NAME) return (await khoSources(m.username, { onlyEnabled: true })).map(s => ({ id: s.id, name: s.name, kind: s.kind, tokens: s.tokens, pinned: s.pinned, updated_at: s.updated_at }))   // Thủ thư Kho: MỌI nguồn của người dùng
   const linked = await linkedSourceIdsForProject(m.project_id)
   const [own, more] = await Promise.all([
     supabaseAdmin.from("argon_sources").select("id,name,kind,tokens,pinned,updated_at").eq("project_id", m.project_id).eq("enabled", true),
@@ -259,8 +263,12 @@ export async function searchMissionSources(m: ArgonMission, kw: string, limit = 
   const ids = (await allMissionSources(m)).map(s => s.id)
   if (!ids.length) return []
   const esc = kw.replace(/[\\%_]/g, c => `\\${c}`)
-  const { data } = await supabaseAdmin.from("argon_sources").select("id,name,kind,tokens,updated_at,extracted_text").in("id", ids).ilike("extracted_text", `%${esc}%`).order("updated_at", { ascending: false }).limit(limit)
-  return (data ?? []) as { id: string; name: string; kind: string; tokens: number; updated_at: string; extracted_text: string | null }[]
+  const hits: { id: string; name: string; kind: string; tokens: number; updated_at: string; extracted_text: string | null }[] = []
+  for (let i = 0; i < ids.length && hits.length < limit; i += 150) {   // Kho có thể hàng nghìn nguồn: chia lô để URL .in() không quá dài
+    const { data } = await supabaseAdmin.from("argon_sources").select("id,name,kind,tokens,updated_at,extracted_text").in("id", ids.slice(i, i + 150)).ilike("extracted_text", `%${esc}%`).order("updated_at", { ascending: false }).limit(limit)
+    hits.push(...((data ?? []) as typeof hits))
+  }
+  return hits.sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, limit)
 }
 
 export async function readMissionSource(m: ArgonMission, id: string) {
