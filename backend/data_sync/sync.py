@@ -46,11 +46,57 @@ def _upsert_batch(sb, table: str, batch: list[dict], pk: str, depth: int = 0):
             _upsert_batch(sb, table, batch, pk, depth + 1)
 
 
-def upsert(sb, table: str, rows: list[dict], pk: str, chunk: int = CHUNK):
+def upsert(sb, table: str, rows: list[dict], pk: str, chunk: int = CHUNK, stamps: dict | None = None):
+    """stamps = {pk: mốc last_modified_date đang có trong Supabase}. Có stamps → CHỈ ghi dòng mới/đổi mốc: Postgres viết
+    lại cả dòng mỗi lần upsert dù giá trị y hệt (kèm synced_at mới), nên ghi lại 264k dòng mỗi tuần làm bảng phình gấp đôi
+    (Supabase Hobby giới hạn DB 500MB). Dòng không có mốc thời gian thì luôn ghi."""
     now = datetime.now(timezone.utc).isoformat()
+    if stamps is not None:
+        keep = [r for r in rows if _changed(r, pk, stamps)]
+        print(f"  [{table}] bỏ qua {len(rows) - len(keep):,}/{len(rows):,} dòng không đổi", flush=True)
+        rows = keep
     for i in range(0, len(rows), chunk):
         batch = [{**r, "synced_at": now} for r in rows[i:i + chunk]]
         _upsert_batch(sb, table, batch, pk)
+
+
+def _ts(v) -> int | None:
+    """Mốc thời gian (chuỗi ISO hoặc datetime) → epoch giây UTC; không đọc được → None."""
+    if v in (None, ""):
+        return None
+    try:
+        d = v if isinstance(v, datetime) else datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        return int(d.timestamp())
+    except (ValueError, TypeError):
+        return None
+
+
+def _changed(row: dict, pk: str, stamps: dict) -> bool:
+    old = stamps.get(row.get(pk))
+    new = _ts(row.get("last_modified_date"))
+    return old is None or new is None or old != new
+
+
+def full_refresh_day() -> bool:
+    """Chủ nhật đầu tháng (UTC) hoặc SYNC_FULL=1: ghi lại TOÀN BỘ để bắt thay đổi mà last_modified_date không phản ánh."""
+    now = datetime.now(timezone.utc)
+    return os.environ.get("SYNC_FULL") == "1" or (now.weekday() == 6 and now.day <= 7)
+
+
+def load_stamps(sb, table: str, pk: str) -> dict | None:
+    """{pk: epoch giây của last_modified_date} từ Supabase; None = ghi hết (ngày làm mới toàn bộ)."""
+    if full_refresh_day():
+        print(f"[{table}] Ngày làm mới toàn bộ — ghi lại mọi dòng", flush=True)
+        return None
+    out: dict = {}
+    for r in fetch_all_rows(sb, table, f"{pk},last_modified_date"):
+        t = _ts(r.get("last_modified_date"))
+        if t is not None:
+            out[r[pk]] = t
+    print(f"[{table}] Đã có {len(out):,} dòng với mốc last_modified_date", flush=True)
+    return out
 
 def fetch_all_rows(sb, table: str, select: str) -> list[dict]:
     """Fetch toàn bộ rows, bypass Supabase 1000-row limit."""
@@ -309,7 +355,7 @@ def _prepare_rows(table: str, rows: list[dict]) -> list[dict]:
 def _sync_table(sb, table: str, rows: list[dict], pk: str):
     rows = _prepare_rows(table, rows)
     print(f"[{table}] Upserting {len(rows):,} rows...", flush=True)
-    upsert(sb, table, rows, pk)
+    upsert(sb, table, rows, pk, stamps=load_stamps(sb, table, pk) if table in SKIP_UNCHANGED else None)
     sb.table("sync_log").upsert(
         {"table_name": table, "last_sync": datetime.now(timezone.utc).isoformat(),
          "record_count": len(rows)},
@@ -371,6 +417,7 @@ def run_core(client, sb) -> dict:
     return counts
 
 
+SKIP_UNCHANGED = {"listings"}   # bảng nặng, đổi ít: chỉ ghi dòng đổi last_modified_date (items làm riêng trong run_items)
 ITEMS_UPSERT_CHUNK = int(os.environ.get("GOHUB_ITEMS_UPSERT_CHUNK", "200"))
 
 
@@ -383,11 +430,12 @@ def run_items(client, sb) -> dict:
     """
     print("[items] Fetching + upserting theo khối...", flush=True)
     written = 0
+    stamps = load_stamps(sb, "items", "item_code")
 
     def sink(objs):
         nonlocal written
         rows = _prepare_rows("items", [dataclasses.asdict(r) for r in objs])
-        upsert(sb, "items", rows, "item_code", chunk=ITEMS_UPSERT_CHUNK)
+        upsert(sb, "items", rows, "item_code", chunk=ITEMS_UPSERT_CHUNK, stamps=stamps)
         written += len(rows)
         print(f"[items] đã ghi {written:,} dòng", flush=True)
 
