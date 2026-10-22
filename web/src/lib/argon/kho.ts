@@ -1,5 +1,7 @@
 import { cleanFolderPath, descendantIds, folderPathOf, khoIndexText, KHO_PROJECT_NAME, MAX_FOLDER_DEPTH, type DigestMeta, type FolderRow, type KhoSource } from "./kho-pure"
 
+import { factsBlock, listFacts, vnToday } from "./facts"
+
 export * from "./kho-pure"
 const db = async () => (await import("@/lib/supabase")).supabaseAdmin   // nạp muộn: phần thuần test được không cần env Supabase
 
@@ -103,6 +105,7 @@ export async function moveSources(username: string, ids: string[], folderId: str
 }
 
 export async function khoIndexBlock(username: string): Promise<string> {
-  const [folders, sources] = await Promise.all([listFolders(username), khoSources(username)])
-  return khoIndexText(folders, sources)
+  const [folders, sources, facts] = await Promise.all([listFolders(username), khoSources(username), listFacts(username, { status: ["active"], limit: 400 })])
+  return `${khoIndexText(folders, sources)}
+${factsBlock(facts, vnToday())}`
 }

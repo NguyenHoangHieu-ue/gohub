@@ -13,6 +13,7 @@ import { useMissionRunner } from "../missions/use-mission-runner"
 import { SourceViewer } from "../source-viewer"
 import { KhoTree, type TreeSel } from "./kho-tree"
 import { KhoInbox } from "./kho-inbox"
+import type { FactRow } from "@/lib/argon/facts-pure"
 
 // Kho nguồn của Phòng Argon: trái = "drive" (thư mục/file), giữa = chat với Thủ thư Kho (tìm, tổng hợp, so sánh, đánh giá, xếp tài liệu),
 // phải = kéo thả file + tóm tắt nhanh file vừa nạp. Chat chạy trên sứ mệnh "Thủ thư Kho" (đọc MỌI nguồn của Kho bằng tìm kiếm ý nghĩa).
@@ -29,6 +30,7 @@ export default function KhoPage() {
   const router = useRouter()
   const [role, setRole] = useState<string | null>(null)
   const [data, setData] = useState<KhoData | null>(null)
+  const [facts, setFacts] = useState<{ rows: FactRow[]; today: string }>({ rows: [], today: new Date().toISOString().slice(0, 10) })
   const [sel, setSel] = useState<TreeSel>({ kind: "all" })
   const [viewing, setViewing] = useState<Source | null>(null)
   const [detail, setDetail] = useState<MissionDetail | null>(null)
@@ -46,7 +48,11 @@ export default function KhoPage() {
   useEffect(() => { if (role && role !== "creator") router.push("/chatbot") }, [role, router])
 
   const reload = useCallback(async () => {
-    try { setData(await api<KhoData>("/api/creator/argon/kho")) } catch (e) { onError((e as Error).message) }
+    try {
+      const [k, f] = await Promise.all([api<KhoData>("/api/creator/argon/kho"), api<{ facts: FactRow[]; today: string }>("/api/creator/argon/facts").catch(() => null)])
+      setData(k)
+      if (f) setFacts({ rows: f.facts, today: f.today })
+    } catch (e) { onError((e as Error).message) }
   }, [onError])
   useEffect(() => { if (role === "creator") void reload() }, [role, reload])
 
@@ -120,7 +126,7 @@ export default function KhoPage() {
         </section>
 
         <aside className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden min-h-[320px]" aria-label="Nạp tài liệu">
-          {data ? <KhoInbox projectId={data.projectId} folders={data.folders} sources={data.sources} targetFolderId={targetFolder} onChanged={reload} onMove={move} onOpen={k => setViewing(toSource(k))} onError={onError} />
+          {data ? <KhoInbox projectId={data.projectId} folders={data.folders} sources={data.sources} facts={facts.rows} today={facts.today} targetFolderId={targetFolder} onChanged={reload} onMove={move} onOpen={k => setViewing(toSource(k))} onError={onError} />
             : <div className="p-4 text-sm text-gray-400">Đang tải…</div>}
         </aside>
       </div>

@@ -1,11 +1,12 @@
 import { Type, type FunctionDeclaration } from "@google/genai"
 import type { ToolLogEntry } from "./tools"
+import { FACT_TYPES, addManualFact, factLine, isoDate, listFacts, updateFact, vnToday, type FactStatus, type FactType } from "./facts"
 import { cleanFolderPath, ensureFolderPath, ensureKhoProject, moveSources, userProjectIds } from "./kho"
 const db = async () => (await import("@/lib/supabase")).supabaseAdmin   // nạp muộn: phần thuần test được không cần env Supabase
 
 // Công cụ riêng của sứ mệnh "Thủ thư Kho": xếp thư mục, đổi tên/nhãn/ghim, lưu ghi chú. KHÔNG xoá gì, không đụng nội dung nguồn.
 // Đọc/tìm nguồn dùng lietKeNguon / timTrongNguon / docNguon có sẵn (ở sứ mệnh Thủ thư, phạm vi = mọi nguồn của người dùng).
-export const KHO_TOOL_NAMES = ["taoThuMuc", "chuyenNguon", "capNhatNguon", "luuGhiChu"] as const
+export const KHO_TOOL_NAMES = ["taoThuMuc", "chuyenNguon", "capNhatNguon", "luuGhiChu", "traSuViec", "ghiSuViec", "capNhatSuViec"] as const
 
 export const KHO_TOOLS: FunctionDeclaration[] = [
   { name: "taoThuMuc", description: "Tạo thư mục trong Kho (tạo cả các cấp còn thiếu, tối đa 3 cấp). Vd \"Vendor/3HK/Bảng giá\". Đã có thì dùng lại.", parameters: { type: Type.OBJECT, properties: { duongDan: { type: Type.STRING, description: "Đường dẫn thư mục, cấp cách nhau bằng /" } }, required: ["duongDan"] } },
@@ -13,6 +14,13 @@ export const KHO_TOOLS: FunctionDeclaration[] = [
   { name: "capNhatNguon", description: "Đổi tên, gắn nhãn (thay toàn bộ nhãn cũ) hoặc ghim/bỏ ghim một nguồn. Nguồn ghim luôn nằm sẵn trong ngữ cảnh mọi lượt nên chỉ ghim tài liệu cốt lõi.", parameters: { type: Type.OBJECT, properties: { id: { type: Type.STRING }, ten: { type: Type.STRING, description: "Tên mới (tuỳ chọn)" }, nhan: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Danh sách nhãn mới, tối đa 8 (tuỳ chọn)" }, ghim: { type: Type.BOOLEAN, description: "true = ghim, false = bỏ ghim (tuỳ chọn)" } }, required: ["id"] } },
   { name: "luuGhiChu", description: "Lưu một ghi chú/bản tổng hợp thành nguồn mới trong Kho (vd bảng so sánh báo giá, hồ sơ vendor, biên bản tóm tắt). Dùng khi kết quả đáng giữ lại cho lần sau.", parameters: { type: Type.OBJECT, properties: { ten: { type: Type.STRING }, noiDung: { type: Type.STRING, description: "Nội dung markdown" }, thuMuc: { type: Type.STRING, description: "Thư mục lưu (tuỳ chọn, mặc định Chưa phân loại)" } }, required: ["ten", "noiDung"] } },
 ]
+
+const FACT_TYPE_LIST = Object.keys(FACT_TYPES)
+KHO_TOOLS.push(
+  { name: "traSuViec", description: "Tra SỔ SỰ VIỆC có hạn (khuyến mãi, ngừng bán, sản phẩm mới, đổi giá, đổi mạng, chính sách, hạn chót) do Argon tự ghi từ tài liệu/thread/mail. NHANH và rẻ hơn đọc lại từng tài liệu: dùng đầu tiên khi anh hỏi về hạn, khuyến mãi, sản phẩm mới/ngừng bán, thay đổi của vendor. Mỗi dòng có id, ngày hiệu lực/hết hạn và nguồn.", parameters: { type: Type.OBJECT, properties: { loai: { type: Type.STRING, description: `Lọc theo loại: ${FACT_TYPE_LIST.join(" | ")} (tuỳ chọn)` }, vendor: { type: Type.STRING, description: "Lọc theo vendor/đối tác (chứa chuỗi này, tuỳ chọn)" }, tuKhoa: { type: Type.STRING, description: "Từ khoá trong nội dung/đối tượng (tuỳ chọn)" }, tatCa: { type: Type.BOOLEAN, description: "true = gồm cả sự việc đã hết hạn/bị thay thế/bỏ (mặc định chỉ đang hiệu lực)" } } } },
+  { name: "ghiSuViec", description: "Ghi MỘT sự việc có hạn vào sổ khi anh nói cho em biết (vd vendor báo miệng, tin nhắn chưa có trong Kho) hoặc khi em phát hiện qua so sánh nhiều tài liệu. Ngày dạng YYYY-MM-DD, chỉ điền khi chắc.", parameters: { type: Type.OBJECT, properties: { loai: { type: Type.STRING, description: FACT_TYPE_LIST.join(" | ") }, vendor: { type: Type.STRING }, doiTuong: { type: Type.STRING, description: "Sản phẩm/nước/mạng ngắn gọn" }, noiDung: { type: Type.STRING, description: "1 câu tiếng Việt đủ số liệu" }, hieuLucTu: { type: Type.STRING, description: "YYYY-MM-DD (tuỳ chọn)" }, hetHan: { type: Type.STRING, description: "YYYY-MM-DD (tuỳ chọn)" } }, required: ["loai", "noiDung"] } },
+  { name: "capNhatSuViec", description: "Sửa một sự việc trong sổ theo id (từ traSuViec / mục lục): đổi nội dung, ngày, hoặc đổi trạng thái (bo = ghi sai nên bỏ, het_han, dang_hieu_luc). Dùng khi anh bảo sửa hoặc khi tài liệu mới cho thấy sự việc cũ đã đổi.", parameters: { type: Type.OBJECT, properties: { id: { type: Type.STRING }, trangThai: { type: Type.STRING, description: "bo | het_han | dang_hieu_luc (tuỳ chọn)" }, noiDung: { type: Type.STRING }, hieuLucTu: { type: Type.STRING, description: "YYYY-MM-DD hoặc rỗng để xoá" }, hetHan: { type: Type.STRING, description: "YYYY-MM-DD hoặc rỗng để xoá" } }, required: ["id"] } },
+)
 
 const entry = (name: string, args: Record<string, unknown>, ok: boolean, result: string): ToolLogEntry => ({ name, args, ok, chars: result.length, result, at: new Date().toISOString() })
 
@@ -63,6 +71,31 @@ export async function execKhoTool(name: string, args: Record<string, unknown>, u
       if (error || !src) return entry(name, args, false, error?.message ?? "Lưu lỗi")
       await (await db()).from("argon_source_versions").insert({ source_id: src.id, version: 1, extracted_text: text, note: "Argon lưu ghi chú", author: "argon" })
       return entry(name, args, true, `Đã lưu ghi chú "${ten}" (id ${src.id}) vào ${path.length ? path.join("/") : "Chưa phân loại"}`)
+    }
+    if (name === "traSuViec") {
+      const rows = await listFacts(username, { status: args.tatCa === true ? undefined : ["active"], limit: 800 })
+      const loai = String(args.loai ?? "").trim(), vendor = String(args.vendor ?? "").trim().toLowerCase(), kw = String(args.tuKhoa ?? "").trim().toLowerCase()
+      const hit = rows.filter(f => (!loai || f.type === loai) && (!vendor || f.vendor.toLowerCase().includes(vendor)) && (!kw || `${f.subject} ${f.summary} ${f.vendor}`.toLowerCase().includes(kw)))
+        .sort((a, b) => (a.expires_at ?? a.effective_from ?? "9999").localeCompare(b.expires_at ?? b.effective_from ?? "9999")).slice(0, 60)
+      if (!hit.length) return entry(name, args, true, `Sổ sự việc không có mục nào khớp (hôm nay ${vnToday()}). Nếu cần chắc chắn hơn thì tìm trong tài liệu bằng timTrongNguon.`)
+      return entry(name, args, true, `${hit.length} sự việc (hôm nay ${vnToday()}):\n${hit.map(f => `- [${f.id}] ${factLine(f)}${f.status !== "active" ? ` {${f.status}}` : ""}${f.source_name ? ` — nguồn: ${f.source_name}` : ""}`).join("\n")}`)
+    }
+    if (name === "ghiSuViec") {
+      const type = (String(args.loai ?? "") in FACT_TYPES ? String(args.loai) : "khac") as FactType
+      const summary = String(args.noiDung ?? "").trim().slice(0, 300)
+      if (!summary) return entry(name, args, false, "noiDung trống")
+      const f = await addManualFact(username, { type, vendor: String(args.vendor ?? "").trim().slice(0, 80), subject: String(args.doiTuong ?? "").trim().slice(0, 120), summary, evidence: "", effectiveFrom: isoDate(args.hieuLucTu), expiresAt: isoDate(args.hetHan) })
+      return entry(name, args, true, `Đã ghi sự việc ${f.id}: ${factLine(f)}`)
+    }
+    if (name === "capNhatSuViec") {
+      const map: Record<string, FactStatus> = { bo: "rejected", het_han: "expired", dang_hieu_luc: "active" }
+      const p: Parameters<typeof updateFact>[2] = {}
+      if (typeof args.trangThai === "string" && map[args.trangThai]) p.status = map[args.trangThai]
+      if (typeof args.noiDung === "string" && args.noiDung.trim()) p.summary = args.noiDung.trim().slice(0, 300)
+      for (const [k, key] of [["hieuLucTu", "effective_from"], ["hetHan", "expires_at"]] as const) if (k in args) { const v = isoDate(args[k]); if (args[k] && !v) return entry(name, args, false, `${k} phải dạng YYYY-MM-DD`); p[key] = v }
+      if (!Object.keys(p).length) return entry(name, args, false, "Không có gì để cập nhật")
+      const f = await updateFact(username, String(args.id ?? ""), p)
+      return f ? entry(name, args, true, `Đã cập nhật: ${factLine(f)} {${f.status}}`) : entry(name, args, false, `Không có sự việc "${String(args.id)}"`)
     }
     return entry(name, args, false, `Công cụ không có: ${name}`)
   } catch (e) { return entry(name, args, false, `Lỗi Kho: ${(e as Error).message}`) }

@@ -6,6 +6,8 @@ import { AlertCircle, CheckCircle2, ChevronDown, Folder, Link2, Loader2, Lightbu
 import { supabaseBrowser } from "@/lib/supabase-browser"
 import { cn } from "@/lib/utils"
 import { folderPathOf, type DigestMeta, type FolderRow, type KhoSource } from "@/lib/argon/kho-pure"
+import type { FactRow } from "@/lib/argon/facts-pure"
+import { KhoFacts } from "./kho-facts"
 import { api, jsonInit, type Source } from "../argon-types"
 
 // Cột phải của Kho: kéo thả / chọn file → tự đọc, tóm tắt nhanh, tự xếp thư mục; bên dưới là các nguồn mới nạp kèm tóm tắt và gợi ý.
@@ -13,8 +15,8 @@ interface Job { key: string; name: string; stage: "upload" | "read" | "summary" 
 const STAGE: Record<Job["stage"], string> = { upload: "Đang tải lên…", read: "Đang đọc nội dung…", summary: "Đang tóm tắt…", done: "Xong", error: "Lỗi" }
 const fmtAgo = (iso: string) => { const m = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60_000)); return m < 1 ? "vừa xong" : m < 60 ? `${m} phút trước` : m < 1440 ? `${Math.round(m / 60)} giờ trước` : `${Math.round(m / 1440)} ngày trước` }
 
-export function KhoInbox({ projectId, folders, sources, targetFolderId, onChanged, onMove, onOpen, onError }: {
-  projectId: string; folders: FolderRow[]; sources: KhoSource[]; targetFolderId: string | null
+export function KhoInbox({ projectId, folders, sources, facts, today, targetFolderId, onChanged, onMove, onOpen, onError }: {
+  projectId: string; folders: FolderRow[]; sources: KhoSource[]; facts: FactRow[]; today: string; targetFolderId: string | null
   onChanged: () => Promise<void>; onMove: (ids: string[], folderId: string | null) => Promise<void>
   onOpen: (s: KhoSource) => void; onError: (m: string) => void
 }) {
@@ -24,6 +26,7 @@ export function KhoInbox({ projectId, folders, sources, targetFolderId, onChange
   const [note, setNote] = useState({ name: "", text: "" })
   const [link, setLink] = useState("")
   const [busy, setBusy] = useState(false)
+  const [tab, setTab] = useState<"new" | "facts">("new")
   const fileRef = useRef<HTMLInputElement>(null)
   const setJob = (key: string, p: Partial<Job>) => setJobs(js => js.map(j => (j.key === key ? { ...j, ...p } : j)))
   const target = targetFolderId ? folderPathOf(targetFolderId, folders) : ""
@@ -132,6 +135,12 @@ export function KhoInbox({ projectId, folders, sources, targetFolderId, onChange
         )}
       </div>
 
+      <div className="flex border-b border-gray-200 dark:border-slate-700 text-[12.5px]" role="tablist">
+        {([["new", "Mới nạp"], ["facts", `Sổ sự việc (${facts.filter(f => f.status === "active").length})`]] as const).map(([k, label]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+            className={cn("flex-1 py-2 font-medium border-b-2 -mb-px", tab === k ? "border-violet-600 text-violet-700 dark:text-violet-300" : "border-transparent text-gray-500 hover:text-gray-700")}>{label}</button>
+        ))}
+      </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {jobs.filter(j => j.stage !== "done").map(j => (
           <div key={j.key} className="flex items-center gap-2 text-[12.5px] rounded-lg bg-gray-50 dark:bg-slate-900/50 px-2.5 py-1.5">
@@ -139,9 +148,11 @@ export function KhoInbox({ projectId, folders, sources, targetFolderId, onChange
             <span className="truncate flex-1">{j.name}</span><span className={cn("shrink-0 text-[11px]", j.stage === "error" ? "text-red-600" : "text-gray-500")} title={j.error}>{j.stage === "error" ? j.error?.slice(0, 40) : STAGE[j.stage]}</span>
           </div>
         ))}
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-1">Mới nạp</div>
+        {tab === "facts" && <KhoFacts facts={facts} today={today} onChanged={onChanged} onError={onError} onOpenSource={id => { const s = sources.find(x => x.id === id); if (s) onOpen(s) }} />}
+        {tab === "new" && <>
         {recent.length === 0 && <div className="text-xs text-gray-400 py-6 text-center">Chưa có nguồn nào.</div>}
         {recent.map(s => <RecentCard key={s.id} s={s} folders={folders} onOpen={() => onOpen(s)} onMove={f => onMove([s.id], f)} onDigest={() => digestNow(s)} />)}
+        </>}
       </div>
 
       <div className="p-2.5 border-t border-gray-200 dark:border-slate-700 text-[12px]">

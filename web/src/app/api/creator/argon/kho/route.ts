@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { requireArgonUser, type ArgonSource } from "@/lib/argon/server"
 import { cleanFolderPath, deleteFolder, ensureFolderPath, ensureKhoProject, folderPathOf, khoSources, listFolders, moveFolder, moveSources, renameFolder, userProjectIds, type DigestMeta } from "@/lib/argon/kho"
 import { ensureKhoMission } from "@/lib/argon/kho-mission"
-import { digestSource } from "@/lib/argon/source-digest"
+import { digestAndFile } from "@/lib/argon/kho-digest"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 120
@@ -61,19 +61,10 @@ export async function POST(req: NextRequest) {
     const { data } = await supabaseAdmin.from("argon_sources").select("*").in("id", ids).in("project_id", pids)
     const folders = await listFolders(username)
     const paths = Array.from(new Set(folders.map(f => folderPathOf(f.id, folders)))).filter(Boolean)
-    const results: { id: string; digest?: DigestMeta; folder_id?: string | null; error?: string }[] = []
+    const results: { id: string; digest?: DigestMeta; folder_id?: string | null; facts?: number; error?: string }[] = []
     for (const s of (data ?? []) as ArgonSource[]) {
-      try {
-        const d = await digestSource(s, paths)
-        let folderId = (s as ArgonSource & { folder_id?: string | null }).folder_id ?? null
-        if (b.autoFile && !folderId && d.folder) {
-          const segs = cleanFolderPath(d.folder)
-          if (segs.length) { folderId = await ensureFolderPath(username, segs.join("/")); d.autoFiled = segs.join("/") }
-        }
-        const meta = { ...(s.meta ?? {}), digest: d, ...(Array.isArray(s.meta?.tags) && (s.meta.tags as unknown[]).length ? {} : { tags: d.tags ?? [] }) }
-        await supabaseAdmin.from("argon_sources").update({ meta, folder_id: folderId }).eq("id", s.id)
-        results.push({ id: s.id, digest: d, folder_id: folderId })
-      } catch (e) { results.push({ id: s.id, error: (e as Error).message }) }
+      try { const r = await digestAndFile(username, s, paths, !!b.autoFile); results.push({ id: s.id, digest: r.digest, folder_id: r.folder_id, facts: r.facts.length }) }
+      catch (e) { results.push({ id: s.id, error: (e as Error).message }) }
     }
     return NextResponse.json({ results, folders: await listFolders(username) })
   }

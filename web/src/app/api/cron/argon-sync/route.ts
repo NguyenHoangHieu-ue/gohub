@@ -12,6 +12,8 @@ import { projectIdsWithAutorun, startAutorun } from "@/lib/argon/autorun"
 import { MAX_PATROLS_PER_NIGHT, missionIdsWithPatrol, startPatrol, vnDate } from "@/lib/argon/patrol"
 import { missionIdsWithDueForecasts } from "@/lib/argon/forecast-tool"
 import { ensureIndexed, pruneOrphans } from "@/lib/argon/index-db"
+import { digestPending } from "@/lib/argon/kho-digest"
+import { argonUsernames, runFactsNightly } from "@/lib/argon/facts"
 import type { ArgonSource } from "@/lib/argon/server"
 
 export const maxDuration = 300
@@ -62,9 +64,18 @@ async function run(req: NextRequest) {
   let search: { indexed: number; pending: number; pruned: number; errors: string[] } = { indexed: 0, pending: 0, pruned: 0, errors: [] }
   try {
     const { data: all } = await supabaseAdmin.from("argon_sources").select("id").eq("enabled", true)
-    const ix = await ensureIndexed((all ?? []).map(r => r.id as string), { deadlineMs: Math.max(5_000, t0 + 270_000 - Date.now()), max: 400 })
+    const ix = await ensureIndexed((all ?? []).map(r => r.id as string), { deadlineMs: Math.max(5_000, t0 + 190_000 - Date.now()), max: 400 })
     search = { ...ix, pruned: await pruneOrphans() }
   } catch (e) { search.errors.push((e as Error).message) }
+  // Sổ sự việc: tóm tắt + trích sự việc có hạn từ nguồn mới (mail/thread/file chưa xử lý), rồi đánh dấu hết hạn, nhắc tới hạn và gửi 1 tin tóm tắt "đã ghi gì" cho Hiếu.
+  const facts: { user: string; digested: number; remaining: number; added: number; due: number; expired: number; sent: boolean; errors: string[] }[] = []
+  try {
+    for (const user of await argonUsernames()) {
+      const dg = await digestPending(user, 40, t0 + 250_000)
+      const nf = await runFactsNightly(user, `${req.nextUrl.origin}/analytics/creator/argon/kho-nguon`)
+      facts.push({ user, digested: dg.done, remaining: dg.remaining, ...nf, errors: dg.errors.slice(0, 5) })
+    }
+  } catch (e) { facts.push({ user: "?", digested: 0, remaining: 0, added: 0, due: 0, expired: 0, sent: false, errors: [(e as Error).message] }) }
   // "Tự chạy hằng đêm": sau khi mail/thread đã nạp, giao worker chạy yêu cầu cố định (1 lần/ngày/dự án) rồi DM Lark.
   const autorun: { project: string; runId: string | null; error?: string }[] = []
   for (const pid of await projectIdsWithAutorun()) {
@@ -86,6 +97,7 @@ async function run(req: NextRequest) {
     mail,
     threads,
     search,
+    facts,
     autorun,
     patrol,
   })
