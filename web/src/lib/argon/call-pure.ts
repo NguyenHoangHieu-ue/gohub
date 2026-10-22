@@ -3,18 +3,21 @@
 export type CallWho = "partner" | "me"
 export interface CallLine { id: number; who: CallWho; en: string; vi: string; final: boolean; at: number }
 
-const NEW_LINE_GAP_MS = 3500
+const ME_GAP_MS = 3500          // mic: im lặng chừng này thì sang dòng mới
+const PARTNER_GAP_MS = 1800     // đối tác: ngừng nói chừng này thì sang dòng mới (khớp mốc chốt dòng ở use-live-call)
+const PARTNER_LONG_CHARS = 240  // độc thoại dài: tách dòng ở chỗ hết câu
 
 /** Ghép một mẩu chữ mới vào danh sách dòng. partner: `en` = lời gốc (inputTranscription), `vi` = bản dịch (outputTranscription); me: chỉ `en`.
- *  Dòng partner mới bắt đầu khi lời gốc mới tới mà dòng trước đã có bản dịch/đã chốt (nghĩa là câu trước xong rồi). Thuần: trả mảng mới. */
+ *  Dòng mới bắt đầu theo QUÃNG NGHỈ (không theo thứ tự lời gốc/bản dịch xen kẽ, vì bản dịch trễ hơn lời gốc ~1–2s và các mẩu đan xen nhau), hoặc khi dòng đã chốt,
+ *  hoặc khi dòng đã quá dài và vừa hết câu. Thuần: trả mảng mới. */
 export function appendChunk(lines: CallLine[], who: CallWho, field: "en" | "vi", text: string, now: number): CallLine[] {
   if (!text) return lines
   const out = lines.map(l => ({ ...l }))
   let last: CallLine | undefined
   for (let i = out.length - 1; i >= 0; i--) if (out[i].who === who) { last = out[i]; break }
   const startNew = !last || last.final
-    || (field === "en" && who === "partner" && !!last.vi)
-    || (who === "me" && now - last.at > NEW_LINE_GAP_MS)
+    || (who === "partner" && field === "en" && (now - last.at > PARTNER_GAP_MS || (last.en.length > PARTNER_LONG_CHARS && /[.?!]["')\]]?\s*$/.test(last.en))))
+    || (who === "me" && now - last.at > ME_GAP_MS)
   if (startNew) {
     if (field === "vi" && last && !last.final) { last.vi += text; last.at = now; return out }   // bản dịch tới sau khi lời gốc đã chốt: gắn vào dòng gần nhất
     const id = (out.reduce((m, l) => Math.max(m, l.id), 0)) + 1

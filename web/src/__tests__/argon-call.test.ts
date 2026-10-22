@@ -11,11 +11,19 @@ describe("appendChunk / finalizeLast", () => {
     expect(l).toHaveLength(1)
     expect(l[0]).toMatchObject({ en: "We can offer three point five.", vi: "Chúng tôi có thể chào 3,5.", final: false })
   })
-  it("lời gốc mới sau khi dòng trước đã có bản dịch → dòng mới", () => {
-    let l = appendChunk([], "partner", "en", "Hello there.", 1)
-    l = appendChunk(l, "partner", "vi", "Xin chào.", 2)
-    l = appendChunk(l, "partner", "en", "About the price.", 3)
-    expect(l.map(x => x.en)).toEqual(["Hello there.", "About the price."])
+  it("lời gốc xen kẽ với bản dịch vẫn cùng một dòng nếu không có quãng nghỉ; nghỉ >1,8s mới sang dòng mới", () => {
+    let l = appendChunk([], "partner", "en", "Hello there.", 1000)
+    l = appendChunk(l, "partner", "vi", "Xin chào.", 1800)
+    l = appendChunk(l, "partner", "en", " About the price.", 2400)
+    expect(l).toHaveLength(1); expect(l[0].en).toBe("Hello there. About the price.")
+    l = appendChunk(l, "partner", "en", "Next topic.", 2400 + 2000)
+    expect(l.map(x => x.en)).toEqual(["Hello there. About the price.", "Next topic."])
+  })
+  it("độc thoại dài: tách dòng ở chỗ hết câu", () => {
+    const long = "word ".repeat(60).trim() + "."
+    let l = appendChunk([], "partner", "en", long, 1000)
+    l = appendChunk(l, "partner", "en", "Another sentence", 1500)
+    expect(l).toHaveLength(2)
   })
   it("bản dịch tới sau khi chốt vẫn không mất; dòng đã chốt thì chữ mới mở dòng mới", () => {
     let l = appendChunk([], "partner", "en", "Okay.", 1)
