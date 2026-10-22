@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
 import { PHASE_LABEL, phaseIndex, type MissionPhase, type PatchUi, type PendingAskUi } from "./mission-types"
-import type { ModelKey, SendOpts, Thinking, useMissionRunner } from "./use-mission-runner"
+import { stepLabel, type ModelKey, type SendOpts, type Thinking, type useMissionRunner } from "./use-mission-runner"
 
 // Chat của sứ mệnh: chỉ hiện KẾT QUẢ và điều cần Hiếu quyết; các bước làm việc nằm ở Bàn làm việc. Thanh pha dẫn Hiếu qua Làm rõ → Kế hoạch → Chốt và chạy.
 type Runner = ReturnType<typeof useMissionRunner>
@@ -81,6 +81,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
     try { await onPatch(id, action) } catch (e) { onError((e as Error).message) } finally { setPatchBusy(null) }
   }
   const endRef = useRef<HTMLDivElement>(null)
+  const lastStep = runner.steps.length ? stepLabel(runner.steps[runner.steps.length - 1]) : null   // bước công cụ mới nhất, để biết Argon đang làm gì khi chưa có chữ
   const stick = useRef(true)
   const opts: SendOpts = { thinking, allowTools, background, model }
   const { busy, bgActive } = runner
@@ -163,7 +164,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
           <div className="mx-auto mt-10 max-w-sm text-center">
             <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"><Atom size={22} /></div>
             <div className="mt-3 text-sm font-medium text-gray-800 dark:text-slate-100">Bắt đầu với Argon</div>
-            <p className="mt-1 text-xs leading-relaxed text-gray-500">Chọn một gợi ý ở dưới hoặc gõ yêu cầu của anh. Mọi bước Argon làm (đọc file, SQL, chạy code) hiện ở cột Bàn làm việc bên phải, chat chỉ giữ kết quả.</p>
+            <p className="mt-1 text-xs leading-relaxed text-gray-500">Chọn một gợi ý ở dưới hoặc gõ yêu cầu của anh. {simple ? "Chat chỉ giữ kết quả; mọi bước Argon làm hiện ở mục “Argon đang làm gì” bên dưới." : "Mọi bước Argon làm (đọc file, SQL, chạy code) hiện ở cột Bàn làm việc bên phải, chat chỉ giữ kết quả."}</p>
           </div>
         )}
         {runs.map(r => {
@@ -176,7 +177,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
                 <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200" aria-hidden><Atom size={15} /></span>
                 <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 shadow-sm">
                   {r.answer ? <ArgonMarkdown text={r.answer} onStep={n => onStep(r.id, n)} />
-                    : <div className="flex items-center gap-2 text-[13px] text-gray-500"><span className="flex gap-1" aria-hidden>{[0, 1, 2].map(i => <i key={i} className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />)}</span>Argon đang làm việc, xem từng bước ở Bàn làm việc</div>}
+                    : <div className="flex items-center gap-2 text-[13px] text-gray-500"><span className="flex gap-1" aria-hidden>{[0, 1, 2].map(i => <i key={i} className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />)}</span>{lastStep ? `Argon đang làm: ${lastStep.tag} ${lastStep.text.slice(0, 80)} (${runner.steps.length} bước)` : "Argon đang làm việc…"}</div>}
                   {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
                   {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}
                   <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-gray-500">
