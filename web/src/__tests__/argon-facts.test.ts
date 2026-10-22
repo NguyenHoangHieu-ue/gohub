@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { bucketFacts, daysUntil, dueReminders, expiredIds, factKey, factLine, factsBlock, isoDate, keyDate, nightlyMessage, normalizeFacts, vnToday, type FactRow } from "@/lib/argon/facts-pure"
+import { bucketFacts, dateKey, daysUntil, dueReminders, expiredIds, factKey, factLine, factsBlock, isoDate, keyDate, nightlyMessage, normalizeFacts, vnToday, type FactRow } from "@/lib/argon/facts-pure"
 import { parseDigestFull } from "@/lib/argon/source-digest"
 
 const F = (id: string, o: Partial<FactRow> = {}): FactRow => ({
@@ -34,6 +34,13 @@ describe("normalizeFacts", () => {
 describe("factKey", () => {
   it("không phân biệt hoa thường/dấu", () => { expect(factKey({ vendor: "Billion Connect", type: "doi_gia", subject: "Thái Lan Daily" })).toBe(factKey({ vendor: "billion connect", type: "doi_gia", subject: "THAI LAN daily" })) })
   it("khác loại → khác khoá", () => { expect(factKey({ vendor: "a", type: "doi_gia", subject: "x" })).not.toBe(factKey({ vendor: "a", type: "khuyen_mai", subject: "x" })) })
+})
+
+describe("dateKey", () => {
+  it("cùng vendor/loại/ngày → cùng khoá dù đối tượng khác chữ; không có ngày → null", () => {
+    expect(dateKey({ vendor: "HTHK", type: "doi_mang", effectiveFrom: "2026-11-30", expiresAt: null })).toBe(dateKey({ vendor: "hthk", type: "doi_mang", effective_from: "2026-11-30", expires_at: null }))
+    expect(dateKey({ vendor: "a", type: "khac" })).toBeNull()
+  })
 })
 
 describe("hạn và nhắc", () => {

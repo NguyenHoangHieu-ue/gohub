@@ -1,4 +1,4 @@
-import { dueReminders, expiredIds, factKey, nightlyMessage, vnToday, type FactIn, type FactRow, type FactStatus, type FactType } from "./facts-pure"
+import { dateKey, dueReminders, expiredIds, factKey, nightlyMessage, vnToday, type FactIn, type FactRow, type FactStatus, type FactType } from "./facts-pure"
 
 export * from "./facts-pure"
 const db = async () => (await import("@/lib/supabase")).supabaseAdmin   // nạp muộn: phần thuần test được không cần env Supabase
@@ -28,10 +28,12 @@ export async function saveSourceFacts(username: string, src: { id: string; name:
   }))).select("*")
   if (error) throw new Error(error.message)
   const added = (ins ?? []) as FactRow[]
-  const { data: others } = await sb.from("argon_facts").select("id,vendor,type,subject,source_id,status").eq("username", username).in("status", ["active", "expired"]).neq("source_id", src.id)
+  const { data: others } = await sb.from("argon_facts").select("id,vendor,type,subject,effective_from,expires_at,source_id,status").eq("username", username).in("status", ["active", "expired"]).neq("source_id", src.id)
   const newest = new Map(added.map(f => [factKey(f), f.id]))
-  const old = ((others ?? []) as Pick<FactRow, "id" | "vendor" | "type" | "subject">[]).filter(o => o.subject && newest.has(factKey(o)))
-  for (const o of old) await sb.from("argon_facts").update({ status: "superseded", superseded_by: newest.get(factKey(o)), updated_at: new Date().toISOString() }).eq("id", o.id)
+  const newestByDate = new Map(added.flatMap(f => { const k = dateKey(f); return k ? [[k, f.id] as const] : [] }))
+  const old = ((others ?? []) as Pick<FactRow, "id" | "vendor" | "type" | "subject" | "effective_from" | "expires_at">[])
+    .map(o => ({ o, by: (o.subject && newest.get(factKey(o))) || newestByDate.get(dateKey(o) ?? "") })).filter(x => !!x.by)
+  for (const { o, by } of old) await sb.from("argon_facts").update({ status: "superseded", superseded_by: by, updated_at: new Date().toISOString() }).eq("id", o.id)
   return added
 }
 

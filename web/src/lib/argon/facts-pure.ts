@@ -52,6 +52,12 @@ const fold = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").r
 /** Khoá nhận diện "cùng một sự việc" giữa các nguồn: vendor + loại + đối tượng (không dấu, không phân biệt hoa thường). */
 export const factKey = (f: { vendor: string; type: string; subject: string }) => `${fold(f.vendor)}|${f.type}|${fold(f.subject)}`
 
+/** Khoá phụ: cùng vendor + loại + CÙNG ngày hiệu lực/hết hạn (có ít nhất một ngày) thì coi là cùng một sự việc dù mô tả đối tượng khác chữ (vd 2 mail báo cùng một thông báo). */
+export const dateKey = (f: { vendor: string; type: string; effective_from?: string | null; expires_at?: string | null; effectiveFrom?: string | null; expiresAt?: string | null }) => {
+  const from = f.effective_from ?? f.effectiveFrom ?? "", to = f.expires_at ?? f.expiresAt ?? ""
+  return from || to ? `${fold(f.vendor)}|${f.type}|${from}|${to}` : null
+}
+
 /** Ngày đáng chú ý của sự việc: loại "bắt đầu có hiệu lực" (đổi giá, ngừng bán, đổi mạng, sản phẩm mới) → ngày hiệu lực; còn lại → hạn. */
 export function keyDate(f: Pick<FactRow, "type" | "effective_from" | "expires_at">): string | null {
   const start: FactType[] = ["doi_gia", "ngung_ban", "doi_mang", "san_pham_moi"]
