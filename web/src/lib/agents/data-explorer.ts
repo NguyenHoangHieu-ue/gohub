@@ -46,9 +46,7 @@ export const SUPABASE_TABLES: Record<string, string> = {
   analytics_channel_group_costs: "Chi phí theo nhóm kênh",
   analytics_target_planning:     "Kế hoạch target (planning)",
   analytics_cost_input_settings: "Cấu hình nhập chi phí",
-  analytics_feedbacks:           "Feedback người dùng trên trang analytics",
   b2c_report_monthly_snapshots:  "Snapshot báo cáo B2C theo tháng (payload jsonb)",
-  analytics_scheduled_messages:  "Lịch gửi tin Lark (analytics)",
   lark_scheduled_messages:       "Lịch gửi tin Lark",
   sync_log:               "Log đồng bộ dữ liệu",
 }
@@ -60,8 +58,6 @@ export const SENSITIVE_TABLES: Record<string, string> = {
   conversations:          "Hội thoại chatbot (PII)",
   chat_messages:          "Tin nhắn chat nhóm Tổ Gấu (PII)",
   conversation_messages:  "Tin nhắn hội thoại chatbot Bé Gấu/Gấu Pro (PII)",
-  analytics_conversations:"Hội thoại BI (PII)",
-  analytics_messages:     "Tin nhắn BI (PII)",
   lark_chat_history:      "Lịch sử chat Lark (PII)",
   lark_cs_tickets:        "Ticket CS từ Lark (PII khách hàng)",
   notifications:          "Thông báo người dùng",
