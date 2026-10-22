@@ -2,16 +2,17 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Compass, Database, MessagesSquare, Network, Sun } from "lucide-react"
+import { Compass, Database, MessagesSquare, Network, Phone, Sun } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-// Phòng Argon: 5 tab (Hôm nay · Kho · Bối cảnh và Kế hoạch · Bản đồ · Trợ lý). Sứ mệnh, workspace, tuần tra, sổ dự đoán… vẫn ở "Nâng cao".
+// Phòng Argon: 6 tab (Hôm nay · Kho · Bối cảnh và Kế hoạch · Bản đồ · Trợ lý · Cuộc gọi). Sứ mệnh, workspace, tuần tra, sổ dự đoán… vẫn ở "Nâng cao".
 const TABS = [
   { href: "/analytics/creator/argon", label: "Hôm nay", icon: Sun, exact: true },
   { href: "/analytics/creator/argon/kho-nguon", label: "Kho", icon: Database },
   { href: "/analytics/creator/argon/boi-canh", label: "Bối cảnh và Kế hoạch", icon: Compass },
   { href: "/analytics/creator/argon/ban-do", label: "Bản đồ", icon: Network },
   { href: "/analytics/creator/argon/tro-ly", label: "Trợ lý", icon: MessagesSquare },
+  { href: "/analytics/creator/argon/cuoc-goi", label: "Cuộc gọi", icon: Phone },
 ]
 
 export default function ArgonLayout({ children }: { children: React.ReactNode }) {
