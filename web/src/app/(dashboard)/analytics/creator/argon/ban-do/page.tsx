@@ -4,9 +4,8 @@ import "@xyflow/react/dist/style.css"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { ReactFlow, Background, Controls, Handle, Position, type Edge, type Node, type NodeProps } from "@xyflow/react"
-import { ArrowLeft, Atom, Network, Pause, Play } from "lucide-react"
+import { Network, Pause, Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api } from "../argon-types"
 import { AGENTS, applyEvents, emptyActivity, isActive, isErrored, type ActivityState, type MapEdge, type MapNode } from "@/lib/system-map"
@@ -139,7 +138,7 @@ export default function BanDoPage() {
         <div className="ml-auto flex items-center gap-3">
           <span className={cn("inline-flex items-center gap-1.5 text-[12.5px]", running ? "text-amber-600" : "text-gray-500")}><span className={cn("w-2 h-2 rounded-full", running ? "bg-amber-500 animate-pulse" : "bg-gray-300")} />{replay ? `Phát lại ${replay.done}/${replay.total}` : running ? "Đang có lượt chạy" : "Đang chờ lượt chạy mới"}</span>
           {replay && <button type="button" onClick={stopReplay} className="inline-flex items-center gap-1 px-2.5 py-1 text-[12.5px] rounded-lg border border-gray-300 dark:border-slate-600"><Pause size={12} />Dừng phát lại</button>}
-          <Link href="/analytics/creator/argon" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><ArrowLeft size={14} /><Atom size={14} />Về Argon</Link>
+          
         </div>
       </header>
       {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}

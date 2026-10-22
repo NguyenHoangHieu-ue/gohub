@@ -93,3 +93,13 @@ describe("auditProposals", () => {
   it("không có đề xuất / không có mục → empty", () => { expect(auditProposals("## Đề xuất hôm nay\nChưa có đề xuất đủ căn cứ hôm nay.").empty).toBe(true); expect(auditProposals("").empty).toBe(true) })
   it("usesKhoScope và câu lệnh đêm", () => { expect(usesKhoScope("Thủ thư Kho")).toBe(true); expect(usesKhoScope("Tham mưu hằng ngày")).toBe(true); expect(usesKhoScope("Sứ mệnh khác")).toBe(false); expect(NIGHTLY_PROMPT).toContain("notes/tac-dong.md") })
 })
+
+import { sectionOf } from "@/lib/argon/context-pure"
+describe("sectionOf", () => {
+  const md = "# Tác động tới kế hoạch và đề xuất\n\n## Tác động tới kế hoạch\n- A\n- B\n\n## Đề xuất hôm nay\n### 1. Việc — Chắc\n- Nguồn: X\n\n## Khác\nz\n"
+  it("lấy đúng mục, bỏ dòng tiêu đề, dừng ở ## kế tiếp (### nằm trong mục)", () => {
+    expect(sectionOf(md, "Tác động")).toBe("- A\n- B")
+    expect(sectionOf(md, "Đề xuất")).toBe("### 1. Việc — Chắc\n- Nguồn: X")
+  })
+  it("không thấy → rỗng", () => { expect(sectionOf(md, "Không có")).toBe(""); expect(sectionOf("", "Đề xuất")).toBe("") })
+})

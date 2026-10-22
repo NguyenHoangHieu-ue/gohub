@@ -73,3 +73,14 @@ export function auditProposals(md: string): ProposalAudit {
   })
   return { total: items.length, ok, issues, empty: false }
 }
+
+/** Lấy một mục "## <tiêu đề>" (không gồm dòng tiêu đề) của file markdown, tới mục "##" kế tiếp. Không thấy → "". Thuần. */
+export function sectionOf(md: string, heading: string): string {
+  const lines = md.split("\n"), want = heading.trim().toLowerCase()
+  const isH2 = (l: string) => /^##\s/.test(l)
+  const i = lines.findIndex(l => isH2(l) && l.replace(/^##\s*/, "").trim().toLowerCase().startsWith(want))
+  if (i < 0) return ""
+  const out: string[] = []
+  for (let j = i + 1; j < lines.length && !isH2(lines[j]); j++) out.push(lines[j])
+  return out.join("\n").trim()
+}

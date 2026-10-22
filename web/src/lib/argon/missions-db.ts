@@ -4,6 +4,7 @@ import { BRIEF_PATH, DECISIONS_PATH, briefTemplate, canTransition, checkWrite, c
 import { deleteProjectCascade } from "./project-delete"
 import { KHO_INSTRUCTION, KHO_MISSION_NAME, khoIndexBlock, khoSources } from "./kho"
 import { CONTEXT_INSTRUCTION, usesKhoScope } from "./context-instruction"
+import { BOI_CANH_PATH, TAC_DONG_PATH } from "./context-pure"
 
 export interface ArgonMission {
   id: string; username: string; project_id: string; name: string; goal: string; phase: MissionPhase
@@ -171,7 +172,14 @@ export async function loadMissionContext(projectId: string): Promise<{ mission: 
   if (!mission) return null
   const [files, brief, decisions] = await Promise.all([listFiles(mission.id), readFile(mission.id, BRIEF_PATH), readFile(mission.id, DECISIONS_PATH)])
   const base = missionContextBlock(mission, brief?.content ?? "", decisions?.content ?? "", files)
-  if (usesKhoScope(mission.name)) return { mission, block: `${base}\n${await khoIndexBlock(mission.username)}`, instruction: `${phaseInstruction(mission.phase)}\n${mission.name === KHO_MISSION_NAME ? KHO_INSTRUCTION : CONTEXT_INSTRUCTION}` }
+  if (usesKhoScope(mission.name)) {
+    const isKho = mission.name === KHO_MISSION_NAME
+    // Trợ lý tổng hợp (Tham mưu hằng ngày): nắm sẵn bối cảnh công ty và tác động/đề xuất mới nhất (các "cửa sổ" khác của Phòng Argon) để trả lời không phải đọc lại.
+    const [boi, tac] = isKho ? [null, null] : await Promise.all([readFile(mission.id, BOI_CANH_PATH), readFile(mission.id, TAC_DONG_PATH)])
+    const window = (tag: string, f: { content?: string | null } | null) => (f?.content?.trim() ? `<${tag}>\n${f.content.trim().slice(0, 4000)}\n</${tag}>` : "")
+    const extra = [window("boi_canh_hien_tai", boi), window("tac_dong_de_xuat_hien_tai", tac)].filter(Boolean).join("\n")
+    return { mission, block: `${base}\n${await khoIndexBlock(mission.username)}${extra ? `\n${extra}` : ""}`, instruction: `${phaseInstruction(mission.phase)}\n${isKho ? KHO_INSTRUCTION : `${CONTEXT_INSTRUCTION}\n${KHO_INSTRUCTION}`}` }
+  }
   return { mission, block: base, instruction: phaseInstruction(mission.phase) }
 }
 

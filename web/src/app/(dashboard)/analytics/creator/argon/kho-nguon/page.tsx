@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { ArrowLeft, Atom, Database } from "lucide-react"
+import { Database } from "lucide-react"
 import { api, jsonInit, type Run, type Source } from "../argon-types"
 import type { FolderRow, KhoSource } from "@/lib/argon/kho-pure"
 import type { MissionDetail } from "../missions/mission-types"
@@ -106,7 +105,7 @@ export default function KhoPage() {
           <h1 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-100 leading-tight">Kho</h1>
           <p className="text-[13px] text-gray-500">Nạp tài liệu, hỏi Argon tìm / so sánh / đánh giá, tự sắp xếp thư mục</p>
         </div>
-        <Link href="/analytics/creator/argon" className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><ArrowLeft size={14} /><Atom size={14} />Về Argon</Link>
+        
       </header>
       {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}
 

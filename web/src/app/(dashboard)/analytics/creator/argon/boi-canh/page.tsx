@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { AlertTriangle, ArrowLeft, Atom, CheckCircle2, Compass, Loader2, Moon, RefreshCw, Save } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Compass, Loader2, Moon, RefreshCw, Save } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api, jsonInit } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
@@ -106,7 +105,7 @@ export default function BoiCanhPage() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50">
             <RefreshCw size={13} className={cn(running && "animate-spin")} />{running ? "Đang cập nhật…" : "Cập nhật ngay"}
           </button>
-          <Link href="/analytics/creator/argon" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"><ArrowLeft size={14} /><Atom size={14} />Về Argon</Link>
+          
         </div>
       </header>
       {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}

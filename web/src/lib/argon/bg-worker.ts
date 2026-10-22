@@ -97,7 +97,7 @@ export async function runBackgroundSegment(runId: string, origin: string): Promi
     })
     const seg = await runSegment({
       ctx, thinking: bg.thinking, model: run.model ?? undefined, segmentMs: SEGMENT_MS, maxOut: MAX_OUT, signal: stopAc.signal,
-      tools: bg.allowTools || mctx ? { origin, log: toolLog, onTool: () => saveToolLog(runId, toolLog), dataTools: bg.allowTools, missionId: mctx?.mission.id, khoUser: usesKhoScope(mctx?.mission.name ?? "") ? mctx!.mission.username : undefined, khoMode: mctx?.mission.name === KHO_MISSION_NAME ? "full" : "facts" } : undefined,
+      tools: bg.allowTools || mctx ? { origin, log: toolLog, onTool: () => saveToolLog(runId, toolLog), dataTools: bg.allowTools, missionId: mctx?.mission.id, khoUser: usesKhoScope(mctx?.mission.name ?? "") ? mctx!.mission.username : undefined, khoMode: mctx?.mission.name === KHO_MISSION_NAME ? "full" : "facts" } : undefined,   // khoMode "facts": việc nền/tuần tra đêm của Tham mưu chỉ tra sổ sự việc, KHÔNG tự xếp lại Kho khi không có ai giám sát
       onDelta: t => { answer += t },
       onProgress: () => {
         void save(); void touchBg(runId, bg)
