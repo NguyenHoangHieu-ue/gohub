@@ -67,6 +67,7 @@ export default function ArgonTodayPage() {
   const running = !!snap?.running
   const proposals = sectionOf(snap?.tacDong.text ?? "", "Đề xuất")
   const impact = sectionOf(snap?.tacDong.text ?? "", "Tác động")
+  const conflicts = sectionOf(snap?.tacDong.text ?? "", "Mâu thuẫn")
   const soon = facts ? bucketFacts(facts.rows, facts.today).soon.slice(0, 8) : []
   const planEmpty = !!snap && snap.tacDong.text.includes("Chưa có kế hoạch")
   const audit = snap?.tacDong.audit
@@ -139,6 +140,13 @@ export default function ArgonTodayPage() {
             </div>
             {impact ? <ArgonMarkdown text={impact} /> : <p className="text-sm text-gray-500">Chưa có.</p>}
           </section>
+
+          {conflicts && (
+            <section className={cn(card, "p-4 space-y-2")} aria-labelledby="cf-title">
+              <div className="flex items-center gap-2"><AlertTriangle size={16} className="text-red-500" /><h2 id="cf-title" className="font-semibold text-gray-900 dark:text-slate-100">Mâu thuẫn và mức ảnh hưởng</h2></div>
+              <ArgonMarkdown text={conflicts} />
+            </section>
+          )}
         </div>
       </div>
     </div>

@@ -37,10 +37,12 @@ Không hỏi lại. Chỗ nào thiếu dữ liệu thì ghi rõ là thiếu.
 export const NIGHTLY_PROMPT = `Cập nhật bối cảnh công ty và đối chiếu với kế hoạch của anh Hiếu. Làm lần lượt:
 1) Đọc brief.md: phần kế hoạch và metric là văn bản anh Hiếu tự viết. CHỈ coi những gì ghi ở đó là kế hoạch; tuyệt đối không tự bịa mục tiêu, metric hay con số. Nếu chưa có kế hoạch/metric thật thì ghi rõ điều đó ở đầu notes/tac-dong.md, nhắc anh điền, và chỉ làm bước 2.
 2) Bối cảnh: tra traSuViec (sự việc có hạn còn hiệu lực), rồi lietKeNguon để thấy nguồn mới, timTrongNguon / docNguon để đọc các thread và mail mới nhất (ưu tiên 14 ngày gần đây). GHI ĐÈ notes/boi-canh.md (tối đa 60 dòng) gồm các mục: "Đối tác và vendor" (mỗi vendor: tình hình mới nhất, việc đang chờ ai), "Khách hàng và kênh", "Sản phẩm và thị trường" (đổi giá, ngừng bán, mới), "Việc đang chờ và quyết định cần anh", "Rủi ro và điểm nghẽn". Mỗi ý kèm (nguồn: tên nguồn, ngày). Điều cũ hơn 30 ngày chỉ nhắc nếu còn hiệu lực.
-3) Số liệu: nếu brief.md có metric cần so thì lấy số 7 ngày gần nhất và quý hiện tại bằng layDuLieuHeThong (hoặc sql), so với mục tiêu anh ghi.
-4) GHI ĐÈ notes/tac-dong.md gồm hai phần:
+3) Số liệu: nếu brief.md có metric cần so thì lấy số 7 ngày gần nhất và quý hiện tại bằng layDuLieuHeThong (hoặc sql), so với mục tiêu anh ghi. Với mỗi sự việc còn hiệu lực loại ngung_ban, doi_gia, doi_mang, khuyen_mai trong sổ: dùng sql kiểm tra sản phẩm/nước liên quan trong hệ thống (dim_sku: còn Active không, vendor nào; doanh thu 30 ngày gần nhất) để biết mức ảnh hưởng thật và phát hiện chỗ hệ thống không khớp tin vendor.
+4) GHI ĐÈ notes/tac-dong.md gồm ba phần:
 ## Tác động tới kế hoạch
 Mỗi tin/sự việc mới thật sự ảnh hưởng tới một mục trong brief.md: "- <mục trong brief.md>: <điều gì đổi> (nguồn: …) → ảnh hưởng tốt / xấu / chưa rõ". Chỉ nêu khi có liên hệ thật. Không có thì ghi đúng một dòng: "Chưa có tin nào ảnh hưởng tới kế hoạch."
+## Mâu thuẫn và mức ảnh hưởng
+Mỗi sự việc đã kiểm ở bước 3: "- <sự việc> (nguồn: …): hệ thống cho thấy <số liệu cụ thể kèm [#N]> → khớp / MÂU THUẪN / không đủ dữ liệu". Chỉ ghi mục có số liệu thật; không có gì đáng nói thì ghi đúng một dòng: "Chưa phát hiện mâu thuẫn." Mâu thuẫn là điều anh cần xử lý nên nêu rõ vì sao và hậu quả (vd tin vendor nói ngừng bán nhưng SKU vẫn Active và còn doanh thu 30 ngày).
 ## Đề xuất hôm nay
 Tối đa 3 đề xuất, đúng khuôn sau cho từng cái:
 ### 1. <việc cần làm> — <Chắc|Có thể|Chưa đủ dữ liệu>
