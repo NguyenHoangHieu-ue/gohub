@@ -17,6 +17,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",            // Tailwind inline styles
       "img-src 'self' data: blob: https:",           // avatars, chart images
       "font-src 'self'",
+      "media-src 'self' blob:",                      // tab Cuộc gọi (Argon): "Thử bằng file âm thanh" phát file người dùng chọn qua blob:
       "connect-src 'self' https://*.supabase.co https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com https://open.larksuite.com",
       "frame-ancestors 'none'",
     ].join("; "),
