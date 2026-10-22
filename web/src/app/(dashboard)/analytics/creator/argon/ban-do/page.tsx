@@ -103,7 +103,7 @@ export default function BanDoPage() {
     try {
       const { events } = await api<{ events: AgentEvent[] }>(`/api/creator/argon/map?run=${run}`)
       if (!events.length) { setErr("Lượt này không còn sự kiện (giữ 3 ngày)."); return }
-      const SPEED = 4, t0 = events[0].at
+      const SPEED = 2, t0 = events[0].at
       setReplay({ run, total: events.length, done: 0 })
       events.forEach((e, i) => timers.current.push(setTimeout(() => {
         feed([e]); setReplay(r => (r ? { ...r, done: i + 1 } : r))
@@ -146,7 +146,7 @@ export default function BanDoPage() {
       {data && !data.eventsEnabled && <div className="text-sm rounded-lg bg-amber-50 text-amber-800 px-3 py-2">Chưa cấu hình ARGON_TURSO_URL / ARGON_TURSO_AUTH_TOKEN nên chưa ghi được sự kiện chạy: sơ đồ vẫn hiện nhưng không sáng.</div>}
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden h-[72vh] min-h-[480px]">
+        <div className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden h-[calc(100vh-11rem)] min-h-[520px]">
           {data ? (
             <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.08 }} minZoom={0.3} maxZoom={1.6} nodesDraggable={false} nodesConnectable={false}
               onNodeClick={(_, n) => setSelected(s => (s === n.id ? null : n.id))} onPaneClick={() => setSelected(null)} proOptions={{ hideAttribution: true }}>
