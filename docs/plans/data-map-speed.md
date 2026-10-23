@@ -63,3 +63,7 @@ Duyệt plan này (đã duyệt hướng); quyết khi nào làm E; hỏi bên `
 - [x] **B prewarm theo hành vi:** `lib/url-hits.ts` (Turso `url_hits`, đếm lượt gọi thật, mẫu ngày tương đối, điểm 7 ngày), `prewarmAnalyticsUrls` lấy top theo điểm + ngân sách thời gian (cron 38s / ETL 22s). QA sống: danh sách xếp hạng ra đúng (`/api/creator/perf-stats` → `warmList`); chưa kiểm một vòng cron thật sau khi tích luỹ nhiều ngày dùng.
 - [x] **D tải nhanh ở trình duyệt:** `lib/client-fetch-cache.ts` (dedupe + nhớ 60s + xoá khi ghi) cho mọi tab; `lib/stale-first.ts` số-cũ-trước **chỉ ở Quarter Report** (`quarterly-report`, `quarterly-b2b-customers`). QA sống: lần đầu 12,4s → lặp 0ms; 2 request đồng thời dùng chung 1 lần gọi; POST xoá bộ nhớ + số cũ.
 - [ ] Mở rộng số-cũ-trước cho Channels, B2C, B2B, BOD, Staff (mỗi tab đọc `readStale` trước, `writeStale` sau); đo hiệu quả bằng Data Map sau vài ngày; rồi quyết C (gom truy vấn) / E (bảng tổng hợp).
+
+## Tiến độ bước 3 (2026-10-23, staging `da825c8f`, chưa merge `main`)
+- [x] Số-cũ-trước mở rộng: BOD, Staff, Channels (bảng tất cả kênh), B2B (`processRaw`), B2C Advanced + Metric; nhãn `StaleNotice`. tsc/lint/vitest 1045/build PASS. QA sống: BOD ghi bundle 48KB vào sessionStorage sau lần tải đầu; **chưa xem được lần mở lại bằng mắt** (công cụ Chrome bị extension khác chặn sau reload) — Hiếu mở BOD/Staff/B2B hai lần liên tiếp để xem số cũ hiện ngay + nhãn "Đang cập nhật số mới…".
+- [ ] Chưa áp: B2C Performance, Orders, Customers, Vendors, Products, Dashboard, All-Time.
