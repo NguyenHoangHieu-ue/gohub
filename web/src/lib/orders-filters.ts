@@ -5,6 +5,12 @@ export const ORDER_TIERS = ["Strategic", "VIP", "Gold", "Silver", "B2C", "Khác"
 export type OrderTier = (typeof ORDER_TIERS)[number]
 export const NO_PIC = "__none__"   // đơn chưa gán PIC (staff_code rỗng)
 
+/** Tên PIC trong dim_staff có dạng "Tên VN|EN-Tên" → chỉ hiện phần trước dấu "|". */
+export function picDisplayName(name: string | null | undefined): string {
+  const n = (name ?? "").split("|")[0].trim()
+  return n || (name ?? "").trim()
+}
+
 /**
  * Tier của MỘT đơn: nhóm B2B → theo bảng giá khách (cùng luật Quarter Report `makeClassifyTier`: khớp từ khoá tier nào trước thì lấy,
  * không khớp tier nào = Strategic); nhóm B2C → "B2C"; đơn nội bộ / không rõ nhóm → "Khác".
@@ -92,7 +98,7 @@ export function deriveFilterOptions(data: OrderFilterData, sel: FilterSelection,
       const inactive = /^\[INACTIVE\]/i.test(s.name) || s.status === "Inactive"
       return { value: v, label: `${s.name.replace(/^\[INACTIVE\]\s*/i, "") || v} (${v})${inactive ? " · ngừng" : ""}`, orders: n, muted: inactive }
     }).sort(byLabel),
-    staff: [...staff].map(([v, n]) => ({ value: v, label: v === NO_PIC ? "Chưa gán PIC" : data.staff.find(x => x.code === v)?.name || v, orders: n })).sort(byLabel),
+    staff: [...staff].map(([v, n]) => ({ value: v, label: v === NO_PIC ? "Chưa gán PIC" : picDisplayName(data.staff.find(x => x.code === v)?.name) || v, orders: n })).sort(byLabel),
     tiers: ORDER_TIERS.filter(t => tiers.has(t)).map(t => ({ value: t, label: t, orders: tiers.get(t)! })),
   }
 }

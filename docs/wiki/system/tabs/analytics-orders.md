@@ -172,3 +172,4 @@ Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm 
 - **Tier (mới):** bộ lọc Tier (Strategic/VIP/Gold/Silver/B2C/Khác) lọc phía server bằng `orderTierSql` (CASE cùng nghĩa với hàm TS, từ khoá đọc từ quarterly-settings, dùng `POSITION` không dùng LIKE; khoá cache có băm từ khoá nên đổi cấu hình tự làm mới). Cột Tier trong bảng + file Excel dùng cùng hàm.
 - Khoá cache order-report đổi `v1`→`v2` (thêm tier). Đổi "Theo ngày" (Đã giao/Đã tạo) và Entity nay tự tải lại (trước chỉ khi bấm Apply).
 - Test: `orders-filters.test.ts` (tier, SQL, lọc nhiều tầng, chuẩn hoá, where chung).
+- Tên PIC dạng "Tên VN|EN-Tên" (dim_staff.name) chỉ hiện phần trước dấu "|" ở dropdown, bảng và file Excel (`picDisplayName`); ô Search vẫn khớp cả phần EN.

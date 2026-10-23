@@ -9,7 +9,7 @@ import { exportToExcel }      from "@/lib/export-excel"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { cn } from "@/lib/utils"
 import { TableRowsSkeleton } from "@/components/dashboard-kit"
-import { classifyOrderTier, deriveFilterOptions, normalizeSelection, type FilterSelection, type OrderFilterData, ORDER_TIERS } from "@/lib/orders-filters"
+import { classifyOrderTier, deriveFilterOptions, normalizeSelection, picDisplayName, type FilterSelection, type OrderFilterData, ORDER_TIERS } from "@/lib/orders-filters"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface OrderRow {
@@ -303,6 +303,7 @@ export default function OrdersPage() {
       const exportRows = allRows.map((r: OrderRow) => ({
         ...r,
         order_date: fmtDate(r.order_date),
+        staff_name: picDisplayName(r.staff_name),
         _tier: classifyOrderTier(r.channel_group, r.price_list_name, tierKws),
       }))
       const label = dateMode === "day" ? singleDate : `${startDate}_${endDate}`
@@ -551,7 +552,7 @@ export default function OrdersPage() {
                     {fmtDate(r.order_date)}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap font-medium text-slate-800 dark:text-slate-200">
-                    {r.staff_name || "—"}
+                    {picDisplayName(r.staff_name) || "—"}
                   </td>
                   <td className="px-3 py-2 max-w-[180px]">
                     <span className="text-slate-500 dark:text-slate-400 truncate block" title={r.order_name || ""}>

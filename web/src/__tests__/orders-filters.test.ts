@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { classifyOrderTier, orderTierSql, deriveFilterOptions, normalizeSelection, NO_PIC, type OrderFilterData } from "../lib/orders-filters"
+import { classifyOrderTier, orderTierSql, deriveFilterOptions, normalizeSelection, picDisplayName, NO_PIC, type OrderFilterData } from "../lib/orders-filters"
 import { baseWhere, filterWhere, parseOrderBase, readFilterParams } from "../lib/orders-where"
 
 const KWS = { Gold: ["GOLD"], Silver: ["SILVER"], Strategic: ["STRATEGIC"], VIP: ["VIP"] }
@@ -94,5 +94,14 @@ describe("orders-where", () => {
   it("tier lạ bị bỏ; thiếu ngày báo lỗi", () => {
     expect(readFilterParams(new URLSearchParams("tier=Hack")).tier).toBe("")
     expect("error" in parseOrderBase(new URLSearchParams("staffCode=A"))).toBe(true)
+  })
+})
+
+describe("picDisplayName", () => {
+  it("chỉ lấy phần trước dấu |, giữ nguyên tên thường và xử lý rỗng", () => {
+    expect(picDisplayName("Chu Thị Hà Linh|EN-Hà Linh")).toBe("Chu Thị Hà Linh")
+    expect(picDisplayName("Anh Liu")).toBe("Anh Liu")
+    expect(picDisplayName("|EN-X")).toBe("|EN-X")
+    expect(picDisplayName(null)).toBe("")
   })
 })
