@@ -63,3 +63,13 @@ export async function startPatrol(missionId: string, origin: string, force = fal
   await triggerWorker(origin, data.id)
   return { runId: data.id }
 }
+
+/** Sau lượt tuần tra đêm: hai file notes/boi-canh.md và notes/tac-dong.md có được ghi lại từ lúc bắt đầu lượt không? (model từng chỉ trả lời bằng chữ mà không ghi file) */
+export async function patrolWroteNotes(projectId: string, sinceIso: string): Promise<boolean> {
+  const { data: m } = await supabaseAdmin.from("argon_missions").select("id").eq("project_id", projectId).maybeSingle()
+  if (!m) return true   // không phải sứ mệnh → không kiểm
+  const { data: files } = await supabaseAdmin.from("argon_workspace_files").select("path,updated_at").eq("mission_id", m.id).in("path", ["notes/boi-canh.md", "notes/tac-dong.md"])
+  const since = Date.parse(sinceIso)
+  const fresh = new Set((files ?? []).filter(f => Date.parse(String(f.updated_at)) >= since).map(f => String(f.path)))
+  return fresh.has("notes/boi-canh.md") && fresh.has("notes/tac-dong.md")
+}

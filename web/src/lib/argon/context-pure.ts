@@ -35,6 +35,7 @@ Không hỏi lại. Chỗ nào thiếu dữ liệu thì ghi rõ là thiếu.
 
 /** Câu lệnh chạy mỗi đêm (và nút "Cập nhật ngay"): dựng bối cảnh, đối chiếu kế hoạch, đề xuất có nguồn. */
 export const NIGHTLY_PROMPT = `Cập nhật bối cảnh công ty và đối chiếu với kế hoạch của anh Hiếu. Làm lần lượt:
+LUẬT BẮT BUỘC (đã có lần bỏ qua): các khối <boi_canh_hien_tai> và <tac_dong_de_xuat_hien_tai> trong ngữ cảnh chỉ là BẢN CŨ để so sánh — KHÔNG chép lại số liệu, [#N] hay nhận định từ đó; mọi số phải lấy lại bằng công cụ trong lượt này. Lượt chỉ được coi là xong khi đã GỌI công cụ ghi đè đủ ba file notes/boi-canh.md, notes/tac-dong.md, notes/tin-hom-nay.md. Không được chỉ trả lời bằng chữ.
 1) Đọc brief.md: phần kế hoạch và metric là văn bản anh Hiếu tự viết. CHỈ coi những gì ghi ở đó là kế hoạch; tuyệt đối không tự bịa mục tiêu, metric hay con số. Nếu chưa có kế hoạch/metric thật thì ghi rõ điều đó ở đầu notes/tac-dong.md, nhắc anh điền, và chỉ làm bước 2.
 2) Bối cảnh: tra traSuViec (sự việc có hạn còn hiệu lực), rồi lietKeNguon để thấy nguồn mới, timTrongNguon / docNguon để đọc các thread và mail mới nhất (ưu tiên 14 ngày gần đây). GHI ĐÈ notes/boi-canh.md (tối đa 60 dòng) gồm các mục: "Đối tác và vendor" (mỗi vendor: tình hình mới nhất, việc đang chờ ai), "Khách hàng và kênh", "Sản phẩm và thị trường" (đổi giá, ngừng bán, mới), "Việc đang chờ và quyết định cần anh", "Rủi ro và điểm nghẽn". Mỗi ý kèm (nguồn: tên nguồn, ngày). Điều cũ hơn 30 ngày chỉ nhắc nếu còn hiệu lực.
 3) Số liệu: nếu brief.md có metric cần so thì lấy số 7 ngày gần nhất và quý hiện tại bằng layDuLieuHeThong (hoặc sql), so với mục tiêu anh ghi. Với mỗi sự việc còn hiệu lực loại ngung_ban, doi_gia, doi_mang, khuyen_mai trong sổ: dùng sql kiểm tra sản phẩm/nước liên quan trong hệ thống (dim_sku: còn Active không, vendor nào; doanh thu 30 ngày gần nhất) để biết mức ảnh hưởng thật và phát hiện chỗ hệ thống không khớp tin vendor.
@@ -85,4 +86,9 @@ export function sectionOf(md: string, heading: string): string {
   const out: string[] = []
   for (let j = i + 1; j < lines.length && !isH2(lines[j]); j++) out.push(lines[j])
   return out.join("\n").trim()
+}
+
+/** Lượt tuần tra đầy đủ (câu lệnh đêm) — phải ghi lại notes/*. Thuần. */
+export function isNightlyPatrolPrompt(prompt: string): boolean {
+  return prompt.includes("GHI ĐÈ notes/tac-dong.md")
 }

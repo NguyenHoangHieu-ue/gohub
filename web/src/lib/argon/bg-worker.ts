@@ -13,6 +13,8 @@ import { droppedWarning, pickByBudget } from "./source-tools"
 import { linkedSourceIdsForProject, loadMissionContext } from "./missions-db"
 import { KHO_MISSION_NAME, khoSources } from "./kho"
 import { usesKhoScope } from "./context-instruction"
+import { isNightlyPatrolPrompt } from "./context-pure"
+import { patrolWroteNotes } from "./patrol"
 
 export const SEGMENT_MS = 265_000     // hết ngân sách đoạn → lưu dở, đoạn sau viết tiếp
 export const MAX_OUT = 32_768         // trần output mỗi đoạn; chạm trần cũng đi qua đoạn sau
@@ -118,8 +120,13 @@ export async function runBackgroundSegment(runId: string, origin: string): Promi
       await touchBg(runId, bg)
       return "continue"
     }
-    const finalStatus = cancelled ? "stopped" : seg.status === "partial" ? "error" : seg.status
-    const err = seg.status === "partial" && !cancelled ? `Dừng sau ${segments} đoạn (giới hạn ${MAX_BG_SEGMENTS} đoạn hoặc $${MAX_BG_COST_USD}) — bấm "Tiếp tục viết" nếu muốn chạy thêm` : seg.error
+    let finalStatus = cancelled ? "stopped" : seg.status === "partial" ? "error" : seg.status
+    let err = seg.status === "partial" && !cancelled ? `Dừng sau ${segments} đoạn (giới hạn ${MAX_BG_SEGMENTS} đoạn hoặc $${MAX_BG_COST_USD}) — bấm "Tiếp tục viết" nếu muốn chạy thêm` : seg.error
+    // Tuần tra đêm kết thúc mà không ghi lại bối cảnh/tác động → báo lỗi rõ thay vì "xong" (QA s240: model chỉ trả lời bằng chữ, 29s, không đụng file)
+    if (finalStatus === "done" && isNightlyPatrolPrompt(run.prompt) && !(await patrolWroteNotes(run.project_id, run.created_at).catch(() => true))) {
+      finalStatus = "error"
+      err = "Argon trả lời nhưng không ghi lại notes/boi-canh.md và notes/tac-dong.md — bấm \"Cập nhật ngay\" để chạy lại"
+    }
     await save({ ...base, status: seg.status === "partial" && !cancelled ? "partial" : finalStatus, error: err, finished_at: new Date().toISOString() })
     await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", run.project_id)
     await deleteBg(runId)
