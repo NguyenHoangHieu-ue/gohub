@@ -88,12 +88,13 @@ function buildBody(strategy: FilterStrategy, startTs: number, endTs: number, wit
 }
 
 /** Ticket có Creation Date trong [startTs, endTs) (ms). Ném lỗi nếu Lark không trả được. */
-export async function fetchCsTickets(startTs: number, endTs: number): Promise<{ tickets: CsTicket[]; strategy: FilterStrategy; pages: number }> {
+export async function fetchCsTickets(startTs: number, endTs: number): Promise<{ tickets: CsTicket[]; strategy: FilterStrategy; pages: number; attempts: string[] }> {
   const appToken = clean(process.env.LARK_BASE_ID || ""), tableId = clean(process.env.LARK_TABLE_ID || "")
   if (!appToken || !tableId) throw new Error("Thiếu env vars: LARK_BASE_ID và LARK_TABLE_ID (token của Lark Base app)")
   const token = await getLarkToken()
   const url = `${LARK_API}/bitable/v1/apps/${appToken}/tables/${tableId}/records/search`
   let lastErr = "Lark Base không trả dữ liệu"
+  const attempts: string[] = []
 
   for (const strategy of ["date", "number", "none"] as FilterStrategy[]) {
     const out: CsTicket[] = []
@@ -114,6 +115,7 @@ export async function fetchCsTickets(startTs: number, endTs: number): Promise<{ 
       if (j.code === 1254045 && useFields) { useFields = false; j = await call(false) }
       if (j.code !== 0) {
         lastErr = `Lark API error (${j.code}): ${j.msg}`
+        attempts.push(`${strategy}${useFields ? "" : "/all-fields"}: ${j.code} ${String(j.msg).slice(0, 120)}`)
         // Lỗi cú pháp lọc → thử cách kế; lỗi quyền/mạng ở trang đầu cũng thử cách kế rồi báo lỗi cuối cùng
         failed = true
         break
@@ -123,7 +125,8 @@ export async function fetchCsTickets(startTs: number, endTs: number): Promise<{ 
       pages++
     } while (pageToken && pages < MAX_PAGES)
     if (failed) continue
-    return { tickets: out.filter(t => t.creation_date >= startTs && t.creation_date < endTs), strategy, pages }
+    attempts.push(`${strategy}${useFields ? "" : "/all-fields"}: ok ${out.length} bản ghi, ${pages} trang`)
+    return { tickets: out.filter(t => t.creation_date >= startTs && t.creation_date < endTs), strategy, pages, attempts }
   }
   throw new Error(lastErr)
 }

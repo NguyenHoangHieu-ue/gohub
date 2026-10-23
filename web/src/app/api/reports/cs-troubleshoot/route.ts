@@ -62,9 +62,9 @@ export async function GET(req: NextRequest) {
     // 2. Ticket đọc THẲNG từ Lark Base (lọc theo ngày ở phía Lark; cache 30 phút theo kỳ — đổi nhóm B2B/B2C không phải kéo lại)
     const startTs = new Date(startDate).getTime()
     const endTs   = new Date(endDate).getTime() + 86400000
-    const { tickets: allTickets, fetchedAt } = await cachedQuery(
+    const { tickets: allTickets, fetchedAt, strategy, attempts } = await cachedQuery(
       `cs-tickets:v1:${startTs}:${endTs}`,
-      () => fetchCsTickets(startTs, endTs).then(r => ({ tickets: r.tickets, strategy: r.strategy, fetchedAt: new Date().toISOString() })),
+      () => fetchCsTickets(startTs, endTs).then(r => ({ tickets: r.tickets, strategy: r.strategy, attempts: r.attempts, fetchedAt: new Date().toISOString() })),
       30,
       noCache(req),
       ["cs-tickets"],
@@ -152,6 +152,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       hasTicketData: (tickets || []).length > 0,
       source: "lark-base",
+      larkStrategy: strategy,
+      larkAttempts: attempts,
       fetchedAt,
       ticketTotal: allTickets.length,
       kpis: {
