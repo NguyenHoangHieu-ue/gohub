@@ -3040,6 +3040,10 @@
    ],
    "tables": [
     {
+     "name": "cs_tickets",
+     "source": "turso"
+    },
+    {
      "name": "dim_order_source",
      "source": "gohub_dw"
     },
@@ -3055,7 +3059,7 @@
    "external": [
     "Lark"
    ],
-   "usesTurso": false
+   "usesTurso": true
   }
  },
  "tables": {
@@ -3233,6 +3237,15 @@
     "channels",
     "dashboard",
     "products"
+   ]
+  },
+  "cs_tickets": {
+   "source": "turso",
+   "apis": [
+    "/api/reports/cs-troubleshoot"
+   ],
+   "tabs": [
+    "cs-troubleshoot"
    ]
   },
   "dim_customer": {

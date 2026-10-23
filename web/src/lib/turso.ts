@@ -33,6 +33,7 @@ export async function tursoQueryOn<T = Record<string, string | number | null>>(
 
   const res = await fetch(`${tursoHttpUrl(rawUrl)}/v2/pipeline`, {
     method: "POST",
+    cache: "no-store",   // KHÔNG để Next cache kết quả Turso (cùng câu SQL + tham số sẽ trả số cũ sau khi đã ghi) — cache ứng dụng nằm ở cachedQuery
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       requests: [
