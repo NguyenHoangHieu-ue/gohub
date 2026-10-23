@@ -528,6 +528,7 @@
       "Hiệu quả sản phẩm"
      ],
      "apis": [
+      "/api/analytics/vendor-filters",
       "/api/analytics/query",
       "/api/analytics/vendors/distribution"
      ],
@@ -2596,6 +2597,29 @@
    "external": [],
    "usesTurso": false
   },
+  "/api/analytics/vendor-filters": {
+   "file": "src/app/api/analytics/vendor-filters/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": "vendor-filters",
+   "deps": [
+    "combos",
+    "order-report"
+   ],
+   "tables": [
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
   "/api/analytics/vendors/distribution": {
    "file": "src/app/api/analytics/vendors/distribution/route.ts",
    "methods": [
@@ -3335,6 +3359,7 @@
     "/api/analytics/squad-progress",
     "/api/analytics/staff-report",
     "/api/analytics/staff-report/customers",
+    "/api/analytics/vendor-filters",
     "/api/analytics/vendors/distribution",
     "/api/channels",
     "/api/config/subchannels",
@@ -3378,6 +3403,7 @@
     "/api/analytics/squad-progress",
     "/api/analytics/staff-report",
     "/api/analytics/staff-report/customers",
+    "/api/analytics/vendor-filters",
     "/api/analytics/vendors/distribution",
     "/api/analytics/win-rate",
     "/api/orders/export",

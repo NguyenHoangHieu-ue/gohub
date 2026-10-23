@@ -13,6 +13,7 @@ import { DatePresets } from "@/components/date-presets"
 import { focusSql, type DistFocus, type DistRow, type DistView } from "@/lib/vendor-distribution"
 import { StatTile, type MetricAccent, CHART_PALETTE } from "@/components/dashboard-kit"
 import { VendorDistribution } from "./vendors-distribution"
+import { deriveVendorOptions, normalizeVendorSelection, type VendorFilterData } from "@/lib/vendors-filters"
 
 // Port "y hệt" gohub-intel VendorPerformance. KPI/Trend/SKU qua /api/analytics/query (SELECT-only); bảng phân bổ theo
 // Khách hàng/Kênh qua /api/analytics/vendors/distribution (s219). Inline getDefaultDateRange/formatDateToISO.
@@ -73,6 +74,25 @@ export default function VendorPerformancePage() {
   const [selectedChannelGroup, setSelectedChannelGroup] = useState<string>("All Groups")
   const [comparisonType, setComparisonType] = useState<"none" | "previous_period" | "previous_year">("none")
   const [dateColumn, setDateColumn] = useState<"fulfiled_date" | "created_date">("fulfiled_date")
+
+  // Lựa chọn Vendor / Nhóm kênh / Kênh chỉ gồm những gì có doanh thu trong kỳ, lọc nhiều tầng kèm số đơn + doanh thu
+  const [filterData, setFilterData] = useState<VendorFilterData | null>(null)
+  useEffect(() => {
+    if (!startDate || !endDate) return
+    let alive = true
+    const qs = new URLSearchParams({ startDate, endDate, dateColumn })
+    fetch(`/api/analytics/vendor-filters?${qs}`).then(r => (r.ok ? r.json() : null)).then(d => { if (alive && d?.combos) setFilterData(d) }).catch(() => {})
+    return () => { alive = false }
+  }, [startDate, endDate, dateColumn])
+  const vSel = useMemo(() => ({ vendors: selectedVendors, group: selectedChannelGroup === "All Groups" ? "" : selectedChannelGroup, channel: selectedChannel === "All Channels" ? "" : selectedChannel }), [selectedVendors, selectedChannelGroup, selectedChannel])
+  const vOpts = useMemo(() => (filterData ? deriveVendorOptions(filterData, vSel) : null), [filterData, vSel])
+  useEffect(() => {
+    if (!filterData) return
+    const n = normalizeVendorSelection(filterData, vSel)
+    if (n.group !== vSel.group) setSelectedChannelGroup(n.group || "All Groups")
+    if (n.channel !== vSel.channel) setSelectedChannel(n.channel || "All Channels")
+  }, [filterData, vSel])
+  const fmtM = (v: number) => (v >= 1e9 ? `${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(Math.round(v)))
 
   const filteredProducts = useMemo(() =>
     productPerformance
@@ -144,6 +164,7 @@ export default function VendorPerformancePage() {
 
   // Fetch Channels from dim_order_source
   useEffect(() => {
+    if (filterData) return
     const fetchChannels = async () => {
       try {
         let cond = `channel_name IS NOT NULL AND channel_name != ''`
@@ -166,7 +187,7 @@ export default function VendorPerformancePage() {
     }
     fetchChannels()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChannelGroup])
+  }, [selectedChannelGroup, filterData])
 
   const getProjectionInfo = () => {
     if (!metrics.revenue || !startDate || !endDate) return null
@@ -490,16 +511,29 @@ export default function VendorPerformancePage() {
                 <div className="flex items-center justify-between p-2 mb-2 border-b border-slate-100 sticky top-0 bg-white z-10">
                   <span className="text-xs font-bold text-slate-400 uppercase">Chọn vendor</span>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setSelectedVendors(vendors)} className="text-[11.5px] text-brand-600 font-bold hover:underline">All</button>
+                    <button onClick={() => setSelectedVendors(vOpts ? vOpts.vendors.map(o => o.value) : vendors)} className="text-[11.5px] text-brand-600 font-bold hover:underline">All</button>
                     <button onClick={() => setSelectedVendors([])} className="text-[11.5px] text-rose-600 font-bold hover:underline">Xoá</button>
                   </div>
                 </div>
-                {vendors.map(v => (
+                {vOpts && <p className="px-3 pb-1 text-[11px] text-slate-400">{vOpts.vendors.length} vendor có doanh thu trong kỳ · xếp theo doanh thu</p>}
+                {(vOpts ? vOpts.vendors.map(o => o.value) : vendors).map(v => {
+                  const o = vOpts?.vendors.find(x => x.value === v)
+                  return (
                   <div key={v} onClick={() => toggleVendor(v)}
-                    className={cn("flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors",
+                    className={cn("flex items-center justify-between gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
                       selectedVendors.includes(v) ? "bg-brand-50 text-brand-600" : "hover:bg-slate-50 text-slate-700")}>
-                    <span className="text-sm font-medium">{v}</span>
-                    {selectedVendors.includes(v) && <Check className="w-4 h-4" />}
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium truncate">{v}</span>
+                      {o && <span className="block text-[10.5px] text-slate-400">{o.orders.toLocaleString("vi-VN")} đơn · {fmtM(o.revenue)}</span>}
+                    </span>
+                    {selectedVendors.includes(v) && <Check className="w-4 h-4 flex-shrink-0" />}
+                  </div>
+                  )
+                })}
+                {vOpts && selectedVendors.filter(v => !vOpts.vendors.some(o => o.value === v)).map(v => (
+                  <div key={`x-${v}`} onClick={() => toggleVendor(v)} className="flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer bg-brand-50 text-brand-600">
+                    <span className="text-sm font-medium truncate">{v} <span className="text-[10.5px] text-slate-400">· chưa có đơn trong kỳ/bộ lọc</span></span>
+                    <Check className="w-4 h-4 flex-shrink-0" />
                   </div>
                 ))}
               </div>
@@ -592,15 +626,18 @@ export default function VendorPerformancePage() {
             <select value={selectedChannelGroup} onChange={(e) => setSelectedChannelGroup(e.target.value)}
               className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
               <option value="All Groups">Tất cả nhóm</option>
-              <option value="B2B">B2B</option>
-              <option value="B2C">B2C</option>
+              {vOpts
+                ? vOpts.groups.map(o => <option key={o.value} value={o.value}>{`${o.label} (${o.orders.toLocaleString("vi-VN")} đơn · ${fmtM(o.revenue)})`}</option>)
+                : (<><option value="B2B">B2B</option><option value="B2C">B2C</option></>)}
             </select>
           </div>
           <div className="flex-1 space-y-1.5">
             <label className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">Kênh</label>
             <select value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}
               className="block w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all">
-              {channels.map(c => (<option key={c} value={c}>{c}</option>))}
+              {vOpts
+                ? (<><option value="All Channels">All Channels</option>{vOpts.channels.map(o => <option key={o.value} value={o.value}>{`${o.label} (${o.orders.toLocaleString("vi-VN")} đơn · ${fmtM(o.revenue)})`}</option>)}</>)
+                : channels.map(c => (<option key={c} value={c}>{c}</option>))}
             </select>
           </div>
           <div className="flex-1 space-y-1.5">
