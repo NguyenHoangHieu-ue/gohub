@@ -146,6 +146,20 @@ function scanApi(root, apiPath, file, supabaseTables) {
     if (isRoute) {
       const ck = src.match(/cachedQuery(?:<[^>]*>)?\(\s*[`"']([A-Za-z0-9_\-]+)/)
       if (ck) cacheKey = ck[1]
+      else {
+        // khoá là biến: tìm `const <biến> = "tên..."` / `const <biến> = `tên:...``
+        const id = src.match(/cachedQuery(?:<[^>]*>)?\(\s*([A-Za-z_]\w*)\s*,/)
+        if (id) {
+          const def = src.match(new RegExp("(?:const|let)\\s+" + id[1] + "\\s*=\\s*[`\"']([A-Za-z0-9_\\-]+)"))
+          if (def) cacheKey = def[1]
+          else {
+            // khoá dạng `${HẰNG_SỐ}...` → đọc giá trị hằng số
+            const pre = src.match(new RegExp("(?:const|let)\\s+" + id[1] + "\\s*=\\s*`\\$\\{([A-Za-z_]\\w*)\\}"))
+            const cv = pre && [globalConsts(root).get(pre[1])].filter(Boolean).map((v) => [null, v])[0]
+            if (cv) cacheKey = cv[1]
+          }
+        }
+      }
       for (const d of src.matchAll(/\[\s*((?:["'][a-z0-9\-_]+["']\s*,?\s*)+)\]/g)) {
         if (/cachedQuery/.test(src)) for (const x of d[1].matchAll(/["']([a-z0-9\-_]+)["']/g)) deps.add(x[1])
       }
@@ -176,6 +190,15 @@ function scanApi(root, apiPath, file, supabaseTables) {
     tables: [...sources.entries()].map(([name, source]) => ({ name, source })).sort((a, b) => a.name.localeCompare(b.name)),
     external: [...externals].sort(), usesTurso,
   }
+}
+
+let _consts = null
+function globalConsts(root) {
+  if (_consts) return _consts
+  _consts = new Map()
+  const re = /export\s+const\s+([A-Z][A-Z0-9_]+)\s*=\s*["'`]([A-Za-z0-9_\-]+)/g
+  for (const f of listFiles(path.join(SRC(root), "lib"), (x) => /\.ts$/.test(x))) for (const m of read(f).matchAll(re)) _consts.set(m[1], m[2])
+  return _consts
 }
 
 function allSupabaseTables(root) {
@@ -219,7 +242,7 @@ export function buildDataMap(root) {
       const titles = titlesIn(src)
       sections.push({
         id: rel(root, f), file: rel(root, f),
-        label: titles[0] ?? humanize(path.basename(f)),
+        label: titles.find((t) => t.length <= 32 && !/^(Bấm|Click|Nhấn)/i.test(t)) ?? humanize(path.basename(f)),
         titles,
         apis: used.filter((u) => apiInfo(u)),
         sqlViaQueryApi: sqlTables.map((name) => ({ name, source: "gohub_dw" })),

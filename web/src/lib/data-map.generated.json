@@ -94,7 +94,7 @@
     {
      "id": "src/components/quarterly/customer-lifecycle-section.tsx",
      "file": "src/components/quarterly/customer-lifecycle-section.tsx",
-     "label": "Bấm để xem danh sách khách hàng",
+     "label": "Customer Lifecycle Section",
      "titles": [
       "Bấm để xem danh sách khách hàng"
      ],
@@ -851,7 +851,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "all-time4",
    "deps": [
     "b2b-cost"
    ],
@@ -952,7 +952,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "b2b-ecom3",
    "deps": [
     "b2b-ecom",
     "b2b-ecom-cost"
@@ -1017,7 +1017,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "b2b-ecom-tl2",
    "deps": [
     "b2b-ecom",
     "month",
@@ -1062,7 +1062,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "b2b-kpis2",
    "deps": [
     "b2b-cost"
    ],
@@ -1100,7 +1100,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "b2b-perf6",
    "deps": [
     "b2b-cost"
    ],
@@ -1142,7 +1142,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "b2b-strategic3",
    "deps": [
     "b2b-cost"
    ],
@@ -1176,7 +1176,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "b2b_tier3",
    "deps": [],
    "tables": [
     {
@@ -1204,7 +1204,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "b2b-trend2",
    "deps": [
     "b2b-cost"
    ],
@@ -1254,7 +1254,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "b2c-kpis",
    "deps": [],
    "tables": [
     {
@@ -1286,7 +1286,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "b2c-loss",
    "deps": [],
    "tables": [
     {
@@ -1381,7 +1381,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "b2c-perf",
    "deps": [],
    "tables": [
     {
@@ -1421,7 +1421,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "b2c-trend",
    "deps": [],
    "tables": [
     {
@@ -1445,7 +1445,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "bod-b2b-tiers2",
    "deps": [
     "b2b-cost"
    ],
@@ -1479,7 +1479,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "bod-channel-perf4",
    "deps": [
     "b2b-cost"
    ],
@@ -1513,7 +1513,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "bod-group-margin4",
    "deps": [
     "b2b-cost"
    ],
@@ -1547,7 +1547,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "bod-report4",
    "deps": [],
    "tables": [
     {
@@ -1579,7 +1579,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "bod-summary5",
    "deps": [
     "b2b-cost"
    ],
@@ -1633,7 +1633,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "ch-b2b-cust",
    "deps": [],
    "tables": [
     {
@@ -1657,7 +1657,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "ch-kpis8",
    "deps": [
     "b2b-cost"
    ],
@@ -1687,7 +1687,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "ch-perf6",
    "deps": [
     "b2b-cost"
    ],
@@ -1738,7 +1738,7 @@
    "methods": [
     "POST"
    ],
-   "cacheKey": null,
+   "cacheKey": "customer-report",
    "deps": [
     "customer-report"
    ],
@@ -1915,7 +1915,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "kpis",
    "deps": [],
    "tables": [
     {
@@ -1935,7 +1935,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "monthly-kpis5",
    "deps": [
     "b2b-cost"
    ],
@@ -1977,7 +1977,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "order-report",
    "deps": [
     "order-report"
    ],
@@ -2015,7 +2015,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "perf-channel",
    "deps": [],
    "tables": [
     {
@@ -2039,7 +2039,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "perf-source",
    "deps": [],
    "tables": [
     {
@@ -2085,7 +2085,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "qb2b_raw_v11",
    "deps": [],
    "tables": [
     {
@@ -2172,7 +2172,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "qdaily_v1",
    "deps": [],
    "tables": [
     {
@@ -2196,7 +2196,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "qreport_raw_v12",
    "deps": [],
    "tables": [
     {
@@ -2298,7 +2298,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "recent-orders",
    "deps": [],
    "tables": [
     {
@@ -2318,7 +2318,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "region-chart",
    "deps": [],
    "tables": [
     {
@@ -2338,7 +2338,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "revenue-chart3",
    "deps": [],
    "tables": [
     {
@@ -2366,7 +2366,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "squad_raw_v2",
    "deps": [],
    "tables": [
     {
@@ -2427,7 +2427,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "staff-report",
    "deps": [
     "staff-report"
    ],
@@ -2538,7 +2538,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
+   "cacheKey": "vendor-dist1",
    "deps": [],
    "tables": [
     {
