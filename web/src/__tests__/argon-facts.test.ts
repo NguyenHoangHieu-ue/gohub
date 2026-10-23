@@ -124,6 +124,13 @@ ${imp}- Nguồn: sql
     expect(none.empty).toBe(true)
     expect(none.missingSection).toBe(false)
   })
+  it("đề xuất viết dạng danh sách / đổi tiêu đề → sai khuôn (không được coi là không có đề xuất)", () => {
+    const md = "## Đề xuất hành động\n1. **Chuyển tuyến** (nguồn: x) (mức chắc chắn: Chắc)\n2. **Việc B**\n"
+    const r = auditProposals(md)
+    expect(r.malformed).toBe(true)
+    expect(r.empty).toBe(false)
+    expect(r.issues[0]).toContain("không theo khuôn")
+  })
   it("impactVnd đọc số tiền tiếng Việt", () => {
     expect(impactVnd("~100 triệu VND/tháng")).toBe(100_000_000)
     expect(impactVnd("1,5 tỷ")).toBe(1_500_000_000)

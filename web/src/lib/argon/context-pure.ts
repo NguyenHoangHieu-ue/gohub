@@ -57,7 +57,7 @@ Không đủ căn cứ thì ghi "Chưa có đề xuất đủ căn cứ hôm nay
 5) GHI ĐÈ notes/tin-hom-nay.md: bản tin tối đa 10 dòng rút từ hai file trên.
 Quy tắc: không phóng đại, không đoán; mọi ý phải có nguồn thật trong Kho hoặc số liệu hệ thống; thiếu dữ liệu thì nói thẳng và đánh "Chưa đủ dữ liệu"; không hỏi lại (không ai trả lời lúc này).`
 
-export interface ProposalAudit { total: number; ok: number; issues: string[]; empty: boolean; missingSection?: boolean }
+export interface ProposalAudit { total: number; ok: number; issues: string[]; empty: boolean; missingSection?: boolean; malformed?: boolean }
 const LABEL = /(Chắc chắn|Chắc|Có thể|Chưa đủ dữ liệu)\s*\**\s*$/i
 
 /** Kiểm các đề xuất trong tac-dong.md: mỗi "### n." phải có nhãn chắc chắn, dòng "Nguồn:" có nội dung và dòng "Liên quan kế hoạch:". Thuần. */
@@ -66,7 +66,12 @@ export function auditProposals(md: string): ProposalAudit {
   const body = sec?.[1] ?? ""
   const items = body.split(/^###\s+/m).slice(1)
   // Không có mục "## Đề xuất" nào (model bỏ hẳn) khác với có mục nhưng ghi "Chưa có đề xuất đủ căn cứ hôm nay."
-  if (!items.length) return { total: 0, ok: 0, issues: [], empty: true, missingSection: !sec }
+  if (!items.length) {
+    // Có nội dung nhưng không theo khuôn "### n." (vd viết danh sách 1. 2. 3., hoặc đổi tiêu đề) → sai khuôn, KHÔNG phải "không có đề xuất"
+    const text = body.trim()
+    const malformed = !!sec && text.length > 0 && !/^\W*Chưa có đề xuất/i.test(text)
+    return { total: 0, ok: 0, issues: malformed ? ['Mục Đề xuất không theo khuôn: mỗi đề xuất phải mở bằng "### n. <việc> — Chắc|Có thể|Chưa đủ dữ liệu" rồi các dòng Vì sao / Ảnh hưởng / Nguồn / Liên quan kế hoạch'] : [], empty: !malformed, missingSection: !sec, malformed }
+  }
   const issues: string[] = []
   let ok = 0
   let prevImpact: number | null = null
@@ -135,5 +140,5 @@ export function buildRepairPrompt(issues: string[], date: string): string {
   return `${REPAIR_PREFIX} ${date}: Mục "## Đề xuất hôm nay" trong notes/tac-dong.md chưa đạt bộ kiểm (hoặc thiếu hẳn mục này):
 ${issues.map(i => `- ${i}`).join(NL)}
 
-Đọc notes/tac-dong.md rồi GHI ĐÈ lại chính file đó, giữ nguyên hai mục "Tác động tới kế hoạch" và "Mâu thuẫn và mức ảnh hưởng", chỉ sửa mục Đề xuất cho đạt: (1) mỗi đề xuất có dòng "- Ảnh hưởng: <số tiền VND mỗi tháng hoặc quý, nêu cách tính, hoặc chưa lượng hoá được>" — cần số thì lấy bằng sql/layDuLieuHeThong, không bịa; (2) xếp việc có ảnh hưởng tiền lớn nhất lên đầu, bỏ việc dưới khoảng 5 triệu VND mỗi tháng trừ khi là rủi ro an toàn/pháp lý/mất dịch vụ; (3) nhãn "Chắc" chỉ khi mọi số đã đo; câu có "nếu/sẽ/ước tính" thì đổi nhãn thành "Có thể" và ghi rõ giả định. Sau đó GHI ĐÈ notes/tin-hom-nay.md (tối đa 10 dòng) cho khớp. Không hỏi lại.`
+Đọc notes/tac-dong.md rồi GHI ĐÈ lại chính file đó, giữ nguyên hai mục "Tác động tới kế hoạch" và "Mâu thuẫn và mức ảnh hưởng", chỉ sửa mục Đề xuất cho đạt. Tiêu đề phải đúng là "## Đề xuất hôm nay" và mỗi đề xuất mở bằng dòng "### n. <việc> — Chắc|Có thể|Chưa đủ dữ liệu" rồi các dòng "- Vì sao:", "- Ảnh hưởng:", "- Nguồn:", "- Liên quan kế hoạch:" (không viết dạng danh sách 1. 2. 3.). Yêu cầu cụ thể: (1) mỗi đề xuất có dòng "- Ảnh hưởng: <số tiền VND mỗi tháng hoặc quý, nêu cách tính, hoặc chưa lượng hoá được>" — cần số thì lấy bằng sql/layDuLieuHeThong, không bịa; (2) xếp việc có ảnh hưởng tiền lớn nhất lên đầu, bỏ việc dưới khoảng 5 triệu VND mỗi tháng trừ khi là rủi ro an toàn/pháp lý/mất dịch vụ; (3) nhãn "Chắc" chỉ khi mọi số đã đo; câu có "nếu/sẽ/ước tính" thì đổi nhãn thành "Có thể" và ghi rõ giả định. Sau đó GHI ĐÈ notes/tin-hom-nay.md (tối đa 10 dòng) cho khớp. Không hỏi lại.`
 }
