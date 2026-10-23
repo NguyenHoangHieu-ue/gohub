@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
-import { supabaseAdmin } from "@/lib/supabase"
-import { cachedQuery, CACHE_HEADERS } from "@/lib/analytics-helpers"
+import { cachedQuery, CACHE_HEADERS, noCache } from "@/lib/analytics-helpers"
+import { fetchCsTickets } from "@/lib/lark-cs-tickets"
+
+export const maxDuration = 60
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -57,22 +59,21 @@ export async function GET(req: NextRequest) {
     const b2bSourceNames = new Set(b2bRows.map(r => r.name))
     const b2cSourceNames = new Set(b2cRows.map(r => r.name))
 
-    // 2. Tickets from Supabase lark_cs_tickets
+    // 2. Ticket đọc THẲNG từ Lark Base (lọc theo ngày ở phía Lark; cache 30 phút theo kỳ — đổi nhóm B2B/B2C không phải kéo lại)
     const startTs = new Date(startDate).getTime()
     const endTs   = new Date(endDate).getTime() + 86400000
-
-    let ticketQuery = supabaseAdmin
-      .from("lark_cs_tickets")
-      .select("*")
-      .gte("creation_date", startTs)
-      .lt("creation_date", endTs)
-
+    const { tickets: allTickets, fetchedAt } = await cachedQuery(
+      `cs-tickets:v1:${startTs}:${endTs}`,
+      () => fetchCsTickets(startTs, endTs).then(r => ({ tickets: r.tickets, strategy: r.strategy, fetchedAt: new Date().toISOString() })),
+      30,
+      noCache(req),
+      ["cs-tickets"],
+    )
+    let tickets = allTickets
     if (channelGroup !== "All") {
       const grp = ["WS","WHOLESALES","OD","ON-DEMAND","B2B"].includes(channelGroup.toUpperCase()) ? "B2B" : "B2C"
-      ticketQuery = ticketQuery.eq("source_1", grp)
+      tickets = allTickets.filter(t => t.source_1 === grp)
     }
-
-    const { data: tickets } = await ticketQuery
 
     // 3. Aggregate ticket data (mirrors intel logic)
     let replacementCount = 0, refundCount = 0, tbsTicketCount = 0
@@ -150,6 +151,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       hasTicketData: (tickets || []).length > 0,
+      source: "lark-base",
+      fetchedAt,
+      ticketTotal: allTickets.length,
       kpis: {
         unitsSold,
         ticketCount:      tbsTicketCount,

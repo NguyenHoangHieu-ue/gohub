@@ -661,8 +661,7 @@
       "Export"
      ],
      "apis": [
-      "/api/reports/cs-troubleshoot",
-      "/api/admin/sync-lark-tickets"
+      "/api/reports/cs-troubleshoot"
      ],
      "sqlViaQueryApi": []
     }
@@ -812,25 +811,6 @@
    "external": [],
    "usesTurso": false
   },
-  "/api/admin/sync-lark-tickets": {
-   "file": "src/app/api/admin/sync-lark-tickets/route.ts",
-   "methods": [
-    "POST",
-    "GET"
-   ],
-   "cacheKey": null,
-   "deps": [],
-   "tables": [
-    {
-     "name": "lark_cs_tickets",
-     "source": "supabase"
-    }
-   ],
-   "external": [
-    "Lark"
-   ],
-   "usesTurso": false
-  },
   "/api/analytics/3hk-sku-meta": {
    "file": "src/app/api/analytics/3hk-sku-meta/route.ts",
    "methods": [
@@ -900,8 +880,16 @@
      "source": "supabase"
     },
     {
-     "name": "b2b_customers_cache",
-     "source": "supabase"
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
     }
    ],
    "external": [],
@@ -3046,8 +3034,10 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": null,
-   "deps": [],
+   "cacheKey": "cs-tickets",
+   "deps": [
+    "cs-tickets"
+   ],
    "tables": [
     {
      "name": "dim_order_source",
@@ -3060,13 +3050,11 @@
     {
      "name": "fact_fulfillment_revenue",
      "source": "gohub_dw"
-    },
-    {
-     "name": "lark_cs_tickets",
-     "source": "supabase"
     }
    ],
-   "external": [],
+   "external": [
+    "Lark"
+   ],
    "usesTurso": false
   }
  },
@@ -3215,16 +3203,6 @@
     "quarterly"
    ]
   },
-  "b2b_customers_cache": {
-   "source": "supabase",
-   "apis": [
-    "/api/analytics/b2b-customer-costs"
-   ],
-   "tabs": [
-    "b2b",
-    "quarterly"
-   ]
-  },
   "b2b_ecom_cost_monthly": {
    "source": "turso",
    "apis": [
@@ -3261,6 +3239,7 @@
    "source": "gohub_dw",
    "apis": [
     "/api/analytics/all-time-performance",
+    "/api/analytics/b2b-customer-costs",
     "/api/analytics/b2b/ecom-breakdown",
     "/api/analytics/b2b/ecom-timeline",
     "/api/analytics/b2b/kpis",
@@ -3324,6 +3303,7 @@
    "source": "gohub_dw",
    "apis": [
     "/api/analytics/all-time-performance",
+    "/api/analytics/b2b-customer-costs",
     "/api/analytics/b2b-customer-orders",
     "/api/analytics/b2b/kpis",
     "/api/analytics/b2b/performance",
@@ -3473,6 +3453,7 @@
    "source": "gohub_dw",
    "apis": [
     "/api/analytics/all-time-performance",
+    "/api/analytics/b2b-customer-costs",
     "/api/analytics/b2b-customer-orders",
     "/api/analytics/b2b/ecom-breakdown",
     "/api/analytics/b2b/ecom-timeline",
@@ -3625,16 +3606,6 @@
    ],
    "tabs": [
     "fulfillment"
-   ]
-  },
-  "lark_cs_tickets": {
-   "source": "supabase",
-   "apis": [
-    "/api/admin/sync-lark-tickets",
-    "/api/reports/cs-troubleshoot"
-   ],
-   "tabs": [
-    "cs-troubleshoot"
    ]
   },
   "lark_scheduled_messages": {

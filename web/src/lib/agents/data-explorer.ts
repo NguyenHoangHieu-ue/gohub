@@ -59,7 +59,6 @@ export const SENSITIVE_TABLES: Record<string, string> = {
   chat_messages:          "Tin nhắn chat nhóm Tổ Gấu (PII)",
   conversation_messages:  "Tin nhắn hội thoại chatbot Bé Gấu/Gấu Pro (PII)",
   lark_chat_history:      "Lịch sử chat Lark (PII)",
-  lark_cs_tickets:        "Ticket CS từ Lark (PII khách hàng)",
   notifications:          "Thông báo người dùng",
   user_notes:             "Ghi chú cá nhân người dùng",
 }

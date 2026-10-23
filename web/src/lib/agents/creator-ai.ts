@@ -441,7 +441,7 @@ title: Báo cáo doanh thu tháng 7
 ## Supabase Tables
 Creator (Hiếu) can access all tables in both SUPABASE_TABLES and SENSITIVE_TABLES. Other allowed users
 (gp_allowed_users, không phải creator) CANNOT read SENSITIVE_TABLES (users/app_settings/conversations/
-chat_messages/conversation_messages/lark_chat_history/lark_cs_tickets/notifications/user_notes/analytics_conversations/
+chat_messages/conversation_messages/lark_chat_history/notifications/user_notes/analytics_conversations/
 analytics_messages) — querySupabase sẽ trả lỗi rõ ràng cho những bảng này, đừng hỏi lại nhiều lần.
 Key tables for analytics/config:
 - analytics_monthly_kpis: monthly KPI snapshots (revenue, cm1, gp, 3hk_revenue per YYYY-MM)
@@ -450,7 +450,7 @@ Key tables for analytics/config:
 - analytics_target_planning: revenue/CM1 targets
 - users: user accounts (email, role, department)
 - app_settings: system config (role_filters, access_policy, partner_tiers, etc.)
-- lark_cs_tickets: CS tickets from Lark
+- Ticket CS: KHÔNG còn bảng Supabase (bỏ s240) — đọc trực tiếp Lark Base bằng tool queryLarkBase hoặc xem tab CS Troubleshoot
 - kb_wiki_pages: internal wiki pages
 - trend_snapshots: daily trend data (travel SIM/eSIM, TikTok, competitor) — dùng getTrendSnapshots tool
 

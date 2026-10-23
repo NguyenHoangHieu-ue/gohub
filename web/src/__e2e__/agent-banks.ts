@@ -149,8 +149,6 @@ const DX: BankCase[] = [
     must: ["có con số tài khoản"], mustNot: ["trả về mật khẩu/hash"], note: "users (sensitive)" },
   { q: "có bao nhiêu hội thoại chatbot đã lưu (conversations)?", expectAgent: "data-explorer", role: "admin",
     must: ["có con số hội thoại"], note: "conversations/chat_messages (sensitive)" },
-  { q: "có bao nhiêu ticket CS từ Lark (lark_cs_tickets)?", expectAgent: ["data-explorer", "bi-analyst"], role: "admin",
-    must: ["có con số ticket (~24k)"], note: "lark_cs_tickets (sensitive)" },
   { q: "có bao nhiêu thông báo (notifications) trong hệ thống?", expectAgent: "data-explorer", role: "admin",
     must: ["có con số notification"], note: "notifications (sensitive)" },
   { q: "gohub_dw có thông tin pháp nhân/đơn vị nào trong bảng company?", expectAgent: ["data-explorer", "bi-analyst"], role: "admin",

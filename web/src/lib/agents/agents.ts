@@ -845,9 +845,8 @@ company: code, name (VN/SG/HK/US)  · exchange_rate: company_code, currency_code
 - analytics_monthly_kpis: month(TEXT 'YYYY-MM'), channel_group(TEXT B2B/B2C),
     revenue(NUMERIC), gp(NUMERIC), cm1(NUMERIC), orders(INT), units(INT).
     → Snapshot KPI tháng đã tính sẵn (bao gồm CM1 sau trừ operation cost). Dùng khi cần CM1 chính xác.
-- b2b_customers_cache: customer_code(TEXT PK), customer_name(TEXT), price_list_name(TEXT),
-    currency_code(TEXT VND/USD), status(TEXT Active/Inactive).
-    → Cache B2B customers từ gohub_dw, sync định kỳ. Dùng để enrich tên KH cho customer_code.
+- (Không còn bảng b2b_customers_cache — đã bỏ s240.) Tên/bảng giá khách: truy vấn dim_customer trong gohub_dw
+    (code, name, price_list_name, currency_code, status, sales_pic_code) bằng executeSQL.
 - analytics_target_planning: month(TEXT), channel_group(TEXT), target_revenue(NUMERIC), target_cm1(NUMERIC).
     → Target KPI theo tháng, B2B và B2C riêng.
 

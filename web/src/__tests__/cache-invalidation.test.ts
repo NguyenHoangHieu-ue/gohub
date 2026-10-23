@@ -19,7 +19,7 @@ const REVIEWED = new Set([
   "analytics/my-metrics/lark-config/scan-history", "analytics/my-metrics/lark-config/scan-now", "analytics/my-metrics/lark-events/[id]/override",
   "analytics/my-metrics/lark-events/[id]/review", "analytics/my-metrics/lark-events/[id]", "analytics/my-metrics/manual", "analytics/my-metrics/sku-tags",
   "analytics/products/report", "analytics/quarterly-settings", "analytics/quarterly-targets", "analytics/query", "analytics/squad-targets",
-  "analytics/staff-targets", "analytics/sync-b2b-customers", "analytics/track", "analytics/usage-stats/classify", "analytics/usage-stats/evaluate",
+  "analytics/staff-targets", "analytics/track", "analytics/usage-stats/classify", "analytics/usage-stats/evaluate",
   "analytics/vendors/report", "config/assistant-feature-users", "config/assistant-features", "config/chatbot-rules", "config/inventory-alert-thresholds",
   "config/role-permissions", "config/sku-destination-rule", "config/squad-config", "config/tab-visibility", "config/writable-tabs",
 ])

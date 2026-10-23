@@ -6,6 +6,7 @@ import { waitUntil }                from "@vercel/functions"
 import { summarizeConversation }    from "@/lib/assistant-memory-auto"
 import { isMemoryOff }              from "@/lib/assistant-memory-rights"
 import { featureOn } from "@/lib/assistant-features"
+import { readArchive } from "@/lib/log-archive"
 
 type Ctx = { params: { id: string } }
 
@@ -38,6 +39,11 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     .order("created_at", { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Hội thoại đã được lưu trữ sang Turso (quá hạn giữ ở Supabase) → đọc lại từ kho lưu trữ
+  if (!messages || messages.length === 0) {
+    const archived = await readArchive("conversation_messages", { ref: params.id, limit: 2000 }).catch(() => [])
+    if (archived.length) return NextResponse.json(archived.map(m => ({ id: m.id, role: m.role, content: m.content, agent_id: m.agent_id, agent_name: m.agent_name, created_at: m.created_at })))
+  }
   return NextResponse.json(messages ?? [])
 }
 

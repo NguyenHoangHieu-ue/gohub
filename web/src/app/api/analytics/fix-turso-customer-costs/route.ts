@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { tursoQuery } from "@/lib/turso"
-import { supabaseAdmin } from "@/lib/supabase"
+import { topB2BCustomers } from "@/lib/b2b-customers"
 import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
 import { canWrite } from "@/lib/writable-tabs"
 import { flushByDeps } from "@/lib/analytics-helpers"
@@ -56,13 +56,8 @@ export async function GET(req: NextRequest) {
   )
   const tursoCodes = tursoRows.map(r => r.customer_code)
 
-  // 2. Lấy b2b_customers_cache — customers có revenue thật
-  const { data: cacheAll } = await supabaseAdmin
-    .from("b2b_customers_cache")
-    .select("customer_code, customer_name, price_list_name, total_revenue")
-    .order("total_revenue", { ascending: false })
-    .limit(500)
-  const cache = cacheAll || []
+  // 2. Top 500 khách B2B có revenue thật (đọc thẳng gohub_dw)
+  const cache = await topB2BCustomers({ limit: 500 })
   const cacheByCode = new Map(cache.map(r => [r.customer_code, r]))
 
   // 3. Phân loại: stale (không có trong cache hoặc revenue=0) vs ok

@@ -10,9 +10,6 @@
     "src/app/api/cron/scheduled-messages/route.ts": {
       "maxDuration": 180
     },
-    "src/app/api/admin/sync-lark-tickets/route.ts": {
-      "maxDuration": 300
-    },
     "src/app/api/cron/prewarm-analytics/route.ts": {
       "maxDuration": 60
     },
@@ -77,8 +74,8 @@
       "schedule": "0 1 * * *"
     },
     {
-      "path": "/api/admin/sync-lark-tickets",
-      "schedule": "0 2 * * *"
+      "path": "/api/cron/log-archive",
+      "schedule": "40 3 * * *"
     },
     {
       "path": "/api/cron/refresh-monthly-kpis",

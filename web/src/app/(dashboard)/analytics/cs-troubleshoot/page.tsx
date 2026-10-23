@@ -16,7 +16,7 @@ import { useToast } from "@/components/toast"
 import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel CSTroubleshootReport. Backend /api/reports/cs-troubleshoot ĐÃ khớp shape.
-// Adapt (user chốt): GIỮ sync của web → nút Sync gọi POST /api/admin/sync-lark-tickets (thay intel sync-lark).
+// s240: ticket đọc THẲNG từ Lark Base (cache 30 phút), không còn bảng Supabase hay nút Sync.
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -33,6 +33,8 @@ function getDefaultDateRange() {
 
 interface CSTroubleshootData {
   hasTicketData: boolean
+  fetchedAt?: string
+  ticketTotal?: number
   kpis: { unitsSold: number; ticketCount: number; tbsRate: number; avgHandleTime: number; replacementCount: number; refundCount: number }
   shifts: { shift: string; tickets: number }[]
   issues: { name: string; count: number }[]
@@ -47,13 +49,8 @@ export default function CSTroubleshootReport() {
   const toast = useToast()
   const [data, setData] = useState<CSTroubleshootData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<"tbs" | "sku" | "vendor" | "source" | "invalid">("tbs")
-  const [syncStatus, setSyncStatus] = useState<{
-    count: number; lastSync: string | null; configured: boolean
-    envCheck?: Record<string, string>
-  } | null>(null)
 
   const [dateRange, setDateRange] = useState(() => {
     const defaultRange = getDefaultDateRange()
@@ -61,10 +58,11 @@ export default function CSTroubleshootReport() {
   })
   const [channelGroup, setChannelGroup] = useState("All")
 
-  const fetchData = async () => {
+  const fetchData = async (fresh = false) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ startDate: dateRange.start, endDate: dateRange.end, channelGroup })
+      if (fresh) params.set("nocache", "1")
       const res = await fetch(`/api/reports/cs-troubleshoot?${params}`)
       if (!res.ok) throw new Error("Failed to fetch data")
       setData(await res.json())
@@ -75,42 +73,7 @@ export default function CSTroubleshootReport() {
     }
   }
 
-  // Giữ sync của web: POST /api/admin/sync-lark-tickets (không poll như intel).
-  const syncLarkData = async () => {
-    if (syncing) return
-    setSyncing(true)
-    try {
-      const res = await fetch("/api/admin/sync-lark-tickets", { method: "POST" })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        const errMsg = json.error || "Failed to sync"
-        // Lỗi thiếu env vars → hướng dẫn cụ thể
-        if (errMsg.includes("LARK_BASE_ID") || errMsg.includes("LARK_TABLE_ID")) {
-          throw new Error("Chưa set LARK_BASE_ID / LARK_TABLE_ID trên Vercel. Set xong phải Redeploy để có hiệu lực.")
-        }
-        throw new Error(errMsg)
-      }
-      await fetchData()
-      toast.success(json.message || `Đã đồng bộ ${json.totalSynced ?? ""} bản ghi từ Lark.`)
-      // Refresh sync status + data
-      fetch("/api/admin/sync-lark-tickets").then(r => r.ok ? r.json() : null).then(d => { if (d) setSyncStatus(d) }).catch(() => {})
-      await fetchData()
-    } catch (err: any) {
-      toast.error(`Sync error: ${err.message}`)
-    } finally {
-      setSyncing(false)
-    }
-  }
-
   useEffect(() => { fetchData() }, [channelGroup]) // eslint-disable-line react-hooks/exhaustive-deps -- ngày chỉ áp khi bấm "Lọc"
-
-  // Load sync status on mount để biết có data chưa
-  useEffect(() => {
-    fetch("/api/admin/sync-lark-tickets")
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setSyncStatus(d) })
-      .catch(() => {})
-  }, [])
 
   if (error) {
     return (
@@ -151,13 +114,13 @@ export default function CSTroubleshootReport() {
                   <option value="B2B">B2B Performance</option>
                   <option value="B2C">B2C Performance</option>
                 </select>
-                <button onClick={fetchData} className="p-2 md:p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
+                <button onClick={() => fetchData()} className="p-2 md:p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
                   <RefreshCcw className={cn("w-4 h-4 text-slate-600", loading && "animate-spin")} />
                 </button>
-                <button onClick={syncLarkData} disabled={syncing} className={cn("flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[11.5px] md:text-xs font-bold transition-all shadow-sm", syncing ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-brand-600 text-white hover:bg-brand-700 shadow-brand-200")}>
-                  <Database className={cn("w-3 h-3 md:w-4 md:h-4", syncing && "animate-spin")} />
-                  <span className="hidden sm:inline">{syncing ? "Syncing..." : "Sync Lark"}</span>
-                  <span className="sm:hidden">{syncing ? "Syncing..." : "Sync"}</span>
+                <button onClick={() => fetchData(true)} disabled={loading} title="Kéo lại ticket mới nhất từ Lark Base (bỏ qua bộ nhớ tạm 30 phút)" className={cn("flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[11.5px] md:text-xs font-bold transition-all shadow-sm", loading ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-brand-600 text-white hover:bg-brand-700")}>
+                  <Database className={cn("w-3 h-3 md:w-4 md:h-4", loading && "animate-spin")} />
+                  <span className="hidden sm:inline">{loading ? "Đang tải..." : "Tải lại từ Lark"}</span>
+                  <span className="sm:hidden">{loading ? "..." : "Lark"}</span>
                 </button>
               </div>
             </div>
@@ -181,62 +144,14 @@ export default function CSTroubleshootReport() {
       </div>
 
       <div className="max-w-[1600px] mx-auto px-4 md:px-6 py-4 md:py-8">
-        {/* Sync status + no-data banner */}
-        {syncStatus && (
-          <div className={cn("mb-4 flex items-center justify-between rounded-xl px-4 py-3 text-sm border",
-            syncStatus.count === 0 ? "bg-amber-50 border-amber-200 text-amber-800" : "bg-emerald-50 border-emerald-200 text-emerald-800"
-          )}>
-            <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 shrink-0" />
-              {syncStatus.count === 0
-                ? <span>Chưa có dữ liệu ticket nào trong Supabase. Nhấn <strong>Sync Lark</strong> để tải dữ liệu từ Lark Base.</span>
-                : <span><strong>{syncStatus.count.toLocaleString()}</strong> tickets · Last sync: {syncStatus.lastSync ? new Date(syncStatus.lastSync).toLocaleString("vi-VN") : "N/A"}</span>
-              }
-            </div>
-            {!syncStatus.configured && (
-              <div className="text-xs font-bold text-red-600 space-y-1">
-                <div>⚠ Lark Base chưa kết nối — kiểm tra Vercel env vars và redeploy nếu vừa set</div>
-                {syncStatus.envCheck && (
-                  <div className="font-mono font-normal text-[12px] text-red-500 space-y-0.5">
-                    {Object.entries(syncStatus.envCheck).map(([k, v]) => (
-                      <div key={k}>{k}: {v}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-            {syncStatus.configured && syncStatus.envCheck && (
-              Object.values(syncStatus.envCheck).some(v => v.includes("❌")) && (
-                <div className="text-xs text-amber-700 space-y-0.5">
-                  <div>⚠ Base/Table set nhưng thiếu bot credentials:</div>
-                  <div className="font-mono text-[12px] space-y-0.5">
-                    {Object.entries(syncStatus.envCheck).filter(([,v]) => v.includes("❌")).map(([k, v]) => (
-                      <div key={k}>{k}: {v}</div>
-                    ))}
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-        )}
-        {data && !data.hasTicketData && !loading && (
-          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl px-4 py-3.5 bg-amber-50 border border-amber-200 text-sm text-amber-900">
-            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+        {data && (
+          <div className={cn("mb-4 flex flex-wrap items-center gap-2 rounded-xl px-4 py-3 text-sm border", data.hasTicketData ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-amber-50 border-amber-200 text-amber-900")}>
+            {data.hasTicketData ? <Database className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
             <span className="min-w-0 flex-1">
-              <strong>Chưa có ticket nào trong kỳ này.</strong>{" "}
-              {syncStatus?.lastSync ? `Lần đồng bộ Lark gần nhất: ${new Date(syncStatus.lastSync).toLocaleDateString("vi-VN")}, nên số liệu ticket có thể đang cũ. ` : ""}
-              Bấm <strong>Sync Lark</strong> để lấy ticket mới, hoặc xem kỳ có ticket gần nhất.
+              {data.hasTicketData
+                ? <>Đọc trực tiếp từ Lark Base · <strong>{(data.ticketTotal ?? 0).toLocaleString("vi-VN")}</strong> ticket trong kỳ{data.fetchedAt ? ` · lấy lúc ${new Date(data.fetchedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : ""} (lưu tạm 30 phút)</>
+                : <><strong>Không có ticket nào trong kỳ này</strong> (hoặc nhóm kênh đang chọn). Thử đổi kỳ, hoặc bấm <strong>Tải lại từ Lark</strong> nếu vừa có ticket mới.</>}
             </span>
-            {syncStatus?.lastSync && (
-              <button type="button" className="px-3 py-1.5 text-[13px] font-semibold rounded-lg bg-white border border-amber-300 hover:bg-amber-100"
-                onClick={() => {
-                  const d = new Date(syncStatus.lastSync as string)
-                  const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`
-                  setDateRange({ start: iso(new Date(d.getFullYear(), d.getMonth(), 1)), end: iso(d) })
-                }}>
-                Xem tháng có ticket gần nhất
-              </button>
-            )}
           </div>
         )}
         {activeTab === "tbs" && <TBSOverview data={data} loading={loading} />}

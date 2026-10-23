@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { tursoQuery } from "@/lib/turso"
 import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
-import { supabaseAdmin } from "@/lib/supabase"
+import { b2bCustomerNames, b2bCodesWithRevenue } from "@/lib/b2b-customers"
 import { canWrite } from "@/lib/writable-tabs"
 import { flushByDeps } from "@/lib/analytics-helpers"
 
@@ -35,16 +35,9 @@ export async function GET(req: NextRequest) {
       updated_by: string; updated_at: string
     }>(sql, params)
 
-    // Enrich với customer_name từ b2b_customers_cache (Supabase) nếu có
+    // Enrich với customer_name từ dim_customer (gohub_dw); lỗi/không có thì dùng mã
     const codes = [...new Set(rows.map(r => r.customer_code))]
-    let nameMap: Record<string, string> = {}
-    if (codes.length > 0) {
-      const { data } = await supabaseAdmin
-        .from("b2b_customers_cache")
-        .select("customer_code, customer_name")
-        .in("customer_code", codes)
-      for (const r of data || []) nameMap[r.customer_code] = r.customer_name
-    }
+    const nameMap: Record<string, string> = await b2bCustomerNames(codes).catch(() => ({}))
 
     return NextResponse.json({
       rows: rows.map(r => ({
@@ -97,25 +90,21 @@ export async function POST(req: NextRequest) {
     if (!(await canWrite(session, "quarterly", WRITE_ROLES_POST)))
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    // Repair mode: đọc tất cả records, cross-check với b2b_customers_cache, báo stale records
+    // Repair mode: đọc tất cả records, cross-check với gohub_dw (khách còn doanh thu B2B), báo stale records
     if (req.nextUrl.searchParams.get("repair") === "1") {
       await ensureB2bCostTable()
       const allRows = await tursoQuery<{ id: string; month: string; customer_code: string; cost_value: number }>(
         "SELECT id, month, customer_code, cost_value FROM b2b_customer_cost_monthly ORDER BY month DESC LIMIT 1000"
       )
       const codes = [...new Set(allRows.map(r => r.customer_code))]
-      const { data: cached } = await supabaseAdmin
-        .from("b2b_customers_cache")
-        .select("customer_code")
-        .in("customer_code", codes)
-      const validCodes = new Set((cached || []).map((r: any) => r.customer_code))
+      const validCodes = await b2bCodesWithRevenue(codes)
       const stale = allRows.filter(r => !validCodes.has(r.customer_code))
       return NextResponse.json({
         total_records: allRows.length,
         valid_records: allRows.length - stale.length,
         stale_records: stale.length,
         stale: stale,
-        note: "Stale = customer_code không còn trong b2b_customers_cache. Dùng DELETE endpoint để xóa từng record nếu cần.",
+        note: "Stale = customer_code không còn có doanh thu B2B trong gohub_dw. Dùng DELETE endpoint để xóa từng record nếu cần.",
       })
     }
 
