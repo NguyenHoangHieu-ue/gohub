@@ -125,3 +125,14 @@ export function sectionOf(md: string, heading: string): string {
 export function isNightlyPatrolPrompt(prompt: string): boolean {
   return prompt.includes("GHI ĐÈ notes/tac-dong.md")
 }
+
+const NL = "\n"
+export const REPAIR_PREFIX = "🔧 Sửa đề xuất"
+export const isRepairPrompt = (prompt: string) => prompt.startsWith(REPAIR_PREFIX)
+
+export function buildRepairPrompt(issues: string[], date: string): string {
+  return `${REPAIR_PREFIX} ${date}: Mục "## Đề xuất hôm nay" trong notes/tac-dong.md chưa đạt bộ kiểm:
+${issues.map(i => `- ${i}`).join(NL)}
+
+Đọc notes/tac-dong.md rồi GHI ĐÈ lại chính file đó, giữ nguyên hai mục "Tác động tới kế hoạch" và "Mâu thuẫn và mức ảnh hưởng", chỉ sửa mục Đề xuất cho đạt: (1) mỗi đề xuất có dòng "- Ảnh hưởng: <số tiền VND mỗi tháng hoặc quý, nêu cách tính, hoặc chưa lượng hoá được>" — cần số thì lấy bằng sql/layDuLieuHeThong, không bịa; (2) xếp việc có ảnh hưởng tiền lớn nhất lên đầu, bỏ việc dưới khoảng 5 triệu VND mỗi tháng trừ khi là rủi ro an toàn/pháp lý/mất dịch vụ; (3) nhãn "Chắc" chỉ khi mọi số đã đo; câu có "nếu/sẽ/ước tính" thì đổi nhãn thành "Có thể" và ghi rõ giả định. Sau đó GHI ĐÈ notes/tin-hom-nay.md (tối đa 10 dòng) cho khớp. Không hỏi lại.`
+}

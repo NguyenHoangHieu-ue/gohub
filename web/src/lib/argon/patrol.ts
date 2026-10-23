@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { setBg, triggerWorker } from "./bg"
 import { missionById } from "./missions-db"
 import { resolveModel } from "./models"
+import { auditProposals, TAC_DONG_PATH, buildRepairPrompt } from "./context-pure"
 import type { MissionPhase } from "./missions"
 import { dueBlock, dueForecasts, getForecasts } from "./forecast-tool"
 
@@ -73,3 +74,30 @@ export async function patrolWroteNotes(projectId: string, sinceIso: string): Pro
   const fresh = new Set((files ?? []).filter(f => Date.parse(String(f.updated_at)) >= since).map(f => String(f.path)))
   return fresh.has("notes/boi-canh.md") && fresh.has("notes/tac-dong.md")
 }
+
+export { REPAIR_PREFIX, isRepairPrompt, buildRepairPrompt } from "./context-pure"
+
+/** Lỗi của mục "Đề xuất hôm nay" trong notes/tac-dong.md hiện tại (rỗng nếu đạt hoặc không phải sứ mệnh). */
+export async function proposalIssuesFor(projectId: string): Promise<string[]> {
+  const { data: m } = await supabaseAdmin.from("argon_missions").select("id").eq("project_id", projectId).maybeSingle()
+  if (!m) return []
+  const { data: f } = await supabaseAdmin.from("argon_workspace_files").select("content").eq("mission_id", m.id).eq("path", TAC_DONG_PATH).maybeSingle()
+  const a = auditProposals(String(f?.content ?? ""))
+  return a.empty ? [] : a.issues
+}
+
+/** Lượt sửa ngắn: model hay bỏ qua luật mới (dòng Ảnh hưởng, nhãn Chắc, thứ tự) nên sau lượt đêm, nếu bộ kiểm báo lỗi thì giao đúng danh sách lỗi cho Argon sửa MỘT lần. */
+export async function startProposalRepair(projectId: string, username: string, issues: string[], origin: string): Promise<string | null> {
+  const prompt = buildRepairPrompt(issues, vnDate())
+  const { data: m } = await supabaseAdmin.from("argon_missions").select("id").eq("project_id", projectId).maybeSingle()
+  if (!m) return null
+  const { data, error } = await supabaseAdmin.from("argon_runs").insert({
+    project_id: projectId, username, prompt, status: "queued", model: resolveModel("fast"), thinking: "medium", source_ids: [],
+  }).select("id").single()
+  if (error || !data) return null
+  const now = new Date().toISOString()
+  await setBg(data.id, { username, projectId, allowTools: true, thinking: "medium", startedAt: now, heartbeat: now })
+  await triggerWorker(origin, data.id)
+  return data.id
+}
+

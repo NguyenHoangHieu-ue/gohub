@@ -14,7 +14,7 @@ import { linkedSourceIdsForProject, loadMissionContext } from "./missions-db"
 import { KHO_MISSION_NAME, khoSources } from "./kho"
 import { usesKhoScope } from "./context-instruction"
 import { isNightlyPatrolPrompt } from "./context-pure"
-import { patrolWroteNotes } from "./patrol"
+import { isRepairPrompt, patrolWroteNotes, proposalIssuesFor, startProposalRepair } from "./patrol"
 
 export const SEGMENT_MS = 265_000     // hết ngân sách đoạn → lưu dở, đoạn sau viết tiếp
 export const MAX_OUT = 32_768         // trần output mỗi đoạn; chạm trần cũng đi qua đoạn sau
@@ -131,7 +131,15 @@ export async function runBackgroundSegment(runId: string, origin: string): Promi
     await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", run.project_id)
     await deleteBg(runId)
     if (!cancelled && seg.status !== "error") await autoSaveReports(bg.username, run.project_id, runId, answer)
-    await notifyDone({ ...run, answer }, project, finalStatus === "error" && seg.status === "partial" ? "error" : finalStatus, cost, segments, err, origin)
+    // Lượt đêm xong mà đề xuất chưa đạt bộ kiểm (thiếu Ảnh hưởng, nhãn Chắc có dự phóng, sai thứ tự) → giao Argon sửa MỘT lần (lượt sửa không tự lặp lại)
+    if (finalStatus === "done" && isNightlyPatrolPrompt(run.prompt)) {
+      const issues = await proposalIssuesFor(run.project_id).catch(() => [] as string[])
+      if (issues.length) await startProposalRepair(run.project_id, bg.username, issues, origin).catch(e => console.error("[argon worker] repair:", (e as Error).message))
+    }
+    // Lượt sửa đề xuất xong êm thì không nhắn Lark lần nữa (đã có tin của lượt đêm); lỗi thì vẫn báo
+    if (!(isRepairPrompt(run.prompt) && finalStatus === "done")) {
+      await notifyDone({ ...run, answer }, project, finalStatus === "error" && seg.status === "partial" ? "error" : finalStatus, cost, segments, err, origin)
+    }
     return "finished"
   } catch (e) {
     await save({ status: "error", error: (e as Error).message.slice(0, 500), finished_at: new Date().toISOString() })
