@@ -58,3 +58,8 @@ Duyệt plan này (đã duyệt hướng); quyết khi nào làm E; hỏi bên `
 - [x] **A' an toàn cache:** checksum 7 ngày trong cron `etl-cache-sync` (chạy sống 2 lần: ổn định, ~0,7s); nhãn "Dữ liệu cập nhật HH:mm" ở thanh trên; test `cache-invalidation` (danh sách REVIEWED 42 route ghi chưa flush — cần rà dần, chưa chứng minh an toàn); khoá phiên bản = epoch sẵn có (softExpire) nên không đổi cấu trúc khoá.
 - [ ] A' còn: nút "Tải lại mới"/read-your-writes cho target–chi phí (rà REVIEWED); đối chiếu `test:consistency` hằng đêm báo Lark.
 - [ ] B prewarm theo hành vi · D UI stale-first · C gom truy vấn (3 tab) · E bảng tổng hợp — chưa làm. Lấy số đo vài ngày (`/api/creator/perf-stats?days=3`) rồi mới chọn C/E.
+
+## Tiến độ B + D (2026-10-23, staging `44a80686`, chưa merge `main`)
+- [x] **B prewarm theo hành vi:** `lib/url-hits.ts` (Turso `url_hits`, đếm lượt gọi thật, mẫu ngày tương đối, điểm 7 ngày), `prewarmAnalyticsUrls` lấy top theo điểm + ngân sách thời gian (cron 38s / ETL 22s). QA sống: danh sách xếp hạng ra đúng (`/api/creator/perf-stats` → `warmList`); chưa kiểm một vòng cron thật sau khi tích luỹ nhiều ngày dùng.
+- [x] **D tải nhanh ở trình duyệt:** `lib/client-fetch-cache.ts` (dedupe + nhớ 60s + xoá khi ghi) cho mọi tab; `lib/stale-first.ts` số-cũ-trước **chỉ ở Quarter Report** (`quarterly-report`, `quarterly-b2b-customers`). QA sống: lần đầu 12,4s → lặp 0ms; 2 request đồng thời dùng chung 1 lần gọi; POST xoá bộ nhớ + số cũ.
+- [ ] Mở rộng số-cũ-trước cho Channels, B2C, B2B, BOD, Staff (mỗi tab đọc `readStale` trước, `writeStale` sau); đo hiệu quả bằng Data Map sau vài ngày; rồi quyết C (gom truy vấn) / E (bảng tổng hợp).
