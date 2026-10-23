@@ -51,3 +51,10 @@ Quét code sót SQL động · cron checksum tăng tải `gohub_dw` (truy vấn 
 
 ## Hiếu còn
 Duyệt plan này (đã duyệt hướng); quyết khi nào làm E; hỏi bên `gohub_dw` về bảng tổng hợp (và xem họ có dùng Kafka không — chỉ để biết).
+
+## Tiến độ (2026-10-23, staging `155ac98a`, chưa merge `main`)
+- [x] **A đo thật:** `lib/perf-recorder.ts` + bảng Turso `perf_events` + `/api/creator/perf-stats`; QA sống: ghi được số nguội thật (bod-summary ~12s, qreport_raw ~4,6s, staff-report ~4,6s).
+- [x] **Data Map mới** (`components/data-map-view.tsx`, `scripts/datamap/build.mjs`, `npm run build:datamap`): 19 tab · 87 API · 32 bảng; 2 chế độ Theo Tab / Theo Bảng; số đo p50/p95; test khoá đồng bộ. QA sống staging OK (khoá cache nhận được 45/87 API; còn lại không qua cachedQuery hoặc khoá động).
+- [x] **A' an toàn cache:** checksum 7 ngày trong cron `etl-cache-sync` (chạy sống 2 lần: ổn định, ~0,7s); nhãn "Dữ liệu cập nhật HH:mm" ở thanh trên; test `cache-invalidation` (danh sách REVIEWED 42 route ghi chưa flush — cần rà dần, chưa chứng minh an toàn); khoá phiên bản = epoch sẵn có (softExpire) nên không đổi cấu trúc khoá.
+- [ ] A' còn: nút "Tải lại mới"/read-your-writes cho target–chi phí (rà REVIEWED); đối chiếu `test:consistency` hằng đêm báo Lark.
+- [ ] B prewarm theo hành vi · D UI stale-first · C gom truy vấn (3 tab) · E bảng tổng hợp — chưa làm. Lấy số đo vài ngày (`/api/creator/perf-stats?days=3`) rồi mới chọn C/E.
