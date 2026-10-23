@@ -8,8 +8,9 @@ const MAX_ENTRIES = 60
 const MAX_BODY = 1_500_000
 const SCOPE = /^\/api\/(analytics|config)\//
 const NEVER = /^\/api\/analytics\/(my-metrics|track|usage-stats|db-status|health|data-health|data-freshness|perf-probe|perf-probe-report|perf-probe-sin|query)(\/|\?|$)/
-// POST nền không phải ghi dữ liệu BI (đếm lượt xem, nhịp tim, chat, thông báo...) — KHÔNG được xoá bộ nhớ, nếu không số-cũ-trước mất tác dụng
-export const TELEMETRY = /^\/api\/(auth|user|chat|creator|creator-ai|notifications|bridge|to-gau|be-gau)(\/|$)|^\/api\/analytics\/(track|usage-stats)(\/|$)/
+// POST KHÔNG ghi dữ liệu BI → không được xoá bộ nhớ (nếu không số-cũ-trước mất tác dụng): nền (đếm lượt xem, nhịp tim, chat, thông báo)
+// và POST dùng để ĐỌC (gửi SQL SELECT, tạo báo cáo/xuất file). QA sống s240: Channels đọc qua POST /api/analytics/query.
+export const TELEMETRY = /^\/api\/(auth|user|chat|creator|creator-ai|notifications|bridge|to-gau|be-gau)(\/|$)|^\/api\/analytics\/(track|usage-stats|query|customer\/report|products\/report|vendors\/report)(\/|$)|^\/api\/admin\/(sql-query|bc-datapool|threehk-datapool|eval)(\/|$)/
 const FRESH_PARAMS = /[?&](nocache|refresh|_t)=/
 
 interface Entry { at: number; status: number; statusText: string; headers: [string, string][]; body: string }
