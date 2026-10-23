@@ -67,3 +67,10 @@ Duyệt plan này (đã duyệt hướng); quyết khi nào làm E; hỏi bên `
 ## Tiến độ bước 3 (2026-10-23, staging `da825c8f`, chưa merge `main`)
 - [x] Số-cũ-trước mở rộng: BOD, Staff, Channels (bảng tất cả kênh), B2B (`processRaw`), B2C Advanced + Metric; nhãn `StaleNotice`. tsc/lint/vitest 1045/build PASS. QA sống: BOD ghi bundle 48KB vào sessionStorage sau lần tải đầu; **chưa xem được lần mở lại bằng mắt** (công cụ Chrome bị extension khác chặn sau reload) — Hiếu mở BOD/Staff/B2B hai lần liên tiếp để xem số cũ hiện ngay + nhãn "Đang cập nhật số mới…".
 - [ ] Chưa áp: B2C Performance, Orders, Customers, Vendors, Products, Dashboard, All-Time.
+
+## QA sống bước 3 (2026-10-23, staging `f7bda27f`)
+Kịch bản: mở lần đầu BOD → Staff → Channels → B2B → B2C, chờ 18s (qua ngưỡng đếm lượt xem 15s), quay lại từng tab (điều hướng trong app, không reload), đo trạng thái mỗi 250–600ms.
+- **Đạt:** Staff, Channels, B2B (Theo tháng): quay lại hiện nội dung cũ + nhãn "Đang cập nhật số mới…" ở ~0,6–0,8s, số mới thay sau ~1,4–2s; thao tác ghi (`quarterly-cache-flush`) xoá sạch số cũ (5 khoá → 0); BOD cũng hiện số cũ + nhãn ở ~108ms ở một lần kiểm riêng.
+- **Lỗi tìm ra + đã sửa:** (1) POST nền (`analytics/track` sau 15s, `user/heartbeat` mỗi 2 phút) xoá sạch bộ nhớ → số cũ không còn; (2) Channels/B2B đọc dữ liệu bằng POST `analytics/query` → cũng xoá; (3) B2B mặc định là chế độ "Theo tháng" (không đi qua `fetchData` khoảng ngày) nên bản đầu chỉ áp cho chế độ cũ → thêm vào `b2b-month-view.tsx`. Danh sách POST chỉ-đọc/nền: `TELEMETRY` trong `lib/client-fetch-cache.ts` (có test).
+- **Còn nghi:** BOD lần mở đầu tiên có lúc bản lưu chưa xuất hiện sau 30s dù nội dung đã hiện (một lần kiểm có, một lần không); B2C Advanced quay lại không thấy nhãn (số mới về nhanh nên có thể không kịp). Cần Hiếu dùng thật vài ngày để xác nhận.
+- Công cụ Chrome chập chờn (extension khác chặn sau reload; tab cũ chạy bản code cũ còn phát tín hiệu xoá sang tab mới → làm nhiễu kết quả; phải đóng tab cũ trước khi kiểm).
