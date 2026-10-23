@@ -16,6 +16,8 @@ import { exportRawRows } from "@/lib/export-excel"
 import { cn } from "@/lib/utils"
 import { StatTile, StatTileSkeleton, type MetricAccent, SourceBadge } from "@/components/dashboard-kit"
 import { useUrlStates } from "@/hooks/use-url-state"
+import { readStale, writeStale } from "@/lib/stale-first"
+import { StaleNotice } from "@/components/stale-notice"
 
 // Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu (s196+21, roadmap performance s196+20).
 const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
@@ -207,6 +209,7 @@ function StaffPageInner() {
   const [channels,     setChannels]     = useState<string[]>([])
   const [staffData,    setStaffData]    = useState<StaffRow[]>([])
   const [loading,      setLoading]      = useState(true)
+  const [refreshing,   setRefreshing]   = useState(false)
   const [staffSearch,   setStaffSearch]   = useState("")
   const [selectedCodes, setSelectedCodes] = useState<string[]>([])
   const [staffDropOpen, setStaffDropOpen] = useState(false)
@@ -240,9 +243,12 @@ function StaffPageInner() {
       })
       if (includeShip)        staffParams.set("includeShip", "1")
       if (includeInternalOps) staffParams.set("includeInternalOps", "1")
+      const sfKey = `staff:${staffParams}`
+      const stale = readStale<typeof staffData>(sfKey)
+      if (stale) { setStaffData(stale.data); setLoading(false); setRefreshing(true) }
       const r = await fetch(`/api/analytics/staff-report?${staffParams}`)
-      if (r.ok) setStaffData(await r.json())
-    } catch {} finally { setLoading(false) }
+      if (r.ok) { const fresh = await r.json(); setStaffData(fresh); writeStale(sfKey, fresh) }
+    } catch {} finally { setLoading(false); setRefreshing(false) }
   }, [applied, includeShip, includeInternalOps])
 
   const fetchTargets = useCallback(async () => {
@@ -531,6 +537,7 @@ function StaffPageInner() {
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="p-4 lg:p-8 space-y-6 max-w-[1600px] mx-auto pb-24 lg:pb-8">
+      <StaleNotice show={refreshing} />
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

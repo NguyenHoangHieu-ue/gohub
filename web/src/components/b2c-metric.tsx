@@ -4,6 +4,8 @@ import { useState, useEffect, type ReactNode } from "react"
 import { RefreshCw, DollarSign, TrendingUp, Percent, ShoppingBag, Globe, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LogicNote, StatTile, type MetricAccent } from "@/components/dashboard-kit"
+import { readStale, writeStale } from "@/lib/stale-first"
+import { StaleNotice } from "@/components/stale-notice"
 
 // Web/App dùng chung 1 màu xuyên suốt B2C (khớp b2c-advanced-dashboard.tsx) — người xem học 1 lần,
 // dùng lại được ở cả 2 sub-tab Advanced/Metric.
@@ -105,19 +107,25 @@ const SEPARATOR_AFTER = new Set([2, 5, 7, 10, 13, 16, 19])
 export function B2CMetric() {
   const [data, setData] = useState<MetricResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
     setError(null)
     try {
+      const stale = readStale<MetricResponse>("b2c-metric")
+      if (stale) { setData(stale.data); setLoading(false); setRefreshing(true) }
       const res = await fetch("/api/analytics/b2c/metric")
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || "Lỗi load data") }
-      setData(await res.json())
+      const fresh = await res.json()
+      setData(fresh)
+      writeStale("b2c-metric", fresh)
     } catch (e: any) {
       setError(e.message)
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -149,6 +157,7 @@ export function B2CMetric() {
 
   return (
     <div className="p-4 lg:p-6">
+      <StaleNotice show={refreshing} />
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-lg font-bold text-slate-900">GoHub Metric</h2>

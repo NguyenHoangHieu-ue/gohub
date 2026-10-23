@@ -16,6 +16,8 @@ import { exportRawRows } from "@/lib/export-excel"
 import { useDbRole } from "@/lib/use-role-guard"
 import { B2BCustomerDetail } from "@/components/channels/b2b-customer-detail"
 import { StatTile, type MetricAccent } from "@/components/dashboard-kit"
+import { readStale, writeStale } from "@/lib/stale-first"
+import { StaleNotice } from "@/components/stale-notice"
 
 // Port "y hệt" gohub-intel ChannelPerformance (deep-dive 1 kênh). Data qua /api/analytics/query
 // (SELECT-only) + /api/channels + endpoint cost sẵn có. Bỏ motion/react (thay tr thường + CSS).
@@ -104,6 +106,7 @@ export default function ChannelPerformancePage() {
   const [selectedChannel, setSelectedChannel] = useState<string>("")
   const [allChannelsData, setAllChannelsData] = useState<any[]>([])
   const [loadingAll, setLoadingAll] = useState(false)
+  const [refreshingAll, setRefreshingAll] = useState(false)
   const [vendors, setVendors] = useState<string[]>([])
   const [selectedVendors, setSelectedVendors] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -409,9 +412,12 @@ export default function ChannelPerformancePage() {
       if (channelGroup !== "All") params.append("channelGroup", channelGroup)
       if (selectedVendors.length > 0) params.append("vendors", selectedVendors.join(","))
       if (selectedProductTypes.length > 0) params.append("productTypes", selectedProductTypes.join(","))
+      const sfKey = `ch-all:${params}`
+      const stale = readStale<typeof allChannelsData>(sfKey)
+      if (stale) { setAllChannelsData(stale.data); setLoadingAll(false); setRefreshingAll(true) }
       const res = await fetch(`/api/analytics/channels/performance?${params}`)
-      if (res.ok) setAllChannelsData(await res.json())
-    } catch (e) { console.error("fetchAllChannels error:", e) } finally { setLoadingAll(false) }
+      if (res.ok) { const fresh = await res.json(); setAllChannelsData(fresh); writeStale(sfKey, fresh) }
+    } catch (e) { console.error("fetchAllChannels error:", e) } finally { setLoadingAll(false); setRefreshingAll(false) }
   }
 
   const fetchSubChannels = async () => {
@@ -849,6 +855,7 @@ export default function ChannelPerformancePage() {
 
   return (
     <div className="p-4 lg:p-8 space-y-8 max-w-[1480px] mx-auto">
+      <StaleNotice show={refreshingAll} />
       {/* Header & Filters */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl bg-white border border-slate-200 p-5 shadow-sm">
         <div>

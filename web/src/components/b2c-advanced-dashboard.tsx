@@ -10,6 +10,8 @@ import {
 } from "lucide-react"
 import { formatCurrency, formatCompactNumber, formatNumber } from "@/lib/analytics-formatters"
 import { SourceBadge, LogicNote, type SourceKind } from "@/components/dashboard-kit"
+import { readStale, writeStale } from "@/lib/stale-first"
+import { StaleNotice } from "@/components/stale-notice"
 
 // ── types ───────────────────────────────────────────────────────────────────
 interface MarketCell { vn: number; us: number; total: number }
@@ -396,6 +398,7 @@ const monthlyRollup = (series: { date: string; sessions: number; cr: number; pur
 export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }: { demoMode?: boolean; localPreview?: boolean } = {}) {
   const [data, setData]       = useState<MonthlyData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshingMonthly, setRefreshingMonthly] = useState(false)
   const [error, setError]     = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"month" | "quarter">("month")
   const [profitMonth, setProfitMonth] = useState<string>("")
@@ -423,16 +426,22 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
       if (localPreview) params.set("localPreview", "1")
       params.set("skipLeads", "1")
       params.set("live", "1")      // luôn số live T-1 (bỏ qua snapshot) nhưng dùng cache SWR — không còn nocache mỗi lượt xem (s203)
+      const sfKey = `b2c-monthly:${params}`
+      const stale = readStale<typeof data>(sfKey)
+      if (stale) { setData(stale.data); setLoading(false); setRefreshingMonthly(true) }
       const res = await fetch(`/api/analytics/b2c/monthly?${params.toString()}`)
       if (!res.ok) {
         const body = await res.json().catch(() => null)
         throw new Error(body?.error || `${res.status}`)
       }
-      setData(await res.json())
+      const fresh = await res.json()
+      setData(fresh)
+      writeStale(sfKey, fresh)
     } catch (err) {
       console.error(err); setError((err as Error).message || "Hiếu đang fix, vui lòng đợi")
     } finally {
       setLoading(false)
+      setRefreshingMonthly(false)
     }
   }
 
@@ -1298,6 +1307,7 @@ export function B2CAdvancedDashboard({ demoMode = false, localPreview = false }:
 
   return (
     <div className="min-h-screen p-4 lg:p-6" style={APPLE_BG_STYLE}>
+      <StaleNotice show={refreshingMonthly} />
       <div className="max-w-[1400px] mx-auto space-y-5">
 
         {/* Header */}

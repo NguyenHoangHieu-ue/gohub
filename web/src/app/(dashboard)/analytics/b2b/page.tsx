@@ -18,6 +18,8 @@ import { B2BMonthView } from "@/components/b2b/b2b-month-view"
 import { exportWithDateRange, exportToExcel } from "@/lib/export-excel"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { StatTile, MetricAccent, DeltaKind, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle, SubChannelTable } from "@/components/dashboard-kit"
+import { readStale, writeStale } from "@/lib/stale-first"
+import { StaleNotice } from "@/components/stale-notice"
 
 // Port "y hệt" gohub-intel B2BPerformance. Backend (đã có op-cost CM1): b2b/kpis|trend|performance|
 // strategic-performance + channels-with-platform-fee + channel-costs + config/partner-tiers.
@@ -80,6 +82,7 @@ export default function B2BPerformance() {
   const [startDate, setStartDate] = useState<string>(() => getDefaultDateRange().startDate)
   const [endDate, setEndDate] = useState<string>(() => getDefaultDateRange().endDate)
 
+  const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Mặc định "Theo tháng" (giống Quarter Report, dùng chung nguồn số); "Khoảng ngày" = bản cũ.
@@ -219,7 +222,10 @@ export default function B2BPerformance() {
 
       // cost_lines hiển thị trong expand panel nay do backend b2b/performance trả trực tiếp.
       // Không cần fetch b2b-customer-costs riêng nữa.
-      const [b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData, quarterlySettings, ecomData] = await Promise.all([
+      // Số cũ trước: bản đã xem cùng bộ lọc trong phiên này hiện ngay, số mới thay khi về (bỏ qua khi bấm tải lại tươi)
+      const sfKey = `b2b:${queryParams.toString()}:${granularity}`
+      const stale = fresh ? null : readStale<any[]>(sfKey)
+      const rawFetch = () => Promise.all([
         fetch(`/api/analytics/b2b/kpis?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/performance?${queryParams.toString()}&groupBy=customer`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/analytics/b2b/strategic-performance?${queryParams.toString()}`).then(r => r.ok ? r.json() : []).catch(() => []),
@@ -229,7 +235,7 @@ export default function B2BPerformance() {
         fetch(`/api/analytics/quarterly-settings`).then(r => r.ok ? r.json() : null).catch(() => null),
         fetch(`/api/analytics/b2b/ecom-breakdown?${queryParams.toString()}`, fresh ? { cache: "no-store" } : undefined).then(r => r.ok ? r.json() : []).catch(() => []),
       ])
-
+      const processRaw = ([b2bKpis, b2bPerfCustomer, strategicPerf, trend, feeChannels, tiersData, quarterlySettings, ecomData]: any[]) => {
       const safeB2BKpis = Array.isArray(b2bKpis) ? b2bKpis : []
       const safeB2BPerfCustomer = Array.isArray(b2bPerfCustomer) ? b2bPerfCustomer : []
       const safeStrategicPerf = Array.isArray(strategicPerf) ? strategicPerf : []
@@ -279,11 +285,17 @@ export default function B2BPerformance() {
         { label: "B2B CM1 %", value: totalRevProjected > 0 ? (totalGpm2Projected / totalRevProjected) * 100 : 0, actualValue: totalRevActual > 0 ? (totalGpm2Actual / totalRevActual) * 100 : 0, lastPeriod: prevTotalRev > 0 ? (prevTotalGpm2 / prevTotalRev) * 100 : 0, change: (totalRevProjected > 0 ? (totalGpm2Projected / totalRevProjected) * 100 : 0) - (prevTotalRev > 0 ? (prevTotalGpm2 / prevTotalRev) * 100 : 0), isPositive: (totalRevProjected > 0 ? (totalGpm2Projected / totalRevProjected) * 100 : 0) >= (prevTotalRev > 0 ? (prevTotalGpm2 / prevTotalRev) * 100 : 0), isCurrency: false, icon: <PieChartIcon className="w-5 h-5" /> },
       ]
       setCombinedKpis(kpis)
+      }
+      if (stale) { processRaw(stale.data); setLoading(false); setRefreshing(true) }
+      const raw = await rawFetch()
+      processRaw(raw)
+      if (Array.isArray(raw[0]) && raw[0].length > 0) writeStale(sfKey, raw)
     } catch (err: any) {
       console.error("Error fetching B2B data:", err)
       setError(err.message)
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -418,6 +430,7 @@ export default function B2BPerformance() {
 
   return (
     <div className="flex-1 overflow-auto bg-slate-50 p-4 lg:p-8">
+      <StaleNotice show={refreshing} />
       <div className="max-w-[1480px] mx-auto space-y-8" ref={reportRef}>
         <div className="flex justify-end">{modeToggle}</div>
         {/* Header */}

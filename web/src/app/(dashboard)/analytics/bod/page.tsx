@@ -17,6 +17,8 @@ import { StatTile, type MetricAccent, type DeltaKind } from "@/components/dashbo
 
 // Biểu đồ nạp động (ssr:false) → recharts code-split khỏi bundle đầu, chỉ tải phía client.
 const chartLoading = () => <div className="w-full h-full animate-pulse bg-slate-100 rounded" />
+import { readStale, writeStale } from "@/lib/stale-first"
+import { StaleNotice } from "@/components/stale-notice"
 const BodWaterfall = dynamic(() => import("@/components/bod/waterfall-chart").then(m => m.BodWaterfall), { ssr: false, loading: chartLoading })
 const RevenueCompositeChart = dynamic(() => import("./bod-charts").then(m => m.RevenueCompositeChart), { ssr: false, loading: chartLoading })
 const MarginTrendChart      = dynamic(() => import("./bod-charts").then(m => m.MarginTrendChart),      { ssr: false, loading: chartLoading })
@@ -69,6 +71,7 @@ export default function BODReport() {
   const [b2bTiers, setB2bTiers] = useState<TierRow[]>([])   // B2B theo tier → organization (bảng Channel Performance Breakdown)
   const [channelPerformance, setChannelPerformance] = useState<BODChannelPerformance[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [dateRange, setDateRange] = useState(() => {
     const defaultRange = getDefaultDateRange()
@@ -230,6 +233,15 @@ export default function BODReport() {
           if (prevSummaryRes.ok) setPrevMonthSummary(await prevSummaryRes.json())
         } catch (e) { console.error("Error fetching prev month summary:", e) }
       }
+      // Số cũ trước: bản đã xem cùng bộ lọc trong phiên này hiện ngay, số mới thay khi về
+      const sfKey = `bod:${queryParams}`
+      type BodBundle = { summaryData: any; reportData: any; groupData: any; channelData: any; stratData: any; tiersData: any; b2bTierData: any }
+      const applyBundle = (b: BodBundle) => {
+        setSummary(b.summaryData); setData(b.reportData); setGroupMargins(b.groupData); setChannelPerformance(b.channelData)
+        setStrategicPerformance(b.stratData); setPartnerTiers(b.tiersData); setB2bTiers(b.b2bTierData?.tiers ?? [])
+      }
+      const stale = readStale<BodBundle>(sfKey)
+      if (stale) { applyBundle(stale.data); setLoading(false); setRefreshing(true) }
       const [summaryData, reportData, groupData, channelData, stratData, tiersData, b2bTierData] = await Promise.all([
         fetchJson(`/api/analytics/bod-summary?${queryParams}`, "Summary"),
         fetchJson(`/api/analytics/bod-report?${queryParams}`, "Report"),
@@ -240,19 +252,16 @@ export default function BODReport() {
         fetch(`/api/analytics/bod-b2b-tiers?${queryParams}`).then(r => r.ok ? r.json() : { tiers: [] }).catch(() => ({ tiers: [] })),
       ])
 
-      setSummary(summaryData)
-      setData(reportData)
-      setGroupMargins(groupData)
-      setChannelPerformance(channelData)
-      setStrategicPerformance(stratData)
-      setPartnerTiers(tiersData)
-      setB2bTiers(b2bTierData?.tiers ?? [])
+      const bundle: BodBundle = { summaryData, reportData, groupData, channelData, stratData, tiersData, b2bTierData }
+      applyBundle(bundle)
+      writeStale(sfKey, bundle)
       void fetchPrevMonth()  // sau 5 request chính: gohub_dw chỉ có 3 kết nối, chạy cùng lúc làm các request chính hết 25s (QA B-07)
     } catch (error) {
       console.error("Error fetching BOD data:", error)
       setLoadError(error instanceof Error ? error.message : "Lỗi tải dữ liệu")
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -353,6 +362,7 @@ export default function BODReport() {
 
   return (
     <div className="space-y-6 p-6">
+      <StaleNotice show={refreshing} />
       {loadError && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           Hiếu đang fix, vui lòng đợi. <span className="text-red-400">({loadError})</span>
