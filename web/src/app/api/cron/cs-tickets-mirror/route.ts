@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 300
 
 // Hằng ngày: kéo ticket CS N ngày gần nhất (mặc định 14) từ Lark Base về Turso. `?days=400` để kéo lại rộng hơn (lần đầu / sửa lỗi).
-// `?backfill=supabase&offset=0&limit=3000`: chuyển LỊCH SỬ từ bảng Supabase `lark_cs_tickets` sang Turso (Lark chỉ giữ ~5 tháng) — chạy tới khi `done:true`
+// `?backfill=supabase&offset=0&limit=1000`: chuyển LỊCH SỬ từ bảng Supabase `lark_cs_tickets` sang Turso (Lark chỉ giữ ~5 tháng) — chạy tới khi `done:true`
 // rồi mới được xoá bảng (migration v80). Chạy lặp lại an toàn (ghi đè theo lark_record_id).
 export async function GET(req: NextRequest) {
   if (!isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   try {
     if (p.get("backfill") === "supabase") {
       const offset = Math.max(0, Number(p.get("offset")) || 0)
-      const limit = Math.min(5000, Math.max(100, Number(p.get("limit")) || 3000))
+      const limit = Math.min(1000, Math.max(100, Number(p.get("limit")) || 1000))   // PostgREST trả tối đa 1.000 dòng mỗi lần
       const { data, error } = await supabaseAdmin.from("lark_cs_tickets").select("*").order("lark_record_id", { ascending: true }).range(offset, offset + limit - 1)
       if (error) throw new Error(error.message)
       const rows: CsTicket[] = (data ?? []).map(r => ({
