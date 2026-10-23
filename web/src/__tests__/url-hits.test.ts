@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest"
-import { anchors, templateUrl, expandUrl, rankUrls, vnDate } from "../lib/url-hits"
+import { anchors, templateUrl, expandUrl, rankUrls, vnDate, stripVolatileParams } from "../lib/url-hits"
 
 // 2026-10-23 12:00 giờ VN
 const NOW = new Date("2026-10-23T05:00:00Z")
@@ -41,5 +41,11 @@ describe("url-hits", () => {
     ]
     expect(rankUrls(rows, NOW, 2)).toEqual(["a", "b"])
     expect(vnDate(NOW)).toBe("2026-10-23")
+  })
+
+  test("stripVolatileParams bỏ nocache/refresh/_t, giữ bộ lọc thật", () => {
+    expect(stripVolatileParams("/api/analytics/x?a=1&nocache=1&_t=99&refresh=1")).toBe("/api/analytics/x?a=1")
+    expect(stripVolatileParams("/api/analytics/x?nocache=1")).toBe("/api/analytics/x")
+    expect(stripVolatileParams("/api/analytics/x?q=A&b=2")).toBe("/api/analytics/x?q=A&b=2")
   })
 })

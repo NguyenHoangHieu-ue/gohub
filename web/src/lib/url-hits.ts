@@ -64,6 +64,14 @@ export function expandUrl(template: string, now = new Date()): string {
   return template.replace(/\{(today|yday|mstart|pmstart|pmend|qstart|ystart)\}/g, (_, t) => a[t])
 }
 
+/** Bỏ tham số chỉ để ép làm mới/chống cache (nocache, refresh, _t) — chúng không phải bộ lọc người dùng chọn. */
+export function stripVolatileParams(url: string): string {
+  const q = url.indexOf("?")
+  if (q < 0) return url
+  const kept = url.slice(q + 1).split("&").filter(p => p && !/^(nocache|refresh|_t)=/.test(p))
+  return kept.length ? `${url.slice(0, q)}?${kept.join("&")}` : url.slice(0, q)
+}
+
 export interface UrlHitRow { url: string; day: string; hits: number }
 
 /** Điểm số: lượt gọi trong 7 ngày gần nhất, ngày mới nặng hơn (hệ số 0,8 mỗi ngày lùi). */
@@ -105,7 +113,7 @@ async function flushHits(): Promise<void> {
 export function recordUrlHit(url: string): void {
   if (process.env.NODE_ENV === "test" || !tursoConfigured()) return
   if (!url.startsWith("/api/analytics/")) return
-  const key = templateUrl(url.replace(/([?&])nocache=1&?/, "$1").replace(/[?&]$/, "")).slice(0, 400)
+  const key = templateUrl(stripVolatileParams(url)).slice(0, 400)
   _hits.set(key, (_hits.get(key) ?? 0) + 1)
   if (Date.now() - _lastFlush > FLUSH_AGE_MS || _hits.size >= 40) waitUntil(flushHits())
 }
