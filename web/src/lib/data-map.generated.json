@@ -501,6 +501,8 @@
       "Top Products Purchased"
      ],
      "apis": [
+      "/api/analytics/quarterly-settings",
+      "/api/analytics/customer-filters",
       "/api/analytics/quarterly-b2b-customers",
       "/api/analytics/customer/report",
       "/api/config/partner-tiers",
@@ -1726,6 +1728,35 @@
     {
      "name": "app_settings",
      "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/customer-filters": {
+   "file": "src/app/api/analytics/customer-filters/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": "customer-filters",
+   "deps": [
+    "combos",
+    "customers",
+    "order-report",
+    "staff"
+   ],
+   "tables": [
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
+     "source": "gohub_dw"
     }
    ],
    "external": [],
@@ -3221,6 +3252,7 @@
     "/api/analytics/bod-summary",
     "/api/analytics/channels/b2b-customers",
     "/api/analytics/channels/performance",
+    "/api/analytics/customer-filters",
     "/api/analytics/customer/report",
     "/api/analytics/monthly-kpis",
     "/api/analytics/order-filters",
@@ -3288,6 +3320,7 @@
     "/api/analytics/channels/b2b-customers",
     "/api/analytics/channels/kpis",
     "/api/analytics/channels/performance",
+    "/api/analytics/customer-filters",
     "/api/analytics/customer/report",
     "/api/analytics/monthly-kpis",
     "/api/analytics/order-filters",
@@ -3376,6 +3409,7 @@
     "/api/analytics/b2b/ecom-timeline",
     "/api/analytics/b2b/performance",
     "/api/analytics/b2c/performance",
+    "/api/analytics/customer-filters",
     "/api/analytics/order-filters",
     "/api/analytics/order-report",
     "/api/analytics/quarterly-customer-lifecycle",
@@ -3386,6 +3420,7 @@
    "tabs": [
     "b2b",
     "b2c",
+    "customers",
     "orders",
     "products",
     "quarterly",

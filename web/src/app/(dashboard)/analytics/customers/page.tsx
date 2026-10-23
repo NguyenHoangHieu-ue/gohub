@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import {
   ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts"
@@ -14,6 +14,7 @@ import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { Pager, PAGE_ROWS } from "@/components/pager"
 import { exportRawRows } from "@/lib/export-excel"
+import { deriveCustomerOptions, normalizeCustomerSelection, type CustomerFilterData } from "@/lib/customers-filters"
 
 interface KPI {
   label: string
@@ -80,6 +81,33 @@ export default function CustomerPerformancePage() {
   // Gợi ý nhanh: khách B2B lớn nhất quý hiện tại (số đã cache của Quarter Report). Bấm là chọn và tải luôn.
   const [topCustomers, setTopCustomers] = useState<string[]>([])
   const [pendingFetch, setPendingFetch] = useState(false)
+
+  // Bộ chọn khách lọc nhiều tầng: khách B2B CÓ ĐƠN trong kỳ + Tier/Kênh/PIC kèm số khách, xếp theo doanh thu
+  const [filterData, setFilterData] = useState<CustomerFilterData | null>(null)
+  const [tierKws, setTierKws] = useState<Record<string, string[]>>({})
+  const [fTier, setFTier] = useState("")
+  const [fChannel, setFChannel] = useState("")
+  const [fStaff, setFStaff] = useState("")
+  useEffect(() => {
+    fetch("/api/analytics/quarterly-settings").then(r => (r.ok ? r.json() : null)).then(d => { if (d?.tierKeywords) setTierKws(d.tierKeywords) }).catch(() => {})
+  }, [])
+  useEffect(() => {
+    if (!startDate || !endDate) return
+    let alive = true
+    const qs = new URLSearchParams({ startDate, endDate, dateColumn })
+    fetch(`/api/analytics/customer-filters?${qs}`).then(r => (r.ok ? r.json() : null)).then(d => { if (alive && d?.combos) setFilterData(d) }).catch(() => {})
+    return () => { alive = false }
+  }, [startDate, endDate, dateColumn])
+  const custSel = useMemo(() => ({ tier: fTier, channel: fChannel, staff: fStaff }), [fTier, fChannel, fStaff])
+  const custOpts = useMemo(() => (filterData ? deriveCustomerOptions(filterData, custSel, tierKws, searchQuery) : null), [filterData, custSel, tierKws, searchQuery])
+  useEffect(() => {
+    if (!filterData) return
+    const n = normalizeCustomerSelection(filterData, custSel, tierKws)
+    if (n.tier !== fTier) setFTier(n.tier)
+    if (n.channel !== fChannel) setFChannel(n.channel)
+    if (n.staff !== fStaff) setFStaff(n.staff)
+  }, [filterData, custSel, tierKws]) // eslint-disable-line react-hooks/exhaustive-deps
+  const SELECT_ALL_CAP = 100
   useEffect(() => {
     const d = new Date()
     const q = `Q${Math.ceil((d.getMonth() + 1) / 3)}`
@@ -146,6 +174,7 @@ export default function CustomerPerformancePage() {
   }, [selectedCustomers])
 
   useEffect(() => {
+    if (filterData) return
     const fetchDebouncedCustomers = setTimeout(async () => {
       setSearching(true)
       try {
@@ -162,7 +191,7 @@ export default function CustomerPerformancePage() {
     }, 300)
 
     return () => clearTimeout(fetchDebouncedCustomers)
-  }, [searchQuery])
+  }, [searchQuery, filterData])
 
   const toggleCustomer = (name: string) => {
     setSelectedCustomers(prev =>
@@ -235,7 +264,48 @@ export default function CustomerPerformancePage() {
                     />
                   </div>
 
-                  <div className="max-h-60 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                  {custOpts && (
+                    <>
+                      <div className="grid grid-cols-3 gap-2">
+                        <select value={fTier} onChange={e => setFTier(e.target.value)} className="w-full text-xs border border-slate-100 rounded-lg px-2 py-1.5 bg-slate-50 text-slate-700 font-medium" title="Phân loại theo bảng giá (cùng cách Quarter Report)">
+                          <option value="">Mọi tier</option>
+                          {custOpts.tiers.map(o => <option key={o.value} value={o.value}>{`${o.label} (${o.orders})`}</option>)}
+                        </select>
+                        <select value={fChannel} onChange={e => setFChannel(e.target.value)} className="w-full text-xs border border-slate-100 rounded-lg px-2 py-1.5 bg-slate-50 text-slate-700 font-medium">
+                          <option value="">Mọi kênh</option>
+                          {custOpts.channels.map(o => <option key={o.value} value={o.value}>{`${o.label} (${o.orders})`}</option>)}
+                        </select>
+                        <select value={fStaff} onChange={e => setFStaff(e.target.value)} className="w-full text-xs border border-slate-100 rounded-lg px-2 py-1.5 bg-slate-50 text-slate-700 font-medium">
+                          <option value="">Mọi PIC</option>
+                          {custOpts.staff.map(o => <option key={o.value} value={o.value}>{`${o.label} (${o.orders})`}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex items-center justify-between text-[11.5px] font-bold text-slate-500">
+                        <span>{custOpts.totalCustomers.toLocaleString("vi-VN")} khách có đơn trong kỳ · xếp theo doanh thu</span>
+                        <button type="button" disabled={custOpts.totalCustomers === 0}
+                          onClick={() => setSelectedCustomers(prev => Array.from(new Set([...prev, ...custOpts.customers.slice(0, SELECT_ALL_CAP).map(c => c.name)])))}
+                          className="text-indigo-600 uppercase hover:underline disabled:opacity-40">
+                          Chọn {Math.min(custOpts.totalCustomers, SELECT_ALL_CAP)}{custOpts.totalCustomers > SELECT_ALL_CAP ? " đầu" : ""}
+                        </button>
+                      </div>
+                      <div className="max-h-60 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                        {custOpts.customers.slice(0, 200).map(c => (
+                          <div key={c.code} onClick={() => toggleCustomer(c.name)}
+                            className={cn("px-3 py-2 rounded-lg cursor-pointer flex items-center justify-between gap-2 transition-all", selectedCustomers.includes(c.name) ? "bg-indigo-50 text-indigo-700" : "hover:bg-slate-50 text-slate-600")}>
+                            <span className="min-w-0">
+                              <span className="block text-xs font-bold truncate">{c.name}</span>
+                              <span className="block text-[10.5px] text-slate-400">{c.tier} · {c.orders.toLocaleString("vi-VN")} đơn · {formatCompact(c.revenue)}</span>
+                            </span>
+                            {selectedCustomers.includes(c.name) && <Check className="w-3.5 h-3.5 flex-shrink-0" />}
+                          </div>
+                        ))}
+                        {custOpts.totalCustomers === 0 && (
+                          <p className="py-6 text-center text-[11.5px] font-black text-slate-300 uppercase tracking-widest">Không có khách phù hợp</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  <div className={cn("max-h-60 overflow-y-auto space-y-1 pr-1 custom-scrollbar", filterData && "hidden")}>
                     {!searchQuery.trim() && selectedCustomers.map((cust, i) => (
                       <div
                         key={`sel-${i}`}

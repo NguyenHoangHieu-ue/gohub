@@ -71,3 +71,9 @@ Phân tích khách hàng **sỉ B2B**: doanh thu/margin/số lượng theo từn
 ## s238 — Giao diện
 
 Bỏ kiểu chữ nghiêng/viết hoa đậm của trang; tiêu đề phụ và màn "chọn khách" bằng tiếng Việt; màn trống có 6 chip "khách lớn nhất quý này" (lấy từ `quarterly-b2b-customers` đã cache) — bấm chip là chọn khách đó và tải luôn.
+
+## s240 (2026-10-23) — Bộ chọn khách lọc nhiều tầng (staging)
+- **Vấn đề:** danh sách chọn khách lấy từ `/api/customers` = 50 tên theo thứ tự ABC (mọi khách có bảng giá, kể cả khách ngừng), không biết khách nào còn hoạt động, không lọc được theo tier/kênh/PIC → muốn xem "tất cả khách Gold" phải tìm tay từng tên.
+- **Mới:** `GET /api/analytics/customer-filters?startDate&endDate&dateColumn` trả khách B2B (nguồn nhóm B2B) CÓ ĐƠN trong kỳ dạng "combo" khách × kênh × PIC → số đơn, doanh thu (cache 15', deps `order-report`). Trình duyệt lọc nhiều tầng (`lib/customers-filters.ts`): **Tier** (cùng luật Quarter Report qua `classifyOrderTier("B2B", bảng giá)`), **Kênh**, **PIC** (tên chỉ phần trước "|", có "Chưa gán PIC"), mỗi lựa chọn kèm số KHÁCH (không đếm dòng); danh sách xếp theo doanh thu, mỗi dòng hiện tier · số đơn · doanh thu; chọn kênh/PIC thì doanh thu/đơn của khách chỉ tính trong lát cắt đó; tìm không dấu theo tên/mã; nút "Chọn N (đầu)" chọn nhanh tối đa 100 khách đang lọc; đổi kỳ thì bỏ lựa chọn không còn khách (`normalizeCustomerSelection`, ưu tiên Tier > Kênh > PIC).
+- Nếu API lỗi, bộ chọn quay về danh sách ABC cũ. Báo cáo (`customer/report`) giữ nguyên, vẫn nhận danh sách TÊN khách.
+- Test `customers-filters.test.ts`.
