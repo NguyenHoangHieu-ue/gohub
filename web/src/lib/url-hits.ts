@@ -126,7 +126,7 @@ export async function topUrlsToWarm(limit = 50, now = new Date()): Promise<strin
     const seen = new Set<string>()
     const out: string[] = []
     for (const t of rankUrls(rows, now, limit * 2)) {
-      const u = expandUrl(t, now)
+      const u = stripVolatileParams(expandUrl(t, now))
       if (!seen.has(u)) { seen.add(u); out.push(u) }
       if (out.length >= limit) break
     }
