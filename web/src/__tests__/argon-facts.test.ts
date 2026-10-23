@@ -118,6 +118,12 @@ ${imp}- Nguồn: sql
     const good = auditProposals(doc(one(1, imp("200 triệu VND/tháng")), one(2, imp("chưa lượng hoá được")), one(3, imp("100 nghìn VND"))))
     expect(good.issues).toEqual([])
   })
+  it("phân biệt bỏ hẳn mục Đề xuất với ghi 'Chưa có đề xuất'", () => {
+    expect(auditProposals("## Tác động tới kế hoạch\n- A\n").missingSection).toBe(true)
+    const none = auditProposals("## Đề xuất hôm nay\nChưa có đề xuất đủ căn cứ hôm nay.")
+    expect(none.empty).toBe(true)
+    expect(none.missingSection).toBe(false)
+  })
   it("impactVnd đọc số tiền tiếng Việt", () => {
     expect(impactVnd("~100 triệu VND/tháng")).toBe(100_000_000)
     expect(impactVnd("1,5 tỷ")).toBe(1_500_000_000)

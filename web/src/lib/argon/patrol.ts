@@ -83,6 +83,7 @@ export async function proposalIssuesFor(projectId: string): Promise<string[]> {
   if (!m) return []
   const { data: f } = await supabaseAdmin.from("argon_workspace_files").select("content").eq("mission_id", m.id).eq("path", TAC_DONG_PATH).maybeSingle()
   const a = auditProposals(String(f?.content ?? ""))
+  if (a.missingSection) return ["Thiếu hẳn mục \"## Đề xuất hôm nay\" — ghi tối đa 3 đề xuất đúng khuôn (hoặc đúng một dòng \"Chưa có đề xuất đủ căn cứ hôm nay.\" dưới tiêu đề đó)"]
   return a.empty ? [] : a.issues
 }
 
