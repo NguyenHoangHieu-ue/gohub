@@ -558,10 +558,8 @@
      ],
      "apis": [
       "/api/analytics/quarterly-settings",
-      "/api/staff",
-      "/api/channels",
-      "/api/order-sources",
-      "/api/analytics/order-report"
+      "/api/analytics/order-report",
+      "/api/analytics/order-filters"
      ],
      "sqlViaQueryApi": []
     }
@@ -1972,6 +1970,40 @@
    "external": [],
    "usesTurso": true
   },
+  "/api/analytics/order-filters": {
+   "file": "src/app/api/analytics/order-filters/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": "order-filters",
+   "deps": [
+    "order-report"
+   ],
+   "tables": [
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
   "/api/analytics/order-report": {
    "file": "src/app/api/analytics/order-report/route.ts",
    "methods": [
@@ -2865,22 +2897,6 @@
    "external": [],
    "usesTurso": false
   },
-  "/api/order-sources": {
-   "file": "src/app/api/order-sources/route.ts",
-   "methods": [
-    "GET"
-   ],
-   "cacheKey": null,
-   "deps": [],
-   "tables": [
-    {
-     "name": "dim_order_source",
-     "source": "gohub_dw"
-    }
-   ],
-   "external": [],
-   "usesTurso": false
-  },
   "/api/orders/export": {
    "file": "src/app/api/orders/export/route.ts",
    "methods": [
@@ -2993,30 +3009,6 @@
     {
      "name": "lark_cs_tickets",
      "source": "supabase"
-    }
-   ],
-   "external": [],
-   "usesTurso": false
-  },
-  "/api/staff": {
-   "file": "src/app/api/staff/route.ts",
-   "methods": [
-    "GET"
-   ],
-   "cacheKey": null,
-   "deps": [],
-   "tables": [
-    {
-     "name": "dim_order_source",
-     "source": "gohub_dw"
-    },
-    {
-     "name": "dim_staff",
-     "source": "gohub_dw"
-    },
-    {
-     "name": "fact_fulfillment_revenue",
-     "source": "gohub_dw"
     }
    ],
    "external": [],
@@ -3231,6 +3223,7 @@
     "/api/analytics/channels/performance",
     "/api/analytics/customer/report",
     "/api/analytics/monthly-kpis",
+    "/api/analytics/order-filters",
     "/api/analytics/order-report",
     "/api/analytics/quarterly-b2b-customers",
     "/api/analytics/quarterly-customer-lifecycle",
@@ -3297,6 +3290,7 @@
     "/api/analytics/channels/performance",
     "/api/analytics/customer/report",
     "/api/analytics/monthly-kpis",
+    "/api/analytics/order-filters",
     "/api/analytics/order-report",
     "/api/analytics/performance-channel",
     "/api/analytics/performance-source",
@@ -3311,11 +3305,9 @@
     "/api/analytics/vendors/distribution",
     "/api/channels",
     "/api/config/subchannels",
-    "/api/order-sources",
     "/api/orders/export",
     "/api/planning/targets",
-    "/api/reports/cs-troubleshoot",
-    "/api/staff"
+    "/api/reports/cs-troubleshoot"
    ],
    "tabs": [
     "all-time",
@@ -3384,12 +3376,12 @@
     "/api/analytics/b2b/ecom-timeline",
     "/api/analytics/b2b/performance",
     "/api/analytics/b2c/performance",
+    "/api/analytics/order-filters",
     "/api/analytics/order-report",
     "/api/analytics/quarterly-customer-lifecycle",
     "/api/analytics/squad-progress",
     "/api/analytics/staff-report",
-    "/api/orders/export",
-    "/api/staff"
+    "/api/orders/export"
    ],
    "tabs": [
     "b2b",
@@ -3447,6 +3439,7 @@
     "/api/analytics/inventory-stock",
     "/api/analytics/kpis",
     "/api/analytics/monthly-kpis",
+    "/api/analytics/order-filters",
     "/api/analytics/order-report",
     "/api/analytics/performance-channel",
     "/api/analytics/performance-source",
@@ -3464,8 +3457,7 @@
     "/api/analytics/win-rate",
     "/api/orders/export",
     "/api/planning/targets",
-    "/api/reports/cs-troubleshoot",
-    "/api/staff"
+    "/api/reports/cs-troubleshoot"
    ],
    "tabs": [
     "all-time",
@@ -3519,6 +3511,7 @@
     "/api/analytics/customer/report",
     "/api/analytics/kpis",
     "/api/analytics/monthly-kpis",
+    "/api/analytics/order-filters",
     "/api/analytics/order-report",
     "/api/analytics/performance-channel",
     "/api/analytics/performance-source",

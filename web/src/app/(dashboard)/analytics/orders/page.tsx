@@ -9,6 +9,7 @@ import { exportToExcel }      from "@/lib/export-excel"
 import { getDefaultDateRange } from "@/lib/analytics-formatters"
 import { cn } from "@/lib/utils"
 import { TableRowsSkeleton } from "@/components/dashboard-kit"
+import { classifyOrderTier, deriveFilterOptions, normalizeSelection, type FilterSelection, type OrderFilterData, ORDER_TIERS } from "@/lib/orders-filters"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface OrderRow {
@@ -20,6 +21,7 @@ interface OrderRow {
   order_name:      string
   sim_type:        string
   channel_name:    string
+  channel_group:   string
   quantity:        number
   unit_price:      number
   total_revenue:   number
@@ -45,26 +47,19 @@ function CompanyBadge({ code }: { code: string | null }) {
   )
 }
 
-// ─── Tier config ──────────────────────────────────────────────────────────────
+// ─── Tier ────────────────────────────────────────────────────────
+// Luật phân loại ở lib/orders-filters.ts (dùng chung với bộ lọc phía server): B2B theo bảng giá khách (cùng Quarter Report), B2C, Khác.
 const TIER_CFG: Record<string, { bg: string; text: string }> = {
   Strategic: { bg: "bg-indigo-100",  text: "text-indigo-700"  },
   VIP:       { bg: "bg-purple-100",  text: "text-purple-700"  },
   Gold:      { bg: "bg-amber-100",   text: "text-amber-700"   },
   Silver:    { bg: "bg-slate-100",   text: "text-slate-600"   },
   B2C:       { bg: "bg-emerald-100", text: "text-emerald-700" },
+  "Khác":    { bg: "bg-slate-50",    text: "text-slate-400"   },
 }
 
-function classifyTier(pln: string | null, kws: Record<string, string[]>): string {
-  if (!pln) return "B2C"
-  const up = pln.toUpperCase()
-  for (const [t, ks] of Object.entries(kws)) {
-    if (ks.some(k => up.includes(k.toUpperCase()))) return t
-  }
-  return "Strategic"
-}
-
-function TierBadge({ pln, kws }: { pln: string | null; kws: Record<string, string[]> }) {
-  const tier = classifyTier(pln, kws)
+function TierBadge({ group, pln, kws }: { group: string; pln: string | null; kws: Record<string, string[]> }) {
+  const tier = classifyOrderTier(group, pln, kws)
   const c = TIER_CFG[tier]
   if (!c) return null
   return (
@@ -108,6 +103,7 @@ export default function OrdersPage() {
   const [channelGroup, setChannelGroup] = useState("")
   const [channel,      setChannel]      = useState("")
   const [orderSource,  setOrderSource]  = useState("")
+  const [tier,         setTier]         = useState("")
   const [search,       setSearch]       = useState("")
   const [page,         setPage]         = useState(1)
 
@@ -122,9 +118,7 @@ export default function OrdersPage() {
 
   // Reference data
   const [tierKws,      setTierKws]      = useState<Record<string, string[]>>({})
-  const [staffList,    setStaffList]    = useState<{ code: string; name: string }[]>([])
-  const [channelList,  setChannelList]  = useState<string[]>([])
-  const [orderSrcList, setOrderSrcList] = useState<string[]>([])
+  const [filterData,   setFilterData]   = useState<OrderFilterData | null>(null)
 
   // Track if dates have been initialised (client-only)
   const datesReady = useRef(false)
@@ -145,26 +139,6 @@ export default function OrdersPage() {
     fetch("/api/analytics/quarterly-settings")
       .then(r => r.json())
       .then(d => { if (d?.tierKeywords) setTierKws(d.tierKeywords) })
-      .catch(() => {})
-    fetch("/api/staff")
-      .then(r => r.json())
-      .then(d => { if (Array.isArray(d)) setStaffList(d) })
-      .catch(() => {})
-    fetch("/api/channels")
-      .then(r => r.json())
-      .then(d => {
-        if (Array.isArray(d)) setChannelList(
-          d.map((x: any) => typeof x === "string" ? x : String(x?.name || x?.channel_name || "")).filter(Boolean)
-        )
-      })
-      .catch(() => {})
-    fetch("/api/order-sources")
-      .then(r => r.json())
-      .then(d => {
-        if (Array.isArray(d)) setOrderSrcList(
-          d.map((x: any) => typeof x === "string" ? x : String(x?.name || x?.code || "")).filter(Boolean)
-        )
-      })
       .catch(() => {})
   }, [])
 
@@ -192,6 +166,7 @@ export default function OrdersPage() {
       if (channelGroup) qs.set("channelGroup", channelGroup)
       if (channel)      qs.set("channel", channel)
       if (orderSource)  qs.set("orderSource", orderSource)
+      if (tier)         qs.set("tier", tier)
 
       const res  = await fetch(`/api/analytics/order-report?${qs}`)
       if (!res.ok) { setRows([]); setTotal(0); setSumRevenue(0); setSumGp(0); setSumQty(0); return }
@@ -215,7 +190,37 @@ export default function OrdersPage() {
   useEffect(() => {
     if (startDate && endDate) doFetch(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, includeShip, includeInternalOps])
+  }, [startDate, endDate, includeShip, includeInternalOps, dataSource, companyCode])
+
+  // ── Lựa chọn bộ lọc: chỉ gồm những gì có đơn trong kỳ (cùng ngày/Entity/ship/nội bộ), kèm số đơn ──────────────
+  useEffect(() => {
+    if (!datesReady.current) return
+    const qs = new URLSearchParams({ dataSource })
+    if (dateMode === "day") { if (!singleDate) return; qs.set("date", singleDate) }
+    else { if (!startDate || !endDate) return; qs.set("startDate", startDate); qs.set("endDate", endDate) }
+    if (companyCode)        qs.set("companyCode", companyCode)
+    if (includeShip)        qs.set("includeShip", "1")
+    if (includeInternalOps) qs.set("includeInternalOps", "1")
+    let alive = true
+    fetch(`/api/analytics/order-filters?${qs}`).then(r => (r.ok ? r.json() : null)).then(d => { if (alive && d?.combos) setFilterData(d) }).catch(() => {})
+    return () => { alive = false }
+  }, [dateMode, singleDate, startDate, endDate, companyCode, dataSource, includeShip, includeInternalOps])
+
+  const selection: FilterSelection = useMemo(() => ({ group: channelGroup, channel, source: orderSource, staff: staffCode, tier }), [channelGroup, channel, orderSource, staffCode, tier])
+  const filterOpts = useMemo(() => (filterData ? deriveFilterOptions(filterData, selection, tierKws) : null), [filterData, selection, tierKws])
+
+  // Dọn lựa chọn không còn hợp lệ khi bộ lọc khác đổi (vd chọn nhóm B2C thì kênh B2B bị bỏ)
+  useEffect(() => {
+    if (!filterData) return
+    const n = normalizeSelection(filterData, selection, tierKws)
+    if (n.group !== channelGroup) setChannelGroup(n.group)
+    if (n.channel !== channel) setChannel(n.channel)
+    if (n.source !== orderSource) setOrderSource(n.source)
+    if (n.staff !== staffCode) setStaffCode(n.staff)
+    if (n.tier !== tier) setTier(n.tier)
+  }, [filterData, selection, tierKws]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const optLabel = (o: { label: string; orders: number }) => `${o.label} (${o.orders.toLocaleString("vi-VN")})`
 
   // ── Client-side search filter ─────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -258,6 +263,7 @@ export default function OrdersPage() {
         if (channelGroup) qs.set("channelGroup", channelGroup)
         if (channel)      qs.set("channel", channel)
         if (orderSource)  qs.set("orderSource", orderSource)
+        if (tier)         qs.set("tier", tier)
         return qs
       }
 
@@ -297,7 +303,7 @@ export default function OrdersPage() {
       const exportRows = allRows.map((r: OrderRow) => ({
         ...r,
         order_date: fmtDate(r.order_date),
-        _tier: classifyTier(r.price_list_name, tierKws),
+        _tier: classifyOrderTier(r.channel_group, r.price_list_name, tierKws),
       }))
       const label = dateMode === "day" ? singleDate : `${startDate}_${endDate}`
       await exportToExcel(exportRows as Record<string, unknown>[], cols, `Orders_${label}`, "Orders")
@@ -435,36 +441,43 @@ export default function OrdersPage() {
         {/* Row 2: other filters + Apply */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nhóm</label>
-            <select value={channelGroup} onChange={e => { setChannelGroup(e.target.value); setChannel("") }}
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Chỉ hiện lựa chọn có đơn trong kỳ; chọn bộ lọc này thì các bộ lọc khác thu hẹp theo">Nhóm</label>
+            <select value={channelGroup} onChange={e => setChannelGroup(e.target.value)}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200">
               <option value="">Tất cả nhóm</option>
-              <option value="B2B">B2B</option>
-              <option value="B2C">B2C</option>
+              {(filterOpts?.groups ?? []).map(o => <option key={o.value} value={o.value}>{optLabel(o)}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Kênh</label>
             <select value={channel} onChange={e => setChannel(e.target.value)}
-              className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[120px]">
+              className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[130px]">
               <option value="">Tất cả kênh</option>
-              {channelList.map(c => <option key={c} value={c}>{c}</option>)}
+              {(filterOpts?.channels ?? []).map(o => <option key={o.value} value={o.value}>{optLabel(o)}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Nguồn đơn (mỗi kênh có thể có nhiều nguồn, vd website, hotline, app)">Nguồn</label>
+            <select value={orderSource} onChange={e => setOrderSource(e.target.value)}
+              className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[150px] max-w-[260px]">
+              <option value="">Tất cả nguồn</option>
+              {(filterOpts?.sources ?? []).map(o => <option key={o.value} value={o.value} className={o.muted ? "text-slate-400" : ""}>{optLabel(o)}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">PIC</label>
             <select value={staffCode} onChange={e => setStaffCode(e.target.value)}
-              className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[130px]">
+              className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[140px]">
               <option value="">Tất cả PIC</option>
-              {staffList.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+              {(filterOpts?.staff ?? []).map(o => <option key={o.value} value={o.value}>{optLabel(o)}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nguồn</label>
-            <select value={orderSource} onChange={e => setOrderSource(e.target.value)}
+            <label className="text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide" title="Phân loại khách B2B theo bảng giá (cùng cách với Quarter Report); đơn kênh B2C là B2C">Tier</label>
+            <select value={tier} onChange={e => setTier(e.target.value)}
               className="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 min-w-[120px]">
-              <option value="">Tất cả nguồn</option>
-              {orderSrcList.map(s => <option key={s} value={s}>{s}</option>)}
+              <option value="">Tất cả tier</option>
+              {(filterOpts?.tiers ?? ORDER_TIERS.map(t => ({ value: t, label: t, orders: 0 }))).map(o => <option key={o.value} value={o.value}>{filterOpts ? optLabel(o) : o.label}</option>)}
             </select>
           </div>
           <button onClick={() => doFetch(1)}
@@ -584,7 +597,7 @@ export default function OrdersPage() {
                     <CompanyBadge code={r.company_code} />
                   </td>
                   <td className="px-3 py-2">
-                    <TierBadge pln={r.price_list_name} kws={tierKws} />
+                    <TierBadge group={r.channel_group} pln={r.price_list_name} kws={tierKws} />
                   </td>
                 </tr>
               ))}

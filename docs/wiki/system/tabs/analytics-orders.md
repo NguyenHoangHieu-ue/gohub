@@ -33,7 +33,7 @@ count/revenue/GP toàn kỳ. Có export Excel đủ mọi đơn (không chỉ 1 
 | Web | `/analytics/orders` — `web/src/app/(dashboard)/analytics/orders/page.tsx` |
 | Redirect (URL cũ) | `/analytics/order-report` → `redirect("/analytics/orders")`, giữ lại tránh 404 cho ai bookmark |
 | API dữ liệu chính | `GET /api/analytics/order-report` (list phân trang + `export=1` cho export) |
-| API dữ liệu tham chiếu | `GET /api/staff` (dropdown PIC) · `GET /api/channels` (dropdown Channel) · `GET /api/order-sources` (dropdown Source) · `GET /api/analytics/quarterly-settings` (tier keywords, để tô badge Tier) |
+| API dữ liệu tham chiếu | `GET /api/analytics/order-filters` (lựa chọn Nhóm/Kênh/Nguồn/PIC/Tier có đơn trong kỳ + số đơn, s240) · `GET /api/analytics/quarterly-settings` (tier keywords, để tô badge Tier) |
 | Nguồn | `fact_fulfillment_revenue`/`fact_sales_revenue` + `dim_staff` · `dim_customer` · `dim_sku` · `dim_order_source` |
 | Quyền | key `orders` trong `analytics-roles.ts`; mặc định: `b2b`, `ops-&-cs`, `hr` (xem `DEFAULT_ROLE_PERMISSIONS`) |
 
@@ -161,3 +161,14 @@ gohub_dw hiện tại → luôn `TRIM(c.code::text)` khi so khớp.
 ## s210 (2026-09-25) — Filter Phí ship / Đơn nội bộ / KH Ops MẶC ĐỊNH TICK (gồm hết)
 
 Hiếu chốt: mọi tab có bộ lọc này mở lên là **đã tick** (gồm phí ship + đơn nội bộ, và KH Ops ở B2B/B2C) — số mặc định khớp raw `gohub_dw`; bỏ tick để về "doanh thu SP thuần". **Thay thế** cột "Default = Off" của bảng "Filter Chuẩn" cũ ở trang này (bản chép ở các wiki tab khác cũng vậy). Áp cho 8 nơi: B2B, B2C (`b2c-performance.tsx`), BOD, Quarter Report (kéo theo tab Performance), Quarter Report (Organization), Staff, All-Time, Orders (dropdown Yes/No mặc định Yes). API KHÔNG đổi: thiếu tham số vẫn = loại (chỉ FE truyền cờ). Tab không có bộ lọc (Channels, Vendors, Customers, Dashboard, Squad Progress...) vẫn cố định loại ship/nội bộ → số không còn khớp tab đã tick mặc định.
+
+## s240 (2026-10-23) — Sửa bộ lọc Kênh / Nguồn / PIC + thêm Tier (staging)
+**Lỗi tìm ra (kiểm dữ liệu thật staging, 01–22/10):**
+- **Nguồn lọc sai cột:** dropdown lấy `dim_order_source.name` (vd "VN B2C SAPO SIM") nhưng API so với `channel_name` ("VN-Web SIM") → chọn bất kỳ nguồn nào ra **0 đơn** (đo: theo tên 0 đơn, theo kênh 141 đơn). Nay lọc theo **`s.code`** (giống `/api/orders/export` của Products BI), dropdown hiện "tên (mã)" và đánh dấu "· ngừng" cho nguồn Inactive.
+- **Danh sách không thu hẹp:** Kênh (42), PIC (toàn bộ dim_staff, kể cả người không có đơn), Nguồn (138 dòng) hiện đủ bất kể kỳ/nhóm đang chọn; chọn nhóm B2C vẫn thấy kênh B2B. Thêm `/api/analytics/order-filters`: trả "combo" nguồn × PIC × bảng giá → số đơn của kỳ đang xem (cùng điều kiện ngày/Entity/Phí ship/Đơn nội bộ với order-report, chung `lib/orders-where.ts`); trình duyệt lọc nhiều tầng (`lib/orders-filters.ts` `deriveFilterOptions`): mỗi bộ lọc chỉ hiện lựa chọn còn đơn khi áp các bộ lọc khác, kèm số đơn; đổi bộ lọc cấp trên thì lựa chọn cấp dưới không hợp lệ tự bỏ (`normalizeSelection`, ưu tiên Nhóm > Kênh > Nguồn > PIC > Tier).
+- **Đơn chưa gán PIC** không lọc được → thêm lựa chọn "Chưa gán PIC" (`staffCode=__none__`).
+- **Các bộ lọc trước chỉ chọn 1 trong 3 (Nguồn > Kênh > Nhóm)**; nay áp cùng lúc (AND) cho nhất quán với lọc nhiều tầng.
+- **Badge Tier sai cho đơn B2C:** `classifyTier` cũ gán "Strategic" cho mọi bảng giá không khớp từ khoá, kể cả "[BVN] VN B2C Website" (B2C). Nay `classifyOrderTier(group, bảng giá, từ khoá)`: nhóm B2B → theo bảng giá (cùng luật Quarter Report `makeClassifyTier`, không khớp = Strategic); nhóm B2C → "B2C"; nội bộ/không rõ → "Khác".
+- **Tier (mới):** bộ lọc Tier (Strategic/VIP/Gold/Silver/B2C/Khác) lọc phía server bằng `orderTierSql` (CASE cùng nghĩa với hàm TS, từ khoá đọc từ quarterly-settings, dùng `POSITION` không dùng LIKE; khoá cache có băm từ khoá nên đổi cấu hình tự làm mới). Cột Tier trong bảng + file Excel dùng cùng hàm.
+- Khoá cache order-report đổi `v1`→`v2` (thêm tier). Đổi "Theo ngày" (Đã giao/Đã tạo) và Entity nay tự tải lại (trước chỉ khi bấm Apply).
+- Test: `orders-filters.test.ts` (tier, SQL, lọc nhiều tầng, chuẩn hoá, where chung).

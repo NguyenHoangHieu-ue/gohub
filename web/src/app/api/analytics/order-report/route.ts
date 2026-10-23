@@ -3,6 +3,10 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery } from "@/lib/analytics-helpers"
+import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
+import { orderTierSql } from "@/lib/orders-filters"
+import { baseWhere, filterWhere, parseOrderBase, readFilterParams } from "@/lib/orders-where"
+import { createHash } from "crypto"
 
 export const maxDuration = 60
 
@@ -12,64 +16,19 @@ export async function GET(req: NextRequest) {
   if (guard) return guard
 
   const p = req.nextUrl.searchParams
-  // singleDate shorthand: sets startDate=endDate=date (filter by 1 day)
-  const singleDate  = p.get("date") || ""
-  const startDate   = singleDate || p.get("startDate") || ""
-  const endDate     = singleDate || p.get("endDate") || ""
-  const staffCode   = p.get("staffCode") || ""
-  const channelGroup = p.get("channelGroup") || ""
-  const channel     = p.get("channel") || ""
-  const orderSource = p.get("orderSource") || ""
-  const companyCode = p.get("companyCode") || "ALL"
-  const dataSource  = p.get("dataSource") || "fulfilled"
-  // 2 filter Yes/No — mặc định No (=loại) cho ra doanh thu SP thuần.
-  // Bật CẢ 2 = Yes → khớp báo cáo gốc (validate tổng không lệch).
-  const includeShip        = p.get("includeShip") === "1"          // No (default) → loại SHIPPINGFEE0
-  const includeInternalOps = p.get("includeInternalOps") === "1"   // No (default) → loại INTERNAL-TRANSACTION
+  const base = parseOrderBase(p)
+  if ("error" in base) return NextResponse.json({ error: base.error }, { status: 400 })
+  const flt = readFilterParams(p)
   const isExport    = p.get("export") === "1"
   const page        = Math.max(1, parseInt(p.get("page") || "1"))
   const limit       = isExport ? 5000 : Math.min(200, parseInt(p.get("limit") || "50"))
   const offset      = (page - 1) * limit
+  const { mainTable, dateCol, revCol, qtyCol, gpCol, startDate, endDate, companyCode, dataSource, includeShip, includeInternalOps } = base
 
-  if (!startDate || !endDate) {
-    return NextResponse.json({ error: "startDate and endDate are required" }, { status: 400 })
-  }
-
-  const isSales   = dataSource === "created"
-  const mainTable = isSales ? "fact_sales_revenue" : "fact_fulfillment_revenue"
-  const dateCol   = isSales ? "created_date" : "fulfiled_date"
-  const revCol    = isSales ? "sales_revenue_amount_vnd" : "fulfilled_revenue_amount_vnd"
-  // fact_sales_revenue uses "quantity"; fact_fulfillment_revenue uses "fulfilled_quantity"
-  const qtyCol    = isSales ? "f.quantity" : "f.fulfilled_quantity"
-  // fact_sales_revenue has no gross_profit_vnd
-  const gpCol     = isSales ? "0" : "f.gross_profit_vnd"
-
-  const params: unknown[] = [startDate, endDate]
-
-  let where = `WHERE f.${dateCol}::date BETWEEN $1 AND $2`
-  // Include ShippingFee = No (default) → loại phí ship khỏi doanh thu SP
-  if (!includeShip) where += ` AND f.sku != 'SHIPPINGFEE0'`
-  // Include Internal Ops = No (default) → loại đơn chuyển nội bộ (revenue=0, chỉ có COGS)
-  if (!includeInternalOps) where += ` AND (UPPER(COALESCE(s.group_name, '')) != 'INTERNAL-TRANSACTION')`
-
-  if (companyCode && companyCode !== "ALL") {
-    params.push(companyCode)
-    where += ` AND f.company_code = $${params.length}`
-  }
-  if (staffCode) {
-    params.push(staffCode)
-    where += ` AND TRIM(f.staff_code) = $${params.length}`
-  }
-  if (orderSource) {
-    params.push(orderSource)
-    where += ` AND TRIM(s.channel_name) = $${params.length}`
-  } else if (channel) {
-    params.push(channel)
-    where += ` AND TRIM(s.channel_name) = $${params.length}`
-  } else if (channelGroup && channelGroup !== "All") {
-    params.push(channelGroup)
-    where += ` AND UPPER(COALESCE(s.group_name, '')) = UPPER($${params.length})`
-  }
+  // Tier = cùng định nghĩa với Quarter Report (từ khoá trong quarterly-settings) — đổi cấu hình thì khoá cache đổi theo
+  const { tierKeywords } = await fetchQuarterlySettings()
+  const tierExpr = orderTierSql(tierKeywords, "s.group_name", "dc.price_list_name")
+  const { where, params } = filterWhere(baseWhere(base), flt, tierExpr)
 
   const baseSelect = `
     SELECT
@@ -116,7 +75,8 @@ export async function GET(req: NextRequest) {
   try {
     // Cache TTL 15' (s196+20 — cùng lớp bug timeout đã fix cho B2C Advanced s195+15): export CSV (limit
     // 5000, group-by nặng nhất) chạy lại tươi mỗi lần bấm xuất, dễ chạm ngưỡng 60s khi data lớn dần.
-    const cacheKey = `order-report:v1:${startDate}:${endDate}:${staffCode}:${channelGroup}:${channel}:${orderSource}:${companyCode}:${dataSource}:${includeShip}:${includeInternalOps}:${isExport}:${page}:${limit}`
+    const tierHash = createHash("sha1").update(JSON.stringify(tierKeywords)).digest("hex").slice(0, 8)
+    const cacheKey = `order-report:v2:${startDate}:${endDate}:${flt.staffCode}:${flt.channelGroup}:${flt.channel}:${flt.orderSource}:${flt.tier}:${tierHash}:${companyCode}:${dataSource}:${includeShip}:${includeInternalOps}:${isExport}:${page}:${limit}`
     const [countRows, aggrRows, dataRows] = await cachedQuery(
       cacheKey,
       () => Promise.all([
