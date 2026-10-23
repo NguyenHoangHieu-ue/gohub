@@ -6,6 +6,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { isCronReq, softExpireAll, prewarmAnalyticsUrls } from "@/lib/analytics-helpers"
 import { waitUntil } from "@vercel/functions"
 import { alertCronFailure } from "@/lib/cron-alert"
+import { checksumOf, checksumChanged, type ChecksumState } from "@/lib/data-freshness"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 30
@@ -26,10 +27,23 @@ const WATCHED_JOBS = [
 ]
 
 const STATE_KEY = "etl_cache_sync_last_seen"
+const CHECKSUM_KEY = "data_checksum_state"
 
 interface JobEnd { name: string; last_end: string | null }
 
-async function checkAndFlush(origin: string): Promise<{ advanced: string[]; flushed: boolean }> {
+// Phát hiện dữ liệu bị sửa/nạp bù ngoài lịch ETL (vd chỉnh lùi ngày cũ): đếm dòng + tổng doanh thu 7 ngày gần nhất của hai
+// bảng fact chính (truy vấn có lọc ngày, rẻ). Số đổi → coi như ETL mới để cache hết hạn mềm.
+async function dataChecksum(): Promise<string> {
+  const [ful, sal] = await Promise.all([
+    queryAnalytics<{ n: string; s: string }>(
+      "SELECT COUNT(*)::text n, COALESCE(SUM(fulfilled_revenue_amount_vnd),0)::text s FROM fact_fulfillment_revenue WHERE fulfiled_date >= CURRENT_DATE - 7"),
+    queryAnalytics<{ n: string; s: string }>(
+      "SELECT COUNT(*)::text n, COALESCE(SUM(sales_revenue_amount_vnd),0)::text s FROM fact_sales_revenue WHERE created_date >= CURRENT_DATE - 7"),
+  ])
+  return checksumOf([ful[0]?.n, ful[0]?.s, sal[0]?.n, sal[0]?.s])
+}
+
+async function checkAndFlush(origin: string): Promise<{ advanced: string[]; checksumChanged: boolean; flushed: boolean }> {
   const rows = await queryAnalytics<JobEnd>(
     `SELECT j.name, MAX(jl.end_time) as last_end
      FROM job_logs jl JOIN jobs j ON j.id = jl.job_id
@@ -53,7 +67,20 @@ async function checkAndFlush(origin: string): Promise<{ advanced: string[]; flus
     }
   }
 
-  if (advanced.length > 0) {
+  // Checksum dữ liệu 7 ngày gần nhất (lỗi truy vấn thì bỏ qua, không chặn phần ETL)
+  let checksumDiff = false
+  try {
+    const next = await dataChecksum()
+    const { data: csRow } = await supabaseAdmin.from("app_settings").select("value").eq("key", CHECKSUM_KEY).maybeSingle()
+    const prev: ChecksumState | null = csRow?.value ? JSON.parse(csRow.value) : null
+    checksumDiff = checksumChanged(prev, next)
+    if (!prev || checksumDiff) {
+      const state: ChecksumState = { checksum: next, changedAt: checksumDiff || !prev ? new Date().toISOString() : prev!.changedAt }
+      await supabaseAdmin.from("app_settings").upsert({ key: CHECKSUM_KEY, value: JSON.stringify(state), category: "cache" }, { onConflict: "key" })
+    }
+  } catch { /* checksum lỗi → chỉ dựa vào job ETL */ }
+
+  if (advanced.length > 0 || checksumDiff) {
     // s203: KHÔNG xoá cứng nữa — đánh dấu cache "hết TTL" để người xem vẫn nhận bản cũ ngay (stale-while-revalidate),
     // đồng thời làm tươi trước ở nền các URL được xem gần đây để lượt xem kế tiếp đã có số mới.
     await softExpireAll()
@@ -64,7 +91,7 @@ async function checkAndFlush(origin: string): Promise<{ advanced: string[]; flus
     )
   }
 
-  return { advanced, flushed: advanced.length > 0 }
+  return { advanced, checksumChanged: checksumDiff, flushed: advanced.length > 0 || checksumDiff }
 }
 
 // Gọi định kỳ từ cron-job.org (GET + Bearer CRON_SECRET) — KHÔNG đăng ký trong vercel.json.

@@ -195,3 +195,10 @@ SUM thẳng mọi dòng của `fact_fulfillment_revenue`.
 
 ### s236 — Tỷ lệ ngày pro-rata chỉ còn một hàm
 `rangeDayRatio(start, end, "YYYY-MM")` (`lib/analytics-engine/cost-engine.ts`) = số ngày của tháng nằm trong [start, end] / số ngày của tháng (0 nếu tháng không chạm). Thay 28 bản copy `getDaysInMonth(m) > 0 ? getDaysInRange(...) / getDaysInMonth(m) : 0` ở b2b/*, b2c/kpis+performance, channels/*, staff-report/*, quarterly-report, bod-data, customer-cost-allocation. KHÔNG đổi: tỷ lệ kiểu khác có chủ đích — `elapsed/totalDays` (b2c/metric, b2c/monthly, b2c-report-snapshot, cron refresh-monthly-kpis), chiếu tháng đang chạy (monthly-kpis), chia theo bucket ngày/tuần (b2b/trend), đoạn cắt (b2b-ecom-timeline). Đừng viết lại công thức này inline — import từ cost-engine.
+
+
+## §s240 — Đo thời gian cache + an toàn cache
+- `cachedQuery` ghi `perf_events` (Turso; route = phần khoá trước dấu ':'; kết quả l1/l2/stale/miss + "compute" = thời gian `fn()` khi nguội) qua `lib/perf-recorder.ts` (ghi theo lô qua `waitUntil`, lỗi thì bỏ, giữ 14 ngày). API `/api/creator/perf-stats` (creator/admin) tính p50/p95 + tỉ lệ trúng; hiện trong Data Map (Dev Tools).
+- **Phát hiện dữ liệu đổi ngoài lịch ETL:** cron `etl-cache-sync` thêm *checksum* (COUNT + SUM doanh thu 7 ngày gần nhất của `fact_fulfillment_revenue`/`fact_sales_revenue`); số đổi → `softExpireAll` + prewarm như khi job ETL xong; lưu `app_settings.data_checksum_state`. Lần chạy đầu chỉ ghi mốc.
+- **Nhãn "Dữ liệu cập nhật HH:mm"** ở thanh trên (`components/data-freshness-badge.tsx`, `/api/analytics/data-freshness`) = max(mốc job ETL, mốc checksum đổi).
+- **Test `cache-invalidation.test.ts`:** route POST/PUT/PATCH/DELETE trong `api/analytics` + `api/config` phải gọi flush/nocache hoặc nằm trong danh sách REVIEWED (ghi cấu hình/target mà route đọc tính SAU cache). Route ghi mới thiếu flush → test đỏ. Danh sách REVIEWED là mốc để rà dần, chưa phải bằng chứng từng route an toàn.

@@ -6,6 +6,7 @@ import { LogOut, Search, Menu } from "lucide-react"
 import { useEffect, useState } from "react"
 import { ROLE_LABELS } from "@/lib/agents/types"
 import { ThemeToggle } from "./theme-toggle"
+import { DataFreshnessBadge } from "./data-freshness-badge"
 import { useSidebar } from "./sidebar-context"
 
 function roleBadgeClass(role: string) {
@@ -60,6 +61,7 @@ export function TopBar() {
       </button>
 
       <div className="flex items-center gap-3">
+        <DataFreshnessBadge />
         <ThemeToggle />
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-600 to-blue-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
