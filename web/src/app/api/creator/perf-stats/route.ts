@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { tursoQuery, tursoConfigured } from "@/lib/turso"
 import { summarizePerf, type PerfEvent } from "@/lib/perf-recorder"
+import { topUrlsToWarm } from "@/lib/url-hits"
 
 export const dynamic = "force-dynamic"
 
@@ -20,7 +21,9 @@ export async function GET(req: Request) {
       "SELECT route, outcome, ms FROM perf_events WHERE ts > ? ORDER BY ts DESC LIMIT 40000",
       [Date.now() - days * 86_400_000],
     )
-    return NextResponse.json({ routes: summarizePerf(rows), events: rows.length, days })
+    // URL được hâm nóng theo lượt gọi thật (đã mở mẫu theo hôm nay) — để kiểm tra cơ chế prewarm theo hành vi
+    const warmList = await topUrlsToWarm(20)
+    return NextResponse.json({ routes: summarizePerf(rows), events: rows.length, days, warmList })
   } catch (e) {
     // Bảng chưa có (chưa lần nào ghi) → trả rỗng thay vì lỗi
     return NextResponse.json({ routes: [], events: 0, days, note: (e as Error).message.slice(0, 120) })
