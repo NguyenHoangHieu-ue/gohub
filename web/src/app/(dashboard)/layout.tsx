@@ -9,6 +9,7 @@ import { ToastProvider }     from "@/components/toast"
 import { SearchShortcut }   from "@/components/search-shortcut"
 import { CommandPalette }   from "@/components/command-palette"
 import { TrackPageView }    from "@/components/track-page-view"
+import { FetchCacheInstaller } from "@/components/fetch-cache-installer"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -17,6 +18,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <ToastProvider>
       <SidebarProvider>
+        <FetchCacheInstaller />
         <HeartbeatProvider />
         <TrackPageView />
         <SearchShortcut />

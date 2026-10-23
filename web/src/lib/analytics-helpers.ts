@@ -9,6 +9,7 @@ import { tursoQuery } from "@/lib/turso"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
 import { recordPerf } from "@/lib/perf-recorder"
+import { recordUrlHit, topUrlsToWarm } from "@/lib/url-hits"
 
 export function isLocalPreviewReq(req: NextRequest): boolean {
   const host = req.nextUrl.hostname
@@ -301,6 +302,7 @@ export function analyticsGuard(req: NextRequest, session: unknown): NextResponse
   const cron = isCronReq(req)
   if (!cron) {
     const url = req.nextUrl.pathname + req.nextUrl.search
+    if (session && req.method === "GET") recordUrlHit(url)
     const h = createHash("sha1").update(url).digest("hex")
     if (!_urlReg.has(h)) {
       _urlReg.add(h)
@@ -327,32 +329,41 @@ function isClosedQuarterReportUrl(url: string): boolean {
 }
 
 // Cron prewarm cho endpoint chuyên dụng: xoá key dedicated (force tươi) rồi re-fetch URL đã đăng ký.
-export async function prewarmAnalyticsUrls(baseUrl: string, limit = 50, concurrency = 3): Promise<{ prewarmed: number; failed: number }> {
-  const regs = await readCacheByPrefix("urlreg:")
-  const urls = regs
-    .map(r => ({ url: r.data?.url as string, ts: r.data?.ts ?? 0 }))
-    .filter(r => typeof r.url === "string" && r.url.startsWith("/api/analytics/"))
-    .sort((a, b) => b.ts - a.ts)
-    .slice(0, limit)
+export async function prewarmAnalyticsUrls(baseUrl: string, limit = 50, concurrency = 3, budgetMs = 50_000): Promise<{ prewarmed: number; failed: number; skipped: number; source: "hits" | "registry" }> {
+  // Ưu tiên URL người dùng hay gọi nhất (đếm lượt thật, tham số ngày tương đối đã mở theo hôm nay); chưa có số đếm thì dùng registry cũ.
+  let urls: string[] = await topUrlsToWarm(limit)
+  let source: "hits" | "registry" = "hits"
+  if (urls.length === 0) {
+    source = "registry"
+    const regs = await readCacheByPrefix("urlreg:")
+    urls = regs
+      .map(r => ({ url: r.data?.url as string, ts: r.data?.ts ?? 0 }))
+      .filter(r => typeof r.url === "string" && r.url.startsWith("/api/analytics/"))
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, limit)
+      .map(r => r.url)
+  }
 
   // Gọi lại URL kèm nocache=1 → route bỏ qua đọc cache, tính lại tươi và GHI cache mới (không cần xoá key trước,
   // nên người dùng vào giữa lúc prewarm vẫn có bản cũ để xem). Chạy `concurrency` URL song song (pool DB max=3/instance).
+  // Hết ngân sách thời gian thì ngừng BẮT ĐẦU URL mới (URL phổ biến nhất đã chạy trước) để không bị cắt giữa chừng.
   const auth = `Bearer ${process.env.CRON_SECRET ?? ""}`
+  const deadline = Date.now() + budgetMs
   let prewarmed = 0, failed = 0
   let next = 0
   const worker = async () => {
-    while (next < urls.length) {
+    while (next < urls.length && Date.now() < deadline) {
       const u = urls[next++]
       try {
-        const sep = u.url.includes("?") ? "&" : "?"
-        const target = u.url.includes("nocache=") || isClosedQuarterReportUrl(u.url) ? u.url : `${u.url}${sep}nocache=1`
+        const sep = u.includes("?") ? "&" : "?"
+        const target = u.includes("nocache=") || isClosedQuarterReportUrl(u) ? u : `${u}${sep}nocache=1`
         const res = await fetch(`${baseUrl}${target}`, { headers: { authorization: auth }, cache: "no-store" })
         res.ok ? prewarmed++ : failed++
       } catch { failed++ }
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, urls.length) }, worker))
-  return { prewarmed, failed }
+  return { prewarmed, failed, skipped: Math.max(0, urls.length - next), source }
 }
 
 // Cache-Control header value for API responses (browser + CDN cache 5 min)

@@ -25,6 +25,7 @@ import { SquadMonthlyTable } from "@/components/quarterly/squad-monthly-table"
 import { SquadCustomerSummary } from "@/components/quarterly/squad-customer-summary"
 import { CompanyPerformanceView } from "@/components/quarterly/company-performance-view"
 import { LogicNote, StatTile } from "@/components/dashboard-kit"
+import { readStale, writeStale } from "@/lib/stale-first"
 
 // Metric có target theo tháng của quý sau (panel "Target Squad") — khớp field `next_targets` route squad-progress.
 const NEXT_METRICS = ["rev", "gp", "cm1", "hk3rev"] as const
@@ -371,9 +372,14 @@ function QuarterlyContent() {
       if (refresh)           qParams.set("nocache", "1")
       if (includeShip)       qParams.set("includeShip", "1")
       if (includeInternalOps) qParams.set("includeInternalOps", "1")
+      // Số cũ trước (bản đã xem cùng bộ lọc trong phiên này), số mới thay khi về — trang vốn làm mờ khi đang tải
+      const sfKey = `qr:${selQ}:${selYear}:${companyCode}:${includeShip ? 1 : 0}${includeInternalOps ? 1 : 0}`
+      if (!refresh) { const st = readStale<typeof report>(sfKey); if (st) setReport(st.data) }
       const res = await fetch(`/api/analytics/quarterly-report?${qParams}`, { signal: ctrl.signal })
       if (!res.ok) throw new Error(`${res.status}`)
-      setReport(await res.json())
+      const fresh = await res.json()
+      setReport(fresh)
+      writeStale(sfKey, fresh)
     } catch (e: any) {
       if (e.name === "AbortError" && reportAbortRef.current !== ctrl) return // huỷ vì filter đổi tiếp, không phải timeout — request mới hơn đang lo
       notify(false, e.name === "AbortError" ? "Tải dữ liệu quá lâu (>65s) — thử bấm 'Tải lại mới' hoặc đợi giây lát" : `Lỗi tải dữ liệu: ${e.message}`)
@@ -407,8 +413,10 @@ function QuarterlyContent() {
       if (refresh)            tp.set("refresh", "1")
       if (includeShip)        tp.set("includeShip", "1")
       if (includeInternalOps) tp.set("includeInternalOps", "1")
+      const sfKey = `qb2b:${selQ}:${selYear}:${includeShip ? 1 : 0}${includeInternalOps ? 1 : 0}`
+      if (!refresh) { const st = readStale<typeof b2bTiers>(sfKey); if (st) setB2bTiers(st.data) }
       const res = await fetch(`/api/analytics/quarterly-b2b-customers?${tp}`, { signal: ctrl.signal })
-      if (res.ok) setB2bTiers(await res.json())
+      if (res.ok) { const fresh = await res.json(); setB2bTiers(fresh); writeStale(sfKey, fresh) }
     } catch {} finally { if (b2bTiersAbortRef.current === ctrl) setB2bTiersLoading(false) }
   }, [selQ, selYear, includeShip, includeInternalOps])
 

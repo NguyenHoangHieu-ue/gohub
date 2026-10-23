@@ -16,8 +16,9 @@ export async function GET(req: NextRequest) {
 
   try {
     // 1) generic /api/analytics/query (replay SQL); 2) endpoint chuyên dụng bod/b2b/b2c/channels (re-fetch URL)
-    const generic = await prewarmAnalyticsCache()
-    const routes  = await prewarmAnalyticsUrls(req.nextUrl.origin)
+    // URL người dùng hay gọi nhất làm trước (ngân sách 38s); phần SQL registry chạy sau với thời gian còn lại
+    const routes  = await prewarmAnalyticsUrls(req.nextUrl.origin, 50, 3, 38_000)
+    const generic = await prewarmAnalyticsCache(10)
     return NextResponse.json({ ok: true, generic, routes, at: new Date().toISOString() })
   } catch (err) {
     await alertCronFailure("prewarm-analytics", err)

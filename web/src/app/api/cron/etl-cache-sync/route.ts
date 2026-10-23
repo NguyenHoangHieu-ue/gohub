@@ -84,7 +84,7 @@ async function checkAndFlush(origin: string): Promise<{ advanced: string[]; chec
     // s203: KHÔNG xoá cứng nữa — đánh dấu cache "hết TTL" để người xem vẫn nhận bản cũ ngay (stale-while-revalidate),
     // đồng thời làm tươi trước ở nền các URL được xem gần đây để lượt xem kế tiếp đã có số mới.
     await softExpireAll()
-    waitUntil(prewarmAnalyticsUrls(origin, 30, 3).then(() => {}, () => {}))
+    waitUntil(prewarmAnalyticsUrls(origin, 30, 3, 22_000).then(() => {}, () => {}))
     await supabaseAdmin.from("app_settings").upsert(
       { key: STATE_KEY, value: JSON.stringify(nextSeen), category: "cache" },
       { onConflict: "key" },
