@@ -48,8 +48,11 @@ Mỗi sự việc đã kiểm ở bước 3: "- <sự việc> (nguồn: …): h�
 Tối đa 3 đề xuất, đúng khuôn sau cho từng cái:
 ### 1. <việc cần làm> — <Chắc|Có thể|Chưa đủ dữ liệu>
 - Vì sao: <lý do ngắn, có số liệu cụ thể>
+- Ảnh hưởng: <số tiền VND mỗi tháng hoặc mỗi quý, nêu cách tính; hoặc "chưa lượng hoá được">
 - Nguồn: <tên nguồn, tên nguồn>
 - Liên quan kế hoạch: <mục trong brief.md, hoặc "ngoài kế hoạch">
+XẾP THỨ TỰ: việc có Ảnh hưởng tiền lớn nhất đứng đầu. Việc dưới khoảng 5 triệu VND mỗi tháng chỉ được nêu khi là rủi ro an toàn/pháp lý/mất dịch vụ, và không được đứng trên việc lớn hơn.
+NHÃN CHẮC CHẮN: "Chắc" chỉ khi MỌI con số trong đề xuất đã đo bằng công cụ trong lượt này và việc không phụ thuộc giả định. Có phép chiếu hay kịch bản ("nếu chuyển X thì Y", "sẽ vượt", "ước tính") thì nhãn tối đa là "Có thể", phần dự phóng ghi rõ là ước tính kèm giả định.
 Không đủ căn cứ thì ghi "Chưa có đề xuất đủ căn cứ hôm nay." thay vì cố nghĩ ra. Không lặp lại đề xuất cũ nếu tình hình không đổi.
 5) GHI ĐÈ notes/tin-hom-nay.md: bản tin tối đa 10 dòng rút từ hai file trên.
 Quy tắc: không phóng đại, không đoán; mọi ý phải có nguồn thật trong Kho hoặc số liệu hệ thống; thiếu dữ liệu thì nói thẳng và đánh "Chưa đủ dữ liệu"; không hỏi lại (không ai trả lời lúc này).`
@@ -65,16 +68,46 @@ export function auditProposals(md: string): ProposalAudit {
   if (!items.length) return { total: 0, ok: 0, issues: [], empty: true }
   const issues: string[] = []
   let ok = 0
+  let prevImpact: number | null = null
   items.forEach((it, i) => {
     const head = it.split("\n")[0].trim()
     const miss: string[] = []
-    if (!LABEL.test(head)) miss.push("thiếu nhãn Chắc / Có thể / Chưa đủ dữ liệu")
+    const label = LABEL.exec(head)
+    if (!label) miss.push("thiếu nhãn Chắc / Có thể / Chưa đủ dữ liệu")
     const src = /^\s*-?\s*Nguồn\s*:\s*(.+)$/im.exec(it)
     if (!src || src[1].trim().length < 3) miss.push("thiếu nguồn")
     if (!/Liên quan kế hoạch\s*:\s*\S+/i.test(it)) miss.push("thiếu mục kế hoạch liên quan")
+    const imp = /^\s*-?\s*Ảnh hưởng\s*:\s*(.+)$/im.exec(it)
+    if (!imp || imp[1].trim().length < 3) miss.push("thiếu mức ảnh hưởng")
+    // "Chắc" chỉ cho số đã đo; có phép chiếu/kịch bản trong lý do thì phải là "Có thể"
+    const why = /^\s*-?\s*Vì sao\s*:\s*(.+)$/im.exec(it)?.[1] ?? ""
+    if (label && /^chắc/i.test(label[1]) && PROJECTION.test(why)) miss.push('nhãn "Chắc" nhưng lý do có phần dự phóng (nếu/ước tính/sẽ) — nên là "Có thể"')
+    const amount = imp ? impactVnd(imp[1]) : null
+    if (amount !== null) {
+      if (prevImpact !== null && amount > prevImpact) miss.push("chưa xếp theo mức ảnh hưởng (việc này lớn hơn việc đứng trước)")
+      prevImpact = amount
+    }
     if (miss.length) issues.push(`Đề xuất ${i + 1}: ${miss.join(", ")}`); else ok++
   })
   return { total: items.length, ok, issues, empty: false }
+}
+
+const PROJECTION = /\b(nếu|giả sử|ước tính|dự kiến|kỳ vọng|sẽ vượt|có thể đạt)\b/i
+
+/** Đổi chuỗi tiền ("~100 triệu VND/tháng", "1,5 tỷ", "793.000", "120M") thành VND; không có số → null. Thuần. */
+export function impactVnd(text: string): number | null {
+  const m = /(\d[\d.,]*)\s*(tỷ|ty|triệu|tr|m|nghìn|ngàn|k)?/i.exec(text)
+  if (!m) return null
+  let raw = m[1].replace(/[.,]+$/, "")
+  const hasDot = raw.includes("."), hasComma = raw.includes(",")
+  if (hasDot && hasComma) raw = raw.replace(/[.]/g, "").replace(",", ".")
+  else if (hasComma) raw = /,\d{1,2}$/.test(raw) ? raw.replace(",", ".") : raw.replace(/,/g, "")
+  else if (hasDot) raw = /^\d{1,3}(\.\d{3})+$/.test(raw) ? raw.replace(/[.]/g, "") : raw
+  const n = parseFloat(raw)
+  if (!Number.isFinite(n)) return null
+  const unit = (m[2] ?? "").toLowerCase()
+  const mult = unit === "tỷ" || unit === "ty" ? 1e9 : unit === "triệu" || unit === "tr" || unit === "m" ? 1e6 : unit === "nghìn" || unit === "ngàn" || unit === "k" ? 1e3 : 1
+  return Math.round(n * mult)
 }
 
 /** Lấy một mục "## <tiêu đề>" (không gồm dòng tiêu đề) của file markdown, tới mục "##" kế tiếp. Không thấy → "". Thuần. */

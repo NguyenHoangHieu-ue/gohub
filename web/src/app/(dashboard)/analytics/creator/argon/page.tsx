@@ -102,7 +102,7 @@ export default function ArgonTodayPage() {
           {audit && !audit.empty && (
             <div className={cn("text-[12px] rounded-lg px-2.5 py-1.5 flex items-start gap-1.5", audit.issues.length ? "bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200" : "bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200")}>
               {audit.issues.length ? <AlertTriangle size={13} className="mt-0.5 shrink-0" /> : <CheckCircle2 size={13} className="mt-0.5 shrink-0" />}
-              <span>Kiểm nguồn: {audit.ok}/{audit.total} đề xuất đủ nhãn chắc chắn, nguồn và mục kế hoạch liên quan.{audit.issues.length ? ` ${audit.issues.join("; ")}.` : ""}</span>
+              <span>Kiểm nguồn: {audit.ok}/{audit.total} đề xuất đủ nhãn chắc chắn, mức ảnh hưởng, nguồn và mục kế hoạch liên quan.{audit.issues.length ? ` ${audit.issues.join("; ")}.` : ""}</span>
             </div>
           )}
           {proposals ? <ArgonMarkdown text={proposals} />

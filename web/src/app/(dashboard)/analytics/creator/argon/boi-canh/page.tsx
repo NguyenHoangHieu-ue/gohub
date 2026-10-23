@@ -145,7 +145,7 @@ export default function BoiCanhPage() {
           {snap && !snap.tacDong.audit.empty && (
             <div className={cn("text-[12px] rounded-lg px-2.5 py-1.5 flex items-start gap-1.5", snap.tacDong.audit.issues.length ? "bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200" : "bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200")}>
               {snap.tacDong.audit.issues.length ? <AlertTriangle size={13} className="mt-0.5 shrink-0" /> : <CheckCircle2 size={13} className="mt-0.5 shrink-0" />}
-              <span>Kiểm nguồn: {snap.tacDong.audit.ok}/{snap.tacDong.audit.total} đề xuất đủ nhãn chắc chắn, nguồn và mục kế hoạch liên quan.{snap.tacDong.audit.issues.length ? ` ${snap.tacDong.audit.issues.join("; ")}. Anh cân nhắc kỹ trước khi làm theo.` : ""}</span>
+              <span>Kiểm nguồn: {snap.tacDong.audit.ok}/{snap.tacDong.audit.total} đề xuất đủ nhãn chắc chắn, mức ảnh hưởng, nguồn và mục kế hoạch liên quan.{snap.tacDong.audit.issues.length ? ` ${snap.tacDong.audit.issues.join("; ")}. Anh cân nhắc kỹ trước khi làm theo.` : ""}</span>
             </div>
           )}
           <div className="max-h-[70vh] overflow-y-auto pr-1">
