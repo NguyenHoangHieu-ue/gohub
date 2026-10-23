@@ -1,5 +1,6 @@
 import { waitUntil } from "@vercel/functions"
 import { tursoQuery, tursoConfigured } from "@/lib/turso"
+import { normalizePerfRoute } from "@/lib/perf-route"
 
 // Đo thời gian THẬT của cache BI (s240): mỗi lần cachedQuery chạy ghi 1 sự kiện (route, kết quả, ms) vào Turso
 // bảng perf_events. Dùng cho Data Map (p50/p95) và tìm endpoint nguội chậm. Ghi theo lô, lỗi thì bỏ — không bao giờ
@@ -16,11 +17,9 @@ const _buf: PerfEvent[] = []
 let _lastFlush = Date.now()
 let _tableReady = false
 
-/** Khoá cache → tên route: bỏ phần sau dấu ':' đầu tiên (hash/tham số). */
+/** Khoá cache → tên route (bỏ hậu tố tham số/phiên bản). */
 export function perfRouteOf(key: string): string {
-  const i = key.indexOf(":")
-  const head = i > 0 ? key.slice(0, i) : key
-  return head.slice(0, 60)
+  return normalizePerfRoute(key)
 }
 
 async function flush(): Promise<void> {
@@ -67,7 +66,8 @@ function pct(sorted: number[], p: number): number | null {
 
 export function summarizePerf(events: Pick<PerfEvent, "route" | "outcome" | "ms">[]): PerfSummary[] {
   const by = new Map<string, { serve: number[]; compute: number[]; hits: number; served: number }>()
-  for (const e of events) {
+  for (const e0 of events) {
+    const e = { route: normalizePerfRoute(e0.route), outcome: e0.outcome, ms: Number(e0.ms) }
     const g = by.get(e.route) ?? { serve: [], compute: [], hits: 0, served: 0 }
     if (e.outcome === "compute") g.compute.push(e.ms)
     else {

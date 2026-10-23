@@ -5,6 +5,7 @@ import { GitBranch, Database, Layers, Server, Cloud, Globe, X, Timer } from "luc
 import raw from "@/lib/data-map.generated.json"
 import { DB_TABLES } from "@/lib/data-lineage"
 import { cn } from "@/lib/utils"
+import { normalizePerfRoute } from "@/lib/perf-route"
 
 type Src = "gohub_dw" | "supabase" | "turso" | "external"
 interface Tbl { name: string; source: Src }
@@ -87,7 +88,7 @@ export function DataMapView() {
 
   const perfOf = (p: string): PerfRow | undefined => {
     const k = MAP.apis[p]?.cacheKey
-    return k ? perf[k] : undefined
+    return k ? perf[normalizePerfRoute(k)] : undefined
   }
 
   const selTable = tableName ? MAP.tables[tableName] : null

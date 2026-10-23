@@ -5,6 +5,8 @@ describe("perf-recorder", () => {
   test("perfRouteOf lấy phần trước dấu ':' đầu tiên", () => {
     expect(perfRouteOf("b2c-monthly:v15:2026-10")).toBe("b2c-monthly")
     expect(perfRouteOf("vendor-list")).toBe("vendor-list")
+    expect(perfRouteOf("bod-summary5:x")).toBe("bod-summary")
+    expect(perfRouteOf("qreport_raw_v12:y")).toBe("qreport_raw")
   })
 
   test("summarizePerf: tỉ lệ trúng, p50/p95, sắp theo compute p95 giảm dần", () => {
