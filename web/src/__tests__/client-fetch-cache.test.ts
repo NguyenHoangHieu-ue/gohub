@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, vi } from "vitest"
-import { cacheKeyFor, installFetchCache, _resetFetchCacheForTest } from "../lib/client-fetch-cache"
+import { cacheKeyFor, installFetchCache, _resetFetchCacheForTest, TELEMETRY } from "../lib/client-fetch-cache"
 import { readStale, writeStale } from "../lib/stale-first"
 
 const ORIGIN = "http://app.test"
@@ -83,5 +83,22 @@ describe("client-fetch-cache", () => {
     expect(readStale("a", -1)).toBeNull()
     writeStale("big", "x".repeat(1_300_000))
     expect(readStale("big")).toBeNull()
+  })
+
+  test("POST nền (track, heartbeat) KHÔNG xoá bộ nhớ; POST ghi dữ liệu thì xoá", async () => {
+    const { calls, win } = setup()
+    expect(TELEMETRY.test("/api/analytics/track")).toBe(true)
+    expect(TELEMETRY.test("/api/user/heartbeat")).toBe(true)
+    expect(TELEMETRY.test("/api/analytics/b2b-customer-targets")).toBe(false)
+    expect(TELEMETRY.test("/api/channel-costs")).toBe(false)
+    await win.fetch("/api/analytics/x?q=1")
+    writeStale("k2", { v: 1 })
+    await win.fetch("/api/analytics/track", { method: "POST", body: "{}" })
+    await win.fetch("/api/user/heartbeat", { method: "POST" })
+    expect(readStale("k2")).not.toBeNull()
+    await win.fetch("/api/analytics/x?q=1")
+    expect(calls.filter(c => c.includes("q=1"))).toHaveLength(1)
+    await win.fetch("/api/channel-costs", { method: "POST", body: "{}" })
+    expect(readStale("k2")).toBeNull()
   })
 })

@@ -8,6 +8,8 @@ const MAX_ENTRIES = 60
 const MAX_BODY = 1_500_000
 const SCOPE = /^\/api\/(analytics|config)\//
 const NEVER = /^\/api\/analytics\/(my-metrics|track|usage-stats|db-status|health|data-health|data-freshness|perf-probe|perf-probe-report|perf-probe-sin|query)(\/|\?|$)/
+// POST nền không phải ghi dữ liệu BI (đếm lượt xem, nhịp tim, chat, thông báo...) — KHÔNG được xoá bộ nhớ, nếu không số-cũ-trước mất tác dụng
+export const TELEMETRY = /^\/api\/(auth|user|chat|creator|creator-ai|notifications|bridge|to-gau|be-gau)(\/|$)|^\/api\/analytics\/(track|usage-stats)(\/|$)/
 const FRESH_PARAMS = /[?&](nocache|refresh|_t)=/
 
 interface Entry { at: number; status: number; statusText: string; headers: [string, string][]; body: string }
@@ -53,7 +55,7 @@ export function installFetchCache(): void {
       let path = ""
       try { path = new URL(raw, window.location.origin).pathname } catch { /* bỏ */ }
       const res = await nativeFetch(input, init)
-      if (path.startsWith("/api/") && !/^\/api\/(auth|track|heartbeat)/.test(path)) { clearAll(); try { bc?.postMessage(1) } catch { /* bỏ */ } }
+      if (path.startsWith("/api/") && !TELEMETRY.test(path)) { clearAll(); try { bc?.postMessage(1) } catch { /* bỏ */ } }
       return res
     }
 
