@@ -9,7 +9,7 @@ import {
   Bookmark, BookmarkCheck, X, BarChart3, Gauge,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { DataLineageMap } from "@/components/data-lineage-map"
+import { DataMapView } from "@/components/data-map-view"
 
 const panelLoading = () => <div className="h-96 animate-pulse bg-slate-100 rounded-2xl" />
 const QueryStudio = dynamic(() => import("./query-studio").then(m => m.QueryStudio), { ssr: false, loading: panelLoading })
@@ -95,7 +95,7 @@ function DevTools({ isCreator }: { isCreator: boolean }) {
         : tab === "api" ? <ApiTester />
         : tab === "db" ? <DbBrowser />
         : tab === "sql" ? <QueryStudio />
-        : <DataLineageMap />}
+        : <DataMapView />}
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { tursoQuery } from "@/lib/turso"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
+import { recordPerf } from "@/lib/perf-recorder"
 
 export function isLocalPreviewReq(req: NextRequest): boolean {
   const host = req.nextUrl.hostname
@@ -134,7 +135,9 @@ export async function cachedQuery<T>(
     const running = _inflight.get(key) as Promise<T> | undefined
     if (running) return running
     const p = (async () => {
+      const t0 = Date.now()
       const data = await fn()
+      recordPerf(key, "compute", Date.now() - t0)
       // Ghi cache KHÔNG chặn response (waitUntil giữ function sống tới khi ghi xong).
       waitUntil(persistCacheEntry(key, data, deps, Math.ceil(maxStaleMs / 1000)))
       return data
@@ -145,6 +148,7 @@ export async function cachedQuery<T>(
 
   if (bypass) return compute()
 
+  const tServe = Date.now()
   const epoch = await getEpoch()
   const now   = Date.now()
   const usable = (e: CacheEntry | undefined | null): e is CacheEntry =>
@@ -153,19 +157,22 @@ export async function cachedQuery<T>(
 
   // L1 chỉ dùng khi còn tươi và chưa quá L1_TTL_MS (tránh giữ bản cũ ở instance này khi flush đã xảy ra ở instance khác).
   const l1 = _cache.get(key) as CacheEntry<T> | undefined
-  if (usable(l1) && isFresh(l1) && now - l1.cachedAt < L1_TTL_MS) return l1.data
+  if (usable(l1) && isFresh(l1) && now - l1.cachedAt < L1_TTL_MS) { recordPerf(key, "l1", Date.now() - tServe); return l1.data }
 
   let entry: CacheEntry<T> | undefined
   try { entry = decodeEntry<T>((await runtimeCache().get(key)) as StoredEntry | undefined) } catch { entry = undefined }
 
   if (usable(entry)) {
-    if (isFresh(entry)) { l1Set(key, entry, deps); return entry.data }
+    if (isFresh(entry)) { l1Set(key, entry, deps); recordPerf(key, "l2", Date.now() - tServe); return entry.data }
     // Hết TTL (hoặc ETL vừa nạp data mới): trả bản cũ ngay, làm mới ở nền.
+    recordPerf(key, "stale", Date.now() - tServe)
     waitUntil(compute().then(() => {}, () => {}))
     return entry.data
   }
 
-  return compute()
+  const data = await compute()
+  recordPerf(key, "miss", Date.now() - tServe)
+  return data
 }
 
 // Xoá toàn bộ cache (admin — gọi từ Settings, nút "Tải lại mới" toàn hệ thống). Bản cũ KHÔNG còn được phục vụ.

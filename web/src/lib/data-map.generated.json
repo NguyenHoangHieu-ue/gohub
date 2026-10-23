@@ -1,0 +1,3652 @@
+{
+ "tabs": [
+  {
+   "id": "dashboard",
+   "label": "Dashboard",
+   "route": "/analytics",
+   "group": "Overview",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/page.tsx",
+     "file": "src/app/(dashboard)/analytics/page.tsx",
+     "label": "Hiệu quả theo tháng",
+     "titles": [
+      "Hiệu quả theo tháng",
+      "Doanh thu gộp theo tháng và nguồn",
+      "Top Destinations by Gross Revenue",
+      "Performance by Business Groups"
+     ],
+     "apis": [
+      "/api/analytics/kpis",
+      "/api/analytics/revenue-chart",
+      "/api/analytics/region-chart",
+      "/api/analytics/performance-source",
+      "/api/analytics/performance-channel",
+      "/api/analytics/recent-orders",
+      "/api/analytics/targets-summary",
+      "/api/config/partner-tiers",
+      "/api/analytics/b2b/strategic-performance",
+      "/api/analytics/monthly-kpis",
+      "/api/analytics/b2b/tier-performance"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "quarterly",
+   "label": "Quarter Report",
+   "route": "/analytics/quarterly",
+   "group": "Overview",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/quarterly/page.tsx",
+     "file": "src/app/(dashboard)/analytics/quarterly/page.tsx",
+     "label": "Quarter Report",
+     "titles": [
+      "Quarter Report",
+      "Cài đặt Quarter Report",
+      "Doanh thu cộng dồn so với đường đạt target",
+      "Tổng hợp theo Tháng"
+     ],
+     "apis": [
+      "/api/config/squad-config",
+      "/api/analytics/squad-progress",
+      "/api/analytics/squad-targets",
+      "/api/analytics/quarterly-settings",
+      "/api/analytics/quarterly-report",
+      "/api/analytics/quarterly-targets",
+      "/api/analytics/quarterly-b2b-customers",
+      "/api/analytics/quarterly-cache-flush",
+      "/api/analytics/quarterly-daily",
+      "/api/analytics/quarterly-settings/search-customers"
+     ],
+     "sqlViaQueryApi": []
+    },
+    {
+     "id": "src/components/quarterly/b2b-tier-section.tsx",
+     "file": "src/components/quarterly/b2b-tier-section.tsx",
+     "label": "Khách hàng nhóm:",
+     "titles": [
+      "Khách hàng nhóm:",
+      "Chi phí kênh —",
+      "Nhập target cho cả Organization (mã con không nhập riêng)",
+      "Nhập chi phí"
+     ],
+     "apis": [
+      "/api/analytics/b2b-customer-costs",
+      "/api/analytics/b2b-customer-orders",
+      "/api/analytics/b2b-customer-targets"
+     ],
+     "sqlViaQueryApi": []
+    },
+    {
+     "id": "src/components/quarterly/company-performance-view.tsx",
+     "file": "src/components/quarterly/company-performance-view.tsx",
+     "label": "Company Performance View",
+     "titles": [],
+     "apis": [
+      "/api/analytics/quarterly-report",
+      "/api/analytics/company-monthly-targets"
+     ],
+     "sqlViaQueryApi": []
+    },
+    {
+     "id": "src/components/quarterly/customer-lifecycle-section.tsx",
+     "file": "src/components/quarterly/customer-lifecycle-section.tsx",
+     "label": "Bấm để xem danh sách khách hàng",
+     "titles": [
+      "Bấm để xem danh sách khách hàng"
+     ],
+     "apis": [
+      "/api/analytics/quarterly-customer-lifecycle"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "bod",
+   "label": "BOD Report",
+   "route": "/analytics/bod",
+   "group": "Overview",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/bod/page.tsx",
+     "file": "src/app/(dashboard)/analytics/bod/page.tsx",
+     "label": "Board of Directors Report",
+     "titles": [
+      "Board of Directors Report",
+      "Từ doanh thu đến CM1",
+      "Doanh thu và giá vốn",
+      "Hiệu quả theo nhóm kênh"
+     ],
+     "apis": [
+      "/api/analytics/query",
+      "/api/analytics/bod-summary",
+      "/api/analytics/bod-report",
+      "/api/analytics/bod-group-margin",
+      "/api/analytics/bod-channel-performance",
+      "/api/analytics/b2b/strategic-performance",
+      "/api/config/partner-tiers",
+      "/api/analytics/bod-b2b-tiers"
+     ],
+     "sqlViaQueryApi": [
+      {
+       "name": "dim_sku",
+       "source": "gohub_dw"
+      },
+      {
+       "name": "dim_order_source",
+       "source": "gohub_dw"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "all-time",
+   "label": "All-Time Report",
+   "route": "/analytics/all-time",
+   "group": "Overview",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/all-time/page.tsx",
+     "file": "src/app/(dashboard)/analytics/all-time/page.tsx",
+     "label": "Failed to Load Data",
+     "titles": [
+      "Failed to Load Data",
+      "All-Time Performance Report",
+      "Historical Trend",
+      "Data Breakdown"
+     ],
+     "apis": [
+      "/api/channels",
+      "/api/analytics/all-time-performance"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "channels",
+   "label": "Channels",
+   "route": "/analytics/channels",
+   "group": "Sales Performance",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/channels/page.tsx",
+     "file": "src/app/(dashboard)/analytics/channels/page.tsx",
+     "label": "Channel Performance",
+     "titles": [
+      "Channel Performance",
+      "Tổng quan tất cả kênh",
+      "",
+      "Revenue Trend"
+     ],
+     "apis": [
+      "/api/analytics/query",
+      "/api/config/country-codes",
+      "/api/analytics/channels/b2b-customers",
+      "/api/channels",
+      "/api/analytics/channels/performance",
+      "/api/analytics/channels/kpis"
+     ],
+     "sqlViaQueryApi": [
+      {
+       "name": "dim_sku",
+       "source": "gohub_dw"
+      },
+      {
+       "name": "dim_order_source",
+       "source": "gohub_dw"
+      },
+      {
+       "name": "fact_fulfillment_revenue",
+       "source": "gohub_dw"
+      },
+      {
+       "name": "dim_customer",
+       "source": "gohub_dw"
+      }
+     ]
+    },
+    {
+     "id": "src/components/channels/b2b-customer-detail.tsx",
+     "file": "src/components/channels/b2b-customer-detail.tsx",
+     "label": "B2b Customer Detail",
+     "titles": [],
+     "apis": [
+      "/api/analytics/query"
+     ],
+     "sqlViaQueryApi": [
+      {
+       "name": "fact_fulfillment_revenue",
+       "source": "gohub_dw"
+      },
+      {
+       "name": "dim_order_source",
+       "source": "gohub_dw"
+      },
+      {
+       "name": "dim_sku",
+       "source": "gohub_dw"
+      }
+     ]
+    },
+    {
+     "id": "src/components/cost-management-modal.tsx",
+     "file": "src/components/cost-management-modal.tsx",
+     "label": "Operational Cost Management",
+     "titles": [
+      "Operational Cost Management",
+      "Sửa",
+      "Xoá"
+     ],
+     "apis": [
+      "/api/channel-costs",
+      "/api/channel-group-costs",
+      "/api/channel-cost-settings",
+      "/api/config/subchannels"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "b2b",
+   "label": "B2B",
+   "route": "/analytics/b2b",
+   "group": "Sales Performance",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/b2b/ecom/page.tsx",
+     "file": "src/app/(dashboard)/analytics/b2b/ecom/page.tsx",
+     "label": "VN Ecom — Theo thời gian",
+     "titles": [
+      "VN Ecom — Theo thời gian",
+      ""
+     ],
+     "apis": [
+      "/api/analytics/b2b/ecom-timeline"
+     ],
+     "sqlViaQueryApi": []
+    },
+    {
+     "id": "src/app/(dashboard)/analytics/b2b/page.tsx",
+     "file": "src/app/(dashboard)/analytics/b2b/page.tsx",
+     "label": "B2B Performance Summary",
+     "titles": [
+      "B2B Performance Summary",
+      "",
+      "Revenue & CM1 Trend",
+      "Strategic Partners Performance"
+     ],
+     "apis": [
+      "/api/analytics/b2b/ecom-costs",
+      "/api/analytics/b2b/kpis",
+      "/api/analytics/b2b/performance",
+      "/api/analytics/b2b/strategic-performance",
+      "/api/analytics/b2b/trend",
+      "/api/analytics/channels-with-platform-fee",
+      "/api/config/partner-tiers",
+      "/api/analytics/quarterly-settings",
+      "/api/analytics/b2b/ecom-breakdown"
+     ],
+     "sqlViaQueryApi": []
+    },
+    {
+     "id": "src/components/b2b/b2b-month-view.tsx",
+     "file": "src/components/b2b/b2b-month-view.tsx",
+     "label": "CM1",
+     "titles": [
+      "CM1",
+      "Ch.Cost + Group Cost",
+      "3HK Revenue"
+     ],
+     "apis": [
+      "/api/analytics/quarterly-cache-flush",
+      "/api/analytics/quarterly-b2b-customers",
+      "/api/analytics/quarterly-report"
+     ],
+     "sqlViaQueryApi": []
+    },
+    {
+     "id": "src/components/quarterly/b2b-tier-section.tsx",
+     "file": "src/components/quarterly/b2b-tier-section.tsx",
+     "label": "Khách hàng nhóm:",
+     "titles": [
+      "Khách hàng nhóm:",
+      "Chi phí kênh —",
+      "Nhập target cho cả Organization (mã con không nhập riêng)",
+      "Nhập chi phí"
+     ],
+     "apis": [
+      "/api/analytics/b2b-customer-costs",
+      "/api/analytics/b2b-customer-orders",
+      "/api/analytics/b2b-customer-targets"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "b2c",
+   "label": "B2C",
+   "route": "/analytics/b2c",
+   "group": "Sales Performance",
+   "sections": [
+    {
+     "id": "src/components/b2c-advanced-dashboard.tsx",
+     "file": "src/components/b2c-advanced-dashboard.tsx",
+     "label": "Gohub B2C",
+     "titles": [
+      "Gohub B2C",
+      "Doanh thu B2C theo thị trường",
+      "Khách mới vs quay lại",
+      "B2C MKT Profit Report"
+     ],
+     "apis": [
+      "/api/analytics/b2c/monthly",
+      "/api/config/ga4",
+      "/api/analytics/website",
+      "/api/analytics/b2c/ga4-categories"
+     ],
+     "sqlViaQueryApi": []
+    },
+    {
+     "id": "src/components/b2c-manage-costs.tsx",
+     "file": "src/components/b2c-manage-costs.tsx",
+     "label": "KPI Target B2C (theo thị trường)",
+     "titles": [
+      "KPI Target B2C (theo thị trường)",
+      "B2C Marketing Budget",
+      "",
+      "Target Doanh Thu (Revenue)"
+     ],
+     "apis": [
+      "/api/config/b2c-kpi-targets",
+      "/api/config/b2c-budget",
+      "/api/planning/targets"
+     ],
+     "sqlViaQueryApi": []
+    },
+    {
+     "id": "src/components/b2c-metric.tsx",
+     "file": "src/components/b2c-metric.tsx",
+     "label": "GoHub Metric",
+     "titles": [
+      "GoHub Metric"
+     ],
+     "apis": [
+      "/api/analytics/b2c/metric"
+     ],
+     "sqlViaQueryApi": []
+    },
+    {
+     "id": "src/components/b2c-performance.tsx",
+     "file": "src/components/b2c-performance.tsx",
+     "label": "B2C Performance",
+     "titles": [
+      "B2C Performance",
+      "",
+      "Revenue & Gross Profit Trend",
+      "Channel Contribution"
+     ],
+     "apis": [
+      "/api/analytics/query",
+      "/api/channel-costs",
+      "/api/channel-group-costs",
+      "/api/analytics/b2c/kpis",
+      "/api/analytics/b2c/trend",
+      "/api/analytics/b2c/performance",
+      "/api/analytics/b2c/loss-skus"
+     ],
+     "sqlViaQueryApi": [
+      {
+       "name": "dim_sku",
+       "source": "gohub_dw"
+      },
+      {
+       "name": "dim_order_source",
+       "source": "gohub_dw"
+      }
+     ]
+    },
+    {
+     "id": "src/components/cost-management-modal.tsx",
+     "file": "src/components/cost-management-modal.tsx",
+     "label": "Operational Cost Management",
+     "titles": [
+      "Operational Cost Management",
+      "Sửa",
+      "Xoá"
+     ],
+     "apis": [
+      "/api/channel-costs",
+      "/api/channel-group-costs",
+      "/api/channel-cost-settings",
+      "/api/config/subchannels"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "website",
+   "label": "Website Analytics",
+   "route": "/analytics/website",
+   "group": "Sales Performance",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/website/page.tsx",
+     "file": "src/app/(dashboard)/analytics/website/page.tsx",
+     "label": "GA4 Connection Error",
+     "titles": [
+      "GA4 Connection Error",
+      "Chưa có Website nào",
+      "Tổng quan truy cập",
+      "Xu hướng tìm kiếm"
+     ],
+     "apis": [
+      "/api/config/ga4",
+      "/api/analytics/ga4",
+      "/api/analytics/gsc"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "staff",
+   "label": "Staff",
+   "route": "/analytics/staff",
+   "group": "Sales Performance",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/staff/page.tsx",
+     "file": "src/app/(dashboard)/analytics/staff/page.tsx",
+     "label": "Staff Performance",
+     "titles": [
+      "Staff Performance",
+      "So sánh doanh thu Sales",
+      "So sánh Revenue từng Sales theo tháng",
+      "Chi tiết từng Sales"
+     ],
+     "apis": [
+      "/api/permissions",
+      "/api/channels",
+      "/api/analytics/staff-report",
+      "/api/analytics/staff-targets",
+      "/api/analytics/staff-report/customers"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "customers",
+   "label": "Customers",
+   "route": "/analytics/customers",
+   "group": "Sales Performance",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/customers/page.tsx",
+     "file": "src/app/(dashboard)/analytics/customers/page.tsx",
+     "label": "Customer Performance",
+     "titles": [
+      "Customer Performance",
+      "Chọn khách hàng",
+      "Customer Revenue Trend",
+      "Top Products Purchased"
+     ],
+     "apis": [
+      "/api/analytics/quarterly-b2b-customers",
+      "/api/analytics/customer/report",
+      "/api/config/partner-tiers",
+      "/api/customers"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "vendors",
+   "label": "Vendors",
+   "route": "/analytics/vendors",
+   "group": "Sales Performance",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/vendors/page.tsx",
+     "file": "src/app/(dashboard)/analytics/vendors/page.tsx",
+     "label": "",
+     "titles": [
+      "",
+      "Xu hướng doanh thu",
+      "Hiệu quả sản phẩm"
+     ],
+     "apis": [
+      "/api/analytics/query",
+      "/api/analytics/vendors/distribution"
+     ],
+     "sqlViaQueryApi": [
+      {
+       "name": "dim_sku",
+       "source": "gohub_dw"
+      },
+      {
+       "name": "dim_order_source",
+       "source": "gohub_dw"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "orders",
+   "label": "Orders",
+   "route": "/analytics/orders",
+   "group": "Operations & Support",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/orders/page.tsx",
+     "file": "src/app/(dashboard)/analytics/orders/page.tsx",
+     "label": "Orders",
+     "titles": [
+      "Orders",
+      "Yes = gồm phí ship vào doanh thu"
+     ],
+     "apis": [
+      "/api/analytics/quarterly-settings",
+      "/api/staff",
+      "/api/channels",
+      "/api/order-sources",
+      "/api/analytics/order-report"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "fulfillment",
+   "label": "Inventory",
+   "route": "/analytics/fulfillment",
+   "group": "Operations & Support",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/fulfillment/page.tsx",
+     "file": "src/app/(dashboard)/analytics/fulfillment/page.tsx",
+     "label": "PO Tracker — Đơn nhập hàng",
+     "titles": [
+      "PO Tracker — Đơn nhập hàng",
+      "Kế hoạch nhập hàng theo tuần",
+      "Inventory — Quản lý tồn kho & nhập hàng"
+     ],
+     "apis": [
+      "/api/analytics/inventory-plan/skus",
+      "/api/analytics/inventory-plan/weekly",
+      "/api/analytics/inventory-po"
+     ],
+     "sqlViaQueryApi": []
+    },
+    {
+     "id": "src/components/inventory/stock-view.tsx",
+     "file": "src/components/inventory/stock-view.tsx",
+     "label": "Stock View",
+     "titles": [],
+     "apis": [
+      "/api/analytics/inventory-stock"
+     ],
+     "sqlViaQueryApi": []
+    },
+    {
+     "id": "src/components/inventory/thresholds-panel.tsx",
+     "file": "src/components/inventory/thresholds-panel.tsx",
+     "label": "Ngưỡng cảnh báo tồn kho",
+     "titles": [
+      "Ngưỡng cảnh báo tồn kho"
+     ],
+     "apis": [
+      "/api/config/inventory-alert-thresholds"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "3hk-usage",
+   "label": "3HK Data Usage",
+   "route": "/analytics/3hk-usage",
+   "group": "Operations & Support",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/3hk-usage/page.tsx",
+     "file": "src/app/(dashboard)/analytics/3hk-usage/page.tsx",
+     "label": "",
+     "titles": [
+      ""
+     ],
+     "apis": [
+      "/api/analytics/3hk-sku-meta",
+      "/api/ncc/3hk-zones",
+      "/api/analytics/query"
+     ],
+     "sqlViaQueryApi": [
+      {
+       "name": "fact_data_usage",
+       "source": "gohub_dw"
+      },
+      {
+       "name": "dim_sku",
+       "source": "gohub_dw"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "cs-troubleshoot",
+   "label": "CS Troubleshoot",
+   "route": "/analytics/cs-troubleshoot",
+   "group": "Operations & Support",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/cs-troubleshoot/page.tsx",
+     "file": "src/app/(dashboard)/analytics/cs-troubleshoot/page.tsx",
+     "label": "Error loading report",
+     "titles": [
+      "Error loading report",
+      "CS TROUBLESHOOTING",
+      "Export"
+     ],
+     "apis": [
+      "/api/reports/cs-troubleshoot",
+      "/api/admin/sync-lark-tickets"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "products",
+   "label": "Products (BI)",
+   "route": "/analytics/products",
+   "group": "Analytics & Planning",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/products/page.tsx",
+     "file": "src/app/(dashboard)/analytics/products/page.tsx",
+     "label": "Product Performance",
+     "titles": [
+      "Product Performance",
+      "Month-End Projection",
+      "Sales &amp; Units Trend",
+      "Top Regions"
+     ],
+     "apis": [
+      "/api/analytics/query",
+      "/api/channels",
+      "/api/config/sku-destination-rule",
+      "/api/config/country-codes",
+      "/api/analytics/quarterly-settings",
+      "/api/analytics/win-rate",
+      "/api/orders/export"
+     ],
+     "sqlViaQueryApi": [
+      {
+       "name": "dim_sku",
+       "source": "gohub_dw"
+      },
+      {
+       "name": "dim_order_source",
+       "source": "gohub_dw"
+      },
+      {
+       "name": "dim_customer",
+       "source": "gohub_dw"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "catalogue",
+   "label": "Product Catalogue",
+   "route": "/analytics/catalogue",
+   "group": "Analytics & Planning",
+   "sections": [
+    {
+     "id": "src/components/catalogue/use-catalogue.ts",
+     "file": "src/components/catalogue/use-catalogue.ts",
+     "label": "Use Catalogue",
+     "titles": [],
+     "apis": [
+      "/api/analytics/product-catalogue"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "targets",
+   "label": "KPI / Target",
+   "route": "/analytics/targets",
+   "group": "Analytics & Planning",
+   "sections": [
+    {
+     "id": "src/components/b2c-manage-costs.tsx",
+     "file": "src/components/b2c-manage-costs.tsx",
+     "label": "KPI Target B2C (theo thị trường)",
+     "titles": [
+      "KPI Target B2C (theo thị trường)",
+      "B2C Marketing Budget",
+      "",
+      "Target Doanh Thu (Revenue)"
+     ],
+     "apis": [
+      "/api/config/b2c-kpi-targets",
+      "/api/config/b2c-budget",
+      "/api/planning/targets"
+     ],
+     "sqlViaQueryApi": []
+    },
+    {
+     "id": "src/components/cost-management-modal.tsx",
+     "file": "src/components/cost-management-modal.tsx",
+     "label": "Operational Cost Management",
+     "titles": [
+      "Operational Cost Management",
+      "Sửa",
+      "Xoá"
+     ],
+     "apis": [
+      "/api/channel-costs",
+      "/api/channel-group-costs",
+      "/api/channel-cost-settings",
+      "/api/config/subchannels"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  },
+  {
+   "id": "scheduled",
+   "label": "Scheduled Messages",
+   "route": "/analytics/scheduled",
+   "group": "Analytics & Planning",
+   "sections": [
+    {
+     "id": "src/app/(dashboard)/analytics/scheduled/page.tsx",
+     "file": "src/app/(dashboard)/analytics/scheduled/page.tsx",
+     "label": "Chưa có lịch nào",
+     "titles": [
+      "Chưa có lịch nào",
+      "Test ngay",
+      "Sửa",
+      "Xoá"
+     ],
+     "apis": [
+      "/api/admin/scheduled-messages"
+     ],
+     "sqlViaQueryApi": []
+    }
+   ]
+  }
+ ],
+ "apis": {
+  "/api/admin/scheduled-messages": {
+   "file": "src/app/api/admin/scheduled-messages/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "lark_scheduled_messages",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/admin/sync-lark-tickets": {
+   "file": "src/app/api/admin/sync-lark-tickets/route.ts",
+   "methods": [
+    "POST",
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "lark_cs_tickets",
+     "source": "supabase"
+    }
+   ],
+   "external": [
+    "Lark"
+   ],
+   "usesTurso": false
+  },
+  "/api/analytics/3hk-sku-meta": {
+   "file": "src/app/api/analytics/3hk-sku-meta/route.ts",
+   "methods": [
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "skus",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/all-time-performance": {
+   "file": "src/app/api/analytics/all-time-performance/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-cost"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/b2b-customer-costs": {
+   "file": "src/app/api/analytics/b2b-customer-costs/route.ts",
+   "methods": [
+    "GET",
+    "DELETE",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "admin",
+    "b2b",
+    "b2b-cost",
+    "b2c",
+    "bod",
+    "creator",
+    "staff"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "b2b_customers_cache",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/b2b-customer-orders": {
+   "file": "src/app/api/analytics/b2b-customer-orders/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/b2b-customer-targets": {
+   "file": "src/app/api/analytics/b2b-customer-targets/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "b2b_customer_targets",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/b2b/ecom-breakdown": {
+   "file": "src/app/api/analytics/b2b/ecom-breakdown/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-ecom",
+    "b2b-ecom-cost"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "b2b_ecom_cost_monthly",
+     "source": "turso"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/b2b/ecom-costs": {
+   "file": "src/app/api/analytics/b2b/ecom-costs/route.ts",
+   "methods": [
+    "GET",
+    "DELETE",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "b2b_ecom_cost_monthly",
+     "source": "turso"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/b2b/ecom-timeline": {
+   "file": "src/app/api/analytics/b2b/ecom-timeline/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-ecom",
+    "month",
+    "quarter",
+    "week"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "b2b_ecom_cost_monthly",
+     "source": "turso"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/b2b/kpis": {
+   "file": "src/app/api/analytics/b2b/kpis/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-cost"
+   ],
+   "tables": [
+    {
+     "name": "analytics_channel_group_costs",
+     "source": "supabase"
+    },
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/b2b/performance": {
+   "file": "src/app/api/analytics/b2b/performance/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-cost"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/b2b/strategic-performance": {
+   "file": "src/app/api/analytics/b2b/strategic-performance/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-cost"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/b2b/tier-performance": {
+   "file": "src/app/api/analytics/b2b/tier-performance/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/b2b/trend": {
+   "file": "src/app/api/analytics/b2b/trend/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-cost"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/b2c/ga4-categories": {
+   "file": "src/app/api/analytics/b2c/ga4-categories/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": "b2c-ga4-categories",
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [
+    "GA4",
+    "Google Workspace",
+    "Search Console"
+   ],
+   "usesTurso": false
+  },
+  "/api/analytics/b2c/kpis": {
+   "file": "src/app/api/analytics/b2c/kpis/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/b2c/loss-skus": {
+   "file": "src/app/api/analytics/b2c/loss-skus/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/b2c/metric": {
+   "file": "src/app/api/analytics/b2c/metric/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": "b2c-metric",
+   "deps": [
+    "b2c-customer",
+    "b2c-metric"
+   ],
+   "tables": [
+    {
+     "name": "analytics_channel_costs",
+     "source": "supabase"
+    },
+    {
+     "name": "analytics_channel_group_costs",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [
+    "GA4",
+    "Google Workspace",
+    "Search Console"
+   ],
+   "usesTurso": false
+  },
+  "/api/analytics/b2c/monthly": {
+   "file": "src/app/api/analytics/b2c/monthly/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": "b2c-revenue-comparison",
+   "deps": [
+    "b2c-customer",
+    "b2c_budget",
+    "b2c_kpi_targets"
+   ],
+   "tables": [
+    {
+     "name": "analytics_channel_costs",
+     "source": "supabase"
+    },
+    {
+     "name": "analytics_channel_group_costs",
+     "source": "supabase"
+    },
+    {
+     "name": "b2c_report_monthly_snapshots",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/b2c/performance": {
+   "file": "src/app/api/analytics/b2c/performance/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/b2c/trend": {
+   "file": "src/app/api/analytics/b2c/trend/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/bod-b2b-tiers": {
+   "file": "src/app/api/analytics/bod-b2b-tiers/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-cost"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/bod-channel-performance": {
+   "file": "src/app/api/analytics/bod-channel-performance/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-cost"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/bod-group-margin": {
+   "file": "src/app/api/analytics/bod-group-margin/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-cost"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/bod-report": {
+   "file": "src/app/api/analytics/bod-report/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/bod-summary": {
+   "file": "src/app/api/analytics/bod-summary/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-cost"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/channels-with-platform-fee": {
+   "file": "src/app/api/analytics/channels-with-platform-fee/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/channels/b2b-customers": {
+   "file": "src/app/api/analytics/channels/b2b-customers/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/channels/kpis": {
+   "file": "src/app/api/analytics/channels/kpis/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-cost"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/channels/performance": {
+   "file": "src/app/api/analytics/channels/performance/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-cost"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/company-monthly-targets": {
+   "file": "src/app/api/analytics/company-monthly-targets/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/customer/report": {
+   "file": "src/app/api/analytics/customer/report/route.ts",
+   "methods": [
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "customer-report"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/ga4": {
+   "file": "src/app/api/analytics/ga4/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [
+    "GA4",
+    "Google Workspace",
+    "Search Console"
+   ],
+   "usesTurso": false
+  },
+  "/api/analytics/gsc": {
+   "file": "src/app/api/analytics/gsc/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [
+    "GA4",
+    "Google Workspace",
+    "Search Console"
+   ],
+   "usesTurso": false
+  },
+  "/api/analytics/inventory-plan/skus": {
+   "file": "src/app/api/analytics/inventory-plan/skus/route.ts",
+   "methods": [
+    "GET",
+    "POST",
+    "PATCH",
+    "DELETE"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "inventory_plan_skus",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/inventory-plan/weekly": {
+   "file": "src/app/api/analytics/inventory-plan/weekly/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_inventory",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "inventory_plan_skus",
+     "source": "supabase"
+    },
+    {
+     "name": "inventory_plan_weekly",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/inventory-po": {
+   "file": "src/app/api/analytics/inventory-po/route.ts",
+   "methods": [
+    "GET",
+    "POST",
+    "PATCH",
+    "DELETE"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "inventory_po",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/inventory-stock": {
+   "file": "src/app/api/analytics/inventory-stock/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_warehouse",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_inventory",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/kpis": {
+   "file": "src/app/api/analytics/kpis/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/monthly-kpis": {
+   "file": "src/app/api/analytics/monthly-kpis/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "b2b-cost"
+   ],
+   "tables": [
+    {
+     "name": "analytics_channel_group_costs",
+     "source": "supabase"
+    },
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/order-report": {
+   "file": "src/app/api/analytics/order-report/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "order-report"
+   ],
+   "tables": [
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/performance-channel": {
+   "file": "src/app/api/analytics/performance-channel/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/performance-source": {
+   "file": "src/app/api/analytics/performance-source/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/product-catalogue": {
+   "file": "src/app/api/analytics/product-catalogue/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": "catalogue",
+   "deps": [
+    "catalogue"
+   ],
+   "tables": [
+    {
+     "name": "ref_countries",
+     "source": "supabase"
+    },
+    {
+     "name": "ref_vendors",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/quarterly-b2b-customers": {
+   "file": "src/app/api/analytics/quarterly-b2b-customers/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/quarterly-cache-flush": {
+   "file": "src/app/api/analytics/quarterly-cache-flush/route.ts",
+   "methods": [
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/quarterly-customer-lifecycle": {
+   "file": "src/app/api/analytics/quarterly-customer-lifecycle/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": "qlife_b2c_summary",
+   "deps": [
+    "admin",
+    "b2c",
+    "bod",
+    "creator",
+    "manager",
+    "saleb2c"
+   ],
+   "tables": [
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/quarterly-daily": {
+   "file": "src/app/api/analytics/quarterly-daily/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/quarterly-report": {
+   "file": "src/app/api/analytics/quarterly-report/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/quarterly-settings": {
+   "file": "src/app/api/analytics/quarterly-settings/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/quarterly-settings/search-customers": {
+   "file": "src/app/api/analytics/quarterly-settings/search-customers/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/quarterly-targets": {
+   "file": "src/app/api/analytics/quarterly-targets/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "target_planning_quarter",
+     "source": "turso"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/query": {
+   "file": "src/app/api/analytics/query/route.ts",
+   "methods": [
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/recent-orders": {
+   "file": "src/app/api/analytics/recent-orders/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_location",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/region-chart": {
+   "file": "src/app/api/analytics/region-chart/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "country_codes",
+     "source": "turso"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/revenue-chart": {
+   "file": "src/app/api/analytics/revenue-chart/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/squad-progress": {
+   "file": "src/app/api/analytics/squad-progress/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "b2b_customer_targets",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/squad-targets": {
+   "file": "src/app/api/analytics/squad-targets/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/staff-report": {
+   "file": "src/app/api/analytics/staff-report/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [
+    "staff-report"
+   ],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/staff-report/customers": {
+   "file": "src/app/api/analytics/staff-report/customers/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "b2b_customer_cost_monthly",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/analytics/staff-targets": {
+   "file": "src/app/api/analytics/staff-targets/route.ts",
+   "methods": [
+    "GET",
+    "PATCH"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "staff_targets",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/targets-summary": {
+   "file": "src/app/api/analytics/targets-summary/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": "targets-summary",
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/vendors/distribution": {
+   "file": "src/app/api/analytics/vendors/distribution/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/analytics/website": {
+   "file": "src/app/api/analytics/website/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": "ga4-website",
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [
+    "GA4",
+    "Google Workspace",
+    "Search Console"
+   ],
+   "usesTurso": false
+  },
+  "/api/analytics/win-rate": {
+   "file": "src/app/api/analytics/win-rate/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "skus",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/channel-cost-settings": {
+   "file": "src/app/api/channel-cost-settings/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "analytics_cost_input_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/channel-costs": {
+   "file": "src/app/api/channel-costs/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "analytics_channel_costs",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/channel-group-costs": {
+   "file": "src/app/api/channel-group-costs/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "analytics_channel_group_costs",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/channels": {
+   "file": "src/app/api/channels/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/config/b2c-budget": {
+   "file": "src/app/api/config/b2c-budget/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/config/b2c-kpi-targets": {
+   "file": "src/app/api/config/b2c-kpi-targets/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/config/country-codes": {
+   "file": "src/app/api/config/country-codes/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": "country-codes",
+   "deps": [],
+   "tables": [
+    {
+     "name": "country_codes",
+     "source": "turso"
+    }
+   ],
+   "external": [],
+   "usesTurso": true
+  },
+  "/api/config/ga4": {
+   "file": "src/app/api/config/ga4/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [
+    "GA4",
+    "Google Workspace",
+    "Search Console"
+   ],
+   "usesTurso": false
+  },
+  "/api/config/inventory-alert-thresholds": {
+   "file": "src/app/api/config/inventory-alert-thresholds/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/config/partner-tiers": {
+   "file": "src/app/api/config/partner-tiers/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": "partner-tiers",
+   "deps": [
+    "admin",
+    "creator"
+   ],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/config/sku-destination-rule": {
+   "file": "src/app/api/config/sku-destination-rule/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/config/squad-config": {
+   "file": "src/app/api/config/squad-config/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/config/subchannels": {
+   "file": "src/app/api/config/subchannels/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/customers": {
+   "file": "src/app/api/customers/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/ncc/3hk-zones": {
+   "file": "src/app/api/ncc/3hk-zones/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "ncc_3hk",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/order-sources": {
+   "file": "src/app/api/order-sources/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/orders/export": {
+   "file": "src/app/api/orders/export/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_customer",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_location",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_sales_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/permissions": {
+   "file": "src/app/api/permissions/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "app_settings",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/planning/targets": {
+   "file": "src/app/api/planning/targets/route.ts",
+   "methods": [
+    "GET",
+    "POST"
+   ],
+   "cacheKey": "planning-targets-actuals",
+   "deps": [
+    "admin",
+    "b2b-cost",
+    "creator"
+   ],
+   "tables": [
+    {
+     "name": "analytics_target_planning",
+     "source": "supabase"
+    },
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/reports/cs-troubleshoot": {
+   "file": "src/app/api/reports/cs-troubleshoot/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "lark_cs_tickets",
+     "source": "supabase"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  },
+  "/api/staff": {
+   "file": "src/app/api/staff/route.ts",
+   "methods": [
+    "GET"
+   ],
+   "cacheKey": null,
+   "deps": [],
+   "tables": [
+    {
+     "name": "dim_order_source",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "fact_fulfillment_revenue",
+     "source": "gohub_dw"
+    }
+   ],
+   "external": [],
+   "usesTurso": false
+  }
+ },
+ "tables": {
+  "analytics_channel_costs": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/b2c/metric",
+    "/api/analytics/b2c/monthly",
+    "/api/channel-costs"
+   ],
+   "tabs": [
+    "b2c",
+    "channels",
+    "targets"
+   ]
+  },
+  "analytics_channel_group_costs": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/b2b/kpis",
+    "/api/analytics/b2c/metric",
+    "/api/analytics/b2c/monthly",
+    "/api/analytics/monthly-kpis",
+    "/api/channel-group-costs"
+   ],
+   "tabs": [
+    "b2b",
+    "b2c",
+    "channels",
+    "dashboard",
+    "targets"
+   ]
+  },
+  "analytics_cost_input_settings": {
+   "source": "supabase",
+   "apis": [
+    "/api/channel-cost-settings"
+   ],
+   "tabs": [
+    "b2c",
+    "channels",
+    "targets"
+   ]
+  },
+  "analytics_target_planning": {
+   "source": "supabase",
+   "apis": [
+    "/api/planning/targets"
+   ],
+   "tabs": [
+    "b2c",
+    "targets"
+   ]
+  },
+  "app_settings": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/b2c/ga4-categories",
+    "/api/analytics/channels-with-platform-fee",
+    "/api/analytics/company-monthly-targets",
+    "/api/analytics/ga4",
+    "/api/analytics/gsc",
+    "/api/analytics/quarterly-cache-flush",
+    "/api/analytics/quarterly-settings",
+    "/api/analytics/query",
+    "/api/analytics/squad-targets",
+    "/api/analytics/targets-summary",
+    "/api/analytics/website",
+    "/api/config/b2c-budget",
+    "/api/config/b2c-kpi-targets",
+    "/api/config/ga4",
+    "/api/config/inventory-alert-thresholds",
+    "/api/config/partner-tiers",
+    "/api/config/sku-destination-rule",
+    "/api/config/squad-config",
+    "/api/permissions"
+   ],
+   "tabs": [
+    "3hk-usage",
+    "b2b",
+    "b2c",
+    "bod",
+    "channels",
+    "customers",
+    "dashboard",
+    "fulfillment",
+    "orders",
+    "products",
+    "quarterly",
+    "staff",
+    "targets",
+    "vendors",
+    "website"
+   ]
+  },
+  "b2b_customer_cost_monthly": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/all-time-performance",
+    "/api/analytics/b2b-customer-costs",
+    "/api/analytics/b2b/ecom-breakdown",
+    "/api/analytics/b2b/ecom-costs",
+    "/api/analytics/b2b/ecom-timeline",
+    "/api/analytics/b2b/kpis",
+    "/api/analytics/b2b/performance",
+    "/api/analytics/b2b/strategic-performance",
+    "/api/analytics/b2b/trend",
+    "/api/analytics/b2c/kpis",
+    "/api/analytics/b2c/performance",
+    "/api/analytics/bod-b2b-tiers",
+    "/api/analytics/bod-channel-performance",
+    "/api/analytics/bod-group-margin",
+    "/api/analytics/bod-report",
+    "/api/analytics/bod-summary",
+    "/api/analytics/channels/kpis",
+    "/api/analytics/channels/performance",
+    "/api/analytics/customer/report",
+    "/api/analytics/monthly-kpis",
+    "/api/analytics/quarterly-b2b-customers",
+    "/api/analytics/quarterly-report",
+    "/api/analytics/squad-progress",
+    "/api/analytics/staff-report",
+    "/api/analytics/staff-report/customers"
+   ],
+   "tabs": [
+    "all-time",
+    "b2b",
+    "b2c",
+    "bod",
+    "channels",
+    "customers",
+    "dashboard",
+    "quarterly",
+    "staff"
+   ]
+  },
+  "b2b_customer_targets": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/b2b-customer-targets",
+    "/api/analytics/squad-progress"
+   ],
+   "tabs": [
+    "b2b",
+    "quarterly"
+   ]
+  },
+  "b2b_customers_cache": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/b2b-customer-costs"
+   ],
+   "tabs": [
+    "b2b",
+    "quarterly"
+   ]
+  },
+  "b2b_ecom_cost_monthly": {
+   "source": "turso",
+   "apis": [
+    "/api/analytics/b2b/ecom-breakdown",
+    "/api/analytics/b2b/ecom-costs",
+    "/api/analytics/b2b/ecom-timeline"
+   ],
+   "tabs": [
+    "b2b"
+   ]
+  },
+  "b2c_report_monthly_snapshots": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/b2c/monthly"
+   ],
+   "tabs": [
+    "b2c"
+   ]
+  },
+  "country_codes": {
+   "source": "turso",
+   "apis": [
+    "/api/analytics/region-chart",
+    "/api/config/country-codes"
+   ],
+   "tabs": [
+    "channels",
+    "dashboard",
+    "products"
+   ]
+  },
+  "dim_customer": {
+   "source": "gohub_dw",
+   "apis": [
+    "/api/analytics/all-time-performance",
+    "/api/analytics/b2b/ecom-breakdown",
+    "/api/analytics/b2b/ecom-timeline",
+    "/api/analytics/b2b/kpis",
+    "/api/analytics/b2b/performance",
+    "/api/analytics/b2b/strategic-performance",
+    "/api/analytics/b2b/tier-performance",
+    "/api/analytics/b2c/kpis",
+    "/api/analytics/b2c/performance",
+    "/api/analytics/bod-b2b-tiers",
+    "/api/analytics/bod-channel-performance",
+    "/api/analytics/bod-group-margin",
+    "/api/analytics/bod-report",
+    "/api/analytics/bod-summary",
+    "/api/analytics/channels/b2b-customers",
+    "/api/analytics/channels/performance",
+    "/api/analytics/customer/report",
+    "/api/analytics/monthly-kpis",
+    "/api/analytics/order-report",
+    "/api/analytics/quarterly-b2b-customers",
+    "/api/analytics/quarterly-customer-lifecycle",
+    "/api/analytics/quarterly-daily",
+    "/api/analytics/quarterly-report",
+    "/api/analytics/quarterly-settings/search-customers",
+    "/api/analytics/revenue-chart",
+    "/api/analytics/squad-progress",
+    "/api/analytics/staff-report",
+    "/api/analytics/staff-report/customers",
+    "/api/analytics/vendors/distribution",
+    "/api/customers",
+    "/api/orders/export"
+   ],
+   "tabs": [
+    "all-time",
+    "b2b",
+    "b2c",
+    "bod",
+    "channels",
+    "customers",
+    "dashboard",
+    "orders",
+    "products",
+    "quarterly",
+    "staff",
+    "vendors"
+   ]
+  },
+  "dim_location": {
+   "source": "gohub_dw",
+   "apis": [
+    "/api/analytics/recent-orders",
+    "/api/orders/export"
+   ],
+   "tabs": [
+    "dashboard",
+    "products"
+   ]
+  },
+  "dim_order_source": {
+   "source": "gohub_dw",
+   "apis": [
+    "/api/analytics/all-time-performance",
+    "/api/analytics/b2b-customer-orders",
+    "/api/analytics/b2b/kpis",
+    "/api/analytics/b2b/performance",
+    "/api/analytics/b2b/strategic-performance",
+    "/api/analytics/b2b/tier-performance",
+    "/api/analytics/b2b/trend",
+    "/api/analytics/b2c/kpis",
+    "/api/analytics/b2c/loss-skus",
+    "/api/analytics/b2c/metric",
+    "/api/analytics/b2c/monthly",
+    "/api/analytics/b2c/performance",
+    "/api/analytics/b2c/trend",
+    "/api/analytics/bod-b2b-tiers",
+    "/api/analytics/bod-channel-performance",
+    "/api/analytics/bod-group-margin",
+    "/api/analytics/bod-report",
+    "/api/analytics/bod-summary",
+    "/api/analytics/channels/b2b-customers",
+    "/api/analytics/channels/kpis",
+    "/api/analytics/channels/performance",
+    "/api/analytics/customer/report",
+    "/api/analytics/monthly-kpis",
+    "/api/analytics/order-report",
+    "/api/analytics/performance-channel",
+    "/api/analytics/performance-source",
+    "/api/analytics/quarterly-b2b-customers",
+    "/api/analytics/quarterly-customer-lifecycle",
+    "/api/analytics/quarterly-daily",
+    "/api/analytics/quarterly-report",
+    "/api/analytics/revenue-chart",
+    "/api/analytics/squad-progress",
+    "/api/analytics/staff-report",
+    "/api/analytics/staff-report/customers",
+    "/api/analytics/vendors/distribution",
+    "/api/channels",
+    "/api/config/subchannels",
+    "/api/order-sources",
+    "/api/orders/export",
+    "/api/planning/targets",
+    "/api/reports/cs-troubleshoot",
+    "/api/staff"
+   ],
+   "tabs": [
+    "all-time",
+    "b2b",
+    "b2c",
+    "bod",
+    "channels",
+    "cs-troubleshoot",
+    "customers",
+    "dashboard",
+    "orders",
+    "products",
+    "quarterly",
+    "staff",
+    "targets",
+    "vendors"
+   ]
+  },
+  "dim_sku": {
+   "source": "gohub_dw",
+   "apis": [
+    "/api/analytics/b2b-customer-orders",
+    "/api/analytics/b2b/ecom-breakdown",
+    "/api/analytics/b2b/ecom-timeline",
+    "/api/analytics/b2b/performance",
+    "/api/analytics/b2c/performance",
+    "/api/analytics/bod-summary",
+    "/api/analytics/customer/report",
+    "/api/analytics/inventory-plan/skus",
+    "/api/analytics/inventory-stock",
+    "/api/analytics/monthly-kpis",
+    "/api/analytics/order-report",
+    "/api/analytics/quarterly-b2b-customers",
+    "/api/analytics/quarterly-report",
+    "/api/analytics/squad-progress",
+    "/api/analytics/staff-report",
+    "/api/analytics/staff-report/customers",
+    "/api/analytics/vendors/distribution",
+    "/api/analytics/win-rate",
+    "/api/orders/export",
+    "/api/planning/targets",
+    "/api/reports/cs-troubleshoot"
+   ],
+   "tabs": [
+    "3hk-usage",
+    "b2b",
+    "b2c",
+    "bod",
+    "channels",
+    "cs-troubleshoot",
+    "customers",
+    "dashboard",
+    "fulfillment",
+    "orders",
+    "products",
+    "quarterly",
+    "staff",
+    "targets",
+    "vendors"
+   ]
+  },
+  "dim_staff": {
+   "source": "gohub_dw",
+   "apis": [
+    "/api/analytics/b2b/ecom-breakdown",
+    "/api/analytics/b2b/ecom-timeline",
+    "/api/analytics/b2b/performance",
+    "/api/analytics/b2c/performance",
+    "/api/analytics/order-report",
+    "/api/analytics/quarterly-customer-lifecycle",
+    "/api/analytics/squad-progress",
+    "/api/analytics/staff-report",
+    "/api/orders/export",
+    "/api/staff"
+   ],
+   "tabs": [
+    "b2b",
+    "b2c",
+    "orders",
+    "products",
+    "quarterly",
+    "staff"
+   ]
+  },
+  "dim_warehouse": {
+   "source": "gohub_dw",
+   "apis": [
+    "/api/analytics/inventory-stock"
+   ],
+   "tabs": [
+    "fulfillment"
+   ]
+  },
+  "fact_data_usage": {
+   "source": "gohub_dw",
+   "apis": [],
+   "tabs": [
+    "3hk-usage"
+   ]
+  },
+  "fact_fulfillment_revenue": {
+   "source": "gohub_dw",
+   "apis": [
+    "/api/analytics/all-time-performance",
+    "/api/analytics/b2b-customer-orders",
+    "/api/analytics/b2b/ecom-breakdown",
+    "/api/analytics/b2b/ecom-timeline",
+    "/api/analytics/b2b/kpis",
+    "/api/analytics/b2b/performance",
+    "/api/analytics/b2b/strategic-performance",
+    "/api/analytics/b2b/tier-performance",
+    "/api/analytics/b2b/trend",
+    "/api/analytics/b2c/kpis",
+    "/api/analytics/b2c/loss-skus",
+    "/api/analytics/b2c/metric",
+    "/api/analytics/b2c/monthly",
+    "/api/analytics/b2c/performance",
+    "/api/analytics/b2c/trend",
+    "/api/analytics/bod-b2b-tiers",
+    "/api/analytics/bod-channel-performance",
+    "/api/analytics/bod-group-margin",
+    "/api/analytics/bod-report",
+    "/api/analytics/bod-summary",
+    "/api/analytics/channels/b2b-customers",
+    "/api/analytics/channels/kpis",
+    "/api/analytics/channels/performance",
+    "/api/analytics/customer/report",
+    "/api/analytics/inventory-plan/weekly",
+    "/api/analytics/inventory-stock",
+    "/api/analytics/kpis",
+    "/api/analytics/monthly-kpis",
+    "/api/analytics/order-report",
+    "/api/analytics/performance-channel",
+    "/api/analytics/performance-source",
+    "/api/analytics/quarterly-b2b-customers",
+    "/api/analytics/quarterly-customer-lifecycle",
+    "/api/analytics/quarterly-daily",
+    "/api/analytics/quarterly-report",
+    "/api/analytics/recent-orders",
+    "/api/analytics/region-chart",
+    "/api/analytics/revenue-chart",
+    "/api/analytics/squad-progress",
+    "/api/analytics/staff-report",
+    "/api/analytics/staff-report/customers",
+    "/api/analytics/vendors/distribution",
+    "/api/analytics/win-rate",
+    "/api/orders/export",
+    "/api/planning/targets",
+    "/api/reports/cs-troubleshoot",
+    "/api/staff"
+   ],
+   "tabs": [
+    "all-time",
+    "b2b",
+    "b2c",
+    "bod",
+    "channels",
+    "cs-troubleshoot",
+    "customers",
+    "dashboard",
+    "fulfillment",
+    "orders",
+    "products",
+    "quarterly",
+    "staff",
+    "targets",
+    "vendors"
+   ]
+  },
+  "fact_inventory": {
+   "source": "gohub_dw",
+   "apis": [
+    "/api/analytics/inventory-plan/weekly",
+    "/api/analytics/inventory-stock"
+   ],
+   "tabs": [
+    "fulfillment"
+   ]
+  },
+  "fact_sales_revenue": {
+   "source": "gohub_dw",
+   "apis": [
+    "/api/analytics/b2b/ecom-breakdown",
+    "/api/analytics/b2b/ecom-timeline",
+    "/api/analytics/b2b/kpis",
+    "/api/analytics/b2b/performance",
+    "/api/analytics/b2b/strategic-performance",
+    "/api/analytics/b2b/tier-performance",
+    "/api/analytics/b2b/trend",
+    "/api/analytics/b2c/kpis",
+    "/api/analytics/b2c/loss-skus",
+    "/api/analytics/b2c/performance",
+    "/api/analytics/b2c/trend",
+    "/api/analytics/bod-b2b-tiers",
+    "/api/analytics/bod-channel-performance",
+    "/api/analytics/bod-group-margin",
+    "/api/analytics/bod-report",
+    "/api/analytics/bod-summary",
+    "/api/analytics/channels/kpis",
+    "/api/analytics/channels/performance",
+    "/api/analytics/customer/report",
+    "/api/analytics/kpis",
+    "/api/analytics/monthly-kpis",
+    "/api/analytics/order-report",
+    "/api/analytics/performance-channel",
+    "/api/analytics/performance-source",
+    "/api/analytics/quarterly-b2b-customers",
+    "/api/analytics/quarterly-report",
+    "/api/analytics/revenue-chart",
+    "/api/analytics/squad-progress",
+    "/api/analytics/staff-report",
+    "/api/analytics/staff-report/customers",
+    "/api/analytics/vendors/distribution",
+    "/api/orders/export"
+   ],
+   "tabs": [
+    "b2b",
+    "b2c",
+    "bod",
+    "channels",
+    "customers",
+    "dashboard",
+    "orders",
+    "products",
+    "quarterly",
+    "staff",
+    "vendors"
+   ]
+  },
+  "inventory_plan_skus": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/inventory-plan/skus",
+    "/api/analytics/inventory-plan/weekly"
+   ],
+   "tabs": [
+    "fulfillment"
+   ]
+  },
+  "inventory_plan_weekly": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/inventory-plan/weekly"
+   ],
+   "tabs": [
+    "fulfillment"
+   ]
+  },
+  "inventory_po": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/inventory-po"
+   ],
+   "tabs": [
+    "fulfillment"
+   ]
+  },
+  "lark_cs_tickets": {
+   "source": "supabase",
+   "apis": [
+    "/api/admin/sync-lark-tickets",
+    "/api/reports/cs-troubleshoot"
+   ],
+   "tabs": [
+    "cs-troubleshoot"
+   ]
+  },
+  "lark_scheduled_messages": {
+   "source": "supabase",
+   "apis": [
+    "/api/admin/scheduled-messages"
+   ],
+   "tabs": [
+    "scheduled"
+   ]
+  },
+  "ncc_3hk": {
+   "source": "supabase",
+   "apis": [
+    "/api/ncc/3hk-zones"
+   ],
+   "tabs": [
+    "3hk-usage"
+   ]
+  },
+  "ref_countries": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/product-catalogue"
+   ],
+   "tabs": [
+    "catalogue"
+   ]
+  },
+  "ref_vendors": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/product-catalogue"
+   ],
+   "tabs": [
+    "catalogue"
+   ]
+  },
+  "skus": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/3hk-sku-meta",
+    "/api/analytics/win-rate"
+   ],
+   "tabs": [
+    "3hk-usage",
+    "products"
+   ]
+  },
+  "staff_targets": {
+   "source": "supabase",
+   "apis": [
+    "/api/analytics/staff-targets"
+   ],
+   "tabs": [
+    "staff"
+   ]
+  },
+  "target_planning_quarter": {
+   "source": "turso",
+   "apis": [
+    "/api/analytics/quarterly-targets"
+   ],
+   "tabs": [
+    "quarterly"
+   ]
+  }
+ }
+}

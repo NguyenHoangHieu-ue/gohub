@@ -52,8 +52,14 @@ Bố cục 3 cột giống Power BI:
 - API: `/api/admin/sql-query` (chặn INSERT/UPDATE/DELETE/DDL, rate-limit 30/phút) + `/api/admin/sql-schema`.
 - **Trước s190**: trang riêng `/analytics/sql`, cho phép role `bod`. Sau khi gộp vào Dev Tools (vốn chỉ admin/creator), **bod không còn xem được nữa**.
 
-### Data Map
-`DataLineageMap` — sơ đồ trực quan luồng dữ liệu giữa các bảng/tab (component dùng chung, không đổi).
+### Data Map (s240)
+`components/data-map-view.tsx` đọc `lib/data-map.generated.json` — sơ đồ **Hệ thống → Tab → Mục → API → Bảng**, TỰ SINH bằng script quét mã nguồn
+(`npm run build:datamap`, `scripts/datamap/build.mjs`): tab từ `lib/nav.ts`; mục = file component có gọi `/api/...` (tên lấy từ tiêu đề h1–h4/`title=`);
+API = `app/api/**/route.ts`; bảng = `.from("x")` (Supabase), `fact_/dim_` trong SQL (gohub_dw), SQL trong `tursoQuery(...)` (Turso), quét sâu 2 cấp vào `src/lib`
+(bỏ helper dùng chung để khỏi nhiễu). Hai chế độ xem: Theo Tab (4 cột chọn dần) và Theo Bảng (bảng → tab + API dùng nó). Lớp **số đo** lấy từ
+`/api/creator/perf-stats` (Turso `perf_events`, ghi trong `cachedQuery` qua `lib/perf-recorder.ts`: l1/l2/stale/miss + thời gian tính lại; p50/p95, tỉ lệ trúng, giữ 14 ngày).
+Test `data-map.test.ts` so kết quả quét với file đã commit → đổi route/nav/bảng mà quên chạy lệnh trên thì test đỏ. Quét sót (SQL ghép chuỗi) bù bằng
+`scripts/datamap/overrides.json`. Mô tả bảng vẫn lấy từ `lib/data-lineage.ts` (DB_TABLES, viết tay, có thể thiếu).
 
 ## 3. An toàn
 - SQL Query: CHỈ SELECT/WITH — chặn multi-statement, INSERT/UPDATE/DELETE/DDL.
