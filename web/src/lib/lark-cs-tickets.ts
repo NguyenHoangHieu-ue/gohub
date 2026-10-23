@@ -5,8 +5,9 @@ import { getLarkToken } from "@/lib/lark"
 // cuối cùng mới kéo hết rồi lọc ở máy chủ (chậm). Kết quả được cache theo kỳ ở nơi gọi.
 
 const LARK_API = "https://open.larksuite.com/open-apis"
-const FIELDS = ["Ticket No.", "Order No.", "SKU", "Ticket Type", "Issue Detail", "Source", "Channel", "Vendor", "Ticket Handler", "PIC (CS-OPs)", "Handler",
-  "Product Action", "Money Action", "Creation Date", "Ticket Status", "Leadtime Done Ticket (Minutes)", "Source-1"]
+// Chỉ các cột báo cáo dùng (không xin cột người xử lý: tên cột khác nhau theo bảng, báo cáo không dùng)
+const FIELDS = ["Ticket No.", "Order No.", "SKU", "Ticket Type", "Issue Detail", "Source", "Vendor",
+  "Product Action", "Money Action", "Creation Date", "Leadtime Done Ticket (Minutes)", "Source-1"]
 const MAX_PAGES = 80   // 40.000 bản ghi
 
 export interface CsTicket {
@@ -71,8 +72,9 @@ export const larkTicketsConfigured = () => !!(clean(process.env.LARK_BASE_ID || 
 
 type FilterStrategy = "date" | "number" | "none"
 
-function buildBody(strategy: FilterStrategy, startTs: number, endTs: number) {
-  const body: Record<string, unknown> = { field_names: FIELDS, automatic_fields: false }
+function buildBody(strategy: FilterStrategy, startTs: number, endTs: number, withFields = true) {
+  const body: Record<string, unknown> = { automatic_fields: false }
+  if (withFields) body.field_names = FIELDS
   if (strategy === "none") return body
   const val = (ms: number) => (strategy === "date" ? ["ExactDate", String(ms)] : [String(ms)])
   body.filter = {
@@ -98,12 +100,18 @@ export async function fetchCsTickets(startTs: number, endTs: number): Promise<{ 
     let pageToken: string | undefined
     let pages = 0
     let failed = false
+    let useFields = true
     do {
       const u = new URL(url)
       u.searchParams.set("page_size", "500")
       if (pageToken) u.searchParams.set("page_token", pageToken)
-      const res = await fetch(u.toString(), { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(buildBody(strategy, startTs, endTs)) })
-      const j = await res.json().catch(() => ({}))
+      const call = async (withFields: boolean) => {
+        const res = await fetch(u.toString(), { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(buildBody(strategy, startTs, endTs, withFields)) })
+        return res.json().catch(() => ({}))
+      }
+      let j = await call(useFields)
+      // Lark báo thiếu tên cột (1254045 FieldNameNotFound) → thử lại không giới hạn cột (lấy hết cột, chậm hơn chút)
+      if (j.code === 1254045 && useFields) { useFields = false; j = await call(false) }
       if (j.code !== 0) {
         lastErr = `Lark API error (${j.code}): ${j.msg}`
         // Lỗi cú pháp lọc → thử cách kế; lỗi quyền/mạng ở trang đầu cũng thử cách kế rồi báo lỗi cuối cùng
