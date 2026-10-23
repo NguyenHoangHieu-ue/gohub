@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils"
 import { fc, pct } from "@/lib/quarterly-format"
 import { B2BTierSection } from "@/components/quarterly/b2b-tier-section"
 import type { MonthStats, MonthSummary } from "@/lib/quarterly-types"
+import { readStale, writeStale } from "@/lib/stale-first"
+import { StaleNotice } from "@/components/stale-notice"
 
 const pad = (n: number) => String(n).padStart(2, "0")
 const monthKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
@@ -54,6 +56,7 @@ export function B2BMonthView({ initialMonth }: { initialMonth?: string }) {
   const [tiers, setTiers] = useState<any>(null)
   const [reports, setReports] = useState<Record<string, { summary: MonthSummary[] }>>({})
   const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(true)
   const [userRole, setUserRole] = useState("")
@@ -88,13 +91,21 @@ export function B2BMonthView({ initialMonth }: { initialMonth?: string }) {
         get(`/api/analytics/quarterly-report?${q(cur)}`),
       ]
       if (!prevSameQuarter) jobs.push(get(`/api/analytics/quarterly-report?${q(prv)}`))
-      const [t, rep, repPrev] = await Promise.all(jobs)
-      setTiers(t)
-      setReports({ [`${cur.quarter}-${cur.year}`]: rep, ...(repPrev ? { [`${prv.quarter}-${prv.year}`]: repPrev } : {}) })
+      // Số cũ trước: bản đã xem cùng bộ lọc trong phiên này hiện ngay, số mới thay khi về
+      const sfKey = `b2bm:${cur.quarter}:${cur.year}:${prv.quarter}:${prv.year}:${includeShip ? 1 : 0}${includeInternalOps ? 1 : 0}`
+      const apply = ([t, rep, repPrev]: any[]) => {
+        setTiers(t)
+        setReports({ [`${cur.quarter}-${cur.year}`]: rep, ...(repPrev ? { [`${prv.quarter}-${prv.year}`]: repPrev } : {}) })
+      }
+      const stale = refresh ? null : readStale<any[]>(sfKey)
+      if (stale) { apply(stale.data); setLoading(false); setRefreshing(true) }
+      const fresh = await Promise.all(jobs)
+      apply(fresh)
+      writeStale(sfKey, fresh)
     } catch (e: any) {
       setError("Hiếu đang fix, vui lòng đợi")
       console.error("B2BMonthView load:", e)
-    } finally { setLoading(false) }
+    } finally { setLoading(false); setRefreshing(false) }
   }, [cur.quarter, cur.year, prv.quarter, prv.year, prevSameQuarter, includeShip, includeInternalOps]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
@@ -131,6 +142,7 @@ export function B2BMonthView({ initialMonth }: { initialMonth?: string }) {
 
   return (
     <div className="space-y-5">
+      <StaleNotice show={refreshing} />
       {/* Điều khiển: tháng, vùng, hộp tích, tải lại */}
       <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
         <div className="flex items-center gap-1 px-2">
