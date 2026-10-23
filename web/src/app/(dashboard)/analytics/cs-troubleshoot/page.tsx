@@ -16,7 +16,7 @@ import { useToast } from "@/components/toast"
 import { StatTile, type MetricAccent, CHART_PALETTE, CHART_GRID_COLOR, chartTooltipStyle } from "@/components/dashboard-kit"
 
 // Port "y hệt" gohub-intel CSTroubleshootReport. Backend /api/reports/cs-troubleshoot ĐÃ khớp shape.
-// s240: ticket đọc THẲNG từ Lark Base (cache 30 phút), không còn bảng Supabase hay nút Sync.
+// s240: ticket đọc từ kho Turso (lịch sử + Lark Base kéo về mỗi ngày), nút "Tải lại từ Lark" kéo ngay ticket mới nhất; không còn bảng Supabase.
 
 function getDefaultDateRange() {
   const today = new Date()
@@ -117,7 +117,7 @@ export default function CSTroubleshootReport() {
                 <button onClick={() => fetchData()} className="p-2 md:p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
                   <RefreshCcw className={cn("w-4 h-4 text-slate-600", loading && "animate-spin")} />
                 </button>
-                <button onClick={() => fetchData(true)} disabled={loading} title="Kéo lại ticket mới nhất từ Lark Base (bỏ qua bộ nhớ tạm 30 phút)" className={cn("flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[11.5px] md:text-xs font-bold transition-all shadow-sm", loading ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-brand-600 text-white hover:bg-brand-700")}>
+                <button onClick={() => fetchData(true)} disabled={loading} title="Kéo ngay ticket 7 ngày gần nhất từ Lark Base rồi tải lại báo cáo" className={cn("flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[11.5px] md:text-xs font-bold transition-all shadow-sm", loading ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-brand-600 text-white hover:bg-brand-700")}>
                   <Database className={cn("w-3 h-3 md:w-4 md:h-4", loading && "animate-spin")} />
                   <span className="hidden sm:inline">{loading ? "Đang tải..." : "Tải lại từ Lark"}</span>
                   <span className="sm:hidden">{loading ? "..." : "Lark"}</span>
@@ -149,7 +149,7 @@ export default function CSTroubleshootReport() {
             {data.hasTicketData ? <Database className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
             <span className="min-w-0 flex-1">
               {data.hasTicketData
-                ? <>Đọc trực tiếp từ Lark Base · <strong>{(data.ticketTotal ?? 0).toLocaleString("vi-VN")}</strong> ticket trong kỳ{data.fetchedAt ? ` · lấy lúc ${new Date(data.fetchedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : ""} (lưu tạm 30 phút)</>
+                ? <>Nguồn Lark Base · <strong>{(data.ticketTotal ?? 0).toLocaleString("vi-VN")}</strong> ticket trong kỳ{data.fetchedAt ? ` · đồng bộ lúc ${new Date(data.fetchedAt).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}` : ""} (tự đồng bộ mỗi ngày; bấm Tải lại từ Lark để lấy ngay)</>
                 : <><strong>Không có ticket nào trong kỳ này</strong> (hoặc nhóm kênh đang chọn). Thử đổi kỳ, hoặc bấm <strong>Tải lại từ Lark</strong> nếu vừa có ticket mới.</>}
             </span>
           </div>

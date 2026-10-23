@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { cachedQuery, CACHE_HEADERS, noCache } from "@/lib/analytics-helpers"
-import { fetchCsTickets } from "@/lib/lark-cs-tickets"
+import { mirrorCsTickets, queryCsTickets, csStoreStats } from "@/lib/cs-tickets-store"
 
 export const maxDuration = 60
 
@@ -59,13 +59,14 @@ export async function GET(req: NextRequest) {
     const b2bSourceNames = new Set(b2bRows.map(r => r.name))
     const b2cSourceNames = new Set(b2cRows.map(r => r.name))
 
-    // 2. Ticket đọc THẲNG từ Lark Base (lọc theo ngày ở phía Lark; cache 30 phút theo kỳ — đổi nhóm B2B/B2C không phải kéo lại)
+    // 2. Ticket đọc từ kho Turso (lịch sử 13 tháng + Lark Base kéo về mỗi ngày). "Tải lại từ Lark" (nocache) kéo ngay 7 ngày gần nhất từ Lark trước khi đọc.
     const startTs = new Date(startDate).getTime()
     const endTs   = new Date(endDate).getTime() + 86400000
-    const { tickets: allTickets, fetchedAt, strategy, attempts } = await cachedQuery(
-      `cs-tickets:v1:${startTs}:${endTs}`,
-      () => fetchCsTickets(startTs, endTs).then(r => ({ tickets: r.tickets, strategy: r.strategy, attempts: r.attempts, fetchedAt: new Date().toISOString() })),
-      30,
+    if (noCache(req)) await mirrorCsTickets(7).catch(e => console.error("[cs-troubleshoot] mirror:", (e as Error).message))
+    const { tickets: allTickets, fetchedAt } = await cachedQuery(
+      `cs-tickets:v2:${startTs}:${endTs}`,
+      async () => ({ tickets: await queryCsTickets(startTs, endTs), fetchedAt: (await csStoreStats()).lastMirror }),
+      10,
       noCache(req),
       ["cs-tickets"],
     )
@@ -151,9 +152,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       hasTicketData: (tickets || []).length > 0,
-      source: "lark-base",
-      larkStrategy: strategy,
-      larkAttempts: attempts,
+      source: "turso-mirror-of-lark-base",
       fetchedAt,
       ticketTotal: allTickets.length,
       kpis: {

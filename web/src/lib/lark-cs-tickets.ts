@@ -70,18 +70,20 @@ export function mapLarkTicket(item: { record_id?: string; fields?: Record<string
 const clean = (v: string) => v.split(/[&?\s]/)[0].trim()
 export const larkTicketsConfigured = () => !!(clean(process.env.LARK_BASE_ID || "") && clean(process.env.LARK_TABLE_ID || ""))
 
-type FilterStrategy = "date" | "number" | "none"
+type FilterStrategy = "date" | "none"
+const DAY = 86_400_000
 
+// Cột "Creation Date" của Lark là DateTime: chỉ nhận isGreater / isLess / is với ["ExactDate", ms] và so theo NGÀY (không nhận isGreaterEqual, không nhận số trần;
+// đo thật s240). Nên nới biên ±2 ngày rồi lọc chính xác theo ms ở máy chủ.
 function buildBody(strategy: FilterStrategy, startTs: number, endTs: number, withFields = true) {
   const body: Record<string, unknown> = { automatic_fields: false }
   if (withFields) body.field_names = FIELDS
   if (strategy === "none") return body
-  const val = (ms: number) => (strategy === "date" ? ["ExactDate", String(ms)] : [String(ms)])
   body.filter = {
     conjunction: "and",
     conditions: [
-      { field_name: "Creation Date", operator: "isGreaterEqual", value: val(startTs) },
-      { field_name: "Creation Date", operator: "isLess", value: val(endTs) },
+      { field_name: "Creation Date", operator: "isGreater", value: ["ExactDate", String(startTs - 2 * DAY)] },
+      { field_name: "Creation Date", operator: "isLess", value: ["ExactDate", String(endTs + 2 * DAY)] },
     ],
   }
   return body
@@ -96,7 +98,7 @@ export async function fetchCsTickets(startTs: number, endTs: number): Promise<{ 
   let lastErr = "Lark Base không trả dữ liệu"
   const attempts: string[] = []
 
-  for (const strategy of ["date", "number", "none"] as FilterStrategy[]) {
+  for (const strategy of ["date", "none"] as FilterStrategy[]) {
     const out: CsTicket[] = []
     let pageToken: string | undefined
     let pages = 0

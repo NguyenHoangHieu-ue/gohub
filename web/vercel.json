@@ -10,6 +10,9 @@
     "src/app/api/cron/scheduled-messages/route.ts": {
       "maxDuration": 180
     },
+    "src/app/api/cron/cs-tickets-mirror/route.ts": {
+      "maxDuration": 300
+    },
     "src/app/api/cron/prewarm-analytics/route.ts": {
       "maxDuration": 60
     },
@@ -72,6 +75,10 @@
     {
       "path": "/api/cron/scheduled-messages",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/cs-tickets-mirror",
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/api/cron/log-archive",

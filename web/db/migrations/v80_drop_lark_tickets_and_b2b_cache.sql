@@ -1,8 +1,9 @@
 -- v80 (s240) — Bỏ 2 bảng bản sao chiếm nhiều dung lượng Supabase (~57MB ước tính, chưa tính index).
 -- CHỈ CHẠY SAU KHI code đã lên production (main) VÀ đã kiểm hai tab chạy đúng:
---   * CS Troubleshoot: ticket đọc thẳng từ Lark Base (lib/lark-cs-tickets.ts, cache 30 phút)
+--   * CS Troubleshoot: ticket đọc từ kho Turso `cs_tickets` (đã backfill 35,5 nghìn ticket từ bảng này — KIỂM `done:true` và số khớp trước khi xoá;
+--     Lark Base chỉ giữ ~5 tháng nên bảng Supabase này đang là nơi duy nhất còn lịch sử tới 10/2025 nếu chưa backfill)
 --   * Khách B2B: đọc thẳng gohub_dw/dim_customer (lib/b2b-customers.ts)
--- Dữ liệu gốc còn nguyên ở Lark Base và gohub_dw nên không mất gì; xoá bảng là không hoàn tác được ở Supabase.
+-- Khách B2B còn nguyên ở gohub_dw. Xoá bảng là không hoàn tác được ở Supabase.
 
 DROP TABLE IF EXISTS lark_cs_tickets;
 DROP TABLE IF EXISTS b2b_customers_cache;
