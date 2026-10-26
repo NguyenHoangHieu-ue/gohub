@@ -229,7 +229,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
 
       {/* Ô nhắn: một khối bo tròn, hàng công cụ ngay dưới ô gõ */}
       <div className="px-4 pb-4 pt-2">
-        {idle && <div className="mb-2 flex flex-wrap gap-1.5">
+        {idle && !(simple && prompt.trim()) && <div className="mb-2 flex flex-wrap gap-1.5">
           {(quick ?? QUICK[phase]).map(q => <button key={q} type="button" onClick={() => setPrompt(q)} title={q} className="px-2.5 py-1 text-xs rounded-full border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors">{q}</button>)}
         </div>}
         {aboveInput}
