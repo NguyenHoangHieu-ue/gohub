@@ -36,8 +36,11 @@ KHO_TOOLS.push(
 
 const entry = (name: string, args: Record<string, unknown>, ok: boolean, result: string): ToolLogEntry => ({ name, args, ok, chars: result.length, result, at: new Date().toISOString() })
 
-export async function execKhoTool(name: string, args: Record<string, unknown>, username: string): Promise<ToolLogEntry> {
+/** tainted = lượt này đã đọc nội dung ngoài (L1): ghi sự việc phải chờ anh xác nhận, không tự sửa sự việc cũ, đề xuất ghi nhớ gắn nhãn nguồn ngoài (run-safety.ts). */
+export async function execKhoTool(name: string, args: Record<string, unknown>, username: string, opts: { tainted?: boolean } = {}): Promise<ToolLogEntry> {
   try {
+    const wr = opts.tainted && (name === "ghiSuViec" || name === "capNhatSuViec") ? (await import("./run-safety")).gateWrite(name, true) : { mode: "run" as const, note: undefined }
+    if (wr.mode === "deny") return entry(name, args, false, wr.note ?? "Bị chặn")
     if (name === "taoThuMuc") {
       const segs = cleanFolderPath(String(args.duongDan ?? ""))
       if (!segs.length) return entry(name, args, false, "duongDan trống")
@@ -108,7 +111,7 @@ export async function execKhoTool(name: string, args: Record<string, unknown>, u
     }
     if (name === "deXuatGhiNho") {
       const { proposeMemory } = await import("@/lib/assistant/memory-proposals")
-      const r = await proposeMemory(username, { kind: args.loai, content: args.noiDung, reason: args.lyDo })
+      const r = await proposeMemory(username, { kind: args.loai, content: args.noiDung, reason: opts.tainted ? `[lượt này đã đọc nội dung ngoài — anh kiểm lại nguồn] ${String(args.lyDo ?? "")}` : args.lyDo })
       return entry(name, args, r.ok, r.message)
     }
     if (name === "traMail") {
@@ -123,8 +126,8 @@ export async function execKhoTool(name: string, args: Record<string, unknown>, u
       const type = (String(args.loai ?? "") in FACT_TYPES ? String(args.loai) : "khac") as FactType
       const summary = String(args.noiDung ?? "").trim().slice(0, 300)
       if (!summary) return entry(name, args, false, "noiDung trống")
-      const f = await addManualFact(username, { type, vendor: String(args.vendor ?? "").trim().slice(0, 80), subject: String(args.doiTuong ?? "").trim().slice(0, 120), summary, evidence: "", effectiveFrom: isoDate(args.hieuLucTu), expiresAt: isoDate(args.hetHan) })
-      return entry(name, args, true, `Đã ghi sự việc ${f.id}: ${factLine(f)}`)
+      const f = await addManualFact(username, { type, vendor: String(args.vendor ?? "").trim().slice(0, 80), subject: String(args.doiTuong ?? "").trim().slice(0, 120), summary, evidence: "", effectiveFrom: isoDate(args.hieuLucTu), expiresAt: isoDate(args.hetHan), needsReview: wr.mode === "review", changeNote: wr.mode === "review" ? wr.note : undefined })
+      return entry(name, args, true, `Đã ghi sự việc ${f.id}: ${factLine(f)}${wr.mode === "review" ? " — CHỜ ANH XÁC NHẬN (lượt này đã đọc nội dung ngoài); nói rõ điều này khi trả lời" : ""}`)
     }
     if (name === "capNhatSuViec") {
       const map: Record<string, FactStatus> = { bo: "rejected", het_han: "expired", dang_hieu_luc: "active" }

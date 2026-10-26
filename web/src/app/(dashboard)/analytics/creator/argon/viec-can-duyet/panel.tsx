@@ -73,6 +73,9 @@ export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) 
         const [name, v] = it.id.split("@")
         await api("/api/creator/assistant/skills", jsonInit("POST", { name, v: Number(v), action: action === "approve" ? "approve" : "reject" }))
         setNote(action === "approve" ? "Đã duyệt — skill bắt đầu dùng được từ lượt chat sau của Gấu Pro." : "Đã từ chối skill.")
+      } else if (it.kind === "security_notice") {
+        await api("/api/creator/assistant/alerts", jsonInit("POST", { id: it.id, action: "dismiss-security" }))
+        setNote("Đã ghi nhận — cảnh báo được xoá khỏi danh sách.")
       } else if (it.kind === "kpi_alert") {
         await api("/api/creator/assistant/alerts", jsonInit("POST", { id: it.id, action: "dismiss" }))
         setNote("Đã bỏ qua cảnh báo này 7 ngày (nếu lệch nặng hơn sẽ báo lại).")
@@ -131,7 +134,7 @@ export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) 
                     {it.actions.includes("confirm") && <button type="button" disabled={!!busy} onClick={() => void act(it, "confirm")} className={cn(btn, "bg-emerald-600 text-white border-emerald-600 disabled:opacity-50")}>Đúng, xác nhận</button>}
                     {it.actions.includes("done") && <button type="button" disabled={!!busy} onClick={() => void act(it, "done")} className={cn(btn, "bg-emerald-600 text-white border-emerald-600 disabled:opacity-50")}>Xong</button>}
                     {it.actions.includes("eval") && <button type="button" disabled={!!busy} onClick={() => void act(it, "eval")} className={cn(btn, "border-gray-300 dark:border-slate-600 disabled:opacity-50")}>{busy === `${it.key}:eval` ? "Đang chấm…" : "Chấm thử A/B"}</button>}
-                    {it.actions.includes("reject") && <button type="button" disabled={!!busy} onClick={() => void act(it, "reject")} className={cn(btn, "border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 disabled:opacity-50")}>{it.kind === "fact_review" ? "Sai, giữ tin cũ" : it.kind === "kpi_alert" ? "Bỏ qua 7 ngày" : "Từ chối"}</button>}
+                    {it.actions.includes("reject") && <button type="button" disabled={!!busy} onClick={() => void act(it, "reject")} className={cn(btn, "border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 disabled:opacity-50")}>{it.kind === "fact_review" ? "Sai, giữ tin cũ" : it.kind === "kpi_alert" ? "Bỏ qua 7 ngày" : it.kind === "security_notice" ? "Đã xem" : "Từ chối"}</button>}
                     {it.href && <Link href={it.href} className={cn(btn, "border-gray-300 dark:border-slate-600 text-violet-700 dark:text-violet-300")}>{it.kind === "kpi_alert" ? "Phân tích nguyên nhân" : it.actions.includes("open") ? "Mở để trả lời" : "Xem chi tiết"}</Link>}
                   </div>
                 </div>

@@ -80,6 +80,14 @@ async function kpiItems(username: string, now: number): Promise<InboxItem[]> {
   }))
 }
 
+async function securityItems(username: string, now: number): Promise<InboxItem[]> {
+  const { listNotices } = await import("@/lib/argon/run-safety")
+  return (await listNotices(username)).map(n => ({
+    key: `security_notice:${n.id}`, kind: "security_notice" as const, id: n.id, title: `Nội dung giống chỉ dẫn lạ khi Argon đọc ${n.detail}`.slice(0, 200),
+    detail: `Dấu hiệu: ${n.hits.join("; ")}. Argon đã được dặn KHÔNG làm theo và siết quyền ghi trong lượt đó. Anh nên kiểm tra nguồn (mail/thread/tài liệu) có bị gài chỉ dẫn không.`, at: n.at, urgency: 3 as const, source: "An toàn Trợ lý", actions: ["reject"] as InboxItem["actions"], href: `${ARGON}/kho-nguon`,
+  }))
+}
+
 async function memoryItems(username: string, now: number): Promise<InboxItem[]> {
   const { listProposals } = await import("./memory-proposals")
   return (await listProposals(username)).map(p => ({
@@ -103,7 +111,7 @@ async function skillItems(now: number): Promise<InboxItem[]> {
 
 export async function loadInbox(username: string, now = Date.now()): Promise<{ items: InboxItem[]; failed: string[] }> {
   const jobs: [string, Promise<InboxItem[]>][] = [
-    ["Hành động Gấu Pro", gpActions(username, now)], ["Argon", argonItems(username, now)], ["Sổ sự việc", factReviews(username, now)], ["Mail", mailItems(username, now)], ["Phiếu sửa code", ticketItems(now)], ["Kỹ năng", skillItems(now)], ["Đề xuất ghi nhớ", memoryItems(username, now)], ["KPI", kpiItems(username, now)],
+    ["Hành động Gấu Pro", gpActions(username, now)], ["Argon", argonItems(username, now)], ["Sổ sự việc", factReviews(username, now)], ["Mail", mailItems(username, now)], ["Phiếu sửa code", ticketItems(now)], ["Kỹ năng", skillItems(now)], ["Đề xuất ghi nhớ", memoryItems(username, now)], ["KPI", kpiItems(username, now)], ["An toàn", securityItems(username, now)],
   ]
   const settled = await Promise.allSettled(jobs.map(j => j[1]))
   const items: InboxItem[] = [], failed: string[] = []

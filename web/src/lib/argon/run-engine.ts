@@ -7,6 +7,7 @@ import { MISSION_TOOL_NAMES, WS_TOOLS, execMissionAsk, execMissionCode, execMiss
 import { LIST_NAME, READ_NAME, SEARCH_NAME, SOURCE_TOOLS } from "./source-tools"
 import { PARALLEL_SAFE, groupCalls } from "./parallel-tools"
 import { FAST_TOOL_NAMES, MAX_FAST_TOOL_CALLS } from "./run-route"
+import { injectionHits, isTainted, levelOf, noticeDetail, recordNotice, refusal, spotlight } from "./run-safety"
 import { FORECAST_TOOL, FORECAST_TOOL_NAME, SCORE_TOOL, SCORE_TOOL_NAME } from "./forecast-tool"
 import { PATCH_TOOL, PATCH_TOOL_NAME } from "./patch-tool"
 import { ASK_TOOL, ASK_TOOL_NAME, askBlock } from "./ask-tool"
@@ -66,9 +67,9 @@ function prepare(i: SegmentIn): Prepared {
   const decls = fast ? allDecls.filter(t => FAST_TOOL_NAMES.includes(String(t.name))) : allDecls
   const maxCalls = fast ? MAX_FAST_TOOL_CALLS : missionId ? MAX_MISSION_TOOL_CALLS : MAX_TOOL_CALLS   // sứ mệnh còn đọc/ghi file nên cần nhiều lượt gọi hơn
   const isData = (n: string) => !MISSION_TOOL_NAMES.includes(n)
-  const dispatch = async (fname: string, fargs: Record<string, unknown>, dataCalls: number): Promise<ToolLogEntry> => (
+  const rawDispatch = async (fname: string, fargs: Record<string, unknown>, dataCalls: number, tainted: boolean): Promise<ToolLogEntry> => (
     fast && !FAST_TOOL_NAMES.includes(String(fname)) ? { name: fname, args: fargs, ok: false, chars: 0, result: "Đường nhanh chỉ tra cứu Kho; câu này cần công cụ khác — nói với Hiếu bấm Sâu hoặc hỏi lại kèm yêu cầu phân tích", at: new Date().toISOString() }
-    : khoUser && khoNames.has(String(fname)) ? await execKhoTool(fname, fargs, khoUser)
+    : khoUser && khoNames.has(String(fname)) ? await execKhoTool(fname, fargs, khoUser, { tainted })
     : (fname === LIST_NAME || fname === READ_NAME || fname === SEARCH_NAME) && missionId ? await execMissionSourceTool(fname, fargs, missionId)
     : (fname === FORECAST_TOOL_NAME || fname === SCORE_TOOL_NAME) && missionId ? await execMissionForecast(fname, fargs, missionId)
     : fname === PATCH_TOOL_NAME && missionId ? await execMissionPatch(fargs, missionId, i.tools!.origin)
@@ -79,6 +80,17 @@ function prepare(i: SegmentIn): Prepared {
     : isData(fname) && dataTools && dataCalls >= MAX_TOOL_CALLS ? { name: fname, args: fargs, ok: false, chars: 0, result: `Đã dùng hết ${MAX_TOOL_CALLS} lần lấy số liệu hệ thống trong lượt này`, at: new Date().toISOString() }
     : isData(fname) && !dataTools ? { name: fname, args: fargs, ok: false, chars: 0, result: "Công cụ lấy số liệu hệ thống đang tắt", at: new Date().toISOString() }
     : await execArgonTool(fname, fargs, i.tools!.origin))
+  // P3 an toàn: công cụ chưa khai báo bậc quyền thì từ chối; kết quả đọc nội dung ngoài (L1) được bọc + quét chỉ dẫn lạ; lượt đã nhiễm thì công cụ ghi bị siết (run-safety.ts).
+  const dispatch = async (fname: string, fargs: Record<string, unknown>, dataCalls: number): Promise<ToolLogEntry> => {
+    const lvl = levelOf(String(fname))
+    if (!lvl) return refusal(fname, fargs, `Công cụ "${fname}" chưa khai báo bậc quyền (run-safety.ts) nên bị từ chối`)
+    const tainted = isTainted(i.tools?.log ?? [])
+    const e = await rawDispatch(fname, fargs, dataCalls, tainted)
+    if (lvl !== "L1" || !e.ok) return e
+    const hits = injectionHits(e.result)
+    if (hits.length && khoUser) void recordNotice(khoUser, { tool: String(fname), detail: noticeDetail(String(fname), fargs), hits })
+    return { ...e, result: spotlight(String(fname), e.result, hits), chars: e.result.length }
+  }
   return { decls, maxCalls, isData, khoUser, dataTools, dispatch }
 }
 
@@ -209,9 +221,10 @@ async function runSegmentCore(i: SegmentIn): Promise<SegmentOut> {
     if (fname === ASK_TOOL_NAME && entry.ok) asked = entry
     return { functionResponse: { name: fname, response: entry.ok ? { buoc: n, ketQua: entry.result } : { buoc: n, loi: entry.result } } }
   }
+  const inflight = new Set<Promise<unknown>>()   // công cụ đọc đang chạy song song: công cụ GHI phải chờ chúng xong để thấy đúng trạng thái "nhiễm" (đọc nội dung ngoài)
   const runTool = (fc: { name?: string; args?: Record<string, unknown> }) => {
-    if (PARALLEL_SAFE.has(String(fc.name))) return execOne(fc)   // công cụ đọc: không xếp hàng
-    const p = queue.then(() => execOne(fc)); queue = p.catch(() => undefined); return p
+    if (PARALLEL_SAFE.has(String(fc.name))) { const p = execOne(fc); inflight.add(p); const rm = () => { inflight.delete(p) }; p.then(rm, rm); return p }   // công cụ đọc: không xếp hàng
+    const p = queue.then(async () => { await Promise.allSettled([...inflight]); return execOne(fc) }); queue = p.catch(() => undefined); return p
   }
 
   try {

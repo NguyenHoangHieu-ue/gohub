@@ -1,6 +1,6 @@
 // "Việc cần duyệt" của Trợ lý: gom MỌI thứ đang chờ anh (hành động Gấu Pro, câu hỏi/đề xuất sửa code của Argon, thay đổi sự việc, mail chờ trả lời, phiếu dev hỏi lại)
 // vào MỘT danh sách. Phần THUẦN — kiểu, xếp thứ tự, đếm. Không I/O.
-export type InboxKind = "gp_action" | "argon_patch" | "argon_ask" | "fact_review" | "mail" | "dev_ticket" | "skill_candidate" | "memory_proposal" | "kpi_alert"
+export type InboxKind = "gp_action" | "argon_patch" | "argon_ask" | "fact_review" | "mail" | "dev_ticket" | "skill_candidate" | "memory_proposal" | "kpi_alert" | "security_notice"
 export type InboxAction = "approve" | "reject" | "confirm" | "done" | "open" | "eval"
 
 export interface InboxItem {
@@ -18,7 +18,7 @@ export interface InboxItem {
 }
 
 export const KIND_LABEL: Record<InboxKind, string> = {
-  gp_action: "Hành động chờ duyệt", argon_patch: "Đề xuất sửa code", argon_ask: "Argon hỏi anh", fact_review: "Thay đổi sự việc", mail: "Mail chờ trả lời", dev_ticket: "Phiếu sửa code hỏi lại", skill_candidate: "Kỹ năng ứng viên", memory_proposal: "Đề xuất ghi nhớ", kpi_alert: "KPI lệch kế hoạch",
+  gp_action: "Hành động chờ duyệt", argon_patch: "Đề xuất sửa code", argon_ask: "Argon hỏi anh", fact_review: "Thay đổi sự việc", mail: "Mail chờ trả lời", dev_ticket: "Phiếu sửa code hỏi lại", skill_candidate: "Kỹ năng ứng viên", memory_proposal: "Đề xuất ghi nhớ", kpi_alert: "KPI lệch kế hoạch", security_notice: "Cảnh báo an toàn",
 }
 
 /** Việc gấp trước, trong cùng mức thì cũ nhất trước (chờ lâu nhất). */
@@ -27,7 +27,7 @@ export function sortInbox(items: InboxItem[]): InboxItem[] {
 }
 
 export function countByKind(items: InboxItem[]): Record<InboxKind, number> {
-  const out = { gp_action: 0, argon_patch: 0, argon_ask: 0, fact_review: 0, mail: 0, dev_ticket: 0, skill_candidate: 0, memory_proposal: 0, kpi_alert: 0 } as Record<InboxKind, number>
+  const out = { gp_action: 0, argon_patch: 0, argon_ask: 0, fact_review: 0, mail: 0, dev_ticket: 0, skill_candidate: 0, memory_proposal: 0, kpi_alert: 0, security_notice: 0 } as Record<InboxKind, number>
   for (const i of items) out[i.kind]++
   return out
 }
