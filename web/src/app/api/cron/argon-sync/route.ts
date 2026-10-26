@@ -15,6 +15,7 @@ import { ensureIndexed, pruneOrphans } from "@/lib/argon/index-db"
 import { digestPending } from "@/lib/argon/kho-digest"
 import { pruneEvents } from "@/lib/agent-events"
 import { argonUsernames, runFactsNightly } from "@/lib/argon/facts"
+import { nudgeStaleThreads, syncMailStatus } from "@/lib/argon/mail-status"
 import type { ArgonSource } from "@/lib/argon/server"
 
 export const maxDuration = 300
@@ -78,6 +79,16 @@ async function run(req: NextRequest) {
       facts.push({ user, digested: dg.done, remaining: dg.remaining, ...nf, errors: dg.errors.slice(0, 5) })
     }
   } catch (e) { facts.push({ user: "?", digested: 0, remaining: 0, added: 0, due: 0, expired: 0, sent: false, errors: [(e as Error).message] }) }
+  // Sổ trạng thái mail theo thread (chỉ đọc INBOX + SENT): luồng nào chờ mình / chờ đối tác; nhắc Lark MỘT tin gộp luồng chờ lâu.
+  const mailStatus: { user: string; threads?: number; created?: number; changed?: number; classified?: number; ignored?: number; remaining?: number; nudged?: number; skipped?: string; errors?: string[] }[] = []
+  for (const user of await argonUsernames().catch(() => [] as string[])) {
+    if (Date.now() - t0 > 255_000) { mailStatus.push({ user, skipped: "hết giờ" }); continue }
+    try {
+      const r = await syncMailStatus(user, t0 + 275_000)
+      const nudged = await nudgeStaleThreads(user, `${req.nextUrl.origin}/analytics/creator/argon`)
+      mailStatus.push({ user, ...r, errors: r.errors.slice(0, 3), nudged })
+    } catch (e) { mailStatus.push({ user, errors: [(e as Error).message] }) }
+  }
   // "Tự chạy hằng đêm": sau khi mail/thread đã nạp, giao worker chạy yêu cầu cố định (1 lần/ngày/dự án) rồi DM Lark.
   const autorun: { project: string; runId: string | null; error?: string }[] = []
   for (const pid of await projectIdsWithAutorun()) {
@@ -100,6 +111,7 @@ async function run(req: NextRequest) {
     threads,
     search,
     facts,
+    mailStatus,
     autorun,
     patrol,
   })
