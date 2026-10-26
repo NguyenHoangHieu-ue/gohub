@@ -76,7 +76,10 @@ export default function ArgonTodayPage() {
   const pending = facts ? facts.rows.filter(f => f.status === "active" && f.needs_review).slice(0, 8) : []
   const soon = facts ? bucketFacts(facts.rows.filter(f => !pending.includes(f)), facts.today).soon.slice(0, 8) : []
   const mailBuckets = mail ? bucketThreads(mail.rows) : null
-  const setThread = async (id: string, status: MailThreadStatus) => { try { await api("/api/creator/argon/mail-status", jsonInit("PATCH", { id, status })); await load() } catch (e) { setErr((e as Error).message) } }
+  const setThread = async (id: string, status: MailThreadStatus) => {
+    setMail(m => (m ? { ...m, rows: m.rows.map(r => (r.id === id ? { ...r, status, status_by: "manual" } : r)) } : m))   // cập nhật ngay, không chờ tải lại cả trang
+    try { await api("/api/creator/argon/mail-status", jsonInit("PATCH", { id, status })) } catch (e) { setErr((e as Error).message); await load() }
+  }
   const rescanMail = async () => { setMailBusy(true); try { await api("/api/creator/argon/mail-status", jsonInit("POST", {})); await load() } catch (e) { setErr((e as Error).message) } finally { setMailBusy(false) } }
   const settle = async (id: string, body: Record<string, unknown>) => { try { await api("/api/creator/argon/facts", jsonInit("PATCH", { id, ...body })); await load() } catch (e) { setErr((e as Error).message) } }
   const planEmpty = !!snap && snap.tacDong.text.includes("Chưa có kế hoạch")
