@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { folderPathOf, type DigestMeta, type FolderRow, type KhoSource } from "@/lib/argon/kho-pure"
 import type { FactRow } from "@/lib/argon/facts-pure"
 import { KhoFacts } from "./kho-facts"
+import { KhoGraph } from "./kho-graph"
 import { api, jsonInit, type Source } from "../argon-types"
 
 // Cột phải của Kho: kéo thả / chọn file → tự đọc, tóm tắt nhanh, tự xếp thư mục; bên dưới là các nguồn mới nạp kèm tóm tắt và gợi ý.
@@ -26,7 +27,7 @@ export function KhoInbox({ projectId, folders, sources, facts, today, targetFold
   const [note, setNote] = useState({ name: "", text: "" })
   const [link, setLink] = useState("")
   const [busy, setBusy] = useState(false)
-  const [tab, setTab] = useState<"new" | "facts">("new")
+  const [tab, setTab] = useState<"new" | "facts" | "graph">("new")
   const fileRef = useRef<HTMLInputElement>(null)
   const setJob = (key: string, p: Partial<Job>) => setJobs(js => js.map(j => (j.key === key ? { ...j, ...p } : j)))
   const target = targetFolderId ? folderPathOf(targetFolderId, folders) : ""
@@ -136,7 +137,7 @@ export function KhoInbox({ projectId, folders, sources, facts, today, targetFold
       </div>
 
       <div className="flex border-b border-gray-200 dark:border-slate-700 text-[12.5px]" role="tablist">
-        {([["new", "Mới nạp"], ["facts", `Sổ sự việc (${facts.filter(f => f.status === "active").length})`]] as const).map(([k, label]) => (
+        {([["new", "Mới nạp"], ["facts", `Sổ sự việc (${facts.filter(f => f.status === "active").length})`], ["graph", "Thực thể"]] as const).map(([k, label]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
             className={cn("flex-1 py-2 font-medium border-b-2 -mb-px", tab === k ? "border-violet-600 text-violet-700 dark:text-violet-300" : "border-transparent text-gray-500 hover:text-gray-700")}>{label}</button>
         ))}
@@ -149,6 +150,7 @@ export function KhoInbox({ projectId, folders, sources, facts, today, targetFold
           </div>
         ))}
         {tab === "facts" && <KhoFacts facts={facts} today={today} onChanged={onChanged} onError={onError} onOpenSource={id => { const s = sources.find(x => x.id === id); if (s) onOpen(s) }} />}
+        {tab === "graph" && <KhoGraph onError={onError} onOpenSource={id => { const s = sources.find(x => x.id === id); if (s) onOpen(s) }} />}
         {tab === "new" && <>
         {recent.length === 0 && <div className="text-xs text-gray-400 py-6 text-center">Chưa có nguồn nào.</div>}
         {recent.map(s => <RecentCard key={s.id} s={s} folders={folders} onOpen={() => onOpen(s)} onMove={f => onMove([s.id], f)} onDigest={() => digestNow(s)} />)}

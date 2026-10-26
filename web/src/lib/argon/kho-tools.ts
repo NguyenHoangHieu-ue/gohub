@@ -6,7 +6,7 @@ const db = async () => (await import("@/lib/supabase")).supabaseAdmin   // nạp
 
 // Công cụ riêng của sứ mệnh "Thủ thư Kho": xếp thư mục, đổi tên/nhãn/ghim, lưu ghi chú. KHÔNG xoá gì, không đụng nội dung nguồn.
 // Đọc/tìm nguồn dùng lietKeNguon / timTrongNguon / docNguon có sẵn (ở sứ mệnh Thủ thư, phạm vi = mọi nguồn của người dùng).
-export const KHO_TOOL_NAMES = ["taoThuMuc", "chuyenNguon", "capNhatNguon", "luuGhiChu", "traSuViec", "ghiSuViec", "capNhatSuViec", "traMail"] as const
+export const KHO_TOOL_NAMES = ["taoThuMuc", "chuyenNguon", "capNhatNguon", "luuGhiChu", "traSuViec", "ghiSuViec", "capNhatSuViec", "traMail", "traThucThe"] as const
 
 export const KHO_TOOLS: FunctionDeclaration[] = [
   { name: "taoThuMuc", description: "Tạo thư mục trong Kho (tạo cả các cấp còn thiếu, tối đa 3 cấp). Vd \"Vendor/3HK/Bảng giá\". Đã có thì dùng lại.", parameters: { type: Type.OBJECT, properties: { duongDan: { type: Type.STRING, description: "Đường dẫn thư mục, cấp cách nhau bằng /" } }, required: ["duongDan"] } },
@@ -24,6 +24,10 @@ KHO_TOOLS.push(
 
 KHO_TOOLS.push(
   { name: "traMail", description: "Tra SỔ TRẠNG THÁI MAIL theo luồng thư (chỉ đọc, do Argon quét INBOX + SENT 14 ngày gần nhất mỗi đêm): luồng nào đang chờ anh trả lời, luồng nào anh đã gửi mà đối tác chưa trả lời, luồng nào đã xong. Mỗi dòng có tiêu đề, đối tác, số ngày chờ và việc cần làm tiếp. Dùng khi anh hỏi 'mail nào đang chờ tôi', 'ai chưa trả lời', 'thread X xong chưa'.", parameters: { type: Type.OBJECT, properties: { trangThai: { type: Type.STRING, description: "cho_minh | cho_doi_tac | xong | tat_ca (mặc định cho_minh)" }, tuKhoa: { type: Type.STRING, description: "Từ khoá trong tiêu đề/đối tác/tóm tắt (tuỳ chọn)" } } } },
+)
+
+KHO_TOOLS.push(
+  { name: "traThucThe", description: "Tra GRAPH của Kho: một vendor / thị trường / nhóm sản phẩm / khách / người được nhắc Ở ĐÂU (tài liệu, thread, mail nào, ngày nào), liên quan tới thực thể nào, và các sự việc có hạn của nó. NHANH hơn timTrongNguon khi anh hỏi 'thông tin về 3HK nằm ở đâu', 'ai liên quan tới Thái Lan', 'vendor này có gì mới'. Chỉ đọc.", parameters: { type: Type.OBJECT, properties: { ten: { type: Type.STRING, description: "Tên hoặc bí danh thực thể, vd 3HK, Billion Connect, Thái Lan" } }, required: ["ten"] } },
 )
 
 const entry = (name: string, args: Record<string, unknown>, ok: boolean, result: string): ToolLogEntry => ({ name, args, ok, chars: result.length, result, at: new Date().toISOString() })
@@ -83,6 +87,20 @@ export async function execKhoTool(name: string, args: Record<string, unknown>, u
         .sort((a, b) => (a.expires_at ?? a.effective_from ?? "9999").localeCompare(b.expires_at ?? b.effective_from ?? "9999")).slice(0, 60)
       if (!hit.length) return entry(name, args, true, `Sổ sự việc không có mục nào khớp (hôm nay ${vnToday()}). Nếu cần chắc chắn hơn thì tìm trong tài liệu bằng timTrongNguon.`)
       return entry(name, args, true, `${hit.length} sự việc (hôm nay ${vnToday()}):\n${hit.map(f => `- [${f.id}] ${factLine(f)}${f.status !== "active" ? ` {${f.status}}` : ""}${f.source_name ? ` — nguồn: ${f.source_name}` : ""}${f.change_note ? ` — ĐỔI so với tin cũ (${f.change_note})` : ""}${f.needs_review ? " — CHƯA được anh xác nhận" : ""}`).join("\n")}\nKhi trả lời PHẢI nêu ngày của tin ("tin ngày …"); hai tin mâu thuẫn thì theo tin mới hơn và nói rõ tin cũ đã bị thay.`)
+    }
+    if (name === "traThucThe") {
+      const { getEntity, ENTITY_KINDS, entityKey } = await import("./graph")
+      const d = await getEntity(username, String(args.ten ?? "")).catch(e => { throw new Error(`Graph chưa dùng được: ${(e as Error).message}`) })
+      if (!d) return entry(name, args, true, `Graph chưa có thực thể "${String(args.ten ?? "")}" (Argon mới trích thực thể từ tài liệu đã tóm tắt). Thử timTrongNguon.`)
+      const key = entityKey(d.entity.name)
+      const facts = (await listFacts(username, { status: ["active"], limit: 800 })).filter(f => entityKey(f.vendor) === key || entityKey(f.subject).includes(key)).slice(0, 10)
+      const lines = [
+        `${ENTITY_KINDS[d.entity.kind]}: ${d.entity.name}${d.entity.aliases.length ? ` (còn gọi: ${d.entity.aliases.join(", ")})` : ""} — nhắc ở ${d.mentions.length} nguồn`,
+        ...d.mentions.slice(0, 12).map(m => `- [${m.sourceId}] ${m.sourceName}${m.sourceDate ? ` (tin ngày ${m.sourceDate})` : ""}${m.snippet ? ` — ${m.snippet}` : ""}`),
+        d.related.length ? `Liên quan: ${d.related.map(r => `${r.name} (${ENTITY_KINDS[r.kind]}${r.rels.length ? `, ${r.rels.join("/")}` : ""}${r.shared ? `, chung ${r.shared} nguồn` : ""})`).join("; ")}` : "Liên quan: chưa có",
+        facts.length ? `Sự việc đang hiệu lực:\n${facts.map(f => `- [${f.id}] ${factLine(f)}`).join("\n")}` : "Sự việc đang hiệu lực: không có",
+      ]
+      return entry(name, args, true, lines.join("\n"))
     }
     if (name === "traMail") {
       const { listMailThreads, threadLine, STATUS_LABEL } = await import("./mail-status")

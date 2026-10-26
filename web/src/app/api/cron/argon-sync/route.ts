@@ -13,6 +13,8 @@ import { MAX_PATROLS_PER_NIGHT, missionIdsWithPatrol, startPatrol, vnDate } from
 import { missionIdsWithDueForecasts } from "@/lib/argon/forecast-tool"
 import { ensureIndexed, pruneOrphans } from "@/lib/argon/index-db"
 import { digestPending } from "@/lib/argon/kho-digest"
+import { pruneGraph } from "@/lib/argon/graph"
+import { loadPubState, publishProfiles } from "@/lib/argon/lark-publish"
 import { pruneEvents } from "@/lib/agent-events"
 import { argonUsernames, runFactsNightly } from "@/lib/argon/facts"
 import { nudgeStaleThreads, syncMailStatus } from "@/lib/argon/mail-status"
@@ -68,6 +70,15 @@ async function run(req: NextRequest) {
     const { data: all } = await supabaseAdmin.from("argon_sources").select("id").eq("enabled", true)
     const ix = await ensureIndexed((all ?? []).map(r => r.id as string), { deadlineMs: Math.max(5_000, t0 + 190_000 - Date.now()), max: 400 })
     search = { ...ix, pruned: await pruneOrphans() }
+    // Graph: dọn theo MỌI nguồn còn tồn tại (kể cả đang tắt), đọc đủ trang vì PostgREST chỉ trả tối đa 1.000 dòng/lần — thiếu id sẽ xoá nhầm graph của nguồn còn sống.
+    const everyId: string[] = []
+    for (let from = 0; from < 20_000; from += 1000) {
+      const { data: page, error: pageErr } = await supabaseAdmin.from("argon_sources").select("id").order("id").range(from, from + 999)
+      if (pageErr) throw new Error(pageErr.message)
+      everyId.push(...(page ?? []).map(r => r.id as string))
+      if ((page?.length ?? 0) < 1000) break
+    }
+    await pruneGraph(everyId).catch(e => search.errors.push(`graph: ${(e as Error).message}`))
   } catch (e) { search.errors.push((e as Error).message) }
   await pruneEvents().catch(() => undefined)   // sự kiện Bản đồ vận hành giữ 3 ngày
   // Sổ sự việc: tóm tắt + trích sự việc có hạn từ nguồn mới (mail/thread/file chưa xử lý), rồi đánh dấu hết hạn, nhắc tới hạn và gửi 1 tin tóm tắt "đã ghi gì" cho Hiếu.
@@ -88,6 +99,16 @@ async function run(req: NextRequest) {
       const nudged = await nudgeStaleThreads(user, `${req.nextUrl.origin}/analytics/creator/argon`)
       mailStatus.push({ user, ...r, errors: r.errors.slice(0, 3), nudged })
     } catch (e) { mailStatus.push({ user, errors: [(e as Error).message] }) }
+  }
+  // Hồ sơ vendor ra Lark (một chiều, chỉ khi anh BẬT "Tự cập nhật mỗi đêm" ở Kho › Thực thể): sau khi sổ sự việc + mail đã mới.
+  const larkPublish: { user: string; skipped?: string; profiles?: number; created?: number; updated?: number; same?: number; errors?: string[] }[] = []
+  for (const user of await argonUsernames().catch(() => [] as string[])) {
+    try {
+      if (!(await loadPubState(user)).enabled) { larkPublish.push({ user, skipped: "chưa bật" }); continue }
+      if (Date.now() - t0 > 240_000) { larkPublish.push({ user, skipped: "hết giờ" }); continue }
+      const r = await publishProfiles(user, { deadline: t0 + 285_000 })
+      larkPublish.push({ user, profiles: r.profiles, created: r.created, updated: r.updated, same: r.same, errors: r.errors.slice(0, 3) })
+    } catch (e) { larkPublish.push({ user, errors: [(e as Error).message] }) }
   }
   // "Tự chạy hằng đêm": sau khi mail/thread đã nạp, giao worker chạy yêu cầu cố định (1 lần/ngày/dự án) rồi DM Lark.
   const autorun: { project: string; runId: string | null; error?: string }[] = []
@@ -112,6 +133,7 @@ async function run(req: NextRequest) {
     search,
     facts,
     mailStatus,
+    larkPublish,
     autorun,
     patrol,
   })
