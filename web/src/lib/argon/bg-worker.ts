@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { costOf } from "./models"
-import { getCreatorLarkOpenId, sendLarkDM } from "@/lib/lark"
+import { notify } from "@/lib/notify"
 import { buildRunContext } from "./context"
 import { getHubId, HUB_TOKEN_BUDGET, loadHubMaterial, pickHubSources } from "./hub"
 import { syncMany } from "./lark-sync"
@@ -56,11 +56,15 @@ export async function loadRunMaterial(project: ArgonProject, pick: Set<string> |
 
 async function notifyDone(run: ArgonRun, project: ArgonProject | null, status: string, cost: number, segments: number, error: string | null, origin: string) {
   try {
-    const openId = await getCreatorLarkOpenId()
-    if (!openId) return
-    const head = status === "done" ? "✅ Argon xong việc nền" : status === "stopped" ? "⏹ Việc nền Argon đã dừng" : "⚠️ Việc nền Argon lỗi"
-    const body = status === "error" ? `Lỗi: ${error ?? "không rõ"}\n` : `${stripReports(run.answer).replace(/\s+/g, " ").slice(0, 700)}${stripReports(run.answer).length > 700 ? "…" : ""}\n`
-    await sendLarkDM(openId, `${head}: "${run.prompt.replace(/\s+/g, " ").slice(0, 70)}"${project ? ` (dự án ${project.name})` : ""}\n${segments} đoạn · ~$${cost.toFixed(2)}\n\n${body}\nXem đầy đủ: ${origin}/analytics/creator/argon`)
+    const head = status === "done" ? "Việc nền xong" : status === "stopped" ? "Việc nền đã dừng" : "Việc nền lỗi"
+    const answer = stripReports(run.answer)
+    const body = status === "error" ? `Lỗi: ${error ?? "không rõ"}` : `${answer.replace(/\s+/g, " ").slice(0, 700)}${answer.length > 700 ? "…" : ""}`
+    await notify("creator", {
+      kind: status === "done" ? "Xong việc" : "Cảnh báo", source: "Argon",
+      title: `${head}: "${run.prompt.replace(/\s+/g, " ").slice(0, 70)}"${project ? ` (dự án ${project.name})` : ""}`,
+      body: `${segments} đoạn · ~$${cost.toFixed(2)}\n\n${body}`,
+      link: { label: "Xem đầy đủ", url: `${origin}/analytics/creator/argon` },
+    })
   } catch (e) { console.error("[argon worker] notify:", (e as Error).message) }
 }
 

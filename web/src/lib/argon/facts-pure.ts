@@ -4,9 +4,10 @@ export type FactType = keyof typeof FACT_TYPES
 export type FactStatus = "active" | "expired" | "superseded" | "rejected"
 export const MAX_FACTS_PER_SOURCE = 8
 
-export interface FactIn { type: FactType; vendor: string; subject: string; summary: string; evidence: string; effectiveFrom: string | null; expiresAt: string | null }
+export interface FactIn { type: FactType; vendor: string; subject: string; attribute: string; value: string; summary: string; evidence: string; effectiveFrom: string | null; expiresAt: string | null }
 export interface FactRow {
-  id: string; username: string; type: FactType; vendor: string; subject: string; summary: string; evidence: string
+  id: string; username: string; type: FactType; vendor: string; subject: string; attribute: string; value: string; summary: string; evidence: string
+  source_date: string | null; recorded_at: string; expired_at: string | null; change_note: string; needs_review: boolean
   effective_from: string | null; expires_at: string | null; status: FactStatus; origin: "auto" | "manual"; edited: boolean
   source_id: string | null; source_name: string; superseded_by: string | null; remind_days: number
   reminded_at: string | null; announced_at: string | null; created_at: string; updated_at: string
@@ -42,7 +43,7 @@ export function normalizeFacts(raw: unknown): FactIn[] {
     const effectiveFrom = isoDate(o.effectiveFrom)
     let expiresAt = isoDate(o.expiresAt)
     if (effectiveFrom && expiresAt && expiresAt < effectiveFrom) expiresAt = null
-    out.push({ type, vendor: s(o.vendor, 80), subject: s(o.subject, 120), summary, evidence: s(o.evidence, 240), effectiveFrom, expiresAt })
+    out.push({ type, vendor: s(o.vendor, 80), subject: s(o.subject, 120), attribute: s(o.attribute, 60), value: s(o.value, 80), summary, evidence: s(o.evidence, 240), effectiveFrom, expiresAt })
     if (out.length >= MAX_FACTS_PER_SOURCE) break
   }
   return out
@@ -50,7 +51,7 @@ export function normalizeFacts(raw: unknown): FactIn[] {
 
 const fold = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
 /** Khoá nhận diện "cùng một sự việc" giữa các nguồn: vendor + loại + đối tượng (không dấu, không phân biệt hoa thường). */
-export const factKey = (f: { vendor: string; type: string; subject: string }) => `${fold(f.vendor)}|${f.type}|${fold(f.subject)}`
+export const factKey = (f: { vendor: string; type: string; subject: string; attribute?: string }) => `${fold(f.vendor)}|${f.type}|${fold(f.subject)}${f.attribute ? `|${fold(f.attribute)}` : ""}`
 
 /** Khoá phụ: cùng vendor + loại + CÙNG ngày hiệu lực/hết hạn (có ít nhất một ngày) thì coi là cùng một sự việc dù mô tả đối tượng khác chữ (vd 2 mail báo cùng một thông báo). */
 export const dateKey = (f: { vendor: string; type: string; effective_from?: string | null; expires_at?: string | null; effectiveFrom?: string | null; expiresAt?: string | null }) => {
@@ -93,22 +94,78 @@ export function bucketFacts(rows: FactRow[], today: string): FactBuckets {
 }
 
 const dmy = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "")
-export const factLine = (f: Pick<FactRow, "type" | "vendor" | "subject" | "summary" | "effective_from" | "expires_at">) => {
+export const factLine = (f: Pick<FactRow, "type" | "vendor" | "subject" | "summary" | "effective_from" | "expires_at"> & { source_date?: string | null }) => {
   const when = [f.effective_from ? `từ ${dmy(f.effective_from)}` : "", f.expires_at ? `đến ${dmy(f.expires_at)}` : ""].filter(Boolean).join(" ")
-  return `[${FACT_TYPES[f.type] ?? "Khác"}] ${[f.vendor, f.subject].filter(Boolean).join(" · ")}: ${f.summary}${when ? ` (${when})` : ""}`
+  return `[${FACT_TYPES[f.type] ?? "Khác"}] ${[f.vendor, f.subject].filter(Boolean).join(" · ")}: ${f.summary}${when ? ` (${when})` : ""}${f.source_date ? ` · tin ngày ${dmy(f.source_date)}` : ""}`
+}
+
+// ── Chống nhầm sự việc cũ với sự việc mới thay thế ─────────────────────────────────────────────────────────────────────────────────
+// Hai trục thời gian: source_date = ngày CỦA TIN (tin nào mới hơn), recorded_at = lúc hệ thống biết. Tin cũ nạp SAU tin mới không được đè tin mới.
+
+/** Ngày của tin: ngày tin nhắn/thư cuối (meta.lastDate) nếu có, không thì ngày cập nhật nguồn — theo giờ VN. */
+export function sourceDateOf(src: { meta?: Record<string, unknown> | null; updated_at?: string | null }, now = Date.now()): string {
+  const raw = [src.meta?.lastDate, src.meta?.sourceDate, src.updated_at].find(v => typeof v === "string" && Number.isFinite(Date.parse(v as string))) as string | undefined
+  return vnToday(raw ? Date.parse(raw) : now)
+}
+
+const rowDate = (f: Pick<FactRow, "source_date" | "created_at">) => f.source_date ?? f.created_at.slice(0, 10)
+const sameText = (a: string, b: string) => fold(a) === fold(b)
+
+type Cmp = Pick<FactRow, "attribute" | "value" | "summary" | "effective_from" | "expires_at">
+/** Hai bản ghi nói cùng một điều (giá trị + ngày giống nhau)? Không có giá trị thì so tóm tắt. */
+export function sameContent(old: Cmp, inc: { attribute: string; value: string; summary: string; effectiveFrom: string | null; expiresAt: string | null }): boolean {
+  if (old.effective_from !== inc.effectiveFrom || old.expires_at !== inc.expiresAt) return false
+  return old.value && inc.value ? sameText(old.value, inc.value) : sameText(old.summary, inc.summary)
+}
+
+/** Ghi chú thay đổi "giá vốn/GB: 3.0 HKD → 3.5 HKD", hoặc "trước: <tóm tắt cũ>"; rỗng nếu nội dung không đổi. */
+export function changeNote(old: Cmp, inc: { attribute: string; value: string; summary: string; effectiveFrom: string | null; expiresAt: string | null }): string {
+  if (sameContent(old, inc)) return ""
+  if (old.attribute && sameText(old.attribute, inc.attribute) && old.value && inc.value && !sameText(old.value, inc.value)) return `${inc.attribute}: ${old.value} → ${inc.value}`.slice(0, 200)
+  return `trước: ${old.summary}`.slice(0, 200)
+}
+
+const REVIEW_TYPES: FactType[] = ["doi_gia", "ngung_ban", "doi_mang"]
+export interface SupersedePlan {
+  /** Tin mới nhưng có sự việc CÙNG khoá từ tin MỚI HƠN → sự việc này đã lỗi thời ngay khi ghi (status superseded). */
+  staleBy: FactRow | null
+  /** Sự việc cũ hơn bị sự việc này thay thế. */
+  replace: FactRow[]
+  /** Ghi chú thay đổi (từ sự việc bị thay thế mới nhất); rỗng nếu không đổi. */
+  note: string
+  /** Cần anh xác nhận: thay đổi giá/ngừng bán/đổi mạng, hoặc xung đột với bản anh đã sửa tay. */
+  needsReview: boolean
+  /** Bản anh đã sửa tay/ghi tay mà tin mới nói khác → KHÔNG tự thay, chờ anh. */
+  conflictWith: FactRow | null
+}
+
+/** Quyết định cho 1 sự việc mới `inc` (tin ngày `sourceDate`) so với các sự việc của nguồn KHÁC. Thuần. */
+export function planSupersede(inc: FactIn, sourceDate: string, others: FactRow[]): SupersedePlan {
+  const k = factKey(inc), dk = dateKey(inc)
+  const matches = others.filter(o => (o.status === "active" || o.status === "expired") && ((o.subject && factKey(o) === k) || (dk && dateKey(o) === dk)))
+  const newer = matches.filter(o => rowDate(o) > sourceDate).sort((a, b) => rowDate(b).localeCompare(rowDate(a)))[0] ?? null
+  if (newer) return { staleBy: newer, replace: [], note: "", needsReview: false, conflictWith: null }
+  const hand = matches.find(o => (o.edited || o.origin === "manual") && !sameContent(o, inc)) ?? null
+  const replace = matches.filter(o => o !== hand)
+  const latest = [...replace].sort((a, b) => rowDate(b).localeCompare(rowDate(a)))[0]
+  const note = (latest ? changeNote(latest, inc) : "") || (hand ? `khác bản anh đã ghi: ${hand.summary}`.slice(0, 200) : "")
+  return { staleBy: null, replace, note, needsReview: !!hand || (!!note && REVIEW_TYPES.includes(inc.type)), conflictWith: hand }
 }
 
 /** Khối "sổ sự việc" đầu ngữ cảnh của Thủ thư Kho: các sự việc còn hiệu lực gần hạn nhất, mỗi dòng kèm id để cập nhật. */
 export function factsBlock(rows: FactRow[], today: string, max = 30): string {
   const live = rows.filter(r => r.status === "active").sort((a, b) => (keyDate(a) ?? "9999").localeCompare(keyDate(b) ?? "9999")).slice(0, max)
-  return `<so_su_viec hom_nay="${today}" dang_hieu_luc="${rows.filter(r => r.status === "active").length}">\n${live.map(f => `- [${f.id}] ${factLine(f)}${f.source_name ? ` — nguồn: ${f.source_name}` : ""}`).join("\n") || "(chưa có sự việc nào)"}\n</so_su_viec>`
+  return `<so_su_viec hom_nay="${today}" dang_hieu_luc="${rows.filter(r => r.status === "active").length}">\n${live.map(f => `- [${f.id}] ${factLine(f)}${f.source_name ? ` — nguồn: ${f.source_name}` : ""}${f.change_note ? ` — ĐỔI so với tin cũ (${f.change_note})` : ""}${f.needs_review ? " — CHỜ ANH XÁC NHẬN" : ""}`).join("\n") || "(chưa có sự việc nào)"}\n</so_su_viec>`
 }
 
 /** Tin Lark gửi Hiếu mỗi đêm: sự việc mới Argon vừa tự ghi + sự việc tới hạn + số vừa hết hạn. Rỗng nếu không có gì. */
 export function nightlyMessage(a: { added: FactRow[]; due: FactRow[]; expired: number; link: string }): string {
   const parts: string[] = []
   if (a.due.length) parts.push(`⏰ Sắp tới hạn (${a.due.length}):\n${a.due.slice(0, 10).map(f => `• ${factLine(f)}`).join("\n")}`)
-  if (a.added.length) parts.push(`📝 Argon vừa ghi vào sổ ${a.added.length} sự việc mới:\n${a.added.slice(0, 10).map(f => `• ${factLine(f)}${f.source_name ? ` — ${f.source_name}` : ""}`).join("\n")}${a.added.length > 10 ? `\n… và ${a.added.length - 10} mục nữa` : ""}`)
+  const changed = a.added.filter(f => f.change_note)
+  const fresh = a.added.filter(f => !f.change_note)
+  if (changed.length) parts.push(`🔁 Thay đổi so với tin cũ (${changed.length}):\n${changed.slice(0, 10).map(f => `• ${factLine(f)}\n   ↳ ${f.change_note}${f.needs_review ? " — chờ anh xác nhận" : ""}`).join("\n")}`)
+  if (fresh.length) parts.push(`📝 Argon vừa ghi vào sổ ${fresh.length} sự việc mới:\n${fresh.slice(0, 10).map(f => `• ${factLine(f)}${f.source_name ? ` — ${f.source_name}` : ""}`).join("\n")}${fresh.length > 10 ? `\n… và ${fresh.length - 10} mục nữa` : ""}`)
   if (a.expired) parts.push(`⌛ ${a.expired} sự việc vừa hết hạn.`)
   if (!parts.length) return ""
   return `${parts.join("\n\n")}\n\nSai thì anh sửa hoặc bỏ ở Kho › Sổ sự việc: ${a.link}`

@@ -1,5 +1,6 @@
 import { Type, type FunctionDeclaration } from "@google/genai"
 import type { MissionPhase } from "./missions"
+import { formatNotice } from "@/lib/notify-pure"
 import type { ToolLogEntry } from "./tools"
 
 // Công cụ `deXuatSuaCode`: Argon phát hiện lỗi/việc cải tiến ở CODE của Intel (vd số liệu một tab lệch) thì soạn ĐỀ XUẤT SỬA CODE kèm bằng chứng. Argon KHÔNG tự sửa/đẩy code:
@@ -78,7 +79,8 @@ export async function execPropose(
     const r = addProposal(await deps.load(ctx.missionId), n, deps.newId(), at)
     if ("error" in r) return done(false, r.error)
     await deps.save(ctx.missionId, r.list)
-    await deps.notify(`🛠 Argon đề xuất sửa code (sứ mệnh "${ctx.missionName}"): ${n.title}\nChờ anh duyệt tại: ${ctx.origin}/analytics/creator/argon\n(Duyệt xong Claude Code mới viết patch và mở PR vào staging.)`).catch(() => undefined)
+    await deps.notify(formatNotice({ kind: "Cần duyệt", source: "Argon", title: `Đề xuất sửa code: ${n.title}`, priority: "high",
+      body: `Sứ mệnh "${ctx.missionName}". Duyệt xong Claude Code mới viết patch và mở PR vào staging.`, link: { label: "Chờ anh duyệt tại", url: `${ctx.origin}/analytics/creator/argon` } })).catch(() => undefined)
     return done(true, `Đã ghi đề xuất "${n.title}" — CHỜ Hiếu duyệt. Bạn không tự sửa code; tiếp tục việc khác hoặc nêu đề xuất này trong tổng kết.`)
   } catch (e) { return done(false, `Không lưu được đề xuất: ${(e as Error).message}`) }
 }

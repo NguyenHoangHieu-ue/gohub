@@ -4,7 +4,7 @@
 // Gấu Tổ — tránh chép lại y hệt logic (đúng bài học "duplicate code" audit s195+17 từng bắt ở chỗ khác).
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { supabaseAdmin }      from "@/lib/supabase"
-import { sendLarkDM }         from "@/lib/lark"
+import { notify }             from "@/lib/notify"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 
 const LEARNING_COOLDOWN = 5 * 60_000
@@ -98,13 +98,13 @@ Trả JSON (KHÔNG giải thích gì khác):
     }
     if (creatorLarkId) {
       const now = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
-      let msg = `🔔 ${sourceLabel} phát hiện học liệu [${typeLabel}]\n${sevLabel}\n\n👤 User: ${userName || userId} (role: ${role})\n📅 ${now}\n💬 Nói: "${userMsg.slice(0, 200)}"\n\n🧠 Phát hiện: "${result.detected_info}"`
+      let msg = `${sevLabel}\n\n👤 User: ${userName || userId} (role: ${role})\n📅 ${now}\n💬 Nói: "${userMsg.slice(0, 200)}"\n\n🧠 Phát hiện: "${result.detected_info}"`
       if (result.learning_type === "CONFLICT" && result.existing_kb_key) {
         msg += `\n❌ Mâu thuẫn với KB[${result.existing_kb_key}]`
         if (result.conflict_detail) msg += `: ${result.conflict_detail}`
       }
       msg += `\n\n→ Mở Gấu Pro → "review pending learning ${id}" để xử lý`
-      await sendLarkDM(creatorLarkId, msg)
+      await notify(creatorLarkId, { kind: "Cần duyệt", source: sourceLabel, title: `Học liệu mới [${typeLabel}]`, body: msg, priority: severity === "HIGH" ? "high" : "normal" })
     }
   } catch { /* learning detection không được làm chậm/break response */ }
 }

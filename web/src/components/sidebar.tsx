@@ -25,7 +25,6 @@ const NAV_MAIN = [
 const NAV_PRODUCTS = [
   { href: "/skus",                        label: "System SKUs",  icon: Package,  key: "skus"         },
   { href: "/ncc",                         label: "NCC Catalog",  icon: Truck,    key: "ncc"          },
-  { href: "/analytics/bc-datapool",       label: "BC Datapool",  icon: Database, key: "bc-datapool"  },
   { href: "/countries",                   label: "Reference",    icon: Globe,    key: "countries"    },
 ]
 
@@ -103,6 +102,7 @@ const CREATOR_GROUP = {
     { href: "/analytics/my-metrics",        label: "My Metrics",       icon: Target   },
     { href: "/analytics/market",            label: "Thị trường & Báo giá", icon: Globe2 },
     { href: "/analytics/product-tools",     label: "Tính giá & Tạo sản phẩm", icon: Calculator },
+    { href: "/analytics/bc-datapool",       label: "BC Datapool",      icon: Database },
   ],
 }
 

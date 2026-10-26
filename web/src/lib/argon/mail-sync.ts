@@ -79,7 +79,7 @@ export async function syncMailRule(projectId: string, username: string, rule: Ma
         const version = cur.version + 1
         const tokens = await countTokens(await sourceParts({ ...cur, extracted_text: text }, { left: 0 }, []))
         await supabaseAdmin.from("argon_source_versions").insert({ source_id: cur.id, version, extracted_text: text, note: "Có thư mới trong luồng", author: "lark-mail" })
-        await supabaseAdmin.from("argon_sources").update({ extracted_text: text, content_hash: hash, version, tokens, size_bytes: Buffer.byteLength(text), synced_at: new Date().toISOString(), updated_at: new Date().toISOString(), name: `✉ ${latest.subject}`.slice(0, 160), meta: { ...cur.meta, ...meta } }).eq("id", cur.id)
+        await supabaseAdmin.from("argon_sources").update({ extracted_text: text, content_hash: hash, version, tokens, size_bytes: Buffer.byteLength(text), synced_at: new Date().toISOString(), updated_at: new Date().toISOString(), name: `✉ ${latest.subject}`.slice(0, 160), meta: { ...cur.meta, ...meta, factsAt: undefined } }).eq("id", cur.id)
         res.updated++
       }
 

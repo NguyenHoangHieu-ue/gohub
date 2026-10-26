@@ -3,7 +3,8 @@
 // cho người hỏi (nằm trong Lark của họ); không chuyển được thì cấp quyền sửa. Bot KHÔNG đọc/sửa file riêng của họ.
 // Thứ tự theo yêu cầu Hiếu: DM báo trước → làm → DM kèm link (câu trả lời cũng phải có link).
 import { SchemaType } from "@google/generative-ai"
-import { getLarkToken, sendLarkDM } from "@/lib/lark"
+import { getLarkToken } from "@/lib/lark"
+import { notify } from "@/lib/notify"
 import { supabaseAdmin } from "@/lib/supabase"
 import { runLarkDocsWithToken } from "./creator/tools/lark-docs"
 import { dueMs } from "./creator/tools/lark"
@@ -68,7 +69,7 @@ export async function runLarkWorkspace(a: Args, openId: string | null): Promise<
   if (!openId) return { error: "Tài khoản này chưa liên kết Lark — đăng nhập GoHub Intel bằng Lark một lần để Bé Gấu tạo được file/task cho bạn." }
   const title = a.title.trim()
 
-  await sendLarkDM(openId, `🐻 Bé Gấu nhận yêu cầu tạo ${label} **${title}**. Em đang làm, xong em gửi link ở đây nhé.`)
+  await notify(openId, { kind: "Tin", source: "Bé Gấu", title: `Nhận yêu cầu tạo ${label} "${title}"`, body: "Em đang làm, xong em gửi link ở đây nhé.", priority: "high" })
   try {
     const token = await getLarkToken()
     let link: string | undefined
@@ -91,11 +92,11 @@ export async function runLarkWorkspace(a: Args, openId: string | null): Promise<
       access = await giveToUser(token, r.token, isDoc ? "docx" : "sheet", openId)
     }
     const where = access === "owner" ? "nằm trong Lark của anh/chị" : access === "editor" ? "đã chia sẻ quyền sửa cho anh/chị" : "đã giao cho anh/chị"
-    await sendLarkDM(openId, `✅ Đã tạo ${label} **${title}** (${where}).${link ? `\n[Mở ${label}](${link})` : ""}`)
+    await notify(openId, { kind: "Xong việc", source: "Bé Gấu", title: `Đã tạo ${label} "${title}"`, body: `${where[0].toUpperCase()}${where.slice(1)}.`, link: link ? { label: `Mở ${label}`, url: link } : undefined, priority: "high" })
     return { ok: true, title, link: link ?? null, access, note: link ? "Đưa link này vào câu trả lời." : "Lark không trả link — báo người dùng mở Lark để xem." }
   } catch (e) {
     const msg = (e as Error).message
-    await sendLarkDM(openId, `⚠️ Bé Gấu chưa tạo được ${label} **${title}**: ${msg}`)
+    await notify(openId, { kind: "Cảnh báo", source: "Bé Gấu", title: `Chưa tạo được ${label} "${title}"`, body: msg, priority: "high" })
     return { error: msg }
   }
 }

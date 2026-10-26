@@ -1,5 +1,6 @@
 import { Type, type FunctionDeclaration } from "@google/genai"
 import type { MissionPhase } from "./missions"
+import { formatNotice } from "@/lib/notify-pure"
 import type { ToolLogEntry } from "./tools"
 
 // Công cụ `hoiHieu`: Argon gặp chỗ mơ hồ ngoài brief/kế hoạch thì HỎI Hiếu rồi DỪNG (không đoán). Câu hỏi hiện ở chat (thẻ có nút chọn) và nhắn Lark cho Hiếu.
@@ -59,7 +60,8 @@ export async function execAsk(
   if ("error" in a) return done(false, a.error)
   try {
     await deps.save(ctx.missionId, { question: a.question, options: a.options, at })
-    await deps.notify(`❓ Argon cần anh quyết (sứ mệnh "${ctx.missionName}"):\n${a.question}${a.options.length ? `\n${a.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}` : ""}\n\nTrả lời tại: ${ctx.origin}/analytics/creator/argon`).catch(() => undefined)   // DM lỗi không được làm mất câu hỏi (vẫn hiện trong chat)
+    await deps.notify(formatNotice({ kind: "Cần trả lời", source: "Argon", title: `Sứ mệnh "${ctx.missionName}" cần anh quyết`, priority: "high",
+      body: `${a.question}${a.options.length ? `\n${a.options.map((o, i) => `${i + 1}. ${o}`).join("\n")}` : ""}`, link: { label: "Trả lời tại", url: `${ctx.origin}/analytics/creator/argon` } })).catch(() => undefined)   // DM lỗi không được làm mất câu hỏi (vẫn hiện trong chat)
     return done(true, "Đã gửi câu hỏi cho Hiếu (chat + Lark). DỪNG lượt này ngay, không làm thêm; Hiếu trả lời thì làm tiếp.")
   } catch (e) { return done(false, `Không lưu được câu hỏi: ${(e as Error).message}`) }
 }

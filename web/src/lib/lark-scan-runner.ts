@@ -10,7 +10,8 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchThreadsFromCapturedLog, fetchRecentThreads, fetchThreadByMessageId, getChatName, type LarkThread } from "@/lib/lark-thread-scan"
 import { classifyLarkThread, type LarkClassifyResult } from "@/lib/okr-lark-classify"
-import { sendLarkDM, getLarkUserOpenId, getLarkToken } from "@/lib/lark"
+import { getLarkUserOpenId, getLarkToken } from "@/lib/lark"
+import { notify } from "@/lib/notify"
 import { quarterLabelForDate } from "@/lib/okr-helpers"
 import { evaluateThread, larkThreadLink, DEFAULT_CASE_GROUPS, type RuleMessage, type RuleOutcome } from "@/lib/okr-lark-rules"
 
@@ -150,7 +151,8 @@ async function processThreads(threads: LarkThread[], hieuId: string, caseGroups:
   out.groups = Array.from(groupCount.entries()).map(([chat_id, thread_count]) => ({ chat_id, chat_name: names.get(chat_id) ?? chat_id, thread_count }))
   if (remindLines.length) {
     const shown = remindLines.slice(0, 25).map((l, i) => `${i + 1}. ${l}`)
-    await sendLarkDM(hieuId, `🔖 ${remindLines.length} thread đã YES nhưng chưa có câu trả lời nào của anh được đánh dấu Typing:\n${shown.join("\n")}${remindLines.length > 25 ? `\n… và ${remindLines.length - 25} thread khác (xem My Metrics)` : ""}\nAnh thả Typing vào câu trả lời giải quyết rồi tag em "Note đi" trong thread nhé.`)
+    await notify(hieuId, { kind: "Nhắc việc", source: "My Metrics", title: `${remindLines.length} thread đã YES nhưng chưa đánh dấu Typing`,
+      body: `Chưa có câu trả lời nào của anh được đánh dấu Typing:\n${shown.join("\n")}${remindLines.length > 25 ? `\n… và ${remindLines.length - 25} thread khác (xem My Metrics)` : ""}\nAnh thả Typing vào câu trả lời giải quyết rồi tag em "Note đi" trong thread nhé.` })
   }
   return out
 }

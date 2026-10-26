@@ -233,7 +233,7 @@ async function upsertThreadSource(projectId: string, externalId: string, name: s
   const version = row.version + 1
   const tokens = await countTokens(await sourceParts({ ...row, extracted_text: text }, { left: 0 }, []))
   await supabaseAdmin.from("argon_source_versions").insert({ source_id: row.id, version, extracted_text: text, note: "Thread có tin mới", author: "lark-thread" })
-  await supabaseAdmin.from("argon_sources").update({ extracted_text: text, content_hash: hash, version, tokens, size_bytes: Buffer.byteLength(text), synced_at: new Date().toISOString(), updated_at: new Date().toISOString(), name: name.slice(0, 160), meta: { ...row.meta, ...meta } }).eq("id", row.id)
+  await supabaseAdmin.from("argon_sources").update({ extracted_text: text, content_hash: hash, version, tokens, size_bytes: Buffer.byteLength(text), synced_at: new Date().toISOString(), updated_at: new Date().toISOString(), name: name.slice(0, 160), meta: { ...row.meta, ...meta, factsAt: undefined } }).eq("id", row.id)
   return "updated"
 }
 

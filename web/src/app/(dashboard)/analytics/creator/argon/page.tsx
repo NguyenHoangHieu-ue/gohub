@@ -4,12 +4,13 @@ import { useCallback, useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { AlertTriangle, CalendarClock, CheckCircle2, Loader2, Moon, RefreshCw, Sparkles, Target } from "lucide-react"
+import { AlertTriangle, CalendarClock, CheckCircle2, Loader2, Mail, Moon, RefreshCw, Sparkles, Target } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api, jsonInit } from "./argon-types"
 import { ArgonMarkdown } from "./argon-markdown"
 import { sectionOf } from "@/lib/argon/context-pure"
 import { FACT_TYPES, bucketFacts, daysUntil, keyDate, type FactRow } from "@/lib/argon/facts-pure"
+import { bucketThreads, isNewThread, waitingDays, type MailThreadRow, type MailThreadStatus } from "@/lib/argon/mail-status-pure"
 
 // Hôm nay: một màn hình gọn cho việc anh cần biết sáng nay — đề xuất (có nguồn, có mức chắc chắn), tin ảnh hưởng tới kế hoạch, sự việc sắp tới hạn.
 // Dữ liệu do Argon cập nhật mỗi đêm (hoặc bấm Cập nhật ngay). Hỏi thêm / đào sâu: tab Trợ lý; xem tài liệu: tab Kho.
@@ -27,6 +28,9 @@ export default function ArgonTodayPage() {
   const [role, setRole] = useState<string | null>(null)
   const [snap, setSnap] = useState<Snapshot | null>(null)
   const [facts, setFacts] = useState<{ rows: FactRow[]; today: string } | null>(null)
+  const [mail, setMail] = useState<{ rows: MailThreadRow[]; now: number } | null>(null)
+  const [mailTab, setMailTab] = useState<"waitingMe" | "waitingPartner" | "done">("waitingMe")
+  const [mailBusy, setMailBusy] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -38,9 +42,10 @@ export default function ArgonTodayPage() {
 
   const load = useCallback(async () => {
     try {
-      const [s, f] = await Promise.all([api<Snapshot>("/api/creator/argon/context"), api<{ facts: FactRow[]; today: string }>("/api/creator/argon/facts").catch(() => null)])
+      const [s, f, m] = await Promise.all([api<Snapshot>("/api/creator/argon/context"), api<{ facts: FactRow[]; today: string }>("/api/creator/argon/facts").catch(() => null), api<{ threads: MailThreadRow[]; now: number }>("/api/creator/argon/mail-status").catch(() => null)])
       setSnap(s)
       if (f) setFacts({ rows: f.facts, today: f.today })
+      if (m) setMail({ rows: m.threads, now: m.now })
     } catch (e) { setErr((e as Error).message) }
   }, [])
   useEffect(() => { if (role === "creator") void load() }, [role, load])
@@ -68,7 +73,15 @@ export default function ArgonTodayPage() {
   const proposals = sectionOf(snap?.tacDong.text ?? "", "Đề xuất")
   const impact = sectionOf(snap?.tacDong.text ?? "", "Tác động")
   const conflicts = sectionOf(snap?.tacDong.text ?? "", "Mâu thuẫn")
-  const soon = facts ? bucketFacts(facts.rows, facts.today).soon.slice(0, 8) : []
+  const pending = facts ? facts.rows.filter(f => f.status === "active" && f.needs_review).slice(0, 8) : []
+  const soon = facts ? bucketFacts(facts.rows.filter(f => !pending.includes(f)), facts.today).soon.slice(0, 8) : []
+  const mailBuckets = mail ? bucketThreads(mail.rows) : null
+  const setThread = async (id: string, status: MailThreadStatus) => {
+    setMail(m => (m ? { ...m, rows: m.rows.map(r => (r.id === id ? { ...r, status, status_by: "manual" } : r)) } : m))   // cập nhật ngay, không chờ tải lại cả trang
+    try { await api("/api/creator/argon/mail-status", jsonInit("PATCH", { id, status })) } catch (e) { setErr((e as Error).message); await load() }
+  }
+  const rescanMail = async () => { setMailBusy(true); try { await api("/api/creator/argon/mail-status", jsonInit("POST", {})); await load() } catch (e) { setErr((e as Error).message) } finally { setMailBusy(false) } }
+  const settle = async (id: string, body: Record<string, unknown>) => { try { await api("/api/creator/argon/facts", jsonInit("PATCH", { id, ...body })); await load() } catch (e) { setErr((e as Error).message) } }
   const planEmpty = !!snap && snap.tacDong.text.includes("Chưa có kế hoạch")
   const audit = snap?.tacDong.audit
 
@@ -110,6 +123,66 @@ export default function ArgonTodayPage() {
         </section>
 
         <div className="space-y-4 min-w-0">
+          {pending.length > 0 && (
+            <section className={cn(card, "p-4 space-y-2")} aria-labelledby="chg-title">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={16} className="text-amber-600" />
+                <h2 id="chg-title" className="font-semibold text-gray-900 dark:text-slate-100">Thay đổi chờ anh xác nhận</h2>
+                <Link href="/analytics/creator/argon/kho-nguon" className="ml-auto text-[12px] text-violet-700 dark:text-violet-300 hover:underline">Sổ sự việc</Link>
+              </div>
+              <ul className="space-y-2.5">
+                {pending.map(f => (
+                  <li key={f.id} className="text-[13px] leading-snug">
+                    <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 mr-1.5">{FACT_TYPES[f.type]}</span>
+                    <b>{[f.vendor, f.subject].filter(Boolean).join(" · ")}</b>: {f.summary}
+                    {f.change_note && <div className="text-[12px] text-amber-700 dark:text-amber-300 mt-0.5">Đổi so với tin cũ: {f.change_note}</div>}
+                    <div className="mt-1 flex gap-3 text-[12px]">
+                      <button type="button" onClick={() => void settle(f.id, { confirm: true })} className="font-medium text-emerald-700 hover:underline">Đúng, xác nhận</button>
+                      <button type="button" onClick={() => void settle(f.id, { status: "rejected" })} className="text-gray-500 hover:text-red-600">Sai, giữ tin cũ</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <section className={cn(card, "p-4 space-y-2")} aria-labelledby="mail-title">
+            <div className="flex items-center gap-2">
+              <Mail size={16} className="text-sky-600" />
+              <h2 id="mail-title" className="font-semibold text-gray-900 dark:text-slate-100">Mail</h2>
+              <button type="button" onClick={() => void rescanMail()} disabled={mailBusy} className="ml-auto inline-flex items-center gap-1 text-[12px] text-violet-700 dark:text-violet-300 hover:underline disabled:opacity-50">
+                {mailBusy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}Quét lại
+              </button>
+            </div>
+            {!mailBuckets || (!mail!.rows.length) ? <p className="text-sm text-gray-500">Chưa có luồng thư nào. Đêm nay Argon sẽ quét INBOX và SENT (chỉ đọc), hoặc bấm Quét lại.</p> : (<>
+              <div className="flex gap-1.5 text-[12px]">
+                {([["waitingMe", "Chờ mình"], ["waitingPartner", "Chờ đối tác"], ["done", "Xong"]] as const).map(([k, label]) => (
+                  <button key={k} type="button" onClick={() => setMailTab(k)} className={cn("px-2 py-1 rounded-lg border", mailTab === k ? "border-violet-500 bg-violet-50 dark:bg-violet-900/30 font-medium" : "border-gray-200 dark:border-slate-700")}>{label} ({mailBuckets[k].length})</button>
+                ))}
+              </div>
+              {mailBuckets[mailTab].length === 0 ? <p className="text-sm text-gray-500">Không có luồng nào.</p> : (
+                <ul className="space-y-2.5">
+                  {mailBuckets[mailTab].slice(0, 8).map(r => (
+                    <li key={r.id} className="text-[13px] leading-snug">
+                      <b>{r.subject || "(không tiêu đề)"}</b>
+                      {isNewThread(r, mail!.now) && <span className="ml-1.5 text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">Mới</span>}
+                      <span className="ml-1.5 text-[11.5px] text-gray-500">{r.counterparty.replace(/<[^>]*>/g, "").trim()} · {waitingDays(r, mail!.now)} ngày</span>
+                      {(r.next_action || r.summary) && <div className="text-[12px] text-gray-600 dark:text-slate-300">{r.next_action ? `Việc: ${r.next_action}` : r.summary}</div>}
+                      <div className="mt-0.5 flex gap-3 text-[12px]">
+                        {r.status !== "done" && <button type="button" onClick={() => void setThread(r.id, "done")} className="font-medium text-emerald-700 hover:underline">Xong</button>}
+                        {r.status === "waiting_me" && <button type="button" onClick={() => void setThread(r.id, "waiting_partner")} className="text-gray-500 hover:text-violet-700">Đã trả lời</button>}
+                        {r.status === "done" && <button type="button" onClick={() => void setThread(r.id, "waiting_me")} className="text-gray-500 hover:text-violet-700">Mở lại</button>}
+                        {r.status !== "done" && <button type="button" onClick={() => void setThread(r.id, "ignored")} className="text-gray-500 hover:text-red-600">Bỏ qua</button>}
+                      </div>
+                    </li>
+                  ))}
+                  {mailBuckets[mailTab].length > 8 && <li className="text-[12px] text-gray-400">… và {mailBuckets[mailTab].length - 8} luồng nữa</li>}
+                </ul>
+              )}
+              {mailBuckets.ignored > 0 && <p className="text-[11.5px] text-gray-400">{mailBuckets.ignored} luồng thư tự động/đã bỏ qua không hiện.</p>}
+            </>)}
+          </section>
+
           <section className={cn(card, "p-4 space-y-2")} aria-labelledby="soon-title">
             <div className="flex items-center gap-2">
               <CalendarClock size={16} className="text-amber-600" />

@@ -28,7 +28,8 @@ export function KhoFacts({ facts, today, onChanged, onOpenSource, onError }: {
   const [adding, setAdding] = useState(false)
   const [add, setAdd] = useState({ type: "khuyen_mai" as FactType, vendor: "", subject: "", summary: "", from: "", to: "" })
   const [pastOpen, setPastOpen] = useState(false)
-  const b = bucketFacts(facts, today)
+  const pending = facts.filter(f => f.status === "active" && f.needs_review)
+  const b = bucketFacts(facts.filter(f => !pending.includes(f)), today)
 
   async function patch(id: string, body: Record<string, unknown>) {
     try { await api("/api/creator/argon/facts", jsonInit("PATCH", { id, ...body })); setEditing(null); await onChanged() } catch (e) { onError((e as Error).message) }
@@ -66,17 +67,20 @@ export function KhoFacts({ facts, today, onChanged, onOpenSource, onError }: {
           </div>
         ) : <>
           <p className="text-[12.5px] leading-snug text-gray-700 dark:text-slate-300">{f.summary}</p>
+          {f.change_note && <p className="text-[11.5px] leading-snug text-amber-700 dark:text-amber-300">Đổi so với tin cũ: {f.change_note}</p>}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-500">
             {f.effective_from && <span>từ {dmy(f.effective_from)}</span>}
             {f.expires_at && <span>đến {dmy(f.expires_at)}</span>}
             {!past && left != null && <span className={cn("font-medium", left < 0 ? "text-gray-500" : left <= 3 ? "text-red-600" : left <= 14 ? "text-amber-600" : "text-gray-500")}>{left < 0 ? `đã qua ${-left} ngày` : left === 0 ? "hôm nay" : `còn ${left} ngày`}</span>}
             {f.source_id && f.source_name && <button type="button" onClick={() => onOpenSource(f.source_id!)} className="text-violet-700 dark:text-violet-300 hover:underline truncate max-w-[160px]" title={f.evidence || f.source_name}>nguồn: {f.source_name}</button>}
+            {f.source_date && <span>tin ngày {dmy(f.source_date)}</span>}
             {f.origin === "manual" && <span>(anh ghi)</span>}
           </div>
           <div className="flex gap-3 text-[11.5px]">
+            {f.needs_review && !past && <button type="button" onClick={() => void patch(f.id, { confirm: true })} className="inline-flex items-center gap-1 font-medium text-emerald-700 hover:underline"><Check size={11} />Xác nhận</button>}
             <button type="button" onClick={() => { setEditing(f.id); setDraft({ summary: f.summary, from: f.effective_from ?? "", to: f.expires_at ?? "" }) }} className="inline-flex items-center gap-1 text-gray-500 hover:text-violet-700"><Pencil size={11} />Sửa</button>
             {past ? <button type="button" onClick={() => void patch(f.id, { status: "active" })} className="text-gray-500 hover:text-emerald-700">Khôi phục</button>
-              : <button type="button" onClick={() => void patch(f.id, { status: "rejected" })} className="inline-flex items-center gap-1 text-gray-500 hover:text-red-600"><X size={11} />Bỏ (ghi sai)</button>}
+              : <button type="button" onClick={() => void patch(f.id, { status: "rejected" })} className="inline-flex items-center gap-1 text-gray-500 hover:text-red-600"><X size={11} />{f.needs_review ? "Bỏ (giữ tin cũ)" : "Bỏ (ghi sai)"}</button>}
           </div>
         </>}
       </div>
@@ -100,6 +104,7 @@ export function KhoFacts({ facts, today, onChanged, onOpenSource, onError }: {
         </div>
       )}
       {!facts.length && <div className="text-xs text-gray-400 py-6 text-center leading-relaxed">Sổ còn trống. Nạp tài liệu, thread hoặc mail: Argon tự ghi khuyến mãi, ngừng bán, đổi giá, hạn chót vào đây.</div>}
+      <Section title="Thay đổi chờ anh xác nhận" rows={pending} tone="text-amber-600" />
       <Section title="Sắp tới hạn (14 ngày)" rows={b.soon} tone="text-amber-600" />
       <Section title="Đang hiệu lực" rows={b.active} />
       {b.past.length > 0 && (

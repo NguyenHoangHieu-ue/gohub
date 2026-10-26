@@ -6,7 +6,7 @@ const db = async () => (await import("@/lib/supabase")).supabaseAdmin   // nạp
 
 // Công cụ riêng của sứ mệnh "Thủ thư Kho": xếp thư mục, đổi tên/nhãn/ghim, lưu ghi chú. KHÔNG xoá gì, không đụng nội dung nguồn.
 // Đọc/tìm nguồn dùng lietKeNguon / timTrongNguon / docNguon có sẵn (ở sứ mệnh Thủ thư, phạm vi = mọi nguồn của người dùng).
-export const KHO_TOOL_NAMES = ["taoThuMuc", "chuyenNguon", "capNhatNguon", "luuGhiChu", "traSuViec", "ghiSuViec", "capNhatSuViec"] as const
+export const KHO_TOOL_NAMES = ["taoThuMuc", "chuyenNguon", "capNhatNguon", "luuGhiChu", "traSuViec", "ghiSuViec", "capNhatSuViec", "traMail"] as const
 
 export const KHO_TOOLS: FunctionDeclaration[] = [
   { name: "taoThuMuc", description: "Tạo thư mục trong Kho (tạo cả các cấp còn thiếu, tối đa 3 cấp). Vd \"Vendor/3HK/Bảng giá\". Đã có thì dùng lại.", parameters: { type: Type.OBJECT, properties: { duongDan: { type: Type.STRING, description: "Đường dẫn thư mục, cấp cách nhau bằng /" } }, required: ["duongDan"] } },
@@ -20,6 +20,10 @@ KHO_TOOLS.push(
   { name: "traSuViec", description: "Tra SỔ SỰ VIỆC có hạn (khuyến mãi, ngừng bán, sản phẩm mới, đổi giá, đổi mạng, chính sách, hạn chót) do Argon tự ghi từ tài liệu/thread/mail. NHANH và rẻ hơn đọc lại từng tài liệu: dùng đầu tiên khi anh hỏi về hạn, khuyến mãi, sản phẩm mới/ngừng bán, thay đổi của vendor. Mỗi dòng có id, ngày hiệu lực/hết hạn và nguồn.", parameters: { type: Type.OBJECT, properties: { loai: { type: Type.STRING, description: `Lọc theo loại: ${FACT_TYPE_LIST.join(" | ")} (tuỳ chọn)` }, vendor: { type: Type.STRING, description: "Lọc theo vendor/đối tác (chứa chuỗi này, tuỳ chọn)" }, tuKhoa: { type: Type.STRING, description: "Từ khoá trong nội dung/đối tượng (tuỳ chọn)" }, tatCa: { type: Type.BOOLEAN, description: "true = gồm cả sự việc đã hết hạn/bị thay thế/bỏ (mặc định chỉ đang hiệu lực)" } } } },
   { name: "ghiSuViec", description: "Ghi MỘT sự việc có hạn vào sổ khi anh nói cho em biết (vd vendor báo miệng, tin nhắn chưa có trong Kho) hoặc khi em phát hiện qua so sánh nhiều tài liệu. Ngày dạng YYYY-MM-DD, chỉ điền khi chắc.", parameters: { type: Type.OBJECT, properties: { loai: { type: Type.STRING, description: FACT_TYPE_LIST.join(" | ") }, vendor: { type: Type.STRING }, doiTuong: { type: Type.STRING, description: "Sản phẩm/nước/mạng ngắn gọn" }, noiDung: { type: Type.STRING, description: "1 câu tiếng Việt đủ số liệu" }, hieuLucTu: { type: Type.STRING, description: "YYYY-MM-DD (tuỳ chọn)" }, hetHan: { type: Type.STRING, description: "YYYY-MM-DD (tuỳ chọn)" } }, required: ["loai", "noiDung"] } },
   { name: "capNhatSuViec", description: "Sửa một sự việc trong sổ theo id (từ traSuViec / mục lục): đổi nội dung, ngày, hoặc đổi trạng thái (bo = ghi sai nên bỏ, het_han, dang_hieu_luc). Dùng khi anh bảo sửa hoặc khi tài liệu mới cho thấy sự việc cũ đã đổi.", parameters: { type: Type.OBJECT, properties: { id: { type: Type.STRING }, trangThai: { type: Type.STRING, description: "bo | het_han | dang_hieu_luc (tuỳ chọn)" }, noiDung: { type: Type.STRING }, hieuLucTu: { type: Type.STRING, description: "YYYY-MM-DD hoặc rỗng để xoá" }, hetHan: { type: Type.STRING, description: "YYYY-MM-DD hoặc rỗng để xoá" } }, required: ["id"] } },
+)
+
+KHO_TOOLS.push(
+  { name: "traMail", description: "Tra SỔ TRẠNG THÁI MAIL theo luồng thư (chỉ đọc, do Argon quét INBOX + SENT 14 ngày gần nhất mỗi đêm): luồng nào đang chờ anh trả lời, luồng nào anh đã gửi mà đối tác chưa trả lời, luồng nào đã xong. Mỗi dòng có tiêu đề, đối tác, số ngày chờ và việc cần làm tiếp. Dùng khi anh hỏi 'mail nào đang chờ tôi', 'ai chưa trả lời', 'thread X xong chưa'.", parameters: { type: Type.OBJECT, properties: { trangThai: { type: Type.STRING, description: "cho_minh | cho_doi_tac | xong | tat_ca (mặc định cho_minh)" }, tuKhoa: { type: Type.STRING, description: "Từ khoá trong tiêu đề/đối tác/tóm tắt (tuỳ chọn)" } } } },
 )
 
 const entry = (name: string, args: Record<string, unknown>, ok: boolean, result: string): ToolLogEntry => ({ name, args, ok, chars: result.length, result, at: new Date().toISOString() })
@@ -78,7 +82,15 @@ export async function execKhoTool(name: string, args: Record<string, unknown>, u
       const hit = rows.filter(f => (!loai || f.type === loai) && (!vendor || f.vendor.toLowerCase().includes(vendor)) && (!kw || `${f.subject} ${f.summary} ${f.vendor}`.toLowerCase().includes(kw)))
         .sort((a, b) => (a.expires_at ?? a.effective_from ?? "9999").localeCompare(b.expires_at ?? b.effective_from ?? "9999")).slice(0, 60)
       if (!hit.length) return entry(name, args, true, `Sổ sự việc không có mục nào khớp (hôm nay ${vnToday()}). Nếu cần chắc chắn hơn thì tìm trong tài liệu bằng timTrongNguon.`)
-      return entry(name, args, true, `${hit.length} sự việc (hôm nay ${vnToday()}):\n${hit.map(f => `- [${f.id}] ${factLine(f)}${f.status !== "active" ? ` {${f.status}}` : ""}${f.source_name ? ` — nguồn: ${f.source_name}` : ""}`).join("\n")}`)
+      return entry(name, args, true, `${hit.length} sự việc (hôm nay ${vnToday()}):\n${hit.map(f => `- [${f.id}] ${factLine(f)}${f.status !== "active" ? ` {${f.status}}` : ""}${f.source_name ? ` — nguồn: ${f.source_name}` : ""}${f.change_note ? ` — ĐỔI so với tin cũ (${f.change_note})` : ""}${f.needs_review ? " — CHƯA được anh xác nhận" : ""}`).join("\n")}\nKhi trả lời PHẢI nêu ngày của tin ("tin ngày …"); hai tin mâu thuẫn thì theo tin mới hơn và nói rõ tin cũ đã bị thay.`)
+    }
+    if (name === "traMail") {
+      const { listMailThreads, threadLine, STATUS_LABEL } = await import("./mail-status")
+      const want = ({ cho_minh: "waiting_me", cho_doi_tac: "waiting_partner", xong: "done" } as Record<string, string>)[String(args.trangThai ?? "cho_minh")]
+      const kw = String(args.tuKhoa ?? "").trim().toLowerCase()
+      const rows = (await listMailThreads(username)).filter(r => r.status !== "ignored" && (String(args.trangThai) === "tat_ca" || r.status === want) && (!kw || `${r.subject} ${r.counterparty} ${r.summary}`.toLowerCase().includes(kw))).slice(0, 40)
+      if (!rows.length) return entry(name, args, true, "Sổ mail không có luồng nào khớp (sổ chỉ gồm thư 14 ngày gần nhất trong INBOX + SENT, cập nhật mỗi đêm).")
+      return entry(name, args, true, `${rows.length} luồng thư:\n${rows.map(r => `- [${STATUS_LABEL[r.status]}] ${threadLine(r)}`).join("\n")}`)
     }
     if (name === "ghiSuViec") {
       const type = (String(args.loai ?? "") in FACT_TYPES ? String(args.loai) : "khac") as FactType

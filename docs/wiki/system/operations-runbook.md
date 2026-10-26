@@ -76,7 +76,6 @@ Tất cả route trên đều yêu cầu session. API routes thêm `getServerSes
 | `prewarm-analytics` | `0 2 * * *` | 09:00 | Cache warm analytics queries |
 | `refresh-b2c-report` | `30 2 * * *` | 09:30 | B2C monthly snapshot |
 | `refresh-trends` | `0 1 * * *` | 08:00 | Thu thập trend data (web search) |
-| `bc-sync` | `0 0 * * *` | 07:00 | Sync BC Datapool |
 | `ca-thread-remind` | `0 3 * * 1` | 10:00 Thứ Hai | Nhắc cà thread Lark |
 
 ETL gohub_dw chạy ~08:00 ICT. Thứ tự cron sau s159: ETL (08:00) → kpis (08:30) → prewarm (09:00) → b2c-report (09:30). ✅ Đúng thứ tự.
@@ -92,7 +91,6 @@ Có 2 trigger đồng thời: Vercel cron (1 lần/ngày) + GitHub Actions (*/15
 | `prewarm-analytics` | `Authorization: Bearer $CRON_SECRET` (fail nếu env rỗng) | ✅ |
 | `scheduled-messages` | `Authorization: Bearer $CRON_SECRET` (fail nếu env rỗng) | ✅ |
 | `refresh-trends` | `Authorization: Bearer $CRON_SECRET` | ✅ fixed s159 |
-| `bc-sync` | `Authorization: Bearer $CRON_SECRET` | ✅ |
 | `ca-thread-remind` | `Authorization: Bearer $CRON_SECRET` | ✅ |
 | `refresh-b2c-report` | `Authorization: Bearer $CRON_SECRET` (fail nếu env rỗng) | ✅ fixed s159 |
 | `refresh-monthly-kpis` | `isCronReq()` Bearer header | ✅ |
@@ -367,3 +365,10 @@ Triệu chứng: chat trả lỗi 429
 - **Lần chạy đầu (2026-10-05, từ staging)**: tạo 10 · cập nhật 40 · giữ nguyên 3 · lỗi 0 · 15 trang chỉ có trên web không đụng; không trang
   nào bị cảnh báo bản web mới hơn. Chạy lại → giữ nguyên 53 (không ghi lặp). Bé Gấu trả lời đúng quy trình SIMPIN Gighub từ trang vừa tạo.
 - Trùng `title` giữa 2 file → chỉ file đầu được đồng bộ (script in cảnh báo) — đổi title để khác nhau.
+
+## s241 — `notify()` chuẩn hoá DM Lark (P0b của plan Trợ lý hợp nhất)
+
+- `lib/notify.ts` `notify(to | "creator", { kind, source, title, body?, link?, priority? })`; phần thuần ở `lib/notify-pure.ts`. Đầu tin cố định `{icon} [Loại · Nguồn] Tiêu đề — dd/MM` (Loại: Báo cáo, Cảnh báo, Xong việc, Cần duyệt, Cần trả lời, Nhắc việc, Tin), rồi nội dung, rồi dòng link.
+- **Giờ yên lặng 22:00–07:00 (giờ VN):** chỉ tin `priority: "low"` bị xếp hàng (`app_settings` key `notify_queue`), cron `scheduled-messages` (mỗi giờ) gọi `flushNotifyQueue()` sau 07:00 và gửi GỘP một tin mỗi người. `normal`/`high` gửi ngay. Hiện `low`: tin model Gemini mới, tóm tắt sổ sự việc đêm.
+- Đã chuyển sang `notify()`: digest Gấu Pro, đánh giá My Metrics, quét giá vendor, việc nền Gấu Pro/Bé Gấu, việc nền Argon, tóm tắt sổ sự việc, Soát giá vốn, phiếu sửa code, học liệu, tạo file/báo cáo Lark, nhắc thread, nhắc task, task từ group, duyệt Gấu Pro. Câu hỏi/đề xuất của Argon (`ask-tool`, `patch-tool`) dùng `formatNotice` cùng khuôn. Chưa đổi (có chủ đích): tin vào group (release, cron-alert, Tổ Gấu), `broadcast-once`.
+- Thêm DM mới: dùng `notify()`, không gọi `sendLarkDM` trực tiếp. Test `notify.test.ts`.

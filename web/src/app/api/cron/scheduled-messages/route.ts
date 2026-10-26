@@ -46,6 +46,9 @@ export async function GET(req: NextRequest) {
   // Việc nền Phòng Argon bị kẹt (đoạn chết giữa chừng) → gọi worker chạy lại; rẻ (1 truy vấn nhỏ), không chặn cron.
   try { const { listBgRunIds } = await import("@/lib/argon/bg"); const { resumeStuckBackground } = await import("@/lib/argon/bg-worker"); await resumeStuckBackground(req.nextUrl.origin, listBgRunIds) } catch (e) { console.error("[scheduled-messages] argon sweep:", (e as Error).message) }
 
+  // Tin DM xếp hàng trong giờ yên lặng (22:00–07:00 VN) → gửi gộp khi hết giờ yên lặng.
+  try { const { flushNotifyQueue } = await import("@/lib/notify"); await flushNotifyQueue() } catch (e) { console.error("[scheduled-messages] notify flush:", (e as Error).message) }
+
   // Thời gian theo ICT (UTC+7) — matcher đọc qua getUTC* nên shift trước
   const ict = new Date(Date.now() + 7 * 3600_000)
 
