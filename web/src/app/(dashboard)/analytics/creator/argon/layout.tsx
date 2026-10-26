@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { ChevronDown, Database, MessagesSquare, Network, Phone, Settings2, Sun } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useArgonMember } from "./use-argon-member"
 
 // Trợ lý (Argon): 3 tab — Hôm nay (việc cần duyệt + đề xuất + kế hoạch) · Hỏi · Kho (tài liệu, sổ sự việc, thực thể, nguồn tự động) — và menu "Thêm" (Cuộc gọi, Bản đồ, Nâng cao).
 const A = "/analytics/creator/argon"
@@ -22,6 +23,7 @@ const MORE = [
 export default function ArgonLayout({ children }: { children: React.ReactNode }) {
   const path = usePathname() ?? ""
   const [pending, setPending] = useState(0)
+  const member = useArgonMember()
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   // Huy hiệu số việc đang chờ (nhẹ: ?count=1); tải lại mỗi lần đổi trang trong Trợ lý.
@@ -46,7 +48,7 @@ export default function ArgonLayout({ children }: { children: React.ReactNode })
               <t.icon size={15} />{t.label}{"badge" in t && t.badge && pending > 0 && <span className="ml-0.5 rounded-full bg-red-500 px-1.5 text-[10.5px] font-semibold leading-4 text-white">{pending}</span>}
             </Link>
           ))}
-          <div ref={menuRef} className="relative ml-auto">
+          <div ref={menuRef} className={cn("relative ml-auto", member && "hidden")}>
             <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open} aria-haspopup="menu"
               className={cn("inline-flex items-center gap-1.5 px-3 py-2 text-[13px] border-b-2 -mb-px transition-colors", moreActive ? "border-violet-600 text-violet-700 dark:text-violet-300 font-medium" : "border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-slate-200")}>
               {moreActive ? moreActive.label : "Thêm"}<ChevronDown size={14} className={cn("transition-transform", open && "rotate-180")} />

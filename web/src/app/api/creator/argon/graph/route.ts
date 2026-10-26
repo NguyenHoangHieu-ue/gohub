@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { cleanAutomatedMailGraph, digestPending } from "@/lib/argon/kho-digest"
 import { requireArgonUser } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { getEntity, listEntities } from "@/lib/argon/graph"
 import { listFacts, fold } from "@/lib/argon/facts"
 
@@ -10,7 +11,7 @@ export const maxDuration = 120
 // GET → danh sách thực thể (vendor, thị trường, sản phẩm, khách, người) kèm số nguồn nhắc tới.
 // GET ?id=<số> hoặc ?q=<tên> → chi tiết: nhắc ở nguồn nào, liên quan thực thể nào, sự việc đang hiệu lực của nó.
 export async function GET(req: NextRequest) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   try {
     const id = req.nextUrl.searchParams.get("id"), q = req.nextUrl.searchParams.get("q")

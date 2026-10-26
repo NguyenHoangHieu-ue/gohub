@@ -8,6 +8,7 @@ import { threadLine } from "@/lib/argon/mail-status-pure"
 import { candidates, readRegistry } from "@/lib/agents/creator/learned-skills"
 import { evalSummary } from "@/lib/agents/creator/skill-eval"
 import { gateSummary } from "@/lib/argon/eval-checks"
+import { MEMBER_INBOX_KINDS } from "@/lib/argon/access-pure"
 import { sortInbox, urgencyFor, type InboxItem } from "./inbox-pure"
 
 export * from "./inbox-pure"
@@ -110,12 +111,13 @@ async function skillItems(now: number): Promise<InboxItem[]> {
   })
 }
 
-export async function loadInbox(username: string, now = Date.now()): Promise<{ items: InboxItem[]; failed: string[] }> {
+export async function loadInbox(username: string, now = Date.now(), level: "owner" | "member" = "owner"): Promise<{ items: InboxItem[]; failed: string[] }> {
   const jobs: [string, Promise<InboxItem[]>][] = [
     ["Hành động Gấu Pro", gpActions(username, now)], ["Argon", argonItems(username, now)], ["Sổ sự việc", factReviews(username, now)], ["Mail", mailItems(username, now)], ["Phiếu sửa code", ticketItems(now)], ["Kỹ năng", skillItems(now)], ["Đề xuất ghi nhớ", memoryItems(username, now)], ["KPI", kpiItems(username, now)], ["An toàn", securityItems(username, now)],
   ]
   const settled = await Promise.allSettled(jobs.map(j => j[1]))
+  const memberKinds = new Set<string>(MEMBER_INBOX_KINDS)
   const items: InboxItem[] = [], failed: string[] = []
   settled.forEach((r, i) => { if (r.status === "fulfilled") items.push(...r.value); else failed.push(`${jobs[i][0]}: ${(r.reason as Error)?.message ?? "lỗi"}`.slice(0, 160)) })
-  return { items: sortInbox(items), failed }
+  return { items: sortInbox(level === "member" ? items.filter(i => memberKinds.has(i.kind)) : items), failed: level === "member" ? [] : failed }
 }

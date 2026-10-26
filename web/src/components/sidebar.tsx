@@ -133,7 +133,8 @@ function useSidebarData(username: string, sessionRole: string) {
     myMetricsEnabled:  boolean
     marketEnabled:     boolean
     pricingEnabled:    boolean
-  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false, myMetricsEnabled: false, marketEnabled: false, pricingEnabled: false })
+    argonEnabled:      boolean
+  }>({ dbRole: null, dept: null, allowedAnalytics: null, allowedTabs: null, rolePerms: null, hiddenTabs: new Set(), gpEnabled: false, myMetricsEnabled: false, marketEnabled: false, pricingEnabled: false, argonEnabled: false })
 
   useEffect(() => {
     if (!username) return
@@ -155,6 +156,7 @@ function useSidebarData(username: string, sessionRole: string) {
         myMetricsEnabled: me?.my_metrics_enabled  === true,
         marketEnabled:    me?.market_enabled      === true,
         pricingEnabled:   me?.pricing_enabled     === true,
+        argonEnabled:     me?.argon_member        === true,   // chỉ member; Creator đã có mục trong nhóm Creator
       })
     })
   }, [username, sessionRole])
@@ -297,7 +299,7 @@ export function Sidebar() {
   const role       = session?.user?.role     || "staff"
   const username   = session?.user?.username || ""
 
-  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag, myMetricsEnabled: myMetricsEnabledFlag, marketEnabled: marketEnabledFlag, pricingEnabled: pricingEnabledFlag } = useSidebarData(username, role)
+  const { dbRole, dept: dbDept, allowedAnalytics, allowedTabs, rolePerms, hiddenTabs, gpEnabled: gpEnabledFlag, myMetricsEnabled: myMetricsEnabledFlag, marketEnabled: marketEnabledFlag, pricingEnabled: pricingEnabledFlag, argonEnabled: argonEnabledFlag } = useSidebarData(username, role)
   const department = dbDept ?? "none"
   // Dùng dbRole (fresh từ DB) để tránh cần logout/login khi admin đổi role
   const effectiveRole = dbRole ?? role
@@ -315,6 +317,8 @@ export function Sidebar() {
   const marketEnabled     = !isCreatorUser && marketEnabledFlag
   // Tính giá & Tạo sản phẩm: creator thấy trong nhóm Creator; người được cấp (tính giá hoặc tạo sản phẩm) thấy ở Personal
   const pricingEnabled     = !isCreatorUser && pricingEnabledFlag
+  // Trợ lý (Argon): người được Creator cấp (mức member) thấy ở mục Personal
+  const argonEnabled       = !isCreatorUser && argonEnabledFlag
 
   const analyticsGroups = (() => {
     let groups = ANALYTICS_GROUPS
@@ -451,6 +455,9 @@ export function Sidebar() {
             {pricingEnabled && (
               <NavRow href="/analytics/product-tools" label="Tính giá & Tạo sản phẩm" Icon={Calculator} active={isActive("/analytics/product-tools")} collapsed accent="violet" />
             )}
+            {argonEnabled && (
+              <NavRow href="/analytics/creator/argon" label="Trợ lý (Argon)" Icon={Atom} active={isActive("/analytics/creator/argon")} collapsed accent="violet" />
+            )}
           </>
         ) : (
           /* Chế độ mở rộng: Tổ Gấu → Bé Gấu/Promotion → Analytics → Product */
@@ -514,12 +521,13 @@ export function Sidebar() {
                     <NavRow href="/analytics/creator/bridge" label="Bridge" Icon={Plug} active={isActive("/analytics/creator/bridge")} collapsed={false} accent="violet" />
                   </div>
                 )}
-                {analystOpen && (myMetricsEnabled || marketEnabled || pricingEnabled) && (
+                {analystOpen && (myMetricsEnabled || marketEnabled || pricingEnabled || argonEnabled) && (
                   <div className="mt-0.5">
                     <p className="px-3 pt-1.5 pb-0.5 text-[11.5px] font-bold text-violet-600/80 uppercase tracking-wider">Personal</p>
                     {myMetricsEnabled && <NavRow href="/analytics/my-metrics" label="My Metrics" Icon={Target} active={isActive("/analytics/my-metrics")} collapsed={false} accent="violet" />}
                     {marketEnabled && <NavRow href="/analytics/market" label="Thị trường & Báo giá" Icon={Globe2} active={isActive("/analytics/market")} collapsed={false} accent="violet" />}
                     {pricingEnabled && <NavRow href="/analytics/product-tools" label="Tính giá & Tạo sản phẩm" Icon={Calculator} active={isActive("/analytics/product-tools")} collapsed={false} accent="violet" />}
+                    {argonEnabled && <NavRow href="/analytics/creator/argon" label="Trợ lý (Argon)" Icon={Atom} active={isActive("/analytics/creator/argon")} collapsed={false} accent="violet" />}
                   </div>
                 )}
               </div>

@@ -1,0 +1,5809 @@
+{
+  "label": "memory-stress150",
+  "judgeModel": "gemini-pro-latest",
+  "at": "2026-10-09T13:39:55.269Z",
+  "dump": {
+    "memories": [
+      {
+        "id": 127,
+        "kind": "project",
+        "content": "Khách Mango Travel thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:13:34.646633+00:00"
+      },
+      {
+        "id": 128,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Mango Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:13:35.511244+00:00"
+      },
+      {
+        "id": 129,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Mango Travel là 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:13:38.062918+00:00"
+      },
+      {
+        "id": 130,
+        "kind": "project",
+        "content": "Khách Garnet Voyages thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:13:50.311838+00:00"
+      },
+      {
+        "id": 131,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Garnet Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:13:50.605712+00:00"
+      },
+      {
+        "id": 132,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Garnet Voyages là 50 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:13:53.983041+00:00"
+      },
+      {
+        "id": 133,
+        "kind": "project",
+        "content": "Khách Garnet Tours thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:13:56.559617+00:00"
+      },
+      {
+        "id": 134,
+        "kind": "person",
+        "content": "Anh Hải là đầu mối liên hệ bên Garnet Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:13:56.871467+00:00"
+      },
+      {
+        "id": 135,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Garnet Tours là 950 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:13:59.674097+00:00"
+      },
+      {
+        "id": 136,
+        "kind": "project",
+        "content": "Khách Alpha Voyages thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:02.146992+00:00"
+      },
+      {
+        "id": 137,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Alpha Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:02.44439+00:00"
+      },
+      {
+        "id": 138,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Alpha Voyages là 1000 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:04.8265+00:00"
+      },
+      {
+        "id": 139,
+        "kind": "project",
+        "content": "Khách Delta Trips thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:07.285236+00:00"
+      },
+      {
+        "id": 140,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Delta Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:07.597447+00:00"
+      },
+      {
+        "id": 141,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Delta Trips là 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:09.888775+00:00"
+      },
+      {
+        "id": 142,
+        "kind": "project",
+        "content": "Khách Topaz Voyages thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:13.071651+00:00"
+      },
+      {
+        "id": 143,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Topaz Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:13.410238+00:00"
+      },
+      {
+        "id": 144,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Topaz Voyages là 150 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:16.544307+00:00"
+      },
+      {
+        "id": 145,
+        "kind": "project",
+        "content": "Khách Onyx Voyages thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:20.559945+00:00"
+      },
+      {
+        "id": 146,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Onyx Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:20.864037+00:00"
+      },
+      {
+        "id": 147,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Onyx Voyages là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:23.473821+00:00"
+      },
+      {
+        "id": 148,
+        "kind": "project",
+        "content": "Khách Koala Journeys thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:27.185883+00:00"
+      },
+      {
+        "id": 149,
+        "kind": "person",
+        "content": "Anh Nam là đầu mối liên hệ bên Koala Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:27.506232+00:00"
+      },
+      {
+        "id": 150,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Koala Journeys là 200 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:30.292639+00:00"
+      },
+      {
+        "id": 151,
+        "kind": "project",
+        "content": "Khách Sierra Tours thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:32.984152+00:00"
+      },
+      {
+        "id": 152,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Sierra Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:33.328443+00:00"
+      },
+      {
+        "id": 153,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Sierra Tours là 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:35.848353+00:00"
+      },
+      {
+        "id": 154,
+        "kind": "project",
+        "content": "Khách Koala Holidays thuộc thị trường Ý",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:39.005637+00:00"
+      },
+      {
+        "id": 155,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Koala Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:39.864232+00:00"
+      },
+      {
+        "id": 156,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Koala Holidays là 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:42.446105+00:00"
+      },
+      {
+        "id": 157,
+        "kind": "project",
+        "content": "Khách Lotus Voyages thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:44.615838+00:00"
+      },
+      {
+        "id": 158,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Lotus Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:44.911369+00:00"
+      },
+      {
+        "id": 159,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Lotus Voyages là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:47.234029+00:00"
+      },
+      {
+        "id": 160,
+        "kind": "project",
+        "content": "Khách Indigo Holidays thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:50.694036+00:00"
+      },
+      {
+        "id": 161,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Indigo Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:50.987039+00:00"
+      },
+      {
+        "id": 162,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Indigo Holidays là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:53.643675+00:00"
+      },
+      {
+        "id": 163,
+        "kind": "project",
+        "content": "Khách Birch Holidays thuộc thị trường Úc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:57.070554+00:00"
+      },
+      {
+        "id": 164,
+        "kind": "person",
+        "content": "Chị Chi là đầu mối liên hệ bên Birch Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:14:57.366942+00:00"
+      },
+      {
+        "id": 165,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Birch Holidays là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:00.460788+00:00"
+      },
+      {
+        "id": 166,
+        "kind": "project",
+        "content": "Khách Umber Voyages thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:03.058577+00:00"
+      },
+      {
+        "id": 167,
+        "kind": "person",
+        "content": "Chị Chi là đầu mối liên hệ bên Umber Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:03.906942+00:00"
+      },
+      {
+        "id": 168,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Umber Voyages là 50 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:06.319782+00:00"
+      },
+      {
+        "id": 169,
+        "kind": "project",
+        "content": "Khách Lotus Travel thuộc thị trường Úc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:09.355973+00:00"
+      },
+      {
+        "id": 170,
+        "kind": "person",
+        "content": "Chị Thảo là đầu mối liên hệ bên Lotus Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:09.648837+00:00"
+      },
+      {
+        "id": 171,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Lotus Travel là 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:12.624996+00:00"
+      },
+      {
+        "id": 172,
+        "kind": "project",
+        "content": "Khách Indigo Journeys thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:15.604261+00:00"
+      },
+      {
+        "id": 173,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Indigo Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:15.932975+00:00"
+      },
+      {
+        "id": 174,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Indigo Journeys là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:18.492051+00:00"
+      },
+      {
+        "id": 175,
+        "kind": "project",
+        "content": "Khách Amber Voyages thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:20.547172+00:00"
+      },
+      {
+        "id": 176,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Amber Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:20.853137+00:00"
+      },
+      {
+        "id": 177,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Amber Voyages là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:23.984104+00:00"
+      },
+      {
+        "id": 178,
+        "kind": "project",
+        "content": "Khách Pearl Tours thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:26.561003+00:00"
+      },
+      {
+        "id": 179,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Pearl Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:26.903269+00:00"
+      },
+      {
+        "id": 180,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Pearl Tours là 50 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:29.20008+00:00"
+      },
+      {
+        "id": 181,
+        "kind": "project",
+        "content": "Khách Harbor Holidays thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:32.38062+00:00"
+      },
+      {
+        "id": 182,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Harbor Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:32.700044+00:00"
+      },
+      {
+        "id": 183,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Harbor Holidays là 700 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:36.106162+00:00"
+      },
+      {
+        "id": 184,
+        "kind": "project",
+        "content": "Khách Onyx Holidays thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:39.365241+00:00"
+      },
+      {
+        "id": 185,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Onyx Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:39.679013+00:00"
+      },
+      {
+        "id": 186,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Onyx Holidays là 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:41.996747+00:00"
+      },
+      {
+        "id": 187,
+        "kind": "project",
+        "content": "Khách Coral Holidays thuộc thị trường Mỹ",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:44.502727+00:00"
+      },
+      {
+        "id": 188,
+        "kind": "person",
+        "content": "Chị Thảo là đầu mối liên hệ bên Coral Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:44.817164+00:00"
+      },
+      {
+        "id": 189,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Coral Holidays là 100 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:47.430505+00:00"
+      },
+      {
+        "id": 190,
+        "kind": "project",
+        "content": "Khách Pearl Travel thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:53.677752+00:00"
+      },
+      {
+        "id": 191,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Pearl Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:53.980074+00:00"
+      },
+      {
+        "id": 192,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Pearl Travel là 750 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:56.48939+00:00"
+      },
+      {
+        "id": 193,
+        "kind": "project",
+        "content": "Khách Quartz Journeys thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:59.317075+00:00"
+      },
+      {
+        "id": 194,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Quartz Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:15:59.601422+00:00"
+      },
+      {
+        "id": 195,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Quartz Journeys là 200 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:02.382875+00:00"
+      },
+      {
+        "id": 196,
+        "kind": "project",
+        "content": "Khách Nimbus Holidays thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:05.767465+00:00"
+      },
+      {
+        "id": 197,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Nimbus Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:06.084306+00:00"
+      },
+      {
+        "id": 198,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Nimbus Holidays là 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:08.764064+00:00"
+      },
+      {
+        "id": 199,
+        "kind": "project",
+        "content": "Khách Jade Journeys thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:12.374111+00:00"
+      },
+      {
+        "id": 200,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Jade Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:12.678231+00:00"
+      },
+      {
+        "id": 201,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Jade Journeys là 1000 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:15.063679+00:00"
+      },
+      {
+        "id": 202,
+        "kind": "project",
+        "content": "Khách Quartz Trips thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:17.484782+00:00"
+      },
+      {
+        "id": 203,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Quartz Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:17.803092+00:00"
+      },
+      {
+        "id": 204,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Quartz Trips là 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:20.732258+00:00"
+      },
+      {
+        "id": 205,
+        "kind": "project",
+        "content": "Khách Topaz Travel thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:23.597319+00:00"
+      },
+      {
+        "id": 206,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Topaz Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:23.903633+00:00"
+      },
+      {
+        "id": 207,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Topaz Travel là 600 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:26.272296+00:00"
+      },
+      {
+        "id": 208,
+        "kind": "project",
+        "content": "Khách Velvet Trips thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:29.485653+00:00"
+      },
+      {
+        "id": 209,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Velvet Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:29.80235+00:00"
+      },
+      {
+        "id": 210,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Velvet Trips là 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:32.973762+00:00"
+      },
+      {
+        "id": 211,
+        "kind": "project",
+        "content": "Khách Raven Tours thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:36.016401+00:00"
+      },
+      {
+        "id": 212,
+        "kind": "person",
+        "content": "Anh Việt là đầu mối liên hệ bên Raven Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:36.331549+00:00"
+      },
+      {
+        "id": 213,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Raven Tours là 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:39.29341+00:00"
+      },
+      {
+        "id": 214,
+        "kind": "project",
+        "content": "Khách Willow Travel thuộc thị trường Mỹ",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:43.19974+00:00"
+      },
+      {
+        "id": 215,
+        "kind": "person",
+        "content": "Anh Nam là đầu mối liên hệ bên Willow Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:43.513378+00:00"
+      },
+      {
+        "id": 216,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Willow Travel là 750 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:46.865911+00:00"
+      },
+      {
+        "id": 217,
+        "kind": "project",
+        "content": "Khách Willow Trips thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:49.832892+00:00"
+      },
+      {
+        "id": 218,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Willow Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:50.136973+00:00"
+      },
+      {
+        "id": 219,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Willow Trips là 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:55.38745+00:00"
+      },
+      {
+        "id": 220,
+        "kind": "project",
+        "content": "Khách Umber Holidays thuộc thị trường Ý",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:58.726356+00:00"
+      },
+      {
+        "id": 221,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Umber Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:16:59.055325+00:00"
+      },
+      {
+        "id": 222,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Umber Holidays là 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:02.403221+00:00"
+      },
+      {
+        "id": 223,
+        "kind": "project",
+        "content": "Khách Velvet Travel thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:05.260226+00:00"
+      },
+      {
+        "id": 224,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Velvet Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:05.566244+00:00"
+      },
+      {
+        "id": 225,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Velvet Travel là 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:08.771736+00:00"
+      },
+      {
+        "id": 226,
+        "kind": "project",
+        "content": "Khách Sierra Journeys thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:11.729277+00:00"
+      },
+      {
+        "id": 227,
+        "kind": "person",
+        "content": "Chị Chi là đầu mối liên hệ bên Sierra Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:12.577891+00:00"
+      },
+      {
+        "id": 228,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Sierra Journeys là 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:14.830464+00:00"
+      },
+      {
+        "id": 229,
+        "kind": "project",
+        "content": "Khách Jade Trips thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:17.372889+00:00"
+      },
+      {
+        "id": 230,
+        "kind": "person",
+        "content": "Anh Hải là đầu mối liên hệ bên Jade Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:18.233737+00:00"
+      },
+      {
+        "id": 231,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Jade Trips là 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:23.344469+00:00"
+      },
+      {
+        "id": 232,
+        "kind": "project",
+        "content": "Khách Alfa Journeys thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:25.774426+00:00"
+      },
+      {
+        "id": 233,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Alfa Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:26.066511+00:00"
+      },
+      {
+        "id": 234,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Alfa Journeys là 200 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:29.446058+00:00"
+      },
+      {
+        "id": 235,
+        "kind": "project",
+        "content": "Khách Birch Trips thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:33.393367+00:00"
+      },
+      {
+        "id": 236,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Birch Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:33.695929+00:00"
+      },
+      {
+        "id": 237,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Birch Trips là 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:36.167868+00:00"
+      },
+      {
+        "id": 238,
+        "kind": "project",
+        "content": "Khách Velvet Holidays thuộc thị trường Úc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:39.169319+00:00"
+      },
+      {
+        "id": 239,
+        "kind": "person",
+        "content": "Anh Hải là đầu mối liên hệ bên Velvet Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:39.531932+00:00"
+      },
+      {
+        "id": 240,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Velvet Holidays là 750 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:41.795172+00:00"
+      },
+      {
+        "id": 241,
+        "kind": "project",
+        "content": "Khách Yarrow Tours thuộc thị trường Úc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:44.377675+00:00"
+      },
+      {
+        "id": 242,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Yarrow Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:44.687754+00:00"
+      },
+      {
+        "id": 243,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Yarrow Tours là 600 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:17:54.358943+00:00"
+      },
+      {
+        "id": 244,
+        "kind": "project",
+        "content": "Khách Topaz Holidays thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:00.56419+00:00"
+      },
+      {
+        "id": 245,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Topaz Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:00.873404+00:00"
+      },
+      {
+        "id": 246,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Topaz Holidays là 600 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:03.789494+00:00"
+      },
+      {
+        "id": 247,
+        "kind": "project",
+        "content": "Khách Velvet Voyages thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:08.445445+00:00"
+      },
+      {
+        "id": 248,
+        "kind": "person",
+        "content": "Anh Việt là đầu mối liên hệ bên Velvet Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:08.755397+00:00"
+      },
+      {
+        "id": 249,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Velvet Voyages là 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:12.06956+00:00"
+      },
+      {
+        "id": 250,
+        "kind": "project",
+        "content": "Khách Umber Tours thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:14.40303+00:00"
+      },
+      {
+        "id": 251,
+        "kind": "person",
+        "content": "Anh Nam là đầu mối liên hệ bên Umber Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:14.712245+00:00"
+      },
+      {
+        "id": 252,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Umber Tours là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:19.380614+00:00"
+      },
+      {
+        "id": 253,
+        "kind": "project",
+        "content": "Khách Birch Voyages thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:22.506478+00:00"
+      },
+      {
+        "id": 254,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Birch Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:22.793689+00:00"
+      },
+      {
+        "id": 255,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Birch Voyages là 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:25.19636+00:00"
+      },
+      {
+        "id": 256,
+        "kind": "project",
+        "content": "Khách Amber Travel thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:27.649854+00:00"
+      },
+      {
+        "id": 257,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Amber Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:27.925638+00:00"
+      },
+      {
+        "id": 258,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Amber Travel là 450 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:31.10413+00:00"
+      },
+      {
+        "id": 259,
+        "kind": "project",
+        "content": "Khách Raven Trips thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:33.783425+00:00"
+      },
+      {
+        "id": 260,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Raven Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:34.134949+00:00"
+      },
+      {
+        "id": 261,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Raven Trips là 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:38.935665+00:00"
+      },
+      {
+        "id": 262,
+        "kind": "project",
+        "content": "Khách Sierra Holidays thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:41.393443+00:00"
+      },
+      {
+        "id": 263,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Sierra Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:41.694328+00:00"
+      },
+      {
+        "id": 264,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Sierra Holidays là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:44.020478+00:00"
+      },
+      {
+        "id": 265,
+        "kind": "project",
+        "content": "Khách Xenon Trips thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:46.319092+00:00"
+      },
+      {
+        "id": 266,
+        "kind": "person",
+        "content": "Chị Chi là đầu mối liên hệ bên Xenon Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:46.632328+00:00"
+      },
+      {
+        "id": 267,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Xenon Trips là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:49.024283+00:00"
+      },
+      {
+        "id": 268,
+        "kind": "project",
+        "content": "Khách Sierra Voyages thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:52.391345+00:00"
+      },
+      {
+        "id": 269,
+        "kind": "person",
+        "content": "Anh Việt là đầu mối liên hệ bên Sierra Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:52.719114+00:00"
+      },
+      {
+        "id": 270,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Sierra Voyages là 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:55.737807+00:00"
+      },
+      {
+        "id": 271,
+        "kind": "project",
+        "content": "Khách Nimbus Travel thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:58.526616+00:00"
+      },
+      {
+        "id": 272,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Nimbus Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:18:58.83645+00:00"
+      },
+      {
+        "id": 273,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Nimbus Travel là 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:02.177886+00:00"
+      },
+      {
+        "id": 274,
+        "kind": "project",
+        "content": "Khách Bravo Journeys thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:04.766534+00:00"
+      },
+      {
+        "id": 275,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Bravo Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:05.037227+00:00"
+      },
+      {
+        "id": 276,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Bravo Journeys là 200 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:07.968471+00:00"
+      },
+      {
+        "id": 277,
+        "kind": "project",
+        "content": "Khách Cedar Holidays thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:10.751205+00:00"
+      },
+      {
+        "id": 278,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Cedar Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:11.616087+00:00"
+      },
+      {
+        "id": 279,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Cedar Holidays là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:15.122086+00:00"
+      },
+      {
+        "id": 280,
+        "kind": "project",
+        "content": "Khách Lotus Tours thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:17.736557+00:00"
+      },
+      {
+        "id": 281,
+        "kind": "person",
+        "content": "Chị Chi là đầu mối liên hệ bên Lotus Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:18.08736+00:00"
+      },
+      {
+        "id": 282,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Lotus Tours là 1000 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:21.369249+00:00"
+      },
+      {
+        "id": 283,
+        "kind": "project",
+        "content": "Khách Garnet Trips thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:24.454556+00:00"
+      },
+      {
+        "id": 284,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Garnet Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:24.756472+00:00"
+      },
+      {
+        "id": 285,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Garnet Trips là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:27.267427+00:00"
+      },
+      {
+        "id": 286,
+        "kind": "project",
+        "content": "Khách Quartz Holidays thuộc thị trường Ý",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:31.087134+00:00"
+      },
+      {
+        "id": 287,
+        "kind": "person",
+        "content": "Anh Việt là đầu mối liên hệ bên Quartz Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:31.364653+00:00"
+      },
+      {
+        "id": 288,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Quartz Holidays là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:34.093738+00:00"
+      },
+      {
+        "id": 289,
+        "kind": "project",
+        "content": "Khách Cedar Voyages thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:36.580341+00:00"
+      },
+      {
+        "id": 290,
+        "kind": "person",
+        "content": "Chị Thảo là đầu mối liên hệ bên Cedar Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:36.887002+00:00"
+      },
+      {
+        "id": 291,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Cedar Voyages là 50 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:39.710821+00:00"
+      },
+      {
+        "id": 292,
+        "kind": "project",
+        "content": "Khách Indigo Travel thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:43.337524+00:00"
+      },
+      {
+        "id": 293,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Indigo Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:43.649502+00:00"
+      },
+      {
+        "id": 294,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Indigo Travel là 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:46.727069+00:00"
+      },
+      {
+        "id": 295,
+        "kind": "project",
+        "content": "Khách Nimbus Tours thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:49.965824+00:00"
+      },
+      {
+        "id": 296,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Nimbus Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:50.842576+00:00"
+      },
+      {
+        "id": 297,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Nimbus Tours là 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:53.217169+00:00"
+      },
+      {
+        "id": 298,
+        "kind": "project",
+        "content": "Khách Delta Holidays thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:56.914261+00:00"
+      },
+      {
+        "id": 299,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Delta Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:19:57.789586+00:00"
+      },
+      {
+        "id": 300,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Delta Holidays là 450 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:00.557337+00:00"
+      },
+      {
+        "id": 301,
+        "kind": "project",
+        "content": "Khách Alpha Trips thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:03.036831+00:00"
+      },
+      {
+        "id": 302,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Alpha Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:03.360005+00:00"
+      },
+      {
+        "id": 303,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Alpha Trips là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:06.870204+00:00"
+      },
+      {
+        "id": 304,
+        "kind": "project",
+        "content": "Khách Topaz Tours thuộc thị trường Úc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:09.778797+00:00"
+      },
+      {
+        "id": 305,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Topaz Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:10.648872+00:00"
+      },
+      {
+        "id": 306,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Topaz Tours là 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:13.297703+00:00"
+      },
+      {
+        "id": 307,
+        "kind": "project",
+        "content": "Khách Lotus Holidays thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:16.747482+00:00"
+      },
+      {
+        "id": 308,
+        "kind": "person",
+        "content": "Anh Việt là đầu mối liên hệ bên Lotus Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:17.621234+00:00"
+      },
+      {
+        "id": 309,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Lotus Holidays là 200 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:20.015018+00:00"
+      },
+      {
+        "id": 310,
+        "kind": "project",
+        "content": "Khách Koala Travel thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:23.474757+00:00"
+      },
+      {
+        "id": 311,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Koala Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:24.315043+00:00"
+      },
+      {
+        "id": 312,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Koala Travel là 700 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:26.642234+00:00"
+      },
+      {
+        "id": 313,
+        "kind": "project",
+        "content": "Khách Zephyr Tours thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:29.768197+00:00"
+      },
+      {
+        "id": 314,
+        "kind": "person",
+        "content": "Anh Nam là đầu mối liên hệ bên Zephyr Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:30.091192+00:00"
+      },
+      {
+        "id": 315,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Zephyr Tours là 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:32.568956+00:00"
+      },
+      {
+        "id": 316,
+        "kind": "project",
+        "content": "Khách Harbor Voyages thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:34.664698+00:00"
+      },
+      {
+        "id": 317,
+        "kind": "person",
+        "content": "Anh Hải là đầu mối liên hệ bên Harbor Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:34.979728+00:00"
+      },
+      {
+        "id": 318,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Harbor Voyages là 100 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:37.902367+00:00"
+      },
+      {
+        "id": 319,
+        "kind": "project",
+        "content": "Khách Harbor Travel thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:40.514922+00:00"
+      },
+      {
+        "id": 320,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Harbor Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:40.806942+00:00"
+      },
+      {
+        "id": 321,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Harbor Travel là 100 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:43.749931+00:00"
+      },
+      {
+        "id": 322,
+        "kind": "project",
+        "content": "Khách Zephyr Travel thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:46.308661+00:00"
+      },
+      {
+        "id": 323,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Zephyr Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:46.628549+00:00"
+      },
+      {
+        "id": 324,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Zephyr Travel là 150 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:49.032255+00:00"
+      },
+      {
+        "id": 325,
+        "kind": "project",
+        "content": "Khách Bravo Travel thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:52.027787+00:00"
+      },
+      {
+        "id": 326,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Bravo Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:52.346211+00:00"
+      },
+      {
+        "id": 327,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Bravo Travel là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:57.086061+00:00"
+      },
+      {
+        "id": 328,
+        "kind": "project",
+        "content": "Khách Dune Tours thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:20:59.797614+00:00"
+      },
+      {
+        "id": 329,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Dune Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:00.096342+00:00"
+      },
+      {
+        "id": 330,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Dune Tours là 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:03.233306+00:00"
+      },
+      {
+        "id": 331,
+        "kind": "project",
+        "content": "Khách Indigo Tours thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:05.810604+00:00"
+      },
+      {
+        "id": 332,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Indigo Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:06.116366+00:00"
+      },
+      {
+        "id": 333,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Indigo Tours là 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:08.82873+00:00"
+      },
+      {
+        "id": 334,
+        "kind": "project",
+        "content": "Khách Bravo Trips thuộc thị trường Ý",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:11.533772+00:00"
+      },
+      {
+        "id": 335,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Bravo Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:11.851265+00:00"
+      },
+      {
+        "id": 336,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Bravo Trips là 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:14.269422+00:00"
+      },
+      {
+        "id": 337,
+        "kind": "project",
+        "content": "Khách Delta Voyages thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:16.509935+00:00"
+      },
+      {
+        "id": 338,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Delta Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:16.814642+00:00"
+      },
+      {
+        "id": 339,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Delta Voyages là 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:19.752939+00:00"
+      },
+      {
+        "id": 340,
+        "kind": "project",
+        "content": "Khách Willow Journeys thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:22.136883+00:00"
+      },
+      {
+        "id": 341,
+        "kind": "person",
+        "content": "Chị Lam là đầu mối liên hệ bên Willow Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:22.453695+00:00"
+      },
+      {
+        "id": 342,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Willow Journeys là 900 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:24.892858+00:00"
+      },
+      {
+        "id": 343,
+        "kind": "project",
+        "content": "Khách Bravo Voyages thuộc thị trường Mỹ",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:27.206729+00:00"
+      },
+      {
+        "id": 344,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Bravo Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:27.506781+00:00"
+      },
+      {
+        "id": 345,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Bravo Voyages là 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:31.043033+00:00"
+      },
+      {
+        "id": 346,
+        "kind": "project",
+        "content": "Khách Mango Voyages thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:33.889464+00:00"
+      },
+      {
+        "id": 347,
+        "kind": "person",
+        "content": "Anh Việt là đầu mối liên hệ bên Mango Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:34.203352+00:00"
+      },
+      {
+        "id": 348,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Mango Voyages là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:36.739551+00:00"
+      },
+      {
+        "id": 349,
+        "kind": "project",
+        "content": "Khách Fjord Journeys thuộc thị trường Ý",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:39.531087+00:00"
+      },
+      {
+        "id": 350,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Fjord Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:39.843557+00:00"
+      },
+      {
+        "id": 351,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Fjord Journeys là 600 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:42.301421+00:00"
+      },
+      {
+        "id": 352,
+        "kind": "project",
+        "content": "Khách Quartz Tours thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:45.242504+00:00"
+      },
+      {
+        "id": 353,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Quartz Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:45.570447+00:00"
+      },
+      {
+        "id": 354,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Quartz Tours là 700 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:48.577842+00:00"
+      },
+      {
+        "id": 355,
+        "kind": "project",
+        "content": "Khách Nimbus Trips thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:52.008461+00:00"
+      },
+      {
+        "id": 356,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Nimbus Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:52.319285+00:00"
+      },
+      {
+        "id": 357,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Nimbus Trips là 1000 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:54.530712+00:00"
+      },
+      {
+        "id": 358,
+        "kind": "project",
+        "content": "Khách Koala Voyages thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:56.573285+00:00"
+      },
+      {
+        "id": 359,
+        "kind": "person",
+        "content": "Anh Hải là đầu mối liên hệ bên Koala Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:21:56.889838+00:00"
+      },
+      {
+        "id": 360,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Koala Voyages là 900 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:00.935432+00:00"
+      },
+      {
+        "id": 361,
+        "kind": "project",
+        "content": "Khách Umber Journeys thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:03.494627+00:00"
+      },
+      {
+        "id": 362,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Umber Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:03.824844+00:00"
+      },
+      {
+        "id": 363,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Umber Journeys là 450 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:06.233315+00:00"
+      },
+      {
+        "id": 364,
+        "kind": "project",
+        "content": "Khách Garnet Holidays thuộc thị trường Mỹ",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:11.041715+00:00"
+      },
+      {
+        "id": 365,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Garnet Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:12.046272+00:00"
+      },
+      {
+        "id": 366,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Garnet Holidays là 50 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:15.019753+00:00"
+      },
+      {
+        "id": 367,
+        "kind": "project",
+        "content": "Khách Cedar Trips thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:17.562776+00:00"
+      },
+      {
+        "id": 368,
+        "kind": "person",
+        "content": "Anh Việt là đầu mối liên hệ bên Cedar Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:17.89469+00:00"
+      },
+      {
+        "id": 369,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Cedar Trips là 150 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:20.374007+00:00"
+      },
+      {
+        "id": 370,
+        "kind": "project",
+        "content": "Khách Ember Voyages thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:23.781875+00:00"
+      },
+      {
+        "id": 371,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Ember Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:24.089382+00:00"
+      },
+      {
+        "id": 372,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Ember Voyages là 100 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:26.3328+00:00"
+      },
+      {
+        "id": 373,
+        "kind": "project",
+        "content": "Khách Amber Journeys thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:28.977868+00:00"
+      },
+      {
+        "id": 374,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Amber Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:29.308087+00:00"
+      },
+      {
+        "id": 375,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Amber Journeys là 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:33.137177+00:00"
+      },
+      {
+        "id": 376,
+        "kind": "project",
+        "content": "Khách Velvet Tours thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:35.914456+00:00"
+      },
+      {
+        "id": 377,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Velvet Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:36.214466+00:00"
+      },
+      {
+        "id": 378,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Velvet Tours là 550 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:39.603498+00:00"
+      },
+      {
+        "id": 379,
+        "kind": "project",
+        "content": "Khách Coral Trips thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:42.314051+00:00"
+      },
+      {
+        "id": 380,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Coral Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:42.608084+00:00"
+      },
+      {
+        "id": 381,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Coral Trips là 750 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:45.583912+00:00"
+      },
+      {
+        "id": 382,
+        "kind": "project",
+        "content": "Khách Zephyr Voyages thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:47.972178+00:00"
+      },
+      {
+        "id": 383,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Zephyr Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:48.82963+00:00"
+      },
+      {
+        "id": 384,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Zephyr Voyages là 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:51.325087+00:00"
+      },
+      {
+        "id": 385,
+        "kind": "project",
+        "content": "Khách Fjord Trips thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:54.982315+00:00"
+      },
+      {
+        "id": 386,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Fjord Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:55.277431+00:00"
+      },
+      {
+        "id": 387,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Fjord Trips là 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:22:57.24515+00:00"
+      },
+      {
+        "id": 388,
+        "kind": "project",
+        "content": "Khách Xenon Journeys thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:01.112198+00:00"
+      },
+      {
+        "id": 389,
+        "kind": "person",
+        "content": "Chị Lam là đầu mối liên hệ bên Xenon Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:01.430529+00:00"
+      },
+      {
+        "id": 390,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Xenon Journeys là 1000 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:03.907319+00:00"
+      },
+      {
+        "id": 391,
+        "kind": "project",
+        "content": "Khách Alpha Journeys thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:06.408568+00:00"
+      },
+      {
+        "id": 392,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Alpha Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:06.72708+00:00"
+      },
+      {
+        "id": 393,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Alpha Journeys là 1000 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:09.836502+00:00"
+      },
+      {
+        "id": 394,
+        "kind": "project",
+        "content": "Khách Raven Holidays thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:13.80436+00:00"
+      },
+      {
+        "id": 395,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Raven Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:14.118933+00:00"
+      },
+      {
+        "id": 396,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Raven Holidays là 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:16.729122+00:00"
+      },
+      {
+        "id": 397,
+        "kind": "project",
+        "content": "Khách Lotus Trips thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:19.102917+00:00"
+      },
+      {
+        "id": 398,
+        "kind": "person",
+        "content": "Chị Lam là đầu mối liên hệ bên Lotus Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:19.421376+00:00"
+      },
+      {
+        "id": 399,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Lotus Trips là 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:22.316664+00:00"
+      },
+      {
+        "id": 400,
+        "kind": "project",
+        "content": "Khách Mango Tours thuộc thị trường Mỹ",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:24.642918+00:00"
+      },
+      {
+        "id": 401,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Mango Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:24.958528+00:00"
+      },
+      {
+        "id": 402,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Mango Tours là 650 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:27.32614+00:00"
+      },
+      {
+        "id": 403,
+        "kind": "project",
+        "content": "Khách Pearl Trips thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:30.357999+00:00"
+      },
+      {
+        "id": 404,
+        "kind": "person",
+        "content": "Chị Lam là đầu mối liên hệ bên Pearl Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:31.215705+00:00"
+      },
+      {
+        "id": 405,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Pearl Trips là 1000 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:34.492719+00:00"
+      },
+      {
+        "id": 406,
+        "kind": "project",
+        "content": "Khách Alpha Holidays thuộc thị trường Ý",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:40.114831+00:00"
+      },
+      {
+        "id": 407,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Alpha Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:40.463458+00:00"
+      },
+      {
+        "id": 408,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Alpha Holidays là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:45.836166+00:00"
+      },
+      {
+        "id": 409,
+        "kind": "project",
+        "content": "Khách Nimbus Journeys thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:48.628475+00:00"
+      },
+      {
+        "id": 410,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Nimbus Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:48.933464+00:00"
+      },
+      {
+        "id": 411,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Nimbus Journeys là 50 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:51.770133+00:00"
+      },
+      {
+        "id": 412,
+        "kind": "project",
+        "content": "Khách Mango Holidays thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:54.345212+00:00"
+      },
+      {
+        "id": 413,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Mango Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:55.172651+00:00"
+      },
+      {
+        "id": 414,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Mango Holidays là 200 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:57.497057+00:00"
+      },
+      {
+        "id": 415,
+        "kind": "project",
+        "content": "Khách Indigo Trips thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:59.485627+00:00"
+      },
+      {
+        "id": 416,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Indigo Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:23:59.784612+00:00"
+      },
+      {
+        "id": 417,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Indigo Trips là 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:02.986249+00:00"
+      },
+      {
+        "id": 418,
+        "kind": "project",
+        "content": "Khách Ember Trips thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:05.636385+00:00"
+      },
+      {
+        "id": 419,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Ember Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:05.939183+00:00"
+      },
+      {
+        "id": 420,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Ember Trips là 900 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:09.544837+00:00"
+      },
+      {
+        "id": 421,
+        "kind": "project",
+        "content": "Khách Coral Voyages thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:13.3922+00:00"
+      },
+      {
+        "id": 422,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Coral Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:13.69875+00:00"
+      },
+      {
+        "id": 423,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Coral Voyages là 50 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:16.624997+00:00"
+      },
+      {
+        "id": 424,
+        "kind": "project",
+        "content": "Khách Nimbus Voyages thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:19.567865+00:00"
+      },
+      {
+        "id": 425,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Nimbus Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:19.870643+00:00"
+      },
+      {
+        "id": 426,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Nimbus Voyages là 150 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:21.851218+00:00"
+      },
+      {
+        "id": 427,
+        "kind": "project",
+        "content": "Khách Cedar Travel thuộc thị trường Ý",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:24.682362+00:00"
+      },
+      {
+        "id": 428,
+        "kind": "person",
+        "content": "Anh Nam là đầu mối liên hệ bên Cedar Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:24.991162+00:00"
+      },
+      {
+        "id": 429,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Cedar Travel là 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:27.701917+00:00"
+      },
+      {
+        "id": 430,
+        "kind": "project",
+        "content": "Khách Topaz Trips thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:30.413208+00:00"
+      },
+      {
+        "id": 431,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Topaz Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:30.727121+00:00"
+      },
+      {
+        "id": 432,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Topaz Trips là 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:35.165086+00:00"
+      },
+      {
+        "id": 433,
+        "kind": "project",
+        "content": "Khách Zephyr Holidays thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:38.891109+00:00"
+      },
+      {
+        "id": 434,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Zephyr Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:39.207172+00:00"
+      },
+      {
+        "id": 435,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Zephyr Holidays là 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:41.639752+00:00"
+      },
+      {
+        "id": 436,
+        "kind": "project",
+        "content": "Khách Topaz Journeys thuộc thị trường Mỹ",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:44.874289+00:00"
+      },
+      {
+        "id": 437,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Topaz Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:45.193397+00:00"
+      },
+      {
+        "id": 438,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Topaz Journeys là 650 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:47.19142+00:00"
+      },
+      {
+        "id": 439,
+        "kind": "project",
+        "content": "Khách Xenon Holidays thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:52.591847+00:00"
+      },
+      {
+        "id": 440,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Xenon Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:52.917931+00:00"
+      },
+      {
+        "id": 441,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Xenon Holidays là 100 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:55.377145+00:00"
+      },
+      {
+        "id": 442,
+        "kind": "project",
+        "content": "Khách Ember Tours thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:58.30889+00:00"
+      },
+      {
+        "id": 443,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Ember Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:24:58.58887+00:00"
+      },
+      {
+        "id": 444,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Ember Tours là 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:01.463317+00:00"
+      },
+      {
+        "id": 445,
+        "kind": "project",
+        "content": "Khách Onyx Travel thuộc thị trường Úc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:06.811973+00:00"
+      },
+      {
+        "id": 446,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Onyx Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:07.134826+00:00"
+      },
+      {
+        "id": 447,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Onyx Travel là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:09.734255+00:00"
+      },
+      {
+        "id": 448,
+        "kind": "project",
+        "content": "Khách Harbor Trips thuộc thị trường Úc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:13.018572+00:00"
+      },
+      {
+        "id": 449,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Harbor Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:13.308441+00:00"
+      },
+      {
+        "id": 450,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Harbor Trips là 550 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:15.953558+00:00"
+      },
+      {
+        "id": 451,
+        "kind": "project",
+        "content": "Khách Alpha Tours thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:18.552389+00:00"
+      },
+      {
+        "id": 452,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Alpha Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:18.855253+00:00"
+      },
+      {
+        "id": 453,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Alpha Tours là 50 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:21.537761+00:00"
+      },
+      {
+        "id": 454,
+        "kind": "project",
+        "content": "Khách Pearl Voyages thuộc thị trường Úc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:25.505653+00:00"
+      },
+      {
+        "id": 455,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Pearl Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:25.792754+00:00"
+      },
+      {
+        "id": 456,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Pearl Voyages là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:28.718588+00:00"
+      },
+      {
+        "id": 457,
+        "kind": "project",
+        "content": "Khách Pearl Journeys thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:31.138824+00:00"
+      },
+      {
+        "id": 458,
+        "kind": "person",
+        "content": "Chị Chi là đầu mối liên hệ bên Pearl Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:32.243932+00:00"
+      },
+      {
+        "id": 459,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Pearl Journeys là 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:35.435552+00:00"
+      },
+      {
+        "id": 460,
+        "kind": "project",
+        "content": "Khách Fjord Voyages thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:38.142723+00:00"
+      },
+      {
+        "id": 461,
+        "kind": "person",
+        "content": "Chị Thảo là đầu mối liên hệ bên Fjord Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:38.452164+00:00"
+      },
+      {
+        "id": 462,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Fjord Voyages là 550 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:40.561952+00:00"
+      },
+      {
+        "id": 463,
+        "kind": "project",
+        "content": "Khách Coral Journeys thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:48.119902+00:00"
+      },
+      {
+        "id": 464,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Coral Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:48.421079+00:00"
+      },
+      {
+        "id": 465,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Coral Journeys là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:51.79888+00:00"
+      },
+      {
+        "id": 466,
+        "kind": "project",
+        "content": "Khách Amber Tours thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:54.403805+00:00"
+      },
+      {
+        "id": 467,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Amber Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:54.706645+00:00"
+      },
+      {
+        "id": 468,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Amber Tours là 700 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:25:58.830946+00:00"
+      },
+      {
+        "id": 469,
+        "kind": "project",
+        "content": "Khách Alfa Travel thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:01.661791+00:00"
+      },
+      {
+        "id": 470,
+        "kind": "person",
+        "content": "Anh Nam là đầu mối liên hệ bên Alfa Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:01.961558+00:00"
+      },
+      {
+        "id": 471,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Alfa Travel là 150 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:04.037088+00:00"
+      },
+      {
+        "id": 472,
+        "kind": "project",
+        "content": "Khách Sierra Trips thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:06.915716+00:00"
+      },
+      {
+        "id": 473,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Sierra Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:07.226507+00:00"
+      },
+      {
+        "id": 474,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Sierra Trips là 950 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:12.89028+00:00"
+      },
+      {
+        "id": 475,
+        "kind": "project",
+        "content": "Khách Birch Tours thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:15.351418+00:00"
+      },
+      {
+        "id": 476,
+        "kind": "person",
+        "content": "Chị Thảo là đầu mối liên hệ bên Birch Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:15.651397+00:00"
+      },
+      {
+        "id": 477,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Birch Tours là 650 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:18.293795+00:00"
+      },
+      {
+        "id": 478,
+        "kind": "project",
+        "content": "Khách Jade Voyages thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:21.476978+00:00"
+      },
+      {
+        "id": 479,
+        "kind": "person",
+        "content": "Chị Chi là đầu mối liên hệ bên Jade Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:21.771428+00:00"
+      },
+      {
+        "id": 480,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Jade Voyages là 750 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:24.4735+00:00"
+      },
+      {
+        "id": 481,
+        "kind": "project",
+        "content": "Khách Mango Journeys thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:28.239832+00:00"
+      },
+      {
+        "id": 482,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Mango Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:28.531299+00:00"
+      },
+      {
+        "id": 483,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Mango Journeys là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:31.628807+00:00"
+      },
+      {
+        "id": 484,
+        "kind": "project",
+        "content": "Khách Dune Travel thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:34.408157+00:00"
+      },
+      {
+        "id": 485,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Dune Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:34.734767+00:00"
+      },
+      {
+        "id": 486,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Dune Travel là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:37.22068+00:00"
+      },
+      {
+        "id": 487,
+        "kind": "project",
+        "content": "Khách Zephyr Journeys thuộc thị trường Mỹ",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:40.876775+00:00"
+      },
+      {
+        "id": 488,
+        "kind": "person",
+        "content": "Chị Chi là đầu mối liên hệ bên Zephyr Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:41.175059+00:00"
+      },
+      {
+        "id": 489,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Zephyr Journeys là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:43.708088+00:00"
+      },
+      {
+        "id": 490,
+        "kind": "project",
+        "content": "Khách Umber Trips thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:46.500428+00:00"
+      },
+      {
+        "id": 491,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Umber Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:47.325616+00:00"
+      },
+      {
+        "id": 492,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Umber Trips là 450 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:49.963078+00:00"
+      },
+      {
+        "id": 493,
+        "kind": "project",
+        "content": "Khách Willow Tours thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:53.231039+00:00"
+      },
+      {
+        "id": 494,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Willow Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:53.553914+00:00"
+      },
+      {
+        "id": 495,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Willow Tours là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:56.008656+00:00"
+      },
+      {
+        "id": 496,
+        "kind": "project",
+        "content": "Khách Fjord Tours thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:58.804656+00:00"
+      },
+      {
+        "id": 497,
+        "kind": "person",
+        "content": "Chị Chi là đầu mối liên hệ bên Fjord Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:26:59.12761+00:00"
+      },
+      {
+        "id": 498,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Fjord Tours là 150 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:02.461337+00:00"
+      },
+      {
+        "id": 499,
+        "kind": "project",
+        "content": "Khách Harbor Tours thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:05.221411+00:00"
+      },
+      {
+        "id": 500,
+        "kind": "person",
+        "content": "Chị Lam là đầu mối liên hệ bên Harbor Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:05.540441+00:00"
+      },
+      {
+        "id": 501,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Harbor Tours là 50 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:08.525425+00:00"
+      },
+      {
+        "id": 502,
+        "kind": "project",
+        "content": "Khách Dune Journeys thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:11.461578+00:00"
+      },
+      {
+        "id": 503,
+        "kind": "person",
+        "content": "Anh Hải là đầu mối liên hệ bên Dune Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:12.325537+00:00"
+      },
+      {
+        "id": 504,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Dune Journeys là 150 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:15.12565+00:00"
+      },
+      {
+        "id": 505,
+        "kind": "project",
+        "content": "Khách Coral Tours thuộc thị trường Ý",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:17.8252+00:00"
+      },
+      {
+        "id": 506,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Coral Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:18.130787+00:00"
+      },
+      {
+        "id": 507,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Coral Tours là 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:20.990742+00:00"
+      },
+      {
+        "id": 508,
+        "kind": "project",
+        "content": "Khách Birch Journeys thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:23.484636+00:00"
+      },
+      {
+        "id": 509,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Birch Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:23.791468+00:00"
+      },
+      {
+        "id": 510,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Birch Journeys là 900 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:26.522752+00:00"
+      },
+      {
+        "id": 511,
+        "kind": "project",
+        "content": "Khách Coral Travel thuộc thị trường Mỹ",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:28.804152+00:00"
+      },
+      {
+        "id": 512,
+        "kind": "person",
+        "content": "Chị Lam là đầu mối liên hệ bên Coral Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:29.125571+00:00"
+      },
+      {
+        "id": 513,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Coral Travel là 600 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:33.891744+00:00"
+      },
+      {
+        "id": 514,
+        "kind": "project",
+        "content": "Khách Cedar Tours thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:37.467555+00:00"
+      },
+      {
+        "id": 515,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Cedar Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:37.774437+00:00"
+      },
+      {
+        "id": 516,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Cedar Tours là 900 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:40.094028+00:00"
+      },
+      {
+        "id": 517,
+        "kind": "project",
+        "content": "Khách Quartz Travel thuộc thị trường Ý",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:42.539176+00:00"
+      },
+      {
+        "id": 518,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Quartz Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:42.861093+00:00"
+      },
+      {
+        "id": 519,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Quartz Travel là 1000 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:46.90475+00:00"
+      },
+      {
+        "id": 520,
+        "kind": "project",
+        "content": "Khách Alfa Tours thuộc thị trường Thái Lan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:49.265483+00:00"
+      },
+      {
+        "id": 521,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Alfa Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:49.575011+00:00"
+      },
+      {
+        "id": 522,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Alfa Tours là 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:51.706292+00:00"
+      },
+      {
+        "id": 523,
+        "kind": "project",
+        "content": "Khách Yarrow Voyages thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:54.409225+00:00"
+      },
+      {
+        "id": 524,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Yarrow Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:54.729609+00:00"
+      },
+      {
+        "id": 525,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Yarrow Voyages là 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:27:57.67925+00:00"
+      },
+      {
+        "id": 526,
+        "kind": "project",
+        "content": "Khách Onyx Journeys thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:01.688727+00:00"
+      },
+      {
+        "id": 527,
+        "kind": "person",
+        "content": "Anh Hải là đầu mối liên hệ bên Onyx Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:02.009888+00:00"
+      },
+      {
+        "id": 528,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Onyx Journeys là 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:04.203722+00:00"
+      },
+      {
+        "id": 529,
+        "kind": "project",
+        "content": "Khách Jade Travel thuộc thị trường Mỹ",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:07.636399+00:00"
+      },
+      {
+        "id": 530,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Jade Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:07.916925+00:00"
+      },
+      {
+        "id": 531,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Jade Travel là 450 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:10.487192+00:00"
+      },
+      {
+        "id": 532,
+        "kind": "project",
+        "content": "Khách Harbor Journeys thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:13.322704+00:00"
+      },
+      {
+        "id": 533,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Harbor Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:13.625188+00:00"
+      },
+      {
+        "id": 534,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Harbor Journeys là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:16.690963+00:00"
+      },
+      {
+        "id": 535,
+        "kind": "project",
+        "content": "Khách Dune Trips thuộc thị trường Singapore",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:19.616583+00:00"
+      },
+      {
+        "id": 536,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Dune Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:20.436158+00:00"
+      },
+      {
+        "id": 537,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Dune Trips là 700 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:22.979404+00:00"
+      },
+      {
+        "id": 538,
+        "kind": "project",
+        "content": "Khách Yarrow Journeys thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:27.073306+00:00"
+      },
+      {
+        "id": 539,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Yarrow Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:27.376287+00:00"
+      },
+      {
+        "id": 540,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Yarrow Journeys là 600 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:30.564567+00:00"
+      },
+      {
+        "id": 541,
+        "kind": "project",
+        "content": "Khách Zephyr Trips thuộc thị trường Đài Loan",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:33.200852+00:00"
+      },
+      {
+        "id": 542,
+        "kind": "person",
+        "content": "Chị Thảo là đầu mối liên hệ bên Zephyr Trips",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:33.518054+00:00"
+      },
+      {
+        "id": 543,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Zephyr Trips là 450 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:38.587521+00:00"
+      },
+      {
+        "id": 544,
+        "kind": "project",
+        "content": "Khách Velvet Journeys thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:41.424641+00:00"
+      },
+      {
+        "id": 545,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Velvet Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:41.751612+00:00"
+      },
+      {
+        "id": 546,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Velvet Journeys là 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:44.117774+00:00"
+      },
+      {
+        "id": 547,
+        "kind": "project",
+        "content": "Khách Alfa Holidays thuộc thị trường Mỹ",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:49.407242+00:00"
+      },
+      {
+        "id": 548,
+        "kind": "person",
+        "content": "Anh Nam là đầu mối liên hệ bên Alfa Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:50.297842+00:00"
+      },
+      {
+        "id": 549,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Alfa Holidays là 100 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:53.045894+00:00"
+      },
+      {
+        "id": 550,
+        "kind": "project",
+        "content": "Khách Xenon Travel thuộc thị trường Đức",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:56.021567+00:00"
+      },
+      {
+        "id": 551,
+        "kind": "person",
+        "content": "Anh Hải là đầu mối liên hệ bên Xenon Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:28:56.311525+00:00"
+      },
+      {
+        "id": 552,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Xenon Travel là 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:00.375731+00:00"
+      },
+      {
+        "id": 553,
+        "kind": "project",
+        "content": "Khách Xenon Voyages thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:03.494702+00:00"
+      },
+      {
+        "id": 554,
+        "kind": "person",
+        "content": "Anh Nam là đầu mối liên hệ bên Xenon Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:03.80971+00:00"
+      },
+      {
+        "id": 555,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Xenon Voyages là 200 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:07.862929+00:00"
+      },
+      {
+        "id": 556,
+        "kind": "project",
+        "content": "Khách Yarrow Travel thuộc thị trường Ý",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:10.243572+00:00"
+      },
+      {
+        "id": 557,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Yarrow Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:10.561942+00:00"
+      },
+      {
+        "id": 558,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Yarrow Travel là 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:14.227512+00:00"
+      },
+      {
+        "id": 559,
+        "kind": "project",
+        "content": "Khách Lotus Journeys thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:16.873249+00:00"
+      },
+      {
+        "id": 560,
+        "kind": "person",
+        "content": "Anh Nam là đầu mối liên hệ bên Lotus Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:17.711672+00:00"
+      },
+      {
+        "id": 561,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Lotus Journeys là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:20.259657+00:00"
+      },
+      {
+        "id": 562,
+        "kind": "project",
+        "content": "Khách Bravo Holidays thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:24.092808+00:00"
+      },
+      {
+        "id": 563,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Bravo Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:24.401073+00:00"
+      },
+      {
+        "id": 564,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Bravo Holidays là 750 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:26.974015+00:00"
+      },
+      {
+        "id": 565,
+        "kind": "project",
+        "content": "Khách Umber Travel thuộc thị trường Hàn Quốc",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:29.919469+00:00"
+      },
+      {
+        "id": 566,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Umber Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:30.2403+00:00"
+      },
+      {
+        "id": 567,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Umber Travel là 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:33.607262+00:00"
+      },
+      {
+        "id": 568,
+        "kind": "project",
+        "content": "Khách Garnet Journeys thuộc thị trường Nhật Bản",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:36.501403+00:00"
+      },
+      {
+        "id": 569,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Garnet Journeys",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:36.797328+00:00"
+      },
+      {
+        "id": 570,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Garnet Journeys là 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:38.931289+00:00"
+      },
+      {
+        "id": 571,
+        "kind": "project",
+        "content": "Khách Quartz Voyages thuộc thị trường Pháp",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:41.184388+00:00"
+      },
+      {
+        "id": 572,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Quartz Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:41.498165+00:00"
+      },
+      {
+        "id": 573,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Quartz Voyages là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:44.040556+00:00"
+      },
+      {
+        "id": 574,
+        "kind": "project",
+        "content": "Khách Koala Tours thuộc thị trường Mỹ",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:46.316879+00:00"
+      },
+      {
+        "id": 575,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Koala Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:46.635702+00:00"
+      },
+      {
+        "id": 576,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Koala Tours là 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:49.030931+00:00"
+      },
+      {
+        "id": 577,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Mango Travel (thay chị Oanh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:51.927786+00:00"
+      },
+      {
+        "id": 578,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Mango Travel là 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:52.251745+00:00"
+      },
+      {
+        "id": 579,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Garnet Voyages",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:54.656317+00:00"
+      },
+      {
+        "id": 580,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Garnet Voyages là 100 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:54.936925+00:00"
+      },
+      {
+        "id": 581,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Garnet Tours (thay anh Hải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:57.40984+00:00"
+      },
+      {
+        "id": 582,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Garnet Tours là 1000 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:29:57.710205+00:00"
+      },
+      {
+        "id": 583,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Delta Trips (thay anh Khải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:00.177016+00:00"
+      },
+      {
+        "id": 584,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Delta Trips là 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:00.485554+00:00"
+      },
+      {
+        "id": 585,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Topaz Voyages (thay anh Bảo)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:03.178287+00:00"
+      },
+      {
+        "id": 586,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Topaz Voyages tăng lên 200 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:03.517959+00:00"
+      },
+      {
+        "id": 587,
+        "kind": "person",
+        "content": "Anh Nam là đầu mối liên hệ bên Onyx Voyages (thay chị Hạnh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:06.310473+00:00"
+      },
+      {
+        "id": 588,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Onyx Voyages tăng lên 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:06.620469+00:00"
+      },
+      {
+        "id": 589,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Sierra Tours (thay chị Hạnh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:09.407686+00:00"
+      },
+      {
+        "id": 590,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Sierra Tours tăng lên 900 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:09.720716+00:00"
+      },
+      {
+        "id": 591,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Indigo Holidays (thay chị Hạnh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:12.569558+00:00"
+      },
+      {
+        "id": 592,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Indigo Holidays tăng lên 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:12.898262+00:00"
+      },
+      {
+        "id": 593,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Birch Holidays (thay chị Chi)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:15.820649+00:00"
+      },
+      {
+        "id": 594,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Birch Holidays tăng lên 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:16.13948+00:00"
+      },
+      {
+        "id": 595,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Lotus Travel (thay chị Thảo)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:18.895581+00:00"
+      },
+      {
+        "id": 596,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Lotus Travel tăng lên 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:19.236888+00:00"
+      },
+      {
+        "id": 597,
+        "kind": "person",
+        "content": "Anh Việt là đầu mối liên hệ bên Pearl Tours (thay chị Hạnh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:21.983916+00:00"
+      },
+      {
+        "id": 598,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Pearl Tours tăng lên 100 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:22.825835+00:00"
+      },
+      {
+        "id": 599,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Harbor Holidays (thay chị Oanh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:25.913184+00:00"
+      },
+      {
+        "id": 600,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Harbor Holidays tăng lên 750 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:26.356041+00:00"
+      },
+      {
+        "id": 601,
+        "kind": "person",
+        "content": "Chị Lam là đầu mối liên hệ bên Onyx Holidays (thay chị Yến)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:29.454402+00:00"
+      },
+      {
+        "id": 602,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Onyx Holidays tăng lên 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:29.766281+00:00"
+      },
+      {
+        "id": 603,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Coral Holidays (thay chị Thảo)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:31.811434+00:00"
+      },
+      {
+        "id": 604,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Coral Holidays tăng lên 150 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:32.150534+00:00"
+      },
+      {
+        "id": 605,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Quartz Journeys (thay chị Giang)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:35.244879+00:00"
+      },
+      {
+        "id": 606,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Quartz Journeys tăng lên 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:35.54991+00:00"
+      },
+      {
+        "id": 607,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Jade Journeys (thay anh Phát)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:39.167252+00:00"
+      },
+      {
+        "id": 608,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Jade Journeys tăng lên 1050 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:39.491635+00:00"
+      },
+      {
+        "id": 609,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Quartz Trips (thay anh Sơn)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:41.98315+00:00"
+      },
+      {
+        "id": 610,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Quartz Trips tăng lên 900 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:42.289234+00:00"
+      },
+      {
+        "id": 611,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Velvet Trips (thay anh Phát)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:51.131886+00:00"
+      },
+      {
+        "id": 612,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Velvet Trips tăng lên 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:51.441546+00:00"
+      },
+      {
+        "id": 613,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Willow Trips (thay chị Giang)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:57.458975+00:00"
+      },
+      {
+        "id": 614,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Willow Trips tăng lên 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:30:57.762702+00:00"
+      },
+      {
+        "id": 615,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Umber Holidays (thay chị Oanh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:01.853413+00:00"
+      },
+      {
+        "id": 616,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Umber Holidays tăng lên 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:02.147422+00:00"
+      },
+      {
+        "id": 617,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Sierra Journeys (thay chị Chi)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:05.108627+00:00"
+      },
+      {
+        "id": 618,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Sierra Journeys tăng lên 550 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:05.408711+00:00"
+      },
+      {
+        "id": 619,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Jade Trips (thay anh Hải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:08.184811+00:00"
+      },
+      {
+        "id": 620,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Jade Trips tăng lên 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:08.488875+00:00"
+      },
+      {
+        "id": 621,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Velvet Holidays (thay anh Hải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:11.778389+00:00"
+      },
+      {
+        "id": 622,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Velvet Holidays tăng lên 800 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:12.60997+00:00"
+      },
+      {
+        "id": 623,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Yarrow Tours (thay chị Giang)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:15.702846+00:00"
+      },
+      {
+        "id": 624,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Yarrow Tours tăng lên 650 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:16.016283+00:00"
+      },
+      {
+        "id": 625,
+        "kind": "person",
+        "content": "Anh Nam là đầu mối liên hệ bên Topaz Holidays (thay anh Khải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:18.47165+00:00"
+      },
+      {
+        "id": 626,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Topaz Holidays tăng lên 650 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:18.77996+00:00"
+      },
+      {
+        "id": 627,
+        "kind": "person",
+        "content": "Anh Việt là đầu mối liên hệ bên Umber Tours (thay anh Nam)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:21.856372+00:00"
+      },
+      {
+        "id": 628,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Umber Tours tăng lên 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:22.355054+00:00"
+      },
+      {
+        "id": 629,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Amber Travel (thay anh Sơn)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:25.077369+00:00"
+      },
+      {
+        "id": 630,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Amber Travel tăng lên 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:25.382209+00:00"
+      },
+      {
+        "id": 631,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Raven Trips (thay chị Quyên)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:28.028793+00:00"
+      },
+      {
+        "id": 632,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Raven Trips tăng lên 550 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:28.327657+00:00"
+      },
+      {
+        "id": 633,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Sierra Holidays (thay anh Sơn)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:31.131348+00:00"
+      },
+      {
+        "id": 634,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Sierra Holidays tăng lên 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:31.418003+00:00"
+      },
+      {
+        "id": 635,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Xenon Trips (thay chị Chi)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:33.758836+00:00"
+      },
+      {
+        "id": 636,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Xenon Trips tăng lên 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:34.060141+00:00"
+      },
+      {
+        "id": 637,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Sierra Voyages (thay anh Việt)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:36.27639+00:00"
+      },
+      {
+        "id": 638,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Sierra Voyages tăng lên 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:36.578455+00:00"
+      },
+      {
+        "id": 639,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Cedar Holidays (thay chị Hạnh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:39.540063+00:00"
+      },
+      {
+        "id": 640,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Cedar Holidays tăng lên 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:39.830192+00:00"
+      },
+      {
+        "id": 641,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Lotus Tours (thay chị Chi)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:42.867644+00:00"
+      },
+      {
+        "id": 642,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Lotus Tours tăng lên 1050 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:43.161815+00:00"
+      },
+      {
+        "id": 643,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Garnet Trips (thay chị Oanh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:45.952725+00:00"
+      },
+      {
+        "id": 644,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Garnet Trips tăng lên 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:46.23344+00:00"
+      },
+      {
+        "id": 645,
+        "kind": "person",
+        "content": "Chị Lam là đầu mối liên hệ bên Quartz Holidays (thay anh Việt)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:48.423479+00:00"
+      },
+      {
+        "id": 646,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Quartz Holidays tăng lên 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:48.737285+00:00"
+      },
+      {
+        "id": 647,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Cedar Voyages (thay chị Thảo)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:51.52831+00:00"
+      },
+      {
+        "id": 648,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Cedar Voyages tăng lên 100 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:51.821174+00:00"
+      },
+      {
+        "id": 649,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Delta Holidays (thay anh Khải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:53.949186+00:00"
+      },
+      {
+        "id": 650,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Delta Holidays tăng lên 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:54.271093+00:00"
+      },
+      {
+        "id": 651,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Topaz Tours (thay chị Hạnh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:58.40505+00:00"
+      },
+      {
+        "id": 652,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Topaz Tours tăng lên 550 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:31:58.710167+00:00"
+      },
+      {
+        "id": 653,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Lotus Holidays (thay anh Việt)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:01.413054+00:00"
+      },
+      {
+        "id": 654,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Lotus Holidays tăng lên 250 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:01.725677+00:00"
+      },
+      {
+        "id": 655,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Koala Travel (thay chị Hạnh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:04.577767+00:00"
+      },
+      {
+        "id": 656,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Koala Travel tăng lên 750 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:04.889318+00:00"
+      },
+      {
+        "id": 657,
+        "kind": "person",
+        "content": "Chị Quyên là đầu mối liên hệ bên Harbor Voyages (thay anh Hải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:07.565382+00:00"
+      },
+      {
+        "id": 658,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Harbor Voyages tăng lên 150 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:07.878942+00:00"
+      },
+      {
+        "id": 659,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Zephyr Travel (thay chị Yến)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:10.892292+00:00"
+      },
+      {
+        "id": 660,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Zephyr Travel tăng lên 200 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:11.197782+00:00"
+      },
+      {
+        "id": 661,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Bravo Travel (thay chị Yến)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:13.208726+00:00"
+      },
+      {
+        "id": 662,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Bravo Travel tăng lên 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:13.5103+00:00"
+      },
+      {
+        "id": 663,
+        "kind": "person",
+        "content": "Chị Lam là đầu mối liên hệ bên Indigo Tours (thay chị Giang)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:17.228758+00:00"
+      },
+      {
+        "id": 664,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Indigo Tours tăng lên 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:17.533309+00:00"
+      },
+      {
+        "id": 665,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Willow Journeys (thay chị Lam)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:20.72982+00:00"
+      },
+      {
+        "id": 666,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Willow Journeys tăng lên 950 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:21.020265+00:00"
+      },
+      {
+        "id": 667,
+        "kind": "person",
+        "content": "Anh Hải là đầu mối liên hệ bên Bravo Voyages (thay chị Oanh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:23.813752+00:00"
+      },
+      {
+        "id": 668,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Bravo Voyages tăng lên 900 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:24.084587+00:00"
+      },
+      {
+        "id": 669,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Mango Voyages (thay anh Việt)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:26.954561+00:00"
+      },
+      {
+        "id": 670,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Mango Voyages tăng lên 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:27.259134+00:00"
+      },
+      {
+        "id": 671,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Quartz Tours (thay chị Quyên)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:30.509569+00:00"
+      },
+      {
+        "id": 672,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Quartz Tours tăng lên 750 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:30.811258+00:00"
+      },
+      {
+        "id": 673,
+        "kind": "person",
+        "content": "Chị Thảo là đầu mối liên hệ bên Nimbus Trips (thay chị Giang)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:33.494515+00:00"
+      },
+      {
+        "id": 674,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Nimbus Trips tăng lên 1050 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:33.794664+00:00"
+      },
+      {
+        "id": 675,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Koala Voyages (thay anh Hải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:36.730057+00:00"
+      },
+      {
+        "id": 676,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Koala Voyages tăng lên 950 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:37.033821+00:00"
+      },
+      {
+        "id": 677,
+        "kind": "person",
+        "content": "Chị Thảo là đầu mối liên hệ bên Umber Journeys (thay anh Sơn)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:39.905282+00:00"
+      },
+      {
+        "id": 678,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Umber Journeys tăng lên 500 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:40.201925+00:00"
+      },
+      {
+        "id": 679,
+        "kind": "person",
+        "content": "Anh Việt là đầu mối liên hệ bên Garnet Holidays (thay chị Quyên)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:42.810534+00:00"
+      },
+      {
+        "id": 680,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Garnet Holidays tăng lên 100 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:43.114029+00:00"
+      },
+      {
+        "id": 681,
+        "kind": "person",
+        "content": "Chị Yến là đầu mối liên hệ bên Ember Voyages (thay chị Oanh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:45.844701+00:00"
+      },
+      {
+        "id": 682,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Ember Voyages tăng lên 150 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:46.148348+00:00"
+      },
+      {
+        "id": 683,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Amber Journeys (thay anh Khải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:48.782144+00:00"
+      },
+      {
+        "id": 684,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Amber Journeys tăng lên 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:49.079849+00:00"
+      },
+      {
+        "id": 685,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Velvet Tours (thay chị Yến)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:52.618968+00:00"
+      },
+      {
+        "id": 686,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Velvet Tours tăng lên 600 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:52.904655+00:00"
+      },
+      {
+        "id": 687,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Mango Tours (thay chị Oanh)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:56.063781+00:00"
+      },
+      {
+        "id": 688,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Mango Tours tăng lên 700 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:56.355262+00:00"
+      },
+      {
+        "id": 689,
+        "kind": "person",
+        "content": "Anh Bảo là đầu mối liên hệ bên Alpha Holidays (thay anh Phát)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:58.470946+00:00"
+      },
+      {
+        "id": 690,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Alpha Holidays tăng lên 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:32:58.770077+00:00"
+      },
+      {
+        "id": 691,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Nimbus Journeys (thay anh Bảo)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:01.689982+00:00"
+      },
+      {
+        "id": 692,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Nimbus Journeys tăng lên 100 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:01.985435+00:00"
+      },
+      {
+        "id": 693,
+        "kind": "person",
+        "content": "Anh Hải là đầu mối liên hệ bên Indigo Trips (thay anh Dũng)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:04.916418+00:00"
+      },
+      {
+        "id": 694,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Indigo Trips tăng lên 550 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:05.221388+00:00"
+      },
+      {
+        "id": 695,
+        "kind": "person",
+        "content": "Chị Thảo là đầu mối liên hệ bên Zephyr Holidays (thay anh Khải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:08.791389+00:00"
+      },
+      {
+        "id": 696,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Zephyr Holidays tăng lên 550 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:09.053638+00:00"
+      },
+      {
+        "id": 697,
+        "kind": "person",
+        "content": "Chị Chi là đầu mối liên hệ bên Topaz Journeys (thay anh Bảo)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:14.814536+00:00"
+      },
+      {
+        "id": 698,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Topaz Journeys tăng lên 700 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:15.117407+00:00"
+      },
+      {
+        "id": 699,
+        "kind": "person",
+        "content": "Anh Phát là đầu mối liên hệ bên Harbor Trips (thay chị Yến)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:32.594274+00:00"
+      },
+      {
+        "id": 700,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Harbor Trips tăng lên 600 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:32.895927+00:00"
+      },
+      {
+        "id": 701,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Alpha Tours (thay anh Bảo)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:35.466027+00:00"
+      },
+      {
+        "id": 702,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Alpha Tours tăng lên 100 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:35.765155+00:00"
+      },
+      {
+        "id": 703,
+        "kind": "person",
+        "content": "Anh Nam là đầu mối liên hệ bên Pearl Voyages (thay anh Khải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:38.938861+00:00"
+      },
+      {
+        "id": 704,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Pearl Voyages tăng lên 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:39.216058+00:00"
+      },
+      {
+        "id": 705,
+        "kind": "person",
+        "content": "Anh Hải là đầu mối liên hệ bên Coral Journeys (thay chị Yến)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:42.310152+00:00"
+      },
+      {
+        "id": 706,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Coral Journeys tăng lên 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:42.605077+00:00"
+      },
+      {
+        "id": 707,
+        "kind": "person",
+        "content": "Anh Khải là đầu mối liên hệ bên Amber Tours (thay anh Dũng)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:45.516214+00:00"
+      },
+      {
+        "id": 708,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Amber Tours tăng lên 750 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:45.809699+00:00"
+      },
+      {
+        "id": 709,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Zephyr Journeys (thay chị Chi)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:48.956398+00:00"
+      },
+      {
+        "id": 710,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Zephyr Journeys tăng lên 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:49.295738+00:00"
+      },
+      {
+        "id": 711,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Willow Tours (thay anh Bảo)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:51.860579+00:00"
+      },
+      {
+        "id": 712,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Willow Tours tăng lên 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:52.147295+00:00"
+      },
+      {
+        "id": 713,
+        "kind": "person",
+        "content": "Anh Việt là đầu mối liên hệ bên Fjord Tours (thay chị Chi)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:54.800373+00:00"
+      },
+      {
+        "id": 714,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Fjord Tours tăng lên 200 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:55.090131+00:00"
+      },
+      {
+        "id": 715,
+        "kind": "person",
+        "content": "Chị Lam là đầu mối liên hệ bên Dune Journeys (thay anh Hải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:58.488938+00:00"
+      },
+      {
+        "id": 716,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Dune Journeys tăng lên 200 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:33:58.769955+00:00"
+      },
+      {
+        "id": 717,
+        "kind": "person",
+        "content": "Chị Giang là đầu mối liên hệ bên Coral Tours (thay anh Bảo)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:02.644957+00:00"
+      },
+      {
+        "id": 718,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Coral Tours tăng lên 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:02.919537+00:00"
+      },
+      {
+        "id": 719,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Coral Travel (thay chị Lam)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:06.540113+00:00"
+      },
+      {
+        "id": 720,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Coral Travel tăng lên 650 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:06.824587+00:00"
+      },
+      {
+        "id": 721,
+        "kind": "person",
+        "content": "Chị Hạnh là đầu mối liên hệ bên Cedar Tours (thay anh Dũng)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:09.530139+00:00"
+      },
+      {
+        "id": 722,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Cedar Tours tăng lên 950 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:09.821554+00:00"
+      },
+      {
+        "id": 723,
+        "kind": "person",
+        "content": "Anh Việt là đầu mối liên hệ bên Alfa Tours (thay chị Yến)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:12.564671+00:00"
+      },
+      {
+        "id": 724,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Alfa Tours tăng lên 350 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:12.838549+00:00"
+      },
+      {
+        "id": 725,
+        "kind": "person",
+        "content": "Chị Chi là đầu mối liên hệ bên Onyx Journeys (thay anh Hải)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:15.427707+00:00"
+      },
+      {
+        "id": 726,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Onyx Journeys tăng lên 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:16.278477+00:00"
+      },
+      {
+        "id": 727,
+        "kind": "person",
+        "content": "Anh Dũng là đầu mối liên hệ bên Harbor Journeys (thay anh Sơn)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:20.651698+00:00"
+      },
+      {
+        "id": 728,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Harbor Journeys tăng lên 400 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:20.99675+00:00"
+      },
+      {
+        "id": 729,
+        "kind": "person",
+        "content": "Chị Thảo là đầu mối liên hệ bên Dune Trips (thay anh Sơn)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:24.862957+00:00"
+      },
+      {
+        "id": 730,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Dune Trips tăng lên 750 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:25.175478+00:00"
+      },
+      {
+        "id": 731,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Yarrow Travel (thay anh Phát)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:29.885965+00:00"
+      },
+      {
+        "id": 732,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Yarrow Travel tăng lên 300 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:30.69933+00:00"
+      },
+      {
+        "id": 733,
+        "kind": "person",
+        "content": "Chị Oanh là đầu mối liên hệ bên Umber Travel (thay anh Dũng)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:33.759254+00:00"
+      },
+      {
+        "id": 734,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Umber Travel tăng lên 850 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:34.569384+00:00"
+      },
+      {
+        "id": 735,
+        "kind": "person",
+        "content": "Anh Sơn là đầu mối liên hệ bên Garnet Journeys (thay chị Yến)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:36.941998+00:00"
+      },
+      {
+        "id": 736,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Garnet Journeys tăng lên 550 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:37.239154+00:00"
+      },
+      {
+        "id": 737,
+        "kind": "person",
+        "content": "Chị Thảo là đầu mối liên hệ bên Koala Tours (thay anh Dũng)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:40.155168+00:00"
+      },
+      {
+        "id": 738,
+        "kind": "project",
+        "content": "Mục tiêu hàng tháng của khách Koala Tours tăng lên 450 SIM",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:40.437074+00:00"
+      },
+      {
+        "id": 739,
+        "kind": "profile",
+        "content": "Tên là Minh Anh, làm Account Manager nhóm B2B, báo cáo trực tiếp cho anh Tuấn (thay chị Lan chuyển sang B2C)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:35:27.811+00:00"
+      },
+      {
+        "id": 740,
+        "kind": "project",
+        "content": "Từ 1/9 chuyển sang phụ trách thị trường Châu Âu (không làm Hàn Quốc nữa), vẫn giữ Beta Tours",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:35:12.313+00:00"
+      },
+      {
+        "id": 741,
+        "kind": "preference",
+        "content": "Thích câu trả lời ngắn, kết luận trước, trình bày số liệu bằng bảng thay vì biểu đồ",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:47.394553+00:00"
+      },
+      {
+        "id": 742,
+        "kind": "person",
+        "content": "Alpha Travel: anh Quang là người liên hệ chính, chị Hà là đầu mối thanh toán",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:54.673823+00:00"
+      },
+      {
+        "id": 743,
+        "kind": "decision",
+        "content": "Alpha Travel vừa chốt hợp đồng năm",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:34:54.968609+00:00"
+      },
+      {
+        "id": 744,
+        "kind": "decision",
+        "content": "Chốt phương án giảm 5% với cam kết 12 tháng cho khách hàng Alpha Travel",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:35:00.223539+00:00"
+      },
+      {
+        "id": 745,
+        "kind": "decision",
+        "content": "Quyết định gửi báo cáo khách hàng vào sáng thứ Hai hằng tuần, không gửi cuối tuần",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:35:02.678651+00:00"
+      },
+      {
+        "id": 746,
+        "kind": "person",
+        "content": "Chị Elena là đầu mối liên hệ bên Gamma Holidays (khách Châu Âu mới)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:35:21.304481+00:00"
+      },
+      {
+        "id": 747,
+        "kind": "project",
+        "content": "Gamma Holidays đổi sang thương lượng/sử dụng gói Unlimited 7 ngày (thay vì 10 ngày)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:35:55.603+00:00"
+      },
+      {
+        "id": 748,
+        "kind": "project",
+        "content": "Từ 1/9 bàn giao khách Alpha Travel cho bạn Phúc phụ trách, không còn theo dõi nữa",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:35:30.575039+00:00"
+      },
+      {
+        "id": 749,
+        "kind": "decision",
+        "content": "Gamma Holidays ký hợp đồng thử nghiệm 3 tháng, bắt đầu từ 15/9",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:35:34.807023+00:00"
+      },
+      {
+        "id": 750,
+        "kind": "project",
+        "content": "Mục tiêu Q4 cho Gamma Holidays là 500 SIM mỗi tháng (tăng từ mục tiêu cũ 200 SIM) và giữ Beta Tours không giảm",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:36:01.528+00:00"
+      },
+      {
+        "id": 751,
+        "kind": "project",
+        "content": "Gamma Holidays yêu cầu hỗ trợ eSIM đồng thương hiệu (có logo Gamma Holidays cùng logo GoHub trên trang kích hoạt)",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:35:39.000421+00:00"
+      },
+      {
+        "id": 752,
+        "kind": "decision",
+        "content": "Thống nhất gửi mẫu thiết kế đồng thương hiệu cho Gamma Holidays trước ngày 30/9",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:35:42.318285+00:00"
+      },
+      {
+        "id": 753,
+        "kind": "preference",
+        "content": "Bảng báo cáo luôn cần có cột CM1% bên cạnh doanh thu",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:35:45.330345+00:00"
+      },
+      {
+        "id": 754,
+        "kind": "project",
+        "content": "Nghỉ phép từ 6/10 đến 10/10, bạn Phúc tạm nhận việc phụ trách Beta Tours và Gamma Holidays",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:35:59.114259+00:00"
+      },
+      {
+        "id": 755,
+        "kind": "preference",
+        "content": "Hay họp với anh Tuấn vào chiều thứ Sáu, tránh đặt lịch nhắc vào thời gian này",
+        "archived": false,
+        "source": "auto-eval",
+        "updated_at": "2026-10-09T13:36:05.269289+00:00"
+      }
+    ],
+    "conversationSummaries": [
+      {
+        "title": "[GP] Giá hợp đồng năm Alpha Travel",
+        "summary": "Khách hàng Alpha Travel chốt hợp đồng năm; người liên hệ chính là anh Quang, đầu mối thanh toán là chị Hà. Quyết định: chọn phương án B (giảm giá 5% kèm cam kết 12 tháng, sau khi so sánh với phương án A giữ giá và C giảm 8% cam kết 24 tháng); lịch gửi báo cáo khách hàng đổi sang sáng thứ Hai hằng tuần thay vì cuối tuần. Không có việc còn dở.",
+        "message_count": 8
+      },
+      {
+        "title": "[GP] Hỗ trợ đồng thương hiệu cho Gamma Holidays",
+        "summary": "Hợp đồng thử nghiệm với Gamma Holidays (chị Elena): thời hạn 3 tháng từ 15/9, KPI 200 SIM/tháng. Thống nhất hỗ trợ eSIM đồng thương hiệu (logo Gamma Holidays và GoHub trên trang kích hoạt). Quyết định: bảng báo cáo luôn hiển thị cột CM1% cạnh doanh thu. Việc còn dở: cần nhận mẫu logo từ Gamma Holidays và gửi lại mẫu thiết kế đồng thương hiệu trước ngày 30/9.",
+        "message_count": 8
+      }
+    ],
+    "memoryBlockChars": 8790
+  },
+  "rows": [
+    {
+      "id": 1,
+      "cat": "single_fact",
+      "question": "Đầu mối thanh toán của Alpha Travel là ai?",
+      "answer": "Đầu mối thanh toán bên khách hàng **Alpha Travel** là **chị Hà** (còn **anh Quang** là người liên hệ chính).",
+      "toolsUsed": [],
+      "tokensIn": 20157,
+      "tokensOut": 31,
+      "ms": 3164,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối thanh toán là chị Hà, thông tin hoàn toàn khớp với bảng sự thật."
+      }
+    },
+    {
+      "id": 2,
+      "cat": "single_fact",
+      "question": "Người liên hệ chính bên Alpha Travel là ai?",
+      "answer": "Người liên hệ chính bên **Alpha Travel** là **anh Quang** (chị Hà là đầu mối thanh toán).",
+      "toolsUsed": [],
+      "tokensIn": 17754,
+      "tokensOut": 24,
+      "ms": 2477,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng người liên hệ chính là anh Quang, thông tin bổ sung về chị Hà cũng có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 3,
+      "cat": "single_fact",
+      "question": "Gamma Holidays ký thử nghiệm bao lâu và bắt đầu từ ngày nào?",
+      "answer": "**Gamma Holidays** ký hợp đồng thử nghiệm **3 tháng**, bắt đầu từ ngày **15/09/2026**.",
+      "toolsUsed": [],
+      "tokensIn": 17758,
+      "tokensOut": 29,
+      "ms": 2886,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thời gian thử nghiệm và ngày bắt đầu. Việc thêm năm 2026 không bị tính là bịa theo quy tắc."
+      }
+    },
+    {
+      "id": 4,
+      "cat": "single_fact",
+      "question": "Mình nghỉ phép khi nào?",
+      "answer": "Minh Anh có lịch nghỉ phép từ **06/10 đến 10/10/2026**. \n\nTrong thời gian này, bạn Phúc là người tạm nhận bàn giao phụ trách hai khách hàng **Beta Tours** và **Gamma Holidays**.",
+      "toolsUsed": [],
+      "tokensIn": 21861,
+      "tokensOut": 56,
+      "ms": 3294,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thời gian nghỉ phép. Việc thêm năm 2026 không bị tính là bịa theo quy tắc, và thông tin bàn giao cho Phúc có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 5,
+      "cat": "single_fact",
+      "question": "Công việc của mình là gì ở công ty?",
+      "answer": "Bạn là **Minh Anh**, đảm nhận vị trí **Account Manager nhóm B2B** tại GoHub:\n\n- **Báo cáo trực tiếp:** Anh Tuấn (thay chị Lan đã chuyển sang B2C).\n- **Phạm vi thị trường:** Từ ngày 01/09, bạn chuyển sang phụ trách thị trường **Châu Âu** (không còn phụ trách thị trường Hàn Quốc).\n- **Khách hàng quản lý chính:**\n  - **Beta Tours:** Tiếp tục duy trì và chăm sóc.\n  - **Gamma Holidays:** Khách Châu Âu mới (đang chạy thử nghiệm 3 tháng từ 15/09, triển khai gói Unlimited 7 ngày, mục tiêu Q4 là 500 SIM/tháng).\n  - *(Lưu ý: Khách Alpha Travel đã bàn giao cho bạn Phúc từ ngày 01/09).*",
+      "toolsUsed": [],
+      "tokensIn": 20795,
+      "tokensOut": 190,
+      "ms": 4596,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng chức danh công việc và cung cấp thêm các thông tin chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 6,
+      "cat": "preference",
+      "question": "Bạn nên trình bày dữ liệu cho mình theo cách nào?",
+      "answer": "Dựa trên thói quen làm việc và sở thích của bạn, Gấu luôn tuân thủ nguyên tắc trình bày sau:\n\n1. **Kết luận trước (Bottom Line First)**: Đưa ra thông tin trọng tâm, kết quả chính hoặc hành động cần làm ngay ở đầu câu trả lời, ngắn gọn, súc tích, đi thẳng vào vấn đề.\n2. **Dữ liệu dạng Bảng (Table)**: Ưu tiên dùng bảng Markdown rõ ràng, dễ nhìn thay vì vẽ biểu đồ/chart (trừ khi bạn yêu cầu riêng).\n3. **Luôn có cột CM1% bên cạnh Doanh thu**: Bất kể báo cáo hay phân tích số liệu kinh doanh nào (tổng thể, theo kênh, hay theo khách hàng B2B), cột **CM1%** luôn đi kèm doanh thu và lợi nhuận để bạn nắm trọn bức tranh biên lợi nhuận.\n\nNếu bạn muốn điều chỉnh hay bổ sung thêm quy chuẩn nào khác cho các báo cáo sắp tới, cứ nhắn Gấu nhé!",
+      "toolsUsed": [],
+      "tokensIn": 21310,
+      "tokensOut": 216,
+      "ms": 5494,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đầy đủ các ý trong đáp án tham chiếu và bổ sung thêm yêu cầu về cột CM1% có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 7,
+      "cat": "preference",
+      "question": "Mình muốn nhận báo cáo khách hàng vào lúc nào trong tuần?",
+      "answer": "Theo quyết định đã chốt trước đây của bạn, bạn muốn gửi/nhận báo cáo khách hàng vào **sáng thứ Hai hằng tuần** (không gửi vào cuối tuần).",
+      "toolsUsed": [],
+      "tokensIn": 21115,
+      "tokensOut": 38,
+      "ms": 2975,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thời gian nhận báo cáo là sáng thứ Hai hằng tuần theo thông tin trong bảng sự thật."
+      }
+    },
+    {
+      "id": 8,
+      "cat": "preference",
+      "question": "Làm bảng báo cáo cho mình thì phải có cột gì cạnh doanh thu?",
+      "answer": "Theo yêu cầu và thói quen làm việc của bạn, các bảng báo cáo luôn cần có cột **CM1%** bên cạnh doanh thu.\n\nNgoài ra, bạn cũng ưu tiên cách trình bày:\n- Đi thẳng vào kết luận/ngắn gọn.\n- Dùng **bảng số liệu** thay vì biểu đồ.",
+      "toolsUsed": [],
+      "tokensIn": 22150,
+      "tokensOut": 69,
+      "ms": 2770,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng cột CM1% và cung cấp thêm thông tin về thói quen trình bày có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 9,
+      "cat": "preference",
+      "question": "Khung giờ nào trong tuần không nên đặt lịch nhắc cho mình?",
+      "answer": "**Chiều thứ Sáu** là khung giờ không nên đặt lịch nhắc cho bạn, vì bạn thường có lịch họp với anh Tuấn vào thời gian này.",
+      "toolsUsed": [],
+      "tokensIn": 19885,
+      "tokensOut": 32,
+      "ms": 4931,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng khung giờ là chiều thứ Sáu và nêu đúng lý do là họp với anh Tuấn."
+      }
+    },
+    {
+      "id": 10,
+      "cat": "update_current",
+      "question": "Hiện giờ mình đang phụ trách thị trường nào?",
+      "answer": "Hiện tại bạn đang phụ trách **thị trường Châu Âu** (chuyển sang từ 01/09, không còn phụ trách thị trường Hàn Quốc). \n\nVề danh mục khách hàng chính liên quan:\n- Tiếp tục giữ và chăm sóc **Beta Tours**.\n- Đang phát triển khách mới **Gamma Holidays** (chuyên tuyến Châu Âu).\n- Khách cũ **Alpha Travel** đã bàn giao cho bạn Phúc từ 01/09.",
+      "toolsUsed": [],
+      "tokensIn": 21886,
+      "tokensOut": 101,
+      "ms": 3738,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường hiện tại là Châu Âu và không còn làm Hàn Quốc, các thông tin bổ sung về khách hàng đều chính xác theo bảng sự thật."
+      }
+    },
+    {
+      "id": 11,
+      "cat": "update_current",
+      "question": "Sếp trực tiếp của mình bây giờ là ai?",
+      "answer": "Sếp trực tiếp hiện tại của bạn là **anh Tuấn** (bạn chuyển sang báo cáo cho anh Tuấn thay chị Lan sau khi chị chuyển sang bộ phận B2C).",
+      "toolsUsed": [],
+      "tokensIn": 21599,
+      "tokensOut": 39,
+      "ms": 6827,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng tên sếp trực tiếp hiện tại là anh Tuấn và giải thích đúng lý do theo bảng sự thật."
+      }
+    },
+    {
+      "id": 12,
+      "cat": "update_current",
+      "question": "Alpha Travel hiện do ai phụ trách?",
+      "answer": "Khách hàng **Alpha Travel** hiện do **bạn Phúc** phụ trách (đã bàn giao lại từ ngày 01/09).",
+      "toolsUsed": [],
+      "tokensIn": 17752,
+      "tokensOut": 31,
+      "ms": 3370,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng người phụ trách hiện tại là bạn Phúc và thời gian bàn giao từ 1/9, khớp với đáp án tham chiếu và bảng sự thật."
+      }
+    },
+    {
+      "id": 13,
+      "cat": "update_current",
+      "question": "Chị Elena đang quan tâm gói Unlimited mấy ngày?",
+      "answer": "Chị Elena bên **Gamma Holidays** hiện đang quan tâm và thương lượng **gói Unlimited 7 ngày** (đã chuyển từ phương án 10 ngày trước đó sang gói 7 ngày).",
+      "toolsUsed": [],
+      "tokensIn": 22265,
+      "tokensOut": 42,
+      "ms": 2561,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng số ngày gói Unlimited mà chị Elena quan tâm hiện tại là 7 ngày (đổi từ 10 ngày), khớp với đáp án tham chiếu và bảng sự thật."
+      }
+    },
+    {
+      "id": 14,
+      "cat": "update_current",
+      "question": "Mục tiêu số SIM mỗi tháng của Gamma Holidays hiện là bao nhiêu?",
+      "answer": "Mục tiêu hàng tháng hiện tại của khách **Gamma Holidays** cho **Q4** là **500 SIM/tháng** (đã được điều chỉnh tăng từ mục tiêu cũ là 200 SIM/tháng).",
+      "toolsUsed": [],
+      "tokensIn": 23096,
+      "tokensOut": 49,
+      "ms": 5427,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng mục tiêu hiện tại là 500 SIM/tháng cho Q4 và có nhắc đến mục tiêu cũ là 200 SIM/tháng, hoàn toàn khớp với đáp án tham chiếu và bảng sự thật."
+      }
+    },
+    {
+      "id": 15,
+      "cat": "history",
+      "question": "Trước tháng 9 mình phụ trách thị trường nào?",
+      "answer": "Trước tháng 9, bạn phụ trách **thị trường Hàn Quốc** (chăm sóc các khách hàng Alpha Travel và Beta Tours). \n\nTừ ngày 01/09, bạn đã chuyển sang phụ trách **thị trường Châu Âu**, đồng thời bàn giao Alpha Travel cho bạn Phúc và tiếp tục giữ chăm sóc Beta Tours.",
+      "toolsUsed": [],
+      "tokensIn": 21764,
+      "tokensOut": 70,
+      "ms": 3370,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường Hàn Quốc và cung cấp thêm thông tin chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 16,
+      "cat": "history",
+      "question": "Trước anh Tuấn thì sếp trực tiếp của mình là ai?",
+      "answer": "Trước anh Tuấn, sếp trực tiếp của bạn là **chị Lan** (sau đó chị Lan chuyển sang phụ trách mảng B2C).",
+      "toolsUsed": [],
+      "tokensIn": 19187,
+      "tokensOut": 32,
+      "ms": 2702,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng sếp trực tiếp trước anh Tuấn là chị Lan, thông tin thêm cũng có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 17,
+      "cat": "history",
+      "question": "Ban đầu Gamma Holidays thương lượng gói Unlimited mấy ngày?",
+      "answer": "Ban đầu **Gamma Holidays** thương lượng gói **Unlimited 10 ngày**, sau đó đã đổi sang thương lượng/sử dụng gói **Unlimited 7 ngày**.",
+      "toolsUsed": [],
+      "tokensIn": 22201,
+      "tokensOut": 34,
+      "ms": 2847,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng số ngày ban đầu là 10 ngày và cung cấp thêm thông tin cập nhật chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 18,
+      "cat": "history",
+      "question": "Lúc mới ký thử nghiệm, mục tiêu SIM mỗi tháng của Gamma là bao nhiêu?",
+      "answer": "Mục tiêu ban đầu lúc mới ký thử nghiệm của **Gamma Holidays** là **200 SIM/tháng** (sau đó đã được nâng lên **500 SIM/tháng** cho mục tiêu Q4).",
+      "toolsUsed": [],
+      "tokensIn": 22606,
+      "tokensOut": 47,
+      "ms": 6005,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng mục tiêu 200 SIM/tháng và cung cấp thêm thông tin có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 19,
+      "cat": "history",
+      "question": "Chị Lan bây giờ làm mảng nào?",
+      "answer": "Chị Lan hiện tại đã chuyển sang phụ trách mảng **B2C** (trước đây chị quản lý nhóm B2B và bạn từng báo cáo trực tiếp cho chị trước khi chuyển sang báo cáo cho anh Tuấn).",
+      "toolsUsed": [],
+      "tokensIn": 20952,
+      "tokensOut": 48,
+      "ms": 4745,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng mảng B2C và các thông tin bổ sung đều có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 20,
+      "cat": "multi_hop",
+      "question": "Khách hàng mà mình đã bàn giao hẳn cho bạn Phúc có đầu mối liên hệ và đầu mối thanh toán là ai?",
+      "answer": "Khách hàng bạn đã bàn giao hẳn cho bạn Phúc (từ ngày 01/09) là **Alpha Travel** (khác với *Beta Tours* và *Gamma Holidays* chỉ tạm bàn giao trong đợt bạn nghỉ phép).\n\nThông tin đầu mối của **Alpha Travel**:\n* **Đầu mối liên hệ chính:** Anh Quang\n* **Đầu mối thanh toán:** Chị Hà",
+      "toolsUsed": [],
+      "tokensIn": 20983,
+      "tokensOut": 86,
+      "ms": 3439,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng tên khách hàng và các đầu mối liên hệ, thanh toán theo bảng sự thật. Không có thông tin bịa đặt."
+      }
+    },
+    {
+      "id": 21,
+      "cat": "multi_hop",
+      "question": "Trong lúc mình nghỉ phép, ai xử lý khách Châu Âu của mình và đầu mối bên khách đó là ai?",
+      "answer": "Trong thời gian bạn nghỉ phép (06/10 – 10/10/2026):\n\n* **Người tạm nhận việc xử lý**: Bạn **Phúc** (tạm phụ trách Beta Tours và Gamma Holidays).\n* **Đầu mối bên khách Châu Âu (Gamma Holidays)**: **Chị Elena**.",
+      "toolsUsed": [],
+      "tokensIn": 21320,
+      "tokensOut": 71,
+      "ms": 2758,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng người xử lý là Phúc, khách Châu Âu là Gamma Holidays và đầu mối là chị Elena. Việc thêm năm 2026 không bị tính là bịa theo quy tắc."
+      }
+    },
+    {
+      "id": 22,
+      "cat": "multi_hop",
+      "question": "Khách nào của mình đang thương lượng gói Unlimited, hiện là mấy ngày và mục tiêu SIM hằng tháng quý 4 là bao nhiêu?",
+      "answer": "Thông tin chi tiết về khách hàng đang thương lượng gói Unlimited:\n\n* **Khách hàng:** **Gamma Holidays** (khách thị trường Châu Âu mới, đầu mối liên hệ là chị Elena).\n* **Gói cước thương lượng hiện tại:** **Gói Unlimited 7 ngày** *(đã đổi từ gói 10 ngày trước đó)*.\n* **Mục tiêu sản lượng Quý 4:** **500 SIM / tháng** *(nâng lên từ mốc 200 SIM ban đầu)*.",
+      "toolsUsed": [],
+      "tokensIn": 22599,
+      "tokensOut": 112,
+      "ms": 4741,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời chính xác tên khách hàng, số ngày của gói Unlimited hiện tại và mục tiêu SIM hằng tháng quý 4 theo đúng bảng sự thật."
+      }
+    },
+    {
+      "id": 23,
+      "cat": "multi_hop",
+      "question": "Mình hay họp với sếp vào lúc nào, và sếp đó là ai?",
+      "answer": "Theo thông tin đã lưu:\n\n- **Sếp trực tiếp của bạn:** **Anh Tuấn** (bạn chuyển sang báo cáo trực tiếp cho anh Tuấn thay chị Lan).\n- **Thời gian hay họp:** **Chiều thứ Sáu** hàng tuần (tránh đặt lịch nhắc vào khung giờ này).",
+      "toolsUsed": [],
+      "tokensIn": 21781,
+      "tokensOut": 65,
+      "ms": 3722,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thời gian họp và tên sếp dựa trên thông tin trong bảng sự thật."
+      }
+    },
+    {
+      "id": 24,
+      "cat": "multi_hop",
+      "question": "Khách nào mình giữ từ đầu đến giờ không đổi người phụ trách, và mục tiêu quý 4 của khách đó là gì?",
+      "answer": "Khách bạn giữ từ đầu đến giờ không đổi người phụ trách là **Beta Tours**.\n\n* Chi tiết:\n  * **Alpha Travel**: Đã bàn giao cho bạn Phúc từ 01/09.\n  * **Beta Tours**: Bạn vẫn tiếp tục phụ trách xuyên suốt từ đầu tới nay (chỉ có bạn Phúc hỗ trợ tạm thời trong đợt bạn nghỉ phép 06/10 – 10/10).\n\n---\n\n### Mục tiêu Quý 4 của Beta Tours:\n* **Duy trì sản lượng, giữ không giảm** so với các tháng trước (theo mục tiêu chốt cho Q4 cùng với kế hoạch tăng trưởng của Gamma Holidays).",
+      "toolsUsed": [],
+      "tokensIn": 21807,
+      "tokensOut": 146,
+      "ms": 3872,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng tên khách hàng là Beta Tours và mục tiêu quý 4 là giữ không giảm, hoàn toàn khớp với bảng sự thật và đáp án tham chiếu."
+      }
+    },
+    {
+      "id": 25,
+      "cat": "abstention",
+      "question": "Số điện thoại của anh Quang bên Alpha Travel là gì?",
+      "answer": "Hiện tại trong hệ thống ghi nhận **anh Quang là người liên hệ chính** và **chị Hà là đầu mối thanh toán** bên đối tác **Alpha Travel**, nhưng **chưa có lưu số điện thoại** cụ thể của anh Quang.\n\nVì bạn đã bàn giao khách hàng Alpha Travel cho **bạn Phúc** phụ trách từ ngày 01/09, bạn có thể nhắn nhanh cho Phúc để lấy số liên hệ trực tiếp của anh Quang nhé.",
+      "toolsUsed": [
+        "assistantMemory",
+        "searchPastConversations"
+      ],
+      "tokensIn": 65561,
+      "tokensOut": 141,
+      "ms": 8452,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng là chưa có thông tin số điện thoại và không bịa số. Các thông tin bổ sung về anh Quang, chị Hà và bạn Phúc đều chính xác theo bảng sự thật."
+      }
+    },
+    {
+      "id": 26,
+      "cat": "abstention",
+      "question": "Sinh nhật mình là ngày nào?",
+      "answer": "Hiện tại Gấu chưa có thông tin về ngày sinh nhật của bạn (Minh Anh) trong dữ liệu và trí nhớ dài hạn. \n\nNếu bạn muốn, bạn có thể chia sẻ ngày sinh nhật để Gấu lưu lại nhé!",
+      "toolsUsed": [
+        "assistantMemory",
+        "searchPastConversations",
+        "executeSQL"
+      ],
+      "tokensIn": 116572,
+      "tokensOut": 167,
+      "ms": 36783,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng là chưa có thông tin về ngày sinh nhật và không bịa đặt thông tin."
+      }
+    },
+    {
+      "id": 27,
+      "cat": "abstention",
+      "question": "Giá bán mỗi SIM trong hợp đồng với Gamma Holidays là bao nhiêu?",
+      "answer": "Hiện tại trong các thông tin và thỏa thuận hợp đồng đã ghi nhận về khách hàng **Gamma Holidays**:\n\n1. **Các điều khoản đã chốt / đang theo dõi:**\n   - **Gói sản phẩm:** Đổi sang thương lượng / sử dụng **gói Unlimited 7 ngày** (thay vì 10 ngày).\n   - **Thời hạn hợp đồng:** Thử nghiệm **3 tháng** (bắt đầu từ **15/09/2026**).\n   - **Sản lượng mục tiêu:** Đã nâng lên **500 SIM/tháng** cho Q4 (mục tiêu ban đầu lúc ký thử nghiệm là 200 SIM/tháng).\n   - **Chính sách kèm theo:** Hỗ trợ **eSIM đồng thương hiệu** (hiển thị logo Gamma Holidays cùng logo GoHub trên trang kích hoạt).\n\n2. **Về đơn giá cụ thể mỗi SIM:**\n   - Trong hồ sơ ghi nhớ và các trao đổi trước đây **chưa có lưu con số giá bán cụ thể (unit price theo USD hoặc VND)** cho gói Unlimited 7 ngày này.\n   - Dữ liệu đơn hàng thực tế trên hệ thống cũng **chưa phát sinh giao dịch xuất bán hoàn tất** cho Gamma Holidays để tra cứu ngược giá xuất hóa đơn/đơn giá bán lẻ.\n\nMinh Anh có thể kiểm tra lại trực tiếp trong file hợp đồng/báo giá gửi chị Elena hoặc trao đổi nhanh với **bạn Phúc** (người đang tạm nhận bàn giao phụ trách Gamma Holidays trong đợt Minh Anh nghỉ phép) để có con số giá chính xác nhé.\n\n```followup\n[\"Xem thông tin liên hệ Gamma Holidays?\", \"Kiểm tra tình hình bàn giao cho Phúc?\"]\n```",
+      "toolsUsed": [
+        "searchPastConversations",
+        "assistantMemory",
+        "executeSQL",
+        "querySupabase",
+        "searchKnowledgeBase"
+      ],
+      "tokensIn": 207267,
+      "tokensOut": 698,
+      "ms": 27246,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng là chưa có thông tin về giá bán cụ thể và không bịa đặt thông tin trái với bảng sự thật."
+      }
+    },
+    {
+      "id": 28,
+      "cat": "abstention",
+      "question": "Mình tốt nghiệp trường đại học nào?",
+      "answer": "Hiện tại trong hồ sơ lưu trữ của Gấu chưa có thông tin về trường đại học bạn đã tốt nghiệp. \n\nGấu chỉ mới lưu thông tin bạn là **Minh Anh**, đảm nhận vị trí **Account Manager nhóm B2B** (báo cáo cho anh Tuấn). \n\nNếu bạn muốn Gấu lưu lại thông tin trường đại học hoặc chuyên ngành vào hồ sơ cá nhân để tiện ghi nhớ sau này, bạn có thể chia sẻ nhé!",
+      "toolsUsed": [
+        "assistantMemory",
+        "searchPastConversations"
+      ],
+      "tokensIn": 126606,
+      "tokensOut": 182,
+      "ms": 16119,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng là chưa có thông tin về trường đại học và không bịa đặt thông tin nào."
+      }
+    },
+    {
+      "id": 29,
+      "cat": "conversation_recall",
+      "question": "Lần bàn giá hợp đồng năm cho Alpha Travel, mình đã chọn phương án nào và điều kiện đi kèm là gì?",
+      "answer": "Theo ghi nhận trước đây, phương án và điều kiện đã chốt cho hợp đồng năm của **Alpha Travel** là:\n\n* **Phương án giá:** Giảm **5%**.\n* **Điều kiện đi kèm:** Cam kết thời hạn hợp đồng **12 tháng**.",
+      "toolsUsed": [],
+      "tokensIn": 22924,
+      "tokensOut": 57,
+      "ms": 2892,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng phương án giảm 5% và điều kiện cam kết 12 tháng, khớp với đáp án tham chiếu và bảng sự thật."
+      }
+    },
+    {
+      "id": 30,
+      "cat": "conversation_recall",
+      "question": "Trong phương án giá của Alpha Travel, mình còn cân nhắc những phương án nào khác?",
+      "answer": "Trong đợt thảo luận về giá hợp đồng năm cho **Alpha Travel**, ngoài phương án đã chốt, bạn đã cân nhắc tổng cộng **3 phương án**:\n\n| Phương án | Chi tiết mức giá & Điều kiện | Trạng thái |\n|---|---|---|\n| **Phương án A** | **Giữ nguyên giá hiện tại** (không giảm), không yêu cầu ràng buộc kỳ hạn dài. | ❌ Không chọn |\n| **Phương án B** | **Giảm 5%** đi kèm cam kết thời hạn hợp đồng **12 tháng**. |  **Đã chốt lựa chọn** |\n| **Phương án C** | **Giảm 8%** đi kèm cam kết thời hạn hợp đồng **24 tháng**. | ❌ Không chọn (mức giảm sâu và cam kết thời gian quá dài) |\n\n---\n*Chi tiết thảo luận có thể xem lại tại hội thoại: [[GP] Giá hợp đồng năm Alpha Travel](/analytics/creator/ai?c=b757b0dd-fb35-4888-83e1-192b6b441d77).*",
+      "toolsUsed": [
+        "searchPastConversations"
+      ],
+      "tokensIn": 48631,
+      "tokensOut": 270,
+      "ms": 8222,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 1,
+        "note": "Trợ lý trả lời đúng các phương án được cân nhắc nhưng bịa ra đường link hội thoại không có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 31,
+      "cat": "conversation_recall",
+      "question": "Chị Elena nhờ hỗ trợ gì thêm ngoài việc ký thử nghiệm, và hạn gửi là khi nào?",
+      "answer": "Dựa trên thông tin đã ghi nhận về **Gamma Holidays** (đầu mối liên hệ là chị Elena):\n\n1. **Yêu cầu hỗ trợ thêm:**\n   * Hỗ trợ **eSIM đồng thương hiệu (co-branded)**: hiển thị logo của Gamma Holidays cùng với logo GoHub trên trang kích hoạt.\n   * Chuyển đổi gói cước sang gói **Unlimited 7 ngày** (thay vì gói 10 ngày như trao đổi ban đầu).\n\n2. **Hạn gửi:**\n   * Đã thống nhất gửi mẫu thiết kế đồng thương hiệu trước ngày **30/09/2026**.",
+      "toolsUsed": [],
+      "tokensIn": 17765,
+      "tokensOut": 137,
+      "ms": 3362,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng và đủ các ý chính. Việc thêm năm 2026 vào ngày tháng không bị tính là bịa theo quy tắc."
+      }
+    },
+    {
+      "id": 32,
+      "cat": "conversation_recall",
+      "question": "Cuộc bàn về đồng thương hiệu với Gamma, bên Gamma cần cung cấp gì cho mình?",
+      "answer": "Trong cuộc bàn về eSIM đồng thương hiệu, bên **Gamma Holidays** (đầu mối chị Elena) cần cung cấp cho GoHub:\n\n- **Mẫu Logo của Gamma Holidays** (file logo chuẩn) để GoHub đưa lên trang kích hoạt cùng với logo của GoHub.\n\nSau khi nhận logo, GoHub sẽ hoàn thiện và gửi lại bản mẫu thiết kế đồng thương hiệu cho bên họ duyệt (theo hạn chốt đã bàn là trước ngày 30/9).\n\n*(Xem lại chi tiết hội thoại trước: [[GP] Hỗ trợ đồng thương hiệu cho Gamma Holidays](/analytics/creator/ai?c=db8498a1-0269-403b-874a-6d8ca9d2ec76))*.",
+      "toolsUsed": [
+        "searchPastConversations"
+      ],
+      "tokensIn": 44569,
+      "tokensOut": 188,
+      "ms": 5726,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng ý chính là mẫu logo của Gamma, các thông tin bổ sung đều dựa trên bảng sự thật."
+      }
+    },
+    {
+      "id": 100,
+      "cat": "stress_current",
+      "question": "Hiện giờ đầu mối bên khách Coral Tours là ai và mục tiêu SIM hằng tháng là bao nhiêu?",
+      "answer": "Thông tin hiện tại về khách **Coral Tours**:\n\n* **Đầu mối liên hệ:** **Chị Giang** (thay anh Bảo).\n* **Mục tiêu SIM hằng tháng:** **300 SIM / tháng**.",
+      "toolsUsed": [],
+      "tokensIn": 22656,
+      "tokensOut": 49,
+      "ms": 2777,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời chính xác đầu mối hiện tại là chị Giang và mục tiêu là 300 SIM/tháng, khớp với đáp án tham chiếu và bảng sự thật."
+      }
+    },
+    {
+      "id": 101,
+      "cat": "stress_current",
+      "question": "Hiện giờ đầu mối bên khách Alfa Holidays là ai và mục tiêu SIM hằng tháng là bao nhiêu?",
+      "answer": "Thông tin hiện tại về khách hàng **Alfa Holidays**:\n\n- **Đầu mối liên hệ:** **Anh Nam**\n- **Mục tiêu SIM hằng tháng:** **100 SIM/tháng**\n*(Thị trường: Mỹ)*",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 46016,
+      "tokensOut": 74,
+      "ms": 7955,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối và mục tiêu SIM của khách Alfa Holidays dựa trên bảng sự thật."
+      }
+    },
+    {
+      "id": 102,
+      "cat": "stress_current",
+      "question": "Hiện giờ đầu mối bên khách Quartz Travel là ai và mục tiêu SIM hằng tháng là bao nhiêu?",
+      "answer": "Thông tin hiện tại về khách hàng **Quartz Travel**:\n\n* **Đầu mối liên hệ:** **Anh Dũng**\n* **Mục tiêu hằng tháng:** **1.000 SIM** (thị trường Ý)",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 45031,
+      "tokensOut": 71,
+      "ms": 5778,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối và mục tiêu SIM của khách Quartz Travel, thông tin thị trường Ý có trong bảng sự thật."
+      }
+    },
+    {
+      "id": 103,
+      "cat": "stress_current",
+      "question": "Hiện giờ đầu mối bên khách Yarrow Journeys là ai và mục tiêu SIM hằng tháng là bao nhiêu?",
+      "answer": "Hiện tại thông tin đối với khách hàng **Yarrow Journeys** (thị trường Pháp) như sau:\n\n* **Đầu mối liên hệ:** Anh Sơn\n* **Mục tiêu SIM hằng tháng:** 600 SIM",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 47187,
+      "tokensOut": 72,
+      "ms": 7620,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối và mục tiêu SIM của khách Yarrow Journeys dựa trên bảng sự thật."
+      }
+    },
+    {
+      "id": 104,
+      "cat": "stress_current",
+      "question": "Hiện giờ đầu mối bên khách Alfa Travel là ai và mục tiêu SIM hằng tháng là bao nhiêu?",
+      "answer": "Thông tin hiện tại về khách hàng **Alfa Travel**:\n\n| Tiêu chí | Thông tin |\n|---|---|\n| **Đầu mối liên hệ** | **Anh Nam** |\n| **Mục tiêu hàng tháng** | **150 SIM** |\n| **Thị trường** | Đài Loan |\n\n*(Lưu ý: Bạn đã bàn giao khách Alfa Travel/Alpha Travel cho bạn Phúc phụ trách từ 01/09).*",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 45263,
+      "tokensOut": 118,
+      "ms": 7023,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối và mục tiêu của Alfa Travel theo bảng sự thật."
+      }
+    },
+    {
+      "id": 105,
+      "cat": "stress_history",
+      "question": "Trước khi đổi, đầu mối của khách Coral Tours là ai và mục tiêu tháng lúc đó là bao nhiêu?",
+      "answer": "Trước khi thay đổi:\n\n* **Đầu mối liên hệ:** **Anh Bảo** (sau đó đổi sang chị Giang).\n* **Mục tiêu tháng:** **250 SIM** (sau đó tăng lên 300 SIM).",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 35991,
+      "tokensOut": 73,
+      "ms": 15943,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối và mục tiêu ban đầu của khách Coral Tours, các thông tin bổ sung cũng hoàn toàn chính xác theo bảng sự thật."
+      }
+    },
+    {
+      "id": 106,
+      "cat": "stress_history",
+      "question": "Trước khi đổi, đầu mối của khách Onyx Holidays là ai và mục tiêu tháng lúc đó là bao nhiêu?",
+      "answer": "Trước khi thay đổi:\n\n* **Đầu mối liên hệ:** Chị Yến (sau đó đổi sang chị Lam)\n* **Mục tiêu tháng:** 300 SIM (sau đó tăng lên 350 SIM)",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 37237,
+      "tokensOut": 74,
+      "ms": 6069,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối và mục tiêu ban đầu của khách Onyx Holidays theo bảng sự thật."
+      }
+    },
+    {
+      "id": 107,
+      "cat": "stress_history",
+      "question": "Trước khi đổi, đầu mối của khách Birch Holidays là ai và mục tiêu tháng lúc đó là bao nhiêu?",
+      "answer": "Trước khi có sự thay đổi, thông tin của khách **Birch Holidays** như sau:\n\n* **Đầu mối liên hệ cũ:** **Chị Chi** (hiện đã đổi sang anh Dũng)\n* **Mục tiêu tháng lúc đó:** **800 SIM** (hiện đã tăng lên 850 SIM)",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 36335,
+      "tokensOut": 95,
+      "ms": 5127,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối cũ và mục tiêu cũ, các thông tin bổ sung đều chính xác theo bảng sự thật."
+      }
+    },
+    {
+      "id": 108,
+      "cat": "stress_history",
+      "question": "Trước khi đổi, đầu mối của khách Alfa Tours là ai và mục tiêu tháng lúc đó là bao nhiêu?",
+      "answer": "Trước khi đổi:\n\n* **Đầu mối liên hệ:** **Chị Yến** (hiện tại đã đổi sang anh Việt).\n* **Mục tiêu tháng:** **300 SIM** (sau đó tăng lên 350 SIM).",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 35996,
+      "tokensOut": 76,
+      "ms": 4788,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối và mục tiêu ban đầu, thông tin thêm chính xác theo bảng sự thật."
+      }
+    },
+    {
+      "id": 109,
+      "cat": "stress_history",
+      "question": "Trước khi đổi, đầu mối của khách Mango Travel là ai và mục tiêu tháng lúc đó là bao nhiêu?",
+      "answer": "Trước khi thay đổi:\n\n* **Đầu mối liên hệ:** Chị Oanh (sau đó đổi sang chị Yến)\n* **Mục tiêu tháng:** 250 SIM (sau đó tăng lên 300 SIM)",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 39090,
+      "tokensOut": 73,
+      "ms": 8716,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng đầu mối và mục tiêu ban đầu của khách Mango Travel, thông tin bổ sung cũng chính xác theo bảng sự thật."
+      }
+    },
+    {
+      "id": 110,
+      "cat": "stress_market",
+      "question": "Khách Onyx Holidays thuộc thị trường nào?",
+      "answer": "Khách **Onyx Holidays** thuộc thị trường **Pháp**.\n\n*(Thông tin bổ sung liên quan: Đầu mối liên hệ hiện tại là chị Lam, mục tiêu hàng tháng là 350 SIM).*",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 35979,
+      "tokensOut": 69,
+      "ms": 4613,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường là Pháp và cung cấp thêm thông tin chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 111,
+      "cat": "stress_market",
+      "question": "Khách Birch Holidays thuộc thị trường nào?",
+      "answer": "Khách **Birch Holidays** thuộc **thị trường Úc**.",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 35969,
+      "tokensOut": 38,
+      "ms": 15575,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường của khách Birch Holidays theo bảng sự thật."
+      }
+    },
+    {
+      "id": 112,
+      "cat": "stress_market",
+      "question": "Khách Alfa Tours thuộc thị trường nào?",
+      "answer": "Khách **Alfa Tours** thuộc thị trường **Thái Lan**.\n\n*(Thông tin bổ sung liên quan: Đầu mối liên hệ hiện tại là anh Việt, mục tiêu hàng tháng là 350 SIM).*",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 37544,
+      "tokensOut": 66,
+      "ms": 5789,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường của khách Alfa Tours là Thái Lan và cung cấp thêm thông tin chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 113,
+      "cat": "stress_market",
+      "question": "Khách Sierra Trips thuộc thị trường nào?",
+      "answer": "Khách **Sierra Trips** thuộc thị trường **Pháp**.\n\n*(Thông tin bổ sung liên quan: Đầu mối liên hệ là chị Yến, mục tiêu sản lượng hàng tháng là 950 SIM).*",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 44219,
+      "tokensOut": 66,
+      "ms": 12037,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường của khách Sierra Trips và cung cấp thêm thông tin chính xác từ bảng sự thật."
+      }
+    },
+    {
+      "id": 114,
+      "cat": "stress_market",
+      "question": "Khách Mango Travel thuộc thị trường nào?",
+      "answer": "Khách hàng **Mango Travel** thuộc thị trường **Singapore**.\n\n*(Thông tin bổ sung liên quan: Đầu mối liên hệ hiện tại là chị Yến, mục tiêu hàng tháng là 300 SIM).*",
+      "toolsUsed": [
+        "assistantMemory"
+      ],
+      "tokensIn": 45154,
+      "tokensOut": 66,
+      "ms": 9512,
+      "judge": {
+        "correct": 1,
+        "hallucinated": 0,
+        "note": "Trợ lý trả lời đúng thị trường của khách Mango Travel là Singapore và cung cấp thêm thông tin chính xác từ bảng sự thật."
+      }
+    }
+  ]
+}

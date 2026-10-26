@@ -3,7 +3,7 @@ import type { EvalRunOut } from "./eval-run"
 // Kiểm tra bằng CODE (khách quan) cho một lượt eval Argon — bản TS dùng cho cổng eval của kỹ năng ứng viên (skill-gate.ts).
 // Cùng ngữ nghĩa với checkCase trong scripts/eval-argon.mjs (đọc eval/argon-cases.json): must / mustNot / tools / expectRoute / maxMs / state.
 export interface EvalCaseDef {
-  id: string; group: string; question: string; expectRoute?: "fast" | "full"; must?: string[]; mustNot?: string[]; maxMs?: number
+  id: string; group: string; question: string; member?: boolean; expectRoute?: "fast" | "full"; must?: string[]; mustNot?: string[]; maxMs?: number
   tools?: { useAny?: string[]; notUse?: string[]; minReads?: number }
   state?: { factsWithTextMustBeReviewed?: string[]; noFactMatching?: string[]; newFactsAtLeast?: number; newFactsUnreviewed?: boolean; noticesAtLeast?: number; proposalsAtLeast?: number; proposalsEqual?: number }
   criteria: string; reference?: string

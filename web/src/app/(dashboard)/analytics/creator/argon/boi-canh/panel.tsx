@@ -46,7 +46,7 @@ export function BoiCanhPanel({ embedded = false }: { embedded?: boolean }) {
 
   useEffect(() => {
     if (status !== "authenticated") return
-    fetch("/api/user/me").then(r => (r.ok ? r.json() : null)).then(d => setRole(d?.role ?? session?.user?.role ?? "staff")).catch(() => setRole(session?.user?.role ?? "staff"))
+    fetch("/api/user/me").then(r => (r.ok ? r.json() : null)).then(d => setRole(d?.argon_enabled === true ? "creator" : (d?.role ?? session?.user?.role ?? "staff"))).catch(() => setRole(session?.user?.role ?? "staff"))
   }, [status, session])
   useEffect(() => { if (role && role !== "creator") router.push("/chatbot") }, [role, router])
 

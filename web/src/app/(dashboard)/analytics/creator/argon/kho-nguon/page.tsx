@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Atom, Database } from "lucide-react"
 import { api, jsonInit, type Source } from "../argon-types"
+import { useArgonMember } from "../use-argon-member"
 import type { FolderRow, KhoSource } from "@/lib/argon/kho-pure"
 import { SourceViewer } from "../source-viewer"
 import { KhoTree, type TreeSel } from "./kho-tree"
@@ -25,6 +26,7 @@ export default function KhoPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [role, setRole] = useState<string | null>(null)
+  const member = useArgonMember()
   const [data, setData] = useState<KhoData | null>(null)
   const [facts, setFacts] = useState<{ rows: FactRow[]; today: string }>({ rows: [], today: new Date().toISOString().slice(0, 10) })
   const [sel, setSel] = useState<TreeSel>({ kind: "all" })
@@ -34,7 +36,7 @@ export default function KhoPage() {
 
   useEffect(() => {
     if (status !== "authenticated") return
-    fetch("/api/user/me").then(r => (r.ok ? r.json() : null)).then(d => setRole(d?.role ?? session?.user?.role ?? "staff")).catch(() => setRole(session?.user?.role ?? "staff"))
+    fetch("/api/user/me").then(r => (r.ok ? r.json() : null)).then(d => setRole(d?.argon_enabled === true ? "creator" : (d?.role ?? session?.user?.role ?? "staff"))).catch(() => setRole(session?.user?.role ?? "staff"))
   }, [status, session])
   useEffect(() => { if (role && role !== "creator") router.push("/chatbot") }, [role, router])
 
@@ -82,7 +84,7 @@ export default function KhoPage() {
           <h1 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-100 leading-tight">Kho</h1>
           <p className="text-[13px] text-gray-500">Tài liệu, sổ sự việc và thực thể Argon đã đọc. Muốn hỏi về chúng: tab Hỏi</p>
         </div>
-        <Link href="/analytics/creator/argon/kho-nguon/du-an" className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700">
+        <Link href="/analytics/creator/argon/kho-nguon/du-an" className={`ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 ${member ? "hidden" : ""}`}>
           <Atom size={14} className="text-violet-600" />Nguồn tự động (Lark, mail)
         </Link>
       </header>

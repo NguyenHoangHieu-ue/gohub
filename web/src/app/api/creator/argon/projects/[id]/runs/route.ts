@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { costOf, resolveModel } from "@/lib/argon/models"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { ownProject, requireArgonUser, type ArgonRun } from "@/lib/argon/server"
+import { ownProject, type ArgonRun } from "@/lib/argon/server"
 import { buildRunContext } from "@/lib/argon/context"
 import { LEVELS, runSegment } from "@/lib/argon/run-engine"
 import { MAX_OUT, SEGMENT_MS, loadRunMaterial } from "@/lib/argon/bg-worker"
@@ -13,6 +13,7 @@ import { clearPendingAsk } from "@/lib/argon/ask-tool"
 import { KHO_MISSION_NAME } from "@/lib/argon/kho"
 import { usesKhoScope } from "@/lib/argon/context-instruction"
 import { routeRun } from "@/lib/argon/run-route"
+import { argonLevel, checkMemberLimit, requireArgonMemberName } from "@/lib/argon/access"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -22,7 +23,7 @@ export const maxDuration = 300
 //   background:true → tạo lượt (status queued) + giao worker chạy nền (không giới hạn đoạn), trả JSON {runId}; xong thì nhắn Lark.
 //   resumeRunId = viết tiếp câu trả lời dở của lượt đó (cùng run, cộng dồn). allowTools = cho Argon tự lấy số liệu hệ thống (chỉ đọc).
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const project = await ownProject(params.id, username)
   if (!project) return NextResponse.json({ error: "Không tìm thấy dự án" }, { status: 404 })
@@ -30,6 +31,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!rl.allowed) return NextResponse.json({ error: `Quá nhiều yêu cầu, chờ ${Math.ceil(rl.resetMs / 1000)}s` }, { status: 429 })
 
   const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string; allowTools?: boolean; background?: boolean; templateReportId?: string; model?: string; route?: "auto" | "full" }
+  // P5: member (người được Creator cấp) chỉ hỏi được trên Kho của chính họ — không chạy nền, không lấy số liệu hệ thống, có hạn mức mỗi ngày.
+  const level = (await argonLevel(username)) ?? "member"
+  const member = level === "member"
+  if (member) {
+    if (b.background) return NextResponse.json({ error: "Chạy nền chỉ dành cho Creator" }, { status: 403 })
+    b.allowTools = false
+    const lim = await checkMemberLimit(username, level)
+    if (!lim.ok) return NextResponse.json({ error: lim.reason }, { status: 429 })
+  }
   let thinking = b.thinking && LEVELS[b.thinking] ? b.thinking : "medium"
 
   const { data: allRuns } = await supabaseAdmin.from("argon_runs").select("*").eq("project_id", params.id).order("created_at")
@@ -101,7 +111,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const log = [...toolLog]
       const seg = await runSegment({
         ctx, thinking, model, segmentMs: SEGMENT_MS, maxOut: MAX_OUT, signal: req.signal,
-        tools: allowTools || mctx ? { origin: req.nextUrl.origin, log, dataTools: allowTools && !fast, fast, missionId: mctx?.mission.id, khoUser: usesKhoScope(mctx?.mission.name ?? "") ? username : undefined, khoMode: mctx?.mission.name === KHO_MISSION_NAME || !b.background ? "full" : "facts",onTool: async e => { send({ type: "tool", name: e.name, args: e.args, ok: e.ok, chars: e.chars }); await saveToolLog(runId, log) } } : undefined,
+        tools: allowTools || mctx ? { origin: req.nextUrl.origin, log, dataTools: allowTools && !fast, fast, member, missionId: mctx?.mission.id, khoUser: usesKhoScope(mctx?.mission.name ?? "") ? username : undefined, khoMode: mctx?.mission.name === KHO_MISSION_NAME || !b.background ? "full" : "facts",onTool: async e => { send({ type: "tool", name: e.name, args: e.args, ok: e.ok, chars: e.chars }); await saveToolLog(runId, log) } } : undefined,
         onDelta: t => { answer += t; send({ type: "delta", text: t }) },
         onProgress: () => { void save() },
       })
@@ -124,7 +134,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
 // GET ?runId=…&tools=1 → nhật ký công cụ của lượt (tên, tham số, thành công?, kích thước; kèm kết quả nếu &full=1).
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (!(await ownProject(params.id, username))) return NextResponse.json({ error: "Không tìm thấy dự án" }, { status: 404 })
   const runId = req.nextUrl.searchParams.get("runId")
@@ -138,7 +148,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
 // PATCH { runId, action:"cancel" } → dừng lượt đang chạy nền (worker thấy "stopped" ở nhịp lưu kế tiếp, tối đa vài giây).
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (!(await ownProject(params.id, username))) return NextResponse.json({ error: "Không tìm thấy dự án" }, { status: 404 })
   const b = (await req.json().catch(() => ({}))) as { runId?: string; action?: string }
@@ -150,7 +160,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 // DELETE ?runId= → xoá 1 lượt khỏi lịch sử dự án.
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (!(await ownProject(params.id, username))) return NextResponse.json({ error: "Không tìm thấy dự án" }, { status: 404 })
   const runId = req.nextUrl.searchParams.get("runId")

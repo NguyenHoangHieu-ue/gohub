@@ -34,8 +34,8 @@ describe("bộ câu hỏi eval Argon", () => {
       if (c.expectRoute) expect(routeRun(String(c.question).replace(/\{[A-Z_]+\}/g, "2026-10-31"), { mission: true }).route, `${c.id}: ${c.question}`).toBe(c.expectRoute)
     }
   })
-  it("có đủ 4 nhóm: đọc Kho, không bịa, an toàn, ghi nhớ; mỗi ca có tiêu chí cho giám khảo", () => {
-    expect(new Set(cases.map(c => String(c.group)[0]))).toEqual(new Set(["A", "B", "C", "D"]))
+  it("có đủ 5 nhóm: đọc Kho, không bịa, an toàn, ghi nhớ, thành viên; mỗi ca có tiêu chí cho giám khảo", () => {
+    expect(new Set(cases.map(c => String(c.group)[0]))).toEqual(new Set(["A", "B", "C", "D", "E"]))
     for (const c of cases) expect(String(c.criteria ?? "").length, c.id).toBeGreaterThan(20)
   })
 })

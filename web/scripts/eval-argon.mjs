@@ -105,7 +105,7 @@ console.log(`Chạy ${todo.length} câu, model ${MODEL}, route ${ROUTE}, ${BASE}
 const rows = []
 for (const c of todo) {
   let r
-  try { r = await api({ action: "run", prompt: fill(c.question, dates), model: MODEL, route: ROUTE }) } catch (e) { r = { error: e.message, ms: 0, text: "", tools: [], newFacts: [], proposals: [], notices: 0 } }
+  try { r = await api({ action: "run", prompt: fill(c.question, dates), model: MODEL, route: ROUTE, member: c.member === true }) } catch (e) { r = { error: e.message, ms: 0, text: "", tools: [], newFacts: [], proposals: [], notices: 0 } }
   const fails = r.error ? [`LỖI: ${r.error}`] : check(c, r, dates)
   console.log(`${c.id} ${fails.length ? "✗" : "✓"} ${r.route ?? "-"} ${Math.round((r.ms || 0) / 1000)}s ${(r.tools || []).length} công cụ${fails.length ? " — " + fails.join("; ") : ""}`)
   rows.push({ id: c.id, group: c.group, question: fill(c.question, dates), fails, pass: fails.length === 0, ...r })

@@ -1,0 +1,36 @@
+Chạy 12 câu trên https://stg-intel-v2.gohub.cloud …
+#1 45s
+#3 92s
+#9 16s
+#10 155s
+#13 35s
+#20 170s
+#23 142s
+#24 126s
+#25 12s
+#27 80s
+#33 7s
+#40 80s
+Chấm điểm …
+# Kết quả eval Bé Gấu — trace1
+
+Giám khảo: gemini-pro-latest · 12 câu · thang 10 điểm/câu
+
+**Điểm trung bình: 9.75/10**
+
+| Tiêu chí | TB (0–2) |
+|---|---|
+| dung_so | 1.92 |
+| nghiep_vu | 2.00 |
+| du_y | 1.83 |
+| ro_rang | 2.00 |
+| an_toan | 2.00 |
+
+| Nhóm | Số câu | TB /10 |
+|---|---|---|
+| A | 2 | 10.00 |
+| B | 3 | 10.00 |
+| C | 1 | 10.00 |
+| D | 4 | 9.50 |
+| F | 1 | 10.00 |
+| H | 1 | 9.00 |

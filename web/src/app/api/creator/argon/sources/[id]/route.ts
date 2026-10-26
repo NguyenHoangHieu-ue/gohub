@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { ARGON_BUCKET, ownSource, requireArgonUser } from "@/lib/argon/server"
+import { ARGON_BUCKET, ownSource } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { countTokens, sourceParts } from "@/lib/argon/context"
 import { sha256 } from "@/lib/argon/extract"
 import { syncSource } from "@/lib/argon/lark-sync"
@@ -10,7 +11,7 @@ export const maxDuration = 60
 
 // GET → nguồn đầy đủ (nội dung chữ, đường xem file ký sẵn 10 phút, danh sách phiên bản) · GET ?version=N → chữ của phiên bản N.
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const src = await ownSource(params.id, username)
   if (!src) return NextResponse.json({ error: "Không tìm thấy nguồn" }, { status: 404 })
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
 // PATCH { enabled?, pinned?, name?, text? (+note?), restoreVersion? } — sửa chữ = tạo phiên bản mới, không ghi đè bản cũ.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const src = await ownSource(params.id, username)
   if (!src) return NextResponse.json({ error: "Không tìm thấy nguồn" }, { status: 404 })
@@ -65,7 +66,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 // POST → đồng bộ lại 1 nguồn Lark / gói dữ liệu ngay (so hash, đổi mới tạo phiên bản).
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const src = await ownSource(params.id, username)
   if (!src) return NextResponse.json({ error: "Không tìm thấy nguồn" }, { status: 404 })
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const src = await ownSource(params.id, username)
   if (!src) return NextResponse.json({ error: "Không tìm thấy nguồn" }, { status: 404 })

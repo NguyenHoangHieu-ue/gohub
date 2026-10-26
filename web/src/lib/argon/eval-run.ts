@@ -63,7 +63,7 @@ export async function evalSeed() {
   return { dates: fx.dates, today, sources: ids.length, facts: fx.facts.length, threads: fx.threads.length, indexed: ix }
 }
 
-export interface EvalRunIn { prompt?: string; model?: string; route?: string; skill?: { name: string; instructions: string } }
+export interface EvalRunIn { prompt?: string; model?: string; route?: string; skill?: { name: string; instructions: string }; member?: boolean }   // member = chạy như người được cấp (bỏ công cụ chạm dữ liệu công ty)
 export interface EvalRunOut {
   text: string; status: string; error: string | null; route: "fast" | "full"; routeReason: string; model: string; ms: number
   tokensIn: number; tokensOut: number; cachedIn: number; costUsd: number
@@ -96,7 +96,7 @@ export async function evalRun(b: EvalRunIn, origin: string): Promise<EvalRunOut>
   const t0 = Date.now()
   const seg = await runSegment({
     ctx, thinking, model, segmentMs: SEGMENT_MS, maxOut: MAX_OUT,
-    tools: { origin, log, dataTools: false, fast, missionId: mctx?.mission.id, khoUser: usesKhoScope(mctx?.mission.name ?? "") ? EVAL_USER : undefined, khoMode: "full", onTool: async () => undefined },
+    tools: { origin, log, dataTools: false, fast, member: !!b.member, missionId: mctx?.mission.id, khoUser: usesKhoScope(mctx?.mission.name ?? "") ? EVAL_USER : undefined, khoMode: "full", onTool: async () => undefined },
     onDelta: t => { answer += t },
   })
   const ms = Date.now() - t0

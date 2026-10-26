@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { bucketThreads, waitingDays, type MailThreadRow, type MailThreadStatus } from "@/lib/argon/mail-status-pure"
 import { KIND_LABEL, type InboxItem, type InboxKind } from "@/lib/assistant/inbox-pure"
 import { api, jsonInit } from "../argon-types"
+import { useArgonAccess } from "../use-argon-member"
 
 // Việc cần duyệt: MỘT danh sách mọi thứ đang chờ anh — hành động Gấu Pro, đề xuất sửa code + câu hỏi của Argon, thay đổi sự việc, mail chờ trả lời, phiếu sửa code hỏi lại.
 // Mỗi nút gọi thẳng endpoint có sẵn của từng loại (không có logic duyệt riêng ở đây).
@@ -23,7 +24,10 @@ const STATE_VN = { candidate: "chờ duyệt", approved: "đang dùng", rejected
 export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const role = (session?.user as { role?: string } | undefined)?.role
+  const access = useArgonAccess()
+  const sessionRole = (session?.user as { role?: string } | undefined)?.role
+  const role = access.enabled ? "creator" : access.loading ? undefined : sessionRole
+  const member = access.member
   const [data, setData] = useState<Inbox | null>(null)
   const [kind, setKind] = useState<InboxKind | "all">("all")
   const [busy, setBusy] = useState<string | null>(null)
@@ -152,7 +156,7 @@ export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) 
       <section className="pt-4 space-y-2" aria-label="Mail chờ đối tác">
         <div className="flex items-center gap-2">
           <h2 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Mail anh đã gửi, đang chờ đối tác ({partner.length})</h2>
-          <button type="button" onClick={() => void rescanMail()} disabled={mailBusy} className="ml-auto inline-flex items-center gap-1 text-[12px] text-violet-700 dark:text-violet-300 hover:underline disabled:opacity-50">
+          <button type="button" onClick={() => void rescanMail()} disabled={mailBusy} className={cn("ml-auto inline-flex items-center gap-1 text-[12px] text-violet-700 dark:text-violet-300 hover:underline disabled:opacity-50", member && "hidden")}>
             {mailBusy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}Quét lại mail
           </button>
         </div>
