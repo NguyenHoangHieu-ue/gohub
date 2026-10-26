@@ -2,42 +2,69 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useEffect, useState } from "react"
-import { Compass, Database, Inbox, MessagesSquare, Network, Phone, Search, Sun } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Atom, ChevronDown, Compass, Database, Inbox, MessagesSquare, Network, Phone, Settings2, Sun } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-// Phòng Argon: 6 tab (Hôm nay · Kho · Bối cảnh và Kế hoạch · Bản đồ · Trợ lý · Cuộc gọi). Sứ mệnh, workspace, tuần tra, sổ dự đoán… vẫn ở "Nâng cao".
+// Trợ lý (Argon): 4 tab chính — Hôm nay · Hỏi · Việc cần duyệt · Kho — và menu "Thêm" cho phần dùng ít hơn (Kế hoạch và bối cảnh, Cuộc gọi, Bản đồ, Nguồn tự động, Nâng cao).
+const A = "/analytics/creator/argon"
 const TABS = [
-  { href: "/analytics/creator/argon", label: "Hôm nay", icon: Sun, exact: true },
-  { href: "/analytics/creator/argon/hoi-tim", label: "Hỏi / Tìm", icon: Search },
-  { href: "/analytics/creator/argon/viec-can-duyet", label: "Việc cần duyệt", icon: Inbox, badge: true },
-  { href: "/analytics/creator/argon/kho-nguon", label: "Kho", icon: Database },
-  { href: "/analytics/creator/argon/boi-canh", label: "Bối cảnh và Kế hoạch", icon: Compass },
-  { href: "/analytics/creator/argon/ban-do", label: "Bản đồ", icon: Network },
-  { href: "/analytics/creator/argon/tro-ly", label: "Trò chuyện", icon: MessagesSquare },
-  { href: "/analytics/creator/argon/cuoc-goi", label: "Cuộc gọi", icon: Phone },
+  { href: A, label: "Hôm nay", icon: Sun, exact: true },
+  { href: `${A}/hoi-tim`, label: "Hỏi", icon: MessagesSquare },
+  { href: `${A}/viec-can-duyet`, label: "Việc cần duyệt", icon: Inbox, badge: true },
+  { href: `${A}/kho-nguon`, label: "Kho", icon: Database },
+]
+const MORE = [
+  { href: `${A}/boi-canh`, label: "Kế hoạch và bối cảnh", icon: Compass },
+  { href: `${A}/cuoc-goi`, label: "Cuộc gọi", icon: Phone },
+  { href: `${A}/ban-do`, label: "Bản đồ vận hành", icon: Network },
+  { href: `${A}/kho-nguon/du-an`, label: "Nguồn tự động (Lark, mail)", icon: Atom },
+  { href: `${A}/nang-cao`, label: "Nâng cao", icon: Settings2 },
 ]
 
 export default function ArgonLayout({ children }: { children: React.ReactNode }) {
   const path = usePathname() ?? ""
   const [pending, setPending] = useState(0)
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   // Huy hiệu số việc đang chờ (nhẹ: ?count=1); tải lại mỗi lần đổi trang trong Trợ lý.
   useEffect(() => { fetch("/api/creator/assistant/inbox?count=1", { cache: "no-store" }).then(r => (r.ok ? r.json() : null)).then(j => setPending(j?.total ?? 0)).catch(() => undefined) }, [path])
-  const advanced = path.startsWith("/analytics/creator/argon/nang-cao") || path.startsWith("/analytics/creator/argon/kho-nguon/du-an")
+  useEffect(() => { setOpen(false) }, [path])
+  useEffect(() => {
+    if (!open) return
+    const off = (e: MouseEvent) => { if (!menuRef.current?.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener("mousedown", off)
+    return () => document.removeEventListener("mousedown", off)
+  }, [open])
+
+  // Mục "Thêm" đang mở: chọn mục khớp DÀI NHẤT (kho-nguon/du-an dài hơn kho-nguon nhưng kho-nguon là tab chính nên phải loại trừ).
+  const moreActive = [...MORE].sort((a, b) => b.href.length - a.href.length).find(m => path === m.href || path.startsWith(`${m.href}/`)) ?? null
+  const tabOn = (t: (typeof TABS)[number]) => !moreActive && (t.exact ? path === t.href : path.startsWith(t.href))
   return (
     <div>
-      <nav aria-label="Phòng Argon" className="max-w-[1700px] mx-auto px-4 pt-3">
-        <div className="flex items-center gap-1 overflow-x-auto border-b border-gray-200 dark:border-slate-700">
-          {TABS.map(t => {
-            const on = !advanced && (t.exact ? path === t.href : path.startsWith(t.href) && !path.startsWith("/analytics/creator/argon/kho-nguon/du-an"))
-            return (
-              <Link key={t.href} href={t.href} aria-current={on ? "page" : undefined}
-                className={cn("inline-flex shrink-0 items-center gap-1.5 px-3.5 py-2 text-[13.5px] font-medium border-b-2 -mb-px transition-colors", on ? "border-violet-600 text-violet-700 dark:text-violet-300" : "border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-slate-200")}>
-                <t.icon size={15} />{t.label}{"badge" in t && t.badge && pending > 0 && <span className="ml-0.5 rounded-full bg-red-500 px-1.5 text-[10.5px] font-semibold leading-4 text-white">{pending}</span>}
-              </Link>
-            )
-          })}
-          <Link href="/analytics/creator/argon/nang-cao" className={cn("ml-auto shrink-0 px-3 py-2 text-[12.5px]", advanced ? "text-violet-700 dark:text-violet-300 font-medium" : "text-gray-400 hover:text-gray-600")}>Nâng cao</Link>
+      <nav aria-label="Trợ lý" className="max-w-[1700px] mx-auto px-4 pt-3">
+        <div className="flex items-center gap-1 border-b border-gray-200 dark:border-slate-700">
+          {TABS.map(t => (
+            <Link key={t.href} href={t.href} aria-current={tabOn(t) ? "page" : undefined}
+              className={cn("inline-flex shrink-0 items-center gap-1.5 px-3.5 py-2 text-[13.5px] font-medium border-b-2 -mb-px transition-colors", tabOn(t) ? "border-violet-600 text-violet-700 dark:text-violet-300" : "border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-slate-200")}>
+              <t.icon size={15} />{t.label}{"badge" in t && t.badge && pending > 0 && <span className="ml-0.5 rounded-full bg-red-500 px-1.5 text-[10.5px] font-semibold leading-4 text-white">{pending}</span>}
+            </Link>
+          ))}
+          <div ref={menuRef} className="relative ml-auto">
+            <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open} aria-haspopup="menu"
+              className={cn("inline-flex items-center gap-1.5 px-3 py-2 text-[13px] border-b-2 -mb-px transition-colors", moreActive ? "border-violet-600 text-violet-700 dark:text-violet-300 font-medium" : "border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-slate-200")}>
+              {moreActive ? moreActive.label : "Thêm"}<ChevronDown size={14} className={cn("transition-transform", open && "rotate-180")} />
+            </button>
+            {open && (
+              <div role="menu" className="absolute right-0 top-full z-30 mt-1 w-64 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg py-1">
+                {MORE.map(m => (
+                  <Link key={m.href} href={m.href} role="menuitem" className={cn("flex items-center gap-2.5 px-3.5 py-2 text-[13px] hover:bg-gray-50 dark:hover:bg-slate-700", moreActive?.href === m.href ? "text-violet-700 dark:text-violet-300 font-medium" : "text-gray-700 dark:text-slate-200")}>
+                    <m.icon size={15} className="text-gray-400" />{m.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </nav>
       {children}

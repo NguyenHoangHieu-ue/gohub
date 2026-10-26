@@ -1,115 +1,143 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Atom, Cpu, Loader2, Search } from "lucide-react"
+import { ChevronDown, Cpu, Loader2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { routeQuestion, type AssistantMode, type RouteDecision } from "@/lib/assistant/route-pure"
+import { api, jsonInit, type Run } from "../argon-types"
+import type { MissionDetail } from "../missions/mission-types"
+import { MissionChat } from "../missions/mission-chat"
+import { Workbench } from "../missions/workbench"
+import { useMissionRunner } from "../missions/use-mission-runner"
+import { routeQuestion, type RouteDecision } from "@/lib/assistant/route-pure"
 import { ENTITY_KINDS } from "@/lib/argon/graph-pure"
 import type { SearchResult } from "@/lib/assistant/search"
-import { STATUS_LABEL } from "@/lib/argon/mail-status-pure"
-import { api } from "../argon-types"
 
-// Hỏi / Tìm: MỘT ô cho cả Argon và Gấu Pro. Gõ → thấy NGAY nơi liên quan trong Kho (không tốn lượt model), rồi chọn hỏi Argon (đọc Kho, chỉ đọc)
-// hoặc Gấu Pro (thao tác). Hệ thống gợi ý chế độ theo nội dung câu hỏi (luật từ khoá, giải thích được) — anh đổi tuỳ ý.
-type Found = SearchResult & { route: RouteDecision }
-const ARGON = "/analytics/creator/argon"
-const MODE = {
-  argon: { label: "Hỏi Argon", sub: "đọc Kho, chỉ đọc", icon: Atom, href: (q: string) => `${ARGON}/tro-ly?q=${encodeURIComponent(q)}` },
-  gau_pro: { label: "Hỏi Gấu Pro", sub: "thao tác máy / Lark", icon: Cpu, href: (q: string) => `/analytics/creator/ai?q=${encodeURIComponent(q)}` },
-} as const
-const EXAMPLES = ["3HK báo giá Thái Lan lần gần nhất là bao nhiêu?", "Mail nào đang chờ tôi trả lời?", "Vendor nào sắp hết hạn khuyến mãi?", "Tạo task Lark nhắc tôi gọi lại HTHK sáng mai"]
+// Hỏi: MỘT ô cho cả hỏi và tìm. Gõ → Kho gợi ý ngay phía trên ô nhắn (sự việc, thực thể, đoạn tài liệu/mail — không tốn lượt model); Ctrl+Enter → Argon trả lời (chat đầy đủ, có lịch sử). Câu cần THAO TÁC (tạo task, gửi tin…) → gợi ý mở Gấu Pro.
+// MỘT khung chat nắm được mọi "cửa sổ" của Phòng Argon (Kho, sổ sự việc, bối cảnh và kế hoạch, số liệu hệ thống). Chạy trên sứ mệnh "Tham mưu hằng ngày"
+// (đọc toàn Kho, có công cụ xếp thư mục/ghi sổ/sql/chạy code). Ghi vào Kho và sổ thì làm luôn rồi báo; việc gửi tin ra ngoài hoặc ghi DB production thì hỏi anh.
+const QUICK = [
+  "Mail nào đang chờ tôi trả lời?",
+  "Hôm nay có gì cần anh quyết?",
+  "Tuần này vendor nào có thay đổi đáng chú ý?",
+  "Gom các báo giá Thái Lan trong Kho và so sánh",
+  "So với kế hoạch của anh, chỗ nào đang chậm?",
+]
 
-export default function HoiTimPage() {
+export default function TroLyPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const role = (session?.user as { role?: string } | undefined)?.role
-  const [q, setQ] = useState("")
-  const [found, setFound] = useState<Found | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [role, setRole] = useState<string | null>(null)
+  const [missionId, setMissionId] = useState<string | null>(null)
+  const [auto, setAuto] = useState<{ text: string; k: number } | null>(null)
+  // Từ ô Hỏi / Tìm: ?q=… → tự gửi câu đó (anh đã bấm "Hỏi Argon"; Argon ở đây không thao tác ngoài Kho).
+  useEffect(() => { const q = new URLSearchParams(window.location.search).get("q"); if (q?.trim()) setAuto({ text: q.trim().slice(0, 2000), k: 1 }) }, [])
+  const [detail, setDetail] = useState<MissionDetail | null>(null)
+  // Gợi ý từ Kho khi đang gõ: chờ 0,9s sau lần gõ cuối, ≥4 ký tự, huỷ lượt cũ; lỗi thì im lặng (chỉ là gợi ý).
+  const [draft, setDraft] = useState("")
+  const [found, setFound] = useState<(SearchResult & { route: RouteDecision }) | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [dismissed, setDismissed] = useState("")
+  useEffect(() => {
+    const q = draft.trim()
+    if (q.length < 4) { setFound(null); setSearching(false); return }
+    const ac = new AbortController()
+    const t = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const r = await fetch(`/api/creator/assistant/search?q=${encodeURIComponent(q)}`, { signal: ac.signal, cache: "no-store" })
+        if (r.ok) setFound(await r.json())
+      } catch { /* bị huỷ hoặc lỗi mạng: bỏ qua */ } finally { if (!ac.signal.aborted) setSearching(false) }
+    }, 900)
+    return () => { clearTimeout(t); ac.abort() }
+  }, [draft])
+  const [runs, setRuns] = useState<Run[]>([])
+  const [showBench, setShowBench] = useState(false)
+  const [focus, setFocus] = useState<{ id: string; k: number } | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const busyRef = useRef(false)
+  const loadSeq = useRef(0)
+  const onError = useCallback((m: string) => setErr(m), [])
 
-  useEffect(() => { if (status === "authenticated" && role && role !== "creator") router.push("/chatbot") }, [status, role, router])
-  useEffect(() => { inputRef.current?.focus() }, [role])
+  useEffect(() => {
+    if (status !== "authenticated") return
+    fetch("/api/user/me").then(r => (r.ok ? r.json() : null)).then(d => setRole(d?.role ?? session?.user?.role ?? "staff")).catch(() => setRole(session?.user?.role ?? "staff"))
+  }, [status, session])
+  useEffect(() => { if (role && role !== "creator") router.push("/chatbot") }, [role, router])
+  useEffect(() => {
+    if (role !== "creator") return
+    api<{ missionId: string }>("/api/creator/argon/context").then(r => setMissionId(r.missionId)).catch(e => onError(e.message))
+  }, [role, onError])
 
-  async function search(text = q) {
-    const t = text.trim()
-    if (t.length < 2) return
-    setBusy(true); setErr(null)
-    try { setFound(await api<Found>(`/api/creator/assistant/search?q=${encodeURIComponent(t)}`)) } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
-  }
+  const loadDetail = useCallback((id: string) => {
+    const seq = ++loadSeq.current
+    api<MissionDetail>(`/api/creator/argon/missions/${id}`).then(r => { if (seq !== loadSeq.current) return; setDetail(r); if (!busyRef.current) setRuns(r.runs) }).catch(e => onError(e.message))
+  }, [onError])
+  useEffect(() => { if (missionId) loadDetail(missionId) }, [missionId, loadDetail])
+  const refresh = useCallback(() => { if (missionId) loadDetail(missionId) }, [missionId, loadDetail])
+  const runner = useMissionRunner({ projectId: detail?.mission.project_id ?? null, runs, setRuns, onError, onWorkspaceChanged: refresh, onFinished: refresh, onPoll: refresh })
+  busyRef.current = runner.busy
 
+  if (status === "loading" || !role) return <div className="p-6 text-sm text-gray-400">Đang tải…</div>
   if (role !== "creator") return null
-  const live = q.trim().length >= 2 ? routeQuestion(q) : null
-  const suggested: AssistantMode | null = (found?.route ?? live)?.mode ?? null
-  const other = (m: AssistantMode): AssistantMode => (m === "argon" ? "gau_pro" : "argon")
-  const empty = found && !found.chunks.length && !found.entities.length && !found.facts.length && !found.threads.length
+  const m = detail?.mission
 
   return (
-    <div className="max-w-[900px] mx-auto px-4 py-6 space-y-5">
-      <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">Hỏi / Tìm</h1>
-      <form onSubmit={e => { e.preventDefault(); void search() }} className="flex gap-2">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} placeholder="Hỏi hoặc tìm: vendor, giá, hạn, mail, hoặc nhờ làm một việc…" aria-label="Hỏi hoặc tìm"
-            className="w-full pl-9 pr-3 py-2.5 text-[14px] rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500" />
-        </div>
-        <button type="submit" disabled={busy || q.trim().length < 2} className="px-4 py-2.5 text-sm rounded-xl bg-violet-600 text-white disabled:opacity-50 inline-flex items-center gap-1.5">{busy ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}Tìm</button>
-      </form>
-
-      {suggested && (
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap gap-2">
-            {[suggested, other(suggested)].map((m, i) => (
-              <Link key={m} href={MODE[m].href(q.trim())} className={cn("inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[13px] border", i === 0 ? "bg-violet-600 border-violet-600 text-white" : "border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200")}>
-                {(() => { const Icon = MODE[m].icon; return <Icon size={15} /> })()}<span className="font-medium">{MODE[m].label}</span><span className={cn("text-[11.5px]", i === 0 ? "text-violet-100" : "text-gray-400")}>{MODE[m].sub}</span>
-              </Link>
-            ))}
-          </div>
-          <p className="text-[12px] text-gray-500">Gợi ý: {(found?.route ?? live)!.reason}.</p>
-        </div>
-      )}
-
-      {err && <div className="p-2.5 rounded-xl text-sm bg-red-50 text-red-700 border border-red-200">{err}</div>}
-
-      {!found && !busy && (
-        <div className="space-y-1.5"><div className="text-[12px] text-gray-500">Thử:</div>
-          <div className="flex flex-wrap gap-2">{EXAMPLES.map(x => <button key={x} type="button" onClick={() => { setQ(x); void search(x) }} className="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 text-[12.5px] text-gray-600 dark:text-slate-300 hover:border-violet-400 text-left">{x}</button>)}</div></div>
-      )}
-
-      {empty && <div className="py-8 text-center text-sm text-gray-500">Không tìm thấy gì trong Kho cho &quot;{q.trim()}&quot;. Hỏi Argon vẫn có thể đọc rộng hơn, hoặc nhờ Gấu Pro tra web.</div>}
-
-      {found && found.facts.length > 0 && (
-        <Section title="Sự việc đang hiệu lực">
-          {found.facts.map(f => <p key={f.id} className="text-[13px] leading-snug text-gray-700 dark:text-slate-300">{f.line}{f.needsReview && <span className="ml-1.5 text-[11px] text-amber-700">(chờ xác nhận)</span>}</p>)}
-        </Section>
-      )}
-      {found && found.entities.length > 0 && (
-        <Section title="Thực thể">
-          <div className="flex flex-wrap gap-2">{found.entities.map(e => <Link key={e.id} href={`${ARGON}/kho-nguon`} className="px-2.5 py-1 rounded-lg border border-gray-200 dark:border-slate-700 text-[12.5px] hover:border-violet-400">{e.name}<span className="text-gray-400"> · {ENTITY_KINDS[e.kind]} · {e.mentions} nguồn</span></Link>)}</div>
-        </Section>
-      )}
-      {found && found.threads.length > 0 && (
-        <Section title="Luồng mail">
-          {found.threads.map(t => <p key={t.id} className="text-[13px] leading-snug text-gray-700 dark:text-slate-300"><span className="mr-1.5 text-[11px] font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700">{STATUS_LABEL[t.status]}</span>{t.line}</p>)}
-        </Section>
-      )}
-      {found && found.chunks.length > 0 && (
-        <Section title="Trong tài liệu / thread / mail">
-          {found.chunks.map((c, i) => (
-            <div key={`${c.sourceId}-${i}`} className="rounded-lg border border-gray-200 dark:border-slate-700 p-2.5">
-              <div className="text-[12.5px] font-medium text-gray-800 dark:text-slate-100 truncate">{c.sourceName}</div>
-              <div className="text-[12px] leading-snug text-gray-600 dark:text-slate-400 mt-0.5">{c.text}</div>
-            </div>))}
-        </Section>
-      )}
+    <div className="max-w-[1100px] mx-auto px-4 py-4 flex flex-col gap-3 lg:h-[calc(100vh-7rem)]">
+      {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}
+      <section className="flex-1 min-h-[60vh] rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden flex flex-col" aria-label="Trợ lý Argon">
+        {!m || !detail ? <div className="m-auto text-sm text-gray-400">Đang chuẩn bị trợ lý…</div> : (
+          <>
+            <div className="flex-1 min-h-0">
+              <MissionChat simple quick={QUICK} autoSend={auto} onDraft={setDraft} aboveInput={<KhoHints draft={draft} found={found} searching={searching} dismissed={dismissed} onDismiss={() => setDismissed(draft.trim())} />} phase={m.phase} pendingAsk={detail.pendingAsk} patches={detail.patches ?? []}
+                onPatch={async (id, action) => { await api(`/api/creator/argon/missions/${m.id}/patches`, jsonInit("POST", { id, action })); refresh() }}
+                runs={runs} runner={runner} onPhase={async to => { await api(`/api/creator/argon/missions/${m.id}/phase`, jsonInit("POST", { to })); refresh() }}
+                onStep={async (runId, n) => { await runner.loadSteps(runId, true); setFocus({ id: `${runId}:${n - 1}`, k: Date.now() }); setShowBench(true) }} onError={onError} />
+            </div>
+            <div className="border-t border-gray-100 dark:border-slate-700">
+              <button type="button" onClick={() => setShowBench(v => !v)} aria-expanded={showBench} className="w-full flex items-center gap-2 px-4 py-2 text-[13px] text-gray-600 dark:text-slate-300">
+                Argon đang làm gì ({runner.steps.length} bước){runner.busy && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+                <ChevronDown size={14} className={cn("ml-auto transition-transform", showBench && "rotate-180")} />
+              </button>
+              {showBench && (
+                <div className="h-64 border-t border-gray-100 dark:border-slate-700">
+                  <Workbench steps={runner.steps} busy={runner.busy} bgActive={runner.bgActive} spentUsd={detail.spent_usd ?? 0} runCount={runs.length} focus={focus} sandbox={null} building={false} onBuild={() => {}}
+                    onStop={runner.stop} onOpenFile={() => {}} onLoadFull={id => void runner.loadSteps(id, true)} />
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </section>
     </div>
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="space-y-1.5"><h2 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{title}</h2>{children}</section>
+/** Gợi ý từ Kho ngay trên ô nhắn: gọn (tối đa ~6 dòng), tắt được, và nhắc Gấu Pro khi câu có vẻ cần thao tác. */
+function KhoHints({ draft, found, searching, dismissed, onDismiss }: { draft: string; found: (SearchResult & { route: RouteDecision }) | null; searching: boolean; dismissed: string; onDismiss: () => void }) {
+  const q = draft.trim()
+  if (q.length < 4 || dismissed === q) return null
+  const route = found?.route ?? routeQuestion(q)
+  const hasAny = !!found && (found.facts.length || found.entities.length || found.threads.length || found.chunks.length)
+  if (!searching && !hasAny && route.mode !== "gau_pro") return null
+  return (
+    <div className="mb-2 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50/60 dark:bg-violet-950/20 px-3 py-2 text-[12.5px] space-y-1.5" aria-label="Gợi ý từ Kho">
+      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+        {searching ? <><Loader2 size={11} className="animate-spin" />Đang tìm trong Kho…</> : "Có trong Kho"}
+        <button type="button" onClick={onDismiss} aria-label="Ẩn gợi ý" className="ml-auto text-gray-400 hover:text-gray-700"><X size={13} /></button>
+      </div>
+      {found && found.facts.slice(0, 2).map(f => <p key={f.id} className="leading-snug text-gray-700 dark:text-slate-300">{f.line}</p>)}
+      {found && found.entities.length > 0 && <div className="flex flex-wrap gap-1.5">{found.entities.slice(0, 4).map(e => <span key={e.id} className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700">{e.name}<span className="text-gray-400"> · {ENTITY_KINDS[e.kind]} · {e.mentions} nguồn</span></span>)}</div>}
+      {found && found.threads.slice(0, 2).map(t => <p key={t.id} className="leading-snug text-gray-700 dark:text-slate-300">✉ {t.line}</p>)}
+      {found && found.chunks.slice(0, 3).map((c, i) => <p key={`${c.sourceId}-${i}`} className="leading-snug text-gray-600 dark:text-slate-400"><b className="font-medium text-gray-800 dark:text-slate-200">{c.sourceName}</b> — {c.text.slice(0, 130)}…</p>)}
+      {route.mode === "gau_pro" && (
+        <div className="flex flex-wrap items-center gap-2 pt-0.5 text-gray-700 dark:text-slate-300">
+          <Cpu size={13} className="text-violet-600" />{route.reason}.
+          <Link href={`/analytics/creator/ai?q=${encodeURIComponent(q)}`} className="font-medium text-violet-700 dark:text-violet-300 hover:underline">Mở Gấu Pro với câu này</Link>
+        </div>
+      )}
+    </div>
+  )
 }

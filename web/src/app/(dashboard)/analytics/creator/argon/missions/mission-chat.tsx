@@ -51,7 +51,7 @@ function Seg<T extends string>({ value, onChange, options, label }: { value: T; 
   )
 }
 
-export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError, simple = false, quick }: {
+export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError, simple = false, quick, onDraft, aboveInput }: {
   autoSend: { text: string; k: number } | null   // câu lệnh tự gửi (vd ▶ chạy lại script); mỗi k mới = một lần gửi
   phase: MissionPhase
   pendingAsk: PendingAskUi | null
@@ -64,8 +64,12 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   onError: (m: string) => void
   simple?: boolean        // trang Argon gọn: ẩn thanh pha (sứ mệnh luôn ở pha chạy), chỉ còn khung chat
   quick?: string[]        // câu gợi ý riêng thay cho gợi ý theo pha
+  onDraft?: (text: string) => void   // báo nội dung đang gõ ra ngoài (trang Hỏi dùng để gợi ý nhanh từ Kho)
+  aboveInput?: React.ReactNode       // khối hiện NGAY TRÊN ô nhắn (vd gợi ý từ Kho)
 }) {
-  const [prompt, setPrompt] = useState("")
+  const [prompt, setPromptState] = useState("")
+  const setPrompt = (v: string) => { setPromptState(v); onDraft?.(v) }
+  const [showOpts, setShowOpts] = useState(false)   // trang gọn: ẩn mức suy luận / số liệu hệ thống / chạy nền sau "Tuỳ chọn"
   const [thinking, setThinking] = useState<Thinking>("medium")
   const [background, setBackground] = useState(false)
   const [model, setModel] = useState<ModelKey>("fast")   // Nhanh = model nhanh chung (nhanh ~4-7 lần, rẻ ~1/2); Sâu = Gemini 4 Argon cho việc cần suy luận kỹ/viết dài
@@ -228,6 +232,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
         {idle && <div className="mb-2 flex flex-wrap gap-1.5">
           {(quick ?? QUICK[phase]).map(q => <button key={q} type="button" onClick={() => setPrompt(q)} title={q} className="px-2.5 py-1 text-xs rounded-full border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors">{q}</button>)}
         </div>}
+        {aboveInput}
         <div className="rounded-2xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-sm focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-violet-400 transition-shadow">
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={2} aria-label="Nhắn Argon"
             onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send() } }}
@@ -238,9 +243,12 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
               { v: "fast", label: "Nhanh", icon: Zap, title: "Nhanh: việc nhiều bước công cụ, SQL, file (nhanh ~4-7 lần, rẻ ~1/2)" },
               { v: "deep", label: "Sâu", icon: Brain, title: "Sâu (Gemini 4 Argon): phân tích khó, viết dài, ngữ cảnh lớn" },
             ]} />
+            {simple && <button type="button" onClick={() => setShowOpts(v => !v)} aria-expanded={showOpts} className="px-2 py-1 text-[12px] rounded-lg text-gray-500 hover:text-gray-800 dark:hover:text-slate-200">{showOpts ? "Ẩn tuỳ chọn" : "Tuỳ chọn"}</button>}
+            {(!simple || showOpts) && <>
             <Seg label="Mức suy luận" value={thinking} onChange={setThinking} options={(Object.keys(THINK_LABEL) as Thinking[]).map(t => ({ v: t, label: THINK_LABEL[t], title: `Suy luận: ${THINK_LABEL[t]}` }))} />
             <Toggle on={allowTools} onClick={() => setAllowTools(v => !v)} icon={Database} label="Số liệu hệ thống" title="Argon được gọi công cụ chỉ-đọc lấy số liệu mới nhất của hệ thống" />
             <Toggle on={background} onClick={() => setBackground(v => !v)} icon={BellRing} label="Chạy nền" title="Worker chạy không giới hạn đoạn, đóng trang vẫn chạy; xong nhắn Lark cho Hiếu" />
+            </>}
             <span className="ml-auto flex items-center gap-2">
               <span className="hidden sm:inline text-[10.5px] text-gray-400">Ctrl+Enter</span>
               {busy

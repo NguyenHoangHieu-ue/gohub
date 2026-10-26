@@ -95,7 +95,7 @@ const CREATOR_GROUP = {
   label: "Creator",
   items: [
     { href: "/analytics/creator",           label: "Creator Settings", icon: Crown    },
-    { href: "/analytics/creator/ai",        label: "Gấu Pro (thao tác)", icon: Cpu      },
+    { href: "/analytics/creator/ai",        label: "Gấu Pro",          icon: Cpu      },
     { href: "/analytics/creator/argon",     label: "Trợ lý (Argon)",    icon: Atom     },
     { href: "/analytics/creator/devtools",  label: "Dữ liệu & API",   icon: Terminal },
     { href: "/analytics/creator/bridge",    label: "Bridge",           icon: Plug     },
