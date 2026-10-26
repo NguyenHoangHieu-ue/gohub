@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { requireArgonUser, type ArgonSource } from "@/lib/argon/server"
+import { type ArgonSource } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { cleanFolderPath, deleteFolder, ensureFolderPath, ensureKhoProject, folderPathOf, khoSources, listFolders, moveFolder, moveSources, renameFolder, userProjectIds, type DigestMeta } from "@/lib/argon/kho"
 import { ensureKhoMission } from "@/lib/argon/kho-mission"
 import { digestAndFile } from "@/lib/argon/kho-digest"
@@ -10,7 +11,7 @@ export const maxDuration = 120
 
 // GET → toàn bộ Kho: dự án nhận file tải lên, sứ mệnh Thủ thư (chat), thư mục, nguồn (nhẹ, không nội dung).
 export async function GET() {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const [projectId, mission, folders, sources] = await Promise.all([ensureKhoProject(username), ensureKhoMission(username), listFolders(username), khoSources(username)])
   return NextResponse.json({ projectId, missionId: mission.id, missionProjectId: mission.project_id, folders, sources })
@@ -20,7 +21,7 @@ export async function GET() {
 //   folder-create {path} · folder-rename {id,name} · folder-move {id,parentId} · folder-delete {id}
 //   move {ids, folderId|null} · tag {id, tags[]} · digest {ids (≤4), autoFile?} → tóm tắt nhanh nguồn vừa nạp và (tuỳ chọn) tự xếp thư mục
 export async function POST(req: NextRequest) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const b = (await req.json().catch(() => ({}))) as { action?: string; path?: string; id?: string; name?: string; parentId?: string | null; ids?: string[]; folderId?: string | null; tags?: string[]; autoFile?: boolean }
 

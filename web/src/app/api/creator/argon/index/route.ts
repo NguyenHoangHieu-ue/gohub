@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireArgonUser } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { supabaseAdmin } from "@/lib/supabase"
 import { argonIndexConfigured, ensureIndexed, indexStats, staleSources } from "@/lib/argon/index-db"
 
@@ -16,7 +17,7 @@ async function mySources(username: string) {
 
 // GET → tình trạng chỉ mục tìm kiếm: bao nhiêu nguồn đã lập, còn bao nhiêu chờ.
 export async function GET() {
-  const user = await requireArgonUser()
+  const user = await requireArgonMemberName()
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (!argonIndexConfigured()) return NextResponse.json({ configured: false })
   const mine = await mySources(user)

@@ -7,6 +7,8 @@ import { FACT_TYPES, factLine } from "@/lib/argon/facts-pure"
 import { threadLine } from "@/lib/argon/mail-status-pure"
 import { candidates, readRegistry } from "@/lib/agents/creator/learned-skills"
 import { evalSummary } from "@/lib/agents/creator/skill-eval"
+import { gateSummary } from "@/lib/argon/eval-checks"
+import { MEMBER_INBOX_KINDS } from "@/lib/argon/access-pure"
 import { sortInbox, urgencyFor, type InboxItem } from "./inbox-pure"
 
 export * from "./inbox-pure"
@@ -72,25 +74,50 @@ async function ticketItems(now: number): Promise<InboxItem[]> {
 }
 
 /** Skill tự học đang chờ duyệt: hiện mô tả, kết quả kiểm tra tĩnh + nhận xét model, phần đầu chỉ dẫn. Bản bị chặn (lint "block") chỉ cho Từ chối. */
+async function kpiItems(username: string, now: number): Promise<InboxItem[]> {
+  const { listAlerts, activeAlerts } = await import("@/lib/argon/kpi-watch")
+  return activeAlerts(await listAlerts(username), now).map(a => ({
+    key: `kpi_alert:${a.key}`, kind: "kpi_alert" as const, id: a.key, title: a.title, detail: a.detail, at: a.at, urgency: a.severity, source: "Theo dõi KPI (mỗi đêm)",
+    actions: ["open", "reject"] as InboxItem["actions"], href: `${ARGON}/hoi-tim?q=${encodeURIComponent(a.question)}`,
+  }))
+}
+
+async function securityItems(username: string, now: number): Promise<InboxItem[]> {
+  const { listNotices } = await import("@/lib/argon/run-safety")
+  return (await listNotices(username)).map(n => ({
+    key: `security_notice:${n.id}`, kind: "security_notice" as const, id: n.id, title: `Nội dung giống chỉ dẫn lạ khi Argon đọc ${n.detail}`.slice(0, 200),
+    detail: `Dấu hiệu: ${n.hits.join("; ")}. Argon đã được dặn KHÔNG làm theo và siết quyền ghi trong lượt đó. Anh nên kiểm tra nguồn (mail/thread/tài liệu) có bị gài chỉ dẫn không.`, at: n.at, urgency: 3 as const, source: "An toàn Trợ lý", actions: ["reject"] as InboxItem["actions"], href: `${ARGON}/kho-nguon`,
+  }))
+}
+
+async function memoryItems(username: string, now: number): Promise<InboxItem[]> {
+  const { listProposals } = await import("./memory-proposals")
+  return (await listProposals(username)).map(p => ({
+    key: `memory_proposal:${p.id}`, kind: "memory_proposal" as const, id: p.id, title: `Nhớ: ${p.content}`.slice(0, 200),
+    detail: p.reason ? `Lý do: ${p.reason} · loại: ${p.kind}` : `loại: ${p.kind}`, at: p.at, urgency: urgencyFor("memory_proposal", p.at, now), source: "Argon · đề xuất ghi nhớ", actions: ["approve", "reject"] as InboxItem["actions"],
+  }))
+}
+
 async function skillItems(now: number): Promise<InboxItem[]> {
   return candidates(await readRegistry()).map(({ name, version: v, replaces }) => {
-    const notes = [...v.lint.findings.map(f => `${f.level === "block" ? "⛔" : "⚠"} ${f.message}`), ...(v.eval ? [evalSummary(v.eval)] : []), ...(v.review ? [`Model chấm độ rõ ${v.review.clarity}/5`, ...v.review.risks.map(r => `Rủi ro: ${r}`), ...v.review.conflicts.map(c => `Mâu thuẫn: ${c}`)] : [])]
+    const notes = [...v.lint.findings.map(f => `${f.level === "block" ? "⛔" : "⚠"} ${f.message}`), ...(v.eval ? [evalSummary(v.eval)] : []), ...(v.gate ? [(v.gate.verdict === "regress" ? "⛔ " : "✓ ") + gateSummary(v.gate)] : []), ...(v.review ? [`Model chấm độ rõ ${v.review.clarity}/5`, ...v.review.risks.map(r => `Rủi ro: ${r}`), ...v.review.conflicts.map(c => `Mâu thuẫn: ${c}`)] : [])]
     return {
       key: `skill_candidate:${name}@${v.v}`, kind: "skill_candidate" as const, id: `${name}@${v.v}`,
       title: `${replaces != null ? "Bản mới" : "Skill mới"} "${name}" (v${v.v})${replaces != null ? ` thay v${replaces}` : ""} — ${v.description}`.slice(0, 200),
       detail: `${notes.length ? notes.join(" · ") : "Kiểm tra tĩnh: không thấy vấn đề."}\n\nChỉ dẫn: ${v.instructions.slice(0, 700)}${v.instructions.length > 700 ? "…" : ""}`,
       at: v.created_at, urgency: urgencyFor("skill_candidate", v.created_at, now), source: `Gấu Pro${v.source ? ` · ${v.source.slice(0, 60)}` : ""}`,
-      actions: [...(v.lint.level === "block" ? ["reject"] : ["approve", "reject"]), ...(!v.eval && v.review?.testPrompts.length ? ["eval"] : [])] as InboxItem["actions"],
+      actions: [...(v.lint.level === "block" ? ["reject"] : v.gate?.verdict === "regress" ? ["reject"] : ["approve", "reject"]), ...(!v.eval && v.review?.testPrompts.length ? ["eval"] : []), ...(!v.gate && v.lint.level !== "block" ? ["gate"] : [])] as InboxItem["actions"],
     }
   })
 }
 
-export async function loadInbox(username: string, now = Date.now()): Promise<{ items: InboxItem[]; failed: string[] }> {
+export async function loadInbox(username: string, now = Date.now(), level: "owner" | "member" = "owner"): Promise<{ items: InboxItem[]; failed: string[] }> {
   const jobs: [string, Promise<InboxItem[]>][] = [
-    ["Hành động Gấu Pro", gpActions(username, now)], ["Argon", argonItems(username, now)], ["Sổ sự việc", factReviews(username, now)], ["Mail", mailItems(username, now)], ["Phiếu sửa code", ticketItems(now)], ["Kỹ năng", skillItems(now)],
+    ["Hành động Gấu Pro", gpActions(username, now)], ["Argon", argonItems(username, now)], ["Sổ sự việc", factReviews(username, now)], ["Mail", mailItems(username, now)], ["Phiếu sửa code", ticketItems(now)], ["Kỹ năng", skillItems(now)], ["Đề xuất ghi nhớ", memoryItems(username, now)], ["KPI", kpiItems(username, now)], ["An toàn", securityItems(username, now)],
   ]
   const settled = await Promise.allSettled(jobs.map(j => j[1]))
+  const memberKinds = new Set<string>(MEMBER_INBOX_KINDS)
   const items: InboxItem[] = [], failed: string[] = []
   settled.forEach((r, i) => { if (r.status === "fulfilled") items.push(...r.value); else failed.push(`${jobs[i][0]}: ${(r.reason as Error)?.message ?? "lỗi"}`.slice(0, 160)) })
-  return { items: sortInbox(items), failed }
+  return { items: sortInbox(level === "member" ? items.filter(i => memberKinds.has(i.kind)) : items), failed: level === "member" ? [] : failed }
 }

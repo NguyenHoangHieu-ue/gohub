@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireArgonUser } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { listMailThreads, setThreadStatus, syncMailStatus, type MailThreadStatus } from "@/lib/argon/mail-status"
 
 export const dynamic = "force-dynamic"
@@ -7,7 +8,7 @@ export const maxDuration = 120
 
 // GET → sổ trạng thái mail theo thread của người dùng (chỉ đọc).
 export async function GET() {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   return NextResponse.json({ threads: await listMailThreads(username), now: Date.now() })
 }

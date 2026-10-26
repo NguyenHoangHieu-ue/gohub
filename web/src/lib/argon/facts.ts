@@ -46,10 +46,10 @@ export async function saveSourceFacts(username: string, src: { id: string; name:
   return rows.filter((_, i) => !plans[i].staleBy)
 }
 
-export async function addManualFact(username: string, f: Omit<FactIn, "attribute" | "value"> & Partial<Pick<FactIn, "attribute" | "value">> & { sourceId?: string | null; sourceName?: string }): Promise<FactRow> {
+export async function addManualFact(username: string, f: Omit<FactIn, "attribute" | "value"> & Partial<Pick<FactIn, "attribute" | "value">> & { sourceId?: string | null; sourceName?: string; needsReview?: boolean; changeNote?: string }): Promise<FactRow> {
   const { data, error } = await (await db()).from("argon_facts").insert({
     username, type: f.type, vendor: f.vendor, subject: f.subject, attribute: f.attribute ?? "", value: f.value ?? "", summary: f.summary, evidence: f.evidence, effective_from: f.effectiveFrom, expires_at: f.expiresAt,
-    origin: "manual", edited: true, source_id: f.sourceId ?? null, source_name: f.sourceName ?? "", source_date: vnToday(),
+    origin: "manual", edited: true, source_id: f.sourceId ?? null, source_name: f.sourceName ?? "", source_date: vnToday(), needs_review: !!f.needsReview, change_note: f.changeNote ?? "",
   }).select("*").single()
   if (error || !data) throw new Error(error?.message ?? "Không ghi được sự việc")
   return data as FactRow

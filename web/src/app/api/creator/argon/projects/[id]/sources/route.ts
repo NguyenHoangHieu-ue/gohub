@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { ARGON_BUCKET, MAX_UPLOAD_BYTES, ensureArgonBucket, ownProject, requireArgonUser, type ArgonSource } from "@/lib/argon/server"
+import { ARGON_BUCKET, MAX_UPLOAD_BYTES, ensureArgonBucket, ownProject, type ArgonSource } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { extractFile } from "@/lib/argon/extract"
 import { countTokens, sourceParts } from "@/lib/argon/context"
 import { addYoutubeSource } from "@/lib/argon/video"
@@ -21,7 +22,7 @@ const safe = (n: string) => n.replace(/[^\w.\-]+/g, "_").slice(-120)
 const strip = ({ extracted_text: _t, ...s }: ArgonSource) => (void _t, s)
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   if (!(await ownProject(params.id, username))) return NextResponse.json({ error: "Không tìm thấy dự án" }, { status: 404 })
   const b = (await req.json().catch(() => ({}))) as {

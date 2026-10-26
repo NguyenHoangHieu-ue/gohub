@@ -177,6 +177,7 @@ export async function execMissionSourceTool(name: string, args: Record<string, u
     },
     search: kw => searchMissionSources(mission, kw),
     read: id => readMissionSource(mission, id),
+    quarantine: async a => (await import("./quarantine")).quarantineRead(a),
     searchChunks: async q => {
       const all = await allMissionSources(mission)
       const ids = all.map(s => s.id)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireArgonUser } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { ensureDailyMission } from "@/lib/argon/daily-mission"
 import { listFiles, readFile, writeFile } from "@/lib/argon/missions-db"
 import { getPatrol, savePatrol, startPatrol } from "@/lib/argon/patrol"
@@ -29,13 +30,13 @@ async function snapshot(username: string) {
 }
 
 export async function GET() {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   return NextResponse.json(await snapshot(username))
 }
 
 export async function PUT(req: NextRequest) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const b = (await req.json().catch(() => ({}))) as { plan?: string }
   if (typeof b.plan !== "string") return NextResponse.json({ error: "Thiếu plan" }, { status: 400 })

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ownProject, requireArgonUser } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { deleteProjectCascade } from "@/lib/argon/project-delete"
 import { getHubId } from "@/lib/argon/hub"
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic"
 
 // GET → dự án + nguồn (không kèm nội dung đầy đủ) + các lượt chạy · PATCH { name?, notes?, instructions? } · DELETE (xoá cả file trong kho).
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const project = await ownProject(params.id, username)
   if (!project) return NextResponse.json({ error: "Không tìm thấy dự án" }, { status: 404 })

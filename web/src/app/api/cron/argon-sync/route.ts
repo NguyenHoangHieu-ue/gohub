@@ -17,6 +17,9 @@ import { pruneGraph } from "@/lib/argon/graph"
 import { loadPubState, publishProfiles } from "@/lib/argon/lark-publish"
 import { pruneEvents } from "@/lib/agent-events"
 import { argonUsernames, runFactsNightly } from "@/lib/argon/facts"
+import { runKpiWatch } from "@/lib/argon/kpi-watch"
+import { suggestSkill } from "@/lib/argon/skill-suggest"
+import { ownerUsernames } from "@/lib/argon/access"
 import { nudgeStaleThreads, syncMailStatus } from "@/lib/argon/mail-status"
 import type { ArgonSource } from "@/lib/argon/server"
 
@@ -101,6 +104,20 @@ async function run(req: NextRequest) {
     } catch (e) { mailStatus.push({ user, errors: [(e as Error).message] }) }
   }
   // Hồ sơ vendor ra Lark (một chiều, chỉ khi anh BẬT "Tự cập nhật mỗi đêm" ở Kho › Thực thể): sau khi sổ sự việc + mail đã mới.
+  // ARGON-X P2: sự kiện "KPI lệch kế hoạch" → cảnh báo ở Việc cần duyệt (so số chiếu quý với target quý).
+  const kpiWatch: { user: string; checked?: number; alerts?: number; note?: string; error?: string }[] = []
+  for (const user of await ownerUsernames(await argonUsernames().catch(() => [] as string[]))) {
+    if (Date.now() - t0 > 270_000) { kpiWatch.push({ user, note: "hết giờ" }); continue }
+    try { kpiWatch.push({ user, ...(await runKpiWatch(user, req.nextUrl.origin)) }) } catch (e) { kpiWatch.push({ user, error: (e as Error).message.slice(0, 160) }) }
+  }
+
+  // ARGON-X P4: câu hỏi anh hỏi lặp ≥3 lần → Argon soạn nháp kỹ năng thành ỨNG VIÊN (chờ anh duyệt, qua cổng eval).
+  const skillSuggest: { user: string; note?: string; created?: string; error?: string }[] = []
+  for (const user of await ownerUsernames(await argonUsernames().catch(() => [] as string[]))) {
+    if (Date.now() - t0 > 275_000) { skillSuggest.push({ user, note: "hết giờ" }); continue }
+    try { skillSuggest.push({ user, ...(await suggestSkill(user, req.nextUrl.origin)) }) } catch (e) { skillSuggest.push({ user, error: (e as Error).message.slice(0, 160) }) }
+  }
+
   const larkPublish: { user: string; skipped?: string; profiles?: number; created?: number; updated?: number; same?: number; errors?: string[] }[] = []
   for (const user of await argonUsernames().catch(() => [] as string[])) {
     try {
@@ -133,6 +150,8 @@ async function run(req: NextRequest) {
     search,
     facts,
     mailStatus,
+    kpiWatch,
+    skillSuggest,
     larkPublish,
     autorun,
     patrol,

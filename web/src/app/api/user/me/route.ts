@@ -11,7 +11,7 @@ const WRITABLE_TABS_KEY = "permissions.writable_tabs"
 // Quyền vừa đổi hiện ra sau tối đa 20s (instance khác) — chấp nhận được cho cờ hiển thị menu/nút.
 async function loadMe(username: string, sessionRole: string) {
 
-  const [userRes, configRes, gpRes, portalRes, myMetricsRes, marketRes, pricingRes, productCreateRes] = await Promise.all([
+  const [userRes, configRes, gpRes, portalRes, myMetricsRes, marketRes, pricingRes, productCreateRes, argonRes] = await Promise.all([
     supabaseAdmin.from("users").select("role, department, allowed_analytics, allowed_tabs").eq("username", username).single(),
     supabaseAdmin.from("app_settings").select("value").eq("key", WRITABLE_TABS_KEY).maybeSingle(),
     supabaseAdmin.from("app_settings").select("value").eq("key", "gp_allowed_users").maybeSingle(),
@@ -20,6 +20,7 @@ async function loadMe(username: string, sessionRole: string) {
     supabaseAdmin.from("app_settings").select("value").eq("key", "market_users").maybeSingle(),
     supabaseAdmin.from("app_settings").select("value").eq("key", "pricing_users").maybeSingle(),
     supabaseAdmin.from("app_settings").select("value").eq("key", "product_create_users").maybeSingle(),
+    supabaseAdmin.from("app_settings").select("value").eq("key", "argon_users").maybeSingle(),
   ])
 
   let writableTabs: string[] = []
@@ -73,6 +74,9 @@ async function loadMe(username: string, sessionRole: string) {
   const inList = (v: string | null | undefined) => { try { return v ? (JSON.parse(v) as string[]).includes(username) : false } catch { return false } }
   const productCreateEnabled = data?.role === "creator" || inList(productCreateRes.data?.value)
   const pricingEnabled = productCreateEnabled || inList(pricingRes.data?.value)
+  // Trợ lý (Argon): Creator = owner; người được cấp = member (chỉ Hỏi/Kho/Việc cần duyệt của chính họ)
+  const argonMember = data?.role !== "creator" && inList(argonRes.data?.value)
+  const argonEnabled = data?.role === "creator" || argonMember
 
   return {
     role:                data?.role              ?? sessionRole,
@@ -87,6 +91,8 @@ async function loadMe(username: string, sessionRole: string) {
     market_enabled:      marketEnabled,
     pricing_enabled:     pricingEnabled,
     product_create_enabled: productCreateEnabled,
+    argon_enabled:       argonEnabled,
+    argon_member:        argonMember,
   }
 }
 

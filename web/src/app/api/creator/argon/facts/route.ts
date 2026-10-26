@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireArgonUser } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { FACT_TYPES, addManualFact, isoDate, listFacts, updateFact, vnToday, type FactPatch, type FactStatus, type FactType } from "@/lib/argon/facts"
 
 export const dynamic = "force-dynamic"
 
 // GET → sổ sự việc của người dùng (còn hiệu lực + đã qua) và ngày hôm nay theo giờ VN.
 export async function GET() {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   return NextResponse.json({ facts: await listFacts(username, { limit: 600 }), today: vnToday() })
 }
@@ -15,7 +15,7 @@ const STATUSES: FactStatus[] = ["active", "expired", "superseded", "rejected"]
 
 // PATCH { id, status?, type?, vendor?, subject?, summary?, effective_from?, expires_at?, remind_days? } → sửa/bỏ 1 sự việc.
 export async function PATCH(req: NextRequest) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const b = (await req.json().catch(() => ({}))) as FactPatch & { id?: string }
   if (!b.id) return NextResponse.json({ error: "Thiếu id" }, { status: 400 })
@@ -35,7 +35,7 @@ export async function PATCH(req: NextRequest) {
 
 // POST { type, vendor?, subject?, summary, effective_from?, expires_at? } → Hiếu tự ghi một sự việc.
 export async function POST(req: NextRequest) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const b = (await req.json().catch(() => ({}))) as { type?: string; vendor?: string; subject?: string; summary?: string; effective_from?: string; expires_at?: string }
   const summary = String(b.summary ?? "").trim().slice(0, 300)

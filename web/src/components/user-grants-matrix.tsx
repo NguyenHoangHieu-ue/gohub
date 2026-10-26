@@ -8,20 +8,21 @@ import { cn } from "@/lib/utils"
 // (mỗi khối tự tìm người rồi thêm). Vẫn gọi đúng 5 API cũ (GET {users}, POST {action: add|remove, username}) nên
 // nhật ký cấp/thu hồi (access_audit_log) và logic phân quyền phía server không đổi. Chỉ Creator gọi được các API này.
 
-type Key = "gp" | "my" | "market" | "pricing" | "create"
+type Key = "gp" | "my" | "market" | "pricing" | "create" | "argon"
 const GRANTS: { key: Key; label: string; endpoint: string; hint: string }[] = [
   { key: "gp",      label: "Gấu Pro",        endpoint: "/api/creator-ai/gp-access",             hint: "Dùng trợ lý Gấu Pro" },
   { key: "my",      label: "My Metrics",     endpoint: "/api/creator/my-metrics-access",        hint: "Xem tab My Metrics" },
   { key: "market",  label: "Thị trường",     endpoint: "/api/creator/market-access",            hint: "Xem tab Thị trường & Báo giá (gồm báo giá nhà cung cấp)" },
   { key: "pricing", label: "Tính giá",       endpoint: "/api/creator/pricing-access",           hint: "Dùng chức năng Tính giá (chỉ tên gói và giá vốn)" },
   { key: "create",  label: "Tạo sản phẩm",   endpoint: "/api/creator/product-create-access",    hint: "Tạo sản phẩm (mã SKU/Product, xuất file import). Đã gồm Tính giá" },
+  { key: "argon",   label: "Trợ lý (Argon)", endpoint: "/api/creator/argon-access",             hint: "Dùng Trợ lý Argon ở mức thành viên: Hỏi + Kho + Việc cần duyệt của CHÍNH HỌ (không số liệu công ty/SQL/code, không chạy nền, có hạn mức mỗi ngày)" },
 ]
 
 interface UserRow { username: string; name: string; role: string; email?: string; lark_open_id?: string | null }
 
 export function UserGrantsMatrix({ onNotify }: { onNotify: (ok: boolean, text: string) => void }) {
   const [users, setUsers] = useState<UserRow[]>([])
-  const [granted, setGranted] = useState<Record<Key, Set<string>>>({ gp: new Set(), my: new Set(), market: new Set(), pricing: new Set(), create: new Set() })
+  const [granted, setGranted] = useState<Record<Key, Set<string>>>({ gp: new Set(), my: new Set(), market: new Set(), pricing: new Set(), create: new Set(), argon: new Set() })
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState("")
   const [roleFilter, setRoleFilter] = useState("")

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireArgonUser } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { buildTree } from "@/lib/argon/missions"
 import { deleteMission, linkedSources, listFiles, ownMission, updateMission } from "@/lib/argon/missions-db"
 import { getPendingAsk } from "@/lib/argon/ask-tool"
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic"
 
 // GET → sứ mệnh + cây workspace + nguồn đã gắn + lượt chạy của dự án nền · PATCH { name?, goal?, archived? } · DELETE (xoá hẳn, kể cả dự án nền).
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const mission = await ownMission(params.id, username)
   if (!mission) return NextResponse.json({ error: "Không tìm thấy sứ mệnh" }, { status: 404 })

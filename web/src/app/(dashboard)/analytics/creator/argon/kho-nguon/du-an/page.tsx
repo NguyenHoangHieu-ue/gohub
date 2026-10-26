@@ -131,8 +131,8 @@ export default function ArgonRoomPage() {
       <div className="flex items-center gap-3 px-4 py-3">
         <div className="w-9 h-9 rounded-xl bg-violet-600 text-white flex items-center justify-center"><Atom size={18} /></div>
         <div>
-          <h1 className="font-semibold text-gray-900 dark:text-slate-100 leading-tight">Nguồn tự động &amp; dự án · Phòng Argon</h1>
-          <div className="text-xs text-gray-500">Nơi nạp và quản lý nguồn (file, Lark, mail, thread, gói số liệu). Gắn nguồn vào sứ mệnh ở trang Sứ mệnh.</div>
+          <h1 className="font-semibold text-gray-900 dark:text-slate-100 leading-tight">Nguồn tự động</h1>
+          <div className="text-xs text-gray-500">Gắn Lark, mail, thread, gói số liệu để Argon tự đọc mỗi đêm. Nạp file lẻ và xem sổ sự việc: trang Kho.</div>
         </div>
         <Link href="/analytics/creator/argon/kho-nguon" className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg"><ArrowLeft size={14} />Về Kho</Link>
         <button onClick={() => setReportsOpen(true)} className=" inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-950/40"><LayoutDashboard size={14} />Kho báo cáo{reports.length ? ` (${reports.length})` : ""}</button>
@@ -140,7 +140,7 @@ export default function ArgonRoomPage() {
       {info && <div className="mx-4 mb-2 text-sm rounded-lg bg-emerald-50 text-emerald-800 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{info}</span><button onClick={() => setInfo(null)}>✕</button></div>}
       {err && <div className="mx-4 mb-2 text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button onClick={() => setErr(null)}>✕</button></div>}
 
-      <div className="flex-1 min-h-0 grid gap-3 px-4 pb-4 lg:grid-cols-[220px_minmax(0,1fr)_340px]">
+      <div className="flex-1 min-h-0 grid gap-3 px-4 pb-4 lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col min-h-0">
           <div className="p-2 border-b border-gray-200 dark:border-slate-700 relative">
             <button onClick={() => setNewOpen(v => !v)} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm bg-violet-600 text-white rounded-lg"><Plus size={14} />Dự án mới<ChevronDown size={13} /></button>
@@ -197,19 +197,21 @@ export default function ArgonRoomPage() {
                 </div>
               </div>
             )}
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="min-h-[50vh]">{project && <SourcesPanel projectId={project.id} sources={sources} setSources={fn => { setSources(fn); void loadProjects() }} onOpen={setViewing} onError={onError} onReload={() => activeId && loadDetail(activeId, true)} />}</div>
+              <details className="border-t border-gray-200 dark:border-slate-700">
+                <summary className="cursor-pointer select-none px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-200">Trò chuyện về dự án này &amp; Làm report <span className="font-normal text-xs text-gray-500">(hỏi chung: tab Hỏi)</span></summary>
+                <div className="h-[70vh] min-h-0 flex flex-col">
               {projects.find(x => x.id === project.id)?.hub && <div className="mx-4 mt-3 text-xs rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-200 px-3 py-2">Dự án Tổng hợp tự đọc sổ, nguồn đang bật và vài kết quả gần đây của MỌI dự án khác (vượt 700k token thì bỏ bớt nguồn cũ không ghim). Hỏi chéo ở đây; dự án thường vẫn tách biệt nhau.</div>}
-              <ChatPanel projectId={project.id} runs={runs} setRuns={fn => setRuns(fn)} enabledCount={enabled.length} quickPrompts={quickPrompts} reportTemplates={reports.filter(r => r.template)} pendingTpl={pendingTpl} setPendingTpl={setPendingTpl} onAppendNotes={appendNotes} onSaveAsSource={saveAsSource} onError={onError} />
+                  <ChatPanel projectId={project.id} runs={runs} setRuns={fn => setRuns(fn)} enabledCount={enabled.length} quickPrompts={quickPrompts} reportTemplates={reports.filter(r => r.template)} pendingTpl={pendingTpl} setPendingTpl={setPendingTpl} onAppendNotes={appendNotes} onSaveAsSource={saveAsSource} onError={onError} />
+                </div>
+              </details>
             </div>
           </>}
         </main>
 
-        <aside className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 min-h-0 hidden lg:block">
-          {project && <SourcesPanel projectId={project.id} sources={sources} setSources={fn => { setSources(fn); void loadProjects() }} onOpen={setViewing} onError={onError} onReload={() => activeId && loadDetail(activeId, true)} />}
-        </aside>
       </div>
 
-      {project && <div className="lg:hidden px-4 pb-4"><div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 h-[60vh]"><SourcesPanel projectId={project.id} sources={sources} setSources={fn => { setSources(fn); void loadProjects() }} onOpen={setViewing} onError={onError} onReload={() => activeId && loadDetail(activeId, true)} /></div></div>}
       {reportsOpen && <ReportsModal reports={reports} activeProject={activeId} onClose={() => setReportsOpen(false)} onChange={loadReports} onError={onError}
         onUseTemplate={r => { setPendingTpl(r); setInfo(`Đã chọn mẫu “${r.title}”. Gõ yêu cầu (hoặc gửi luôn câu gợi ý) ở ô chat để dựng lại với số liệu mới của dự án đang mở.`) }} />}
       {viewing && <SourceViewer source={viewing} onClose={() => setViewing(null)} onChanged={s => setSources(prev => prev.map(x => (x.id === s.id ? s : x)))} onError={onError} />}
