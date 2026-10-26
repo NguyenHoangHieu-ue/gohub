@@ -286,8 +286,8 @@ export async function searchMissionSources(m: ArgonMission, kw: string, limit = 
 export async function readMissionSource(m: ArgonMission, id: string) {
   const ids = (await allMissionSources(m)).map(s => s.id)
   if (!ids.includes(id)) return null
-  const { data } = await supabaseAdmin.from("argon_sources").select("id,name,kind,tokens,updated_at,extracted_text").eq("id", id).maybeSingle()
-  return (data as { id: string; name: string; kind: string; tokens: number; updated_at: string; extracted_text: string | null } | null) ?? null
+  const { data } = await supabaseAdmin.from("argon_sources").select("id,name,kind,tokens,updated_at,extracted_text,meta").eq("id", id).maybeSingle()
+  return (data as { id: string; name: string; kind: string; tokens: number; updated_at: string; extracted_text: string | null; meta: Record<string, unknown> | null } | null) ?? null
 }
 
 /** Gắn nhiều nguồn một lượt (vd cả dự án "Hộp thư Lark"): chỉ nhận nguồn thuộc dự án thường của chính người dùng. Trả số nguồn đã gắn. */

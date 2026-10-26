@@ -7,7 +7,7 @@ import { MISSION_TOOL_NAMES, WS_TOOLS, execMissionAsk, execMissionCode, execMiss
 import { LIST_NAME, READ_NAME, SEARCH_NAME, SOURCE_TOOLS } from "./source-tools"
 import { PARALLEL_SAFE, groupCalls } from "./parallel-tools"
 import { FAST_TOOL_NAMES, MAX_FAST_TOOL_CALLS } from "./run-route"
-import { injectionHits, isTainted, levelOf, noticeDetail, recordNotice, refusal, spotlight } from "./run-safety"
+import { injectionHits, isTainted, levelOf, markerHits, noticeDetail, recordNotice, refusal, spotlight } from "./run-safety"
 import { FORECAST_TOOL, FORECAST_TOOL_NAME, SCORE_TOOL, SCORE_TOOL_NAME } from "./forecast-tool"
 import { PATCH_TOOL, PATCH_TOOL_NAME } from "./patch-tool"
 import { ASK_TOOL, ASK_TOOL_NAME, askBlock } from "./ask-tool"
@@ -87,7 +87,7 @@ function prepare(i: SegmentIn): Prepared {
     const tainted = isTainted(i.tools?.log ?? [])
     const e = await rawDispatch(fname, fargs, dataCalls, tainted)
     if (lvl !== "L1" || !e.ok) return e
-    const hits = injectionHits(e.result)
+    const hits = Array.from(new Set([...injectionHits(e.result), ...markerHits(e.result)]))
     if (hits.length && khoUser) void recordNotice(khoUser, { tool: String(fname), detail: noticeDetail(String(fname), fargs), hits })
     return { ...e, result: spotlight(String(fname), e.result, hits), chars: e.result.length }
   }

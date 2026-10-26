@@ -1,5 +1,6 @@
 import { Type, type FunctionDeclaration } from "@google/genai"
 import type { ToolLogEntry } from "./tools"
+import { isExternalSource } from "./quarantine"
 
 // Nguồn của sứ mệnh (thread Lark, mail, file…) có thể vượt cửa sổ ngữ cảnh. Hai lớp: (1) `pickByBudget` chọn nguồn đưa THẲNG vào ngữ cảnh trong ngân sách token (ghim trước, rồi mới cập nhật gần nhất);
 // (2) công cụ lietKeNguon / docNguon / timTrongNguon cho Argon tự tìm và đọc phần còn lại theo nhu cầu (kể cả nguồn bị bỏ khỏi ngữ cảnh). Chỉ đọc, chỉ nguồn thuộc sứ mệnh này.
@@ -13,7 +14,7 @@ const SNIP = 260
 export const SOURCE_TOOLS: FunctionDeclaration[] = [
   { name: LIST_NAME, description: "Liệt kê nguồn của sứ mệnh (thread Lark, mail, file, ghi chú đã gắn): id, tên, loại, số token, ngày cập nhật, có nằm sẵn trong ngữ cảnh không. Dùng khi nguồn nhiều và bạn cần biết có gì.", parameters: { type: Type.OBJECT, properties: {} } },
   { name: SEARCH_NAME, description: "Tìm trong NỘI DUNG mọi nguồn của sứ mệnh (kể cả nguồn không nằm sẵn trong ngữ cảnh), theo Ý NGHĨA lẫn từ khoá. Trả các đoạn liên quan nhất kèm tên nguồn, id và vị trí đoạn. Dùng để lần theo một khách, mã SKU, tên người, chủ đề, quyết định qua nhiều thread/mail/file; có thể là câu hỏi ngắn thay vì từ khoá.", parameters: { type: Type.OBJECT, properties: { tuKhoa: { type: Type.STRING, description: "Từ khoá hoặc câu hỏi ngắn, tối thiểu 2 ký tự" } }, required: ["tuKhoa"] } },
-  { name: READ_NAME, description: "Đọc toàn văn 1 nguồn theo id (lấy từ lietKeNguon hoặc timTrongNguon), mỗi lần tối đa ~60.000 ký tự; nguồn dài hơn thì đọc tiếp bằng batDau (vị trí ký tự bắt đầu, mặc định 0). Cần đọc NHIỀU nguồn: truyền ids (tối đa 5 id) để đọc song song trong một lần thay vì gọi từng cái (mỗi nguồn nhận phần đầu, chia đều ngân sách ký tự).", parameters: { type: Type.OBJECT, properties: { id: { type: Type.STRING, description: "Id một nguồn" }, ids: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Danh sách id để đọc nhiều nguồn một lần (thay cho id)" }, batDau: { type: Type.NUMBER, description: "Vị trí ký tự bắt đầu đọc (mặc định 0; chỉ dùng với id)" } } } },
+  { name: READ_NAME, description: "Đọc toàn văn 1 nguồn theo id (lấy từ lietKeNguon hoặc timTrongNguon), mỗi lần tối đa ~60.000 ký tự; nguồn dài hơn thì đọc tiếp bằng batDau (vị trí ký tự bắt đầu, mặc định 0). Cần đọc NHIỀU nguồn: truyền ids (tối đa 5 id) để đọc song song trong một lần thay vì gọi từng cái (mỗi nguồn nhận phần đầu, chia đều ngân sách ký tự). NGUỒN CỦA NGƯỜI NGOÀI (mail, thread Lark, file đính kèm của chúng) mặc định trả BẢN TRÍCH XUẤT AN TOÀN do một model cách ly làm (tóm tắt, các bên, giá, ngày hạn, yêu cầu, vài câu trích) — bạn không thấy văn bản gốc; nên đặt hoi (câu hỏi cụ thể) để bản trích xuất trả lời đúng ý. Chỉ khi thật sự cần nguyên văn (bảng dài, trích dẫn chính xác) mới đặt nguyenVan=true.", parameters: { type: Type.OBJECT, properties: { id: { type: Type.STRING, description: "Id một nguồn" }, hoi: { type: Type.STRING, description: "Câu hỏi cụ thể cần trả lời từ nguồn (giúp bản trích xuất đúng trọng tâm)" }, nguyenVan: { type: Type.BOOLEAN, description: "true = đọc nguyên văn thay vì bản trích xuất an toàn (chỉ khi cần trích chính xác)" }, ids: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Danh sách id để đọc nhiều nguồn một lần (thay cho id)" }, batDau: { type: Type.NUMBER, description: "Vị trí ký tự bắt đầu đọc (mặc định 0; chỉ dùng với id)" } } } },
 ]
 
 export interface PickableSource { id: string; name: string; tokens: number; pinned: boolean; updated_at: string }
@@ -45,15 +46,23 @@ export function snippet(text: string, kw: string, width = SNIP): string {
   return `${from > 0 ? "…" : ""}${text.slice(from, to).replace(/\s+/g, " ")}${to < text.length ? "…" : ""}`
 }
 
-export interface SrcRow { id: string; name: string; kind: string; tokens: number; updated_at: string; extracted_text?: string | null }
+export interface SrcRow { id: string; name: string; kind: string; tokens: number; updated_at: string; extracted_text?: string | null; meta?: Record<string, unknown> | null }
 export interface SourceDeps {
   list: () => Promise<(SrcRow & { inContext: boolean })[]>
   search: (kw: string) => Promise<SrcRow[]>
   read: (id: string) => Promise<SrcRow | null>
   /** Tìm theo ý nghĩa + từ khoá trên chỉ mục (index-db). Lỗi hoặc rỗng → quay về ILIKE (search). */
+  /** Buồng cách ly (ARGON-X P3): đọc nguồn của NGƯỜI NGOÀI bằng model không công cụ, trả bản trích xuất đã làm sạch (null = lỗi → đọc thô có bọc + quét). */
+  quarantine?: (a: { id: string; name: string; kind: string; meta?: Record<string, unknown> | null; text: string; updatedAt: string; question?: string }) => Promise<string | null>
   searchChunks?: (q: string) => Promise<{ source_id: string; name: string; kind: string; idx: number; text: string }[]>
 }
 const done = (name: string, args: Record<string, unknown>) => (ok: boolean, result: string): ToolLogEntry => ({ name, args, ok, chars: result.length, result, at: new Date().toISOString() })
+
+/** Nguồn của người ngoài + chưa đòi nguyên văn + đọc từ đầu → bản trích xuất của buồng cách ly; ngược lại (hoặc lỗi) null để đọc thô. */
+async function quarantined(deps: SourceDeps, s: SrcRow, text: string, from: number, args: Record<string, unknown>, question?: string): Promise<string | null> {
+  if (!deps.quarantine || from > 0 || args.nguyenVan === true || !isExternalSource(s)) return null
+  return deps.quarantine({ id: s.id, name: s.name, kind: s.kind, meta: s.meta, text, updatedAt: s.updated_at, question })
+}
 
 /** Thực thi 1 trong 3 công cụ nguồn; không bao giờ ném lỗi. */
 export async function execSourceTool(name: string, args: Record<string, unknown>, deps: SourceDeps): Promise<ToolLogEntry> {
@@ -81,11 +90,14 @@ export async function execSourceTool(name: string, args: Record<string, unknown>
       const many = Array.isArray(args.ids) ? [...new Set((args.ids as unknown[]).map(x => String(x).trim()).filter(Boolean))].slice(0, MAX_MULTI_READ) : []
       if (many.length > 1) {
         const per = Math.max(8_000, Math.floor(MAX_READ_CHARS / many.length))
+        const question = String(args.hoi ?? "").trim() || undefined
         const docs = await Promise.all(many.map(x => deps.read(x)))
+        const safe = await Promise.all(docs.map(s => (s?.extracted_text ? quarantined(deps, s, s.extracted_text, 0, args, question) : Promise.resolve(null))))
         return d(true, docs.map((s, k) => {
           if (!s) return `# (không có nguồn "${many[k]}" trong sứ mệnh này)`
           const t = s.extracted_text ?? ""
           if (!t) return `# ${s.name} [id ${s.id}]\n(không có văn bản đọc được)`
+          if (safe[k]) return safe[k] as string
           return `# ${s.name} [id ${s.id}]\n${t.slice(0, per)}${t.length > per ? `\n…(còn ${t.length - per} ký tự; đọc tiếp bằng id=${s.id}, batDau=${per})` : ""}`
         }).join("\n\n---\n\n"))
       }
@@ -95,6 +107,8 @@ export async function execSourceTool(name: string, args: Record<string, unknown>
       const t = s.extracted_text ?? ""
       if (!t) return d(false, `"${s.name}" không có văn bản đọc được (file nhị phân/ảnh chưa trích chữ).`)
       const from = Math.max(0, Math.floor(Number(args.batDau) || 0))
+      const q = await quarantined(deps, s, t, from, args, String(args.hoi ?? "").trim() || undefined)
+      if (q) return d(true, q)
       const part = t.slice(from, from + MAX_READ_CHARS)
       const left = t.length - (from + part.length)
       return d(true, `# ${s.name}${from ? ` (từ ký tự ${from})` : ""}\n${part}${left > 0 ? `\n…(còn ${left} ký tự; đọc tiếp bằng batDau=${from + part.length})` : ""}`)
