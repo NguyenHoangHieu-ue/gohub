@@ -68,7 +68,9 @@ export default function ArgonTodayPage() {
   const proposals = sectionOf(snap?.tacDong.text ?? "", "Đề xuất")
   const impact = sectionOf(snap?.tacDong.text ?? "", "Tác động")
   const conflicts = sectionOf(snap?.tacDong.text ?? "", "Mâu thuẫn")
-  const soon = facts ? bucketFacts(facts.rows, facts.today).soon.slice(0, 8) : []
+  const pending = facts ? facts.rows.filter(f => f.status === "active" && f.needs_review).slice(0, 8) : []
+  const soon = facts ? bucketFacts(facts.rows.filter(f => !pending.includes(f)), facts.today).soon.slice(0, 8) : []
+  const settle = async (id: string, body: Record<string, unknown>) => { try { await api("/api/creator/argon/facts", jsonInit("PATCH", { id, ...body })); await load() } catch (e) { setErr((e as Error).message) } }
   const planEmpty = !!snap && snap.tacDong.text.includes("Chưa có kế hoạch")
   const audit = snap?.tacDong.audit
 
@@ -110,6 +112,29 @@ export default function ArgonTodayPage() {
         </section>
 
         <div className="space-y-4 min-w-0">
+          {pending.length > 0 && (
+            <section className={cn(card, "p-4 space-y-2")} aria-labelledby="chg-title">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={16} className="text-amber-600" />
+                <h2 id="chg-title" className="font-semibold text-gray-900 dark:text-slate-100">Thay đổi chờ anh xác nhận</h2>
+                <Link href="/analytics/creator/argon/kho-nguon" className="ml-auto text-[12px] text-violet-700 dark:text-violet-300 hover:underline">Sổ sự việc</Link>
+              </div>
+              <ul className="space-y-2.5">
+                {pending.map(f => (
+                  <li key={f.id} className="text-[13px] leading-snug">
+                    <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 mr-1.5">{FACT_TYPES[f.type]}</span>
+                    <b>{[f.vendor, f.subject].filter(Boolean).join(" · ")}</b>: {f.summary}
+                    {f.change_note && <div className="text-[12px] text-amber-700 dark:text-amber-300 mt-0.5">Đổi so với tin cũ: {f.change_note}</div>}
+                    <div className="mt-1 flex gap-3 text-[12px]">
+                      <button type="button" onClick={() => void settle(f.id, { confirm: true })} className="font-medium text-emerald-700 hover:underline">Đúng, xác nhận</button>
+                      <button type="button" onClick={() => void settle(f.id, { status: "rejected" })} className="text-gray-500 hover:text-red-600">Sai, giữ tin cũ</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section className={cn(card, "p-4 space-y-2")} aria-labelledby="soon-title">
             <div className="flex items-center gap-2">
               <CalendarClock size={16} className="text-amber-600" />

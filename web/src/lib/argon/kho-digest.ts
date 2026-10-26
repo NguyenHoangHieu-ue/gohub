@@ -1,5 +1,5 @@
 import { cleanFolderPath, ensureFolderPath, folderPathOf, listFolders, userProjectIds, type DigestMeta } from "./kho"
-import { saveSourceFacts, type FactRow } from "./facts"
+import { saveSourceFacts, sourceDateOf, type FactRow } from "./facts"
 import { digestSource } from "./source-digest"
 import type { ArgonSource } from "./server"
 
@@ -18,7 +18,7 @@ export async function digestAndFile(username: string, s: ArgonSource & { folder_
   const hasTags = Array.isArray(s.meta?.tags) && (s.meta.tags as unknown[]).length > 0
   const meta = { ...(s.meta ?? {}), digest: d, factsAt: d.at, ...(hasTags ? {} : { tags: d.tags ?? [] }) }
   await (await db()).from("argon_sources").update({ meta, folder_id: folderId }).eq("id", s.id)
-  const saved = await saveSourceFacts(username, { id: s.id, name: s.name }, facts)
+  const saved = await saveSourceFacts(username, { id: s.id, name: s.name, date: sourceDateOf(s) }, facts)
   return { id: s.id, digest: d, folder_id: folderId, facts: saved }
 }
 

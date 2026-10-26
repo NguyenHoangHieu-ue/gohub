@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest"
-import { bucketFacts, dateKey, daysUntil, dueReminders, expiredIds, factKey, factLine, factsBlock, isoDate, keyDate, nightlyMessage, normalizeFacts, vnToday, type FactRow } from "@/lib/argon/facts-pure"
+import { changeNote, planSupersede, sameContent, sourceDateOf, bucketFacts, dateKey, daysUntil, dueReminders, expiredIds, factKey, factLine, factsBlock, isoDate, keyDate, nightlyMessage, normalizeFacts, vnToday, type FactRow } from "@/lib/argon/facts-pure"
 import { parseDigestFull } from "@/lib/argon/source-digest"
 
 const F = (id: string, o: Partial<FactRow> = {}): FactRow => ({
   id, username: "u", type: "khuyen_mai", vendor: "BC", subject: "Thái Lan", summary: "Giảm 10%", evidence: "", effective_from: null, expires_at: null, status: "active", origin: "auto", edited: false,
+  attribute: "", value: "", source_date: null, recorded_at: "2026-10-20T00:00:00Z", expired_at: null, change_note: "", needs_review: false,
   source_id: "s", source_name: "Mail BC", superseded_by: null, remind_days: 3, reminded_at: null, announced_at: null, created_at: "2026-10-20T00:00:00Z", updated_at: "2026-10-20T00:00:00Z", ...o,
 })
 const TODAY = "2026-10-22"
@@ -151,4 +152,50 @@ describe("sectionOf", () => {
     expect(sectionOf(md, "Đề xuất")).toBe("### 1. Việc — Chắc\n- Nguồn: X")
   })
   it("không thấy → rỗng", () => { expect(sectionOf(md, "Không có")).toBe(""); expect(sectionOf("", "Đề xuất")).toBe("") })
+})
+
+describe("sổ sự việc v2: tin cũ không đè tin mới", () => {
+  const inc = (o: Partial<Parameters<typeof planSupersede>[0]> = {}) => ({ type: "doi_gia" as const, vendor: "3HK", subject: "Thái Lan", attribute: "giá/GB", value: "3.5 HKD", summary: "Giá 3.5 HKD/GB", evidence: "", effectiveFrom: null, expiresAt: null, ...o })
+  const old = (o: Partial<FactRow> = {}) => F("old", { type: "doi_gia", vendor: "3HK", subject: "Thái Lan", attribute: "giá/GB", value: "3.0 HKD", summary: "Giá 3.0 HKD/GB", source_date: "2026-10-01", source_id: "a", ...o })
+
+  it("tin mới hơn thay tin cũ, ghi chú đổi giá trị và chờ xác nhận (đổi giá)", () => {
+    const p = planSupersede(inc(), "2026-10-20", [old()])
+    expect(p.staleBy).toBeNull()
+    expect(p.replace.map(r => r.id)).toEqual(["old"])
+    expect(p.note).toBe("giá/GB: 3.0 HKD → 3.5 HKD")
+    expect(p.needsReview).toBe(true)
+  })
+  it("tin CŨ hơn nạp sau → chính nó lỗi thời, không đè tin mới", () => {
+    const p = planSupersede(inc({ value: "2.5 HKD" }), "2026-09-15", [old()])
+    expect(p.staleBy?.id).toBe("old")
+    expect(p.replace).toEqual([])
+  })
+  it("cùng ngày tin → tin vừa nạp thắng; cùng nội dung → không có ghi chú, không cần xác nhận", () => {
+    const p = planSupersede(inc({ value: "3.0 HKD", summary: "Giá 3.0 HKD/GB" }), "2026-10-01", [old()])
+    expect(p.staleBy).toBeNull(); expect(p.note).toBe(""); expect(p.needsReview).toBe(false)
+  })
+  it("loại không quan trọng (khuyến mãi) đổi nội dung → có ghi chú nhưng không bắt xác nhận", () => {
+    const p = planSupersede(inc({ type: "khuyen_mai", value: "10%", attribute: "giảm", summary: "Giảm 10%" }), "2026-10-20", [old({ type: "khuyen_mai", attribute: "giảm", value: "5%", summary: "Giảm 5%" })])
+    expect(p.note).toBe("giảm: 5% → 10%"); expect(p.needsReview).toBe(false)
+  })
+  it("bản anh đã sửa tay mà tin mới nói khác → không tự thay, chờ anh", () => {
+    const p = planSupersede(inc(), "2026-10-20", [old({ edited: true, origin: "manual" })])
+    expect(p.replace).toEqual([]); expect(p.conflictWith?.id).toBe("old"); expect(p.needsReview).toBe(true); expect(p.note).toContain("khác bản anh đã ghi")
+  })
+  it("sự việc đã bị thay/bỏ không tham gia; khác đối tượng không đụng nhau", () => {
+    expect(planSupersede(inc(), "2026-10-20", [old({ status: "superseded" }), old({ id: "x", subject: "Nhật" })]).replace).toEqual([])
+  })
+  it("changeNote/sameContent", () => {
+    expect(sameContent(old(), inc({ value: "3.0 HKD" }))).toBe(true)
+    expect(changeNote(old({ attribute: "", value: "" }), inc({ attribute: "", value: "" }))).toBe("trước: Giá 3.0 HKD/GB")
+  })
+  it("sourceDateOf lấy ngày tin nhắn cuối (giờ VN), không có thì ngày cập nhật", () => {
+    expect(sourceDateOf({ meta: { lastDate: "2026-10-20T18:00:00Z" } })).toBe("2026-10-21")
+    expect(sourceDateOf({ meta: {}, updated_at: "2026-10-05T03:00:00Z" })).toBe("2026-10-05")
+  })
+  it("factLine và nightlyMessage nêu ngày tin / thay đổi", () => {
+    expect(factLine(F("1", { source_date: "2026-10-20" }))).toContain("tin ngày 20/10/2026")
+    const t = nightlyMessage({ added: [F("2", { change_note: "giá/GB: 3.0 → 3.5", needs_review: true })], due: [], expired: 0, link: "L" })
+    expect(t).toContain("Thay đổi so với tin cũ"); expect(t).toContain("giá/GB: 3.0 → 3.5"); expect(t).toContain("chờ anh xác nhận")
+  })
 })

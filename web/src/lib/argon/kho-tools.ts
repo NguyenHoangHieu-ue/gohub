@@ -78,7 +78,7 @@ export async function execKhoTool(name: string, args: Record<string, unknown>, u
       const hit = rows.filter(f => (!loai || f.type === loai) && (!vendor || f.vendor.toLowerCase().includes(vendor)) && (!kw || `${f.subject} ${f.summary} ${f.vendor}`.toLowerCase().includes(kw)))
         .sort((a, b) => (a.expires_at ?? a.effective_from ?? "9999").localeCompare(b.expires_at ?? b.effective_from ?? "9999")).slice(0, 60)
       if (!hit.length) return entry(name, args, true, `Sổ sự việc không có mục nào khớp (hôm nay ${vnToday()}). Nếu cần chắc chắn hơn thì tìm trong tài liệu bằng timTrongNguon.`)
-      return entry(name, args, true, `${hit.length} sự việc (hôm nay ${vnToday()}):\n${hit.map(f => `- [${f.id}] ${factLine(f)}${f.status !== "active" ? ` {${f.status}}` : ""}${f.source_name ? ` — nguồn: ${f.source_name}` : ""}`).join("\n")}`)
+      return entry(name, args, true, `${hit.length} sự việc (hôm nay ${vnToday()}):\n${hit.map(f => `- [${f.id}] ${factLine(f)}${f.status !== "active" ? ` {${f.status}}` : ""}${f.source_name ? ` — nguồn: ${f.source_name}` : ""}${f.change_note ? ` — ĐỔI so với tin cũ (${f.change_note})` : ""}${f.needs_review ? " — CHƯA được anh xác nhận" : ""}`).join("\n")}\nKhi trả lời PHẢI nêu ngày của tin ("tin ngày …"); hai tin mâu thuẫn thì theo tin mới hơn và nói rõ tin cũ đã bị thay.`)
     }
     if (name === "ghiSuViec") {
       const type = (String(args.loai ?? "") in FACT_TYPES ? String(args.loai) : "khac") as FactType

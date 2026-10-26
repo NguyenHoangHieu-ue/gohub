@@ -28,6 +28,7 @@ export async function PATCH(req: NextRequest) {
     p[k] = b[k] ? String(b[k]) : null
   }
   if (typeof b.remind_days === "number") p.remind_days = b.remind_days
+  if (b.confirm === true) p.confirm = true
   const row = await updateFact(username, b.id, p)
   return row ? NextResponse.json({ fact: row }) : NextResponse.json({ error: "Không tìm thấy sự việc" }, { status: 404 })
 }
