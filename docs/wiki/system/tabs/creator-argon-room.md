@@ -308,3 +308,10 @@ File `.xlsx` Argon/code tạo ra mở ngay trong trang (trước đây chỉ t�
 - **Hôm nay bớt trùng:** bỏ khối "Thay đổi chờ anh xác nhận" (đã có trong Việc cần duyệt), thay bằng thẻ **"Việc cần duyệt (N)"** đếm theo loại + link "Xem và duyệt →".
 - **Hôm nay bỏ khối Mail:** thẻ Việc cần duyệt thêm 1 dòng "N mail anh gửi đang chờ đối tác"; danh sách chờ đối tác (Xong/Bỏ qua) + nút "Quét lại mail" chuyển xuống cuối trang Việc cần duyệt (mail chờ mình vẫn là một loại việc trong danh sách chính).
 - **Menu bên trái:** nhãn "Gấu Pro" (bỏ chữ "thao tác"), "Trợ lý (Argon)".
+
+### s241j — Gộp Trợ lý còn 3 tab (2026-10-26, `staging`; không migration)
+- **Vì sao:** vẫn khó thao tác: Việc cần duyệt lặp ở Hôm nay, Kế hoạch/Bối cảnh lặp phần Tác động, Kho có chat riêng trùng tab Hỏi, Nguồn tự động nằm lạc trong menu.
+- **Thanh tab: Hôm nay (huy hiệu số việc) · Hỏi · Kho** + menu Thêm (Cuộc gọi, Bản đồ vận hành, Nâng cao).
+- **Hôm nay** = Việc cần duyệt (panel đầy đủ, duyệt ngay tại chỗ: `viec-can-duyet/panel.tsx`, prop `embedded`) → Đề xuất hôm nay + Sắp tới hạn + Tác động → hộp thu gọn "Kế hoạch và bối cảnh" (`boi-canh/panel.tsx`, chỉ cột kế hoạch + bối cảnh). `/viec-can-duyet` và `/boi-canh` chuyển hướng về Hôm nay (#viec-can-duyet, #ke-hoach-box tự mở hộp).
+- **Kho** = 2 cột (thư mục | Nạp tài liệu · Sổ sự việc · Thực thể); bỏ chat Thủ thư Kho riêng — nút ✨ tóm tắt thư mục chuyển câu hỏi sang tab Hỏi (`?q=`, tự gửi). Nút "Nguồn tự động (Lark, mail)" ở đầu trang Kho (trang `kho-nguon/du-an` giữ nguyên).
+- **Chưa kiểm bằng mắt trên trình duyệt** (tsc, lint, vitest pass).

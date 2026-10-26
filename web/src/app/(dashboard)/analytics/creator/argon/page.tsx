@@ -10,8 +10,8 @@ import { api, jsonInit } from "./argon-types"
 import { ArgonMarkdown } from "./argon-markdown"
 import { sectionOf } from "@/lib/argon/context-pure"
 import { FACT_TYPES, bucketFacts, daysUntil, keyDate, type FactRow } from "@/lib/argon/facts-pure"
-import { bucketThreads, type MailThreadRow } from "@/lib/argon/mail-status-pure"
-import { KIND_LABEL, type InboxKind } from "@/lib/assistant/inbox-pure"
+import { ViecCanDuyetPanel } from "./viec-can-duyet/panel"
+import { BoiCanhPanel } from "./boi-canh/panel"
 
 // Hôm nay: một màn hình gọn cho việc anh cần biết sáng nay — đề xuất (có nguồn, có mức chắc chắn), tin ảnh hưởng tới kế hoạch, sự việc sắp tới hạn.
 // Dữ liệu do Argon cập nhật mỗi đêm (hoặc bấm Cập nhật ngay). Hỏi thêm / đào sâu: tab Trợ lý; xem tài liệu: tab Kho.
@@ -29,8 +29,6 @@ export default function ArgonTodayPage() {
   const [role, setRole] = useState<string | null>(null)
   const [snap, setSnap] = useState<Snapshot | null>(null)
   const [facts, setFacts] = useState<{ rows: FactRow[]; today: string } | null>(null)
-  const [mail, setMail] = useState<{ rows: MailThreadRow[]; now: number } | null>(null)
-  const [inbox, setInbox] = useState<{ total: number; byKind: Record<InboxKind, number> } | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -42,14 +40,13 @@ export default function ArgonTodayPage() {
 
   const load = useCallback(async () => {
     try {
-      const [s, f, m, ib] = await Promise.all([api<Snapshot>("/api/creator/argon/context"), api<{ facts: FactRow[]; today: string }>("/api/creator/argon/facts").catch(() => null), api<{ threads: MailThreadRow[]; now: number }>("/api/creator/argon/mail-status").catch(() => null), api<{ total: number; byKind: Record<InboxKind, number> }>("/api/creator/assistant/inbox?count=1").catch(() => null)])
+      const [s, f] = await Promise.all([api<Snapshot>("/api/creator/argon/context"), api<{ facts: FactRow[]; today: string }>("/api/creator/argon/facts").catch(() => null)])
       setSnap(s)
       if (f) setFacts({ rows: f.facts, today: f.today })
-      if (m) setMail({ rows: m.threads, now: m.now })
-      if (ib) setInbox(ib)
     } catch (e) { setErr((e as Error).message) }
   }, [])
   useEffect(() => { if (role === "creator") void load() }, [role, load])
+  useEffect(() => { if (role === "creator" && window.location.hash === "#ke-hoach-box") (document.getElementById("ke-hoach-box") as HTMLDetailsElement | null)?.setAttribute("open", "") }, [role])
   useEffect(() => {   // đang cập nhật → hỏi lại mỗi 6 giây
     if (!snap?.running) return
     const t = setInterval(() => void load(), 6000)
@@ -76,7 +73,6 @@ export default function ArgonTodayPage() {
   const conflicts = sectionOf(snap?.tacDong.text ?? "", "Mâu thuẫn")
   const pending = facts ? facts.rows.filter(f => f.status === "active" && f.needs_review).slice(0, 8) : []
   const soon = facts ? bucketFacts(facts.rows.filter(f => !pending.includes(f)), facts.today).soon.slice(0, 8) : []
-  const partnerWaiting = mail ? bucketThreads(mail.rows).waitingPartner.length : 0
   const planEmpty = !!snap && snap.tacDong.text.includes("Chưa có kế hoạch")
   const audit = snap?.tacDong.audit
 
@@ -99,7 +95,9 @@ export default function ArgonTodayPage() {
       </header>
       {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}
       {running && <div className="text-[13px] rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-200 px-3 py-2 flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Argon đang đọc Kho và đối chiếu kế hoạch (từ {fmtAt(snap!.running!.since)}), thường mất vài phút. Xong sẽ nhắn Lark.</div>}
-      {planEmpty && <div className="text-[13px] rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-3 py-2 flex items-center gap-2"><Target size={14} />Anh chưa viết kế hoạch và metric nên đề xuất chưa bám được trọng tâm. <Link href="/analytics/creator/argon/boi-canh" className="underline font-medium">Viết kế hoạch</Link></div>}
+      {planEmpty && <div className="text-[13px] rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-3 py-2 flex items-center gap-2"><Target size={14} />Anh chưa viết kế hoạch và metric nên đề xuất chưa bám được trọng tâm. <Link href="#ke-hoach" onClick={() => { const d = document.getElementById("ke-hoach-box") as HTMLDetailsElement | null; if (d) d.open = true }} className="underline font-medium">Viết kế hoạch</Link></div>}
+
+      <section className={cn(card, "p-4")} aria-label="Việc cần duyệt"><ViecCanDuyetPanel embedded /></section>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start">
         <section className={cn(card, "p-4 space-y-3")} aria-labelledby="dx-title">
@@ -118,20 +116,6 @@ export default function ArgonTodayPage() {
         </section>
 
         <div className="space-y-4 min-w-0">
-          {inbox && (inbox.total > 0 || partnerWaiting > 0) && (
-            <section className={cn(card, "p-4 space-y-2")} aria-labelledby="inbox-title">
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={16} className="text-amber-600" />
-                <h2 id="inbox-title" className="font-semibold text-gray-900 dark:text-slate-100">Việc cần duyệt ({inbox.total})</h2>
-                <Link href="/analytics/creator/argon/viec-can-duyet" className="ml-auto text-[12px] font-medium text-violet-700 dark:text-violet-300 hover:underline">Xem và duyệt →</Link>
-              </div>
-              <ul className="text-[13px] text-gray-700 dark:text-slate-300 space-y-0.5">
-                {(Object.keys(KIND_LABEL) as InboxKind[]).filter(k => inbox.byKind[k] > 0).map(k => <li key={k}>• {inbox.byKind[k]} {KIND_LABEL[k].toLowerCase()}</li>)}
-                {partnerWaiting > 0 && <li>• {partnerWaiting} mail anh gửi đang chờ đối tác</li>}
-              </ul>
-            </section>
-          )}
-
           <section className={cn(card, "p-4 space-y-2")} aria-labelledby="soon-title">
             <div className="flex items-center gap-2">
               <CalendarClock size={16} className="text-amber-600" />
@@ -158,7 +142,7 @@ export default function ArgonTodayPage() {
             <div className="flex items-center gap-2">
               <Target size={16} className="text-violet-600" />
               <h2 id="imp-title" className="font-semibold text-gray-900 dark:text-slate-100">Tác động tới kế hoạch</h2>
-              <Link href="/analytics/creator/argon/boi-canh" className="ml-auto text-[12px] text-violet-700 dark:text-violet-300 hover:underline">Bối cảnh</Link>
+              <a href="#ke-hoach" onClick={() => { const d = document.getElementById("ke-hoach-box") as HTMLDetailsElement | null; if (d) d.open = true }} className="ml-auto text-[12px] text-violet-700 dark:text-violet-300 hover:underline">Kế hoạch và bối cảnh</a>
             </div>
             {impact ? <ArgonMarkdown text={impact} /> : <p className="text-sm text-gray-500">Chưa có.</p>}
           </section>
@@ -171,6 +155,11 @@ export default function ArgonTodayPage() {
           )}
         </div>
       </div>
+
+      <details id="ke-hoach-box" className={cn(card, "p-4 group")}>
+        <summary className="cursor-pointer font-semibold text-gray-900 dark:text-slate-100 select-none">Kế hoạch và bối cảnh <span className="ml-1 text-[12px] font-normal text-gray-500">anh viết kế hoạch, Argon đọc Kho rồi đối chiếu</span></summary>
+        <div className="pt-3"><BoiCanhPanel embedded /></div>
+      </details>
     </div>
   )
 }

@@ -3,22 +3,19 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
-import { Atom, ChevronDown, Compass, Database, Inbox, MessagesSquare, Network, Phone, Settings2, Sun } from "lucide-react"
+import { ChevronDown, Database, MessagesSquare, Network, Phone, Settings2, Sun } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-// Trợ lý (Argon): 4 tab chính — Hôm nay · Hỏi · Việc cần duyệt · Kho — và menu "Thêm" cho phần dùng ít hơn (Kế hoạch và bối cảnh, Cuộc gọi, Bản đồ, Nguồn tự động, Nâng cao).
+// Trợ lý (Argon): 3 tab — Hôm nay (việc cần duyệt + đề xuất + kế hoạch) · Hỏi · Kho (tài liệu, sổ sự việc, thực thể, nguồn tự động) — và menu "Thêm" (Cuộc gọi, Bản đồ, Nâng cao).
 const A = "/analytics/creator/argon"
 const TABS = [
-  { href: A, label: "Hôm nay", icon: Sun, exact: true },
+  { href: A, label: "Hôm nay", icon: Sun, exact: true, badge: true },
   { href: `${A}/hoi-tim`, label: "Hỏi", icon: MessagesSquare },
-  { href: `${A}/viec-can-duyet`, label: "Việc cần duyệt", icon: Inbox, badge: true },
   { href: `${A}/kho-nguon`, label: "Kho", icon: Database },
 ]
 const MORE = [
-  { href: `${A}/boi-canh`, label: "Kế hoạch và bối cảnh", icon: Compass },
   { href: `${A}/cuoc-goi`, label: "Cuộc gọi", icon: Phone },
   { href: `${A}/ban-do`, label: "Bản đồ vận hành", icon: Network },
-  { href: `${A}/kho-nguon/du-an`, label: "Nguồn tự động (Lark, mail)", icon: Atom },
   { href: `${A}/nang-cao`, label: "Nâng cao", icon: Settings2 },
 ]
 
@@ -37,9 +34,8 @@ export default function ArgonLayout({ children }: { children: React.ReactNode })
     return () => document.removeEventListener("mousedown", off)
   }, [open])
 
-  // Mục "Thêm" đang mở: chọn mục khớp DÀI NHẤT (kho-nguon/du-an dài hơn kho-nguon nhưng kho-nguon là tab chính nên phải loại trừ).
   const moreActive = [...MORE].sort((a, b) => b.href.length - a.href.length).find(m => path === m.href || path.startsWith(`${m.href}/`)) ?? null
-  const tabOn = (t: (typeof TABS)[number]) => !moreActive && (t.exact ? path === t.href : path.startsWith(t.href))
+  const tabOn = (t: (typeof TABS)[number]) => !moreActive && (t.exact ? path === t.href : path.startsWith(t.href))   // trang cũ /viec-can-duyet, /boi-canh chuyển hướng về Hôm nay
   return (
     <div>
       <nav aria-label="Trợ lý" className="max-w-[1700px] mx-auto px-4 pt-3">
