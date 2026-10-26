@@ -25,7 +25,7 @@ Anh lưu tài liệu/thread/mail trên Lark (Drive, Wiki, Base); bot vào đọc
 | P0a | Dọn Supabase: bỏ `lark_cs_tickets`, `b2b_customers_cache`; log cũ sang Turso | 1–2 ngày | **XONG (s240, đã merge, v80 đã chạy)** |
 | P0b | `notify({loại, tiêu đề, nội dung, link, ưu tiên})` chuẩn hoá DM, đầu tin `[Loại · Nguồn] Tiêu đề — ngày`, gom tin, giờ yên lặng (thay ~21 chỗ `sendLarkDM`) | 0,5–1 ngày | **XONG (s241, staging)** |
 | P1 | Sổ sự việc v2 (hai trục thời gian, chủ thể–thuộc tính, thay thế, "Thay đổi hôm nay"); sổ trạng thái mail theo thread | 1 tuần | chưa làm |
-| P2 | Graph-lite cho Kho; ghi ra Lark Base + Wiki theo vendor (một chiều); tự tổng hợp thread | 1–2 tuần | chưa làm |
+| P2 | Graph-lite cho Kho; ghi ra Lark Base + Wiki theo vendor (một chiều); tự tổng hợp thread | 1–2 tuần | **XONG phần lõi (s241c, staging)**: graph + hồ sơ vendor ra Lark Doc; chưa: Lark Base có cột Duyệt |
 | P3 | Gộp Gấu Pro + Argon thành "Trợ lý", 4 màn giao diện | 2 tuần | chưa làm |
 | P4 | Kỹ năng ứng viên + eval + duyệt; siết thao tác máy | 1–2 tuần | chưa làm |
 Còn trong danh sách dọn Supabase (cần Hiếu quyết riêng vì thuộc catalog): `listings` ~62MB, `ncc_worldmove` ~17MB, `skus` ~16MB, `sku_catalog` ~10MB, `argon_source_versions` ~9MB (giữ 3 bản gần nhất).
