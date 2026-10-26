@@ -33,3 +33,13 @@ describe("agent-loop — stopWhen (P3c: Argon dừng ngay sau khi hỏi người
     expect(loop.last.finishReason).toBe("MAX_TOKENS")
   })
 })
+
+import { flagValueOn } from "@/lib/argon/core-loop-flag"
+describe("cờ argon_core_loop", () => {
+  it('"1" bật mọi nơi; "preview" chỉ bật ngoài production; khác → tắt', () => {
+    expect(flagValueOn("1", "production")).toBe(true)
+    expect(flagValueOn("preview", "preview")).toBe(true)
+    expect(flagValueOn("preview", "production")).toBe(false)
+    expect(flagValueOn("0", "preview")).toBe(false); expect(flagValueOn(undefined, "preview")).toBe(false); expect(flagValueOn("true", "preview")).toBe(false)
+  })
+})

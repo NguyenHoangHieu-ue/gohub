@@ -13,6 +13,7 @@ import { SQL_TOOL, SQL_TOOL_NAME } from "./sql-tool"
 import { KHO_TOOLS, execKhoTool } from "./kho-tools"
 import { createRunTrace } from "@/lib/agent-events"
 import { runAgentLoop } from "@/lib/agents/core/agent-loop"
+import { flagValueOn } from "./core-loop-flag"
 
 // Lõi chạy 1 ĐOẠN của Phòng Argon, dùng chung cho SSE (runs/route.ts) và worker việc nền (worker/route.ts).
 // Hết ngân sách thời gian đoạn → status "partial" (câu trả lời dở được lưu, đoạn sau viết tiếp). Có công cụ → vòng gọi công cụ ngay trong đoạn.
@@ -165,12 +166,12 @@ async function runSegmentLegacy(i: SegmentIn): Promise<SegmentOut> {
 }
 
 // ── Vòng lặp lõi chung (P3c): Argon chạy trên CÙNG `runAgentLoop` với Bé Gấu/Gấu Pro (retry lỗi tạm thời, theo dõi token, sự kiện Bản đồ, dừng giữa chừng).
-// Công cụ vẫn chạy TUẦN TỰ qua hàng đợi (các hạn mức run_code/sql/số liệu tính theo log nên không được chạy song song). Bật bằng app_settings `argon_core_loop` = "1".
+// Công cụ vẫn chạy TUẦN TỰ qua hàng đợi (các hạn mức run_code/sql/số liệu tính theo log nên không được chạy song song). Bật bằng app_settings `argon_core_loop` = "1" (mọi nơi) hoặc "preview" (chỉ staging).
 let flagMemo: { v: boolean; at: number } | null = null
 export async function coreLoopOn(): Promise<boolean> {
   if (flagMemo && Date.now() - flagMemo.at < 30_000) return flagMemo.v
   let v = false
-  try { const { data } = await (await import("@/lib/supabase")).supabaseAdmin.from("app_settings").select("value").eq("key", "argon_core_loop").maybeSingle(); v = data?.value === "1" } catch { /* mặc định tắt */ }
+  try { const { data } = await (await import("@/lib/supabase")).supabaseAdmin.from("app_settings").select("value").eq("key", "argon_core_loop").maybeSingle(); v = flagValueOn(data?.value) } catch { /* mặc định tắt */ }
   flagMemo = { v, at: Date.now() }
   return v
 }
