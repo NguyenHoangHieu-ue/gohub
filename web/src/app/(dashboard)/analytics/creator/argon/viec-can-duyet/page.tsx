@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { AlertTriangle, CheckCircle2, Inbox, Loader2 } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Inbox, Loader2, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { bucketThreads, waitingDays, type MailThreadRow, type MailThreadStatus } from "@/lib/argon/mail-status-pure"
 import { KIND_LABEL, type InboxItem, type InboxKind } from "@/lib/assistant/inbox-pure"
 import { api, jsonInit } from "../argon-types"
 
@@ -29,11 +30,22 @@ export default function ViecCanDuyetPage() {
   const [err, setErr] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [skills, setSkills] = useState<SkillRow[]>([])
+  const [mail, setMail] = useState<{ rows: MailThreadRow[]; now: number } | null>(null)
+  const [mailBusy, setMailBusy] = useState(false)
 
   useEffect(() => { if (status === "authenticated" && role && role !== "creator") router.push("/chatbot") }, [status, role, router])
   const load = useCallback(async () => { try { setData(await api<Inbox>("/api/creator/assistant/inbox")); setErr(null) } catch (e) { setErr((e as Error).message) } }, [])
   const loadSkills = useCallback(async () => { try { setSkills((await api<{ skills: SkillRow[] }>("/api/creator/assistant/skills")).skills.filter(s => s.versions.some(v => v.state === "approved" || v.state === "retired"))) } catch { /* mục phụ: lỗi không chặn danh sách chính */ } }, [])
-  useEffect(() => { if (role === "creator") { void load(); void loadSkills() } }, [role, load, loadSkills])
+  const loadMail = useCallback(async () => { try { const m = await api<{ threads: MailThreadRow[]; now: number }>("/api/creator/argon/mail-status"); setMail({ rows: m.threads, now: m.now }) } catch { /* mục phụ */ } }, [])
+  useEffect(() => { if (role === "creator") { void load(); void loadSkills(); void loadMail() } }, [role, load, loadSkills, loadMail])
+  async function setThread(id: string, st: MailThreadStatus) {
+    setMail(m => (m ? { ...m, rows: m.rows.map(r => (r.id === id ? { ...r, status: st, status_by: "manual" } : r)) } : m))
+    try { await api("/api/creator/argon/mail-status", jsonInit("PATCH", { id, status: st })) } catch (e) { setErr((e as Error).message); await loadMail() }
+  }
+  async function rescanMail() {
+    setMailBusy(true)
+    try { await api("/api/creator/argon/mail-status", jsonInit("POST", {})); await Promise.all([loadMail(), load()]) } catch (e) { setErr((e as Error).message) } finally { setMailBusy(false) }
+  }
   async function skillAct(name: string, v: number, action: "rollback" | "retire") {
     setBusy(`skill:${name}:${v}`); setNote(null)
     try { await api("/api/creator/assistant/skills", jsonInit("POST", { name, v, action })); setNote(action === "rollback" ? `Đã quay lại phiên bản ${v} của "${name}".` : `Đã gỡ "${name}" khỏi prompt.`); await loadSkills() } catch (e) { setErr((e as Error).message) } finally { setBusy(null) }
@@ -72,6 +84,8 @@ export default function ViecCanDuyetPage() {
 
   if (role !== "creator") return null
   const items = (data?.items ?? []).filter(i => kind === "all" || i.kind === kind)
+  const partner = mail ? bucketThreads(mail.rows).waitingPartner : []
+  const mailNow = mail?.now ?? Date.now()
   const counts = (k: InboxKind) => (data?.items ?? []).filter(i => i.kind === k).length
 
   return (
@@ -119,6 +133,31 @@ export default function ViecCanDuyetPage() {
             ))}
           </ul>
         )}
+
+      <section className="pt-4 space-y-2" aria-label="Mail chờ đối tác">
+        <div className="flex items-center gap-2">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Mail anh đã gửi, đang chờ đối tác ({partner.length})</h2>
+          <button type="button" onClick={() => void rescanMail()} disabled={mailBusy} className="ml-auto inline-flex items-center gap-1 text-[12px] text-violet-700 dark:text-violet-300 hover:underline disabled:opacity-50">
+            {mailBusy ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}Quét lại mail
+          </button>
+        </div>
+        {partner.length === 0 ? <p className="text-[12.5px] text-gray-500">Không có luồng nào đang chờ. Đêm nay Argon quét INBOX và SENT (chỉ đọc), hoặc bấm Quét lại mail.</p> : (
+          <ul className="space-y-2">
+            {partner.slice(0, 8).map(r => (
+              <li key={r.id} className="text-[13px] leading-snug rounded-xl border border-gray-200 dark:border-slate-700 p-2.5">
+                <b>{r.subject || "(không tiêu đề)"}</b>
+                <span className="ml-1.5 text-[11.5px] text-gray-500">{r.counterparty.replace(/<[^>]*>/g, "").trim()} · {waitingDays(r, mailNow)} ngày</span>
+                {(r.next_action || r.summary) && <div className="text-[12px] text-gray-600 dark:text-slate-300">{r.next_action ? `Việc: ${r.next_action}` : r.summary}</div>}
+                <div className="mt-0.5 flex gap-3 text-[12px]">
+                  <button type="button" onClick={() => void setThread(r.id, "done")} className="font-medium text-emerald-700 hover:underline">Xong</button>
+                  <button type="button" onClick={() => void setThread(r.id, "ignored")} className="text-gray-500 hover:text-red-600">Bỏ qua</button>
+                </div>
+              </li>
+            ))}
+            {partner.length > 8 && <li className="text-[12px] text-gray-400">… và {partner.length - 8} luồng nữa</li>}
+          </ul>
+        )}
+      </section>
 
       {skills.length > 0 && (
         <section className="pt-4 space-y-2" aria-label="Kỹ năng đã học">
