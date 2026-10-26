@@ -21,10 +21,20 @@ export function KhoGraph({ onOpenSource, onError }: { onOpenSource: (id: string)
   const [pub, setPub] = useState<Pub | null>(null)
   const [pubBusy, setPubBusy] = useState(false)
   const [pubMsg, setPubMsg] = useState("")
+  const [fillBusy, setFillBusy] = useState(false)
+  const [fillMsg, setFillMsg] = useState("")
 
   useEffect(() => { api<Pub>("/api/creator/argon/publish").then(setPub).catch(() => undefined) }, [])
   async function togglePub(enabled: boolean) {
     try { await api("/api/creator/argon/publish", jsonInit("PUT", { enabled })); setPub(p => (p ? { ...p, enabled } : p)) } catch (e) { onError((e as Error).message) }
+  }
+  async function backfill() {
+    setFillBusy(true); setFillMsg("")
+    try {
+      const r = await api<{ done: number; remaining: number; entities: number; errors: string[] }>("/api/creator/argon/graph", jsonInit("POST", {}))
+      setFillMsg(`Đã bù ${r.done} nguồn, còn ${r.remaining}. Hiện có ${r.entities} thực thể.${r.errors.length ? ` Lỗi: ${r.errors[0]}` : ""}`)
+      setList((await api<{ entities: Item[] }>("/api/creator/argon/graph")).entities)
+    } catch (e) { onError((e as Error).message) } finally { setFillBusy(false) }
   }
   async function publishNow() {
     setPubBusy(true); setPubMsg("")
@@ -92,6 +102,10 @@ export function KhoGraph({ onOpenSource, onError }: { onOpenSource: (id: string)
           <button key={k} type="button" onClick={() => setKind(k as EntityKind | "all")} className={cn("px-2 py-1 rounded-lg border", kind === k ? "border-violet-500 bg-violet-50 dark:bg-violet-900/30 font-medium" : "border-gray-200 dark:border-slate-700")}>
             {k === "all" ? `Tất cả (${list.length})` : `${ENTITY_KINDS[k as EntityKind]} (${list.filter(e => e.kind === k).length})`}
           </button>))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-[11.5px] text-gray-500">
+        <button type="button" onClick={() => void backfill()} disabled={fillBusy} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-300 dark:border-slate-600 disabled:opacity-50">{fillBusy && <Loader2 size={11} className="animate-spin" />}Bù thực thể cho nguồn cũ</button>
+        {fillMsg && <span>{fillMsg}</span>}
       </div>
       {loading && <div className="text-xs text-gray-400"><Loader2 size={12} className="inline animate-spin" /> Đang tải…</div>}
       {!list.length && <div className="text-xs text-gray-400 py-6 text-center leading-relaxed">Chưa có thực thể nào. Argon tự trích khi tóm tắt tài liệu, thread, mail (nguồn cũ được bù dần mỗi đêm).</div>}
