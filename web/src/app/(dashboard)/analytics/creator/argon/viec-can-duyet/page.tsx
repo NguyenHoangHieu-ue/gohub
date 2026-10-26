@@ -61,6 +61,7 @@ export default function ViecCanDuyetPage() {
       }
       setData(d => (d ? { ...d, items: d.items.filter(x => x.key !== it.key) } : d))
       void load()
+      if (it.kind === "skill_candidate") void loadSkills()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(null) }
   }
 
