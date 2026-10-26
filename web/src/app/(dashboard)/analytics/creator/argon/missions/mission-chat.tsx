@@ -1,7 +1,7 @@
 "use client"
 
 import { Fragment, memo, useCallback, useEffect, useRef, useState } from "react"
-import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Pause, Play, RotateCcw, Rocket, Send, Square, Zap } from "lucide-react"
+import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Pause, Play, RotateCcw, Rocket, Send, Square, ThumbsDown, ThumbsUp, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
@@ -101,6 +101,11 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   async function decidePatch(id: string, action: "approve" | "reject") {
     setPatchBusy(id)
     try { await onPatch(id, action) } catch (e) { onError((e as Error).message) } finally { setPatchBusy(null) }
+  }
+  const [rated, setRated] = useState<Record<string, 1 | -1>>({})
+  async function rate(runId: string, question: string, answer: string, rating: 1 | -1) {
+    setRated(m => ({ ...m, [runId]: rating }))
+    try { await fetch("/api/chat/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agentId: "argon", question, answer, rating }) }) } catch { /* phản hồi lỗi không ảnh hưởng chat */ }
   }
   const endRef = useRef<HTMLDivElement>(null)
   const lastStep = runner.steps.length ? stepLabel(runner.steps[runner.steps.length - 1]) : null   // bước công cụ mới nhất, để biết Argon đang làm gì khi chưa có chữ
@@ -205,6 +210,12 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
                   <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-gray-500">
                     {live && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 text-violet-700 dark:text-violet-200"><Loader2 size={11} className="animate-spin" />{bgLive ? (r.status === "queued" ? "chạy nền · chờ đoạn kế" : `chạy nền · đoạn ${r.segments + 1}`) : "đang chạy"}</span>}
                     {bgLive && <button type="button" onClick={() => runner.cancelBg(r.id)} className="inline-flex items-center gap-1 text-red-600 hover:underline"><Square size={10} />Dừng việc nền</button>}
+                    {r.answer && r.status === "done" && !live && (
+                      <span className="inline-flex items-center gap-0.5" role="group" aria-label="Đánh giá câu trả lời">
+                        <button type="button" onClick={() => void rate(r.id, r.prompt, r.answer, 1)} aria-label="Trả lời tốt" aria-pressed={rated[r.id] === 1} className={cn("rounded p-1 hover:bg-emerald-50 dark:hover:bg-emerald-950/40", rated[r.id] === 1 ? "text-emerald-600" : "text-gray-400")}><ThumbsUp size={12} /></button>
+                        <button type="button" onClick={() => void rate(r.id, r.prompt, r.answer, -1)} aria-label="Trả lời chưa tốt" aria-pressed={rated[r.id] === -1} className={cn("rounded p-1 hover:bg-red-50 dark:hover:bg-red-950/40", rated[r.id] === -1 ? "text-red-600" : "text-gray-400")}><ThumbsDown size={12} /></button>
+                      </span>
+                    )}
                     {r.model && <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-slate-700 px-2 py-0.5">{/flash/i.test(r.model) ? <><Zap size={10} />Nhanh</> : <><Brain size={10} />Sâu</>}</span>}
                     {r.tokens_in > 0 && <span>{fmtTokens(r.tokens_in)} vào · {fmtTokens(r.tokens_out)} ra · ~${r.cost_usd.toFixed(2)} · {Math.round(r.duration_ms / 1000)}s{r.segments > 1 ? ` · ${r.segments} đoạn` : ""}</span>}
                     {!live && r.status === "partial" && <button type="button" disabled={busy} onClick={() => runner.resume(r.id, opts)} className="inline-flex items-center gap-1 text-violet-600 font-medium"><Play size={11} />Tiếp tục viết</button>}

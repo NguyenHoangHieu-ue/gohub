@@ -9,7 +9,7 @@ describe("routeRun (router đường nhanh / đầy đủ)", () => {
     for (const q of ["Mail nào đang chờ tôi trả lời?", "Hôm nay có gì cần anh quyết?", "Tài liệu nào sắp hết hạn?", "Hạn chốt báo giá Thái Lan là khi nào?", "Ai là người phụ trách vendor Elite?", "Vendor nào mới ngừng bán gần đây?", "3HK nằm ở những nguồn nào trong Kho?"]) expect(fast(q), q).toBe("fast")
   })
   it("câu cần số liệu / tính toán / phân tích / soạn thảo đi đầy đủ", () => {
-    for (const q of ["Doanh thu Q4 so với kế hoạch thế nào?", "So sánh giá vốn Thái Lan giữa BC và WM", "Tại sao CM1 tuần này giảm?", "Tính %Datapool tháng 10", "Làm report doanh thu theo vendor", "Soạn mail trả lời Elite về báo giá", "Top 10 khách tháng này", "Kiểm tra số bán WM từ tháng 9"]) expect(fast(q), q).toBe("full")
+    for (const q of ["Doanh thu Q4 so với kế hoạch thế nào?", "So sánh giá vốn Thái Lan giữa BC và WM", "Tại sao CM1 tuần này giảm?", "Tính %Datapool tháng 10", "Làm report doanh thu theo vendor", "Soạn mail trả lời Elite về báo giá", "Top 10 khách tháng này", "Kiểm tra số bán WM từ tháng 9", "Ghi vào sổ sự việc: Aurora giảm giá UK còn 2.0 USD/GB", "Lưu giúp anh bảng so sánh này vào Kho", "Cập nhật hạn chót báo giá Nimbus", "Nhớ giúp anh là anh thích báo cáo ngắn", "Xoá sự việc sai về Zephyr đi"]) expect(fast(q), q).toBe("full")
   })
   it("mặc định ĐẦY ĐỦ khi không rõ; câu dài/nhiều dòng/việc tự động/Sâu/tiếp tục/suy luận cao luôn đầy đủ", () => {
     expect(fast("Em nghĩ sao về chuyện này")).toBe("full")

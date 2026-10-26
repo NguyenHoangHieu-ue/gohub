@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { SKILL_NAMES } from "./skills"
 import { lintSkill, type LintResult } from "./skill-lint"
 import { runSkillEval, type SkillEval } from "./skill-eval"
+import type { SkillGate } from "@/lib/argon/eval-checks"
 
 // Skill Gấu Pro TỰ HỌC — vòng đời có kiểm soát (P4, plan Trợ lý hợp nhất): Gấu Pro soạn bản nháp → trở thành ỨNG VIÊN (CHƯA nạp vào prompt) → kiểm tra tĩnh (skill-lint) +
 // nhận xét của model → Creator DUYỆT ở "Việc cần duyệt" → mới thành chính thức. Mỗi lần sửa là một PHIÊN BẢN mới (cũng phải duyệt), giữ lịch sử, quay lại bản trước được.
@@ -21,7 +22,7 @@ export type VersionState = "candidate" | "approved" | "rejected" | "retired"
 export interface SkillReview { clarity: number; risks: string[]; conflicts: string[]; testPrompts: string[]; at: string }
 export interface SkillVersion {
   v: number; state: VersionState; description: string; instructions: string; source: string; created_at: string; created_by: string
-  lint: LintResult; review?: SkillReview | null; eval?: SkillEval | null; decided_at?: string; decided_by?: string
+  lint: LintResult; review?: SkillReview | null; eval?: SkillEval | null; gate?: SkillGate | null; decided_at?: string; decided_by?: string
 }
 export interface SkillEntry { name: string; versions: SkillVersion[]; active: number | null }   // active = số phiên bản đang dùng (null = chưa có bản nào được duyệt)
 
@@ -64,6 +65,7 @@ export function decideSkill(reg: Registry, a: { name: string; v: number; action:
   if (a.action === "approve") {
     if (ver.state !== "candidate") return { error: "Chỉ duyệt được phiên bản đang chờ duyệt." }
     if (ver.lint.level === "block") return { error: `Skill bị chặn bởi kiểm tra tĩnh: ${ver.lint.findings.filter(f => f.level === "block").map(f => f.message).join("; ")}. Sửa nội dung rồi tạo lại.` }
+    if (ver.gate?.verdict === "regress") return { error: "Eval cổng cho thấy kỹ năng này làm Argon kém đi: " + ver.gate.reasons.join("; ") + ". Từ chối hoặc sửa rồi tạo bản mới." }
     next = { ...e, active: ver.v, versions: e.versions.map(s => s.v === ver.v ? mark(s, "approved") : s.v === e.active ? { ...s, state: "retired" as const } : s) }
   } else if (a.action === "reject") {
     if (ver.state !== "candidate") return { error: "Chỉ từ chối được phiên bản đang chờ duyệt." }

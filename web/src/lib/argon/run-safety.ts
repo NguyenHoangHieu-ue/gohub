@@ -12,9 +12,9 @@ import type { ToolLogEntry } from "./tools"
 export type Level = "L0" | "L1" | "L2" | "L3"
 export const TOOL_LEVELS: Readonly<Record<string, Level>> = {
   layDuLieuHeThong: "L0", sql: "L0", lietKeFile: "L0", docFile: "L0", traSuViec: "L0", traThucThe: "L0",
-  lietKeNguon: "L1", timTrongNguon: "L1", docNguon: "L1", traMail: "L1",
+  lietKeNguon: "L1", timTrongNguon: "L1", docNguon: "L1", traMail: "L1", docKyNang: "L0",
   ghiFile: "L2", ghiSuViec: "L2", capNhatSuViec: "L2", taoThuMuc: "L2", chuyenNguon: "L2", capNhatNguon: "L2", luuGhiChu: "L2", ghiDuDoan: "L2", chamDuDoan: "L2", run_code: "L2",
-  hoiHieu: "L3", deXuatSuaCode: "L3", deXuatGhiNho: "L3",
+  hoiHieu: "L3", deXuatSuaCode: "L3", deXuatGhiNho: "L3", deXuatKyNang: "L3",
 }
 export const levelOf = (name: string): Level | null => TOOL_LEVELS[name] ?? null
 
@@ -61,6 +61,7 @@ export function spotlight(tool: string, result: string, hits: string[]): string 
 export function gateWrite(tool: string, tainted: boolean): { mode: "run" | "review" | "deny"; note?: string } {
   if (!tainted) return { mode: "run" }
   if (tool === "ghiSuViec") return { mode: "review", note: "Ghi trong lượt đã đọc nội dung ngoài — cần anh xác nhận trước khi tin" }
+  if (tool === "deXuatKyNang") return { mode: "deny", note: "Lượt này đã đọc nội dung ngoài (mail/thread của người khác) nên không được đề xuất kỹ năng: kỹ năng được nạp vào mọi lượt sau, nội dung từ nguồn ngoài không được phép đi vào đó. Hãy đề xuất trong một lượt khác chỉ dựa trên điều anh Hiếu nói." }
   if (tool === "capNhatSuViec") return { mode: "deny", note: "Lượt này đã đọc nội dung ngoài (mail/thread/tài liệu của người khác) nên không tự sửa/bỏ sự việc đã có. Hãy hỏi anh Hiếu (hoiHieu) hoặc đề xuất để anh tự sửa ở Kho." }
   return { mode: "run" }
 }

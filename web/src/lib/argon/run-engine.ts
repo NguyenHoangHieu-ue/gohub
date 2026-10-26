@@ -60,7 +60,7 @@ function prepare(i: SegmentIn): Prepared {
   const dataTools = i.tools?.dataTools !== false
   const missionId = i.tools?.missionId
   const khoUser = i.tools?.khoUser   // sứ mệnh đọc toàn Kho: "full" (Thủ thư Kho) thêm công cụ xếp thư mục + sổ sự việc; "facts" (Tham mưu hằng ngày) chỉ tra sổ sự việc (kho-tools.ts)
-  const khoDecls = khoUser ? (i.tools?.khoMode === "full" ? KHO_TOOLS : KHO_TOOLS.filter(t => t.name === "traSuViec" || t.name === "traMail" || t.name === "traThucThe" || t.name === "deXuatGhiNho")) : []
+  const khoDecls = khoUser ? (i.tools?.khoMode === "full" ? KHO_TOOLS : KHO_TOOLS.filter(t => t.name === "traSuViec" || t.name === "traMail" || t.name === "traThucThe" || t.name === "deXuatGhiNho" || t.name === "docKyNang" || t.name === "deXuatKyNang")) : []
   const khoNames = new Set(khoDecls.map(t => t.name))
   const fast = !!i.tools?.fast && !!missionId
   const allDecls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? [...WS_TOOLS, SQL_TOOL, RUN_CODE_TOOL, ASK_TOOL, PATCH_TOOL, FORECAST_TOOL, SCORE_TOOL, ...SOURCE_TOOLS, ...khoDecls] : [])]

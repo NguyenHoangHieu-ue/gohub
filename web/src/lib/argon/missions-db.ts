@@ -180,7 +180,8 @@ export async function loadMissionContext(projectId: string, prompt?: string): Pr
     // Trợ lý tổng hợp (Tham mưu hằng ngày): nắm sẵn bối cảnh công ty và tác động/đề xuất mới nhất (các "cửa sổ" khác của Phòng Argon) để trả lời không phải đọc lại.
     const [boi, tac] = isKho ? [null, null] : await Promise.all([readFile(mission.id, BOI_CANH_PATH), readFile(mission.id, TAC_DONG_PATH)])
     const window = (tag: string, f: { content?: string | null } | null) => (f?.content?.trim() ? `<${tag}>\n${f.content.trim().slice(0, 4000)}\n</${tag}>` : "")
-    const extra = [window("boi_canh_hien_tai", boi), window("tac_dong_de_xuat_hien_tai", tac)].filter(Boolean).join("\n")
+    const skills = await import("@/lib/agents/creator/learned-skills").then(m => m.readLearnedSkills().then(l => m.learnedCatalog(l))).catch(() => "")
+    const extra = [window("boi_canh_hien_tai", boi), window("tac_dong_de_xuat_hien_tai", tac), skills.replace("gọi loadSkill để đọc", "gọi docKyNang để đọc")].filter(Boolean).join("\n")
     return { mission, block: `${base}\n${await khoIndexBlock(mission.username)}${extra ? `\n${extra}` : ""}${memory}`, instruction: `${phaseInstruction(mission.phase)}\n${isKho ? KHO_INSTRUCTION : `${CONTEXT_INSTRUCTION}\n${KHO_INSTRUCTION}`}` }
   }
   return { mission, block: `${base}${memory}`, instruction: phaseInstruction(mission.phase) }

@@ -18,6 +18,7 @@ import { loadPubState, publishProfiles } from "@/lib/argon/lark-publish"
 import { pruneEvents } from "@/lib/agent-events"
 import { argonUsernames, runFactsNightly } from "@/lib/argon/facts"
 import { runKpiWatch } from "@/lib/argon/kpi-watch"
+import { suggestSkill } from "@/lib/argon/skill-suggest"
 import { nudgeStaleThreads, syncMailStatus } from "@/lib/argon/mail-status"
 import type { ArgonSource } from "@/lib/argon/server"
 
@@ -109,6 +110,13 @@ async function run(req: NextRequest) {
     try { kpiWatch.push({ user, ...(await runKpiWatch(user, req.nextUrl.origin)) }) } catch (e) { kpiWatch.push({ user, error: (e as Error).message.slice(0, 160) }) }
   }
 
+  // ARGON-X P4: câu hỏi anh hỏi lặp ≥3 lần → Argon soạn nháp kỹ năng thành ỨNG VIÊN (chờ anh duyệt, qua cổng eval).
+  const skillSuggest: { user: string; note?: string; created?: string; error?: string }[] = []
+  for (const user of await argonUsernames().catch(() => [] as string[])) {
+    if (Date.now() - t0 > 275_000) { skillSuggest.push({ user, note: "hết giờ" }); continue }
+    try { skillSuggest.push({ user, ...(await suggestSkill(user, req.nextUrl.origin)) }) } catch (e) { skillSuggest.push({ user, error: (e as Error).message.slice(0, 160) }) }
+  }
+
   const larkPublish: { user: string; skipped?: string; profiles?: number; created?: number; updated?: number; same?: number; errors?: string[] }[] = []
   for (const user of await argonUsernames().catch(() => [] as string[])) {
     try {
@@ -142,6 +150,7 @@ async function run(req: NextRequest) {
     facts,
     mailStatus,
     kpiWatch,
+    skillSuggest,
     larkPublish,
     autorun,
     patrol,

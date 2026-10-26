@@ -7,6 +7,7 @@ import { FACT_TYPES, factLine } from "@/lib/argon/facts-pure"
 import { threadLine } from "@/lib/argon/mail-status-pure"
 import { candidates, readRegistry } from "@/lib/agents/creator/learned-skills"
 import { evalSummary } from "@/lib/agents/creator/skill-eval"
+import { gateSummary } from "@/lib/argon/eval-checks"
 import { sortInbox, urgencyFor, type InboxItem } from "./inbox-pure"
 
 export * from "./inbox-pure"
@@ -98,13 +99,13 @@ async function memoryItems(username: string, now: number): Promise<InboxItem[]> 
 
 async function skillItems(now: number): Promise<InboxItem[]> {
   return candidates(await readRegistry()).map(({ name, version: v, replaces }) => {
-    const notes = [...v.lint.findings.map(f => `${f.level === "block" ? "⛔" : "⚠"} ${f.message}`), ...(v.eval ? [evalSummary(v.eval)] : []), ...(v.review ? [`Model chấm độ rõ ${v.review.clarity}/5`, ...v.review.risks.map(r => `Rủi ro: ${r}`), ...v.review.conflicts.map(c => `Mâu thuẫn: ${c}`)] : [])]
+    const notes = [...v.lint.findings.map(f => `${f.level === "block" ? "⛔" : "⚠"} ${f.message}`), ...(v.eval ? [evalSummary(v.eval)] : []), ...(v.gate ? [(v.gate.verdict === "regress" ? "⛔ " : "✓ ") + gateSummary(v.gate)] : []), ...(v.review ? [`Model chấm độ rõ ${v.review.clarity}/5`, ...v.review.risks.map(r => `Rủi ro: ${r}`), ...v.review.conflicts.map(c => `Mâu thuẫn: ${c}`)] : [])]
     return {
       key: `skill_candidate:${name}@${v.v}`, kind: "skill_candidate" as const, id: `${name}@${v.v}`,
       title: `${replaces != null ? "Bản mới" : "Skill mới"} "${name}" (v${v.v})${replaces != null ? ` thay v${replaces}` : ""} — ${v.description}`.slice(0, 200),
       detail: `${notes.length ? notes.join(" · ") : "Kiểm tra tĩnh: không thấy vấn đề."}\n\nChỉ dẫn: ${v.instructions.slice(0, 700)}${v.instructions.length > 700 ? "…" : ""}`,
       at: v.created_at, urgency: urgencyFor("skill_candidate", v.created_at, now), source: `Gấu Pro${v.source ? ` · ${v.source.slice(0, 60)}` : ""}`,
-      actions: [...(v.lint.level === "block" ? ["reject"] : ["approve", "reject"]), ...(!v.eval && v.review?.testPrompts.length ? ["eval"] : [])] as InboxItem["actions"],
+      actions: [...(v.lint.level === "block" ? ["reject"] : v.gate?.verdict === "regress" ? ["reject"] : ["approve", "reject"]), ...(!v.eval && v.review?.testPrompts.length ? ["eval"] : []), ...(!v.gate && v.lint.level !== "block" ? ["gate"] : [])] as InboxItem["actions"],
     }
   })
 }
