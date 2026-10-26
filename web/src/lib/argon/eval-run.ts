@@ -12,6 +12,7 @@ import { runSegment } from "./run-engine"
 import { MAX_OUT, SEGMENT_MS, loadRunMaterial } from "./bg-worker"
 import { loadMissionContext } from "./missions-db"
 import { routeRun } from "./run-route"
+import { MEMBER_NOTE } from "./access-pure"
 import { costOf, resolveModel } from "./models"
 import { usesKhoScope } from "./context-instruction"
 import { listNotices } from "./run-safety"
@@ -90,6 +91,7 @@ export async function evalRun(b: EvalRunIn, origin: string): Promise<EvalRunOut>
   const mctx = base && b.skill
     ? { ...base, block: `${base.block}\n<ky_nang_dang_thu ten="${b.skill.name.replace(/"/g, "'")}">\n${b.skill.instructions}\n</ky_nang_dang_thu>\n(Kỹ năng trên là chỉ dẫn cách làm việc đang được thử; áp dụng khi phù hợp với câu hỏi.)` }
     : base
+  if (b.member && mctx) mctx.instruction += `\n${MEMBER_NOTE}`
   const ctx = await buildRunContext({ project: mat.project, sources: mat.sources, priorRuns: [], prompt, allowTools: false, toolLog: [], mission: mctx ?? undefined })
   const log: ToolLogEntry[] = []
   let answer = ""

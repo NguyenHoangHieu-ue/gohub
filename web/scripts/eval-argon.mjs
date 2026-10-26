@@ -20,9 +20,11 @@ const OUT = path.join(ROOT, "eval/results")
 const { cases } = JSON.parse(fs.readFileSync(path.join(ROOT, "eval/argon-cases.json"), "utf8"))
 const ONLY = arg("only")?.split(",")
 
-const api = async (body, timeoutMs = 280_000) => {
-  const res = await fetch(`${BASE}/api/admin/eval/argon`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${env.CRON_SECRET}` }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) })
-  const d = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+const api = async (body, timeoutMs = 280_000, retry = true) => {
+  let res = await fetch(`${BASE}/api/admin/eval/argon`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${env.CRON_SECRET}` }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) })
+  let d = await res.json().catch(() => null)
+  if (!d && res.status >= 500 && retry) return api(body, timeoutMs, false)   // 5xx không phải JSON = lỗi nền tảng thoáng qua (đã gặp 1 lần): thử lại một lần
+  d ??= { error: `HTTP ${res.status}` }
   if (!res.ok || d.error) throw new Error(d.error || `HTTP ${res.status}`)
   return d
 }

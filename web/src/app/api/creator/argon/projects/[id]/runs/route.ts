@@ -13,6 +13,7 @@ import { clearPendingAsk } from "@/lib/argon/ask-tool"
 import { KHO_MISSION_NAME } from "@/lib/argon/kho"
 import { usesKhoScope } from "@/lib/argon/context-instruction"
 import { routeRun } from "@/lib/argon/run-route"
+import { MEMBER_NOTE } from "@/lib/argon/access-pure"
 import { argonLevel, checkMemberLimit, requireArgonMemberName } from "@/lib/argon/access"
 
 export const dynamic = "force-dynamic"
@@ -87,6 +88,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const mat = await loadRunMaterial(project, pick, req.nextUrl.origin)
   const toolLog = resume ? await getToolLog(resume.id) : []
   const mctx = project.kind === "mission" ? await loadMissionContext(project.id, prompt) : null
+  if (member && mctx) mctx.instruction += `\n${MEMBER_NOTE}`   // P5: nói rõ giới hạn của thành viên thay vì để model tự tìm đường vòng
   const ctx = await buildRunContext({ project: mat.project, sources: mat.sources, priorRuns: runs, prompt: withTpl(prompt), resumeRun: resume ? { ...resume, prompt: withTpl(resume.prompt) } : undefined, allowTools, toolLog, mission: mctx ?? undefined })
   ctx.warnings.push(...mat.warnings)
   const t0 = Date.now()
