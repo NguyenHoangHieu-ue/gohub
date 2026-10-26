@@ -1,6 +1,6 @@
 // "Việc cần duyệt" của Trợ lý: gom MỌI thứ đang chờ anh (hành động Gấu Pro, câu hỏi/đề xuất sửa code của Argon, thay đổi sự việc, mail chờ trả lời, phiếu dev hỏi lại)
 // vào MỘT danh sách. Phần THUẦN — kiểu, xếp thứ tự, đếm. Không I/O.
-export type InboxKind = "gp_action" | "argon_patch" | "argon_ask" | "fact_review" | "mail" | "dev_ticket"
+export type InboxKind = "gp_action" | "argon_patch" | "argon_ask" | "fact_review" | "mail" | "dev_ticket" | "skill_candidate"
 export type InboxAction = "approve" | "reject" | "confirm" | "done" | "open"
 
 export interface InboxItem {
@@ -18,7 +18,7 @@ export interface InboxItem {
 }
 
 export const KIND_LABEL: Record<InboxKind, string> = {
-  gp_action: "Hành động chờ duyệt", argon_patch: "Đề xuất sửa code", argon_ask: "Argon hỏi anh", fact_review: "Thay đổi sự việc", mail: "Mail chờ trả lời", dev_ticket: "Phiếu sửa code hỏi lại",
+  gp_action: "Hành động chờ duyệt", argon_patch: "Đề xuất sửa code", argon_ask: "Argon hỏi anh", fact_review: "Thay đổi sự việc", mail: "Mail chờ trả lời", dev_ticket: "Phiếu sửa code hỏi lại", skill_candidate: "Kỹ năng ứng viên",
 }
 
 /** Việc gấp trước, trong cùng mức thì cũ nhất trước (chờ lâu nhất). */
@@ -27,7 +27,7 @@ export function sortInbox(items: InboxItem[]): InboxItem[] {
 }
 
 export function countByKind(items: InboxItem[]): Record<InboxKind, number> {
-  const out = { gp_action: 0, argon_patch: 0, argon_ask: 0, fact_review: 0, mail: 0, dev_ticket: 0 } as Record<InboxKind, number>
+  const out = { gp_action: 0, argon_patch: 0, argon_ask: 0, fact_review: 0, mail: 0, dev_ticket: 0, skill_candidate: 0 } as Record<InboxKind, number>
   for (const i of items) out[i.kind]++
   return out
 }
@@ -36,6 +36,6 @@ export function countByKind(items: InboxItem[]): Record<InboxKind, number> {
 export function urgencyFor(kind: InboxKind, at: string, now = Date.now()): 1 | 2 | 3 {
   const ageH = Math.max(0, (now - Date.parse(at)) / 3_600_000)
   if (kind === "gp_action") return ageH >= 12 ? 3 : 2
-  if (kind === "argon_ask" || kind === "dev_ticket") return ageH >= 24 ? 3 : 2
+  if (kind === "argon_ask" || kind === "dev_ticket" || kind === "skill_candidate") return ageH >= 24 ? 3 : 2
   return ageH >= 48 ? 3 : ageH >= 12 ? 2 : 1
 }

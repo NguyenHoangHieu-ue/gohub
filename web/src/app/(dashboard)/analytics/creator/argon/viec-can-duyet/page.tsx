@@ -15,6 +15,9 @@ interface Inbox { items: InboxItem[]; byKind: Record<InboxKind, number>; failed:
 const URG = { 3: "bg-red-500", 2: "bg-amber-500", 1: "bg-gray-300 dark:bg-slate-600" } as const
 const ago = (at: string, now: number) => { const h = Math.max(0, Math.round((now - Date.parse(at)) / 3_600_000)); return h < 1 ? "vừa xong" : h < 48 ? `${h} giờ trước` : `${Math.round(h / 24)} ngày trước` }
 const btn = "px-2.5 py-1 text-[12px] rounded-lg border"
+interface SkillVer { v: number; state: "candidate" | "approved" | "rejected" | "retired"; description: string; created_at: string; lint: { level: string } }
+interface SkillRow { name: string; active: number | null; versions: SkillVer[] }
+const STATE_VN = { candidate: "chờ duyệt", approved: "đang dùng", rejected: "đã từ chối", retired: "bản cũ" } as const
 
 export default function ViecCanDuyetPage() {
   const { data: session, status } = useSession()
@@ -25,10 +28,16 @@ export default function ViecCanDuyetPage() {
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [skills, setSkills] = useState<SkillRow[]>([])
 
   useEffect(() => { if (status === "authenticated" && role && role !== "creator") router.push("/chatbot") }, [status, role, router])
   const load = useCallback(async () => { try { setData(await api<Inbox>("/api/creator/assistant/inbox")); setErr(null) } catch (e) { setErr((e as Error).message) } }, [])
-  useEffect(() => { if (role === "creator") void load() }, [role, load])
+  const loadSkills = useCallback(async () => { try { setSkills((await api<{ skills: SkillRow[] }>("/api/creator/assistant/skills")).skills.filter(s => s.versions.some(v => v.state === "approved" || v.state === "retired"))) } catch { /* mục phụ: lỗi không chặn danh sách chính */ } }, [])
+  useEffect(() => { if (role === "creator") { void load(); void loadSkills() } }, [role, load, loadSkills])
+  async function skillAct(name: string, v: number, action: "rollback" | "retire") {
+    setBusy(`skill:${name}:${v}`); setNote(null)
+    try { await api("/api/creator/assistant/skills", jsonInit("POST", { name, v, action })); setNote(action === "rollback" ? `Đã quay lại phiên bản ${v} của "${name}".` : `Đã gỡ "${name}" khỏi prompt.`); await loadSkills() } catch (e) { setErr((e as Error).message) } finally { setBusy(null) }
+  }
 
   async function act(it: InboxItem, action: "approve" | "reject" | "confirm" | "done") {
     setBusy(`${it.key}:${action}`); setNote(null)
@@ -43,6 +52,10 @@ export default function ViecCanDuyetPage() {
       } else if (it.kind === "fact_review") {
         await api("/api/creator/argon/facts", jsonInit("PATCH", action === "confirm" ? { id: it.id, confirm: true } : { id: it.id, status: "rejected" }))
         setNote(action === "confirm" ? "Đã xác nhận thay đổi." : "Đã bỏ thay đổi, giữ tin cũ.")
+      } else if (it.kind === "skill_candidate") {
+        const [name, v] = it.id.split("@")
+        await api("/api/creator/assistant/skills", jsonInit("POST", { name, v: Number(v), action: action === "approve" ? "approve" : "reject" }))
+        setNote(action === "approve" ? "Đã duyệt — skill bắt đầu dùng được từ lượt chat sau của Gấu Pro." : "Đã từ chối skill.")
       } else if (it.kind === "mail") {
         await api("/api/creator/argon/mail-status", jsonInit("PATCH", { id: it.id, status: "done" }))
       }
@@ -86,7 +99,7 @@ export default function ViecCanDuyetPage() {
                     <span className="font-medium text-gray-700 dark:text-slate-300">{KIND_LABEL[it.kind]}</span><span>· {it.source}</span><span>· {ago(it.at, data.now)}</span>
                   </div>
                   <div className="text-[14px] font-medium text-gray-900 dark:text-slate-100 break-words">{it.title}</div>
-                  {it.detail && <div className="text-[12.5px] leading-snug text-gray-600 dark:text-slate-300 break-words">{it.detail}</div>}
+                  {it.detail && <div className="text-[12.5px] leading-snug text-gray-600 dark:text-slate-300 break-words whitespace-pre-line">{it.detail}</div>}
                   <div className="flex flex-wrap gap-2 pt-1">
                     {it.actions.includes("approve") && <button type="button" disabled={!!busy} onClick={() => void act(it, "approve")} className={cn(btn, "bg-emerald-600 text-white border-emerald-600 disabled:opacity-50")}>{busy === `${it.key}:approve` ? "Đang chạy…" : "Duyệt"}</button>}
                     {it.actions.includes("confirm") && <button type="button" disabled={!!busy} onClick={() => void act(it, "confirm")} className={cn(btn, "bg-emerald-600 text-white border-emerald-600 disabled:opacity-50")}>Đúng, xác nhận</button>}
@@ -99,6 +112,24 @@ export default function ViecCanDuyetPage() {
             ))}
           </ul>
         )}
+
+      {skills.length > 0 && (
+        <section className="pt-4 space-y-2" aria-label="Kỹ năng đã học">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Kỹ năng Gấu Pro đã học ({skills.length})</h2>
+          {skills.map(s => (
+            <div key={s.name} className="rounded-xl border border-gray-200 dark:border-slate-700 p-3 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2 text-[13px]"><b>{s.name}</b><span className="text-gray-500">{s.active != null ? `đang dùng v${s.active}` : "đang tắt"}</span>
+                {s.active != null && <button type="button" disabled={!!busy} onClick={() => void skillAct(s.name, s.active!, "retire")} className="ml-auto text-[12px] text-gray-500 hover:text-red-600">Gỡ khỏi prompt</button>}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {s.versions.filter(v => v.state === "approved" || v.state === "retired").map(v => (
+                  <span key={v.v} className="inline-flex items-center gap-1.5 text-[12px] rounded-lg border border-gray-200 dark:border-slate-700 px-2 py-1" title={v.description}>
+                    v{v.v} · {STATE_VN[v.state]}{v.created_at ? ` · ${new Date(v.created_at).toLocaleDateString("vi-VN")}` : ""}
+                    {v.v !== s.active && <button type="button" disabled={!!busy} onClick={() => void skillAct(s.name, v.v, "rollback")} className="text-violet-700 dark:text-violet-300 hover:underline">Dùng bản này</button>}
+                  </span>))}
+              </div>
+            </div>))}
+        </section>
+      )}
     </div>
   )
 }

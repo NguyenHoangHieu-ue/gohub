@@ -72,8 +72,8 @@ function ruleFor(name: string, args: any): Rule {
       return args?.chat_id === "me" && !args?.lark_id ? "when_tainted" : "always"
     case "devTicket":
       return action === "create" ? "always" : action === "answer" || action === "cancel" ? "when_tainted" : "never"
-    case "learnSkill":
-      return action === "list" ? "never" : "always"
+    case "learnSkill":   // create chỉ tạo ỨNG VIÊN (không nạp vào prompt cho tới khi Hiếu duyệt ở Việc cần duyệt, có kiểm tra tĩnh) → không cần duyệt lần nữa; xoá skill đang dùng vẫn LUÔN hỏi
+      return action === "delete" ? "always" : "never"
     case "createLarkTask": case "updateLarkTask":
     case "writeKnowledgeBase": case "approveLearning": case "rejectLearning":
     case "generateImage": case "generateVideo":
