@@ -14,8 +14,9 @@ vi.mock("@/lib/supabase", () => ({
 vi.mock("@/lib/lark", () => ({
   getLarkUserToken: async () => "user-token",
   getCreatorLarkOpenId: async () => "ou_creator",
-  sendLarkDM: (...a: unknown[]) => sendLarkDM(...a),
 }))
+// Nhắc việc đi qua notify() (đầu tin chuẩn); test kiểm nội dung body gửi đi.
+vi.mock("@/lib/notify", () => ({ notify: (to: string, n: { body?: string }) => sendLarkDM(to, n.body ?? "") }))
 vi.mock("@/lib/agents/creator/tools/lark", () => ({ runLarkTask: vi.fn() }))
 
 import { runTaskReminders } from "@/lib/task-assistant"
