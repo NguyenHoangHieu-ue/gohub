@@ -13,6 +13,7 @@ import { MAX_PATROLS_PER_NIGHT, missionIdsWithPatrol, startPatrol, vnDate } from
 import { missionIdsWithDueForecasts } from "@/lib/argon/forecast-tool"
 import { ensureIndexed, pruneOrphans } from "@/lib/argon/index-db"
 import { digestPending } from "@/lib/argon/kho-digest"
+import { pruneGraph } from "@/lib/argon/graph"
 import { pruneEvents } from "@/lib/agent-events"
 import { argonUsernames, runFactsNightly } from "@/lib/argon/facts"
 import { nudgeStaleThreads, syncMailStatus } from "@/lib/argon/mail-status"
@@ -68,6 +69,15 @@ async function run(req: NextRequest) {
     const { data: all } = await supabaseAdmin.from("argon_sources").select("id").eq("enabled", true)
     const ix = await ensureIndexed((all ?? []).map(r => r.id as string), { deadlineMs: Math.max(5_000, t0 + 190_000 - Date.now()), max: 400 })
     search = { ...ix, pruned: await pruneOrphans() }
+    // Graph: dọn theo MỌI nguồn còn tồn tại (kể cả đang tắt), đọc đủ trang vì PostgREST chỉ trả tối đa 1.000 dòng/lần — thiếu id sẽ xoá nhầm graph của nguồn còn sống.
+    const everyId: string[] = []
+    for (let from = 0; from < 20_000; from += 1000) {
+      const { data: page, error: pageErr } = await supabaseAdmin.from("argon_sources").select("id").order("id").range(from, from + 999)
+      if (pageErr) throw new Error(pageErr.message)
+      everyId.push(...(page ?? []).map(r => r.id as string))
+      if ((page?.length ?? 0) < 1000) break
+    }
+    await pruneGraph(everyId).catch(e => search.errors.push(`graph: ${(e as Error).message}`))
   } catch (e) { search.errors.push((e as Error).message) }
   await pruneEvents().catch(() => undefined)   // sự kiện Bản đồ vận hành giữ 3 ngày
   // Sổ sự việc: tóm tắt + trích sự việc có hạn từ nguồn mới (mail/thread/file chưa xử lý), rồi đánh dấu hết hạn, nhắc tới hạn và gửi 1 tin tóm tắt "đã ghi gì" cho Hiếu.

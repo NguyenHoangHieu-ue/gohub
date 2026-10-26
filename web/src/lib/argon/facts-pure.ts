@@ -49,7 +49,7 @@ export function normalizeFacts(raw: unknown): FactIn[] {
   return out
 }
 
-const fold = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+export const fold = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
 /** Khoá nhận diện "cùng một sự việc" giữa các nguồn: vendor + loại + đối tượng (không dấu, không phân biệt hoa thường). */
 export const factKey = (f: { vendor: string; type: string; subject: string; attribute?: string }) => `${fold(f.vendor)}|${f.type}|${fold(f.subject)}${f.attribute ? `|${fold(f.attribute)}` : ""}`
 

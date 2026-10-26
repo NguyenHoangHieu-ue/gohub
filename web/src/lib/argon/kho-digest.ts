@@ -1,6 +1,7 @@
 import { cleanFolderPath, ensureFolderPath, folderPathOf, listFolders, userProjectIds, type DigestMeta } from "./kho"
 import { saveSourceFacts, sourceDateOf, type FactRow } from "./facts"
 import { digestSource } from "./source-digest"
+import { saveSourceGraph } from "./graph"
 import type { ArgonSource } from "./server"
 
 const db = async () => (await import("@/lib/supabase")).supabaseAdmin
@@ -8,17 +9,21 @@ const db = async () => (await import("@/lib/supabase")).supabaseAdmin
 export interface DigestResult { id: string; digest: DigestMeta; folder_id: string | null; facts: FactRow[] }
 
 /** Tóm tắt 1 nguồn, (tuỳ chọn) tự xếp thư mục theo gợi ý, trích sự việc có hạn vào sổ. Lưu kết quả vào meta.digest / meta.tags. */
-export async function digestAndFile(username: string, s: ArgonSource & { folder_id?: string | null }, folderPaths: string[], autoFile: boolean): Promise<DigestResult> {
-  const { digest: d, facts } = await digestSource(s, folderPaths)
+export async function digestAndFile(username: string, s: ArgonSource & { folder_id?: string | null }, folderPaths: string[], autoFile: boolean, opts: { graphOnly?: boolean } = {}): Promise<DigestResult> {
+  const { digest: d, facts, entities, relations } = await digestSource(s, folderPaths)
   let folderId = s.folder_id ?? null
   if (autoFile && !folderId && d.folder) {
     const segs = cleanFolderPath(d.folder)
     if (segs.length) { folderId = await ensureFolderPath(username, segs.join("/")); d.autoFiled = segs.join("/") }
   }
   const hasTags = Array.isArray(s.meta?.tags) && (s.meta.tags as unknown[]).length > 0
-  const meta = { ...(s.meta ?? {}), digest: d, factsAt: d.at, ...(hasTags ? {} : { tags: d.tags ?? [] }) }
+  // Graph (Turso) lỗi không được làm hỏng việc tóm tắt: không đánh dấu graphAt thì đêm sau thử lại.
+  let graphAt: string | undefined
+  try { await saveSourceGraph(username, { id: s.id, name: s.name, date: sourceDateOf(s) }, entities, relations, d.summary ?? ""); graphAt = d.at } catch (e) { console.error("[argon graph]", (e as Error).message) }
+  const meta = { ...(s.meta ?? {}), digest: d, factsAt: d.at, ...(graphAt ? { graphAt } : {}), ...(hasTags ? {} : { tags: d.tags ?? [] }) }
   await (await db()).from("argon_sources").update({ meta, folder_id: folderId }).eq("id", s.id)
-  const saved = await saveSourceFacts(username, { id: s.id, name: s.name, date: sourceDateOf(s) }, facts)
+  // graphOnly: nguồn đã trích sự việc từ trước, chỉ bù graph — không trích lại (tránh báo "sự việc mới" lần nữa).
+  const saved = opts.graphOnly ? [] : await saveSourceFacts(username, { id: s.id, name: s.name, date: sourceDateOf(s) }, facts)
   return { id: s.id, digest: d, folder_id: folderId, facts: saved }
 }
 
@@ -34,12 +39,12 @@ export async function digestPending(username: string, max: number, deadline: num
     rows.push(...((data ?? []) as ArgonSource[]))
     if ((data?.length ?? 0) < 500) break
   }
-  const todo = rows.filter(s => !s.meta?.factsAt && ((s.extracted_text ?? "").trim() || s.send_binary))
+  const todo = rows.filter(s => (!s.meta?.factsAt || (!s.meta?.graphAt && !s.meta?.factsError)) && ((s.extracted_text ?? "").trim() || s.send_binary))
   const folders = await listFolders(username)
   const paths = Array.from(new Set(folders.map(f => folderPathOf(f.id, folders)))).filter(Boolean)
   for (const s of todo) {
     if (out.done >= max || Date.now() > deadline) { out.remaining++; continue }
-    try { await digestAndFile(username, s, paths, false); out.done++ } catch (e) { out.errors.push(`${s.name}: ${(e as Error).message}`.slice(0, 160)); await sb.from("argon_sources").update({ meta: { ...(s.meta ?? {}), factsAt: new Date().toISOString(), factsError: true } }).eq("id", s.id) }
+    try { await digestAndFile(username, s, paths, false, { graphOnly: !!s.meta?.factsAt }); out.done++ } catch (e) { out.errors.push(`${s.name}: ${(e as Error).message}`.slice(0, 160)); await sb.from("argon_sources").update({ meta: { ...(s.meta ?? {}), factsAt: new Date().toISOString(), factsError: true } }).eq("id", s.id) }
   }
   return out
 }

@@ -17,7 +17,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
   { id: "web", label: "Web, GA4, xu hướng", stores: ["s-web"], tools: ["webSearch", "deepResearch", "queryGA4", "queryGSC", "getTrendSnapshots"] },
   { id: "code", label: "Chạy code (Sandbox)", stores: ["s-sandbox"], tools: ["run_code"] },
   { id: "sources", label: "Kho và workspace", stores: ["s-supabase", "s-turso"], tools: ["lietKeNguon", "timTrongNguon", "docNguon", "docFile", "ghiFile", "lietKeFile", "taoThuMuc", "chuyenNguon", "capNhatNguon", "luuGhiChu"] },
-  { id: "facts", label: "Sổ sự việc có hạn", stores: ["s-supabase"], tools: ["traSuViec", "ghiSuViec", "capNhatSuViec", "traMail"] },
+  { id: "facts", label: "Sổ sự việc có hạn", stores: ["s-supabase"], tools: ["traSuViec", "ghiSuViec", "capNhatSuViec", "traMail", "traThucThe"] },
   { id: "memory", label: "Trí nhớ, kỹ năng, kế hoạch", stores: ["s-supabase"], tools: ["assistantMemory", "searchPastConversations", "learnSkill", "loadSkill", "updatePlan"] },
   { id: "media", label: "Ảnh và video", stores: ["s-gemini"], tools: ["generateImage", "generateVideo", "checkVideoStatus"] },
   { id: "files", label: "File và Google", stores: ["s-lark"], tools: ["localFiles", "googleWorkspace"] },
