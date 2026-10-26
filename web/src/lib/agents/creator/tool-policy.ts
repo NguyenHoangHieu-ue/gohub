@@ -37,6 +37,7 @@ const READ_ACTIONS = new Set(["search", "read", "list", "list_tabs", "read_tab"]
 function isTaintSource(name: string, args: any): boolean {
   switch (name) {
     case "webSearch": case "browseWeb": case "browsePortal": case "queryLarkBase": case "getTrendSnapshots":
+    case "traCuuKho":   // Kho chứa mail/thread/tài liệu do người ngoài viết → nội dung không tin cậy (chống prompt injection)
       return true
     case "readMyBrowser":
       return args?.action === "read_tab" || args?.action === "snapshot" || args?.action === "screenshot"

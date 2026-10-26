@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
+import { sharedMemoryBlockFor } from "@/lib/assistant/shared-memory"
 import { ARGON_BUCKET, ownSource, type ArgonSource } from "./server"
 import { BRIEF_PATH, DECISIONS_PATH, briefTemplate, canTransition, checkWrite, cleanPath, decisionsTemplate, isProtectedPath, missionContextBlock, phaseInstruction, chotLine, PLAN_PATH, type MissionPhase, type WsFileRow } from "./missions"
 import { deleteProjectCascade } from "./project-delete"
@@ -166,10 +167,12 @@ export async function missionById(id: string): Promise<ArgonMission | null> {
 }
 
 /** Ngữ cảnh sứ mệnh cho 1 lượt chạy của dự án nền: khối sổ tay (mục tiêu, brief, decisions, danh sách file) + chỉ dẫn theo pha. Null nếu không phải dự án nền. */
-export async function loadMissionContext(projectId: string): Promise<{ mission: ArgonMission; block: string; instruction: string } | null> {
+export async function loadMissionContext(projectId: string, prompt?: string): Promise<{ mission: ArgonMission; block: string; instruction: string } | null> {
   const { data } = await supabaseAdmin.from("argon_missions").select("*").eq("project_id", projectId).maybeSingle()
   const mission = data as ArgonMission | null
   if (!mission) return null
+  // P3c: Argon đọc CHUNG trí nhớ dài hạn với Gấu Pro (chỉ đọc; tắt trí nhớ thì không nạp) — `prompt` giúp chọn mục liên quan khi trí nhớ dài.
+  const memory = await sharedMemoryBlockFor(mission.username, prompt)
   const [files, brief, decisions] = await Promise.all([listFiles(mission.id), readFile(mission.id, BRIEF_PATH), readFile(mission.id, DECISIONS_PATH)])
   const base = missionContextBlock(mission, brief?.content ?? "", decisions?.content ?? "", files)
   if (usesKhoScope(mission.name)) {
@@ -178,9 +181,9 @@ export async function loadMissionContext(projectId: string): Promise<{ mission: 
     const [boi, tac] = isKho ? [null, null] : await Promise.all([readFile(mission.id, BOI_CANH_PATH), readFile(mission.id, TAC_DONG_PATH)])
     const window = (tag: string, f: { content?: string | null } | null) => (f?.content?.trim() ? `<${tag}>\n${f.content.trim().slice(0, 4000)}\n</${tag}>` : "")
     const extra = [window("boi_canh_hien_tai", boi), window("tac_dong_de_xuat_hien_tai", tac)].filter(Boolean).join("\n")
-    return { mission, block: `${base}\n${await khoIndexBlock(mission.username)}${extra ? `\n${extra}` : ""}`, instruction: `${phaseInstruction(mission.phase)}\n${isKho ? KHO_INSTRUCTION : `${CONTEXT_INSTRUCTION}\n${KHO_INSTRUCTION}`}` }
+    return { mission, block: `${base}\n${await khoIndexBlock(mission.username)}${extra ? `\n${extra}` : ""}${memory}`, instruction: `${phaseInstruction(mission.phase)}\n${isKho ? KHO_INSTRUCTION : `${CONTEXT_INSTRUCTION}\n${KHO_INSTRUCTION}`}` }
   }
-  return { mission, block: base, instruction: phaseInstruction(mission.phase) }
+  return { mission, block: `${base}${memory}`, instruction: phaseInstruction(mission.phase) }
 }
 
 /** Id các nguồn (của dự án khác trong Kho nguồn) đã gắn vào sứ mệnh của dự án nền này. */

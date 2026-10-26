@@ -530,7 +530,7 @@ Hôm nay: ${fmt(now)} (${dow}). Data cutoff gohub_dw = CURRENT_DATE-1 = ${fmt(ye
 // sendLarkMessage (G0): trước mở cho mọi user Gấu Pro → bot đăng được vào group Lark bất kỳ theo chat_id.
 const CREATOR_ONLY_TOOLS = new Set<string>(["localFiles", "googleWorkspace", "larkDocs", "sendLarkMessage", "learnSkill",
   // Tài khoản portal NCC dùng chung + KB chung: chỉ Creator (người khác có trí nhớ riêng, không ghi KB chung).
-  "browsePortal", "managePortalCredentials", "writeKnowledgeBase", "reviewPendingLearning", "approveLearning", "rejectLearning"])
+  "browsePortal", "managePortalCredentials", "writeKnowledgeBase", "reviewPendingLearning", "approveLearning", "rejectLearning", "traCuuKho"])
 // G3: trí nhớ cá nhân — bật theo cờ gp_personal_features (personalFeaturesEnabled), hiện mặc định chỉ creator.
 const PERSONAL_TOOLS = new Set<string>(["assistantMemory", "searchPastConversations", "scheduleTask"])
 

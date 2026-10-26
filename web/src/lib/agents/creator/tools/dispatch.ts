@@ -27,6 +27,7 @@ import { runVerifyReportNumbers }  from "./self-review"
 import { runBuildReport }          from "../../report-tool"
 import { runDevTicket }            from "@/lib/dev-tickets"
 import { runLearnSkill }           from "../learned-skills"
+import { lookupKho }               from "@/lib/assistant/kho-lookup"
 
 // Tool dùng tài khoản/dữ liệu chung của Creator — không bao giờ chạy cho người khác dù khai báo lọt.
 const CREATOR_ONLY_DISPATCH = new Set(["browsePortal", "managePortalCredentials", "writeKnowledgeBase", "reviewPendingLearning", "approveLearning", "rejectLearning"])
@@ -121,6 +122,9 @@ async function dispatchToolCore(
 
   if (call.name === "controlMyBrowser")
     return wrap(await runControlMyBrowser(call.args, ctx?.username || "", onEvent))
+
+  if (call.name === "traCuuKho")   // P3c: cùng một Kho với Argon, chỉ đọc, chỉ Creator (Kho là dữ liệu riêng của Creator)
+    return wrap(ctx?.isCreator ? await lookupKho(ctx?.username || "", call.args) : { error: "traCuuKho chỉ dành cho creator." })
 
   if (call.name === "localFiles")
     return wrap(ctx?.isCreator ? await runLocalFiles(call.args, ctx?.username || "", onEvent) : { error: "localFiles chỉ dành cho creator." })

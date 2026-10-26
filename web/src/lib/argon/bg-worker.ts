@@ -96,7 +96,7 @@ export async function runBackgroundSegment(runId: string, origin: string): Promi
     const mat = await loadRunMaterial(project, pick.size ? pick : null, origin)
     const tpl = bg.templateReportId ? await getReportHtml(bg.username, bg.templateReportId) : null
     const tplSuffix = tpl ? templateSuffix(tpl.meta.title, tpl.html) : ""
-    const mctx = project.kind === "mission" ? await loadMissionContext(project.id) : null
+    const mctx = project.kind === "mission" ? await loadMissionContext(project.id, run.prompt) : null
     const ctx = await buildRunContext({
       project: mat.project, sources: mat.sources, priorRuns: ((allRuns ?? []) as ArgonRun[]).filter(r => r.id !== runId), prompt: run.prompt + tplSuffix,
       resumeRun: answer.trim() ? { ...run, answer } : undefined, allowTools: bg.allowTools, toolLog, mission: mctx ?? undefined,
