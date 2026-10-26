@@ -421,6 +421,8 @@ export default function CreatorAIPage() {
 
   const [messages,      setMessages]      = useState<Message[]>([])
   const [input,         setInput]         = useState("")
+  // Từ ô Hỏi / Tìm: ?q=… → điền sẵn vào ô nhập, KHÔNG tự gửi (Gấu Pro có thể thao tác thật, anh đọc lại rồi tự Enter).
+  useEffect(() => { const q = new URLSearchParams(window.location.search).get("q"); if (q?.trim()) setInput(q.trim().slice(0, 4000)) }, [])
   const [loading,       setLoading]       = useState(false)
   const [elapsed,       setElapsed]       = useState(0)
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])

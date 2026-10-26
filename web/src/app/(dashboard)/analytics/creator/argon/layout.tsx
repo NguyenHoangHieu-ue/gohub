@@ -3,17 +3,18 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { Compass, Database, Inbox, MessagesSquare, Network, Phone, Sun } from "lucide-react"
+import { Compass, Database, Inbox, MessagesSquare, Network, Phone, Search, Sun } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // Phòng Argon: 6 tab (Hôm nay · Kho · Bối cảnh và Kế hoạch · Bản đồ · Trợ lý · Cuộc gọi). Sứ mệnh, workspace, tuần tra, sổ dự đoán… vẫn ở "Nâng cao".
 const TABS = [
   { href: "/analytics/creator/argon", label: "Hôm nay", icon: Sun, exact: true },
+  { href: "/analytics/creator/argon/hoi-tim", label: "Hỏi / Tìm", icon: Search },
   { href: "/analytics/creator/argon/viec-can-duyet", label: "Việc cần duyệt", icon: Inbox, badge: true },
   { href: "/analytics/creator/argon/kho-nguon", label: "Kho", icon: Database },
   { href: "/analytics/creator/argon/boi-canh", label: "Bối cảnh và Kế hoạch", icon: Compass },
   { href: "/analytics/creator/argon/ban-do", label: "Bản đồ", icon: Network },
-  { href: "/analytics/creator/argon/tro-ly", label: "Trợ lý", icon: MessagesSquare },
+  { href: "/analytics/creator/argon/tro-ly", label: "Trò chuyện", icon: MessagesSquare },
   { href: "/analytics/creator/argon/cuoc-goi", label: "Cuộc gọi", icon: Phone },
 ]
 
