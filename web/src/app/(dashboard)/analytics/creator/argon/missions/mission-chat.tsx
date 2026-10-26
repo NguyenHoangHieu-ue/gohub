@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useEffect, useRef, useState } from "react"
+import { Fragment, memo, useCallback, useEffect, useRef, useState } from "react"
 import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Pause, Play, RotateCcw, Rocket, Send, Square, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
@@ -51,6 +51,12 @@ function Seg<T extends string>({ value, onChange, options, label }: { value: T; 
   )
 }
 
+// Câu trả lời đã xong không cần vẽ lại mỗi lần ô nhập hoặc trang cha đổi (parse markdown + bảng + khối report là phần nặng nhất khi chat dài).
+const AnswerMd = memo(function AnswerMd({ text, runId, onStep }: { text: string; runId: string; onStep: (runId: string, n: number) => void }) {
+  const cb = useCallback((n: number) => onStep(runId, n), [onStep, runId])
+  return <ArgonMarkdown text={text} onStep={cb} />
+})
+
 export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError, simple = false, quick, onDraft, aboveInput }: {
   autoSend: { text: string; k: number } | null   // câu lệnh tự gửi (vd ▶ chạy lại script); mỗi k mới = một lần gửi
   phase: MissionPhase
@@ -68,7 +74,19 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   aboveInput?: React.ReactNode       // khối hiện NGAY TRÊN ô nhắn (vd gợi ý từ Kho)
 }) {
   const [prompt, setPromptState] = useState("")
-  const setPrompt = (v: string) => { setPromptState(v); onDraft?.(v) }
+  // Báo nội dung đang gõ ra ngoài: trễ 350ms (gõ liên tục chỉ báo 1 lần, không làm cả trang cha vẽ lại theo từng ký tự); xoá ô (gửi) thì báo ngay.
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const setPrompt = (v: string) => {
+    setPromptState(v)
+    if (!onDraft) return
+    if (draftTimer.current) clearTimeout(draftTimer.current)
+    if (!v) { onDraft(v); return }
+    draftTimer.current = setTimeout(() => onDraft(v), 350)
+  }
+  useEffect(() => () => { if (draftTimer.current) clearTimeout(draftTimer.current) }, [])
+  const onStepRef = useRef(onStep)
+  onStepRef.current = onStep
+  const stepStable = useCallback((runId: string, n: number) => onStepRef.current(runId, n), [])
   const [showOpts, setShowOpts] = useState(false)   // trang gọn: ẩn mức suy luận / số liệu hệ thống / chạy nền sau "Tuỳ chọn"
   const [thinking, setThinking] = useState<Thinking>("medium")
   const [background, setBackground] = useState(false)
@@ -180,7 +198,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
               <div className="flex items-start gap-2.5">
                 <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200" aria-hidden><Atom size={15} /></span>
                 <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 shadow-sm">
-                  {r.answer ? <ArgonMarkdown text={r.answer} onStep={n => onStep(r.id, n)} />
+                  {r.answer ? <AnswerMd text={r.answer} runId={r.id} onStep={stepStable} />
                     : <div className="flex items-center gap-2 text-[13px] text-gray-500"><span className="flex gap-1" aria-hidden>{[0, 1, 2].map(i => <i key={i} className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />)}</span>{lastStep ? `Argon đang làm: ${lastStep.tag} ${lastStep.text.slice(0, 80)} (${runner.steps.length} bước)` : "Argon đang làm việc…"}</div>}
                   {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
                   {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}
