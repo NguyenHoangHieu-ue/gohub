@@ -72,6 +72,14 @@ async function ticketItems(now: number): Promise<InboxItem[]> {
 }
 
 /** Skill tự học đang chờ duyệt: hiện mô tả, kết quả kiểm tra tĩnh + nhận xét model, phần đầu chỉ dẫn. Bản bị chặn (lint "block") chỉ cho Từ chối. */
+async function kpiItems(username: string, now: number): Promise<InboxItem[]> {
+  const { listAlerts, activeAlerts } = await import("@/lib/argon/kpi-watch")
+  return activeAlerts(await listAlerts(username), now).map(a => ({
+    key: `kpi_alert:${a.key}`, kind: "kpi_alert" as const, id: a.key, title: a.title, detail: a.detail, at: a.at, urgency: a.severity, source: "Theo dõi KPI (mỗi đêm)",
+    actions: ["open", "reject"] as InboxItem["actions"], href: `${ARGON}/hoi-tim?q=${encodeURIComponent(a.question)}`,
+  }))
+}
+
 async function memoryItems(username: string, now: number): Promise<InboxItem[]> {
   const { listProposals } = await import("./memory-proposals")
   return (await listProposals(username)).map(p => ({
@@ -95,7 +103,7 @@ async function skillItems(now: number): Promise<InboxItem[]> {
 
 export async function loadInbox(username: string, now = Date.now()): Promise<{ items: InboxItem[]; failed: string[] }> {
   const jobs: [string, Promise<InboxItem[]>][] = [
-    ["Hành động Gấu Pro", gpActions(username, now)], ["Argon", argonItems(username, now)], ["Sổ sự việc", factReviews(username, now)], ["Mail", mailItems(username, now)], ["Phiếu sửa code", ticketItems(now)], ["Kỹ năng", skillItems(now)], ["Đề xuất ghi nhớ", memoryItems(username, now)],
+    ["Hành động Gấu Pro", gpActions(username, now)], ["Argon", argonItems(username, now)], ["Sổ sự việc", factReviews(username, now)], ["Mail", mailItems(username, now)], ["Phiếu sửa code", ticketItems(now)], ["Kỹ năng", skillItems(now)], ["Đề xuất ghi nhớ", memoryItems(username, now)], ["KPI", kpiItems(username, now)],
   ]
   const settled = await Promise.allSettled(jobs.map(j => j[1]))
   const items: InboxItem[] = [], failed: string[] = []
