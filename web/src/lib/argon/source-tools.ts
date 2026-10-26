@@ -6,13 +6,14 @@ import type { ToolLogEntry } from "./tools"
 export const SOURCE_TOKEN_BUDGET = 650_000      // chừa chỗ cho sổ tay sứ mệnh, lịch sử, công cụ và câu trả lời trong cửa sổ 1M
 export const LIST_NAME = "lietKeNguon", READ_NAME = "docNguon", SEARCH_NAME = "timTrongNguon"
 export const MAX_READ_CHARS = 60_000
+export const MAX_MULTI_READ = 5     // docNguon đọc tối đa ngần này nguồn trong MỘT lời gọi (chia đều MAX_READ_CHARS)
 export const MAX_HITS = 20
 const SNIP = 260
 
 export const SOURCE_TOOLS: FunctionDeclaration[] = [
   { name: LIST_NAME, description: "Liệt kê nguồn của sứ mệnh (thread Lark, mail, file, ghi chú đã gắn): id, tên, loại, số token, ngày cập nhật, có nằm sẵn trong ngữ cảnh không. Dùng khi nguồn nhiều và bạn cần biết có gì.", parameters: { type: Type.OBJECT, properties: {} } },
   { name: SEARCH_NAME, description: "Tìm trong NỘI DUNG mọi nguồn của sứ mệnh (kể cả nguồn không nằm sẵn trong ngữ cảnh), theo Ý NGHĨA lẫn từ khoá. Trả các đoạn liên quan nhất kèm tên nguồn, id và vị trí đoạn. Dùng để lần theo một khách, mã SKU, tên người, chủ đề, quyết định qua nhiều thread/mail/file; có thể là câu hỏi ngắn thay vì từ khoá.", parameters: { type: Type.OBJECT, properties: { tuKhoa: { type: Type.STRING, description: "Từ khoá hoặc câu hỏi ngắn, tối thiểu 2 ký tự" } }, required: ["tuKhoa"] } },
-  { name: READ_NAME, description: "Đọc toàn văn 1 nguồn theo id (lấy từ lietKeNguon hoặc timTrongNguon), mỗi lần tối đa ~60.000 ký tự; nguồn dài hơn thì đọc tiếp bằng batDau (vị trí ký tự bắt đầu, mặc định 0).", parameters: { type: Type.OBJECT, properties: { id: { type: Type.STRING, description: "Id nguồn" }, batDau: { type: Type.NUMBER, description: "Vị trí ký tự bắt đầu đọc (mặc định 0)" } }, required: ["id"] } },
+  { name: READ_NAME, description: "Đọc toàn văn 1 nguồn theo id (lấy từ lietKeNguon hoặc timTrongNguon), mỗi lần tối đa ~60.000 ký tự; nguồn dài hơn thì đọc tiếp bằng batDau (vị trí ký tự bắt đầu, mặc định 0). Cần đọc NHIỀU nguồn: truyền ids (tối đa 5 id) để đọc song song trong một lần thay vì gọi từng cái (mỗi nguồn nhận phần đầu, chia đều ngân sách ký tự).", parameters: { type: Type.OBJECT, properties: { id: { type: Type.STRING, description: "Id một nguồn" }, ids: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Danh sách id để đọc nhiều nguồn một lần (thay cho id)" }, batDau: { type: Type.NUMBER, description: "Vị trí ký tự bắt đầu đọc (mặc định 0; chỉ dùng với id)" } } } },
 ]
 
 export interface PickableSource { id: string; name: string; tokens: number; pinned: boolean; updated_at: string }
@@ -77,7 +78,18 @@ export async function execSourceTool(name: string, args: Record<string, unknown>
       return d(true, `${hits.length} nguồn chứa "${kw}":\n` + hits.map(h => `- ${h.id} · ${h.name} (${h.kind}, ${h.updated_at.slice(0, 10)})\n  ${snippet(h.extracted_text ?? "", kw)}`).join("\n"))
     }
     if (name === READ_NAME) {
-      const id = String(args.id ?? "").trim()
+      const many = Array.isArray(args.ids) ? [...new Set((args.ids as unknown[]).map(x => String(x).trim()).filter(Boolean))].slice(0, MAX_MULTI_READ) : []
+      if (many.length > 1) {
+        const per = Math.max(8_000, Math.floor(MAX_READ_CHARS / many.length))
+        const docs = await Promise.all(many.map(x => deps.read(x)))
+        return d(true, docs.map((s, k) => {
+          if (!s) return `# (không có nguồn "${many[k]}" trong sứ mệnh này)`
+          const t = s.extracted_text ?? ""
+          if (!t) return `# ${s.name} [id ${s.id}]\n(không có văn bản đọc được)`
+          return `# ${s.name} [id ${s.id}]\n${t.slice(0, per)}${t.length > per ? `\n…(còn ${t.length - per} ký tự; đọc tiếp bằng id=${s.id}, batDau=${per})` : ""}`
+        }).join("\n\n---\n\n"))
+      }
+      const id = String(args.id ?? many[0] ?? "").trim()
       const s = id ? await deps.read(id) : null
       if (!s) return d(false, `Không có nguồn "${id}" trong sứ mệnh này. Gọi lietKeNguon để xem id.`)
       const t = s.extracted_text ?? ""

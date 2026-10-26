@@ -62,6 +62,16 @@ describe("công cụ nguồn", () => {
     expect((await execSourceTool("docNguon", { id: "lạ" }, deps(rows))).ok).toBe(false)
     expect((await execSourceTool("docNguon", { id: "e" }, deps([row("e", "")]))).ok).toBe(false)
   })
+  it("docNguon ids: đọc nhiều nguồn một lần, chia đều ngân sách ký tự, id lạ/rỗng không làm hỏng cả lô, trùng id chỉ đọc một lần", async () => {
+    const r = await execSourceTool("docNguon", { ids: ["t1", "lạ", "e", "t1"] }, deps([...rows, row("e", "")]))
+    expect(r.ok).toBe(true)
+    expect(r.result).toContain("Lan trả lời: OK"); expect(r.result).toContain("không có nguồn \"lạ\""); expect(r.result).toContain("không có văn bản đọc được")
+    expect(r.result.split("Lan trả lời: OK").length).toBe(2)
+    const big = ["a", "b", "c"].map(x => row(x, x.repeat(MAX_READ_CHARS)))
+    const m = await execSourceTool("docNguon", { ids: ["a", "b", "c"] }, deps(big))
+    expect(m.result.length).toBeLessThan(MAX_READ_CHARS + 2_000); expect(m.result).toContain("đọc tiếp bằng id=a")
+    expect((await execSourceTool("docNguon", { ids: ["t1"] }, deps(rows))).result).toContain("Lan trả lời: OK")
+  })
   it("lỗi hạ tầng không ném; công cụ lạ báo lỗi chữ", async () => {
     const bad: SourceDeps = { list: async () => { throw new Error("db") }, search: async () => [], read: async () => null }
     expect((await execSourceTool("lietKeNguon", {}, bad)).ok).toBe(false)

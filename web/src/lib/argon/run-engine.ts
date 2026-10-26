@@ -5,6 +5,7 @@ import type { RunContext } from "./context"
 import { ARGON_TOOLS, MAX_TOOL_CALLS, execArgonTool, type ToolLogEntry } from "./tools"
 import { MISSION_TOOL_NAMES, WS_TOOLS, execMissionAsk, execMissionCode, execMissionForecast, execMissionPatch, execMissionSourceTool, execMissionSql, execWsTool } from "./ws-tools"
 import { LIST_NAME, READ_NAME, SEARCH_NAME, SOURCE_TOOLS } from "./source-tools"
+import { PARALLEL_SAFE, groupCalls } from "./parallel-tools"
 import { FORECAST_TOOL, FORECAST_TOOL_NAME, SCORE_TOOL, SCORE_TOOL_NAME } from "./forecast-tool"
 import { PATCH_TOOL, PATCH_TOOL_NAME } from "./patch-tool"
 import { ASK_TOOL, ASK_TOOL_NAME, askBlock } from "./ask-tool"
@@ -128,17 +129,22 @@ async function runSegmentLegacy(i: SegmentIn): Promise<SegmentOut> {
       const calls = modelParts.filter(p => p.functionCall)
       if (calls.length && toolsOn) {
         const responses: Part[] = []
-        for (const c of calls) {
-          const fc = c.functionCall!
-          const fname = String(fc.name), fargs = (fc.args ?? {}) as Record<string, unknown>
+        for (const group of groupCalls(calls.map(c => c.functionCall!))) {
           const dataCalls = i.tools!.log.filter(t => isData(t.name)).length
-          const toolStart = Date.now()
-          evTrace.emit("tool-start", fname)
-          const entry = await dispatch(fname, fargs, dataCalls)
-          evTrace.emit("tool", fname, { ms: Date.now() - toolStart, ok: entry.ok })
-          i.tools!.log.push(entry)
-          await i.tools!.onTool(entry)
-          responses.push({ functionResponse: { name: String(fc.name), response: entry.ok ? { buoc: i.tools!.log.length, ketQua: entry.result } : { buoc: i.tools!.log.length, loi: entry.result } } })
+          const entries = await Promise.all(group.map(async fc => {
+            const fname = String(fc.name), fargs = (fc.args ?? {}) as Record<string, unknown>
+            const toolStart = Date.now()
+            evTrace.emit("tool-start", fname)
+            const entry = await dispatch(fname, fargs, dataCalls)
+            evTrace.emit("tool", fname, { ms: Date.now() - toolStart, ok: entry.ok })
+            return entry
+          }))
+          for (let k = 0; k < group.length; k++) {   // ghi nhật ký theo đúng thứ tự model gọi, số bước ổn định
+            const entry = entries[k]
+            const n = i.tools!.log.push(entry)
+            await i.tools!.onTool(entry)
+            responses.push({ functionResponse: { name: String(group[k].name), response: entry.ok ? { buoc: n, ketQua: entry.result } : { buoc: n, loi: entry.result } } })
+          }
         }
         // Argon vừa hỏi Hiếu (hoiHieu thành công) → kết thúc lượt NGAY, hiện câu hỏi trong chat; không để model làm tiếp khi chưa có câu trả lời.
         const asked = i.tools!.log.slice(-calls.length).find(t => t.name === ASK_TOOL_NAME && t.ok)
@@ -194,12 +200,15 @@ async function runSegmentCore(i: SegmentIn): Promise<SegmentOut> {
     const fname = String(fc.name), fargs = (fc.args ?? {}) as Record<string, unknown>
     const dataCalls = i.tools!.log.filter(t => P.isData(t.name)).length
     const entry = await P.dispatch(fname, fargs, dataCalls)
-    i.tools!.log.push(entry)
+    const n = i.tools!.log.push(entry)   // số bước lấy ngay lúc push (công cụ đọc chạy song song nên không dùng log.length sau await)
     await i.tools!.onTool(entry)
     if (fname === ASK_TOOL_NAME && entry.ok) asked = entry
-    return { functionResponse: { name: fname, response: entry.ok ? { buoc: i.tools!.log.length, ketQua: entry.result } : { buoc: i.tools!.log.length, loi: entry.result } } }
+    return { functionResponse: { name: fname, response: entry.ok ? { buoc: n, ketQua: entry.result } : { buoc: n, loi: entry.result } } }
   }
-  const runTool = (fc: { name?: string; args?: Record<string, unknown> }) => { const p = queue.then(() => execOne(fc)); queue = p.catch(() => undefined); return p }
+  const runTool = (fc: { name?: string; args?: Record<string, unknown> }) => {
+    if (PARALLEL_SAFE.has(String(fc.name))) return execOne(fc)   // công cụ đọc: không xếp hàng
+    const p = queue.then(() => execOne(fc)); queue = p.catch(() => undefined); return p
+  }
 
   try {
     const loop = await runAgentLoop({
