@@ -59,4 +59,5 @@ const nextConfig = {
     return config
   },
 }
-module.exports = nextConfig
+const { withWorkflow } = require("workflow/next")
+module.exports = withWorkflow(nextConfig)
