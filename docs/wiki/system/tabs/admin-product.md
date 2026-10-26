@@ -238,3 +238,9 @@ Kiểm sống trên staging bằng API build + tự tính lại độc lập (b�
 ## s236 (2026-10-19) — "Tạo sản phẩm" tách khỏi Admin
 
 Tab "Tạo sản phẩm" (BC Datapool, 3HK) đã chuyển sang trang riêng `/analytics/product-tools` cùng chức năng Tính giá, phân quyền riêng — xem `product-tools.md`. Admin chỉ còn Cài đặt, Soát giá vốn, Khuyến mãi...; `admin?tab=product-builder` tự chuyển hướng sang trang mới. Code UI nằm ở `components/product-tools/` (`create-products.tsx`, `product-builder-3hk.tsx`, `price-calc.tsx`).
+
+## s241 — Tab "BC Datapool" (quản lý dữ liệu nền) + gỡ trang/cron cũ
+
+- Gỡ trang BC Datapool cũ (đọc catalog BC qua API), `/api/bc/*`, `lib/bc-api.ts`, cron `bc-sync`; migration `v81_drop_bc_sync_tables.sql` xoá 5 bảng `bc_*` (chạy SAU merge).
+- Trang mới `/analytics/bc-datapool` (nhóm Creator, API `requireAdmin`): import bảng báo giá (`/api/admin/bc-datapool/price-list`) và file Portal "Purchase information" (`/plan-catalog`), xem nội dung (bảng giá theo pool, danh sách gói + lọc), báo cáo thay đổi so với bản trước. Đọc qua `/api/admin/bc-datapool/sources`.
+- Dữ liệu lưu `app_settings` (`bcdp.price_list`, `bcdp.plan_catalog`) — tab "Tính giá & Tạo sản phẩm" đọc đúng khoá này; ở đó chỉ còn hiển thị trạng thái + link sang tab BC Datapool, nút upload đã chuyển đi. `DiffBox` dùng chung: `components/bc-datapool/diff-box.tsx`.

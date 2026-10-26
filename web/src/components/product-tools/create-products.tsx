@@ -1,16 +1,17 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { SkippedSkuLine } from "./skipped-sku-line"
 import { EditableCell } from "./editable-cell"
 import { useSheetEdits } from "./use-sheet-edits"
 import { lockedCols, rowKey, type EditSheet } from "@/lib/datapool-audit/edits"
-import { Download, Eye, Plus, Trash2, Upload } from "lucide-react"
+import { Download, Eye, Plus, Trash2 } from "lucide-react"
 import ProductBuilder3hk from "./product-builder-3hk"
 import { PRODUCT_HEADERS, SKU_HEADERS, pickOperatorPrice, type BuildResult } from "@/lib/bc-datapool/builder"
 import { pickSupportCountry, pickSupportGroup } from "@/lib/bc-datapool/iso"
 import type { Skipped } from "@/lib/bc-datapool/dedupe"
-import type { CatalogDiff, PriceDiff } from "@/lib/bc-datapool/diff"
+import type { CatalogDiff } from "@/lib/bc-datapool/diff"
+import { DiffBox, catalogGroups, priceGroups } from "@/components/bc-datapool/diff-box"
 import { availableKinds, canonCountry, choosePlan, findPlans, manualMismatches, multiRegions, offers, sellableCountries, type CatalogPlan, type PlanCatalog, type PlanInfo } from "@/lib/bc-datapool/plan-lookup"
 import { unlimitedFactor } from "@/lib/bc-datapool/pricing"
 import { customUnlimitedLabel, levelsOf } from "@/lib/datapool-formula"
@@ -45,44 +46,6 @@ const keyOf = (amount: number, unit: string) => `${amount}|${unit}`
 const labelOf = (key: string) => key.replace("|", " ")
 const commonOf = (offered: number[]) => COMMON_DAYS.filter(d => offered.includes(d))
 
-interface DiffGroup { label: string; tone: "red" | "green" | "amber"; total: number; items: string[] }
-const TONE = { red: "text-red-700", green: "text-emerald-700", amber: "text-amber-700" }
-
-/** Báo cáo thay đổi sau khi upload: nhóm có số lượng, bấm mở xem chi tiết. */
-function DiffBox({ diff, groups }: { diff: { at: string; compared: boolean } | null | undefined; groups: DiffGroup[] }) {
-  if (!diff) return null
-  const when = new Date(diff.at).toLocaleString("vi-VN")
-  if (!diff.compared) return <div className="text-[12px] text-gray-400">Lần upload đầu tiên ({when}) — chưa có bản cũ để so sánh.</div>
-  const active = groups.filter(g => g.total > 0)
-  if (!active.length) return <div className="text-[12px] text-emerald-700">✓ Không có thay đổi so với bản trước ({when}).</div>
-  return (
-    <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-2 space-y-1">
-      <div className="text-[12px] font-semibold text-amber-900 dark:text-amber-200">Thay đổi so với bản trước ({when}) — sản phẩm/giá đã tạo trước đó có thể cần cập nhật</div>
-      {active.map(g => (
-        <details key={g.label} className="text-[12px]">
-          <summary className={`cursor-pointer font-semibold ${TONE[g.tone]}`}>{g.label}: {g.total}</summary>
-          <ul className="mt-1 ml-4 list-disc max-h-48 overflow-auto space-y-0.5 text-gray-700 dark:text-slate-300">
-            {g.items.map((t, k) => <li key={k}>{t}</li>)}
-            {g.total > g.items.length && <li className="text-gray-400">… và {g.total - g.items.length} dòng nữa</li>}
-          </ul>
-        </details>
-      ))}
-    </div>
-  )
-}
-
-const priceGroups = (d?: PriceDiff | null): DiffGroup[] => !d ? [] : [
-  { label: "Đổi giá", tone: "amber", total: d.counts.changed, items: d.changed.map(c => `${c.pool} · ${c.coverage} · ${c.operator}: ${c.from} → ${c.to} ${c.currency}/GB`) },
-  { label: "Nhà mạng/khu vực mới", tone: "green", total: d.counts.added, items: d.added.map(c => `${c.pool} · ${c.coverage} · ${c.operator}: ${c.to} ${c.currency}/GB`) },
-  { label: "Nhà mạng/khu vực bị bỏ", tone: "red", total: d.counts.removed, items: d.removed.map(c => `${c.pool} · ${c.coverage} · ${c.operator} (trước: ${c.from} ${c.currency}/GB)`) },
-  { label: "Đổi phí (IMSI/eSIM/SIM)", tone: "amber", total: d.counts.fees, items: d.fees.map(f => `${f.pool} · ${f.field}: ${f.from} → ${f.to}`) },
-]
-const catalogGroups = (d?: CatalogDiff | null): DiffGroup[] => !d ? [] : [
-  { label: "Gói mới", tone: "green", total: d.counts.added, items: d.added.map(p => `${p.label} — ${p.id}`) },
-  { label: "Gói bị bỏ", tone: "red", total: d.counts.removed, items: d.removed.map(p => `${p.label} — ${p.id}`) },
-  { label: "Gói đổi số ngày/tốc độ/nhà mạng", tone: "amber", total: d.counts.changed, items: d.changed.map(p => `${p.label} — ${p.id}: ${p.detail}`) },
-]
-
 function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUpload: boolean }) {
   const [opts, setOpts] = useState<Options | null>(null)
   const [loadErr, setLoadErr] = useState<string | null>(null)
@@ -91,10 +54,8 @@ function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUploa
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [previewStale, setPreviewStale] = useState(false)
   const [sheet, setSheet] = useState<"skuUS" | "skuVN" | "productUS" | "productVN" | "cost">("cost")
-  const [busy, setBusy] = useState<"" | "upload" | "catalog" | "preview" | "export">("")
+  const [busy, setBusy] = useState<"" | "preview" | "export">("")
   const ed = useSheetEdits()
-  const fileRef = useRef<HTMLInputElement>(null)
-  const catRef = useRef<HTMLInputElement>(null)
 
   const load = async (first: boolean) => {
     try {
@@ -191,35 +152,6 @@ function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUploa
     }),
   }))
 
-  const upload = async (file: File) => {
-    setBusy("upload")
-    const fd = new FormData(); fd.append("file", file)
-    let j: any
-    try {
-      const r = await fetch("/api/admin/bc-datapool/price-list", { method: "POST", body: fd })
-      j = await r.json()
-      if (!r.ok) return onNotify("error", j.error || "Không đọc được file báo giá")
-    } catch { return onNotify("error", "Lỗi mạng hoặc máy chủ trả về không đúng định dạng (có thể quá thời gian) — thử lại") } finally { setBusy("") }
-    setOpts(o => (o ? { ...o, priceList: j.priceList } : o)); touch()
-    const c = j.priceList.lastDiff?.counts
-    const changed = c ? c.changed + c.added + c.removed + c.fees : 0
-    onNotify("success", `Đã lưu bảng báo giá: ${j.priceList.fileName}` + (j.priceList.lastDiff?.compared ? (changed ? ` — có ${c.changed} nhà mạng đổi giá, ${c.added} mới, ${c.removed} bị bỏ, ${c.fees} phí đổi (xem bên dưới)` : " — không có thay đổi so với bản trước") : ""))
-  }
-
-  const uploadCatalog = async (files: FileList) => {
-    setBusy("catalog")
-    const fd = new FormData(); Array.from(files).forEach(f => fd.append("files", f))
-    let j: any
-    try {
-      const r = await fetch("/api/admin/bc-datapool/plan-catalog", { method: "POST", body: fd })
-      j = await r.json()
-      if (!r.ok) return onNotify("error", j.error || "Không đọc được file Portal")
-    } catch { return onNotify("error", "Lỗi mạng hoặc máy chủ trả về không đúng định dạng (có thể quá thời gian) — thử lại") } finally { setBusy("") }
-    await load(false); touch()
-    const c = j.planCatalog.lastDiff?.counts
-    onNotify("success", `Đã lưu danh mục gói Portal: ${j.planCatalog.esim} gói eSIM, ${j.planCatalog.sim} gói SIM` + (j.planCatalog.lastDiff?.compared ? (c && c.added + c.removed + c.changed ? ` — ${c.added} gói mới, ${c.removed} bị bỏ, ${c.changed} đổi ngày/tốc độ (xem bên dưới)` : " — không có thay đổi so với bản trước") : ""))
-  }
-
   const runPreview = async () => {
     setBusy("preview")
     try {
@@ -275,11 +207,7 @@ function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUploa
               <div>CMHK {list.pools.CMHK.rows.length} dòng (HKD/GB) · Singtel {list.pools.SINGTEL.rows.length} dòng (USD/GB)</div>
             </div>
           ) : <div className="text-xs text-amber-700">Chưa có bảng báo giá — upload file có sheet &quot;cmhk&quot; và &quot;Singtel&quot;.</div>}
-          <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = "" }} />
-          {canUpload && <button onClick={() => fileRef.current?.click()} disabled={busy === "upload"}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
-            <Upload size={14} /> {list ? "Upload bảng giá mới" : "Upload bảng giá"}
-          </button>}
+          {canUpload && <a href="/analytics/bc-datapool" className="text-sm text-brand-600 hover:underline">Upload / quản lý ở tab BC Datapool →</a>}
           <DiffBox diff={list?.lastDiff} groups={priceGroups(list?.lastDiff)} />
         </div>
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-2">
@@ -290,11 +218,7 @@ function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUploa
               <div>Cập nhật {new Date(opts.planCatalog.uploadedAt).toLocaleString("vi-VN")}</div>
             </div>
           ) : <div className="text-xs text-amber-700">Chưa có — upload 2 file &quot;Purchase information&quot; (eSIM và SIM) để tự điền ProductID.</div>}
-          <input ref={catRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={e => { if (e.target.files?.length) uploadCatalog(e.target.files); e.target.value = "" }} />
-          {canUpload && <button onClick={() => catRef.current?.click()} disabled={busy === "catalog"}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
-            <Upload size={14} /> {busy === "catalog" ? "Đang đọc file..." : opts.planCatalog ? "Upload file Portal mới" : "Upload file Portal"}
-          </button>}
+          {canUpload && <a href="/analytics/bc-datapool" className="text-sm text-brand-600 hover:underline">Upload / quản lý ở tab BC Datapool →</a>}
           <DiffBox diff={opts.planCatalog?.lastDiff} groups={catalogGroups(opts.planCatalog?.lastDiff)} />
         </div>
         <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-1 text-sm">

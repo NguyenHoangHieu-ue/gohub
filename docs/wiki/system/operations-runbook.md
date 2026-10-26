@@ -76,7 +76,6 @@ Tất cả route trên đều yêu cầu session. API routes thêm `getServerSes
 | `prewarm-analytics` | `0 2 * * *` | 09:00 | Cache warm analytics queries |
 | `refresh-b2c-report` | `30 2 * * *` | 09:30 | B2C monthly snapshot |
 | `refresh-trends` | `0 1 * * *` | 08:00 | Thu thập trend data (web search) |
-| `bc-sync` | `0 0 * * *` | 07:00 | Sync BC Datapool |
 | `ca-thread-remind` | `0 3 * * 1` | 10:00 Thứ Hai | Nhắc cà thread Lark |
 
 ETL gohub_dw chạy ~08:00 ICT. Thứ tự cron sau s159: ETL (08:00) → kpis (08:30) → prewarm (09:00) → b2c-report (09:30). ✅ Đúng thứ tự.
@@ -92,7 +91,6 @@ Có 2 trigger đồng thời: Vercel cron (1 lần/ngày) + GitHub Actions (*/15
 | `prewarm-analytics` | `Authorization: Bearer $CRON_SECRET` (fail nếu env rỗng) | ✅ |
 | `scheduled-messages` | `Authorization: Bearer $CRON_SECRET` (fail nếu env rỗng) | ✅ |
 | `refresh-trends` | `Authorization: Bearer $CRON_SECRET` | ✅ fixed s159 |
-| `bc-sync` | `Authorization: Bearer $CRON_SECRET` | ✅ |
 | `ca-thread-remind` | `Authorization: Bearer $CRON_SECRET` | ✅ |
 | `refresh-b2c-report` | `Authorization: Bearer $CRON_SECRET` (fail nếu env rỗng) | ✅ fixed s159 |
 | `refresh-monthly-kpis` | `isCronReq()` Bearer header | ✅ |

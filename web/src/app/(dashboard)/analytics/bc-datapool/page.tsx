@@ -1,618 +1,205 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react"
-import { Search, RefreshCw, Globe, Package, Wallet, Terminal, ChevronDown, ChevronUp, Loader2, CheckCircle, XCircle, AlertCircle } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Upload } from "lucide-react"
+import { DiffBox, catalogGroups, priceGroups } from "@/components/bc-datapool/diff-box"
+import type { PlanCatalog } from "@/lib/bc-datapool/plan-lookup"
+import type { Pool, PriceList } from "@/lib/bc-datapool/types"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface BCProduct {
-  sku_id: string; name: string; type: string; days: string | null
-  capacity_kb: string | null; high_flow_size_kb: string | null
-  hotspot_support: string | null; plan_type: string | null
-  description: string | null; countries: { mcc: string; name: string }[] | null
-  synced_at: string
-}
-interface BCPrice { sku_id: string; copies: string; retail_price: number; settlement_price: number }
-interface BCBalance { balance: number; synced_at: string }
-interface BCCountry { mcc: string; continent: string; name: string; url: string | null }
-interface SyncLog { changes: Record<string, unknown> | null; error: string | null; synced_at: string }
+type Msg = { type: "success" | "error"; text: string }
+interface Sources { priceList: PriceList | null; catalog: PlanCatalog | null }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const PRODUCT_TYPES: Record<string, string> = {
-  "110": "Self-select plan", "111": "Fixed plan",
-  "210": "SIM (single)", "211": "SIM (multi)", "212": "Hard SIM",
-  "220": "MIFI sale", "221": "MIFI lease", "230": "eSIM",
-  "311": "Hard SIM + data", "3101": "SIM + self-select", "3102": "SIM + fixed",
-  "3103": "Multi-SIM + self-select", "3104": "Multi-SIM + fixed",
-  "3105": "eSIM + self-select", "3106": "eSIM + fixed",
-  "3201": "MIFI + self-select", "3202": "MIFI + fixed",
-  "3211": "MIFI lease + self-select", "3212": "MIFI lease + fixed",
-}
+const btn = "inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50"
+const field = "px-2.5 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500"
+const ROW_CAP = 300
+const fmtDays = (d: number[]) => (d.length ? d.join(", ") : "—")
 
-function fmtMB(kb: string | null): string {
-  if (!kb || kb === "" || kb === "0") return "—"
-  const mb = parseFloat(kb) / 1024
-  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`
-}
+// BC Datapool: nơi import và quản lý dữ liệu nền (bảng báo giá + file Portal). Tab "Tạo sản phẩm" / "Tính giá" đọc cùng dữ liệu này.
+export default function BcDatapoolPage() {
+  const [data, setData] = useState<Sources | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [msg, setMsg] = useState<Msg | null>(null)
+  const [busy, setBusy] = useState<"" | "price" | "catalog">("")
+  const [view, setView] = useState<"price" | "catalog">("price")
+  const priceRef = useRef<HTMLInputElement>(null)
+  const catRef = useRef<HTMLInputElement>(null)
 
-function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", dateStyle: "short", timeStyle: "short" })
-}
+  const notify = (type: Msg["type"], text: string) => { setMsg({ type, text }); setTimeout(() => setMsg(null), 6000) }
 
-// ─── Tab components ───────────────────────────────────────────────────────────
-function CatalogTab({ products, prices }: { products: BCProduct[]; prices: BCPrice[] }) {
-  const [search, setSearch] = useState("")
-  const [typeFilter, setTypeFilter] = useState("")
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch("/api/admin/bc-datapool/sources", { cache: "no-store" })
+      const j = await r.json()
+      if (!r.ok) throw new Error(r.status === 403 ? "Bạn không có quyền xem tab này." : j.error || "Lỗi tải dữ liệu")
+      setData(j)
+    } catch (e) { setErr((e as Error).message) }
+  }, [])
+  useEffect(() => { load() }, [load])
 
-  const priceMap = new Map<string, BCPrice[]>()
-  for (const p of prices) {
-    if (!priceMap.has(p.sku_id)) priceMap.set(p.sku_id, [])
-    priceMap.get(p.sku_id)!.push(p)
+  const send = async (url: string, fd: FormData, which: "price" | "catalog", fail: string) => {
+    setBusy(which)
+    try {
+      const r = await fetch(url, { method: "POST", body: fd })
+      const j = await r.json()
+      if (!r.ok) { notify("error", j.error || fail); return null }
+      return j
+    } catch { notify("error", "Lỗi mạng hoặc máy chủ trả về không đúng định dạng (có thể quá thời gian) — thử lại"); return null } finally { setBusy("") }
   }
 
-  const types = [...new Set(products.map(p => p.type))].sort()
-  const filtered = products.filter(p => {
-    const q = search.toLowerCase()
-    const match = !q || p.name.toLowerCase().includes(q) || p.sku_id.includes(q)
-    const tMatch = !typeFilter || p.type === typeFilter
-    return match && tMatch
-  })
+  const uploadPrice = async (file: File) => {
+    const fd = new FormData(); fd.append("file", file)
+    const j = await send("/api/admin/bc-datapool/price-list", fd, "price", "Không đọc được file báo giá")
+    if (!j) return
+    await load()
+    const c = j.priceList.lastDiff?.counts
+    const changed = c ? c.changed + c.added + c.removed + c.fees : 0
+    notify("success", `Đã lưu bảng báo giá: ${j.priceList.fileName}` + (j.priceList.lastDiff?.compared ? (changed ? ` — ${c.changed} nhà mạng đổi giá, ${c.added} mới, ${c.removed} bị bỏ, ${c.fees} phí đổi` : " — không có thay đổi so với bản trước") : ""))
+  }
+
+  const uploadCatalog = async (files: FileList) => {
+    const fd = new FormData(); Array.from(files).forEach(f => fd.append("files", f))
+    const j = await send("/api/admin/bc-datapool/plan-catalog", fd, "catalog", "Không đọc được file Portal")
+    if (!j) return
+    await load()
+    const c = j.planCatalog.lastDiff?.counts
+    notify("success", `Đã lưu danh mục gói Portal: ${j.planCatalog.esim} gói eSIM, ${j.planCatalog.sim} gói SIM` + (j.planCatalog.lastDiff?.compared ? (c && c.added + c.removed + c.changed ? ` — ${c.added} gói mới, ${c.removed} bị bỏ, ${c.changed} đổi ngày/tốc độ` : " — không có thay đổi so với bản trước") : ""))
+  }
+
+  if (err) return <div className="p-6 text-sm text-red-600">{err}</div>
+  if (!data) return <div className="p-6 text-sm text-gray-400">Đang tải...</div>
+  const { priceList, catalog } = data
+  const esim = catalog?.plans.filter(p => p.sim === "eSIM").length ?? 0
+  const sim = catalog?.plans.filter(p => p.sim === "SIM").length ?? 0
 
   return (
-    <div className="space-y-3">
-      <div className="flex gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-48">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Tìm theo tên hoặc SKU ID..."
-            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <select
-          value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">Tất cả loại</option>
-          {types.map(t => <option key={t} value={t}>{PRODUCT_TYPES[t] ?? t}</option>)}
-        </select>
-        <span className="text-sm text-gray-400 self-center">{filtered.length} / {products.length} sản phẩm</span>
+    <div className="max-w-6xl mx-auto p-4 sm:p-6 space-y-5">
+      <div>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">BC Datapool</h1>
+        <p className="text-sm text-gray-500 mt-1">Import và quản lý dữ liệu nền của BC Datapool. Tab &quot;Tính giá &amp; Tạo sản phẩm&quot; dùng đúng dữ liệu này — upload ở đây là các tab kia cập nhật theo.</p>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-100">
+      {msg && <div className={`p-3 rounded-xl text-sm ${msg.type === "success" ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>{msg.text}</div>}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-2">
+          <div className="text-sm font-semibold">Bảng báo giá</div>
+          {priceList ? (
+            <div className="text-xs text-gray-600 dark:text-slate-300 space-y-0.5">
+              <div>{priceList.fileName}</div>
+              <div>Cập nhật {new Date(priceList.uploadedAt).toLocaleString("vi-VN")}</div>
+              <div>CMHK {priceList.pools.CMHK.rows.length} dòng (HKD/GB) · Singtel {priceList.pools.SINGTEL.rows.length} dòng (USD/GB)</div>
+            </div>
+          ) : <div className="text-xs text-amber-700">Chưa có bảng báo giá — upload file có sheet &quot;cmhk&quot; và &quot;Singtel&quot;.</div>}
+          <input ref={priceRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadPrice(f); e.target.value = "" }} />
+          <button onClick={() => priceRef.current?.click()} disabled={busy === "price"} className={btn}>
+            <Upload size={14} /> {busy === "price" ? "Đang đọc file..." : priceList ? "Upload bảng giá mới" : "Upload bảng giá"}
+          </button>
+          <DiffBox diff={priceList?.lastDiff} groups={priceGroups(priceList?.lastDiff)} />
+        </div>
+
+        <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-xl space-y-2">
+          <div className="text-sm font-semibold">Danh mục gói Portal (Plan ID = ProductID)</div>
+          {catalog ? (
+            <div className="text-xs text-gray-600 dark:text-slate-300 space-y-0.5">
+              <div>{esim} gói eSIM · {sim} gói SIM</div>
+              <div>File: {catalog.files.join(", ") || "—"}</div>
+              <div>Cập nhật {new Date(catalog.uploadedAt).toLocaleString("vi-VN")}</div>
+            </div>
+          ) : <div className="text-xs text-amber-700">Chưa có — upload 2 file &quot;Purchase information&quot; (eSIM và SIM) từ Portal.</div>}
+          <input ref={catRef} type="file" multiple accept=".xlsx,.xls" className="hidden" onChange={e => { if (e.target.files?.length) uploadCatalog(e.target.files); e.target.value = "" }} />
+          <button onClick={() => catRef.current?.click()} disabled={busy === "catalog"} className={btn}>
+            <Upload size={14} /> {busy === "catalog" ? "Đang đọc file..." : catalog ? "Upload file Portal mới" : "Upload file Portal"}
+          </button>
+          <div className="text-[12px] text-gray-400">Loại SIM nào có trong file upload thì thay hẳn loại đó, loại còn lại giữ nguyên.</div>
+          <DiffBox diff={catalog?.lastDiff} groups={catalogGroups(catalog?.lastDiff)} />
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        {([["price", "Xem bảng báo giá"], ["catalog", "Xem gói Portal"]] as const).map(([k, t]) => (
+          <button key={k} onClick={() => setView(k)} className={`px-3 py-1.5 text-sm rounded-lg border ${view === k ? "border-brand-600 bg-brand-50 dark:bg-brand-950/30 font-semibold" : "border-gray-200 dark:border-slate-700"}`}>{t}</button>
+        ))}
+      </div>
+
+      {view === "price" ? <PriceView priceList={priceList} /> : <CatalogView catalog={catalog} />}
+    </div>
+  )
+}
+
+function PriceView({ priceList }: { priceList: PriceList | null }) {
+  const [pool, setPool] = useState<Pool>("CMHK")
+  const [q, setQ] = useState("")
+  if (!priceList) return <div className="text-sm text-gray-400">Chưa có bảng báo giá.</div>
+  const p = priceList.pools[pool]
+  const rows = p.rows.filter(r => !q || `${r.coverage} ${r.operator} ${r.plmn}`.toLowerCase().includes(q.toLowerCase()))
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <select className={field} value={pool} onChange={e => setPool(e.target.value as Pool)}>
+          <option value="CMHK">CMHK (HKD/GB)</option>
+          <option value="SINGTEL">Singtel (USD/GB)</option>
+        </select>
+        <input className={`${field} w-64`} placeholder="Tìm khu vực / nhà mạng / PLMN" value={q} onChange={e => setQ(e.target.value)} />
+        <span className="text-xs text-gray-500">Phí: IMSI {p.imsiFee} {p.currency} · eSIM {p.esimFeeCny} CNY · SIM {p.simFeeCny} CNY</span>
+      </div>
+      <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-auto max-h-[28rem]">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 text-left">
-              <th className="px-3 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wide">SKU ID</th>
-              <th className="px-3 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wide">Tên</th>
-              <th className="px-3 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wide">Loại</th>
-              <th className="px-3 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wide">Ngày</th>
-              <th className="px-3 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wide">Data/ngày</th>
-              <th className="px-3 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wide">Quốc gia</th>
-              <th className="px-3 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wide">Giá gốc (copies=1)</th>
-              <th className="px-3 py-2"></th>
-            </tr>
+          <thead className="sticky top-0 bg-gray-50 dark:bg-slate-800 text-left text-[12px] text-gray-500">
+            <tr><th className="px-3 py-2">Khu vực</th><th className="px-3 py-2">Nhà mạng</th><th className="px-3 py-2">PLMN</th><th className="px-3 py-2 text-right">Giá/GB ({p.currency})</th><th className="px-3 py-2">KYC</th></tr>
           </thead>
-          <tbody className="divide-y divide-gray-50">
-            {filtered.map(p => {
-              const pList = priceMap.get(p.sku_id) ?? []
-              const base  = pList.find(x => x.copies === "1") ?? pList[0]
-              const isExp = expanded === p.sku_id
-              return (
-                <React.Fragment key={p.sku_id}>
-                  <tr className="hover:bg-gray-50 transition-colors">
-                    <td className="px-3 py-2 font-mono text-xs text-gray-500">{p.sku_id}</td>
-                    <td className="px-3 py-2 font-medium text-gray-800 max-w-48">{p.name}</td>
-                    <td className="px-3 py-2">
-                      <span className="px-1.5 py-0.5 rounded text-xs bg-blue-50 text-blue-700">
-                        {PRODUCT_TYPES[p.type] ?? p.type}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-gray-600">{p.days ?? "—"}</td>
-                    <td className="px-3 py-2 text-gray-600">{fmtMB(p.high_flow_size_kb)}</td>
-                    <td className="px-3 py-2 text-gray-600 text-xs">
-                      {(p.countries ?? []).slice(0, 3).map(c => c.mcc).join(", ")}
-                      {(p.countries ?? []).length > 3 && ` +${(p.countries ?? []).length - 3}`}
-                    </td>
-                    <td className="px-3 py-2 text-gray-700">
-                      {base ? (
-                        <span>{base.settlement_price} <span className="text-xs text-gray-400">(retail {base.retail_price})</span></span>
-                      ) : "—"}
-                    </td>
-                    <td className="px-3 py-2">
-                      {(pList.length > 0 || (p.countries ?? []).length > 0) && (
-                        <button onClick={() => setExpanded(isExp ? null : p.sku_id)} className="text-gray-400 hover:text-gray-600">
-                          {isExp ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                  {isExp && (
-                    <tr className="bg-blue-50/30">
-                      <td colSpan={8} className="px-4 py-3">
-                        <div className="grid grid-cols-2 gap-4 text-xs">
-                          {pList.length > 0 && (
-                            <div>
-                              <p className="font-semibold text-gray-600 mb-1">Bảng giá (theo số lượng copies):</p>
-                              <table className="text-xs">
-                                <thead><tr className="text-gray-500"><th className="pr-4">Copies</th><th className="pr-4">Retail</th><th>Settlement</th></tr></thead>
-                                <tbody>
-                                  {pList.sort((a, b) => parseInt(a.copies) - parseInt(b.copies)).map(px => (
-                                    <tr key={px.copies}>
-                                      <td className="pr-4">{px.copies}</td>
-                                      <td className="pr-4">{px.retail_price}</td>
-                                      <td className="font-medium text-blue-700">{px.settlement_price}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                          {(p.countries ?? []).length > 0 && (
-                            <div>
-                              <p className="font-semibold text-gray-600 mb-1">Quốc gia áp dụng:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {(p.countries ?? []).map((c) => (
-                                  <span key={c.mcc} className="px-1.5 py-0.5 bg-white border border-gray-200 rounded text-gray-600">{c.mcc} {c.name}</span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        {p.description && <p className="mt-2 text-xs text-gray-500 italic">{p.description}</p>}
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              )
-            })}
-            {filtered.length === 0 && (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-sm text-gray-400">Không có sản phẩm</td></tr>
-            )}
+          <tbody>
+            {rows.slice(0, ROW_CAP).map((r, i) => (
+              <tr key={i} className="border-t border-gray-100 dark:border-slate-800">
+                <td className="px-3 py-1.5">{r.coverage}</td><td className="px-3 py-1.5">{r.operator}</td><td className="px-3 py-1.5 text-gray-500">{r.plmn}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{r.pricePerGb}</td><td className="px-3 py-1.5">{r.kyc ? "Có" : ""}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
+      <div className="text-xs text-gray-400">{rows.length} dòng{rows.length > ROW_CAP ? ` — hiện ${ROW_CAP} dòng đầu, gõ tìm kiếm để thu hẹp` : ""}</div>
     </div>
   )
 }
 
-function BalanceTab({ balance, syncLog }: { balance: BCBalance[]; syncLog: SyncLog[] }) {
-  const latest = balance[0]
+function CatalogView({ catalog }: { catalog: PlanCatalog | null }) {
+  const [sim, setSim] = useState("")
+  const [kind, setKind] = useState("")
+  const [q, setQ] = useState("")
+  const rows = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    return (catalog?.plans ?? []).filter(p => (!sim || p.sim === sim) && (!kind || p.kind === kind)
+      && (!s || `${p.id} ${p.name} ${p.countries.join(" ")} ${p.operators.join(" ")}`.toLowerCase().includes(s)))
+  }, [catalog, sim, kind, q])
+  if (!catalog) return <div className="text-sm text-gray-400">Chưa có danh mục gói Portal.</div>
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-4 text-white">
-          <p className="text-blue-100 text-sm font-medium">Số dư tài khoản BC</p>
-          <p className="text-3xl font-bold mt-1">{latest ? Number(latest.balance).toLocaleString("vi-VN", { minimumFractionDigits: 2 }) : "—"}</p>
-          <p className="text-blue-200 text-xs mt-1">{latest ? `Cập nhật: ${fmtTime(latest.synced_at)}` : "Chưa sync"}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <p className="text-gray-500 text-sm font-medium">Lịch sử số dư (30 lần gần nhất)</p>
-          <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
-            {balance.map((b, i) => (
-              <div key={i} className="flex justify-between text-sm">
-                <span className="text-gray-500 text-xs">{fmtTime(b.synced_at)}</span>
-                <span className="font-medium text-gray-700">{Number(b.balance).toLocaleString("vi-VN", { minimumFractionDigits: 2 })}</span>
-              </div>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <select className={field} value={sim} onChange={e => setSim(e.target.value)}><option value="">eSIM + SIM</option><option value="eSIM">eSIM</option><option value="SIM">SIM</option></select>
+        <select className={field} value={kind} onChange={e => setKind(e.target.value)}><option value="">Daily + Fixed</option><option value="Daily">Daily</option><option value="Fixed">Fixed</option></select>
+        <input className={`${field} w-64`} placeholder="Tìm Plan ID / tên / nước / nhà mạng" value={q} onChange={e => setQ(e.target.value)} />
+      </div>
+      <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-auto max-h-[28rem]">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-gray-50 dark:bg-slate-800 text-left text-[12px] text-gray-500">
+            <tr><th className="px-3 py-2">Plan ID</th><th className="px-3 py-2">Loại</th><th className="px-3 py-2">Pool</th><th className="px-3 py-2">Nước</th><th className="px-3 py-2">Dung lượng</th><th className="px-3 py-2">Ngày bán</th><th className="px-3 py-2">Nhà mạng</th></tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, ROW_CAP).map(p => (
+              <tr key={`${p.sim}-${p.id}`} className="border-t border-gray-100 dark:border-slate-800 align-top">
+                <td className="px-3 py-1.5 font-mono text-[12px]">{p.id}</td>
+                <td className="px-3 py-1.5">{p.sim} · {p.kind}{p.throttleKbps === 1024 ? " (1Mbps)" : ""}</td>
+                <td className="px-3 py-1.5">{p.pool}</td>
+                <td className="px-3 py-1.5">{p.countries.join(", ")}</td>
+                <td className="px-3 py-1.5 whitespace-nowrap">{p.amount} {p.unit}</td>
+                <td className="px-3 py-1.5">{fmtDays(p.days)}</td>
+                <td className="px-3 py-1.5 text-gray-500">{p.operators.join(", ")}</td>
+              </tr>
             ))}
-            {balance.length === 0 && <p className="text-sm text-gray-400">Chưa có dữ liệu</p>}
-          </div>
-        </div>
+          </tbody>
+        </table>
       </div>
-
-      <div>
-        <p className="text-sm font-semibold text-gray-700 mb-2">Lịch sử sync gần nhất</p>
-        <div className="space-y-2">
-          {syncLog.map((s, i) => {
-            const ch = s.changes as Record<string, { added?: string[]; removed?: string[]; modified?: string[]; changed?: string[] }> | null
-            const hasChange = ch && (
-              (ch.products?.added?.length ?? 0) + (ch.products?.removed?.length ?? 0) +
-              (ch.products?.modified?.length ?? 0) + (ch.prices?.changed?.length ?? 0) +
-              (ch.countries?.added?.length ?? 0) + (ch.countries?.removed?.length ?? 0) > 0
-            )
-            return (
-              <div key={i} className="flex items-start gap-2 text-sm bg-gray-50 rounded-lg px-3 py-2">
-                {s.error ? <XCircle size={14} className="text-red-500 mt-0.5 flex-shrink-0" />
-                  : hasChange ? <AlertCircle size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                  : <CheckCircle size={14} className="text-green-500 mt-0.5 flex-shrink-0" />}
-                <div className="flex-1 min-w-0">
-                  <span className="text-gray-500 text-xs">{fmtTime(s.synced_at)}</span>
-                  {s.error && <p className="text-red-600 text-xs mt-0.5">{s.error}</p>}
-                  {hasChange && ch && (
-                    <p className="text-gray-600 text-xs mt-0.5">
-                      {(ch.products?.added?.length ?? 0) > 0 && `+${ch.products!.added!.length} sản phẩm `}
-                      {(ch.products?.removed?.length ?? 0) > 0 && `-${ch.products!.removed!.length} sản phẩm `}
-                      {(ch.products?.modified?.length ?? 0) > 0 && `~${ch.products!.modified!.length} đổi `}
-                      {(ch.prices?.changed?.length ?? 0) > 0 && `${ch.prices!.changed!.length} giá thay đổi`}
-                    </p>
-                  )}
-                  {!s.error && !hasChange && <p className="text-gray-400 text-xs mt-0.5">Không có thay đổi</p>}
-                </div>
-              </div>
-            )
-          })}
-          {syncLog.length === 0 && <p className="text-sm text-gray-400 px-3">Chưa sync lần nào</p>}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function CountriesTab({ countries }: { countries: BCCountry[] }) {
-  const [search, setSearch] = useState("")
-  const byContinent = countries
-    .filter(c => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.mcc.toLowerCase().includes(search.toLowerCase()))
-    .reduce<Record<string, BCCountry[]>>((acc, c) => {
-      ;(acc[c.continent] ??= []).push(c)
-      return acc
-    }, {})
-
-  return (
-    <div className="space-y-3">
-      <div className="relative w-64">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Tìm quốc gia..."
-          className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-      <p className="text-xs text-gray-400">{countries.length} quốc gia / vùng lãnh thổ BC hỗ trợ</p>
-      {Object.entries(byContinent).sort().map(([continent, list]) => (
-        <div key={continent}>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{continent || "Other"} ({list.length})</p>
-          <div className="flex flex-wrap gap-1.5">
-            {list.map(c => (
-              <div key={c.mcc} className="flex items-center gap-1 px-2 py-1 bg-gray-50 border border-gray-100 rounded-lg text-xs hover:bg-gray-100 transition-colors">
-                {c.url && <img src={c.url} alt="" className="w-4 h-3 object-cover rounded-sm" onError={e => (e.currentTarget.style.display = "none")} />}
-                <span className="font-mono text-gray-500">{c.mcc}</span>
-                <span className="text-gray-700">{c.name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-      {Object.keys(byContinent).length === 0 && (
-        <p className="text-sm text-gray-400">Không tìm thấy quốc gia</p>
-      )}
-    </div>
-  )
-}
-
-// ─── Query Tab ────────────────────────────────────────────────────────────────
-type QueryType = "F011" | "F012" | "F023" | "F046" | "F042"
-
-interface QueryForm {
-  channelOrderId?: string; iccid?: string; orderId?: string
-  beginDate?: string; endDate?: string; eid?: string
-}
-
-function CredentialTest() {
-  const [secret, setSecret] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<object | null>(null)
-
-  async function test() {
-    if (!secret.trim()) return
-    setLoading(true); setResult(null)
-    const res = await fetch("/api/bc/query", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ testSecret: secret.trim() }),
-    })
-    setResult(await res.json() as object)
-    setLoading(false)
-  }
-
-  const r = result as { tradeCode?: string; tradeMsg?: string } | null
-  const ok = r?.tradeCode === "1000"
-
-  return (
-    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
-      <p className="text-sm font-semibold text-amber-800">Test App Secret</p>
-      <p className="text-xs text-amber-700">Nhập appSecret từ portal BC để kiểm tra — gọi F014 (balance) và trả kết quả ngay.</p>
-      <div className="flex gap-2">
-        <input
-          value={secret} onChange={e => setSecret(e.target.value)}
-          placeholder="Nhập appSecret..."
-          type="text"
-          className="flex-1 px-3 py-1.5 text-sm border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white font-mono"
-        />
-        <button
-          onClick={test} disabled={loading || !secret.trim()}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
-        >
-          {loading ? <Loader2 size={13} className="animate-spin" /> : <Terminal size={13} />}
-          Test
-        </button>
-      </div>
-      {result && (
-        <div className={cn("flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium",
-          ok ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200")}>
-          {ok ? <CheckCircle size={14} /> : <XCircle size={14} />}
-          {ok ? `Secret đúng! Số dư: ${(result as { tradeData?: { saleBalance?: string } }).tradeData?.saleBalance ?? "—"}`
-              : `[${r?.tradeCode}] ${r?.tradeMsg}`}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function QueryTab() {
-  const [qType, setQType]   = useState<QueryType>("F011")
-  const [form, setForm]     = useState<QueryForm>({})
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<object | null>(null)
-  const [error, setError]   = useState("")
-
-  const QUERIES: { type: QueryType; label: string; fields: { key: keyof QueryForm; label: string; placeholder: string; required?: boolean }[] }[] = [
-    {
-      type: "F011", label: "Thông tin đơn hàng (F011)",
-      fields: [{ key: "channelOrderId", label: "Channel Order ID", placeholder: "Mã đơn hàng phía GoHub", required: true }],
-    },
-    {
-      type: "F012", label: "Mức dùng data plan (F012)",
-      fields: [
-        { key: "iccid", label: "ICCID", placeholder: "Số ICCID thẻ SIM", required: true },
-        { key: "channelOrderId", label: "Channel Order ID (tùy chọn)", placeholder: "" },
-      ],
-    },
-    {
-      type: "F023", label: "Daily flow từng ngày (F023)",
-      fields: [
-        { key: "iccid", label: "ICCID", placeholder: "Số ICCID thẻ SIM", required: true },
-        { key: "beginDate", label: "Từ ngày (YYYY-MM-DD)", placeholder: "2026-08-01", required: true },
-        { key: "endDate", label: "Đến ngày (YYYY-MM-DD)", placeholder: "2026-08-14", required: true },
-      ],
-    },
-    {
-      type: "F046", label: "Mức dùng data plan V2 (F046)",
-      fields: [
-        { key: "iccid", label: "ICCID", placeholder: "Số ICCID thẻ SIM", required: true },
-        { key: "channelOrderId", label: "Channel Order ID (tùy chọn)", placeholder: "" },
-        { key: "orderId", label: "BC Order ID (tùy chọn)", placeholder: "" },
-      ],
-    },
-    {
-      type: "F042", label: "Trạng thái eSIM profile (F042)",
-      fields: [
-        { key: "iccid", label: "ICCID", placeholder: "Số ICCID" },
-        { key: "eid", label: "EID (tùy chọn)", placeholder: "" },
-      ],
-    },
-  ]
-
-  const current = QUERIES.find(q => q.type === qType)!
-
-  async function runQuery() {
-    const tradeData: Record<string, string> = {}
-    for (const f of current.fields) {
-      if (form[f.key]) tradeData[f.key] = form[f.key]!
-    }
-    setLoading(true); setResult(null); setError("")
-    try {
-      const res = await fetch("/api/bc/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tradeType: qType, tradeData }),
-      })
-      const data = await res.json() as object
-      if (!res.ok) { setError((data as { error?: string }).error ?? "Lỗi không xác định"); return }
-      setResult(data)
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <CredentialTest />
-      <div className="flex gap-1 flex-wrap border-b border-gray-100 pb-3">
-        {QUERIES.map(q => (
-          <button
-            key={q.type}
-            onClick={() => { setQType(q.type); setForm({}); setResult(null); setError("") }}
-            className={cn("px-3 py-1.5 text-xs font-medium rounded-lg transition-colors",
-              qType === q.type ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}
-          >
-            {q.type}
-          </button>
-        ))}
-      </div>
-
-      <div>
-        <p className="text-sm font-semibold text-gray-700 mb-3">{current.label}</p>
-        <div className="space-y-2 max-w-md">
-          {current.fields.map(f => (
-            <div key={f.key}>
-              <label className="block text-xs text-gray-500 mb-0.5">{f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}</label>
-              <input
-                value={form[f.key] ?? ""}
-                onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
-                placeholder={f.placeholder}
-                className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          ))}
-          <button
-            onClick={runQuery}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <Terminal size={14} />}
-            Query BC API
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
-          <XCircle size={15} className="mt-0.5 flex-shrink-0" />
-          {error}
-        </div>
-      )}
-
-      {result && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Kết quả</p>
-          <pre className="bg-gray-900 text-green-400 text-xs rounded-lg p-4 overflow-auto max-h-96 font-mono">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Main page ────────────────────────────────────────────────────────────────
-type Tab = "catalog" | "balance" | "countries" | "query"
-
-export default function BCDatapoolPage() {
-  const [tab, setTab]         = useState<Tab>("catalog")
-  const [products, setProducts] = useState<BCProduct[]>([])
-  const [prices, setPrices]     = useState<BCPrice[]>([])
-  const [balance, setBalance]   = useState<BCBalance[]>([])
-  const [countries, setCountries] = useState<BCCountry[]>([])
-  const [syncLog, setSyncLog]   = useState<SyncLog[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [syncing, setSyncing]   = useState(false)
-  const [syncError, setSyncError] = useState("")
-  const [lastLoad, setLastLoad] = useState("")
-
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch("/api/bc/data")
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const d = await res.json()
-      setProducts(d.products ?? [])
-      setPrices(d.prices ?? [])
-      setBalance(d.balance ?? [])
-      setCountries(d.countries ?? [])
-      setSyncLog(d.syncLog ?? [])
-      setLastLoad(new Date().toLocaleTimeString("vi-VN"))
-    } catch (e) {
-      console.error("BC data load error:", e)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { loadData() }, [loadData])
-
-  async function triggerSync() {
-    setSyncing(true)
-    setSyncError("")
-    try {
-      const res = await fetch("/api/cron/bc-sync", { method: "POST" })
-      const json = await res.json() as { ok?: boolean; error?: string; changes?: unknown }
-      if (!res.ok || !json.ok) {
-        setSyncError(json.error ?? `HTTP ${res.status}`)
-      } else {
-        await loadData()
-      }
-    } catch (e) {
-      setSyncError((e as Error).message)
-    }
-    setSyncing(false)
-  }
-
-  const TABS: { id: Tab; label: string; icon: React.ElementType; badge?: number }[] = [
-    { id: "catalog",   label: "Catalog",   icon: Package,  badge: products.length },
-    { id: "balance",   label: "Số dư",     icon: Wallet                           },
-    { id: "countries", label: "Quốc gia",  icon: Globe,    badge: countries.length },
-    { id: "query",     label: "Tra cứu",   icon: Terminal                         },
-  ]
-
-  return (
-    <div className="p-6 max-w-[1480px] mx-auto space-y-4">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">BC Datapool</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Billion Connect — catalog sản phẩm, số dư tài khoản, tra cứu đơn / SIM
-            {lastLoad && <span className="ml-2 text-gray-400">· Tải lúc {lastLoad}</span>}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={loadData}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
-            <RefreshCw size={13} className={cn(loading && "animate-spin")} />
-            Làm mới
-          </button>
-          <button
-            onClick={triggerSync}
-            disabled={syncing}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            <RefreshCw size={13} className={cn(syncing && "animate-spin")} />
-            Sync ngay
-          </button>
-        </div>
-      </div>
-
-      {syncError && (
-        <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-4 py-2.5">
-          <XCircle size={15} className="mt-0.5 flex-shrink-0 text-red-500" />
-          <span><span className="font-medium">Sync lỗi:</span> {syncError}</span>
-        </div>
-      )}
-
-      {/* Balance banner */}
-      {balance[0] && (
-        <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-lg px-4 py-2.5">
-          <Wallet size={16} className="text-blue-600 flex-shrink-0" />
-          <span className="text-sm text-blue-800">
-            <span className="font-semibold">Số dư BC:</span>{" "}
-            <span className="font-bold text-blue-700 text-base">{Number(balance[0].balance).toLocaleString("vi-VN", { minimumFractionDigits: 2 })}</span>
-            <span className="text-blue-500 ml-2">· Cập nhật {fmtTime(balance[0].synced_at)}</span>
-          </span>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-100">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors",
-              tab === t.id
-                ? "border-blue-600 text-blue-700"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200",
-            )}
-          >
-            <t.icon size={14} />
-            {t.label}
-            {t.badge !== undefined && t.badge > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 font-normal">{t.badge}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 size={24} className="animate-spin text-gray-400" />
-          <span className="ml-2 text-gray-400 text-sm">Đang tải dữ liệu...</span>
-        </div>
-      ) : (
-        <div>
-          {tab === "catalog"   && <CatalogTab products={products} prices={prices} />}
-          {tab === "balance"   && <BalanceTab balance={balance} syncLog={syncLog} />}
-          {tab === "countries" && <CountriesTab countries={countries} />}
-          {tab === "query"     && <QueryTab />}
-        </div>
-      )}
+      <div className="text-xs text-gray-400">{rows.length} gói{rows.length > ROW_CAP ? ` — hiện ${ROW_CAP} gói đầu, dùng bộ lọc để thu hẹp` : ""}</div>
     </div>
   )
 }
