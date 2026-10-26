@@ -26,6 +26,9 @@ export default function TroLyPage() {
   const router = useRouter()
   const [role, setRole] = useState<string | null>(null)
   const [missionId, setMissionId] = useState<string | null>(null)
+  const [auto, setAuto] = useState<{ text: string; k: number } | null>(null)
+  // Từ ô Hỏi / Tìm: ?q=… → tự gửi câu đó (anh đã bấm "Hỏi Argon"; Argon ở đây không thao tác ngoài Kho).
+  useEffect(() => { const q = new URLSearchParams(window.location.search).get("q"); if (q?.trim()) setAuto({ text: q.trim().slice(0, 2000), k: 1 }) }, [])
   const [detail, setDetail] = useState<MissionDetail | null>(null)
   const [runs, setRuns] = useState<Run[]>([])
   const [showBench, setShowBench] = useState(false)
@@ -65,7 +68,7 @@ export default function TroLyPage() {
         {!m || !detail ? <div className="m-auto text-sm text-gray-400">Đang chuẩn bị trợ lý…</div> : (
           <>
             <div className="flex-1 min-h-0">
-              <MissionChat simple quick={QUICK} autoSend={null} phase={m.phase} pendingAsk={detail.pendingAsk} patches={detail.patches ?? []}
+              <MissionChat simple quick={QUICK} autoSend={auto} phase={m.phase} pendingAsk={detail.pendingAsk} patches={detail.patches ?? []}
                 onPatch={async (id, action) => { await api(`/api/creator/argon/missions/${m.id}/patches`, jsonInit("POST", { id, action })); refresh() }}
                 runs={runs} runner={runner} onPhase={async to => { await api(`/api/creator/argon/missions/${m.id}/phase`, jsonInit("POST", { to })); refresh() }}
                 onStep={async (runId, n) => { await runner.loadSteps(runId, true); setFocus({ id: `${runId}:${n - 1}`, k: Date.now() }); setShowBench(true) }} onError={onError} />

@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const mat = await loadRunMaterial(project, pick, req.nextUrl.origin)
   const toolLog = resume ? await getToolLog(resume.id) : []
-  const mctx = project.kind === "mission" ? await loadMissionContext(project.id) : null
+  const mctx = project.kind === "mission" ? await loadMissionContext(project.id, prompt) : null
   const ctx = await buildRunContext({ project: mat.project, sources: mat.sources, priorRuns: runs, prompt: withTpl(prompt), resumeRun: resume ? { ...resume, prompt: withTpl(resume.prompt) } : undefined, allowTools, toolLog, mission: mctx ?? undefined })
   ctx.warnings.push(...mat.warnings)
   const t0 = Date.now()

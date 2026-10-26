@@ -24,6 +24,8 @@ export interface AgentLoopOptions {
   timeBudgetMs?: number
   startedAt?: number
   onRound?: (round: LoopRound) => void
+  /** Kiểm sau MỖI vòng công cụ (đã nối kết quả vào contents): true → dừng ngay, không gọi model nữa (vd Argon vừa hỏi người dùng, chờ trả lời). */
+  stopWhen?: () => boolean
   /** Ghi sự kiện cho Bản đồ vận hành (chỉ tên bước + thời gian, không nội dung). Không chặn, không bao giờ làm hỏng lượt. */
   trace?: RunTrace
 }
@@ -85,6 +87,7 @@ export async function runAgentLoop(o: AgentLoopOptions): Promise<AgentLoop> {
     parts.push(...extras)
     // Kết quả tool gửi lại với role "user" (định dạng Gemini API cho functionResponse).
     o.contents.push({ role: "user", parts })
+    if (o.stopWhen?.()) break
     if (o.timeBudgetMs != null && Date.now() - startedAt >= o.timeBudgetMs) { unfinished = true; break }
     last = await next()
   }

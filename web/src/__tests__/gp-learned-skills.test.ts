@@ -21,10 +21,9 @@ describe("skill tự học", () => {
     expect(c).toContain("viet-email-ncc: Viết email hỏi báo giá nhà cung cấp")
   })
 
-  it("create/delete LUÔN cần duyệt, kể cả hôm nay đã tự-duyệt và lượt chưa nhiễm; list chạy luôn", () => {
+  it("delete LUÔN cần duyệt (kể cả đã tự-duyệt hôm nay); create chỉ tạo ứng viên nên chạy luôn; list chạy luôn", () => {
     const s = newTurnSafety("học cách viết email", false)
-    expect(approvalReason({ name: "learnSkill", args: { action: "create", ...ok } }, s)).not.toBeNull()
-    expect(approvalReason({ name: "learnSkill", args: { action: "create", ...ok } }, s, { dailyAuto: true })).not.toBeNull()
+    expect(approvalReason({ name: "learnSkill", args: { action: "create", ...ok } }, s)).toBeNull()
     expect(approvalReason({ name: "learnSkill", args: { action: "delete", name: "viet-email-ncc" } }, s, { dailyAuto: true })).not.toBeNull()
     expect(approvalReason({ name: "learnSkill", args: { action: "list" } }, s)).toBeNull()
   })

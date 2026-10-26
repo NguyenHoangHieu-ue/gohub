@@ -5,6 +5,8 @@ import { listMailThreads } from "@/lib/argon/mail-status"
 import { listTickets } from "@/lib/dev-tickets"
 import { FACT_TYPES, factLine } from "@/lib/argon/facts-pure"
 import { threadLine } from "@/lib/argon/mail-status-pure"
+import { candidates, readRegistry } from "@/lib/agents/creator/learned-skills"
+import { evalSummary } from "@/lib/agents/creator/skill-eval"
 import { sortInbox, urgencyFor, type InboxItem } from "./inbox-pure"
 
 export * from "./inbox-pure"
@@ -69,9 +71,23 @@ async function ticketItems(now: number): Promise<InboxItem[]> {
   })
 }
 
+/** Skill tự học đang chờ duyệt: hiện mô tả, kết quả kiểm tra tĩnh + nhận xét model, phần đầu chỉ dẫn. Bản bị chặn (lint "block") chỉ cho Từ chối. */
+async function skillItems(now: number): Promise<InboxItem[]> {
+  return candidates(await readRegistry()).map(({ name, version: v, replaces }) => {
+    const notes = [...v.lint.findings.map(f => `${f.level === "block" ? "⛔" : "⚠"} ${f.message}`), ...(v.eval ? [evalSummary(v.eval)] : []), ...(v.review ? [`Model chấm độ rõ ${v.review.clarity}/5`, ...v.review.risks.map(r => `Rủi ro: ${r}`), ...v.review.conflicts.map(c => `Mâu thuẫn: ${c}`)] : [])]
+    return {
+      key: `skill_candidate:${name}@${v.v}`, kind: "skill_candidate" as const, id: `${name}@${v.v}`,
+      title: `${replaces != null ? "Bản mới" : "Skill mới"} "${name}" (v${v.v})${replaces != null ? ` thay v${replaces}` : ""} — ${v.description}`.slice(0, 200),
+      detail: `${notes.length ? notes.join(" · ") : "Kiểm tra tĩnh: không thấy vấn đề."}\n\nChỉ dẫn: ${v.instructions.slice(0, 700)}${v.instructions.length > 700 ? "…" : ""}`,
+      at: v.created_at, urgency: urgencyFor("skill_candidate", v.created_at, now), source: `Gấu Pro${v.source ? ` · ${v.source.slice(0, 60)}` : ""}`,
+      actions: [...(v.lint.level === "block" ? ["reject"] : ["approve", "reject"]), ...(!v.eval && v.review?.testPrompts.length ? ["eval"] : [])] as InboxItem["actions"],
+    }
+  })
+}
+
 export async function loadInbox(username: string, now = Date.now()): Promise<{ items: InboxItem[]; failed: string[] }> {
   const jobs: [string, Promise<InboxItem[]>][] = [
-    ["Hành động Gấu Pro", gpActions(username, now)], ["Argon", argonItems(username, now)], ["Sổ sự việc", factReviews(username, now)], ["Mail", mailItems(username, now)], ["Phiếu sửa code", ticketItems(now)],
+    ["Hành động Gấu Pro", gpActions(username, now)], ["Argon", argonItems(username, now)], ["Sổ sự việc", factReviews(username, now)], ["Mail", mailItems(username, now)], ["Phiếu sửa code", ticketItems(now)], ["Kỹ năng", skillItems(now)],
   ]
   const settled = await Promise.allSettled(jobs.map(j => j[1]))
   const items: InboxItem[] = [], failed: string[] = []

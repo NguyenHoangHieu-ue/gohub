@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { isBridgeBlockedUrl, BRIDGE_BLOCK_MESSAGE } from "@/lib/bridge-safety"
+import { localFilesVerdict } from "@/lib/local-files-safety"
 
 // Action đổi trạng thái tab (khác đọc thuần) — Hiếu chọn bỏ bước "Duyệt" (thói quen luôn bấm Duyệt khiến
 // bước xác nhận vô nghĩa), extension thực thi NGAY + hiện notification không chặn để biết. Cột
@@ -138,6 +139,8 @@ export async function runLocalFiles(
   if (args.action !== "list" && !args.path) return { error: "Thiếu path." }
   if (args.action === "write" && typeof args.content !== "string") return { error: "write cần content." }
   if (args.action === "edit" && (!args.find || typeof args.replace !== "string")) return { error: "edit cần find + replace." }
+  const blocked = localFilesVerdict(args.action, args.path)   // phòng thủ nhiều lớp: server từ chối sớm, không phụ thuộc phiên bản daemon trên máy
+  if (blocked) return { error: blocked }
   return enqueueAndPoll(`${LOCAL_PREFIX}${args.action}`, {
     path: args.path, content: args.content, find: args.find, replace: args.replace,
   }, username, onEvent)
