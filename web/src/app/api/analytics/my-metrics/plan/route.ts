@@ -9,6 +9,8 @@ import { loadMarketData } from "@/lib/market-data"
 import { loadQuoteCompare } from "@/lib/quote-sources"
 import { buildProposals, analysisQuarterFor } from "@/lib/okr-proposals"
 import { loadPlan, pendingQuotes } from "@/lib/okr-plan-server"
+import { fetchBefore, logRowEdits } from "@/lib/manual-history/wire"
+import { recordEdit } from "@/lib/manual-history/store"
 import { PLAN_KINDS, type PlanItem } from "@/lib/okr-plan"
 
 const READ_ROLES  = ["admin", "creator", "bod"]
@@ -103,6 +105,7 @@ export async function POST(req: NextRequest) {
   if (b.kind === "quotes_review" && (b.baseline === null || b.baseline === undefined)) row.baseline = await pendingQuotes()
   const { data, error } = await supabaseAdmin.from("okr_plan_items").insert(row).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await recordEdit({ table: "okr_plan_items", key: String(data?.id ?? ""), label: `Kế hoạch quý ${b.quarter}: ${String(row.title)}`, before: null, after: data as Record<string, unknown>, user: g.name, source: "POST /analytics/my-metrics/plan", ignore: ["created_by"] })
   return NextResponse.json({ ok: true, item: data })
 }
 
@@ -112,8 +115,11 @@ export async function PATCH(req: NextRequest) {
   const b = await req.json() as Body
   if (!b.id) return NextResponse.json({ error: "id required" }, { status: 400 })
   const locked = await lockedErr(b.id, undefined); if (locked) return locked
-  const { error } = await supabaseAdmin.from("okr_plan_items").update({ ...clean(b), updated_at: new Date().toISOString() }).eq("id", b.id)
+  const patch = { ...clean(b), updated_at: new Date().toISOString() }
+  const before = await fetchBefore("okr_plan_items", ["id"], [{ id: b.id }])   // số cũ để ghi lịch sử sửa tay
+  const { error } = await supabaseAdmin.from("okr_plan_items").update(patch).eq("id", b.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await logRowEdits({ table: "okr_plan_items", pk: ["id"], rows: [{ id: b.id, ...patch }], before, user: g.name, source: "PATCH /analytics/my-metrics/plan", label: () => `Kế hoạch quý: ${String(before.get(String(b.id))?.title ?? b.id)}` })
   return NextResponse.json({ ok: true })
 }
 
@@ -123,7 +129,9 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id")
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
   const locked = await lockedErr(id, undefined); if (locked) return locked
+  const old = (await fetchBefore("okr_plan_items", ["id"], [{ id }])).get(String(id)) ?? null   // lưu lại số cũ trước khi xoá
   const { error } = await supabaseAdmin.from("okr_plan_items").delete().eq("id", id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await recordEdit({ table: "okr_plan_items", key: String(id), label: `Kế hoạch quý: ${String(old?.title ?? id)}`, before: old, after: null, user: g.name, source: "DELETE /analytics/my-metrics/plan" })
   return NextResponse.json({ ok: true })
 }

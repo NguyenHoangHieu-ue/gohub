@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 import { canWrite } from "@/lib/writable-tabs"
+import { fetchBefore, logRowEdits } from "@/lib/manual-history/wire"
 
 // GET /api/channel-cost-settings?month=YYYY-MM → { [channel]: mode }
 export async function GET(req: NextRequest) {
@@ -42,19 +43,13 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const row = { channel, month, mode, updated_by: updatedBy || session.user?.name || "system", updated_at: new Date().toISOString() }
+    const before = await fetchBefore("analytics_cost_input_settings", ["channel", "month"], [row])   // số cũ để ghi lịch sử sửa tay
     const { error } = await supabaseAdmin
       .from("analytics_cost_input_settings")
-      .upsert(
-        {
-          channel,
-          month,
-          mode,
-          updated_by: updatedBy || session.user?.name || "system",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "channel,month", ignoreDuplicates: false }
-      )
+      .upsert(row, { onConflict: "channel,month", ignoreDuplicates: false })
     if (error) throw new Error(error.message)
+    await logRowEdits({ table: "analytics_cost_input_settings", pk: ["channel", "month"], rows: [row], before, user: String(row.updated_by), source: "POST /channel-cost-settings", label: () => `Cách nhập chi phí kênh ${channel} · ${month}` })
     await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ success: true })
   } catch (err: any) {

@@ -6,6 +6,8 @@ import { createNotification } from "@/lib/notifications"
 import { loadEffectiveTable, saveMonthlyTable } from "@/lib/fx/server"
 import { triggerAudit } from "@/lib/datapool-audit/server"
 import { parseFxWorkbook } from "@/lib/fx/parse"
+import { recordEdits } from "@/lib/manual-history/store"
+import { userOfSession } from "@/lib/manual-history/wire"
 import { currentMonth, FX_ROWS, monthLabel, MONTHS, setCell, type FxTable } from "@/lib/fx/table"
 
 export const dynamic = "force-dynamic"
@@ -31,6 +33,7 @@ export async function PUT(req: NextRequest) {
   if (!changes.length) return NextResponse.json({ error: "Không có thay đổi nào" }, { status: 400 })
   const ids = new Set(FX_ROWS.map(r => r.id))
   let { table } = await loadEffectiveTable()
+  const oldTable = table   // bảng trước khi sửa — để ghi lịch sử sửa tay
   for (const c of changes) {
     if (!ids.has(c.id) || !MONTHS.includes(c.month)) return NextResponse.json({ error: `Ô không hợp lệ: ${c.id} ${c.month}` }, { status: 400 })
     if (c.rate != null && !(Number(c.rate) > 0)) return NextResponse.json({ error: `Tỷ giá phải là số dương (${c.id} ${monthLabel(c.month)})` }, { status: 400 })
@@ -39,6 +42,8 @@ export async function PUT(req: NextRequest) {
   try {
     const { flatWritten } = await saveMonthlyTable(table)
     triggerAudit("Tỷ giá nội bộ thay đổi")
+    const fxUser = userOfSession(await getServerSession(authOptions))
+    await recordEdits(changes.map(c => ({ table: "fx_rate", key: `${c.id}|${c.month}`, label: `Tỷ giá nội bộ ${c.id} · ${monthLabel(c.month)}`, before: oldTable.values[c.id]?.[c.month] != null ? { rate: oldTable.values[c.id][c.month] } : null, after: c.rate == null ? null : { rate: Number(c.rate) }, user: fxUser, source: "PUT /admin/fx" })))
     return NextResponse.json({ ...view(table, "monthly", new Date().toISOString()), saved: changes.length, flatWritten })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
@@ -66,6 +71,8 @@ export async function POST(req: NextRequest) {
   try {
     const { flatWritten } = await saveMonthlyTable(table)
     triggerAudit("Tỷ giá nội bộ thay đổi")
+    const importUser = userOfSession(await getServerSession(authOptions))
+    await recordEdits(changed.map(c => ({ table: "fx_rate", key: `${c.id}|${c.month}`, label: `Tỷ giá nội bộ ${c.id} · ${monthLabel(c.month)}`, before: c.from != null ? { rate: c.from } : null, after: { rate: c.to }, user: importUser, source: `POST /admin/fx (nhập file ${file.name})` })))
     if (changed.length)
       await createNotification("price_change", `Tỷ giá nội bộ: nhập từ ${file.name} — ${changed.length} ô thay đổi`, "Xem chi tiết ở Admin › Cài đặt › Tỷ Giá Nội Bộ.", { summary: { changed: changed.length } }, "admin_manager")
     return NextResponse.json({ ...view(table, "monthly", new Date().toISOString()), imported: { rows: parsed.rows, cells: parsed.cells }, changed: changed.slice(0, 100), changedCount: changed.length, flatWritten })

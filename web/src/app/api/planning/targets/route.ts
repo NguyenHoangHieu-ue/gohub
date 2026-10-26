@@ -5,6 +5,7 @@ import { queryAnalytics } from "@/lib/analytics-db"
 import { supabaseAdmin } from "@/lib/supabase"
 import { flushAnalyticsCache, getChannelCostsForMonths, shipFilter, internalOpsFilter, excludeInactiveCustomers, cachedQuery, QUERY_TTL_MIN } from "@/lib/analytics-helpers"
 import { canWrite } from "@/lib/writable-tabs"
+import { fetchBefore, logRowEdits } from "@/lib/manual-history/wire"
 
 const WRITE_ROLES = ["admin", "creator"]
 
@@ -170,11 +171,13 @@ export async function POST(req: NextRequest) {
       updated_at:               new Date().toISOString(),
     }))
 
+    const before = await fetchBefore("analytics_target_planning", ["month", "channel"], rows)
     const { error } = await supabaseAdmin
       .from("analytics_target_planning")
       .upsert(rows, { onConflict: "month,channel", ignoreDuplicates: false })
 
     if (error) throw new Error(error.message)
+    await logRowEdits({ table: "analytics_target_planning", pk: ["month", "channel"], rows, before, user: session.user?.name || "system", source: "POST /planning/targets", label: r => `Target kế hoạch ${r.channel} ${r.month}` })
     // Target thay đổi → xoá cache analytics (targets-summary + KPI cache 12h).
     await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ ok: true })

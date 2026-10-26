@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { tursoQuery } from "@/lib/turso"
 import { canWriteTab } from "@/lib/writable-tabs"
+import { recordEdits } from "@/lib/manual-history/store"
 
 const WRITE_ROLES = ["admin", "creator", "bod", "b2b", "b2c", "staff"]
 
@@ -83,6 +84,8 @@ export async function POST(req: NextRequest) {
 
   try {
     await ensureTable()
+    const oldRows = await tursoQuery<Record<string, unknown>>("SELECT * FROM target_planning_quarter WHERE quarter = ?", [q]).catch(() => [] as Record<string, unknown>[])   // số cũ để ghi lịch sử sửa tay
+    const logs: Parameters<typeof recordEdits>[0] = []
 
     for (const [ch, rev, cm1, thk] of [
       ["B2B", targets.b2bRev ?? 0, targets.b2bCm1 ?? 0, targets.b2bThk ?? 0],
@@ -94,7 +97,9 @@ export async function POST(req: NextRequest) {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [`${q}_${ch}`, q, ch, rev, cm1, thk, by, now]
       )
+      logs.push({ table: "target_planning_quarter", key: `${q}_${ch}`, label: `Target ${quarter} ${year} · kênh ${ch}`, before: oldRows.find(r => r.id === `${q}_${ch}`) ?? null, after: { id: `${q}_${ch}`, quarter: q, channel: ch, target_revenue: rev, target_cm1: cm1, target_three_hk_pct: thk }, user: by, source: "POST /analytics/quarterly-targets" })
     }
+    await recordEdits(logs)
 
     return NextResponse.json({ ok: true })
   } catch (err: any) {

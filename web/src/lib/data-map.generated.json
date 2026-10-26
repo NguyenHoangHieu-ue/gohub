@@ -890,6 +890,10 @@
     {
      "name": "fact_fulfillment_revenue",
      "source": "gohub_dw"
+    },
+    {
+     "name": "manual_edit_history",
+     "source": "turso"
     }
    ],
    "external": [],
@@ -931,10 +935,14 @@
     {
      "name": "b2b_customer_targets",
      "source": "supabase"
+    },
+    {
+     "name": "manual_edit_history",
+     "source": "turso"
     }
    ],
    "external": [],
-   "usesTurso": false
+   "usesTurso": true
   },
   "/api/analytics/b2b/ecom-breakdown": {
    "file": "src/app/api/analytics/b2b/ecom-breakdown/route.ts",
@@ -995,6 +1003,10 @@
     },
     {
      "name": "b2b_ecom_cost_monthly",
+     "source": "turso"
+    },
+    {
+     "name": "manual_edit_history",
      "source": "turso"
     }
    ],
@@ -1715,12 +1727,12 @@
    "deps": [],
    "tables": [
     {
-     "name": "app_settings",
-     "source": "supabase"
+     "name": "manual_edit_history",
+     "source": "turso"
     }
    ],
    "external": [],
-   "usesTurso": false
+   "usesTurso": true
   },
   "/api/analytics/customer-filters": {
    "file": "src/app/api/analytics/customer-filters/route.ts",
@@ -1847,10 +1859,14 @@
     {
      "name": "inventory_plan_skus",
      "source": "supabase"
+    },
+    {
+     "name": "manual_edit_history",
+     "source": "turso"
     }
    ],
    "external": [],
-   "usesTurso": false
+   "usesTurso": true
   },
   "/api/analytics/inventory-plan/weekly": {
    "file": "src/app/api/analytics/inventory-plan/weekly/route.ts",
@@ -1876,10 +1892,14 @@
     {
      "name": "inventory_plan_weekly",
      "source": "supabase"
+    },
+    {
+     "name": "manual_edit_history",
+     "source": "turso"
     }
    ],
    "external": [],
-   "usesTurso": false
+   "usesTurso": true
   },
   "/api/analytics/inventory-po": {
    "file": "src/app/api/analytics/inventory-po/route.ts",
@@ -1895,10 +1915,14 @@
     {
      "name": "inventory_po",
      "source": "supabase"
+    },
+    {
+     "name": "manual_edit_history",
+     "source": "turso"
     }
    ],
    "external": [],
-   "usesTurso": false
+   "usesTurso": true
   },
   "/api/analytics/inventory-stock": {
    "file": "src/app/api/analytics/inventory-stock/route.ts",
@@ -2289,12 +2313,12 @@
    "deps": [],
    "tables": [
     {
-     "name": "app_settings",
-     "source": "supabase"
+     "name": "manual_edit_history",
+     "source": "turso"
     }
    ],
    "external": [],
-   "usesTurso": false
+   "usesTurso": true
   },
   "/api/analytics/quarterly-settings/search-customers": {
    "file": "src/app/api/analytics/quarterly-settings/search-customers/route.ts",
@@ -2321,6 +2345,10 @@
    "cacheKey": null,
    "deps": [],
    "tables": [
+    {
+     "name": "manual_edit_history",
+     "source": "turso"
+    },
     {
      "name": "target_planning_quarter",
      "source": "turso"
@@ -2467,12 +2495,12 @@
    "deps": [],
    "tables": [
     {
-     "name": "app_settings",
-     "source": "supabase"
+     "name": "manual_edit_history",
+     "source": "turso"
     }
    ],
    "external": [],
-   "usesTurso": false
+   "usesTurso": true
   },
   "/api/analytics/staff-report": {
    "file": "src/app/api/analytics/staff-report/route.ts",
@@ -2562,12 +2590,16 @@
    "deps": [],
    "tables": [
     {
+     "name": "manual_edit_history",
+     "source": "turso"
+    },
+    {
      "name": "staff_targets",
      "source": "supabase"
     }
    ],
    "external": [],
-   "usesTurso": false
+   "usesTurso": true
   },
   "/api/analytics/targets-summary": {
    "file": "src/app/api/analytics/targets-summary/route.ts",
@@ -2696,10 +2728,14 @@
     {
      "name": "analytics_cost_input_settings",
      "source": "supabase"
+    },
+    {
+     "name": "manual_edit_history",
+     "source": "turso"
     }
    ],
    "external": [],
-   "usesTurso": false
+   "usesTurso": true
   },
   "/api/channel-costs": {
    "file": "src/app/api/channel-costs/route.ts",
@@ -2713,10 +2749,14 @@
     {
      "name": "analytics_channel_costs",
      "source": "supabase"
+    },
+    {
+     "name": "manual_edit_history",
+     "source": "turso"
     }
    ],
    "external": [],
-   "usesTurso": false
+   "usesTurso": true
   },
   "/api/channel-group-costs": {
    "file": "src/app/api/channel-group-costs/route.ts",
@@ -2730,10 +2770,14 @@
     {
      "name": "analytics_channel_group_costs",
      "source": "supabase"
+    },
+    {
+     "name": "manual_edit_history",
+     "source": "turso"
     }
    ],
    "external": [],
-   "usesTurso": false
+   "usesTurso": true
   },
   "/api/channels": {
    "file": "src/app/api/channels/route.ts",
@@ -3006,7 +3050,9 @@
    "deps": [
     "admin",
     "b2b-cost",
-    "creator"
+    "channel",
+    "creator",
+    "month"
    ],
    "tables": [
     {
@@ -3024,10 +3070,14 @@
     {
      "name": "fact_fulfillment_revenue",
      "source": "gohub_dw"
+    },
+    {
+     "name": "manual_edit_history",
+     "source": "turso"
     }
    ],
    "external": [],
-   "usesTurso": false
+   "usesTurso": true
   },
   "/api/reports/cs-troubleshoot": {
    "file": "src/app/api/reports/cs-troubleshoot/route.ts",
@@ -3119,13 +3169,10 @@
    "apis": [
     "/api/analytics/b2c/ga4-categories",
     "/api/analytics/channels-with-platform-fee",
-    "/api/analytics/company-monthly-targets",
     "/api/analytics/ga4",
     "/api/analytics/gsc",
     "/api/analytics/quarterly-cache-flush",
-    "/api/analytics/quarterly-settings",
     "/api/analytics/query",
-    "/api/analytics/squad-targets",
     "/api/analytics/targets-summary",
     "/api/analytics/website",
     "/api/config/b2c-budget",
@@ -3146,7 +3193,6 @@
     "customers",
     "dashboard",
     "fulfillment",
-    "orders",
     "products",
     "quarterly",
     "staff",
@@ -3628,6 +3674,38 @@
    ],
    "tabs": [
     "scheduled"
+   ]
+  },
+  "manual_edit_history": {
+   "source": "turso",
+   "apis": [
+    "/api/analytics/b2b-customer-costs",
+    "/api/analytics/b2b-customer-targets",
+    "/api/analytics/b2b/ecom-costs",
+    "/api/analytics/company-monthly-targets",
+    "/api/analytics/inventory-plan/skus",
+    "/api/analytics/inventory-plan/weekly",
+    "/api/analytics/inventory-po",
+    "/api/analytics/quarterly-settings",
+    "/api/analytics/quarterly-targets",
+    "/api/analytics/squad-targets",
+    "/api/analytics/staff-targets",
+    "/api/channel-cost-settings",
+    "/api/channel-costs",
+    "/api/channel-group-costs",
+    "/api/planning/targets"
+   ],
+   "tabs": [
+    "b2b",
+    "b2c",
+    "channels",
+    "customers",
+    "fulfillment",
+    "orders",
+    "products",
+    "quarterly",
+    "staff",
+    "targets"
    ]
   },
   "ncc_3hk": {

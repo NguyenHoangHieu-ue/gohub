@@ -5,7 +5,7 @@ import Link                   from "next/link"
 import { usePathname }        from "next/navigation"
 import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
-import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, Database, Clock, Settings, Crown, Cpu, Atom, MessageCircle, Plug, Layers, Calculator } from "lucide-react"
+import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, Database, Clock, Settings, Crown, Cpu, Atom, MessageCircle, Plug, Layers, Calculator, History } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
@@ -86,6 +86,7 @@ const MANAGEMENT_GROUP = {
   items: [
     { href: "/analytics/users",      label: "Người dùng và quyền", icon: Users     },
     { href: "/analytics/settings",   label: "Cấu hình hệ thống", icon: Settings  },
+    { href: "/analytics/manual-history", label: "Lịch sử nhập liệu", icon: History },
     { href: "/admin",                label: "Dữ liệu và giá", icon: Package   },
   ],
 }
@@ -95,7 +96,7 @@ const CREATOR_GROUP = {
   label: "Creator",
   items: [
     { href: "/analytics/creator",           label: "Creator Settings", icon: Crown    },
-    { href: "/analytics/creator/ai",        label: "Gấu Pro (thao tác)", icon: Cpu      },
+    { href: "/analytics/creator/ai",        label: "Gấu Pro",          icon: Cpu      },
     { href: "/analytics/creator/argon",     label: "Trợ lý (Argon)",    icon: Atom     },
     { href: "/analytics/creator/devtools",  label: "Dữ liệu & API",   icon: Terminal },
     { href: "/analytics/creator/bridge",    label: "Bridge",           icon: Plug     },

@@ -6,6 +6,8 @@ import { ensureB2bCostTable } from "@/lib/b2b-customer-cost"
 import { b2bCustomerNames, b2bCodesWithRevenue } from "@/lib/b2b-customers"
 import { canWrite } from "@/lib/writable-tabs"
 import { flushByDeps } from "@/lib/analytics-helpers"
+import { fetchTursoBefore, userOfSession } from "@/lib/manual-history/wire"
+import { recordEdits, recordEdit } from "@/lib/manual-history/store"
 
 const WRITE_ROLES_DELETE = ["admin", "creator"]
 const WRITE_ROLES_POST   = ["admin", "creator", "bod", "b2b", "b2c", "staff"]
@@ -63,7 +65,9 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
 
   try {
+    const old = (await fetchTursoBefore("b2b_customer_cost_monthly", [id])).get(id) ?? null   // lưu lại số cũ trước khi xoá
     await tursoQuery("DELETE FROM b2b_customer_cost_monthly WHERE id = ?", [id])
+    await recordEdit({ table: "b2b_customer_cost_monthly", key: id, label: `Chi phí KH ${old?.customer_code ?? id} · ${old?.month ?? ""}`, before: old, after: null, user: userOfSession(session), source: "DELETE /analytics/b2b-customer-costs" })
     // Nhiều route (b2b/kpis|performance|trend, channels/kpis|performance, bod-summary|group-margin|
     // channel-performance, monthly-kpis, all-time-performance) cache KẾT QUẢ ĐÃ TÍNH SẴN với cost này
     // bên trong — xoá thẳng ID không tự làm số cũ trên các tab đó tươi lại (chỉ Quarter Report luôn fresh
@@ -151,6 +155,7 @@ export async function POST(req: NextRequest) {
 
     const deleteRows = rows.filter(r => !r.hasLines)
     const upsertRows = rows.filter(r => r.hasLines)
+    const oldCosts = await fetchTursoBefore("b2b_customer_cost_monthly", rows.map(r => r.id))   // số cũ để ghi lịch sử sửa tay
 
     let deleted = 0
     for (const r of deleteRows) {
@@ -196,6 +201,7 @@ export async function POST(req: NextRequest) {
     // s169(b): flushAnalyticsCache() (xoá sạch) gây cả app chậm hẳn mỗi lần sửa cost (nuke luôn cache
     // Products/Staff/Vendors/Orders... không liên quan) khi Hiếu sửa/reload nhiều lần liên tục lúc test.
     await flushByDeps(["b2b-cost"]).catch(() => {})
+    await recordEdits(rows.map(r => ({ table: "b2b_customer_cost_monthly", key: r.id, label: `Chi phí KH ${r.customer_code} · ${r.month}`, before: oldCosts.get(r.id) ?? null, after: r.hasLines ? { id: r.id, month: r.month, customer_code: r.customer_code, cost_type: r.cost_type, cost_value: r.cost_value, cost_lines: r.cost_lines } : null, user: updatedBy, source: "POST /analytics/b2b-customer-costs" })))
     return NextResponse.json({ ok: true, saved, deleted })
   } catch (e: any) {
     console.error("[b2b-customer-costs POST]", e.message)

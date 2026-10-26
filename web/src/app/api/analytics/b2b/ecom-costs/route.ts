@@ -5,6 +5,8 @@ import { tursoQuery } from "@/lib/turso"
 import { ensureB2bEcomCostTable, ecomCostKey } from "@/lib/b2b-ecom-cost"
 import { canWrite } from "@/lib/writable-tabs"
 import { flushByDeps } from "@/lib/analytics-helpers"
+import { fetchTursoBefore, userOfSession } from "@/lib/manual-history/wire"
+import { recordEdits, recordEdit } from "@/lib/manual-history/store"
 
 const WRITE_ROLES = ["admin", "creator", "bod", "b2b", "b2c", "staff"]
 
@@ -53,7 +55,9 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
 
   try {
+    const old = (await fetchTursoBefore("b2b_ecom_cost_monthly", [id])).get(id) ?? null   // lưu lại số cũ trước khi xoá
     await tursoQuery("DELETE FROM b2b_ecom_cost_monthly WHERE id = ?", [id])
+    await recordEdit({ table: "b2b_ecom_cost_monthly", key: id, label: `Chi phí VN Ecom ${old?.customer_name ?? ""} ${old?.shop_name ?? ""} · ${old?.month ?? id}`, before: old, after: null, user: userOfSession(session), source: "DELETE /analytics/b2b/ecom-costs" })
     await flushByDeps(["b2b-ecom-cost"]).catch(() => {})
     return NextResponse.json({ ok: true, deleted: id })
   } catch (e: any) {
@@ -110,6 +114,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Dòng chi phí không hợp lệ" }, { status: 400 })
 
     await ensureB2bEcomCostTable()
+    const oldCosts = await fetchTursoBefore("b2b_ecom_cost_monthly", rows.map(r => r.id))   // số cũ để ghi lịch sử sửa tay
 
     let deleted = 0
     for (const r of rows.filter(r => !r.hasLines)) {
@@ -146,6 +151,7 @@ export async function POST(req: NextRequest) {
     }
 
     await flushByDeps(["b2b-ecom-cost"]).catch(() => {})
+    await recordEdits(rows.map(r => ({ table: "b2b_ecom_cost_monthly", key: r.id, label: `Chi phí VN Ecom ${r.customer_name} ${r.shop_name} ${r.subshop_name} · ${r.month}`.replace(/\s+/g, " "), before: oldCosts.get(r.id) ?? null, after: r.hasLines ? { id: r.id, month: r.month, customer_name: r.customer_name, shop_name: r.shop_name, subshop_name: r.subshop_name, cost_type: r.cost_type, cost_value: r.cost_value, cost_lines: r.cost_lines } : null, user: updatedBy, source: "POST /analytics/b2b/ecom-costs" })))
     return NextResponse.json({ ok: true, saved, deleted })
   } catch (e: any) {
     console.error("[b2b/ecom-costs POST]", e.message)

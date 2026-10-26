@@ -37,7 +37,7 @@ async function argonItems(username: string, now: number): Promise<InboxItem[]> {
     const ask = parse(byKey.get(`argon_ask:${m.id}`)) as { question?: string; options?: string[]; at?: string } | null
     if (ask?.question) {
       const at = ask.at ?? new Date(now).toISOString()
-      out.push({ key: `argon_ask:${m.id}`, kind: "argon_ask", id: m.id, title: ask.question, detail: (ask.options ?? []).map((o, i) => `${i + 1}. ${o}`).join(" · "), at, urgency: urgencyFor("argon_ask", at, now), source: `Argon · ${m.name}`, actions: ["open"], missionId: m.id, href: `${ARGON}/tro-ly` })
+      out.push({ key: `argon_ask:${m.id}`, kind: "argon_ask", id: m.id, title: ask.question, detail: (ask.options ?? []).map((o, i) => `${i + 1}. ${o}`).join(" · "), at, urgency: urgencyFor("argon_ask", at, now), source: `Argon · ${m.name}`, actions: ["open"], missionId: m.id, href: `${ARGON}/hoi-tim` })
     }
     const patches = (parse(byKey.get(`argon_patches:${m.id}`)) ?? []) as { id: string; title: string; request?: string; at: string; status: string }[]
     for (const p of patches) if (p.status === "pending") out.push({

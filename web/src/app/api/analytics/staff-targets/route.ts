@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWriteTab } from "@/lib/writable-tabs"
+import { fetchBefore, logRowEdits } from "@/lib/manual-history/wire"
 
 const READ_ROLES  = ["admin", "creator", "manager", "staff", "bod"]
 const WRITE_ROLES = ["admin", "creator", "manager", "bod"]
@@ -102,11 +103,13 @@ export async function PATCH(req: NextRequest) {
       updated_by_name:   name,
     }))
 
+    const before = await fetchBefore("staff_targets", ["staff_code", "month"], rows)   // số cũ để ghi lịch sử sửa tay
     const { error } = await supabaseAdmin
       .from("staff_targets")
       .upsert(rows, { onConflict: "staff_code,month" })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await logRowEdits({ table: "staff_targets", pk: ["staff_code", "month"], rows, before, user: email || name || "web", source: "PATCH /analytics/staff-targets", label: r => `Target nhân viên ${r.staff_code} · ${r.month}`, ignore: ["updated_by_email", "updated_by_name"] })
     return NextResponse.json({ ok: true, updated: rows.length })
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

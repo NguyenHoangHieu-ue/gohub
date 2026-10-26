@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWrite } from "@/lib/writable-tabs"
+import { recordJsonEdit } from "@/lib/manual-history/store"
 
 const KEY = "squad_targets"
 const WRITE_ROLES = ["admin", "creator"]
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
     if (!quarter || !year) return NextResponse.json({ error: "Thiếu quarter/year" }, { status: 400 })
 
     const all = await loadAll()
+    const beforeAll = JSON.parse(JSON.stringify(all))   // bản trước khi gộp — để ghi lịch sử sửa tay
     const mergeInto = (key: string, incoming: Record<string, any> | undefined) => {
       const cur = all[key] ?? {}
       for (const [squad, t] of Object.entries(incoming ?? {})) cur[squad] = { ...(cur[squad] ?? {}), ...(t as object) }
@@ -45,6 +47,9 @@ export async function POST(req: NextRequest) {
       { onConflict: "key" }
     )
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const user = (session.user as { username?: string }).username || session.user.email || "web"
+    for (const k of [`${quarter}_${year}`, ...(next?.quarter && next?.year ? [`${next.quarter}_${next.year}`] : [])])
+      await recordJsonEdit({ table: "squad_targets", key: k, label: `Target squad ${k.replace("_", " ")}`, before: beforeAll[k], after: all[k], user, source: "POST /analytics/squad-targets" })
     return NextResponse.json({ ok: true })
   } catch (e: any) {
     return NextResponse.json({ error: e.message ?? "Lỗi không xác định" }, { status: 500 })

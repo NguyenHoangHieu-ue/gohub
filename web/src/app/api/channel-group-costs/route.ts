@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 import { canWrite } from "@/lib/writable-tabs"
+import { fetchBefore, logRowEdits } from "@/lib/manual-history/wire"
 
 // GET /api/channel-group-costs?month=YYYY-MM&group=B2B
 export async function GET(req: NextRequest) {
@@ -51,12 +52,14 @@ export async function POST(req: NextRequest) {
     }
     if (id) row.id = id
 
+    const before = id ? await fetchBefore("analytics_channel_group_costs", ["id"], [row]) : new Map()   // số cũ để ghi lịch sử sửa tay
     const { data, error } = await supabaseAdmin
       .from("analytics_channel_group_costs")
       .upsert(row, { onConflict: "id", ignoreDuplicates: false })
       .select("id")
       .single()
     if (error) throw new Error(error.message)
+    await logRowEdits({ table: "analytics_channel_group_costs", pk: ["id"], rows: [{ ...row, id: data?.id ?? id }], before, user: String(row.updated_by), source: "POST /channel-group-costs", label: () => `Chi phí nhóm ${group_name} · ${item_name} · ${month}` })
     await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ success: true, id: data?.id })
   } catch (err: any) {

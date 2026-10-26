@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWrite } from "@/lib/writable-tabs"
 import { triggerAudit } from "@/lib/datapool-audit/server"
+import { logSettingChanges, readSettings, userOfSession } from "@/lib/manual-history/wire"
 import { DATAPOOL_FORMULA, FORMULA_KEYS, UNLIMITED_LEVELS_KEY, findLevel, sanitizeLevels } from "@/lib/datapool-formula"
 
 const WRITE_ROLES = ["admin", "creator"]
@@ -33,7 +34,7 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   try {
-    await requireAdmin()
+    const adminSession = await requireAdmin()
     const body = await req.json()
     const updates: { key: string; value: string }[] = body.updates ?? []
 
@@ -63,11 +64,13 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    const oldSettings = await readSettings(rows.map(r => r.key))   // giá trị cũ để ghi lịch sử sửa tay
     const { error } = await supabaseAdmin
       .from("app_settings")
       .upsert(rows, { onConflict: "key" })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await logSettingChanges(rows.map(r => ({ key: r.key, before: oldSettings.get(r.key), after: String(r.value) })), userOfSession(adminSession), "PATCH /admin/settings")
     if (updates.some(u => u.key.startsWith("datapool."))) triggerAudit("Hiếu đổi Công Thức Datapool (giả định / bảng mức Unlimited)")
     return NextResponse.json({ ok: true, updated: rows.length })
   } catch {
