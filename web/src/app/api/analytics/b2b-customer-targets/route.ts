@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWrite } from "@/lib/writable-tabs"
+import { fetchBefore, logRowEdits } from "@/lib/manual-history/wire"
 
 const WRITE_ROLES = ["admin", "creator", "bod", "b2b", "b2c", "staff"]
 
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
     updated_at: new Date().toISOString(),
   }
 
+  const before = await fetchBefore("b2b_customer_targets", ["id"], [payload])   // số cũ để ghi lịch sử sửa tay
   let { error } = await supabaseAdmin.from("b2b_customer_targets").upsert(payload, { onConflict: "id" })
 
   // Fallback: nếu lỗi do cột v38/v39 chưa tồn tại → upsert không có cột mới (migration chưa chạy)
@@ -76,5 +78,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  await logRowEdits({ table: "b2b_customer_targets", pk: ["id"], rows: [payload], before, user: updatedBy, source: "POST /analytics/b2b-customer-targets", label: () => `Target B2B ${quarter} ${year} · ${customer_code}` })
   return NextResponse.json({ ok: true })
 }

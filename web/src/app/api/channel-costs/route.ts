@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { flushAnalyticsCache } from "@/lib/analytics-helpers"
 import { canWrite } from "@/lib/writable-tabs"
+import { fetchBefore, logRowEdits } from "@/lib/manual-history/wire"
 
 // GET /api/channel-costs?month=YYYY-MM → { [channel]: { ads, platformFee, sponsorProducts, media } }
 export async function GET(req: NextRequest) {
@@ -70,10 +71,12 @@ export async function POST(req: NextRequest) {
     // source_code = dim_order_source.code (ổn định, không đổi khi rename channel)
     if (sourceCode) upsertData.source_code = sourceCode
 
+    const before = await fetchBefore("analytics_channel_costs", ["channel", "month"], [upsertData])   // số cũ để ghi lịch sử sửa tay
     const { error } = await supabaseAdmin
       .from("analytics_channel_costs")
       .upsert(upsertData, { onConflict: "channel,month", ignoreDuplicates: false })
     if (error) throw new Error(error.message)
+    await logRowEdits({ table: "analytics_channel_costs", pk: ["channel", "month"], rows: [upsertData], before, user: String(upsertData.updated_by), source: "POST /channel-costs", label: () => `Chi phí kênh ${channel} · ${month}` })
     // Cost thay đổi → xoá cache analytics (KPI CM1/opCost cache 12h theo ngày, không theo cost).
     await flushAnalyticsCache().catch(() => {})
     return NextResponse.json({ success: true })

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWrite } from "@/lib/writable-tabs"
+import { recordJsonEdit } from "@/lib/manual-history/store"
 
 const KEY = "company_monthly_targets"
 const WRITE_ROLES = ["admin", "creator"]
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
 
     const all = await loadAll()
     const key = `${quarter}_${year}`
+    const beforeCur = JSON.parse(JSON.stringify(all[key] ?? null))
     const cur = all[key] ?? {}
     for (const seg of SEGMENTS) {
       if (!targets?.[seg]) continue
@@ -49,6 +51,7 @@ export async function POST(req: NextRequest) {
       { onConflict: "key" },
     )
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await recordJsonEdit({ table: "company_monthly_targets", key, label: `Target công ty theo tháng ${quarter} ${year}`, before: beforeCur, after: all[key], user: (session.user as { username?: string }).username || session.user.email || "web", source: "POST /analytics/company-monthly-targets" })
     return NextResponse.json({ ok: true })
   } catch (e: any) {
     return NextResponse.json({ error: e.message ?? "Lỗi không xác định" }, { status: 500 })

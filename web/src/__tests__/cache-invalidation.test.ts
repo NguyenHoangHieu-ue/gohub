@@ -12,6 +12,7 @@ const FLUSHES = /flushByDeps|flushAnalyticsCache|softExpireAll|flushAnalyticsCac
 const WRITES = /export\s+(async\s+)?function\s+(POST|PUT|PATCH|DELETE)\b/
 
 const REVIEWED = new Set([
+  "analytics/manual-history",   // khôi phục số cũ: restore.ts tự gọi flushAnalyticsCache() sau khi ghi
   "analytics/3hk-sku-meta", "analytics/b2b-customer-targets", "analytics/channel-costs-fix-renamed", "analytics/channel-costs-repair",
   "analytics/company-monthly-targets", "analytics/customer/report", "analytics/inventory-plan/skus", "analytics/inventory-plan/weekly",
   "analytics/inventory-po", "analytics/market/vendor-quotes/extract", "analytics/market/vendor-quotes", "analytics/market/vendor-quotes/[id]",

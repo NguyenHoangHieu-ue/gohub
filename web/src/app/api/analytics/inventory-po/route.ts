@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWriteTab } from "@/lib/writable-tabs"
+import { fetchBefore, logRowEdits } from "@/lib/manual-history/wire"
+import { recordEdit } from "@/lib/manual-history/store"
 
 const READ_ROLES  = ["admin", "creator", "manager", "staff", "bod", "ops-&-cs"]
 const WRITE_ROLES = ["admin", "creator", "manager", "staff"]
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "vendor, sku_code, qty required" }, { status: 400 })
 
     const email = session.user.name ?? session.user.email ?? ""
-    const { error } = await supabaseAdmin.from("inventory_po").insert({
+    const poRow = {
       vendor: body.vendor,
       sku_code: body.sku_code,
       qty: body.qty,
@@ -61,9 +63,11 @@ export async function POST(req: NextRequest) {
       note: body.note ?? null,
       created_by: email,
       updated_by: email,
-    })
+    }
+    const { data: created, error } = await supabaseAdmin.from("inventory_po").insert(poRow).select("id").single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await recordEdit({ table: "inventory_po", key: String(created?.id ?? ""), label: `PO ${body.vendor} · ${body.sku_code} · SL ${body.qty}`, before: null, after: { id: created?.id, ...poRow }, user: email, source: "POST /analytics/inventory-po", ignore: ["created_by", "updated_by"] })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -82,8 +86,10 @@ export async function PATCH(req: NextRequest) {
     const email = session.user.name ?? session.user.email ?? ""
     const rows = updates.map(u => ({ ...u, updated_by: email, updated_at: now }))
 
+    const before = await fetchBefore("inventory_po", ["id"], rows)   // số cũ để ghi lịch sử sửa tay
     const { error } = await supabaseAdmin.from("inventory_po").upsert(rows, { onConflict: "id" })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await logRowEdits({ table: "inventory_po", pk: ["id"], rows, before, user: email, source: "PATCH /analytics/inventory-po", label: r => `PO #${r.id} ${String(before.get(String(r.id))?.vendor ?? "")} ${String(before.get(String(r.id))?.sku_code ?? "")}`.trim(), ignore: ["created_by", "updated_by"] })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -93,12 +99,14 @@ export async function PATCH(req: NextRequest) {
 // DELETE — xoá 1 PO theo id
 export async function DELETE(req: NextRequest) {
   try {
-    await requireWrite()
+    const session = await requireWrite()
     const { id } = await req.json()
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
 
+    const old = (await fetchBefore("inventory_po", ["id"], [{ id }])).get(String(id)) ?? null   // lưu lại số cũ trước khi xoá
     const { error } = await supabaseAdmin.from("inventory_po").delete().eq("id", id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await recordEdit({ table: "inventory_po", key: String(id), label: `PO #${id} ${String(old?.vendor ?? "")} ${String(old?.sku_code ?? "")}`.trim(), before: old, after: null, user: session.user.name ?? session.user.email ?? "web", source: "DELETE /analytics/inventory-po" })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWriteTab } from "@/lib/writable-tabs"
+import { fetchBefore, logRowEdits } from "@/lib/manual-history/wire"
+import { recordEdit } from "@/lib/manual-history/store"
 import { isQuarterLocked } from "@/lib/okr-helpers"
 
 const READ_ROLES  = ["admin", "creator", "bod"]
@@ -48,12 +50,15 @@ export async function POST(req: NextRequest) {
   }
 
   const name = session.user.name ?? session.user.email ?? session.user.username
-  const { error } = await supabaseAdmin.from("okr_sku_tags").upsert({
+  const tagRow = {
     quarter: body.quarter, sku_code: skuCode, note: body.note || null,
     evidence_image_url: body.evidence_image_url || null,
     created_by: name, updated_by: name, updated_at: new Date().toISOString(),
-  }, { onConflict: "quarter,sku_code" })
+  }
+  const before = await fetchBefore("okr_sku_tags", ["quarter", "sku_code"], [tagRow])   // số cũ để ghi lịch sử sửa tay
+  const { error } = await supabaseAdmin.from("okr_sku_tags").upsert(tagRow, { onConflict: "quarter,sku_code" })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await logRowEdits({ table: "okr_sku_tags", pk: ["quarter", "sku_code"], rows: [tagRow], before, user: name, source: "POST /analytics/my-metrics/sku-tags", label: () => `Ghi chú SKU ${skuCode} · ${body.quarter}`, ignore: ["created_by"] })
   return NextResponse.json({ ok: true })
 }
 
@@ -67,12 +72,13 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id")
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
 
-  const { data: rec } = await supabaseAdmin.from("okr_sku_tags").select("quarter").eq("id", id).maybeSingle()
+  const { data: rec } = await supabaseAdmin.from("okr_sku_tags").select("*").eq("id", id).maybeSingle()
   if (rec && isQuarterLocked(rec.quarter)) {
     return NextResponse.json({ error: "Quý này đã đóng — không thể xoá." }, { status: 403 })
   }
 
   const { error } = await supabaseAdmin.from("okr_sku_tags").delete().eq("id", id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (rec) await recordEdit({ table: "okr_sku_tags", key: `${rec.quarter}|${rec.sku_code}`, label: `Ghi chú SKU ${rec.sku_code} · ${rec.quarter}`, before: rec as Record<string, unknown>, after: null, user: session.user.name ?? session.user.email ?? "web", source: "DELETE /analytics/my-metrics/sku-tags", ignore: ["id", "created_by"] })
   return NextResponse.json({ ok: true })
 }

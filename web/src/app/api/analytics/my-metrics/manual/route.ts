@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWriteTab } from "@/lib/writable-tabs"
+import { recordEdit } from "@/lib/manual-history/store"
 
 const READ_ROLES  = ["admin", "creator", "bod"]
 const WRITE_ROLES = ["admin", "creator"]
@@ -86,5 +87,6 @@ export async function PATCH(req: NextRequest) {
     }, { onConflict: "key" })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await recordEdit({ table: "okr_manual_targets", key, label: `Target OKR ${quarter} ${year}`, before: existing?.value ? (prev as Record<string, unknown>) : null, after: next as unknown as Record<string, unknown>, user: name, source: "PATCH /analytics/my-metrics/manual" })
   return NextResponse.json({ ok: true, data: next })
 }

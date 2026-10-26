@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { canWriteTab } from "@/lib/writable-tabs"
+import { fetchBefore, logRowEdits } from "@/lib/manual-history/wire"
 import {
   buildWeekSeries, getWeeklyVelocity, getLatestStock, computePlan, alertLevel, findFirstCriticalWeek, needsOrderSoon,
   type SkuPlanConfig, type WeeklyInputRow,
@@ -133,11 +134,13 @@ export async function POST(req: NextRequest) {
       return row
     })
 
+    const before = await fetchBefore("inventory_plan_weekly", ["sku_code", "week_start_date"], rows)   // số cũ để ghi lịch sử sửa tay
     const { error } = await supabaseAdmin
       .from("inventory_plan_weekly")
       .upsert(rows, { onConflict: "sku_code,week_start_date" })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await logRowEdits({ table: "inventory_plan_weekly", pk: ["sku_code", "week_start_date"], rows, before, user: email, source: "POST /analytics/inventory-plan/weekly", label: r => `Kế hoạch tồn ${r.sku_code} · tuần ${r.week_start_date}` })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
