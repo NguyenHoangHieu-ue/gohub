@@ -4,7 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { findLevel, levelsOf, type CustomUnlimited } from "@/lib/datapool-formula"
 import { loadAssumptions, loadFx, loadPriceList, loadRefCountries, loadSupportCountries, loadWhiteSimVnd } from "@/lib/bc-datapool/server"
 import { loadFrames, loadNcc3hk } from "@/lib/threehk-datapool/server"
-import { getLarkUserOpenId, sendLarkDM } from "@/lib/lark"
+import { getLarkUserOpenId } from "@/lib/lark"
+import { notify } from "@/lib/notify"
 import { auditAll, mismatchSignature, summarize, VENDOR_LABEL, type AuditCtx, type AuditProductInput, type AuditRow, type AuditSkuInput, type AuditVendor, type AuditSummary } from "./engine"
 
 export const AUDIT_STATE_KEY = "datapool.audit_state"
@@ -143,7 +144,10 @@ export async function runAuditAndNotify(reason: string, force = false): Promise<
   if (should) {
     const hieu = await getLarkUserOpenId()
     if (!hieu) skipped = "chưa Kết nối Lark của Creator — không gửi được DM"
-    else { await sendLarkDM(hieu, dmText(run, changed, reason)); notified = true }
+    else {
+      const [first, ...rest] = dmText(run, changed, reason).split("\n")   // dòng đầu của dmText là kết luận → làm tiêu đề tin
+      notified = await notify(hieu, { kind: first.startsWith("⚠️") ? "Cảnh báo" : "Báo cáo", source: "Soát giá vốn", title: first.replace(/^(⚠️|✅)\s*/u, ""), body: rest.join("\n").trim() })
+    }
   }
   await saveState({ at: new Date().toISOString(), inputs: run.inputs, signature: run.signature, counts, notifiedSignature: notified ? run.signature : prev?.notifiedSignature, notifiedAt: notified ? new Date().toISOString() : prev?.notifiedAt })
   return { notified, counts, changed, skipped }

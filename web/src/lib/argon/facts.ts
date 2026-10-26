@@ -71,9 +71,9 @@ export async function runFactsNightly(username: string, link: string, now = Date
   const text = nightlyMessage({ added, due, expired: exp.length, link })
   let sent = false
   if (text) {
-    const { getCreatorLarkOpenId, sendLarkDM } = await import("@/lib/lark")
-    const openId = await getCreatorLarkOpenId()
-    if (openId) { await sendLarkDM(openId, text); sent = true }
+    const { notify } = await import("@/lib/notify")
+    const bits = [added.length && `${added.length} sự việc mới`, due.length && `${due.length} sắp tới hạn`, exp.length && `${exp.length} hết hạn`].filter(Boolean)
+    sent = await notify("creator", { kind: "Báo cáo", source: "Argon", title: `Sổ sự việc: ${bits.join(", ")}`, body: text, priority: "low" })
   }
   const nowIso = new Date(now).toISOString()
   if (sent || !text) {

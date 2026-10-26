@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getCreatorLarkOpenId, getLarkUserToken, sendLarkDM } from "@/lib/lark"
+import { getCreatorLarkOpenId, getLarkUserToken } from "@/lib/lark"
+import { notify } from "@/lib/notify"
 import { runLarkTask } from "@/lib/agents/creator/tools/lark"
 import { GEMINI_MODEL } from "@/lib/ai-models"
 
@@ -92,7 +93,7 @@ export async function runTaskReminders(now = Date.now()): Promise<{ skipped?: st
   const parts: string[] = []
   if (soon.length) parts.push(`⏰ Sắp tới hạn:\n${soon.join("\n")}`)
   if (overdue.length) parts.push(`🔴 Quá hạn:\n${overdue.join("\n")}`)
-  if (parts.length) await sendLarkDM(openId, parts.join("\n\n"))
+  if (parts.length) await notify(openId, { kind: "Nhắc việc", source: "Lark Task", title: [overdue.length && `${overdue.length} quá hạn`, soon.length && `${soon.length} sắp tới hạn`].filter(Boolean).join(", "), body: parts.join("\n\n"), priority: overdue.length ? "high" : "normal" })
   return { sent: soon.length + overdue.length }
 }
 
@@ -130,9 +131,9 @@ Trả JSON: {"is_task": boolean, "summary": "tên việc ngắn gọn ≤80 ký 
   const openId = await getCreatorLarkOpenId()
   if (!openId) return
   if (created?.error) {
-    await sendLarkDM(openId, `⚠️ Phát hiện việc được giao từ ${who} nhưng tạo task lỗi: ${created.error}\nViệc: ${parsed.summary}`)
+    await notify(openId, { kind: "Cảnh báo", source: "Lark Task", title: `Việc được ${who} giao nhưng tạo task lỗi`, body: `${created.error}\nViệc: ${parsed.summary}`, priority: "high" })
     return
   }
   const due = parsed.due ? ` · hạn ${parsed.due.slice(0, 16).replace("T", " ")}` : ""
-  await sendLarkDM(openId, `📌 Đã tạo task từ group (${who} giao): ${parsed.summary}${due}\nKhông phải việc của bạn? Nhắn "xoá task ${parsed.summary.slice(0, 30)}" cho mình.`)
+  await notify(openId, { kind: "Tin", source: "Lark Task", title: `Đã tạo task từ group (${who} giao)`, body: `${parsed.summary}${due}\nKhông phải việc của bạn? Nhắn "xoá task ${parsed.summary.slice(0, 30)}" cho mình.` })
 }

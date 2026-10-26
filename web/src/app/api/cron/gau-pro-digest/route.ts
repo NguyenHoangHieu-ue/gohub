@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { runCreatorAI }              from "@/lib/agents/creator-ai"
-import { getCreatorLarkOpenId, sendLarkDM } from "@/lib/lark"
+import { getCreatorLarkOpenId } from "@/lib/lark"
+import { notify } from "@/lib/notify"
 import { alertCronFailure }          from "@/lib/cron-alert"
 import { detectNewGeminiModels, newModelMessage } from "@/lib/gemini-model-watch"
 
@@ -31,11 +32,11 @@ export async function GET(req: NextRequest) {
     const openId = await getCreatorLarkOpenId()
     if (!openId) return NextResponse.json({ ok: false, error: "Không tìm được Lark open_id của creator" }, { status: 500 })
 
-    await sendLarkDM(openId, `☀️ Digest sáng nay từ Gấu Pro\n\n${text}`)
+    await notify(openId, { kind: "Báo cáo", source: "Gấu Pro", title: "Digest sáng", body: text })
 
     // Ké cron digest (Hobby giới hạn số cron) — lỗi quét model không được làm hỏng digest.
     const newModels = await detectNewGeminiModels().catch(e => { console.error("[gemini-model-watch]", (e as Error).message); return [] as string[] })
-    if (newModels.length) await sendLarkDM(openId, newModelMessage(newModels))
+    if (newModels.length) await notify(openId, { kind: "Tin", source: "Hệ thống", title: "Google mở model Gemini mới", body: newModelMessage(newModels).replace(/^🆕 /, ""), priority: "low" })
     return NextResponse.json({ ok: true, at: new Date().toISOString() })
   } catch (err) {
     await alertCronFailure("gau-pro-digest", err)

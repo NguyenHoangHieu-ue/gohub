@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { getCreatorLarkOpenId, sendLarkMessage } from "@/lib/lark"
+import { notify } from "@/lib/notify"
 
 // U5b (plan be-gau-upgrade.md): phiếu sửa code. Gấu Pro tạo phiếu qua tool devTicket (action create LUÔN qua cổng duyệt — tool-policy.ts),
 // duyệt xong mới tạo dòng + gọi GitHub workflow_dispatch (.github/workflows/claude-ticket.yml). Luật cho Claude Code nằm trong file workflow
@@ -112,11 +112,14 @@ export async function runDevTicket(args: any, username: string, isCreator: boole
 
 /** Nhắn Hiếu qua Lark khi phiếu đổi trạng thái đáng báo. */
 export async function notifyCreator(t: DevTicket) {
-  const openId = await getCreatorLarkOpenId()
-  if (!openId) return
-  let text = ""
-  if (t.status === "question") text = `❓ Phiếu #${t.id} "${t.title}" cần anh trả lời:\n\n${t.question}\n\nTrả lời: nhắn Gấu Pro "phiếu ${t.id}: <câu trả lời>"${t.run_url ? `\nNhật ký: ${t.run_url}` : ""}`
-  else if (t.status === "pr_open") text = `✅ Phiếu #${t.id} "${t.title}" xong, đã mở PR vào staging:\n${t.pr_url}\nBản xem thử (khi Vercel build xong): ${previewUrlOf(t.id)}\n\n${(t.summary ?? "").slice(0, 2500)}\n\nAnh xem PR rồi merge vào staging khi ổn.`
-  else if (t.status === "failed") text = `⚠️ Phiếu #${t.id} "${t.title}" lỗi: ${(t.error ?? "").slice(0, 800)}${t.run_url ? `\nNhật ký: ${t.run_url}` : ""}`
-  if (text) await sendLarkMessage(openId, "open_id", text).catch(() => {})
+  const source = "Phiếu sửa code"
+  if (t.status === "question")
+    await notify("creator", { kind: "Cần trả lời", source, priority: "high", title: `#${t.id} "${t.title}" cần anh trả lời`,
+      body: `${t.question}\n\nTrả lời: nhắn Gấu Pro "phiếu ${t.id}: <câu trả lời>"`, link: t.run_url ? { label: "Nhật ký", url: t.run_url } : undefined })
+  else if (t.status === "pr_open")
+    await notify("creator", { kind: "Xong việc", source, title: `#${t.id} "${t.title}" xong, đã mở PR vào staging`,
+      body: `${(t.summary ?? "").slice(0, 2500)}\n\nBản xem thử (khi Vercel build xong): ${previewUrlOf(t.id)}\nAnh xem PR rồi merge vào staging khi ổn.`, link: t.pr_url ? { label: "PR", url: t.pr_url } : undefined })
+  else if (t.status === "failed")
+    await notify("creator", { kind: "Cảnh báo", source, priority: "high", title: `#${t.id} "${t.title}" lỗi`,
+      body: (t.error ?? "").slice(0, 800), link: t.run_url ? { label: "Nhật ký", url: t.run_url } : undefined })
 }

@@ -21,7 +21,7 @@ import { buildProfileBlock } from "@/lib/agent-profile"
 import { newTurnSafety, recordToolResult, approvalReason, describeAction, taintFromRuns } from "./creator/tool-policy"
 import { createPendingAction, type PendingAction } from "./creator/approvals"
 import { hasDailyAutoApprove } from "./creator/auto-approve"
-import { getCreatorLarkOpenId, sendLarkMessage } from "@/lib/lark"
+import { notify } from "@/lib/notify"
 import { SKILL_TOOLS, getSkill, skillCatalog, preloadSkills } from "./creator/skills"
 import { readLearnedSkills, learnedCatalog, type LearnedSkill } from "./creator/learned-skills"
 import { kbIndexBlock, relevantKbBlock } from "./creator/kb-recall"
@@ -70,10 +70,8 @@ async function saveRunTrace(row: Record<string, unknown>) {
 
 /** Nguồn "nhiễm" nếu cuộc chat đã đọc nội dung ngoài ở lượt trước; null nếu không. */
 async function notifyPendingOnLark(a: PendingAction): Promise<void> {
-  const openId = await getCreatorLarkOpenId().catch(() => null)
-  if (openId) await sendLarkMessage(openId, "open_id", `📝 Chờ anh duyệt — ${a.summary}
-
-Duyệt: nhắn Gấu Pro "duyệt ${a.code}" (hoặc bấm Duyệt trên web). Bỏ: "từ chối ${a.code}".`).catch(() => {})
+  await notify("creator", { kind: "Cần duyệt", source: "Gấu Pro", title: a.summary, priority: "high",
+    body: `Duyệt: nhắn Gấu Pro "duyệt ${a.code}" (hoặc bấm Duyệt trên web). Bỏ: "từ chối ${a.code}".` })
 }
 
 // P2: gắn theo CUỘC CHAT (`conv`, ghi ở bước cuối của trace): quay lại cuộc chat bị nhiễm sau khi chat cuộc khác vẫn còn nhiễm, và không hết hạn

@@ -5,7 +5,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { isCronReq } from "@/lib/analytics-helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 import { alertCronFailure } from "@/lib/cron-alert"
-import { getLarkUserOpenId, sendLarkDM } from "@/lib/lark"
+import { getLarkUserOpenId } from "@/lib/lark"
+import { notify } from "@/lib/notify"
 import { currentQuarterLabel } from "@/lib/okr-helpers"
 import { loadDailyReview } from "@/lib/okr-review-server"
 import { reviewText } from "@/lib/okr-review"
@@ -25,7 +26,8 @@ export async function GET(req: NextRequest) {
 
     const review = await loadDailyReview(currentQuarterLabel())
     const text = reviewText(review, LINK)
-    await sendLarkDM(hieuId, text)
+    const [first, ...rest] = text.split("\n")   // dòng đầu của reviewText đã là tiêu đề (kèm ngày) → tách ra làm tiêu đề tin
+    await notify(hieuId, { kind: "Báo cáo", source: "My Metrics", title: first.replace(/^📊\s*/, "").replace(/ \d{2}\/\d{2} —/, " —"), body: rest.join("\n") })
     await supabaseAdmin.from("app_settings").upsert({ key: SENT_KEY, value: dateVN, category: "okr", label: "Ngày gửi Lark DM đánh giá My Metrics gần nhất", updated_at: new Date().toISOString() }, { onConflict: "key" })
     return NextResponse.json({ ok: true, sent: dateVN, chars: text.length })
   } catch (e: any) {

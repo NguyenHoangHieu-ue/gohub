@@ -1,4 +1,5 @@
-import { getLarkToken, sendLarkDM } from "@/lib/lark"
+import { getLarkToken } from "@/lib/lark"
+import { notify } from "@/lib/notify"
 import { appendMarkdown, appendImage, docUrl } from "@/lib/agents/creator/tools/lark-docs"
 import { giveToUser } from "@/lib/agents/lark-workspace"
 import { formatValue, totalRow, type ReportSpec, type ReportSection } from "./spec"
@@ -59,6 +60,6 @@ export async function buildReportLark(spec: ReportSpec, openId: string | null): 
   const url = await docUrl(token, id, "docx")
   if (!openId) return { link: url, access: "bot", documentId: id }   // chỉ dùng khi thử (không chuyển cho ai)
   const access = await giveToUser(token, id, "docx", openId)
-  await sendLarkDM(openId, `📄 Bé Gấu đã tạo báo cáo **${spec.title}** trong Lark của anh/chị.${url ? `\n[Mở tài liệu](${url})` : ""}`).catch(() => {})
+  await notify(openId, { kind: "Báo cáo", source: "Bé Gấu", title: spec.title, body: "Báo cáo đã được tạo trong Lark của anh/chị.", link: url ? { label: "Mở tài liệu", url } : undefined, priority: "high" })
   return { link: url, access, documentId: id }
 }

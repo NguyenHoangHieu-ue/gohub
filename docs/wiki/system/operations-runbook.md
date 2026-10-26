@@ -365,3 +365,10 @@ Triệu chứng: chat trả lỗi 429
 - **Lần chạy đầu (2026-10-05, từ staging)**: tạo 10 · cập nhật 40 · giữ nguyên 3 · lỗi 0 · 15 trang chỉ có trên web không đụng; không trang
   nào bị cảnh báo bản web mới hơn. Chạy lại → giữ nguyên 53 (không ghi lặp). Bé Gấu trả lời đúng quy trình SIMPIN Gighub từ trang vừa tạo.
 - Trùng `title` giữa 2 file → chỉ file đầu được đồng bộ (script in cảnh báo) — đổi title để khác nhau.
+
+## s241 — `notify()` chuẩn hoá DM Lark (P0b của plan Trợ lý hợp nhất)
+
+- `lib/notify.ts` `notify(to | "creator", { kind, source, title, body?, link?, priority? })`; phần thuần ở `lib/notify-pure.ts`. Đầu tin cố định `{icon} [Loại · Nguồn] Tiêu đề — dd/MM` (Loại: Báo cáo, Cảnh báo, Xong việc, Cần duyệt, Cần trả lời, Nhắc việc, Tin), rồi nội dung, rồi dòng link.
+- **Giờ yên lặng 22:00–07:00 (giờ VN):** chỉ tin `priority: "low"` bị xếp hàng (`app_settings` key `notify_queue`), cron `scheduled-messages` (mỗi giờ) gọi `flushNotifyQueue()` sau 07:00 và gửi GỘP một tin mỗi người. `normal`/`high` gửi ngay. Hiện `low`: tin model Gemini mới, tóm tắt sổ sự việc đêm.
+- Đã chuyển sang `notify()`: digest Gấu Pro, đánh giá My Metrics, quét giá vendor, việc nền Gấu Pro/Bé Gấu, việc nền Argon, tóm tắt sổ sự việc, Soát giá vốn, phiếu sửa code, học liệu, tạo file/báo cáo Lark, nhắc thread, nhắc task, task từ group, duyệt Gấu Pro. Câu hỏi/đề xuất của Argon (`ask-tool`, `patch-tool`) dùng `formatNotice` cùng khuôn. Chưa đổi (có chủ đích): tin vào group (release, cron-alert, Tổ Gấu), `broadcast-once`.
+- Thêm DM mới: dùng `notify()`, không gọi `sendLarkDM` trực tiếp. Test `notify.test.ts`.

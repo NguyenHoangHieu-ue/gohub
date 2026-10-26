@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { sendLarkDM, getCreatorLarkOpenId } from "@/lib/lark"
+import { getCreatorLarkOpenId } from "@/lib/lark"
+import { notify, type Notice } from "@/lib/notify"
 import { runCreatorAI, type JobCheckpoint } from "@/lib/agents/creator-ai"
 import { runBeGau } from "@/lib/agents/be-gau"
 import { canViewCogs } from "@/lib/agents/guardian"
@@ -75,10 +76,10 @@ async function larkOpenIdFor(username: string, isCreator: boolean): Promise<stri
   return (data?.lark_open_id as string) || null
 }
 
-async function finish(job: JobRow, patch: Partial<JobRow>, notify: string) {
+async function finish(job: JobRow, patch: Partial<JobRow>, notice: Notice) {
   await supabaseAdmin.from("gp_jobs").update({ ...patch, checkpoint: null, updated_at: new Date().toISOString() }).eq("id", job.id)
   const openId = await larkOpenIdFor(job.username, job.is_creator).catch(() => null)
-  if (openId) await sendLarkDM(openId, notify)
+  if (openId) await notify(openId, notice)
 }
 
 /** Chạy 1 chặng. Trả "continue" nếu cần gọi chặng tiếp. Chặn chạy trùng bằng chuyển trạng thái nguyên tử. */
@@ -132,11 +133,11 @@ export async function runJobChunk(id: string): Promise<"continue" | "finished" |
     const { data: cur } = await supabaseAdmin.from("gp_jobs").select("status").eq("id", id).maybeSingle()
     if (cur?.status === "cancelled") return "finished"
     await finish(j, { status: "done", result: text.slice(0, 20_000), conversation_id: convId },
-      `✅ Gấu Pro đã xong việc nền: "${j.title}"\n\n${text.slice(0, 1500)}${text.length > 1500 ? "\n…(xem đầy đủ trên web, mục Việc & duyệt)" : ""}`)
+      { kind: "Xong việc", source: "Gấu Pro", title: j.title, body: `${text.slice(0, 1500)}${text.length > 1500 ? "\n…(xem đầy đủ trên web, mục Việc & duyệt)" : ""}` })
     return "finished"
   } catch (e: any) {
     await finish(j, { status: "failed", error: String(e?.message || e).slice(0, 1000) },
-      `⚠️ Việc nền "${j.title}" lỗi: ${String(e?.message || e).slice(0, 300)}`)
+      { kind: "Cảnh báo", source: "Gấu Pro", title: `Việc nền "${j.title}" lỗi`, body: String(e?.message || e).slice(0, 300) })
     return "finished"
   }
 }
@@ -188,11 +189,11 @@ async function runBeGauJobChunk(j: JobRow, st: BeGauJobState): Promise<"continue
       } catch (e) { console.error("[bg_jobs] log task:", e) }
     }
     await finish(j, { status: "done", result: text.slice(0, 20_000), conversation_id: convId },
-      `✅ Bé Gấu đã xong việc nền: "${j.title}"\n\n${text.slice(0, 1500)}${text.length > 1500 ? "\n…(xem đầy đủ trong Bé Gấu, mục Lịch sử)" : ""}`)
+      { kind: "Xong việc", source: "Bé Gấu", title: j.title, body: `${text.slice(0, 1500)}${text.length > 1500 ? "\n…(xem đầy đủ trong Bé Gấu, mục Lịch sử)" : ""}` })
     return "finished"
   } catch (e: any) {
     await finish(j, { status: "failed", error: String(e?.message || e).slice(0, 1000) },
-      `⚠️ Việc nền Bé Gấu "${j.title}" lỗi: ${String(e?.message || e).slice(0, 300)}`)
+      { kind: "Cảnh báo", source: "Bé Gấu", title: `Việc nền "${j.title}" lỗi`, body: String(e?.message || e).slice(0, 300) })
     return "finished"
   }
 }
@@ -220,7 +221,7 @@ async function runDeepResearchChunk(j: JobRow, st: DeepResearchState): Promise<"
         const text = String(g.output_text ?? "").trim() || "Không có nội dung."
         const convId = await save(text)
         await finish(j, { status: "done", result: text.slice(0, 20_000), conversation_id: convId },
-          `🔎 Bé Gấu đã xong nghiên cứu: "${j.title}"\n\n${text.slice(0, 1200)}${text.length > 1200 ? "\n…(xem đầy đủ trong Bé Gấu, mục Lịch sử)" : ""}`)
+          { kind: "Xong việc", source: "Bé Gấu", title: `Nghiên cứu: ${j.title}`, body: `${text.slice(0, 1200)}${text.length > 1200 ? "\n…(xem đầy đủ trong Bé Gấu, mục Lịch sử)" : ""}` })
         return "finished"
       }
       if (!["in_progress", "queued", "running"].includes(g.status)) throw new Error(`Phiên nghiên cứu kết thúc với trạng thái ${g.status}`)
@@ -236,7 +237,7 @@ async function runDeepResearchChunk(j: JobRow, st: DeepResearchState): Promise<"
     return still?.length ? "continue" : "finished"
   } catch (e: any) {
     await finish(j, { status: "failed", error: String(e?.message || e).slice(0, 1000) },
-      `⚠️ Nghiên cứu "${j.title}" lỗi: ${String(e?.message || e).slice(0, 300)}`)
+      { kind: "Cảnh báo", source: "Bé Gấu", title: `Nghiên cứu "${j.title}" lỗi`, body: String(e?.message || e).slice(0, 300) })
     return "finished"
   }
 }
