@@ -14,6 +14,7 @@ import { missionIdsWithDueForecasts } from "@/lib/argon/forecast-tool"
 import { ensureIndexed, pruneOrphans } from "@/lib/argon/index-db"
 import { digestPending } from "@/lib/argon/kho-digest"
 import { pruneGraph } from "@/lib/argon/graph"
+import { loadPubState, publishProfiles } from "@/lib/argon/lark-publish"
 import { pruneEvents } from "@/lib/agent-events"
 import { argonUsernames, runFactsNightly } from "@/lib/argon/facts"
 import { nudgeStaleThreads, syncMailStatus } from "@/lib/argon/mail-status"
@@ -99,6 +100,16 @@ async function run(req: NextRequest) {
       mailStatus.push({ user, ...r, errors: r.errors.slice(0, 3), nudged })
     } catch (e) { mailStatus.push({ user, errors: [(e as Error).message] }) }
   }
+  // Hồ sơ vendor ra Lark (một chiều, chỉ khi anh BẬT "Tự cập nhật mỗi đêm" ở Kho › Thực thể): sau khi sổ sự việc + mail đã mới.
+  const larkPublish: { user: string; skipped?: string; profiles?: number; created?: number; updated?: number; same?: number; errors?: string[] }[] = []
+  for (const user of await argonUsernames().catch(() => [] as string[])) {
+    try {
+      if (!(await loadPubState(user)).enabled) { larkPublish.push({ user, skipped: "chưa bật" }); continue }
+      if (Date.now() - t0 > 240_000) { larkPublish.push({ user, skipped: "hết giờ" }); continue }
+      const r = await publishProfiles(user, { deadline: t0 + 285_000 })
+      larkPublish.push({ user, profiles: r.profiles, created: r.created, updated: r.updated, same: r.same, errors: r.errors.slice(0, 3) })
+    } catch (e) { larkPublish.push({ user, errors: [(e as Error).message] }) }
+  }
   // "Tự chạy hằng đêm": sau khi mail/thread đã nạp, giao worker chạy yêu cầu cố định (1 lần/ngày/dự án) rồi DM Lark.
   const autorun: { project: string; runId: string | null; error?: string }[] = []
   for (const pid of await projectIdsWithAutorun()) {
@@ -122,6 +133,7 @@ async function run(req: NextRequest) {
     search,
     facts,
     mailStatus,
+    larkPublish,
     autorun,
     patrol,
   })
