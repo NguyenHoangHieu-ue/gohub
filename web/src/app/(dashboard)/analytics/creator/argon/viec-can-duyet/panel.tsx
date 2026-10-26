@@ -73,6 +73,9 @@ export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) 
         const [name, v] = it.id.split("@")
         await api("/api/creator/assistant/skills", jsonInit("POST", { name, v: Number(v), action: action === "approve" ? "approve" : "reject" }))
         setNote(action === "approve" ? "Đã duyệt — skill bắt đầu dùng được từ lượt chat sau của Gấu Pro." : "Đã từ chối skill.")
+      } else if (it.kind === "memory_proposal") {
+        const r = await api<{ message?: string }>("/api/creator/assistant/memory-proposals", jsonInit("POST", { id: it.id, action: action === "approve" ? "approve" : "reject" }))
+        setNote(r.message ?? (action === "approve" ? "Đã lưu vào trí nhớ." : "Đã bỏ đề xuất."))
       } else if (it.kind === "mail") {
         await api("/api/creator/argon/mail-status", jsonInit("PATCH", { id: it.id, status: "done" }))
       }

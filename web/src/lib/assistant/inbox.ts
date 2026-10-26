@@ -72,6 +72,14 @@ async function ticketItems(now: number): Promise<InboxItem[]> {
 }
 
 /** Skill tự học đang chờ duyệt: hiện mô tả, kết quả kiểm tra tĩnh + nhận xét model, phần đầu chỉ dẫn. Bản bị chặn (lint "block") chỉ cho Từ chối. */
+async function memoryItems(username: string, now: number): Promise<InboxItem[]> {
+  const { listProposals } = await import("./memory-proposals")
+  return (await listProposals(username)).map(p => ({
+    key: `memory_proposal:${p.id}`, kind: "memory_proposal" as const, id: p.id, title: `Nhớ: ${p.content}`.slice(0, 200),
+    detail: p.reason ? `Lý do: ${p.reason} · loại: ${p.kind}` : `loại: ${p.kind}`, at: p.at, urgency: urgencyFor("memory_proposal", p.at, now), source: "Argon · đề xuất ghi nhớ", actions: ["approve", "reject"] as InboxItem["actions"],
+  }))
+}
+
 async function skillItems(now: number): Promise<InboxItem[]> {
   return candidates(await readRegistry()).map(({ name, version: v, replaces }) => {
     const notes = [...v.lint.findings.map(f => `${f.level === "block" ? "⛔" : "⚠"} ${f.message}`), ...(v.eval ? [evalSummary(v.eval)] : []), ...(v.review ? [`Model chấm độ rõ ${v.review.clarity}/5`, ...v.review.risks.map(r => `Rủi ro: ${r}`), ...v.review.conflicts.map(c => `Mâu thuẫn: ${c}`)] : [])]
@@ -87,7 +95,7 @@ async function skillItems(now: number): Promise<InboxItem[]> {
 
 export async function loadInbox(username: string, now = Date.now()): Promise<{ items: InboxItem[]; failed: string[] }> {
   const jobs: [string, Promise<InboxItem[]>][] = [
-    ["Hành động Gấu Pro", gpActions(username, now)], ["Argon", argonItems(username, now)], ["Sổ sự việc", factReviews(username, now)], ["Mail", mailItems(username, now)], ["Phiếu sửa code", ticketItems(now)], ["Kỹ năng", skillItems(now)],
+    ["Hành động Gấu Pro", gpActions(username, now)], ["Argon", argonItems(username, now)], ["Sổ sự việc", factReviews(username, now)], ["Mail", mailItems(username, now)], ["Phiếu sửa code", ticketItems(now)], ["Kỹ năng", skillItems(now)], ["Đề xuất ghi nhớ", memoryItems(username, now)],
   ]
   const settled = await Promise.allSettled(jobs.map(j => j[1]))
   const items: InboxItem[] = [], failed: string[] = []

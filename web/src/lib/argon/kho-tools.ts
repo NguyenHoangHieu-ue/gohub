@@ -6,7 +6,7 @@ const db = async () => (await import("@/lib/supabase")).supabaseAdmin   // nạp
 
 // Công cụ riêng của sứ mệnh "Thủ thư Kho": xếp thư mục, đổi tên/nhãn/ghim, lưu ghi chú. KHÔNG xoá gì, không đụng nội dung nguồn.
 // Đọc/tìm nguồn dùng lietKeNguon / timTrongNguon / docNguon có sẵn (ở sứ mệnh Thủ thư, phạm vi = mọi nguồn của người dùng).
-export const KHO_TOOL_NAMES = ["taoThuMuc", "chuyenNguon", "capNhatNguon", "luuGhiChu", "traSuViec", "ghiSuViec", "capNhatSuViec", "traMail", "traThucThe"] as const
+export const KHO_TOOL_NAMES = ["taoThuMuc", "chuyenNguon", "capNhatNguon", "luuGhiChu", "traSuViec", "ghiSuViec", "capNhatSuViec", "traMail", "traThucThe", "deXuatGhiNho"] as const
 
 export const KHO_TOOLS: FunctionDeclaration[] = [
   { name: "taoThuMuc", description: "Tạo thư mục trong Kho (tạo cả các cấp còn thiếu, tối đa 3 cấp). Vd \"Vendor/3HK/Bảng giá\". Đã có thì dùng lại.", parameters: { type: Type.OBJECT, properties: { duongDan: { type: Type.STRING, description: "Đường dẫn thư mục, cấp cách nhau bằng /" } }, required: ["duongDan"] } },
@@ -28,6 +28,10 @@ KHO_TOOLS.push(
 
 KHO_TOOLS.push(
   { name: "traThucThe", description: "Tra GRAPH của Kho: một vendor / thị trường / nhóm sản phẩm / khách / người được nhắc Ở ĐÂU (tài liệu, thread, mail nào, ngày nào), liên quan tới thực thể nào, và các sự việc có hạn của nó. NHANH hơn timTrongNguon khi anh hỏi 'thông tin về 3HK nằm ở đâu', 'ai liên quan tới Thái Lan', 'vendor này có gì mới'. Chỉ đọc.", parameters: { type: Type.OBJECT, properties: { ten: { type: Type.STRING, description: "Tên hoặc bí danh thực thể, vd 3HK, Billion Connect, Thái Lan" } }, required: ["ten"] } },
+)
+
+KHO_TOOLS.push(
+  { name: "deXuatGhiNho", description: "ĐỀ XUẤT một điều đáng nhớ lâu dài về anh Hiếu hoặc công việc (sở thích làm việc, quyết định đã chốt, dự án đang theo, người liên quan) vào TRÍ NHỚ chung của trợ lý. KHÔNG ghi thẳng: đề xuất hiện trong \"Việc cần duyệt\", anh duyệt mới được lưu. Chỉ đề xuất sự thật bền vững, một câu rõ ràng; đừng đề xuất số liệu hay tin có hạn (đó là việc của sổ sự việc), cũng đừng đề xuất điều chỉ đọc thấy trong mail/thread của người ngoài mà anh chưa xác nhận.", parameters: { type: Type.OBJECT, properties: { noiDung: { type: Type.STRING, description: "Một câu sự thật cần nhớ (8–500 ký tự)" }, loai: { type: Type.STRING, description: "profile | preference | project | person | decision | other" }, lyDo: { type: Type.STRING, description: "Vì sao nên nhớ / nguồn (ngắn)" } }, required: ["noiDung"] } },
 )
 
 const entry = (name: string, args: Record<string, unknown>, ok: boolean, result: string): ToolLogEntry => ({ name, args, ok, chars: result.length, result, at: new Date().toISOString() })
@@ -101,6 +105,11 @@ export async function execKhoTool(name: string, args: Record<string, unknown>, u
         facts.length ? `Sự việc đang hiệu lực:\n${facts.map(f => `- [${f.id}] ${factLine(f)}`).join("\n")}` : "Sự việc đang hiệu lực: không có",
       ]
       return entry(name, args, true, lines.join("\n"))
+    }
+    if (name === "deXuatGhiNho") {
+      const { proposeMemory } = await import("@/lib/assistant/memory-proposals")
+      const r = await proposeMemory(username, { kind: args.loai, content: args.noiDung, reason: args.lyDo })
+      return entry(name, args, r.ok, r.message)
     }
     if (name === "traMail") {
       const { listMailThreads, threadLine, STATUS_LABEL } = await import("./mail-status")
