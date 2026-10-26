@@ -6,6 +6,7 @@ import { ARGON_TOOLS, MAX_TOOL_CALLS, execArgonTool, type ToolLogEntry } from ".
 import { MISSION_TOOL_NAMES, WS_TOOLS, execMissionAsk, execMissionCode, execMissionForecast, execMissionPatch, execMissionSourceTool, execMissionSql, execWsTool } from "./ws-tools"
 import { LIST_NAME, READ_NAME, SEARCH_NAME, SOURCE_TOOLS } from "./source-tools"
 import { PARALLEL_SAFE, groupCalls } from "./parallel-tools"
+import { FAST_TOOL_NAMES, MAX_FAST_TOOL_CALLS } from "./run-route"
 import { FORECAST_TOOL, FORECAST_TOOL_NAME, SCORE_TOOL, SCORE_TOOL_NAME } from "./forecast-tool"
 import { PATCH_TOOL, PATCH_TOOL_NAME } from "./patch-tool"
 import { ASK_TOOL, ASK_TOOL_NAME, askBlock } from "./ask-tool"
@@ -30,7 +31,7 @@ export interface SegmentIn {
   maxOut: number
   signal?: AbortSignal                        // huỷ từ ngoài (client đóng / người dùng bấm Dừng)
   // dataTools=false: tắt layDuLieuHeThong (mặc định bật). missionId: bật thêm công cụ workspace của sứ mệnh đó (docFile/ghiFile/lietKeFile).
-  tools?: { origin: string; log: ToolLogEntry[]; onTool: (e: ToolLogEntry) => void | Promise<void>; dataTools?: boolean; missionId?: string; khoUser?: string; khoMode?: "full" | "facts" }
+  tools?: { origin: string; log: ToolLogEntry[]; onTool: (e: ToolLogEntry) => void | Promise<void>; dataTools?: boolean; missionId?: string; khoUser?: string; khoMode?: "full" | "facts"; fast?: boolean }   // fast = đường nhanh: chỉ công cụ đọc Kho (FAST_TOOL_NAMES), ít vòng gọi
   onDelta: (text: string) => void
   onProgress?: () => void                     // gọi định kỳ (≥4s) để lưu câu trả lời dở / nhịp tim
 }
@@ -60,11 +61,14 @@ function prepare(i: SegmentIn): Prepared {
   const khoUser = i.tools?.khoUser   // sứ mệnh đọc toàn Kho: "full" (Thủ thư Kho) thêm công cụ xếp thư mục + sổ sự việc; "facts" (Tham mưu hằng ngày) chỉ tra sổ sự việc (kho-tools.ts)
   const khoDecls = khoUser ? (i.tools?.khoMode === "full" ? KHO_TOOLS : KHO_TOOLS.filter(t => t.name === "traSuViec" || t.name === "traMail" || t.name === "traThucThe")) : []
   const khoNames = new Set(khoDecls.map(t => t.name))
-  const decls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? [...WS_TOOLS, SQL_TOOL, RUN_CODE_TOOL, ASK_TOOL, PATCH_TOOL, FORECAST_TOOL, SCORE_TOOL, ...SOURCE_TOOLS, ...khoDecls] : [])]
-  const maxCalls = missionId ? MAX_MISSION_TOOL_CALLS : MAX_TOOL_CALLS   // sứ mệnh còn đọc/ghi file nên cần nhiều lượt gọi hơn
+  const fast = !!i.tools?.fast && !!missionId
+  const allDecls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? [...WS_TOOLS, SQL_TOOL, RUN_CODE_TOOL, ASK_TOOL, PATCH_TOOL, FORECAST_TOOL, SCORE_TOOL, ...SOURCE_TOOLS, ...khoDecls] : [])]
+  const decls = fast ? allDecls.filter(t => FAST_TOOL_NAMES.includes(String(t.name))) : allDecls
+  const maxCalls = fast ? MAX_FAST_TOOL_CALLS : missionId ? MAX_MISSION_TOOL_CALLS : MAX_TOOL_CALLS   // sứ mệnh còn đọc/ghi file nên cần nhiều lượt gọi hơn
   const isData = (n: string) => !MISSION_TOOL_NAMES.includes(n)
   const dispatch = async (fname: string, fargs: Record<string, unknown>, dataCalls: number): Promise<ToolLogEntry> => (
-    khoUser && khoNames.has(String(fname)) ? await execKhoTool(fname, fargs, khoUser)
+    fast && !FAST_TOOL_NAMES.includes(String(fname)) ? { name: fname, args: fargs, ok: false, chars: 0, result: "Đường nhanh chỉ tra cứu Kho; câu này cần công cụ khác — nói với Hiếu bấm Sâu hoặc hỏi lại kèm yêu cầu phân tích", at: new Date().toISOString() }
+    : khoUser && khoNames.has(String(fname)) ? await execKhoTool(fname, fargs, khoUser)
     : (fname === LIST_NAME || fname === READ_NAME || fname === SEARCH_NAME) && missionId ? await execMissionSourceTool(fname, fargs, missionId)
     : (fname === FORECAST_TOOL_NAME || fname === SCORE_TOOL_NAME) && missionId ? await execMissionForecast(fname, fargs, missionId)
     : fname === PATCH_TOOL_NAME && missionId ? await execMissionPatch(fargs, missionId, i.tools!.origin)

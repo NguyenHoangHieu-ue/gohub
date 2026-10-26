@@ -12,6 +12,7 @@ import { linkedSourceIdsForProject, loadMissionContext, missionIdForProject } fr
 import { clearPendingAsk } from "@/lib/argon/ask-tool"
 import { KHO_MISSION_NAME } from "@/lib/argon/kho"
 import { usesKhoScope } from "@/lib/argon/context-instruction"
+import { routeRun } from "@/lib/argon/run-route"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -28,8 +29,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const rl = await checkRateLimit(`argon:${username}`, 20, 60_000)
   if (!rl.allowed) return NextResponse.json({ error: `Quá nhiều yêu cầu, chờ ${Math.ceil(rl.resetMs / 1000)}s` }, { status: 429 })
 
-  const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string; allowTools?: boolean; background?: boolean; templateReportId?: string; model?: string }
-  const thinking = b.thinking && LEVELS[b.thinking] ? b.thinking : "medium"
+  const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string; allowTools?: boolean; background?: boolean; templateReportId?: string; model?: string; route?: "auto" | "full" }
+  let thinking = b.thinking && LEVELS[b.thinking] ? b.thinking : "medium"
 
   const { data: allRuns } = await supabaseAdmin.from("argon_runs").select("*").eq("project_id", params.id).order("created_at")
   const runs = (allRuns ?? []) as ArgonRun[]
@@ -46,6 +47,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Mô hình: "tiếp tục viết" giữ model của lượt gốc; lượt mới theo yêu cầu, mặc định NHANH cho sứ mệnh (nhiều lượt công cụ, nhanh gấp ~4-7 lần Argon) và SÂU cho dự án thường.
   const model = resume?.model ?? resolveModel(b.model ?? (project.kind === "mission" ? "fast" : "deep"))
   const pick = resume ? new Set(resume.source_ids) : b.sourceIds ? new Set(b.sourceIds) : null
+  // Router (ARGON-X P1): câu tra cứu ngắn đi ĐƯỜNG NHANH (suy luận thấp, chỉ công cụ đọc Kho, ≤5 lượt gọi); mọi câu khác chạy đầy đủ như trước. Việc nền không qua router.
+  const decision = !b.background && b.route !== "full" ? routeRun(prompt, { deep: b.model === "deep", resume: !!resume, thinking: b.thinking, mission: project.kind === "mission" }) : { route: "full" as const, reason: "việc nền / chọn đầy đủ" }
+  const fast = decision.route === "fast"
+  if (fast) thinking = "low"
 
   // ── Việc nền: chỉ tạo lượt + giao worker (nguồn live được đọc lại ở đoạn đầu của worker) ──
   if (b.background) {
@@ -91,12 +96,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const stream = new ReadableStream({
     async start(controller) {
       const send = (o: unknown) => { try { controller.enqueue(enc.encode(`data: ${JSON.stringify(o)}\n\n`)) } catch { /* client đã đóng */ } }
-      send({ type: "start", runId, warnings: ctx.warnings, sources: ctx.usedSourceIds.length })
+      send({ type: "start", runId, warnings: ctx.warnings, sources: ctx.usedSourceIds.length, route: decision.route, routeReason: decision.reason })
       const save = (extra: Record<string, unknown> = {}) => supabaseAdmin.from("argon_runs").update({ answer, ...extra }).eq("id", runId)
       const log = [...toolLog]
       const seg = await runSegment({
         ctx, thinking, model, segmentMs: SEGMENT_MS, maxOut: MAX_OUT, signal: req.signal,
-        tools: allowTools || mctx ? { origin: req.nextUrl.origin, log, dataTools: allowTools, missionId: mctx?.mission.id, khoUser: usesKhoScope(mctx?.mission.name ?? "") ? username : undefined, khoMode: mctx?.mission.name === KHO_MISSION_NAME || !b.background ? "full" : "facts",onTool: async e => { send({ type: "tool", name: e.name, args: e.args, ok: e.ok, chars: e.chars }); await saveToolLog(runId, log) } } : undefined,
+        tools: allowTools || mctx ? { origin: req.nextUrl.origin, log, dataTools: allowTools && !fast, fast, missionId: mctx?.mission.id, khoUser: usesKhoScope(mctx?.mission.name ?? "") ? username : undefined, khoMode: mctx?.mission.name === KHO_MISSION_NAME || !b.background ? "full" : "facts",onTool: async e => { send({ type: "tool", name: e.name, args: e.args, ok: e.ok, chars: e.chars }); await saveToolLog(runId, log) } } : undefined,
         onDelta: t => { answer += t; send({ type: "delta", text: t }) },
         onProgress: () => { void save() },
       })
