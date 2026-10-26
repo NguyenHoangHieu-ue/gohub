@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { SKILL_NAMES } from "./skills"
 import { lintSkill, type LintResult } from "./skill-lint"
+import { runSkillEval, type SkillEval } from "./skill-eval"
 
 // Skill Gấu Pro TỰ HỌC — vòng đời có kiểm soát (P4, plan Trợ lý hợp nhất): Gấu Pro soạn bản nháp → trở thành ỨNG VIÊN (CHƯA nạp vào prompt) → kiểm tra tĩnh (skill-lint) +
 // nhận xét của model → Creator DUYỆT ở "Việc cần duyệt" → mới thành chính thức. Mỗi lần sửa là một PHIÊN BẢN mới (cũng phải duyệt), giữ lịch sử, quay lại bản trước được.
@@ -20,7 +21,7 @@ export type VersionState = "candidate" | "approved" | "rejected" | "retired"
 export interface SkillReview { clarity: number; risks: string[]; conflicts: string[]; testPrompts: string[]; at: string }
 export interface SkillVersion {
   v: number; state: VersionState; description: string; instructions: string; source: string; created_at: string; created_by: string
-  lint: LintResult; review?: SkillReview | null; decided_at?: string; decided_by?: string
+  lint: LintResult; review?: SkillReview | null; eval?: SkillEval | null; decided_at?: string; decided_by?: string
 }
 export interface SkillEntry { name: string; versions: SkillVersion[]; active: number | null }   // active = số phiên bản đang dùng (null = chưa có bản nào được duyệt)
 
@@ -129,6 +130,20 @@ export async function writeRegistry(reg: Registry): Promise<void> {
 /** Skill đã duyệt đang dùng — NƠI DUY NHẤT prompt đọc skill tự học (ứng viên chưa duyệt không bao giờ lọt vào đây). */
 export async function readLearnedSkills(): Promise<LearnedSkill[]> { return approvedSkills(await readRegistry()) }
 
+/** Chấm A/B một phiên bản (dùng 3 câu thử do model nhận xét đề xuất) rồi ghi kết quả vào sổ. Gọi nền sau khi tạo ứng viên, hoặc tay từ Việc cần duyệt. */
+export async function evalSkillVersion(name: string, v: number): Promise<{ ok?: true; error?: string }> {
+  const reg = await readRegistry()
+  const ver = reg.skills.find(s => s.name === name)?.versions.find(x => x.v === v)
+  if (!ver) return { error: `Không có skill "${name}" phiên bản ${v}.` }
+  const prompts = ver.review?.testPrompts ?? []
+  if (!prompts.length) return { error: "Chưa có câu thử (model chưa nhận xét được skill này)." }
+  const result = await runSkillEval({ name, instructions: ver.instructions }, prompts)
+  if (!result) return { error: "Không chấm được (model lỗi hoặc không trả phán quyết hợp lệ)." }
+  const fresh = await readRegistry()   // đọc lại ngay trước khi ghi: trong lúc chấm anh có thể vừa duyệt/từ chối
+  await writeRegistry({ skills: fresh.skills.map(s => (s.name === name ? { ...s, versions: s.versions.map(x => (x.v === v ? { ...x, eval: result } : x)) } : s)) })
+  return { ok: true }
+}
+
 /** Quyết định của Creator (web/Inbox): duyệt, từ chối, quay lại phiên bản trước, gỡ. */
 export async function decideLearnedSkill(a: { name: string; v: number; action: SkillDecision; by: string }): Promise<{ ok?: true; error?: string }> {
   const r = decideSkill(await readRegistry(), a)
@@ -191,6 +206,8 @@ export async function runLearnSkill(args: any, username: string, isCreator: bool
     const r = addCandidate(reg, { name: String(args.name), description: String(args.description), instructions: String(args.instructions), source: String(args.source ?? ""), by: username, lint, review })
     if ("error" in r) return { error: r.error }
     await writeRegistry(r.reg)
+    // Chấm A/B chạy NỀN (≈20–40s) — kết quả hiện trên thẻ duyệt khi xong; lỗi thì thẻ có nút "Chấm thử A/B".
+    if (review?.testPrompts.length) { try { (await import("@vercel/functions")).waitUntil(evalSkillVersion(String(args.name), r.v).then(() => undefined, () => undefined)) } catch { /* ngoài Vercel: bỏ qua */ } }
     return {
       ok: true, saved: String(args.name), version: r.v, status: "ứng viên — CHƯA dùng được, chờ Hiếu duyệt ở Trợ lý › Việc cần duyệt",
       replaces: r.replaces, lint: lint.level, notes: lint.findings.map(f => f.message), review: review ? { clarity: review.clarity, risks: review.risks, conflicts: review.conflicts } : null,

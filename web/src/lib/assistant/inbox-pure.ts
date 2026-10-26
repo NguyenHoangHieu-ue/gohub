@@ -1,7 +1,7 @@
 // "Việc cần duyệt" của Trợ lý: gom MỌI thứ đang chờ anh (hành động Gấu Pro, câu hỏi/đề xuất sửa code của Argon, thay đổi sự việc, mail chờ trả lời, phiếu dev hỏi lại)
 // vào MỘT danh sách. Phần THUẦN — kiểu, xếp thứ tự, đếm. Không I/O.
 export type InboxKind = "gp_action" | "argon_patch" | "argon_ask" | "fact_review" | "mail" | "dev_ticket" | "skill_candidate"
-export type InboxAction = "approve" | "reject" | "confirm" | "done" | "open"
+export type InboxAction = "approve" | "reject" | "confirm" | "done" | "open" | "eval"
 
 export interface InboxItem {
   key: string                    // `${kind}:${id}` — duy nhất trong danh sách

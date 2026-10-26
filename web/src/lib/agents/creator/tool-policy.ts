@@ -10,6 +10,7 @@ export interface TurnSafety {
   tainted: boolean
   taintSources: string[]
   knownText: string          // văn bản người dùng + kết quả tool đã thấy — URL hợp lệ cho browseWeb phải xuất hiện ở đây
+  browserActions?: number    // số thao tác thật (click/gõ/điều hướng…) trên browser của người dùng trong lượt này — chặn vòng lặp thao tác không dừng
 }
 
 const KNOWN_TEXT_CAP = 200_000
@@ -19,6 +20,7 @@ export function newTurnSafety(userText: string, hasFiles: boolean): TurnSafety {
     tainted: hasFiles,
     taintSources: hasFiles ? ["file tải lên"] : [],
     knownText: userText.slice(0, KNOWN_TEXT_CAP),
+    browserActions: 0,
   }
 }
 
@@ -49,6 +51,7 @@ function isTaintSource(name: string, args: any): boolean {
 }
 
 export function recordToolResult(state: TurnSafety, call: { name: string; args: any }, response: unknown): void {
+  if (call.name === "controlMyBrowser" && !BROWSER_FREE_ACTIONS.has(String(call.args?.action ?? ""))) state.browserActions = (state.browserActions ?? 0) + 1
   if (isTaintSource(call.name, call.args)) {
     state.tainted = true
     if (!state.taintSources.includes(call.name)) state.taintSources.push(call.name)
@@ -64,6 +67,7 @@ type Rule = "always" | "when_tainted" | "never"
 
 // Thao tác trên tab của người dùng không đổi dữ liệu / không đi đâu xa: luôn chạy luôn.
 const BROWSER_FREE_ACTIONS = new Set(["scroll", "scroll_to", "hover", "wait_for", "activate_tab"])
+export const MAX_BROWSER_ACTIONS_PER_TURN = 40
 
 function ruleFor(name: string, args: any): Rule {
   const action = String(args?.action ?? "")
@@ -115,6 +119,9 @@ export function approvalReason(call: { name: string; args: any }, state: TurnSaf
       return `Mở URL chưa từng xuất hiện trong hội thoại sau khi đã đọc nội dung bên ngoài (${state.taintSources.join(", ")}).`
     if (state.taintSources.every(s => s.replace(/ \(lượt trước\)$/, "") === "readMyBrowser")) return null
   }
+  // Trần thao tác thật trên browser trong MỘT lượt (kể cả khi chưa "nhiễm"): vượt thì phải duyệt để người dùng thấy và cho đi tiếp — chống vòng lặp click/gõ không dừng (lỗi model hoặc bị điều khiển ngầm).
+  if (call.name === "controlMyBrowser" && !BROWSER_FREE_ACTIONS.has(String(call.args?.action ?? "")) && (state.browserActions ?? 0) >= MAX_BROWSER_ACTIONS_PER_TURN)
+    return `Đã thao tác ${state.browserActions} lần trên browser trong lượt này (trần ${MAX_BROWSER_ACTIONS_PER_TURN}) — cần anh xác nhận trước khi làm tiếp.`
   const rule = ruleFor(call.name, call.args)
   if (rule === "always") return call.name === "devTicket"
     ? "Phiếu sửa code (Claude Code chạy trên GitHub, mở PR vào staging) luôn cần Hiếu duyệt."

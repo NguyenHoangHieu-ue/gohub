@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { digestPending } from "@/lib/argon/kho-digest"
+import { cleanAutomatedMailGraph, digestPending } from "@/lib/argon/kho-digest"
 import { requireArgonUser } from "@/lib/argon/server"
 import { getEntity, listEntities } from "@/lib/argon/graph"
 import { listFacts, fold } from "@/lib/argon/facts"
@@ -29,8 +29,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const username = await requireArgonUser()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  const b = (await req.json().catch(() => ({}))) as { max?: number }
+  const b = (await req.json().catch(() => ({}))) as { max?: number; clean?: boolean }
   try {
+    if (b.clean) return NextResponse.json({ cleaned: await cleanAutomatedMailGraph(username), entities: (await listEntities(username)).length })   // dọn nhiễu từ mail tự động (OTP/thông báo)
     const r = await digestPending(username, Math.max(1, Math.min(12, Number(b.max) || 12)), Date.now() + 100_000)
     return NextResponse.json({ ...r, entities: (await listEntities(username)).length })
   } catch (e) {

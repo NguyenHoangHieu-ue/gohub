@@ -2,6 +2,10 @@ import { cleanFolderPath, ensureFolderPath, folderPathOf, listFolders, userProje
 import { saveSourceFacts, sourceDateOf, type FactRow } from "./facts"
 import { digestSource } from "./source-digest"
 import { saveSourceGraph } from "./graph"
+import { isAutomatedSender } from "./mail-status-pure"
+
+/** Mail do hệ thống/địa chỉ tự động gửi (OTP, thông báo, newsletter): không đưa vào graph (nhiễu — vd "Airhub" chiếm hàng chục nguồn chỉ vì thư OTP). */
+export const isAutomatedMailSource = (s: { kind?: string; meta?: Record<string, unknown> | null }) => s.kind === "mail" && typeof s.meta?.mailFrom === "string" && isAutomatedSender(s.meta.mailFrom)
 import type { ArgonSource } from "./server"
 
 const db = async () => (await import("@/lib/supabase")).supabaseAdmin
@@ -19,7 +23,7 @@ export async function digestAndFile(username: string, s: ArgonSource & { folder_
   const hasTags = Array.isArray(s.meta?.tags) && (s.meta.tags as unknown[]).length > 0
   // Graph (Turso) lỗi không được làm hỏng việc tóm tắt: không đánh dấu graphAt thì đêm sau thử lại.
   let graphAt: string | undefined
-  try { await saveSourceGraph(username, { id: s.id, name: s.name, date: sourceDateOf(s) }, entities, relations, d.summary ?? ""); graphAt = d.at } catch (e) { console.error("[argon graph]", (e as Error).message) }
+  try { const skip = isAutomatedMailSource(s); await saveSourceGraph(username, { id: s.id, name: s.name, date: sourceDateOf(s) }, skip ? [] : entities, skip ? [] : relations, d.summary ?? ""); graphAt = d.at } catch (e) { console.error("[argon graph]", (e as Error).message) }
   const meta = { ...(s.meta ?? {}), digest: d, factsAt: d.at, ...(graphAt ? { graphAt } : {}), ...(hasTags ? {} : { tags: d.tags ?? [] }) }
   await (await db()).from("argon_sources").update({ meta, folder_id: folderId }).eq("id", s.id)
   // graphOnly: nguồn đã trích sự việc từ trước, chỉ bù graph — không trích lại (tránh báo "sự việc mới" lần nữa).
@@ -47,4 +51,18 @@ export async function digestPending(username: string, max: number, deadline: num
     try { await digestAndFile(username, s, paths, false, { graphOnly: !!s.meta?.factsAt }); out.done++ } catch (e) { out.errors.push(`${s.name}: ${(e as Error).message}`.slice(0, 160)); await sb.from("argon_sources").update({ meta: { ...(s.meta ?? {}), factsAt: new Date().toISOString(), factsError: true } }).eq("id", s.id) }
   }
   return out
+}
+
+/** Xoá khỏi graph các nguồn mail tự động đã lỡ nạp trước khi có bộ lọc. Trả số nguồn đã dọn. */
+export async function cleanAutomatedMailGraph(username: string): Promise<number> {
+  const pids = await userProjectIds(username)
+  if (!pids.length) return 0
+  const sb = await db()
+  let n = 0
+  for (let from = 0; from < 20_000; from += 1000) {
+    const { data } = await sb.from("argon_sources").select("id,name,kind,meta").in("project_id", pids).eq("kind", "mail").order("id").range(from, from + 999)
+    for (const s of data ?? []) if (isAutomatedMailSource(s as { kind: string; meta: Record<string, unknown> })) { await saveSourceGraph(username, { id: String(s.id), name: String(s.name) }, [], [], ""); n++ }
+    if ((data?.length ?? 0) < 1000) break
+  }
+  return n
 }

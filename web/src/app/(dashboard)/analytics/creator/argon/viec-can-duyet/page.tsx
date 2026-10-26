@@ -39,7 +39,7 @@ export default function ViecCanDuyetPage() {
     try { await api("/api/creator/assistant/skills", jsonInit("POST", { name, v, action })); setNote(action === "rollback" ? `Đã quay lại phiên bản ${v} của "${name}".` : `Đã gỡ "${name}" khỏi prompt.`); await loadSkills() } catch (e) { setErr((e as Error).message) } finally { setBusy(null) }
   }
 
-  async function act(it: InboxItem, action: "approve" | "reject" | "confirm" | "done") {
+  async function act(it: InboxItem, action: "approve" | "reject" | "confirm" | "done" | "eval") {
     setBusy(`${it.key}:${action}`); setNote(null)
     try {
       if (it.kind === "gp_action") {
@@ -52,6 +52,11 @@ export default function ViecCanDuyetPage() {
       } else if (it.kind === "fact_review") {
         await api("/api/creator/argon/facts", jsonInit("PATCH", action === "confirm" ? { id: it.id, confirm: true } : { id: it.id, status: "rejected" }))
         setNote(action === "confirm" ? "Đã xác nhận thay đổi." : "Đã bỏ thay đổi, giữ tin cũ.")
+      } else if (it.kind === "skill_candidate" && action === "eval") {
+        const [name, v] = it.id.split("@")
+        await api("/api/creator/assistant/skills", jsonInit("POST", { name, v: Number(v), action: "eval" }))
+        setNote("Đã chấm A/B — kết quả hiện trên thẻ.")
+        void load(); return
       } else if (it.kind === "skill_candidate") {
         const [name, v] = it.id.split("@")
         await api("/api/creator/assistant/skills", jsonInit("POST", { name, v: Number(v), action: action === "approve" ? "approve" : "reject" }))
@@ -105,6 +110,7 @@ export default function ViecCanDuyetPage() {
                     {it.actions.includes("approve") && <button type="button" disabled={!!busy} onClick={() => void act(it, "approve")} className={cn(btn, "bg-emerald-600 text-white border-emerald-600 disabled:opacity-50")}>{busy === `${it.key}:approve` ? "Đang chạy…" : "Duyệt"}</button>}
                     {it.actions.includes("confirm") && <button type="button" disabled={!!busy} onClick={() => void act(it, "confirm")} className={cn(btn, "bg-emerald-600 text-white border-emerald-600 disabled:opacity-50")}>Đúng, xác nhận</button>}
                     {it.actions.includes("done") && <button type="button" disabled={!!busy} onClick={() => void act(it, "done")} className={cn(btn, "bg-emerald-600 text-white border-emerald-600 disabled:opacity-50")}>Xong</button>}
+                    {it.actions.includes("eval") && <button type="button" disabled={!!busy} onClick={() => void act(it, "eval")} className={cn(btn, "border-gray-300 dark:border-slate-600 disabled:opacity-50")}>{busy === `${it.key}:eval` ? "Đang chấm…" : "Chấm thử A/B"}</button>}
                     {it.actions.includes("reject") && <button type="button" disabled={!!busy} onClick={() => void act(it, "reject")} className={cn(btn, "border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 disabled:opacity-50")}>{it.kind === "fact_review" ? "Sai, giữ tin cũ" : "Từ chối"}</button>}
                     {it.href && <Link href={it.href} className={cn(btn, "border-gray-300 dark:border-slate-600 text-violet-700 dark:text-violet-300")}>{it.actions.includes("open") ? "Mở để trả lời" : "Xem chi tiết"}</Link>}
                   </div>
