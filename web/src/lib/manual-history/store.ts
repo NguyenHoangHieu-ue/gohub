@@ -97,7 +97,7 @@ export async function historyStats(): Promise<{ rows: number; oldest: string | n
   await ensureTable()
   const [c] = await tursoQuery("SELECT COUNT(*) AS n, MIN(at) AS oldest FROM manual_edit_history")
   const t = await tursoQuery("SELECT tbl, COUNT(*) AS n FROM manual_edit_history GROUP BY tbl ORDER BY n DESC")
-  return { rows: Number(c?.n ?? 0), oldest: c?.oldest ? String(c.oldest) : null, tables: t.map(r => ({ tbl: String(r.tbl), n: Number(r.n) })) }
+  return { rows: Number(c?.n ?? 0), oldest: typeof c?.oldest === "string" && /^\d{4}-/.test(c.oldest) ? c.oldest : null, tables: t.map(r => ({ tbl: String(r.tbl), n: Number(r.n) })) }
 }
 
 /**
