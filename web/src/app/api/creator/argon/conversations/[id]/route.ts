@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireArgonUser } from "@/lib/argon/server"
 import { isChatMission, isDailyMission } from "@/lib/argon/conversations"
+import { CHAT_PREFIX } from "@/lib/argon/missions"
 import { deleteMission, ownMission, updateMission } from "@/lib/argon/missions-db"
 
 export const dynamic = "force-dynamic"
@@ -15,7 +16,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const b = (await req.json().catch(() => ({}))) as { title?: unknown }
   const title = typeof b.title === "string" ? b.title.replace(/\s+/g, " ").trim().slice(0, 80) : ""
   if (!title) return NextResponse.json({ error: "Thiếu tên" }, { status: 400 })
-  try { await updateMission(m.id, { name: title }); return NextResponse.json({ ok: true, title }) }
+  try { await updateMission(m.id, { name: CHAT_PREFIX + title }); return NextResponse.json({ ok: true, title }) }
   catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }) }
 }
 

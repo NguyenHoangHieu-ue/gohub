@@ -73,8 +73,8 @@ export const briefTemplate = (name: string, goal: string) =>
 
 export const decisionsTemplate = () => "# Quyết định đã chốt\n\n(chưa có mục nào. Mỗi mục: ngày, ai chốt, nội dung, lý do.)\n"
 
-/** Dấu ở `goal` của sứ mệnh dùng làm cuộc trò chuyện (xem conversations.ts); không đưa vào ngữ cảnh model. */
-export const CHAT_MARK = "__chat__"
+/** Tiền tố TÊN của sứ mệnh dùng làm cuộc trò chuyện (xem conversations.ts). Đặt ở tên (không phải `goal`) vì mọi nơi quyết định "đọc toàn Kho" đều dựa trên tên sứ mệnh (usesKhoScope). */
+export const CHAT_PREFIX = "💬 "
 export const CHAT_DEFAULT_NAME = "Cuộc trò chuyện mới"
 
 /** Khối đầu ngữ cảnh mỗi lượt của sứ mệnh: mục tiêu + pha + brief/decisions nguyên văn + danh sách file (tên + kích thước; nội dung đọc qua công cụ). */
@@ -82,7 +82,7 @@ export function missionContextBlock(m: { name: string; goal: string; phase: Miss
   const list = files.filter(f => f.path !== BRIEF_PATH && f.path !== DECISIONS_PATH).map(f => `- ${f.path} (${f.size_bytes} byte, ${f.author === "argon" ? "Argon" : "Hiếu"} ghi)`).join("\n")
   return [
     `<su_menh ten="${m.name.replace(/"/g, "'")}" pha="${m.phase}">`,
-    `Mục tiêu: ${(m.goal.trim() === CHAT_MARK ? "" : m.goal.trim()) || "(chưa ghi)"}`,
+    `Mục tiêu: ${m.goal.trim() || "(chưa ghi)"}`,
     `<brief.md>\n${brief.trim()}\n</brief.md>`,
     `<decisions.md>\n${decisions.trim()}\n</decisions.md>`,
     `<file_workspace>\n${list || "(chưa có file nào khác)"}\n</file_workspace>`,

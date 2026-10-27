@@ -1,4 +1,5 @@
 import { KHO_MISSION_NAME } from "./kho-pure"
+import { CHAT_PREFIX } from "./missions"
 
 // "Bối cảnh & Kế hoạch": sứ mệnh "Tham mưu hằng ngày" đọc MỌI nguồn trong Kho (thread, mail, file, sổ sự việc) để hiểu công ty đang ở đâu, đọc kế hoạch/metric
 // Hiếu tự viết bằng văn bản (brief.md) để biết việc của Hiếu, rồi mỗi đêm ghi: notes/boi-canh.md, notes/tac-dong.md (+ notes/tin-hom-nay.md cho trang chủ Argon).
@@ -10,7 +11,7 @@ export const TAC_DONG_PATH = "notes/tac-dong.md"
 export const TIN_PATH = "notes/tin-hom-nay.md"
 
 /** Sứ mệnh nào đọc mọi nguồn trong Kho (tìm bằng chỉ mục, chỉ nạp sẵn nguồn ghim) thay vì chỉ nguồn gắn tay. */
-export const usesKhoScope = (name: string) => name === KHO_MISSION_NAME || name === DAILY_MISSION_NAME
+export const usesKhoScope = (name: string) => name === KHO_MISSION_NAME || name === DAILY_MISSION_NAME || name.startsWith(CHAT_PREFIX)   // cuộc trò chuyện của Trợ lý cũng đọc toàn Kho
 
 export const BRIEF_TEXT = `# Tham mưu hằng ngày
 
