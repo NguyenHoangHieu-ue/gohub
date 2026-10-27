@@ -15,7 +15,7 @@ export const TOOL_LEVELS: Readonly<Record<string, Level>> = {
   lietKeNguon: "L1", timTrongNguon: "L1", docNguon: "L1", traMail: "L1", docKyNang: "L0",
   timTrenWeb: "L1", docLark: "L1", docLarkBase: "L1",   // đọc từ web/Lark (ext-tools.ts): nội dung do người/trang ngoài viết
   ghiFile: "L2", ghiSuViec: "L2", capNhatSuViec: "L2", taoThuMuc: "L2", chuyenNguon: "L2", capNhatNguon: "L2", luuGhiChu: "L2", ghiDuDoan: "L2", chamDuDoan: "L2", run_code: "L2",
-  hoiHieu: "L3", deXuatSuaCode: "L3", deXuatGhiNho: "L3", deXuatKyNang: "L3",
+  hoiHieu: "L3", deXuatSuaCode: "L3", deXuatGhiNho: "L3", deXuatKyNang: "L3", deXuatThaoTac: "L3",   // deXuatThaoTac (act-tool.ts): chỉ tạo thẻ chờ duyệt, không tự chạy hành động ra ngoài
 }
 export const levelOf = (name: string): Level | null => TOOL_LEVELS[name] ?? null
 

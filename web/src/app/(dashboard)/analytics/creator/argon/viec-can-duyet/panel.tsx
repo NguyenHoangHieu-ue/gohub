@@ -61,7 +61,7 @@ export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) 
       if (it.kind === "gp_action") {
         const r = await api<{ ok?: boolean; error?: string }>("/api/creator-ai/approve", jsonInit("POST", { id: it.id, approve: action === "approve" }))
         if (r.error) throw new Error(r.error)
-        setNote(action === "approve" ? "Đã duyệt — Gấu Pro đã chạy hành động." : "Đã từ chối.")
+        setNote(action === "approve" ? "Đã duyệt — hành động đã chạy." : "Đã từ chối.")
       } else if (it.kind === "argon_patch") {
         await api(`/api/creator/argon/missions/${it.missionId}/patches`, jsonInit("POST", { action, id: it.id }))
         setNote(action === "approve" ? "Đã duyệt — phiếu sửa code đã tạo, PR sẽ vào staging." : "Đã từ chối đề xuất.")

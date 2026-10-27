@@ -18,6 +18,8 @@ const FULL_HINTS = [
   "tai sao", "vi sao", "nguyen nhan", " tinh ", " tong ", "trung binh", " sql ", "truy van", "toi uu", "danh gia", "kiem tra so", "doi chieu", "soat ", "ke hoach", "de xuat",
   " viet ", " soan ", " tao ", "lam report", "lam bao cao",
   // cần công cụ ngoài Kho (ext-tools.ts): tìm web, đọc Lark Doc/Sheet/Base — đường nhanh không có
+  // nhờ làm việc ra ngoài (deXuatThaoTac, act-tool.ts): đường nhanh không có công cụ đề xuất
+  "gui tin", "nhan tin", "nhan cho", "tao task", "giao viec", "nhac toi", "nhac em", "dat lich", "len lich", "hen gio", "gui mail", "tao phieu", "tao doc", "tao sheet", "gui cho", " dm ",
   "tren web", "tren mang", "internet", "google", "lark base", "bitable", "larksuite", "feishu", "http", " base ", "lark doc", "lark sheet",
   // ý định GHI/sửa (đường nhanh KHÔNG có công cụ ghi): phát hiện từ eval D3 — "Ghi vào sổ sự việc…" từng bị coi là tra cứu vì có chữ "sự việc"
   " ghi ", "ghi vao", " luu ", "cap nhat", " sua ", " xoa ", " bo di ", " nho ", "nho giup", "chuyen vao", "doi ten", "gan nhan",

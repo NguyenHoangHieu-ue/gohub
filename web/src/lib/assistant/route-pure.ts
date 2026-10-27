@@ -23,14 +23,14 @@ const KNOWLEDGE = [
 ]
 
 // ───────── Làn (Gấu Prime, ARGON-X mục 15.1): chia câu theo MỤC ĐÍCH rồi gợi ý mức model. Cũng luật từ khoá, không gọi model.
-// `here` = làn này Gấu Prime làm được ngay; làn thao tác/trình duyệt vẫn qua Gấu Pro cho tới Đợt 2–3 của lộ trình hợp nhất.
+// `here` = làn này Gấu Prime làm được; `approval` = làm qua thẻ duyệt (Argon chỉ đề xuất — Đợt 2). Làn trình duyệt vẫn qua Gấu Pro cho tới Đợt 3 của lộ trình hợp nhất.
 export type Lane = "hoi_kho" | "so_lieu" | "soan_tao" | "hanh_dong" | "trinh_duyet"
-export interface LaneDecision { lane: Lane; n: number; label: string; tier: "fast" | "deep"; here: boolean; reason: string; confidence: "high" | "low" }
+export interface LaneDecision { lane: Lane; n: number; label: string; tier: "fast" | "deep"; here: boolean; approval: boolean; reason: string; confidence: "high" | "low" }
 const LANE_LABEL: Record<Lane, { n: number; label: string }> = {
   hoi_kho: { n: 1, label: "Hỏi Kho" }, so_lieu: { n: 2, label: "Phân tích số liệu" }, soan_tao: { n: 3, label: "Soạn và tạo" },
   hanh_dong: { n: 4, label: "Hành động" }, trinh_duyet: { n: 5, label: "Trình duyệt" },
 }
-const BROWSER = ["mo trang", "vao portal", "portal ", "dang nhap", "duyet web", "tren trinh duyet", "bam nut", "dien form", "tai file", "tai ve"]
+const BROWSER = ["mo trang", "vao portal", "portal ", "dang nhap", "duyet web", "tren trinh duyet", "bam nut", "dien form", "tai file", "tai ve", "file tren may", "o dia may"]
 const CREATE = [
   "viet bao cao", "lam bao cao", "tao bao cao", "bao cao html", "lam slide", "tao slide", "lam powerpoint", "soan bai", "soan van ban", "viet bai", "viet email", "viet thu",
   "xuat excel", "xuat docx", "xuat file", "xuat pdf", "ve hinh", "tao hinh", "tao anh", "tao video", "ve bieu do", "lam bieu do",
@@ -46,12 +46,12 @@ export function routeLane(text: string): LaneDecision {
   const t = ` ${fold(text)} `
   const mk = (lane: Lane, reason: string, confidence: "high" | "low", here: boolean): LaneDecision => {
     const deep = lane === "soan_tao" || has(t, DEEP).length > 0 || text.length > 280
-    return { lane, ...LANE_LABEL[lane], tier: here && deep ? "deep" : "fast", here, reason, confidence }
+    return { lane, ...LANE_LABEL[lane], tier: here && deep ? "deep" : "fast", here, approval: lane === "hanh_dong", reason, confidence }
   }
   const br = has(t, BROWSER)
   if (br.length) return mk("trinh_duyet", `Cần thao tác trên trình duyệt ("${br[0].trim()}") — hiện qua Gấu Pro`, "high", false)
   const act = has(t, ACTION)
-  if (act.length) return mk("hanh_dong", `Cần thao tác ("${act[0].trim()}") — hiện qua Gấu Pro`, has(t, KNOWLEDGE).length ? "low" : "high", false)
+  if (act.length) return mk("hanh_dong", `Cần thao tác ("${act[0].trim()}") — Argon tạo đề xuất, anh duyệt ở Việc cần duyệt`, has(t, KNOWLEDGE).length ? "low" : "high", true)
   const cr = has(t, CREATE)
   if (cr.length) return mk("soan_tao", `Soạn/tạo nội dung ("${cr[0].trim()}")`, "high", true)
   const nu = has(t, NUMBERS)

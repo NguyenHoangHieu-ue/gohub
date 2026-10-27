@@ -11,7 +11,7 @@ import type { MissionDetail } from "../missions/mission-types"
 import { MissionChat } from "../missions/mission-chat"
 import { Workbench } from "../missions/workbench"
 import { useMissionRunner } from "../missions/use-mission-runner"
-import { routeQuestion, type RouteDecision } from "@/lib/assistant/route-pure"
+import { routeLane, type RouteDecision } from "@/lib/assistant/route-pure"
 import { ConversationSwitcher, type ConvItem } from "@/components/chat/conversation-switcher"
 import { CHAT_DEFAULT_NAME } from "@/lib/argon/missions"
 import { useArgonMember } from "../use-argon-member"
@@ -175,9 +175,10 @@ export default function TroLyPage() {
 function KhoHints({ draft, found, searching, dismissed, onDismiss }: { draft: string; found: (SearchResult & { route: RouteDecision }) | null; searching: boolean; dismissed: string; onDismiss: () => void }) {
   const q = draft.trim()
   if (q.length < 4 || dismissed === q) return null
-  const route = found?.route ?? routeQuestion(q)
+  const lane = routeLane(q)   // việc ra ngoài (gửi tin, task, lịch, tài liệu) Argon làm qua thẻ duyệt; chỉ việc trên trình duyệt/máy của anh mới gợi ý Gấu Pro
+  const handoff = !lane.here
   const hasAny = !!found && (found.facts.length || found.entities.length || found.threads.length || found.chunks.length)
-  if (!searching && !hasAny && route.mode !== "gau_pro") return null
+  if (!searching && !hasAny && !handoff) return null
   return (
     <div className="mb-2 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50/60 dark:bg-violet-950/20 px-3 py-2 text-[12.5px] space-y-1.5" aria-label="Gợi ý từ Kho">
       <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
@@ -188,9 +189,9 @@ function KhoHints({ draft, found, searching, dismissed, onDismiss }: { draft: st
       {found && found.entities.length > 0 && <div className="flex flex-wrap gap-1.5">{found.entities.slice(0, 4).map(e => <span key={e.id} className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700">{e.name}<span className="text-gray-400"> · {ENTITY_KINDS[e.kind]} · {e.mentions} nguồn</span></span>)}</div>}
       {found && found.threads.slice(0, 2).map(t => <p key={t.id} className="leading-snug text-gray-700 dark:text-slate-300">✉ {t.line}</p>)}
       {found && found.chunks.slice(0, 3).map((c, i) => <p key={`${c.sourceId}-${i}`} className="leading-snug text-gray-600 dark:text-slate-400"><b className="font-medium text-gray-800 dark:text-slate-200">{c.sourceName}</b> — {c.text.slice(0, 130)}…</p>)}
-      {route.mode === "gau_pro" && (
+      {handoff && (
         <div className="flex flex-wrap items-center gap-2 pt-0.5 text-gray-700 dark:text-slate-300">
-          <Cpu size={13} className="text-violet-600" />{route.reason}.
+          <Cpu size={13} className="text-violet-600" />{lane.reason}.
           <Link href={`/analytics/creator/ai?q=${encodeURIComponent(q)}`} className="font-medium text-violet-700 dark:text-violet-300 hover:underline">Mở Gấu Pro với câu này</Link>
         </div>
       )}

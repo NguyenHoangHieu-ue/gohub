@@ -22,10 +22,10 @@ describe("routeLane", () => {
     expect(r.lane).toBe(lane)
     expect(r.tier).toBe(tier)
   })
-  it("thao tác/trình duyệt chưa làm được ở Gấu Prime (here=false), còn lại làm ngay", () => {
-    expect(routeLane("Gửi tin cho Romy").here).toBe(false)
-    expect(routeLane("mở trang portal BC").here).toBe(false)
-    expect(routeLane("Doanh thu hôm qua").here).toBe(true)
+  it("thao tác làm qua thẻ duyệt (here + approval); trình duyệt chưa làm được (here=false); còn lại làm ngay", () => {
+    expect(routeLane("Gửi tin cho Romy")).toMatchObject({ here: true, approval: true })
+    expect(routeLane("mở trang portal BC")).toMatchObject({ here: false, approval: false })
+    expect(routeLane("Doanh thu hôm qua")).toMatchObject({ here: true, approval: false })
   })
   it("ghi/gửi luôn lên làn thao tác dù câu có từ hỏi Kho", () => {
     const r = routeLane("So sánh giá 3HK với BC rồi gửi tin cho Hana")

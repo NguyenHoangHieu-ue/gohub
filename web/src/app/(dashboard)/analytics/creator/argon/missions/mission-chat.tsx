@@ -279,7 +279,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
             ]} />
             {lane && (
               <span title={lane.reason} className={cn("inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full border", lane.here ? "border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 bg-violet-50/60 dark:bg-violet-950/30" : "border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30")}>
-                Làn {lane.n} · {lane.label}{lane.here ? ` · ${modelMode === "auto" ? "tự chọn " : ""}${model === "deep" ? "Sâu" : "Nhanh"}` : " · cần Gấu Pro"}
+                Làn {lane.n} · {lane.label}{lane.here ? ` · ${modelMode === "auto" ? "tự chọn " : ""}${model === "deep" ? "Sâu" : "Nhanh"}${lane.approval ? " · qua thẻ duyệt" : ""}` : " · cần Gấu Pro"}
               </span>
             )}
             {simple && <button type="button" onClick={() => setShowOpts(v => !v)} aria-expanded={showOpts} className="px-2 py-1 text-[12px] rounded-lg text-gray-500 hover:text-gray-800 dark:hover:text-slate-200">{showOpts ? "Ẩn tuỳ chọn" : "Tuỳ chọn"}</button>}
