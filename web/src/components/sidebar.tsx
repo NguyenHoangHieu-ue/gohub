@@ -103,7 +103,6 @@ const CREATOR_GROUP = {
     { href: "/analytics/creator/ai",        label: "Gấu Pro",          icon: Cpu      },
     { href: "/analytics/creator/argon",     label: "Gấu Prime",    icon: BearIcon },
     { href: "/analytics/creator/devtools",  label: "Dữ liệu & API",   icon: Terminal },
-    { href: "/analytics/creator/bridge",    label: "Bridge",           icon: Plug     },
     { href: "/analytics/my-metrics",        label: "My Metrics",       icon: Target   },
     { href: "/analytics/market",            label: "Thị trường & Báo giá", icon: Globe2 },
     { href: "/analytics/product-tools",     label: "Tính giá & Tạo sản phẩm", icon: Calculator },

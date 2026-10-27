@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Suspense, useEffect, useRef, useState } from "react"
 import { JetBrains_Mono } from "next/font/google"
-import { ChevronDown, Database, MessagesSquare, Moon, Phone, Scale, Settings2, Sun } from "lucide-react"
+import { ChevronDown, Database, MessagesSquare, Moon, Phone, Plug, Scale, Settings2, Sun } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useArgonAccess } from "./use-argon-member"
 import { BearAvatar } from "@/components/brand/bear"
@@ -24,6 +24,7 @@ const TABS = [
 ]
 const MORE = [
   { href: `${A}/cuoc-goi`, label: "Cuộc gọi", icon: Phone },
+  { href: `${A}/bridge`, label: "Bridge (nối trình duyệt)", icon: Plug },
   { href: `${A}/song-song`, label: "Chạy song song Gấu Pro", icon: Scale },
   { href: `${A}/tu-dong`, label: "Tự động hằng đêm", icon: Moon },
   { href: `${A}/nang-cao`, label: "Sứ mệnh (kiểu cũ)", icon: Settings2 },

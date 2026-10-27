@@ -9,13 +9,13 @@ import { FAST_TOOL_NAMES, routeRun } from "@/lib/argon/run-route"
 
 // L1 = nội dung do bên ngoài viết (web, Lark Doc/Base, task); L0 = dữ liệu nội bộ; L2 = có chi phí (video).
 const EXPECT: Record<string, string> = { timTrenWeb: "L1", docLark: "L1", docLarkBase: "L1", docViecLark: "L1", traBangSupabase: "L0", docGA4: "L0", docGSC: "L0", kiemTraVideo: "L0", timHoiThoaiCu: "L0", taoVideo: "L2", docGoogle: "L1", docTabTrinhDuyet: "L1", thaoTacTrinhDuyet: "L2", docTepMay: "L1" }
-const MEMBER_OK = new Set(["timHoiThoaiCu", "docLark", "docLarkBase", "docViecLark"])
+const MEMBER_OK = new Set(["timHoiThoaiCu", "docLark", "docLarkBase", "docViecLark", "timTrenWeb", "traBangSupabase", "docGA4", "docGSC"])
 describe("công cụ ngoài Kho của Argon (web, Lark)", () => {
   it("khai báo đủ, bậc L1 (nội dung ngoài → bọc + đánh dấu nhiễm), chỉ Creator, đọc song song được", () => {
     expect(EXT_TOOLS.map(t => t.name).sort()).toEqual([...EXT_TOOL_NAMES].sort())
     for (const n of EXT_TOOL_NAMES) {
       expect(TOOL_LEVELS[n], n).toBe(EXPECT[n])
-      if (MEMBER_OK.has(n)) expect(MEMBER_BLOCKED_TOOLS, n).not.toContain(n)   // chỉ dữ liệu CỦA CHÍNH người hỏi (hội thoại của họ; Lark bằng token của họ)
+      if (MEMBER_OK.has(n)) expect(MEMBER_BLOCKED_TOOLS, n).not.toContain(n)   // dữ liệu CỦA CHÍNH người hỏi (hội thoại, Lark bằng token của họ) + số liệu công ty/web như Gấu Pro
       else expect(MEMBER_BLOCKED_TOOLS, n).toContain(n)
       expect(PARALLEL_SAFE.has(n), n).toBe(!["taoVideo", "docTabTrinhDuyet", "thaoTacTrinhDuyet", "docTepMay"].includes(n))   // video tốn chi phí; Bridge thao tác tuần tự
       expect(FAST_TOOL_NAMES, n).not.toContain(n)

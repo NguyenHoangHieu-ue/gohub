@@ -225,16 +225,22 @@ export const authOptions: NextAuthOptions = {
       // Đọc lại role/department từ DB mỗi 5 phút để đổi quyền có hiệu lực sớm (không đợi phiên hết hạn).
       const now = Date.now()
       if (token.username && (!token.roleCheckedAt || now - (token.roleCheckedAt as number) > ROLE_RECHECK_MS)) {
-        const { data: dbUser } = await adminClient()
-          .from("users")
-          .select("role, department")
-          .eq("username", token.username as string)
-          .maybeSingle()
-        if (dbUser) {
-          token.role       = dbUser.role
-          token.department = dbUser.department ?? "all"
-        }
-        token.roleCheckedAt = now
+        // Lỗi DB thoáng qua KHÔNG được làm hỏng callback: ném lỗi ở đây khiến /api/auth/session trả rỗng → giao diện tưởng hết phiên và tự đăng nhập lại (tải lại trang, mất nội dung).
+        // Lỗi → giữ role cũ trong token và thử lại ở lần sau (không đặt roleCheckedAt).
+        try {
+          const { data: dbUser, error } = await adminClient()
+            .from("users")
+            .select("role, department")
+            .eq("username", token.username as string)
+            .maybeSingle()
+          if (!error) {
+            if (dbUser) {
+              token.role       = dbUser.role
+              token.department = dbUser.department ?? "all"
+            }
+            token.roleCheckedAt = now
+          }
+        } catch { /* giữ role cũ, thử lại lần sau */ }
       }
 
       return token

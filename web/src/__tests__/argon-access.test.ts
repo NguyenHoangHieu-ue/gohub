@@ -27,8 +27,8 @@ describe("mức truy cập Trợ lý (owner / member)", () => {
 describe("member bị giới hạn công cụ và hộp việc", () => {
   it("mọi công cụ bị chặn đều là công cụ có thật; sql/run_code/số liệu hệ thống/sửa code/kỹ năng nằm trong danh sách", () => {
     for (const n of MEMBER_BLOCKED_TOOLS) expect(TOOL_LEVELS[n], n).toBeDefined()
-    for (const n of ["sql", "run_code", "layDuLieuHeThong", "deXuatSuaCode", "deXuatKyNang"]) expect(MEMBER_BLOCKED_TOOLS).toContain(n)
-    for (const n of ["docNguon", "timTrongNguon", "traMail", "traSuViec", "ghiSuViec", "deXuatGhiNho"]) expect(MEMBER_BLOCKED_TOOLS, n).not.toContain(n)   // đọc/ghi Kho của chính họ vẫn dùng được
+    for (const n of ["run_code", "deXuatSuaCode", "deXuatKyNang"]) expect(MEMBER_BLOCKED_TOOLS).toContain(n)
+    for (const n of ["sql", "layDuLieuHeThong", "docNguon", "timTrongNguon", "traMail", "traSuViec", "ghiSuViec", "deXuatGhiNho"]) expect(MEMBER_BLOCKED_TOOLS, n).not.toContain(n)   // đọc/ghi Kho của chính họ vẫn dùng được
   })
   it("member không thấy việc của toàn hệ thống: hành động Gấu Pro, đề xuất sửa code, phiếu dev, kỹ năng, KPI công ty", () => {
     for (const k of MEMBER_INBOX_KINDS) expect(Object.keys(KIND_LABEL), k).toContain(k)
@@ -56,6 +56,6 @@ describe("danh sách route mở cho member (chống mở nhầm)", () => {
   })
   it("trong route chạy (runs) member bị chặn việc nền và có kiểm hạn mức", () => {
     const src = routes.find(r => r.rel === "argon/projects/[id]/runs")!.src
-    expect(src).toContain("checkMemberLimit"); expect(src).toMatch(/if \(b\.background\) return NextResponse\.json\(\{ error: "Chạy nền chỉ dành cho Creator"/); expect(src).toContain("b.allowTools = false")
+    expect(src).toContain("checkMemberLimit"); expect(src).toMatch(/if \(b\.background\) return NextResponse\.json\(\{ error: "Chạy nền chỉ dành cho Creator"/); expect(src).toContain("b.allowTools = true")
   })
 })

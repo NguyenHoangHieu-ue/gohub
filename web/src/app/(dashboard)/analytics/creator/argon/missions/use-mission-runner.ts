@@ -89,6 +89,9 @@ export function useMissionRunner(o: {
     if (!projectId) return
     const ac = new AbortController(); acRef.current = ac; setBusy(true); setWarn([])
     let seg = 0, resumeId = body.resumeRunId as string | undefined
+    // Hiện câu hỏi NGAY khi bấm gửi (không chờ máy chủ dựng ngữ cảnh rồi mới báo "start"): thêm lượt tạm, khi có runId thật thì đổi id.
+    const tmpId = !resumeId && typeof body.prompt === "string" ? `tmp-${Date.now()}` : null
+    if (tmpId) { stepsRun.current = tmpId; setSteps([]); setRuns(prev => [...prev, { id: tmpId, prompt: String(body.prompt), answer: "", status: "running", model: null, thinking: String(body.thinking), source_ids: [], tokens_in: 0, tokens_out: 0, cached_in: 0, cost_usd: 0, duration_ms: 0, segments: 0, error: null, created_at: new Date().toISOString() }]) }
     try {
       for (;;) {
         let rid = resumeId ?? "", final: Partial<Run> | null = null
@@ -97,7 +100,7 @@ export function useMissionRunner(o: {
             rid = e.runId; if (e.warnings?.length) setWarn(e.warnings)
             if (!resumeId) {
               stepsRun.current = rid; setSteps([])
-              setRuns(prev => [...prev, { id: rid, prompt: String(body.prompt), answer: "", status: "running", model: null, thinking: String(body.thinking), source_ids: [], tokens_in: 0, tokens_out: 0, cached_in: 0, cost_usd: 0, duration_ms: 0, segments: 0, error: null, created_at: new Date().toISOString() }])
+              setRuns(prev => (tmpId && prev.some(r => r.id === tmpId) ? prev.map(r => (r.id === tmpId ? { ...r, id: rid } : r)) : [...prev, { id: rid, prompt: String(body.prompt), answer: "", status: "running", model: null, thinking: String(body.thinking), source_ids: [], tokens_in: 0, tokens_out: 0, cached_in: 0, cost_usd: 0, duration_ms: 0, segments: 0, error: null, created_at: new Date().toISOString() }]))
             } else patchRun(rid, { status: "running" })
           } else if (e.type === "delta") {
             setRuns(prev => prev.map(r => (r.id === rid ? { ...r, answer: r.answer + e.text } : r)))
@@ -115,6 +118,7 @@ export function useMissionRunner(o: {
     } catch (e) {
       if (!(e instanceof DOMException && e.name === "AbortError")) onError((e as Error).message)
     }
+    if (tmpId) setRuns(prev => prev.filter(r => r.id !== tmpId))   // lỗi/huỷ trước khi máy chủ báo bắt đầu: bỏ lượt tạm
     setBusy(false); acRef.current = null
     onFinished()
   }

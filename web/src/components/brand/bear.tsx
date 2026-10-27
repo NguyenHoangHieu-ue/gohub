@@ -28,6 +28,16 @@ export function BearAvatar({ size = 32, className }: { size?: number; className?
   )
 }
 
+/** Gấu Prime đang chạy: gấu con chạy dọc theo vạch đất kèm dòng chữ. Hoạt ảnh định nghĩa ở argon/argon.css (.bear-run*); không hiện công cụ nào đang dùng. */
+export function BearRunner({ label = "Gấu Prime đang chạy…" }: { label?: string }) {
+  return (
+    <div className="flex items-center gap-3 text-[13px] text-gray-500 dark:text-slate-400" role="status" aria-label={label}>
+      <span className="bear-run-track" aria-hidden><Bear size={30} className="bear-run" /></span>
+      <span>{label}</span>
+    </div>
+  )
+}
+
 /** Avatar của Bé Gấu (bản mini). */
 export function BearMiniAvatar({ size = 32, className }: { size?: number; className?: string }) {
   return (

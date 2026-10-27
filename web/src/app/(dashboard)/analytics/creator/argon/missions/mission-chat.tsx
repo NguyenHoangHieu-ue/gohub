@@ -6,9 +6,9 @@ import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
 import { routeLane } from "@/lib/assistant/route-pure"
-import { BearAvatar } from "@/components/brand/bear"
+import { BearAvatar, BearRunner } from "@/components/brand/bear"
 import { PHASE_LABEL, phaseIndex, type MissionPhase, type PatchUi, type PendingAskUi } from "./mission-types"
-import { stepLabel, type ModelKey, type SendOpts, type Thinking, type useMissionRunner } from "./use-mission-runner"
+import { type ModelKey, type SendOpts, type Thinking, type useMissionRunner } from "./use-mission-runner"
 
 // Chat của sứ mệnh: chỉ hiện KẾT QUẢ và điều cần Hiếu quyết; các bước làm việc nằm ở Bàn làm việc. Thanh pha dẫn Hiếu qua Làm rõ → Kế hoạch → Chốt và chạy.
 type Runner = ReturnType<typeof useMissionRunner>
@@ -117,7 +117,6 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
     try { await fetch("/api/chat/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agentId: "argon", question, answer, rating }) }) } catch { /* phản hồi lỗi không ảnh hưởng chat */ }
   }
   const endRef = useRef<HTMLDivElement>(null)
-  const lastStep = runner.steps.length ? stepLabel(runner.steps[runner.steps.length - 1]) : null   // bước công cụ mới nhất, để biết Argon đang làm gì khi chưa có chữ
   const stick = useRef(true)
   const opts: SendOpts = { thinking, allowTools, background, model }
   const { busy, bgActive } = runner
@@ -213,11 +212,11 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
                 <BearAvatar size={28} className="mt-0.5" />
                 <div className="min-w-0 flex-1 ag-bubble-ai px-4 py-3">
                   {r.answer ? <AnswerMd text={r.answer} runId={r.id} onStep={stepStable} />
-                    : <div className="flex items-center gap-2 text-[13px] text-gray-500"><span className="ag-think" aria-hidden />{lastStep ? `Argon đang làm: ${lastStep.tag} ${lastStep.text.slice(0, 80)} (${runner.steps.length} bước)` : "Argon đang làm việc…"}</div>}
+                    : <BearRunner />}
                   {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
                   {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}
                   <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-gray-500">
-                    {live && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 text-violet-700 dark:text-violet-200"><Loader2 size={11} className="animate-spin" />{bgLive ? (r.status === "queued" ? "chạy nền · chờ đoạn kế" : `chạy nền · đoạn ${r.segments + 1}`) : "đang chạy"}</span>}
+                    {live && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 text-violet-700 dark:text-violet-200"><Loader2 size={11} className="animate-spin" />{bgLive ? (r.status === "queued" ? "chạy nền · chờ đoạn kế" : `chạy nền · đoạn ${r.segments + 1}`) : "Gấu Prime đang chạy"}</span>}
                     {bgLive && <button type="button" onClick={() => runner.cancelBg(r.id)} className="inline-flex items-center gap-1 text-red-600 hover:underline"><Square size={10} />Dừng việc nền</button>}
                     {r.answer && r.status === "done" && !live && (
                       <span className="inline-flex items-center gap-0.5" role="group" aria-label="Đánh giá câu trả lời">

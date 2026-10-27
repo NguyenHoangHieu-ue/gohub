@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const member = level === "member"
   if (member) {
     if (b.background) return NextResponse.json({ error: "Chạy nền chỉ dành cho Creator" }, { status: 403 })
-    b.allowTools = false
+    b.allowTools = true   // số liệu công ty: member dùng công cụ dữ liệu như Gấu Pro (Kho chỉ cho tài liệu cá nhân)
     const lim = await checkMemberLimit(username, level)
     if (!lim.ok) return NextResponse.json({ error: lim.reason }, { status: 429 })
   }
