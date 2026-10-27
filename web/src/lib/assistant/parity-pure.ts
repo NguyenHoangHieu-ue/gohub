@@ -5,8 +5,9 @@ export interface ParityInfo { status: Parity; prime: string; note?: string }
 // Bảng đối chiếu theo ĐÚNG tên công cụ trong nhật ký gp_runs.steps[].tool. Công cụ chưa có trong bảng → "not_yet" (an toàn: coi là chưa có tương đương).
 const MAP: Record<string, ParityInfo> = {
   executeSQL: { status: "covered", prime: "sql" },
-  querySupabase: { status: "partial", prime: "layDuLieuHeThong / sql", note: "bảng Supabase (sản phẩm/KB) đọc qua sql của gohub_dw là chưa đủ" },
-  queryProduct: { status: "partial", prime: "layDuLieuHeThong / sql" },
+  querySupabase: { status: "covered", prime: "traBangSupabase", note: "chỉ nhóm bảng không nhạy cảm" },
+  listSupabaseTables: { status: "covered", prime: "traBangSupabase (action ds)" },
+  queryProduct: { status: "covered", prime: "traBangSupabase" },
   queryGA4: { status: "not_yet", prime: "—", note: "GA4 chưa có ở Gấu Prime" },
   queryGSC: { status: "not_yet", prime: "—", note: "Search Console chưa có ở Gấu Prime" },
   webSearch: { status: "covered", prime: "timTrenWeb" },

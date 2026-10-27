@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+
+vi.mock("@/lib/supabase", () => ({ supabaseAdmin: {}, supabase: {} }))   // gate bảng nhạy cảm chạy trước mọi truy vấn nên không cần DB thật
 import { EXT_LIMITS, EXT_TOOLS, EXT_TOOL_NAMES, execExtTool } from "@/lib/argon/ext-tools"
 import { TOOL_LEVELS } from "@/lib/argon/run-safety"
 import { MEMBER_BLOCKED_TOOLS } from "@/lib/argon/access-pure"
@@ -9,7 +11,7 @@ describe("công cụ ngoài Kho của Argon (web, Lark)", () => {
   it("khai báo đủ, bậc L1 (nội dung ngoài → bọc + đánh dấu nhiễm), chỉ Creator, đọc song song được", () => {
     expect(EXT_TOOLS.map(t => t.name).sort()).toEqual([...EXT_TOOL_NAMES].sort())
     for (const n of EXT_TOOL_NAMES) {
-      expect(TOOL_LEVELS[n], n).toBe("L1")
+      expect(TOOL_LEVELS[n], n).toBe(n === "traBangSupabase" ? "L0" : "L1")   // Supabase = dữ liệu nội bộ
       expect(MEMBER_BLOCKED_TOOLS, n).toContain(n)
       expect(PARALLEL_SAFE.has(n), n).toBe(true)
       expect(FAST_TOOL_NAMES, n).not.toContain(n)
@@ -30,6 +32,12 @@ describe("công cụ ngoài Kho của Argon (web, Lark)", () => {
     const r = await execExtTool("timTrenWeb", { query: "abc def" }, EXT_LIMITS.timTrenWeb)
     expect(r.ok).toBe(false)
     expect(r.result).toMatch(/hết/)
+  })
+  it("traBangSupabase không đọc được bảng nhạy cảm / lạ (gate ở runQuerySupabase)", async () => {
+    expect(TOOL_LEVELS.traBangSupabase).toBe("L0")
+    expect((await execExtTool("traBangSupabase", { action: "doc", table: "app_settings" }, 0)).ok).toBe(false)
+    expect((await execExtTool("traBangSupabase", { action: "doc", table: "users" }, 0)).result).toMatch(/nhạy cảm/)
+    expect((await execExtTool("traBangSupabase", { action: "doc", table: "khong_co" }, 0)).ok).toBe(false)
   })
   it("thiếu tham số bắt buộc → lỗi rõ ràng, không gọi mạng", async () => {
     expect((await execExtTool("timTrenWeb", { query: "ab" }, 0)).ok).toBe(false)
