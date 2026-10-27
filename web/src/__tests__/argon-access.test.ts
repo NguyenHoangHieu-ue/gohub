@@ -39,8 +39,8 @@ describe("member bị giới hạn công cụ và hộp việc", () => {
 describe("danh sách route mở cho member (chống mở nhầm)", () => {
   // Route nào dùng requireArgonMember/requireArgonMemberName thì PHẢI nằm ở đây — mọi route khác của Trợ lý chỉ Creator. Thêm vào đây = đã rà soát: dữ liệu khoá theo username, không lộ số liệu công ty.
   const OPEN = [
-    "argon/context", "argon/facts", "argon/graph", "argon/index", "argon/kho", "argon/mail-status", "argon/missions/[id]", "argon/projects", "argon/projects/[id]",
-    "argon/projects/[id]/runs", "argon/projects/[id]/sources", "argon/sources/[id]", "assistant/alerts", "assistant/inbox", "assistant/memory-proposals", "assistant/search",
+    "argon/context", "argon/conversations", "argon/conversations/[id]", "argon/facts", "argon/graph", "argon/index", "argon/kho", "argon/mail-status", "argon/missions/[id]", "argon/projects", "argon/projects/[id]",
+    "argon/projects/[id]/runs", "argon/projects/[id]/sources", "argon/sources/[id]", "assistant/alerts", "assistant/inbox", "assistant/memory", "assistant/memory-proposals", "assistant/search",
   ].sort()
   const root = path.join(process.cwd(), "src/app/api/creator")
   const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(path.join(d, e.name)) : e.name === "route.ts" ? [path.join(d, e.name)] : []))

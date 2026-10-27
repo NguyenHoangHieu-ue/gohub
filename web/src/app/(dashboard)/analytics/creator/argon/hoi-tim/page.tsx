@@ -4,8 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Brain, Cpu, Loader2, Wrench, X } from "lucide-react"
+import { Brain, Check, Cpu, FileText, Loader2, Wrench, X } from "lucide-react"
 import { MemoryPanel } from "@/components/gau-pro/memory-panel"
+import { useChatUpload } from "./use-chat-upload"
+import { InlineConfirm } from "./inline-confirm"
+import { MyDocs } from "./my-docs"
 import { cn } from "@/lib/utils"
 import { api, jsonInit, type Run } from "../argon-types"
 import type { MissionDetail } from "../missions/mission-types"
@@ -23,6 +26,12 @@ import type { SearchResult } from "@/lib/assistant/search"
 // Hỏi: MỘT ô cho cả hỏi và tìm. Gõ → Kho gợi ý ngay phía trên ô nhắn (sự việc, thực thể, đoạn tài liệu/mail — không tốn lượt model); Ctrl+Enter → Argon trả lời (chat đầy đủ, có lịch sử). Câu cần THAO TÁC (tạo task, gửi tin…) → gợi ý mở Gấu Pro.
 // MỘT khung chat nắm được mọi "cửa sổ" của Phòng Argon (Kho, sổ sự việc, bối cảnh và kế hoạch, số liệu hệ thống). Chạy trên sứ mệnh "Tham mưu hằng ngày"
 // (đọc toàn Kho, có công cụ xếp thư mục/ghi sổ/sql/chạy code). Ghi vào Kho và sổ thì làm luôn rồi báo; việc gửi tin ra ngoài hoặc ghi DB production thì hỏi anh.
+const MEMBER_QUICK = [
+  "Tóm tắt giúp em tài liệu vừa thêm",
+  "Trong tài liệu của em có thông tin gì về giá?",
+  "Giúp em soạn email trả lời khách",
+  "So sánh các báo giá trong tài liệu của em",
+]
 const QUICK = [
   "Mail nào đang chờ tôi trả lời?",
   "Hôm nay có gì cần anh quyết?",
@@ -60,6 +69,9 @@ export default function TroLyPage() {
   }, [draft])
   const [runs, setRuns] = useState<Run[]>([])
   const [showBench, setShowBench] = useState(false)
+  const [showDocs, setShowDocs] = useState(false)   // ngăn kéo "Tài liệu của tôi"
+  const { state: up, upload, reset: resetUp } = useChatUpload()
+  const [dropping, setDropping] = useState(false)
   const [showMemory, setShowMemory] = useState(false)   // panel Trí nhớ của chính người dùng (Argon đọc chung trí nhớ này)
   const [focus, setFocus] = useState<{ id: string; k: number } | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -84,7 +96,7 @@ export default function TroLyPage() {
     if (role !== "creator") return
     api<{ missionId: string }>("/api/creator/argon/context").then(r => { setDailyId(r.missionId); setMissionId(r.missionId) }).catch(e => onError(e.message))
   }, [role, onError])
-  useEffect(() => { if (role === "creator" && !member) void loadConvs() }, [role, member, loadConvs])
+  useEffect(() => { if (role === "creator") void loadConvs() }, [role, loadConvs])
 
   const loadDetail = useCallback((id: string) => {
     const seq = ++loadSeq.current
@@ -139,7 +151,8 @@ export default function TroLyPage() {
   const m = detail?.mission
 
   const steps = runner.steps.length
-  const convItems = convs.map(c => ({ ...c, locked: c.daily }))
+  const mainLabel = member ? "Cuộc trò chuyện chính" : "Tham mưu hằng ngày"   // tên dễ hiểu cho thành viên
+  const convItems = convs.map(c => ({ ...c, locked: c.daily, title: c.daily ? mainLabel : c.title }))
   const canRename = (id: string) => !convs.find(c => c.id === id)?.daily
   // Bố cục như Gấu Pro/ChatGPT: danh sách cuộc trò chuyện ở CỘT TRÁI, khung chat chiếm phần còn lại, "Argon đang làm gì" là panel bên phải.
   // Phân quyền: chỉ Creator thấy cột trái và panel Argon đang làm gì; thành viên chỉ thấy khung chat của mình.
@@ -147,7 +160,7 @@ export default function TroLyPage() {
     <div className="mx-auto w-full max-w-[1700px] px-3 py-2 flex flex-col gap-2 lg:h-[calc(100vh-6.5rem)]">
       {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}
       <div className="flex-1 min-h-0 flex gap-3">
-        {!member && convs.length > 0 && (
+        {convs.length > 0 && (
           <aside className="hidden lg:flex w-[260px] shrink-0 ag-card ag-card-flat overflow-hidden flex-col" aria-label="Quản lý cuộc trò chuyện">
             <ConversationSidebar className="flex-1" conversations={convItems} activeId={missionId} disabled={runner.busy}
               onSelect={c => switchTo(c.id)} onNew={() => void newConversation()}
@@ -155,16 +168,19 @@ export default function TroLyPage() {
               onDelete={id => { if (canRename(id)) void deleteConv(id) }} />
           </aside>
         )}
-        <section className="flex-1 min-w-0 min-h-[75vh] lg:min-h-0 ag-card ag-card-flat overflow-hidden flex flex-col" aria-label="Gấu Prime">
+        <section onDragOver={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDropping(true) } }} onDragLeave={e => { if (e.currentTarget === e.target) setDropping(false) }} onDrop={e => { e.preventDefault(); setDropping(false); const fs = Array.from(e.dataTransfer.files); if (fs.length) void upload(fs) }}
+          className={cn("relative flex-1 min-w-0 min-h-[75vh] lg:min-h-0 ag-card ag-card-flat overflow-hidden flex flex-col", dropping && "ring-2 ring-violet-400")} aria-label="Gấu Prime">
+          {dropping && <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-violet-50/80 dark:bg-slate-900/80 text-[15px] font-medium text-violet-700 dark:text-violet-200">Thả tài liệu vào đây để thêm vào Tài liệu của tôi</div>}
           <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-700 flex items-center gap-2">
-            {!member && convs.length > 0
-              ? <div className="lg:hidden min-w-0"><ConversationSwitcher conversations={convItems} activeId={missionId} title={active?.title ?? "Tham mưu hằng ngày"} disabled={runner.busy}
+            {convs.length > 0
+              ? <div className="lg:hidden min-w-0"><ConversationSwitcher conversations={convItems} activeId={missionId} title={active?.daily ? mainLabel : (active?.title ?? mainLabel)} disabled={runner.busy}
                   onSelect={c => switchTo(c.id)} onNew={() => void newConversation()}
                   onRename={(id, t) => (canRename(id) ? renameConv(id, t) : undefined)}
                   onDelete={id => { if (canRename(id)) void deleteConv(id) }} /></div>
               : null}
-            <span className={cn("px-2 text-sm font-semibold text-gray-800 dark:text-slate-100 truncate", !member && convs.length > 0 && "hidden lg:inline")}>{active?.title ?? "Tham mưu hằng ngày"}</span>
-            <button type="button" onClick={() => setShowMemory(true)} title="Xem, sửa hoặc xoá những điều trợ lý nhớ về bạn" className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"><Brain size={13} />Trí nhớ</button>
+            <span className={cn("px-2 text-sm font-semibold text-gray-800 dark:text-slate-100 truncate", convs.length > 0 && "hidden lg:inline")}>{active?.daily ? mainLabel : (active?.title ?? mainLabel)}</span>
+            <button type="button" onClick={() => setShowDocs(true)} title="Những tài liệu bạn đã đưa cho trợ lý" className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"><FileText size={13} />Tài liệu của tôi</button>
+            <button type="button" onClick={() => setShowMemory(true)} title="Xem, sửa hoặc xoá những điều trợ lý nhớ về bạn" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"><Brain size={13} />Trí nhớ</button>
             {!member && (
               <button type="button" onClick={() => toggleBench(!showBench)} aria-expanded={showBench} title="Các bước Argon đã làm: đọc nguồn, chạy SQL, số liệu…"
                 className={cn("inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] transition-colors", showBench ? "border-violet-400 bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-200 dark:border-violet-700" : "border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700")}>
@@ -175,13 +191,19 @@ export default function TroLyPage() {
           </div>
           {!m || !detail ? <div className="m-auto text-sm text-gray-400">Đang chuẩn bị trợ lý…</div> : (
             <div className="flex-1 min-h-0">
-              <MissionChat simple quick={QUICK} autoSend={auto} onDraft={setDraft} aboveInput={<KhoHints draft={draft} found={found} searching={searching} dismissed={dismissed} onDismiss={() => setDismissed(draft.trim())} />} phase={m.phase} pendingAsk={detail.pendingAsk} patches={detail.patches ?? []}
+              <MissionChat simple quick={member ? MEMBER_QUICK : QUICK} autoSend={auto} onDraft={setDraft} basic={member} onAttach={files => void upload(files)} placeholder={member ? "Nhập câu hỏi của anh/chị… (Enter để gửi, Shift+Enter xuống dòng)" : undefined}
+                aboveInput={<>
+                  <UploadBanner state={up} onClose={resetUp} />
+                  {member && <InlineConfirm refreshKey={runner.busy} onError={onError} />}
+                  <KhoHints member={member} draft={draft} found={found} searching={searching} dismissed={dismissed} onDismiss={() => setDismissed(draft.trim())} />
+                </>} phase={m.phase} pendingAsk={detail.pendingAsk} patches={detail.patches ?? []}
                 onPatch={async (id, action) => { await api(`/api/creator/argon/missions/${m.id}/patches`, jsonInit("POST", { id, action })); refresh() }}
                 runs={runs} runner={runner} onPhase={async to => { await api(`/api/creator/argon/missions/${m.id}/phase`, jsonInit("POST", { to })); refresh() }}
                 onStep={async (runId, n) => { await runner.loadSteps(runId, true); setFocus({ id: `${runId}:${n - 1}`, k: Date.now() }); if (!member) setShowBench(true) }} onError={onError} />
             </div>
           )}
         </section>
+        {showDocs && <MyDocs onClose={() => setShowDocs(false)} refreshKey={up.stage} onError={onError} />}
         {showMemory && <MemoryPanel api="/api/creator/assistant/memory" floating onClose={() => setShowMemory(false)} />}
         {!member && showBench && detail && (
           <aside aria-label="Argon đang làm gì" className="fixed inset-x-2 bottom-2 z-30 h-[60vh] rounded-2xl shadow-2xl lg:static lg:inset-auto lg:z-auto lg:h-auto lg:w-[360px] lg:shrink-0 lg:shadow-none ag-card ag-card-flat !bg-[var(--ag-glass-strong)] overflow-hidden flex flex-col">
@@ -195,12 +217,29 @@ export default function TroLyPage() {
   )
 }
 
+/** Trạng thái tải tài liệu trong khung chat (lưu vào Tài liệu của tôi). */
+function UploadBanner({ state, onClose }: { state: ReturnType<typeof useChatUpload>["state"]; onClose: () => void }) {
+  if (state.stage === "idle") return null
+  const ok = state.stage === "done"
+  return (
+    <div role="status" className={cn("mb-2 flex items-start gap-2 rounded-xl border px-3 py-2 text-[13px]", state.stage === "error" ? "border-red-300 bg-red-50 text-red-800 dark:bg-red-950/30 dark:text-red-200" : "border-emerald-300 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100")}>
+      {state.stage === "working" ? <Loader2 size={15} className="mt-0.5 animate-spin" /> : ok ? <Check size={15} className="mt-0.5" /> : <X size={15} className="mt-0.5" />}
+      <span className="flex-1 min-w-0">
+        {state.stage === "working" && state.text}
+        {state.stage === "error" && state.text}
+        {ok && <>Đã lưu vào Tài liệu của tôi: <b className="font-medium">{state.names.join(", ")}</b>. Anh/chị hỏi trợ lý về tài liệu này được rồi.{state.failed.length > 0 && <> Chưa lưu được: {state.failed.join(", ")}.</>}</>}
+      </span>
+      {state.stage !== "working" && <button type="button" onClick={onClose} aria-label="Đóng" className="opacity-60 hover:opacity-100"><X size={14} /></button>}
+    </div>
+  )
+}
+
 /** Gợi ý từ Kho ngay trên ô nhắn: gọn (tối đa ~6 dòng), tắt được, và nhắc Gấu Pro khi câu có vẻ cần thao tác. */
-function KhoHints({ draft, found, searching, dismissed, onDismiss }: { draft: string; found: (SearchResult & { route: RouteDecision }) | null; searching: boolean; dismissed: string; onDismiss: () => void }) {
+function KhoHints({ draft, found, searching, dismissed, onDismiss, member = false }: { member?: boolean; draft: string; found: (SearchResult & { route: RouteDecision }) | null; searching: boolean; dismissed: string; onDismiss: () => void }) {
   const q = draft.trim()
   if (q.length < 4 || dismissed === q) return null
   const lane = routeLane(q)   // việc ra ngoài (gửi tin, task, lịch, tài liệu) Argon làm qua thẻ duyệt; chỉ việc trên trình duyệt/máy của anh mới gợi ý Gấu Pro
-  const handoff = !lane.here
+  const handoff = !member && !lane.here
   const hasAny = !!found && (found.facts.length || found.entities.length || found.threads.length || found.chunks.length)
   if (!searching && !hasAny && !handoff) return null
   return (
