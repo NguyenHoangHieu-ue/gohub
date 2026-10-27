@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Cpu, Loader2, Wrench, X } from "lucide-react"
+import { Brain, Cpu, Loader2, Wrench, X } from "lucide-react"
+import { MemoryPanel } from "@/components/gau-pro/memory-panel"
 import { cn } from "@/lib/utils"
 import { api, jsonInit, type Run } from "../argon-types"
 import type { MissionDetail } from "../missions/mission-types"
@@ -59,6 +60,7 @@ export default function TroLyPage() {
   }, [draft])
   const [runs, setRuns] = useState<Run[]>([])
   const [showBench, setShowBench] = useState(false)
+  const [showMemory, setShowMemory] = useState(false)   // panel Trí nhớ của chính người dùng (Argon đọc chung trí nhớ này)
   const [focus, setFocus] = useState<{ id: string; k: number } | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const busyRef = useRef(false)
@@ -162,9 +164,10 @@ export default function TroLyPage() {
                   onDelete={id => { if (canRename(id)) void deleteConv(id) }} /></div>
               : null}
             <span className={cn("px-2 text-sm font-semibold text-gray-800 dark:text-slate-100 truncate", !member && convs.length > 0 && "hidden lg:inline")}>{active?.title ?? "Tham mưu hằng ngày"}</span>
+            <button type="button" onClick={() => setShowMemory(true)} title="Xem, sửa hoặc xoá những điều trợ lý nhớ về bạn" className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"><Brain size={13} />Trí nhớ</button>
             {!member && (
               <button type="button" onClick={() => toggleBench(!showBench)} aria-expanded={showBench} title="Các bước Argon đã làm: đọc nguồn, chạy SQL, số liệu…"
-                className={cn("ml-auto inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] transition-colors", showBench ? "border-violet-400 bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-200 dark:border-violet-700" : "border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700")}>
+                className={cn("inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] transition-colors", showBench ? "border-violet-400 bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-200 dark:border-violet-700" : "border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700")}>
                 <Wrench size={13} />Argon đang làm gì{steps > 0 && <span className="tabular-nums text-gray-500 dark:text-slate-400">· {steps}</span>}
                 {runner.busy && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
               </button>
@@ -179,6 +182,7 @@ export default function TroLyPage() {
             </div>
           )}
         </section>
+        {showMemory && <MemoryPanel api="/api/creator/assistant/memory" floating onClose={() => setShowMemory(false)} />}
         {!member && showBench && detail && (
           <aside aria-label="Argon đang làm gì" className="fixed inset-x-2 bottom-2 z-30 h-[60vh] rounded-2xl shadow-2xl lg:static lg:inset-auto lg:z-auto lg:h-auto lg:w-[360px] lg:shrink-0 lg:shadow-none ag-card ag-card-flat !bg-[var(--ag-glass-strong)] overflow-hidden flex flex-col">
             <button type="button" onClick={() => toggleBench(false)} aria-label="Đóng" className="absolute right-2 top-2 z-10 rounded-md p-1 text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 lg:hidden"><X size={15} /></button>

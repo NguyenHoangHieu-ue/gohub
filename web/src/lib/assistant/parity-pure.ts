@@ -34,7 +34,7 @@ const MAP: Record<string, ParityInfo> = {
   traCuuKho: { status: "covered", prime: "timTrongNguon / docNguon" },
   writeKnowledgeBase: { status: "approval", prime: "deXuatGhiNho", note: "Argon chỉ đề xuất, anh duyệt" },
   assistantMemory: { status: "partial", prime: "deXuatGhiNho", note: "trí nhớ: Argon chỉ đề xuất; chưa hợp nhất panel Trí nhớ" },
-  searchPastConversations: { status: "partial", prime: "timHoiThoaiCu", note: "tìm theo từ khoá trong lịch sử Trợ lý, chưa tìm theo ý nghĩa" },
+  searchPastConversations: { status: "covered", prime: "timHoiThoaiCu", note: "Gấu Prime theo từ khoá không dấu + Gấu Pro/Bé Gấu theo ý nghĩa" },
   learnSkill: { status: "covered", prime: "deXuatKyNang" },
   getTrendSnapshots: { status: "not_yet", prime: "—" },
   readMyBrowser: { status: "not_yet", prime: "—", note: "Bridge — chưa chuyển" },
