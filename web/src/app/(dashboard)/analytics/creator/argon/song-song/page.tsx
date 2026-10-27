@@ -13,7 +13,7 @@ interface Side { runs: number; users: number; done: number; medianMs: number | n
 interface Data {
   days: number
   gauPro: Side
-  gauPrime: Side & { costUsd: number; daysWithRuns: number }
+  gauPrime: Side & { costUsd: number; daysWithRuns: number; autoRuns: number; autoMedianMs: number | null }
   tools: { tool: string; count: number; status: Parity; label: string; prime: string; note?: string }[]
   criteria: Criterion[]
   errors: string[]
@@ -28,12 +28,12 @@ const CHIP: Record<Parity, string> = {
   "n/a": "bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300",
 }
 
-function SideCard({ title, s, extra }: { title: string; s: Data["gauPro"]; extra?: React.ReactNode }) {
+function SideCard({ title, s, extra, prime = false }: { title: string; s: Data["gauPro"]; extra?: React.ReactNode; prime?: boolean }) {
   return (
     <div className="ag-card ag-card-flat p-4 space-y-1.5">
       <p className="text-sm font-semibold">{title}</p>
       <p className="text-2xl font-bold tabular-nums">{s.runs}<span className="ml-1 text-xs font-normal text-gray-500">lượt · {s.users} người</span></p>
-      <p className="text-xs text-gray-600 dark:text-slate-300">Hoàn tất {pct(s.done, s.runs)} · thời gian giữa {sec(s.medianMs)}</p>
+      <p className="text-xs text-gray-600 dark:text-slate-300">Hoàn tất {pct(s.done, s.runs)} · thời gian giữa {sec(s.medianMs)}{prime && " (chỉ lượt anh hỏi tay)"}</p>
       <p className="text-xs text-gray-600 dark:text-slate-300">👍 {s.up} · 👎 {s.down}{s.upRate != null && ` · ${s.upRate}% hài lòng`}</p>
       {extra}
     </div>
@@ -65,7 +65,10 @@ export default function SongSongPage() {
 
       <div className="grid gap-3 sm:grid-cols-2">
         <SideCard title="Gấu Pro" s={data.gauPro} />
-        <SideCard title="Gấu Prime" s={data.gauPrime} extra={<p className="text-xs text-gray-600 dark:text-slate-300">{data.gauPrime.daysWithRuns} ngày có dùng · chi phí {data.gauPrime.costUsd.toLocaleString("vi-VN")} USD</p>} />
+        <SideCard title="Gấu Prime" s={data.gauPrime} prime extra={<>
+          <p className="text-xs text-gray-600 dark:text-slate-300">{data.gauPrime.daysWithRuns} ngày có dùng · chi phí {data.gauPrime.costUsd.toLocaleString("vi-VN")} USD</p>
+          <p className="text-xs text-gray-500 dark:text-slate-400">Trong số lượt trên có {data.gauPrime.autoRuns} lượt tự động (bản tin/tuần tra đêm, đọc cả Kho), giữa {sec(data.gauPrime.autoMedianMs)} — không tính vào so sánh tốc độ.</p>
+        </>} />
       </div>
 
       <section className="ag-card ag-card-flat p-4 space-y-2" aria-label="Tiêu chí gỡ Gấu Pro">

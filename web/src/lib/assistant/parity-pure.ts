@@ -82,3 +82,6 @@ export function removalCriteria(i: RemovalInput, minUses = 3): Criterion[] {
     { id: "owner", label: "Anh duyệt gỡ", ok: null, detail: "Quyết định của anh" },
   ]
 }
+
+/** Lượt Argon chạy TỰ ĐỘNG (tuần tra đêm, bản tin, Chốt sứ mệnh) — đọc cả Kho nên chậm hơn hẳn lượt anh hỏi tay; không tính vào so sánh tốc độ với Gấu Pro. Thuần. */
+export const isAutoRun = (prompt: string | null | undefined): boolean => /^[🌙🔧]/u.test(prompt ?? "") || /^(Cập nhật bản tin|Anh đã Chốt)/i.test((prompt ?? "").trim())

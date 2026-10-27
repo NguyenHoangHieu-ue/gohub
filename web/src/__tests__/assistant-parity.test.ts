@@ -33,3 +33,11 @@ describe("đối chiếu Gấu Pro ↔ Gấu Prime", () => {
     expect(removalCriteria({ ...base, used: [{ tool: "webSearch", count: 10 }], daysWithPrimeRuns: 3, primeUp: 0, primeDown: 0 }).map(x => x.ok)).toEqual([true, false, null, null, null])
   })
 })
+
+import { isAutoRun } from "@/lib/assistant/parity-pure"
+describe("lượt tự động không tính vào so sánh tốc độ", () => {
+  it("nhận ra tuần tra đêm / bản tin / Chốt; câu anh hỏi tay thì không", () => {
+    for (const p of ["🌙 Tuần tra đêm: đọc Kho…", "🔧 Việc tự động", "Cập nhật bản tin hôm nay và ghi vào notes", "Anh đã Chốt. Đọc notes/ke-hoach.md"]) expect(isAutoRun(p), p).toBe(true)
+    for (const p of ["Mail nào đang chờ tôi trả lời?", "Cập nhật giúp anh giá Aurora", "", null, undefined]) expect(isAutoRun(p as string), String(p)).toBe(false)
+  })
+})
