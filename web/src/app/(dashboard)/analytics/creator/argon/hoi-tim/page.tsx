@@ -138,7 +138,7 @@ export default function TroLyPage() {
       <section className="flex-1 min-h-[60vh] ag-card ag-card-flat overflow-hidden flex flex-col" aria-label="Trợ lý Argon">
         {!member && convs.length > 0 && (
           <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-700 flex items-center">
-            <ConversationSwitcher conversations={convs} activeId={missionId} title={active?.title ?? "Tham mưu hằng ngày"} disabled={runner.busy}
+            <ConversationSwitcher conversations={convs.map(c => ({ ...c, locked: c.daily }))} activeId={missionId} title={active?.title ?? "Tham mưu hằng ngày"} disabled={runner.busy}
               onSelect={c => switchTo(c.id)} onNew={() => void newConversation()}
               onRename={(id, t) => (convs.find(c => c.id === id)?.daily ? undefined : renameConv(id, t))}
               onDelete={id => { if (!convs.find(c => c.id === id)?.daily) void deleteConv(id) }} />

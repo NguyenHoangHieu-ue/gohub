@@ -5,7 +5,7 @@ import { Check, ChevronDown, MessageSquare, Pencil, Plus, Search, Trash2 } from 
 
 // U4 (plan be-gau-upgrade.md): thanh trên khung chat — bấm tên hội thoại mở danh sách lịch sử (tìm, "Cuộc mới", xoá). Thay cột lịch sử
 // bên trái để khung chat rộng hơn. Dùng chung Bé Gấu + Gấu Pro + Argon. Có onRename thì mỗi dòng có nút bút chì đổi tên tại chỗ (Enter lưu, Esc huỷ).
-export interface ConvItem { id: string; title: string; updated_at: string }
+export interface ConvItem { id: string; title: string; updated_at: string; locked?: boolean }   // locked: không đổi tên/xoá được (vd cuộc mặc định của Trợ lý)
 
 function group(convs: ConvItem[]) {
   const now = new Date()
@@ -97,7 +97,7 @@ export function ConversationSwitcher({ conversations, activeId, title, onSelect,
                     ) : (
                       <span className="flex-1 leading-snug line-clamp-2">{c.title}</span>
                     )}
-                    {onRename && (
+                    {onRename && !c.locked && (
                       <button type="button" title={editId === c.id ? "Lưu tên" : "Đổi tên"} aria-label="Đổi tên cuộc trò chuyện"
                         onMouseDown={e => e.preventDefault()}
                         onClick={e => { e.stopPropagation(); if (editId === c.id) void commitRename(c); else { setDraft(c.title); setEditId(c.id) } }}
@@ -105,7 +105,7 @@ export function ConversationSwitcher({ conversations, activeId, title, onSelect,
                         {editId === c.id ? <Check size={12} /> : <Pencil size={12} />}
                       </button>
                     )}
-                    {onDelete && (
+                    {onDelete && !c.locked && (
                       <button type="button" title="Xoá" aria-label="Xoá cuộc trò chuyện"
                         onClick={e => { e.stopPropagation(); onDelete(c.id) }}
                         className="opacity-0 group-hover:opacity-100 focus:opacity-100 shrink-0 p-0.5 text-gray-400 hover:text-red-500">
