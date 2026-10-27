@@ -25,7 +25,7 @@ export function vnDayStartIso(now = new Date()): string {
 }
 
 /** Công cụ member KHÔNG được dùng (chạm dữ liệu công ty/hệ thống hoặc có tác dụng toàn hệ thống). */
-export const MEMBER_BLOCKED_TOOLS: readonly string[] = ["sql", "run_code", "layDuLieuHeThong", "deXuatSuaCode", "deXuatKyNang", "ghiDuDoan", "chamDuDoan"]
+export const MEMBER_BLOCKED_TOOLS: readonly string[] = ["sql", "run_code", "layDuLieuHeThong", "deXuatSuaCode", "deXuatKyNang", "ghiDuDoan", "chamDuDoan", "timTrenWeb", "docLark", "docLarkBase"]
 
 /** Dặn model khi người hỏi là THÀNH VIÊN (không phải Creator): nói rõ giới hạn thay vì tự tìm đường vòng (đã thấy ở eval: bị chặn kỹ năng thì tự lưu ghi chú "đóng gói kỹ năng"). */
 export const MEMBER_NOTE = "NGƯỜI HỎI LÀ THÀNH VIÊN ĐƯỢC CẤP QUYỀN (không phải Creator): bạn chỉ làm việc trên Kho của chính họ. KHÔNG có số liệu công ty/hệ thống, SQL hay chạy mã, và không tạo kỹ năng hay đề xuất sửa code cho cả hệ thống. Khi họ nhờ việc thuộc nhóm đó, nói NGẮN GỌN rằng việc này chỉ Creator làm được và gợi ý nhờ Creator; KHÔNG tự tìm cách làm vòng (không lưu ghi chú/tệp để thay thế) và không bịa số liệu. Việc trong Kho của họ (đọc, tìm, so sánh, ghi sự việc, đề xuất ghi nhớ) thì làm bình thường."

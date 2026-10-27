@@ -15,6 +15,7 @@ import { ASK_TOOL, ASK_TOOL_NAME, askBlock } from "./ask-tool"
 import { RUN_CODE_NAME, RUN_CODE_TOOL } from "./code-tool"
 import { SQL_TOOL, SQL_TOOL_NAME } from "./sql-tool"
 import { KHO_TOOLS, execKhoTool } from "./kho-tools"
+import { EXT_TOOLS, EXT_TOOL_NAMES, execExtTool } from "./ext-tools"
 import { createRunTrace } from "@/lib/agent-events"
 import { runAgentLoop } from "@/lib/agents/core/agent-loop"
 import { flagValueOn } from "./core-loop-flag"
@@ -64,7 +65,7 @@ function prepare(i: SegmentIn): Prepared {
   const khoDecls = khoUser ? (i.tools?.khoMode === "full" ? KHO_TOOLS : KHO_TOOLS.filter(t => t.name === "traSuViec" || t.name === "traMail" || t.name === "traThucThe" || t.name === "deXuatGhiNho" || t.name === "docKyNang" || t.name === "deXuatKyNang")) : []
   const khoNames = new Set(khoDecls.map(t => t.name))
   const fast = !!i.tools?.fast && !!missionId
-  const allDecls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? [...WS_TOOLS, SQL_TOOL, RUN_CODE_TOOL, ASK_TOOL, PATCH_TOOL, FORECAST_TOOL, SCORE_TOOL, ...SOURCE_TOOLS, ...khoDecls] : [])]
+  const allDecls: FunctionDeclaration[] = [...(dataTools ? ARGON_TOOLS : []), ...(missionId ? [...WS_TOOLS, SQL_TOOL, RUN_CODE_TOOL, ASK_TOOL, PATCH_TOOL, FORECAST_TOOL, SCORE_TOOL, ...SOURCE_TOOLS, ...khoDecls, ...EXT_TOOLS] : [])]
   const member = !!i.tools?.member
   const decls = (fast ? allDecls.filter(t => FAST_TOOL_NAMES.includes(String(t.name))) : allDecls).filter(t => !member || !MEMBER_BLOCKED_TOOLS.includes(String(t.name)))
   const maxCalls = fast ? MAX_FAST_TOOL_CALLS : missionId ? MAX_MISSION_TOOL_CALLS : MAX_TOOL_CALLS   // sứ mệnh còn đọc/ghi file nên cần nhiều lượt gọi hơn
@@ -72,6 +73,7 @@ function prepare(i: SegmentIn): Prepared {
   const rawDispatch = async (fname: string, fargs: Record<string, unknown>, dataCalls: number, tainted: boolean): Promise<ToolLogEntry> => (
     member && MEMBER_BLOCKED_TOOLS.includes(String(fname)) ? { name: fname, args: fargs, ok: false, chars: 0, result: "Công cụ này chỉ dành cho Creator", at: new Date().toISOString() }
     : fast && !FAST_TOOL_NAMES.includes(String(fname)) ? { name: fname, args: fargs, ok: false, chars: 0, result: "Đường nhanh chỉ tra cứu Kho; câu này cần công cụ khác — nói với Hiếu bấm Sâu hoặc hỏi lại kèm yêu cầu phân tích", at: new Date().toISOString() }
+    : missionId && EXT_TOOL_NAMES.includes(String(fname)) ? await execExtTool(fname, fargs, i.tools!.log.filter(t => t.name === fname).length)
     : khoUser && khoNames.has(String(fname)) ? await execKhoTool(fname, fargs, khoUser, { tainted })
     : (fname === LIST_NAME || fname === READ_NAME || fname === SEARCH_NAME) && missionId ? await execMissionSourceTool(fname, fargs, missionId)
     : (fname === FORECAST_TOOL_NAME || fname === SCORE_TOOL_NAME) && missionId ? await execMissionForecast(fname, fargs, missionId)

@@ -13,6 +13,7 @@ export type Level = "L0" | "L1" | "L2" | "L3"
 export const TOOL_LEVELS: Readonly<Record<string, Level>> = {
   layDuLieuHeThong: "L0", sql: "L0", lietKeFile: "L0", docFile: "L0", traSuViec: "L0", traThucThe: "L0",
   lietKeNguon: "L1", timTrongNguon: "L1", docNguon: "L1", traMail: "L1", docKyNang: "L0",
+  timTrenWeb: "L1", docLark: "L1", docLarkBase: "L1",   // đọc từ web/Lark (ext-tools.ts): nội dung do người/trang ngoài viết
   ghiFile: "L2", ghiSuViec: "L2", capNhatSuViec: "L2", taoThuMuc: "L2", chuyenNguon: "L2", capNhatNguon: "L2", luuGhiChu: "L2", ghiDuDoan: "L2", chamDuDoan: "L2", run_code: "L2",
   hoiHieu: "L3", deXuatSuaCode: "L3", deXuatGhiNho: "L3", deXuatKyNang: "L3",
 }

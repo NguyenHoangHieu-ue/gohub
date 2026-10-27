@@ -17,6 +17,8 @@ const FULL_HINTS = [
   " kpi ", " quy ", " thang ", " tuan ", "ban duoc", "san luong", "don hang", "bao cao", "report", "bieu do", "chart", "excel", "xlsx", "bang tinh", "du bao", "du doan",
   "tai sao", "vi sao", "nguyen nhan", " tinh ", " tong ", "trung binh", " sql ", "truy van", "toi uu", "danh gia", "kiem tra so", "doi chieu", "soat ", "ke hoach", "de xuat",
   " viet ", " soan ", " tao ", "lam report", "lam bao cao",
+  // cần công cụ ngoài Kho (ext-tools.ts): tìm web, đọc Lark Doc/Sheet/Base — đường nhanh không có
+  "tren web", "tren mang", "internet", "google", "lark base", "bitable", "larksuite", "feishu", "http", " base ", "lark doc", "lark sheet",
   // ý định GHI/sửa (đường nhanh KHÔNG có công cụ ghi): phát hiện từ eval D3 — "Ghi vào sổ sự việc…" từng bị coi là tra cứu vì có chữ "sự việc"
   " ghi ", "ghi vao", " luu ", "cap nhat", " sua ", " xoa ", " bo di ", " nho ", "nho giup", "chuyen vao", "doi ten", "gan nhan",
 ]
