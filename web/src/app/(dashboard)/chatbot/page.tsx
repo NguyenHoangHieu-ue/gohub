@@ -5,6 +5,7 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { useSession, signOut }                        from "next-auth/react"
 import { Send, Bot, User, Sparkles, X, FileSpreadsheet, Paperclip, FileText, Image as ImageIcon, ThumbsUp, ThumbsDown, Square, CheckCircle2, Circle, Loader2, Volume2, ArrowDown, Radio, Languages, Mic, FileAudio, Hourglass, SquarePen, Brain } from "lucide-react"
 import ReactMarkdown from "react-markdown"
+import type { Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Message } from "@/lib/agents/types"
 import type { PlanStep } from "@/lib/agents/creator-ai"
@@ -66,10 +67,8 @@ const AGENT_COLORS: Record<string, string> = {
 // ─── Chart helpers ────────────────────────────────────────────────────────────
 
 // ─── Markdown renderer (dùng chung, hoisted để BeGauMsgContent dùng được) ───────────────────────────
-function renderMarkdown(text: string) {
-  return (
-    <div className="markdown-body">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+// Hoisted: object/hàm inline mới mỗi lần render làm React dựng lại toàn bộ DOM markdown (nháy như reload khi session refetch).
+const MD_COMPONENTS: Components = {
         p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
         strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-slate-100">{children}</strong>,
         em:     ({ children }) => <em className="italic">{children}</em>,
@@ -87,7 +86,12 @@ function renderMarkdown(text: string) {
         tr:     ({ children }) => <tr className="hover:bg-gray-50 transition-colors">{children}</tr>,
         th:     ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap text-gray-700 dark:text-slate-200">{children}</th>,
         td:     ({ children }) => <td className="px-3 py-2 text-gray-600 dark:text-slate-300">{children}</td>,
-      }}>
+      }
+
+function renderMarkdown(text: string) {
+  return (
+    <div className="markdown-body">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
         {text}
       </ReactMarkdown>
     </div>

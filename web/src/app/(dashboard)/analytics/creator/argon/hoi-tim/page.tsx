@@ -61,10 +61,11 @@ export default function TroLyPage() {
   const loadSeq = useRef(0)
   const onError = useCallback((m: string) => setErr(m), [])
 
+  const sessionRole = session?.user?.role
   useEffect(() => {
     if (status !== "authenticated") return
-    fetch("/api/user/me").then(r => (r.ok ? r.json() : null)).then(d => setRole(d?.argon_enabled === true ? "creator" : (d?.role ?? session?.user?.role ?? "staff"))).catch(() => setRole(session?.user?.role ?? "staff"))
-  }, [status, session])
+    fetch("/api/user/me").then(r => (r.ok ? r.json() : null)).then(d => setRole(d?.argon_enabled === true ? "creator" : (d?.role ?? sessionRole ?? "staff"))).catch(() => setRole(sessionRole ?? "staff"))
+  }, [status, sessionRole])
   useEffect(() => { if (role && role !== "creator") router.push("/chatbot") }, [role, router])
   useEffect(() => {
     if (role !== "creator") return

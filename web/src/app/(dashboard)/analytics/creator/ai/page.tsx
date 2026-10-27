@@ -14,6 +14,7 @@ import { ConversationSwitcher } from "@/components/chat/conversation-switcher"
 import { OverflowMenu } from "@/components/chat/overflow-menu"
 import { useStickToBottom } from "@/components/chat/use-stick-to-bottom"
 import ReactMarkdown from "react-markdown"
+import type { Components } from "react-markdown"
 import remarkGfm     from "remark-gfm"
 import ChatChart      from "@/components/chat-chart"
 import { splitChartBlocks } from "@/lib/chat-charts"
@@ -190,11 +191,8 @@ function isImage(name: string) {
 
 // ─── Markdown renderer ────────────────────────────────────────────────────────
 
-function renderMarkdown(raw: string) {
-  const text = stripLatex(raw)
-  return (
-    <div className="markdown-body">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+// Hoisted: object/hàm inline mới mỗi lần render làm React dựng lại toàn bộ DOM markdown (nháy như reload khi session refetch).
+const MD_COMPONENTS: Components = {
         p:      ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
         strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-slate-100">{children}</strong>,
         em:     ({ children }) => <em className="italic">{children}</em>,
@@ -223,7 +221,13 @@ function renderMarkdown(raw: string) {
             {children}
           </a>
         ),
-      }}>
+      }
+
+function renderMarkdown(raw: string) {
+  const text = stripLatex(raw)
+  return (
+    <div className="markdown-body">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
         {text}
       </ReactMarkdown>
     </div>

@@ -35,7 +35,7 @@ function SessionKeepAlive() {
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   return (
-    <NextAuthSessionProvider>
+    <NextAuthSessionProvider refetchOnWindowFocus={false}>
       <SessionKeepAlive />
       {children}
     </NextAuthSessionProvider>
