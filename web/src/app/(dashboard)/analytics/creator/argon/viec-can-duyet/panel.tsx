@@ -61,7 +61,7 @@ export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) 
       if (it.kind === "gp_action") {
         const r = await api<{ ok?: boolean; error?: string }>("/api/creator-ai/approve", jsonInit("POST", { id: it.id, approve: action === "approve" }))
         if (r.error) throw new Error(r.error)
-        setNote(action === "approve" ? "Đã duyệt — Gấu Pro đã chạy hành động." : "Đã từ chối.")
+        setNote(action === "approve" ? "Đã duyệt — hành động đã chạy." : "Đã từ chối.")
       } else if (it.kind === "argon_patch") {
         await api(`/api/creator/argon/missions/${it.missionId}/patches`, jsonInit("POST", { action, id: it.id }))
         setNote(action === "approve" ? "Đã duyệt — phiếu sửa code đã tạo, PR sẽ vào staging." : "Đã từ chối đề xuất.")
@@ -130,7 +130,7 @@ export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) 
         : (
           <ul className="space-y-2.5">
             {items.map(it => (
-              <li key={it.key} className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3.5 flex gap-3">
+              <li key={it.key} className="ag-card ag-card-flat ag-rise p-3.5 flex gap-3">
                 <span className={cn("mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full", URG[it.urgency])} title={it.urgency === 3 ? "Cần quyết sớm" : it.urgency === 2 ? "Nên xem hôm nay" : "Bình thường"} />
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-gray-500">

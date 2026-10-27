@@ -86,6 +86,29 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   return NextResponse.json({ ok: true })
 }
 
+// PATCH /api/chat/conversations/[id] { title } — đổi tên (Bé Gấu + Gấu Pro; hội thoại Gấu Pro giữ tiền tố "[GP] " để lọc danh sách)
+export async function PATCH(req: NextRequest, { params }: Ctx) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const body = (await req.json().catch(() => ({}))) as { title?: unknown }
+  const title = typeof body.title === "string" ? body.title.replace(/\s+/g, " ").trim().slice(0, 80) : ""
+  if (!title) return NextResponse.json({ error: "Thiếu tên" }, { status: 400 })
+
+  const { data: conv } = await supabaseAdmin
+    .from("conversations")
+    .select("id,title")
+    .eq("id", params.id)
+    .in("username", ownersOf(session))
+    .maybeSingle()
+  if (!conv) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
+  const stored = String(conv.title ?? "").startsWith("[GP] ") ? `[GP] ${title}` : title
+  const { error } = await supabaseAdmin.from("conversations").update({ title: stored }).eq("id", params.id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true, title })
+}
+
 // DELETE /api/chat/conversations/[id] — delete conversation
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
   const session = await getServerSession(authOptions)

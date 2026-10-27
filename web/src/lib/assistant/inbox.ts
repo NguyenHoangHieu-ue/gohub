@@ -18,11 +18,11 @@ const ARGON = "/analytics/creator/argon"
 // Mỗi nguồn việc đọc độc lập; lỗi một nguồn KHÔNG làm mất cả danh sách (trả phần còn lại + tên nguồn lỗi).
 async function gpActions(username: string, now: number): Promise<InboxItem[]> {
   const since = new Date(now - 24 * 3_600_000).toISOString()
-  const { data, error } = await (await sb()).from("gp_pending_actions").select("id,code,tool,args,reason,created_at").eq("username", username).eq("status", "pending").gte("created_at", since).order("created_at", { ascending: false }).limit(30)
+  const { data, error } = await (await sb()).from("gp_pending_actions").select("id,code,tool,args,reason,created_at,channel").eq("username", username).eq("status", "pending").gte("created_at", since).order("created_at", { ascending: false }).limit(30)
   if (error) throw new Error(error.message)
   return (data ?? []).map(r => ({
     key: `gp_action:${r.id}`, kind: "gp_action" as const, id: String(r.id), title: describeAction({ name: String(r.tool), args: r.args }), detail: String(r.reason ?? ""),
-    at: String(r.created_at), urgency: urgencyFor("gp_action", String(r.created_at), now), source: "Gấu Pro", actions: ["approve", "reject"] as InboxItem["actions"], href: "/analytics/creator/ai",
+    at: String(r.created_at), urgency: urgencyFor("gp_action", String(r.created_at), now), source: r.channel === "argon" ? "Argon đề xuất" : "Gấu Pro", actions: ["approve", "reject"] as InboxItem["actions"], href: r.channel === "argon" ? `${ARGON}/hoi-tim` : "/analytics/creator/ai",
   }))
 }
 

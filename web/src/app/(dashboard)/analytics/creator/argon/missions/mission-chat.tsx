@@ -1,10 +1,11 @@
 "use client"
 
-import { Fragment, memo, useCallback, useEffect, useRef, useState } from "react"
-import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Pause, Play, RotateCcw, Rocket, Send, Square, ThumbsDown, ThumbsUp, Zap } from "lucide-react"
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Pause, Play, RotateCcw, Rocket, Send, Sparkles, Square, ThumbsDown, ThumbsUp, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
+import { routeLane } from "@/lib/assistant/route-pure"
 import { PHASE_LABEL, phaseIndex, type MissionPhase, type PatchUi, type PendingAskUi } from "./mission-types"
 import { stepLabel, type ModelKey, type SendOpts, type Thinking, type useMissionRunner } from "./use-mission-runner"
 
@@ -90,9 +91,12 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   const [showOpts, setShowOpts] = useState(false)   // trang gọn: ẩn mức suy luận / số liệu hệ thống / chạy nền sau "Tuỳ chọn"
   const [thinking, setThinking] = useState<Thinking>("medium")
   const [background, setBackground] = useState(false)
-  const [model, setModel] = useState<ModelKey>("fast")   // Nhanh = model nhanh chung (nhanh ~4-7 lần, rẻ ~1/2); Sâu = Gemini 4 Argon cho việc cần suy luận kỹ/viết dài
-  useEffect(() => { try { const v = localStorage.getItem("argon_model"); if (v === "fast" || v === "deep") setModel(v) } catch { /* trình duyệt chặn lưu: dùng mặc định */ } }, [])
-  const pickModel = (m: ModelKey) => { setModel(m); try { localStorage.setItem("argon_model", m) } catch { /* bỏ qua */ } }
+  // Nhanh = model nhanh chung (nhanh ~4-7 lần, rẻ ~1/2); Sâu = Gemini 4 Argon cho việc cần suy luận kỹ/viết dài; Tự động = router theo mục đích câu hỏi (làn) chọn một trong hai.
+  const [modelMode, setModelMode] = useState<ModelKey | "auto">("auto")
+  useEffect(() => { try { const v = localStorage.getItem("argon_model"); if (v === "fast" || v === "deep" || v === "auto") setModelMode(v) } catch { /* trình duyệt chặn lưu: dùng mặc định */ } }, [])
+  const pickModel = (m: ModelKey | "auto") => { setModelMode(m); try { localStorage.setItem("argon_model", m) } catch { /* bỏ qua */ } }
+  const lane = useMemo(() => (prompt.trim().length >= 4 ? routeLane(prompt) : null), [prompt])
+  const model: ModelKey = modelMode === "auto" ? (lane?.tier ?? "fast") : modelMode
   const [allowTools, setAllowTools] = useState(true)
   const [confirmChot, setConfirmChot] = useState(false)
   const [autoRun, setAutoRun] = useState(true)   // Chốt xong tự giao Argon chạy nền theo kế hoạch
@@ -189,7 +193,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6" onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
         {runs.length === 0 && (
           <div className="mx-auto mt-10 max-w-sm text-center">
-            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"><Atom size={22} /></div>
+            <div className="ag-avatar mx-auto h-12 w-12"><Atom size={22} /></div>
             <div className="mt-3 text-sm font-medium text-gray-800 dark:text-slate-100">Bắt đầu với Argon</div>
             <p className="mt-1 text-xs leading-relaxed text-gray-500">Chọn một gợi ý ở dưới hoặc gõ yêu cầu của anh. {simple ? "Chat chỉ giữ kết quả; mọi bước Argon làm hiện ở mục “Argon đang làm gì” bên dưới." : "Mọi bước Argon làm (đọc file, SQL, chạy code) hiện ở cột Bàn làm việc bên phải, chat chỉ giữ kết quả."}</p>
           </div>
@@ -199,12 +203,12 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
           const live = (busy && r.id === runs[runs.length - 1]?.id) || bgLive
           return (
             <div key={r.id} className="space-y-3">
-              <div className="flex justify-end"><div className="max-w-[82%] rounded-2xl rounded-br-md bg-violet-600 text-white px-4 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-wrap shadow-sm">{r.prompt}</div></div>
+              <div className="flex justify-end"><div className="max-w-[82%] ag-bubble-user px-4 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-wrap">{r.prompt}</div></div>
               <div className="flex items-start gap-2.5">
-                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200" aria-hidden><Atom size={15} /></span>
-                <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 shadow-sm">
+                <span className="ag-avatar mt-0.5 h-7 w-7 shrink-0" aria-hidden><Atom size={15} /></span>
+                <div className="min-w-0 flex-1 ag-bubble-ai px-4 py-3">
                   {r.answer ? <AnswerMd text={r.answer} runId={r.id} onStep={stepStable} />
-                    : <div className="flex items-center gap-2 text-[13px] text-gray-500"><span className="flex gap-1" aria-hidden>{[0, 1, 2].map(i => <i key={i} className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />)}</span>{lastStep ? `Argon đang làm: ${lastStep.tag} ${lastStep.text.slice(0, 80)} (${runner.steps.length} bước)` : "Argon đang làm việc…"}</div>}
+                    : <div className="flex items-center gap-2 text-[13px] text-gray-500"><span className="ag-think" aria-hidden />{lastStep ? `Argon đang làm: ${lastStep.tag} ${lastStep.text.slice(0, 80)} (${runner.steps.length} bước)` : "Argon đang làm việc…"}</div>}
                   {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
                   {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}
                   <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-gray-500">
@@ -262,16 +266,22 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
           {(quick ?? QUICK[phase]).map(q => <button key={q} type="button" onClick={() => setPrompt(q)} title={q} className="px-2.5 py-1 text-xs rounded-full border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors">{q}</button>)}
         </div>}
         {aboveInput}
-        <div className="rounded-2xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-sm focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-violet-400 transition-shadow">
+        <div className="ag-composer">
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={2} aria-label="Nhắn Argon"
             onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send() } }}
             placeholder="Nhắn Argon…"
             className="block w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[13.5px] leading-relaxed text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none" />
           <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5 pt-1">
-            <Seg label="Mô hình" value={model} onChange={pickModel} options={[
+            <Seg label="Mô hình" value={modelMode} onChange={pickModel} options={[
+              { v: "auto", label: "Tự động", icon: Sparkles, title: "Tự động: chọn Nhanh hoặc Sâu theo mục đích câu hỏi (hiện ở chip bên cạnh); bấm Nhanh/Sâu để tự chọn" },
               { v: "fast", label: "Nhanh", icon: Zap, title: "Nhanh: việc nhiều bước công cụ, SQL, file (nhanh ~4-7 lần, rẻ ~1/2)" },
               { v: "deep", label: "Sâu", icon: Brain, title: "Sâu (Gemini 4 Argon): phân tích khó, viết dài, ngữ cảnh lớn" },
             ]} />
+            {lane && (
+              <span title={lane.reason} className={cn("inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full border", lane.here ? "border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 bg-violet-50/60 dark:bg-violet-950/30" : "border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30")}>
+                Làn {lane.n} · {lane.label}{lane.here ? ` · ${modelMode === "auto" ? "tự chọn " : ""}${model === "deep" ? "Sâu" : "Nhanh"}${lane.approval ? " · qua thẻ duyệt" : ""}` : " · cần Gấu Pro"}
+              </span>
+            )}
             {simple && <button type="button" onClick={() => setShowOpts(v => !v)} aria-expanded={showOpts} className="px-2 py-1 text-[12px] rounded-lg text-gray-500 hover:text-gray-800 dark:hover:text-slate-200">{showOpts ? "Ẩn tuỳ chọn" : "Tuỳ chọn"}</button>}
             {(!simple || showOpts) && <>
             <Seg label="Mức suy luận" value={thinking} onChange={setThinking} options={(Object.keys(THINK_LABEL) as Thinking[]).map(t => ({ v: t, label: THINK_LABEL[t], title: `Suy luận: ${THINK_LABEL[t]}` }))} />
@@ -279,10 +289,10 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
             <Toggle on={background} onClick={() => setBackground(v => !v)} icon={BellRing} label="Chạy nền" title="Worker chạy không giới hạn đoạn, đóng trang vẫn chạy; xong nhắn Lark cho Hiếu" />
             </>}
             <span className="ml-auto flex items-center gap-2">
-              <span className="hidden sm:inline text-[10.5px] text-gray-400">Ctrl+Enter</span>
+              <kbd className="ag-kbd hidden sm:inline">Ctrl ↵</kbd>
               {busy
                 ? <button type="button" onClick={runner.stop} className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-red-600 px-3 text-[13px] text-white hover:bg-red-700"><Square size={13} />Dừng</button>
-                : <button type="button" onClick={() => void send()} disabled={!prompt.trim()} className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-violet-600 px-3.5 text-[13px] font-medium text-white shadow-sm hover:bg-violet-700 disabled:opacity-40 transition-colors"><Send size={13} />Gửi</button>}
+                : <button type="button" onClick={() => void send()} disabled={!prompt.trim()} className="ag-btn-primary h-8 !py-0"><Send size={13} />Gửi</button>}
             </span>
           </div>
         </div>

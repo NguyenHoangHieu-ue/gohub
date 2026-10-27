@@ -24,6 +24,7 @@ async function finish(op: any): Promise<{ markdown?: string; error?: string }> {
 export async function runGenerateVideo(
   args: { prompt: string; negative_prompt?: string; aspect_ratio?: string; quality?: string },
   onEvent?: OnEvent,
+  waitMs: number = WAIT_MS,
 ): Promise<{ markdown?: string; task_id?: string; error?: string }> {
   const prompt = String(args.prompt ?? "").trim()
   if (!prompt) return { error: "Thiếu mô tả video." }
@@ -36,7 +37,7 @@ export async function runGenerateVideo(
     } as any)
     onEvent?.({ type: "status", text: "🎬 Đã gửi yêu cầu Veo, đang dựng video (~1 phút)..." })
     const t0 = Date.now()
-    while (!op.done && Date.now() - t0 < WAIT_MS) {
+    while (!op.done && Date.now() - t0 < waitMs) {
       await new Promise(r => setTimeout(r, 10_000))
       op = await genai().operations.getVideosOperation({ operation: op })
       onEvent?.({ type: "status", text: `🎬 Đang dựng video... ${Math.round((Date.now() - t0) / 1000)}s` })

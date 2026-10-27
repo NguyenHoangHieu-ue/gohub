@@ -97,7 +97,7 @@ const CREATOR_GROUP = {
   items: [
     { href: "/analytics/creator",           label: "Creator Settings", icon: Crown    },
     { href: "/analytics/creator/ai",        label: "Gấu Pro",          icon: Cpu      },
-    { href: "/analytics/creator/argon",     label: "Trợ lý (Argon)",    icon: Atom     },
+    { href: "/analytics/creator/argon",     label: "Gấu Prime",    icon: Atom     },
     { href: "/analytics/creator/devtools",  label: "Dữ liệu & API",   icon: Terminal },
     { href: "/analytics/creator/bridge",    label: "Bridge",           icon: Plug     },
     { href: "/analytics/my-metrics",        label: "My Metrics",       icon: Target   },
@@ -456,7 +456,7 @@ export function Sidebar() {
               <NavRow href="/analytics/product-tools" label="Tính giá & Tạo sản phẩm" Icon={Calculator} active={isActive("/analytics/product-tools")} collapsed accent="violet" />
             )}
             {argonEnabled && (
-              <NavRow href="/analytics/creator/argon" label="Trợ lý (Argon)" Icon={Atom} active={isActive("/analytics/creator/argon")} collapsed accent="violet" />
+              <NavRow href="/analytics/creator/argon" label="Gấu Prime" Icon={Atom} active={isActive("/analytics/creator/argon")} collapsed accent="violet" />
             )}
           </>
         ) : (
@@ -527,7 +527,7 @@ export function Sidebar() {
                     {myMetricsEnabled && <NavRow href="/analytics/my-metrics" label="My Metrics" Icon={Target} active={isActive("/analytics/my-metrics")} collapsed={false} accent="violet" />}
                     {marketEnabled && <NavRow href="/analytics/market" label="Thị trường & Báo giá" Icon={Globe2} active={isActive("/analytics/market")} collapsed={false} accent="violet" />}
                     {pricingEnabled && <NavRow href="/analytics/product-tools" label="Tính giá & Tạo sản phẩm" Icon={Calculator} active={isActive("/analytics/product-tools")} collapsed={false} accent="violet" />}
-                    {argonEnabled && <NavRow href="/analytics/creator/argon" label="Trợ lý (Argon)" Icon={Atom} active={isActive("/analytics/creator/argon")} collapsed={false} accent="violet" />}
+                    {argonEnabled && <NavRow href="/analytics/creator/argon" label="Gấu Prime" Icon={Atom} active={isActive("/analytics/creator/argon")} collapsed={false} accent="violet" />}
                   </div>
                 )}
               </div>

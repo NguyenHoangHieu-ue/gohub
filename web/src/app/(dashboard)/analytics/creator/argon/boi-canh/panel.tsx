@@ -86,7 +86,7 @@ export function BoiCanhPanel({ embedded = false }: { embedded?: boolean }) {
   const running = !!snap?.running
   // "Chưa có kế hoạch" = ngoài tiêu đề và dòng mẫu trong ngoặc, mục kế hoạch không có chữ nào (các mục "Cách viết" mặc định không tính)
   const planEmpty = !snap || !/\S/.test((/##\s*(Kế hoạch và metric|Target và nhiệm vụ)[^\n]*\n([\s\S]*?)(?=^##\s|$(?![\s\S]))/m.exec(snap.plan.text)?.[2] ?? "").replace(/^\(.*\)\s*$/gm, ""))
-  const card = "rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm"
+  const card = "ag-card ag-card-flat"
 
   return (
     <div id="ke-hoach" className={embedded ? "space-y-4" : "max-w-[1500px] mx-auto px-4 py-5 space-y-4"}>

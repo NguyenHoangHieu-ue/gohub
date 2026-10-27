@@ -31,7 +31,7 @@ export interface DecideResult { ok: boolean; decided?: boolean; autoApprove?: bo
 export async function decidePendingAction(
   p: { username: string; isCreator: boolean; id?: string; code?: string; approve: boolean },
 ): Promise<DecideResult> {
-  let q = supabaseAdmin.from("gp_pending_actions").select("id,code,tool,args,status,created_at").eq("username", p.username)
+  let q = supabaseAdmin.from("gp_pending_actions").select("id,code,tool,args,status,created_at,channel").eq("username", p.username)
   q = p.id ? q.eq("id", p.id) : q.eq("code", (p.code ?? "").toLowerCase())
   const { data: rows, error } = await q.order("created_at", { ascending: false }).limit(1)
   if (error) return { ok: false, error: missingTable(error.message) ? MIGRATION_HINT : error.message }
@@ -53,7 +53,8 @@ export async function decidePendingAction(
 
   // Duyệt 1 lần → hôm nay (giờ VN) các hành động chỉ cần duyệt vì lượt "nhiễm" tự chạy (xem auto-approve.ts). Chỉ Creator; lỗi ghi cờ không chặn việc đã duyệt.
   let autoApprove = false
-  if (p.isCreator) { try { await grantDailyAutoApprove(p.username); autoApprove = true } catch { /* bỏ qua */ } }
+  // Đề xuất do Argon tạo (channel "argon") không bật cờ này: nó chỉ có nghĩa cho các lượt Gấu Pro "nhiễm", không phải cho Argon.
+  if (p.isCreator && row.channel !== "argon") { try { await grantDailyAutoApprove(p.username); autoApprove = true } catch { /* bỏ qua */ } }
 
   // Chạy đúng tool + tham số đã lưu (dispatchTool tự ghi audit log như mọi lần gọi tool ghi).
   let response: any
