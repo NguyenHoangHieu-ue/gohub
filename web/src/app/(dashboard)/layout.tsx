@@ -9,6 +9,7 @@ import { ToastProvider }     from "@/components/toast"
 import { SearchShortcut }   from "@/components/search-shortcut"
 import { CommandPalette }   from "@/components/command-palette"
 import { TrackPageView }    from "@/components/track-page-view"
+import { ReloadProbe }      from "@/components/reload-probe"
 import { FetchCacheInstaller } from "@/components/fetch-cache-installer"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -21,6 +22,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <FetchCacheInstaller />
         <HeartbeatProvider />
         <TrackPageView />
+        <ReloadProbe />
         <SearchShortcut />
         <CommandPalette />
         <div className="flex min-h-screen">
