@@ -52,8 +52,8 @@ export default function ArgonLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center gap-2.5 pr-1">
             <span className="ag-avatar h-9 w-9" aria-hidden><Atom size={19} /></span>
             <div className="leading-tight">
-              <div className="ag-title text-[17px] font-bold tracking-tight">Argon</div>
-              <div className="ag-eyebrow flex items-center gap-1.5"><span className="ag-dot" />{member ? "Thành viên" : "Trợ lý hợp nhất"}</div>
+              <div className="ag-title text-[17px] font-bold tracking-tight">Gấu Prime</div>
+              <div className="ag-eyebrow flex items-center gap-1.5"><span className="ag-dot" />{member ? "Thành viên · Argon" : "Trợ lý hợp nhất · Argon"}</div>
             </div>
           </div>
           <div className="ag-tabs" role="tablist">
