@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
+import { BearAvatar } from "@/components/brand/bear"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Archive, ArchiveRestore, ArrowLeft, Atom, Database, Moon, FolderOpen, MessageSquare, Pencil, Target, Trash2, Workflow } from "lucide-react"
@@ -140,7 +141,7 @@ export default function ArgonMissionsPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-[1700px] mx-auto">
       <div className="flex items-center gap-3 px-4 py-3.5">
-        <div className="w-10 h-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shrink-0 shadow-sm"><Atom size={20} /></div>
+        <BearAvatar size={40} className="!rounded-2xl" />
         <div className="min-w-0">
           <h1 className="text-[17px] font-semibold tracking-tight text-gray-900 dark:text-slate-100 leading-tight">Phòng Tham mưu</h1>
           <div className="text-xs text-gray-500 truncate">Giao Argon một sứ mệnh dài hạn: hỏi cho rõ, anh Chốt rồi Argon mới làm</div>

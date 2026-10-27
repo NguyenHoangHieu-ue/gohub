@@ -1,18 +1,20 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { JetBrains_Mono } from "next/font/google"
-import { Atom, ChevronDown, Database, MessagesSquare, Network, Phone, Scale, Settings2, Sun } from "lucide-react"
+import { ChevronDown, Database, MessagesSquare, Network, Phone, Scale, Settings2, Sun } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useArgonMember } from "./use-argon-member"
+import { useArgonAccess } from "./use-argon-member"
+import { BearAvatar } from "@/components/brand/bear"
 import "./argon.css"
 
 // Số, nhãn và huy hiệu dùng font mono (có dấu tiếng Việt) để giao diện có chất "bảng điều khiển công nghệ"; chữ nội dung vẫn là Be Vietnam Pro.
 const mono = JetBrains_Mono({ subsets: ["latin", "vietnamese"], weight: ["400", "500", "700"], variable: "--font-mono" })
 
-// Trợ lý (Argon): 3 tab — Hôm nay (việc cần duyệt + đề xuất + kế hoạch) · Hỏi · Kho (tài liệu, sổ sự việc, thực thể, nguồn tự động) — và menu "Thêm" (Cuộc gọi, Bản đồ, Nâng cao).
+// Phân quyền: CREATOR thấy hết (3 tab + menu Thêm). Người khác (thành viên được cấp) CHỈ thấy mục Hỏi — không thấy Hôm nay, Kho, menu Thêm; vào trang khác bị đưa về Hỏi.
+// Gấu Prime (Argon): 3 tab — Hôm nay (việc cần duyệt + đề xuất + kế hoạch) · Hỏi · Kho (tài liệu, sổ sự việc, thực thể, nguồn tự động) — và menu "Thêm" (Cuộc gọi, Bản đồ, Nâng cao).
 const A = "/analytics/creator/argon"
 const TABS = [
   { href: A, label: "Hôm nay", icon: Sun, exact: true, badge: true },
@@ -30,10 +32,13 @@ export default function ArgonLayout({ children }: { children: React.ReactNode })
   const path = usePathname() ?? ""
   const [pending, setPending] = useState(0)
   const [open, setOpen] = useState(false)
-  const member = useArgonMember()
+  const router = useRouter()
+  const { member, loading } = useArgonAccess()
   const menuRef = useRef<HTMLDivElement>(null)
   // Huy hiệu số việc đang chờ (nhẹ: ?count=1); tải lại mỗi lần đổi trang trong Trợ lý.
-  useEffect(() => { fetch("/api/creator/assistant/inbox?count=1", { cache: "no-store" }).then(r => (r.ok ? r.json() : null)).then(j => setPending(j?.total ?? 0)).catch(() => undefined) }, [path])
+  useEffect(() => { if (loading || member) return; fetch("/api/creator/assistant/inbox?count=1", { cache: "no-store" }).then(r => (r.ok ? r.json() : null)).then(j => setPending(j?.total ?? 0)).catch(() => undefined) }, [path, loading, member])
+  // Thành viên chỉ được ở mục Hỏi.
+  useEffect(() => { if (member && !(path === `${A}/hoi-tim` || path.startsWith(`${A}/hoi-tim/`))) router.replace(`${A}/hoi-tim`) }, [member, path, router])
   useEffect(() => { setOpen(false) }, [path])
   useEffect(() => {
     if (!open) return
@@ -51,20 +56,17 @@ export default function ArgonLayout({ children }: { children: React.ReactNode })
       <nav aria-label="Trợ lý" className="max-w-[1700px] mx-auto px-4 pt-4 pb-1">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
           <div className="flex items-center gap-2.5 pr-1">
-            <span className="ag-avatar h-9 w-9" aria-hidden><Atom size={19} /></span>
-            <div className="leading-tight">
-              <div className="ag-title text-[17px] font-bold tracking-tight">Gấu Prime</div>
-              <div className="ag-eyebrow flex items-center gap-1.5"><span className="ag-dot" />{member ? "Thành viên · Argon" : "Trợ lý hợp nhất · Argon"}</div>
-            </div>
+            <BearAvatar size={38} className="!rounded-2xl" />
+            <div className="ag-title text-[17px] font-bold tracking-tight">Gấu Prime</div>
           </div>
-          <div className="ag-tabs" role="tablist">
+          {!member && <div className="ag-tabs" role="tablist">
             {TABS.map(t => (
               <Link key={t.href} href={t.href} aria-current={tabOn(t) ? "page" : undefined} className="ag-tab">
                 <t.icon size={15} />{t.label}
                 {"badge" in t && t.badge && pending > 0 && <span className="ag-badge">{pending}</span>}
               </Link>
             ))}
-          </div>
+          </div>}
           <div ref={menuRef} className={cn("relative ml-auto", member && "hidden")}>
             <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open} aria-haspopup="menu"
               className={cn("ag-btn-ghost", moreActive && "!border-[var(--ag-line-hot)]")}>
@@ -82,7 +84,7 @@ export default function ArgonLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
       </nav>
-      {children}
+      {member && !(path === `${A}/hoi-tim` || path.startsWith(`${A}/hoi-tim/`)) ? null : children}
     </div>
   )
 }

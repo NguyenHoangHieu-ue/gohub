@@ -7,7 +7,7 @@ import { Check, ChevronDown, MessageSquare, Pencil, Plus, Search, Trash2 } from 
 // bên trái để khung chat rộng hơn. Dùng chung Bé Gấu + Gấu Pro + Argon. Có onRename thì mỗi dòng có nút bút chì đổi tên tại chỗ (Enter lưu, Esc huỷ).
 export interface ConvItem { id: string; title: string; updated_at: string; locked?: boolean }   // locked: không đổi tên/xoá được (vd cuộc mặc định của Trợ lý)
 
-function group(convs: ConvItem[]) {
+export function group(convs: ConvItem[]) {
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const out: { label: string; items: ConvItem[] }[] = [

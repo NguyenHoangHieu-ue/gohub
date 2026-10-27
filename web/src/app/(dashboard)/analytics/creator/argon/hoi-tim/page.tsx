@@ -13,6 +13,7 @@ import { Workbench } from "../missions/workbench"
 import { useMissionRunner } from "../missions/use-mission-runner"
 import { routeLane, type RouteDecision } from "@/lib/assistant/route-pure"
 import { ConversationSwitcher, type ConvItem } from "@/components/chat/conversation-switcher"
+import { ConversationSidebar } from "@/components/chat/conversation-sidebar"
 import { CHAT_DEFAULT_NAME } from "@/lib/argon/missions"
 import { useArgonMember } from "../use-argon-member"
 import { ENTITY_KINDS } from "@/lib/argon/graph-pure"
@@ -93,7 +94,7 @@ export default function TroLyPage() {
   busyRef.current = runner.busy
   const benchClosedByUser = useRef(false)
   const toggleBench = (v: boolean) => { benchClosedByUser.current = !v; setShowBench(v) }
-  useEffect(() => { if (runner.busy && !benchClosedByUser.current && typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches) setShowBench(true) }, [runner.busy])
+  useEffect(() => { if (!member && runner.busy && !benchClosedByUser.current && typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches) setShowBench(true) }, [runner.busy, member])
 
   const switchTo = (id: string) => {
     if (id === missionId || runner.busy) return
@@ -136,35 +137,49 @@ export default function TroLyPage() {
   const m = detail?.mission
 
   const steps = runner.steps.length
-  // Bố cục như Gấu Pro: cột chat hẹp, cao theo màn hình; "Argon đang làm gì" là panel bên phải (màn lớn) hoặc bảng trượt từ dưới lên (màn nhỏ).
+  const convItems = convs.map(c => ({ ...c, locked: c.daily }))
+  const canRename = (id: string) => !convs.find(c => c.id === id)?.daily
+  // Bố cục như Gấu Pro/ChatGPT: danh sách cuộc trò chuyện ở CỘT TRÁI, khung chat chiếm phần còn lại, "Argon đang làm gì" là panel bên phải.
+  // Phân quyền: chỉ Creator thấy cột trái và panel Argon đang làm gì; thành viên chỉ thấy khung chat của mình.
   return (
-    <div className="mx-auto w-full max-w-[1280px] px-4 py-3 flex flex-col gap-2 lg:h-[calc(100vh-7rem)]">
+    <div className="mx-auto w-full max-w-[1700px] px-3 py-2 flex flex-col gap-2 lg:h-[calc(100vh-6.5rem)]">
       {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}
-      <div className="flex-1 min-h-0 flex gap-3 justify-center">
-        <section className="flex-1 min-w-0 min-h-[70vh] lg:min-h-0 lg:max-w-[860px] ag-card ag-card-flat overflow-hidden flex flex-col" aria-label="Trợ lý Argon">
+      <div className="flex-1 min-h-0 flex gap-3">
+        {!member && convs.length > 0 && (
+          <aside className="hidden lg:flex w-[260px] shrink-0 ag-card ag-card-flat overflow-hidden flex-col" aria-label="Quản lý cuộc trò chuyện">
+            <ConversationSidebar className="flex-1" conversations={convItems} activeId={missionId} disabled={runner.busy}
+              onSelect={c => switchTo(c.id)} onNew={() => void newConversation()}
+              onRename={(id, t) => (canRename(id) ? renameConv(id, t) : undefined)}
+              onDelete={id => { if (canRename(id)) void deleteConv(id) }} />
+          </aside>
+        )}
+        <section className="flex-1 min-w-0 min-h-[75vh] lg:min-h-0 ag-card ag-card-flat overflow-hidden flex flex-col" aria-label="Gấu Prime">
           <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-700 flex items-center gap-2">
             {!member && convs.length > 0
-              ? <ConversationSwitcher conversations={convs.map(c => ({ ...c, locked: c.daily }))} activeId={missionId} title={active?.title ?? "Tham mưu hằng ngày"} disabled={runner.busy}
+              ? <div className="lg:hidden min-w-0"><ConversationSwitcher conversations={convItems} activeId={missionId} title={active?.title ?? "Tham mưu hằng ngày"} disabled={runner.busy}
                   onSelect={c => switchTo(c.id)} onNew={() => void newConversation()}
-                  onRename={(id, t) => (convs.find(c => c.id === id)?.daily ? undefined : renameConv(id, t))}
-                  onDelete={id => { if (!convs.find(c => c.id === id)?.daily) void deleteConv(id) }} />
-              : <span className="px-2 text-sm font-semibold text-gray-800 dark:text-slate-100">Tham mưu hằng ngày</span>}
-            <button type="button" onClick={() => toggleBench(!showBench)} aria-expanded={showBench} title="Các bước Argon đã làm: đọc nguồn, chạy SQL, số liệu…"
-              className={cn("ml-auto inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] transition-colors", showBench ? "border-violet-400 bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-200 dark:border-violet-700" : "border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700")}>
-              <Wrench size={13} />Argon đang làm gì{steps > 0 && <span className="tabular-nums text-gray-500 dark:text-slate-400">· {steps}</span>}
-              {runner.busy && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
-            </button>
+                  onRename={(id, t) => (canRename(id) ? renameConv(id, t) : undefined)}
+                  onDelete={id => { if (canRename(id)) void deleteConv(id) }} /></div>
+              : null}
+            <span className={cn("px-2 text-sm font-semibold text-gray-800 dark:text-slate-100 truncate", !member && convs.length > 0 && "hidden lg:inline")}>{active?.title ?? "Tham mưu hằng ngày"}</span>
+            {!member && (
+              <button type="button" onClick={() => toggleBench(!showBench)} aria-expanded={showBench} title="Các bước Argon đã làm: đọc nguồn, chạy SQL, số liệu…"
+                className={cn("ml-auto inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] transition-colors", showBench ? "border-violet-400 bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-200 dark:border-violet-700" : "border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700")}>
+                <Wrench size={13} />Argon đang làm gì{steps > 0 && <span className="tabular-nums text-gray-500 dark:text-slate-400">· {steps}</span>}
+                {runner.busy && <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+              </button>
+            )}
           </div>
           {!m || !detail ? <div className="m-auto text-sm text-gray-400">Đang chuẩn bị trợ lý…</div> : (
             <div className="flex-1 min-h-0">
               <MissionChat simple quick={QUICK} autoSend={auto} onDraft={setDraft} aboveInput={<KhoHints draft={draft} found={found} searching={searching} dismissed={dismissed} onDismiss={() => setDismissed(draft.trim())} />} phase={m.phase} pendingAsk={detail.pendingAsk} patches={detail.patches ?? []}
                 onPatch={async (id, action) => { await api(`/api/creator/argon/missions/${m.id}/patches`, jsonInit("POST", { id, action })); refresh() }}
                 runs={runs} runner={runner} onPhase={async to => { await api(`/api/creator/argon/missions/${m.id}/phase`, jsonInit("POST", { to })); refresh() }}
-                onStep={async (runId, n) => { await runner.loadSteps(runId, true); setFocus({ id: `${runId}:${n - 1}`, k: Date.now() }); setShowBench(true) }} onError={onError} />
+                onStep={async (runId, n) => { await runner.loadSteps(runId, true); setFocus({ id: `${runId}:${n - 1}`, k: Date.now() }); if (!member) setShowBench(true) }} onError={onError} />
             </div>
           )}
         </section>
-        {showBench && detail && (
+        {!member && showBench && detail && (
           <aside aria-label="Argon đang làm gì" className="fixed inset-x-2 bottom-2 z-30 h-[60vh] rounded-2xl shadow-2xl lg:static lg:inset-auto lg:z-auto lg:h-auto lg:w-[360px] lg:shrink-0 lg:shadow-none ag-card ag-card-flat !bg-[var(--ag-glass-strong)] overflow-hidden flex flex-col">
             <button type="button" onClick={() => toggleBench(false)} aria-label="Đóng" className="absolute right-2 top-2 z-10 rounded-md p-1 text-gray-400 hover:text-gray-700 dark:hover:text-slate-200 lg:hidden"><X size={15} /></button>
             <Workbench steps={runner.steps} busy={runner.busy} bgActive={runner.bgActive} spentUsd={detail.spent_usd ?? 0} runCount={runs.length} focus={focus} sandbox={null} building={false} onBuild={() => {}}

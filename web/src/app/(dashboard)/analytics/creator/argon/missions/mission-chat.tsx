@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
 import { routeLane } from "@/lib/assistant/route-pure"
+import { BearAvatar } from "@/components/brand/bear"
 import { PHASE_LABEL, phaseIndex, type MissionPhase, type PatchUi, type PendingAskUi } from "./mission-types"
 import { stepLabel, type ModelKey, type SendOpts, type Thinking, type useMissionRunner } from "./use-mission-runner"
 
@@ -193,7 +194,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6" onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
         {runs.length === 0 && (
           <div className="mx-auto mt-10 max-w-sm text-center">
-            <div className="ag-avatar mx-auto h-12 w-12"><Atom size={22} /></div>
+            <BearAvatar size={56} className="mx-auto !rounded-2xl" />
             <div className="mt-3 text-sm font-medium text-gray-800 dark:text-slate-100">Bắt đầu với Argon</div>
             <p className="mt-1 text-xs leading-relaxed text-gray-500">Chọn một gợi ý ở dưới hoặc gõ yêu cầu của anh. {simple ? "Chat chỉ giữ kết quả; mọi bước Argon làm hiện ở mục “Argon đang làm gì” bên dưới." : "Mọi bước Argon làm (đọc file, SQL, chạy code) hiện ở cột Bàn làm việc bên phải, chat chỉ giữ kết quả."}</p>
           </div>
@@ -205,7 +206,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
             <div key={r.id} className="space-y-3">
               <div className="flex justify-end"><div className="max-w-[82%] ag-bubble-user px-4 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-wrap">{r.prompt}</div></div>
               <div className="flex items-start gap-2.5">
-                <span className="ag-avatar mt-0.5 h-7 w-7 shrink-0" aria-hidden><Atom size={15} /></span>
+                <BearAvatar size={28} className="mt-0.5" />
                 <div className="min-w-0 flex-1 ag-bubble-ai px-4 py-3">
                   {r.answer ? <AnswerMd text={r.answer} runId={r.id} onStep={stepStable} />
                     : <div className="flex items-center gap-2 text-[13px] text-gray-500"><span className="ag-think" aria-hidden />{lastStep ? `Argon đang làm: ${lastStep.tag} ${lastStep.text.slice(0, 80)} (${runner.steps.length} bước)` : "Argon đang làm việc…"}</div>}
@@ -262,7 +263,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
 
       {/* Ô nhắn: một khối bo tròn, hàng công cụ ngay dưới ô gõ */}
       <div className="px-4 pb-4 pt-2">
-        {idle && !(simple && prompt.trim()) && <div className="mb-2 flex flex-wrap gap-1.5">
+        {idle && !(simple && (prompt.trim() || runs.length > 0)) && <div className="mb-2 flex flex-wrap gap-1.5">
           {(quick ?? QUICK[phase]).map(q => <button key={q} type="button" onClick={() => setPrompt(q)} title={q} className="px-2.5 py-1 text-xs rounded-full border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors">{q}</button>)}
         </div>}
         {aboveInput}
