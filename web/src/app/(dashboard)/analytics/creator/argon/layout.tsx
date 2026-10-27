@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { JetBrains_Mono } from "next/font/google"
-import { Atom, ChevronDown, Database, MessagesSquare, Network, Phone, Settings2, Sun } from "lucide-react"
+import { Atom, ChevronDown, Database, MessagesSquare, Network, Phone, Scale, Settings2, Sun } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useArgonMember } from "./use-argon-member"
 import "./argon.css"
@@ -22,6 +22,7 @@ const TABS = [
 const MORE = [
   { href: `${A}/cuoc-goi`, label: "Cuộc gọi", icon: Phone },
   { href: `${A}/ban-do`, label: "Bản đồ vận hành", icon: Network },
+  { href: `${A}/song-song`, label: "Chạy song song Gấu Pro", icon: Scale },
   { href: `${A}/nang-cao`, label: "Nâng cao", icon: Settings2 },
 ]
 
