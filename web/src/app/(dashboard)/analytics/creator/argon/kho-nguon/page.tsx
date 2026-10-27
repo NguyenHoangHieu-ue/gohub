@@ -79,9 +79,9 @@ export default function KhoPage() {
   return (
     <div className="flex flex-col max-w-[1600px] mx-auto px-4 py-4 gap-3 lg:h-[calc(100vh-4rem)]">
       <header className="flex flex-wrap items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-sm"><Database size={20} /></div>
+        <div className="ag-avatar w-10 h-10"><Database size={20} /></div>
         <div>
-          <h1 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-100 leading-tight">Kho</h1>
+          <h1 className="ag-title text-xl font-bold tracking-tight leading-tight">Kho</h1>
           <p className="text-[13px] text-gray-500">Tài liệu, sổ sự việc và thực thể Argon đã đọc. Muốn hỏi về chúng: tab Hỏi</p>
         </div>
         <Link href="/analytics/creator/argon/kho-nguon/du-an" className={`ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 ${member ? "hidden" : ""}`}>
@@ -91,12 +91,12 @@ export default function KhoPage() {
       {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}
 
       <div className="flex-1 min-h-0 grid gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden min-h-[320px] max-h-[60vh] lg:max-h-none" aria-label="Thư mục và file">
+        <aside className="ag-card ag-card-flat overflow-hidden min-h-[320px] max-h-[60vh] lg:max-h-none" aria-label="Thư mục và file">
           {data ? <KhoTree folders={data.folders} sources={data.sources} sel={sel} setSel={setSel} onOpen={k => setViewing(toSource(k))} onMove={move} onFolder={folderAction} onPin={pin} onRemove={remove} onAsk={t => router.push(`/analytics/creator/argon/hoi-tim?q=${encodeURIComponent(t)}`)} />
             : <div className="p-4 text-sm text-gray-400">Đang tải Kho…</div>}
         </aside>
 
-        <aside className="rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden min-h-[320px]" aria-label="Nạp tài liệu, sổ sự việc, thực thể">
+        <aside className="ag-card ag-card-flat overflow-hidden min-h-[320px]" aria-label="Nạp tài liệu, sổ sự việc, thực thể">
           {data ? <KhoInbox projectId={data.projectId} folders={data.folders} sources={data.sources} facts={facts.rows} today={facts.today} targetFolderId={targetFolder} onChanged={reload} onMove={move} onOpen={k => setViewing(toSource(k))} onError={onError} />
             : <div className="p-4 text-sm text-gray-400">Đang tải…</div>}
         </aside>

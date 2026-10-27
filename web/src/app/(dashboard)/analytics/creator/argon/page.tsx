@@ -22,7 +22,7 @@ interface Snapshot {
   nightly: boolean; running: { runId: string; since: string } | null
 }
 const fmtAt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "")
-const card = "rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm"
+const card = "ag-card ag-rise"
 
 export default function ArgonTodayPage() {
   const { data: session, status } = useSession()
@@ -84,7 +84,7 @@ export default function ArgonTodayPage() {
     <div className="max-w-[1300px] mx-auto px-4 py-5 space-y-4">
       <header className="flex flex-wrap items-center gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-100 leading-tight">Hôm nay</h1>
+          <h1 className="ag-title text-2xl font-bold tracking-tight leading-tight">Hôm nay</h1>
           <p className="text-[13px] text-gray-500">{snap?.tacDong.updatedAt ? `Argon cập nhật lúc ${fmtAt(snap.tacDong.updatedAt)}` : "Chưa có cập nhật nào"}</p>
         </div>
         <div className={cn("ml-auto flex flex-wrap items-center gap-3", member && "hidden")}>
@@ -92,7 +92,7 @@ export default function ArgonTodayPage() {
             <Moon size={14} className="text-violet-600" />
             <input type="checkbox" checked={!!snap?.nightly} disabled={!snap} onChange={() => void toggleNightly()} className="w-4 h-4 accent-violet-600" />Tự cập nhật mỗi đêm
           </label>
-          <button type="button" onClick={() => void updateNow()} disabled={!snap || running || busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-lg bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50">
+          <button type="button" onClick={() => void updateNow()} disabled={!snap || running || busy} className="ag-btn-primary">
             <RefreshCw size={13} className={cn(running && "animate-spin")} />{running ? "Đang cập nhật…" : "Cập nhật ngay"}
           </button>
         </div>

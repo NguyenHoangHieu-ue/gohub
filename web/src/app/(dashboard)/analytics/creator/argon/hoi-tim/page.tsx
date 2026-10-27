@@ -87,7 +87,7 @@ export default function TroLyPage() {
   return (
     <div className="max-w-[1100px] mx-auto px-4 py-4 flex flex-col gap-3 lg:h-[calc(100vh-7rem)]">
       {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}
-      <section className="flex-1 min-h-[60vh] rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm overflow-hidden flex flex-col" aria-label="Trợ lý Argon">
+      <section className="flex-1 min-h-[60vh] ag-card ag-card-flat overflow-hidden flex flex-col" aria-label="Trợ lý Argon">
         {!m || !detail ? <div className="m-auto text-sm text-gray-400">Đang chuẩn bị trợ lý…</div> : (
           <>
             <div className="flex-1 min-h-0">
