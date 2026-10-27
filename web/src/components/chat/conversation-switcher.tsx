@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ChevronDown, MessageSquare, Plus, Search, Trash2 } from "lucide-react"
+import { Check, ChevronDown, MessageSquare, Pencil, Plus, Search, Trash2 } from "lucide-react"
 
 // U4 (plan be-gau-upgrade.md): thanh trên khung chat — bấm tên hội thoại mở danh sách lịch sử (tìm, "Cuộc mới", xoá). Thay cột lịch sử
-// bên trái để khung chat rộng hơn. Dùng chung Bé Gấu + Gấu Pro.
+// bên trái để khung chat rộng hơn. Dùng chung Bé Gấu + Gấu Pro + Argon. Có onRename thì mỗi dòng có nút bút chì đổi tên tại chỗ (Enter lưu, Esc huỷ).
 export interface ConvItem { id: string; title: string; updated_at: string }
 
 function group(convs: ConvItem[]) {
@@ -20,27 +20,35 @@ function group(convs: ConvItem[]) {
   return out.filter(g => g.items.length)
 }
 
-export function ConversationSwitcher({ conversations, activeId, title, onSelect, onNew, onDelete, disabled }: {
+export function ConversationSwitcher({ conversations, activeId, title, onSelect, onNew, onDelete, onRename, disabled }: {
   conversations: ConvItem[]
   activeId: string | null
   title: string
   onSelect: (c: ConvItem) => void
   onNew: () => void
   onDelete?: (id: string) => void
+  onRename?: (id: string, title: string) => void | Promise<void>
   disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState("")
+  const [editId, setEditId] = useState<string | null>(null)
+  const [draft, setDraft] = useState("")
+  const commitRename = async (c: ConvItem) => {
+    const t = draft.trim().slice(0, 80)
+    setEditId(null)
+    if (t && t !== c.title) await onRename?.(c.id, t)
+  }
   const boxRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
     const close = (e: MouseEvent) => { if (!boxRef.current?.contains(e.target as Node)) setOpen(false) }
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && !editId) setOpen(false) }
     document.addEventListener("mousedown", close)
     document.addEventListener("keydown", esc)
     return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc) }
-  }, [open])
+  }, [open, editId])
 
   const groups = useMemo(() => {
     const k = q.trim().toLowerCase()
@@ -75,12 +83,28 @@ export function ConversationSwitcher({ conversations, activeId, title, onSelect,
                 <p className="px-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{g.label}</p>
                 {g.items.map(c => (
                   <div key={c.id} role="option" aria-selected={c.id === activeId}
-                    onClick={() => { onSelect(c); setOpen(false) }}
+                    onClick={() => { if (editId === c.id) return; onSelect(c); setOpen(false) }}
                     className={`group flex items-start gap-2 px-2 py-2 rounded-lg cursor-pointer text-xs ${c.id === activeId
                       ? "bg-brand-100 dark:bg-brand-800/40 text-brand-800 dark:text-brand-200"
                       : "hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-300"}`}>
                     <MessageSquare size={13} className="shrink-0 mt-0.5 text-gray-400" />
-                    <span className="flex-1 leading-snug line-clamp-2">{c.title}</span>
+                    {editId === c.id ? (
+                      <input value={draft} onChange={e => setDraft(e.target.value)} autoFocus maxLength={80} aria-label="Tên cuộc trò chuyện"
+                        onClick={e => e.stopPropagation()}
+                        onKeyDown={e => { e.stopPropagation(); if (e.key === "Enter") void commitRename(c); else if (e.key === "Escape") setEditId(null) }}
+                        onBlur={() => void commitRename(c)}
+                        className="flex-1 min-w-0 px-1.5 py-0.5 rounded border border-brand-300 bg-white dark:bg-slate-800 text-xs text-gray-800 dark:text-slate-100 outline-none focus:ring-1 focus:ring-brand-400" />
+                    ) : (
+                      <span className="flex-1 leading-snug line-clamp-2">{c.title}</span>
+                    )}
+                    {onRename && (
+                      <button type="button" title={editId === c.id ? "Lưu tên" : "Đổi tên"} aria-label="Đổi tên cuộc trò chuyện"
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={e => { e.stopPropagation(); if (editId === c.id) void commitRename(c); else { setDraft(c.title); setEditId(c.id) } }}
+                        className={`${editId === c.id ? "" : "opacity-0 group-hover:opacity-100"} focus:opacity-100 shrink-0 p-0.5 text-gray-400 hover:text-brand-600`}>
+                        {editId === c.id ? <Check size={12} /> : <Pencil size={12} />}
+                      </button>
+                    )}
                     {onDelete && (
                       <button type="button" title="Xoá" aria-label="Xoá cuộc trò chuyện"
                         onClick={e => { e.stopPropagation(); onDelete(c.id) }}

@@ -954,7 +954,11 @@ export default function CreatorAIPage() {
           <span className="hidden sm:inline text-gray-300">/</span>
           <ConversationSwitcher conversations={pastConvs} activeId={convId} disabled={loading}
             title={pastConvs.find(c => c.id === convId)?.title?.replace(/^\[GP\]\s*/, "") || (messages.length ? "Cuộc trò chuyện" : "Cuộc trò chuyện mới")}
-            onSelect={c => loadConversation(c.id)} onNew={clearConversation} />
+            onSelect={c => loadConversation(c.id)} onNew={clearConversation}
+            onRename={async (id, t) => {
+              const res = await fetch(`/api/chat/conversations/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: t }) })
+              if (res.ok) setPastConvs(prev => prev.map(c => (c.id === id ? { ...c, title: t } : c)))
+            }} />
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {loading && (

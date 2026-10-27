@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireArgonUser } from "@/lib/argon/server"
 import { createMission, listMissions } from "@/lib/argon/missions-db"
+import { CHAT_MARK } from "@/lib/argon/missions"
 
 export const dynamic = "force-dynamic"
 
@@ -8,7 +9,8 @@ export const dynamic = "force-dynamic"
 export async function GET(req: NextRequest) {
   const username = await requireArgonUser()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  return NextResponse.json({ missions: await listMissions(username, req.nextUrl.searchParams.get("archived") === "1") })
+  const all = await listMissions(username, req.nextUrl.searchParams.get("archived") === "1")
+  return NextResponse.json({ missions: all.filter(m => m.goal !== CHAT_MARK) })   // cuộc trò chuyện của khung chat có danh sách riêng (/conversations)
 }
 
 export async function POST(req: NextRequest) {

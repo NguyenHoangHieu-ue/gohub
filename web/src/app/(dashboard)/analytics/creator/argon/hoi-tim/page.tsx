@@ -12,6 +12,9 @@ import { MissionChat } from "../missions/mission-chat"
 import { Workbench } from "../missions/workbench"
 import { useMissionRunner } from "../missions/use-mission-runner"
 import { routeQuestion, type RouteDecision } from "@/lib/assistant/route-pure"
+import { ConversationSwitcher, type ConvItem } from "@/components/chat/conversation-switcher"
+import { CHAT_DEFAULT_NAME } from "@/lib/argon/missions"
+import { useArgonMember } from "../use-argon-member"
 import { ENTITY_KINDS } from "@/lib/argon/graph-pure"
 import type { SearchResult } from "@/lib/assistant/search"
 
@@ -61,6 +64,13 @@ export default function TroLyPage() {
   const loadSeq = useRef(0)
   const onError = useCallback((m: string) => setErr(m), [])
 
+  // Cuộc trò chuyện có tên (Creator): mỗi cuộc là một sứ mệnh riêng nên ngữ cảnh tách hẳn; cuộc mặc định = "Tham mưu hằng ngày". Member chỉ có cuộc mặc định.
+  const member = useArgonMember()
+  const [dailyId, setDailyId] = useState<string | null>(null)
+  const [convs, setConvs] = useState<(ConvItem & { daily: boolean })[]>([])
+  const loadConvs = useCallback(() => api<{ conversations: (ConvItem & { daily: boolean })[] }>("/api/creator/argon/conversations").then(r => setConvs(r.conversations)).catch(() => { /* chỉ là danh sách: lỗi thì giữ cuộc hiện tại */ }), [])
+  const titled = useRef<Set<string>>(new Set())
+
   const sessionRole = session?.user?.role
   useEffect(() => {
     if (status !== "authenticated") return
@@ -69,8 +79,9 @@ export default function TroLyPage() {
   useEffect(() => { if (role && role !== "creator") router.push("/chatbot") }, [role, router])
   useEffect(() => {
     if (role !== "creator") return
-    api<{ missionId: string }>("/api/creator/argon/context").then(r => setMissionId(r.missionId)).catch(e => onError(e.message))
+    api<{ missionId: string }>("/api/creator/argon/context").then(r => { setDailyId(r.missionId); setMissionId(r.missionId) }).catch(e => onError(e.message))
   }, [role, onError])
+  useEffect(() => { if (role === "creator" && !member) void loadConvs() }, [role, member, loadConvs])
 
   const loadDetail = useCallback((id: string) => {
     const seq = ++loadSeq.current
@@ -81,6 +92,42 @@ export default function TroLyPage() {
   const runner = useMissionRunner({ projectId: detail?.mission.project_id ?? null, runs, setRuns, onError, onWorkspaceChanged: refresh, onFinished: refresh, onPoll: refresh })
   busyRef.current = runner.busy
 
+  const switchTo = (id: string) => {
+    if (id === missionId || runner.busy) return
+    setDetail(null); setRuns([]); setDraft(""); setFound(null); setMissionId(id)
+  }
+  const newConversation = async () => {
+    if (runner.busy) return
+    try {
+      const r = await api<{ conversation: ConvItem & { daily: boolean } }>("/api/creator/argon/conversations", jsonInit("POST", {}))
+      setConvs(prev => [r.conversation, ...prev]); switchTo(r.conversation.id)
+    } catch (e) { onError((e as Error).message) }
+  }
+  const renameConv = async (id: string, title: string) => {
+    try {
+      await api(`/api/creator/argon/conversations/${id}`, jsonInit("PATCH", { title }))
+      setConvs(prev => prev.map(c => (c.id === id ? { ...c, title } : c)))
+    } catch (e) { onError((e as Error).message) }
+  }
+  const deleteConv = async (id: string) => {
+    if (!confirm("Xoá cuộc trò chuyện này (cả lượt hỏi/đáp và file trong đó)?")) return
+    try {
+      await api(`/api/creator/argon/conversations/${id}`, { method: "DELETE" })
+      setConvs(prev => prev.filter(c => c.id !== id))
+      if (id === missionId && dailyId) switchTo(dailyId)
+    } catch (e) { onError((e as Error).message) }
+  }
+  // Cuộc mới chưa có tên: lấy câu hỏi đầu làm tên (sửa lại được bằng nút bút chì).
+  const active = convs.find(c => c.id === missionId)
+  const firstPrompt = runs[0]?.prompt
+  useEffect(() => {
+    if (!active || active.daily || active.title !== CHAT_DEFAULT_NAME || !firstPrompt || titled.current.has(active.id)) return
+    titled.current.add(active.id)
+    const t = firstPrompt.replace(/\s+/g, " ").trim()
+    void renameConv(active.id, t.length > 50 ? `${t.slice(0, 50)}…` : t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.id, active?.title, firstPrompt])
+
   if (status === "loading" || !role) return <div className="p-6 text-sm text-gray-400">Đang tải…</div>
   if (role !== "creator") return null
   const m = detail?.mission
@@ -89,6 +136,14 @@ export default function TroLyPage() {
     <div className="max-w-[1100px] mx-auto px-4 py-4 flex flex-col gap-3 lg:h-[calc(100vh-7rem)]">
       {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}
       <section className="flex-1 min-h-[60vh] ag-card ag-card-flat overflow-hidden flex flex-col" aria-label="Trợ lý Argon">
+        {!member && convs.length > 0 && (
+          <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-700 flex items-center">
+            <ConversationSwitcher conversations={convs} activeId={missionId} title={active?.title ?? "Tham mưu hằng ngày"} disabled={runner.busy}
+              onSelect={c => switchTo(c.id)} onNew={() => void newConversation()}
+              onRename={(id, t) => (convs.find(c => c.id === id)?.daily ? undefined : renameConv(id, t))}
+              onDelete={id => { if (!convs.find(c => c.id === id)?.daily) void deleteConv(id) }} />
+          </div>
+        )}
         {!m || !detail ? <div className="m-auto text-sm text-gray-400">Đang chuẩn bị trợ lý…</div> : (
           <>
             <div className="flex-1 min-h-0">

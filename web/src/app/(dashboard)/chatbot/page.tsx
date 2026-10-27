@@ -444,6 +444,11 @@ export default function ChatbotPage() {
     }
   }, [activeConvId, startNew])
 
+  const renameConversation = useCallback(async (convId: string, title: string) => {
+    const res = await fetch(`/api/chat/conversations/${convId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) })
+    if (res.ok) setConversations(prev => prev.map(c => (c.id === convId ? { ...c, title } : c)))
+  }, [])
+
   // ─── Send ─────────────────────────────────────────────────────────────────
 
   const send = async (content: string) => {
@@ -659,7 +664,7 @@ export default function ChatbotPage() {
           <span className="hidden sm:inline text-lg font-bold text-gray-900 dark:text-slate-100 shrink-0">Bé Gấu</span>
           <span className="hidden sm:inline text-gray-300">/</span>
           <ConversationSwitcher conversations={conversations} activeId={activeConvId} title={activeTitle} disabled={busy}
-            onSelect={c => switchConversation(c as Conversation)} onNew={startNew} onDelete={id => { if (!deletingId) deleteConversation(id) }} />
+            onSelect={c => switchConversation(c as Conversation)} onNew={startNew} onDelete={id => { if (!deletingId) deleteConversation(id) }} onRename={renameConversation} />
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {busy && (
