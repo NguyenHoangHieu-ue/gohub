@@ -1,10 +1,11 @@
 "use client"
 
-import { Fragment, memo, useCallback, useEffect, useRef, useState } from "react"
-import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Pause, Play, RotateCcw, Rocket, Send, Square, ThumbsDown, ThumbsUp, Zap } from "lucide-react"
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Pause, Play, RotateCcw, Rocket, Send, Sparkles, Square, ThumbsDown, ThumbsUp, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
+import { routeLane } from "@/lib/assistant/route-pure"
 import { PHASE_LABEL, phaseIndex, type MissionPhase, type PatchUi, type PendingAskUi } from "./mission-types"
 import { stepLabel, type ModelKey, type SendOpts, type Thinking, type useMissionRunner } from "./use-mission-runner"
 
@@ -90,9 +91,12 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   const [showOpts, setShowOpts] = useState(false)   // trang gọn: ẩn mức suy luận / số liệu hệ thống / chạy nền sau "Tuỳ chọn"
   const [thinking, setThinking] = useState<Thinking>("medium")
   const [background, setBackground] = useState(false)
-  const [model, setModel] = useState<ModelKey>("fast")   // Nhanh = model nhanh chung (nhanh ~4-7 lần, rẻ ~1/2); Sâu = Gemini 4 Argon cho việc cần suy luận kỹ/viết dài
-  useEffect(() => { try { const v = localStorage.getItem("argon_model"); if (v === "fast" || v === "deep") setModel(v) } catch { /* trình duyệt chặn lưu: dùng mặc định */ } }, [])
-  const pickModel = (m: ModelKey) => { setModel(m); try { localStorage.setItem("argon_model", m) } catch { /* bỏ qua */ } }
+  // Nhanh = model nhanh chung (nhanh ~4-7 lần, rẻ ~1/2); Sâu = Gemini 4 Argon cho việc cần suy luận kỹ/viết dài; Tự động = router theo mục đích câu hỏi (làn) chọn một trong hai.
+  const [modelMode, setModelMode] = useState<ModelKey | "auto">("auto")
+  useEffect(() => { try { const v = localStorage.getItem("argon_model"); if (v === "fast" || v === "deep" || v === "auto") setModelMode(v) } catch { /* trình duyệt chặn lưu: dùng mặc định */ } }, [])
+  const pickModel = (m: ModelKey | "auto") => { setModelMode(m); try { localStorage.setItem("argon_model", m) } catch { /* bỏ qua */ } }
+  const lane = useMemo(() => (prompt.trim().length >= 4 ? routeLane(prompt) : null), [prompt])
+  const model: ModelKey = modelMode === "auto" ? (lane?.tier ?? "fast") : modelMode
   const [allowTools, setAllowTools] = useState(true)
   const [confirmChot, setConfirmChot] = useState(false)
   const [autoRun, setAutoRun] = useState(true)   // Chốt xong tự giao Argon chạy nền theo kế hoạch
@@ -268,10 +272,16 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
             placeholder="Nhắn Argon…"
             className="block w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[13.5px] leading-relaxed text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none" />
           <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5 pt-1">
-            <Seg label="Mô hình" value={model} onChange={pickModel} options={[
+            <Seg label="Mô hình" value={modelMode} onChange={pickModel} options={[
+              { v: "auto", label: "Tự động", icon: Sparkles, title: "Tự động: chọn Nhanh hoặc Sâu theo mục đích câu hỏi (hiện ở chip bên cạnh); bấm Nhanh/Sâu để tự chọn" },
               { v: "fast", label: "Nhanh", icon: Zap, title: "Nhanh: việc nhiều bước công cụ, SQL, file (nhanh ~4-7 lần, rẻ ~1/2)" },
               { v: "deep", label: "Sâu", icon: Brain, title: "Sâu (Gemini 4 Argon): phân tích khó, viết dài, ngữ cảnh lớn" },
             ]} />
+            {lane && (
+              <span title={lane.reason} className={cn("inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full border", lane.here ? "border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 bg-violet-50/60 dark:bg-violet-950/30" : "border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30")}>
+                Làn {lane.n} · {lane.label}{lane.here ? ` · ${modelMode === "auto" ? "tự chọn " : ""}${model === "deep" ? "Sâu" : "Nhanh"}` : " · cần Gấu Pro"}
+              </span>
+            )}
             {simple && <button type="button" onClick={() => setShowOpts(v => !v)} aria-expanded={showOpts} className="px-2 py-1 text-[12px] rounded-lg text-gray-500 hover:text-gray-800 dark:hover:text-slate-200">{showOpts ? "Ẩn tuỳ chọn" : "Tuỳ chọn"}</button>}
             {(!simple || showOpts) && <>
             <Seg label="Mức suy luận" value={thinking} onChange={setThinking} options={(Object.keys(THINK_LABEL) as Thinking[]).map(t => ({ v: t, label: THINK_LABEL[t], title: `Suy luận: ${THINK_LABEL[t]}` }))} />
