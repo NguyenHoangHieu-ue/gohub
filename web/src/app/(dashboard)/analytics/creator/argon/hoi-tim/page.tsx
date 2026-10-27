@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Brain, Check, Cpu, FileText, Loader2, Wrench, X } from "lucide-react"
+import dynamic from "next/dynamic"
+import { Brain, Check, Cpu, FileText, Loader2, Radio, Wrench, X } from "lucide-react"
 import { MemoryPanel } from "@/components/gau-pro/memory-panel"
 import { useChatUpload } from "./use-chat-upload"
+const LiveSession = dynamic(() => import("@/components/gau-pro/live-session").then(m => m.LiveSession), { ssr: false })   // giọng nói trực tiếp: chỉ nạp khi mở (nặng)
 import { InlineConfirm } from "./inline-confirm"
 import { MyDocs } from "./my-docs"
 import { cn } from "@/lib/utils"
@@ -69,6 +71,7 @@ export default function TroLyPage() {
   }, [draft])
   const [runs, setRuns] = useState<Run[]>([])
   const [showBench, setShowBench] = useState(false)
+  const [showLive, setShowLive] = useState(false)   // giọng nói/màn hình trực tiếp (chỉ Creator)
   const [showDocs, setShowDocs] = useState(false)   // ngăn kéo "Tài liệu của tôi"
   const { state: up, upload, reset: resetUp } = useChatUpload()
   const [dropping, setDropping] = useState(false)
@@ -181,6 +184,7 @@ export default function TroLyPage() {
             <span className={cn("px-2 text-sm font-semibold text-gray-800 dark:text-slate-100 truncate", convs.length > 0 && "hidden lg:inline")}>{active?.daily ? mainLabel : (active?.title ?? mainLabel)}</span>
             <button type="button" onClick={() => setShowDocs(true)} title="Những tài liệu bạn đã đưa cho trợ lý" className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"><FileText size={13} />Tài liệu của tôi</button>
             <button type="button" onClick={() => setShowMemory(true)} title="Xem, sửa hoặc xoá những điều trợ lý nhớ về bạn" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"><Brain size={13} />Trí nhớ</button>
+            {!member && <button type="button" onClick={() => setShowLive(true)} title="Nói chuyện trực tiếp bằng giọng nói, có thể chia sẻ màn hình" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"><Radio size={13} />Nói chuyện</button>}
             {!member && (
               <button type="button" onClick={() => toggleBench(!showBench)} aria-expanded={showBench} title="Các bước Argon đã làm: đọc nguồn, chạy SQL, số liệu…"
                 className={cn("inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] transition-colors", showBench ? "border-violet-400 bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-200 dark:border-violet-700" : "border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700")}>
@@ -203,6 +207,7 @@ export default function TroLyPage() {
             </div>
           )}
         </section>
+        {!member && showLive && <LiveSession title="Gấu Prime" onClose={() => setShowLive(false)} />}
         {showDocs && <MyDocs onClose={() => setShowDocs(false)} refreshKey={up.stage} onError={onError} />}
         {showMemory && <MemoryPanel api="/api/creator/assistant/memory" floating onClose={() => setShowMemory(false)} />}
         {!member && showBench && detail && (
