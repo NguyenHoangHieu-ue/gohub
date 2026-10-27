@@ -69,7 +69,7 @@ export async function execExtTool(name: string, args: Record<string, unknown>, u
       return r?.error ? entry(name, args, false, String(r.error)) : entry(name, args, true, json(r))
     }
     if (name === TAB_NAME || name === CONTROL_NAME || name === FILES_NAME) {
-      if (o.member || !o.username) return entry(name, args, false, "Bridge chỉ dành cho Creator")
+      if (!o.username || (o.member && name === FILES_NAME)) return entry(name, args, false, name === FILES_NAME ? "Đọc tệp trên máy chỉ dành cho Creator" : "Không xác định người dùng")   // thành viên dùng Bridge cho trình duyệt CỦA CHÍNH HỌ (như Gấu Pro), không đọc tệp máy
       const m = await import("@/lib/agents/creator/tools/bridge")
       if (name === TAB_NAME) {
         const action = String(args.action ?? "")

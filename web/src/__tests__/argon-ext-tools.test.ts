@@ -9,7 +9,7 @@ import { FAST_TOOL_NAMES, routeRun } from "@/lib/argon/run-route"
 
 // L1 = nội dung do bên ngoài viết (web, Lark Doc/Base, task); L0 = dữ liệu nội bộ; L2 = có chi phí (video).
 const EXPECT: Record<string, string> = { timTrenWeb: "L1", docLark: "L1", docLarkBase: "L1", docViecLark: "L1", traBangSupabase: "L0", docGA4: "L0", docGSC: "L0", kiemTraVideo: "L0", timHoiThoaiCu: "L0", taoVideo: "L2", docGoogle: "L1", docTabTrinhDuyet: "L1", thaoTacTrinhDuyet: "L2", docTepMay: "L1" }
-const MEMBER_OK = new Set(["timHoiThoaiCu", "docLark", "docLarkBase", "docViecLark", "timTrenWeb", "traBangSupabase", "docGA4", "docGSC"])
+const MEMBER_OK = new Set(["timHoiThoaiCu", "docLark", "docLarkBase", "docViecLark", "timTrenWeb", "traBangSupabase", "docGA4", "docGSC", "taoVideo", "kiemTraVideo", "docTabTrinhDuyet", "thaoTacTrinhDuyet"])
 describe("công cụ ngoài Kho của Argon (web, Lark)", () => {
   it("khai báo đủ, bậc L1 (nội dung ngoài → bọc + đánh dấu nhiễm), chỉ Creator, đọc song song được", () => {
     expect(EXT_TOOLS.map(t => t.name).sort()).toEqual([...EXT_TOOL_NAMES].sort())
@@ -53,7 +53,7 @@ describe("công cụ ngoài Kho của Argon (web, Lark)", () => {
     expect((await execExtTool("timHoiThoaiCu", { tuKhoa: "báo giá" }, 0)).result).toMatch(/người dùng/)
   }, 30_000)
   it("Bridge: chỉ Creator; điều khiển trình duyệt bị từ chối khi lượt đã đọc nội dung ngoài; file chỉ list/read", async () => {
-    expect((await execExtTool("docTabTrinhDuyet", { action: "list_tabs" }, 0, { member: true, username: "u" })).result).toMatch(/Creator/)
+    expect((await execExtTool("docTepMay", { action: "list" }, 0, { member: true, username: "u" })).result).toMatch(/Creator/)
     expect((await execExtTool("thaoTacTrinhDuyet", { action: "click", tab_id: 1 }, 0, { username: "u", externalTaint: true })).result).toMatch(/nội dung từ bên ngoài/)
     expect((await execExtTool("docTabTrinhDuyet", { action: "screenshot" }, 0, { username: "u" })).result).toMatch(/list_tabs.*snapshot/)
     expect((await execExtTool("docTepMay", { action: "write", path: "C:/a.txt" }, 0, { username: "u" })).result).toMatch(/list.*read/)

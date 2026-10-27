@@ -29,10 +29,11 @@ export interface DecideResult { ok: boolean; decided?: boolean; autoApprove?: bo
 
 /** Duyệt/từ chối theo id (web) hoặc code (Lark). Chỉ chủ hành động; chuyển trạng thái nguyên tử để không chạy 2 lần. */
 export async function decidePendingAction(
-  p: { username: string; isCreator: boolean; id?: string; code?: string; approve: boolean },
+  p: { username: string; isCreator: boolean; id?: string; code?: string; approve: boolean; onlyChannel?: string },
 ): Promise<DecideResult> {
   let q = supabaseAdmin.from("gp_pending_actions").select("id,code,tool,args,status,created_at,channel").eq("username", p.username)
   q = p.id ? q.eq("id", p.id) : q.eq("code", (p.code ?? "").toLowerCase())
+  if (p.onlyChannel) q = q.eq("channel", p.onlyChannel)   // thành viên Gấu Prime (không có quyền Gấu Pro) chỉ duyệt được đề xuất do Gấu Prime tạo
   const { data: rows, error } = await q.order("created_at", { ascending: false }).limit(1)
   if (error) return { ok: false, error: missingTable(error.message) ? MIGRATION_HINT : error.message }
   const row = rows?.[0]

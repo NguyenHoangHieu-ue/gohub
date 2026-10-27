@@ -5,12 +5,13 @@ import { Check, Loader2, X } from "lucide-react"
 import { api, jsonInit } from "../argon-types"
 import type { InboxItem } from "@/lib/assistant/inbox-pure"
 
-// Thẻ XÁC NHẬN ngay trong khung chat cho người ít rành công nghệ: thay cho tab "Việc cần duyệt". Chỉ các việc của CHÍNH họ: đề xuất ghi nhớ và thay đổi thông tin (sự việc).
+// Thẻ XÁC NHẬN ngay trong khung chat cho người ít rành công nghệ: thay cho tab "Việc cần duyệt". Chỉ các việc của CHÍNH họ: đề xuất ghi nhớ, thay đổi thông tin (sự việc) và việc Gấu Prime xin làm (tạo task, đặt lịch…).
 // Hai nút lớn "Đồng ý" / "Không" gọi đúng endpoint của Việc cần duyệt. Làm mới khi mở trang và sau mỗi lượt trả lời xong.
-const KINDS = new Set(["memory_proposal", "fact_review"])
+const KINDS = new Set(["memory_proposal", "fact_review", "gp_action"])
 const strip = (t: string) => t.replace(/^(Nhớ|Thay đổi sự việc|Sự việc|Giá|Hạn)\s*:\s*/i, "")
 
 function ask(it: InboxItem): string {
+  if (it.kind === "gp_action") return `Em xin phép làm việc này: ${it.title}${it.detail ? ` (${it.detail})` : ""}. Anh/chị đồng ý chứ?`
   return it.kind === "memory_proposal"
     ? `Em có nên ghi nhớ điều này không: “${strip(it.title)}”?`
     : `Em thấy thông tin này có thay đổi: “${strip(it.title)}”. Anh/chị xác nhận giúp em nhé?`
@@ -25,7 +26,8 @@ export function InlineConfirm({ refreshKey, onError }: { refreshKey: unknown; on
   async function decide(it: InboxItem, yes: boolean) {
     setBusy(it.key)
     try {
-      if (it.kind === "memory_proposal") await api("/api/creator/assistant/memory-proposals", jsonInit("POST", { id: it.id, action: yes ? "approve" : "reject" }))
+      if (it.kind === "gp_action") { const r = await api<{ ok?: boolean; error?: string }>("/api/creator-ai/approve", jsonInit("POST", { id: it.id, approve: yes })); if (r.ok === false && r.error) onError(r.error) }
+      else if (it.kind === "memory_proposal") await api("/api/creator/assistant/memory-proposals", jsonInit("POST", { id: it.id, action: yes ? "approve" : "reject" }))
       else await api("/api/creator/argon/facts", jsonInit("PATCH", yes ? { id: it.id, confirm: true } : { id: it.id, status: "rejected" }))
       setItems(list => list.filter(x => x.key !== it.key))
     } catch (e) { onError((e as Error).message) } finally { setBusy(null) }

@@ -6,11 +6,12 @@ import { FAST_TOOL_NAMES, routeRun } from "@/lib/argon/run-route"
 import { routeLane } from "@/lib/assistant/route-pure"
 
 describe("công cụ đọc trang / portal / tạo ảnh của Argon", () => {
-  it("khai báo đủ, bậc đúng, chỉ Creator, không ở đường nhanh", () => {
+  it("khai báo đủ, bậc đúng, portal chỉ Creator (trang web + ảnh thành viên dùng được như Gấu Pro), không ở đường nhanh", () => {
     expect(BROWSE_TOOLS.map(t => t.name).sort()).toEqual([...BROWSE_TOOL_NAMES].sort())
     expect(TOOL_LEVELS.docTrang).toBe("L1"); expect(TOOL_LEVELS.docPortal).toBe("L1"); expect(TOOL_LEVELS.taoAnh).toBe("L2")
     for (const n of BROWSE_TOOL_NAMES) {
-      expect(MEMBER_BLOCKED_TOOLS, n).toContain(n)
+      if (n === "docPortal") expect(MEMBER_BLOCKED_TOOLS, n).toContain(n)
+      else expect(MEMBER_BLOCKED_TOOLS, n).not.toContain(n)
       expect(FAST_TOOL_NAMES, n).not.toContain(n)
       expect(BROWSE_LIMITS[n], n).toBeGreaterThan(0)
     }

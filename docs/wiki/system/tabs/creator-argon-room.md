@@ -391,3 +391,7 @@ File `.xlsx` Argon/code tạo ra mở ngay trong trang (trước đây chỉ t�
 - **Bridge** nằm trong menu "Thêm" của Gấu Prime (`/analytics/creator/argon/bridge`, dùng lại trang cũ); bỏ khỏi nhóm Creator ở sidebar (người có quyền Gấu Pro vẫn thấy ở mục Private AI).
 - **Chờ trả lời**: gấu con chạy (`BearRunner`), không hiện tên công cụ; câu hỏi hiện NGAY (lượt tạm `tmp-…`, đổi id khi máy chủ báo `start`). Ô nhập bỏ viền tím khi focus.
 - **Reload mất nội dung**: `SessionKeepAlive` không còn `signIn()` ngay khi session trống thoáng qua (kiểm lại 4 lần, chỉ chuyển khi ≥2 lần trống thật); jwt đọc lại role bọc try/catch. Chẩn đoán: `ReloadProbe` ghi `app_settings.reload_log` qua `/api/diag/reload` (GET chỉ Creator).
+
+### s243 (tiếp 5) — thành viên Gấu Prime = thành viên Gấu Pro
+
+Nguyên tắc: thành viên dùng được ở Gấu Prime đúng những gì thành viên dùng được ở Gấu Pro (`CREATOR_ONLY_TOOLS` trong `creator-ai.ts`). `MEMBER_BLOCKED_TOOLS` còn: `run_code`, `deXuatSuaCode`, `deXuatKyNang`, `ghiDuDoan`, `chamDuDoan` (công cụ riêng của Argon), `docGoogle`, `docTepMay`, `docPortal` (Creator-only ở Gấu Pro). Mở thêm: `docTrang`, `taoAnh`, `taoVideo`/`kiemTraVideo`, Bridge trình duyệt của CHÍNH họ (`docTabTrinhDuyet`, `thaoTacTrinhDuyet`; tệp máy vẫn Creator), `deXuatThaoTac` giới hạn `MEMBER_ACT_TOOLS` (createLarkTask, updateLarkTask, scheduleTask, devTicket — không gửi tin/Lark Doc/Google/tệp máy). Thẻ duyệt hiện ngay trong chat (Đồng ý/Không); `/api/creator-ai/approve` cho thành viên Argon duyệt, nhưng CHỈ đề xuất kênh `argon` (`onlyChannel`).

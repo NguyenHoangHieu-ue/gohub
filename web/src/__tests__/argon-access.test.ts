@@ -32,7 +32,8 @@ describe("member bị giới hạn công cụ và hộp việc", () => {
   })
   it("member không thấy việc của toàn hệ thống: hành động Gấu Pro, đề xuất sửa code, phiếu dev, kỹ năng, KPI công ty", () => {
     for (const k of MEMBER_INBOX_KINDS) expect(Object.keys(KIND_LABEL), k).toContain(k)
-    for (const k of ["gp_action", "argon_patch", "dev_ticket", "skill_candidate", "kpi_alert"]) expect(MEMBER_INBOX_KINDS, k).not.toContain(k)
+    for (const k of ["argon_patch", "dev_ticket", "skill_candidate", "kpi_alert"]) expect(MEMBER_INBOX_KINDS, k).not.toContain(k)
+    expect(MEMBER_INBOX_KINDS).toContain("gp_action")   // thẻ xin làm task/lịch của chính họ (thành viên tự bấm Đồng ý)
   })
 })
 
