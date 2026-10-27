@@ -8,8 +8,10 @@ const LONG = 260
 export function tidyAnswer(text: string): string {
   let inFence = false
   return text.split(/\n{2,}/).map(block => {
-    if (/^\s*```/.test(block) || block.includes("```")) { inFence = inFence !== (block.match(/```/g)?.length ?? 0) % 2 === 1; return block }
-    if (inFence) return block
+    const fences = (block.match(/```/g) ?? []).length
+    const wasIn = inFence
+    if (fences % 2 === 1) inFence = !inFence   // khối mã có thể trải qua nhiều đoạn (dòng trống bên trong)
+    if (wasIn || fences > 0) return block
     if (/^\s*([#>|]|[-*+]\s|\d+[.)]\s)/.test(block) || block.length < LONG) return block
     const labels = block.match(LABEL_RE)
     if (!labels || labels.length < 1) return block
