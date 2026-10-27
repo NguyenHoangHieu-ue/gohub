@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { requireArgonUser } from "@/lib/argon/server"
-import { PARITY_LABEL, countTools, median, parityOf, removalCriteria, upRate } from "@/lib/assistant/parity-pure"
+import { PARITY_LABEL, countTools, isAutoRun, median, parityOf, removalCriteria, upRate } from "@/lib/assistant/parity-pure"
 
 export const dynamic = "force-dynamic"
 
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const since = new Date(Date.now() - days * 86_400_000).toISOString()
   const [gp, ar, fb] = await Promise.all([
     supabaseAdmin.from("gp_runs").select("username,steps,duration_ms,outcome,created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(3000),
-    supabaseAdmin.from("argon_runs").select("username,status,duration_ms,cost_usd,created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(3000),
+    supabaseAdmin.from("argon_runs").select("username,prompt,status,duration_ms,cost_usd,created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(3000),
     supabaseAdmin.from("chat_feedback").select("agent_id,rating,created_at").gte("created_at", since).limit(5000),
   ])
   const gpRows = gp.data ?? [], arRows = ar.data ?? []
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     days,
     gauPro: { runs: gpRows.length, users: new Set(gpRows.map(r => r.username)).size, done: gpRows.filter(r => r.outcome === "done").length, medianMs: median(gpRows.map(r => Number(r.duration_ms)).filter(n => n > 0)), up: pro.up, down: pro.down, upRate: upRate(pro.up, pro.down) },
-    gauPrime: { runs: arRows.length, users: new Set(arRows.map(r => r.username)).size, done: arRows.filter(r => ok(r.status)).length, medianMs: median(arRows.map(r => Number(r.duration_ms)).filter(n => n > 0)), costUsd: Math.round(arRows.reduce((n, r) => n + (Number(r.cost_usd) || 0), 0) * 100) / 100, up: prime.up, down: prime.down, upRate: upRate(prime.up, prime.down), daysWithRuns: primeDays },
+    gauPrime: { runs: arRows.length, users: new Set(arRows.map(r => r.username)).size, done: arRows.filter(r => ok(r.status)).length, medianMs: median(arRows.filter(r => !isAutoRun(r.prompt)).map(r => Number(r.duration_ms)).filter(n => n > 0)), autoRuns: arRows.filter(r => isAutoRun(r.prompt)).length, autoMedianMs: median(arRows.filter(r => isAutoRun(r.prompt)).map(r => Number(r.duration_ms)).filter(n => n > 0)), costUsd: Math.round(arRows.reduce((n, r) => n + (Number(r.cost_usd) || 0), 0) * 100) / 100, up: prime.up, down: prime.down, upRate: upRate(prime.up, prime.down), daysWithRuns: primeDays },
     tools: used,
     criteria: removalCriteria({ primeRuns: arRows.length, daysWithPrimeRuns: primeDays, used, primeUp: prime.up, primeDown: prime.down, proUp: pro.up, proDown: pro.down }),
     errors: [gp.error, ar.error, fb.error].filter(Boolean).map(e => e!.message),
