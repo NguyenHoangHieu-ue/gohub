@@ -30,7 +30,9 @@ const LANE_LABEL: Record<Lane, { n: number; label: string }> = {
   hoi_kho: { n: 1, label: "Hỏi Kho" }, so_lieu: { n: 2, label: "Phân tích số liệu" }, soan_tao: { n: 3, label: "Soạn và tạo" },
   hanh_dong: { n: 4, label: "Hành động" }, trinh_duyet: { n: 5, label: "Trình duyệt" },
 }
-const BROWSER = ["mo trang", "vao portal", "portal ", "dang nhap", "duyet web", "tren trinh duyet", "bam nut", "dien form", "tai file", "tai ve", "file tren may", "o dia may"]
+// Đọc trang/portal: Argon làm được (docTrang/docPortal, chỉ đọc). Thao tác thật trên trình duyệt/máy của anh (bấm, gõ, tải file, đọc ổ đĩa): vẫn qua Gấu Pro + Bridge.
+const BROWSER_READ = ["mo trang", "vao portal", "portal ", "dang nhap", "duyet web", "doc trang", "xem trang"]
+const BROWSER_DO = ["bam nut", "dien form", "tren trinh duyet", "tai file", "tai ve", "file tren may", "o dia may", "click"]
 const CREATE = [
   "viet bao cao", "lam bao cao", "tao bao cao", "bao cao html", "lam slide", "tao slide", "lam powerpoint", "soan bai", "soan van ban", "viet bai", "viet email", "viet thu",
   "xuat excel", "xuat docx", "xuat file", "xuat pdf", "ve hinh", "tao hinh", "tao anh", "tao video", "ve bieu do", "lam bieu do",
@@ -48,8 +50,10 @@ export function routeLane(text: string): LaneDecision {
     const deep = lane === "soan_tao" || has(t, DEEP).length > 0 || text.length > 280
     return { lane, ...LANE_LABEL[lane], tier: here && deep ? "deep" : "fast", here, approval: lane === "hanh_dong", reason, confidence }
   }
-  const br = has(t, BROWSER)
-  if (br.length) return mk("trinh_duyet", `Cần thao tác trên trình duyệt ("${br[0].trim()}") — hiện qua Gấu Pro`, "high", false)
+  const bd = has(t, BROWSER_DO)
+  if (bd.length) return mk("trinh_duyet", `Cần thao tác trên trình duyệt/máy của anh ("${bd[0].trim()}") — dùng Gấu Pro + Bridge`, "high", false)
+  const br = has(t, BROWSER_READ)
+  if (br.length) return mk("trinh_duyet", `Đọc trang web/portal ("${br[0].trim()}") — chỉ đọc`, "high", true)
   const act = has(t, ACTION)
   if (act.length) return mk("hanh_dong", `Cần thao tác ("${act[0].trim()}") — Argon tạo đề xuất, anh duyệt ở Việc cần duyệt`, has(t, KNOWLEDGE).length ? "low" : "high", true)
   const cr = has(t, CREATE)

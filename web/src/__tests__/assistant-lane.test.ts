@@ -24,7 +24,7 @@ describe("routeLane", () => {
   })
   it("thao tác làm qua thẻ duyệt (here + approval); trình duyệt chưa làm được (here=false); còn lại làm ngay", () => {
     expect(routeLane("Gửi tin cho Romy")).toMatchObject({ here: true, approval: true })
-    expect(routeLane("mở trang portal BC")).toMatchObject({ here: false, approval: false })
+    expect(routeLane("bấm nút Gửi trên trình duyệt")).toMatchObject({ here: false, approval: false })
     expect(routeLane("Doanh thu hôm qua")).toMatchObject({ here: true, approval: false })
   })
   it("ghi/gửi luôn lên làn thao tác dù câu có từ hỏi Kho", () => {
