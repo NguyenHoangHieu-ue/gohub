@@ -28,7 +28,9 @@ const entry = (name: string, args: Record<string, unknown>, ok: boolean, result:
 const json = (v: unknown) => { const s = typeof v === "string" ? v : JSON.stringify(v, null, 1); return s.length > MAX_CHARS ? `${s.slice(0, MAX_CHARS)}\n…(cắt bớt, còn ${s.length - MAX_CHARS} ký tự; thu hẹp range/filter để đọc phần còn lại)` : s }
 
 /** `used` = số lần công cụ CÙNG TÊN đã chạy trong lượt (tính từ nhật ký) để áp EXT_LIMITS. */
-export async function execExtTool(name: string, args: Record<string, unknown>, used: number, o: { tainted?: boolean; username?: string } = {}): Promise<ToolLogEntry> {
+export async function execExtTool(name: string, args: Record<string, unknown>, used: number, o: { tainted?: boolean; username?: string; member?: boolean } = {}): Promise<ToolLogEntry> {
+  // Thành viên (không phải Creator) dùng Lark bằng TOKEN CỦA CHÍNH HỌ (đã bấm "Cho phép"): chỉ thấy tài liệu/task/Base họ có quyền xem. Creator dùng token của Creator.
+  const larkCtx = { isCreator: !o.member, username: o.username }
   const cap = EXT_LIMITS[name]
   if (cap && used >= cap) return entry(name, args, false, `Đã dùng hết ${cap} lần ${name} trong lượt này`)
   try {
@@ -42,8 +44,15 @@ export async function execExtTool(name: string, args: Record<string, unknown>, u
     if (name === LARK_DOC_NAME) {
       const action = String(args.action ?? "")
       if (action !== "search" && action !== "read") return entry(name, args, false, 'Chỉ hỗ trợ action "search" hoặc "read" (không tạo/sửa tài liệu)')
-      const { runLarkDocs } = await import("@/lib/agents/creator/tools/lark-docs")
-      const r = await runLarkDocs({ action, query: args.query as string | undefined, url_or_token: args.url_or_token as string | undefined, range: args.range as string | undefined })
+      const docArgs = { action, query: args.query as string | undefined, url_or_token: args.url_or_token as string | undefined, range: args.range as string | undefined }
+      const larkDocs = await import("@/lib/agents/creator/tools/lark-docs")
+      if (o.member) {
+        const { getLarkUserToken } = await import("@/lib/lark")
+        const token = o.username ? await getLarkUserToken(o.username) : null
+        if (!token) return entry(name, args, false, "Chưa cấp quyền Lark cho Gấu Prime. Nhờ người dùng bấm “Cho phép” ở cửa sổ xin quyền Lark (hiện khi mở Gấu Prime) rồi hỏi lại.")
+        try { return entry(name, args, true, json(await larkDocs.runLarkDocsWithToken(token, docArgs))) } catch (e) { return entry(name, args, false, (e as Error).message) }
+      }
+      const r = await larkDocs.runLarkDocs(docArgs)
       return r.error ? entry(name, args, false, r.error) : entry(name, args, true, json(r.result))
     }
     if (name === TASK_NAME) {
@@ -52,7 +61,7 @@ export async function execExtTool(name: string, args: Record<string, unknown>, u
       if (!map[action]) return entry(name, args, false, 'Chỉ hỗ trợ action "lists", "list" hoặc "get"')
       if (action === "get" && !String(args.task_guid ?? "").trim()) return entry(name, args, false, "get cần task_guid")
       const { runLarkTask } = await import("@/lib/agents/creator/tools/lark")
-      const r = await runLarkTask(map[action], { tasklist_guid: args.tasklist_guid, task_guid: args.task_guid, page_size: Math.min(Number(args.page_size) || 20, 50) }, { isCreator: true })
+      const r = await runLarkTask(map[action], { tasklist_guid: args.tasklist_guid, task_guid: args.task_guid, page_size: Math.min(Number(args.page_size) || 20, 50) }, larkCtx)
       return r?.error ? entry(name, args, false, String(r.error)) : entry(name, args, true, json(r))
     }
     if (name === GOOGLE_NAME) {
@@ -99,7 +108,7 @@ export async function execExtTool(name: string, args: Record<string, unknown>, u
     if (name === LARK_BASE_NAME) {
       if (!String(args.app_token ?? "").trim()) return entry(name, args, false, "Thiếu app_token (mã sau '/base/' trong link Base)")
       const { runLarkBase } = await import("@/lib/agents/creator/tools/lark")
-      const r = await runLarkBase({ app_token: args.app_token, table_id: args.table_id, filter: args.filter, page_size: args.page_size }, { isCreator: true })
+      const r = await runLarkBase({ app_token: args.app_token, table_id: args.table_id, filter: args.filter, page_size: args.page_size }, { ...larkCtx, gauPro: !!o.member })
       return r?.error ? entry(name, args, false, String(r.error)) : entry(name, args, true, json(r))
     }
     return entry(name, args, false, `Công cụ ${name} không thuộc nhóm ngoài`)

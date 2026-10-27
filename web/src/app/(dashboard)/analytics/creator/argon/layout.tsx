@@ -2,12 +2,13 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { JetBrains_Mono } from "next/font/google"
 import { ChevronDown, Database, MessagesSquare, Network, Phone, Scale, Settings2, Sun } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useArgonAccess } from "./use-argon-member"
 import { BearAvatar } from "@/components/brand/bear"
+import { LarkConnectPrompt } from "./lark-connect-prompt"
 import "./argon.css"
 
 // Số, nhãn và huy hiệu dùng font mono (có dấu tiếng Việt) để giao diện có chất "bảng điều khiển công nghệ"; chữ nội dung vẫn là Be Vietnam Pro.
@@ -84,6 +85,7 @@ export default function ArgonLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
       </nav>
+      <Suspense fallback={null}><LarkConnectPrompt /></Suspense>
       {member && !(path === `${A}/hoi-tim` || path.startsWith(`${A}/hoi-tim/`)) ? null : children}
     </div>
   )
