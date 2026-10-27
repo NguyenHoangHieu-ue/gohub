@@ -15,7 +15,7 @@ const MAP: Record<string, ParityInfo> = {
   browsePortal: { status: "covered", prime: "docPortal" },
   queryLarkBase: { status: "covered", prime: "docLarkBase" },
   larkDocs: { status: "covered", prime: "docLark (đọc) + deXuatThaoTac (ghi qua duyệt)" },
-  googleWorkspace: { status: "approval", prime: "deXuatThaoTac (ghi); đọc chưa có", note: "đọc Google Drive/Docs chưa chuyển" },
+  googleWorkspace: { status: "covered", prime: "docGoogle (đọc) + deXuatThaoTac (ghi qua duyệt)" },
   sendLarkMessage: { status: "approval", prime: "deXuatThaoTac" },
   createLarkTask: { status: "approval", prime: "deXuatThaoTac" },
   updateLarkTask: { status: "approval", prime: "deXuatThaoTac" },

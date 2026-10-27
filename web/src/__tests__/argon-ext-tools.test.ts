@@ -8,13 +8,14 @@ import { PARALLEL_SAFE } from "@/lib/argon/parallel-tools"
 import { FAST_TOOL_NAMES, routeRun } from "@/lib/argon/run-route"
 
 // L1 = nội dung do bên ngoài viết (web, Lark Doc/Base, task); L0 = dữ liệu nội bộ; L2 = có chi phí (video).
-const EXPECT: Record<string, string> = { timTrenWeb: "L1", docLark: "L1", docLarkBase: "L1", docViecLark: "L1", traBangSupabase: "L0", docGA4: "L0", docGSC: "L0", kiemTraVideo: "L0", timHoiThoaiCu: "L0", taoVideo: "L2" }
+const EXPECT: Record<string, string> = { timTrenWeb: "L1", docLark: "L1", docLarkBase: "L1", docViecLark: "L1", traBangSupabase: "L0", docGA4: "L0", docGSC: "L0", kiemTraVideo: "L0", timHoiThoaiCu: "L0", taoVideo: "L2", docGoogle: "L1" }
 describe("công cụ ngoài Kho của Argon (web, Lark)", () => {
   it("khai báo đủ, bậc L1 (nội dung ngoài → bọc + đánh dấu nhiễm), chỉ Creator, đọc song song được", () => {
     expect(EXT_TOOLS.map(t => t.name).sort()).toEqual([...EXT_TOOL_NAMES].sort())
     for (const n of EXT_TOOL_NAMES) {
       expect(TOOL_LEVELS[n], n).toBe(EXPECT[n])
-      expect(MEMBER_BLOCKED_TOOLS, n).toContain(n)
+      if (n === "timHoiThoaiCu") expect(MEMBER_BLOCKED_TOOLS, n).not.toContain(n)   // chỉ tìm hội thoại của chính người hỏi
+      else expect(MEMBER_BLOCKED_TOOLS, n).toContain(n)
       expect(PARALLEL_SAFE.has(n), n).toBe(n !== "taoVideo")
       expect(FAST_TOOL_NAMES, n).not.toContain(n)
       expect(EXT_LIMITS[n], n).toBeGreaterThan(0)
