@@ -13,8 +13,8 @@ describe("deXuatThaoTac — hành động ra ngoài chỉ qua thẻ duyệt", ()
     expect(PARALLEL_SAFE.has(ACT_NAME)).toBe(false)
   })
   it("chỉ cho đề xuất các công cụ ghi đã chọn — không có trình duyệt/máy/portal", () => {
-    expect(ACT_TOOLS).toEqual(["sendLarkMessage", "createLarkTask", "updateLarkTask", "scheduleTask", "larkDocs", "googleWorkspace", "devTicket"])
-    for (const n of ["controlMyBrowser", "browsePortal", "localFiles", "managePortalCredentials", "writeKnowledgeBase"]) {
+    expect(ACT_TOOLS).toEqual(["sendLarkMessage", "createLarkTask", "updateLarkTask", "scheduleTask", "larkDocs", "googleWorkspace", "devTicket", "localFiles"])
+    for (const n of ["controlMyBrowser", "browsePortal", "managePortalCredentials", "writeKnowledgeBase"]) {
       expect(validateProposal(n, { action: "x" }), n).toMatch(/không nằm trong danh sách/)
     }
   })
@@ -28,6 +28,10 @@ describe("deXuatThaoTac — hành động ra ngoài chỉ qua thẻ duyệt", ()
     expect(validateProposal("larkDocs", { action: "read" })).toMatch(/chỉ đề xuất ghi/)
     expect(validateProposal("larkDocs", { action: "create_doc", title: "x", content: "y" })).toBeNull()
     expect(validateProposal("googleWorkspace", { action: "read" })).toMatch(/ghi\/tạo/)
+    expect(validateProposal("localFiles", { action: "read", path: "C:/a.txt" })).toMatch(/docTepMay/)
+    expect(validateProposal("localFiles", { action: "write", path: "C:/a.txt", content: "x" })).toBeNull()
+    expect(validateProposal("localFiles", { action: "write", path: "C:/a.txt" })).toMatch(/content/)
+    expect(validateProposal("localFiles", { action: "edit", path: "C:/a.txt", find: "a", replace: "b" })).toBeNull()
     expect(validateProposal("devTicket", { action: "create", title: "t" })).toMatch(/plan/)
     expect(validateProposal("devTicket", { action: "create", title: "t", plan: "p" })).toBeNull()
   })

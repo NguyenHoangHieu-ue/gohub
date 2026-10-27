@@ -9,8 +9,8 @@ export const MAX_PROPOSALS_PER_RUN = 5
 
 const DOC_WRITE = new Set(["create_doc", "append_doc", "create_sheet", "write_sheet", "append_sheet"])
 const GOOGLE_READ = new Set(["search", "read", "list"])
-/** Công cụ Gấu Pro được phép đề xuất. Chưa có: localFiles (cần Bridge, Đợt 3), controlMyBrowser/browsePortal (Đợt 3). */
-export const ACT_TOOLS: readonly string[] = ["sendLarkMessage", "createLarkTask", "updateLarkTask", "scheduleTask", "larkDocs", "googleWorkspace", "devTicket"]
+/** Công cụ Gấu Pro được phép đề xuất (localFiles: chỉ ghi/sửa file trên máy qua daemon). Điều khiển trình duyệt đi qua thaoTacTrinhDuyet, không qua thẻ duyệt. */
+export const ACT_TOOLS: readonly string[] = ["sendLarkMessage", "createLarkTask", "updateLarkTask", "scheduleTask", "larkDocs", "googleWorkspace", "devTicket", "localFiles"]
 
 export const ACT_TOOL: FunctionDeclaration = {
   name: ACT_NAME,
@@ -37,6 +37,7 @@ export function validateProposal(tool: string, a: Record<string, unknown>): stri
     case "scheduleTask": return !str(a.action) || str(a.action) === "list" ? "scheduleTask cần action tạo/sửa/xoá (không phải list)" : null
     case "larkDocs": return DOC_WRITE.has(str(a.action)) ? null : `larkDocs chỉ đề xuất ghi: ${[...DOC_WRITE].join(", ")} (đọc thì dùng docLark)`
     case "googleWorkspace": return !str(a.action) || GOOGLE_READ.has(str(a.action)) ? "googleWorkspace chỉ đề xuất hành động ghi/tạo (đọc không cần duyệt)" : null
+    case "localFiles": return ["write", "edit"].includes(str(a.action)) && str(a.path) ? (str(a.action) === "write" ? (typeof a.content === "string" ? null : "localFiles write cần content") : (str(a.find) ? null : "localFiles edit cần find (và replace)")) : "localFiles chỉ đề xuất write/edit kèm path (đọc thì dùng docTepMay)"
     case "devTicket": return str(a.action) === "create" && str(a.title) && str(a.plan) ? null : "devTicket cần action=create, title, plan"
     default: return `Công cụ "${tool}" không nằm trong danh sách đề xuất được (${ACT_TOOLS.join(", ")})`
   }

@@ -14,7 +14,7 @@ export const TOOL_LEVELS: Readonly<Record<string, Level>> = {
   layDuLieuHeThong: "L0", sql: "L0", lietKeFile: "L0", docFile: "L0", traSuViec: "L0", traThucThe: "L0",
   lietKeNguon: "L1", timTrongNguon: "L1", docNguon: "L1", traMail: "L1", docKyNang: "L0",
   docTrang: "L1", docPortal: "L1", taoAnh: "L2",   // browse-tools.ts: đọc trang web/portal vendor (nội dung ngoài) + tạo ảnh
-  docGoogle: "L1", traBangSupabase: "L0", docViecLark: "L1", docGA4: "L0", docGSC: "L0", taoVideo: "L2", kiemTraVideo: "L0", timHoiThoaiCu: "L0", timTrenWeb: "L1", docLark: "L1", docLarkBase: "L1",   // đọc từ web/Lark (ext-tools.ts): nội dung do người/trang ngoài viết
+  docTabTrinhDuyet: "L1", thaoTacTrinhDuyet: "L2", docTepMay: "L1", docGoogle: "L1", traBangSupabase: "L0", docViecLark: "L1", docGA4: "L0", docGSC: "L0", taoVideo: "L2", kiemTraVideo: "L0", timHoiThoaiCu: "L0", timTrenWeb: "L1", docLark: "L1", docLarkBase: "L1",   // đọc từ web/Lark (ext-tools.ts): nội dung do người/trang ngoài viết
   ghiFile: "L2", ghiSuViec: "L2", capNhatSuViec: "L2", taoThuMuc: "L2", chuyenNguon: "L2", capNhatNguon: "L2", luuGhiChu: "L2", ghiDuDoan: "L2", chamDuDoan: "L2", run_code: "L2",
   hoiHieu: "L3", deXuatSuaCode: "L3", deXuatGhiNho: "L3", deXuatKyNang: "L3", deXuatThaoTac: "L3",   // deXuatThaoTac (act-tool.ts): chỉ tạo thẻ chờ duyệt, không tự chạy hành động ra ngoài
 }
@@ -65,6 +65,7 @@ export function gateWrite(tool: string, tainted: boolean): { mode: "run" | "revi
   if (tool === "ghiSuViec") return { mode: "review", note: "Ghi trong lượt đã đọc nội dung ngoài — cần anh xác nhận trước khi tin" }
   if (tool === "deXuatKyNang") return { mode: "deny", note: "Lượt này đã đọc nội dung ngoài (mail/thread của người khác) nên không được đề xuất kỹ năng: kỹ năng được nạp vào mọi lượt sau, nội dung từ nguồn ngoài không được phép đi vào đó. Hãy đề xuất trong một lượt khác chỉ dựa trên điều anh Hiếu nói." }
   if (tool === "taoAnh") return { mode: "deny", note: "Lượt này đã đọc nội dung ngoài (mail/thread/web/Lark) nên không tạo ảnh: ảnh tốn chi phí và có thể bị điều khiển ngầm. Anh nhờ lại ở một lượt khác chỉ dựa trên điều anh nói." }
+  if (tool === "thaoTacTrinhDuyet") return { mode: "deny", note: "Lượt này đã đọc nội dung ngoài nên không điều khiển trình duyệt (chống bị điều khiển ngầm)." }
   if (tool === "taoVideo") return { mode: "deny", note: "Lượt này đã đọc nội dung ngoài (mail/thread/web/Lark) nên không tạo video: video tốn chi phí và có thể bị điều khiển ngầm. Anh nhờ lại ở một lượt khác chỉ dựa trên điều anh nói." }
   if (tool === "capNhatSuViec") return { mode: "deny", note: "Lượt này đã đọc nội dung ngoài (mail/thread/tài liệu của người khác) nên không tự sửa/bỏ sự việc đã có. Hãy hỏi anh Hiếu (hoiHieu) hoặc đề xuất để anh tự sửa ở Kho." }
   return { mode: "run" }

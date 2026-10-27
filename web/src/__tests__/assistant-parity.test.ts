@@ -11,7 +11,8 @@ describe("đối chiếu Gấu Pro ↔ Gấu Prime", () => {
     expect(parityOf("toolLa")).toMatchObject({ status: "not_yet" })
     expect(parityOf("webSearch").status).toBe("covered")
     expect(parityOf("sendLarkMessage").status).toBe("approval")
-    expect(parityOf("controlMyBrowser").status).toBe("not_yet")
+    expect(parityOf("controlMyBrowser").status).toBe("covered")
+    expect(parityOf("khongCoTrongBang").status).toBe("not_yet")
   })
   it("mọi công cụ đề xuất được qua thẻ duyệt đều được đánh dấu approval/covered", () => {
     for (const t of ACT_TOOLS) expect(["approval", "covered"], t).toContain(parityOf(t).status)
@@ -21,11 +22,11 @@ describe("đối chiếu Gấu Pro ↔ Gấu Prime", () => {
     expect(upRate(0, 0)).toBeNull(); expect(upRate(3, 1)).toBe(75)
   })
   it("tiêu chí gỡ: khoảng trống công cụ, số ngày, chất lượng; mục của anh để null", () => {
-    const base = { primeRuns: 40, daysWithPrimeRuns: 8, used: [{ tool: "webSearch", count: 10 }, { tool: "controlMyBrowser", count: 5 }, { tool: "generateVideo", count: 1 }], primeUp: 9, primeDown: 1, proUp: 8, proDown: 2 }
+    const base = { primeRuns: 40, daysWithPrimeRuns: 8, used: [{ tool: "webSearch", count: 10 }, { tool: "deepResearch", count: 5 }, { tool: "generateVideo", count: 1 }], primeUp: 9, primeDown: 1, proUp: 8, proDown: 2 }
     const c = removalCriteria(base)
     const by = Object.fromEntries(c.map(x => [x.id, x]))
     expect(by.parity.ok).toBe(false)
-    expect(by.parity.detail).toContain("controlMyBrowser (5)")
+    expect(by.parity.detail).toContain("deepResearch (5)")
     expect(by.parity.detail).not.toContain("generateVideo")   // dùng < 3 lần: chưa tính
     expect(by.days.ok).toBe(true)
     expect(by.quality.ok).toBe(true)

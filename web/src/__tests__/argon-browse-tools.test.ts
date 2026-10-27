@@ -50,8 +50,8 @@ describe("công cụ đọc trang / portal / tạo ảnh của Argon", () => {
   it("router: đọc trang/portal làm được (chỉ đọc); bấm/gõ/tải file thật vẫn qua Gấu Pro; đều không đi đường nhanh", () => {
     expect(routeLane("Vào portal 3HK lấy bảng giá")).toMatchObject({ lane: "trinh_duyet", here: true })
     expect(routeLane("Mở trang https://a.com xem giá")).toMatchObject({ lane: "trinh_duyet", here: true })
-    expect(routeLane("Bấm nút Gửi trên trình duyệt")).toMatchObject({ lane: "trinh_duyet", here: false })
-    expect(routeLane("Tải file báo giá về máy")).toMatchObject({ here: false })
+    expect(routeLane("Bấm nút Gửi trên trình duyệt")).toMatchObject({ lane: "trinh_duyet", here: true })   // qua Bridge (cần extension đã ghép nối)
+    expect(routeLane("Tải file báo giá về máy")).toMatchObject({ here: false })   // tải file về máy: chưa hỗ trợ
     for (const q of ["Vào portal 3HK lấy bảng giá", "Tạo banner thumbnail cho eSIM Nhật"]) expect(routeRun(q, { mission: true }).route, q).toBe("full")
   })
 })

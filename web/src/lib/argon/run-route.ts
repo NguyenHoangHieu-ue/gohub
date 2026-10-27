@@ -21,7 +21,7 @@ const FULL_HINTS = [
   // nhờ làm việc ra ngoài (deXuatThaoTac, act-tool.ts): đường nhanh không có công cụ đề xuất
   "gui tin", "nhan tin", "nhan cho", "tao task", "giao viec", "nhac toi", "nhac em", "dat lich", "len lich", "hen gio", "gui mail", "tao phieu", "tao doc", "tao sheet", "gui cho", " dm ",
   "portal", "mo trang", "doc trang", "xem trang", "tao anh", "ve anh", "banner", "thumbnail", "hinh anh",
-  "google drive", "google doc", "google sheet", "drive", "task lark", "viec lark", "ga4", "analytics", "search console", "gsc", "seo", "video", "reels", "tiktok", "hom truoc", "lan truoc", "da ban", "supabase", " sku", "catalog", "bang gia", "ncc ", "wiki",
+  "trinh duyet", " tab ", "tren may", "file may", "o dia", "google drive", "google doc", "google sheet", "drive", "task lark", "viec lark", "ga4", "analytics", "search console", "gsc", "seo", "video", "reels", "tiktok", "hom truoc", "lan truoc", "da ban", "supabase", " sku", "catalog", "bang gia", "ncc ", "wiki",
   "tren web", "tren mang", "internet", "google", "lark base", "bitable", "larksuite", "feishu", "http", " base ", "lark doc", "lark sheet",
   // ý định GHI/sửa (đường nhanh KHÔNG có công cụ ghi): phát hiện từ eval D3 — "Ghi vào sổ sự việc…" từng bị coi là tra cứu vì có chữ "sự việc"
   " ghi ", "ghi vao", " luu ", "cap nhat", " sua ", " xoa ", " bo di ", " nho ", "nho giup", "chuyen vao", "doi ten", "gan nhan",
