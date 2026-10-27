@@ -24,6 +24,7 @@ import type { ToolLogEntry } from "./tools"
 const SETTINGS = [`memory_proposals:${EVAL_USER}`, `argon_alerts:${EVAL_USER}`, `argon_security_log:${EVAL_USER}`]
 
 export async function wipeSideEffects() {
+  await supabaseAdmin.from("gp_pending_actions").delete().eq("username", EVAL_USER)   // đề xuất hành động (deXuatThaoTac) của lượt trước — không bao giờ được chạy
   await supabaseAdmin.from("argon_facts").delete().eq("username", EVAL_USER).neq("evidence", "eval-seed")
   await supabaseAdmin.from("app_settings").delete().in("key", SETTINGS)
 }
@@ -33,6 +34,7 @@ export async function evalReset() {
   for (const p of projs ?? []) await deleteProjectCascade(p.id as string)
   await supabaseAdmin.from("argon_facts").delete().eq("username", EVAL_USER)
   await supabaseAdmin.from("argon_mail_threads").delete().eq("username", EVAL_USER)
+  await supabaseAdmin.from("gp_pending_actions").delete().eq("username", EVAL_USER)
   await supabaseAdmin.from("app_settings").delete().in("key", SETTINGS)
 }
 
