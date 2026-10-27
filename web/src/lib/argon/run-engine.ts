@@ -77,7 +77,7 @@ function prepare(i: SegmentIn): Prepared {
     : fast && !FAST_TOOL_NAMES.includes(String(fname)) ? { name: fname, args: fargs, ok: false, chars: 0, result: "Đường nhanh chỉ tra cứu Kho; câu này cần công cụ khác — nói với Hiếu bấm Sâu hoặc hỏi lại kèm yêu cầu phân tích", at: new Date().toISOString() }
     : fname === ACT_NAME && khoUser ? await execActTool(fargs, { username: khoUser, used: i.tools!.log.filter(t => t.name === ACT_NAME && t.ok).length, tainted })
     : missionId && BROWSE_TOOL_NAMES.includes(String(fname)) ? await execBrowseTool(fname, fargs, { used: i.tools!.log.filter(t => t.name === fname).length, tainted, trusted: trustedUrlText(i.ctx.contents, i.tools!.log) })
-    : missionId && EXT_TOOL_NAMES.includes(String(fname)) ? await execExtTool(fname, fargs, i.tools!.log.filter(t => t.name === fname).length)
+    : missionId && EXT_TOOL_NAMES.includes(String(fname)) ? await execExtTool(fname, fargs, i.tools!.log.filter(t => t.name === fname).length, { tainted, username: khoUser })
     : khoUser && khoNames.has(String(fname)) ? await execKhoTool(fname, fargs, khoUser, { tainted })
     : (fname === LIST_NAME || fname === READ_NAME || fname === SEARCH_NAME) && missionId ? await execMissionSourceTool(fname, fargs, missionId)
     : (fname === FORECAST_TOOL_NAME || fname === SCORE_TOOL_NAME) && missionId ? await execMissionForecast(fname, fargs, missionId)
