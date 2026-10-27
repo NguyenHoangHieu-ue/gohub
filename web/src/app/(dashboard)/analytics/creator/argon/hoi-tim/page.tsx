@@ -208,7 +208,7 @@ export default function TroLyPage() {
           )}
         </section>
         {!member && showLive && <LiveSession title="Gấu Prime" onClose={() => setShowLive(false)} />}
-        {showDocs && <MyDocs onClose={() => setShowDocs(false)} refreshKey={up.stage} onError={onError} />}
+        {showDocs && <MyDocs onClose={() => setShowDocs(false)} refreshKey={up.stage} onError={onError} upload={files => void upload(files)} up={up} />}
         {showMemory && <MemoryPanel api="/api/creator/assistant/memory" floating onClose={() => setShowMemory(false)} />}
         {!member && showBench && detail && (
           <aside aria-label="Argon đang làm gì" className="fixed inset-x-2 bottom-2 z-30 h-[60vh] rounded-2xl shadow-2xl lg:static lg:inset-auto lg:z-auto lg:h-auto lg:w-[360px] lg:shrink-0 lg:shadow-none ag-card ag-card-flat !bg-[var(--ag-glass-strong)] overflow-hidden flex flex-col">

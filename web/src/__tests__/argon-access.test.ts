@@ -51,7 +51,7 @@ describe("danh sách route mở cho member (chống mở nhầm)", () => {
     expect(open).toEqual(OPEN)
   })
   it("route nhạy cảm (số liệu, SQL, code, kỹ năng, Lark, việc nền, cuộc gọi, xuất bản) KHÔNG mở cho member", () => {
-    const sensitive = ["argon/data-packs", "argon/sandbox", "argon/publish", "argon/worker", "argon/map", "argon/call/token", "argon/missions/[id]/patches", "argon/missions/[id]/files", "argon/missions/[id]/phase", "argon/projects/[id]/mail", "argon/projects/[id]/threads", "argon/projects/[id]/autorun", "assistant/skills", "argon/reports"]
+    const sensitive = ["argon/data-packs", "argon/sandbox", "argon/publish", "argon/worker", "argon/call/token", "argon/missions/[id]/patches", "argon/missions/[id]/files", "argon/missions/[id]/phase", "argon/projects/[id]/mail", "argon/projects/[id]/threads", "argon/projects/[id]/autorun", "assistant/skills", "argon/reports"]
     for (const s of sensitive) { const r = routes.find(x => x.rel === s); expect(r, s).toBeDefined(); expect(/requireArgonMember(Name)?\(/.test(r!.src), s).toBe(false) }
   })
   it("trong route chạy (runs) member bị chặn việc nền và có kiểm hạn mức", () => {

@@ -21,7 +21,7 @@ interface SkillVer { v: number; state: "candidate" | "approved" | "rejected" | "
 interface SkillRow { name: string; active: number | null; versions: SkillVer[] }
 const STATE_VN = { candidate: "chờ duyệt", approved: "đang dùng", rejected: "đã từ chối", retired: "bản cũ" } as const
 
-export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) {
+export function ViecCanDuyetPanel({ embedded = false, compact = false }: { embedded?: boolean; compact?: boolean }) {   // compact: gọn cho trang Hôm nay — tối đa 5 việc, không lọc loại, không mail chờ/kỹ năng
   const { data: session, status } = useSession()
   const router = useRouter()
   const access = useArgonAccess()
@@ -41,7 +41,7 @@ export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) 
   const load = useCallback(async () => { try { setData(await api<Inbox>("/api/creator/assistant/inbox")); setErr(null) } catch (e) { setErr((e as Error).message) } }, [])
   const loadSkills = useCallback(async () => { try { setSkills((await api<{ skills: SkillRow[] }>("/api/creator/assistant/skills")).skills.filter(s => s.versions.some(v => v.state === "approved" || v.state === "retired"))) } catch { /* mục phụ: lỗi không chặn danh sách chính */ } }, [])
   const loadMail = useCallback(async () => { try { const m = await api<{ threads: MailThreadRow[]; now: number }>("/api/creator/argon/mail-status"); setMail({ rows: m.threads, now: m.now }) } catch { /* mục phụ */ } }, [])
-  useEffect(() => { if (role === "creator") { void load(); void loadSkills(); void loadMail() } }, [role, load, loadSkills, loadMail])
+  useEffect(() => { if (role === "creator") { void load(); if (!compact) { void loadSkills(); void loadMail() } } }, [role, load, loadSkills, loadMail, compact])
   async function setThread(id: string, st: MailThreadStatus) {
     setMail(m => (m ? { ...m, rows: m.rows.map(r => (r.id === id ? { ...r, status: st, status_by: "manual" } : r)) } : m))
     try { await api("/api/creator/argon/mail-status", jsonInit("PATCH", { id, status: st })) } catch (e) { setErr((e as Error).message); await loadMail() }
@@ -101,7 +101,8 @@ export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) 
   }
 
   if (role !== "creator") return null
-  const items = (data?.items ?? []).filter(i => kind === "all" || i.kind === kind)
+  const allItems = (data?.items ?? []).filter(i => kind === "all" || i.kind === kind)
+  const items = compact ? allItems.slice(0, 5) : allItems
   const partner = mail ? bucketThreads(mail.rows).waitingPartner : []
   const mailNow = mail?.now ?? Date.now()
   const counts = (k: InboxKind) => (data?.items ?? []).filter(i => i.kind === k).length
@@ -112,13 +113,14 @@ export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) 
         <Inbox size={20} className="text-violet-600" />
         <h2 className={embedded ? "font-semibold text-gray-900 dark:text-slate-100" : "text-xl font-bold text-gray-900 dark:text-slate-100"}>Việc cần duyệt</h2>
         {data && <span className="text-sm text-gray-500">{data.items.length} việc đang chờ anh</span>}
-        <button type="button" onClick={() => void load()} className="ml-auto text-[12px] text-violet-700 dark:text-violet-300 hover:underline">Làm mới</button>
+        {compact && (data?.items.length ?? 0) > 5 && <Link href="/analytics/creator/argon/viec-can-duyet" className="ml-auto text-[12px] font-medium text-violet-700 dark:text-violet-300 hover:underline">Xem tất cả {data?.items.length} →</Link>}
+        <button type="button" onClick={() => void load()} className={cn("text-[12px] text-violet-700 dark:text-violet-300 hover:underline", !(compact && (data?.items.length ?? 0) > 5) && "ml-auto")}>Làm mới</button>
       </div>
       {err && <div className="p-2.5 rounded-xl text-sm bg-red-50 text-red-700 border border-red-200">{err}</div>}
       {note && <div className="p-2.5 rounded-xl text-sm bg-emerald-50 text-emerald-800 border border-emerald-200">{note}</div>}
       {data?.failed.length ? <div className="p-2.5 rounded-xl text-[12.5px] bg-amber-50 text-amber-800 border border-amber-200 flex gap-1.5"><AlertTriangle size={14} className="mt-0.5 shrink-0" /><span>Không đọc được một số nguồn việc: {data.failed.join(" · ")}</span></div> : null}
 
-      <div className="flex flex-wrap gap-1.5 text-[12px]">
+      <div className={cn("flex flex-wrap gap-1.5 text-[12px]", compact && "hidden")}>
         <button type="button" onClick={() => setKind("all")} className={cn(btn, kind === "all" ? "border-violet-500 bg-violet-50 dark:bg-violet-900/30 font-medium" : "border-gray-200 dark:border-slate-700")}>Tất cả ({data?.items.length ?? 0})</button>
         {(Object.keys(KIND_LABEL) as InboxKind[]).filter(k => counts(k) > 0).map(k => (
           <button key={k} type="button" onClick={() => setKind(k)} className={cn(btn, kind === k ? "border-violet-500 bg-violet-50 dark:bg-violet-900/30 font-medium" : "border-gray-200 dark:border-slate-700")}>{KIND_LABEL[k]} ({counts(k)})</button>
@@ -153,7 +155,7 @@ export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) 
           </ul>
         )}
 
-      <section className="pt-4 space-y-2" aria-label="Mail chờ đối tác">
+      <section className={cn("pt-4 space-y-2", compact && "hidden")} aria-label="Mail chờ đối tác">
         <div className="flex items-center gap-2">
           <h2 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Mail anh đã gửi, đang chờ đối tác ({partner.length})</h2>
           <button type="button" onClick={() => void rescanMail()} disabled={mailBusy} className={cn("ml-auto inline-flex items-center gap-1 text-[12px] text-violet-700 dark:text-violet-300 hover:underline disabled:opacity-50", member && "hidden")}>
@@ -178,7 +180,7 @@ export function ViecCanDuyetPanel({ embedded = false }: { embedded?: boolean }) 
         )}
       </section>
 
-      {skills.length > 0 && (
+      {!compact && skills.length > 0 && (
         <section className="pt-4 space-y-2" aria-label="Kỹ năng đã học">
           <h2 className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Kỹ năng Gấu Pro đã học ({skills.length})</h2>
           {skills.map(s => (
