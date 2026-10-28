@@ -119,3 +119,5 @@
 .ag-bubble-ai { background: var(--ag-glass-strong); }
 .ag-chat-scroll { overscroll-behavior: contain; }
 .ag-aurora::before, .ag-aurora::after { will-change: auto; }
+/* Hội thoại dài (hàng chục nghìn px): lượt nằm ngoài màn hình không cần dựng/bố cục cho tới khi cuộn tới */
+.ag-run-row { content-visibility: auto; contain-intrinsic-size: auto 480px; }

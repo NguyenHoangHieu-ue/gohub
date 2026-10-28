@@ -55,10 +55,10 @@ export function ArgonNav({ variant = "bar" }: { variant?: "bar" | "side" }) {
     </div>
   )
   const tabs = !member && (
-    <div className={cn("ag-tabs", side && "!flex w-full")} role="tablist">
+    <div className={cn("ag-tabs", side && "!flex w-full !gap-0.5 !p-1")} role="tablist">
       {TABS.map(t => (
-        <Link key={t.href} href={t.href} aria-current={tabOn(t) ? "page" : undefined} className={cn("ag-tab", side && "flex-1 justify-center !px-2 !text-[13px]")}>
-          <t.icon size={15} />{t.label}
+        <Link key={t.href} href={t.href} aria-current={tabOn(t) ? "page" : undefined} className={cn("ag-tab", side && "min-w-0 flex-1 justify-center !gap-1 !px-1.5 !text-[12.5px]")}>
+          <t.icon size={side ? 13 : 15} className="shrink-0" />{t.label}
           {"badge" in t && t.badge && pending > 0 && <span className="ag-badge">{pending}</span>}
         </Link>
       ))}

@@ -67,7 +67,7 @@ const RunRow = memo(function RunRow({ r, live, bgLive, simple, basic, busy, rati
   onCancelBg: (runId: string) => void; onResume: (runId: string) => void
 }) {
   return (
-            <div key={r.id} className="space-y-3">
+            <div className="ag-run-row space-y-3">
               <div className="flex justify-end"><div className="max-w-[82%] ag-bubble-user px-4 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-wrap">{r.prompt}</div></div>
               <div className="flex items-start gap-2.5">
                 <BearAvatar size={28} className="mt-0.5" />
