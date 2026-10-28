@@ -1,6 +1,6 @@
 # Plan — Rollup Analytics (bảng tổng hợp sẵn trong Turso)
 
-> Trạng thái: **ĐÃ DUYỆT thiết kế, CHƯA code** (2026-10-28). Bản có hình vẽ đầy đủ: Artifact `claude.ai/artifact/AKopqC2UApuk2iyFD1ia8a`.
+> Trạng thái: **P0 (nền móng) ĐÃ LÀM trên `staging` (2026-10-28)** — chưa tab nào đọc rollup (P1 là Quarter Report). Xem §14. Bản có hình vẽ đầy đủ: Artifact `claude.ai/artifact/AKopqC2UApuk2iyFD1ia8a`.
 > Đọc file này TRƯỚC khi đặt tên hay viết bất cứ thứ gì liên quan rollup. Đổi thiết kế thì sửa file này cùng lúc.
 
 ## 1. Điều đã chốt (Hiếu, 2026-10-28)
@@ -184,3 +184,15 @@ Cache — ba lớp, cả ba phải xử lý:
 1. **Máy chủ (L1/L2 `cachedQuery`)**: khóa gồm `data_version` + băm cấu hình → bản mới = khóa mới, không phục vụ bản cũ (đường hiện tại còn trả bản cũ tới 6 giờ sau hết TTL). `dm_*` và rollup ghi cùng một lần, tăng `data_version` ở BƯỚC CUỐI, nên không có trạng thái nửa mới nửa cũ.
 2. **CDN**: `CACHE_HEADERS = s-maxage=300, stale-while-revalidate=600` → tên cũ có thể thấy thêm 5–15 phút theo URL. Route rollup dùng `Cache-Control: no-store` (đã đủ nhanh, không cần cache biên). **Phải làm ở P0/P1.**
 3. **Trình duyệt (`lib/stale-first.ts`, sessionStorage)**: thêm `data_version` vào khóa để khi dữ liệu đổi không hiện bản cũ thoáng qua.
+
+## 14. P0 — kết quả thực hiện (2026-10-28, `staging`)
+
+Mã: `web/src/lib/rollup/` (`pure`, `client`, `schema`, `source`, `builder`), route `/api/cron/rollup-refresh` (modes `init|refresh|backfill|window|dims|reconcile|health`, Bearer CRON_SECRET), `/api/analytics/rollup-health` (Creator), test `rollup-pure.test.ts` (13).
+- **DB:** chưa tạo `intel-rollup` riêng (cần tài khoản Turso). Tạm dùng DB config qua `TURSO_URL` — bảng có tiền tố `ru_`/`dm_`. Khi tạo DB riêng: đặt `ROLLUP_TURSO_URL/ROLLUP_TURSO_AUTH_TOKEN` rồi chạy `mode=init` + `backfill` + `dims` lại; không cần đổi mã.
+- **Ghi giao dịch:** request `batch` của Hrana (COMMIT chỉ khi các bước trước đều ok, ngược lại ROLLBACK); mỗi ngày một giao dịch (xoá ngày rồi chèn lại).
+- **Số đo thật:** dựng 22 tháng cho `ful` (666 ngày, 205.381 dòng khách, 258.442 dòng SKU) và `sal` (319 ngày, 10.672 / 145.387); `dm_customer` 355.420, `dm_sku` 29.305, `dm_source` 138, `dm_staff` 155. Mỗi tháng dựng ~10s (2 truy vấn gom, tuần tự), làm mới 45 ngày ~3–6s và chỉ ghi ngày đổi (hash cyrb53); dựng khách 355k dòng ~75s sau khi gộp ghi theo trang. Ghi tháng 10/2026 ≈ 1,0M lượt (10% hạn mức, đa số là dựng lần đầu).
+- **Đối chiếu:** 46/46 (23 tháng × 2 cơ sở) khớp bảng thô về doanh thu, giá vốn, GP, số lượng, số dòng.
+- **Phát hiện dữ liệu:** 88 dòng ngày 31/12/2025 (đơn `BPTxxx*`) có `cogs`/`gp` = `NaN` trong `fact_fulfillment_revenue`; `SUM` thô thành NaN cho mọi tổng gồm ngày đó (các tab hiện tại cũng bị). Rollup coi NaN = 0 ở tiền/giá vốn/GP (`'NaN'::numeric`), nên tab chuyển sang rollup sẽ hết NaN: khác với đường thô ở đúng điểm này.
+- **Cột ngày:** `fact_sales_revenue.created_date` là **timestamp** (khác `fulfiled_date` là varchar); `fact_sales_revenue` có cả `cogs_amount_vnd`/`gross_profit_vnd` nhưng các tab hiện tại coi Created không có margin → rollup `sal` giữ 0 để khớp. Có cột `etl_updated_at` (dấu thời gian ETL) có thể dùng phát hiện ngày đổi sau này.
+- **Kích hoạt:** `etl-cache-sync` (cron-job.org đã gọi 10–15') sau khi phát hiện ETL xong sẽ tự gọi `refreshRecent(45)` ở nền (không cần job ngoài mới). Vercel Cron thêm: `rollup-refresh?mode=reconcile&months=3` (03:00 ICT hằng đêm, báo Lark khi lệch) và `?mode=dims` (Chủ nhật).
+- **Còn lại của P0:** tạo DB `intel-rollup` riêng (Hiếu), trang health trong Data Map, theo dõi hạn mức Turso 70%/90% (chốt chặn chưa code), thời gian ETL đơn tạo.

@@ -13,6 +13,9 @@
     "src/app/api/cron/cs-tickets-mirror/route.ts": {
       "maxDuration": 300
     },
+    "src/app/api/cron/rollup-refresh/route.ts": {
+      "maxDuration": 300
+    },
     "src/app/api/cron/prewarm-analytics/route.ts": {
       "maxDuration": 60
     },
@@ -96,6 +99,14 @@
     {
       "path": "/api/cron/refresh-trends",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/rollup-refresh?mode=reconcile&months=3",
+      "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/cron/rollup-refresh?mode=dims",
+      "schedule": "30 20 * * 0"
     },
     {
       "path": "/api/cron/my-metrics-lark-scan",
