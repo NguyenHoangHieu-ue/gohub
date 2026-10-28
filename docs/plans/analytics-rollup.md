@@ -206,3 +206,12 @@ Mã: `lib/rollup/filters.ts` (bộ lọc SQLite tương đương `shipFilter`/`i
 - **Bẫy:** các request thử PHẢI thêm tham số khác nhau (`&_b=…`): CDN cache theo URL (`s-maxage=300`) nên cùng URL `nocache=1` vẫn trả bản cũ — đúng lỗ hổng cache biên đã nêu ở §13.
 - **Trạng thái cờ:** `shadow` (trả đường thô). Cờ nằm trong app_settings dùng CHUNG staging/production: khi merge `main`, production đọc cùng cờ.
 - **Còn lại của P1:** vòng đời khách (lifecycle) từ `ru_cust_day`; các route khác của tab (`quarterly-b2b-customers`, `squad-progress`, `quarterly-daily`, `quarterly-customer-lifecycle`); bỏ cache biên cho route rollup; 7 ngày shadow trước khi bật `on`.
+
+### 15b. Cập nhật 2026-10-28 (tối)
+- **DB riêng `intel-rollup` đã chạy** (Hiếu tạo, env đã lên Vercel; `health` báo `dedicated: true`). Đã dựng lại toàn bộ trong DB mới: 44 tháng-cơ sở (~4s/tháng, nhanh hơn lần đầu), `dm_*` 355.420 khách (119 trang, 26s), đối chiếu 46/46 khớp, ghi tháng 10 ≈ 1,0M lượt. Các bảng `ru_*`/`dm_*` tạm trong DB config cần dọn (xem việc còn lại).
+- **`lib/rollup/serve.ts`**: khuôn dùng chung cho mọi route (`rollupCtx`, `serve`, `ruKey`, `ruHeaders`): off/shadow/on + khoá cache có version + bỏ cache biên khi `on`.
+- **Vòng đời khách B2B** (`lifecycle.ts`): rollup = thô 112.316/112.316 khách (VN 107.924, US 4.321), 0 lệch ngày mua đầu và 0 lệch PIC. Đọc rollup mất 24–235ms thay vì quét thô.
+- **`quarterly-daily`** (`daily.ts`): shadow 7 tổ hợp, 6/7 khớp; 1 lệch là NGÀY HÔM NAY của quý đang chạy (thô 180,5M ≠ rollup 169,5M) do ETL nạp thêm giữa hai lần làm mới (độ trễ ≤ 1 giờ theo Q4, không phải lỗi). Response `on`: 6/7 giống hệt, cùng điểm trên; thời gian 0,6–1,9s so với 1,4–4,1s.
+- **Cờ hiện tại:** `quarterly-report` và `quarterly-daily` = `shadow`.
+- **Bài học quy trình:** KHÔNG nối `tsc | head && git commit` (head luôn trả 0, đã lỡ commit bản lỗi cú pháp một lần, build fail, sửa ngay): kiểm `tsc; echo rc=$?`.
+- **Còn lại của P1:** `quarterly-b2b-customers`, `squad-progress`, `quarterly-customer-lifecycle`; shadow 7 ngày; dọn bảng tạm ở DB config.
