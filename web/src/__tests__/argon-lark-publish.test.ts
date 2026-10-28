@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { FactRow } from "@/lib/argon/facts-pure"
 import type { MailThreadRow } from "@/lib/argon/mail-status-pure"
-import { contentHash, factsFor, indexMarkdown, profileMarkdown, threadsFor, vendorTargets } from "@/lib/argon/lark-publish-pure"
+import { contentHash, factsFor, indexMarkdown, profileMarkdown, threadsFor, vendorTargets, wikiNodesFor, memoriesFor } from "@/lib/argon/lark-publish-pure"
 
 const F = (id: string, o: Partial<FactRow> = {}): FactRow => ({
   id, username: "u", type: "doi_gia", vendor: "3HK", subject: "Thái Lan", attribute: "", value: "", summary: "Giá 3.5 HKD/GB", evidence: "", effective_from: "2026-11-15", expires_at: null, status: "active", origin: "auto", edited: false,
@@ -55,5 +55,23 @@ describe("vendorTargets", () => {
     expect(t[0].codes).toEqual(["SI", "SS"])
     expect(t[1].entity).toEqual({ id: 1, aliases: ["WM"], mentions: 9 })
     expect(t[2].entity).toBeNull()
+  })
+})
+
+describe("Wiki + trí nhớ theo vendor", () => {
+  const nodes = [
+    { title: "3HK", nodeToken: "a", objType: "docx", parent: null }, { title: "Chính sách hoàn tiền", nodeToken: "b", objType: "docx", parent: "a" },
+    { title: "Hợp đồng 3HK Datapool", nodeToken: "c", objType: "docx", parent: null }, { title: "Bảng giá", nodeToken: "d", objType: "sheet", parent: "a" },
+    { title: "Elite", nodeToken: "e", objType: "docx", parent: null },
+  ]
+  it("wikiNodesFor: khớp theo từ trong tiêu đề, lấy cả trang con, chỉ docx", () => {
+    expect(wikiNodesFor({ name: "3HK", aliases: [] }, nodes).map(n => n.nodeToken).sort()).toEqual(["a", "b", "c"])
+    expect(wikiNodesFor({ name: "Elite", aliases: [] }, nodes).map(n => n.nodeToken)).toEqual(["e"])
+    expect(wikiNodesFor({ name: "Joytel", aliases: [] }, nodes)).toEqual([])
+  })
+  it("memoriesFor: chỉ loại cho phép và phải nhắc đúng tên vendor theo từ", () => {
+    const m = [{ kind: "decision", content: "Với 3HK luôn đặt trước 2 ngày" }, { kind: "preference", content: "3HK em trả lời ngắn" }, { kind: "other", content: "Elite chậm phản hồi" }, { kind: "decision", content: "Nhật dùng KDDI" }]
+    expect(memoriesFor({ name: "3HK", aliases: [] }, m)).toEqual(["Với 3HK luôn đặt trước 2 ngày"])
+    expect(memoriesFor({ name: "Elite", aliases: [] }, m)).toEqual(["Elite chậm phản hồi"])
   })
 })

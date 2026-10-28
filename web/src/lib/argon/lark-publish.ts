@@ -1,9 +1,9 @@
 import { appendMarkdown, docUrl } from "@/lib/agents/creator/tools/lark-docs"
 import { listFacts } from "./facts"
 import { getEntity, listEntities } from "./graph"
-import { larkToken } from "./lark"
+import { larkToken, listWikiNodes, readLark } from "./lark"
 import { listMailThreads } from "./mail-status"
-import { contentHash, factsFor, indexMarkdown, profileMarkdown, threadsFor, vendorTargets, type IndexEntry } from "./lark-publish-pure"
+import { contentHash, factsFor, indexMarkdown, profileMarkdown, memoriesFor, threadsFor, vendorTargets, wikiNodesFor, type IndexEntry, type WikiNodeLite } from "./lark-publish-pure"
 import { vnToday } from "./facts-pure"
 
 export * from "./lark-publish-pure"
@@ -11,11 +11,13 @@ const sb = async () => (await import("@/lib/supabase")).supabaseAdmin
 const L = "https://open.larksuite.com/open-apis"
 const FOLDER_NAME = "GoHub · Hồ sơ Argon"
 const MAX_PROFILES = 60
+const WIKI_CHARS = 5000   // trích tối đa mỗi trang Wiki (bản gốc ở Wiki)
+const DEFAULT_WIKI_SPACE = "7654497822921739997", DEFAULT_WIKI_HOST = "esimgohub.sg.larksuite.com"   // Wiki vendor của GoHub; đổi bằng PUT /api/creator/argon/publish { wikiUrl }
 
 // Xuất MỘT CHIỀU: Argon (Supabase/Turso) là gốc, Lark chỉ để đọc. Mỗi vendor/thực thể quan trọng một tài liệu Lark trong thư mục "GoHub · Hồ sơ Argon",
 // cập nhật khi nội dung đổi (so hash) + một tài liệu mục lục. Trạng thái (token tài liệu, hash) lưu app_settings — không cần migration.
 export interface PubDoc { token: string; url: string; hash: string; title: string }
-export interface PubState { enabled: boolean; folderToken?: string; folderUrl?: string; index?: PubDoc; docs: Record<string, PubDoc>; lastRunAt?: string }
+export interface PubState { enabled: boolean; folderToken?: string; folderUrl?: string; wikiSpaceId?: string; wikiHost?: string; index?: PubDoc; docs: Record<string, PubDoc>; lastRunAt?: string }
 const stateKey = (username: string) => `argon_lark_pub:${username}`
 
 export async function loadPubState(username: string): Promise<PubState> {
@@ -62,7 +64,7 @@ async function writeDoc(token: string, folder: string, existing: PubDoc | undefi
   return { doc: { token: id, url: (await docUrl(token, id, "docx")) ?? `https://www.larksuite.com/docx/${id}`, hash: hashOf, title }, action: "created" }
 }
 
-export interface PublishResult { profiles: number; created: number; updated: number; same: number; errors: string[]; folderUrl?: string; indexUrl?: string; stale?: { name: string; url: string }[] }
+export interface PublishResult { profiles: number; created: number; updated: number; same: number; errors: string[]; folderUrl?: string; indexUrl?: string; wikiNodes?: number; wikiMissing?: string[]; stale?: { name: string; url: string }[] }
 
 /** Dựng và cập nhật hồ sơ Lark cho các thực thể quan trọng (vendor + thực thể có sự việc đang hiệu lực), rồi mục lục. Dừng trước `deadline`. */
 export async function publishProfiles(username: string, opts: { deadline?: number; force?: boolean } = {}): Promise<PublishResult> {
@@ -84,11 +86,36 @@ export async function publishProfiles(username: string, opts: { deadline?: numbe
   }).sort((a, b) => b.facts.length - a.facts.length || (b.entity?.mentions ?? 0) - (a.entity?.mentions ?? 0) || a.name.localeCompare(b.name))
   const entries: IndexEntry[] = []
 
+  // Trí nhớ bot của CHÍNH người dùng (bỏ thói quen tự quan sát) — chỉ dòng nhắc tên vendor, lọc loại ở memoriesFor.
+  const { data: memRows } = await (await sb()).from("assistant_memory").select("kind,content").eq("username", username).eq("archived", false).not("source", "like", "auto-habit:%").limit(3000)
+  const memories = (memRows ?? []) as { kind: string; content: string }[]
+  // Wiki Lark vendor (chính sách/điều khoản): lỗi (chưa là thành viên không gian, thiếu quyền…) không chặn việc xuất hồ sơ.
+  let wikiNodes: WikiNodeLite[] = []
+  try { wikiNodes = await listWikiNodes(token, st.wikiSpaceId ?? DEFAULT_WIKI_SPACE) } catch (err) { out.errors.push(`Wiki: ${(err as Error).message}`.slice(0, 200)) }
+  const wikiHost = st.wikiHost ?? DEFAULT_WIKI_HOST
+  const wikiText = new Map<string, string>()
+  const readWiki = async (n: WikiNodeLite): Promise<string> => {
+    if (!wikiText.has(n.nodeToken)) {
+      let text = ""
+      try { text = (await readLark({ kind: "wiki", token: n.nodeToken }, token)).text.trim().slice(0, WIKI_CHARS) } catch (err) { out.errors.push(`Wiki "${n.title}": ${(err as Error).message}`.slice(0, 200)) }
+      wikiText.set(n.nodeToken, text)
+    }
+    return wikiText.get(n.nodeToken)!
+  }
+  out.wikiNodes = wikiNodes.length; out.wikiMissing = []
+
   for (const t of targets.slice(0, MAX_PROFILES)) {
     if (Date.now() > deadline) break
     try {
       const d = t.entity ? await getEntity(username, t.entity.id) : null
+      const wiki: { title: string; url: string; text: string }[] = []
+      for (const n of wikiNodesFor(t.p, wikiNodes).slice(0, 4)) {
+        const text = await readWiki(n)
+        if (text) wiki.push({ title: n.title, url: `https://${wikiHost}/wiki/${n.nodeToken}`, text })
+      }
+      if (wikiNodes.length && !wiki.length) out.wikiMissing.push(t.name)
       const md = profileMarkdown({
+        wiki, memories: memoriesFor(t.p, memories),
         name: t.name, kind: "vendor", aliases: t.p.aliases, facts: t.facts, changes: t.facts.filter(f => f.change_note && Date.now() - Date.parse(f.recorded_at) < 14 * 86_400_000),
         related: (d?.related ?? []).map(r => ({ name: r.name, kind: r.kind, rels: r.rels })), mentions: d?.mentions ?? [], threads: threadsFor(t.p, threads),
       })

@@ -10,6 +10,8 @@ export interface ProfileInput {
   related: { name: string; kind: EntityKind; rels: string[] }[]
   mentions: { sourceName: string; sourceDate: string | null; snippet: string }[]
   threads: MailThreadRow[]                           // luồng mail đang chờ liên quan
+  wiki?: { title: string; url: string; text: string }[]   // trang Wiki Lark của vendor (chính sách/điều khoản…): bản gốc ở Wiki, đây chỉ là trích
+  memories?: string[]                                // điều Creator đã dặn bot có nhắc vendor này
 }
 
 const dmy = (d: string | null) => (d && d.length >= 10 ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "")
@@ -18,6 +20,10 @@ const cell = (s: string) => s.replace(/\|/g, "/").replace(/\s+/g, " ").trim()
 /** Markdown hồ sơ 1 thực thể. KHÔNG chứa ngày giờ cập nhật (để băm nội dung ổn định); ngày cập nhật do nơi gọi thêm riêng. */
 export function profileMarkdown(p: ProfileInput, now = Date.now()): string {
   const out: string[] = [`> ${ENTITY_KINDS[p.kind]}${p.aliases.length ? ` · còn gọi: ${p.aliases.join(", ")}` : ""}. Tài liệu TỰ SINH từ Kho Argon — sửa tay ở đây sẽ bị ghi đè; muốn đổi thông tin hãy sửa ở Argon (Kho › Sổ sự việc).`]
+  if (p.wiki?.length) {
+    out.push("", "## Chính sách và thông tin vendor (trích từ Wiki)", "", "Bản gốc nằm ở Wiki Lark; phần dưới chỉ là trích, đổi nội dung hãy sửa ở Wiki.")
+    for (const w of p.wiki) out.push("", `### [${cell(w.title)}](${w.url})`, "", w.text)
+  }
   out.push("", "## Sự việc đang hiệu lực")
   if (!p.facts.length) out.push("", "Không có sự việc nào đang hiệu lực.")
   else {
@@ -28,6 +34,10 @@ export function profileMarkdown(p: ProfileInput, now = Date.now()): string {
   if (p.changes.length) {
     out.push("", "## Thay đổi so với tin cũ", "")
     for (const f of p.changes.slice(0, 10)) out.push(`- ${cell(f.summary)} — ${cell(f.change_note)}${f.source_date ? ` (tin ngày ${dmy(f.source_date)})` : ""}`)
+  }
+  if (p.memories?.length) {
+    out.push("", "## Điều đã dặn bot về vendor này", "")
+    for (const m of p.memories.slice(0, 20)) out.push(`- ${m}`)
   }
   const open = p.threads.filter(t => t.status === "waiting_me" || t.status === "waiting_partner")
   if (open.length) {
@@ -86,4 +96,28 @@ export function vendorTargets(db: { vendor_code: string; name: string }[], entit
     byName.set(k, { name, codes: [v.vendor_code], entity: e ? { id: e.id, aliases: e.aliases, mentions: e.mentions } : null })
   }
   return [...byName.values()]
+}
+
+export interface WikiNodeLite { title: string; nodeToken: string; objType: string; parent: string | null }
+const hasWord = (hay: string, key: string) => ` ${hay} `.includes(` ${key} `)
+const nameKeys = (p: { name: string; aliases: string[] }) => [p.name, ...p.aliases].map(fold).filter(k => k.length >= 3)
+
+/** Trang Wiki của một vendor: trang có tiêu đề chứa nguyên cụm tên/bí danh vendor (theo từ), cộng mọi trang con của chúng. Chỉ lấy trang đọc được (docx). */
+export function wikiNodesFor(p: { name: string; aliases: string[] }, nodes: WikiNodeLite[]): WikiNodeLite[] {
+  const keys = nameKeys(p)
+  const direct = nodes.filter(n => keys.some(k => hasWord(fold(n.title), k)))
+  const picked = new Map<string, WikiNodeLite>(direct.map(n => [n.nodeToken, n]))
+  let grew = true
+  while (grew) {   // trang con (mọi cấp) của trang đã khớp
+    grew = false
+    for (const n of nodes) if (!picked.has(n.nodeToken) && n.parent && picked.has(n.parent)) { picked.set(n.nodeToken, n); grew = true }
+  }
+  return [...picked.values()].filter(n => n.objType === "docx")
+}
+
+/** Trí nhớ bot liên quan vendor: chỉ loại quyết định/dự án/người/khác (bỏ hồ sơ + sở thích cá nhân), và phải nhắc đúng tên/bí danh vendor (theo từ). */
+export const MEMORY_KINDS_PUBLISHED = ["decision", "project", "person", "other"] as const
+export function memoriesFor(p: { name: string; aliases: string[] }, mems: { kind: string; content: string }[]): string[] {
+  const keys = nameKeys(p)
+  return mems.filter(m => (MEMORY_KINDS_PUBLISHED as readonly string[]).includes(m.kind) && keys.some(k => hasWord(fold(m.content), k))).map(m => m.content.replace(/\s+/g, " ").trim())
 }

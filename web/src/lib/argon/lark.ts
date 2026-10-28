@@ -152,3 +152,24 @@ export async function larkToken(): Promise<string> {
   if (!t) throw new Error('Chưa kết nối Lark của Creator — bấm "Kết nối Lark" ở Creator Settings')
   return t
 }
+
+export interface WikiNode { title: string; nodeToken: string; objType: string; parent: string | null; hasChild: boolean }
+/** Liệt kê trang của một không gian Wiki (đệ quy tới `maxDepth`, tối đa `max` trang). Cần người dùng Lark là thành viên không gian đó. */
+export async function listWikiNodes(token: string, spaceId: string, opts: { maxDepth?: number; max?: number } = {}): Promise<WikiNode[]> {
+  const maxDepth = opts.maxDepth ?? 3, max = opts.max ?? 400
+  const out: WikiNode[] = []
+  const walk = async (parent: string | null, depth: number): Promise<void> => {
+    let pageToken = ""
+    do {
+      const d = await lk(token, `/wiki/v2/spaces/${encodeURIComponent(spaceId)}/nodes?page_size=50${parent ? `&parent_node_token=${parent}` : ""}${pageToken ? `&page_token=${pageToken}` : ""}`)
+      for (const n of (d.items ?? []) as { title?: string; node_token: string; obj_type: string; has_child?: boolean }[]) {
+        if (out.length >= max) return
+        out.push({ title: String(n.title ?? ""), nodeToken: n.node_token, objType: n.obj_type, parent, hasChild: !!n.has_child })
+        if (n.has_child && depth < maxDepth) await walk(n.node_token, depth + 1)
+      }
+      pageToken = d.has_more ? d.page_token : ""
+    } while (pageToken && out.length < max)
+  }
+  await walk(null, 0)
+  return out
+}
