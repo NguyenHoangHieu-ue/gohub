@@ -123,7 +123,9 @@ export async function syncSmallDims(): Promise<{ source: number; sku: number; st
   await ensureRollupSchema()
   const [src, sku, staff] = [await fetchDimSource(), await fetchDimSku(), await fetchDimStaff()]
   const skipped: string[] = []
-  const replace = async (name: string, rows: Record<string, string | null>[], cols: string[], table: string): Promise<void> => {
+  const replace = async (name: string, input: Record<string, string | null>[], cols: string[], table: string): Promise<void> => {
+    // Khoá TRIM() có thể trùng giữa các dòng dim (vd dim_sku): giữ dòng đầu tiên của mỗi khoá, như một phép join LEFT lấy dòng đầu.
+    const rows = [...new Map(input.map(r => [r[cols[0]], r] as const).reverse()).values()].reverse()
     const h = hashStr(JSON.stringify(rows))
     if ((await getMeta(`dimhash:${name}`)) === h) { skipped.push(name); return }
     const stmts: Stmt[] = [{ sql: `DELETE FROM ${table}` }]
