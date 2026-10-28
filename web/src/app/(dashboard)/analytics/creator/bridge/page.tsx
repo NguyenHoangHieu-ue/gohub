@@ -86,7 +86,7 @@ function BridgeSettings({ isCreator }: { isCreator: boolean }) {
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-          <h2 className="font-bold text-slate-800">Token pairing</h2>
+          <h2 className="font-bold text-slate-800">Kết nối Bridge</h2>
           {!loading && (
             <span className={cn("flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg",
               connected ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500")}>
@@ -96,6 +96,9 @@ function BridgeSettings({ isCreator }: { isCreator: boolean }) {
           )}
         </div>
         <div className="p-6 space-y-4">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] leading-relaxed text-emerald-900">
+            <b className="font-semibold">Cách nhanh (extension 1.4.0 trở lên):</b> cài extension, rồi chỉ cần <b className="font-semibold">mở trang này hoặc Gấu Prime khi đã đăng nhập</b> — extension tự nhận tài khoản của bạn, <b className="font-semibold">không phải dán token</b>. Phần token bên dưới chỉ dùng khi bạn cài bản cũ hoặc cần ghép nối tay.
+          </div>
           {loading ? (
             <div className="text-xs text-slate-400">Đang tải...</div>
           ) : (

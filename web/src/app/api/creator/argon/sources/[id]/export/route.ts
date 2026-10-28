@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { ownSource, requireArgonUser } from "@/lib/argon/server"
+import { ownSource } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { toDocx, toXlsx } from "@/lib/argon/export"
 
 export const dynamic = "force-dynamic"
 
 // GET ?format=docx|xlsx|md → tải phiên bản hiện tại của nguồn (chữ đã trích/sửa; không giữ định dạng file gốc).
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const src = await ownSource(params.id, username)
   if (!src) return NextResponse.json({ error: "Không tìm thấy nguồn" }, { status: 404 })

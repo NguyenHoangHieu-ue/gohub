@@ -15,7 +15,6 @@ import { ensureIndexed, pruneOrphans } from "@/lib/argon/index-db"
 import { digestPending } from "@/lib/argon/kho-digest"
 import { pruneGraph } from "@/lib/argon/graph"
 import { loadPubState, publishProfiles } from "@/lib/argon/lark-publish"
-import { pruneEvents } from "@/lib/agent-events"
 import { argonUsernames, runFactsNightly } from "@/lib/argon/facts"
 import { runKpiWatch } from "@/lib/argon/kpi-watch"
 import { suggestSkill } from "@/lib/argon/skill-suggest"
@@ -83,7 +82,6 @@ async function run(req: NextRequest) {
     }
     await pruneGraph(everyId).catch(e => search.errors.push(`graph: ${(e as Error).message}`))
   } catch (e) { search.errors.push((e as Error).message) }
-  await pruneEvents().catch(() => undefined)   // sự kiện Bản đồ vận hành giữ 3 ngày
   // Sổ sự việc: tóm tắt + trích sự việc có hạn từ nguồn mới (mail/thread/file chưa xử lý), rồi đánh dấu hết hạn, nhắc tới hạn và gửi 1 tin tóm tắt "đã ghi gì" cho Hiếu.
   const facts: { user: string; digested: number; remaining: number; added: number; due: number; expired: number; sent: boolean; errors: string[] }[] = []
   try {

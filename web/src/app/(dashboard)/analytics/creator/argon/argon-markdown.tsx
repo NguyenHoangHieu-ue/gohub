@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm"
 import { Check, Copy, Download, ExternalLink, FileCode2, Wand2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { isReportHtml, reportTitle } from "@/lib/argon/report"
+import { CALLOUT_MAX_CHARS, tidyAnswer } from "@/lib/argon/answer-format"
 import { ReportViewer, downloadReport } from "./report-viewer"
 
 // Khung hiển thị câu trả lời của Argon: tiêu đề có vạch nhấn, bảng cuộn ngang có sọc, hộp "Kết luận"/"Lưu ý", checklist, chip trích nguồn, khối mã có nút chép.
@@ -36,12 +37,17 @@ function ReportCard({ html }: { html: string }) {
   )
 }
 
+// Thành viên không xem được Argon làm gì: ẩn khối mã (trừ report HTML, là kết quả) và chip [#N] trỏ tới Bàn làm việc.
+const HideCodeCtx = createContext(false)
+
 function CodeBlock({ children }: { children?: ReactNode }) {
   const [done, setDone] = useState(false)
+  const hide = useContext(HideCodeCtx)
   const code = Children.toArray(children).find(isValidElement) as { props: { className?: string; children?: ReactNode } } | undefined
   const text = textOf(code?.props.children ?? children).replace(/\n$/, "")
   const lang = /language-([\w-]+)/.exec(code?.props.className ?? "")?.[1]
   if (lang === "html" && isReportHtml(text)) return <ReportCard html={text} />
+  if (hide) return null
   return (
     <div className="my-3 rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1 bg-gray-100 dark:bg-slate-700/60 text-[11px] text-gray-500 dark:text-slate-300">
@@ -67,8 +73,8 @@ const components: Components = {
     const first = node?.children?.[0] as { tagName?: string } | undefined
     const lead = first?.tagName === "strong" ? textOf(Children.toArray(children)[0]).trim() : ""
     const tone = lead ? CALLOUT.find(([re]) => re.test(lead))?.[1] : undefined
-    if (tone) return <p className={cn("my-3 rounded-r-lg border-l-4 px-3.5 py-2.5 text-[14px] leading-relaxed", tone)}>{children}</p>
-    return <p className="my-2 text-[14px] leading-[1.7]">{children}</p>
+    if (tone && textOf(children).length <= CALLOUT_MAX_CHARS) return <p className={cn("my-3.5 rounded-r-lg border-l-4 px-3.5 py-2.5 text-[14.5px] leading-[1.7]", tone)}>{children}</p>
+    return <p className="my-3 text-[14.5px] leading-[1.75]">{children}</p>
   },
   strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-slate-50">{children}</strong>,
   em: ({ children }) => {
@@ -77,7 +83,7 @@ const components: Components = {
     return <em className="italic">{children}</em>
   },
   a: ({ href, children }) => href?.startsWith(STEP_HREF) ? <StepChip n={Number(href.slice(STEP_HREF.length))} /> : <a href={href} target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-300 underline underline-offset-2 hover:text-violet-800 break-words">{children}</a>,
-  ul: ({ children, className }) => <ul className={cn("my-2 space-y-1 [&_li>p]:my-0.5 text-[14px] leading-relaxed", className?.includes("contains-task-list") ? "list-none pl-1" : "list-disc pl-5 marker:text-violet-400")}>{children}</ul>,
+  ul: ({ children, className }) => <ul className={cn("my-3 space-y-1.5 [&_li>p]:my-0.5 text-[14.5px] leading-[1.7]", className?.includes("contains-task-list") ? "list-none pl-1" : "list-disc pl-5 marker:text-violet-400")}>{children}</ul>,
   ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 [&_li>p]:my-0.5 pl-5 text-[14px] leading-relaxed marker:font-semibold marker:text-violet-500">{children}</ol>,
   li: ({ children, className }) => <li className={cn("pl-0.5", className?.includes("task-list-item") && "flex items-start gap-2")}>{children}</li>,
   input: ({ checked }) => <span aria-hidden className={cn("mt-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border text-[10px] leading-none", checked ? "border-emerald-500 bg-emerald-500 text-white" : "border-gray-400 dark:border-slate-500")}>{checked ? "✓" : ""}</span>,
@@ -100,6 +106,7 @@ const STEP_HREF = "#argon-step-"
 const StepCtx = createContext<((n: number) => void) | null>(null)
 function StepChip({ n }: { n: number }) {
   const on = useContext(StepCtx)
+  if (useContext(HideCodeCtx)) return null
   if (!on) return <span className="text-[10px] align-super text-gray-400">[#{n}]</span>
   return <button type="button" onClick={() => on(n)} title={`Xem bước ${n} ở Bàn làm việc: câu SQL / số liệu / code đã cho ra con số này`} className="mx-0.5 align-baseline rounded bg-violet-100 dark:bg-violet-900/50 px-1 text-[10.5px] font-mono text-violet-700 dark:text-violet-200 hover:bg-violet-600 hover:text-white">#{n}</button>
 }
@@ -108,6 +115,6 @@ export function linkSteps(text: string): string {
   return text.replace(/\[#(\d+(?:\s*,\s*#?\d+)*)\]/g, (_m, g: string) => g.split(",").map(x => `[#${x.trim().replace("#", "")}](${STEP_HREF}${x.trim().replace("#", "")})`).join(""))
 }
 
-export function ArgonMarkdown({ text, onStep }: { text: string; onStep?: (n: number) => void }) {
-  return <StepCtx.Provider value={onStep ?? null}><div className="argon-md text-gray-800 dark:text-slate-200 min-w-0 break-words"><ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{linkSteps(text)}</ReactMarkdown></div></StepCtx.Provider>
+export function ArgonMarkdown({ text, onStep, hideCode = false }: { text: string; onStep?: (n: number) => void; hideCode?: boolean }) {
+  return <HideCodeCtx.Provider value={hideCode}><StepCtx.Provider value={onStep ?? null}><div className="argon-md text-gray-800 dark:text-slate-200 min-w-0 break-words"><ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{linkSteps(tidyAnswer(text))}</ReactMarkdown></div></StepCtx.Provider></HideCodeCtx.Provider>
 }

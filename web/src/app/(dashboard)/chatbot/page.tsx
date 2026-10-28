@@ -15,6 +15,7 @@ import { LiveSession } from "@/components/gau-pro/live-session"
 import { MeetingRecorder } from "@/components/be-gau/meeting-recorder"
 import { TranslateSession } from "@/components/be-gau/translate-session"
 import { ConversationSwitcher } from "@/components/chat/conversation-switcher"
+import { BearMiniAvatar } from "@/components/brand/bear"
 import { OverflowMenu, type MenuItem } from "@/components/chat/overflow-menu"
 import { DictationButton } from "@/components/chat/dictation-button"
 import { useStickToBottom } from "@/components/chat/use-stick-to-bottom"
@@ -738,9 +739,7 @@ export default function ChatbotPage() {
           {messages.map((msg, i) => i < hiddenCount ? null : (
             <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
               {msg.role === "assistant" && (
-                <div className="w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm shadow-brand-600/20">
-                  <Bot size={14} className="text-white" />
-                </div>
+                <BearMiniAvatar size={32} className="mt-0.5" />
               )}
               <div className="flex flex-col gap-1 max-w-[85%] md:max-w-[72%]">
                 {msg.role === "assistant" && msg.agent && (
@@ -777,9 +776,7 @@ export default function ChatbotPage() {
 
           {loading && (
             <div className="flex gap-3 justify-start">
-              <div className="w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-600/20">
-                <Bot size={14} className="text-white" />
-              </div>
+              <BearMiniAvatar size={32} />
               <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
                 <div className="flex gap-1.5 items-center">
                   {[0, 1, 2].map(i => (

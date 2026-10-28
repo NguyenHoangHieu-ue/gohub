@@ -69,6 +69,8 @@ export const DATA_TASK_TOOLS = [
   "executeSQL", "querySupabase", "queryProduct", "listSupabaseTables",
   "queryGA4", "queryGSC", "queryLarkBase",
   "buildReport", "b2bCustomerCm1", "compareVendorQuotes", "trackSKUWinRate",
+  // Gấu Prime (Argon): công cụ đọc dữ liệu công ty tương đương (sql, lấy báo cáo hệ thống, GA4/GSC, Lark Base, bảng Supabase)
+  "sql", "layDuLieuHeThong", "docGA4", "docGSC", "docLarkBase", "traBangSupabase",
 ] as const
 export const TASK_RULE_CHANGED_AT = "2026-10-11"
 export function isDataTask(tools: string[] | null | undefined, role?: string | null): boolean {

@@ -15,7 +15,7 @@ const GRANTS: { key: Key; label: string; endpoint: string; hint: string }[] = [
   { key: "market",  label: "Thị trường",     endpoint: "/api/creator/market-access",            hint: "Xem tab Thị trường & Báo giá (gồm báo giá nhà cung cấp)" },
   { key: "pricing", label: "Tính giá",       endpoint: "/api/creator/pricing-access",           hint: "Dùng chức năng Tính giá (chỉ tên gói và giá vốn)" },
   { key: "create",  label: "Tạo sản phẩm",   endpoint: "/api/creator/product-create-access",    hint: "Tạo sản phẩm (mã SKU/Product, xuất file import). Đã gồm Tính giá" },
-  { key: "argon",   label: "Gấu Prime", endpoint: "/api/creator/argon-access",             hint: "Dùng Trợ lý Argon ở mức thành viên: Hỏi + Kho + Việc cần duyệt của CHÍNH HỌ (không số liệu công ty/SQL/code, không chạy nền, có hạn mức mỗi ngày)" },
+  { key: "argon",   label: "Gấu Prime", endpoint: "/api/creator/argon-access",             hint: "Chỉ thấy mục Hỏi của Gấu Prime (Kho của chính họ; không thấy Hôm nay/Kho/Việc cần duyệt/Argon đang làm gì; không số liệu công ty, SQL, code, hành động ra ngoài, web; không chạy nền; có hạn mức mỗi ngày). Creator thấy tất cả." },
 ]
 
 interface UserRow { username: string; name: string; role: string; email?: string; lark_open_id?: string | null }

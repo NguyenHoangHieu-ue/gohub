@@ -4,7 +4,8 @@ import { genai } from "@/lib/agents/genai-stream"
 import { GEMINI_MODEL_ARGON } from "@/lib/ai-models"
 import { estimateArgonCostUsd } from "@/lib/agents/gemini-pricing"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { ownProject, ownSource, requireArgonUser } from "@/lib/argon/server"
+import { ownProject, ownSource } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -18,7 +19,7 @@ Quy tắc:
 
 // POST { instruction } → bản NHÁP (chưa lưu): văn bản đã sửa để giao diện so khác biệt rồi Hiếu duyệt (PATCH text → phiên bản mới).
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const src = await ownSource(params.id, username)
   if (!src) return NextResponse.json({ error: "Không tìm thấy nguồn" }, { status: 404 })

@@ -80,10 +80,18 @@
 .ag-bubble-ai::before { content: ""; position: absolute; left: -1px; top: 0.9rem; bottom: 0.9rem; width: 3px; border-radius: 3px; background: linear-gradient(to bottom, var(--ag-acc1), var(--ag-cyan)); }
 .ag-avatar { display: inline-flex; align-items: center; justify-content: center; border-radius: 0.8rem; color: #fff; background: linear-gradient(135deg, var(--ag-acc1), var(--ag-cyan)); box-shadow: 0 8px 20px -8px rgba(6, 182, 212, 0.7); }
 .ag-composer { background: var(--ag-glass-strong); border: 1px solid var(--ag-line); border-radius: 1.3rem; box-shadow: var(--ag-shadow); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); transition: border-color 0.2s ease, box-shadow 0.2s ease; }
-.ag-composer:focus-within { border-color: var(--ag-line-hot); box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.13), var(--ag-shadow-hot); }
+.ag-composer:focus-within { border-color: var(--ag-line); box-shadow: var(--ag-shadow); }   /* không viền tím khi đang gõ */
+.argon-ui .ag-composer textarea:focus, .argon-ui .ag-composer textarea:focus-visible { outline: none; box-shadow: none; }
 .ag-kbd { font-family: var(--font-mono), ui-monospace, monospace; font-size: 10.5px; padding: 0.1rem 0.4rem; border-radius: 0.4rem; border: 1px solid var(--ag-line); color: var(--ag-mute); background: var(--ag-glass); }
 
 /* chỉ báo đang nghĩ: thanh sáng chạy ngang */
+/* Gấu con chạy (BearRunner): chạy ngang qua khung 120px, nảy lên xuống và nghiêng nhẹ; vạch đất chạy ngược để có cảm giác tiến lên. */
+.bear-run-track { position: relative; display: block; width: 120px; height: 36px; overflow: hidden; }
+.bear-run-track::after { content: ""; position: absolute; left: 0; right: 0; bottom: 1px; height: 2px; background: repeating-linear-gradient(90deg, var(--ag-line) 0 7px, transparent 7px 14px); animation: bear-ground 0.5s linear infinite; }
+.bear-run { position: absolute; bottom: 4px; left: -30px; animation: bear-run-x 2.6s linear infinite, bear-hop 0.34s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes bear-run-x { from { left: -30px; } to { left: 120px; } }
+@keyframes bear-hop { 0%, 100% { transform: translateY(0) rotate(-7deg); } 50% { transform: translateY(-7px) rotate(7deg); } }
+@keyframes bear-ground { from { background-position: 0 0; } to { background-position: -14px 0; } }
 .ag-think { position: relative; display: block; height: 0.3rem; width: 7rem; overflow: hidden; border-radius: 9999px; background: var(--ag-line); }
 .ag-think::after { content: ""; position: absolute; inset: 0; width: 45%; border-radius: 9999px; background: linear-gradient(90deg, transparent, var(--ag-acc1), var(--ag-cyan), transparent); animation: ag-slide 1.3s ease-in-out infinite; }
 @keyframes ag-slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(260%); } }
@@ -97,6 +105,19 @@
 .argon-ui ::-webkit-scrollbar { width: 8px; height: 8px; }
 .argon-ui ::-webkit-scrollbar-thumb { background: var(--ag-line); border-radius: 8px; }
 @media (prefers-reduced-motion: reduce) {
-  .ag-rise, .ag-think::after { animation: none !important; }
+  .ag-rise, .ag-think::after, .bear-run, .bear-run-track::after { animation: none !important; }
+  .bear-run { left: 45px; }
   .ag-card, .ag-btn-primary, .ag-tab { transition: none !important; }
 }
+
+/* Nhãn "Gấu Prime" ở đầu câu trả lời: chữ chuyển màu, để nhìn là biết không phải Gấu Pro/Bé Gấu */
+.ag-prime-name { background: linear-gradient(90deg, var(--ag-acc1), var(--ag-cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* Hiệu năng cuộn/gõ trong khung hỏi: backdrop-filter trên khung chat, mỗi bong bóng và ô nhắn buộc trình duyệt làm mờ lại cả vùng phía sau mỗi khi cuộn/gõ. Giữ nền kính mờ nhưng bỏ blur ở các phần tử lớn/lặp lại. */
+.ag-card-flat, .ag-bubble-ai, .ag-composer, .ag-bubble-ai pre { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.ag-card-flat { background: var(--ag-glass-strong); }
+.ag-bubble-ai { background: var(--ag-glass-strong); }
+.ag-chat-scroll { overscroll-behavior: contain; }
+.ag-aurora::before, .ag-aurora::after { will-change: auto; }
+/* Hội thoại dài (hàng chục nghìn px): lượt nằm ngoài màn hình không cần dựng/bố cục cho tới khi cuộn tới */
+.ag-run-row { content-visibility: auto; contain-intrinsic-size: auto 480px; }

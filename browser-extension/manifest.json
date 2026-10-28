@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GoHub Gấu Pro Bridge",
-  "version": "1.3.3",
+  "version": "1.4.0",
   "description": "Cầu nối cho Gấu Pro đọc/thao tác trên tab Chrome đang mở (dùng session đăng nhập thật) — chỉ dùng nội bộ GoHub, cài tay, không publish Chrome Web Store.",
   "permissions": [
     "tabs",

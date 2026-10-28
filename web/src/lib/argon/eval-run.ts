@@ -100,7 +100,7 @@ export async function evalRun(b: EvalRunIn, origin: string): Promise<EvalRunOut>
   const t0 = Date.now()
   const seg = await runSegment({
     ctx, thinking, model, segmentMs: SEGMENT_MS, maxOut: MAX_OUT,
-    tools: { origin, log, dataTools: false, fast, member: !!b.member, missionId: mctx?.mission.id, khoUser: usesKhoScope(mctx?.mission.name ?? "") ? EVAL_USER : undefined, khoMode: "full", onTool: async () => undefined },
+    tools: { origin, log, dataTools: !!b.member && !fast, fast, member: !!b.member, missionId: mctx?.mission.id, khoUser: usesKhoScope(mctx?.mission.name ?? "") ? EVAL_USER : undefined, khoMode: "full", onTool: async () => undefined },
     onDelta: t => { answer += t },
   })
   const ms = Date.now() - t0

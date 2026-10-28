@@ -18,11 +18,16 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   const username = await requireArgonUser()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  const b = (await req.json().catch(() => ({}))) as { enabled?: boolean }
+  const b = (await req.json().catch(() => ({}))) as { enabled?: boolean; wikiUrl?: string }
   const s = await loadPubState(username)
-  s.enabled = !!b.enabled
+  if (typeof b.enabled === "boolean") s.enabled = b.enabled
+  if (b.wikiUrl) {   // link không gian Wiki vendor: https://<miền>/wiki/space/<id>
+    const m = b.wikiUrl.match(/^https?:\/\/([^/]+)\/wiki\/space\/(\d+)/)
+    if (!m) return NextResponse.json({ error: "Link Wiki phải dạng https://…/wiki/space/<số>" }, { status: 400 })
+    s.wikiHost = m[1]; s.wikiSpaceId = m[2]
+  }
   await savePubState(username, s)
-  return NextResponse.json({ enabled: s.enabled })
+  return NextResponse.json({ enabled: s.enabled, wikiSpaceId: s.wikiSpaceId ?? null })
 }
 
 // POST { force? } → xuất/cập nhật ngay (force = ghi lại cả tài liệu không đổi).

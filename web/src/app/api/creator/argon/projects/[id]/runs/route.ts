@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { costOf, resolveModel } from "@/lib/argon/models"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { ownProject, type ArgonRun } from "@/lib/argon/server"
+import { ownProject, type ArgonRun, type ArgonSource } from "@/lib/argon/server"
+import { registerUploads, type UploadItem } from "@/lib/argon/register-upload"
+import { getDbRole } from "@/lib/db-role"
+import { isDataTask } from "@/lib/okr-helpers"
 import { buildRunContext } from "@/lib/argon/context"
 import { LEVELS, runSegment } from "@/lib/argon/run-engine"
 import { MAX_OUT, SEGMENT_MS, loadRunMaterial } from "@/lib/argon/bg-worker"
@@ -10,10 +13,11 @@ import { deleteBg, deleteToolLog, getToolLog, saveToolLog, setBg, triggerWorker 
 import { autoSaveReports, getReportHtml, templateSuffix } from "@/lib/argon/report-store"
 import { linkedSourceIdsForProject, loadMissionContext, missionIdForProject } from "@/lib/argon/missions-db"
 import { clearPendingAsk } from "@/lib/argon/ask-tool"
-import { KHO_MISSION_NAME } from "@/lib/argon/kho"
+import { KHO_MISSION_NAME, ensureKhoProject } from "@/lib/argon/kho"
 import { usesKhoScope } from "@/lib/argon/context-instruction"
 import { routeRun } from "@/lib/argon/run-route"
 import { MEMBER_NOTE } from "@/lib/argon/access-pure"
+import { exportNote } from "@/lib/argon/export-note"
 import { argonLevel, checkMemberLimit, requireArgonMemberName } from "@/lib/argon/access"
 
 export const dynamic = "force-dynamic"
@@ -31,13 +35,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const rl = await checkRateLimit(`argon:${username}`, 20, 60_000)
   if (!rl.allowed) return NextResponse.json({ error: `Quá nhiều yêu cầu, chờ ${Math.ceil(rl.resetMs / 1000)}s` }, { status: 429 })
 
-  const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string; allowTools?: boolean; background?: boolean; templateReportId?: string; model?: string; route?: "auto" | "full" }
+  const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string; allowTools?: boolean; background?: boolean; templateReportId?: string; model?: string; route?: "auto" | "full"; attachments?: UploadItem[] }
   // P5: member (người được Creator cấp) chỉ hỏi được trên Kho của chính họ — không chạy nền, không lấy số liệu hệ thống, có hạn mức mỗi ngày.
   const level = (await argonLevel(username)) ?? "member"
   const member = level === "member"
   if (member) {
     if (b.background) return NextResponse.json({ error: "Chạy nền chỉ dành cho Creator" }, { status: 403 })
-    b.allowTools = false
+    b.allowTools = true   // số liệu công ty: member dùng công cụ dữ liệu như Gấu Pro (Kho chỉ cho tài liệu cá nhân)
     const lim = await checkMemberLimit(username, level)
     if (!lim.ok) return NextResponse.json({ error: lim.reason }, { status: 429 })
   }
@@ -85,9 +89,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ runId, background: true })
   }
 
-  const mat = await loadRunMaterial(project, pick, req.nextUrl.origin)
+  // File đính kèm theo câu hỏi: chỉ lưu vào "Tài liệu của tôi" khi người dùng bấm gửi; đăng ký song song với dựng ngữ cảnh, rồi đưa thẳng vào ngữ cảnh lượt này (Kho chỉ nạp sẵn nguồn ghim).
+  const attachItems = !resume && Array.isArray(b.attachments) ? b.attachments.slice(0, 10).filter(a => a && typeof a.path === "string" && typeof a.name === "string") : []
+  const [mat, att] = await Promise.all([loadRunMaterial(project, pick, req.nextUrl.origin), attachItems.length ? ensureKhoProject(username).then(khoPid => registerUploads(khoPid, username, attachItems)) : Promise.resolve({ sources: [] as ArgonSource[], errors: [] as string[] })])
+  if (att.sources.length) mat.sources = [...mat.sources.filter(s => !att.sources.some(a => a.id === s.id)), ...att.sources]
+  if (att.errors.length) mat.warnings.push(`Chưa đọc được tệp đính kèm: ${att.errors.join("; ")}`)
   const toolLog = resume ? await getToolLog(resume.id) : []
   const mctx = project.kind === "mission" ? await loadMissionContext(project.id, prompt) : null
+  if (mctx) mctx.instruction += "\n" + exportNote(mctx.mission.id)
   if (member && mctx) mctx.instruction += `\n${MEMBER_NOTE}`   // P5: nói rõ giới hạn của thành viên thay vì để model tự tìm đường vòng
   const ctx = await buildRunContext({ project: mat.project, sources: mat.sources, priorRuns: runs, prompt: withTpl(prompt), resumeRun: resume ? { ...resume, prompt: withTpl(resume.prompt) } : undefined, allowTools, toolLog, mission: mctx ?? undefined })
   ctx.warnings.push(...mat.warnings)
@@ -108,7 +117,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const stream = new ReadableStream({
     async start(controller) {
       const send = (o: unknown) => { try { controller.enqueue(enc.encode(`data: ${JSON.stringify(o)}\n\n`)) } catch { /* client đã đóng */ } }
-      send({ type: "start", runId, warnings: ctx.warnings, sources: ctx.usedSourceIds.length, route: decision.route, routeReason: decision.reason })
+      send({ type: "start", runId, warnings: ctx.warnings, sources: ctx.usedSourceIds.length, attachedIds: att.sources.map(s => s.id), route: decision.route, routeReason: decision.reason })
       const save = (extra: Record<string, unknown> = {}) => supabaseAdmin.from("argon_runs").update({ answer, ...extra }).eq("id", runId)
       const log = [...toolLog]
       const seg = await runSegment({
@@ -126,6 +135,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
       await save(patch)
       if (seg.status !== "error") await autoSaveReports(username, params.id, runId, answer)
+      // Metric (My Metrics "Tasks via Bé Gấu"): chỉ ghi lượt của thành viên — câu của Creator không tính (như Bé Gấu/Gấu Pro). Lượt dở (partial) chưa ghi; ghi khi lượt xong, kể cả sau "tiếp tục viết".
+      if (member && seg.status === "done" && answer.trim()) {
+        const names = Array.from(new Set(log.map(t => t.name)))
+        try {
+          const role = await getDbRole(username)
+          await supabaseAdmin.from("app_usage_events").insert({
+            event_type: "chat", agent_id: "gau_prime", user_email: username, user_name: username, user_role: role ?? null,
+            user_message: prompt.slice(0, 500), ai_response: answer.slice(0, 3000), tools_used: names.length ? names : null,
+            used_db_tool: isDataTask(names, role), tokens_in: (prev?.tokens_in ?? 0) + seg.tokensIn, tokens_out: (prev?.tokens_out ?? 0) + seg.tokensOut,
+            est_cost_usd: patch.cost_usd,
+          })
+        } catch (e) { console.error("[Gấu Prime] track usage:", (e as Error).message) }
+      }
       await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
       send(seg.status === "error" && !answer ? { type: "error", message: seg.error } : { type: "done", run: { id: runId, answer, ...patch } })
       try { controller.close() } catch { /* đã đóng */ }

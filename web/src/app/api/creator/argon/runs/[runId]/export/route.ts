@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { ownProject, requireArgonUser, type ArgonRun } from "@/lib/argon/server"
+import { ownProject, type ArgonRun } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { toDocx } from "@/lib/argon/export"
 
 export const dynamic = "force-dynamic"
 
 // GET ?format=docx|md → xuất câu trả lời của 1 lượt chạy (chỉ chữ; bảng/tiêu đề/gạch đầu dòng markdown được dựng lại trong docx).
 export async function GET(req: NextRequest, { params }: { params: { runId: string } }) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const { data } = await supabaseAdmin.from("argon_runs").select("*").eq("id", params.runId).maybeSingle()
   const run = data as ArgonRun | null

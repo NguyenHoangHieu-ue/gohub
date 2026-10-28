@@ -326,9 +326,7 @@ const MessageRow = memo(function MessageRow({ msg, index, speaking, ttsSupported
   return (
     <div className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
       {msg.role === "assistant" && (
-        <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm shadow-violet-600/20">
-          <Cpu size={14} className="text-white" />
-        </div>
+        <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm shadow-violet-600/20"><Cpu size={14} className="text-white" /></div>
       )}
       <div className={`flex flex-col gap-1 ${msg.role === "user" ? "max-w-[80%]" : "max-w-[92%]"}`}>
         {/* File chip on user messages */}
@@ -947,9 +945,7 @@ export default function CreatorAIPage() {
       {/* Header (U4): tên hội thoại → lịch sử · ✎ cuộc mới · ⋯ gom chức năng (chấm đỏ khi có việc chờ duyệt) */}
       <div className="flex-shrink-0 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-6 py-2.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center shadow-sm shadow-violet-600/20 shrink-0">
-            <Cpu size={16} className="text-white" />
-          </div>
+          <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-violet-600/20"><Cpu size={14} className="text-white" /></div>
           <span className="hidden sm:inline text-base font-bold text-gray-900 dark:text-slate-100 shrink-0">Gấu Pro</span>
           <span className="hidden sm:inline text-gray-300">/</span>
           <ConversationSwitcher conversations={pastConvs} activeId={convId} disabled={loading}
@@ -1031,9 +1027,7 @@ export default function CreatorAIPage() {
         {messages.length === 0 && (
           <div className="max-w-3xl mx-auto pt-6">
             <div className="text-center mb-8">
-              <div className="w-14 h-14 bg-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-violet-600/25">
-                <Cpu size={26} className="text-white" />
-              </div>
+              <div className="w-14 h-14 bg-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-violet-600/25"><Cpu size={26} className="text-white" /></div>
               <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-1">Gấu Pro</h2>
               <p className="text-sm text-gray-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
                 AI riêng của Hiếu. Truy xuất toàn bộ database, tìm kiếm web, phân tích dữ liệu, đọc file, xuất CSV/Excel.
@@ -1092,9 +1086,7 @@ export default function CreatorAIPage() {
           {/* Loading */}
           {loading && (
             <div className="flex gap-3 justify-start">
-              <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-violet-600/20">
-                <Cpu size={14} className="text-white" />
-              </div>
+              <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-violet-600/20"><Cpu size={14} className="text-white" /></div>
               <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-2.5">
                   <div className="flex gap-1">

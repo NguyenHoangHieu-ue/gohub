@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { loadGpAllowed } from "@/lib/gp-access"
+import { argonLevel } from "@/lib/argon/access"
 import { decidePendingAction, followupMessage } from "@/lib/agents/creator/approvals"
 import { describeAction } from "@/lib/agents/creator/tool-policy"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -16,7 +17,9 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.username) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const username = session.user.username
   const isCreator = session.user.role === "creator"
-  if (!isCreator && !(await loadGpAllowed()).includes(username)) {
+  const gp = isCreator || (await loadGpAllowed()).includes(username)
+  const argonMember = !gp && (await argonLevel(username)) === "member"
+  if (!gp && !argonMember) {
     return NextResponse.json({ error: "Không có quyền truy cập Gấu Pro" }, { status: 403 })
   }
 
@@ -25,7 +28,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Cần id (string) và approve (boolean)." }, { status: 400 })
   }
 
-  const r = await decidePendingAction({ username, isCreator, id: body.id, approve: body.approve })
+  const r = await decidePendingAction({ username, isCreator, id: body.id, approve: body.approve, onlyChannel: argonMember ? "argon" : undefined })
   return NextResponse.json({ ...r, followup: r.decided ? followupMessage(r) : null }, { status: r.decided || r.status ? 200 : 400 })
 }
 

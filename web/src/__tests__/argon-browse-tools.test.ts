@@ -6,11 +6,12 @@ import { FAST_TOOL_NAMES, routeRun } from "@/lib/argon/run-route"
 import { routeLane } from "@/lib/assistant/route-pure"
 
 describe("công cụ đọc trang / portal / tạo ảnh của Argon", () => {
-  it("khai báo đủ, bậc đúng, chỉ Creator, không ở đường nhanh", () => {
+  it("khai báo đủ, bậc đúng, portal chỉ Creator (trang web + ảnh thành viên dùng được như Gấu Pro), không ở đường nhanh", () => {
     expect(BROWSE_TOOLS.map(t => t.name).sort()).toEqual([...BROWSE_TOOL_NAMES].sort())
     expect(TOOL_LEVELS.docTrang).toBe("L1"); expect(TOOL_LEVELS.docPortal).toBe("L1"); expect(TOOL_LEVELS.taoAnh).toBe("L2")
     for (const n of BROWSE_TOOL_NAMES) {
-      expect(MEMBER_BLOCKED_TOOLS, n).toContain(n)
+      if (n === "docPortal") expect(MEMBER_BLOCKED_TOOLS, n).toContain(n)
+      else expect(MEMBER_BLOCKED_TOOLS, n).not.toContain(n)
       expect(FAST_TOOL_NAMES, n).not.toContain(n)
       expect(BROWSE_LIMITS[n], n).toBeGreaterThan(0)
     }
@@ -50,8 +51,8 @@ describe("công cụ đọc trang / portal / tạo ảnh của Argon", () => {
   it("router: đọc trang/portal làm được (chỉ đọc); bấm/gõ/tải file thật vẫn qua Gấu Pro; đều không đi đường nhanh", () => {
     expect(routeLane("Vào portal 3HK lấy bảng giá")).toMatchObject({ lane: "trinh_duyet", here: true })
     expect(routeLane("Mở trang https://a.com xem giá")).toMatchObject({ lane: "trinh_duyet", here: true })
-    expect(routeLane("Bấm nút Gửi trên trình duyệt")).toMatchObject({ lane: "trinh_duyet", here: false })
-    expect(routeLane("Tải file báo giá về máy")).toMatchObject({ here: false })
+    expect(routeLane("Bấm nút Gửi trên trình duyệt")).toMatchObject({ lane: "trinh_duyet", here: true })   // qua Bridge (cần extension đã ghép nối)
+    expect(routeLane("Tải file báo giá về máy")).toMatchObject({ here: false })   // tải file về máy: chưa hỗ trợ
     for (const q of ["Vào portal 3HK lấy bảng giá", "Tạo banner thumbnail cho eSIM Nhật"]) expect(routeRun(q, { mission: true }).route, q).toBe("full")
   })
 })

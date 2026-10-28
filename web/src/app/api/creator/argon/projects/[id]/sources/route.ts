@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ARGON_BUCKET, MAX_UPLOAD_BYTES, ensureArgonBucket, ownProject, type ArgonSource } from "@/lib/argon/server"
 import { requireArgonMemberName } from "@/lib/argon/access"
-import { extractFile } from "@/lib/argon/extract"
 import { countTokens, sourceParts } from "@/lib/argon/context"
+import { registerUploads } from "@/lib/argon/register-upload"
 import { addYoutubeSource } from "@/lib/argon/video"
 import { youtubeId } from "@/lib/argon/video-url"
 import { addDataPack, addLarkLink, syncFolders, syncMany } from "@/lib/argon/lark-sync"
@@ -51,29 +51,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   if (b.action === "register") {
-    const created: Omit<ArgonSource, "extracted_text">[] = [], errors: string[] = []
-    for (const it of (b.items ?? []).slice(0, 20)) {
-      try {
-        if (!it.path.startsWith(`${username}/${params.id}/`)) throw new Error("đường dẫn không hợp lệ")
-        const { data: blob, error } = await supabaseAdmin.storage.from(ARGON_BUCKET).download(it.path)
-        if (error || !blob) throw new Error(`không đọc được file đã tải (${error?.message})`)
-        const buf = Buffer.from(await blob.arrayBuffer())
-        const ex = await extractFile(buf, it.name, it.mime)
-        const { data: src, error: e2 } = await supabaseAdmin.from("argon_sources").insert({
-          project_id: params.id, kind: "file", name: it.name, mime: ex.mime, size_bytes: buf.length, storage_path: it.path,
-          extracted_text: ex.text, send_binary: ex.sendBinary, content_hash: ex.hash, tokens: 0,
-        }).select("*").single()
-        if (e2 || !src) throw new Error(e2?.message ?? "lưu nguồn lỗi")
-        const tokens = await countTokens(await sourceParts(src as ArgonSource, { left: Number.MAX_SAFE_INTEGER }, []))
-        await supabaseAdmin.from("argon_sources").update({ tokens }).eq("id", src.id)
-        await supabaseAdmin.from("argon_source_versions").insert({ source_id: src.id, version: 1, extracted_text: ex.text, storage_path: it.path, note: "Tải lên", author: username })
-        created.push(strip({ ...(src as ArgonSource), tokens }))
-      } catch (e) {
-        errors.push(`${it.name}: ${(e as Error).message}`)
-      }
-    }
-    await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
-    return NextResponse.json({ sources: created, errors })
+    const r = await registerUploads(params.id, username, b.items ?? [])
+    return NextResponse.json({ sources: r.sources.map(strip), errors: r.errors })
   }
 
   if (b.action === "note") {

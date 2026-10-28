@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
+import { BearAvatar } from "@/components/brand/bear"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Atom, ArrowLeft, Plus, Trash2, ChevronDown, ChevronRight, Save, Pencil, Mail, MessagesSquare, FolderPlus, Moon, Play, LayoutDashboard } from "lucide-react"
@@ -129,7 +130,7 @@ export default function ArgonRoomPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-[1600px] mx-auto">
       <div className="flex items-center gap-3 px-4 py-3">
-        <div className="w-9 h-9 rounded-xl bg-violet-600 text-white flex items-center justify-center"><Atom size={18} /></div>
+        <BearAvatar size={36} />
         <div>
           <h1 className="font-semibold text-gray-900 dark:text-slate-100 leading-tight">Nguồn tự động</h1>
           <div className="text-xs text-gray-500">Gắn Lark, mail, thread, gói số liệu để Argon tự đọc mỗi đêm. Nạp file lẻ và xem sổ sự việc: trang Kho.</div>

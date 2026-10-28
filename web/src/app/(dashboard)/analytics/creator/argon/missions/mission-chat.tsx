@@ -1,13 +1,14 @@
 "use client"
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Pause, Play, RotateCcw, Rocket, Send, Sparkles, Square, ThumbsDown, ThumbsUp, Zap } from "lucide-react"
+import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Pause, Play, RotateCcw, Paperclip, Rocket, Send, Sparkles, Square, ThumbsDown, ThumbsUp, X, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
 import { routeLane } from "@/lib/assistant/route-pure"
+import { BearAvatar, BearRunner } from "@/components/brand/bear"
 import { PHASE_LABEL, phaseIndex, type MissionPhase, type PatchUi, type PendingAskUi } from "./mission-types"
-import { stepLabel, type ModelKey, type SendOpts, type Thinking, type useMissionRunner } from "./use-mission-runner"
+import { type ModelKey, type SendOpts, type Thinking, type useMissionRunner } from "./use-mission-runner"
 
 // Chat của sứ mệnh: chỉ hiện KẾT QUẢ và điều cần Hiếu quyết; các bước làm việc nằm ở Bàn làm việc. Thanh pha dẫn Hiếu qua Làm rõ → Kế hoạch → Chốt và chạy.
 type Runner = ReturnType<typeof useMissionRunner>
@@ -53,12 +54,56 @@ function Seg<T extends string>({ value, onChange, options, label }: { value: T; 
 }
 
 // Câu trả lời đã xong không cần vẽ lại mỗi lần ô nhập hoặc trang cha đổi (parse markdown + bảng + khối report là phần nặng nhất khi chat dài).
-const AnswerMd = memo(function AnswerMd({ text, runId, onStep }: { text: string; runId: string; onStep: (runId: string, n: number) => void }) {
+const AnswerMd = memo(function AnswerMd({ text, runId, onStep, hideCode }: { text: string; runId: string; onStep: (runId: string, n: number) => void; hideCode?: boolean }) {
   const cb = useCallback((n: number) => onStep(runId, n), [onStep, runId])
-  return <ArgonMarkdown text={text} onStep={cb} />
+  return <ArgonMarkdown text={text} onStep={cb} hideCode={hideCode} />
 })
 
-export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError, simple = false, quick, onDraft, aboveInput }: {
+// Một lượt hỏi/đáp. memo: gõ vào ô nhắn hoặc cập nhật lượt khác không vẽ lại các lượt cũ (chat dài thì đây là phần nặng nhất).
+const RunRow = memo(function RunRow({ r, live, bgLive, simple, basic, busy, rating, stepStable, onRate, onCancelBg, onResume }: {
+  r: Run; live: boolean; bgLive: boolean; simple: boolean; basic: boolean; busy: boolean; rating?: 1 | -1
+  stepStable: (runId: string, n: number) => void
+  onRate: (runId: string, question: string, answer: string, rating: 1 | -1) => void
+  onCancelBg: (runId: string) => void; onResume: (runId: string) => void
+}) {
+  return (
+            <div className="ag-run-row space-y-3">
+              <div className="flex justify-end"><div className="max-w-[82%] ag-bubble-user px-4 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-wrap">{r.prompt}</div></div>
+              <div className="flex items-start gap-2.5">
+                <BearAvatar size={28} className="mt-0.5" />
+                <div className="min-w-0 flex-1 ag-bubble-ai px-4 py-3">
+                  {simple && (
+                    <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="ag-prime-name text-[13px] font-bold tracking-tight">Gấu Prime</span>
+                      {!live && r.source_ids.length > 0 && <span className="text-[11px] text-gray-500 dark:text-slate-400">đã đối chiếu {r.source_ids.length} tài liệu</span>}
+                    </div>
+                  )}
+                  {r.answer && !(simple && live) ? <AnswerMd text={r.answer} runId={r.id} onStep={stepStable} hideCode={basic} />
+                    : <BearRunner />}
+                  {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
+                  {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}
+                  <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-gray-500">
+                    {live && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 text-violet-700 dark:text-violet-200"><Loader2 size={11} className="animate-spin" />{bgLive ? (r.status === "queued" ? "chạy nền · chờ đoạn kế" : `chạy nền · đoạn ${r.segments + 1}`) : "Gấu Prime đang chạy"}</span>}
+                    {bgLive && <button type="button" onClick={() => onCancelBg(r.id)} className="inline-flex items-center gap-1 text-red-600 hover:underline"><Square size={10} />Dừng việc nền</button>}
+                    {r.answer && r.status === "done" && !live && (
+                      <span className="inline-flex items-center gap-0.5" role="group" aria-label="Đánh giá câu trả lời">
+                        <button type="button" onClick={() => onRate(r.id, r.prompt, r.answer, 1)} aria-label="Trả lời tốt" aria-pressed={rating === 1} className={cn("rounded p-1 hover:bg-emerald-50 dark:hover:bg-emerald-950/40", rating === 1 ? "text-emerald-600" : "text-gray-400")}><ThumbsUp size={12} /></button>
+                        <button type="button" onClick={() => onRate(r.id, r.prompt, r.answer, -1)} aria-label="Trả lời chưa tốt" aria-pressed={rating === -1} className={cn("rounded p-1 hover:bg-red-50 dark:hover:bg-red-950/40", rating === -1 ? "text-red-600" : "text-gray-400")}><ThumbsDown size={12} /></button>
+                      </span>
+                    )}
+                    {r.model && <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-slate-700 px-2 py-0.5">{/flash/i.test(r.model) ? <><Zap size={10} />Nhanh</> : <><Brain size={10} />Sâu</>}</span>}
+                    {!basic && r.tokens_in > 0 && <span>{fmtTokens(r.tokens_in)} vào · {fmtTokens(r.tokens_out)} ra · ~${r.cost_usd.toFixed(2)} · {Math.round(r.duration_ms / 1000)}s{r.segments > 1 ? ` · ${r.segments} đoạn` : ""}</span>}
+                    {!live && r.status === "partial" && <button type="button" disabled={busy} onClick={() => onResume(r.id)} className="inline-flex items-center gap-1 text-violet-600 font-medium"><Play size={11} />Tiếp tục viết</button>}
+                    {simple && !live && r.answer && r.status === "done" && <span className="inline-flex items-center gap-1.5">Xuất:<a href={`/api/creator/argon/runs/${r.id}/export?format=docx`} className="rounded px-1 text-violet-700 dark:text-violet-300 hover:underline">Word</a><a href={`/api/creator/argon/runs/${r.id}/export?format=md`} className="rounded px-1 text-violet-700 dark:text-violet-300 hover:underline">Markdown</a></span>}
+                    {!live && r.answer && <button type="button" onClick={() => void navigator.clipboard?.writeText(r.answer)} className="ml-auto inline-flex items-center gap-1 hover:text-gray-800 dark:hover:text-slate-200"><Copy size={11} />Sao chép</button>}
+                  </div>
+                </div>
+              </div>
+            </div>
+  )
+})
+
+export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError, simple = false, quick, onDraft, aboveInput, basic = false, attach, tpl, placeholder }: {
   autoSend: { text: string; k: number } | null   // câu lệnh tự gửi (vd ▶ chạy lại script); mỗi k mới = một lần gửi
   phase: MissionPhase
   pendingAsk: PendingAskUi | null
@@ -73,6 +118,10 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   quick?: string[]        // câu gợi ý riêng thay cho gợi ý theo pha
   onDraft?: (text: string) => void   // báo nội dung đang gõ ra ngoài (trang Hỏi dùng để gợi ý nhanh từ Kho)
   aboveInput?: React.ReactNode       // khối hiện NGAY TRÊN ô nhắn (vd gợi ý từ Kho)
+  basic?: boolean                    // giao diện cho người ít rành công nghệ: ẩn chọn mô hình/suy luận/chi phí, Enter là gửi
+  attach?: { files: File[]; add: (f: File[]) => void; remove: (i: number) => void; clear: () => void } // có thì hiện nút đính kèm: tệp chỉ giữ ở ô nhắn, bấm Gửi mới tải lên + lưu vào Tài liệu của tôi
+  tpl?: { id: string; clear: () => void }   // report mẫu sẽ dựng lại với số liệu mới ở lượt kế tiếp
+  placeholder?: string
 }) {
   const [prompt, setPromptState] = useState("")
   // Báo nội dung đang gõ ra ngoài: trễ 350ms (gõ liên tục chỉ báo 1 lần, không làm cả trang cha vẽ lại theo từng ký tự); xoá ô (gửi) thì báo ngay.
@@ -88,6 +137,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   const onStepRef = useRef(onStep)
   onStepRef.current = onStep
   const stepStable = useCallback((runId: string, n: number) => onStepRef.current(runId, n), [])
+  const attachRef = useRef<HTMLInputElement>(null)
   const [showOpts, setShowOpts] = useState(false)   // trang gọn: ẩn mức suy luận / số liệu hệ thống / chạy nền sau "Tuỳ chọn"
   const [thinking, setThinking] = useState<Thinking>("medium")
   const [background, setBackground] = useState(false)
@@ -107,14 +157,18 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
     try { await onPatch(id, action) } catch (e) { onError((e as Error).message) } finally { setPatchBusy(null) }
   }
   const [rated, setRated] = useState<Record<string, 1 | -1>>({})
-  async function rate(runId: string, question: string, answer: string, rating: 1 | -1) {
+  const rate = useCallback(async (runId: string, question: string, answer: string, rating: 1 | -1) => {
     setRated(m => ({ ...m, [runId]: rating }))
     try { await fetch("/api/chat/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agentId: "argon", question, answer, rating }) }) } catch { /* phản hồi lỗi không ảnh hưởng chat */ }
-  }
+  }, [])
   const endRef = useRef<HTMLDivElement>(null)
-  const lastStep = runner.steps.length ? stepLabel(runner.steps[runner.steps.length - 1]) : null   // bước công cụ mới nhất, để biết Argon đang làm gì khi chưa có chữ
   const stick = useRef(true)
   const opts: SendOpts = { thinking, allowTools, background, model }
+  // Callback ổn định cho RunRow (memo): đọc runner/opts mới nhất qua ref
+  const runnerRef = useRef(runner); runnerRef.current = runner
+  const optsRef = useRef(opts); optsRef.current = opts
+  const cancelBgStable = useCallback((id: string) => runnerRef.current.cancelBg(id), [])
+  const resumeStable = useCallback((id: string) => runnerRef.current.resume(id, optsRef.current), [])
   const { busy, bgActive } = runner
   useEffect(() => { if (stick.current) endRef.current?.scrollIntoView({ block: "end" }) }, [runs])
   const lastAuto = useRef(0)
@@ -130,8 +184,12 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   async function send(text?: string) {
     const p = (text ?? prompt).trim()
     if (!p || busy) return
+    const files = attach?.files ?? []
+    if (files.length && background) { onError("Chạy nền chưa hỗ trợ tệp đính kèm: tắt “Chạy nền” hoặc bỏ tệp."); return }
     setPrompt(""); stick.current = true
-    await runner.send(p, opts)
+    attach?.clear()
+    const tplId = tpl?.id; tpl?.clear()
+    await runner.send(p, opts, files.length ? files : undefined, tplId)
   }
 
   const idx = phaseIndex(phase)
@@ -190,10 +248,10 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
         )}
       </div>}
 
-      <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6" onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
+      <div className="ag-chat-scroll flex-1 overflow-y-auto px-4 py-5 space-y-6" onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
         {runs.length === 0 && (
           <div className="mx-auto mt-10 max-w-sm text-center">
-            <div className="ag-avatar mx-auto h-12 w-12"><Atom size={22} /></div>
+            <BearAvatar size={56} className="mx-auto !rounded-2xl" />
             <div className="mt-3 text-sm font-medium text-gray-800 dark:text-slate-100">Bắt đầu với Argon</div>
             <p className="mt-1 text-xs leading-relaxed text-gray-500">Chọn một gợi ý ở dưới hoặc gõ yêu cầu của anh. {simple ? "Chat chỉ giữ kết quả; mọi bước Argon làm hiện ở mục “Argon đang làm gì” bên dưới." : "Mọi bước Argon làm (đọc file, SQL, chạy code) hiện ở cột Bàn làm việc bên phải, chat chỉ giữ kết quả."}</p>
           </div>
@@ -201,34 +259,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
         {runs.map(r => {
           const bgLive = !busy && (r.status === "queued" || r.status === "running")
           const live = (busy && r.id === runs[runs.length - 1]?.id) || bgLive
-          return (
-            <div key={r.id} className="space-y-3">
-              <div className="flex justify-end"><div className="max-w-[82%] ag-bubble-user px-4 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-wrap">{r.prompt}</div></div>
-              <div className="flex items-start gap-2.5">
-                <span className="ag-avatar mt-0.5 h-7 w-7 shrink-0" aria-hidden><Atom size={15} /></span>
-                <div className="min-w-0 flex-1 ag-bubble-ai px-4 py-3">
-                  {r.answer ? <AnswerMd text={r.answer} runId={r.id} onStep={stepStable} />
-                    : <div className="flex items-center gap-2 text-[13px] text-gray-500"><span className="ag-think" aria-hidden />{lastStep ? `Argon đang làm: ${lastStep.tag} ${lastStep.text.slice(0, 80)} (${runner.steps.length} bước)` : "Argon đang làm việc…"}</div>}
-                  {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
-                  {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}
-                  <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-gray-500">
-                    {live && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 text-violet-700 dark:text-violet-200"><Loader2 size={11} className="animate-spin" />{bgLive ? (r.status === "queued" ? "chạy nền · chờ đoạn kế" : `chạy nền · đoạn ${r.segments + 1}`) : "đang chạy"}</span>}
-                    {bgLive && <button type="button" onClick={() => runner.cancelBg(r.id)} className="inline-flex items-center gap-1 text-red-600 hover:underline"><Square size={10} />Dừng việc nền</button>}
-                    {r.answer && r.status === "done" && !live && (
-                      <span className="inline-flex items-center gap-0.5" role="group" aria-label="Đánh giá câu trả lời">
-                        <button type="button" onClick={() => void rate(r.id, r.prompt, r.answer, 1)} aria-label="Trả lời tốt" aria-pressed={rated[r.id] === 1} className={cn("rounded p-1 hover:bg-emerald-50 dark:hover:bg-emerald-950/40", rated[r.id] === 1 ? "text-emerald-600" : "text-gray-400")}><ThumbsUp size={12} /></button>
-                        <button type="button" onClick={() => void rate(r.id, r.prompt, r.answer, -1)} aria-label="Trả lời chưa tốt" aria-pressed={rated[r.id] === -1} className={cn("rounded p-1 hover:bg-red-50 dark:hover:bg-red-950/40", rated[r.id] === -1 ? "text-red-600" : "text-gray-400")}><ThumbsDown size={12} /></button>
-                      </span>
-                    )}
-                    {r.model && <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-slate-700 px-2 py-0.5">{/flash/i.test(r.model) ? <><Zap size={10} />Nhanh</> : <><Brain size={10} />Sâu</>}</span>}
-                    {r.tokens_in > 0 && <span>{fmtTokens(r.tokens_in)} vào · {fmtTokens(r.tokens_out)} ra · ~${r.cost_usd.toFixed(2)} · {Math.round(r.duration_ms / 1000)}s{r.segments > 1 ? ` · ${r.segments} đoạn` : ""}</span>}
-                    {!live && r.status === "partial" && <button type="button" disabled={busy} onClick={() => runner.resume(r.id, opts)} className="inline-flex items-center gap-1 text-violet-600 font-medium"><Play size={11} />Tiếp tục viết</button>}
-                    {!live && r.answer && <button type="button" onClick={() => void navigator.clipboard?.writeText(r.answer)} className="ml-auto inline-flex items-center gap-1 hover:text-gray-800 dark:hover:text-slate-200"><Copy size={11} />Sao chép</button>}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )
+          return <RunRow key={r.id} r={r} live={live} bgLive={bgLive} simple={simple} basic={basic} busy={busy} rating={rated[r.id]} stepStable={stepStable} onRate={rate} onCancelBg={cancelBgStable} onResume={resumeStable} />
         })}
         <div ref={endRef} />
       </div>
@@ -262,34 +293,50 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
 
       {/* Ô nhắn: một khối bo tròn, hàng công cụ ngay dưới ô gõ */}
       <div className="px-4 pb-4 pt-2">
-        {idle && !(simple && prompt.trim()) && <div className="mb-2 flex flex-wrap gap-1.5">
+        {idle && !(simple && (prompt.trim() || runs.length > 0)) && <div className="mb-2 flex flex-wrap gap-1.5">
           {(quick ?? QUICK[phase]).map(q => <button key={q} type="button" onClick={() => setPrompt(q)} title={q} className="px-2.5 py-1 text-xs rounded-full border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 transition-colors">{q}</button>)}
         </div>}
         {aboveInput}
         <div className="ag-composer">
+          {attach && attach.files.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-3 pt-2.5" aria-label="Tệp đính kèm chưa gửi">
+              {attach.files.map((f, i) => (
+                <span key={`${f.name}-${i}`} className="inline-flex max-w-[220px] items-center gap-1 rounded-lg bg-violet-50 dark:bg-violet-950/40 px-2 py-1 text-[12px] text-violet-800 dark:text-violet-200">
+                  <Paperclip size={11} className="shrink-0" /><span className="truncate">{f.name}</span>
+                  <button type="button" onClick={() => attach.remove(i)} aria-label={`Bỏ ${f.name}`} className="shrink-0 rounded p-0.5 hover:bg-violet-100 dark:hover:bg-violet-900"><X size={11} /></button>
+                </span>
+              ))}
+            </div>
+          )}
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={2} aria-label="Nhắn Argon"
-            onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send() } }}
-            placeholder="Nhắn Argon…"
+            onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey || (basic && !e.shiftKey && !e.nativeEvent.isComposing))) { e.preventDefault(); void send() } }}
+            placeholder={placeholder ?? "Nhắn Argon…"}
             className="block w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[13.5px] leading-relaxed text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none" />
           <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5 pt-1">
-            <Seg label="Mô hình" value={modelMode} onChange={pickModel} options={[
+            {attach && (
+              <>
+                <input ref={attachRef} type="file" multiple hidden onChange={e => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; if (fs.length) attach.add(fs) }} />
+                <button type="button" onClick={() => attachRef.current?.click()} title="Đính kèm tài liệu (PDF, Word, Excel, ảnh…) cho câu hỏi này; bấm Gửi mới lưu vào Tài liệu của tôi" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700"><Paperclip size={13} />Đính kèm</button>
+              </>
+            )}
+            {!basic && <Seg label="Mô hình" value={modelMode} onChange={pickModel} options={[
               { v: "auto", label: "Tự động", icon: Sparkles, title: "Tự động: chọn Nhanh hoặc Sâu theo mục đích câu hỏi (hiện ở chip bên cạnh); bấm Nhanh/Sâu để tự chọn" },
               { v: "fast", label: "Nhanh", icon: Zap, title: "Nhanh: việc nhiều bước công cụ, SQL, file (nhanh ~4-7 lần, rẻ ~1/2)" },
               { v: "deep", label: "Sâu", icon: Brain, title: "Sâu (Gemini 4 Argon): phân tích khó, viết dài, ngữ cảnh lớn" },
-            ]} />
-            {lane && (
+            ]} />}
+            {!basic && lane && (
               <span title={lane.reason} className={cn("inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full border", lane.here ? "border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 bg-violet-50/60 dark:bg-violet-950/30" : "border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30")}>
                 Làn {lane.n} · {lane.label}{lane.here ? ` · ${modelMode === "auto" ? "tự chọn " : ""}${model === "deep" ? "Sâu" : "Nhanh"}${lane.approval ? " · qua thẻ duyệt" : ""}` : " · cần Gấu Pro"}
               </span>
             )}
-            {simple && <button type="button" onClick={() => setShowOpts(v => !v)} aria-expanded={showOpts} className="px-2 py-1 text-[12px] rounded-lg text-gray-500 hover:text-gray-800 dark:hover:text-slate-200">{showOpts ? "Ẩn tuỳ chọn" : "Tuỳ chọn"}</button>}
-            {(!simple || showOpts) && <>
+            {simple && !basic && <button type="button" onClick={() => setShowOpts(v => !v)} aria-expanded={showOpts} className="px-2 py-1 text-[12px] rounded-lg text-gray-500 hover:text-gray-800 dark:hover:text-slate-200">{showOpts ? "Ẩn tuỳ chọn" : "Tuỳ chọn"}</button>}
+            {!basic && (!simple || showOpts) && <>
             <Seg label="Mức suy luận" value={thinking} onChange={setThinking} options={(Object.keys(THINK_LABEL) as Thinking[]).map(t => ({ v: t, label: THINK_LABEL[t], title: `Suy luận: ${THINK_LABEL[t]}` }))} />
             <Toggle on={allowTools} onClick={() => setAllowTools(v => !v)} icon={Database} label="Số liệu hệ thống" title="Argon được gọi công cụ chỉ-đọc lấy số liệu mới nhất của hệ thống" />
             <Toggle on={background} onClick={() => setBackground(v => !v)} icon={BellRing} label="Chạy nền" title="Worker chạy không giới hạn đoạn, đóng trang vẫn chạy; xong nhắn Lark cho Hiếu" />
             </>}
             <span className="ml-auto flex items-center gap-2">
-              <kbd className="ag-kbd hidden sm:inline">Ctrl ↵</kbd>
+              {!basic && <kbd className="ag-kbd hidden sm:inline">Ctrl ↵</kbd>}
               {busy
                 ? <button type="button" onClick={runner.stop} className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-red-600 px-3 text-[13px] text-white hover:bg-red-700"><Square size={13} />Dừng</button>
                 : <button type="button" onClick={() => void send()} disabled={!prompt.trim()} className="ag-btn-primary h-8 !py-0"><Send size={13} />Gửi</button>}

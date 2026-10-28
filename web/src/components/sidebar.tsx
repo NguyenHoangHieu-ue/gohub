@@ -7,6 +7,10 @@ import { useSession }         from "next-auth/react"
 import { useEffect, useState } from "react"
 import { Users, Gift, Package, Truck, Globe, Sparkles, ChevronLeft, ChevronRight, Radio, LayoutDashboard, PieChart, Globe2, Building2, ShoppingBag, BarChart3, Target, ClipboardList, HeartPulse, Zap, ChevronDown, ChevronUp, Terminal, Activity, TrendingUp, Database, Clock, Settings, Crown, Cpu, Atom, MessageCircle, Plug, Layers, Calculator, History } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
+import { Bear, BearMini } from "@/components/brand/bear"
+
+const BearIcon = Bear as unknown as LucideIcon   // Gấu Prime
+const BearMiniIcon = BearMini as unknown as LucideIcon   // Bé Gấu (bản mini của Gấu Prime)
 import { useSidebar }         from "./sidebar-context"
 import { NotificationBell }   from "./notification-bell"
 import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/analytics-roles"
@@ -17,7 +21,7 @@ const NAV_TO_GAU = { href: "/analytics/to-gau", label: "Tổ Gấu", icon: Messa
 
 // Tabs luôn hiển thị ở trên (KB đã chuyển vào trong Note → bỏ khỏi sidebar)
 const NAV_MAIN = [
-  { href: "/chatbot",    label: "Bé Gấu",     icon: Sparkles, key: "chatbot"    },
+  { href: "/chatbot",    label: "Bé Gấu",     icon: BearMiniIcon, key: "chatbot"    },
   { href: "/promotions", label: "Promotions",  icon: Gift,     key: "promotions" },
 ]
 
@@ -33,7 +37,7 @@ const NAV_ALL = [...NAV_MAIN, ...NAV_PRODUCTS]
 
 // Tabs đứng riêng đầu sidebar (Bé Gấu, Promotion) — keys khớp NAV_ALL để dùng chung phân quyền
 const NAV_TOP = [
-  { href: "/chatbot",    label: "Bé Gấu",     icon: Sparkles, key: "chatbot"    },
+  { href: "/chatbot",    label: "Bé Gấu",     icon: BearMiniIcon, key: "chatbot"    },
   { href: "/promotions", label: "Promotions",  icon: Gift,     key: "promotions" },
 ]
 const NAV_PRODUCT = NAV_PRODUCTS
@@ -97,9 +101,8 @@ const CREATOR_GROUP = {
   items: [
     { href: "/analytics/creator",           label: "Creator Settings", icon: Crown    },
     { href: "/analytics/creator/ai",        label: "Gấu Pro",          icon: Cpu      },
-    { href: "/analytics/creator/argon",     label: "Gấu Prime",    icon: Atom     },
+    { href: "/analytics/creator/argon",     label: "Gấu Prime",    icon: BearIcon },
     { href: "/analytics/creator/devtools",  label: "Dữ liệu & API",   icon: Terminal },
-    { href: "/analytics/creator/bridge",    label: "Bridge",           icon: Plug     },
     { href: "/analytics/my-metrics",        label: "My Metrics",       icon: Target   },
     { href: "/analytics/market",            label: "Thị trường & Báo giá", icon: Globe2 },
     { href: "/analytics/product-tools",     label: "Tính giá & Tạo sản phẩm", icon: Calculator },
@@ -359,7 +362,7 @@ export function Sidebar() {
   const navItems = (() => {
     // bod: chatbot + product catalog (xem được SP/NCC) + full analytics
     if (effectiveRole === "bod") {
-      return [{ href: "/chatbot", label: "Bé Gấu", icon: Sparkles, key: "chatbot" }, ...NAV_PRODUCTS]
+      return [{ href: "/chatbot", label: "Bé Gấu", icon: BearMiniIcon, key: "chatbot" }, ...NAV_PRODUCTS]
     }
     if (effectiveRole === "admin" || effectiveRole === "creator") return [...NAV_ALL, { href: "/admin", label: "Admin", icon: Users, key: "admin" }]
     // staff (gồm user PM, role intel): tab PM theo phòng ban (per-user allowed_tabs override dept matrix)
@@ -456,7 +459,7 @@ export function Sidebar() {
               <NavRow href="/analytics/product-tools" label="Tính giá & Tạo sản phẩm" Icon={Calculator} active={isActive("/analytics/product-tools")} collapsed accent="violet" />
             )}
             {argonEnabled && (
-              <NavRow href="/analytics/creator/argon" label="Gấu Prime" Icon={Atom} active={isActive("/analytics/creator/argon")} collapsed accent="violet" />
+              <NavRow href="/analytics/creator/argon/hoi-tim" label="Gấu Prime" Icon={BearIcon} active={isActive("/analytics/creator/argon")} collapsed accent="violet" />
             )}
           </>
         ) : (
@@ -527,7 +530,7 @@ export function Sidebar() {
                     {myMetricsEnabled && <NavRow href="/analytics/my-metrics" label="My Metrics" Icon={Target} active={isActive("/analytics/my-metrics")} collapsed={false} accent="violet" />}
                     {marketEnabled && <NavRow href="/analytics/market" label="Thị trường & Báo giá" Icon={Globe2} active={isActive("/analytics/market")} collapsed={false} accent="violet" />}
                     {pricingEnabled && <NavRow href="/analytics/product-tools" label="Tính giá & Tạo sản phẩm" Icon={Calculator} active={isActive("/analytics/product-tools")} collapsed={false} accent="violet" />}
-                    {argonEnabled && <NavRow href="/analytics/creator/argon" label="Gấu Prime" Icon={Atom} active={isActive("/analytics/creator/argon")} collapsed={false} accent="violet" />}
+                    {argonEnabled && <NavRow href="/analytics/creator/argon/hoi-tim" label="Gấu Prime" Icon={BearIcon} active={isActive("/analytics/creator/argon")} collapsed={false} accent="violet" />}
                   </div>
                 )}
               </div>

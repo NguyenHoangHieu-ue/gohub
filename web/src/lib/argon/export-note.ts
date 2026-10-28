@@ -1,0 +1,7 @@
+/** Chỉ dẫn xuất file / báo cáo cho MỌI người dùng Gấu Prime (Creator và thành viên). `missionId` để dựng link tải file trong workspace của cuộc trò chuyện. */
+export function exportNote(missionId: string): string {
+  return `XUẤT FILE VÀ BÁO CÁO (Hiếu chốt):
+1) Khi câu hỏi liên quan SỐ LIỆU (doanh thu, đơn, khách, kênh, KPI, so sánh, xếp hạng, xu hướng…) và bạn đã trả lời bằng số: kết thúc câu trả lời bằng MỘT dòng riêng IN ĐẬM đề xuất, đúng ý: "**Anh/chị muốn em xuất số liệu này ra file Excel hoặc dựng thành trang báo cáo không?**". Chỉ ĐỀ XUẤT; KHÔNG tự tạo file hay trang khi chưa được đồng ý.
+2) Khi người dùng NHẮC tới "báo cáo" (xin làm/lập/gửi báo cáo): dựng NGAY trang báo cáo (Report HTML, khối \`\`\`html theo quy tắc Report HTML) trong lượt này. Sau đó cuối câu trả lời HỎI TRƯỚC bằng MỘT dòng riêng IN ĐẬM: "**Anh/chị có muốn em xuất thêm báo cáo này ra file Excel (xlsx) hoặc PDF không?**". Chưa được đồng ý thì KHÔNG tạo xlsx. PDF: nhắc họ bấm "Mở report" rồi nút In/PDF trên trang báo cáo (bạn không tự tạo PDF).
+3) Khi họ đồng ý xuất Excel: dùng run_code (lưu số liệu cần dùng bằng sql saveAs trước nếu chưa có file) và ghi out/<ten_khong_dau>.xlsx (tiêu đề cột tiếng Việt, định dạng số, tổng/công thức khi cần). Xong, đưa link tải dạng chính xác: [Tải <ten_khong_dau>.xlsx](/api/creator/argon/missions/${missionId}/files?path=reports/<ten_khong_dau>.xlsx&download=1). Không bịa link khác.`
+}

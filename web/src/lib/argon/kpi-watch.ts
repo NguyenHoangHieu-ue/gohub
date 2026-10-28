@@ -93,6 +93,12 @@ async function readJson<T>(k: string, fallback: T): Promise<T> {
   const { data } = await (await db()).from("app_settings").select("value").eq("key", k).maybeSingle()
   try { const v = typeof data?.value === "string" ? JSON.parse(data.value) : data?.value; return (v ?? fallback) as T } catch { return fallback }
 }
+/** Như readJson nhưng PHÂN BIỆT "không có" với "đọc lỗi": đọc lỗi thì ok=false để người gọi KHÔNG ghi đè dữ liệu cũ bằng giá trị mặc định. */
+async function readStrict<T>(k: string, fallback: T): Promise<{ ok: true; v: T } | { ok: false; err: string }> {
+  const { data, error } = await (await db()).from("app_settings").select("value").eq("key", k).maybeSingle()
+  if (error) return { ok: false, err: error.message }
+  try { const v = typeof data?.value === "string" ? JSON.parse(data.value) : data?.value; return { ok: true, v: (v ?? fallback) as T } } catch { return { ok: false, err: "giá trị không phải JSON" } }
+}
 export const listAlerts = (username: string) => readJson<KpiAlert[]>(key(username), [])
 async function saveAlerts(username: string, list: KpiAlert[]) {
   await (await db()).from("app_settings").upsert({ key: key(username), value: JSON.stringify(list), category: "argon", label: "Cảnh báo KPI của Trợ lý", updated_at: new Date().toISOString() }, { onConflict: "key" })
@@ -111,14 +117,22 @@ export async function dismissAlert(username: string, alertKey: string, now = new
 export async function runKpiWatch(username: string, origin: string, now = new Date()): Promise<{ checked: number; alerts: number; note?: string }> {
   const { q, year, label } = vnQuarter(now)
   if (!process.env.CRON_SECRET) return { checked: 0, alerts: 0, note: "thiếu CRON_SECRET" }
-  const all = await readJson<Record<string, TargetsIn>>("company_monthly_targets", {})
-  const targets = all[`Q${q}_${year}`] ?? {}
+  // Mọi lỗi đọc/gọi (DB, quarterly-report, hết giờ) → trả note và GIỮ NGUYÊN danh sách cảnh báo cũ (kể cả trạng thái "bỏ qua"); chỉ xoá khi CHẮC CHẮN chưa nhập target.
+  const all = await readStrict<Record<string, TargetsIn>>("company_monthly_targets", {})
+  if (!all.ok) return { checked: 0, alerts: 0, note: `lỗi đọc target: ${all.err} — giữ nguyên cảnh báo cũ` }
+  const targets = all.v[`Q${q}_${year}`] ?? {}
   if (!Object.keys(targets).length) { await saveAlerts(username, []); return { checked: 0, alerts: 0, note: `chưa nhập target ${label}` } }
-  const res = await fetch(`${origin}/api/analytics/quarterly-report?quarter=Q${q}&year=${year}&companyCode=ALL`, { headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` }, signal: AbortSignal.timeout(120_000) })
-  if (!res.ok) return { checked: 0, alerts: 0, note: `quarterly-report HTTP ${res.status}` }
-  const j = (await res.json()) as { summary?: MonthIn[] }
-  const fresh = evaluateKpi({ months: Array.isArray(j.summary) ? j.summary : [], targets, now })
-  const merged = mergeAlerts(await listAlerts(username), fresh, now)
+  let j: { summary?: MonthIn[] }
+  try {
+    const res = await fetch(`${origin}/api/analytics/quarterly-report?quarter=Q${q}&year=${year}&companyCode=ALL`, { headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` }, signal: AbortSignal.timeout(120_000) })
+    if (!res.ok) return { checked: 0, alerts: 0, note: `quarterly-report HTTP ${res.status} — giữ nguyên cảnh báo cũ` }
+    j = (await res.json()) as { summary?: MonthIn[] }
+  } catch (e) { return { checked: 0, alerts: 0, note: `quarterly-report lỗi: ${(e as Error).message} — giữ nguyên cảnh báo cũ` } }
+  if (!Array.isArray(j.summary)) return { checked: 0, alerts: 0, note: "quarterly-report không trả summary — giữ nguyên cảnh báo cũ" }
+  const fresh = evaluateKpi({ months: j.summary, targets, now })
+  const old = await readStrict<KpiAlert[]>(key(username), [])
+  if (!old.ok) return { checked: 0, alerts: 0, note: `lỗi đọc cảnh báo cũ: ${old.err} — không ghi đè` }
+  const merged = mergeAlerts(old.v, fresh, now)
   await saveAlerts(username, merged)
   return { checked: 9, alerts: merged.length }
 }

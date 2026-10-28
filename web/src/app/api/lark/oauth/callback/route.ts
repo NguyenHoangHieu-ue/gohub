@@ -3,17 +3,20 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { exchangeLarkCode, saveLarkUserToken, getLarkSelfOpenId } from "@/lib/lark"
 import { loadGpAllowed } from "@/lib/gp-access"
+import { requireArgonMemberName } from "@/lib/argon/access"
+import { returnUrl, safeReturnPath } from "@/lib/lark-return"
 
 // Lark redirect về đây kèm ?code&state. Đổi code → user token, lưu, quay về Gấu Pro.
 export async function GET(req: NextRequest) {
   // Cùng origin với start (redirect_uri phải khớp tuyệt đối + cookie state nằm trên domain này).
   const base = req.nextUrl.origin
-  const done = (status: string) => NextResponse.redirect(`${base}/analytics/creator/ai?lark=${status}`)
+  const back = safeReturnPath(req.cookies.get("lark_oauth_return")?.value ?? null)
+  const done = (status: string) => { const r = NextResponse.redirect(returnUrl(base, back, status)); r.cookies.delete("lark_oauth_return"); return r }
 
   const session = await getServerSession(authOptions)
   const isCreator = session?.user?.role === "creator"
   const username = session?.user?.username
-  if (!username || (!isCreator && !(await loadGpAllowed()).includes(username))) return done("error")
+  if (!username || (!isCreator && !(await loadGpAllowed()).includes(username) && !(await requireArgonMemberName()))) return done("error")
 
   const code  = req.nextUrl.searchParams.get("code")  || ""
   const state = req.nextUrl.searchParams.get("state") || ""

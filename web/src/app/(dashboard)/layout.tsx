@@ -10,6 +10,7 @@ import { SearchShortcut }   from "@/components/search-shortcut"
 import { CommandPalette }   from "@/components/command-palette"
 import { TrackPageView }    from "@/components/track-page-view"
 import { ReloadProbe }      from "@/components/reload-probe"
+import { BridgeAutoPair }   from "@/components/bridge-auto-pair"
 import { FetchCacheInstaller } from "@/components/fetch-cache-installer"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -23,6 +24,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <HeartbeatProvider />
         <TrackPageView />
         <ReloadProbe />
+        <BridgeAutoPair />
         <SearchShortcut />
         <CommandPalette />
         <div className="flex min-h-screen">
