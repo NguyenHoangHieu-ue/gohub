@@ -606,7 +606,7 @@ export async function GET(req: NextRequest) {
       elapsed_days,
       quarter_days,
       customerLifecycle,
-    }, { headers: ruMode === "on" ? { "Cache-Control": "no-store" } : CACHE_HEADERS }   // rollup: không cache biên (đã đủ nhanh; tên/số đổi hiện ngay sau lần làm mới))
+    }, { headers: ruMode === "on" ? { "Cache-Control": "no-store" } : CACHE_HEADERS })   // rollup: không cache biên (đã đủ nhanh; số đổi hiện ngay sau lần làm mới)
   } catch (err: any) {
     console.error("[quarterly-report]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
