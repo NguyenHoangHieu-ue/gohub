@@ -196,3 +196,13 @@ Mã: `web/src/lib/rollup/` (`pure`, `client`, `schema`, `source`, `builder`), ro
 - **Cột ngày:** `fact_sales_revenue.created_date` là **timestamp** (khác `fulfiled_date` là varchar); `fact_sales_revenue` có cả `cogs_amount_vnd`/`gross_profit_vnd` nhưng các tab hiện tại coi Created không có margin → rollup `sal` giữ 0 để khớp. Có cột `etl_updated_at` (dấu thời gian ETL) có thể dùng phát hiện ngày đổi sau này.
 - **Kích hoạt:** `etl-cache-sync` (cron-job.org đã gọi 10–15') sau khi phát hiện ETL xong sẽ tự gọi `refreshRecent(45)` ở nền (không cần job ngoài mới). Vercel Cron thêm: `rollup-refresh?mode=reconcile&months=3` (03:00 ICT hằng đêm, báo Lark khi lệch) và `?mode=dims` (Chủ nhật).
 - **Còn lại của P0:** tạo DB `intel-rollup` riêng (Hiếu), trang health trong Data Map, theo dõi hạn mức Turso 70%/90% (chốt chặn chưa code), thời gian ETL đơn tạo.
+
+## 15. P1 — Quarter Report, route `quarterly-report` (2026-10-28, `staging`)
+
+Mã: `lib/rollup/filters.ts` (bộ lọc SQLite tương đương `shipFilter`/`internalOpsFilter`/INACTIVE/`makeExcludeSql`), `quarter.ts` (3 truy vấn rollup đúng hình dạng đường thô + `diffRows`), `mode.ts` (cờ `rollup_routes` off|shadow|on trong app_settings, `rollupState` = version + độ tươi ≤ 3h); route đã nối: khoá cache thêm `:ru<data_version>` khi `on`; `shadow` ghi kết quả so sánh vào `ru_runlog`; lỗi/cũ thì rơi về đường thô. Đặt cờ: `GET /api/cron/rollup-refresh?mode=flag&route=quarterly-report&value=…` (Bearer CRON_SECRET).
+- **Shadow:** 10 tổ hợp (Q2/Q3/Q4-2026, Q4-2025, Q1-2026; ALL/VN/US; ship và nội bộ bật/tắt) khớp 10/10.
+- **Response đầy đủ:** so JSON cuối của `on` với đường thô: 8/10 giống hệt; 2 khác đều do NaN (xem §14): Q4-2025 và `prevQuarterTotals` của Q1-2026 — đường thô trả `null` cho GP/CM1 (NaN), rollup trả số thật (Q4-2025: GP 2.821.687.796).
+- **Tốc độ:** đường thô lần nguội 3,7–14,4s (đo từ shadow); `on` ≈ 0,9–3,9s toàn request, phần còn lại là chi phí Supabase/Turso và `fetchB2BLifecycleRows` (vẫn quét thô, cache 6h) — việc kế tiếp.
+- **Bẫy:** các request thử PHẢI thêm tham số khác nhau (`&_b=…`): CDN cache theo URL (`s-maxage=300`) nên cùng URL `nocache=1` vẫn trả bản cũ — đúng lỗ hổng cache biên đã nêu ở §13.
+- **Trạng thái cờ:** `shadow` (trả đường thô). Cờ nằm trong app_settings dùng CHUNG staging/production: khi merge `main`, production đọc cùng cờ.
+- **Còn lại của P1:** vòng đời khách (lifecycle) từ `ru_cust_day`; các route khác của tab (`quarterly-b2b-customers`, `squad-progress`, `quarterly-daily`, `quarterly-customer-lifecycle`); bỏ cache biên cho route rollup; 7 ngày shadow trước khi bật `on`.
