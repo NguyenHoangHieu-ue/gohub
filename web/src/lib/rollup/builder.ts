@@ -152,8 +152,11 @@ export async function syncCustomers(deadline: number, pageSize = 3000): Promise<
     const hi = page[page.length - 1].customer
     const have = new Map((await rq("SELECT customer, hash FROM dm_customer WHERE customer > ? AND customer <= ?", [cursor, hi])).map(r => [String(r.customer), String(r.hash)] as const))
     const todo = page.filter(c => have.get(c.customer) !== custHash(c))
-    for (const part of chunk(todo, ROWS_PER_INSERT)) {
-      await rtx([{ sql: `INSERT OR REPLACE INTO dm_customer (customer, name, organization, organization_code, price_list_name, currency_code, sales_pic_code, status, hash) VALUES ${placeholders(9, part.length)}`, args: part.flatMap(c => [c.customer, c.name, c.organization, c.organization_code, c.price_list_name, c.currency_code, c.sales_pic_code, c.status, custHash(c)]) }, counterStmt(writesKey(), part.length)])
+    // Cả trang trong MỘT giao dịch (nhiều câu 300 dòng): ít vòng gọi Turso hơn nhiều so với từng lô 100 dòng.
+    if (todo.length) {
+      const stmts: Stmt[] = chunk(todo, 300).map(part => ({ sql: `INSERT OR REPLACE INTO dm_customer (customer, name, organization, organization_code, price_list_name, currency_code, sales_pic_code, status, hash) VALUES ${placeholders(9, part.length)}`, args: part.flatMap(c => [c.customer, c.name, c.organization, c.organization_code, c.price_list_name, c.currency_code, c.sales_pic_code, c.status, custHash(c)]) }))
+      stmts.push(counterStmt(writesKey(), todo.length))
+      await rtx(stmts)
     }
     changed += todo.length
     cursor = hi; pages++
