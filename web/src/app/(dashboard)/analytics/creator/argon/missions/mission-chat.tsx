@@ -1,7 +1,7 @@
 "use client"
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Pause, Play, RotateCcw, Paperclip, Rocket, Send, Sparkles, Square, ThumbsDown, ThumbsUp, Zap } from "lucide-react"
+import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Pause, Play, RotateCcw, Paperclip, Rocket, Send, Sparkles, Square, ThumbsDown, ThumbsUp, X, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
@@ -59,7 +59,7 @@ const AnswerMd = memo(function AnswerMd({ text, runId, onStep, hideCode }: { tex
   return <ArgonMarkdown text={text} onStep={cb} hideCode={hideCode} />
 })
 
-export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError, simple = false, quick, onDraft, aboveInput, basic = false, onAttach, placeholder }: {
+export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError, simple = false, quick, onDraft, aboveInput, basic = false, attach, placeholder }: {
   autoSend: { text: string; k: number } | null   // câu lệnh tự gửi (vd ▶ chạy lại script); mỗi k mới = một lần gửi
   phase: MissionPhase
   pendingAsk: PendingAskUi | null
@@ -75,7 +75,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   onDraft?: (text: string) => void   // báo nội dung đang gõ ra ngoài (trang Hỏi dùng để gợi ý nhanh từ Kho)
   aboveInput?: React.ReactNode       // khối hiện NGAY TRÊN ô nhắn (vd gợi ý từ Kho)
   basic?: boolean                    // giao diện cho người ít rành công nghệ: ẩn chọn mô hình/suy luận/chi phí, Enter là gửi
-  onAttach?: (files: File[]) => void // có thì hiện nút "Thêm tài liệu" (lưu vào Tài liệu của tôi)
+  attach?: { files: File[]; add: (f: File[]) => void; remove: (i: number) => void; clear: () => void } // có thì hiện nút đính kèm: tệp chỉ giữ ở ô nhắn, bấm Gửi mới tải lên + lưu vào Tài liệu của tôi
   placeholder?: string
 }) {
   const [prompt, setPromptState] = useState("")
@@ -134,8 +134,11 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   async function send(text?: string) {
     const p = (text ?? prompt).trim()
     if (!p || busy) return
+    const files = attach?.files ?? []
+    if (files.length && background) { onError("Chạy nền chưa hỗ trợ tệp đính kèm: tắt “Chạy nền” hoặc bỏ tệp."); return }
     setPrompt(""); stick.current = true
-    await runner.send(p, opts)
+    attach?.clear()
+    await runner.send(p, opts, files.length ? files : undefined)
   }
 
   const idx = phaseIndex(phase)
@@ -271,15 +274,25 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
         </div>}
         {aboveInput}
         <div className="ag-composer">
+          {attach && attach.files.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 px-3 pt-2.5" aria-label="Tệp đính kèm chưa gửi">
+              {attach.files.map((f, i) => (
+                <span key={`${f.name}-${i}`} className="inline-flex max-w-[220px] items-center gap-1 rounded-lg bg-violet-50 dark:bg-violet-950/40 px-2 py-1 text-[12px] text-violet-800 dark:text-violet-200">
+                  <Paperclip size={11} className="shrink-0" /><span className="truncate">{f.name}</span>
+                  <button type="button" onClick={() => attach.remove(i)} aria-label={`Bỏ ${f.name}`} className="shrink-0 rounded p-0.5 hover:bg-violet-100 dark:hover:bg-violet-900"><X size={11} /></button>
+                </span>
+              ))}
+            </div>
+          )}
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={2} aria-label="Nhắn Argon"
             onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey || (basic && !e.shiftKey && !e.nativeEvent.isComposing))) { e.preventDefault(); void send() } }}
             placeholder={placeholder ?? "Nhắn Argon…"}
             className="block w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[13.5px] leading-relaxed text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none" />
           <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5 pt-1">
-            {onAttach && (
+            {attach && (
               <>
-                <input ref={attachRef} type="file" multiple hidden onChange={e => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; if (fs.length) onAttach(fs) }} />
-                <button type="button" onClick={() => attachRef.current?.click()} title="Thêm tài liệu (PDF, Word, Excel, ảnh…) vào Tài liệu của tôi" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700"><Paperclip size={13} />Thêm tài liệu</button>
+                <input ref={attachRef} type="file" multiple hidden onChange={e => { const fs = Array.from(e.target.files ?? []); e.target.value = ""; if (fs.length) attach.add(fs) }} />
+                <button type="button" onClick={() => attachRef.current?.click()} title="Đính kèm tài liệu (PDF, Word, Excel, ảnh…) cho câu hỏi này; bấm Gửi mới lưu vào Tài liệu của tôi" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700"><Paperclip size={13} />Đính kèm</button>
               </>
             )}
             {!basic && <Seg label="Mô hình" value={modelMode} onChange={pickModel} options={[

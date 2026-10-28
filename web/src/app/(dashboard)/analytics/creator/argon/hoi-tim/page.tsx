@@ -7,7 +7,7 @@ import Link from "next/link"
 import dynamic from "next/dynamic"
 import { Brain, Check, Cpu, FileText, Loader2, Radio, Wrench, X } from "lucide-react"
 import { MemoryPanel } from "@/components/gau-pro/memory-panel"
-import { useChatUpload } from "./use-chat-upload"
+import { MAX_FILES, useChatUpload } from "./use-chat-upload"
 const LiveSession = dynamic(() => import("@/components/gau-pro/live-session").then(m => m.LiveSession), { ssr: false })   // giọng nói trực tiếp: chỉ nạp khi mở (nặng)
 import { InlineConfirm } from "./inline-confirm"
 import { MyDocs } from "./my-docs"
@@ -73,7 +73,14 @@ export default function TroLyPage() {
   const [showBench, setShowBench] = useState(false)
   const [showLive, setShowLive] = useState(false)   // giọng nói/màn hình trực tiếp (chỉ Creator)
   const [showDocs, setShowDocs] = useState(false)   // ngăn kéo "Tài liệu của tôi"
-  const { state: up, upload, reset: resetUp } = useChatUpload()
+  const { state: up, upload, stage, digest, reset: resetUp } = useChatUpload()
+  const [pending, setPending] = useState<File[]>([])   // tệp đính kèm chưa gửi: chỉ lưu vào Tài liệu của tôi khi bấm Gửi
+  const attach = {
+    files: pending,
+    add: (fs: File[]) => setPending(p => [...p, ...fs].slice(0, MAX_FILES)),
+    remove: (i: number) => setPending(p => p.filter((_, j) => j !== i)),
+    clear: () => setPending([]),
+  }
   const [dropping, setDropping] = useState(false)
   const [showMemory, setShowMemory] = useState(false)   // panel Trí nhớ của chính người dùng (Argon đọc chung trí nhớ này)
   const [focus, setFocus] = useState<{ id: string; k: number } | null>(null)
@@ -107,7 +114,7 @@ export default function TroLyPage() {
   }, [onError])
   useEffect(() => { if (missionId) loadDetail(missionId) }, [missionId, loadDetail])
   const refresh = useCallback(() => { if (missionId) loadDetail(missionId) }, [missionId, loadDetail])
-  const runner = useMissionRunner({ projectId: detail?.mission.project_id ?? null, runs, setRuns, onError, onWorkspaceChanged: refresh, onFinished: refresh, onPoll: refresh })
+  const runner = useMissionRunner({ projectId: detail?.mission.project_id ?? null, runs, setRuns, onError, onWorkspaceChanged: refresh, onFinished: refresh, onPoll: refresh, stage, onAttached: ids => { void digest(ids) } })
   busyRef.current = runner.busy
   const benchClosedByUser = useRef(false)
   const toggleBench = (v: boolean) => { benchClosedByUser.current = !v; setShowBench(v) }
@@ -171,9 +178,9 @@ export default function TroLyPage() {
               onDelete={id => { if (canRename(id)) void deleteConv(id) }} />
           </aside>
         )}
-        <section onDragOver={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDropping(true) } }} onDragLeave={e => { if (e.currentTarget === e.target) setDropping(false) }} onDrop={e => { e.preventDefault(); setDropping(false); const fs = Array.from(e.dataTransfer.files); if (fs.length) void upload(fs) }}
+        <section onDragOver={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDropping(true) } }} onDragLeave={e => { if (e.currentTarget === e.target) setDropping(false) }} onDrop={e => { e.preventDefault(); setDropping(false); const fs = Array.from(e.dataTransfer.files); if (fs.length) attach.add(fs) }}
           className={cn("relative flex-1 min-w-0 min-h-[75vh] lg:min-h-0 ag-card ag-card-flat overflow-hidden flex flex-col", dropping && "ring-2 ring-violet-400")} aria-label="Gấu Prime">
-          {dropping && <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-violet-50/80 dark:bg-slate-900/80 text-[15px] font-medium text-violet-700 dark:text-violet-200">Thả tài liệu vào đây để thêm vào Tài liệu của tôi</div>}
+          {dropping && <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-violet-50/80 dark:bg-slate-900/80 text-[15px] font-medium text-violet-700 dark:text-violet-200">Thả tài liệu vào đây để đính kèm vào câu hỏi</div>}
           <div className="px-3 py-1.5 border-b border-gray-100 dark:border-slate-700 flex items-center gap-2">
             {convs.length > 0
               ? <div className="lg:hidden min-w-0"><ConversationSwitcher conversations={convItems} activeId={missionId} title={active?.daily ? mainLabel : (active?.title ?? mainLabel)} disabled={runner.busy}
@@ -195,7 +202,7 @@ export default function TroLyPage() {
           </div>
           {!m || !detail ? <div className="m-auto text-sm text-gray-400">Đang chuẩn bị trợ lý…</div> : (
             <div className="flex-1 min-h-0">
-              <MissionChat simple quick={member ? MEMBER_QUICK : QUICK} autoSend={auto} onDraft={setDraft} basic={member} onAttach={files => void upload(files)} placeholder={member ? "Nhập câu hỏi của anh/chị… (Enter để gửi, Shift+Enter xuống dòng)" : undefined}
+              <MissionChat simple quick={member ? MEMBER_QUICK : QUICK} autoSend={auto} onDraft={setDraft} basic={member} attach={attach} placeholder={member ? "Nhập câu hỏi của anh/chị… (Enter để gửi, Shift+Enter xuống dòng)" : undefined}
                 aboveInput={<>
                   <UploadBanner state={up} onClose={resetUp} />
                   {member && <InlineConfirm refreshKey={runner.busy} onError={onError} />}

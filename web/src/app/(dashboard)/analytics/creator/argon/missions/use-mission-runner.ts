@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { api, jsonInit, type Run } from "../argon-types"
+import type { Staged } from "../hoi-tim/use-chat-upload"
 
 // Chạy lượt của sứ mệnh: SSE tới dự án nền (tự nối đoạn dở), gom các bước công cụ cho Bàn làm việc, thăm dò việc nền. Chat chỉ nhận câu trả lời, mọi bước đi vào `steps`.
 export interface Step { id: string; runId: string; idx: number; name: string; args: Record<string, unknown>; ok: boolean; chars: number; at: string; result?: string }
@@ -61,8 +62,10 @@ export function useMissionRunner(o: {
   onWorkspaceChanged: () => void          // Argon vừa ghi file
   onFinished: () => void                  // lượt xong (cập nhật chi tiêu, lịch sử)
   onPoll: () => void                      // thăm dò việc nền: tải lại chi tiết sứ mệnh
+  stage?: (files: File[]) => Promise<{ regs: Staged[]; failed: string[] }>   // tải tệp đính kèm lên Storage lúc bấm gửi
+  onAttached?: (ids: string[]) => void   // máy chủ đã lưu tệp đính kèm thành tài liệu → trang chạy tóm tắt song song với câu trả lời
 }) {
-  const { projectId, runs, setRuns, onError, onWorkspaceChanged, onFinished, onPoll } = o
+  const { projectId, runs, setRuns, onError, onWorkspaceChanged, onFinished, onPoll, stage, onAttached } = o
   const [busy, setBusy] = useState(false)
   const [steps, setSteps] = useState<Step[]>([])
   const [warn, setWarn] = useState<string[]>([])
@@ -85,7 +88,7 @@ export function useMissionRunner(o: {
   useEffect(() => { stepsRun.current = null; setSteps([]) }, [projectId])
   useEffect(() => { if (lastRunId && !busy && stepsRun.current !== lastRunId) void loadSteps(lastRunId) }, [lastRunId, busy, loadSteps])
 
-  async function run(body: Record<string, unknown>) {
+  async function run(body: Record<string, unknown>, files?: File[]) {
     if (!projectId) return
     const ac = new AbortController(); acRef.current = ac; setBusy(true); setWarn([])
     let seg = 0, resumeId = body.resumeRunId as string | undefined
@@ -93,11 +96,17 @@ export function useMissionRunner(o: {
     const tmpId = !resumeId && typeof body.prompt === "string" ? `tmp-${Date.now()}` : null
     if (tmpId) { stepsRun.current = tmpId; setSteps([]); setRuns(prev => [...prev, { id: tmpId, prompt: String(body.prompt), answer: "", status: "running", model: null, thinking: String(body.thinking), source_ids: [], tokens_in: 0, tokens_out: 0, cached_in: 0, cost_usd: 0, duration_ms: 0, segments: 0, error: null, created_at: new Date().toISOString() }]) }
     try {
+      if (files?.length && stage) {
+        const st = await stage(files)
+        if (st.failed.length) onError(`Chưa tải lên được: ${st.failed.join(", ")}`)
+        if (st.regs.length) body = { ...body, attachments: st.regs }
+      }
       for (;;) {
         let rid = resumeId ?? "", final: Partial<Run> | null = null
         await streamRun(projectId, resumeId ? { ...body, resumeRunId: resumeId } : body, ac.signal, e => {
           if (e.type === "start") {
             rid = e.runId; if (e.warnings?.length) setWarn(e.warnings)
+            if (e.attachedIds?.length) onAttached?.(e.attachedIds)
             if (!resumeId) {
               stepsRun.current = rid; setSteps([])
               setRuns(prev => (tmpId && prev.some(r => r.id === tmpId) ? prev.map(r => (r.id === tmpId ? { ...r, id: rid } : r)) : [...prev, { id: rid, prompt: String(body.prompt), answer: "", status: "running", model: null, thinking: String(body.thinking), source_ids: [], tokens_in: 0, tokens_out: 0, cached_in: 0, cost_usd: 0, duration_ms: 0, segments: 0, error: null, created_at: new Date().toISOString() }]))
@@ -132,7 +141,7 @@ export function useMissionRunner(o: {
     } catch (e) { onError((e as Error).message) }
   }
 
-  const send = (prompt: string, opts: SendOpts) => (opts.background ? startBackground({ prompt, thinking: opts.thinking, allowTools: opts.allowTools, model: opts.model }) : run({ prompt, thinking: opts.thinking, allowTools: opts.allowTools, model: opts.model }))
+  const send = (prompt: string, opts: SendOpts, files?: File[]) => (opts.background ? startBackground({ prompt, thinking: opts.thinking, allowTools: opts.allowTools, model: opts.model }) : run({ prompt, thinking: opts.thinking, allowTools: opts.allowTools, model: opts.model }, files))
   const resume = (runId: string, opts: SendOpts) => (opts.background ? startBackground({ resumeRunId: runId, thinking: opts.thinking, allowTools: opts.allowTools }) : run({ resumeRunId: runId, thinking: opts.thinking, allowTools: opts.allowTools }))
   const stop = () => acRef.current?.abort()
   async function cancelBg(runId: string) {

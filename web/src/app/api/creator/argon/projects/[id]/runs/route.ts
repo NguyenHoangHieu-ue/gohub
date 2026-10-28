@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { costOf, resolveModel } from "@/lib/argon/models"
 import { checkRateLimit } from "@/lib/rate-limit"
-import { ownProject, type ArgonRun } from "@/lib/argon/server"
+import { ownProject, type ArgonRun, type ArgonSource } from "@/lib/argon/server"
+import { registerUploads, type UploadItem } from "@/lib/argon/register-upload"
 import { buildRunContext } from "@/lib/argon/context"
 import { LEVELS, runSegment } from "@/lib/argon/run-engine"
 import { MAX_OUT, SEGMENT_MS, loadRunMaterial } from "@/lib/argon/bg-worker"
@@ -10,7 +11,7 @@ import { deleteBg, deleteToolLog, getToolLog, saveToolLog, setBg, triggerWorker 
 import { autoSaveReports, getReportHtml, templateSuffix } from "@/lib/argon/report-store"
 import { linkedSourceIdsForProject, loadMissionContext, missionIdForProject } from "@/lib/argon/missions-db"
 import { clearPendingAsk } from "@/lib/argon/ask-tool"
-import { KHO_MISSION_NAME } from "@/lib/argon/kho"
+import { KHO_MISSION_NAME, ensureKhoProject } from "@/lib/argon/kho"
 import { usesKhoScope } from "@/lib/argon/context-instruction"
 import { routeRun } from "@/lib/argon/run-route"
 import { MEMBER_NOTE } from "@/lib/argon/access-pure"
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const rl = await checkRateLimit(`argon:${username}`, 20, 60_000)
   if (!rl.allowed) return NextResponse.json({ error: `Quá nhiều yêu cầu, chờ ${Math.ceil(rl.resetMs / 1000)}s` }, { status: 429 })
 
-  const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string; allowTools?: boolean; background?: boolean; templateReportId?: string; model?: string; route?: "auto" | "full" }
+  const b = (await req.json().catch(() => ({}))) as { prompt?: string; thinking?: string; sourceIds?: string[]; resumeRunId?: string; allowTools?: boolean; background?: boolean; templateReportId?: string; model?: string; route?: "auto" | "full"; attachments?: UploadItem[] }
   // P5: member (người được Creator cấp) chỉ hỏi được trên Kho của chính họ — không chạy nền, không lấy số liệu hệ thống, có hạn mức mỗi ngày.
   const level = (await argonLevel(username)) ?? "member"
   const member = level === "member"
@@ -85,7 +86,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ runId, background: true })
   }
 
-  const mat = await loadRunMaterial(project, pick, req.nextUrl.origin)
+  // File đính kèm theo câu hỏi: chỉ lưu vào "Tài liệu của tôi" khi người dùng bấm gửi; đăng ký song song với dựng ngữ cảnh, rồi đưa thẳng vào ngữ cảnh lượt này (Kho chỉ nạp sẵn nguồn ghim).
+  const attachItems = !resume && Array.isArray(b.attachments) ? b.attachments.slice(0, 10).filter(a => a && typeof a.path === "string" && typeof a.name === "string") : []
+  const [mat, att] = await Promise.all([loadRunMaterial(project, pick, req.nextUrl.origin), attachItems.length ? ensureKhoProject(username).then(khoPid => registerUploads(khoPid, username, attachItems)) : Promise.resolve({ sources: [] as ArgonSource[], errors: [] as string[] })])
+  if (att.sources.length) mat.sources = [...mat.sources.filter(s => !att.sources.some(a => a.id === s.id)), ...att.sources]
+  if (att.errors.length) mat.warnings.push(`Chưa đọc được tệp đính kèm: ${att.errors.join("; ")}`)
   const toolLog = resume ? await getToolLog(resume.id) : []
   const mctx = project.kind === "mission" ? await loadMissionContext(project.id, prompt) : null
   if (member && mctx) mctx.instruction += `\n${MEMBER_NOTE}`   // P5: nói rõ giới hạn của thành viên thay vì để model tự tìm đường vòng
@@ -108,7 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const stream = new ReadableStream({
     async start(controller) {
       const send = (o: unknown) => { try { controller.enqueue(enc.encode(`data: ${JSON.stringify(o)}\n\n`)) } catch { /* client đã đóng */ } }
-      send({ type: "start", runId, warnings: ctx.warnings, sources: ctx.usedSourceIds.length, route: decision.route, routeReason: decision.reason })
+      send({ type: "start", runId, warnings: ctx.warnings, sources: ctx.usedSourceIds.length, attachedIds: att.sources.map(s => s.id), route: decision.route, routeReason: decision.reason })
       const save = (extra: Record<string, unknown> = {}) => supabaseAdmin.from("argon_runs").update({ answer, ...extra }).eq("id", runId)
       const log = [...toolLog]
       const seg = await runSegment({
