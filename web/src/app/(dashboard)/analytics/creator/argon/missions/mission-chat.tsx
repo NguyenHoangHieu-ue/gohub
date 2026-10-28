@@ -59,7 +59,7 @@ const AnswerMd = memo(function AnswerMd({ text, runId, onStep, hideCode }: { tex
   return <ArgonMarkdown text={text} onStep={cb} hideCode={hideCode} />
 })
 
-export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError, simple = false, quick, onDraft, aboveInput, basic = false, attach, placeholder }: {
+export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError, simple = false, quick, onDraft, aboveInput, basic = false, attach, tpl, placeholder }: {
   autoSend: { text: string; k: number } | null   // câu lệnh tự gửi (vd ▶ chạy lại script); mỗi k mới = một lần gửi
   phase: MissionPhase
   pendingAsk: PendingAskUi | null
@@ -76,6 +76,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   aboveInput?: React.ReactNode       // khối hiện NGAY TRÊN ô nhắn (vd gợi ý từ Kho)
   basic?: boolean                    // giao diện cho người ít rành công nghệ: ẩn chọn mô hình/suy luận/chi phí, Enter là gửi
   attach?: { files: File[]; add: (f: File[]) => void; remove: (i: number) => void; clear: () => void } // có thì hiện nút đính kèm: tệp chỉ giữ ở ô nhắn, bấm Gửi mới tải lên + lưu vào Tài liệu của tôi
+  tpl?: { id: string; clear: () => void }   // report mẫu sẽ dựng lại với số liệu mới ở lượt kế tiếp
   placeholder?: string
 }) {
   const [prompt, setPromptState] = useState("")
@@ -138,7 +139,8 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
     if (files.length && background) { onError("Chạy nền chưa hỗ trợ tệp đính kèm: tắt “Chạy nền” hoặc bỏ tệp."); return }
     setPrompt(""); stick.current = true
     attach?.clear()
-    await runner.send(p, opts, files.length ? files : undefined)
+    const tplId = tpl?.id; tpl?.clear()
+    await runner.send(p, opts, files.length ? files : undefined, tplId)
   }
 
   const idx = phaseIndex(phase)
@@ -236,6 +238,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
                     {r.model && <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-slate-700 px-2 py-0.5">{/flash/i.test(r.model) ? <><Zap size={10} />Nhanh</> : <><Brain size={10} />Sâu</>}</span>}
                     {!basic && r.tokens_in > 0 && <span>{fmtTokens(r.tokens_in)} vào · {fmtTokens(r.tokens_out)} ra · ~${r.cost_usd.toFixed(2)} · {Math.round(r.duration_ms / 1000)}s{r.segments > 1 ? ` · ${r.segments} đoạn` : ""}</span>}
                     {!live && r.status === "partial" && <button type="button" disabled={busy} onClick={() => runner.resume(r.id, opts)} className="inline-flex items-center gap-1 text-violet-600 font-medium"><Play size={11} />Tiếp tục viết</button>}
+                    {simple && !live && r.answer && r.status === "done" && <span className="inline-flex items-center gap-1.5">Xuất:<a href={`/api/creator/argon/runs/${r.id}/export?format=docx`} className="rounded px-1 text-violet-700 dark:text-violet-300 hover:underline">Word</a><a href={`/api/creator/argon/runs/${r.id}/export?format=md`} className="rounded px-1 text-violet-700 dark:text-violet-300 hover:underline">Markdown</a></span>}
                     {!live && r.answer && <button type="button" onClick={() => void navigator.clipboard?.writeText(r.answer)} className="ml-auto inline-flex items-center gap-1 hover:text-gray-800 dark:hover:text-slate-200"><Copy size={11} />Sao chép</button>}
                   </div>
                 </div>

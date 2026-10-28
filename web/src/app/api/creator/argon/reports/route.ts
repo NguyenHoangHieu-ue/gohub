@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { requireArgonUser } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { isReportHtml, reportTitle } from "@/lib/argon/report"
 import { loadReportIndex, saveReport } from "@/lib/argon/report-store"
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic"
 
 // Kho báo cáo (HTML do Argon viết). GET → danh sách mới nhất trước (kèm tên dự án) · POST { html, title?, projectId? } → lưu tay 1 report.
 export async function GET() {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const list = await loadReportIndex(username)
   const pids = Array.from(new Set(list.map(r => r.projectId).filter((p): p is string => !!p)))
@@ -22,7 +22,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const username = await requireArgonUser()
+  const username = await requireArgonMemberName()
   if (!username) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const b = (await req.json().catch(() => ({}))) as { html?: string; title?: string; projectId?: string }
   const html = String(b.html ?? "")

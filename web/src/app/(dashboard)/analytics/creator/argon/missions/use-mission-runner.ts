@@ -141,7 +141,7 @@ export function useMissionRunner(o: {
     } catch (e) { onError((e as Error).message) }
   }
 
-  const send = (prompt: string, opts: SendOpts, files?: File[]) => (opts.background ? startBackground({ prompt, thinking: opts.thinking, allowTools: opts.allowTools, model: opts.model }) : run({ prompt, thinking: opts.thinking, allowTools: opts.allowTools, model: opts.model }, files))
+  const send = (prompt: string, opts: SendOpts, files?: File[], templateReportId?: string) => (opts.background ? startBackground({ prompt, thinking: opts.thinking, allowTools: opts.allowTools, model: opts.model, templateReportId }) : run({ prompt, thinking: opts.thinking, allowTools: opts.allowTools, model: opts.model, templateReportId }, files))
   const resume = (runId: string, opts: SendOpts) => (opts.background ? startBackground({ resumeRunId: runId, thinking: opts.thinking, allowTools: opts.allowTools }) : run({ resumeRunId: runId, thinking: opts.thinking, allowTools: opts.allowTools }))
   const stop = () => acRef.current?.abort()
   async function cancelBg(runId: string) {

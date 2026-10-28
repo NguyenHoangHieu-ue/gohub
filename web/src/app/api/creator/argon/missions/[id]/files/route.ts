@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireArgonUser } from "@/lib/argon/server"
+import { requireArgonMemberName } from "@/lib/argon/access"
 import { buildTree } from "@/lib/argon/missions"
 import { listFiles, ownMission, readFile, readFileBuffer, removeFile, writeFile } from "@/lib/argon/missions-db"
 import { isXlsxPath, previewWorkbook } from "@/lib/argon/xlsx-preview"
@@ -7,8 +8,9 @@ import { isXlsxPath, previewWorkbook } from "@/lib/argon/xlsx-preview"
 export const dynamic = "force-dynamic"
 
 // GET → cây workspace · GET ?path= → nội dung 1 file · PUT { path, content } → tạo/ghi file chữ (Hiếu ghi mọi lúc) · DELETE ?path= → xoá (trừ brief.md, decisions.md).
-async function guard(id: string) {
-  const username = await requireArgonUser()
+// Đọc/tải file (kể cả file Excel Argon vừa dựng) cho cả thành viên trong cuộc trò chuyện CỦA HỌ; ghi/xoá file chỉ Creator.
+async function guard(id: string, write = false) {
+  const username = write ? await requireArgonUser() : await requireArgonMemberName()
   if (!username) return { res: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
   const mission = await ownMission(id, username)
   return mission ? { mission } : { res: NextResponse.json({ error: "Không tìm thấy sứ mệnh" }, { status: 404 }) }
@@ -39,7 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const g = await guard(params.id); if (!g.mission) return g.res
+  const g = await guard(params.id, true); if (!g.mission) return g.res
   const b = (await req.json().catch(() => ({}))) as { path?: string; content?: string }
   if (typeof b.path !== "string" || typeof b.content !== "string") return NextResponse.json({ error: "Cần path và content (chữ)" }, { status: 400 })
   const r = await writeFile(g.mission.id, b.path, b.content, "user")
@@ -47,7 +49,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const g = await guard(params.id); if (!g.mission) return g.res
+  const g = await guard(params.id, true); if (!g.mission) return g.res
   const path = req.nextUrl.searchParams.get("path")
   if (!path) return NextResponse.json({ error: "Thiếu path" }, { status: 400 })
   const r = await removeFile(g.mission.id, path)

@@ -17,6 +17,7 @@ import { KHO_MISSION_NAME, ensureKhoProject } from "@/lib/argon/kho"
 import { usesKhoScope } from "@/lib/argon/context-instruction"
 import { routeRun } from "@/lib/argon/run-route"
 import { MEMBER_NOTE } from "@/lib/argon/access-pure"
+import { exportNote } from "@/lib/argon/export-note"
 import { argonLevel, checkMemberLimit, requireArgonMemberName } from "@/lib/argon/access"
 
 export const dynamic = "force-dynamic"
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (att.errors.length) mat.warnings.push(`Chưa đọc được tệp đính kèm: ${att.errors.join("; ")}`)
   const toolLog = resume ? await getToolLog(resume.id) : []
   const mctx = project.kind === "mission" ? await loadMissionContext(project.id, prompt) : null
+  if (mctx) mctx.instruction += "\n" + exportNote(mctx.mission.id)
   if (member && mctx) mctx.instruction += `\n${MEMBER_NOTE}`   // P5: nói rõ giới hạn của thành viên thay vì để model tự tìm đường vòng
   const ctx = await buildRunContext({ project: mat.project, sources: mat.sources, priorRuns: runs, prompt: withTpl(prompt), resumeRun: resume ? { ...resume, prompt: withTpl(resume.prompt) } : undefined, allowTools, toolLog, mission: mctx ?? undefined })
   ctx.warnings.push(...mat.warnings)

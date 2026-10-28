@@ -5,14 +5,15 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import { Brain, Check, Cpu, FileText, Loader2, Radio, Wrench, X } from "lucide-react"
+import { BarChart3, Brain, Check, Cpu, FileText, Loader2, Radio, Wrench, X } from "lucide-react"
+import { ReportsModal } from "../reports-modal"
 import { MemoryPanel } from "@/components/gau-pro/memory-panel"
 import { MAX_FILES, useChatUpload } from "./use-chat-upload"
 const LiveSession = dynamic(() => import("@/components/gau-pro/live-session").then(m => m.LiveSession), { ssr: false })   // giọng nói trực tiếp: chỉ nạp khi mở (nặng)
 import { InlineConfirm } from "./inline-confirm"
 import { MyDocs } from "./my-docs"
 import { cn } from "@/lib/utils"
-import { api, jsonInit, type Run } from "../argon-types"
+import { api, jsonInit, type ReportMetaUi, type Run } from "../argon-types"
 import type { MissionDetail } from "../missions/mission-types"
 import { MissionChat } from "../missions/mission-chat"
 import { Workbench } from "../missions/workbench"
@@ -74,6 +75,10 @@ export default function TroLyPage() {
   const [showLive, setShowLive] = useState(false)   // giọng nói/màn hình trực tiếp (chỉ Creator)
   const [showDocs, setShowDocs] = useState(false)   // ngăn kéo "Tài liệu của tôi"
   const { state: up, upload, stage, digest, reset: resetUp } = useChatUpload()
+  const [reports, setReports] = useState<ReportMetaUi[]>([])
+  const [showReports, setShowReports] = useState(false)   // Kho báo cáo của chính người dùng (report HTML Gấu Prime đã dựng)
+  const [tpl, setTpl] = useState<ReportMetaUi | null>(null)
+  const loadReports = useCallback(() => api<{ reports: ReportMetaUi[] }>("/api/creator/argon/reports").then(r => setReports(r.reports)).catch(() => { /* chỉ là danh sách */ }), [])
   const [pending, setPending] = useState<File[]>([])   // tệp đính kèm chưa gửi: chỉ lưu vào Tài liệu của tôi khi bấm Gửi
   const attach = {
     files: pending,
@@ -190,6 +195,7 @@ export default function TroLyPage() {
               : null}
             <span className={cn("px-2 text-sm font-semibold text-gray-800 dark:text-slate-100 truncate", convs.length > 0 && "hidden lg:inline")}>{active?.daily ? mainLabel : (active?.title ?? mainLabel)}</span>
             <button type="button" onClick={() => setShowDocs(true)} title="Những tài liệu bạn đã đưa cho trợ lý" className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"><FileText size={13} />Tài liệu của tôi</button>
+            <button type="button" onClick={() => { void loadReports(); setShowReports(true) }} title="Các report Gấu Prime đã dựng cho bạn" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"><BarChart3 size={13} />Kho báo cáo</button>
             <button type="button" onClick={() => setShowMemory(true)} title="Xem, sửa hoặc xoá những điều trợ lý nhớ về bạn" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"><Brain size={13} />Trí nhớ</button>
             {!member && <button type="button" onClick={() => setShowLive(true)} title="Nói chuyện trực tiếp bằng giọng nói, có thể chia sẻ màn hình" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 px-2.5 py-1 text-[12px] text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"><Radio size={13} />Nói chuyện</button>}
             {!member && (
@@ -202,9 +208,10 @@ export default function TroLyPage() {
           </div>
           {!m || !detail ? <div className="m-auto text-sm text-gray-400">Đang chuẩn bị trợ lý…</div> : (
             <div className="flex-1 min-h-0">
-              <MissionChat simple quick={member ? MEMBER_QUICK : QUICK} autoSend={auto} onDraft={setDraft} basic={member} attach={attach} placeholder={member ? "Nhập câu hỏi của anh/chị… (Enter để gửi, Shift+Enter xuống dòng)" : undefined}
+              <MissionChat simple quick={member ? MEMBER_QUICK : QUICK} autoSend={auto} onDraft={setDraft} basic={member} attach={attach} tpl={tpl ? { id: tpl.id, clear: () => setTpl(null) } : undefined} placeholder={member ? "Nhập câu hỏi của anh/chị… (Enter để gửi, Shift+Enter xuống dòng)" : undefined}
                 aboveInput={<>
                   <UploadBanner state={up} onClose={resetUp} />
+                  {tpl && <div className="mb-2 flex items-center gap-2 rounded-lg bg-violet-50 dark:bg-violet-950/40 px-3 py-1.5 text-[12.5px] text-violet-800 dark:text-violet-200"><BarChart3 size={13} />Dựng lại từ mẫu: <b className="truncate">{tpl.title}</b> với số liệu mới nhất<button type="button" onClick={() => setTpl(null)} aria-label="Bỏ mẫu" className="ml-auto rounded p-0.5 hover:bg-violet-100 dark:hover:bg-violet-900"><X size={12} /></button></div>}
                   {member && <InlineConfirm refreshKey={runner.busy} onError={onError} />}
                   <KhoHints member={member} draft={draft} found={found} searching={searching} dismissed={dismissed} onDismiss={() => setDismissed(draft.trim())} />
                 </>} phase={m.phase} pendingAsk={detail.pendingAsk} patches={detail.patches ?? []}
@@ -216,6 +223,7 @@ export default function TroLyPage() {
         </section>
         {!member && showLive && <LiveSession title="Gấu Prime" onClose={() => setShowLive(false)} />}
         {showDocs && <MyDocs onClose={() => setShowDocs(false)} refreshKey={up.stage} onError={onError} upload={files => void upload(files)} up={up} />}
+        {showReports && <ReportsModal reports={reports} activeProject={detail?.mission.project_id ?? null} onClose={() => setShowReports(false)} onChange={() => void loadReports()} onUseTemplate={r => { setTpl(r); setShowReports(false) }} onError={onError} />}
         {showMemory && <MemoryPanel api="/api/creator/assistant/memory" floating onClose={() => setShowMemory(false)} />}
         {!member && showBench && detail && (
           <aside aria-label="Argon đang làm gì" className="fixed inset-x-2 bottom-2 z-30 h-[60vh] rounded-2xl shadow-2xl lg:static lg:inset-auto lg:z-auto lg:h-auto lg:w-[360px] lg:shrink-0 lg:shadow-none ag-card ag-card-flat !bg-[var(--ag-glass-strong)] overflow-hidden flex flex-col">
