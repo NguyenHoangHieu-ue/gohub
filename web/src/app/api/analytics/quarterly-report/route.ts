@@ -13,6 +13,7 @@ import { rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { getRollupMode, rollupState } from "@/lib/rollup/mode"
 import { diffQuarter, fetchQuarterRollup } from "@/lib/rollup/quarter"
 import { logRun } from "@/lib/rollup/builder"
+import { diffLifecycle, fetchB2BLifecycleRollup } from "@/lib/rollup/lifecycle"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
@@ -138,6 +139,22 @@ export async function GET(req: NextRequest) {
   const useRollup = ruMode === "on" && !!ruState?.fresh
   const cacheKey = useRollup ? `${rawCacheKey}:ru${ruState!.version}` : rawCacheKey   // version đổi → khoá mới, không phục vụ bản cũ
 
+  type LifecycleRow = import("@/lib/analytics-engine/b2b-lifecycle").B2BLifecycleRow
+  const lifecycleRaw = () => fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)).catch(() => [] as LifecycleRow[])
+  const loadLifecycle = async (): Promise<LifecycleRow[]> => {
+    if (useRollup) {
+      try { return await fetchB2BLifecycleRollup(companyCode, excludedCustomers, exclHash(excludedCustomers), ruState!.version, refresh) }
+      catch (e) { await logRun("fallback:quarterly-lifecycle", null, false, 0, { error: (e as Error).message }).catch(() => undefined) }
+    }
+    const raw = await lifecycleRaw()
+    if (ruMode === "shadow" && ruState?.fresh && raw.length) {
+      const t0 = Date.now()
+      try { const d = diffLifecycle(raw, await fetchB2BLifecycleRollup(companyCode, excludedCustomers, exclHash(excludedCustomers), ruState.version, refresh)); await logRun("shadow:quarterly-lifecycle", null, d.ok, Date.now() - t0, { companyCode, ...d }) }
+      catch (e) { await logRun("shadow:quarterly-lifecycle", null, false, Date.now() - t0, { error: (e as Error).message }).catch(() => undefined) }
+    }
+    return raw
+  }
+
   try {
     const [rawData, { channelCosts, groupCosts: allGroupCosts }, { channelCosts: prevChannelCosts, groupCosts: allPrevGroupCosts }, customerCostMap, prevCustomerCostMap, lifecycleRows] = await Promise.all([
       cachedQuery(cacheKey, async () => {
@@ -239,7 +256,7 @@ export async function GET(req: NextRequest) {
       fetchCosts(prevQMonths),
       fetchCustomerCosts(months).catch(() => new Map<string, CostRecord>()),      // Turso B2B customer costs current Q
       fetchCustomerCosts(prevQMonths).catch(() => new Map<string, CostRecord>()), // Turso B2B customer costs prev Q (QoQ)
-      fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)).catch(() => [] as import("@/lib/analytics-engine/b2b-lifecycle").B2BLifecycleRow[]), // s200
+      loadLifecycle(), // s200 (rollup khi bật; thô khi tắt/lỗi/cũ)
     ])
 
     const groupCosts = filterGroupCostsByCompany(allGroupCosts, companyCode)
@@ -589,7 +606,7 @@ export async function GET(req: NextRequest) {
       elapsed_days,
       quarter_days,
       customerLifecycle,
-    }, { headers: CACHE_HEADERS })
+    }, { headers: ruMode === "on" ? { "Cache-Control": "no-store" } : CACHE_HEADERS }   // rollup: không cache biên (đã đủ nhanh; tên/số đổi hiện ngay sau lần làm mới))
   } catch (err: any) {
     console.error("[quarterly-report]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
