@@ -37,12 +37,17 @@ function ReportCard({ html }: { html: string }) {
   )
 }
 
+// Thành viên không xem được Argon làm gì: ẩn khối mã (trừ report HTML, là kết quả) và chip [#N] trỏ tới Bàn làm việc.
+const HideCodeCtx = createContext(false)
+
 function CodeBlock({ children }: { children?: ReactNode }) {
   const [done, setDone] = useState(false)
+  const hide = useContext(HideCodeCtx)
   const code = Children.toArray(children).find(isValidElement) as { props: { className?: string; children?: ReactNode } } | undefined
   const text = textOf(code?.props.children ?? children).replace(/\n$/, "")
   const lang = /language-([\w-]+)/.exec(code?.props.className ?? "")?.[1]
   if (lang === "html" && isReportHtml(text)) return <ReportCard html={text} />
+  if (hide) return null
   return (
     <div className="my-3 rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1 bg-gray-100 dark:bg-slate-700/60 text-[11px] text-gray-500 dark:text-slate-300">
@@ -101,6 +106,7 @@ const STEP_HREF = "#argon-step-"
 const StepCtx = createContext<((n: number) => void) | null>(null)
 function StepChip({ n }: { n: number }) {
   const on = useContext(StepCtx)
+  if (useContext(HideCodeCtx)) return null
   if (!on) return <span className="text-[10px] align-super text-gray-400">[#{n}]</span>
   return <button type="button" onClick={() => on(n)} title={`Xem bước ${n} ở Bàn làm việc: câu SQL / số liệu / code đã cho ra con số này`} className="mx-0.5 align-baseline rounded bg-violet-100 dark:bg-violet-900/50 px-1 text-[10.5px] font-mono text-violet-700 dark:text-violet-200 hover:bg-violet-600 hover:text-white">#{n}</button>
 }
@@ -109,6 +115,6 @@ export function linkSteps(text: string): string {
   return text.replace(/\[#(\d+(?:\s*,\s*#?\d+)*)\]/g, (_m, g: string) => g.split(",").map(x => `[#${x.trim().replace("#", "")}](${STEP_HREF}${x.trim().replace("#", "")})`).join(""))
 }
 
-export function ArgonMarkdown({ text, onStep }: { text: string; onStep?: (n: number) => void }) {
-  return <StepCtx.Provider value={onStep ?? null}><div className="argon-md text-gray-800 dark:text-slate-200 min-w-0 break-words"><ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{linkSteps(tidyAnswer(text))}</ReactMarkdown></div></StepCtx.Provider>
+export function ArgonMarkdown({ text, onStep, hideCode = false }: { text: string; onStep?: (n: number) => void; hideCode?: boolean }) {
+  return <HideCodeCtx.Provider value={hideCode}><StepCtx.Provider value={onStep ?? null}><div className="argon-md text-gray-800 dark:text-slate-200 min-w-0 break-words"><ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{linkSteps(tidyAnswer(text))}</ReactMarkdown></div></StepCtx.Provider></HideCodeCtx.Provider>
 }

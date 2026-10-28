@@ -54,9 +54,9 @@ function Seg<T extends string>({ value, onChange, options, label }: { value: T; 
 }
 
 // Câu trả lời đã xong không cần vẽ lại mỗi lần ô nhập hoặc trang cha đổi (parse markdown + bảng + khối report là phần nặng nhất khi chat dài).
-const AnswerMd = memo(function AnswerMd({ text, runId, onStep }: { text: string; runId: string; onStep: (runId: string, n: number) => void }) {
+const AnswerMd = memo(function AnswerMd({ text, runId, onStep, hideCode }: { text: string; runId: string; onStep: (runId: string, n: number) => void; hideCode?: boolean }) {
   const cb = useCallback((n: number) => onStep(runId, n), [onStep, runId])
-  return <ArgonMarkdown text={text} onStep={cb} />
+  return <ArgonMarkdown text={text} onStep={cb} hideCode={hideCode} />
 })
 
 export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError, simple = false, quick, onDraft, aboveInput, basic = false, onAttach, placeholder }: {
@@ -211,7 +211,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
               <div className="flex items-start gap-2.5">
                 <BearAvatar size={28} className="mt-0.5" />
                 <div className="min-w-0 flex-1 ag-bubble-ai px-4 py-3">
-                  {r.answer ? <AnswerMd text={r.answer} runId={r.id} onStep={stepStable} />
+                  {r.answer && !(simple && live) ? <AnswerMd text={r.answer} runId={r.id} onStep={stepStable} hideCode={basic} />
                     : <BearRunner />}
                   {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
                   {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}

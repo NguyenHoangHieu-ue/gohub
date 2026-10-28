@@ -63,10 +63,10 @@ export async function POST(req: NextRequest) {
     const folders = await listFolders(username)
     const paths = Array.from(new Set(folders.map(f => folderPathOf(f.id, folders)))).filter(Boolean)
     const results: { id: string; digest?: DigestMeta; folder_id?: string | null; facts?: number; error?: string }[] = []
-    for (const s of (data ?? []) as ArgonSource[]) {
+    await Promise.all(((data ?? []) as ArgonSource[]).map(async s => {
       try { const r = await digestAndFile(username, s, paths, !!b.autoFile); results.push({ id: s.id, digest: r.digest, folder_id: r.folder_id, facts: r.facts.length }) }
       catch (e) { results.push({ id: s.id, error: (e as Error).message }) }
-    }
+    }))
     return NextResponse.json({ results, folders: await listFolders(username) })
   }
   return NextResponse.json({ error: "action không hợp lệ" }, { status: 400 })

@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   if (b.action === "register") {
     const created: Omit<ArgonSource, "extracted_text">[] = [], errors: string[] = []
-    for (const it of (b.items ?? []).slice(0, 20)) {
+    await Promise.all((b.items ?? []).slice(0, 20).map(async it => {
       try {
         if (!it.path.startsWith(`${username}/${params.id}/`)) throw new Error("đường dẫn không hợp lệ")
         const { data: blob, error } = await supabaseAdmin.storage.from(ARGON_BUCKET).download(it.path)
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       } catch (e) {
         errors.push(`${it.name}: ${(e as Error).message}`)
       }
-    }
+    }))
     await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
     return NextResponse.json({ sources: created, errors })
   }

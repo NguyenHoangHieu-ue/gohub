@@ -24,20 +24,19 @@ export function useChatUpload() {
       const projectId = projectRef.current
       const prep = await api<{ bucket: string; uploads: { name: string; path: string; token: string }[] }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "prepare", files: list.map(f => ({ name: f.name, size: f.size })) }))
       const regs: { path: string; name: string; mime: string; size: number }[] = [], failed: string[] = []
-      for (let i = 0; i < list.length; i++) {
-        const { error } = await supabaseBrowser.storage.from(prep.bucket).uploadToSignedUrl(prep.uploads[i].path, prep.uploads[i].token, list[i])
-        if (error) { failed.push(list[i].name); continue }
-        regs.push({ path: prep.uploads[i].path, name: list[i].name, mime: list[i].type, size: list[i].size })
-      }
+      const sent = await Promise.all(list.map((f, i) => supabaseBrowser.storage.from(prep.bucket).uploadToSignedUrl(prep.uploads[i].path, prep.uploads[i].token, f)))
+      sent.forEach(({ error }, i) => {
+        if (error) failed.push(list[i].name)
+        else regs.push({ path: prep.uploads[i].path, name: list[i].name, mime: list[i].type, size: list[i].size })
+      })
       if (!regs.length) { setState({ stage: "error", text: "Không tải lên được tài liệu nào. Anh/chị thử lại giúp em." }); return }
       setState({ stage: "working", text: "Đang đọc nội dung…" })
       const r = await api<{ sources: Source[]; errors: string[] }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "register", items: regs }))
       failed.push(...regs.filter(x => !r.sources.some(s => s.name === x.name)).map(x => x.name))
       const ids = r.sources.map(s => s.id)
-      for (let i = 0; i < ids.length; i += 4) {
-        setState({ stage: "working", text: "Đang tóm tắt…" })
-        try { await api("/api/creator/argon/kho", jsonInit("POST", { action: "digest", ids: ids.slice(i, i + 4), autoFile: true })) } catch { /* tóm tắt lỗi không làm mất tài liệu đã lưu */ }
-      }
+      setState({ stage: "working", text: "Đang tóm tắt…" })
+      // Mỗi tài liệu một yêu cầu, chạy song song (server cũng song song trong lô); tóm tắt lỗi không làm mất tài liệu đã lưu.
+      await Promise.all(ids.map(id => api("/api/creator/argon/kho", jsonInit("POST", { action: "digest", ids: [id], autoFile: true })).catch(() => null)))
       setState({ stage: "done", names: r.sources.map(s => s.name), failed })
     } catch (e) { setState({ stage: "error", text: (e as Error).message }) }
     finally { busy.current = false }
