@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, noCache, shipFilter, internalOpsFilter } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { diffDaily, fetchDailyRollup } from "@/lib/rollup/daily"
 
 export const maxDuration = 60
 export const dynamic = "force-dynamic"
@@ -34,8 +36,9 @@ export async function GET(req: NextRequest) {
   const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)}`
   const closed = end < new Date()
 
-  const key = `qdaily_v1:${quarter}:${year}:${companyCode}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
-  const days = await cachedQuery(key, async () => {
+  const ctx = await rollupCtx("quarterly-daily")
+  const key = `qdaily_v1:${quarter}:${year}:${companyCode}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}${ruKey(ctx)}`
+  const days = await cachedQuery(key, () => serve(ctx, async () => {
     const rows = await queryAnalytics<{ d: string; rev: string }>(`
       WITH inactive_cust AS (
         SELECT TRIM(code) as code FROM dim_customer WHERE UPPER(COALESCE(price_list_name, '')) LIKE '%INACTIVE%'
@@ -52,7 +55,7 @@ export async function GET(req: NextRequest) {
       GROUP BY 1 ORDER BY 1
     `)
     return rows.map(r => ({ d: r.d, rev: Number(r.rev) || 0 }))
-  }, closed ? 24 * 60 : QUERY_TTL_MIN, noCache(req), [], closed ? { maxStaleMs: 48 * 60 * 60_000, ignoreSoftExpiry: true } : {})
+  }, () => fetchDailyRollup({ start: iso(start), end: iso(end), companyCode, includeShip, includeInternalOps, excludedCustomers }), diffDaily, { quarter, year, companyCode, includeShip, includeInternalOps }), closed ? 24 * 60 : QUERY_TTL_MIN, noCache(req), [], closed ? { maxStaleMs: 48 * 60 * 60_000, ignoreSoftExpiry: true } : {})
 
-  return NextResponse.json({ quarter, year, start: iso(start), end: iso(end), days }, { headers: CACHE_HEADERS })
+  return NextResponse.json({ quarter, year, start: iso(start), end: iso(end), days }, { headers: ruHeaders(ctx, CACHE_HEADERS) })
 }
