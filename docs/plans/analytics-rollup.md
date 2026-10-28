@@ -169,3 +169,18 @@ Truy vấn rollup PHẢI dùng chỉ mục theo `day` (Turso tính lượt đọ
 - Danh sách đầy đủ số đo theo nhóm vendor (ngoài `hk3_rev_vnd`).
 - Cách áp `excludeInactiveCustomers` ở rollup khách để khớp tuyệt đối.
 - Độ trễ đọc Turso ~150ms (số đo s203) chưa đo riêng cho rollup.
+
+## 13. Khi dữ liệu bị SỬA (không chỉ thêm mới) — bổ sung 2026-10-28
+
+| Loại thay đổi | Xử lý | Độ trễ tối đa |
+|---|---|---|
+| Đổi NHÃN trong dim (tên kênh/khách/SKU A→B) | rollup lưu mã nên không dựng lại; `dm_*` làm mới sau ETL dim; cả lịch sử hiện tên mới (giống hiện nay vì join dim hiện tại) | ≤ 1 giờ |
+| Sửa GIÁ TRỊ trong fact (COGS, đơn hủy, xóa dòng) | băm theo ngày khác → XÓA cả ngày rồi CHÈN lại (dòng bị xóa cũng mất) | ≤ 1 giờ trong cửa sổ 45 ngày; ngoài cửa sổ ≤ 24 giờ (đối chiếu từng tháng hằng đêm) |
+| Đổi MÃ (gộp khách X→Y) | như sửa giá trị (mã nằm trong fact); `dm_customer` đồng bộ cả dòng bị xóa | như trên |
+| Thuộc tính NƯỚNG VÀO rollup: nhóm vendor của SKU (`hk3_rev_vnd`), cờ `ship` | điểm yếu duy nhất: băm bảng ánh xạ SKU→nhóm vendor; đổi băm thì dựng lại số đo đó toàn lịch sử ngay lần làm mới sau (không chờ cuối tuần) | ≤ 1 giờ |
+| Cấu hình Supabase (loại khách, tier, chi phí, target) | áp lúc đọc; nằm trong khóa cache bằng băm cấu hình (như `exclHash`) | ngay |
+
+Cache — ba lớp, cả ba phải xử lý:
+1. **Máy chủ (L1/L2 `cachedQuery`)**: khóa gồm `data_version` + băm cấu hình → bản mới = khóa mới, không phục vụ bản cũ (đường hiện tại còn trả bản cũ tới 6 giờ sau hết TTL). `dm_*` và rollup ghi cùng một lần, tăng `data_version` ở BƯỚC CUỐI, nên không có trạng thái nửa mới nửa cũ.
+2. **CDN**: `CACHE_HEADERS = s-maxage=300, stale-while-revalidate=600` → tên cũ có thể thấy thêm 5–15 phút theo URL. Route rollup dùng `Cache-Control: no-store` (đã đủ nhanh, không cần cache biên). **Phải làm ở P0/P1.**
+3. **Trình duyệt (`lib/stale-first.ts`, sessionStorage)**: thêm `data_version` vào khóa để khi dữ liệu đổi không hiện bản cũ thoáng qua.
