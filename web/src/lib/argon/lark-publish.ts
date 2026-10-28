@@ -1,9 +1,9 @@
 import { appendMarkdown, docUrl } from "@/lib/agents/creator/tools/lark-docs"
 import { listFacts } from "./facts"
 import { getEntity, listEntities } from "./graph"
-import { larkToken, listWikiNodes, readLark } from "./lark"
+import { larkToken, listWikiNodes, readLark, readWikiSheetRows, tenantToken } from "./lark"
 import { listMailThreads } from "./mail-status"
-import { contentHash, factsFor, indexMarkdown, profileMarkdown, memoriesFor, threadsFor, vendorTargets, wikiNodesFor, type IndexEntry, type WikiNodeLite } from "./lark-publish-pure"
+import { contentHash, factsFor, indexMarkdown, profileMarkdown, memoriesFor, policyRowFor, threadsFor, vendorTargets, wikiNodesFor, type IndexEntry, type WikiNodeLite } from "./lark-publish-pure"
 import { vnToday } from "./facts-pure"
 
 export * from "./lark-publish-pure"
@@ -64,7 +64,7 @@ async function writeDoc(token: string, folder: string, existing: PubDoc | undefi
   return { doc: { token: id, url: (await docUrl(token, id, "docx")) ?? `https://www.larksuite.com/docx/${id}`, hash: hashOf, title }, action: "created" }
 }
 
-export interface PublishResult { profiles: number; created: number; updated: number; same: number; errors: string[]; folderUrl?: string; indexUrl?: string; wikiNodes?: number; wikiMissing?: string[]; stale?: { name: string; url: string }[] }
+export interface PublishResult { profiles: number; created: number; updated: number; same: number; errors: string[]; folderUrl?: string; indexUrl?: string; wikiNodes?: number; wikiMissing?: string[]; policyUnmatched?: string[]; stale?: { name: string; url: string }[] }
 
 /** Dựng và cập nhật hồ sơ Lark cho các thực thể quan trọng (vendor + thực thể có sự việc đang hiệu lực), rồi mục lục. Dừng trước `deadline`. */
 export async function publishProfiles(username: string, opts: { deadline?: number; force?: boolean } = {}): Promise<PublishResult> {
@@ -90,19 +90,28 @@ export async function publishProfiles(username: string, opts: { deadline?: numbe
   const { data: memRows } = await (await sb()).from("assistant_memory").select("kind,content").eq("username", username).eq("archived", false).not("source", "like", "auto-habit:%").limit(3000)
   const memories = (memRows ?? []) as { kind: string; content: string }[]
   // Wiki Lark vendor (chính sách/điều khoản): lỗi (chưa là thành viên không gian, thiếu quyền…) không chặn việc xuất hồ sơ.
-  let wikiNodes: WikiNodeLite[] = []
-  try { wikiNodes = await listWikiNodes(token, st.wikiSpaceId ?? DEFAULT_WIKI_SPACE) } catch (err) { out.errors.push(`Wiki: ${(err as Error).message}`.slice(0, 200)) }
+  // Đọc Wiki bằng token của bot (bot đã được thêm vào không gian Wiki vendor), không dùng phiên Lark cá nhân.
+  let wikiNodes: WikiNodeLite[] = [], wt = ""
+  let policy: { headers: string[]; rows: string[][] } | null = null
+  try {
+    wt = await tenantToken()
+    wikiNodes = await listWikiNodes(wt, st.wikiSpaceId ?? DEFAULT_WIKI_SPACE)
+    const sheet = wikiNodes.find(n => n.objType === "sheet" && /policy/i.test(n.title))
+    if (sheet) policy = await readWikiSheetRows(wt, sheet.nodeToken)
+  } catch (err) { out.errors.push(`Wiki: ${(err as Error).message}`.slice(0, 200)) }
   const wikiHost = st.wikiHost ?? DEFAULT_WIKI_HOST
+  const policySheetUrl = `https://${wikiHost}/wiki/${wikiNodes.find(n => n.objType === "sheet" && /policy/i.test(n.title))?.nodeToken ?? ""}`
   const wikiText = new Map<string, string>()
   const readWiki = async (n: WikiNodeLite): Promise<string> => {
     if (!wikiText.has(n.nodeToken)) {
       let text = ""
-      try { text = (await readLark({ kind: "wiki", token: n.nodeToken }, token)).text.trim().slice(0, WIKI_CHARS) } catch (err) { out.errors.push(`Wiki "${n.title}": ${(err as Error).message}`.slice(0, 200)) }
+      try { text = (await readLark({ kind: "wiki", token: n.nodeToken }, wt)).text.trim().slice(0, WIKI_CHARS) } catch (err) { out.errors.push(`Wiki "${n.title}": ${(err as Error).message}`.slice(0, 200)) }
       wikiText.set(n.nodeToken, text)
     }
     return wikiText.get(n.nodeToken)!
   }
-  out.wikiNodes = wikiNodes.length; out.wikiMissing = []
+  out.wikiNodes = wikiNodes.length; out.wikiMissing = []; out.policyUnmatched = []
+  const policyUsed = new Set<string>()
 
   for (const t of targets.slice(0, MAX_PROFILES)) {
     if (Date.now() > deadline) break
@@ -113,9 +122,11 @@ export async function publishProfiles(username: string, opts: { deadline?: numbe
         const text = await readWiki(n)
         if (text) wiki.push({ title: n.title, url: `https://${wikiHost}/wiki/${n.nodeToken}`, text })
       }
-      if (wikiNodes.length && !wiki.length) out.wikiMissing.push(t.name)
+      const cells = policy ? policyRowFor({ name: t.name, codes: t.codes }, policy) : null
+      if (cells) for (const c of policy!.rows) if (policyRowFor({ name: t.name, codes: t.codes }, { headers: policy!.headers, rows: [c] })) policyUsed.add(c[0])
+      if (wikiNodes.length && !wiki.length && !cells) out.wikiMissing.push(t.name)
       const md = profileMarkdown({
-        wiki, memories: memoriesFor(t.p, memories),
+        wiki, policy: cells ? { sheetUrl: policySheetUrl, cells } : undefined, memories: memoriesFor(t.p, memories),
         name: t.name, kind: "vendor", aliases: t.p.aliases, facts: t.facts, changes: t.facts.filter(f => f.change_note && Date.now() - Date.parse(f.recorded_at) < 14 * 86_400_000),
         related: (d?.related ?? []).map(r => ({ name: r.name, kind: r.kind, rels: r.rels })), mentions: d?.mentions ?? [], threads: threadsFor(t.p, threads),
       })
@@ -126,6 +137,7 @@ export async function publishProfiles(username: string, opts: { deadline?: numbe
       entries.push({ name: t.name, kind: "vendor", url: w.doc.url, facts: t.facts.length, mentions: t.entity?.mentions ?? 0 })
     } catch (err) { out.errors.push(`${t.name}: ${(err as Error).message}`.slice(0, 200)) }
   }
+  if (policy) out.policyUnmatched = policy.rows.map(r => r[0]).filter(l => l && !policyUsed.has(l))   // hàng chính sách chưa khớp vendor nào trong DB
   const keep = new Set(targets.map(t => `vendor|${t.name}`))
   out.stale = Object.entries(st.docs).filter(([k]) => !keep.has(k)).map(([k, d]) => ({ name: k.split("|").slice(1).join("|"), url: d.url }))
   for (const [k] of Object.entries(st.docs)) if (!keep.has(k)) delete st.docs[k]   // không còn trong danh sách vendor: bỏ khỏi trạng thái (tài liệu cũ trên Lark giữ nguyên để người dùng tự xoá)

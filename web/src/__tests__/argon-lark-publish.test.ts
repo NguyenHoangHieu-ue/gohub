@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { FactRow } from "@/lib/argon/facts-pure"
 import type { MailThreadRow } from "@/lib/argon/mail-status-pure"
-import { contentHash, factsFor, indexMarkdown, profileMarkdown, threadsFor, vendorTargets, wikiNodesFor, memoriesFor } from "@/lib/argon/lark-publish-pure"
+import { contentHash, factsFor, indexMarkdown, profileMarkdown, threadsFor, vendorTargets, wikiNodesFor, memoriesFor, policyRowFor } from "@/lib/argon/lark-publish-pure"
 
 const F = (id: string, o: Partial<FactRow> = {}): FactRow => ({
   id, username: "u", type: "doi_gia", vendor: "3HK", subject: "Thái Lan", attribute: "", value: "", summary: "Giá 3.5 HKD/GB", evidence: "", effective_from: "2026-11-15", expires_at: null, status: "active", origin: "auto", edited: false,
@@ -73,5 +73,31 @@ describe("Wiki + trí nhớ theo vendor", () => {
     const m = [{ kind: "decision", content: "Với 3HK luôn đặt trước 2 ngày" }, { kind: "preference", content: "3HK em trả lời ngắn" }, { kind: "other", content: "Elite chậm phản hồi" }, { kind: "decision", content: "Nhật dùng KDDI" }]
     expect(memoriesFor({ name: "3HK", aliases: [] }, m)).toEqual(["Với 3HK luôn đặt trước 2 ngày"])
     expect(memoriesFor({ name: "Elite", aliases: [] }, m)).toEqual(["Elite chậm phản hồi"])
+  })
+})
+
+describe("memoriesFor: bản tin nhiều vendor", () => {
+  it("chỉ giữ tiêu đề + đoạn nhắc vendor, không đổ cả bản tin", () => {
+    const m = [{ kind: "project", content: "Telco Update 16/9: - Deal quan trọng: 3HK đã deal xong - Elite chậm phản hồi; cần nhắc - Joytel hết hàng" }]
+    expect(memoriesFor({ name: "Elite", aliases: [] }, m)).toEqual(["Telco Update 16/9: Elite chậm phản hồi"])
+    expect(memoriesFor({ name: "Uhuibao", aliases: [] }, m)).toEqual([])
+  })
+})
+
+describe("policyRowFor + wikiNodesFor (dữ liệu dạng thật)", () => {
+  const table = { headers: ["Vendor", "QR", "Hủy"], rows: [["BC Datapool", "90 ngày", "a"], ["BC", "90 ngày", "b"], ["DTac / TrueMove ", "lô", "c"], ["CHINA UNICOM", "lô", "d"], ["Mobifone", "lô", "e"], ["WM", "30", "f"]] }
+  it("khớp theo mã / tên / phần đầu tên, không nhầm VN Viettech (MobiFone) với Mobifone", () => {
+    expect(policyRowFor({ name: "BC Datapool (Singtel)", codes: ["W1"] }, table)![1].text).toBe("a")
+    expect(policyRowFor({ name: "Billion Connect", codes: ["BC"] }, table)![1].text).toBe("b")
+    expect(policyRowFor({ name: "Truemove", codes: ["TM"] }, table)![1].text).toBe("c")
+    expect(policyRowFor({ name: "DTAC", codes: ["DT"] }, table)![1].text).toBe("c")
+    expect(policyRowFor({ name: "China Unicom Hong Kong", codes: ["CU"] }, table)![1].text).toBe("d")
+    expect(policyRowFor({ name: "WORLDMOVE", codes: ["WM"] }, table)![1].text).toBe("f")
+    expect(policyRowFor({ name: "VN Viettech (MobiFone)", codes: ["VC"] }, table)).toBeNull()
+  })
+  it("wikiNodesFor: 'About X' và 'Viettech' ↔ 'VN Viettech (Viettel)'; loại trang tài khoản", () => {
+    const nodes = [{ title: "About GigHub", nodeToken: "g", objType: "docx", parent: null }, { title: "Viettech", nodeToken: "v", objType: "docx", parent: null }, { title: "Account Telco Viettech", nodeToken: "x", objType: "docx", parent: null }]
+    expect(wikiNodesFor({ name: "Gighub", aliases: [] }, nodes).map(n => n.nodeToken)).toEqual(["g"])
+    expect(wikiNodesFor({ name: "VN Viettech (Viettel)", aliases: [] }, nodes).map(n => n.nodeToken)).toEqual(["v"])
   })
 })

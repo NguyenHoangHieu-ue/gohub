@@ -173,3 +173,29 @@ export async function listWikiNodes(token: string, spaceId: string, opts: { maxD
   await walk(null, 0)
   return out
 }
+
+let tenantTok: { v: string; exp: number } | null = null
+/** Token của chính bot (tenant): đọc Wiki/Doc mà bot đã được thêm vào, không phụ thuộc phiên Lark cá nhân của ai. */
+export async function tenantToken(): Promise<string> {
+  if (tenantTok && Date.now() < tenantTok.exp) return tenantTok.v
+  const res = await fetch(`${L}/auth/v3/tenant_access_token/internal`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app_id: process.env.LARK_APP_ID, app_secret: process.env.LARK_APP_SECRET }) })
+  const d = await res.json().catch(() => null)
+  if (!d || d.code !== 0) throw new Error(`Lark tenant token: ${d?.msg ?? res.status}`)
+  tenantTok = { v: d.tenant_access_token as string, exp: Date.now() + (Number(d.expire) - 600) * 1000 }
+  return tenantTok.v
+}
+
+/** Trang tính đầu tiên của một trang Wiki dạng sheet → hàng đầu là tiêu đề cột, các hàng sau theo cột (ô rich-text đã trải phẳng, hàng trống bỏ). */
+export async function readWikiSheetRows(token: string, wikiNodeToken: string, maxRows = 300): Promise<{ headers: string[]; rows: string[][] }> {
+  const n = (await lk(token, `/wiki/v2/spaces/get_node?token=${encodeURIComponent(wikiNodeToken)}`)).node ?? {}
+  if (n.obj_type !== "sheet") throw new Error(`Trang Wiki "${n.title ?? wikiNodeToken}" không phải bảng tính`)
+  const q = await lk(token, `/sheets/v3/spreadsheets/${n.obj_token}/sheets/query`)
+  const sh = ((q.sheets ?? []) as { sheet_id: string; hidden?: boolean; grid_properties?: { row_count?: number; column_count?: number } }[]).find(s => !s.hidden)
+  if (!sh) return { headers: [], rows: [] }
+  const rows = Math.min(sh.grid_properties?.row_count ?? 0, maxRows), cols = Math.min(sh.grid_properties?.column_count ?? 0, 12)
+  if (!rows || !cols) return { headers: [], rows: [] }
+  const d = await lk(token, `/sheets/v2/spreadsheets/${n.obj_token}/values/${encodeURIComponent(`${sh.sheet_id}!A1:${colLetter(cols - 1)}${rows}`)}?valueRenderOption=FormattedValue`)
+  const all = ((d.valueRange?.values ?? []) as unknown[][]).map(r => r.map(c => cellText(c).trim()))
+  const [headers = [], ...body] = all
+  return { headers, rows: body.filter(r => r.some(Boolean)) }
+}
