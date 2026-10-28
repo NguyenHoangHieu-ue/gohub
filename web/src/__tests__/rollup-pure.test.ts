@@ -91,3 +91,35 @@ describe("rollup: NaN trong DW", () => {
     }
   })
 })
+
+import { custFilterSql, excludeCustomersSql } from "@/lib/rollup/filters"
+import { diffRows } from "@/lib/rollup/quarter"
+
+describe("rollup: bộ lọc tương đương đường thô", () => {
+  it("mặc định tick (gồm ship + nội bộ): chỉ còn loại khách INACTIVE", () => {
+    const f = custFilterSql({ includeShip: true, includeInternalOps: true })
+    expect(f).toContain("INACTIVE"); expect(f).not.toContain("r.ship = 0"); expect(f).not.toContain("INTERNAL-TRANSACTION")
+  })
+  it("bỏ tick ship/nội bộ, lọc công ty; công ty ALL không lọc", () => {
+    const f = custFilterSql({ includeShip: false, includeInternalOps: false, companyCode: "VN" })
+    expect(f).toContain("r.ship = 0"); expect(f).toContain("INTERNAL-TRANSACTION"); expect(f).toContain("r.company = 'VN'")
+    expect(custFilterSql({ includeShip: true, includeInternalOps: true, companyCode: "ALL" })).not.toContain("r.company")
+  })
+  it("loại khách chỉ trong nhánh B2B; mã so trực tiếp, tên qua dm_customer; escape dấu nháy", () => {
+    const e = excludeCustomersSql(["wHWSYmE541", "Công ty O'Neil"])
+    expect(e).toMatch(/^NOT \(UPPER\(COALESCE\(s\.group_name, 'OTHER'\)\) = 'B2B'/)
+    expect(e).toContain("r.customer IN ('wHWSYmE541')"); expect(e).toContain("dm_customer cx"); expect(e).toContain("O''Neil")
+    expect(excludeCustomersSql([])).toBe("")
+  })
+})
+
+describe("rollup: diffRows (shadow)", () => {
+  type R = { k: string; v: string }
+  const key = (r: R) => r.k
+  it("khớp khi bằng nhau; báo lệch số, thừa/thiếu dòng; bỏ qua dòng toàn 0 và số đo NaN phía thô", () => {
+    expect(diffRows<R>([{ k: "a", v: "10" }], [{ k: "a", v: "10.2" }], key, ["v"]).ok).toBe(true)
+    const d = diffRows<R>([{ k: "a", v: "10" }, { k: "b", v: "5" }, { k: "z", v: "0" }], [{ k: "a", v: "12" }, { k: "c", v: "7" }], key, ["v"])
+    expect(d.ok).toBe(false); expect([d.valueMismatch, d.onlyRaw, d.onlyRollup]).toEqual([1, 1, 1])
+    expect(diffRows<R>([{ k: "a", v: "NaN" }], [{ k: "a", v: "99" }], key, ["v"]).ok).toBe(true)
+  })
+})

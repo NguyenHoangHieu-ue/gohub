@@ -10,6 +10,9 @@ import { splitQuarterRows } from "@/lib/analytics-engine/quarter-rows"
 import { buildQuarterMonthMeta, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
 import { fetchB2BLifecycleRows, classifyB2BLifecycle } from "@/lib/analytics-engine/b2b-lifecycle"
 import { rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
+import { getRollupMode, rollupState } from "@/lib/rollup/mode"
+import { diffQuarter, fetchQuarterRollup } from "@/lib/rollup/quarter"
+import { logRun } from "@/lib/rollup/builder"
 
 const COST_KEYS = ["ads", "platformFee", "sponsorProducts", "media"] as const
 
@@ -129,9 +132,15 @@ export async function GET(req: NextRequest) {
   // Filter SQL dùng NOT EXISTS thay NOT IN (tránh NULL-trap, nhanh hơn với list lớn)
   const INACTIVE_FILTER = `AND NOT EXISTS (SELECT 1 FROM inactive_cust ic WHERE ic.code = TRIM(f.customer_code))`
 
+  // Rollup Analytics (docs/plans/analytics-rollup.md): off = đường thô; shadow = chạy cả hai, so sánh, vẫn trả thô; on = trả rollup khi còn tươi.
+  const ruMode = await getRollupMode("quarterly-report")
+  const ruState = ruMode === "off" ? null : await rollupState().catch(() => null)
+  const useRollup = ruMode === "on" && !!ruState?.fresh
+  const cacheKey = useRollup ? `${rawCacheKey}:ru${ruState!.version}` : rawCacheKey   // version đổi → khoá mới, không phục vụ bản cũ
+
   try {
     const [rawData, { channelCosts, groupCosts: allGroupCosts }, { channelCosts: prevChannelCosts, groupCosts: allPrevGroupCosts }, customerCostMap, prevCustomerCostMap, lifecycleRows] = await Promise.all([
-      cachedQuery(rawCacheKey, async () => {
+      cachedQuery(cacheKey, async () => {
         // s203: GỘP 7 query (mỗi cái quét lại cả bảng fact ~2-4s) thành 2 query trên KHOẢNG [quý trước → quý này] rồi
         // tách theo tháng ở JS. Trước: 7 lần quét / 2 luồng ≈ 12-22s khi cache nguội. Cùng bộ lọc (INACTIVE/exclude/ship/
         // company) nên số liệu giữ nguyên; chỉ khác thứ tự cộng số thực (sai số ~1e-9 tương đối).
@@ -139,7 +148,7 @@ export async function GET(req: NextRequest) {
         const rangeEnd   = qEndDate
         type BaseRow = { month: string; bg: string; channel: string | null; source_code: string | null; revenue: string; gp: string; hk3: string }
         type SourceRow = { month: string; channel: string | null; source_code: string | null; sapo_name: string | null; revenue: string; gp: string; hk3: string }
-        const [baseRows, custRows, srcRows] = await runLimited(3, [
+        const fetchRaw = () => runLimited(3, [
           // Hạt (tháng × nhóm × kênh) — đủ để dựng groupRows / channelRows / hk3Rows / prevGroupRows / prevChannelRows.
           () => queryAnalytics<BaseRow>(`
           ${CTE_PREAMBLE}
@@ -207,6 +216,22 @@ export async function GET(req: NextRequest) {
           GROUP BY 1, 2, 3
         `),
         ])
+
+        const ruArgs = { companyCode, includeShip, includeInternalOps, excludedCustomers, rangeStart, rangeEnd, qStartDate, qEndDate }
+        let baseRows: BaseRow[], custRows: { month: string; customer_code: string; revenue: string }[], srcRows: SourceRow[]
+        if (useRollup) {
+          try { ({ baseRows, custRows, srcRows } = await fetchQuarterRollup(ruArgs) as never) }
+          catch (e) { await logRun("fallback:quarterly-report", null, false, 0, { error: (e as Error).message }).catch(() => undefined); [baseRows, custRows, srcRows] = await fetchRaw() }
+        } else {
+          [baseRows, custRows, srcRows] = await fetchRaw()
+          if (ruMode === "shadow" && ruState?.fresh) {
+            const t0 = Date.now()
+            try {
+              const d = diffQuarter({ baseRows, custRows, srcRows }, await fetchQuarterRollup(ruArgs))
+              await logRun("shadow:quarterly-report", null, d.ok, Date.now() - t0, { quarter, year, companyCode, includeShip, includeInternalOps, ...(d.ok ? { rows: [d.base.rawRows, d.cust.rawRows, d.src.rawRows] } : { base: d.base, cust: d.cust, src: d.src }) })
+            } catch (e) { await logRun("shadow:quarterly-report", null, false, Date.now() - t0, { error: (e as Error).message }).catch(() => undefined) }
+          }
+        }
 
         return { ...splitQuarterRows(baseRows, custRows, months, prevQMonths), srcRows }
       }, quarterClosed ? CLOSED_QUARTER_TTL_MIN : QUERY_TTL_MIN, refresh, [], quarterClosed ? { maxStaleMs: CLOSED_QUARTER_MAX_STALE_MS, ignoreSoftExpiry: true } : {}),

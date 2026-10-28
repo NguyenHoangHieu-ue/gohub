@@ -87,6 +87,7 @@ export async function refreshRecent(days = 45, bases: Basis[] = BASES): Promise<
   const today = vnToday()
   const out: RefreshResult[] = []
   for (const b of bases) out.push(await refreshWindow(b, addDays(today, -days + 1), addDays(today, 2)))   // +2: dư một ngày phòng lệch múi giờ giữa DW và giờ VN
+  await setMeta("last_check_at", now())   // đã so với DW xong (kể cả khi không có gì đổi): tầng đọc dùng để biết rollup còn tươi
   return out
 }
 

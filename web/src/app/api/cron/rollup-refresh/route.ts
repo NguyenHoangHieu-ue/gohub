@@ -4,6 +4,7 @@ import { alertCronFailure } from "@/lib/cron-alert"
 import { backfillNext, health, logRun, reconcileMonth, refreshRecent, refreshWindow, syncCustomers, syncSmallDims } from "@/lib/rollup/builder"
 import { rollupConfigured, rollupDedicated } from "@/lib/rollup/client"
 import { ensureRollupSchema } from "@/lib/rollup/schema"
+import { setRollupMode } from "@/lib/rollup/mode"
 import { addDays, isBasis, isDay, isMonth, monthsInclusive, vnToday, type Basis } from "@/lib/rollup/pure"
 
 export const dynamic = "force-dynamic"
@@ -15,6 +16,7 @@ export const maxDuration = 300
 //   ?mode=window&basis=&start=YYYY-MM-DD&end=YYYY-MM-DD    làm mới một cửa sổ ngày [start, end)
 //   ?mode=dims                                              bản sao dm_* (khách theo con trỏ, làm tiếp mỗi lần gọi)
 //   ?mode=reconcile [&months=3][&basis=][&month=YYYY-MM]    đối chiếu rollup với bảng thô theo tháng
+//   ?mode=flag&route=quarterly-report&value=off|shadow|on   đặt chế độ rollup của một route (cờ app_settings rollup_routes)
 //   ?mode=init | health                                     tạo bảng / xem trạng thái
 export async function GET(req: NextRequest) {
   if (!isCronReq(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -31,6 +33,11 @@ export async function GET(req: NextRequest) {
     if (mode === "init") { await ensureRollupSchema(); result = { dedicated: rollupDedicated(), ...(await health()) } }
     else if (mode === "health") result = { dedicated: rollupDedicated(), ...(await health()) }
     else if (mode === "refresh") result = await refreshRecent(Math.min(Math.max(Number(q.get("days") ?? 45) || 45, 1), 120), bases)
+    else if (mode === "flag") {
+      const [route, value] = [q.get("route"), q.get("value")]
+      if (!route || !/^[a-z0-9-]+$/.test(route) || !(value === "off" || value === "shadow" || value === "on")) return NextResponse.json({ error: "Cần route và value=off|shadow|on" }, { status: 400 })
+      result = await setRollupMode(route, value)
+    }
     else if (mode === "window") {
       const [s, e] = [q.get("start"), q.get("end")]
       if (!basisP || !isDay(s) || !isDay(e)) return NextResponse.json({ error: "Cần basis, start, end (YYYY-MM-DD)" }, { status: 400 })
