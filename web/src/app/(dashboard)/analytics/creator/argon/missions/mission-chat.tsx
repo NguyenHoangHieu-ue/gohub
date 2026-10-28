@@ -59,6 +59,50 @@ const AnswerMd = memo(function AnswerMd({ text, runId, onStep, hideCode }: { tex
   return <ArgonMarkdown text={text} onStep={cb} hideCode={hideCode} />
 })
 
+// Một lượt hỏi/đáp. memo: gõ vào ô nhắn hoặc cập nhật lượt khác không vẽ lại các lượt cũ (chat dài thì đây là phần nặng nhất).
+const RunRow = memo(function RunRow({ r, live, bgLive, simple, basic, busy, rating, stepStable, onRate, onCancelBg, onResume }: {
+  r: Run; live: boolean; bgLive: boolean; simple: boolean; basic: boolean; busy: boolean; rating?: 1 | -1
+  stepStable: (runId: string, n: number) => void
+  onRate: (runId: string, question: string, answer: string, rating: 1 | -1) => void
+  onCancelBg: (runId: string) => void; onResume: (runId: string) => void
+}) {
+  return (
+            <div key={r.id} className="space-y-3">
+              <div className="flex justify-end"><div className="max-w-[82%] ag-bubble-user px-4 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-wrap">{r.prompt}</div></div>
+              <div className="flex items-start gap-2.5">
+                <BearAvatar size={28} className="mt-0.5" />
+                <div className="min-w-0 flex-1 ag-bubble-ai px-4 py-3">
+                  {simple && (
+                    <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="ag-prime-name text-[13px] font-bold tracking-tight">Gấu Prime</span>
+                      {!live && r.source_ids.length > 0 && <span className="text-[11px] text-gray-500 dark:text-slate-400">đã đối chiếu {r.source_ids.length} tài liệu</span>}
+                    </div>
+                  )}
+                  {r.answer && !(simple && live) ? <AnswerMd text={r.answer} runId={r.id} onStep={stepStable} hideCode={basic} />
+                    : <BearRunner />}
+                  {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
+                  {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}
+                  <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-gray-500">
+                    {live && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 text-violet-700 dark:text-violet-200"><Loader2 size={11} className="animate-spin" />{bgLive ? (r.status === "queued" ? "chạy nền · chờ đoạn kế" : `chạy nền · đoạn ${r.segments + 1}`) : "Gấu Prime đang chạy"}</span>}
+                    {bgLive && <button type="button" onClick={() => onCancelBg(r.id)} className="inline-flex items-center gap-1 text-red-600 hover:underline"><Square size={10} />Dừng việc nền</button>}
+                    {r.answer && r.status === "done" && !live && (
+                      <span className="inline-flex items-center gap-0.5" role="group" aria-label="Đánh giá câu trả lời">
+                        <button type="button" onClick={() => onRate(r.id, r.prompt, r.answer, 1)} aria-label="Trả lời tốt" aria-pressed={rating === 1} className={cn("rounded p-1 hover:bg-emerald-50 dark:hover:bg-emerald-950/40", rating === 1 ? "text-emerald-600" : "text-gray-400")}><ThumbsUp size={12} /></button>
+                        <button type="button" onClick={() => onRate(r.id, r.prompt, r.answer, -1)} aria-label="Trả lời chưa tốt" aria-pressed={rating === -1} className={cn("rounded p-1 hover:bg-red-50 dark:hover:bg-red-950/40", rating === -1 ? "text-red-600" : "text-gray-400")}><ThumbsDown size={12} /></button>
+                      </span>
+                    )}
+                    {r.model && <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-slate-700 px-2 py-0.5">{/flash/i.test(r.model) ? <><Zap size={10} />Nhanh</> : <><Brain size={10} />Sâu</>}</span>}
+                    {!basic && r.tokens_in > 0 && <span>{fmtTokens(r.tokens_in)} vào · {fmtTokens(r.tokens_out)} ra · ~${r.cost_usd.toFixed(2)} · {Math.round(r.duration_ms / 1000)}s{r.segments > 1 ? ` · ${r.segments} đoạn` : ""}</span>}
+                    {!live && r.status === "partial" && <button type="button" disabled={busy} onClick={() => onResume(r.id)} className="inline-flex items-center gap-1 text-violet-600 font-medium"><Play size={11} />Tiếp tục viết</button>}
+                    {simple && !live && r.answer && r.status === "done" && <span className="inline-flex items-center gap-1.5">Xuất:<a href={`/api/creator/argon/runs/${r.id}/export?format=docx`} className="rounded px-1 text-violet-700 dark:text-violet-300 hover:underline">Word</a><a href={`/api/creator/argon/runs/${r.id}/export?format=md`} className="rounded px-1 text-violet-700 dark:text-violet-300 hover:underline">Markdown</a></span>}
+                    {!live && r.answer && <button type="button" onClick={() => void navigator.clipboard?.writeText(r.answer)} className="ml-auto inline-flex items-center gap-1 hover:text-gray-800 dark:hover:text-slate-200"><Copy size={11} />Sao chép</button>}
+                  </div>
+                </div>
+              </div>
+            </div>
+  )
+})
+
 export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, runs, runner, onPhase, onStep, onError, simple = false, quick, onDraft, aboveInput, basic = false, attach, tpl, placeholder }: {
   autoSend: { text: string; k: number } | null   // câu lệnh tự gửi (vd ▶ chạy lại script); mỗi k mới = một lần gửi
   phase: MissionPhase
@@ -113,13 +157,18 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
     try { await onPatch(id, action) } catch (e) { onError((e as Error).message) } finally { setPatchBusy(null) }
   }
   const [rated, setRated] = useState<Record<string, 1 | -1>>({})
-  async function rate(runId: string, question: string, answer: string, rating: 1 | -1) {
+  const rate = useCallback(async (runId: string, question: string, answer: string, rating: 1 | -1) => {
     setRated(m => ({ ...m, [runId]: rating }))
     try { await fetch("/api/chat/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agentId: "argon", question, answer, rating }) }) } catch { /* phản hồi lỗi không ảnh hưởng chat */ }
-  }
+  }, [])
   const endRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
   const opts: SendOpts = { thinking, allowTools, background, model }
+  // Callback ổn định cho RunRow (memo): đọc runner/opts mới nhất qua ref
+  const runnerRef = useRef(runner); runnerRef.current = runner
+  const optsRef = useRef(opts); optsRef.current = opts
+  const cancelBgStable = useCallback((id: string) => runnerRef.current.cancelBg(id), [])
+  const resumeStable = useCallback((id: string) => runnerRef.current.resume(id, optsRef.current), [])
   const { busy, bgActive } = runner
   useEffect(() => { if (stick.current) endRef.current?.scrollIntoView({ block: "end" }) }, [runs])
   const lastAuto = useRef(0)
@@ -199,7 +248,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
         )}
       </div>}
 
-      <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6" onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
+      <div className="ag-chat-scroll flex-1 overflow-y-auto px-4 py-5 space-y-6" onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
         {runs.length === 0 && (
           <div className="mx-auto mt-10 max-w-sm text-center">
             <BearAvatar size={56} className="mx-auto !rounded-2xl" />
@@ -210,41 +259,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
         {runs.map(r => {
           const bgLive = !busy && (r.status === "queued" || r.status === "running")
           const live = (busy && r.id === runs[runs.length - 1]?.id) || bgLive
-          return (
-            <div key={r.id} className="space-y-3">
-              <div className="flex justify-end"><div className="max-w-[82%] ag-bubble-user px-4 py-2.5 text-[13.5px] leading-relaxed whitespace-pre-wrap">{r.prompt}</div></div>
-              <div className="flex items-start gap-2.5">
-                <BearAvatar size={28} className="mt-0.5" />
-                <div className="min-w-0 flex-1 ag-bubble-ai px-4 py-3">
-                  {simple && (
-                    <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="ag-prime-name text-[13px] font-bold tracking-tight">Gấu Prime</span>
-                      {!live && r.source_ids.length > 0 && <span className="text-[11px] text-gray-500 dark:text-slate-400">đã đối chiếu {r.source_ids.length} tài liệu</span>}
-                    </div>
-                  )}
-                  {r.answer && !(simple && live) ? <AnswerMd text={r.answer} runId={r.id} onStep={stepStable} hideCode={basic} />
-                    : <BearRunner />}
-                  {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
-                  {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}
-                  <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-gray-500">
-                    {live && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 text-violet-700 dark:text-violet-200"><Loader2 size={11} className="animate-spin" />{bgLive ? (r.status === "queued" ? "chạy nền · chờ đoạn kế" : `chạy nền · đoạn ${r.segments + 1}`) : "Gấu Prime đang chạy"}</span>}
-                    {bgLive && <button type="button" onClick={() => runner.cancelBg(r.id)} className="inline-flex items-center gap-1 text-red-600 hover:underline"><Square size={10} />Dừng việc nền</button>}
-                    {r.answer && r.status === "done" && !live && (
-                      <span className="inline-flex items-center gap-0.5" role="group" aria-label="Đánh giá câu trả lời">
-                        <button type="button" onClick={() => void rate(r.id, r.prompt, r.answer, 1)} aria-label="Trả lời tốt" aria-pressed={rated[r.id] === 1} className={cn("rounded p-1 hover:bg-emerald-50 dark:hover:bg-emerald-950/40", rated[r.id] === 1 ? "text-emerald-600" : "text-gray-400")}><ThumbsUp size={12} /></button>
-                        <button type="button" onClick={() => void rate(r.id, r.prompt, r.answer, -1)} aria-label="Trả lời chưa tốt" aria-pressed={rated[r.id] === -1} className={cn("rounded p-1 hover:bg-red-50 dark:hover:bg-red-950/40", rated[r.id] === -1 ? "text-red-600" : "text-gray-400")}><ThumbsDown size={12} /></button>
-                      </span>
-                    )}
-                    {r.model && <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-slate-700 px-2 py-0.5">{/flash/i.test(r.model) ? <><Zap size={10} />Nhanh</> : <><Brain size={10} />Sâu</>}</span>}
-                    {!basic && r.tokens_in > 0 && <span>{fmtTokens(r.tokens_in)} vào · {fmtTokens(r.tokens_out)} ra · ~${r.cost_usd.toFixed(2)} · {Math.round(r.duration_ms / 1000)}s{r.segments > 1 ? ` · ${r.segments} đoạn` : ""}</span>}
-                    {!live && r.status === "partial" && <button type="button" disabled={busy} onClick={() => runner.resume(r.id, opts)} className="inline-flex items-center gap-1 text-violet-600 font-medium"><Play size={11} />Tiếp tục viết</button>}
-                    {simple && !live && r.answer && r.status === "done" && <span className="inline-flex items-center gap-1.5">Xuất:<a href={`/api/creator/argon/runs/${r.id}/export?format=docx`} className="rounded px-1 text-violet-700 dark:text-violet-300 hover:underline">Word</a><a href={`/api/creator/argon/runs/${r.id}/export?format=md`} className="rounded px-1 text-violet-700 dark:text-violet-300 hover:underline">Markdown</a></span>}
-                    {!live && r.answer && <button type="button" onClick={() => void navigator.clipboard?.writeText(r.answer)} className="ml-auto inline-flex items-center gap-1 hover:text-gray-800 dark:hover:text-slate-200"><Copy size={11} />Sao chép</button>}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )
+          return <RunRow key={r.id} r={r} live={live} bgLive={bgLive} simple={simple} basic={basic} busy={busy} rating={rated[r.id]} stepStable={stepStable} onRate={rate} onCancelBg={cancelBgStable} onResume={resumeStable} />
         })}
         <div ref={endRef} />
       </div>

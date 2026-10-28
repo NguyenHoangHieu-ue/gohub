@@ -112,3 +112,10 @@
 
 /* Nhãn "Gấu Prime" ở đầu câu trả lời: chữ chuyển màu, để nhìn là biết không phải Gấu Pro/Bé Gấu */
 .ag-prime-name { background: linear-gradient(90deg, var(--ag-acc1), var(--ag-cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* Hiệu năng cuộn/gõ trong khung hỏi: backdrop-filter trên khung chat, mỗi bong bóng và ô nhắn buộc trình duyệt làm mờ lại cả vùng phía sau mỗi khi cuộn/gõ. Giữ nền kính mờ nhưng bỏ blur ở các phần tử lớn/lặp lại. */
+.ag-card-flat, .ag-bubble-ai, .ag-composer, .ag-bubble-ai pre { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.ag-card-flat { background: var(--ag-glass-strong); }
+.ag-bubble-ai { background: var(--ag-glass-strong); }
+.ag-chat-scroll { overscroll-behavior: contain; }
+.ag-aurora::before, .ag-aurora::after { will-change: auto; }

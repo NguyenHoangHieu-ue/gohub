@@ -95,6 +95,13 @@ export function useMissionRunner(o: {
     // Hiện câu hỏi NGAY khi bấm gửi (không chờ máy chủ dựng ngữ cảnh rồi mới báo "start"): thêm lượt tạm, khi có runId thật thì đổi id.
     const tmpId = !resumeId && typeof body.prompt === "string" ? `tmp-${Date.now()}` : null
     if (tmpId) { stepsRun.current = tmpId; setSteps([]); setRuns(prev => [...prev, { id: tmpId, prompt: String(body.prompt), answer: "", status: "running", model: null, thinking: String(body.thinking), source_ids: [], tokens_in: 0, tokens_out: 0, cached_in: 0, cost_usd: 0, duration_ms: 0, segments: 0, error: null, created_at: new Date().toISOString() }]) }
+    let pendingText = "", flushTimer: ReturnType<typeof setTimeout> | null = null, flushRid = ""
+    const flushDelta = () => {
+      flushTimer = null
+      if (!pendingText) return
+      const t = pendingText; pendingText = ""
+      setRuns(prev => prev.map(r => (r.id === flushRid ? { ...r, answer: r.answer + t } : r)))
+    }
     try {
       if (files?.length && stage) {
         const st = await stage(files)
@@ -103,22 +110,27 @@ export function useMissionRunner(o: {
       }
       for (;;) {
         let rid = resumeId ?? "", final: Partial<Run> | null = null
+        flushRid = rid
         await streamRun(projectId, resumeId ? { ...body, resumeRunId: resumeId } : body, ac.signal, e => {
           if (e.type === "start") {
-            rid = e.runId; if (e.warnings?.length) setWarn(e.warnings)
+            rid = e.runId; flushRid = rid; if (e.warnings?.length) setWarn(e.warnings)
             if (e.attachedIds?.length) onAttached?.(e.attachedIds)
             if (!resumeId) {
               stepsRun.current = rid; setSteps([])
               setRuns(prev => (tmpId && prev.some(r => r.id === tmpId) ? prev.map(r => (r.id === tmpId ? { ...r, id: rid } : r)) : [...prev, { id: rid, prompt: String(body.prompt), answer: "", status: "running", model: null, thinking: String(body.thinking), source_ids: [], tokens_in: 0, tokens_out: 0, cached_in: 0, cost_usd: 0, duration_ms: 0, segments: 0, error: null, created_at: new Date().toISOString() }]))
             } else patchRun(rid, { status: "running" })
           } else if (e.type === "delta") {
-            setRuns(prev => prev.map(r => (r.id === rid ? { ...r, answer: r.answer + e.text } : r)))
+            // Gộp các mảnh chữ rồi cập nhật mỗi ~150ms (mỗi mảnh một lần setState làm cả trang vẽ lại hàng chục lần/giây → trễ khi cuộn/gõ)
+            pendingText += e.text
+            if (!flushTimer) flushTimer = setTimeout(flushDelta, 150)
           } else if (e.type === "tool") {
             const st: Step = { id: "", runId: rid, idx: 0, name: e.name, args: e.args, ok: e.ok, chars: e.chars, at: new Date().toISOString() }
             setSteps(prev => [...prev, { ...st, idx: prev.length, id: `${rid}:${prev.length}` }])
             if (changedWorkspace(st)) onWorkspaceChanged()
           } else if (e.type === "done") { final = e.run } else if (e.type === "error") { throw new Error(e.message) }
         })
+        if (flushTimer) clearTimeout(flushTimer)
+        flushDelta()
         if (final) patchRun(rid, final)
         seg++
         if ((final as Partial<Run> | null)?.status === "partial" && seg < MAX_AUTO_SEGMENTS && !ac.signal.aborted) { resumeId = rid; continue }
@@ -128,6 +140,8 @@ export function useMissionRunner(o: {
       if (!(e instanceof DOMException && e.name === "AbortError")) onError((e as Error).message)
     }
     if (tmpId) setRuns(prev => prev.filter(r => r.id !== tmpId))   // lỗi/huỷ trước khi máy chủ báo bắt đầu: bỏ lượt tạm
+    if (flushTimer) clearTimeout(flushTimer)
+    flushDelta()
     setBusy(false); acRef.current = null
     onFinished()
   }

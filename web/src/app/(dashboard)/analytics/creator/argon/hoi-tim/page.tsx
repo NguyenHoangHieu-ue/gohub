@@ -7,6 +7,7 @@ import Link from "next/link"
 import dynamic from "next/dynamic"
 import { BarChart3, Brain, Check, Cpu, FileText, Loader2, Radio, Wrench, X } from "lucide-react"
 import { ReportsModal } from "../reports-modal"
+import { ArgonNav } from "../argon-nav"
 import { MemoryPanel } from "@/components/gau-pro/memory-panel"
 import { MAX_FILES, useChatUpload } from "./use-chat-upload"
 const LiveSession = dynamic(() => import("@/components/gau-pro/live-session").then(m => m.LiveSession), { ssr: false })   // giọng nói trực tiếp: chỉ nạp khi mở (nặng)
@@ -172,15 +173,16 @@ export default function TroLyPage() {
   // Bố cục như Gấu Pro/ChatGPT: danh sách cuộc trò chuyện ở CỘT TRÁI, khung chat chiếm phần còn lại, "Argon đang làm gì" là panel bên phải.
   // Phân quyền: chỉ Creator thấy cột trái và panel Argon đang làm gì; thành viên chỉ thấy khung chat của mình.
   return (
-    <div className="mx-auto w-full max-w-[1700px] px-3 py-2 flex flex-col gap-2 lg:h-[calc(100vh-6.5rem)]">
+    <div className="mx-auto w-full max-w-[1700px] px-3 py-2 flex flex-col gap-2 lg:h-[calc(100vh-4.5rem)]">
       {err && <div className="text-sm rounded-lg bg-red-50 text-red-700 px-3 py-2 flex justify-between whitespace-pre-wrap"><span>{err}</span><button type="button" onClick={() => setErr(null)} aria-label="Đóng">×</button></div>}
       <div className="flex-1 min-h-0 flex gap-3">
-        {convs.length > 0 && (
-          <aside className="hidden lg:flex w-[260px] shrink-0 ag-card ag-card-flat overflow-hidden flex-col" aria-label="Quản lý cuộc trò chuyện">
-            <ConversationSidebar className="flex-1" conversations={convItems} activeId={missionId} disabled={runner.busy}
+        {(
+          <aside className="hidden lg:flex w-[260px] shrink-0 ag-card ag-card-flat !overflow-visible flex-col" aria-label="Điều hướng và quản lý cuộc trò chuyện">
+            <ArgonNav variant="side" />
+            {convs.length > 0 && <ConversationSidebar className="flex-1 min-h-0 overflow-hidden rounded-b-[1.1rem]" conversations={convItems} activeId={missionId} disabled={runner.busy}
               onSelect={c => switchTo(c.id)} onNew={() => void newConversation()}
               onRename={(id, t) => (canRename(id) ? renameConv(id, t) : undefined)}
-              onDelete={id => { if (canRename(id)) void deleteConv(id) }} />
+              onDelete={id => { if (canRename(id)) void deleteConv(id) }} />}
           </aside>
         )}
         <section onDragOver={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDropping(true) } }} onDragLeave={e => { if (e.currentTarget === e.target) setDropping(false) }} onDrop={e => { e.preventDefault(); setDropping(false); const fs = Array.from(e.dataTransfer.files); if (fs.length) attach.add(fs) }}
