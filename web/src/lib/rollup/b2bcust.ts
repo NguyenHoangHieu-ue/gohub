@@ -11,6 +11,9 @@ export interface B2bTriple { customerRows: B2bCustomerRow[]; prevQuarterRows: B2
 
 const n = (v: unknown) => String(Number(v ?? 0))
 const s = (v: unknown) => (v == null ? null : String(v))
+// Đường thô ORDER BY tháng, mã khách theo collation của Postgres (không phân biệt hoa thường trước, chữ thường đứng trước chữ hoa khi bằng nhau); SQLite so nhị phân (chữ hoa trước).
+// Route dựng danh sách theo thứ tự hàng vào nên các dòng hoà nhau phải ra cùng thứ tự → sắp lại bằng Intl.Collator.
+const collator = new Intl.Collator("en")
 const FROM = "FROM ru_cust_day r LEFT JOIN dm_source s ON s.source = r.source LEFT JOIN dm_customer c ON c.customer = r.customer"
 
 export async function fetchB2bCustomersRollup(a: B2bCustArgs): Promise<B2bTriple> {
@@ -29,7 +32,7 @@ export async function fetchB2bCustomersRollup(a: B2bCustArgs): Promise<B2bTriple
         ${FROM} WHERE r.basis = 'ful' AND r.day >= ? AND r.day <= ? AND UPPER(COALESCE(s.group_name, '')) = 'B2B'${withInactive} GROUP BY 1, 2, 3`, [a.monthBeforeQStartStart, a.monthBeforeQStartEnd]),
   ])
   return {
-    customerRows: cur.map(r => ({ month: String(r.month), customer_code: String(r.customer_code), customer_name: String(r.customer_name), price_list_name: s(r.price_list_name), currency_code: s(r.currency_code), channel_name: String(r.channel_name), org_key: String(r.org_key), org_name: String(r.org_name), revenue: n(r.revenue), gm: n(r.gm), hk3: n(r.hk3) })),
+    customerRows: [...cur].sort((x, y) => String(x.month).localeCompare(String(y.month)) || collator.compare(String(x.customer_code), String(y.customer_code))).map(r => ({ month: String(r.month), customer_code: String(r.customer_code), customer_name: String(r.customer_name), price_list_name: s(r.price_list_name), currency_code: s(r.currency_code), channel_name: String(r.channel_name), org_key: String(r.org_key), org_name: String(r.org_name), revenue: n(r.revenue), gm: n(r.gm), hk3: n(r.hk3) })),
     prevQuarterRows: prevQ.map(r => ({ customer_code: String(r.customer_code), gm: n(r.gm), revenue: n(r.revenue) })),
     prevMonthRows: prevM.map(r => ({ customer_code: String(r.customer_code), price_list_name: s(r.price_list_name), currency_code: s(r.currency_code), revenue: n(r.revenue) })),
   }
