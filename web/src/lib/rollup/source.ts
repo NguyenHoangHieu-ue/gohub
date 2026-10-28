@@ -20,26 +20,29 @@ function def(basis: Basis, start: string, end: string): BasisDef {
 
 // Nhóm vendor "3HK Datapool" (so tên chuẩn hoá như getAnalyticsSource/BOD): số đo nướng sẵn hk3_rev_vnd.
 const HK3 = `TRIM(f.sku) IN (SELECT TRIM(sku) FROM dim_sku WHERE REPLACE(UPPER(TRIM(vendor)),' ','') = '3HKDATAPOOL')`
+// 88 dòng ngày 31/12/2025 (đơn BPTxxx*) có cogs/gp = 'NaN' (kiểu numeric của Postgres cho phép): SUM trên gohub_dw thành NaN, làm hỏng mọi tổng có chứa chúng (kể cả các tab hiện tại).
+// Rollup coi NaN là 0 ở tiền/giá vốn/GP để tổng luôn hữu hạn; đối chiếu dùng cùng quy tắc.
+const fin = (expr: string) => `COALESCE(SUM(CASE WHEN ${expr} = 'NaN'::numeric THEN 0 ELSE ${expr} END),0)`
 const num = (v: unknown) => { const x = Number(v ?? 0); return Number.isFinite(x) ? x : 0 }
 
 export function custSql(basis: Basis, start: string, end: string): string {
   const b = def(basis, start, end)
   return `SELECT ${b.day} AS day, COALESCE(f.company_code,'') AS company, COALESCE(f.order_source_code,'') AS source, COALESCE(TRIM(f.customer_code),'') AS customer,
     CASE WHEN f.sku = 'SHIPPINGFEE0' THEN 1 ELSE 0 END AS ship,
-    COALESCE(SUM(${b.rev}),0) AS revenue, COALESCE(SUM(${b.cogs}),0) AS cogs, COALESCE(SUM(${b.gp}),0) AS gp, COALESCE(SUM(${b.qty}),0) AS qty,
-    COUNT(*) AS lines, COUNT(DISTINCT f.order_code) AS orders, COALESCE(SUM(CASE WHEN ${HK3} THEN ${b.rev} ELSE 0 END),0) AS hk3
+    ${fin(b.rev)} AS revenue, ${fin(b.cogs)} AS cogs, ${fin(b.gp)} AS gp, COALESCE(SUM(${b.qty}),0) AS qty,
+    COUNT(*) AS lines, COUNT(DISTINCT f.order_code) AS orders, COALESCE(SUM(CASE WHEN ${HK3} AND ${b.rev} <> 'NaN'::numeric THEN ${b.rev} ELSE 0 END),0) AS hk3
   FROM ${b.table} f WHERE ${b.range(start, end)} GROUP BY 1, 2, 3, 4, 5`
 }
 export function skuSql(basis: Basis, start: string, end: string): string {
   const b = def(basis, start, end)
   return `SELECT ${b.day} AS day, COALESCE(f.company_code,'') AS company, COALESCE(f.order_source_code,'') AS source, COALESCE(TRIM(f.sku),'') AS sku,
-    COALESCE(SUM(${b.rev}),0) AS revenue, COALESCE(SUM(${b.cogs}),0) AS cogs, COALESCE(SUM(${b.gp}),0) AS gp, COALESCE(SUM(${b.qty}),0) AS qty,
+    ${fin(b.rev)} AS revenue, ${fin(b.cogs)} AS cogs, ${fin(b.gp)} AS gp, COALESCE(SUM(${b.qty}),0) AS qty,
     COUNT(*) AS lines, COUNT(DISTINCT f.order_code) AS orders
   FROM ${b.table} f WHERE ${b.range(start, end)} GROUP BY 1, 2, 3, 4`
 }
 export function totalsSql(basis: Basis, start: string, end: string): string {
   const b = def(basis, start, end)
-  return `SELECT COALESCE(SUM(${b.rev}),0) AS revenue, COALESCE(SUM(${b.cogs}),0) AS cogs, COALESCE(SUM(${b.gp}),0) AS gp, COALESCE(SUM(${b.qty}),0) AS qty, COUNT(*) AS lines
+  return `SELECT ${fin(b.rev)} AS revenue, ${fin(b.cogs)} AS cogs, ${fin(b.gp)} AS gp, COALESCE(SUM(${b.qty}),0) AS qty, COUNT(*) AS lines
   FROM ${b.table} f WHERE ${b.range(start, end)}`
 }
 

@@ -82,3 +82,12 @@ describe("rollup: câu lệnh ghi một ngày", () => {
     expect(st[st.length - 1].sql).toContain("ru_day_hash")
   })
 })
+
+describe("rollup: NaN trong DW", () => {
+  it("tổng tiền/giá vốn/GP bỏ qua giá trị NaN của numeric (không để một dòng hỏng làm cả tháng thành NaN)", () => {
+    for (const q of [custSql("ful", "2026-10-01", "2026-11-01"), skuSql("ful", "2026-10-01", "2026-11-01"), totalsSql("ful", "2026-10-01", "2026-11-01")]) {
+      expect(q).toContain("'NaN'::numeric")
+      expect(q).toMatch(/CASE WHEN f\.cogs_amount_vnd = 'NaN'::numeric THEN 0/)
+    }
+  })
+})
