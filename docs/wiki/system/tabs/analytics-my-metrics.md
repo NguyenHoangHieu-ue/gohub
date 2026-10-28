@@ -849,3 +849,6 @@ Supabase trả tối đa 1.000 dòng/lần; thẻ KPI, danh sách "hội thoại
 **Tính lại cờ cũ**: route `POST /api/admin/my-metrics-recompute` (CRON_SECRET, `{from,to,dryRun}`, mặc định dryRun) tính lại `used_db_tool` từ `tools_used` + `user_role`, chỉ đổi cột đó, cập nhật theo lô 200 id. Trả `tasksBefore/tasksAfter`. Số Q3/Q4 nhảy sau khi chạy là do đổi luật, không phải lỗi.
 
 **Kết quả (2026-10-11):** Q3 235 → 246, Q4 (tới 11/10) 202 → 208 sau tính lại cờ (route recompute đã chạy thật trên staging/Supabase chung; chạy lại = 0 dòng lệch). Đối chiếu 3 số (thẻ KPI = tổng danh sách hội thoại = tổng breakdown nguồn) đúng theo cấu trúc vì cùng `loadChatEvents` + `isCountedTask`; chưa Hiếu xem tay trên UI. Plan `my-metrics-be-gau-tasks.md` đã xoá (xong T0–T4).
+
+## s243 (tiếp 7) — Gấu Prime vào KPI "Tasks via Bé Gấu"
+Lượt Gấu Prime của thành viên (không phải Creator) ghi `app_usage_events` `agent_id='gau_prime'`, `used_db_tool` theo `isDataTask`; `DATA_TASK_TOOLS` thêm `sql`, `layDuLieuHeThong`, `docGA4`, `docGSC`, `docLarkBase`, `traBangSupabase`. Tính trong nguồn "web" cùng Bé Gấu/Gấu Pro. Chạy lại route `my-metrics-recompute` sẽ tính theo bộ tên mới (chỉ ảnh hưởng dòng có các tên này).

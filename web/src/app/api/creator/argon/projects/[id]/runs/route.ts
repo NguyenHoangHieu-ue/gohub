@@ -4,6 +4,8 @@ import { costOf, resolveModel } from "@/lib/argon/models"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { ownProject, type ArgonRun, type ArgonSource } from "@/lib/argon/server"
 import { registerUploads, type UploadItem } from "@/lib/argon/register-upload"
+import { getDbRole } from "@/lib/db-role"
+import { isDataTask } from "@/lib/okr-helpers"
 import { buildRunContext } from "@/lib/argon/context"
 import { LEVELS, runSegment } from "@/lib/argon/run-engine"
 import { MAX_OUT, SEGMENT_MS, loadRunMaterial } from "@/lib/argon/bg-worker"
@@ -131,6 +133,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
       await save(patch)
       if (seg.status !== "error") await autoSaveReports(username, params.id, runId, answer)
+      // Metric (My Metrics "Tasks via Bé Gấu"): chỉ ghi lượt của thành viên — câu của Creator không tính (như Bé Gấu/Gấu Pro). Lượt dở (partial) chưa ghi; ghi khi lượt xong, kể cả sau "tiếp tục viết".
+      if (member && seg.status === "done" && answer.trim()) {
+        const names = Array.from(new Set(log.map(t => t.name)))
+        try {
+          const role = await getDbRole(username)
+          await supabaseAdmin.from("app_usage_events").insert({
+            event_type: "chat", agent_id: "gau_prime", user_email: username, user_name: username, user_role: role ?? null,
+            user_message: prompt.slice(0, 500), ai_response: answer.slice(0, 3000), tools_used: names.length ? names : null,
+            used_db_tool: isDataTask(names, role), tokens_in: (prev?.tokens_in ?? 0) + seg.tokensIn, tokens_out: (prev?.tokens_out ?? 0) + seg.tokensOut,
+            est_cost_usd: patch.cost_usd,
+          })
+        } catch (e) { console.error("[Gấu Prime] track usage:", (e as Error).message) }
+      }
       await supabaseAdmin.from("argon_projects").update({ updated_at: new Date().toISOString() }).eq("id", params.id)
       send(seg.status === "error" && !answer ? { type: "error", message: seg.error } : { type: "done", run: { id: runId, answer, ...patch } })
       try { controller.close() } catch { /* đã đóng */ }

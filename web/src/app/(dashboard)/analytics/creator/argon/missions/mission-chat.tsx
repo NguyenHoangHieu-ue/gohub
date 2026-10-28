@@ -214,6 +214,13 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
               <div className="flex items-start gap-2.5">
                 <BearAvatar size={28} className="mt-0.5" />
                 <div className="min-w-0 flex-1 ag-bubble-ai px-4 py-3">
+                  {simple && (
+                    <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="ag-prime-name text-[13px] font-bold tracking-tight">Gấu Prime</span>
+                      <span className="rounded-full border border-violet-200 dark:border-violet-800 bg-violet-50/70 dark:bg-violet-950/40 px-2 py-px text-[10.5px] font-medium text-violet-700 dark:text-violet-300">Trợ lý hợp nhất</span>
+                      {!live && r.source_ids.length > 0 && <span className="text-[11px] text-gray-500 dark:text-slate-400">đã đối chiếu {r.source_ids.length} tài liệu</span>}
+                    </div>
+                  )}
                   {r.answer && !(simple && live) ? <AnswerMd text={r.answer} runId={r.id} onStep={stepStable} hideCode={basic} />
                     : <BearRunner />}
                   {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}

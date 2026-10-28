@@ -71,3 +71,19 @@ export function indexMarkdown(entries: IndexEntry[]): string {
   for (const e of [...entries].sort((a, b) => b.facts - a.facts || b.mentions - a.mentions || a.name.localeCompare(b.name))) out.push(`| [${cell(e.name)}](${e.url}) | ${ENTITY_KINDS[e.kind]} | ${e.facts} | ${e.mentions} |`)
   return out.join("\n")
 }
+
+export interface VendorTarget { name: string; codes: string[]; entity: { id: number; aliases: string[]; mentions: number } | null }
+/** Danh sách hồ sơ = vendor trong DB (ref_vendors), KHÔNG phải thực thể do AI đoán từ văn bản. Trùng tên (vd Simstore SI/SS) gộp một hồ sơ; ghép với thực thể graph theo tên/bí danh khớp CHÍNH XÁC để lấy bí danh và nơi được nhắc. */
+export function vendorTargets(db: { vendor_code: string; name: string }[], entities: { id: number; name: string; aliases: string[]; mentions: number }[]): VendorTarget[] {
+  const byName = new Map<string, VendorTarget>()
+  for (const v of db) {
+    const name = String(v.name ?? "").trim()
+    if (!name) continue
+    const k = fold(name)
+    const hit = byName.get(k)
+    if (hit) { hit.codes.push(v.vendor_code); continue }
+    const e = entities.find(x => fold(x.name) === k || x.aliases.some(a => fold(a) === k))
+    byName.set(k, { name, codes: [v.vendor_code], entity: e ? { id: e.id, aliases: e.aliases, mentions: e.mentions } : null })
+  }
+  return [...byName.values()]
+}

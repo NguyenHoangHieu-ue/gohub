@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { FactRow } from "@/lib/argon/facts-pure"
 import type { MailThreadRow } from "@/lib/argon/mail-status-pure"
-import { contentHash, factsFor, indexMarkdown, profileMarkdown, threadsFor } from "@/lib/argon/lark-publish-pure"
+import { contentHash, factsFor, indexMarkdown, profileMarkdown, threadsFor, vendorTargets } from "@/lib/argon/lark-publish-pure"
 
 const F = (id: string, o: Partial<FactRow> = {}): FactRow => ({
   id, username: "u", type: "doi_gia", vendor: "3HK", subject: "Thái Lan", attribute: "", value: "", summary: "Giá 3.5 HKD/GB", evidence: "", effective_from: "2026-11-15", expires_at: null, status: "active", origin: "auto", edited: false,
@@ -44,4 +44,16 @@ describe("mục lục + băm", () => {
     expect(md.indexOf("[B](https://b)")).toBeLessThan(md.indexOf("[A](https://a)"))
   })
   it("contentHash đổi khi nội dung đổi", () => { expect(contentHash("a")).not.toBe(contentHash("b")); expect(contentHash("a")).toBe(contentHash("a")) })
+})
+
+describe("vendorTargets", () => {
+  it("lấy danh sách từ ref_vendors, gộp trùng tên, ghép thực thể theo tên/bí danh chính xác, bỏ thực thể không có trong DB", () => {
+    const db = [{ vendor_code: "SI", name: "Simstore" }, { vendor_code: "SS", name: "Simstore" }, { vendor_code: "WM", name: "WORLDMOVE" }, { vendor_code: "3H", name: "3HK" }]
+    const ents = [{ id: 1, name: "WorldMove", aliases: ["WM"], mentions: 9 }, { id: 2, name: "Công ty lạ", aliases: [], mentions: 50 }]
+    const t = vendorTargets(db, ents)
+    expect(t.map(x => x.name)).toEqual(["Simstore", "WORLDMOVE", "3HK"])
+    expect(t[0].codes).toEqual(["SI", "SS"])
+    expect(t[1].entity).toEqual({ id: 1, aliases: ["WM"], mentions: 9 })
+    expect(t[2].entity).toBeNull()
+  })
 })

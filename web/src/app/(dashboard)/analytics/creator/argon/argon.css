@@ -109,3 +109,6 @@
   .bear-run { left: 45px; }
   .ag-card, .ag-btn-primary, .ag-tab { transition: none !important; }
 }
+
+/* Nhãn "Gấu Prime" ở đầu câu trả lời: chữ chuyển màu, để nhìn là biết không phải Gấu Pro/Bé Gấu */
+.ag-prime-name { background: linear-gradient(90deg, var(--ag-acc1), var(--ag-cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }

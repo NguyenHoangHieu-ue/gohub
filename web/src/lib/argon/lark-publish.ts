@@ -1,16 +1,16 @@
 import { appendMarkdown, docUrl } from "@/lib/agents/creator/tools/lark-docs"
 import { listFacts } from "./facts"
-import { getEntity, listEntities, type EntityListItem } from "./graph"
+import { getEntity, listEntities } from "./graph"
 import { larkToken } from "./lark"
 import { listMailThreads } from "./mail-status"
-import { contentHash, factsFor, indexMarkdown, profileMarkdown, threadsFor, type IndexEntry } from "./lark-publish-pure"
+import { contentHash, factsFor, indexMarkdown, profileMarkdown, threadsFor, vendorTargets, type IndexEntry } from "./lark-publish-pure"
 import { vnToday } from "./facts-pure"
 
 export * from "./lark-publish-pure"
 const sb = async () => (await import("@/lib/supabase")).supabaseAdmin
 const L = "https://open.larksuite.com/open-apis"
 const FOLDER_NAME = "GoHub · Hồ sơ Argon"
-const MAX_PROFILES = 30
+const MAX_PROFILES = 60
 
 // Xuất MỘT CHIỀU: Argon (Supabase/Turso) là gốc, Lark chỉ để đọc. Mỗi vendor/thực thể quan trọng một tài liệu Lark trong thư mục "GoHub · Hồ sơ Argon",
 // cập nhật khi nội dung đổi (so hash) + một tài liệu mục lục. Trạng thái (token tài liệu, hash) lưu app_settings — không cần migration.
@@ -62,7 +62,7 @@ async function writeDoc(token: string, folder: string, existing: PubDoc | undefi
   return { doc: { token: id, url: (await docUrl(token, id, "docx")) ?? `https://www.larksuite.com/docx/${id}`, hash: hashOf, title }, action: "created" }
 }
 
-export interface PublishResult { profiles: number; created: number; updated: number; same: number; errors: string[]; folderUrl?: string; indexUrl?: string }
+export interface PublishResult { profiles: number; created: number; updated: number; same: number; errors: string[]; folderUrl?: string; indexUrl?: string; stale?: { name: string; url: string }[] }
 
 /** Dựng và cập nhật hồ sơ Lark cho các thực thể quan trọng (vendor + thực thể có sự việc đang hiệu lực), rồi mục lục. Dừng trước `deadline`. */
 export async function publishProfiles(username: string, opts: { deadline?: number; force?: boolean } = {}): Promise<PublishResult> {
@@ -73,28 +73,35 @@ export async function publishProfiles(username: string, opts: { deadline?: numbe
   const folder = await ensureFolder(token, st)
   await savePubState(username, st)   // lưu sớm token thư mục: lỗi giữa chừng không tạo thư mục trùng ở lần sau
 
-  const [entities, allFacts, threads] = await Promise.all([listEntities(username, 400), listFacts(username, { status: ["active"], limit: 2000 }), listMailThreads(username)])
-  const withFacts = (e: EntityListItem) => factsFor(e, allFacts).length
-  const picked = entities.filter(e => e.kind === "vendor" || withFacts(e) > 0).sort((a, b) => withFacts(b) - withFacts(a) || b.mentions - a.mentions).slice(0, MAX_PROFILES)
+  // Danh sách hồ sơ = vendor trong DB (ref_vendors); thực thể graph chỉ bổ sung bí danh/nơi được nhắc, không quyết định ai có hồ sơ.
+  const [{ data: dbVendors, error: vErr }, entities, allFacts, threads] = await Promise.all([
+    (await sb()).from("ref_vendors").select("vendor_code,name").limit(1000), listEntities(username, 400), listFacts(username, { status: ["active"], limit: 2000 }), listMailThreads(username),
+  ])
+  if (vErr) throw new Error(`ref_vendors: ${vErr.message}`)
+  const targets = vendorTargets(dbVendors ?? [], entities).map(t => {
+    const p = { name: t.name, kind: "vendor" as const, aliases: t.entity?.aliases ?? [] }
+    return { ...t, p, facts: factsFor(p, allFacts) }
+  }).sort((a, b) => b.facts.length - a.facts.length || (b.entity?.mentions ?? 0) - (a.entity?.mentions ?? 0) || a.name.localeCompare(b.name))
   const entries: IndexEntry[] = []
 
-  for (const e of picked) {
+  for (const t of targets.slice(0, MAX_PROFILES)) {
     if (Date.now() > deadline) break
     try {
-      const d = await getEntity(username, e.id)
-      if (!d) continue
-      const facts = factsFor(e, allFacts)
+      const d = t.entity ? await getEntity(username, t.entity.id) : null
       const md = profileMarkdown({
-        name: e.name, kind: e.kind, aliases: e.aliases, facts, changes: facts.filter(f => f.change_note && Date.now() - Date.parse(f.recorded_at) < 14 * 86_400_000),
-        related: d.related.map(r => ({ name: r.name, kind: r.kind, rels: r.rels })), mentions: d.mentions, threads: threadsFor(e, threads),
+        name: t.name, kind: "vendor", aliases: t.p.aliases, facts: t.facts, changes: t.facts.filter(f => f.change_note && Date.now() - Date.parse(f.recorded_at) < 14 * 86_400_000),
+        related: (d?.related ?? []).map(r => ({ name: r.name, kind: r.kind, rels: r.rels })), mentions: d?.mentions ?? [], threads: threadsFor(t.p, threads),
       })
-      const key = `${e.kind}|${e.name}`
-      const w = await writeDoc(token, folder, st.docs[key], `Hồ sơ: ${e.name}`, md, contentHash(md), !!opts.force)
+      const key = `vendor|${t.name}`
+      const w = await writeDoc(token, folder, st.docs[key], `Hồ sơ: ${t.name}`, md, contentHash(md), !!opts.force)
       st.docs[key] = w.doc
       out[w.action]++; out.profiles++
-      entries.push({ name: e.name, kind: e.kind, url: w.doc.url, facts: facts.length, mentions: e.mentions })
-    } catch (err) { out.errors.push(`${e.name}: ${(err as Error).message}`.slice(0, 200)) }
+      entries.push({ name: t.name, kind: "vendor", url: w.doc.url, facts: t.facts.length, mentions: t.entity?.mentions ?? 0 })
+    } catch (err) { out.errors.push(`${t.name}: ${(err as Error).message}`.slice(0, 200)) }
   }
+  const keep = new Set(targets.map(t => `vendor|${t.name}`))
+  out.stale = Object.entries(st.docs).filter(([k]) => !keep.has(k)).map(([k, d]) => ({ name: k.split("|").slice(1).join("|"), url: d.url }))
+  for (const [k] of Object.entries(st.docs)) if (!keep.has(k)) delete st.docs[k]   // không còn trong danh sách vendor: bỏ khỏi trạng thái (tài liệu cũ trên Lark giữ nguyên để người dùng tự xoá)
 
   if (entries.length) {
     try {
