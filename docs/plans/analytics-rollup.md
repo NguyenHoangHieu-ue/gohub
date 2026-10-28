@@ -215,3 +215,8 @@ Mã: `lib/rollup/filters.ts` (bộ lọc SQLite tương đương `shipFilter`/`i
 - **Cờ hiện tại:** `quarterly-report` và `quarterly-daily` = `shadow`.
 - **Bài học quy trình:** KHÔNG nối `tsc | head && git commit` (head luôn trả 0, đã lỡ commit bản lỗi cú pháp một lần, build fail, sửa ngay): kiểm `tsc; echo rc=$?`.
 - **Còn lại của P1:** `quarterly-b2b-customers`, `squad-progress`, `quarterly-customer-lifecycle`; shadow 7 ngày; dọn bảng tạm ở DB config.
+
+### 15c. `quarterly-b2b-customers` (2026-10-28)
+`lib/rollup/b2bcust.ts` (3 truy vấn rollup đúng hình dạng thô; `b2bFilterSql` = `customerExcludedSql` theo TÊN hoặc MÃ, INACTIVE tuỳ truy vấn — truy vấn quý trước KHÔNG lọc INACTIVE như thô). Shadow 8/8 khớp. Response `on` vs thô: 6/8 giống hệt; 2 khác chỉ do NaN (Q4-2025: tổng GP/CM1 của tier trả số thay vì null; Q1-2026: prevCm1/qoqPct trả số thay vì null). Thời gian 0,9–6,2s so với 2,3–13,6s (nguội).
+- **Bẫy collation:** thô `ORDER BY month, customer_code` theo collation Postgres (chữ thường trước chữ hoa khi bằng nhau), SQLite so nhị phân (chữ hoa trước). Route dựng danh sách theo thứ tự hàng nên khác thứ tự → 96 khác biệt ở Q2-2026. Sửa bằng `Intl.Collator("en")` khi đọc rollup. Quy tắc: truy vấn rollup nào thô có ORDER BY text thì PHẢI sắp lại bằng collator (`MIN`/`MAX` trên text cũng chịu cùng bẫy: quarterly-report dùng `MIN(source)` — shadow vẫn khớp vì mã nguồn chỉ gồm số/chữ hoa cùng dạng).
+- **Cờ hiện tại:** `quarterly-report`, `quarterly-daily`, `quarterly-b2b-customers` = `shadow`. Còn: `squad-progress`, `quarterly-customer-lifecycle`.
