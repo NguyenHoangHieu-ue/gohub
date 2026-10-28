@@ -9,6 +9,8 @@ import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSql, exclHash, QB2
 import { buildQuarterMonthMeta, getElapsedRatio } from "@/lib/analytics-engine/quarter-projection"
 
 // Route nặng (per-customer B2B + Turso costs) → cho 60s (khớp vercel.json) tránh 504 treo FE.
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { diffB2bCustomers, fetchB2bCustomersRollup, type B2bTriple } from "@/lib/rollup/b2bcust"
 export const maxDuration = 60
 export const dynamic = "force-dynamic"
 
@@ -90,10 +92,13 @@ export async function GET(req: NextRequest) {
   // (CH.Cost tháng tương lai không còn cộng vào tổng — xem comment ở vòng months.forEach)
   const rawCacheKey = `${QB2B_CACHE_PREFIX}${quarter}:${year}:${companyCode}:${qEndDate}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
 
+  const ctx = await rollupCtx("quarterly-b2b-customers")
+  const cacheKey = `${rawCacheKey}${ruKey(ctx)}`
+
   try {
     // ── Phần 1+2+3+4: gohub_dw (cache), Turso customer costs, prev costs, Supabase group costs — SONG SONG ──
     const [rawData, costMap, prevCostMap, { groupCosts: allGroupCosts }] = await Promise.all([
-      cachedQuery(rawCacheKey, async () => {
+      cachedQuery(cacheKey, () => serve<B2bTriple>(ctx, async () => {
         // SQL fragment: loại KH khỏi B2B (an toàn khi list rỗng)
         const exclFilter = excludedCustomers.length > 0
           ? `AND NOT ${customerExcludedSql(excludedCustomers)}`
@@ -168,8 +173,9 @@ export async function GET(req: NextRequest) {
         `),
         ])
 
-        return { customerRows, prevQuarterRows, prevMonthRows }
-      }, QUERY_TTL_MIN, refresh),
+        return { customerRows, prevQuarterRows, prevMonthRows } as unknown as B2bTriple
+      }, () => fetchB2bCustomersRollup({ companyCode, includeShip, includeInternalOps, excludedCustomers, qStartDate, qEndDate, prevQStartDate, prevQEndDate, monthBeforeQStartStart, monthBeforeQStartEnd }),
+      diffB2bCustomers, { quarter, year, companyCode, includeShip, includeInternalOps }), QUERY_TTL_MIN, refresh),
       fetchCustomerCosts(months),          // current quarter Turso costs
       fetchCustomerCosts(prevQMonths),     // prev quarter Turso costs (để tính QoQ CM1)
       fetchCosts(months).catch(() => ({ channelCosts: [], groupCosts: [] as Array<{ group_name: string; month: string; amount: number; item_name?: string | null }> })),  // Supabase group costs
@@ -480,7 +486,7 @@ export async function GET(req: NextRequest) {
       }
     }).filter(t => t.totalRevenue > 0)
 
-    return NextResponse.json({ quarter, year, months, prevMonth: monthBeforeQStart, tiers }, { headers: CACHE_HEADERS })
+    return NextResponse.json({ quarter, year, months, prevMonth: monthBeforeQStart, tiers }, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[quarterly-b2b-customers]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

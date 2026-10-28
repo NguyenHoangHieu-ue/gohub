@@ -22,6 +22,22 @@ export function custFilterSql(f: RollupFilter): string {
   return parts.length ? ` AND ${parts.join(" AND ")}` : ""
 }
 
+export interface B2bFilter { companyCode?: string; includeShip: boolean; includeInternalOps: boolean; inactive: boolean; excludedCustomers?: string[] }
+/**
+ * Bộ lọc của các route B2B theo khách (quarterly-b2b-customers…): nguồn B2B đã lọc riêng ở câu SQL, loại KH theo
+ * `customerExcludedSql` (TÊN HOẶC MÃ, không ràng buộc nhóm), INACTIVE tuỳ truy vấn. Bảng `c` = dm_customer (LEFT JOIN).
+ */
+export function b2bFilterSql(f: B2bFilter): string {
+  const parts: string[] = []
+  if (f.companyCode && f.companyCode !== "ALL") parts.push(`r.company = ${esc(f.companyCode)}`)
+  if (!f.includeShip) parts.push("r.ship = 0")
+  if (!f.includeInternalOps) parts.push("UPPER(COALESCE(s.group_name, '')) != 'INTERNAL-TRANSACTION'")
+  if (f.inactive) parts.push("NOT (UPPER(COALESCE(c.price_list_name, '')) LIKE '%INACTIVE%')")
+  const list = (f.excludedCustomers ?? []).map(esc).join(",")
+  if (list) parts.push(`NOT (COALESCE(c.name, r.customer) IN (${list}) OR r.customer IN (${list}))`)
+  return parts.length ? ` AND ${parts.join(" AND ")}` : ""
+}
+
 /** Bản SQLite của makeExcludeSql(): mã (chữ-số-gạch) so trực tiếp, tên so qua dm_customer.name; chỉ loại khi nguồn là B2B. Trả không có "AND " đầu. */
 export function excludeCustomersSql(excluded: string[]): string {
   if (!excluded.length) return ""
