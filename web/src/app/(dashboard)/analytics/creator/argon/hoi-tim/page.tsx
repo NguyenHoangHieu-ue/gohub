@@ -134,8 +134,11 @@ export default function TroLyPage() {
   const newConversation = async () => {
     if (runner.busy) return
     try {
-      const r = await api<{ conversation: ConvItem & { daily: boolean } }>("/api/creator/argon/conversations", jsonInit("POST", {}))
-      setConvs(prev => [r.conversation, ...prev]); switchTo(r.conversation.id)
+      const r = await api<{ conversation: ConvItem & { daily: boolean; mission?: MissionDetail["mission"] } }>("/api/creator/argon/conversations", jsonInit("POST", {}))
+      const { mission, ...conv } = r.conversation
+      setConvs(prev => [conv, ...prev]); switchTo(conv.id)
+      // Cuộc mới còn trống: dựng chi tiết ngay từ phản hồi tạo (không chờ tải lại ~2s); lượt tải nền sau đó chỉ đồng bộ lại.
+      if (mission) setDetail({ mission, pendingAsk: null, patches: [], tree: [], files: [], sources: [], runs: [], spent_usd: 0 })
     } catch (e) { onError((e as Error).message) }
   }
   const renameConv = async (id: string, title: string) => {

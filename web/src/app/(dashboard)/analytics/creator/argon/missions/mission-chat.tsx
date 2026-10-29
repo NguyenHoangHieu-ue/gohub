@@ -1,7 +1,7 @@
 "use client"
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Pause, Play, RotateCcw, Paperclip, Rocket, Send, Sparkles, Square, ThumbsDown, ThumbsUp, X, Zap } from "lucide-react"
+import { ArrowLeft, ArrowRight, Atom, BellRing, Brain, Check, Copy, Database, Loader2, Maximize2, Minimize2, Pause, Play, RotateCcw, Paperclip, Rocket, Send, Sparkles, Square, ThumbsDown, ThumbsUp, X, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fmtTokens, type Run } from "../argon-types"
 import { ArgonMarkdown } from "../argon-markdown"
@@ -12,6 +12,12 @@ import { type ModelKey, type SendOpts, type Thinking, type useMissionRunner } fr
 
 // Chat của sứ mệnh: chỉ hiện KẾT QUẢ và điều cần Hiếu quyết; các bước làm việc nằm ở Bàn làm việc. Thanh pha dẫn Hiếu qua Làm rõ → Kế hoạch → Chốt và chạy.
 type Runner = ReturnType<typeof useMissionRunner>
+/** Nhãn trạng thái dưới câu trả lời đang chạy: sau ~10s đổi sang lời nhắn kiên nhẫn (mount lại mỗi lượt chạy nên tự đếm lại). */
+function LiveLabel() {
+  const [slow, setSlow] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setSlow(true), 10_000); return () => clearTimeout(t) }, [])
+  return <>{slow ? "Đợi Bé xíu nhá…" : "Gấu Prime đang chạy"}</>
+}
 const THINK_LABEL: Record<Thinking, string> = { low: "Nhanh", medium: "Cân bằng", high: "Sâu" }
 const STEPS = ["Làm rõ", "Kế hoạch", "Chốt và chạy"]
 const CHOT_PROMPT = "Anh đã Chốt. Đọc notes/ke-hoach.md và brief.md rồi thực hiện kế hoạch từ đầu đến cuối, tự làm hết các bước. Ghi kết quả vào workspace, ghi quyết định vào decisions.md, xong thì ghi tổng kết vào notes/tong-ket.md. Gặp chỗ mơ hồ ngoài brief thì hỏi anh bằng hoiHieu rồi dừng."
@@ -79,11 +85,11 @@ const RunRow = memo(function RunRow({ r, live, bgLive, simple, basic, busy, rati
                     </div>
                   )}
                   {r.answer && !(simple && live) ? <AnswerMd text={r.answer} runId={r.id} onStep={stepStable} hideCode={basic} />
-                    : <BearRunner />}
+                    : <BearRunner showLabel={false} />}
                   {r.status === "error" && <div className="mt-2 text-xs text-red-600">Lỗi: {r.error}</div>}
                   {r.status === "stopped" && <div className="mt-2 text-xs text-amber-600">Đã dừng.</div>}
                   <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-gray-500">
-                    {live && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 text-violet-700 dark:text-violet-200"><Loader2 size={11} className="animate-spin" />{bgLive ? (r.status === "queued" ? "chạy nền · chờ đoạn kế" : `chạy nền · đoạn ${r.segments + 1}`) : "Gấu Prime đang chạy"}</span>}
+                    {live && <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 dark:bg-violet-950/50 px-2 py-0.5 text-violet-700 dark:text-violet-200"><Loader2 size={11} className="animate-spin" />{bgLive ? (r.status === "queued" ? "chạy nền · chờ đoạn kế" : `chạy nền · đoạn ${r.segments + 1}`) : <LiveLabel />}</span>}
                     {bgLive && <button type="button" onClick={() => onCancelBg(r.id)} className="inline-flex items-center gap-1 text-red-600 hover:underline"><Square size={10} />Dừng việc nền</button>}
                     {r.answer && r.status === "done" && !live && (
                       <span className="inline-flex items-center gap-0.5" role="group" aria-label="Đánh giá câu trả lời">
@@ -138,6 +144,15 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
   onStepRef.current = onStep
   const stepStable = useCallback((runId: string, n: number) => onStepRef.current(runId, n), [])
   const attachRef = useRef<HTMLInputElement>(null)
+  const taRef = useRef<HTMLTextAreaElement>(null)
+  const [big, setBig] = useState(false)   // ô nhập phóng to cho câu hỏi dài; thu nhỏ thì tự giãn theo nội dung (tối đa 200px)
+  useEffect(() => {
+    const t = taRef.current
+    if (!t) return
+    t.style.height = "auto"
+    const max = big ? Math.round(window.innerHeight * 0.5) : 200, min = big ? Math.round(window.innerHeight * 0.35) : 0
+    t.style.height = `${Math.max(min, Math.min(t.scrollHeight, max))}px`
+  }, [prompt, big])
   const [showOpts, setShowOpts] = useState(false)   // trang gọn: ẩn mức suy luận / số liệu hệ thống / chạy nền sau "Tuỳ chọn"
   const [thinking, setThinking] = useState<Thinking>("medium")
   const [background, setBackground] = useState(false)
@@ -308,11 +323,14 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
               ))}
             </div>
           )}
-          <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={2} aria-label="Nhắn Argon"
+          <div className="relative">
+          <textarea ref={taRef} value={prompt} onChange={e => setPrompt(e.target.value)} rows={2} aria-label="Nhắn Argon"
             onPaste={e => { if (!attach) return; const fs = Array.from(e.clipboardData.files); if (fs.length) { e.preventDefault(); attach.add(fs) } }}
             onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey || (basic && !e.shiftKey && !e.nativeEvent.isComposing))) { e.preventDefault(); void send() } }}
             placeholder={placeholder ?? "Nhắn Argon…"}
-            className="block w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[13.5px] leading-relaxed text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none" />
+            className="block w-full resize-none bg-transparent pl-3.5 pr-10 pt-3 pb-1 text-[13.5px] leading-relaxed text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none" />
+          <button type="button" onClick={() => setBig(v => !v)} aria-label={big ? "Thu nhỏ ô nhập" : "Phóng to ô nhập"} title={big ? "Thu nhỏ ô nhập" : "Phóng to ô nhập (cho câu hỏi dài)"} className="absolute right-2 top-2 rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-700 dark:hover:text-slate-200">{big ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
+          </div>
           <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-2.5 pt-1">
             {attach && (
               <>
