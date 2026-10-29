@@ -44,3 +44,8 @@ Nhóm 2 (nhiều bước/GA4/GSC), 3, 4 (xuất file, report), 5, 6, 7 (cần t�
 - E4 (thành viên: từ chối gửi Lark + tìm web) 116s lần đầu, chạy lại 47s → biến động lớn; thời gian nằm ở `runWebSearch` (Gemini googleSearch, prompt "comprehensive", chưa giới hạn độ dài/thời gian; module dùng chung Bé Gấu/Gấu Pro).
 - D3: giám khảo báo "bịa mã sự việc" nhưng mã là kết quả thật của công cụ `ghiSuViec` (giám khảo không thấy kết quả công cụ) → nghi dương tính giả, cần xem tay.
 - Điểm trừ nội dung: A7 thiếu câu so sánh trực tiếp UK vs Nhật; A2 thiếu thư Nimbus; F5 tự nhắc "Gấu Pro" ngoài dữ liệu; C3 thiếu hỏi lại người dùng.
+
+## Đợt 3 (staging `c2dcbdd2`)
+- Tìm web riêng Gấu Prime: ngắn (<200 từ) + hạn 40s; E4 47→31–33s, F3 44→25–28s, 3/3 lần có URL sau khi nhắc "BẮT BUỘC ghi URL".
+- Đo luồng SSE câu số liệu đường đầy đủ (so B2B/B2C Q3): ngữ cảnh dựng 16ms; công cụ `layDuLieuHeThong` xong ở 10,9s; chữ đầu tiên 14,3s; xong ~17,5s. Thời gian nằm ở vòng chọn công cụ + công cụ lấy số, không ở dựng ngữ cảnh.
+- Luật trả lời mới trong `ARGON_SYSTEM` (CÁCH TRẢ LỜI 1–4): F5 7→8 (hết nhắc "Gấu Pro"), A7 7→8 (có so sánh + chênh lệch). A2 7→6 và C3 7 giữ nguyên; D3 vẫn 6 — giám khảo không thấy kết quả công cụ nên báo "bịa mã/chi tiết" ở các mã/tên lấy từ công cụ: dương tính giả, cần cho giám khảo thấy kết quả công cụ nếu muốn chấm đúng.
