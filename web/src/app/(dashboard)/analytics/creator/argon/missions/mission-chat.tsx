@@ -309,6 +309,7 @@ export function MissionChat({ autoSend, phase, pendingAsk, patches, onPatch, run
             </div>
           )}
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={2} aria-label="Nhắn Argon"
+            onPaste={e => { if (!attach) return; const fs = Array.from(e.clipboardData.files); if (fs.length) { e.preventDefault(); attach.add(fs) } }}
             onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey || (basic && !e.shiftKey && !e.nativeEvent.isComposing))) { e.preventDefault(); void send() } }}
             placeholder={placeholder ?? "Nhắn Argon…"}
             className="block w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[13.5px] leading-relaxed text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none" />
