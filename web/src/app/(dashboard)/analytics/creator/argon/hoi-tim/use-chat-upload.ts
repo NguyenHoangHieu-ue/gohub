@@ -78,5 +78,5 @@ export function useChatUpload() {
   }, [khoProject, stage, digest])
 
   const reset = useCallback(() => setState({ stage: "idle" }), [])
-  return { state, upload, stage, digest, reset }
+  return { state, upload, stage, digest, reset, warm: () => khoProject().catch(() => null) }
 }
