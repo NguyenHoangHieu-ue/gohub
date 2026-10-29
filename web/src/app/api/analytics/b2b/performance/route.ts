@@ -99,7 +99,8 @@ export async function GET(req: NextRequest) {
     const basis = dateColumn === "created_date" ? "sal" : "ful"
     const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
     const ruEnd = endDate < yesterday ? endDate : yesterday
-    const first = ctx.mode !== "off" && (groupBy === "channel" || groupBy === "customer") && /^d{4}-d{2}-d{2}$/.test(startDate) && /^d{4}-d{2}-d{2}$/.test(endDate) ? await rollupFirstDay(basis).catch(() => null) : null
+    const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v)
+    const first = ctx.mode !== "off" && (groupBy === "channel" || groupBy === "customer") && isDay(startDate) && isDay(endDate) ? await rollupFirstDay(basis).catch(() => null) : null
     if (first && startDate >= first && startDate <= ruEnd) {
       rows = await serve<PerfRow[]>(ctx, rawRows, () => fetchB2bPerfRollup({ groupBy: groupBy as "channel" | "customer", basis, start: startDate, end: ruEnd, includeShip, includeInternalOps, excludedCustomers }),
         diffB2bPerf, { dateColumn, startDate, endDate, groupBy, includeShip, includeInternalOps, includeOpsCustomers })
