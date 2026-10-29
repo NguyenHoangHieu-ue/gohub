@@ -6,15 +6,16 @@ import { GEMINI_MODEL } from "@/lib/ai-models"
 
 export interface WebSource { title: string; url: string }
 
-export async function runWebSearch(query: string): Promise<{ result: string; sources: WebSource[] }> {
+/** concise: trả lời ngắn (≤ ~200 từ, ý chính + nguồn) và có hạn thời gian — Gấu Prime dùng; mặc định giữ nguyên hành vi cũ cho Bé Gấu/Gấu Pro. */
+export async function runWebSearch(query: string, opts?: { concise?: boolean; timeoutMs?: number }): Promise<{ result: string; sources: WebSource[] }> {
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY!)
     const searchModel = genAI.getGenerativeModel({
       model: GEMINI_MODEL,
       tools: [{ googleSearch: {} } as any],
-    })
+    }, opts?.timeoutMs ? { timeout: opts.timeoutMs } : undefined)
     const result = await searchModel.generateContent({
-      contents: [{ role: "user", parts: [{ text: `${query}\n\nProvide a comprehensive, factual answer with citations.` }] }],
+      contents: [{ role: "user", parts: [{ text: `${query}\n\n${opts?.concise ? "Answer concisely (under 200 words): key facts only, with citations. No preamble." : "Provide a comprehensive, factual answer with citations."}` }] }],
     })
     const text = result.response.text()
     const meta = (result.response.candidates?.[0] as any)?.groundingMetadata
