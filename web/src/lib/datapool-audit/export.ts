@@ -60,13 +60,13 @@ export function buildAuditWorkbook(rows: AuditRow[], ctx: AuditCtx): XLSX.WorkBo
     put(ws, `M${r}`, num(c.dataUsd, `ROUNDUP(IF(J${r}="HKD",L${r}/${P(R.hkd)},L${r}),2)`))
     const pool = x.vendor === "BC_CMHK" ? "cmhk" : "st"
     const imsi = x.vendor === "BC_CMHK" ? `${P(R.cmhkImsi)}/${P(R.hkd)}` : P(R.stImsi)
-    const feeF = c.feeKind === "none" || (c.feeKind === "sim" && x.vendor !== "3HK") ? null
+    const feeF = c.feeKind === "none" ? null
       : x.vendor === "3HK" ? (c.feeKind === "esim" ? P(R.esim3hk) : P(R.simUs3hk))
-      : `ROUNDUP(${P(pool === "cmhk" ? R.cmhkEsimCny : R.stEsimCny)}/${P(R.cny)}+${imsi},2)`
+      : c.feeKind === "esim" ? `ROUNDUP(${P(pool === "cmhk" ? R.cmhkEsimCny : R.stEsimCny)}/${P(R.cny)}+${imsi},2)` : `ROUNDUP(${imsi},2)`
     put(ws, `N${r}`, num(c.feeUsd, feeF ?? undefined))
     put(ws, `O${r}`, num(c.cogsUsd, `ROUNDUP(M${r}+N${r},2)`))
     if (x.type === "E") put(ws, `Y${r}`, num(c.feeVnd, P(x.vendor === "3HK" ? R.simVn3hk : R.white)))
-    put(ws, `P${r}`, num(c.cogsVnd, x.type === "E" ? `ROUNDUP(M${r}*${P(R.vndJsc)},0)+Y${r}` : `ROUNDUP(O${r}*${P(R.vndJsc)},0)`))
+    put(ws, `P${r}`, num(c.cogsVnd, x.type === "E" ? `ROUNDUP(${x.vendor === "3HK" ? "M" : "O"}${r}*${P(R.vndJsc)},0)+Y${r}` : `ROUNDUP(O${r}*${P(R.vndJsc)},0)`))
     put(ws, `Q${r}`, num(x.expected ?? 0, x.tenant === "US" ? `O${r}` : `P${r}`))
     if (x.current != null) {
       put(ws, `S${r}`, num(x.expected != null ? x.expected - x.current : 0, `Q${r}-R${r}`))

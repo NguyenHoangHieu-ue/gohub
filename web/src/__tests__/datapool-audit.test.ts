@@ -65,7 +65,8 @@ describe("soát giá vốn: engine tính lại ĐÚNG như lúc tạo sản ph�
     expect(e.some(r => r.vendor !== "3HK")).toBe(true)
     for (const r of e) {
       expect(r.calc!.feeVnd).toBe(r.vendor === "3HK" ? FRAMES.simVnVnd : 16028)
-      expect(r.calc!.cogsVnd).toBe(Math.ceil(r.calc!.dataUsd * FX.vndPerUsd - 1e-9) + r.calc!.feeVnd)
+      expect(r.calc!.cogsVnd).toBe(Math.ceil((r.vendor === "3HK" ? r.calc!.dataUsd : r.calc!.cogsUsd) * FX.vndPerUsd - 1e-9) + r.calc!.feeVnd)
+      if (r.vendor !== "3HK") expect(r.calc!.feeUsd).toBeGreaterThan(0)   // BC SIM full có IMSI
       expect(r.explain).toContain(r.vendor === "3HK" ? "khung SIM VN" : "SIM trắng")
     }
   })

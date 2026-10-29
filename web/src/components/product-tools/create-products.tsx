@@ -455,7 +455,7 @@ function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUploa
             </div>
           )}
           {preview.whiteSimVnd && (
-            <div className="text-xs text-gray-600 dark:text-slate-300">Giá SIM trắng lấy từ hệ thống (SKU 1D000WDK00000): <b>{preview.whiteSimVnd.toLocaleString("vi-VN")} VND</b> — phí SIM = giá SIM trắng + phí IMSI.</div>
+            <div className="text-xs text-gray-600 dark:text-slate-300">Giá SIM trắng lấy từ hệ thống (SKU 1D000WDK00000): <b>{preview.whiteSimVnd.toLocaleString("vi-VN")} VND</b> — SIM full (VN) = (data + phí IMSI) × tỷ giá JSC + giá SIM trắng (cộng thẳng VND).</div>
           )}
           {preview.warnings.length > 0 && (
             <div className="p-3 border border-amber-300 bg-amber-50 rounded-xl text-sm text-amber-900">
@@ -484,7 +484,7 @@ function BcDatapoolBuilder({ onNotify, canUpload }: { onNotify: Notify; canUploa
                     <td className="px-2 py-1 whitespace-nowrap">{r.type}</td><td className="px-2 py-1 font-mono">{r.skuUS}</td><td className="px-2 py-1 font-mono">{r.skuVN}</td><td className="px-2 py-1 font-mono">{r.productId}</td><td className="px-2 py-1">{r.pool}</td><td className="px-2 py-1">{r.operator}</td>
                     <td className="px-2 py-1" title={r.explain.dataPool}>{r.pricePerGb} {r.currency}</td>
                     <td className="px-2 py-1 cursor-help underline decoration-dotted" title={`${r.explain.dataPool}\n${r.explain.dataUsd}`}>{r.dataUsd}</td>
-                    <td className="px-2 py-1 cursor-help underline decoration-dotted" title={r.explain.fee}>{r.feeVnd ? `${r.feeVnd.toLocaleString("vi-VN")}đ` : r.feeUsd}</td>
+                    <td className="px-2 py-1 cursor-help underline decoration-dotted" title={r.explain.fee}>{r.feeVnd ? `${r.feeUsd} + ${r.feeVnd.toLocaleString("vi-VN")}đ` : r.feeUsd}</td>
                     <td className="px-2 py-1 font-semibold cursor-help underline decoration-dotted" title={r.explain.cogsUsd}>{r.cogsUsd}</td>
                     <td className="px-2 py-1 font-semibold cursor-help underline decoration-dotted" title={`${r.explain.cogsUsd}\n${r.explain.cogsVnd}`}>{r.cogsVnd.toLocaleString("vi-VN")}</td>
                   </tr>))}</tbody>
