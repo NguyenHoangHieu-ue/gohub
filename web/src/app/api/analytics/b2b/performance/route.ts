@@ -12,6 +12,8 @@ import {
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { diffB2bPerf, fetchB2bPerfRollup, rollupFirstDay, type PerfRow } from "@/lib/rollup/b2bperf"
 import { calcChCostForPeriod, COST_KEYS, type CostRecord, type CostLine, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
@@ -28,6 +30,7 @@ export async function GET(req: NextRequest) {
   const includeOpsCustomers = searchParams.get("includeOpsCustomers") === "1"
 
   const source = getAnalyticsSource(dateColumn)
+  const ctx = await rollupCtx("b2b-performance")
   const filter = getDateFilter(startDate || null, endDate || null, source.dateCol)
 
   try {
@@ -35,7 +38,7 @@ export async function GET(req: NextRequest) {
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)} ${excludeInactiveCustomers()}`
     // v4: thêm excludedCustomers hash (v3 thiếu → đổi config không invalidate cache)
     const exclHash = excludedCustomers.length ? excludedCustomers.slice().sort().join(",") : ""
-    const key = `b2b-perf6:${dateColumn}:${startDate}:${endDate}:${groupBy}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash}`
+    const key = `b2b-perf6${ruKey(ctx)}:${dateColumn}:${startDate}:${endDate}:${groupBy}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash}`
     const payload = await cachedQuery(key, async () => {
     let selectClause = "f.channel_name as name"
     let joinClause = ""
@@ -58,7 +61,7 @@ export async function GET(req: NextRequest) {
     const isChannelGroup = groupBy === "channel" || !groupBy
     const needsSubChannel = isChannelGroup || groupBy === "customer"
 
-    const rows = await queryAnalytics<Record<string, string>>(
+    const rawRows = () => queryAnalytics<Record<string, string>>(
       `WITH b2b_raw AS (
          SELECT f.*, TRIM(s.channel_name) as channel_name, TRIM(s.sapo_name) as sub_channel,
                 TRIM(COALESCE(s.sub_group_name, '')) as sub_group_name, TRIM(s.code) as source_code
@@ -90,6 +93,17 @@ export async function GET(req: NextRequest) {
            : "f.channel_name, sub_channel, TO_CHAR(f." + source.dateCol + "::DATE,'YYYY-MM')"
        }`
     )
+
+    // Rollup chỉ phục vụ groupBy kênh/khách và khoảng ngày nằm trong vùng đã dựng; còn lại đường thô.
+    let rows: PerfRow[]
+    const basis = dateColumn === "created_date" ? "sal" : "ful"
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const ruEnd = endDate < yesterday ? endDate : yesterday
+    const first = ctx.mode !== "off" && (groupBy === "channel" || groupBy === "customer") && /^d{4}-d{2}-d{2}$/.test(startDate) && /^d{4}-d{2}-d{2}$/.test(endDate) ? await rollupFirstDay(basis).catch(() => null) : null
+    if (first && startDate >= first && startDate <= ruEnd) {
+      rows = await serve<PerfRow[]>(ctx, rawRows, () => fetchB2bPerfRollup({ groupBy: groupBy as "channel" | "customer", basis, start: startDate, end: ruEnd, includeShip, includeInternalOps, excludedCustomers }),
+        diffB2bPerf, { dateColumn, startDate, endDate, groupBy, includeShip, includeInternalOps, includeOpsCustomers })
+    } else rows = await rawRows()
 
     // ── Aggregate in JS (name → totals + monthly + sub-channel breakdown) ───────
     type Item = {
@@ -297,7 +311,7 @@ export async function GET(req: NextRequest) {
     return result
     }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    return NextResponse.json(payload, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/b2b/performance]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
