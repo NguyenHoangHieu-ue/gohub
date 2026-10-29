@@ -9,7 +9,7 @@ import { BarChart3, Brain, Check, Cpu, FileText, Loader2, Radio, Wrench, X } fro
 import { ReportsModal } from "../reports-modal"
 import { ArgonNav } from "../argon-nav"
 import { MemoryPanel } from "@/components/gau-pro/memory-panel"
-import { MAX_FILES, useChatUpload } from "./use-chat-upload"
+import { MAX_FILES, uniqueFiles, useChatUpload } from "./use-chat-upload"
 const LiveSession = dynamic(() => import("@/components/gau-pro/live-session").then(m => m.LiveSession), { ssr: false })   // giọng nói trực tiếp: chỉ nạp khi mở (nặng)
 import { InlineConfirm } from "./inline-confirm"
 import { MyDocs } from "./my-docs"
@@ -75,7 +75,8 @@ export default function TroLyPage() {
   const [showBench, setShowBench] = useState(false)
   const [showLive, setShowLive] = useState(false)   // giọng nói/màn hình trực tiếp (chỉ Creator)
   const [showDocs, setShowDocs] = useState(false)   // ngăn kéo "Tài liệu của tôi"
-  const { state: up, upload, stage, digest, reset: resetUp } = useChatUpload()
+  const { state: up, upload, stage, digest, warm, reset: resetUp } = useChatUpload()
+  useEffect(() => { if (up.stage !== "done") return; const t = setTimeout(resetUp, 8000); return () => clearTimeout(t) }, [up.stage, resetUp])   // thông báo "Đã lưu" tự tắt sau 8 giây
   const [reports, setReports] = useState<ReportMetaUi[]>([])
   const [showReports, setShowReports] = useState(false)   // Kho báo cáo của chính người dùng (report HTML Gấu Prime đã dựng)
   const [tpl, setTpl] = useState<ReportMetaUi | null>(null)
@@ -83,7 +84,7 @@ export default function TroLyPage() {
   const [pending, setPending] = useState<File[]>([])   // tệp đính kèm chưa gửi: chỉ lưu vào Tài liệu của tôi khi bấm Gửi
   const attach = {
     files: pending,
-    add: (fs: File[]) => setPending(p => [...p, ...fs].slice(0, MAX_FILES)),
+    add: (fs: File[]) => { void warm(); setPending(p => [...p, ...uniqueFiles(p, fs)].slice(0, MAX_FILES)) },
     remove: (i: number) => setPending(p => p.filter((_, j) => j !== i)),
     clear: () => setPending([]),
   }

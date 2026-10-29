@@ -7,9 +7,11 @@ import { isCronReq, softExpireAll, prewarmAnalyticsUrls } from "@/lib/analytics-
 import { waitUntil } from "@vercel/functions"
 import { alertCronFailure } from "@/lib/cron-alert"
 import { checksumOf, checksumChanged, type ChecksumState } from "@/lib/data-freshness"
+import { refreshRecent, logRun } from "@/lib/rollup/builder"
+import { rollupConfigured } from "@/lib/rollup/client"
 
 export const dynamic = "force-dynamic"
-export const maxDuration = 30
+export const maxDuration = 60   // + làm mới rollup 45 ngày (~6s) ở nền
 
 // s200+6 — flush cache BI ngay khi ETL nạp xong (thay vì chờ mù TTL 60'). KHÔNG dùng Vercel Cron (Hobby
 // plan giới hạn 1 lần/ngày/job, xem CLAUDE.md) — route này để cron-job.org (đã có sẵn cho browserless
@@ -85,6 +87,11 @@ async function checkAndFlush(origin: string): Promise<{ advanced: string[]; chec
     // đồng thời làm tươi trước ở nền các URL được xem gần đây để lượt xem kế tiếp đã có số mới.
     await softExpireAll()
     waitUntil(prewarmAnalyticsUrls(origin, 30, 3, 22_000).then(() => {}, () => {}))
+    // Rollup Analytics (docs/plans/analytics-rollup.md): ETL mới xong thì làm mới 45 ngày gần nhất (chỉ ghi ngày đổi). Lỗi không chặn phần cache.
+    if (rollupConfigured()) {
+      const t0 = Date.now()
+      waitUntil(refreshRecent(45).then(r => logRun("refresh", null, true, Date.now() - t0, r), e => { void logRun("refresh", null, false, Date.now() - t0, { error: (e as Error).message }).catch(() => undefined); return alertCronFailure("rollup-refresh", e) }))
+    }
     await supabaseAdmin.from("app_settings").upsert(
       { key: STATE_KEY, value: JSON.stringify(nextSeen), category: "cache" },
       { onConflict: "key" },

@@ -11,6 +11,24 @@ export type UploadState = { stage: "idle" } | { stage: "working"; text: string }
 export interface Staged { path: string; name: string; mime: string; size: number }
 export const MAX_FILES = 10
 
+/** Ảnh dán/chụp màn hình luôn tên "image.png": đặt tên duy nhất (và đổi tên mọi tệp trùng) để người dùng, thẻ tệp và mô hình phân biệt được từng tệp. */
+export function uniqueFiles(existing: File[], incoming: File[]): File[] {
+  const taken = new Set(existing.map(f => f.name))
+  const stamp = new Date().toISOString().slice(11, 19).replace(/:/g, "")
+  return incoming.map((f, i) => {
+    let name = f.name
+    if (/^(image|blob|untitled)\.\w+$/i.test(name) || !name) name = `anh-${stamp}-${existing.length + i + 1}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg")}`
+    if (taken.has(name)) {
+      const dot = name.lastIndexOf("."), base = dot > 0 ? name.slice(0, dot) : name, ext = dot > 0 ? name.slice(dot) : ""
+      let n = 2
+      while (taken.has(`${base}-${n}${ext}`)) n++
+      name = `${base}-${n}${ext}`
+    }
+    taken.add(name)
+    return name === f.name ? f : new File([f], name, { type: f.type, lastModified: f.lastModified })
+  })
+}
+
 export function useChatUpload() {
   const [state, setState] = useState<UploadState>({ stage: "idle" })
   const projectRef = useRef<string | null>(null)
@@ -39,7 +57,7 @@ export function useChatUpload() {
   const digest = useCallback(async (ids: string[], names: string[] = [], failed: string[] = []) => {
     setState({ stage: "working", text: "Đang tóm tắt tài liệu…" })
     await Promise.all(ids.map(id => api("/api/creator/argon/kho", jsonInit("POST", { action: "digest", ids: [id], autoFile: true })).catch(() => null)))
-    setState({ stage: "done", names, failed })
+    setState({ stage: "done", names: names.length ? names : [`${ids.length} tài liệu`], failed })
   }, [])
 
   /** Lưu chủ động vào Tài liệu của tôi (không gắn với câu hỏi nào). */
@@ -53,12 +71,12 @@ export function useChatUpload() {
       if (!regs.length) { setState({ stage: "error", text: "Không tải lên được tài liệu nào. Anh/chị thử lại giúp em." }); return }
       setState({ stage: "working", text: "Đang đọc nội dung…" })
       const r = await api<{ sources: Source[]; errors: string[] }>(`/api/creator/argon/projects/${projectId}/sources`, jsonInit("POST", { action: "register", items: regs }))
-      failed.push(...regs.filter(x => !r.sources.some(s => s.name === x.name)).map(x => x.name))
+      failed.push(...regs.filter(x => !r.sources.some(s => s.storage_path === x.path)).map(x => x.name))
       await digest(r.sources.map(s => s.id), r.sources.map(s => s.name), failed)
     } catch (e) { setState({ stage: "error", text: (e as Error).message }) }
     finally { busy.current = false }
   }, [khoProject, stage, digest])
 
   const reset = useCallback(() => setState({ stage: "idle" }), [])
-  return { state, upload, stage, digest, reset }
+  return { state, upload, stage, digest, reset, warm: () => khoProject().catch(() => null) }
 }

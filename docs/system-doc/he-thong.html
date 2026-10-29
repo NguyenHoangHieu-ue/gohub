@@ -1,0 +1,910 @@
+<!doctype html>
+<html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GoHub Intel — Tài liệu hệ thống</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#fff;--card:#fff;--fg:#1b2125;--muted:#56626a;--line:#d8d6cd;--soft:#f1efe8;--accent:#0b5f6b;--accent-soft:#dcecee;
+ --ok:#17703f;--ok-soft:#dff1e6;--warn:#8a5a00;--warn-soft:#faedc8;--bad:#a3262a;--bad-soft:#f8dcdc;--blue:#2563eb;--blue-soft:#dde7fb;--vio:#7c3aed;--vio-soft:#ece4fc;
+ --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;--sans:"Be Vietnam Pro",system-ui,"Segoe UI",sans-serif}
+*{box-sizing:border-box}
+html{font-size:14px}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);line-height:1.55;margin:0;padding:0 10px}
+.doc{max-width:1040px;margin:0 auto}
+h1{font-size:30px;line-height:1.15;margin:0 0 8px;letter-spacing:-.01em}
+h2{font-size:21px;margin:0 0 6px;padding-top:6px;border-top:3px solid var(--accent);letter-spacing:-.005em;break-after:avoid}
+h3{font-size:15px;margin:18px 0 6px;font-weight:600;break-after:avoid}
+h4{font-size:13px;margin:12px 0 4px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;break-after:avoid}
+p{margin:0 0 8px;max-width:76ch}
+ul{margin:4px 0 10px;padding-left:20px}li{margin:2px 0}
+code{font-family:var(--mono);font-size:.88em;background:var(--soft);padding:1px 4px;border-radius:3px}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.lead{font-size:15px;color:var(--muted);max-width:70ch}
+.sub{color:var(--muted);max-width:80ch}
+.chapter{break-before:page;padding-top:4px}
+.cover{min-height:92vh;display:flex;flex-direction:column;justify-content:center;gap:14px;break-after:page}
+.cover h1{font-size:44px}
+.tag{display:inline-block;font-family:var(--mono);font-size:10.5px;padding:0 6px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.tag.ok{background:var(--ok-soft);color:var(--ok);border-color:transparent}.tag.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}.tag.bad{background:var(--bad-soft);color:var(--bad);border-color:transparent}.tag.blue{background:var(--blue-soft);color:var(--blue);border-color:transparent}
+table{border-collapse:collapse;width:100%;font-size:12px;margin:6px 0 12px;break-inside:auto}
+tr{break-inside:avoid}
+th,td{text-align:left;padding:5px 8px;border:1px solid var(--line);vertical-align:top}
+th{background:var(--soft);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+td.m{font-family:var(--mono);font-size:11px;white-space:nowrap}
+figure{margin:10px 0 14px;border:1px solid var(--line);border-radius:8px;padding:10px 10px 8px;break-inside:avoid}
+figure svg{display:block;width:100%;height:auto}
+figcaption{margin-top:6px;color:var(--muted);font-size:11.5px}
+figcaption b{color:var(--fg)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.card{border:1px solid var(--line);border-radius:8px;padding:9px 12px;break-inside:avoid}
+.card h3{margin-top:0}
+.callout{border-left:4px solid var(--accent);background:var(--accent-soft);padding:8px 12px;border-radius:0 6px 6px 0;margin:8px 0;break-inside:avoid}
+.callout.warn{border-color:var(--warn);background:var(--warn-soft)}
+.toc{columns:2;column-gap:28px;font-size:13px}.toc div{margin:2px 0}.toc b{font-family:var(--mono);color:var(--accent);margin-right:6px}
+/* svg */
+.t{fill:var(--fg);font-family:var(--sans);font-size:12px}.tm{fill:var(--muted);font-family:var(--sans);font-size:10.5px}.tb{fill:var(--fg);font-family:var(--sans);font-size:12.5px;font-weight:600}
+.tmono{fill:var(--fg);font-family:var(--mono);font-size:10.5px}.tmonom{fill:var(--muted);font-family:var(--mono);font-size:10px}
+.bx{fill:#fff;stroke:#1b2125;stroke-width:1.2}.bxs{fill:var(--soft);stroke:#56626a;stroke-width:1}.bxa{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.4}.bxw{fill:var(--warn-soft);stroke:var(--warn);stroke-width:1.2}.bxb{fill:var(--bad-soft);stroke:var(--bad);stroke-width:1.2}.bxo{fill:var(--ok-soft);stroke:var(--ok);stroke-width:1.2}.bxl{fill:var(--blue-soft);stroke:var(--blue);stroke-width:1.2}.bxv{fill:var(--vio-soft);stroke:var(--vio);stroke-width:1.2}
+.ln{stroke:#1b2125;stroke-width:1.3;fill:none}.lnm{stroke:#56626a;stroke-width:1;fill:none}.lnd{stroke:#1b2125;stroke-width:1.2;fill:none;stroke-dasharray:5 4}.lna{stroke:var(--accent);stroke-width:1.7;fill:none}.gl{stroke:var(--line);stroke-width:1;fill:none}
+@page{size:A4;margin:12mm 11mm}
+@media print{body{padding:0}}
+</style>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1b2125"/></marker></defs></svg>
+<div class="doc">
+
+<div class="cover">
+  <div class="eyebrow">Tài liệu kỹ thuật · bản tổng hợp toàn hệ thống</div>
+  <h1>GoHub Intel</h1>
+  <p class="lead">Quy trình, mô hình và sơ đồ của toàn bộ hệ thống: dữ liệu, analytics, trợ lý AI, tích hợp Lark, tác vụ định kỳ, bảo mật, vận hành và kế hoạch mở rộng. Viết để người mới đọc một lần là hiểu hệ thống chạy thế nào, chỗ nào chậm, chỗ nào rủi ro.</p>
+  <table style="max-width:560px">
+    <tr><th>Thông tin</th><th>Giá trị</th></tr>
+    <tr><td>Phiên bản tài liệu</td><td>2026-10-28 (s243)</td></tr>
+    <tr><td>Nhánh / commit</td><td><code>main</code> = <code>e4cee3d4</code>, <code>staging</code> bằng <code>main</code> tại thời điểm viết</td></tr>
+    <tr><td>Môi trường</td><td>production <code>intel-v2.gohub.cloud</code> · staging <code>stg-intel-v2.gohub.cloud</code></td></tr>
+    <tr><td>Nguồn</td><td>mã nguồn, <code>docs/wiki</code>, <code>CLAUDE.md</code>, số đo trực tiếp trên <code>gohub_dw</code> (chỉ SELECT)</td></tr>
+    <tr><td>Cách đọc</td><td>Mỗi chương độc lập. Nhãn <span class="tag ok">đã kiểm</span> là đã đối chiếu mã/số đo; <span class="tag warn">theo wiki</span> là lấy từ tài liệu, chưa đọc lại mã hôm nay; <span class="tag bad">cần xác nhận</span> là chưa chắc.</td></tr>
+  </table>
+  <p class="sub">Tài liệu bổ trợ: kế hoạch Rollup Analytics (<code>docs/plans/analytics-rollup.md</code> và bản PDF cùng thư mục), wiki từng tab (<code>docs/wiki/system/tabs/</code>), nhật ký <code>docs/session_summary.txt</code>.</p>
+</div>
+
+<h2 style="border:0;padding-top:0">Mục lục</h2>
+<div class="toc">
+  <div><b>1</b>Bức tranh tổng thể</div>
+  <div><b>2</b>Hạ tầng, môi trường, phát hành</div>
+  <div><b>3</b>Các kho dữ liệu</div>
+  <div><b>4</b>Luồng nạp dữ liệu</div>
+  <div><b>5</b>Analytics: vòng đời một request và cache</div>
+  <div><b>6</b>Quy tắc nghiệp vụ tính số</div>
+  <div><b>7</b>Danh mục tab và module</div>
+  <div><b>8</b>Xác thực và phân quyền</div>
+  <div><b>9</b>Hệ trợ lý AI</div>
+  <div><b>10</b>Tích hợp Lark</div>
+  <div><b>11</b>Bridge: extension trình duyệt</div>
+  <div><b>12</b>Tác vụ định kỳ</div>
+  <div><b>13</b>Bảo mật và an toàn</div>
+  <div><b>14</b>Hiệu năng, giới hạn, Rollup</div>
+  <div><b>15</b>Vận hành và xử lý sự cố</div>
+  <div><b>A</b>Phụ lục: bảng dữ liệu, biến môi trường, thuật ngữ, nợ kỹ thuật</div>
+</div>
+
+<!-- ============ CHƯƠNG 1 ============ -->
+<div class="chapter">
+<h2>1. Bức tranh tổng thể</h2>
+<p class="sub">GoHub Intel là web nội bộ (Next.js 14) gom ba việc: <b>báo cáo số liệu kinh doanh</b> (analytics), <b>quản lý sản phẩm và nhà cung cấp</b>, và <b>trợ lý AI</b> (Bé Gấu, Gấu Pro, Gấu Prime) tích hợp sâu với Lark. Toàn bộ chạy serverless trên Vercel; dữ liệu nằm ở nhiều kho tách vai trò.</p>
+<figure>
+<svg viewBox="0 0 1000 600" role="img" aria-label="Sơ đồ bối cảnh: người dùng, Lark, bộ lập lịch, GitHub nối vào ứng dụng GoHub Intel trên Vercel; ứng dụng đọc ghi các kho dữ liệu và gọi các dịch vụ AI và bên thứ ba.">
+  <!-- trung tâm -->
+  <rect class="bxa" x="330" y="200" width="340" height="190" rx="10"/>
+  <text class="tb" x="500" y="228" text-anchor="middle" font-size="15">GoHub Intel</text>
+  <text class="tm" x="500" y="246" text-anchor="middle">Next.js 14 App Router · Vercel (Hobby) · 1 repo</text>
+  <rect class="bx" x="348" y="260" width="140" height="48" rx="5"/><text class="t" x="418" y="280" text-anchor="middle">Giao diện</text><text class="tm" x="418" y="296" text-anchor="middle">tab analytics, admin</text>
+  <rect class="bx" x="512" y="260" width="140" height="48" rx="5"/><text class="t" x="582" y="280" text-anchor="middle">API routes</text><text class="tm" x="582" y="296" text-anchor="middle">≈ 67 nhóm analytics</text>
+  <rect class="bx" x="348" y="322" width="140" height="56" rx="5"/><text class="t" x="418" y="342" text-anchor="middle">Lõi trợ lý</text><text class="tm" x="418" y="358" text-anchor="middle">Bé Gấu · Gấu Pro</text><text class="tm" x="418" y="371" text-anchor="middle">Gấu Prime (Argon)</text>
+  <rect class="bx" x="512" y="322" width="140" height="56" rx="5"/><text class="t" x="582" y="342" text-anchor="middle">Cache + guard</text><text class="tm" x="582" y="358" text-anchor="middle">cachedQuery · quyền</text><text class="tm" x="582" y="371" text-anchor="middle">rate limit · cron auth</text>
+  <!-- trái: người dùng -->
+  <rect class="bxs" x="20" y="200" width="220" height="190" rx="8"/><text class="tb" x="130" y="224" text-anchor="middle">Người dùng</text>
+  <text class="tm" x="34" y="248">Creator (toàn quyền)</text><text class="tm" x="34" y="264">Admin · Manager · BOD</text><text class="tm" x="34" y="280">Staff, sale B2B/B2C, ops, CS, HR</text><text class="tm" x="34" y="296">Thành viên được cấp Gấu Prime</text>
+  <text class="tm" x="34" y="320">Trình duyệt + extension Bridge</text><text class="tm" x="34" y="336">(điều khiển trình duyệt của chính họ)</text><text class="tm" x="34" y="360">Đăng nhập: mật khẩu hoặc Lark OAuth</text>
+  <line class="ln" x1="240" y1="295" x2="328" y2="295" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <!-- trên: Lark -->
+  <rect class="bxl" x="330" y="14" width="340" height="124" rx="8"/><text class="tb" x="500" y="36" text-anchor="middle">Lark (Larksuite)</text>
+  <text class="tm" x="346" y="58">Bot: nhận tin DM/group (webhook mã hóa AES-256)</text><text class="tm" x="346" y="74">Gửi tin, card, task, lịch nhắc</text><text class="tm" x="346" y="90">OAuth đăng nhập + token cá nhân (task, Doc)</text><text class="tm" x="346" y="106">Base (CS tickets) · Docs · Sheets · Wiki · Drive · Mail</text><text class="tm" x="346" y="122">Minutes (biên bản họp)</text>
+  <line class="ln" x1="500" y1="138" x2="500" y2="198" marker-end="url(#ar)" marker-start="url(#ar)"/><text class="tm" x="508" y="172">/api/lark/events · REST</text>
+  <!-- phải: kho dữ liệu -->
+  <rect class="bxo" x="760" y="150" width="220" height="300" rx="8"/><text class="tb" x="870" y="172" text-anchor="middle">Kho dữ liệu</text>
+  <rect class="bx" x="774" y="184" width="192" height="46" rx="5"/><text class="t" x="870" y="203" text-anchor="middle">gohub_dw (Postgres, GCP)</text><text class="tm" x="870" y="219" text-anchor="middle">số liệu bán hàng · CHỈ ĐỌC</text>
+  <rect class="bx" x="774" y="238" width="192" height="46" rx="5"/><text class="t" x="870" y="257" text-anchor="middle">Supabase (Postgres)</text><text class="tm" x="870" y="273" text-anchor="middle">sản phẩm, KB, cấu hình, Argon</text>
+  <rect class="bx" x="774" y="292" width="192" height="46" rx="5"/><text class="t" x="870" y="311" text-anchor="middle">Turso ×3 (libSQL)</text><text class="tm" x="870" y="327" text-anchor="middle">chi phí, target, chỉ mục Argon</text>
+  <rect class="bx" x="774" y="346" width="192" height="46" rx="5"/><text class="t" x="870" y="365" text-anchor="middle">Vercel Runtime Cache</text><text class="tm" x="870" y="381" text-anchor="middle">cache analytics L2</text>
+  <rect class="bx" x="774" y="400" width="192" height="40" rx="5"/><text class="t" x="870" y="418" text-anchor="middle">Supabase Storage</text><text class="tm" x="870" y="432" text-anchor="middle">tệp tải lên của Argon</text>
+  <line class="ln" x1="670" y1="295" x2="758" y2="295" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <!-- dưới: dịch vụ -->
+  <rect class="bxv" x="20" y="440" width="460" height="150" rx="8"/><text class="tb" x="250" y="462" text-anchor="middle">AI và dịch vụ tính toán</text>
+  <text class="tm" x="34" y="484">Google Gemini: chat, suy luận, Live (giọng nói), TTS, ảnh, video,</text><text class="tm" x="34" y="498">embedding, dịch, ghi âm, Deep Research</text>
+  <text class="tm" x="34" y="518">Vercel Sandbox: chạy Python (mạng đóng) cho run_code</text><text class="tm" x="34" y="534">browserless: trình duyệt headless đọc trang web</text><text class="tm" x="34" y="550">GA4 + Search Console (số liệu website)</text><text class="tm" x="34" y="566">Google Drive/Docs/Sheets (OAuth cá nhân Creator)</text>
+  <rect class="bxw" x="500" y="470" width="240" height="120" rx="8"/><text class="tb" x="620" y="492" text-anchor="middle">Bên thứ ba khác</text>
+  <text class="tm" x="514" y="514">GoHub Admin API (sản phẩm/khách)</text><text class="tm" x="514" y="530">BC Datapool API · Chatwoot (CS)</text><text class="tm" x="514" y="546">Omni (leads) · GitHub API</text><text class="tm" x="514" y="562">API ngoài cho đối tác (/api/external, MCP)</text>
+  <line class="ln" x1="420" y1="392" x2="300" y2="438" marker-end="url(#ar)"/><line class="ln" x1="580" y1="392" x2="620" y2="468" marker-end="url(#ar)"/>
+  <!-- trái dưới/giữa: bộ lập lịch + GitHub -->
+  <rect class="bxs" x="760" y="470" width="220" height="120" rx="8"/><text class="tb" x="870" y="492" text-anchor="middle">Bộ lập lịch và CI</text>
+  <text class="tm" x="774" y="514">Vercel Cron (11 job/ngày)</text><text class="tm" x="774" y="530">cron-job.org (job hằng giờ/đêm)</text><text class="tm" x="774" y="546">GitHub Actions (sync, CI, wiki)</text><text class="tm" x="774" y="562">Claude Code (phiếu sửa code → PR)</text>
+  <line class="lnd" x1="860" y1="468" x2="670" y2="372" marker-end="url(#ar)"/>
+  <text class="tm" x="20" y="430">Mũi tên: hướng gọi chính. Nét đứt: kích hoạt định kỳ.</text>
+</svg>
+<figcaption><b>Cách đọc:</b> một ứng dụng duy nhất làm trung tâm. Người dùng và Lark gọi vào; ứng dụng đọc ghi 5 loại kho, gọi AI và dịch vụ ngoài; các bộ lập lịch gọi ngược vào các route <code>/api/cron/*</code>.</figcaption>
+</figure>
+
+<h3>Ba trụ của hệ thống</h3>
+<div class="grid3">
+  <div class="card"><h3>1. Analytics</h3><p>≈ 24 tab báo cáo (Dashboard, Quarter, BOD, Channels, B2B, B2C, Staff, Customers, Vendors, Orders, Products…). Số liệu đọc từ <code>gohub_dw</code>, cộng chi phí/target từ Supabase và Turso, tính CM1 trong code.</p></div>
+  <div class="card"><h3>2. Sản phẩm và NCC</h3><p>Catalog 4 tầng (Product, SKU, Listing, Item) đồng bộ từ API GoHub; danh mục nhà cung cấp, bảng giá, tính giá, tạo sản phẩm, khuyến mãi, BC Datapool, 3HK Data Usage.</p></div>
+  <div class="card"><h3>3. Trợ lý AI</h3><p>Bé Gấu (chatbot toàn team), Gấu Pro (trợ lý agent cho Creator), Gấu Prime (Argon: tham mưu theo Sứ mệnh, Kho tri thức, mở cho thành viên được cấp).</p></div>
+</div>
+
+<h3>Vai trò người dùng</h3>
+<table>
+  <tr><th>Vai trò</th><th>Thấy gì</th><th>Ghi chú</th></tr>
+  <tr><td><code>creator</code></td><td>Mọi tab, mọi API, nhóm "Creator" (Gấu Pro, Gấu Prime, Dữ liệu và API, Bridge, Creator Settings…)</td><td>Chủ hệ thống, một vài người</td></tr>
+  <tr><td><code>admin</code>, <code>manager</code></td><td>Hầu hết analytics + quản trị (Người dùng và quyền, Cấu hình, Dữ liệu và giá)</td><td>Admin toàn quyền analytics; manager trừ công cụ admin</td></tr>
+  <tr><td><code>bod</code> và các vai trò vận hành</td><td>Theo ma trận <code>role_permissions</code> trong <code>app_settings</code> (deny-by-default)</td><td>staff, b2b, b2c, saleb2c, ops-&amp;-cs, hr, product…</td></tr>
+  <tr><td>Thành viên Gấu Prime</td><td>Chỉ mục Hỏi của Gấu Prime với quyền được Creator cấp</td><td>Danh sách <code>argon_users</code>; hạn mức 40 lượt và 3 USD/ngày</td></tr>
+</table>
+</div>
+
+<!-- ============ CHƯƠNG 2 ============ -->
+<div class="chapter">
+<h2>2. Hạ tầng, môi trường và quy trình phát hành</h2>
+<p class="sub">Một repo GitHub, hai nhánh chính, hai domain Vercel. Điểm cần nhớ nhất: <b>staging và production dùng CHUNG cơ sở dữ liệu</b>; chỉ khác code và cache.</p>
+<h3>Môi trường</h3>
+<table>
+  <tr><th>Mục</th><th>Production</th><th>Staging</th></tr>
+  <tr><td>Domain</td><td><code>intel-v2.gohub.cloud</code></td><td><code>stg-intel-v2.gohub.cloud</code></td></tr>
+  <tr><td>Nhánh Git</td><td><code>main</code></td><td><code>staging</code></td></tr>
+  <tr><td>Cơ sở dữ liệu</td><td colspan="2">cùng <code>gohub_dw</code>, cùng Supabase, cùng Turso (dữ liệu thử trên staging là dữ liệu thật: cuộc thử tạo bằng API phải xoá)</td></tr>
+  <tr><td>Runtime Cache</td><td>riêng (namespace <code>production</code>)</td><td>riêng (<code>preview</code>)</td></tr>
+  <tr><td>Cron Vercel</td><td>có (vercel.json, chỉ production)</td><td>không; cron ngoài đã trỏ production</td></tr>
+  <tr><td>Biến môi trường</td><td colspan="2"><code>ANALYTICS_DB_*</code> phải tick scope Preview, thiếu thì truy vấn trả rỗng âm thầm</td></tr>
+</table>
+<figure>
+<svg viewBox="0 0 1000 330" role="img" aria-label="Quy trình phát hành: sửa code trên staging, CI tsc và vitest, Vercel build staging, kiểm tra, rồi Hiếu yêu cầu merge vào main, Vercel build production, workflow thông báo Lark và đồng bộ wiki.">
+  <rect class="bx" x="14" y="30" width="130" height="56" rx="6"/><text class="t" x="79" y="54" text-anchor="middle">Sửa code</text><text class="tm" x="79" y="70" text-anchor="middle">nhánh staging</text>
+  <rect class="bxs" x="180" y="30" width="150" height="56" rx="6"/><text class="t" x="255" y="54" text-anchor="middle">Kiểm tra cục bộ</text><text class="tm" x="255" y="70" text-anchor="middle">tsc · vitest · lint</text>
+  <rect class="bxl" x="366" y="30" width="150" height="56" rx="6"/><text class="t" x="441" y="54" text-anchor="middle">Push staging</text><text class="tm" x="441" y="70" text-anchor="middle">CI chạy tsc + vitest</text>
+  <rect class="bxa" x="552" y="30" width="150" height="56" rx="6"/><text class="t" x="627" y="54" text-anchor="middle">Vercel build</text><text class="tm" x="627" y="70" text-anchor="middle">stg-intel-v2.gohub.cloud</text>
+  <rect class="bxw" x="738" y="30" width="150" height="56" rx="6"/><text class="t" x="813" y="54" text-anchor="middle">Kiểm tra sống</text><text class="tm" x="813" y="70" text-anchor="middle">QA + Hiếu xem</text>
+  <line class="ln" x1="144" y1="58" x2="178" y2="58" marker-end="url(#ar)"/><line class="ln" x1="330" y1="58" x2="364" y2="58" marker-end="url(#ar)"/><line class="ln" x1="516" y1="58" x2="550" y2="58" marker-end="url(#ar)"/><line class="ln" x1="702" y1="58" x2="736" y2="58" marker-end="url(#ar)"/>
+  <path class="ln" d="M813 86 V150" marker-end="url(#ar)"/><text class="tm" x="823" y="124">Hiếu nói rõ "merge main"</text>
+  <rect class="bxo" x="738" y="152" width="150" height="56" rx="6"/><text class="t" x="813" y="176" text-anchor="middle">Merge main</text><text class="tm" x="813" y="192" text-anchor="middle">tiêu đề có [skip notify]</text>
+  <rect class="bxa" x="552" y="152" width="150" height="56" rx="6"/><text class="t" x="627" y="176" text-anchor="middle">Vercel build</text><text class="tm" x="627" y="192" text-anchor="middle">intel-v2.gohub.cloud</text>
+  <line class="ln" x1="738" y1="180" x2="704" y2="180" marker-end="url(#ar)"/>
+  <rect class="bxs" x="366" y="152" width="150" height="56" rx="6"/><text class="t" x="441" y="172" text-anchor="middle">notify-release</text><text class="tm" x="441" y="188" text-anchor="middle">báo Lark (trừ [skip notify])</text>
+  <rect class="bxs" x="180" y="152" width="150" height="56" rx="6"/><text class="t" x="255" y="172" text-anchor="middle">wiki-sync</text><text class="tm" x="255" y="188" text-anchor="middle">docs/wiki → Supabase KB</text>
+  <rect class="bxs" x="14" y="152" width="130" height="56" rx="6"/><text class="t" x="79" y="172" text-anchor="middle">data_sync</text><text class="tm" x="79" y="188" text-anchor="middle">xlsx tham chiếu → DB</text>
+  <path class="lnd" d="M627 152 V132 H441 V152" /><path class="lnd" d="M627 132 H255 V150" marker-end="url(#ar)"/><path class="lnd" d="M255 132 H79 V150" marker-end="url(#ar)"/>
+  <rect class="bxv" x="14" y="248" width="874" height="62" rx="8"/><text class="tb" x="30" y="270">Nhánh phụ: Phiếu sửa code</text>
+  <text class="tm" x="30" y="288">Creator nhờ Gấu Pro/Gấu Prime → thẻ duyệt → workflow claude-ticket chạy Claude Code trên nhánh auto/ticket-N → mở PR vào staging → bot nhắn Lark.</text>
+  <text class="tm" x="30" y="302">Giới hạn: chỉ sửa file + chạy tsc/vitest/lint, không push/merge, không có bí mật production.</text>
+</svg>
+<figcaption><b>Quy tắc cứng:</b> mọi thay đổi vào <code>staging</code> trước; KHÔNG tự merge <code>main</code> khi chưa được Hiếu yêu cầu rõ. Migration SQL chạy <b>sau</b> merge (migration kiểu DROP đã từng gây sự cố khi chạy trước).</figcaption>
+</figure>
+<h3>GitHub Actions</h3>
+<table>
+  <tr><th>Workflow</th><th>Kích hoạt</th><th>Việc</th></tr>
+  <tr><td><code>ci</code></td><td>push/PR vào staging, main</td><td>tsc + vitest (timeout 10')</td></tr>
+  <tr><td><code>sync</code></td><td>01:00 UTC hằng ngày (job <code>core</code>), 02:00 UTC Chủ nhật (job <code>items</code>), chạy tay</td><td>kéo products/skus/listings (hằng ngày) và items 233k dòng (hằng tuần, ~100') từ API GoHub về Supabase; chạy theo <code>main</code></td></tr>
+  <tr><td><code>data_sync</code></td><td>push <code>main</code> có file xlsx trong <code>resources/reference/</code></td><td>nhập file tham chiếu vào Supabase (kiểm băm)</td></tr>
+  <tr><td><code>wiki-sync</code></td><td>push <code>main</code> có <code>docs/wiki/**</code></td><td>đồng bộ wiki vào <code>kb_wiki_pages</code> (Chatbot tra cứu)</td></tr>
+  <tr><td><code>notify-release</code></td><td>push <code>main</code></td><td>báo Lark danh sách thay đổi + backlog còn trên staging (bỏ qua nếu commit cuối có <code>[skip notify]</code>)</td></tr>
+  <tr><td><code>claude-ticket</code></td><td><code>workflow_dispatch</code> từ web sau khi Creator duyệt phiếu</td><td>Claude Code sửa trên nhánh riêng, mở PR vào staging</td></tr>
+  <tr><td><code>broadcast-once</code>, <code>scheduled-messages</code></td><td>chạy tay</td><td>phát thông báo một lần; kích hoạt tay gửi tin lịch (bình thường do cron-job.org gọi)</td></tr>
+</table>
+<h3>Giới hạn của gói miễn phí đang dùng</h3>
+<table>
+  <tr><th>Dịch vụ</th><th>Giới hạn liên quan</th><th>Hệ quả</th></tr>
+  <tr><td>Vercel Hobby</td><td>cron tối đa 1 lần/ngày/job; thời gian hàm có trần</td><td>job hằng giờ phải do cron-job.org gọi; nhiều route đặt <code>maxDuration</code> 60–300s</td></tr>
+  <tr><td>Supabase (free)</td><td>500 MB; hiện ≈ 425 MB</td><td>không thêm dữ liệu lớn; đã dọn bảng/index, chuyển log và ticket sang Turso</td></tr>
+  <tr><td>Turso (free)</td><td>5 GB, 500 triệu lượt đọc, 10 triệu lượt ghi mỗi tháng (theo trang giá)</td><td>nơi chứa dữ liệu mới nếu cần; phải theo dõi lượt ghi</td></tr>
+  <tr><td>GitHub</td><td>repo công khai (theo GitHub API)</td><td>tuyệt đối không commit bí mật; <code>CLAUDE.md</code>, <code>Hieu/</code>, <code>.env*</code> nằm ngoài git</td></tr>
+</table>
+</div>
+
+<!-- ============ CHƯƠNG 3 ============ -->
+<div class="chapter">
+<h2>3. Các kho dữ liệu</h2>
+<p class="sub">Mỗi kho có một vai trò. Quy tắc chung: <code>gohub_dw</code> là nguồn sự thật cho số liệu bán hàng và <b>không bao giờ bị ghi</b>; mọi thứ do hệ thống tự tạo (cấu hình, tri thức, trí nhớ, chỉ mục) nằm ở Supabase hoặc Turso.</p>
+<figure>
+<svg viewBox="0 0 1000 520" role="img" aria-label="Năm kho dữ liệu và thành phần nào đọc ghi chúng.">
+  <text class="tb" x="20" y="22">Thành phần</text><text class="tb" x="400" y="22">Kho</text><text class="tb" x="790" y="22">Nội dung chính</text>
+  <!-- cột trái: thành phần -->
+  <rect class="bxa" x="14" y="36" width="260" height="62" rx="6"/><text class="t" x="144" y="60" text-anchor="middle">Route analytics (≈67 nhóm)</text><text class="tm" x="144" y="78" text-anchor="middle">BOD, Quarter, B2B, B2C, Channels…</text>
+  <rect class="bxa" x="14" y="116" width="260" height="62" rx="6"/><text class="t" x="144" y="140" text-anchor="middle">Bé Gấu · Gấu Pro</text><text class="tm" x="144" y="158" text-anchor="middle">công cụ SQL, Supabase, GA4, Lark…</text>
+  <rect class="bxa" x="14" y="196" width="260" height="62" rx="6"/><text class="t" x="144" y="220" text-anchor="middle">Gấu Prime (Argon)</text><text class="tm" x="144" y="238" text-anchor="middle">sql, Kho, workspace, run_code</text>
+  <rect class="bxa" x="14" y="276" width="260" height="62" rx="6"/><text class="t" x="144" y="300" text-anchor="middle">Admin / Catalogue / NCC / Tính giá</text><text class="tm" x="144" y="318" text-anchor="middle">sản phẩm, bảng giá, cấu hình</text>
+  <rect class="bxs" x="14" y="356" width="260" height="62" rx="6"/><text class="t" x="144" y="380" text-anchor="middle">Cron và đồng bộ</text><text class="tm" x="144" y="398" text-anchor="middle">ETL, sync, log-archive, mirror</text>
+  <rect class="bxs" x="14" y="436" width="260" height="62" rx="6"/><text class="t" x="144" y="460" text-anchor="middle">Auth, quyền, thông báo</text><text class="tm" x="144" y="478" text-anchor="middle">users, role_permissions, app_settings</text>
+  <!-- cột giữa: kho -->
+  <rect class="bx" x="360" y="36" width="190" height="62" rx="6"/><text class="tb" x="455" y="60" text-anchor="middle">gohub_dw</text><text class="tm" x="455" y="78" text-anchor="middle">Postgres GCP · CHỈ ĐỌC</text>
+  <rect class="bx" x="360" y="116" width="190" height="62" rx="6"/><text class="tb" x="455" y="140" text-anchor="middle">Supabase</text><text class="tm" x="455" y="158" text-anchor="middle">Postgres + Storage · ≈425/500MB</text>
+  <rect class="bx" x="360" y="196" width="190" height="62" rx="6"/><text class="tb" x="455" y="220" text-anchor="middle">Turso: cấu hình</text><text class="tm" x="455" y="238" text-anchor="middle">chi phí, target, log, ticket</text>
+  <rect class="bx" x="360" y="276" width="190" height="62" rx="6"/><text class="tb" x="455" y="300" text-anchor="middle">Turso: argon-hub</text><text class="tm" x="455" y="318" text-anchor="middle">chỉ mục vector, graph, sự kiện</text>
+  <rect class="bx" x="360" y="356" width="190" height="62" rx="6"/><text class="tb" x="455" y="380" text-anchor="middle">Turso: leads</text><text class="tm" x="455" y="398" text-anchor="middle">dữ liệu Omni (khách tiềm năng)</text>
+  <rect class="bx" x="360" y="436" width="190" height="62" rx="6"/><text class="tb" x="455" y="460" text-anchor="middle">Vercel Runtime Cache</text><text class="tm" x="455" y="478" text-anchor="middle">L2 của cachedQuery, nén gzip</text>
+  <!-- cột phải: nội dung -->
+  <rect class="bxs" x="640" y="36" width="346" height="62" rx="6"/><text class="tm" x="652" y="56">fact_fulfillment_revenue (653k), fact_sales_revenue (273k),</text><text class="tm" x="652" y="70">fact_data_usage (278k), fact_inventory, dim_customer (355k),</text><text class="tm" x="652" y="84">dim_sku, dim_order_source, dim_staff, jobs, job_logs (ETL)</text>
+  <rect class="bxs" x="640" y="116" width="346" height="62" rx="6"/><text class="tm" x="652" y="136">products, skus, listings, items, ncc_*, users, app_settings,</text><text class="tm" x="652" y="150">kb_wiki_pages, kb_chunks, creator_kb, argon_*, gp_*,</text><text class="tm" x="652" y="164">assistant_memory, chat, dev_tickets, okr_*, vendor_quotes</text>
+  <rect class="bxs" x="640" y="196" width="346" height="62" rx="6"/><text class="tm" x="652" y="216">b2b_customer_cost_monthly, b2b_ecom_cost_monthly,</text><text class="tm" x="652" y="230">target_planning_quarter, cs_tickets, manual_edit_history,</text><text class="tm" x="652" y="244">log_archive, perf_events, url_hits</text>
+  <rect class="bxs" x="640" y="276" width="346" height="62" rx="6"/><text class="tm" x="652" y="296">argon_chunks (vector 768), argon_index (tìm kiếm ngữ nghĩa),</text><text class="tm" x="652" y="310">argon_entities / edges / mentions (graph), agent_events</text><text class="tm" x="652" y="324">(Bản đồ vận hành, giữ 3 ngày)</text>
+  <rect class="bxs" x="640" y="356" width="346" height="62" rx="6"/><text class="tm" x="652" y="380">Khách tiềm năng từ Omni; chỉ đọc cho báo cáo liên quan</text><text class="tm" x="652" y="396">(theo biến TURSO_LEADS_*)</text>
+  <rect class="bxs" x="640" y="436" width="346" height="62" rx="6"/><text class="tm" x="652" y="456">khóa theo bộ lọc + ngày; TTL 60'; stale-while-revalidate ≤ 6h;</text><text class="tm" x="652" y="470">tách preview / production; trần 2 MB mỗi khối</text>
+  <!-- liên kết -->
+  <line class="ln" x1="274" y1="67" x2="358" y2="67" marker-end="url(#ar)"/><line class="ln" x1="274" y1="147" x2="358" y2="67" marker-end="url(#ar)"/><line class="ln" x1="274" y1="227" x2="358" y2="75" marker-end="url(#ar)"/>
+  <line class="ln" x1="274" y1="60" x2="358" y2="147" marker-end="url(#ar)"/><line class="ln" x1="274" y1="147" x2="358" y2="147" marker-end="url(#ar)" marker-start="url(#ar)"/><line class="ln" x1="274" y1="227" x2="358" y2="147" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <line class="ln" x1="274" y1="227" x2="358" y2="305" marker-end="url(#ar)" marker-start="url(#ar)"/><line class="ln" x1="274" y1="307" x2="358" y2="147" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <line class="ln" x1="274" y1="60" x2="358" y2="225" marker-end="url(#ar)" marker-start="url(#ar)"/><line class="ln" x1="274" y1="387" x2="358" y2="225" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <line class="ln" x1="274" y1="467" x2="358" y2="147" marker-end="url(#ar)" marker-start="url(#ar)"/><line class="ln" x1="274" y1="60" x2="358" y2="465" marker-end="url(#ar)" marker-start="url(#ar)"/>
+</svg>
+<figcaption><b>Đọc:</b> hai chiều mũi tên là đọc và ghi. Chỉ có đường vào <code>gohub_dw</code> là một chiều (đọc). Gấu Prime và Gấu Pro đọc dữ liệu công ty qua các công cụ chỉ đọc; chỉ mục tìm kiếm và graph của Argon nằm riêng ở <code>argon-hub</code> để không phình Supabase.</figcaption>
+</figure>
+<h3>gohub_dw: kho số liệu bán hàng <span class="tag ok">đã kiểm</span></h3>
+<table>
+  <tr><th>Bảng</th><th>Dòng (28/10/2026)</th><th>Dung lượng</th><th>Vai trò</th></tr>
+  <tr><td><code>fact_fulfillment_revenue</code></td><td class="m">652.741</td><td>186 MB</td><td>doanh thu theo ngày <b>giao</b> (mặc định của hầu hết báo cáo); có giá vốn, GP</td></tr>
+  <tr><td><code>fact_sales_revenue</code></td><td class="m">272.889</td><td>105 MB</td><td>doanh thu theo ngày <b>tạo đơn</b>; không có giá vốn (margin = 0)</td></tr>
+  <tr><td><code>fact_data_usage</code></td><td class="m">278.053</td><td>62 MB</td><td>tiêu hao data 3HK, 1 bản ghi/ICCID/tháng</td></tr>
+  <tr><td><code>dim_customer</code></td><td class="m">355.420</td><td>41 MB</td><td>khách hàng (<code>code</code> duy nhất): tên, tổ chức, price list, nhân viên phụ trách…</td></tr>
+  <tr><td><code>dim_sku</code></td><td class="m">29.306</td><td>13 MB</td><td>SKU: vendor, loại SIM, danh mục</td></tr>
+  <tr><td><code>dim_order_source</code></td><td class="m">138 (76 dùng trong fact)</td><td>128 kB</td><td>kênh bán: nhóm B2B/B2C, kênh con</td></tr>
+  <tr><td><code>dim_staff</code>, <code>dim_date</code>, <code>dim_warehouse</code>, <code>fact_inventory</code></td><td class="m">155 / 1.462 / 13 / 3.251</td><td>nhỏ</td><td>nhân viên, lịch, kho, tồn kho</td></tr>
+  <tr><td><code>jobs</code>, <code>job_logs</code></td><td>—</td><td>—</td><td>lịch và lịch sử các ETL (dùng để biết khi nào dữ liệu mới về)</td></tr>
+</table>
+<div class="callout warn"><b>Điểm yếu cấu trúc:</b> chỉ có khóa chính (<code>id</code>), không có chỉ mục theo ngày, kênh hay khách; cột ngày là <code>varchar</code> 10 ký tự. Mọi truy vấn quét cả bảng. Hiếu không có quyền DDL, nên giải pháp mở rộng phải nằm ngoài <code>gohub_dw</code> (xem chương 14).</div>
+</div>
+<!-- ===== tiếp chương 3: hai mô hình dữ liệu ===== -->
+<div>
+<figure>
+<svg viewBox="0 0 1000 400" role="img" aria-label="Mô hình sao của gohub_dw: hai bảng fact nối với các bảng dim qua mã.">
+  <rect class="bxo" x="360" y="140" width="280" height="120" rx="8"/><text class="tb" x="500" y="164" text-anchor="middle">fact_fulfillment_revenue</text>
+  <text class="tmono" x="374" y="184">id (PK) · fulfiled_date (text)</text><text class="tmono" x="374" y="199">created_date · company_code</text><text class="tmono" x="374" y="214">order_code · order_source_code</text><text class="tmono" x="374" y="229">customer_code · staff_code · sku</text><text class="tmono" x="374" y="244">revenue · cogs · gross_profit · qty (VND)</text>
+  <rect class="bxl" x="360" y="296" width="280" height="84" rx="8"/><text class="tb" x="500" y="318" text-anchor="middle">fact_sales_revenue</text><text class="tmono" x="374" y="338">cùng cấu trúc, theo created_date</text><text class="tmono" x="374" y="354">không có cogs/gross_profit</text><text class="tmono" x="374" y="370">(thêm cột 0 khi cần margin)</text>
+  <rect class="bx" x="20" y="20" width="250" height="100" rx="6"/><text class="tb" x="145" y="42" text-anchor="middle">dim_order_source</text><text class="tmono" x="34" y="62">code · channel_name</text><text class="tmono" x="34" y="77">group_name (B2B/B2C/INTERNAL…)</text><text class="tmono" x="34" y="92">sub_group_name · sapo_name</text>
+  <rect class="bx" x="730" y="20" width="250" height="118" rx="6"/><text class="tb" x="855" y="42" text-anchor="middle">dim_customer</text><text class="tmono" x="744" y="62">code (duy nhất) · name</text><text class="tmono" x="744" y="77">organization · price_list_name</text><text class="tmono" x="744" y="92">currency · sales_pic_code</text><text class="tmono" x="744" y="107">status · payment_term…</text>
+  <rect class="bx" x="20" y="150" width="250" height="100" rx="6"/><text class="tb" x="145" y="172" text-anchor="middle">dim_sku</text><text class="tmono" x="34" y="192">sku · vendor · category_name</text><text class="tmono" x="34" y="207">type_of_sim</text><text class="tmonom" x="34" y="228">nước đích suy từ ký tự của mã sku</text>
+  <rect class="bx" x="730" y="170" width="250" height="70" rx="6"/><text class="tb" x="855" y="192" text-anchor="middle">dim_staff</text><text class="tmono" x="744" y="212">code · name</text><text class="tmonom" x="744" y="228">nhân viên phụ trách</text>
+  <rect class="bxs" x="730" y="270" width="250" height="70" rx="6"/><text class="tb" x="855" y="292" text-anchor="middle">dim_date · dim_location</text><text class="tmonom" x="744" y="312">lịch; chi nhánh (KHÔNG phải nước đích)</text>
+  <rect class="bxs" x="20" y="280" width="250" height="84" rx="6"/><text class="tb" x="145" y="302" text-anchor="middle">fact_data_usage</text><text class="tmono" x="34" y="322">first_report_date · iccid · day_amount</text><text class="tmonom" x="34" y="340">3HK: 1 bản ghi/ICCID/tháng</text>
+  <line class="ln" x1="270" y1="70" x2="360" y2="170" marker-end="url(#ar)"/><text class="tm" x="285" y="112">order_source_code → code</text>
+  <line class="ln" x1="730" y1="80" x2="640" y2="180" marker-end="url(#ar)"/><text class="tm" x="470" y="122">TRIM(customer_code) = code</text>
+  <line class="ln" x1="270" y1="200" x2="360" y2="215" marker-end="url(#ar)"/><text class="tm" x="285" y="190">sku</text>
+  <line class="ln" x1="730" y1="205" x2="640" y2="215" marker-end="url(#ar)"/>
+</svg>
+<figcaption><b>Lưu ý khi viết SQL:</b> không bọc <code>TRIM()</code> lên cột phía <code>dim_customer</code> khi join (từ 1s lên ~10s). Luôn lọc ngày qua <code>getDateFilter</code>. Nước đích của SKU không lấy từ <code>dim_location</code>.</figcaption>
+</figure>
+<figure>
+<svg viewBox="0 0 1000 330" role="img" aria-label="Catalog bốn tầng Product, SKU, Listing, Item; bảng NCC và danh mục tham chiếu; nguồn đồng bộ từ API GoHub.">
+  <rect class="bxo" x="20" y="40" width="170" height="86" rx="6"/><text class="tb" x="105" y="64" text-anchor="middle">Product</text><text class="tm" x="105" y="82" text-anchor="middle">gói thương mại</text><text class="tmonom" x="105" y="100" text-anchor="middle">product_code, vendor, nước</text>
+  <rect class="bxo" x="250" y="40" width="170" height="86" rx="6"/><text class="tb" x="335" y="64" text-anchor="middle">SKU</text><text class="tm" x="335" y="82" text-anchor="middle">mã kho bán</text><text class="tmonom" x="335" y="100" text-anchor="middle">sku_code, latest_cogs, status</text>
+  <rect class="bxo" x="480" y="40" width="170" height="86" rx="6"/><text class="tb" x="565" y="64" text-anchor="middle">Listing</text><text class="tm" x="565" y="82" text-anchor="middle">đăng bán trên sàn/kênh</text>
+  <rect class="bxo" x="710" y="40" width="170" height="86" rx="6"/><text class="tb" x="795" y="64" text-anchor="middle">Item</text><text class="tm" x="795" y="82" text-anchor="middle">SIM/eSIM vật lý từ NCC</text><text class="tmonom" x="795" y="100" text-anchor="middle">233k dòng, sync hằng tuần</text>
+  <line class="ln" x1="190" y1="83" x2="248" y2="83" marker-end="url(#ar)"/><line class="ln" x1="420" y1="83" x2="478" y2="83" marker-end="url(#ar)"/><line class="ln" x1="650" y1="83" x2="708" y2="83" marker-end="url(#ar)"/>
+  <text class="tm" x="198" y="76">1–n</text><text class="tm" x="428" y="76">1–n</text><text class="tm" x="658" y="76">1–n</text>
+  <rect class="bxl" x="20" y="190" width="210" height="110" rx="6"/><text class="tb" x="125" y="212" text-anchor="middle">NCC (bảng giá nhà cung cấp)</text><text class="tmono" x="34" y="232">ncc_worldmove (11.025 dòng)</text><text class="tmono" x="34" y="247">ncc_3hk · ncc_datapool</text><text class="tmono" x="34" y="262">vendor_quotes (báo giá AI đọc)</text><text class="tmonom" x="34" y="284">cột exist = gói NCC chưa có SKU (Gap)</text>
+  <rect class="bxl" x="270" y="190" width="210" height="110" rx="6"/><text class="tb" x="375" y="212" text-anchor="middle">Tham chiếu</text><text class="tmono" x="284" y="232">ref_vendors (31 vendor)</text><text class="tmono" x="284" y="247">ref_countries · country_codes</text><text class="tmono" x="284" y="262">ref_support_countries</text><text class="tmonom" x="284" y="284">tên vendor chuẩn lấy từ ref_vendors</text>
+  <rect class="bxw" x="520" y="190" width="210" height="110" rx="6"/><text class="tb" x="625" y="212" text-anchor="middle">Công thức giá</text><text class="tmono" x="534" y="232">giả định Datapool (app_settings)</text><text class="tmono" x="534" y="247">tỷ giá theo tháng × pháp nhân</text><text class="tmono" x="534" y="262">bảng mức Unlimited</text><text class="tmonom" x="534" y="284">ROUNDUP; không dùng ROUND</text>
+  <rect class="bxs" x="770" y="190" width="210" height="110" rx="6"/><text class="tb" x="875" y="212" text-anchor="middle">Nguồn nạp</text><text class="tm" x="784" y="234">API GoHub → GitHub Actions</text><text class="tm" x="784" y="250">(products/skus/listings hằng ngày,</text><text class="tm" x="784" y="266">items hằng tuần)</text><text class="tm" x="784" y="284">File xlsx NCC, bảng giá, Portal</text>
+  <line class="lnd" x1="335" y1="126" x2="125" y2="188" marker-end="url(#ar)"/><text class="tm" x="170" y="160">vendor_product_id</text>
+  <line class="lnd" x1="875" y1="190" x2="500" y2="128" marker-end="url(#ar)"/>
+</svg>
+<figcaption>Catalog tách bốn tầng để một gói bán được qua nhiều kênh và nhiều nguồn SIM mà không trộn dữ liệu. NCC và bảng giá nằm ngoài chuỗi này, chỉ nối bằng <code>vendor_product_id</code>.</figcaption>
+</figure>
+</div>
+
+<!-- ============ CHƯƠNG 4 ============ -->
+<div class="chapter">
+<h2>4. Luồng nạp dữ liệu</h2>
+<p class="sub">Dữ liệu vào hệ thống qua bảy đường. Chỉ đường 1 (ETL của kho số liệu) nằm ngoài mã nguồn này; các đường còn lại do repo điều khiển.</p>
+<figure>
+<svg viewBox="0 0 1000 560" role="img" aria-label="Bảy đường nạp dữ liệu từ nguồn, qua cơ chế, đến kho đích.">
+  <text class="tb" x="14" y="18">Nguồn</text><text class="tb" x="340" y="18">Cơ chế và lịch</text><text class="tb" x="760" y="18">Đích</text>
+  <!-- 1 -->
+  <rect class="bx" x="14" y="30" width="250" height="56" rx="5"/><text class="t" x="139" y="52" text-anchor="middle">VATDB và GoHub Cloud DB</text><text class="tm" x="139" y="68" text-anchor="middle">đơn, giá vốn, khách, SKU</text>
+  <rect class="bxa" x="330" y="30" width="360" height="56" rx="5"/><text class="t" x="510" y="52" text-anchor="middle">ETL trong gohub_dw (ngoài repo)</text><text class="tm" x="510" y="68" text-anchor="middle">dim :40 · COGS :45 · fact giao :50 · fact đơn tạo (hằng giờ)</text>
+  <rect class="bxo" x="760" y="30" width="226" height="56" rx="5"/><text class="t" x="873" y="56" text-anchor="middle">gohub_dw</text>
+  <line class="ln" x1="264" y1="58" x2="328" y2="58" marker-end="url(#ar)"/><line class="ln" x1="690" y1="58" x2="758" y2="58" marker-end="url(#ar)"/>
+  <!-- 2 -->
+  <rect class="bx" x="14" y="104" width="250" height="56" rx="5"/><text class="t" x="139" y="126" text-anchor="middle">API GoHub (admin)</text><text class="tm" x="139" y="142" text-anchor="middle">products, skus, listings, items</text>
+  <rect class="bxa" x="330" y="104" width="360" height="56" rx="5"/><text class="t" x="510" y="126" text-anchor="middle">GitHub Actions: sync.py</text><text class="tm" x="510" y="142" text-anchor="middle">core hằng ngày 01:00 UTC · items Chủ nhật; chỉ ghi dòng đổi</text>
+  <rect class="bxo" x="760" y="104" width="226" height="56" rx="5"/><text class="t" x="873" y="130" text-anchor="middle">Supabase (catalog)</text>
+  <line class="ln" x1="264" y1="132" x2="328" y2="132" marker-end="url(#ar)"/><line class="ln" x1="690" y1="132" x2="758" y2="132" marker-end="url(#ar)"/>
+  <!-- 3 -->
+  <rect class="bx" x="14" y="178" width="250" height="56" rx="5"/><text class="t" x="139" y="200" text-anchor="middle">File xlsx trong repo</text><text class="tm" x="139" y="216" text-anchor="middle">resources/reference/**, bảng giá NCC</text>
+  <rect class="bxa" x="330" y="178" width="360" height="56" rx="5"/><text class="t" x="510" y="200" text-anchor="middle">data_sync (khi push main) + upload qua web</text><text class="tm" x="510" y="216" text-anchor="middle">so băm; admin nhập bảng giá, Portal, tỷ giá</text>
+  <rect class="bxo" x="760" y="178" width="226" height="56" rx="5"/><text class="t" x="873" y="204" text-anchor="middle">Supabase (ncc_*, cấu hình)</text>
+  <line class="ln" x1="264" y1="206" x2="328" y2="206" marker-end="url(#ar)"/><line class="ln" x1="690" y1="206" x2="758" y2="206" marker-end="url(#ar)"/>
+  <!-- 4 -->
+  <rect class="bx" x="14" y="252" width="250" height="56" rx="5"/><text class="t" x="139" y="274" text-anchor="middle">docs/wiki (tài liệu nghiệp vụ)</text><text class="tm" x="139" y="290" text-anchor="middle">business/ và system/</text>
+  <rect class="bxa" x="330" y="252" width="360" height="56" rx="5"/><text class="t" x="510" y="274" text-anchor="middle">wiki-sync (push main)</text><text class="tm" x="510" y="290" text-anchor="middle">chia đoạn, embedding gemini-embedding-001</text>
+  <rect class="bxo" x="760" y="252" width="226" height="56" rx="5"/><text class="t" x="873" y="278" text-anchor="middle">Supabase kb_wiki_pages</text>
+  <line class="ln" x1="264" y1="280" x2="328" y2="280" marker-end="url(#ar)"/><line class="ln" x1="690" y1="280" x2="758" y2="280" marker-end="url(#ar)"/>
+  <!-- 5 -->
+  <rect class="bx" x="14" y="326" width="250" height="56" rx="5"/><text class="t" x="139" y="348" text-anchor="middle">Lark Base (CS tickets)</text><text class="tm" x="139" y="364" text-anchor="middle">+ nhật ký chat, log cũ</text>
+  <rect class="bxa" x="330" y="326" width="360" height="56" rx="5"/><text class="t" x="510" y="348" text-anchor="middle">cron cs-tickets-mirror · log-archive (hằng ngày)</text><text class="tm" x="510" y="364" text-anchor="middle">sao sang Turso, dọn log quá hạn khỏi Supabase</text>
+  <rect class="bxo" x="760" y="326" width="226" height="56" rx="5"/><text class="t" x="873" y="352" text-anchor="middle">Turso (cs_tickets, log_archive)</text>
+  <line class="ln" x1="264" y1="354" x2="328" y2="354" marker-end="url(#ar)"/><line class="ln" x1="690" y1="354" x2="758" y2="354" marker-end="url(#ar)"/>
+  <!-- 6 -->
+  <rect class="bx" x="14" y="400" width="250" height="56" rx="5"/><text class="t" x="139" y="422" text-anchor="middle">Lark: mail, thread, tài liệu, Wiki</text><text class="tm" x="139" y="438" text-anchor="middle">file tải lên, link, họp</text>
+  <rect class="bxa" x="330" y="400" width="360" height="56" rx="5"/><text class="t" x="510" y="422" text-anchor="middle">argon-sync (hằng đêm) + nạp khi người dùng thêm</text><text class="tm" x="510" y="438" text-anchor="middle">trích chữ → chia đoạn → vector → tóm tắt → sự việc → graph</text>
+  <rect class="bxo" x="760" y="400" width="226" height="56" rx="5"/><text class="t" x="873" y="426" text-anchor="middle">Supabase + Turso argon-hub</text>
+  <line class="ln" x1="264" y1="428" x2="328" y2="428" marker-end="url(#ar)"/><line class="ln" x1="690" y1="428" x2="758" y2="428" marker-end="url(#ar)"/>
+  <!-- 7 -->
+  <rect class="bx" x="14" y="474" width="250" height="56" rx="5"/><text class="t" x="139" y="496" text-anchor="middle">Chat Lark, web, thao tác người dùng</text><text class="tm" x="139" y="512" text-anchor="middle">câu hỏi, trí nhớ, nhập tay</text>
+  <rect class="bxa" x="330" y="474" width="360" height="56" rx="5"/><text class="t" x="510" y="496" text-anchor="middle">Ghi trực tiếp từ route</text><text class="tm" x="510" y="512" text-anchor="middle">app_usage_events, assistant_memory, manual_edit_history</text>
+  <rect class="bxo" x="760" y="474" width="226" height="56" rx="5"/><text class="t" x="873" y="500" text-anchor="middle">Supabase / Turso</text>
+  <line class="ln" x1="264" y1="502" x2="328" y2="502" marker-end="url(#ar)"/><line class="ln" x1="690" y1="502" x2="758" y2="502" marker-end="url(#ar)"/>
+</svg>
+<figcaption>Đường 1 quyết định độ tươi của mọi báo cáo: số liệu mới chỉ xuất hiện sau khi ETL xong, và app chỉ lấy dữ liệu đến <code>CURRENT_DATE − 1</code>. Lịch ETL đơn tạo hiện chưa xác nhận.</figcaption>
+</figure>
+<h3>Ngân sách dữ liệu</h3>
+<ul>
+  <li>Supabase gần đầy (≈ 425/500 MB): nguyên nhân từng là chỉ mục của <code>items</code>/<code>listings</code>. Đã bỏ 10 bảng chết, bỏ index thừa, chỉ ghi dòng đổi khi sync, chuyển ticket CS và log sang Turso.</li>
+  <li>Không thêm dữ liệu lớn vào Supabase; dữ liệu mới ưu tiên Turso.</li>
+</ul>
+</div>
+
+<!-- ============ CHƯƠNG 5 ============ -->
+<div class="chapter">
+<h2>5. Analytics: vòng đời một request và cache</h2>
+<p class="sub">Mỗi tab gọi nhiều route; mỗi route dựng SQL, chạy trên <code>gohub_dw</code>, gộp với cấu hình ở Supabase/Turso rồi trả về. Cache che các lần xem lặp lại.</p>
+<figure>
+<svg viewBox="0 0 1000 460" role="img" aria-label="Chuỗi gọi một request analytics: trình duyệt, CDN, route handler, cachedQuery, kết nối gohub_dw và kho cấu hình.">
+  <g class="tb"><text x="70" y="22" text-anchor="middle">Trình duyệt</text><text x="230" y="22" text-anchor="middle">CDN Vercel</text><text x="400" y="22" text-anchor="middle">Route handler</text><text x="580" y="22" text-anchor="middle">cachedQuery</text><text x="770" y="22" text-anchor="middle">gohub_dw</text><text x="925" y="22" text-anchor="middle">Supabase/Turso</text></g>
+  <g class="gl"><line x1="70" y1="30" x2="70" y2="440"/><line x1="230" y1="30" x2="230" y2="440"/><line x1="400" y1="30" x2="400" y2="440"/><line x1="580" y1="30" x2="580" y2="440"/><line x1="770" y1="30" x2="770" y2="440"/><line x1="925" y1="30" x2="925" y2="440"/></g>
+  <line class="ln" x1="70" y1="54" x2="228" y2="54" marker-end="url(#ar)"/><text class="tm" x="78" y="48">1 · GET /api/analytics/… (7–8 song song)</text>
+  <line class="lnm" x1="230" y1="76" x2="72" y2="76" marker-end="url(#ar)"/><text class="tm" x="82" y="70">hit: s-maxage 300s (+stale 600s)</text>
+  <line class="ln" x1="230" y1="100" x2="398" y2="100" marker-end="url(#ar)"/><text class="tm" x="240" y="94">2 · miss → hàm Vercel (iad1)</text>
+  <line class="ln" x1="400" y1="124" x2="400" y2="144"/><text class="tm" x="410" y="140">3 · phiên + analyticsGuard (role)</text>
+  <line class="ln" x1="400" y1="168" x2="925" y2="168" marker-end="url(#ar)"/><text class="tm" x="410" y="162">4 · đọc cấu hình (memo 15–20s): loại khách, tier, target, chi phí</text>
+  <line class="ln" x1="400" y1="200" x2="578" y2="200" marker-end="url(#ar)"/><text class="tm" x="410" y="194">5 · cachedQuery(khóa, fn, TTL)</text>
+  <line class="lnm" x1="580" y1="224" x2="402" y2="224" marker-end="url(#ar)"/><text class="tm" x="414" y="218">6a · L1 (45s) hoặc L2 Runtime Cache → trả ngay</text>
+  <line class="ln" x1="580" y1="256" x2="768" y2="256" marker-end="url(#ar)"/><text class="tm" x="590" y="250">6b · miss: pool max 3, timeout 25s</text>
+  <line class="lnm" x1="770" y1="288" x2="582" y2="288" marker-end="url(#ar)"/><text class="tm" x="598" y="282">kết quả (quét cả bảng, 1–4s)</text>
+  <line class="ln" x1="580" y1="320" x2="580" y2="340"/><text class="tm" x="590" y="336">7 · ghi L1+L2 nền (waitUntil); quá TTL: trả bản cũ + tính lại nền</text>
+  <line class="lnm" x1="400" y1="360" x2="72" y2="360" marker-end="url(#ar)"/><text class="tm" x="82" y="354">8 · JSON + Cache-Control (s-maxage=300)</text>
+  <rect class="bxw" x="40" y="380" width="920" height="54" rx="6"/><text class="tm" x="52" y="400">Sau ETL xong (cron etl-cache-sync, job ngoài): soft-expire toàn bộ cache (vẫn phục vụ bản cũ) + làm nóng ~30 URL hay dùng. Route GHI dữ liệu gọi flushByDeps([…])</text><text class="tm" x="52" y="418">để xóa đúng nhóm cache phụ thuộc. Trình duyệt giữ thêm bản "stale-first" trong sessionStorage để hiện số lần xem trước ngay lúc tải.</text>
+</svg>
+<figcaption><b>Đọc:</b> bước 6b là chỗ chậm. Với ~650k dòng thô, một truy vấn nặng tốn 1,5–3,7s lần đầu, và mỗi route thường chạy 2–10 truy vấn nên một tab lúc cache nguội mất 6–12s.</figcaption>
+</figure>
+<h3>Bốn lớp cache <span class="tag ok">đã kiểm</span></h3>
+<table>
+  <tr><th>Lớp</th><th>Nơi</th><th>Hạn</th><th>Làm mới / xoá</th></tr>
+  <tr><td>Trình duyệt</td><td><code>sessionStorage</code> (<code>stale-first</code>)</td><td>trong phiên</td><td>luôn gọi lại và thay bằng số mới</td></tr>
+  <tr><td>CDN</td><td><code>CACHE_HEADERS</code>: <code>s-maxage=300, stale-while-revalidate=600</code></td><td>5 phút + 10 phút stale</td><td>theo URL; không xoá được chủ động</td></tr>
+  <tr><td>L1</td><td>bộ nhớ instance (<code>Map</code>)</td><td>45 giây</td><td>hết hạn; flush theo <code>deps</code></td></tr>
+  <tr><td>L2</td><td>Vercel Runtime Cache (<code>@vercel/functions</code>), nén &gt; 400 KB, trần 2 MB</td><td>TTL 60', stale ≤ 6h; quý đã đóng 24h/48h</td><td><code>expireTag(dep:…)</code>, mốc epoch hard/soft</td></tr>
+</table>
+<h3>Quy tắc bắt buộc khi viết route analytics</h3>
+<ul>
+  <li>Khóa cache phải gồm mọi tham số ảnh hưởng kết quả, kể cả băm danh sách loại khách (<code>exclHash</code>); thiếu thì đổi cấu hình xong vẫn thấy số cũ.</li>
+  <li>Gộp truy vấn cùng bộ lọc thành một (Quarter Report đã gộp 7 thành 2); I/O độc lập dùng <code>Promise.all</code>; tránh N+1.</li>
+  <li>Không dùng <code>TRIM()</code> lên cột <code>dim_customer</code> trong JOIN; luôn lọc ngày bằng <code>getDateFilter</code> và kiểm tham số bằng <code>safeDate</code>/<code>safeCompanyCode</code>.</li>
+  <li>Route mới dùng <code>analyticsGuard</code> thì tự vào danh sách làm nóng.</li>
+  <li>Đo thật bằng <code>/api/analytics/perf-probe</code> (creator) và trang Data Map (<code>perf_events</code>) trước khi tối ưu.</li>
+</ul>
+</div>
+
+<!-- ============ CHƯƠNG 6 ============ -->
+<div class="chapter">
+<h2>6. Quy tắc nghiệp vụ tính số</h2>
+<p class="sub">Những định nghĩa dùng chung cho mọi tab. Khi hai tab lệch số, kiểm các quy tắc này trước.</p>
+<h3>Hai cơ sở thời gian</h3>
+<table>
+  <tr><th></th><th>Fulfillment (mặc định)</th><th>Created (Sales)</th></tr>
+  <tr><td>Bảng</td><td><code>fact_fulfillment_revenue</code></td><td><code>fact_sales_revenue</code></td></tr>
+  <tr><td>Cột ngày</td><td><code>fulfiled_date</code></td><td><code>created_date</code></td></tr>
+  <tr><td>Doanh thu</td><td><code>fulfilled_revenue_amount_vnd</code></td><td><code>sales_revenue_amount_vnd</code></td></tr>
+  <tr><td>Giá vốn / GP</td><td>có</td><td>không có (= 0), nên mọi margin và CM1 bằng 0 là đúng, không phải lỗi</td></tr>
+</table>
+<h3>Bộ lọc chuẩn (mặc định tick = gồm hết)</h3>
+<table>
+  <tr><th>Bộ lọc</th><th>Hiệu ứng</th><th>Mặc định</th></tr>
+  <tr><td>Phí ship</td><td>loại SKU <code>SHIPPINGFEE0</code> khi bỏ tick</td><td>gồm</td></tr>
+  <tr><td>Đơn nội bộ</td><td>loại nhóm kênh <code>INTERNAL-TRANSACTION</code> (doanh thu 0, GP âm)</td><td>gồm</td></tr>
+  <tr><td>Khách Ops / danh sách loại trừ</td><td>loại theo MÃ hoặc TÊN khách trong cài đặt Quarter Report; B2C dùng danh sách riêng (<code>excludedForB2C</code>)</td><td>gồm</td></tr>
+  <tr><td>Khách INACTIVE</td><td>loại khách có <code>price_list_name</code> chứa INACTIVE</td><td>luôn loại</td></tr>
+  <tr><td>Công ty</td><td><code>company_code</code>: ALL, VN, US</td><td>ALL</td></tr>
+</table>
+<h3>Chỉ số tài chính (chuẩn Management Report)</h3>
+<table>
+  <tr><th>Nhãn</th><th>Công thức</th><th>Ghi chú</th></tr>
+  <tr><td>Revenue</td><td>Σ doanh thu</td><td></td></tr>
+  <tr><td>GP (Gross Profit)</td><td>Revenue − COGS</td><td>khóa dữ liệu <code>margin</code></td></tr>
+  <tr><td>GPM %</td><td>GP / Revenue</td><td></td></tr>
+  <tr><td>CM1</td><td>GP − chi phí vận hành (quảng cáo, phí sàn, tài trợ SP, media, chi phí khách, chi phí nhóm)</td><td>nhãn UI "CM1"; khóa dữ liệu cũ <code>gpm2</code> giữ nguyên</td></tr>
+  <tr><td>CM1 %</td><td>CM1 / Revenue</td><td>ngưỡng tiến độ: ≥100% xanh, ≥85% vàng, &lt;85% đỏ</td></tr>
+  <tr><td>3HK contribution %</td><td>Revenue vendor 3HK Datapool / Revenue tổng</td><td>so tên vendor bằng <code>REPLACE(UPPER(vendor),' ','')='3HKDATAPOOL'</code></td></tr>
+  <tr><td>%Datapool (KPI)</td><td>tỷ trọng doanh thu BC Datapool và 3HK</td><td>nhận cả hậu tố vendor <code>(CMHK)</code>, <code>(Singtel)</code></td></tr>
+</table>
+<figure>
+<svg viewBox="0 0 1000 395" role="img" aria-label="Cách tính CM1: lấy doanh thu và GP theo ngày từ fact, trừ chi phí kênh chia theo ngày, chi phí nhóm theo pháp nhân và chi phí khách phân bổ.">
+  <rect class="bxo" x="14" y="150" width="190" height="80" rx="6"/><text class="tb" x="109" y="176" text-anchor="middle">gohub_dw</text><text class="tm" x="109" y="194" text-anchor="middle">Revenue, COGS, GP</text><text class="tm" x="109" y="208" text-anchor="middle">theo ngày × kênh × khách</text>
+  <rect class="bxl" x="260" y="30" width="230" height="86" rx="6"/><text class="tb" x="375" y="54" text-anchor="middle">Chi phí kênh (Supabase/Turso)</text><text class="tm" x="375" y="72" text-anchor="middle">ads, phí sàn, sponsor, media</text><text class="tm" x="375" y="88" text-anchor="middle">nhập theo THÁNG, chia theo SỐ NGÀY</text><text class="tm" x="375" y="102" text-anchor="middle">(rangeDayRatio, pro-rata)</text>
+  <rect class="bxl" x="260" y="140" width="230" height="86" rx="6"/><text class="tb" x="375" y="164" text-anchor="middle">Chi phí nhóm</text><text class="tm" x="375" y="182" text-anchor="middle">1 bảng cho cả công ty</text><text class="tm" x="375" y="198" text-anchor="middle">tên có "Global" → US, còn lại → VN</text><text class="tm" x="375" y="212" text-anchor="middle">lọc VN/US: VN + US = ALL</text>
+  <rect class="bxl" x="260" y="250" width="230" height="96" rx="6"/><text class="tb" x="375" y="274" text-anchor="middle">Chi phí khách B2B</text><text class="tm" x="375" y="292" text-anchor="middle">nhập theo khách (Ch.Cost)</text><text class="tm" x="375" y="308" text-anchor="middle">chia theo KHÁCH THẬT, key ORG::…</text><text class="tm" x="375" y="324" text-anchor="middle">target B2B ở cấp Organization</text>
+  <rect class="bxa" x="560" y="140" width="200" height="86" rx="6"/><text class="tb" x="660" y="166" text-anchor="middle">calcChCostForPeriod</text><text class="tm" x="660" y="184" text-anchor="middle">analytics-engine/cost-engine</text><text class="tm" x="660" y="200" text-anchor="middle">customer-cost-allocation</text>
+  <rect class="bxo" x="820" y="150" width="166" height="80" rx="6"/><text class="tb" x="903" y="176" text-anchor="middle">CM1, CM1 %</text><text class="tm" x="903" y="194" text-anchor="middle">+ dự phóng tháng đang chạy</text><text class="tm" x="903" y="208" text-anchor="middle">(projection factor)</text>
+  <path class="ln" d="M109 230 V366 H660 V228" marker-end="url(#ar)"/>
+  <line class="ln" x1="490" y1="73" x2="560" y2="160" marker-end="url(#ar)"/><line class="ln" x1="490" y1="183" x2="558" y2="183" marker-end="url(#ar)"/><line class="ln" x1="490" y1="298" x2="560" y2="215" marker-end="url(#ar)"/>
+  <line class="ln" x1="760" y1="183" x2="818" y2="190" marker-end="url(#ar)"/>
+  <text class="tm" x="14" y="388">Mọi tab phải dùng CÙNG hàm nạp chi phí (một bộ nạp chi phí kênh duy nhất từ s236); tổng công ty luôn = B2B + B2C (loại nhóm INTERNAL-TRANSACTION).</text>
+</svg>
+<figcaption>CM1 không có trong <code>gohub_dw</code>: nó được tính trong code mỗi lần, từ số liệu bán hàng cộng ba nguồn chi phí. Vì vậy mỗi route phải gộp dữ liệu ở app, và đây cũng là lý do rollup chỉ lưu số cộng được (chương 14).</figcaption>
+</figure>
+<h3>Phân loại khách và nhóm kênh</h3>
+<ul>
+  <li><b>B2B / B2C:</b> theo <code>dim_order_source.group_name</code>. B2C luôn lọc <code>UPPER(group_name)='B2C'</code>.</li>
+  <li><b>Tier</b> (Strategic / VIP / Gold / Silver): một định nghĩa duy nhất qua <code>price_list_name</code> và <code>tierKeywords</code> của Quarter Report (<code>makeClassifyTier</code>). Bảng <code>partner_tiers</code> đã rỗng; mã cũ dựa vào nó đã thay thế nhưng còn vài chỗ thừa.</li>
+  <li><b>Nước đích của SKU:</b> suy từ vị trí ký tự mã SKU theo độ dài (13 ký tự: ký tự 3–5; 14: 1–3; 15: 2–4) và tra <code>country_codes</code> (Turso).</li>
+</ul>
+<h3>Quarter Report: mô hình mục tiêu</h3>
+<table>
+  <tr><th>Thành phần</th><th>Nơi lưu</th><th>Ghi chú</th></tr>
+  <tr><td>Target tháng công ty (ALL/B2B/B2C)</td><td><code>company_monthly_targets</code></td><td>B2C = ALL − B2B</td></tr>
+  <tr><td>Target Squad 1/2</td><td><code>squad_targets</code></td><td>theo tháng</td></tr>
+  <tr><td>Target B2B theo Organization</td><td><code>b2b_customer_targets</code> (khóa <code>ORG::&lt;orgKey&gt;</code>)</td><td>chia xuống mã con theo doanh thu</td></tr>
+  <tr><td>Target quý B2B/B2C</td><td>Turso</td><td>độc lập, chưa đồng bộ với target tháng</td></tr>
+  <tr><td>Cài đặt (tier, loại trừ khách)</td><td><code>quarterly-settings</code></td><td>đổi cấu hình tự làm mới cache qua băm trong khóa</td></tr>
+</table>
+</div>
+
+<!-- ============ CHƯƠNG 7 ============ -->
+<div class="chapter">
+<h2>7. Danh mục tab và module</h2>
+<p class="sub">Điều hướng chia nhóm theo <code>lib/nav.ts</code> (và <code>components/sidebar.tsx</code>, hai nơi phải giữ đồng bộ). Cột "Quyền" là mặc định; Creator thấy tất cả.</p>
+<table>
+  <tr><th>Nhóm</th><th>Tab</th><th>Mục đích</th><th>Dữ liệu chính</th></tr>
+  <tr><td rowspan="4">Overview</td><td>Dashboard</td><td>tổng quan, biểu đồ xu hướng</td><td>gohub_dw</td></tr>
+  <tr><td>Quarter Report</td><td>CM1 theo quý, Squad Progress, Performance (ALL/B2B/B2C), target, xuất Excel</td><td>gohub_dw + Supabase/Turso (target, chi phí)</td></tr>
+  <tr><td>BOD Report</td><td>báo cáo quản trị: 3 kỳ (này/trước/cùng kỳ năm ngoái), kênh, tier B2B</td><td>gohub_dw + chi phí</td></tr>
+  <tr><td>All-Time Report</td><td>lịch sử dài hạn (mặc định 12 tháng)</td><td>gohub_dw</td></tr>
+  <tr><td rowspan="7">Sales Performance</td><td>Channels</td><td>xếp hạng kênh, "bán nhiều hay lãi cao"</td><td>gohub_dw + chi phí</td></tr>
+  <tr><td>B2B</td><td>Performance theo tháng/khoảng ngày, theo tier, khách lớn, VN Ecom</td><td>như trên</td></tr>
+  <tr><td>B2C</td><td>Performance, Metric, Advanced (GA4 Category)</td><td>gohub_dw + GA4</td></tr>
+  <tr><td>Website Analytics</td><td>GA4 và Search Console</td><td>GA4/GSC API</td></tr>
+  <tr><td>Staff, Customers, Vendors</td><td>hiệu suất nhân viên (target), khách B2B (lọc nhiều tầng), nhà cung cấp</td><td>gohub_dw + dim</td></tr>
+  <tr><td rowspan="4">Operations &amp; Support</td><td>Orders</td><td>đơn hàng, lọc nhiều tầng có số đơn</td><td>gohub_dw (cấp đơn)</td></tr>
+  <tr><td>Inventory</td><td>tồn kho, kế hoạch nhập, PO</td><td>gohub_dw + Supabase</td></tr>
+  <tr><td>3HK Data Usage</td><td>tiêu hao data 3HK</td><td>fact_data_usage</td></tr>
+  <tr><td>CS Troubleshoot</td><td>ticket CS, khách B2B đọc từ dim_customer</td><td>Turso cs_tickets (mirror Lark Base)</td></tr>
+  <tr><td rowspan="4">Analytics &amp; Planning</td><td>Products (BI)</td><td>hiệu suất sản phẩm, B2B theo tier</td><td>gohub_dw</td></tr>
+  <tr><td>Product Catalogue</td><td>catalog dựng lại (không rành kỹ thuật vẫn xem được)</td><td>Supabase</td></tr>
+  <tr><td>Manage Costs (KPI/Target)</td><td>target và chi phí B2C</td><td>Supabase/Turso</td></tr>
+  <tr><td>Scheduled Messages</td><td>lịch gửi báo cáo vào Lark</td><td>Supabase</td></tr>
+  <tr><td rowspan="4">Quản trị</td><td>Người dùng và quyền</td><td>user, ma trận quyền, 5 quyền Creator</td><td>Supabase</td></tr>
+  <tr><td>Cấu hình hệ thống</td><td>Dữ liệu, Chatbot, API bên ngoài</td><td>app_settings</td></tr>
+  <tr><td>Lịch sử nhập liệu</td><td>khôi phục số cũ ở ~21 route nhập tay</td><td>Turso manual_edit_history</td></tr>
+  <tr><td>Dữ liệu và giá (Admin)</td><td>SKU destination, tỷ giá, công thức Datapool, soát giá vốn, tạo sản phẩm</td><td>Supabase</td></tr>
+  <tr><td rowspan="8">Creator</td><td>Creator Settings</td><td>cấp quyền Gấu Pro, Gấu Prime, tính giá, tạo SP, thị trường; kết nối Lark/Google</td><td>app_settings</td></tr>
+  <tr><td>Gấu Pro</td><td>trợ lý agent đầy đủ</td><td>nhiều kho</td></tr>
+  <tr><td>Gấu Prime (Argon)</td><td>Hôm nay, Hỏi, Kho, Thêm (Cuộc gọi, Bridge, Chạy song song, Tự động, Sứ mệnh cũ)</td><td>Supabase + Turso argon-hub</td></tr>
+  <tr><td>Dữ liệu và API</td><td>SQL Query, Data Map, Giám sát dữ liệu (độ tươi, bất thường, đối chiếu), API Tester</td><td>gohub_dw (chỉ đọc)</td></tr>
+  <tr><td>Bridge</td><td>cài và ghép extension</td><td>Supabase browser_bridge_*</td></tr>
+  <tr><td>Thị trường và Báo giá</td><td>so giá vốn theo thị trường/vendor; AI đọc báo giá</td><td>Supabase vendor_quotes + ncc_*</td></tr>
+  <tr><td>Tính giá và Tạo sản phẩm</td><td>tính giá 4 bước cho sale; tạo SP BC/3HK</td><td>Supabase</td></tr>
+  <tr><td>BC Datapool</td><td>nhập báo giá và file Portal</td><td>Supabase</td></tr>
+  <tr><td rowspan="5">Khác</td><td>Bé Gấu</td><td>chatbot toàn team</td><td>nhiều kho</td></tr>
+  <tr><td>Tổ Gấu</td><td>group chat nội bộ + tài liệu, hỏi AI</td><td>Supabase (Realtime)</td></tr>
+  <tr><td>My Metrics</td><td>OKR: Tasks via Bé Gấu, KPI %Datapool, Kế hoạch quý, Lark events</td><td>Supabase okr_*, app_usage_events</td></tr>
+  <tr><td>Promotions</td><td>khuyến mãi gắn SKU, nguồn cho chatbot</td><td>Supabase</td></tr>
+  <tr><td>System SKUs, NCC Catalog, Reference</td><td>danh mục sản phẩm, NCC (Gap), quốc gia</td><td>Supabase</td></tr>
+</table>
+</div>
+<!-- ============ CHƯƠNG 8 ============ -->
+<div class="chapter">
+<h2>8. Xác thực và phân quyền</h2>
+<p class="sub">Nguyên tắc: <b>từ chối mặc định</b>. Quyền được kiểm ở nhiều lớp, từ middleware tới từng công cụ của trợ lý.</p>
+<figure>
+<svg viewBox="0 0 1000 330" role="img" aria-label="Các lớp kiểm quyền: middleware JWT, guard của route theo vai trò, quyền do Creator cấp, quyền theo công cụ của trợ lý, và khóa dữ liệu theo người dùng.">
+  <rect class="bx" x="14" y="40" width="150" height="90" rx="6"/><text class="tb" x="89" y="66" text-anchor="middle">Đăng nhập</text><text class="tm" x="89" y="84" text-anchor="middle">mật khẩu (bcrypt)</text><text class="tm" x="89" y="98" text-anchor="middle">hoặc Lark OAuth</text><text class="tm" x="89" y="112" text-anchor="middle">→ JWT NextAuth</text>
+  <rect class="bxl" x="200" y="40" width="150" height="90" rx="6"/><text class="tb" x="275" y="66" text-anchor="middle">Lớp 1 · Middleware</text><text class="tm" x="275" y="84" text-anchor="middle">matcher /analytics,</text><text class="tm" x="275" y="98" text-anchor="middle">/admin, /chatbot…</text><text class="tm" x="275" y="112" text-anchor="middle">chưa đăng nhập → /login</text>
+  <rect class="bxl" x="386" y="40" width="150" height="90" rx="6"/><text class="tb" x="461" y="66" text-anchor="middle">Lớp 2 · Route</text><text class="tm" x="461" y="84" text-anchor="middle">getServerSession +</text><text class="tm" x="461" y="98" text-anchor="middle">analyticsGuard</text><text class="tm" x="461" y="112" text-anchor="middle">(role_permissions)</text>
+  <rect class="bxl" x="572" y="40" width="190" height="90" rx="6"/><text class="tb" x="667" y="66" text-anchor="middle">Lớp 3 · Quyền Creator cấp</text><text class="tm" x="667" y="84" text-anchor="middle">Gấu Pro, Gấu Prime, tính giá,</text><text class="tm" x="667" y="98" text-anchor="middle">tạo SP, thị trường… (app_settings)</text><text class="tm" x="667" y="112" text-anchor="middle">đọc lại từ DB, memo 20s</text>
+  <rect class="bxl" x="798" y="40" width="188" height="90" rx="6"/><text class="tb" x="892" y="66" text-anchor="middle">Lớp 4 · Công cụ trợ lý</text><text class="tm" x="892" y="84" text-anchor="middle">tool nào dùng được theo</text><text class="tm" x="892" y="98" text-anchor="middle">vai trò; thẻ duyệt cho</text><text class="tm" x="892" y="112" text-anchor="middle">hành động ra ngoài</text>
+  <line class="ln" x1="164" y1="85" x2="198" y2="85" marker-end="url(#ar)"/><line class="ln" x1="350" y1="85" x2="384" y2="85" marker-end="url(#ar)"/><line class="ln" x1="536" y1="85" x2="570" y2="85" marker-end="url(#ar)"/><line class="ln" x1="762" y1="85" x2="796" y2="85" marker-end="url(#ar)"/>
+  <rect class="bxo" x="14" y="170" width="972" height="64" rx="6"/><text class="tb" x="28" y="192">Lớp 5 · Khóa dữ liệu theo người dùng</text><text class="tm" x="28" y="208">Dữ liệu Argon (dự án, nguồn, sự việc, mail, trí nhớ, đề xuất) luôn lọc theo username: thành viên không thấy dữ liệu của người khác.</text><text class="tm" x="28" y="224">Bridge ghép theo người; token Lark cá nhân chỉ dùng cho việc của chính họ.</text>
+  <rect class="bxw" x="14" y="256" width="972" height="60" rx="6"/><text class="tb" x="28" y="278">Phiên đăng nhập (s238)</text><text class="tm" x="28" y="296">JWT trượt, hết hạn sau 4 giờ không hoạt động (maxAge 4h, updateAge 10'; tab đang mở tự gia hạn 5'/lần); role đọc lại từ DB mỗi 5 phút; hết phiên về /login rồi quay lại đúng trang.</text>
+</svg>
+<figcaption>Một request có thể bị chặn ở bất kỳ lớp nào. Lớp 3 là chỗ Creator điều chỉnh quyền từng người mà không cần deploy.</figcaption>
+</figure>
+<h3>Ma trận quyền Creator cấp (5 quyền)</h3>
+<table>
+  <tr><th>Quyền</th><th>Cho phép</th><th>Khóa lưu</th></tr>
+  <tr><td>Gấu Pro</td><td>dùng trợ lý agent (danh sách người dùng thử theo từng tính năng cá nhân)</td><td><code>gp_allowed_users</code>, <code>gp_personal_features</code></td></tr>
+  <tr><td>Gấu Prime</td><td>mục Hỏi với hạn mức/ngày</td><td><code>argon_users</code>, <code>argon_member_limits</code></td></tr>
+  <tr><td>Tính giá</td><td>công cụ tính giá cho sale</td><td><code>pricing_users</code></td></tr>
+  <tr><td>Tạo sản phẩm</td><td>tạo SP BC/3HK (gồm tính giá)</td><td><code>product_create_users</code></td></tr>
+  <tr><td>Thị trường và Báo giá</td><td>xem so giá, báo giá vendor</td><td><code>market_users</code></td></tr>
+</table>
+<h3>Cổng ngoài</h3>
+<ul>
+  <li><b>Cron:</b> <code>Authorization: Bearer $CRON_SECRET</code>; thiếu biến môi trường thì từ chối (không bỏ qua).</li>
+  <li><b>API ngoài / MCP:</b> khóa tạo trong tab "API bên ngoài" (<code>external_api_keys</code>); chỉ đọc dữ liệu cho phép.</li>
+  <li><b>Lark webhook:</b> giải mã AES-256-CBC, xác minh <code>LARK_VERIFICATION_TOKEN</code>, loại trùng theo <code>event_id</code>.</li>
+  <li><b>Rate limit chat:</b> 20/10 lượt/phút theo người dùng; code hỗ trợ Upstash Redis dùng chung giữa instance, nhưng chưa chắc đã cấu hình trên Vercel (nếu thiếu thì chạy trong bộ nhớ từng instance) <span class="tag bad">cần xác nhận</span>.</li>
+</ul>
+</div>
+
+<!-- ============ CHƯƠNG 9 ============ -->
+<div class="chapter">
+<h2>9. Hệ trợ lý AI</h2>
+<p class="sub">Ba trợ lý cùng dùng Gemini nhưng khác vai trò. Hướng đi đã chốt: dần chỉ còn hai (Bé Gấu và Gấu Prime); Gấu Pro giữ cho tới khi Gấu Prime đủ tiêu chí (trang "Chạy song song" theo dõi).</p>
+<figure>
+<svg viewBox="0 0 1000 470" role="img" aria-label="So sánh ba trợ lý: Bé Gấu, Gấu Pro, Gấu Prime theo người dùng, vòng lặp, công cụ, an toàn, trí nhớ.">
+  <rect class="bxs" x="14" y="14" width="150" height="40" rx="5"/>
+  <rect class="bxl" x="180" y="14" width="260" height="40" rx="5"/><text class="tb" x="310" y="39" text-anchor="middle">Bé Gấu</text>
+  <rect class="bxw" x="450" y="14" width="260" height="40" rx="5"/><text class="tb" x="580" y="39" text-anchor="middle">Gấu Pro</text>
+  <rect class="bxv" x="720" y="14" width="266" height="40" rx="5"/><text class="tb" x="853" y="39" text-anchor="middle">Gấu Prime (Argon)</text>
+  <g class="tm">
+  <text x="22" y="86" class="tb">Người dùng</text><text x="190" y="80">Mọi vai trò (web + Lark DM/group)</text><text x="460" y="80">Creator; người được cấp từng</text><text x="460" y="94">tính năng cá nhân</text><text x="730" y="80">Creator (đủ) + thành viên được</text><text x="730" y="94">cấp (quyền gần full, có hạn mức)</text>
+  <text x="22" y="132" class="tb">Vai trò</text><text x="190" y="126">Chatbot tra cứu, trả lời nhanh</text><text x="460" y="126">Làm theo lệnh: agent nhiều</text><text x="460" y="140">công cụ, việc nền, lịch</text><text x="730" y="126">Tham mưu theo Sứ mệnh + Kho</text><text x="730" y="140">tri thức, trợ lý hợp nhất</text>
+  <text x="22" y="178" class="tb">Mã chính</text><text x="190" y="172"><tspan class="tmono">lib/agents/be-gau.ts</tspan></text><text x="460" y="172"><tspan class="tmono">lib/agents/creator-ai.ts</tspan></text><text x="730" y="172"><tspan class="tmono">lib/argon/*</tspan> (run-engine, tools…)</text>
+  <text x="22" y="224" class="tb">Vòng lặp</text><text x="190" y="218">1 agent function-calling,</text><text x="190" y="232">≤ 12 vòng; lõi chung agent-loop</text><text x="460" y="218">≤ 20 vòng, SDK @google/genai,</text><text x="460" y="232">skills nạp khi cần; lõi chung</text><text x="730" y="218">vòng riêng + vòng lõi chung (cờ</text><text x="730" y="232">argon_core_loop); router Nhanh/Đầy đủ</text>
+  <text x="22" y="278" class="tb">Công cụ</text><text x="190" y="264">SQL (đọc), Supabase, sản phẩm,</text><text x="190" y="278">GA4/GSC, web, KB, báo cáo,</text><text x="190" y="292">tạo ảnh/video, code Python</text><text x="460" y="264">20+: SQL, Supabase, Lark (task,</text><text x="460" y="278">Doc, Base, tin), Google, tệp máy,</text><text x="460" y="292">Bridge, portal, trí nhớ, lịch</text><text x="730" y="264">sql, layDuLieuHeThong, Kho (sự việc,</text><text x="730" y="278">thực thể, mail), workspace, run_code,</text><text x="730" y="292">đọc trang, ảnh/video, Bridge, thẻ duyệt</text>
+  <text x="22" y="338" class="tb">An toàn</text><text x="190" y="332">Guardian trước khi vào; lọc lộ</text><text x="190" y="346">tên bảng/cột trong câu trả lời</text><text x="460" y="332">cổng duyệt hành động; chống</text><text x="460" y="346">prompt injection; nhật ký hành động</text><text x="730" y="332">bậc quyền công cụ L0–L3; lượt đọc</text><text x="730" y="346">nội dung ngoài bị "nhiễm" và siết ghi</text>
+  <text x="22" y="392" class="tb">Trí nhớ</text><text x="190" y="386">tra KB mỗi lượt; trí nhớ qua Lark DM;</text><text x="190" y="400">nhớ nhiễm theo cuộc chat</text><text x="460" y="386">2 tầng (assistant_memory +</text><text x="460" y="400">theo hội thoại); học thói quen</text><text x="730" y="386">dùng chung assistant_memory;</text><text x="730" y="400">chỉ ĐỀ XUẤT ghi nhớ, người dùng duyệt</text>
+  <text x="22" y="446" class="tb">Lưu</text><text x="190" y="440">conversations, conversation_messages</text><text x="460" y="440">gp_runs, gp_jobs, gp_pending_actions</text><text x="730" y="440">argon_projects/missions/runs/sources…</text>
+  </g>
+</svg>
+<figcaption>Bé Gấu và Gấu Pro chia nhau lõi agent (<code>lib/agents/core/agent-loop.ts</code>); Gấu Prime có kiến trúc riêng quanh Sứ mệnh và Kho nhưng dùng chung trí nhớ và thẻ duyệt với Gấu Pro.</figcaption>
+</figure>
+
+<h3>9.1 Bé Gấu: một lượt trả lời</h3>
+<figure>
+<svg viewBox="0 0 1000 250" role="img" aria-label="Luồng Bé Gấu: web hoặc Lark, giới hạn tốc độ, Guardian, lọc theo vai trò, vòng lặp agent với công cụ, stream câu trả lời, ghi nhật ký.">
+  <rect class="bx" x="14" y="30" width="110" height="60" rx="5"/><text class="t" x="69" y="56" text-anchor="middle">/api/chat</text><text class="tm" x="69" y="72" text-anchor="middle">hoặc Lark event</text>
+  <rect class="bxs" x="148" y="30" width="110" height="60" rx="5"/><text class="t" x="203" y="56" text-anchor="middle">Rate limit</text><text class="tm" x="203" y="72" text-anchor="middle">20/10 lượt/phút</text>
+  <rect class="bxb" x="282" y="30" width="120" height="60" rx="5"/><text class="t" x="342" y="52" text-anchor="middle">Guardian</text><text class="tm" x="342" y="68" text-anchor="middle">chặn system_internal,</text><text class="tm" x="342" y="80" text-anchor="middle">injection, PII</text>
+  <rect class="bxs" x="426" y="30" width="120" height="60" rx="5"/><text class="t" x="486" y="52" text-anchor="middle">Theo vai trò</text><text class="tm" x="486" y="68" text-anchor="middle">lọc giá theo kênh,</text><text class="tm" x="486" y="80" text-anchor="middle">bảng tính năng</text>
+  <rect class="bxa" x="570" y="20" width="200" height="80" rx="5"/><text class="tb" x="670" y="42" text-anchor="middle">runBeGau (≤ 12 vòng)</text><text class="tm" x="670" y="60" text-anchor="middle">Gemini tự chọn công cụ:</text><text class="tm" x="670" y="74" text-anchor="middle">executeSQL · querySupabase ·</text><text class="tm" x="670" y="88" text-anchor="middle">queryGA4/GSC · KB · web …</text>
+  <rect class="bxo" x="794" y="30" width="192" height="60" rx="5"/><text class="t" x="890" y="52" text-anchor="middle">Stream + biểu đồ</text><text class="tm" x="890" y="68" text-anchor="middle">báo cáo Word/Excel/PPT/PDF</text><text class="tm" x="890" y="80" text-anchor="middle">hoặc trả lời qua Lark</text>
+  <line class="ln" x1="124" y1="60" x2="146" y2="60" marker-end="url(#ar)"/><line class="ln" x1="258" y1="60" x2="280" y2="60" marker-end="url(#ar)"/><line class="ln" x1="402" y1="60" x2="424" y2="60" marker-end="url(#ar)"/><line class="ln" x1="546" y1="60" x2="568" y2="60" marker-end="url(#ar)"/><line class="ln" x1="770" y1="60" x2="792" y2="60" marker-end="url(#ar)"/>
+  <rect class="bxs" x="570" y="140" width="416" height="86" rx="5"/><text class="tb" x="582" y="162">Sau khi trả lời</text><text class="tm" x="582" y="180">Ghi app_usage_events: câu hỏi, công cụ, token, chi phí, có gọi tool đọc dữ liệu?</text><text class="tm" x="582" y="194">→ KPI My Metrics "Tasks via Bé Gấu" (câu của role creator không tính).</text><text class="tm" x="582" y="208">Phản hồi tốt/chưa tốt → chat_feedback; hội thoại → conversation_messages.</text><text class="tm" x="582" y="222">Việc dài chạy nền theo chặng (gp_jobs), xong nhắn Lark.</text>
+  <line class="lnm" x1="670" y1="100" x2="670" y2="138" marker-end="url(#ar)"/>
+  <text class="tm" x="14" y="130">Ba nguồn kích hoạt: web (SSE), Lark DM/group, trò chuyện trực tiếp (Gemini Live, giọng nói).</text>
+  <text class="tm" x="14" y="148">Tính năng chia hai loại: "thường" (mọi vai trò: báo cáo, ảnh/video, code, nghiên cứu sâu, dịch)</text><text class="tm" x="14" y="162">và "đặc biệt" (chỉ Creator).</text>
+</svg>
+<figcaption>Nguồn: <code>docs/wiki/system/tabs/chatbot.md</code>, <code>analytics-creator-ai.md</code> <span class="tag warn">theo wiki</span>.</figcaption>
+</figure>
+
+<h3>9.2 Gấu Prime (Argon): một lượt chạy</h3>
+<figure>
+<svg viewBox="0 0 1000 545" role="img" aria-label="Luồng một lượt Gấu Prime: giao diện, kiểm quyền và hạn mức, router chọn đường nhanh hoặc đầy đủ, dựng ngữ cảnh, vòng lặp công cụ với bậc quyền L0 đến L3, stream, lưu, ghi metric.">
+  <rect class="bx" x="14" y="20" width="150" height="62" rx="5"/><text class="t" x="89" y="44" text-anchor="middle">Giao diện Hỏi</text><text class="tm" x="89" y="60" text-anchor="middle">câu hỏi + tệp đính kèm</text><text class="tm" x="89" y="72" text-anchor="middle">(chỉ lưu khi bấm Gửi)</text>
+  <rect class="bxs" x="190" y="20" width="170" height="62" rx="5"/><text class="t" x="275" y="42" text-anchor="middle">POST …/projects/[id]/runs</text><text class="tm" x="275" y="58" text-anchor="middle">SSE · quyền owner/member</text><text class="tm" x="275" y="72" text-anchor="middle">rate limit · hạn mức 40/3$</text>
+  <rect class="bxl" x="386" y="20" width="170" height="62" rx="5"/><text class="t" x="471" y="42" text-anchor="middle">Router (run-route)</text><text class="tm" x="471" y="58" text-anchor="middle">Nhanh: tra Kho, suy luận thấp</text><text class="tm" x="471" y="72" text-anchor="middle">Đầy đủ: mọi công cụ</text>
+  <rect class="bxs" x="582" y="20" width="200" height="62" rx="5"/><text class="t" x="682" y="42" text-anchor="middle">Dựng ngữ cảnh</text><text class="tm" x="682" y="58" text-anchor="middle">nguồn ghim, brief/decisions,</text><text class="tm" x="682" y="72" text-anchor="middle">trí nhớ, tệp đính kèm, chỉ dẫn xuất file</text>
+  <rect class="bxa" x="808" y="20" width="178" height="62" rx="5"/><text class="t" x="897" y="42" text-anchor="middle">runSegment</text><text class="tm" x="897" y="58" text-anchor="middle">Gemini Nhanh / Sâu (1M)</text><text class="tm" x="897" y="72" text-anchor="middle">tối đa vòng gọi công cụ</text>
+  <line class="ln" x1="164" y1="51" x2="188" y2="51" marker-end="url(#ar)"/><line class="ln" x1="360" y1="51" x2="384" y2="51" marker-end="url(#ar)"/><line class="ln" x1="556" y1="51" x2="580" y2="51" marker-end="url(#ar)"/><line class="ln" x1="782" y1="51" x2="806" y2="51" marker-end="url(#ar)"/>
+  <!-- công cụ theo bậc -->
+  <text class="tb" x="14" y="118">Công cụ và bậc quyền (kiểm trong mã, không phải lời dặn)</text>
+  <rect class="bxo" x="14" y="130" width="230" height="150" rx="6"/><text class="tb" x="28" y="152">L0 · đọc nội bộ tin cậy</text><text class="tm" x="28" y="170">layDuLieuHeThong, sql (chỉ đọc)</text><text class="tm" x="28" y="184">traSuViec, traThucThe</text><text class="tm" x="28" y="198">docFile, lietKeFile, docKyNang</text><text class="tm" x="28" y="212">traBangSupabase, docGA4/GSC</text><text class="tm" x="28" y="226">kiemTraVideo, timHoiThoaiCu</text><text class="tm" x="28" y="246">→ tự chạy</text>
+  <rect class="bxw" x="262" y="130" width="230" height="150" rx="6"/><text class="tb" x="276" y="152">L1 · đọc nội dung ngoài</text><text class="tm" x="276" y="170">mail, thread, tài liệu đối tác,</text><text class="tm" x="276" y="184">docTrang (web), docLark/Base,</text><text class="tm" x="276" y="198">timTrenWeb, docTabTrinhDuyet,</text><text class="tm" x="276" y="212">docTepMay, docGoogle, docPortal</text><text class="tm" x="276" y="232">→ kết quả bị BỌC, quét chỉ dẫn lạ,</text><text class="tm" x="276" y="246">lượt thành "nhiễm"</text>
+  <rect class="bxl" x="510" y="130" width="230" height="150" rx="6"/><text class="tb" x="524" y="152">L2 · ghi nội bộ hoàn tác được</text><text class="tm" x="524" y="170">ghiFile, ghiSuViec, luuGhiChu</text><text class="tm" x="524" y="184">taoThuMuc, chuyenNguon, capNhat…</text><text class="tm" x="524" y="198">ghiDuDoan, chamDuDoan, run_code</text><text class="tm" x="524" y="212">taoAnh, taoVideo, thaoTacTrinhD…</text><text class="tm" x="524" y="232">→ tự chạy + nhật ký; lượt "nhiễm"</text><text class="tm" x="524" y="246">bị siết ghi</text>
+  <rect class="bxb" x="758" y="130" width="228" height="150" rx="6"/><text class="tb" x="772" y="152">L3 · cần NGƯỜI quyết</text><text class="tm" x="772" y="170">hoiHieu (hỏi rồi dừng)</text><text class="tm" x="772" y="184">deXuatThaoTac (task, lịch, phiếu)</text><text class="tm" x="772" y="198">deXuatGhiNho, deXuatKyNang</text><text class="tm" x="772" y="212">deXuatSuaCode</text><text class="tm" x="772" y="232">→ chỉ tạo THẺ chờ duyệt, không</text><text class="tm" x="772" y="246">tác dụng ra ngoài tới khi duyệt</text>
+  <line class="lnm" x1="897" y1="82" x2="897" y2="128" marker-end="url(#ar)"/><text class="tm" x="905" y="108">gọi công cụ</text>
+  <rect class="bxs" x="14" y="304" width="972" height="96" rx="6"/><text class="tb" x="28" y="326">Quy tắc cứng</text><text class="tm" x="28" y="344">• Công cụ chưa khai báo bậc quyền bị từ chối. Lượt đã đọc nội dung ngoài KHÔNG được tự sửa sự việc cũ; sự việc mới ghi trong lượt đó phải chờ xác nhận.</text><text class="tm" x="28" y="360">• Không có công cụ L4: Argon không gửi tin, không xoá hàng loạt, không lộ khoá. Hành động ra ngoài chỉ qua thẻ duyệt.</text><text class="tm" x="28" y="376">• Thành viên: chặn deXuatSuaCode, deXuatKyNang, docGoogle, docPortal; thẻ duyệt giới hạn 4 loại (tạo/sửa task, đặt lịch, phiếu sửa code). Kho chỉ chứa tài liệu của chính họ.</text><text class="tm" x="28" y="392">• Mail và thread được đọc qua "buồng cách ly" (Q-LLM) để chống chỉ dẫn gài.</text>
+  <rect class="bxo" x="14" y="420" width="972" height="112" rx="6"/><text class="tb" x="28" y="442">Sau khi chạy</text><text class="tm" x="28" y="460">Lưu argon_runs (câu trả lời, token, chi phí, nhật ký công cụ) → tự lưu report HTML vào Kho báo cáo.</text><text class="tm" x="28" y="476">Ghi app_usage_events (agent_id=gau_prime, chỉ lượt của thành viên) cho KPI Tasks via Bé Gấu.</text><text class="tm" x="28" y="492">Thẻ duyệt hiện ngay trong chat (Đồng ý/Không) và ở hộp "Việc cần duyệt".</text><text class="tm" x="28" y="508">Việc nền (chỉ Creator): chạy theo đoạn qua worker, tối đa 40 đoạn/10$, xong nhắn Lark.</text><text class="tm" x="28" y="524">File xuất: câu trả lời (Word/Markdown), tài liệu (Word/Excel/Markdown), Excel dựng bằng run_code kèm link tải.</text>
+</svg>
+<figcaption>Nguồn: <code>lib/argon/run-safety.ts</code>, <code>run-engine.ts</code>, <code>access-pure.ts</code>, route <code>projects/[id]/runs</code> <span class="tag ok">đã kiểm</span>.</figcaption>
+</figure>
+
+<h3>9.3 Kho tri thức của Gấu Prime</h3>
+<figure>
+<svg viewBox="0 0 1000 360" role="img" aria-label="Đường nạp Kho: nguồn, trích chữ, lưu nguồn, chia đoạn và vector, tóm tắt, sự việc có hạn, graph; các công cụ tra cứu và xuất hồ sơ vendor ra Lark.">
+  <rect class="bx" x="14" y="30" width="170" height="130" rx="6"/><text class="tb" x="99" y="52" text-anchor="middle">Nguồn vào</text><text class="tm" x="26" y="72">Tệp tải lên (PDF, Word…)</text><text class="tm" x="26" y="86">Link Lark: docx, sheet,</text><text class="tm" x="26" y="100">Wiki, Base, thư mục, Minutes</text><text class="tm" x="26" y="114">Mail Lark, thread group</text><text class="tm" x="26" y="128">YouTube, gói dữ liệu</text><text class="tm" x="26" y="142">Ghi chú tay</text>
+  <rect class="bxs" x="210" y="30" width="150" height="130" rx="6"/><text class="tb" x="285" y="52" text-anchor="middle">Trích chữ</text><text class="tm" x="222" y="74">extract: docx, xlsx, pdf;</text><text class="tm" x="222" y="90">ảnh/âm thanh gửi nhị phân;</text><text class="tm" x="222" y="106">tệp lớn qua Gemini Files</text><text class="tm" x="224" y="130">phiên bản mỗi lần sửa</text><text class="tm" x="224" y="146">(argon_source_versions)</text>
+  <rect class="bxo" x="386" y="30" width="170" height="130" rx="6"/><text class="tb" x="471" y="52" text-anchor="middle">argon_sources</text><text class="tm" x="396" y="74">Supabase + Storage</text><text class="tm" x="396" y="90">thư mục 3 khu, ghim, bật/tắt</text><text class="tm" x="396" y="106">đếm token mỗi nguồn</text><text class="tm" x="396" y="130">mỗi cuộc trò chuyện</text><text class="tm" x="396" y="144">= 1 sứ mệnh</text>
+  <rect class="bxl" x="582" y="30" width="190" height="130" rx="6"/><text class="tb" x="677" y="52" text-anchor="middle">Chỉ mục (Turso argon-hub)</text><text class="tm" x="596" y="74">argon_chunks: vector 768 chiều</text><text class="tm" x="596" y="90">argon_index: tìm theo ý nghĩa</text><text class="tm" x="596" y="106">(timTrongNguon)</text><text class="tm" x="596" y="130">chunker + embedding Gemini</text><text class="tm" x="596" y="146">chỉ nạp nguồn ghim vào ngữ cảnh</text>
+  <rect class="bxv" x="798" y="30" width="188" height="130" rx="6"/><text class="tb" x="892" y="52" text-anchor="middle">Tóm tắt và phân loại</text><text class="tm" x="812" y="74">digestAndFile: tóm tắt, thẻ,</text><text class="tm" x="812" y="90">tự xếp thư mục, trích sự việc</text><text class="tm" x="812" y="106">(tài liệu lớn gộp theo lô)</text><text class="tm" x="812" y="130">chạy song song với câu trả lời</text><text class="tm" x="812" y="146">khi đính kèm trong chat</text>
+  <line class="ln" x1="184" y1="95" x2="208" y2="95" marker-end="url(#ar)"/><line class="ln" x1="360" y1="95" x2="384" y2="95" marker-end="url(#ar)"/><line class="ln" x1="556" y1="95" x2="580" y2="95" marker-end="url(#ar)"/><line class="ln" x1="772" y1="95" x2="796" y2="95" marker-end="url(#ar)"/>
+  <rect class="bxw" x="14" y="200" width="300" height="140" rx="6"/><text class="tb" x="28" y="222">Sổ sự việc có hạn (argon_facts)</text><text class="tm" x="28" y="240">Hạn, khuyến mãi, ngừng bán, đổi giá…</text><text class="tm" x="28" y="256">Tin mới theo NGÀY CỦA TIN thay tin cũ</text><text class="tm" x="28" y="272">(không xoá, có lịch sử); chờ xác nhận</text><text class="tm" x="28" y="288">khi nguồn ngoài; cron đêm hết hạn/nhắc</text><text class="tm" x="28" y="304">+ tóm tắt Lark. Sổ trạng thái mail theo</text><text class="tm" x="28" y="320">thread (chờ mình/chờ đối tác).</text>
+  <rect class="bxl" x="334" y="200" width="300" height="140" rx="6"/><text class="tb" x="348" y="222">Graph thực thể (Turso)</text><text class="tm" x="348" y="240">argon_entities, argon_edges,</text><text class="tm" x="348" y="256">argon_mentions: vendor, sản phẩm,</text><text class="tm" x="348" y="272">thị trường, người; nhắc ở nguồn nào.</text><text class="tm" x="348" y="288">Mail tự động (OTP, newsletter) bị loại</text><text class="tm" x="348" y="304">khỏi graph. Tab Kho › Thực thể xem và</text><text class="tm" x="348" y="320">xuất hồ sơ.</text>
+  <rect class="bxa" x="654" y="200" width="332" height="140" rx="6"/><text class="tb" x="668" y="222">Hồ sơ vendor ra Lark (một chiều)</text><text class="tm" x="668" y="240">Danh sách = 31 vendor của ref_vendors, mỗi vendor</text><text class="tm" x="668" y="256">một Lark Doc trong thư mục "GoHub · Hồ sơ</text><text class="tm" x="668" y="272">Argon": chính sách (Wiki + bảng Policy_Vendor),</text><text class="tm" x="668" y="288">sự việc đang hiệu lực, điều đã dặn bot (trí nhớ</text><text class="tm" x="668" y="304">của Creator), luồng mail mở, liên quan. Cập nhật</text><text class="tm" x="668" y="320">khi nội dung đổi (so băm). Argon là gốc, Lark chỉ để đọc.</text>
+  <line class="lnm" x1="892" y1="160" x2="320" y2="200" marker-end="url(#ar)"/><line class="lnm" x1="471" y1="160" x2="484" y2="198" marker-end="url(#ar)"/>
+</svg>
+<figcaption>Công cụ đọc Kho: <code>traSuViec</code>, <code>traThucThe</code>, <code>traMail</code>, <code>timTrongNguon</code>, <code>docNguon</code>, <code>lietKeNguon</code>. Thành viên chỉ thấy Kho của chính mình; Creator có thêm tab Thực thể, xuất hồ sơ Lark và nguồn tự động.</figcaption>
+</figure>
+
+<h3>9.4 Trí nhớ</h3>
+<figure>
+<svg viewBox="0 0 1000 300" role="img" aria-label="Hệ trí nhớ: nguồn ghi, kho assistant_memory, nạp theo ngữ cảnh mỗi lượt, quyền người dùng, học thói quen ban đêm.">
+  <rect class="bx" x="14" y="30" width="200" height="110" rx="6"/><text class="tb" x="114" y="52" text-anchor="middle">Nguồn ghi</text><text class="tm" x="28" y="72">Người dùng dặn trong chat</text><text class="tm" x="28" y="88">Trợ lý ĐỀ XUẤT → duyệt</text><text class="tm" x="28" y="104">(Việc cần duyệt)</text><text class="tm" x="28" y="124">Lark DM, nhập tay</text>
+  <rect class="bxo" x="250" y="30" width="230" height="110" rx="6"/><text class="tb" x="365" y="52" text-anchor="middle">assistant_memory (Supabase)</text><text class="tm" x="264" y="72">theo người dùng; loại: profile, preference,</text><text class="tm" x="264" y="88">project, person, decision, other</text><text class="tm" x="264" y="104">ghim / lưu trữ ("quên" = archive)</text><text class="tm" x="264" y="124">+ history (không ghi đè)</text>
+  <rect class="bxl" x="516" y="30" width="230" height="110" rx="6"/><text class="tb" x="631" y="52" text-anchor="middle">Nạp mỗi lượt</text><text class="tm" x="530" y="72">chọn mục LIÊN QUAN theo ngữ cảnh</text><text class="tm" x="530" y="88">(embedding), không đổ cả 120 mục đầu</text><text class="tm" x="530" y="104">→ giảm 20–25% token</text><text class="tm" x="530" y="124">Gấu Pro, Bé Gấu, Gấu Prime đọc chung</text>
+  <rect class="bxv" x="782" y="30" width="204" height="110" rx="6"/><text class="tb" x="884" y="52" text-anchor="middle">Quyền của người dùng</text><text class="tm" x="796" y="72">xem · sửa · xoá hẳn · xuất JSON</text><text class="tm" x="796" y="88">tắt trí nhớ; panel "Trí nhớ"</text><text class="tm" x="796" y="108">Cờ tắt không cache</text><text class="tm" x="796" y="124">(nhiều instance Vercel)</text>
+  <line class="ln" x1="214" y1="85" x2="248" y2="85" marker-end="url(#ar)"/><line class="ln" x1="480" y1="85" x2="514" y2="85" marker-end="url(#ar)"/><line class="lnm" x1="746" y1="85" x2="780" y2="85" marker-start="url(#ar)"/>
+  <rect class="bxw" x="250" y="180" width="496" height="100" rx="6"/><text class="tb" x="264" y="202">Học thói quen ngầm (habit-learn, hằng đêm)</text><text class="tm" x="264" y="220">Tự lưu thói quen NHÓM AN TOÀN (định dạng, văn phong, kênh, khung giờ, chủ đề tên riêng) vào</text><text class="tm" x="264" y="236">assistant_memory với source=auto-habit:…: tối đa 3 mới/đêm, 15/người, hết hạn 60 ngày; hiển thị nhãn</text><text class="tm" x="264" y="252">"Bé Gấu tự quan sát". Hiếu chốt giữ nguyên, KHÔNG gợi ý chủ động. Mở cho người khác = thêm vào</text><text class="tm" x="264" y="268">"Người dùng thử" và thông báo nhân viên/pháp chế.</text>
+  <line class="lnm" x1="365" y1="180" x2="365" y2="142" marker-end="url(#ar)"/>
+</svg>
+<figcaption>Hồ sơ vendor ra Lark chỉ dùng trí nhớ của Creator, loại <code>decision/project/person/other</code>, và chỉ các dòng nhắc đúng tên vendor.</figcaption>
+</figure>
+</div>
+
+<!-- ============ CHƯƠNG 10 ============ -->
+<div class="chapter">
+<h2>10. Tích hợp Lark</h2>
+<p class="sub">Lark là kênh làm việc chính của công ty: nhận câu hỏi, gửi báo cáo, lưu task, tài liệu và ticket. Ứng dụng dùng hai loại token: token của bot (tenant) và token OAuth cá nhân.</p>
+<figure>
+<svg viewBox="0 0 1000 470" role="img" aria-label="Các tích hợp Lark: webhook sự kiện bot, gửi tin DM và card, OAuth cá nhân, đọc tài liệu, mirror CS tickets, quét My Metrics, tin nhắn theo lịch, xuất hồ sơ vendor.">
+  <rect class="bxl" x="20" y="20" width="250" height="430" rx="8"/><text class="tb" x="145" y="44" text-anchor="middle">Lark</text>
+  <text class="tm" x="36" y="70">Bot (tin DM, group)</text><text class="tm" x="36" y="100">Người dùng (OAuth)</text><text class="tm" x="36" y="130">Task · Lịch</text><text class="tm" x="36" y="160">Docs · Sheets · Wiki · Drive</text><text class="tm" x="36" y="190">Base (CS tickets, bảng dữ liệu)</text><text class="tm" x="36" y="220">Mail · thread trong group</text><text class="tm" x="36" y="250">Minutes (biên bản họp)</text><text class="tm" x="36" y="280">Thông báo / tin card</text>
+  <rect class="bxa" x="350" y="20" width="300" height="430" rx="8"/><text class="tb" x="500" y="44" text-anchor="middle">GoHub Intel</text>
+  <rect class="bx" x="366" y="58" width="268" height="52" rx="5"/><text class="t" x="500" y="78" text-anchor="middle">/api/lark/events</text><text class="tm" x="500" y="94" text-anchor="middle">giải mã, xác minh, loại trùng event_id</text>
+  <rect class="bx" x="366" y="122" width="268" height="52" rx="5"/><text class="t" x="500" y="142" text-anchor="middle">/api/lark/oauth/*</text><text class="tm" x="500" y="158" text-anchor="middle">đăng nhập + token cá nhân (task, Doc…)</text>
+  <rect class="bx" x="366" y="186" width="268" height="52" rx="5"/><text class="t" x="500" y="206" text-anchor="middle">notify() / sendLarkDM / card</text><text class="tm" x="500" y="222" text-anchor="middle">DM chuẩn, giờ yên lặng, gộp 1 tin</text>
+  <rect class="bx" x="366" y="250" width="268" height="52" rx="5"/><text class="t" x="500" y="270" text-anchor="middle">Công cụ trợ lý</text><text class="tm" x="500" y="286" text-anchor="middle">larkDocs, larkTask, Base, sendLarkMessage</text>
+  <rect class="bx" x="366" y="314" width="268" height="52" rx="5"/><text class="t" x="500" y="334" text-anchor="middle">Cron (Lark)</text><text class="tm" x="500" y="350" text-anchor="middle">scheduled-messages, cs-tickets-mirror, argon-sync…</text>
+  <rect class="bx" x="366" y="378" width="268" height="56" rx="5"/><text class="t" x="500" y="398" text-anchor="middle">Xuất hồ sơ vendor (lark-publish)</text><text class="tm" x="500" y="414" text-anchor="middle">Wiki: token bot · ghi Doc: token Creator</text>
+  <rect class="bxs" x="730" y="20" width="256" height="430" rx="8"/><text class="tb" x="858" y="44" text-anchor="middle">Kết quả trong hệ thống</text>
+  <text class="tm" x="746" y="76">Bé Gấu trả lời trong Lark</text><text class="tm" x="746" y="106">Người dùng đăng nhập bằng Lark;</text><text class="tm" x="746" y="120">tạo/sửa task thay họ (qua thẻ duyệt)</text><text class="tm" x="746" y="150">Báo cáo định kỳ vào group</text><text class="tm" x="746" y="180">Tab CS Troubleshoot (Turso)</text><text class="tm" x="746" y="210">Argon nạp mail/thread vào Kho</text><text class="tm" x="746" y="240">My Metrics bắt tin thread, emoji YES</text><text class="tm" x="746" y="254">và Typing làm bằng chứng OKR</text><text class="tm" x="746" y="284">Hồ sơ vendor (Doc) trong thư mục</text><text class="tm" x="746" y="298">"GoHub · Hồ sơ Argon"</text>
+  <line class="ln" x1="270" y1="84" x2="364" y2="84" marker-end="url(#ar)"/><line class="ln" x1="270" y1="150" x2="364" y2="148" marker-end="url(#ar)"/><line class="ln" x1="364" y1="212" x2="272" y2="212" marker-end="url(#ar)"/><line class="ln" x1="364" y1="276" x2="272" y2="190" marker-end="url(#ar)" marker-start="url(#ar)"/><line class="ln" x1="364" y1="340" x2="272" y2="250" marker-end="url(#ar)" marker-start="url(#ar)"/><line class="ln" x1="364" y1="406" x2="272" y2="260" marker-end="url(#ar)"/>
+  <line class="ln" x1="634" y1="84" x2="728" y2="84" marker-end="url(#ar)"/><line class="ln" x1="634" y1="276" x2="728" y2="276" marker-end="url(#ar)"/>
+</svg>
+<figcaption>Token bot cần được thêm vào từng nơi muốn đọc: group chat, không gian Wiki, thư mục. Token cá nhân (OAuth) cần cấp đúng phạm vi (task, Doc…); thiếu quyền thì báo "Kết nối Lark lại" ở Creator Settings.</figcaption>
+</figure>
+</div>
+
+<!-- ============ CHƯƠNG 11 ============ -->
+<div class="chapter">
+<h2>11. Bridge: extension trình duyệt</h2>
+<p class="sub">Cho trợ lý đọc và thao tác trên trình duyệt <b>của chính người dùng</b> (không phải trình duyệt headless của máy chủ). Mỗi người tự ghép trình duyệt của mình (đa người thuê).</p>
+<figure>
+<svg viewBox="0 0 1000 400" role="img" aria-label="Chuỗi Bridge: trợ lý yêu cầu thao tác, máy chủ đưa lệnh vào hàng đợi theo thiết bị, extension hỏi lệnh, thực thi bằng chrome.debugger sau khi qua kiểm an toàn, trả kết quả.">
+  <g class="tb"><text x="90" y="22" text-anchor="middle">Trợ lý (Gấu Pro/Prime)</text><text x="330" y="22" text-anchor="middle">Máy chủ</text><text x="580" y="22" text-anchor="middle">Extension (MV3)</text><text x="830" y="22" text-anchor="middle">Trình duyệt người dùng</text></g>
+  <g class="gl"><line x1="90" y1="30" x2="90" y2="390"/><line x1="330" y1="30" x2="330" y2="390"/><line x1="580" y1="30" x2="580" y2="390"/><line x1="830" y1="30" x2="830" y2="390"/></g>
+  <line class="ln" x1="90" y1="52" x2="328" y2="52" marker-end="url(#ar)"/><text class="tm" x="100" y="46">1 · readMyBrowser / controlMyBrowser (theo username)</text>
+  <line class="ln" x1="330" y1="84" x2="330" y2="104"/><text class="tm" x="340" y="100">2 · kiểm quy tắc an toàn URL (server) + thẻ duyệt</text>
+  <line class="ln" x1="330" y1="130" x2="330" y2="150"/><text class="tm" x="340" y="146">3 · ghi browser_bridge_commands (device_id)</text>
+  <line class="ln" x1="578" y1="176" x2="332" y2="176" marker-end="url(#ar)"/><text class="tm" x="344" y="170">4 · extension hỏi lệnh (poll dồn dập khi đang có việc)</text>
+  <line class="ln" x1="580" y1="206" x2="580" y2="226"/><text class="tm" x="590" y="222">5 · kiểm safety-rules.json (ngân hàng, thanh toán, đổi mật khẩu…)</text>
+  <line class="ln" x1="580" y1="250" x2="828" y2="250" marker-end="url(#ar)"/><text class="tm" x="592" y="244">6 · chrome.debugger: click/gõ/phím thật, snapshot, ảnh chụp</text>
+  <line class="lnm" x1="828" y1="282" x2="582" y2="282" marker-end="url(#ar)"/><text class="tm" x="594" y="276">7 · kết quả (cây phần tử có ref, xuyên iframe/shadow DOM)</text>
+  <line class="lnm" x1="578" y1="314" x2="332" y2="314" marker-end="url(#ar)"/><text class="tm" x="344" y="308">8 · trả kết quả</text>
+  <line class="lnm" x1="328" y1="346" x2="92" y2="346" marker-end="url(#ar)"/><text class="tm" x="104" y="340">9 · trợ lý đọc tiếp / kết thúc (tối đa 40 thao tác/lượt)</text>
+  <rect class="bxw" x="540" y="352" width="450" height="40" rx="5"/><text class="tm" x="550" y="368">Khung cam quanh tab đang bị điều khiển + nút DỪNG; mọi lệnh có hạn thời gian;</text><text class="tm" x="550" y="382">tab nằm trong nhóm "Gấu Pro"; extension tự ghép với web (bản 1.4.0).</text>
+</svg>
+<figcaption>Ghép thiết bị: <code>browser_bridge_pairings</code>/<code>devices</code>; ghi nhận thiết bị để truy vết. Điều kiện an toàn: lượt đã đọc nội dung ngoài (mail/web/Lark) thì KHÔNG được điều khiển trình duyệt (tránh bị điều khiển ngầm). Người dùng cũ phải tải bản mới và nạp lại extension khi có phiên bản mới.</figcaption>
+</figure>
+</div>
+
+<!-- ============ CHƯƠNG 12 ============ -->
+<div class="chapter">
+<h2>12. Tác vụ định kỳ</h2>
+<p class="sub">Ba nguồn kích hoạt: Vercel Cron (11 job, mỗi job tối đa 1 lần/ngày vì gói Hobby), cron-job.org (HTTP định kỳ, chính xác hơn, dùng cho job hằng giờ) và GitHub Actions. Mọi route cron kiểm <code>Bearer $CRON_SECRET</code>.</p>
+<h3>Vercel Cron (giờ UTC → ICT = UTC+7) <span class="tag ok">đã kiểm</span></h3>
+<table>
+  <tr><th>Route</th><th>UTC</th><th>ICT</th><th>Việc</th></tr>
+  <tr><td><code>scheduled-messages</code></td><td class="m">01:00</td><td class="m">08:00</td><td>gửi tin Lark theo lịch (backstop; chính do cron-job.org gọi mỗi giờ, có cơ chế giành slot chống gửi trùng)</td></tr>
+  <tr><td><code>refresh-trends</code></td><td class="m">01:00</td><td class="m">08:00</td><td>thu thập trend (tìm web) vào <code>trend_snapshots</code></td></tr>
+  <tr><td><code>refresh-monthly-kpis</code></td><td class="m">01:30</td><td class="m">08:30</td><td>tính <code>analytics_monthly_kpis</code></td></tr>
+  <tr><td><code>my-metrics-daily-review</code></td><td class="m">01:30</td><td class="m">08:30</td><td>"Đánh giá hôm nay" + DM Lark 8:30</td></tr>
+  <tr><td><code>cs-tickets-mirror</code></td><td class="m">02:00</td><td class="m">09:00</td><td>kéo ticket CS từ Lark Base sang Turso</td></tr>
+  <tr><td><code>prewarm-analytics</code></td><td class="m">02:00</td><td class="m">09:00</td><td>làm nóng cache các URL/SQL hay dùng</td></tr>
+  <tr><td><code>refresh-b2c-report</code></td><td class="m">02:30</td><td class="m">09:30</td><td>snapshot B2C hằng tháng</td></tr>
+  <tr><td><code>gau-pro-digest</code></td><td class="m">02:45</td><td class="m">09:45</td><td>digest chủ động buổi sáng của Gấu Pro</td></tr>
+  <tr><td><code>vendor-quote-scan</code></td><td class="m">03:15</td><td class="m">10:15</td><td>quét báo giá vendor định kỳ</td></tr>
+  <tr><td><code>log-archive</code></td><td class="m">03:40</td><td class="m">10:40</td><td>sao log quá hạn sang Turso, dọn Supabase</td></tr>
+  <tr><td><code>my-metrics-lark-scan</code></td><td class="m">10:00</td><td class="m">17:00</td><td>quét tin nhắn Lark làm bằng chứng OKR</td></tr>
+</table>
+<h3>Job do cron-job.org gọi (cấu hình ngoài repo) <span class="tag warn">theo wiki / CLAUDE.md</span></h3>
+<table>
+  <tr><th>Route</th><th>Tần suất</th><th>Việc</th></tr>
+  <tr><td><code>scheduled-messages</code></td><td>mỗi giờ (:01)</td><td>gửi tin Lark theo lịch, có cửa sổ bù 24 giờ</td></tr>
+  <tr><td><code>etl-cache-sync</code></td><td>mỗi 10–15 phút</td><td>đọc <code>jobs/job_logs</code> của gohub_dw; ETL mới xong thì soft-expire cache và làm nóng ~30 URL</td></tr>
+  <tr><td><code>argon-sync</code></td><td>hằng đêm</td><td>đồng bộ nguồn Lark/mail/thread, chỉ mục, sự việc, tuần tra đêm, xuất hồ sơ vendor (nếu bật)</td></tr>
+  <tr><td><code>habit-learn</code></td><td>hằng đêm</td><td>học thói quen ngầm của người dùng</td></tr>
+  <tr><td><code>datapool-audit</code></td><td>hằng đêm</td><td>soát giá vốn Datapool, DM Lark khi lệch <span class="tag bad">cần xác nhận đã thêm</span></td></tr>
+</table>
+<figure>
+<svg viewBox="0 0 1000 250" role="img" aria-label="Dòng thời gian một ngày theo giờ ICT với các tác vụ định kỳ.">
+  <line class="lnm" x1="40" y1="120" x2="960" y2="120"/>
+  <g class="tmonom" text-anchor="middle"><text x="40" y="140">00</text><text x="193" y="140">04</text><text x="347" y="140">08</text><text x="500" y="140">12</text><text x="653" y="140">16</text><text x="807" y="140">20</text><text x="960" y="140">24 giờ ICT</text></g>
+  <g class="gl"><line x1="193" y1="60" x2="193" y2="125"/><line x1="347" y1="60" x2="347" y2="125"/><line x1="500" y1="60" x2="500" y2="125"/><line x1="653" y1="60" x2="653" y2="125"/><line x1="807" y1="60" x2="807" y2="125"/></g>
+  <rect class="bxo" x="40" y="156" width="920" height="26" rx="4"/><text class="tm" x="500" y="173" text-anchor="middle">ETL gohub_dw mỗi giờ (dim :40 · COGS :45 · fact :50) + etl-cache-sync 10–15' + scheduled-messages mỗi giờ</text>
+  <rect class="bxa" x="318" y="26" width="240" height="78" rx="4"/><text class="tm" x="438" y="44" text-anchor="middle">08:00–10:40 (UTC 01:00–03:40)</text><text class="tm" x="438" y="58" text-anchor="middle">trends · GitHub sync core · kpis · review</text><text class="tm" x="438" y="72" text-anchor="middle">mirror · prewarm · b2c · digest</text><text class="tm" x="438" y="86" text-anchor="middle">quote scan · log-archive</text>
+  <rect class="bxl" x="720" y="40" width="200" height="50" rx="4"/><text class="tm" x="820" y="62" text-anchor="middle">17:00 my-metrics-lark-scan</text><text class="tm" x="820" y="76" text-anchor="middle">(UTC 10:00)</text>
+  <rect class="bxv" x="40" y="40" width="200" height="50" rx="4"/><text class="tm" x="140" y="58" text-anchor="middle">Đêm: argon-sync (tuần tra),</text><text class="tm" x="140" y="72" text-anchor="middle">habit-learn, datapool-audit</text>
+  <rect class="bxw" x="40" y="196" width="920" height="40" rx="4"/><text class="tm" x="50" y="212">Chủ nhật 09:00 ICT: GitHub sync job items (~100 phút). Thứ tự phụ thuộc: ETL (hằng giờ) → kpis → prewarm → b2c-report → digest.</text><text class="tm" x="50" y="226">Giờ cron-job.org có thể lệch; code các route có cửa sổ bù để không bỏ sót.</text>
+</svg>
+<figcaption>Cron-job.org và GitHub Actions không đảm bảo giờ chính xác; vì vậy các route gửi tin dùng cơ chế giành slot (optimistic lock) và cửa sổ bù.</figcaption>
+</figure>
+</div>
+<!-- ============ CHƯƠNG 13 ============ -->
+<div class="chapter">
+<h2>13. Bảo mật và an toàn</h2>
+<p class="sub">Phòng thủ nhiều lớp. Với trợ lý AI, nguyên tắc chính là <b>an toàn nằm trong mã, không dựa vào lời dặn của prompt</b>.</p>
+<figure>
+<svg viewBox="0 0 1000 400" role="img" aria-label="Các lớp bảo mật: truy cập, dữ liệu, AI, hành động ra ngoài, vận hành.">
+  <rect class="bxl" x="14" y="14" width="236" height="372" rx="8"/><text class="tb" x="132" y="38" text-anchor="middle">Truy cập</text>
+  <text class="tm" x="26" y="62">Middleware + JWT trượt 4h</text><text class="tm" x="26" y="82">Role đọc lại DB mỗi 5 phút</text><text class="tm" x="26" y="102">Ma trận quyền deny-by-default</text><text class="tm" x="26" y="122">Cron: Bearer CRON_SECRET</text><text class="tm" x="26" y="142">Lark: giải mã + token + loại trùng</text><text class="tm" x="26" y="162">API ngoài: khóa riêng, chỉ đọc</text><text class="tm" x="26" y="182">Rate limit chat 20/10 lượt/phút</text><text class="tm" x="26" y="202">CSP header (next.config)</text><text class="tm" x="26" y="232">bcrypt cho mật khẩu</text>
+  <rect class="bxo" x="262" y="14" width="236" height="372" rx="8"/><text class="tb" x="380" y="38" text-anchor="middle">Dữ liệu</text>
+  <text class="tm" x="274" y="62">gohub_dw: chỉ SELECT, timeout 25s,</text><text class="tm" x="274" y="76">idle_session_timeout 90s</text><text class="tm" x="274" y="100">SQL động: safeDate, safeCompanyCode,</text><text class="tm" x="274" y="114">1 câu lệnh, danh sách cho/chặn</text><text class="tm" x="274" y="138">sql của Argon: sql-guard + READ ONLY</text><text class="tm" x="274" y="162">Bảng nhạy cảm không đọc được qua</text><text class="tm" x="274" y="176">querySupabase nếu không đủ quyền</text><text class="tm" x="274" y="200">Khóa dữ liệu Argon theo username</text><text class="tm" x="274" y="224">Service key chỉ dùng ở máy chủ</text>
+  <rect class="bxw" x="510" y="14" width="236" height="372" rx="8"/><text class="tb" x="628" y="38" text-anchor="middle">AI</text>
+  <text class="tm" x="522" y="62">Guardian trước Bé Gấu</text><text class="tm" x="522" y="82">Bậc quyền công cụ L0–L3 trong mã</text><text class="tm" x="522" y="102">Nội dung ngoài bị bọc + quét chỉ dẫn lạ</text><text class="tm" x="522" y="122">Lượt "nhiễm": siết ghi, cấm Bridge</text><text class="tm" x="522" y="142">Buồng cách ly Q-LLM cho mail/thread</text><text class="tm" x="522" y="162">Bộ red-team + eval Argon (25 ca)</text><text class="tm" x="522" y="182">Lọc lộ tên bảng/cột trong câu trả lời</text><text class="tm" x="522" y="202">Mật khẩu portal không đưa ra ngoài</text><text class="tm" x="522" y="222">Sandbox Python: mạng đóng</text><text class="tm" x="522" y="242">Kỹ năng ứng viên: lint + A/B + duyệt</text>
+  <rect class="bxb" x="758" y="14" width="228" height="372" rx="8"/><text class="tb" x="872" y="38" text-anchor="middle">Hành động ra ngoài</text>
+  <text class="tm" x="770" y="62">Thẻ duyệt: người bấm Đồng ý mới chạy</text><text class="tm" x="770" y="82">Chỉ 4 loại cho thành viên</text><text class="tm" x="770" y="102">Gửi tin/xóa/ghi Google: Creator</text><text class="tm" x="770" y="122">Bridge: chặn trang nhạy cảm</text><text class="tm" x="770" y="142">(ngân hàng, thanh toán, mật khẩu)</text><text class="tm" x="770" y="162">localFiles: cổng server, 40 thao tác</text><text class="tm" x="770" y="182">Phiếu sửa code → PR vào staging,</text><text class="tm" x="770" y="196">không có bí mật production</text><text class="tm" x="770" y="220">Nhật ký: gp_action_log,</text><text class="tm" x="770" y="234">access_audit_log, nhật ký công cụ</text>
+</svg>
+<figcaption>Nguồn: <code>operations-runbook.md</code> §6, <code>run-safety.ts</code>, <code>bridge-safety.ts</code>, <code>access-pure.ts</code>.</figcaption>
+</figure>
+<h3>Rủi ro và nợ bảo mật đã biết</h3>
+<table>
+  <tr><th>Mục</th><th>Trạng thái</th><th>Hành động</th></tr>
+  <tr><td>Repo GitHub công khai</td><td><span class="tag warn">lưu ý</span></td><td>không commit bí mật; <code>.env*</code>, <code>CLAUDE.md</code>, <code>Hieu/</code> nằm ngoài git (kiểm trước mỗi commit)</td></tr>
+  <tr><td>Mật khẩu portal vendor trong <code>creator_kb</code> (chữ rõ)</td><td><span class="tag bad">chưa xử lý</span></td><td>chuyển sang trình quản lý mật khẩu rồi xoá khỏi KB; Argon đã không đưa ra ngoài</td></tr>
+  <tr><td><code>VERCEL_TOKEN</code> cũ trong <code>web/.env.local</code></td><td><span class="tag bad">cần thu hồi</span></td><td>bị Vercel từ chối; tạo token mới nếu cần</td></tr>
+  <tr><td>SSL tới gohub_dw</td><td><span class="tag warn">một phần</span></td><td>xác minh đầy đủ khi có <code>ANALYTICS_DB_SSL_CA</code>; DW không do GoHub sở hữu</td></tr>
+  <tr><td>Giới hạn kích thước body request</td><td><span class="tag warn">chưa có</span></td><td>rủi ro thấp (công cụ nội bộ)</td></tr>
+  <tr><td>Rate limit liên instance</td><td><span class="tag bad">cần xác nhận</span></td><td>Upstash đã có mã; kiểm biến môi trường trên Vercel</td></tr>
+  <tr><td>Staging dùng chung DB với production</td><td><span class="tag warn">có chủ đích</span></td><td>dữ liệu thử trên staging là dữ liệu thật; luôn dọn</td></tr>
+</table>
+</div>
+
+<!-- ============ CHƯƠNG 14 ============ -->
+<div class="chapter">
+<h2>14. Hiệu năng, giới hạn và kế hoạch Rollup</h2>
+<p class="sub">Phần này gộp số đo thật, dự đoán quy mô và hướng đã chốt. Chi tiết đầy đủ ở <code>docs/plans/analytics-rollup.md</code> và bản PDF <code>ANALYTICS-ROLLUP-ke-hoach.pdf</code>.</p>
+<h3>Số đo (28/10/2026) <span class="tag ok">đã kiểm</span></h3>
+<table>
+  <tr><th>Phép đo</th><th>Kết quả</th></tr>
+  <tr><td>Quét thuần <code>COUNT(*)</code> bảng fact giao hàng</td><td>≈ 0,35s lần đầu (đã trừ ~0,3s mạng)</td></tr>
+  <tr><td>Truy vấn kiểu BOD (nhóm kênh × tháng, 10 tháng, JOIN)</td><td>1,5–3,7s lần đầu; 2,3–5,7 µs mỗi dòng của cả bảng</td></tr>
+  <tr><td>Ép kiểu <code>::date</code> so với so chuỗi</td><td>786ms so với 611ms lần đầu: không phải thủ phạm chính</td></tr>
+  <tr><td>Cache nguội các route chính</td><td>bod-summary ~12s, staff ~6s, bod-b2b-tiers ~6s, quarterly-b2b-customers ~5s</td></tr>
+  <tr><td>Cache nóng</td><td>&lt; 1s</td></tr>
+  <tr><td>Độ trễ kho</td><td>gohub_dw ~30ms/truy vấn đơn giản · Turso ~150ms · Supabase 280–450ms · Runtime Cache 4–15ms</td></tr>
+  <tr><td>Số dòng sau khi gộp (22 tháng)</td><td>ngày×kênh×công ty×khách×ship 205.376; ngày×kênh×công ty×SKU 258.353 (từ 652.741 dòng thô)</td></tr>
+</table>
+<figure>
+<svg viewBox="0 0 760 330" role="img" aria-label="Dự đoán thời gian một truy vấn thô cache nguội theo số năm tới cho ba kịch bản; kịch bản C vượt giới hạn 25 giây trước năm thứ ba, rollup nằm ngang ở khoảng 0,3 giây.">
+  <g class="gl"><line x1="70" y1="30" x2="640" y2="30"/><line x1="70" y1="97.5" x2="640" y2="97.5"/><line x1="70" y1="165" x2="640" y2="165"/><line x1="70" y1="232.5" x2="640" y2="232.5"/></g><line class="lnm" x1="70" y1="300" x2="640" y2="300"/>
+  <g class="tmonom" text-anchor="end"><text x="62" y="304">0s</text><text x="62" y="236">10s</text><text x="62" y="169">20s</text><text x="62" y="101">30s</text><text x="62" y="34">40s</text></g>
+  <g class="tmonom" text-anchor="middle"><text x="70" y="318">nay</text><text x="184" y="318">+1 năm</text><text x="298" y="318">+2</text><text x="412" y="318">+3</text><text x="526" y="318">+4</text><text x="640" y="318">+5 năm</text></g>
+  <line x1="70" y1="131.25" x2="640" y2="131.25" stroke="#a3262a" stroke-width="1.3" stroke-dasharray="6 4"/><text x="74" y="124" fill="#a3262a" font-family="Be Vietnam Pro" font-size="10.5" font-weight="600">giới hạn 25s: truy vấn bị hủy</text>
+  <polyline points="70,275.8 184,262 298,248.3 412,234.5 526,220.8 640,207" fill="none" stroke="#2563eb" stroke-width="2.2"/>
+  <polyline points="70,275.8 184,258.6 298,237.2 412,210.3 526,176.8 640,134.8" fill="none" stroke="#d97706" stroke-width="2.2"/>
+  <polyline points="70,275.8 184,248.3 298,193.4 412,83.5 439.7,30" fill="none" stroke="#9333ea" stroke-width="2.2"/>
+  <line x1="70" y1="298" x2="640" y2="298" stroke="#059669" stroke-width="2.2" stroke-dasharray="6 4"/>
+  <text x="648" y="211" fill="#2563eb" font-family="Be Vietnam Pro" font-size="11" font-weight="600">A · 13,8s</text><text x="648" y="139" fill="#d97706" font-family="Be Vietnam Pro" font-size="11" font-weight="600">B · 24,5s</text><text x="446" y="22" fill="#9333ea" font-family="Be Vietnam Pro" font-size="11" font-weight="600">C · vượt 40s trước năm thứ 4</text><text x="648" y="302" fill="#059669" font-family="Be Vietnam Pro" font-size="11" font-weight="600">Rollup ~0,3s</text>
+</svg>
+<figcaption>A: phẳng (~370k dòng/năm, đúng thực tế 2025–2026); B: +25%/năm; C: gấp đôi mỗi năm (kịch bản căng). Thời gian = số dòng × 5,5 µs (cận trên đo). Đường rollup là <b>ước tính</b>, sẽ đo thật ở giai đoạn P0.</figcaption>
+</figure>
+<h3>Hướng đã chốt (2026-10-28)</h3>
+<div class="grid2">
+  <div class="card"><h3>Ràng buộc</h3><ul><li><code>gohub_dw</code> chỉ đọc, không sửa/thêm gì.</li><li>Không phát sinh chi phí (Turso free, Vercel Hobby, cron-job.org).</li><li>Quy mô tương lai suy ra từ dữ liệu bằng kịch bản.</li><li>Số liệu các tab không đổi; chỉ bật sau khi đối chiếu khớp.</li></ul></div>
+  <div class="card"><h3>Thiết kế</h3><ul><li>Turso <code>intel-rollup</code>: <code>ru_cust_day</code>, <code>ru_sku_day</code>, bản sao <code>dm_*</code>, <code>ru_meta</code>.</li><li>Cron làm mới sau ETL (hằng giờ), chỉ ghi ngày có băm đổi; đối chiếu tháng hằng đêm.</li><li>Router chọn bảng nhỏ nhất đủ trả lời; luôn có đường thô dự phòng.</li><li>Thứ tự: Quarter Report → B2B → B2C → Channels → các tab khác.</li></ul></div>
+</div>
+<div class="callout">Khi dữ liệu bị sửa (đổi nhãn, sửa giá trị fact, đổi mã): nhãn cập nhật sau lần làm mới kế (≤ 1 giờ); giá trị fact ≤ 1 giờ trong 45 ngày gần nhất, xa hơn ≤ 24 giờ; cache cần ba lớp xử lý (khóa theo <code>data_version</code>, bỏ cache biên cho route rollup, thêm version vào khóa stale-first). Điểm yếu duy nhất là số đo nướng sẵn theo nhóm vendor (ví dụ <code>hk3_rev_vnd</code>): băm bảng ánh xạ để dựng lại ngay khi đổi.</div>
+</div>
+
+<!-- ============ CHƯƠNG 15 ============ -->
+<div class="chapter">
+<h2>15. Vận hành và xử lý sự cố</h2>
+<h3>Công cụ giám sát có sẵn</h3>
+<table>
+  <tr><th>Công cụ</th><th>Dùng để</th><th>Vị trí</th></tr>
+  <tr><td>Giám sát dữ liệu (Data Health)</td><td>độ tươi (ETL đã chạy chưa), bất thường số liệu, đối chiếu giữa các tab</td><td>Dữ liệu và API › Giám sát</td></tr>
+  <tr><td>Data Map</td><td>bản đồ nguồn dữ liệu tự sinh, thời gian cache, nhãn "Dữ liệu cập nhật"</td><td>Dữ liệu và API</td></tr>
+  <tr><td><code>perf-probe</code>, <code>perf_events</code></td><td>đo độ trễ từng kho và thời gian từng route</td><td>API creator</td></tr>
+  <tr><td>Usage Analytics / My Metrics</td><td>mức dùng, chi phí AI, Tasks via Bé Gấu</td><td>Creator</td></tr>
+  <tr><td><code>cron-alert</code></td><td>cron lỗi thì DM Lark cho Creator</td><td>tự động</td></tr>
+  <tr><td>Chạy song song Gấu Pro / Gấu Prime</td><td>số lượt, chất lượng, tiêu chí gỡ Gấu Pro</td><td>Gấu Prime › Thêm</td></tr>
+  <tr><td><code>test:consistency</code></td><td>so số giữa các tab (chống lệch)</td><td>repo, chạy bằng <code>CONSISTENCY_BASE_URL</code></td></tr>
+</table>
+<h3>Quy trình kiểm khi "số liệu sai hoặc lệch giữa hai tab"</h3>
+<figure>
+<svg viewBox="0 0 1000 220" role="img" aria-label="Quy trình điều tra số lệch: kiểm cơ sở thời gian và bộ lọc, bỏ qua cache bằng nocache, kiểm độ tươi ETL, kiểm cấu hình loại trừ, so với SQL thô, chạy test nhất quán.">
+  <rect class="bx" x="14" y="40" width="150" height="70" rx="6"/><text class="tb" x="89" y="64" text-anchor="middle">1 · Cùng điều kiện?</text><text class="tm" x="89" y="82" text-anchor="middle">Fulfillment/Created,</text><text class="tm" x="89" y="96" text-anchor="middle">tick ship/nội bộ/Ops</text>
+  <rect class="bx" x="190" y="40" width="150" height="70" rx="6"/><text class="tb" x="265" y="64" text-anchor="middle">2 · Bỏ cache</text><text class="tm" x="265" y="82" text-anchor="middle">thêm nocache=1 hoặc</text><text class="tm" x="265" y="96" text-anchor="middle">nút "Tải lại mới"</text>
+  <rect class="bx" x="366" y="40" width="150" height="70" rx="6"/><text class="tb" x="441" y="64" text-anchor="middle">3 · Độ tươi dữ liệu</text><text class="tm" x="441" y="82" text-anchor="middle">ETL xong chưa?</text><text class="tm" x="441" y="96" text-anchor="middle">Data Health</text>
+  <rect class="bx" x="542" y="40" width="150" height="70" rx="6"/><text class="tb" x="617" y="64" text-anchor="middle">4 · Cấu hình</text><text class="tm" x="617" y="82" text-anchor="middle">loại trừ khách, tier,</text><text class="tm" x="617" y="96" text-anchor="middle">chi phí, target</text>
+  <rect class="bx" x="718" y="40" width="150" height="70" rx="6"/><text class="tb" x="793" y="64" text-anchor="middle">5 · So SQL thô</text><text class="tm" x="793" y="82" text-anchor="middle">SQL Query (Dữ liệu và API)</text><text class="tm" x="793" y="96" text-anchor="middle">trên cùng bộ lọc</text>
+  <rect class="bxo" x="718" y="140" width="268" height="60" rx="6"/><text class="tb" x="852" y="164" text-anchor="middle">6 · Chạy test:consistency</text><text class="tm" x="852" y="182" text-anchor="middle">tìm tab nào lệch; sửa ở hàm dùng chung</text>
+  <line class="ln" x1="164" y1="75" x2="188" y2="75" marker-end="url(#ar)"/><line class="ln" x1="340" y1="75" x2="364" y2="75" marker-end="url(#ar)"/><line class="ln" x1="516" y1="75" x2="540" y2="75" marker-end="url(#ar)"/><line class="ln" x1="692" y1="75" x2="716" y2="75" marker-end="url(#ar)"/><line class="ln" x1="793" y1="110" x2="793" y2="138" marker-end="url(#ar)"/>
+  <text class="tm" x="14" y="150">Lỗi thường gặp: Created không có margin (CM1 = 0, bình thường); cache cũ sau khi đổi cấu hình (thiếu băm trong khóa);</text><text class="tm" x="14" y="166">filter nhóm B2B/B2C khác nhau; khách bị loại theo TÊN nhưng không theo MÃ; tổng công ty ≠ B2B + B2C (nhóm INTERNAL).</text>
+</svg>
+<figcaption>Sửa ở hàm dùng chung (<code>lib/analytics-helpers.ts</code>, <code>lib/analytics-engine/*</code>) rồi chạy bộ kiểm nhất quán, đừng vá từng route.</figcaption>
+</figure>
+<h3>Sự cố thường gặp</h3>
+<table>
+  <tr><th>Sự cố</th><th>Dấu hiệu</th><th>Xử lý</th></tr>
+  <tr><td>Cạn kết nối <code>gohub_dw</code></td><td>"remaining connection slots…", nhiều route 500</td><td>pool đã giới hạn 3/instance + <code>idle_session_timeout</code> 90s; đợi nhả slot, tránh gọi song song nhiều route nặng; có retry 3 lần</td></tr>
+  <tr><td>Hết hạn mức Gemini</td><td>trợ lý báo lỗi hạn mức</td><td>kiểm quota; đổi model qua biến <code>GEMINI_MODEL*</code> (tập trung ở <code>lib/ai-models.ts</code>); hệ thống tự báo khi có model mới</td></tr>
+  <tr><td>Cron không chạy</td><td>không có tin/KPI buổi sáng</td><td>xem log Vercel + cron-job.org; kiểm <code>CRON_SECRET</code>; <code>cron-alert</code> sẽ DM nếu route lỗi</td></tr>
+  <tr><td>Bot Lark không trả lời</td><td>không có phản hồi trong chat</td><td>kiểm bot còn trong group, <code>LARK_*</code>, loại trùng event, token hết hạn; xem <code>/api/lark/events</code></td></tr>
+  <tr><td>Supabase gần đầy</td><td>nhắc dung lượng, ghi lỗi</td><td>không thêm dữ liệu lớn; xem bảng lớn (<code>listings</code>, <code>ncc_worldmove</code>, <code>skus</code>); dùng Turso cho dữ liệu mới</td></tr>
+  <tr><td>Staging làm bẩn dữ liệu thật</td><td>cuộc thử còn lại</td><td>xoá cuộc thử bằng API; nhớ DB dùng chung</td></tr>
+  <tr><td>Deploy lỗi</td><td>production hỏng sau merge</td><td>promote lại bản trước trên Vercel; sửa trên staging rồi merge lại (migration DROP chỉ chạy sau merge)</td></tr>
+</table>
+<h3>Chu kỳ kiểm</h3>
+<ul>
+  <li><b>Hằng ngày (tự động):</b> ETL, cron buổi sáng, <code>cron-alert</code>, tin báo lỗi.</li>
+  <li><b>Hằng tuần:</b> xem Data Health (độ tươi/bất thường/đối chiếu), chi phí AI, dung lượng Supabase, lỗi trong log Vercel.</li>
+  <li><b>Hằng tháng:</b> xoay bí mật cần thiết, rà quyền người dùng, chạy bộ eval trợ lý, kiểm hạn mức Turso (đặc biệt khi bắt đầu Rollup).</li>
+</ul>
+</div>
+
+<!-- ============ PHỤ LỤC ============ -->
+<div class="chapter">
+<h2>Phụ lục A · Bảng dữ liệu theo miền</h2>
+<h3>Supabase (Postgres)</h3>
+<table>
+  <tr><th>Miền</th><th>Bảng chính</th></tr>
+  <tr><td>Catalog và NCC</td><td><code>products</code>, <code>skus</code>, <code>listings</code>, <code>items</code>, <code>ncc_worldmove</code>, <code>ncc_3hk</code>, <code>ncc_datapool</code>, <code>vendor_quotes</code>, <code>ref_vendors</code>, <code>ref_countries</code>, <code>ref_support_countries</code>, <code>sku_vat</code>, <code>pm_operators</code>, <code>pm_price_lists</code>, <code>bc_*</code></td></tr>
+  <tr><td>Tri thức và wiki</td><td><code>kb_wiki_pages</code>, <code>kb_wiki_page_groups</code>, <code>kb_chunks</code>, <code>creator_kb</code></td></tr>
+  <tr><td>Người dùng và cấu hình</td><td><code>users</code>, <code>app_settings</code> (cấu hình, quyền, cờ, trạng thái phụ), <code>external_api_keys</code>, <code>access_audit_log</code></td></tr>
+  <tr><td>Trợ lý chung</td><td><code>conversation_messages</code>, <code>app_usage_events</code>, <code>chat_feedback</code>, <code>chat_questions</code>, <code>chatbot_learning_log</code>, <code>assistant_memory</code>, <code>lark_chat_history</code></td></tr>
+  <tr><td>Gấu Pro</td><td><code>gp_pending_actions</code>, <code>gp_runs</code>, <code>gp_jobs</code>, <code>gp_conversation_memory</code>, <code>gp_scheduled_tasks</code>, <code>gp_action_log</code>, <code>dev_tickets</code>, <code>trend_snapshots</code></td></tr>
+  <tr><td>Gấu Prime (Argon)</td><td><code>argon_projects</code>, <code>argon_missions</code>, <code>argon_runs</code>, <code>argon_sources</code>, <code>argon_source_versions</code>, <code>argon_folders</code>, <code>argon_facts</code>, <code>argon_mail_threads</code>, <code>argon_workspace_files</code>, <code>argon_mission_sources</code></td></tr>
+  <tr><td>Bridge</td><td><code>browser_bridge_commands</code>, <code>browser_bridge_devices</code>, <code>browser_bridge_pairings</code></td></tr>
+  <tr><td>My Metrics (OKR)</td><td><code>okr_evidence_records</code>, <code>okr_lark_events</code>, <code>okr_lark_message_log</code>, <code>okr_plan_items</code>, <code>okr_sku_tags</code></td></tr>
+  <tr><td>Analytics phụ trợ</td><td><code>analytics_monthly_kpis</code>, <code>b2b_customer_targets</code>, <code>b2b_customer_cost_monthly</code>, <code>company_monthly_targets</code>, <code>squad_targets</code>, <code>inventory_plan_*</code>, <code>inventory_po</code>, <code>ca_thread_log</code></td></tr>
+</table>
+<h3>Turso</h3>
+<table>
+  <tr><th>Database</th><th>Bảng</th></tr>
+  <tr><td>Cấu hình (<code>TURSO_URL</code>)</td><td><code>b2b_customer_cost_monthly</code>, <code>b2b_ecom_cost_monthly</code>, <code>target_planning_quarter</code>, <code>cs_tickets</code>, <code>manual_edit_history</code>, <code>log_archive</code>, <code>perf_events</code>, <code>url_hits</code>, <code>country_codes</code></td></tr>
+  <tr><td>argon-hub (<code>ARGON_TURSO_URL</code>)</td><td><code>argon_chunks</code>, <code>argon_index</code>, <code>argon_entities</code>, <code>argon_edges</code>, <code>argon_mentions</code>, <code>agent_events</code></td></tr>
+  <tr><td>Leads (<code>TURSO_LEADS_URL</code>)</td><td>dữ liệu Omni (khách tiềm năng)</td></tr>
+  <tr><td>Sắp có (kế hoạch)</td><td><code>intel-rollup</code>: <code>ru_cust_day</code>, <code>ru_sku_day</code>, <code>dm_*</code>, <code>ru_meta</code>, <code>ru_runlog</code></td></tr>
+</table>
+<h3>Biến môi trường theo nhóm (chỉ tên, không có giá trị)</h3>
+<table>
+  <tr><th>Nhóm</th><th>Biến</th></tr>
+  <tr><td>Kho số liệu</td><td><code>ANALYTICS_DB_HOST/PORT/NAME/USER/PASSWORD/SSL_CA</code></td></tr>
+  <tr><td>Supabase</td><td><code>NEXT_PUBLIC_SUPABASE_URL</code>, <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>, <code>SUPABASE_SERVICE_KEY</code></td></tr>
+  <tr><td>Turso</td><td><code>TURSO_URL/AUTH_TOKEN</code>, <code>ARGON_TURSO_URL/AUTH_TOKEN</code>, <code>TURSO_LEADS_URL/AUTH_TOKEN</code></td></tr>
+  <tr><td>Xác thực</td><td><code>NEXTAUTH_SECRET</code>, <code>NEXTAUTH_URL</code>, <code>CRON_SECRET</code>, <code>MCP_SECRET</code>, <code>DEV_TICKET_SECRET</code>, <code>PORTAL_CRED_KEY</code></td></tr>
+  <tr><td>Lark</td><td><code>LARK_APP_ID/SECRET</code>, <code>LARK_ENCRYPT_KEY</code>, <code>LARK_VERIFICATION_TOKEN</code>, <code>LARK_BOT_NAME</code>, <code>LARK_CREATOR_USER_ID</code>, <code>LARK_BASE_ID/TABLE_ID</code>, <code>LARK_OAUTH_SCOPES</code></td></tr>
+  <tr><td>Gemini</td><td><code>GEMINI_KEY</code>, <code>GEMINI_MODEL</code>, <code>GEMINI_MODEL_PRO</code>, <code>GEMINI_MODEL_GAU_PRO</code>, <code>GEMINI_MODEL_ARGON</code>, <code>GEMINI_LIVE_MODEL</code>, <code>GEMINI_TTS_MODEL</code>, <code>GEMINI_IMAGE_MODEL(_PRO)</code>, <code>GEMINI_VIDEO_MODEL(_HQ)</code>, <code>GEMINI_TRANSLATE_MODEL</code>, <code>GEMINI_TRANSCRIBE_MODEL</code>, <code>GEMINI_DEEP_RESEARCH_AGENT</code></td></tr>
+  <tr><td>Dịch vụ khác</td><td><code>GOOGLE_OAUTH_CLIENT_ID/SECRET</code>, <code>BROWSERLESS_WS_URL/TOKEN</code>, <code>ARGON_SANDBOX_TOKEN</code>, <code>UPSTASH_REDIS_REST_URL/TOKEN</code>, <code>CHATWOOT_*</code>, <code>OMNI_API_*</code>, <code>BC_DATAPOOL_*</code>, <code>ADMIN_GOHUB_*</code>, <code>VERCEL_TOKEN/TEAM_ID/PROJECT_ID</code>, <code>GITHUB_DISPATCH_TOKEN</code></td></tr>
+</table>
+
+<h2 style="margin-top:20px">Phụ lục B · Thuật ngữ</h2>
+<table>
+  <tr><th>Thuật ngữ</th><th>Nghĩa</th></tr>
+  <tr><td>Fulfillment / Created</td><td>cơ sở thời gian báo cáo: ngày giao hàng / ngày tạo đơn</td></tr>
+  <tr><td>GP, GPM %, CM1, CM1 %</td><td>Gross Profit, tỷ suất GP, Contribution Margin 1 (GP trừ chi phí vận hành), tỷ lệ CM1</td></tr>
+  <tr><td>Strategic / VIP / Gold / Silver</td><td>phân hạng khách B2B theo price list</td></tr>
+  <tr><td>Datapool</td><td>sản phẩm dung lượng dùng chung của BC Datapool và 3HK Datapool</td></tr>
+  <tr><td>NCC</td><td>nhà cung cấp; "Gap" = gói NCC chưa có SKU</td></tr>
+  <tr><td>Sứ mệnh (Mission)</td><td>không gian làm việc của Gấu Prime: brief, kế hoạch, workspace, lượt hỏi; mỗi cuộc trò chuyện là một sứ mệnh</td></tr>
+  <tr><td>Kho</td><td>nơi chứa tài liệu, ghi chú, mail, thread, sự việc, thực thể của Gấu Prime</td></tr>
+  <tr><td>Sự việc (fact)</td><td>thông tin có hạn trích từ nguồn: hạn, khuyến mãi, ngừng bán, đổi giá</td></tr>
+  <tr><td>Bậc quyền L0–L3</td><td>mức rủi ro của công cụ Argon (đọc tin cậy / đọc ngoài / ghi hoàn tác / cần người quyết)</td></tr>
+  <tr><td>"Nhiễm" (tainted)</td><td>lượt đã đọc nội dung ngoài: bị siết ghi và cấm điều khiển trình duyệt</td></tr>
+  <tr><td>Bridge</td><td>extension trình duyệt cho trợ lý thao tác trên máy người dùng</td></tr>
+  <tr><td>SWR</td><td>stale-while-revalidate: trả bản cũ rồi làm mới ở nền</td></tr>
+  <tr><td>Rollup</td><td>bảng tổng hợp sẵn theo ngày, thay vì tính từ bảng thô mỗi lần xem</td></tr>
+</table>
+
+<h2 style="margin-top:20px">Phụ lục C · Việc còn mở, nợ kỹ thuật, điều chưa biết</h2>
+<ul>
+  <li><b>Rollup Analytics:</b> toàn bộ P0–P6 chưa làm; cần audit từng route trước khi code (chương 14).</li>
+  <li><b>Gấu Prime:</b> chưa kiểm sống bằng tài khoản thành viên thật (run_code, xuất file, Kho báo cáo, đính kèm); eval còn 2 ca bị trừ điểm vì bịa chi tiết; nút giao diện cho "nhờ Argon sửa tài liệu" của thành viên chưa có; PDF một chạm chưa có.</li>
+  <li><b>Gấu Pro:</b> còn giữ vì Gấu Prime chưa chuyển hết: Bridge điều khiển máy, giọng nói Live, panel Trí nhớ hợp nhất, tìm hội thoại theo ý nghĩa, verifyReportNumbers.</li>
+  <li><b>Dữ liệu:</b> một số mã thừa đọc <code>partner-tiers</code> (đang rỗng) ở trang B2B/Customers/Dashboard; định nghĩa "doanh thu" mặc định của bot cần chốt; "KH cũ chưa quay lại" ở tab Quarter đếm cả lịch sử.</li>
+  <li><b>Hạ tầng:</b> Upstash chưa chắc đã cấu hình; cron-job.org còn việc cấu hình thủ công; <code>VERCEL_TOKEN</code> cũ cần thu hồi; mật khẩu portal trong KB cần chuyển đi.</li>
+  <li><b>Chưa biết (sẽ đo):</b> lịch và thời lượng ETL đơn tạo; ETL có sửa số cũ không; độ trễ đọc rollup trên Turso; kiểu và độ nhất quán các cột ngày ở các bảng ngoài fact giao hàng.</li>
+</ul>
+
+<h2 style="margin-top:20px">Phụ lục D · Nguồn tài liệu</h2>
+<ul>
+  <li><code>CLAUDE.md</code> (trạng thái hiện tại, quy tắc, checklist), <code>docs/session_summary.txt</code> (nhật ký từng phiên).</li>
+  <li><code>docs/wiki/system/kien-truc-he-thong.md</code>, <code>operations-runbook.md</code>, <code>analytics-data-model.md</code>, <code>chatbot-agents-guardian.md</code>, <code>quy-trinh-van-hanh.md</code>.</li>
+  <li><code>docs/wiki/system/tabs/*.md</code> (một file mỗi tab, gồm phần "Gotchas"), <code>docs/wiki/business/*.md</code> (nghiệp vụ sản phẩm, vendor, giá).</li>
+  <li><code>docs/plans/analytics-rollup.md</code> và <code>ANALYTICS-ROLLUP-ke-hoach.pdf</code>.</li>
+  <li>Mã nguồn: <code>web/src/lib/analytics-helpers.ts</code>, <code>analytics-engine/</code>, <code>agents/</code>, <code>argon/</code>, <code>nav.ts</code>; <code>web/vercel.json</code>; <code>.github/workflows/</code>.</li>
+</ul>
+<p class="sub">Tài liệu này là ảnh chụp tại 2026-10-28. Khi kiến trúc đổi (đặc biệt sau Rollup), cập nhật cả nguồn HTML <code>docs/system-doc/he-thong.html</code> rồi dựng lại PDF.</p>
+</div>
+
+</div>
+</html>

@@ -42,8 +42,8 @@ export async function execExtTool(name: string, args: Record<string, unknown>, u
       const q = String(args.query ?? "").trim()
       if (q.length < 3) return entry(name, args, false, "Thiếu câu tìm (query ≥ 3 ký tự)")
       const { runWebSearch } = await import("@/lib/web-search")   // nạp lười: kéo theo Supabase/Lark, không để vòng lặp Argon phải nạp khi chưa dùng
-      const { result, sources } = await runWebSearch(q)
-      return entry(name, args, true, json(result + (sources.length ? "\n\nNguồn:\n" + sources.map((s, i) => `[${i + 1}] ${s.title}: ${s.url}`).join("\n") : "")))
+      const { result, sources } = await runWebSearch(q, { concise: true, timeoutMs: 40_000 })
+      return entry(name, args, true, json(result + (sources.length ? "\n\nNguồn (BẮT BUỘC ghi URL nguồn trong câu trả lời):\n" + sources.map((s, i) => `[${i + 1}] ${s.title}: ${s.url}`).join("\n") : "")))
     }
     if (name === LARK_DOC_NAME) {
       const action = String(args.action ?? "")

@@ -13,7 +13,7 @@ describe("vercel.json crons", () => {
 
   for (const c of crons) {
     it(`${c.path} export GET`, () => {
-      const file = path.join(root, "src/app", c.path, "route.ts")
+      const file = path.join(root, "src/app", c.path.split("?")[0], "route.ts")   // cron có thể kèm ?mode=…
       expect(fs.existsSync(file), `thiếu file ${file}`).toBe(true)
       const src = fs.readFileSync(file, "utf8")
       expect(/export\s+(async\s+)?function\s+GET\b|export\s+const\s+GET\b/.test(src), `${c.path} chỉ có POST/thiếu GET → Vercel Cron nhận 405`).toBe(true)

@@ -2161,7 +2161,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": "qb2b_raw_v11",
+   "cacheKey": null,
    "deps": [],
    "tables": [
     {
@@ -2272,7 +2272,7 @@
    "methods": [
     "GET"
    ],
-   "cacheKey": "qreport_raw_v12",
+   "cacheKey": null,
    "deps": [],
    "tables": [
     {
@@ -2289,6 +2289,10 @@
     },
     {
      "name": "dim_sku",
+     "source": "gohub_dw"
+    },
+    {
+     "name": "dim_staff",
      "source": "gohub_dw"
     },
     {
@@ -3478,6 +3482,7 @@
     "/api/analytics/order-filters",
     "/api/analytics/order-report",
     "/api/analytics/quarterly-customer-lifecycle",
+    "/api/analytics/quarterly-report",
     "/api/analytics/squad-progress",
     "/api/analytics/staff-report",
     "/api/orders/export"
