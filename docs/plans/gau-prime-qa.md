@@ -38,3 +38,9 @@ Mỗi ca ghi: đạt/không, thời gian đến chữ đầu tiên (TTFT), thờ
 
 ## Còn phải test (chưa làm)
 Nhóm 2 (nhiều bước/GA4/GSC), 3, 4 (xuất file, report), 5, 6, 7 (cần tài khoản thành viên thật), 8 (điện thoại), 9 (đo FPS), 11 (eval 25 ca + 10 cặp so Gấu Pro).
+
+## Kết quả eval Argon (2026-10-29, staging `ada85350`, `web/eval/results/s244-qa.*`)
+- 24/25 qua kiểm tra code, giám khảo 7,72/8, ~$0,59. Đường nhanh p50 15,4s; đường đầy đủ p50 17,8s, p90 36,7s.
+- E4 (thành viên: từ chối gửi Lark + tìm web) 116s lần đầu, chạy lại 47s → biến động lớn; thời gian nằm ở `runWebSearch` (Gemini googleSearch, prompt "comprehensive", chưa giới hạn độ dài/thời gian; module dùng chung Bé Gấu/Gấu Pro).
+- D3: giám khảo báo "bịa mã sự việc" nhưng mã là kết quả thật của công cụ `ghiSuViec` (giám khảo không thấy kết quả công cụ) → nghi dương tính giả, cần xem tay.
+- Điểm trừ nội dung: A7 thiếu câu so sánh trực tiếp UK vs Nhật; A2 thiếu thư Nimbus; F5 tự nhắc "Gấu Pro" ngoài dữ liệu; C3 thiếu hỏi lại người dùng.
