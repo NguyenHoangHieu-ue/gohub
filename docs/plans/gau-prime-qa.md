@@ -29,3 +29,12 @@ Mỗi ca ghi: đạt/không, thời gian đến chữ đầu tiên (TTFT), thờ
 - Tệp trùng tên/"image.png" tự đặt tên duy nhất (`anh-HHMMSS-n.png`) để người dùng thấy rõ từng thẻ và mô hình phân biệt từng nguồn.
 - So khớp lỗi đăng ký theo đường dẫn lưu, không theo tên.
 - Thông báo "Đã lưu…" hiện "N tài liệu" thay vì rỗng.
+
+## Kết quả đợt 2 (staging `9f92a5de`)
+- Dán 2 ảnh cùng tên (giả lập paste): thẻ tự đặt tên `anh-HHMMSS-1/2.png`, cả hai ảnh được đọc đúng, thông báo "Đã lưu: 2 tài liệu". ĐẠT.
+- Tốc độ câu ảnh: tổng ~25s = lấy project Kho 2s + prepare 2,1s + chạy mô hình 20s. Đã bỏ bước 2s (lấy sẵn khi chọn tệp).
+- Số liệu: "Doanh thu và CM1 Q3/2026" → 22.900.269.200 VND, CM1 5.672.743.934 (24,8%), khớp `bod-summary` tuyệt đối. 32s, không hiện tên công cụ/code, có câu gợi ý xuất Excel/báo cáo. ĐẠT.
+- UX: thông báo "Đã lưu vào Tài liệu của tôi" nằm mãi sang lượt hỏi khác → nay tự tắt sau 8s.
+
+## Còn phải test (chưa làm)
+Nhóm 2 (nhiều bước/GA4/GSC), 3, 4 (xuất file, report), 5, 6, 7 (cần tài khoản thành viên thật), 8 (điện thoại), 9 (đo FPS), 11 (eval 25 ca + 10 cặp so Gấu Pro).

@@ -76,6 +76,7 @@ export default function TroLyPage() {
   const [showLive, setShowLive] = useState(false)   // giọng nói/màn hình trực tiếp (chỉ Creator)
   const [showDocs, setShowDocs] = useState(false)   // ngăn kéo "Tài liệu của tôi"
   const { state: up, upload, stage, digest, warm, reset: resetUp } = useChatUpload()
+  useEffect(() => { if (up.stage !== "done") return; const t = setTimeout(resetUp, 8000); return () => clearTimeout(t) }, [up.stage, resetUp])   // thông báo "Đã lưu" tự tắt sau 8 giây
   const [reports, setReports] = useState<ReportMetaUi[]>([])
   const [showReports, setShowReports] = useState(false)   // Kho báo cáo của chính người dùng (report HTML Gấu Prime đã dựng)
   const [tpl, setTpl] = useState<ReportMetaUi | null>(null)
