@@ -10,6 +10,9 @@ import {
 import { fetchQuarterlySettings, exclHash, excludedForB2C } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { fetchCosts, matchChannelCost } from "@/lib/bod-data"
+import { rollupCtx, ruHeaders, ruKey, serve, type RollupCtx } from "@/lib/rollup/serve"
+import { rollupFirstDay, type PerfRow } from "@/lib/rollup/b2bperf"
+import { diffB2cPerf, fetchB2cPerfRollup } from "@/lib/rollup/b2cperf"
 import { rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
 // s195+19: số dòng detail trả về (bảng/CSV) — KHÔNG dùng để tính "Tổng cộng" (xem `total` riêng, luôn
@@ -40,7 +43,8 @@ function computeChCost(
   return amtCost + pctCost
 }
 
-async function fetchB2CPerformanceData(startDate: string, endDate: string, groupBy: string, advancedFilter: string, dateColumn: string, sfx = "") {
+interface RuOpts { ctx: RollupCtx; includeShip: boolean; includeInternalOps: boolean; excludedCustomers: string[] }
+async function fetchB2CPerformanceData(startDate: string, endDate: string, groupBy: string, advancedFilter: string, dateColumn: string, sfx = "", ru?: RuOpts) {
   const source = getAnalyticsSource(dateColumn)
   const filter = getDateFilter(startDate, endDate, source.dateCol)
   const isChannelGroup = groupBy === "channel" || !groupBy
@@ -65,7 +69,7 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
   const withMarket = groupBy === "customer"
   const marketSelect = withMarket ? ", COALESCE(data.company_code, 'NA') as market" : ""
   const groupByCols  = withMarket ? "1, 2, 3" : "1, 2"
-  const rows = await queryAnalytics<Record<string, string>>(
+  const rawRows = () => queryAnalytics<Record<string, string>>(
     `WITH b2c_data AS (
        SELECT f.*, TRIM(s.channel_name) as channel_name
        FROM ${source.mainTable} f
@@ -81,6 +85,16 @@ async function fetchB2CPerformanceData(startDate: string, endDate: string, group
      FROM b2c_data data ${joinClause}
      GROUP BY ${groupByCols}`
   )
+
+  // Rollup chỉ phục vụ groupBy kênh/khách, không bộ lọc nâng cao, khoảng ngày nằm trong vùng đã dựng; còn lại đường thô.
+  const basis = dateColumn === "created_date" ? "sal" : "ful"
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const ruEnd = endDate < yesterday ? endDate : yesterday
+  const first = ru && ru.ctx.mode !== "off" && !advancedFilter && (groupBy === "channel" || groupBy === "customer") ? await rollupFirstDay(basis).catch(() => null) : null
+  const rows: Record<string, string>[] = ru && first && startDate >= first && startDate <= ruEnd
+    ? await serve<PerfRow[]>(ru.ctx, rawRows, () => fetchB2cPerfRollup({ groupBy: groupBy as "channel" | "customer", basis, start: startDate, end: ruEnd, includeShip: ru.includeShip, includeInternalOps: ru.includeInternalOps, excludedCustomers: ru.excludedCustomers }),
+        diffB2cPerf, { startDate, endDate, dateColumn, groupBy, includeShip: ru.includeShip, includeInternalOps: ru.includeInternalOps })
+    : await rawRows()
 
   const aggregated = new Map<string, any>()
   rows.forEach(r => {
@@ -194,10 +208,12 @@ export async function GET(req: NextRequest) {
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
     // v4 (s195+19): đổi shape response array→{rows,total,totalGroups} (fix Tổng cộng thiếu doanh thu
     // khi groupBy=sku/destination có >50 nhóm) — bump key để cache 12h cũ (shape cũ) không phục vụ nhầm.
-    const key = `b2c-perf:v4:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const ctx = await rollupCtx("b2c-performance")
+    const ru: RuOpts = { ctx, includeShip, includeInternalOps, excludedCustomers }
+    const key = `b2c-perf:v4${ruKey(ctx)}:${dateColumn}:${startDate}:${endDate}:${groupBy}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
       if (comparisonType === "none") {
-        return await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx)
+        return await fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx, ru)
       }
 
       const start = new Date(startDate); const end = new Date(endDate)
@@ -211,15 +227,15 @@ export async function GET(req: NextRequest) {
         prevEnd = new Date(end.getFullYear() - 1, end.getMonth(), end.getDate())
       }
       const [current, previous] = await Promise.all([
-        fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx),
-        fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn, sfx),
+        fetchB2CPerformanceData(startDate, endDate, groupBy, advancedFilter, dateColumn, sfx, ru),
+        fetchB2CPerformanceData(prevStart.toISOString().split("T")[0], prevEnd.toISOString().split("T")[0], groupBy, advancedFilter, dateColumn, sfx, ru),
       ])
       const prevByName = new Map(previous.rows.map((p: any) => [p.name, p.revenue]))
       const rows = current.rows.map((curr: any) => ({ ...curr, prev_revenue: prevByName.get(curr.name) || 0 }))
       return { rows, total: { ...current.total, prev_revenue: previous.total.revenue }, totalGroups: current.totalGroups }
     }, QUERY_TTL_MIN, noCache(req))
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    return NextResponse.json(payload, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/b2c/performance]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
