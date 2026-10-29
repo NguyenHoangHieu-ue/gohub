@@ -190,7 +190,7 @@ export async function health() {
     { sql: "SELECT (SELECT COUNT(*) FROM dm_source) AS dm_source, (SELECT COUNT(*) FROM dm_sku) AS dm_sku, (SELECT COUNT(*) FROM dm_staff) AS dm_staff, (SELECT COUNT(*) FROM dm_customer) AS dm_customer" },
     { sql: "SELECT key, value, updated_at FROM ru_meta WHERE key IN ('data_version','last_refresh_at','dimcust:cursor') OR key LIKE 'reconcile:%' ORDER BY key" },
     { sql: "SELECT key, n FROM ru_counter ORDER BY key" },
-    { sql: "SELECT at, mode, basis, ok, ms, detail FROM ru_runlog ORDER BY id DESC LIMIT 12" },
+    { sql: "SELECT at, mode, basis, ok, ms, detail FROM ru_runlog ORDER BY id DESC LIMIT 60" },
   ])
   return { days, dims: counts[0], meta, counters, runs }
 }
