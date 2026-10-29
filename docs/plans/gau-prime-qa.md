@@ -49,3 +49,9 @@ Nhóm 2 (nhiều bước/GA4/GSC), 3, 4 (xuất file, report), 5, 6, 7 (cần t�
 - Tìm web riêng Gấu Prime: ngắn (<200 từ) + hạn 40s; E4 47→31–33s, F3 44→25–28s, 3/3 lần có URL sau khi nhắc "BẮT BUỘC ghi URL".
 - Đo luồng SSE câu số liệu đường đầy đủ (so B2B/B2C Q3): ngữ cảnh dựng 16ms; công cụ `layDuLieuHeThong` xong ở 10,9s; chữ đầu tiên 14,3s; xong ~17,5s. Thời gian nằm ở vòng chọn công cụ + công cụ lấy số, không ở dựng ngữ cảnh.
 - Luật trả lời mới trong `ARGON_SYSTEM` (CÁCH TRẢ LỜI 1–4): F5 7→8 (hết nhắc "Gấu Pro"), A7 7→8 (có so sánh + chênh lệch). A2 7→6 và C3 7 giữ nguyên; D3 vẫn 6 — giám khảo không thấy kết quả công cụ nên báo "bịa mã/chi tiết" ở các mã/tên lấy từ công cụ: dương tính giả, cần cho giám khảo thấy kết quả công cụ nếu muốn chấm đúng.
+
+## Đợt 4 — xuất file, report HTML, hiệu suất trang (staging `6207f6ac`)
+- Xuất theo lượt: `docx` 9,9KB/2,1s, `md` 2,1KB/1,5s, HTTP 200 đúng content-type. Route lượt chỉ hỗ trợ docx|md (khớp 2 nút giao diện); xlsx chỉ có ở xuất NGUỒN (`sources/[id]/export`), không phải lỗi.
+- Report HTML: mở được, render đủ biểu đồ cột/tròn + bảng xếp hạng có tìm kiếm/sắp xếp, iframe sandbox `allow-scripts allow-modals`, srcdoc 18,9KB. NHƯỢC: lần mở đầu khung trắng vài giây, không có trạng thái "Đang dựng report…"; chữ trong report nhỏ.
+- Trang chat: DCL 1,1s, load 1,8s, JS 291KB (20 file), DOM 1.754, heap 41MB. Nền: heartbeat mỗi 120s, thông báo + data-freshness mỗi 300s (đúng nhịp); thỉnh thoảng 2 heartbeat cùng giây (nhẹ).
+- Chưa kiểm được bằng tài khoản này: thẻ duyệt hành động đầy đủ, quyền thành viên thật, giao diện điện thoại, FPS khi cuộn (tab nền throttle rAF).
