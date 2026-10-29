@@ -9,6 +9,9 @@ import { fetchB2BLifecycleRows } from "@/lib/analytics-engine/b2b-lifecycle"
 import {
   selectB2BLifecycle, attachB2BProfiles, buildB2CLifecycleDetail, type B2BProfile, type LifecycleDetail,
 } from "@/lib/analytics-engine/lifecycle-detail"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { diffLifeRev, fetchLifeRevRollup, type LifeRevRow } from "@/lib/rollup/lifedetail"
+import { fetchB2BLifecycleRollup } from "@/lib/rollup/lifecycle"
 import { adminGohubConfigured, adminGohubCustomerList, adminGohubCustomerRangeSummary } from "@/lib/admin-gohub"
 
 // Breakdown chi tiết KH Mới / Quay lại / Rời bỏ của Quarter Report (s203), tách B2B và B2C.
@@ -97,14 +100,15 @@ export async function GET(req: NextRequest) {
     const EXCLUDE_CUST_SQL = makeExcludeSql(excludedCustomers)
     const companyFilter = companyCode !== "ALL" ? `AND f.company_code = '${companyCode}'` : ""
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)}`
+    const ctx = await rollupCtx("quarterly-customer-lifecycle")
 
     const detail = await cachedQuery<LifecycleDetail>(
-      `qlife_b2b_detail:v1:${quarter}:${year}:${companyCode}:${r.qEnd}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${createHash("sha1").update(JSON.stringify(tierKeywords)).digest("hex").slice(0, 8)}`,
+      `qlife_b2b_detail:v1${ruKey(ctx)}:${quarter}:${year}:${companyCode}:${r.qEnd}:${exclHash(excludedCustomers)}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${createHash("sha1").update(JSON.stringify(tierKeywords)).digest("hex").slice(0, 8)}`,
       async () => {
         // Doanh thu B2B theo KH × tháng cho [quý trước → quý này] — CÙNG bộ lọc INACTIVE/exclude/ship/company với Quarter Report
         // nên "đang hoạt động quý này" khớp đúng ô tổng quan.
         const [revRows, lifecycleRows] = await Promise.all([
-          queryAnalytics<{ month: string; customer_code: string; revenue: string }>(`
+          serve<LifeRevRow[]>(ctx, () => queryAnalytics<LifeRevRow>(`
             WITH inactive_cust AS (
               SELECT TRIM(code) as code FROM dim_customer WHERE UPPER(COALESCE(price_list_name, '')) LIKE '%INACTIVE%'
             )
@@ -118,7 +122,11 @@ export async function GET(req: NextRequest) {
               ${EXCLUDE_CUST_SQL}
               ${sfx}
             GROUP BY 1, 2`),
-          fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)),
+          () => fetchLifeRevRollup({ companyCode, includeShip, includeInternalOps, excludedCustomers, start: r.prevStart, end: r.qEnd }),
+          diffLifeRev, { quarter, year, companyCode, includeShip, includeInternalOps }),
+          ctx.useRollup
+            ? fetchB2BLifecycleRollup(companyCode, excludedCustomers, exclHash(excludedCustomers), ctx.version).catch(() => fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)))
+            : fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)),
         ])
 
         const cur = new Set(r.months), prev = new Set(r.prevMonths)
@@ -146,7 +154,7 @@ export async function GET(req: NextRequest) {
       },
       QUERY_TTL_MIN, refresh,
     )
-    return NextResponse.json({ segment, quarter, year, mode, detail })
+    return NextResponse.json({ segment, quarter, year, mode, detail }, { headers: ruHeaders(ctx, {}) })
   } catch (err: any) {
     console.error("[quarterly-customer-lifecycle]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

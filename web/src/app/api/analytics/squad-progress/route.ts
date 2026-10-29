@@ -12,6 +12,7 @@ import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterl
 import { fetchB2BLifecycleRows, classifyB2BLifecycle, fetchCustomerNames, type B2BLifecycleRow } from "@/lib/analytics-engine/b2b-lifecycle"
 
 import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { fetchB2BLifecycleRollup } from "@/lib/rollup/lifecycle"
 import { diffSquad, fetchSquadRollup, type SquadRaw } from "@/lib/rollup/squad"
 
 export const dynamic = "force-dynamic"
@@ -217,7 +218,7 @@ export async function GET(req: NextRequest) {
       }, () => fetchSquadRollup({ companyCode, excludedCustomers, months, qStart, qEnd, prevQStartDate, prevQEndDate }),
       diffSquad, { quarter, year, companyCode }), QUERY_TTL_MIN, noCache(req)),
       fetchCosts(months),
-      fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)).catch(() => [] as B2BLifecycleRow[]),
+      (ctx.useRollup ? fetchB2BLifecycleRollup(companyCode, excludedCustomers, exclHash(excludedCustomers), ctx.version) : fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers))).catch(() => [] as B2BLifecycleRow[]),
     ])
     const { custRows, picRows, prevCustRevRows } = raw
     const groupCosts = filterGroupCostsByCompany(allGroupCosts, companyCode)
