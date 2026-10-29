@@ -11,6 +11,9 @@ import {
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { rollupFirstDay } from "@/lib/rollup/b2bperf"
+import { diffB2bKpis, fetchB2bKpisRollup, prevRange, type KpiPair } from "@/lib/rollup/b2bkpis"
 import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
@@ -27,6 +30,7 @@ export async function GET(req: NextRequest) {
   const includeOpsCustomers = searchParams.get("includeOpsCustomers") === "1"
 
   const source     = getAnalyticsSource(dateColumn)
+  const ctx = await rollupCtx("b2b-kpis")
   const filter     = getDateFilter(startDate, endDate, source.dateCol)
   const prevFilter = getPrevDateFilter(startDate, endDate, comparisonType, source.dateCol)
 
@@ -34,9 +38,9 @@ export async function GET(req: NextRequest) {
     const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : await fetchQuarterlySettings()
     // excludeOpsByCode: dùng subquery (không cần JOIN dim_customer) — nhất quán với b2b/performance
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)} ${excludeInactiveCustomers()}`
-    const key = `b2b-kpis2:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const key = `b2b-kpis2${ruKey(ctx)}:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
-    const [main, custRevRows] = await Promise.all([
+    const rawBoth = (): Promise<KpiPair> => Promise.all([
       queryAnalytics<Record<string, string>>(
         `WITH current_period AS (
            SELECT SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.marginCol}) as margin, COUNT(DISTINCT f.order_code) as orders
@@ -65,6 +69,22 @@ export async function GET(req: NextRequest) {
          GROUP BY TRIM(f.customer_code), month`
       ),
     ])
+
+    // Rollup chỉ phục vụ khi cả kỳ này và kỳ trước nằm trong vùng đã dựng; còn lại đường thô.
+    const isDay = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v)
+    const basis = dateColumn === "created_date" ? "sal" : "ful"
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    let pair: KpiPair
+    if (ctx.mode !== "off" && isDay(startDate) && isDay(endDate)) {
+      const prev = prevRange(startDate, endDate, comparisonType)
+      const first = await rollupFirstDay(basis).catch(() => null)
+      const curEnd = endDate < yesterday ? endDate : yesterday
+      if (first && startDate >= first && prev.start >= first && startDate <= curEnd && prev.start <= prev.end) {
+        pair = await serve<KpiPair>(ctx, rawBoth, () => fetchB2bKpisRollup({ basis, curStart: startDate, curEnd, prevStart: prev.start, prevEnd: prev.end, includeShip, includeInternalOps, excludedCustomers }),
+          diffB2bKpis, { dateColumn, startDate, endDate, comparisonType, includeShip, includeInternalOps, includeOpsCustomers })
+      } else pair = await rawBoth()
+    } else pair = await rawBoth()
+    const [main, custRevRows] = pair
 
     const m = main[0] || {}
 
@@ -153,7 +173,7 @@ export async function GET(req: NextRequest) {
     ]
     }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    return NextResponse.json(payload, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/b2b/kpis]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

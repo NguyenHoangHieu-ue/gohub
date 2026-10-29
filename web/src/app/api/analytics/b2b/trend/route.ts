@@ -9,6 +9,9 @@ import {
 } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { rollupFirstDay } from "@/lib/rollup/b2bperf"
+import { diffTrend, fetchTrendRollup, type TrendGranularity, type TrendTriple } from "@/lib/rollup/b2btrend"
 import { calcChCostForPeriod } from "@/lib/analytics-engine/cost-engine"
 
 export async function GET(req: NextRequest) {
@@ -27,6 +30,7 @@ export async function GET(req: NextRequest) {
   if (!startDate || !endDate) return NextResponse.json({ error: "startDate and endDate are required" }, { status: 400 })
 
   const source = getAnalyticsSource(dateColumn)
+  const ctx = await rollupCtx("b2b-trend")
   const filter = getDateFilter(startDate, endDate, source.dateCol)
 
   let groupBySQL = `TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM-DD')`
@@ -39,9 +43,10 @@ export async function GET(req: NextRequest) {
     // group_name/date → chart lệch khỏi KPI card/Quarter Report khi có phí ship/đơn nội bộ/KH ops/KH INACTIVE).
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)} ${excludeInactiveCustomers()}`
     const exclHash = excludedCustomers.length ? excludedCustomers.slice().sort().join(",") : ""
-    const key = `b2b-trend2:${dateColumn}:${startDate}:${endDate}:${granularity}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash}`
+    const key = `b2b-trend2${ruKey(ctx)}:${dateColumn}:${startDate}:${endDate}:${granularity}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash}`
     const payload = await cachedQuery(key, async () => {
-    const [result, groupGrouped, custGrouped] = await Promise.all([
+    const rawAll = async (): Promise<TrendTriple> => {
+      const [result, groupGrouped, custGrouped] = await Promise.all([
       queryAnalytics<Record<string, any>>(
         `SELECT ${groupBySQL} as name,
                 SUM(f.${source.revenueCol}) as revenue,
@@ -74,6 +79,20 @@ export async function GET(req: NextRequest) {
          GROUP BY 1, 2, 4`
       ),
     ])
+      return { result, groupGrouped, custGrouped }
+    }
+
+    // Rollup chỉ phục vụ khi khoảng ngày nằm trong vùng đã dựng; còn lại đường thô.
+    const isDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v)
+    const basis = dateColumn === "created_date" ? "sal" : "ful"
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const ruEnd = endDate < yesterday ? endDate : yesterday
+    const first = ctx.mode !== "off" && isDay(startDate) && isDay(endDate) ? await rollupFirstDay(basis).catch(() => null) : null
+    const gran: TrendGranularity = granularity === "week" ? "week" : granularity === "month" ? "month" : "day"
+    const { result, groupGrouped, custGrouped } = first && startDate >= first && startDate <= ruEnd
+      ? await serve<TrendTriple>(ctx, rawAll, () => fetchTrendRollup({ basis, start: startDate, end: ruEnd, granularity: gran, includeShip, includeInternalOps, excludedCustomers }),
+          diffTrend, { dateColumn, startDate, endDate, granularity, includeShip, includeInternalOps, includeOpsCustomers })
+      : await rawAll()
 
     const allMonths = Array.from(new Set(result.flatMap(r => (r.months as string[]) || [])))
     const groupCosts = await getGroupCostsForMonths(allMonths) as Array<{ group_name: string; month: string; amount: string }>
@@ -113,7 +132,7 @@ export async function GET(req: NextRequest) {
     return trend
     }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    return NextResponse.json(payload, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/b2b/trend]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
