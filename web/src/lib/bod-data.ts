@@ -4,6 +4,9 @@ import { fetchQuarterlySettings, makeExcludeSqlByCode } from "@/lib/quarterly-se
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
+import { rollupCtx, serve } from "@/lib/rollup/serve"
+import { rollupFirstDay, type PerfRow } from "@/lib/rollup/b2bperf"
+import { diffBodMulti, fetchBodMultiRollup, type BodMultiFact } from "@/lib/rollup/bod"
 import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
 
 // Port y hệt gohub-intel server.ts fetchBODGroupMarginData + fetchBODChannelPerformanceData.
@@ -220,7 +223,7 @@ export async function fetchBODGroupMarginMulti(
   const monthsOf = periods.map(p => monthsBetween(p.startDate, p.endDate))
   const unionMonths = [...new Set(monthsOf.flat())]
 
-  const rowsP = queryAnalytics<Record<string, string>>(
+  const rowsQ = () => queryAnalytics<Record<string, string>>(
     `WITH filtered_f AS (
        SELECT sku, order_source_code, customer_code, order_code, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol},
               ${periodCase} AS period
@@ -238,7 +241,7 @@ export async function fetchBODGroupMarginMulti(
   // B2B per-customer cost (Turso b2b_customer_cost_monthly) — B2B KHÔNG dùng analytics_channel_costs
   // (tránh double-count, khớp Quarter Report/b2b-kpis/b2b-performance). Cần revenue theo KH×tháng, CÙNG
   // phân loại Strategic/Non-Strategic (groupCaseSQL) để cộng đúng nhóm.
-  const custRevP = queryAnalytics<Record<string, string>>(
+  const custRevQ = () => queryAnalytics<Record<string, string>>(
     `WITH filtered_f AS (
        SELECT sku, order_source_code, customer_code, order_code, ${source.dateCol}, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol},
               ${periodCase} AS period
@@ -253,8 +256,19 @@ export async function fetchBODGroupMarginMulti(
      WHERE ${groupCaseSQL} IN ('B2B-Strategic', 'B2B-Non-Strategic')
      GROUP BY 1, 2, 3, 4`
   )
-  const [rows, { channelCosts, groupCosts }, custRevRows, customerCostMap] =
-    await Promise.all([rowsP, fetchCosts(unionMonths), custRevP, fetchCustomerCosts(unionMonths)])
+  // Rollup chỉ phục vụ khi không có bộ lọc nâng cao và mọi kỳ nằm trong vùng đã dựng; còn lại đường thô.
+  const ctx = await rollupCtx("bod-group-margin")
+  const basis = dateColumn === "created_date" ? "sal" : "ful"
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const ruPeriods = periods.map(p => ({ start: p.startDate, end: p.endDate < yesterday ? p.endDate : yesterday }))
+  const first = ctx.mode !== "off" && !extraFilters ? await rollupFirstDay(basis).catch(() => null) : null
+  const rawFact = async (): Promise<BodMultiFact> => { const [rows, custRevRows] = await Promise.all([rowsQ(), custRevQ()]); return { rows, custRevRows } as BodMultiFact }
+  const factP: Promise<BodMultiFact> = first && ruPeriods.every(p => p.start >= first && p.start <= p.end)
+    ? serve<BodMultiFact>(ctx, rawFact, () => fetchBodMultiRollup({ basis, periods: ruPeriods, groupCaseSql: groupCaseSQL, includeShip, includeInternalOps, excludedCustomers }),
+        diffBodMulti, { periods: periods.map(p => `${p.startDate}..${p.endDate}`), dateColumn, includeShip, includeInternalOps })
+    : rawFact()
+  const [{ rows, custRevRows }, { channelCosts, groupCosts }, customerCostMap] =
+    await Promise.all([factP, fetchCosts(unionMonths), fetchCustomerCosts(unionMonths)])
 
   return periods.map((p, i) => {
     const monthSet = new Set(monthsOf[i])

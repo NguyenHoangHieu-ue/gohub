@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getAnalyticsSource, getDateFilter, getTargetSummary, getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache, getStrategicSettingsHash, shipFilter, internalOpsFilterByCode, excludeInactiveCustomers } from "@/lib/analytics-helpers"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { rollupFirstDay, type PerfRow } from "@/lib/rollup/b2bperf"
+import { diffBodAgg, fetchBodAggRollup } from "@/lib/rollup/bod"
 import { fetchBODGroupMarginMulti, fetchBODGroupMarginTripleShared, bodTriplePeriods } from "@/lib/bod-data"
 import { fetchQuarterlySettings, makeExcludeSqlByCode, exclHash } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
@@ -38,15 +41,23 @@ export async function GET(req: NextRequest) {
     // Cùng bộ lọc chuẩn với fetchBODGroupMarginMulti, nếu không COGS/units/3HK lệch Revenue/Margin (QA B-01).
     const { excludedCustomers } = await fetchQuarterlySettings()
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()} ${makeExcludeSqlByCode(excludedCustomers)}`
+    const ctx = await rollupCtx("bod-group-margin")
+    const basis = dateColumn === "created_date" ? "sal" : "ful"
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const ruPeriods = periods.map(p => ({ start: p.startDate, end: p.endDate < yesterday ? p.endDate : yesterday }))
     const fetchAggregates = async () => {
       const cols = [
         `SUM(f.${source.cogsCol}) FILTER (WHERE (${conds[0]})) as total_cogs`,
         `SUM(f.${source.quantityCol}) FILTER (WHERE (${conds[0]})) as total_units`,
         ...conds.map((c, i) => `SUM(CASE WHEN ${hk3In} THEN f.${source.revenueCol} ELSE 0 END) FILTER (WHERE (${c})) as hk3_${i}`),
       ].join(", ")
-      const rows = await queryAnalytics<Record<string, string>>(
+      const rawAgg = () => queryAnalytics<PerfRow>(
         `SELECT ${cols} FROM ${source.mainTable} f WHERE (${conds.map(c => `(${c})`).join(" OR ")}) ${extraFilters} ${sfx}`
       )
+      const first = ctx.mode !== "off" && !extraFilters ? await rollupFirstDay(basis).catch(() => null) : null
+      const rows = first && ruPeriods.every(p => p.start >= first && p.start <= p.end)
+        ? await serve<PerfRow[]>(ctx, rawAgg, () => fetchBodAggRollup({ basis, periods: ruPeriods, includeShip, includeInternalOps, excludedCustomers }), diffBodAgg, { q: "agg", startDate, endDate, dateColumn, includeShip, includeInternalOps })
+        : await rawAgg()
       const r = rows[0] ?? {}
       return {
         total_cogs: parseFloat(r.total_cogs || "0"), total_units: parseFloat(r.total_units || "0"),
@@ -57,7 +68,7 @@ export async function GET(req: NextRequest) {
     // Cache 12h (data gohub_dw đổi 1 lần/ngày). Trước: ~20 query, nhiều cái await TUẦN TỰ → 25-50s.
     // Nay gom HẾT query độc lập vào 1 Promise.all (giảm critical path) + cache toàn bộ payload.
     const stratHash = await getStrategicSettingsHash()
-    const key = `bod-summary5${lite ? "L" : ""}:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const key = `bod-summary5${ruKey(ctx)}${lite ? "L" : ""}:${dateColumn}:${startDate}:${endDate}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
       const [[groupResult, prev, prevYear], agg, targetData] = await Promise.all([
         lite
@@ -86,7 +97,7 @@ export async function GET(req: NextRequest) {
       }
     }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    return NextResponse.json(payload, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/bod-summary]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
