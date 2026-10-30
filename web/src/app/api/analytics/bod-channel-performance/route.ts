@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
+import { rollupCtx, ruHeaders, ruKey } from "@/lib/rollup/serve"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { fetchBODChannelPerformanceData } from "@/lib/bod-data"
 
@@ -24,8 +25,9 @@ export async function GET(req: NextRequest) {
   }
 
   const { excludedCustomers } = await fetchQuarterlySettings()
+  const ctx = await rollupCtx("bod-channel-performance")
   try {
-    const key = `bod-channel-perf4:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const key = `bod-channel-perf4${ruKey(ctx)}:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
       const current = await fetchBODChannelPerformanceData(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps)
       if (comparisonType === "none") return current
@@ -48,7 +50,7 @@ export async function GET(req: NextRequest) {
       })
     }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    return NextResponse.json(payload, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/bod-channel-performance]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
