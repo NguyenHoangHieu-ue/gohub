@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { rollupFirstDay, type PerfRow } from "@/lib/rollup/b2bperf"
+import { prevRange } from "@/lib/rollup/b2bkpis"
+import * as ch from "@/lib/rollup/channels"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 import { getAnalyticsSource, getBODFilters, getDateFilter, getPrevDateFilter, shipFilter, internalOpsFilter, excludeInactiveCustomers, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
 import { fetchCosts, monthsBetween } from "@/lib/bod-data"
@@ -33,9 +37,21 @@ export async function GET(req: NextRequest) {
   const sfx = `${shipFilter(false)} ${internalOpsFilter(false)} ${excludeInactiveCustomers()} ${makeExcludeSql(excludedCustomers)}`
 
   try {
-    const key = `ch-perf6:${dateColumn}:${startDate}:${endDate}:${channelGroup}:${extraFilters}:${exclHash(excludedCustomers)}`
+    const ctx = await rollupCtx("channels-performance")
+    const basis = dateColumn === "created_date" ? "sal" : "ful"
+    const isDay = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v)
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    let parts: (() => Promise<ch.ChPerfParts>) | null = null
+    if (ctx.mode !== "off" && !extraFilters && isDay(startDate) && isDay(endDate)) {
+      const prev = prevRange(startDate, endDate, "none"), first = await rollupFirstDay(basis).catch(() => null), end = endDate < yesterday ? endDate : yesterday
+      if (first && startDate >= first && prev.start >= first && startDate <= end && prev.start <= prev.end) {
+        parts = () => ch.fetchChPerfRollup({ basis, start: startDate, end, prevStart: prev.start, prevEnd: prev.end, excludedCustomers, channelGroup })
+      }
+    }
+    const qa = ch.viaRollup(ctx, parts, ch.chPerfDiffs, sql => queryAnalytics<PerfRow>(sql), { startDate, endDate, dateColumn, channelGroup })
+    const key = `ch-perf6${ruKey(ctx)}:${dateColumn}:${startDate}:${endDate}:${channelGroup}:${extraFilters}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
-    const rows = await queryAnalytics<Record<string, string>>(
+    const rows = await qa("rows")(
       `WITH cur AS (
          SELECT TRIM(s.channel_name) as channel,
                 UPPER(s.group_name) as group_name,
@@ -82,7 +98,7 @@ export async function GET(req: NextRequest) {
     let b2bCostByChannel = new Map<string, number>()
     if (groupRevTotals["B2B"] > 0) {
       const [custRevRows, customerCostMap] = await Promise.all([
-        queryAnalytics<{ customer_code: string; month: string; channel: string; revenue: string }>(`
+        qa("custRev")(`
           SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
                  TRIM(s.channel_name) as channel, SUM(f.${source.revenueCol}) as revenue
           FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
@@ -142,7 +158,7 @@ export async function GET(req: NextRequest) {
     })
     }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    return NextResponse.json(payload, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/channels/performance]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

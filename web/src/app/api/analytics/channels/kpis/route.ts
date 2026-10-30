@@ -7,6 +7,10 @@ import {
   getMonthsInRange, getChannelCostsForMonths, getGroupCostsForMonths,
   CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache,
 } from "@/lib/analytics-helpers"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { rollupFirstDay, type PerfRow } from "@/lib/rollup/b2bperf"
+import { prevRange } from "@/lib/rollup/b2bkpis"
+import * as ch from "@/lib/rollup/channels"
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
 import { COST_KEYS, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
@@ -45,10 +49,22 @@ export async function GET(req: NextRequest) {
       : "TRUE"
 
   try {
-    const key = `ch-kpis8:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const ctx = await rollupCtx("channels-kpis")
+    const basis = dateColumn === "created_date" ? "sal" : "ful"
+    const isDay = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v)
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    let parts: (() => Promise<ch.ChKpiParts>) | null = null
+    if (ctx.mode !== "off" && isDay(startDate) && isDay(endDate)) {
+      const prev = prevRange(startDate, endDate, "none"), first = await rollupFirstDay(basis).catch(() => null), end = endDate < yesterday ? endDate : yesterday
+      if (first && startDate >= first && prev.start >= first && startDate <= end && prev.start <= prev.end) {
+        parts = () => ch.fetchChKpisRollup({ basis, start: startDate, end, prevStart: prev.start, prevEnd: prev.end, excludedCustomers, includeShip, includeInternalOps, channelName, channelGroup })
+      }
+    }
+    const qa = ch.viaRollup(ctx, parts, ch.chKpiDiffs, sql => queryAnalytics<PerfRow>(sql), { startDate, endDate, dateColumn, channelName, channelGroup, includeShip, includeInternalOps })
+    const key = `ch-kpis8${ruKey(ctx)}:${dateColumn}:${startDate}:${endDate}:${channelName}:${channelGroup}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
     const [cur, prv] = await Promise.all([
-      queryAnalytics<Record<string, string>>(
+      qa("cur")(
         `SELECT SUM(f.${source.revenueCol}) as revenue,
                 SUM(f.${source.marginCol})  as margin,
                 COUNT(DISTINCT f.order_code) as orders,
@@ -59,7 +75,7 @@ export async function GET(req: NextRequest) {
          LEFT JOIN dim_order_source s ON f.order_source_code = s.code
          WHERE ${filter} ${chFilter} ${sfx}`
       ),
-      queryAnalytics<Record<string, string>>(
+      qa("prv")(
         `SELECT SUM(f.${source.revenueCol}) as revenue,
                 SUM(f.${source.marginCol})  as margin,
                 COUNT(DISTINCT f.order_code) as orders
@@ -97,7 +113,7 @@ export async function GET(req: NextRequest) {
         getChannelCostsForMonths(months),
         getGroupCostsForMonths(months),
         cB2BRev !== 0
-          ? queryAnalytics<{ customer_code: string; month: string; sub: string; in_scope: string; revenue: string }>(
+          ? qa("custRev")(
               // KHÔNG lọc theo chFilter — Turso cost gắn với KHÁCH HÀNG (1 khách có thể mua qua nhiều kênh). Lấy doanh thu
               // B2B TOÀN CÔNG TY của khách theo sub-channel + cờ in_scope: chi phí tính trên tổng doanh thu khách rồi
               // chỉ phần doanh thu trong scope nhận chi phí (s232) — khách chưa nhập chi phí không gánh phần của khách khác.
@@ -112,7 +128,7 @@ export async function GET(req: NextRequest) {
           : Promise.resolve([] as { customer_code: string; month: string; sub: string; in_scope: string; revenue: string }[]),
         cB2BRev !== 0 ? fetchCustomerCosts(months) : Promise.resolve(new Map<string, import("@/lib/b2b-customer-cost").CostRecord>()),
         // Doanh thu B2B/B2C TOÀN CÔNG TY cùng kỳ (không lọc channel) — mẫu số revenue-share phân bổ group cost.
-        queryAnalytics<{ grp: string; rev: string }>(
+        qa("groupRev")(
           `SELECT UPPER(COALESCE(s.group_name,'OTHER')) as grp, SUM(f.${source.revenueCol}) as rev
            FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
            WHERE ${filter} ${sfx} GROUP BY 1`
@@ -136,7 +152,7 @@ export async function GET(req: NextRequest) {
       // cùng cách channels/performance (bảng cùng trang). B2B dùng Turso ở trên nên bỏ qua để khỏi double-count.
       // Trước: cộng chi phí MỌI kênh (kể cả kênh B2B) khi scope có doanh thu B2C + percent nhân doanh thu cả scope →
       // kỳ có tháng 7 (platformFee kênh B2B 2,46 tỷ) thẻ CM1 âm trong khi bảng dương (đo Q3: -1,32 tỷ vs 5,66 tỷ).
-      const nonB2BChannels = await queryAnalytics<{ channel: string; revenue: string }>(
+      const nonB2BChannels = await qa("nonB2b")(
         `SELECT TRIM(s.channel_name) as channel, SUM(f.${source.revenueCol}) as revenue
          FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
          WHERE ${filter} ${chFilter} ${sfx} AND UPPER(COALESCE(s.group_name,'')) NOT LIKE 'B2B%'
@@ -202,7 +218,7 @@ export async function GET(req: NextRequest) {
     }
     }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    return NextResponse.json(payload, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/channels/kpis]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
