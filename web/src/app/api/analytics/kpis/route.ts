@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import type { PerfRow } from "@/lib/rollup/b2bperf"
+import * as dash from "@/lib/rollup/dash"
 import { getAnalyticsSource, getDateFilter, getPrevDateFilter, cachedQuery, CACHE_HEADERS, analyticsGuard } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
@@ -17,11 +20,13 @@ export async function GET(req: NextRequest) {
   const source     = getAnalyticsSource(dateColumn)
   const filter     = getDateFilter(startDate, endDate, source.dateCol, "30 days", companyCode)
   const prevFilter = getPrevDateFilter(startDate, endDate, "none", source.dateCol, "30 days", companyCode)
-  const cacheKey   = `kpis:${startDate}:${endDate}:${dateColumn}:${companyCode}`
+  const ctx = await rollupCtx("dashboard-kpis")
+  const basis = dateColumn === "created_date" ? "sal" : "ful"
+  const cacheKey   = `kpis${ruKey(ctx)}:${startDate}:${endDate}:${dateColumn}:${companyCode}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
-      const [curRows, prvRows] = await Promise.all([
+      const rawBoth = (): Promise<dash.KpiPair> => Promise.all([
         queryAnalytics<{ revenue: string; orders: string; units: string }>(
           `SELECT SUM(${source.revenueCol}) as revenue,
                   COUNT(DISTINCT order_code) as orders,
@@ -35,6 +40,10 @@ export async function GET(req: NextRequest) {
            FROM ${source.mainTable} f WHERE ${prevFilter}`
         ),
       ])
+      const rg = await dash.dashRange(ctx, basis, startDate, endDate, true)
+      const [curRows, prvRows] = rg
+        ? await serve<dash.KpiPair>(ctx, rawBoth, () => dash.fetchDashKpisRollup(basis, rg, companyCode), dash.diffDashKpis, { startDate, endDate, dateColumn, companyCode })
+        : await rawBoth()
 
       const cur = curRows[0]; const prv = prvRows[0]
       const cRev = parseFloat(cur?.revenue || "0"); const pRev = parseFloat(prv?.revenue || "0")
@@ -51,7 +60,7 @@ export async function GET(req: NextRequest) {
       ]
     })
 
-    return NextResponse.json(data, { headers: CACHE_HEADERS })
+    return NextResponse.json(data, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/kpis]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
