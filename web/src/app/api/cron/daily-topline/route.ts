@@ -1,14 +1,40 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { sendLarkCardToChat } from "@/lib/lark"
+import { sendLarkCardToChat, getLarkToken } from "@/lib/lark"
 import { buildDailyTopline, buildDailyToplineCard, getToplineAssessmentCached } from "@/lib/scheduled-report-data"
 
 // Bản mẫu card Daily Toplines (chưa nối vào lịch tự động). Bearer CRON_SECRET.
 //   GET ?                      → trả JSON số liệu + card, KHÔNG gửi
-//   GET ?send=1&chat=<chat_id>  → gửi card bằng bot vào group đó
+//   GET ?send=1&chat=<chat_id>  → gửi card bằng bot vào group đó (thêm &recall=1 để thu hồi các card Daily cũ của bot trong group trước khi gửi)
 //   GET ?send=1&to=<tên lịch>  → gửi card vào webhook của scheduled message có tên đó (vd "Test Daily")
 export const dynamic = "force-dynamic"
 export const maxDuration = 120
+
+const LARK_API = "https://open.larksuite.com/open-apis"
+
+// Thu hồi (xoá) các card Daily Revenue do CHÍNH bot đã gửi trong 1 group — bot chỉ xoá được tin của mình; lọc theo tiêu đề card để không đụng tin khác.
+async function recallDailyCards(chatId: string): Promise<{ found: number; deleted: number; failed: number }> {
+  const token = await getLarkToken()
+  const h = { Authorization: "Bearer " + token }
+  let pageToken = "", found = 0, deleted = 0, failed = 0
+  for (let page = 0; page < 10; page++) {
+    const url = LARK_API + "/im/v1/messages?container_id_type=chat&container_id=" + encodeURIComponent(chatId) + "&page_size=50&sort_type=ByCreateTimeDesc" + (pageToken ? "&page_token=" + pageToken : "")
+    const res = await fetch(url, { headers: h })
+    const j = await res.json() as { code?: number; msg?: string; data?: { items?: any[]; has_more?: boolean; page_token?: string } }
+    if (j.code) throw new Error("Lark list lỗi " + j.code + ": " + j.msg)
+    for (const m of j.data?.items ?? []) {
+      if (m.sender?.sender_type !== "app" || m.msg_type !== "interactive" || m.deleted) continue
+      if (!JSON.stringify(m.body?.content ?? "").includes("Daily Revenue")) continue
+      found++
+      const d = await fetch(LARK_API + "/im/v1/messages/" + m.message_id, { method: "DELETE", headers: h })
+      const dj = await d.json().catch(() => null) as { code?: number } | null
+      if (d.ok && !dj?.code) deleted++; else failed++
+    }
+    if (!j.data?.has_more) break
+    pageToken = j.data.page_token ?? ""
+  }
+  return { found, deleted, failed }
+}
 
 const DASHBOARD_URL = "https://intel-v2.gohub.cloud/analytics"
 
@@ -25,8 +51,9 @@ export async function GET(req: NextRequest) {
     let webhook: string | undefined
     const chat = q.get("chat")
     if (q.get("send") === "1" && chat) {
+      const recall = q.get("recall") === "1" ? await recallDailyCards(chat) : undefined   // thu hồi card cũ TRƯỚC khi gửi card mới
       await sendLarkCardToChat(chat, buildDailyToplineCard(topline, DASHBOARD_URL, { assessment }))
-      return NextResponse.json({ sent: true, chat, topline })
+      return NextResponse.json({ sent: true, chat, recall, topline })
     }
     if (q.get("send") === "1") {
       const { data } = await supabaseAdmin.from("lark_scheduled_messages")

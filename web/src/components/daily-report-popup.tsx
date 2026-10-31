@@ -105,7 +105,7 @@ export function DailyReportPopup() {
               {t && d && (
                 <>
                   <section>
-                    <h3 className="font-bold text-slate-800 mb-2">Doanh thu hôm qua</h3>
+                    <h3 className="font-bold text-slate-800 mb-2">I. Doanh thu hôm qua</h3>
                     <table className="w-full text-left">
                       <thead><tr className="text-xs text-slate-500 border-b border-slate-100">
                         <th className="py-1.5 font-medium">Thị trường</th><th className="font-medium text-right">Hôm qua ({t.dayShort})</th>
@@ -126,7 +126,7 @@ export function DailyReportPopup() {
                   </section>
 
                   <section>
-                    <h3 className="font-bold text-slate-800 mb-2">Tiến độ target tháng {t.monthStr.slice(5)} <span className="text-xs font-normal text-slate-500">(đã qua {t.daysElapsed}/{t.daysInMonth} ngày)</span></h3>
+                    <h3 className="font-bold text-slate-800 mb-2">II. Tiến độ target tháng {t.monthStr.slice(5)} <span className="text-xs font-normal text-slate-500">(đã qua {t.daysElapsed}/{t.daysInMonth} ngày)</span></h3>
                     <table className="w-full text-left">
                       <thead><tr className="text-xs text-slate-500 border-b border-slate-100">
                         <th className="py-1.5 font-medium">Nhóm</th><th className="font-medium text-right">Doanh thu tháng</th><th className="font-medium text-right">Pro-rata</th>
@@ -149,7 +149,8 @@ export function DailyReportPopup() {
 
                   {t.breakdown.tiers.length > 0 && (
                     <section>
-                      <h3 className="font-bold text-slate-800 mb-2">B2B theo Tier</h3>
+                      <h3 className="font-bold text-slate-800 mb-2">III. B2B</h3>
+                      <h4 className="font-semibold text-slate-700 mb-1 text-[13px]">Theo Tier</h4>
                       <MvTable first="Tier" t={t} rows={t.breakdown.tiers} />
                       {t.breakdown.b2bTop.length > 0 && (
                         <>
@@ -162,14 +163,14 @@ export function DailyReportPopup() {
                   )}
                   {t.breakdown.b2cChannels.length > 0 && (
                     <section>
-                      <h3 className="font-bold text-slate-800 mb-2">B2C theo kênh</h3>
+                      <h3 className="font-bold text-slate-800 mb-2">IV. B2C <span className="text-xs font-normal text-slate-500">(top 5 kênh)</span></h3>
                       <MvTable first="Kênh" t={t} rows={t.breakdown.b2cChannels} />
                       <Highlights top={[]} up={t.breakdown.b2cUp} down={t.breakdown.b2cDown} topLabel="" />
                     </section>
                   )}
 
                   <section>
-                    <h3 className="font-bold text-slate-800 mb-2">Hiệu quả (lũy kế tháng)</h3>
+                    <h3 className="font-bold text-slate-800 mb-2">V. Hiệu quả <span className="text-xs font-normal text-slate-500">(lũy kế tháng)</span></h3>
                     <ul className="space-y-1 text-slate-700">
                       <li>GP tháng: <b>{short(t.mtdGp)}</b> ({pct(ratio(t.mtdGp, t.mtdTotal))} doanh thu)</li>
                       <li>CM1%: {t.cm1.map(c => <span key={c.name} className="mr-3">{c.name} <b>{pct(c.cm1Pct)}</b>{c.target != null ? <span className="text-slate-500"> (target {pct(c.target)})</span> : null}</span>)}</li>
@@ -179,21 +180,21 @@ export function DailyReportPopup() {
 
                   {data?.assessment && (
                     <section className="rounded-xl bg-blue-50 border border-blue-100 p-4">
-                      <h3 className="font-bold text-blue-900 mb-1 flex items-center gap-1.5"><Sparkles className="w-4 h-4" />AI đánh giá</h3>
+                      <h3 className="font-bold text-blue-900 mb-1 flex items-center gap-1.5"><Sparkles className="w-4 h-4" />VI. Đánh giá chung</h3>
                       <p className="text-slate-700 leading-relaxed">{data.assessment}</p>
                     </section>
                   )}
 
                   <section>
-                    <h3 className="font-bold text-slate-800 mb-2">Xu hướng 3 ngày</h3>
+                    <h3 className="font-bold text-slate-800 mb-2">VII. Xu hướng 3 ngày</h3>
                     <MiniTable days={d.days} rows={d.trend} />
                   </section>
                   <section>
-                    <h3 className="font-bold text-slate-800 mb-2">Top 10 khách B2B</h3>
+                    <h3 className="font-bold text-slate-800 mb-2">VIII. Top 10 khách B2B (3 ngày)</h3>
                     <MiniTable days={d.days} rows={d.topB2b} />
                   </section>
                   <section>
-                    <h3 className="font-bold text-slate-800 mb-2">Kênh B2C</h3>
+                    <h3 className="font-bold text-slate-800 mb-2">IX. Kênh B2C (3 ngày)</h3>
                     <MiniTable days={d.days} rows={d.topB2c} />
                   </section>
                 </>

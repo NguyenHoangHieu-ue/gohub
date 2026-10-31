@@ -739,7 +739,7 @@ export const fmtShort = (n: number) => {
 }
 const NO_TGT_SHORT = "Chưa nhập target"
 
-// "AI đánh giá": 2-3 câu nhận xét chỉ dựa trên số của card. Lỗi/timeout → trả null (card vẫn gửi, bỏ mục này).
+// "Đánh giá chung": 2-3 câu nhận xét chỉ dựa trên số của card. Lỗi/timeout → trả null (card vẫn gửi, bỏ mục này).
 export async function buildToplineAssessment(t: DailyTopline): Promise<string | null> {
   try {
     const { genai } = await import("@/lib/agents/genai-stream")
@@ -775,84 +775,97 @@ export async function buildToplineAssessment(t: DailyTopline): Promise<string | 
     const txt = (res.text ?? "").replace(/\s+/g, " ").trim()
     return txt || null
   } catch (e) {
-    console.error("[daily-topline] AI đánh giá lỗi:", (e as Error).message)
+    console.error("[daily-topline] đánh giá chung lỗi:", (e as Error).message)
     return null
   }
 }
 
-// Dựng đúng 1 Lark card (schema 2.0) từ DailyTopline.
+// Dựng đúng 1 Lark card (schema 2.0) từ DailyTopline. Mục đánh số La Mã; bảng có header xám + số căn phải + % tô màu.
 export function buildDailyToplineCard(t: DailyTopline, dashboardUrl: string, opts?: { keyword?: string; assessment?: string | null }): any {
-  const cmp = (c: number, p: number) => (p > 0 ? `${c >= p ? "▲" : "▼"} ${pct(Math.abs(((c - p) / p) * 100))}` : "—")
-  const row = (n: string, c: number, p: number) => ({ c0: n, c1: fmtShort(c), c2: fmtShort(p), c3: cmp(c, p) })
-  const revTable = {
-    tag: "table", page_size: 3,
-    columns: [
-      { name: "c0", display_name: "Thị trường", width: "auto" },
-      { name: "c1", display_name: `Hôm qua (${t.dayShort})`, width: "auto" },
-      { name: "c2", display_name: `Hôm trước (${t.prevDayShort})`, width: "auto" },
-      { name: "c3", display_name: "% so sánh", width: "auto" },
-    ],
-    rows: [row("VN", t.day.vn, t.prevDay.vn), row("US", t.day.us, t.prevDay.us), row("Tổng", t.day.total, t.prevDay.total)],
+  const GREEN = "green", RED = "red", ORANGE = "orange"
+  const font = (color: string, txt: string) => `<font color='${color}'>${txt}</font>`
+  const cmp = (c: number, p: number) => {
+    if (!(p > 0)) return "—"
+    const d = ((c - p) / p) * 100
+    return font(d >= 0 ? GREEN : RED, `${d >= 0 ? "▲" : "▼"} ${pct(Math.abs(d))}`)
   }
-  const tgtTable = {
-    tag: "table", page_size: 3,
-    columns: [
-      { name: "c0", display_name: "Nhóm", width: "auto" },
-      { name: "c1", display_name: "Doanh thu tháng", width: "auto" },
-      { name: "c2", display_name: "Pro-rata", width: "auto" },
-      { name: "c3", display_name: "Target tháng", width: "auto" },
-      { name: "c4", display_name: "% pro-rata/target", width: "auto" },
-    ],
-    rows: t.groups.map(x => x.target > 0
-      ? { c0: x.name, c1: fmtShort(x.mtd), c2: fmtShort(x.proRata), c3: fmtShort(x.target), c4: pct(ratio(x.proRata, x.target)) }
-      : { c0: x.name, c1: fmtShort(x.mtd), c2: fmtShort(x.proRata), c3: NO_TGT_SHORT, c4: "—" }),
-  }
-  const mvTable = (title: string, rows: Mv[]) => ({
-    tag: "table", page_size: Math.max(rows.length, 1),
-    columns: [
-      { name: "c0", display_name: title, width: "auto" },
-      { name: "c1", display_name: `Hôm qua (${t.dayShort})`, width: "auto" },
-      { name: "c2", display_name: `Hôm trước (${t.prevDayShort})`, width: "auto" },
-      { name: "c3", display_name: "% so sánh", width: "auto" },
-    ],
-    rows: rows.map(r => ({ c0: r.name, c1: fmtShort(r.cur), c2: fmtShort(r.prev), c3: cmp(r.cur, r.prev) })),
+  const progressTxt = (v: number) => font(v >= 100 ? GREEN : v >= 85 ? ORANGE : RED, pct(v))
+  const col = (name: string, display: string, kind: "text" | "num" | "md" = "num") => ({
+    name, display_name: display, width: "auto", horizontal_align: kind === "text" ? "left" : "right",
+    ...(kind === "md" ? { data_type: "markdown" } : {}),
   })
-  const hl = (up: Mv | null, down: Mv | null) => [
-    ...(up ? [`▲ Tăng mạnh: **${up.name}** ${fmtShort(up.cur)} (+${fmtShort(up.cur - up.prev)} so với hôm trước)`] : []),
-    ...(down ? [`▼ Giảm mạnh: **${down.name}** ${fmtShort(down.cur)} (-${fmtShort(down.prev - down.cur)} so với hôm trước)`] : []),
+  const table = (columns: any[], rows: any[]) => ({
+    tag: "table", page_size: Math.max(rows.length, 1), row_height: "low",
+    header_style: { text_align: "left", bold: true, background_style: "grey", lines: 1 },
+    columns, rows,
+  })
+  const sec = (num: string, title: string, sub?: string) => ({
+    tag: "markdown", content: `**${num}. ${title}**${sub ? `  ${font("grey", sub)}` : ""}`,
+  })
+  const sub = (txt: string) => ({ tag: "markdown", content: `**▸ ${txt}**` })
+  const hr = { tag: "hr" }
+  const dayCols = (first: string) => [
+    col("c0", first, "text"), col("c1", `Hôm qua (${t.dayShort})`), col("c2", `Hôm trước (${t.prevDayShort})`), col("c3", "% so sánh", "md"),
   ]
-  const bd = t.breakdown
-  const top10Table = {
-    tag: "table", page_size: Math.max(bd.b2bTop.length, 1),
-    columns: [
-      { name: "c0", display_name: "Khách", width: "auto" },
-      { name: "c1", display_name: "Tier", width: "auto" },
-      { name: "c2", display_name: `Hôm qua (${t.dayShort})`, width: "auto" },
-      { name: "c3", display_name: `Hôm trước (${t.prevDayShort})`, width: "auto" },
-      { name: "c4", display_name: "% so sánh", width: "auto" },
-    ],
-    rows: bd.b2bTop.map(r => ({ c0: r.name, c1: r.tier, c2: fmtShort(r.cur), c3: fmtShort(r.prev), c4: cmp(r.cur, r.prev) })),
-  }
-  const b2bHl = hl(bd.b2bUp, bd.b2bDown).join("\n")
-  const b2cHl = hl(bd.b2cUp, bd.b2cDown).join("\n")
-  const cm1Line = t.cm1.map(c => `${c.name} ${pct(c.cm1Pct)}${c.target != null ? ` (target ${pct(c.target)})` : ""}`).join(" · ")
-  const eff = [
-    `• GP tháng: ${fmtShort(t.mtdGp)} (${pct(ratio(t.mtdGp, t.mtdTotal))} doanh thu)`,
-    `• CM1%: ${cm1Line}`,
-    `• %3HK: ${pct(t.hk3Pct)}${t.hk3Target != null ? ` (target ${pct(t.hk3Target)})` : ""}`,
+  const mvRows = (rows: Mv[]) => rows.map(r => ({ c0: r.name, c1: fmtShort(r.cur), c2: fmtShort(r.prev), c3: cmp(r.cur, r.prev) }))
+  const hl = (up: Mv | null, down: Mv | null) => [
+    ...(up ? [`${font(GREEN, "▲ Tăng mạnh:")} **${up.name}** ${fmtShort(up.cur)} (+${fmtShort(up.cur - up.prev)} so với hôm trước)`] : []),
+    ...(down ? [`${font(RED, "▼ Giảm mạnh:")} **${down.name}** ${fmtShort(down.cur)} (-${fmtShort(down.prev - down.cur)} so với hôm trước)`] : []),
   ].join("\n")
+
+  const bd = t.breakdown
+  const revTable = table(dayCols("Thị trường"), [
+    { c0: "VN", c1: fmtShort(t.day.vn), c2: fmtShort(t.prevDay.vn), c3: cmp(t.day.vn, t.prevDay.vn) },
+    { c0: "US", c1: fmtShort(t.day.us), c2: fmtShort(t.prevDay.us), c3: cmp(t.day.us, t.prevDay.us) },
+    { c0: "**Tổng**", c1: `**${fmtShort(t.day.total)}**`, c2: fmtShort(t.prevDay.total), c3: cmp(t.day.total, t.prevDay.total) },
+  ])
+  const tgtTable = table(
+    [col("c0", "Nhóm", "text"), col("c1", "Doanh thu tháng"), col("c2", "Pro-rata"), col("c3", "Target tháng"), col("c4", "% pro-rata/target", "md")],
+    t.groups.map(x => ({
+      c0: x.name, c1: fmtShort(x.mtd), c2: fmtShort(x.proRata),
+      c3: x.target > 0 ? fmtShort(x.target) : NO_TGT_SHORT,
+      c4: x.target > 0 ? progressTxt(ratio(x.proRata, x.target)) : "—",
+    })),
+  )
+  const top10Table = table(
+    [col("c0", "Khách", "text"), col("c1", "Tier", "text"), col("c2", `Hôm qua (${t.dayShort})`), col("c3", `Hôm trước (${t.prevDayShort})`), col("c4", "% so sánh", "md")],
+    bd.b2bTop.map(r => ({ c0: r.name, c1: r.tier, c2: fmtShort(r.cur), c3: fmtShort(r.prev), c4: cmp(r.cur, r.prev) })),
+  )
+  const b2bHl = hl(bd.b2bUp, bd.b2bDown), b2cHl = hl(bd.b2cUp, bd.b2cDown)
+  const cm1Line = t.cm1.map(c => `${c.name} **${pct(c.cm1Pct)}**${c.target != null ? font("grey", ` (target ${pct(c.target)})`) : ""}`).join("  ·  ")
+  const eff = [
+    `• GP tháng: **${fmtShort(t.mtdGp)}** (${pct(ratio(t.mtdGp, t.mtdTotal))} doanh thu)`,
+    `• CM1%: ${cm1Line}`,
+    `• %3HK: **${pct(t.hk3Pct)}**${t.hk3Target != null ? font("grey", ` (target ${pct(t.hk3Target)})`) : ""}`,
+  ].join("\n")
+
+  let n = 0
+  const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
+  const next = () => ROMAN[n++]
   const els: any[] = [
-    { tag: "markdown", content: "**DOANH THU HÔM QUA**" }, revTable,
-    { tag: "markdown", content: `**TIẾN ĐỘ TARGET THÁNG ${t.monthStr.slice(5)}** (đã qua ${t.daysElapsed}/${t.daysInMonth} ngày)` }, tgtTable,
-    ...(bd.tiers.length ? [{ tag: "markdown", content: "**B2B THEO TIER**" }, mvTable("Tier", bd.tiers), ...(bd.b2bTop.length ? [{ tag: "markdown", content: "**TOP 10 KHÁCH B2B**" }, top10Table] : []), ...(b2bHl ? [{ tag: "markdown", content: b2bHl }] : [])] : []),
-    ...(bd.b2cChannels.length ? [{ tag: "markdown", content: "**B2C THEO KÊNH**" }, mvTable("Kênh", bd.b2cChannels), ...(b2cHl ? [{ tag: "markdown", content: b2cHl }] : [])] : []),
-    { tag: "markdown", content: `**HIỆU QUẢ (lũy kế tháng)**\n${eff}` },
-    ...(opts?.assessment ? [{ tag: "markdown", content: `**🤖 AI ĐÁNH GIÁ**\n${opts.assessment}` }] : []),
-    { tag: "markdown", content: `[Xem chi tiết trên Intel Dashboard](${dashboardUrl})` },
+    sec(next(), "DOANH THU HÔM QUA", `(${t.dayShort})`), revTable, hr,
+    sec(next(), `TIẾN ĐỘ TARGET THÁNG ${t.monthStr.slice(5)}`, `(đã qua ${t.daysElapsed}/${t.daysInMonth} ngày)`), tgtTable,
+    { tag: "markdown", content: font("grey", "Pro-rata = dự phóng cả tháng theo doanh thu lũy kế tới hôm qua.") }, hr,
+    ...(bd.tiers.length ? [
+      sec(next(), "B2B"), sub("Theo Tier"), table(dayCols("Tier"), mvRows(bd.tiers)),
+      ...(bd.b2bTop.length ? [sub("Top 10 khách"), top10Table] : []),
+      ...(b2bHl ? [{ tag: "markdown", content: b2bHl }] : []), hr,
+    ] : []),
+    ...(bd.b2cChannels.length ? [
+      sec(next(), "B2C", "(top 5 kênh)"), table(dayCols("Kênh"), mvRows(bd.b2cChannels)),
+      ...(b2cHl ? [{ tag: "markdown", content: b2cHl }] : []), hr,
+    ] : []),
+    sec(next(), "HIỆU QUẢ", "(lũy kế tháng)"), { tag: "markdown", content: eff },
+    ...(opts?.assessment ? [hr, sec(next(), "ĐÁNH GIÁ CHUNG"), { tag: "markdown", content: opts.assessment }] : []),
+    hr, { tag: "markdown", content: `[Xem chi tiết trên Intel Dashboard →](${dashboardUrl})` },
   ]
   return {
     schema: "2.0",
-    header: { title: { tag: "plain_text", content: `Daily Revenue · ${t.label}` }, template: "blue" },
+    header: {
+      title: { tag: "plain_text", content: `Daily Revenue · ${t.label}` },
+      subtitle: { tag: "plain_text", content: "Doanh thu đã giao · cập nhật hằng ngày" },
+      template: "blue",
+    },
     body: { elements: opts?.keyword ? [{ tag: "markdown", content: opts.keyword }, ...els] : els },
   }
 }
@@ -901,7 +914,7 @@ export async function getToplineAssessmentCached(t: DailyTopline): Promise<strin
   } catch { /* đọc cache lỗi → tính mới */ }
   const txt = await buildToplineAssessment(t)
   if (txt) {
-    try { await supabaseAdmin.from("app_settings").upsert({ key, value: txt, category: "scheduled", label: "AI đánh giá Daily Toplines" }, { onConflict: "key" }) } catch { /* bỏ qua */ }
+    try { await supabaseAdmin.from("app_settings").upsert({ key, value: txt, category: "scheduled", label: "Đánh giá chung Daily Toplines" }, { onConflict: "key" }) } catch { /* bỏ qua */ }
   }
   return txt
 }
