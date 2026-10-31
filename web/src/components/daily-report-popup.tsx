@@ -12,7 +12,10 @@ interface Topline {
   mtdTotal: number; mtdGp: number
   cm1: Array<{ name: string; cm1Pct: number; target: number | null }>
   hk3Pct: number; hk3Target: number | null
+  breakdown: Breakdown
 }
+interface Mv { name: string; cur: number; prev: number }
+interface Breakdown { tiers: Mv[]; b2bTop: Mv[]; b2bUp: Mv | null; b2bDown: Mv | null; b2cChannels: Mv[]; b2cUp: Mv | null; b2cDown: Mv | null }
 interface Detail {
   days: string[]
   trend: Array<{ name: string; values: number[] }>
@@ -144,6 +147,21 @@ export function DailyReportPopup() {
                     </table>
                   </section>
 
+                  {t.breakdown.tiers.length > 0 && (
+                    <section>
+                      <h3 className="font-bold text-slate-800 mb-2">B2B theo Tier</h3>
+                      <MvTable first="Tier" t={t} rows={t.breakdown.tiers} />
+                      <Highlights top={t.breakdown.b2bTop} up={t.breakdown.b2bUp} down={t.breakdown.b2bDown} topLabel="Top khách" />
+                    </section>
+                  )}
+                  {t.breakdown.b2cChannels.length > 0 && (
+                    <section>
+                      <h3 className="font-bold text-slate-800 mb-2">B2C theo kênh</h3>
+                      <MvTable first="Kênh" t={t} rows={t.breakdown.b2cChannels} />
+                      <Highlights top={[]} up={t.breakdown.b2cUp} down={t.breakdown.b2cDown} topLabel="" />
+                    </section>
+                  )}
+
                   <section>
                     <h3 className="font-bold text-slate-800 mb-2">Hiệu quả (lũy kế tháng)</h3>
                     <ul className="space-y-1 text-slate-700">
@@ -182,6 +200,39 @@ export function DailyReportPopup() {
         </div>
       )}
     </>
+  )
+}
+
+function MvTable({ first, t, rows }: { first: string; t: Topline; rows: Mv[] }) {
+  return (
+    <table className="w-full text-left">
+      <thead><tr className="text-xs text-slate-500 border-b border-slate-100">
+        <th className="py-1.5 font-medium">{first}</th><th className="font-medium text-right">Hôm qua ({t.dayShort})</th>
+        <th className="font-medium text-right">Hôm trước ({t.prevDayShort})</th><th className="font-medium text-right">% so sánh</th>
+      </tr></thead>
+      <tbody>
+        {rows.map(r => {
+          const x = cmp(r.cur, r.prev)
+          return (
+            <tr key={r.name} className="border-b border-slate-50">
+              <td className="py-1.5 pr-3 max-w-[14rem] truncate">{r.name}</td><td className="text-right tabular-nums">{short(r.cur)}</td>
+              <td className="text-right tabular-nums text-slate-500">{short(r.prev)}</td><td className={`text-right tabular-nums ${x.cls}`}>{x.text}</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
+function Highlights({ top, up, down, topLabel }: { top: Mv[]; up: Mv | null; down: Mv | null; topLabel: string }) {
+  if (!top.length && !up && !down) return null
+  return (
+    <ul className="mt-2 space-y-0.5 text-[13px] text-slate-700">
+      {top.length > 0 && <li>{topLabel}: {top.map(x => `${x.name} ${short(x.cur)}`).join(" · ")}</li>}
+      {up && <li><span className="text-emerald-600">▲ Tăng mạnh:</span> <b>{up.name}</b> {short(up.cur)} (+{short(up.cur - up.prev)} so với hôm trước)</li>}
+      {down && <li><span className="text-rose-600">▼ Giảm mạnh:</span> <b>{down.name}</b> {short(down.cur)} (-{short(down.prev - down.cur)} so với hôm trước)</li>}
+    </ul>
   )
 }
 
