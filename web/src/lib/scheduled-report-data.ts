@@ -648,3 +648,105 @@ export function inferPeriod(cron: string, name?: string): Period {
   if (n.includes("week") || n.includes("tuần")) return "weekly"
   return "daily"
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Daily Toplines: bộ chỉ tiêu gọn cho 1 card duy nhất (sếp chốt: notification chỉ Toplines, chi tiết xem Dashboard).
+// Số lấy từ cùng nguồn/định nghĩa với buildReportData (không qua Gemini).
+// ─────────────────────────────────────────────────────────────────────────────
+export interface DailyTopline {
+  label: string; monthStr: string; daysElapsed: number; daysInMonth: number
+  day: Triple; prevDay: Triple
+  groups: Array<{ name: string; mtd: number; proRata: number; target: number }>
+  mtdTotal: number; mtdGp: number; cm1: Array<{ name: string; cm1Pct: number; target: number | null }>
+  hk3Pct: number; hk3Target: number | null
+}
+
+export async function buildDailyTopline(): Promise<DailyTopline> {
+  const r = computeRanges("daily")
+  const [targetRows, dayRows, prevRows, mtdRows, mtd3hkRows, bod] = await Promise.all([
+    getTargetRows(r.monthStr),
+    revByMarketGroup(r.curStart, r.curEnd),
+    revByMarketGroup(r.prevStart, r.prevEnd),
+    revByMarketGroup(r.mtdStart, r.mtdEnd),
+    rev3hkByMarket(r.mtdStart, r.mtdEnd),
+    fetchBODGroupMarginData(r.mtdStart, r.mtdEnd),
+  ])
+  const sum = (rows: Array<{ cc: string; revenue: string }>) => { const t = zero(); for (const x of rows) add(t, x.cc, parseFloat(x.revenue || "0")); return t }
+  const mtdTot = sum(mtdRows)
+  const mtdGp = mtdRows.reduce((s, x) => s + parseFloat(x.gp || "0"), 0)
+  const grpMtd = (g: string) => mtdRows.filter(x => x.grp === g).reduce((s, x) => s + parseFloat(x.revenue || "0"), 0)
+  const tgt = (g: string) => Number(targetRows.find(t => (t.channel || "").toUpperCase() === g)?.target_revenue || 0)
+  const proRata = (v: number) => (r.daysElapsed > 0 ? (v / r.daysElapsed) * r.daysInMonth : 0)
+  const groups = [
+    { name: "B2B", mtd: grpMtd("B2B"), target: tgt("B2B") },
+    { name: "B2C", mtd: grpMtd("B2C"), target: tgt("B2C") },
+    { name: "Tổng", mtd: mtdTot.total, target: targetRows.reduce((s, t) => s + Number(t.target_revenue || 0), 0) },
+  ].map(x => ({ ...x, proRata: proRata(x.mtd) }))
+
+  const g = (name: string) => bod.groups.find(x => x.group === name)
+  const b2bRev = (g("B2B-Strategic")?.revenue || 0) + (g("B2B-Non-Strategic")?.revenue || 0)
+  const b2bCm1 = (g("B2B-Strategic")?.gpm2 || 0) + (g("B2B-Non-Strategic")?.gpm2 || 0)
+  const b2c = g("B2C")
+  const tgtCm1 = (grp: string) => { const row = targetRows.find(t => (t.channel || "").toUpperCase() === grp); return row && Number(row.target_gpm2) > 0 ? Number(row.target_gpm2) : null }
+  const hk3 = sum(mtd3hkRows).total
+  const hk3Target = targetRows.find(t => Number(t.target_3hk_contribution) > 0)?.target_3hk_contribution ?? null
+
+  return {
+    label: r.label, monthStr: r.monthStr, daysElapsed: r.daysElapsed, daysInMonth: r.daysInMonth,
+    day: sum(dayRows), prevDay: sum(prevRows), groups, mtdTotal: mtdTot.total, mtdGp,
+    cm1: [
+      { name: "B2B", cm1Pct: ratio(b2bCm1, b2bRev), target: tgtCm1("B2B") },
+      { name: "B2C", cm1Pct: ratio(b2c?.gpm2 || 0, b2c?.revenue || 0), target: tgtCm1("B2C") },
+    ],
+    hk3Pct: ratio(hk3, mtdTot.total), hk3Target: hk3Target != null ? Number(hk3Target) : null,
+  }
+}
+
+const trVnd = (n: number) => (Math.round(n / 1e5) / 10).toLocaleString("vi-VN") + " tr"
+const NO_TGT_SHORT = "Chưa nhập target"
+
+// Dựng đúng 1 Lark card (schema 2.0) từ DailyTopline.
+export function buildDailyToplineCard(t: DailyTopline, dashboardUrl: string, keyword?: string): any {
+  const dod = (c: number, p: number) => (p > 0 ? `${c >= p ? "▲" : "▼"} ${pct(Math.abs(((c - p) / p) * 100))}` : "—")
+  const row = (n: string, c: number, p: number) => ({ c0: n, c1: trVnd(c), c2: dod(c, p) })
+  const revTable = {
+    tag: "table", page_size: 3,
+    columns: [
+      { name: "c0", display_name: "Thị trường", width: "auto" },
+      { name: "c1", display_name: "Hôm qua", width: "auto" },
+      { name: "c2", display_name: "So với hôm trước", width: "auto" },
+    ],
+    rows: [row("VN", t.day.vn, t.prevDay.vn), row("US", t.day.us, t.prevDay.us), row("Tổng", t.day.total, t.prevDay.total)],
+  }
+  const tgtTable = {
+    tag: "table", page_size: 3,
+    columns: [
+      { name: "c0", display_name: "Nhóm", width: "auto" },
+      { name: "c1", display_name: "MTD", width: "auto" },
+      { name: "c2", display_name: "Pro-rata", width: "auto" },
+      { name: "c3", display_name: "Target tháng", width: "auto" },
+      { name: "c4", display_name: "% đạt target", width: "auto" },
+      { name: "c5", display_name: "% pro-rata/target", width: "auto" },
+    ],
+    rows: t.groups.map(x => x.target > 0
+      ? { c0: x.name, c1: trVnd(x.mtd), c2: trVnd(x.proRata), c3: trVnd(x.target), c4: pct(ratio(x.mtd, x.target)), c5: pct(ratio(x.proRata, x.target)) }
+      : { c0: x.name, c1: trVnd(x.mtd), c2: trVnd(x.proRata), c3: NO_TGT_SHORT, c4: "—", c5: "—" }),
+  }
+  const cm1Line = t.cm1.map(c => `${c.name} ${pct(c.cm1Pct)}${c.target != null ? ` (target ${pct(c.target)})` : ""}`).join(" · ")
+  const eff = [
+    `• GP MTD: ${trVnd(t.mtdGp)} (${pct(ratio(t.mtdGp, t.mtdTotal))} doanh thu)`,
+    `• CM1% MTD: ${cm1Line}`,
+    `• %3HK MTD: ${pct(t.hk3Pct)}${t.hk3Target != null ? ` (target ${pct(t.hk3Target)})` : ""}`,
+  ].join("\n")
+  const els: any[] = [
+    { tag: "markdown", content: "**DOANH THU HÔM QUA**" }, revTable,
+    { tag: "markdown", content: `**TIẾN ĐỘ TARGET THÁNG ${t.monthStr.slice(5)}** (đã qua ${t.daysElapsed}/${t.daysInMonth} ngày)` }, tgtTable,
+    { tag: "markdown", content: `**HIỆU QUẢ (MTD)**\n${eff}` },
+    { tag: "markdown", content: `[Xem chi tiết trên Intel Dashboard](${dashboardUrl})` },
+  ]
+  return {
+    schema: "2.0",
+    header: { title: { tag: "plain_text", content: `Daily Revenue · ${t.label}` }, template: "blue" },
+    body: { elements: keyword ? [{ tag: "markdown", content: keyword }, ...els] : els },
+  }
+}
