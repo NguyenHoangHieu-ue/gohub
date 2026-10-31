@@ -661,9 +661,22 @@ export interface DailyTopline {
   hk3Pct: number; hk3Target: number | null
 }
 
+// Target tháng công ty (nhập ở Quarter Report → app_settings.company_monthly_targets, mỗi quý 3 số/phân khúc).
+async function getCompanyMonthTargets(monthStr: string) {
+  const [y, m] = monthStr.split("-").map(Number)
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", "company_monthly_targets").maybeSingle()
+  let all: Record<string, any> = {}
+  try { all = data?.value ? JSON.parse(data.value) : {} } catch { /* coi như chưa nhập */ }
+  const seg = all[`Q${Math.floor((m - 1) / 3) + 1}_${y}`] ?? {}
+  const i = (m - 1) % 3
+  const pick = (s: string, field: string) => Number(seg?.[s]?.[field]?.[i] || 0)
+  return (s: "ALL" | "B2B" | "B2C") => ({ rev: pick(s, "rev"), cm1: pick(s, "cm1"), hk3rev: pick(s, "hk3rev") })
+}
+
 export async function buildDailyTopline(): Promise<DailyTopline> {
   const r = computeRanges("daily")
-  const [targetRows, dayRows, prevRows, mtdRows, mtd3hkRows, bod] = await Promise.all([
+  const [ct, targetRows, dayRows, prevRows, mtdRows, mtd3hkRows, bod] = await Promise.all([
+    getCompanyMonthTargets(r.monthStr),
     getTargetRows(r.monthStr),
     revByMarketGroup(r.curStart, r.curEnd),
     revByMarketGroup(r.prevStart, r.prevEnd),
@@ -675,21 +688,22 @@ export async function buildDailyTopline(): Promise<DailyTopline> {
   const mtdTot = sum(mtdRows)
   const mtdGp = mtdRows.reduce((s, x) => s + parseFloat(x.gp || "0"), 0)
   const grpMtd = (g: string) => mtdRows.filter(x => x.grp === g).reduce((s, x) => s + parseFloat(x.revenue || "0"), 0)
-  const tgt = (g: string) => Number(targetRows.find(t => (t.channel || "").toUpperCase() === g)?.target_revenue || 0)
+  const tgt = (g: "B2B" | "B2C") => ct(g).rev || Number(targetRows.find(t => (t.channel || "").toUpperCase() === g)?.target_revenue || 0)
   const proRata = (v: number) => (r.daysElapsed > 0 ? (v / r.daysElapsed) * r.daysInMonth : 0)
   const groups = [
     { name: "B2B", mtd: grpMtd("B2B"), target: tgt("B2B") },
     { name: "B2C", mtd: grpMtd("B2C"), target: tgt("B2C") },
-    { name: "Tổng", mtd: mtdTot.total, target: targetRows.reduce((s, t) => s + Number(t.target_revenue || 0), 0) },
+    { name: "Tổng", mtd: mtdTot.total, target: ct("ALL").rev || targetRows.reduce((s, t) => s + Number(t.target_revenue || 0), 0) },
   ].map(x => ({ ...x, proRata: proRata(x.mtd) }))
 
   const g = (name: string) => bod.groups.find(x => x.group === name)
   const b2bRev = (g("B2B-Strategic")?.revenue || 0) + (g("B2B-Non-Strategic")?.revenue || 0)
   const b2bCm1 = (g("B2B-Strategic")?.gpm2 || 0) + (g("B2B-Non-Strategic")?.gpm2 || 0)
   const b2c = g("B2C")
-  const tgtCm1 = (grp: string) => { const row = targetRows.find(t => (t.channel || "").toUpperCase() === grp); return row && Number(row.target_gpm2) > 0 ? Number(row.target_gpm2) : null }
+  const tgtCm1 = (grp: "B2B" | "B2C") => { const c = ct(grp); if (c.cm1 > 0 && c.rev > 0) return ratio(c.cm1, c.rev); const row = targetRows.find(t => (t.channel || "").toUpperCase() === grp); return row && Number(row.target_gpm2) > 0 ? Number(row.target_gpm2) : null }
   const hk3 = sum(mtd3hkRows).total
-  const hk3Target = targetRows.find(t => Number(t.target_3hk_contribution) > 0)?.target_3hk_contribution ?? null
+  const all = ct("ALL")
+  const hk3Target = all.hk3rev > 0 && all.rev > 0 ? ratio(all.hk3rev, all.rev) : (targetRows.find(t => Number(t.target_3hk_contribution) > 0)?.target_3hk_contribution ?? null)
 
   return {
     label: r.label, monthStr: r.monthStr, daysElapsed: r.daysElapsed, daysInMonth: r.daysInMonth,
