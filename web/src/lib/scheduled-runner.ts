@@ -27,6 +27,11 @@ export async function runScheduledMessage(
     dataBlock = `\n(LỖI lấy dữ liệu precompute: ${e?.message || e}. Báo "Hiếu đang fix" và KHÔNG bịa số.)`
   }
 
+  // Daily: CHỈ in các mục 【3】【6】【7】【8】 + nhận xét đúng theo prompt (trước đây ép in đủ 【1】→【8】 nên tin quá dài).
+  const rule7 = period === "daily"
+    ? `7. ⚠️ BÁO CÁO NGÀY — CHỈ IN các mục 【3】【6】【7】【8】 đúng bố cục prompt, rồi phần 📝 Nhận xét. TUYỆT ĐỐI KHÔNG in mục 【1】【2】【4】【5】 (chỉ dùng làm tham khảo cho nhận xét nếu cần). Bảng 【3】: hàng B2B | B2C | Tổng; cột Doanh thu tháng (MTD) | Pro-rata | Target tháng | % pro-rata/target (KHÔNG có cột % tiến độ). Nếu một nhóm là "Chưa nhập target tháng này" thì GHI ĐÚNG câu đó vào ô Target và để "—" ở ô %. Tiền ghi GỌN đúng như khối dữ liệu (tỷ/tr), KHÔNG đổi đơn vị. Bảng 【6】【7】【8】: giữ đúng các cột ngày như khối dữ liệu. ĐÁNH SỐ LA MÃ: tiêu đề các mục đánh I, II, III, IV theo thứ tự in ra (I = pro-rata tháng, II = doanh thu 3 ngày, III = top 10 khách B2B, IV = kênh B2C) và phần nhận xét là V; TUYỆT ĐỐI KHÔNG ghi các ký hiệu 【3】【6】【7】【8】 trong báo cáo.`
+    : `7. ⚠️ BẮT BUỘC IN ĐỦ MỌI MỤC 【1】→【5】 (và 【6】→【8】 nếu là báo cáo ngày) có trong khối dữ liệu — KHÔNG được bỏ mục nào, KỂ CẢ khi prompt không nhắc tới. Đặc biệt: mục 【3】 (MTD/thực tế, dự phóng pro-rata, target cả tháng, target theo kênh, % đạt target), Target CM1% ở 【4】, Target 3HK% ở 【5】 PHẢI luôn xuất hiện. Nếu giá trị là "Chưa nhập target tháng này" → GHI ĐÚNG NGUYÊN VĂN câu đó thành 1 dòng, TUYỆT ĐỐI KHÔNG ẩn/bỏ dòng target.`
+
   const directive = `
 
 ━━━ CHẾ ĐỘ BÁO CÁO TỰ ĐỘNG (BẮT BUỘC TUÂN THỦ) ━━━
@@ -37,13 +42,17 @@ Hôm nay: ${today} (giờ VN). Loại báo cáo: ${period.toUpperCase()}. "Thán
 4. Giá trị thiếu NHẤT QUÁN: thực sự bằng 0 → "0 VND"; chưa nhập target → ghi ĐÚNG "Chưa nhập target tháng này". KHÔNG dùng lẫn "-", "N/A".
 5. Tiền: phân cách hàng nghìn + " VND" (số trong khối đã đúng định dạng — giữ nguyên). Phần trăm 1 chữ số.
 6. KHÔNG dùng khối \`\`\`chart (Lark không render được). Tiếng Việt, chuyên nghiệp, nhận xét NGẮN mỗi mục (1-2 câu, chỉ dựa trên số trong khối).
-7. ⚠️ BẮT BUỘC IN ĐỦ MỌI MỤC 【1】→【5】 (và 【6】→【8】 nếu là báo cáo ngày) có trong khối dữ liệu — KHÔNG được bỏ mục nào, KỂ CẢ khi prompt không nhắc tới. Đặc biệt: mục 【3】 (MTD/thực tế, dự phóng pro-rata, target cả tháng, target theo kênh, % đạt target), Target CM1% ở 【4】, Target 3HK% ở 【5】 PHẢI luôn xuất hiện. Nếu giá trị là "Chưa nhập target tháng này" → GHI ĐÚNG NGUYÊN VĂN câu đó thành 1 dòng, TUYỆT ĐỐI KHÔNG ẩn/bỏ dòng target.
+${rule7}
 8. Kỳ MONTHLY = tháng đã đóng → dùng số THỰC TẾ so target (khối đã bỏ pro-rata, đừng tự dựng lại). Kỳ DAILY = 1 ngày (hôm qua) so ngày liền trước; WEEKLY = 7 ngày gần nhất. DAILY/WEEKLY đang trong tháng → vẫn có MTD + dự phóng pro-rata cả tháng ở 【3】. Kỳ QUARTERLY = QTD từ đầu quý đến hôm qua, so QoQ; in đủ 【1】→【6】.
 
 ${dataBlock}`
 
   const systemInstruction = AGENTS["bi-analyst"].systemPrompt + directive
-  const report = await runBIAnalyst(systemInstruction, [], msg.prompt, "admin", { thinkingLevel: "low" })
+  const rawReport = await runBIAnalyst(systemInstruction, [], msg.prompt, "admin", { thinkingLevel: "low" })
+  // Daily: Gemini bám tiêu đề 【3】【6】【7】【8】 của prompt → đổi sang số La Mã bằng code (chỉ thị trong directive không đủ chắc).
+  const report = period === "daily"
+    ? rawReport.replace(/【3】\s*/g, "I. ").replace(/【6】\s*/g, "II. ").replace(/【7】\s*/g, "III. ").replace(/【8】\s*/g, "IV. ").replace(/📝\s*(Nhận xét)/gi, "V. $1").replace(/\b(IV|III|II|I|V)\.\s*\1\.\s*/g, "$1. ")
+    : rawReport
 
   // Render card đẹp (header + bảng). Nếu có lark_keyword (bảo mật custom bot) → chèn vào đầu card.
   const title = msg.title || msg.name || "Báo cáo tự động"

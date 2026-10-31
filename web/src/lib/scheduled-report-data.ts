@@ -2,6 +2,7 @@ import { getDateFilter, getDaysInMonth, cachedAnalyticsQuery } from "@/lib/analy
 import { fetchBODGroupMarginData } from "@/lib/bod-data"
 import { supabaseAdmin } from "@/lib/supabase"
 import { tursoQuery } from "@/lib/turso"
+import { fetchQuarterlySettings, makeClassifyTier } from "@/lib/quarterly-settings"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Precompute số liệu cho Scheduled Reports (Daily/Weekly/Monthly).
@@ -206,29 +207,6 @@ async function b2cChannelsByDay(start: string, end: string) {
   return cachedAnalyticsQuery<{ ch: string; d: string; revenue: string }>(sql)
 }
 
-// Target quý từ Turso target_planning_quarter (cùng nguồn với tab Quarter Report).
-// qKey format: "Q3-2026". Trả B2B + B2C tách riêng (Quarter Report không tách VN/US).
-interface QuarterTargets { b2bRev: number; b2cRev: number; total: number; error?: boolean }
-async function getQuarterTargets(qKey: string): Promise<QuarterTargets> {
-  try {
-    const rows = await tursoQuery<{ channel: string; target_revenue: string | number }>(
-      `SELECT channel, target_revenue FROM target_planning_quarter WHERE quarter = ?`,
-      [qKey]
-    )
-    const n = (v: string | number | undefined) => parseFloat(String(v ?? 0)) || 0
-    const b2b = rows.find(r => r.channel === "B2B")
-    const b2c = rows.find(r => r.channel === "B2C")
-    const b2bRev = n(b2b?.target_revenue), b2cRev = n(b2c?.target_revenue)
-    return { b2bRev, b2cRev, total: b2bRev + b2cRev }
-  } catch (err: any) {
-    // Không nuốt im lặng — lỗi Turso ở đây trước đây bị coi giống hệt "chưa nhập target" (total=0),
-    // không phân biệt được lỗi thật với thiếu data → khó debug. Log ra Vercel + đánh dấu error:true
-    // để report hiển thị đúng nguyên nhân thay vì luôn nói "chưa nhập".
-    console.error(`[scheduled-report] getQuarterTargets("${qKey}") lỗi:`, err?.message || err)
-    return { b2bRev: 0, b2cRev: 0, total: 0, error: true }
-  }
-}
-
 // Target theo channel cho 1 tháng (target_planning ở Supabase, KHÔNG có trong gohub_dw).
 async function getTargetRows(monthStr: string) {
   const { data } = await supabaseAdmin
@@ -259,27 +237,8 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   const isMonthly = period === "monthly"
   const isDaily   = period === "daily"
 
-  // Daily: tính thêm QTD + target quý (từ Turso, cùng nguồn Quarter Report) để hiện trong【3】
-  let qStartStr = "", qEndStr = "", daysElapsedInQ = 0, daysInQ = 92, qLabel = "", qKey = ""
-  if (isDaily) {
-    const ictD = ictNow()
-    const todayD = new Date(Date.UTC(ictD.getUTCFullYear(), ictD.getUTCMonth(), ictD.getUTCDate()))
-    const yestD  = addDays(todayD, -1)
-    const qMo    = Math.floor(todayD.getUTCMonth() / 3) * 3
-    const qStart = new Date(Date.UTC(todayD.getUTCFullYear(), qMo, 1))
-    qStartStr = ymd(qStart)
-    qEndStr   = ymd(yestD)
-    daysElapsedInQ = Math.round((yestD.getTime() - qStart.getTime()) / 86400_000) + 1
-    const qIdx = Math.floor(todayD.getUTCMonth() / 3) + 1
-    qLabel = `Q${qIdx}/${todayD.getUTCFullYear()}`
-    qKey   = `Q${qIdx}-${todayD.getUTCFullYear()}`   // format Turso: "Q3-2026"
-  }
-
   // Supabase/Turso: chạy song song (không dùng gohub_dw pool).
-  const [targetRows, qtTargets] = await Promise.all([
-    getTargetRows(r.monthStr),
-    isDaily ? getQuarterTargets(qKey) : Promise.resolve({ b2bRev: 0, b2cRev: 0, total: 0 } as QuarterTargets),
-  ])
+  const targetRows = await getTargetRows(r.monthStr)
 
   // gohub_dw: chạy tối đa 2 song song (pool max=3, tránh tranh kết nối khi cache cold).
   // Thứ tự: nhẹ trước (1 ngày) → trung bình (MTD) → nặng (BOD join + QTD 50+ ngày).
@@ -296,7 +255,6 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     isMonthly ? Promise.resolve([]) : rev3hkByMarket(r.mtdStart, r.mtdEnd),
   ])
   const bodCur = await fetchBODGroupMarginData(r.curStart, r.curEnd)
-  const qtdRevRows = isDaily ? await revByMarketGroup(qStartStr, qEndStr) : [] as Awaited<ReturnType<typeof revByMarketGroup>>
 
   // Aggregate revenue/GP theo market & group
   const totalRev = zero(), b2bRev = zero(), b2cRev = zero(), totalGp = zero()
@@ -349,25 +307,6 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   }
   const tgtCm1B2b = targetCm1Pct("B2B"), tgtCm1B2c = targetCm1Pct("B2C")
 
-  // QTD aggregates (daily only) — tách B2B/B2C để hiện trong【3】
-  const qtdRev = zero(), qtdB2b = zero(), qtdB2c = zero()
-  if (isDaily) {
-    for (const row of qtdRevRows) {
-      const v = parseFloat(row.revenue || "0")
-      add(qtdRev, row.cc, v)
-      if (row.grp === "B2B") add(qtdB2b, row.cc, v)
-      else if (row.grp === "B2C") add(qtdB2c, row.cc, v)
-    }
-  }
-  // Projections B2B/B2C theo quý (total only, không cần tách VN/US)
-  const projQb2b = daysElapsedInQ > 0 ? (qtdB2b.total / daysElapsedInQ) * daysInQ : 0
-  const projQb2c = daysElapsedInQ > 0 ? (qtdB2c.total / daysElapsedInQ) * daysInQ : 0
-  const projQ: Triple = {
-    vn:    daysElapsedInQ > 0 ? (qtdRev.vn    / daysElapsedInQ) * daysInQ : 0,
-    us:    daysElapsedInQ > 0 ? (qtdRev.us    / daysElapsedInQ) * daysInQ : 0,
-    total: daysElapsedInQ > 0 ? (qtdRev.total / daysElapsedInQ) * daysInQ : 0,
-  }
-
   // MoM/WoW %
   const momPct = (cur: number, prv: number) => prv > 0 ? ((cur - prv) / prv) * 100 : 0
 
@@ -396,18 +335,14 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     L.push(`  - Target cả tháng (mọi kênh): ${totalTargetMonth > 0 ? vnd(totalTargetMonth) : NO_TGT}`)
     L.push(`  - Target theo kênh: ${targetByChannel}`)
     L.push(`  - % đạt target (Thực tế/Target, Tổng): ${totalTargetMonth > 0 ? pct(ratio(mtdTotal.total, totalTargetMonth)) : NO_TGT}`)
-  } else if (isDaily && qStartStr) {
-    // Daily → tiến độ QUÝ theo B2B/B2C (không tách VN/US — khớp cách nhập trong Quarter Report)
-    const hasQTgt = qtTargets.total > 0
-    const NO_QTGT = qtTargets.error ? "Lỗi lấy target quý từ Turso (xem log Vercel)" : "Chưa nhập target quý"
-    L.push(`【3】PRO-RATA & TARGET ${qLabel} (đã dùng ${daysElapsedInQ}/${daysInQ} ngày từ ${qStartStr}):`)
-    L.push(`  - Doanh thu QTD (${qStartStr}→${qEndStr}): B2B ${vnd(qtdB2b.total)} | B2C ${vnd(qtdB2c.total)} | Tổng ${vnd(qtdRev.total)}`)
-    L.push(`  - Pro-rata dự phóng cả quý: B2B ${vnd(projQb2b)} | B2C ${vnd(projQb2c)} | Tổng ${vnd(projQb2b + projQb2c)}`)
-    L.push(`  - Target quý: ${hasQTgt ? `B2B ${vnd(qtTargets.b2bRev)} | B2C ${vnd(qtTargets.b2cRev)} | Tổng ${vnd(qtTargets.total)}` : NO_QTGT}`)
-    if (hasQTgt) {
-      L.push(`  - % QTD/Target: B2B ${pct(ratio(qtdB2b.total, qtTargets.b2bRev))} | B2C ${pct(ratio(qtdB2c.total, qtTargets.b2cRev))} | Tổng ${pct(ratio(qtdRev.total, qtTargets.total))}`)
-      L.push(`  - % Pro-rata/Target: B2B ${pct(ratio(projQb2b, qtTargets.b2bRev))} | B2C ${pct(ratio(projQb2c, qtTargets.b2cRev))} | Tổng ${pct(ratio(projQb2b + projQb2c, qtTargets.total))}`)
+  } else if (isDaily) {
+    // Daily → pro-rata THÁNG theo B2B/B2C/Tổng (đúng prompt Daily; target tháng từ company_monthly_targets, cùng nguồn Quarter Report).
+    const tl = await buildDailyTopline()
+    L.push(`【3】PRO-RATA & TARGET tháng ${r.monthStr} (đã dùng ${r.daysElapsed}/${r.daysInMonth} ngày; Pro-rata = dự phóng cả tháng):`)
+    for (const g of tl.groups) {
+      L.push(`  - ${g.name}: Doanh thu tháng (MTD) ${fmtShort(g.mtd)} | Pro-rata ${fmtShort(g.proRata)} | Target tháng ${g.target > 0 ? fmtShort(g.target) : NO_TGT} | % pro-rata/target ${g.target > 0 ? pct(ratio(g.proRata, g.target)) : "—"}`)
     }
+    L.push(`  - Thị trường (MTD | Pro-rata): VN ${fmtShort(mtdTotal.vn)} | ${fmtShort(proj.vn)} ; US ${fmtShort(mtdTotal.us)} | ${fmtShort(proj.us)} ; Tổng ${fmtShort(mtdTotal.total)} | ${fmtShort(proj.total)}`)
   } else {
     // Weekly → pro-rata tháng hiện tại
     L.push(`【3】PRO-RATA & TARGET tháng ${r.monthStr} (đã dùng ${r.daysElapsed}/${r.daysInMonth} ngày):`)
@@ -447,7 +382,7 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     ])
     const days = r.days // desc
     const fmtRow = (label: string, get: (d: string) => number) =>
-      `  - ${label}: ${days.map(d => vnd(get(d))).join(" | ")}`
+      `  - ${label}: ${days.map(d => fmtShort(get(d))).join(" | ")}`
 
     // per-day per-group totals
     const dayGet = (grp: string, market: "all" | "VN" | "US") => (d: string) =>
@@ -647,4 +582,336 @@ export function inferPeriod(cron: string, name?: string): Period {
   if (n.includes("month") || n.includes("tháng")) return "monthly"
   if (n.includes("week") || n.includes("tuần")) return "weekly"
   return "daily"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Daily Toplines: bộ chỉ tiêu gọn cho 1 card duy nhất (sếp chốt: notification chỉ Toplines, chi tiết xem Dashboard).
+// Số lấy từ cùng nguồn/định nghĩa với buildReportData (không qua Gemini).
+// ─────────────────────────────────────────────────────────────────────────────
+export interface DailyTopline {
+  label: string; date: string; dayShort: string; prevDayShort: string; monthStr: string; daysElapsed: number; daysInMonth: number
+  day: Triple; prevDay: Triple
+  groups: Array<{ name: string; mtd: number; proRata: number; target: number }>
+  mtdTotal: number; mtdGp: number; cm1: Array<{ name: string; cm1Pct: number; target: number | null }>
+  hk3Pct: number; hk3Target: number | null
+  breakdown: DailyBreakdown
+}
+
+export interface Mv { name: string; cur: number; prev: number }
+export interface DailyBreakdown {
+  tiers: Mv[]                 // B2B theo Tier (Strategic/VIP/Gold/Silver)
+  b2bTop: Array<Mv & { tier: string }>   // top 10 Organization B2B hôm qua (kèm Tier của khách)
+  b2bUp: Mv | null; b2bDown: Mv | null   // Organization tăng/giảm mạnh nhất so với hôm trước
+  b2cChannels: Mv[]           // B2C theo kênh (top 5 hôm qua)
+  b2cUp: Mv | null; b2cDown: Mv | null
+}
+
+// Target tháng công ty (nhập ở Quarter Report → app_settings.company_monthly_targets, mỗi quý 3 số/phân khúc).
+async function getCompanyMonthTargets(monthStr: string) {
+  const [y, m] = monthStr.split("-").map(Number)
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", "company_monthly_targets").maybeSingle()
+  let all: Record<string, any> = {}
+  try { all = data?.value ? JSON.parse(data.value) : {} } catch { /* coi như chưa nhập */ }
+  const seg = all[`Q${Math.floor((m - 1) / 3) + 1}_${y}`] ?? {}
+  const i = (m - 1) % 3
+  const pick = (s: string, field: string) => Number(seg?.[s]?.[field]?.[i] || 0)
+  return (s: "ALL" | "B2B" | "B2C") => ({ rev: pick(s, "rev"), cm1: pick(s, "cm1"), hk3rev: pick(s, "hk3rev") })
+}
+
+export async function buildDailyTopline(): Promise<DailyTopline> {
+  const r = computeRanges("daily")
+  const [ct, targetRows, dayRows, prevRows, mtdRows, mtd3hkRows, bod, custRows, chRows, qs] = await Promise.all([
+    getCompanyMonthTargets(r.monthStr),
+    getTargetRows(r.monthStr),
+    revByMarketGroup(r.curStart, r.curEnd),
+    revByMarketGroup(r.prevStart, r.prevEnd),
+    revByMarketGroup(r.mtdStart, r.mtdEnd),
+    rev3hkByMarket(r.mtdStart, r.mtdEnd),
+    fetchBODGroupMarginData(r.mtdStart, r.mtdEnd),
+    b2bCustomerTierByDay(r.prevStart, r.curEnd),
+    b2cChannelsByDay(r.prevStart, r.curEnd),
+    fetchQuarterlySettings(),
+  ])
+  const sum = (rows: Array<{ cc: string; revenue: string }>) => { const t = zero(); for (const x of rows) add(t, x.cc, parseFloat(x.revenue || "0")); return t }
+  const mtdTot = sum(mtdRows)
+  const mtdGp = mtdRows.reduce((s, x) => s + parseFloat(x.gp || "0"), 0)
+  const grpMtd = (g: string) => mtdRows.filter(x => x.grp === g).reduce((s, x) => s + parseFloat(x.revenue || "0"), 0)
+  const tgt = (g: "B2B" | "B2C") => ct(g).rev || Number(targetRows.find(t => (t.channel || "").toUpperCase() === g)?.target_revenue || 0)
+  const proRata = (v: number) => (r.daysElapsed > 0 ? (v / r.daysElapsed) * r.daysInMonth : 0)
+  const groups = [
+    { name: "B2B", mtd: grpMtd("B2B"), target: tgt("B2B") },
+    { name: "B2C", mtd: grpMtd("B2C"), target: tgt("B2C") },
+    { name: "Tổng", mtd: mtdTot.total, target: ct("ALL").rev || targetRows.reduce((s, t) => s + Number(t.target_revenue || 0), 0) },
+  ].map(x => ({ ...x, proRata: proRata(x.mtd) }))
+
+  const g = (name: string) => bod.groups.find(x => x.group === name)
+  const b2bRev = (g("B2B-Strategic")?.revenue || 0) + (g("B2B-Non-Strategic")?.revenue || 0)
+  const b2bCm1 = (g("B2B-Strategic")?.gpm2 || 0) + (g("B2B-Non-Strategic")?.gpm2 || 0)
+  const b2c = g("B2C")
+  const tgtCm1 = (grp: "B2B" | "B2C") => { const c = ct(grp); if (c.cm1 > 0 && c.rev > 0) return ratio(c.cm1, c.rev); const row = targetRows.find(t => (t.channel || "").toUpperCase() === grp); return row && Number(row.target_gpm2) > 0 ? Number(row.target_gpm2) : null }
+  const hk3 = sum(mtd3hkRows).total
+  const all = ct("ALL")
+  const hk3Target = all.hk3rev > 0 && all.rev > 0 ? ratio(all.hk3rev, all.rev) : (targetRows.find(t => Number(t.target_3hk_contribution) > 0)?.target_3hk_contribution ?? null)
+
+  return {
+    label: r.label, date: r.curStart, dayShort: r.curStart.slice(8) + "/" + r.curStart.slice(5, 7), prevDayShort: r.prevStart.slice(8) + "/" + r.prevStart.slice(5, 7), monthStr: r.monthStr, daysElapsed: r.daysElapsed, daysInMonth: r.daysInMonth,
+    day: sum(dayRows), prevDay: sum(prevRows), groups, mtdTotal: mtdTot.total, mtdGp,
+    cm1: [
+      { name: "B2B", cm1Pct: ratio(b2bCm1, b2bRev), target: tgtCm1("B2B") },
+      { name: "B2C", cm1Pct: ratio(b2c?.gpm2 || 0, b2c?.revenue || 0), target: tgtCm1("B2C") },
+    ],
+    hk3Pct: ratio(hk3, mtdTot.total), hk3Target: hk3Target != null ? Number(hk3Target) : null,
+    breakdown: buildBreakdown(custRows, chRows, makeClassifyTier(qs.tierKeywords), r.curStart, r.prevStart),
+  }
+}
+
+// Tiền gọn: ≥ 1 tỷ ghi "x,xx tỷ", dưới 1 tỷ ghi "xxx tr".
+export const fmtShort = (n: number) => {
+  const a = Math.abs(n)
+  if (a >= 1e9) return (Math.round(n / 1e7) / 100).toLocaleString("vi-VN") + " tỷ"
+  return Math.round(n / 1e6).toLocaleString("vi-VN") + " tr"
+}
+const NO_TGT_SHORT = "Chưa nhập target"
+
+// "Đánh giá chung": 2-3 câu nhận xét chỉ dựa trên số của card. Lỗi/timeout → trả null (card vẫn gửi, bỏ mục này).
+export async function buildToplineAssessment(t: DailyTopline): Promise<string | null> {
+  try {
+    const { genai } = await import("@/lib/agents/genai-stream")
+    const { GEMINI_MODEL } = await import("@/lib/ai-models")
+    const { ThinkingLevel } = await import("@google/genai")
+    const dod = (c: number, p: number) => (p > 0 ? pct(((c - p) / p) * 100) : "n/a")
+    const facts = [
+      `Doanh thu ${t.label}: VN ${fmtShort(t.day.vn)} (${dod(t.day.vn, t.prevDay.vn)} so ngày trước), US ${fmtShort(t.day.us)} (${dod(t.day.us, t.prevDay.us)}), Tổng ${fmtShort(t.day.total)} (${dod(t.day.total, t.prevDay.total)}).`,
+      `Tháng ${t.monthStr} đã qua ${t.daysElapsed}/${t.daysInMonth} ngày.`,
+      ...t.groups.map(g => g.target > 0
+        ? `${g.name}: doanh thu tháng ${fmtShort(g.mtd)}, dự phóng pro-rata ${fmtShort(g.proRata)}, target ${fmtShort(g.target)}, pro-rata/target ${pct(ratio(g.proRata, g.target))}.`
+        : `${g.name}: doanh thu tháng ${fmtShort(g.mtd)}, dự phóng ${fmtShort(g.proRata)}, chưa nhập target.`),
+      ...t.breakdown.tiers.map(x => `B2B Tier ${x.name}: ${fmtShort(x.cur)} (${dod(x.cur, x.prev)} so ngày trước).`),
+      ...(t.breakdown.b2bUp ? [`B2B tăng mạnh nhất: ${t.breakdown.b2bUp.name} (+${fmtShort(t.breakdown.b2bUp.cur - t.breakdown.b2bUp.prev)}).`] : []),
+      ...(t.breakdown.b2bDown ? [`B2B giảm mạnh nhất: ${t.breakdown.b2bDown.name} (-${fmtShort(t.breakdown.b2bDown.prev - t.breakdown.b2bDown.cur)}).`] : []),
+      ...(t.breakdown.b2cUp ? [`B2C kênh tăng mạnh nhất: ${t.breakdown.b2cUp.name} (+${fmtShort(t.breakdown.b2cUp.cur - t.breakdown.b2cUp.prev)}).`] : []),
+      ...(t.breakdown.b2cDown ? [`B2C kênh giảm mạnh nhất: ${t.breakdown.b2cDown.name} (-${fmtShort(t.breakdown.b2cDown.prev - t.breakdown.b2cDown.cur)}).`] : []),
+      `GP tháng ${fmtShort(t.mtdGp)} (${pct(ratio(t.mtdGp, t.mtdTotal))} doanh thu).`,
+      `CM1%: ${t.cm1.map(c => `${c.name} ${pct(c.cm1Pct)}${c.target != null ? ` (target ${pct(c.target)})` : ""}`).join("; ")}.`,
+      `%3HK: ${pct(t.hk3Pct)}${t.hk3Target != null ? ` (target ${pct(t.hk3Target)})` : ""}.`,
+    ].join("\n")
+    const res = await Promise.race([
+      genai().models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [{ role: "user", parts: [{ text: facts }] }],
+        config: {
+          systemInstruction: "Bạn là analyst viết đánh giá nhanh cho ban lãnh đạo. Chỉ dựa trên số được đưa, KHÔNG bịa số, KHÔNG suy diễn nguyên nhân. Viết tiếng Việt, 2-3 câu ngắn (tối đa 70 từ): (1) hôm qua tăng/giảm ra sao, (2) tiến độ so target tháng (nhóm nào đạt/chưa đạt, ngưỡng ≥100% tốt, 85-100% cần theo dõi, <85% đáng lo), (3) một điểm cần chú ý nếu có (CM1/3HK lệch target). Không chào hỏi, không markdown, không gạch đầu dòng. Tiền đọc như đã cho (tỷ/tr).",
+          temperature: 0.2, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, maxOutputTokens: 400,
+        },
+      }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 40_000)),
+    ])
+    const txt = (res.text ?? "").replace(/\s+/g, " ").trim()
+    return txt || null
+  } catch (e) {
+    console.error("[daily-topline] đánh giá chung lỗi:", (e as Error).message)
+    return null
+  }
+}
+
+// Dựng đúng 1 Lark card (schema 2.0) cho Daily — theo prompt Daily gốc: 【3】 pro-rata tháng, 【6】 doanh thu 3 ngày, 【7】 top 10 khách B2B, 【8】 kênh B2C + nhận xét.
+// Mục đánh số La Mã; bảng header xám, số căn phải, % tô màu.
+export function buildDailyToplineCard(t: DailyTopline, d: DailyDetail, dashboardUrl: string, opts?: { keyword?: string; assessment?: string | null }): any {
+  const GREEN = "green", RED = "red", ORANGE = "orange"
+  const font = (color: string, txt: string) => `<font color='${color}'>${txt}</font>`
+  const cmp = (c: number, p: number) => {
+    if (!(p > 0)) return "—"
+    const x = ((c - p) / p) * 100
+    return font(x >= 0 ? GREEN : RED, `${x >= 0 ? "▲" : "▼"} ${pct(Math.abs(x))}`)
+  }
+  const progressTxt = (v: number) => font(v >= 100 ? GREEN : v >= 85 ? ORANGE : RED, pct(v))
+  const col = (name: string, display: string, kind: "text" | "num" | "md" = "num") => ({
+    name, display_name: display, width: "auto", horizontal_align: kind === "text" ? "left" : "right",
+    ...(kind === "md" ? { data_type: "markdown" } : {}),
+  })
+  const table = (columns: any[], rows: any[]) => ({
+    tag: "table", page_size: Math.max(rows.length, 1), row_height: "low",
+    header_style: { text_align: "left", bold: true, background_style: "grey", lines: 1 },
+    columns, rows,
+  })
+  const sec = (num: string, title: string, sub?: string) => ({
+    tag: "markdown", content: `**${num}. ${title}**${sub ? `  ${font("grey", sub)}` : ""}`,
+  })
+  const hr = { tag: "hr" }
+  // 3 cột ngày (hôm qua → 3 ngày trước) + % hôm qua so với hôm trước
+  const dayCols = (first: string, withTier = false) => [
+    col("c0", first, "text"), ...(withTier ? [col("ct", "Tier", "text")] : []),
+    col("d0", d.days[0]), col("d1", d.days[1]), col("d2", d.days[2]), col("pc", "% so sánh", "md"),
+  ]
+  const dayRow = (name: string, v: number[], tier?: string) => ({
+    c0: name, ...(tier !== undefined ? { ct: tier } : {}),
+    d0: fmtShort(v[0]), d1: fmtShort(v[1]), d2: fmtShort(v[2]), pc: cmp(v[0], v[1]),
+  })
+  const trend = (name: string) => d.trend.find(x => x.name === name)?.values ?? [0, 0, 0]
+
+  const tgtTable = table(
+    [col("c0", "Nhóm", "text"), col("c1", "Doanh thu tháng"), col("c2", "Pro-rata"), col("c3", "Target tháng"), col("c4", "% pro-rata/target", "md")],
+    t.groups.map(x => ({
+      c0: x.name, c1: fmtShort(x.mtd), c2: fmtShort(x.proRata),
+      c3: x.target > 0 ? fmtShort(x.target) : NO_TGT_SHORT,
+      c4: x.target > 0 ? progressTxt(ratio(x.proRata, x.target)) : "—",
+    })),
+  )
+  const trendTable = table(dayCols("Khối"), [
+    dayRow("B2B", trend("B2B")), dayRow("B2C", trend("B2C")), dayRow("**Tổng**", trend("Tổng")),
+    dayRow("   trong đó VN", trend("VN")), dayRow("   trong đó US", trend("US")),
+  ])
+  const top10Table = table(dayCols("Khách", true), d.topB2b.map(r => dayRow(r.name, r.values, r.tier ?? "")))
+  const b2cTable = table(dayCols("Kênh"), d.topB2c.map(r => dayRow(r.name, r.values)))
+
+  const ROMAN = ["I", "II", "III", "IV", "V", "VI"]
+  let n = 0
+  const next = () => ROMAN[n++]
+  const els: any[] = [
+    sec(next(), `PRO-RATA THÁNG ${t.monthStr.slice(5)}`, `(đã qua ${t.daysElapsed}/${t.daysInMonth} ngày)`), tgtTable,
+    { tag: "markdown", content: font("grey", "Pro-rata = dự phóng cả tháng theo doanh thu lũy kế tới hôm qua.") }, hr,
+    sec(next(), "DOANH THU 3 NGÀY"), trendTable, hr,
+    ...(d.topB2b.length ? [sec(next(), "TOP 10 KHÁCH B2B", "(3 ngày)"), top10Table, hr] : []),
+    ...(d.topB2c.length ? [sec(next(), "KÊNH B2C", "(top 10, 3 ngày)"), b2cTable, hr] : []),
+    ...(opts?.assessment ? [sec(next(), "ĐÁNH GIÁ CHUNG"), { tag: "markdown", content: opts.assessment }, hr] : []),
+    { tag: "markdown", content: `[Xem chi tiết trên Intel Dashboard →](${dashboardUrl})` },
+  ]
+  return {
+    schema: "2.0",
+    header: {
+      title: { tag: "plain_text", content: `Daily Revenue · ${t.label}` },
+      subtitle: { tag: "plain_text", content: "Doanh thu đã giao · cập nhật hằng ngày" },
+      template: "blue",
+    },
+    body: { elements: opts?.keyword ? [{ tag: "markdown", content: opts.keyword }, ...els] : els },
+  }
+}
+
+// Phần chi tiết cho popup Daily trên Dashboard (mục 6-8 của báo cáo cũ, dạng dữ liệu thô): xu hướng 3 ngày, top khách B2B, kênh B2C.
+export interface DailyDetail {
+  days: string[]                                   // desc: [hôm qua, hôm trước, 3 ngày trước] dạng DD/MM
+  trend: Array<{ name: string; values: number[] }> // B2B, B2C, Tổng, VN, US
+  topB2b: Array<{ name: string; values: number[]; tier?: string }>   // top 10 Organization B2B (3 ngày) kèm Tier
+  topB2c: Array<{ name: string; values: number[] }>
+}
+
+export async function buildDailyDetail(): Promise<DailyDetail> {
+  const r = computeRanges("daily")
+  const days = r.days
+  const [dayRows, orgRows, b2cCh, qs] = await Promise.all([
+    revByDay(days[2], days[0]),
+    b2bCustomerTierByDay(days[2], days[0]),
+    b2cChannelsByDay(days[2], days[0]),
+    fetchQuarterlySettings(),
+  ])
+  const classify = makeClassifyTier(qs.tierKeywords)
+  const n = (v: string | undefined) => parseFloat(v || "0")
+  const dayGet = (grp: string, market: string) => days.map(d =>
+    dayRows.filter(x => x.d === d && (grp === "ALL" || x.grp === grp) && (market === "all" || x.cc === market)).reduce((s, x) => s + n(x.revenue), 0))
+  const top = <T extends { d: string; revenue: string }>(rows: T[], key: (x: T) => string) => {
+    const tot = new Map<string, number>()
+    for (const x of rows) tot.set(key(x), (tot.get(key(x)) || 0) + n(x.revenue))
+    return [...tot.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([name]) => ({ name, values: days.map(d => rows.filter(x => key(x) === name && x.d === d).reduce((s, x) => s + n(x.revenue), 0)) }))
+  }
+  return {
+    days: days.map(d => d.slice(8) + "/" + d.slice(5, 7)),
+    trend: [
+      { name: "B2B", values: dayGet("B2B", "all") }, { name: "B2C", values: dayGet("B2C", "all") },
+      { name: "Tổng", values: dayGet("ALL", "all") }, { name: "VN", values: dayGet("ALL", "VN") }, { name: "US", values: dayGet("ALL", "US") },
+    ],
+    topB2b: topOrgs(orgRows, days, classify), topB2c: top(b2cCh, x => x.ch),
+  }
+}
+
+// Top 10 Organization B2B theo tổng 3 ngày, kèm Tier (Tier có doanh thu lớn nhất của khách đó) — cùng bộ lọc với tổng B2B ở bảng pro-rata.
+function topOrgs(rows: Array<{ d: string; org: string; pln: string | null; revenue: string }>, days: string[], classify: (pln: string | null) => string) {
+  const map = new Map<string, { values: number[]; tiers: Map<string, number> }>()
+  for (const x of rows) {
+    const name = cleanOrgName(x.org), i = days.indexOf(x.d)
+    if (i < 0) continue
+    const e = map.get(name) ?? { values: days.map(() => 0), tiers: new Map<string, number>() }
+    const v = parseFloat(x.revenue || "0")
+    e.values[i] += v
+    const tier = classify(x.pln)
+    e.tiers.set(tier, (e.tiers.get(tier) ?? 0) + Math.abs(v))
+    map.set(name, e)
+  }
+  return [...map.entries()].sort((a, b) => b[1].values.reduce((s, v) => s + v, 0) - a[1].values.reduce((s, v) => s + v, 0)).slice(0, 10)
+    .map(([name, e]) => ({ name, values: e.values, tier: [...e.tiers.entries()].sort((p, q) => q[1] - p[1])[0]?.[0] ?? "" }))
+}
+
+// AI đánh giá có cache theo ngày báo cáo (app_settings) → popup mọi người mở + card Lark dùng CHUNG 1 đoạn, không gọi Gemini mỗi lượt.
+export async function getToplineAssessmentCached(t: DailyTopline): Promise<string | null> {
+  const key = "daily_topline_ai:" + t.date
+  try {
+    const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", key).maybeSingle()
+    if (data?.value) return String(data.value)
+  } catch { /* đọc cache lỗi → tính mới */ }
+  const txt = await buildToplineAssessment(t)
+  if (txt) {
+    try { await supabaseAdmin.from("app_settings").upsert({ key, value: txt, category: "scheduled", label: "Đánh giá chung Daily Toplines" }, { onConflict: "key" }) } catch { /* bỏ qua */ }
+  }
+  return txt
+}
+
+// ── Breakdown Daily: B2B theo Tier/Organization, B2C theo kênh (hôm qua vs hôm trước) ──
+// Cùng bộ lọc với revByMarketGroup (không ship, không nội bộ) nên tổng các Tier = doanh thu B2B ở bảng trên.
+async function b2bCustomerTierByDay(start: string, end: string) {
+  const sql = `
+    SELECT TO_CHAR(f.fulfiled_date::date,'YYYY-MM-DD') AS d,
+           COALESCE(NULLIF(TRIM(c.organization), ''), COALESCE(c.name, TRIM(f.customer_code), '(không rõ)')) AS org,
+           c.price_list_name AS pln,
+           SUM(f.${REV}) AS revenue
+    FROM fact_fulfillment_revenue f
+    LEFT JOIN dim_order_source s ON f.order_source_code = s.code
+    LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
+    WHERE ${getDateFilter(start, end, "fulfiled_date")} ${STD_FILTER_S} AND UPPER(s.group_name)='B2B'
+    GROUP BY 1,2,3`
+  return cachedAnalyticsQuery<{ d: string; org: string; pln: string | null; revenue: string }>(sql)
+}
+
+const shortName = (n: string) => (n.length > 34 ? n.slice(0, 33).trim() + "…" : n)
+const cleanOrgName = (n: string) => shortName(n.replace(/^(VN|US)_Org\s+/i, "").trim())
+const TIER_ORDER_DAILY = ["Strategic", "VIP", "Gold", "Silver"]
+const HIGHLIGHT_MIN = 10_000_000   // chỉ nêu "tăng/giảm mạnh" khi lệch ≥ 10 triệu so với hôm trước
+
+export function buildBreakdown(
+  cust: Array<{ d: string; org: string; pln: string | null; revenue: string }>,
+  ch: Array<{ ch: string; d: string; revenue: string }>,
+  classifyTier: (pln: string | null) => string,
+  curDay: string, prevDay: string,
+): DailyBreakdown {
+  const n = (v: string) => parseFloat(v || "0")
+  const tierMap = new Map<string, Mv>(), orgMap = new Map<string, Mv>(), chMap = new Map<string, Mv>()
+  const orgTier = new Map<string, Map<string, number>>()   // org → doanh thu theo Tier (lấy Tier lớn nhất làm nhãn)
+  const bump = (m: Map<string, Mv>, name: string, d: string, v: number) => {
+    const e = m.get(name) ?? { name, cur: 0, prev: 0 }
+    if (d === curDay) e.cur += v; else if (d === prevDay) e.prev += v
+    m.set(name, e)
+  }
+  for (const x of cust) {
+    const tier = classifyTier(x.pln), org = cleanOrgName(x.org)
+    bump(tierMap, tier, x.d, n(x.revenue)); bump(orgMap, org, x.d, n(x.revenue))
+    const tm = orgTier.get(org) ?? new Map<string, number>()
+    tm.set(tier, (tm.get(tier) ?? 0) + Math.abs(n(x.revenue))); orgTier.set(org, tm)
+  }
+  const tierOf = (org: string) => [...(orgTier.get(org) ?? new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? ""
+  for (const x of ch) if (x.d === curDay || x.d === prevDay) bump(chMap, x.ch, x.d, n(x.revenue))
+  const movers = (m: Map<string, Mv>) => {
+    const all = [...m.values()]
+    const up = all.filter(e => e.cur - e.prev >= HIGHLIGHT_MIN).sort((a, b) => (b.cur - b.prev) - (a.cur - a.prev))[0] ?? null
+    const down = all.filter(e => e.prev - e.cur >= HIGHLIGHT_MIN).sort((a, b) => (b.prev - b.cur) - (a.prev - a.cur))[0] ?? null
+    return { up, down }
+  }
+  const tiers = [...tierMap.values()].filter(t => t.cur !== 0 || t.prev !== 0)
+    .sort((a, b) => (TIER_ORDER_DAILY.indexOf(a.name) + 1 || 99) - (TIER_ORDER_DAILY.indexOf(b.name) + 1 || 99))
+  const o = movers(orgMap), c = movers(chMap)
+  return {
+    tiers,
+    b2bTop: [...orgMap.values()].filter(e => e.cur > 0).sort((a, b) => b.cur - a.cur).slice(0, 10).map(e => ({ ...e, tier: tierOf(e.name) })),
+    b2bUp: o.up, b2bDown: o.down,
+    b2cChannels: [...chMap.values()].filter(e => e.cur > 0 || e.prev > 0).sort((a, b) => b.cur - a.cur).slice(0, 5),
+    b2cUp: c.up, b2cDown: c.down,
+  }
 }
