@@ -912,9 +912,10 @@ async function b2bCustomerTierByDay(start: string, end: string) {
   return cachedAnalyticsQuery<{ d: string; org: string; pln: string | null; revenue: string }>(sql)
 }
 
-const cleanOrgName = (n: string) => n.replace(/^(VN|US)_Org\s+/i, "").trim()
+const shortName = (n: string) => (n.length > 34 ? n.slice(0, 33).trim() + "…" : n)
+const cleanOrgName = (n: string) => shortName(n.replace(/^(VN|US)_Org\s+/i, "").trim())
 const TIER_ORDER_DAILY = ["Strategic", "VIP", "Gold", "Silver"]
-const HIGHLIGHT_MIN = 5_000_000   // chỉ nêu "tăng/giảm mạnh" khi lệch ≥ 5 triệu so với hôm trước
+const HIGHLIGHT_MIN = 10_000_000   // chỉ nêu "tăng/giảm mạnh" khi lệch ≥ 10 triệu so với hôm trước
 
 export function buildBreakdown(
   cust: Array<{ d: string; org: string; pln: string | null; revenue: string }>,
