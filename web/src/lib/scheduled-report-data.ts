@@ -654,7 +654,7 @@ export function inferPeriod(cron: string, name?: string): Period {
 // Số lấy từ cùng nguồn/định nghĩa với buildReportData (không qua Gemini).
 // ─────────────────────────────────────────────────────────────────────────────
 export interface DailyTopline {
-  label: string; monthStr: string; daysElapsed: number; daysInMonth: number
+  label: string; dayShort: string; prevDayShort: string; monthStr: string; daysElapsed: number; daysInMonth: number
   day: Triple; prevDay: Triple
   groups: Array<{ name: string; mtd: number; proRata: number; target: number }>
   mtdTotal: number; mtdGp: number; cm1: Array<{ name: string; cm1Pct: number; target: number | null }>
@@ -706,7 +706,7 @@ export async function buildDailyTopline(): Promise<DailyTopline> {
   const hk3Target = all.hk3rev > 0 && all.rev > 0 ? ratio(all.hk3rev, all.rev) : (targetRows.find(t => Number(t.target_3hk_contribution) > 0)?.target_3hk_contribution ?? null)
 
   return {
-    label: r.label, monthStr: r.monthStr, daysElapsed: r.daysElapsed, daysInMonth: r.daysInMonth,
+    label: r.label, dayShort: r.curStart.slice(8) + "/" + r.curStart.slice(5, 7), prevDayShort: r.prevStart.slice(8) + "/" + r.prevStart.slice(5, 7), monthStr: r.monthStr, daysElapsed: r.daysElapsed, daysInMonth: r.daysInMonth,
     day: sum(dayRows), prevDay: sum(prevRows), groups, mtdTotal: mtdTot.total, mtdGp,
     cm1: [
       { name: "B2B", cm1Pct: ratio(b2bCm1, b2bRev), target: tgtCm1("B2B") },
@@ -716,19 +716,61 @@ export async function buildDailyTopline(): Promise<DailyTopline> {
   }
 }
 
-const trVnd = (n: number) => (Math.round(n / 1e5) / 10).toLocaleString("vi-VN") + " tr"
+// Tiền gọn: ≥ 1 tỷ ghi "x,xx tỷ", dưới 1 tỷ ghi "xxx tr".
+export const fmtShort = (n: number) => {
+  const a = Math.abs(n)
+  if (a >= 1e9) return (Math.round(n / 1e7) / 100).toLocaleString("vi-VN") + " tỷ"
+  return Math.round(n / 1e6).toLocaleString("vi-VN") + " tr"
+}
 const NO_TGT_SHORT = "Chưa nhập target"
 
+// "AI đánh giá": 2-3 câu nhận xét chỉ dựa trên số của card. Lỗi/timeout → trả null (card vẫn gửi, bỏ mục này).
+export async function buildToplineAssessment(t: DailyTopline): Promise<string | null> {
+  try {
+    const { genai } = await import("@/lib/agents/genai-stream")
+    const { GEMINI_MODEL } = await import("@/lib/ai-models")
+    const { ThinkingLevel } = await import("@google/genai")
+    const dod = (c: number, p: number) => (p > 0 ? pct(((c - p) / p) * 100) : "n/a")
+    const facts = [
+      `Doanh thu ${t.label}: VN ${fmtShort(t.day.vn)} (${dod(t.day.vn, t.prevDay.vn)} so ngày trước), US ${fmtShort(t.day.us)} (${dod(t.day.us, t.prevDay.us)}), Tổng ${fmtShort(t.day.total)} (${dod(t.day.total, t.prevDay.total)}).`,
+      `Tháng ${t.monthStr} đã qua ${t.daysElapsed}/${t.daysInMonth} ngày.`,
+      ...t.groups.map(g => g.target > 0
+        ? `${g.name}: doanh thu tháng ${fmtShort(g.mtd)}, dự phóng pro-rata ${fmtShort(g.proRata)}, target ${fmtShort(g.target)}, pro-rata/target ${pct(ratio(g.proRata, g.target))}.`
+        : `${g.name}: doanh thu tháng ${fmtShort(g.mtd)}, dự phóng ${fmtShort(g.proRata)}, chưa nhập target.`),
+      `GP tháng ${fmtShort(t.mtdGp)} (${pct(ratio(t.mtdGp, t.mtdTotal))} doanh thu).`,
+      `CM1%: ${t.cm1.map(c => `${c.name} ${pct(c.cm1Pct)}${c.target != null ? ` (target ${pct(c.target)})` : ""}`).join("; ")}.`,
+      `%3HK: ${pct(t.hk3Pct)}${t.hk3Target != null ? ` (target ${pct(t.hk3Target)})` : ""}.`,
+    ].join("\n")
+    const res = await Promise.race([
+      genai().models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [{ role: "user", parts: [{ text: facts }] }],
+        config: {
+          systemInstruction: "Bạn là analyst viết đánh giá nhanh cho ban lãnh đạo. Chỉ dựa trên số được đưa, KHÔNG bịa số, KHÔNG suy diễn nguyên nhân. Viết tiếng Việt, 2-3 câu ngắn (tối đa 60 từ): (1) hôm qua tăng/giảm ra sao, (2) tiến độ so target tháng (nhóm nào đạt/chưa đạt, ngưỡng ≥100% tốt, 85-100% cần theo dõi, <85% đáng lo), (3) một điểm cần chú ý nếu có (CM1/3HK lệch target). Không chào hỏi, không markdown, không gạch đầu dòng. Tiền đọc như đã cho (tỷ/tr).",
+          temperature: 0.2, thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }, maxOutputTokens: 400,
+        },
+      }),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 40_000)),
+    ])
+    const txt = (res.text ?? "").replace(/\s+/g, " ").trim()
+    return txt || null
+  } catch (e) {
+    console.error("[daily-topline] AI đánh giá lỗi:", (e as Error).message)
+    return null
+  }
+}
+
 // Dựng đúng 1 Lark card (schema 2.0) từ DailyTopline.
-export function buildDailyToplineCard(t: DailyTopline, dashboardUrl: string, keyword?: string): any {
-  const dod = (c: number, p: number) => (p > 0 ? `${c >= p ? "▲" : "▼"} ${pct(Math.abs(((c - p) / p) * 100))}` : "—")
-  const row = (n: string, c: number, p: number) => ({ c0: n, c1: trVnd(c), c2: dod(c, p) })
+export function buildDailyToplineCard(t: DailyTopline, dashboardUrl: string, opts?: { keyword?: string; assessment?: string | null }): any {
+  const cmp = (c: number, p: number) => (p > 0 ? `${c >= p ? "▲" : "▼"} ${pct(Math.abs(((c - p) / p) * 100))}` : "—")
+  const row = (n: string, c: number, p: number) => ({ c0: n, c1: fmtShort(c), c2: fmtShort(p), c3: cmp(c, p) })
   const revTable = {
     tag: "table", page_size: 3,
     columns: [
       { name: "c0", display_name: "Thị trường", width: "auto" },
-      { name: "c1", display_name: "Hôm qua", width: "auto" },
-      { name: "c2", display_name: "So với hôm trước", width: "auto" },
+      { name: "c1", display_name: `Hôm qua (${t.dayShort})`, width: "auto" },
+      { name: "c2", display_name: `Hôm trước (${t.prevDayShort})`, width: "auto" },
+      { name: "c3", display_name: "% so sánh", width: "auto" },
     ],
     rows: [row("VN", t.day.vn, t.prevDay.vn), row("US", t.day.us, t.prevDay.us), row("Tổng", t.day.total, t.prevDay.total)],
   }
@@ -736,31 +778,31 @@ export function buildDailyToplineCard(t: DailyTopline, dashboardUrl: string, key
     tag: "table", page_size: 3,
     columns: [
       { name: "c0", display_name: "Nhóm", width: "auto" },
-      { name: "c1", display_name: "MTD", width: "auto" },
+      { name: "c1", display_name: "Doanh thu tháng", width: "auto" },
       { name: "c2", display_name: "Pro-rata", width: "auto" },
       { name: "c3", display_name: "Target tháng", width: "auto" },
-      { name: "c4", display_name: "% đạt target", width: "auto" },
-      { name: "c5", display_name: "% pro-rata/target", width: "auto" },
+      { name: "c4", display_name: "% pro-rata/target", width: "auto" },
     ],
     rows: t.groups.map(x => x.target > 0
-      ? { c0: x.name, c1: trVnd(x.mtd), c2: trVnd(x.proRata), c3: trVnd(x.target), c4: pct(ratio(x.mtd, x.target)), c5: pct(ratio(x.proRata, x.target)) }
-      : { c0: x.name, c1: trVnd(x.mtd), c2: trVnd(x.proRata), c3: NO_TGT_SHORT, c4: "—", c5: "—" }),
+      ? { c0: x.name, c1: fmtShort(x.mtd), c2: fmtShort(x.proRata), c3: fmtShort(x.target), c4: pct(ratio(x.proRata, x.target)) }
+      : { c0: x.name, c1: fmtShort(x.mtd), c2: fmtShort(x.proRata), c3: NO_TGT_SHORT, c4: "—" }),
   }
   const cm1Line = t.cm1.map(c => `${c.name} ${pct(c.cm1Pct)}${c.target != null ? ` (target ${pct(c.target)})` : ""}`).join(" · ")
   const eff = [
-    `• GP MTD: ${trVnd(t.mtdGp)} (${pct(ratio(t.mtdGp, t.mtdTotal))} doanh thu)`,
-    `• CM1% MTD: ${cm1Line}`,
-    `• %3HK MTD: ${pct(t.hk3Pct)}${t.hk3Target != null ? ` (target ${pct(t.hk3Target)})` : ""}`,
+    `• GP tháng: ${fmtShort(t.mtdGp)} (${pct(ratio(t.mtdGp, t.mtdTotal))} doanh thu)`,
+    `• CM1%: ${cm1Line}`,
+    `• %3HK: ${pct(t.hk3Pct)}${t.hk3Target != null ? ` (target ${pct(t.hk3Target)})` : ""}`,
   ].join("\n")
   const els: any[] = [
     { tag: "markdown", content: "**DOANH THU HÔM QUA**" }, revTable,
     { tag: "markdown", content: `**TIẾN ĐỘ TARGET THÁNG ${t.monthStr.slice(5)}** (đã qua ${t.daysElapsed}/${t.daysInMonth} ngày)` }, tgtTable,
-    { tag: "markdown", content: `**HIỆU QUẢ (MTD)**\n${eff}` },
+    { tag: "markdown", content: `**HIỆU QUẢ (lũy kế tháng)**\n${eff}` },
+    ...(opts?.assessment ? [{ tag: "markdown", content: `**🤖 AI ĐÁNH GIÁ**\n${opts.assessment}` }] : []),
     { tag: "markdown", content: `[Xem chi tiết trên Intel Dashboard](${dashboardUrl})` },
   ]
   return {
     schema: "2.0",
     header: { title: { tag: "plain_text", content: `Daily Revenue · ${t.label}` }, template: "blue" },
-    body: { elements: keyword ? [{ tag: "markdown", content: keyword }, ...els] : els },
+    body: { elements: opts?.keyword ? [{ tag: "markdown", content: opts.keyword }, ...els] : els },
   }
 }

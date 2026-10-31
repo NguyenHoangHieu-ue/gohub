@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sendLarkCardToChat } from "@/lib/lark"
-import { buildDailyTopline, buildDailyToplineCard } from "@/lib/scheduled-report-data"
+import { buildDailyTopline, buildDailyToplineCard, buildToplineAssessment } from "@/lib/scheduled-report-data"
 
 // Bản mẫu card Daily Toplines (chưa nối vào lịch tự động). Bearer CRON_SECRET.
 //   GET ?                      → trả JSON số liệu + card, KHÔNG gửi
@@ -10,7 +10,7 @@ import { buildDailyTopline, buildDailyToplineCard } from "@/lib/scheduled-report
 export const dynamic = "force-dynamic"
 export const maxDuration = 120
 
-const DASHBOARD_URL = "https://intel-v2.gohub.cloud/analytics/bod"
+const DASHBOARD_URL = "https://intel-v2.gohub.cloud/analytics"
 
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET
@@ -20,11 +20,12 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams
   try {
     const topline = await buildDailyTopline()
+    const assessment = await buildToplineAssessment(topline)
     let keyword: string | undefined
     let webhook: string | undefined
     const chat = q.get("chat")
     if (q.get("send") === "1" && chat) {
-      await sendLarkCardToChat(chat, buildDailyToplineCard(topline, DASHBOARD_URL))
+      await sendLarkCardToChat(chat, buildDailyToplineCard(topline, DASHBOARD_URL, { assessment }))
       return NextResponse.json({ sent: true, chat, topline })
     }
     if (q.get("send") === "1") {
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
       if (!data?.lark_webhook_url) return NextResponse.json({ error: "Không có webhook cho lịch này" }, { status: 400 })
       webhook = data.lark_webhook_url; keyword = data.lark_keyword || undefined
     }
-    const card = buildDailyToplineCard(topline, DASHBOARD_URL, keyword)
+    const card = buildDailyToplineCard(topline, DASHBOARD_URL, { keyword, assessment })
     if (!webhook) return NextResponse.json({ topline, card })
     const res = await fetch(webhook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ msg_type: "interactive", card }) })
     const body = await res.json().catch(() => null)
