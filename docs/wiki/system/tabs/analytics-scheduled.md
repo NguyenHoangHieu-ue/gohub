@@ -224,3 +224,13 @@ Bố cục đổi theo file Lark "Company Weekly Performance" (Hiếu cung cấp
 - **Điểm sáng/Hạn chế dựng THUẦN từ số** (không còn Gemini narrative, `narrative.ts` không còn được gọi): chỉ nêu khách/kênh lệch ≥ 3 triệu so tháng trước, tối đa 8 dòng; khách tháng trước có tháng này = 0 ₫ liệt kê ở Hạn chế. KHÔNG có câu giải thích nguyên nhân (mẫu Lark có do người viết).
 - Bỏ khỏi file: thẻ "Overall tháng" và banner projection. Dòng Internal/Misc của WoW chỉ hiện khi khác 0.
 - `POST /api/admin/scheduled-messages/weekly-report?format=md` trả markdown + ảnh base64 để kiểm nhanh (không tạo .docx).
+
+## 0c. Daily Revenue Update — chỉ in mục I–IV + nhận xét (s245, 2026-10-31)
+
+Job Daily (`lark_scheduled_messages` "Daily Revenue Update", cron `1 8 * * *` ICT) chạy luồng Gemini format cũ (`scheduled-runner.ts` → `buildReportData("daily")` → `runBIAnalyst` → `buildReportCards`), nhưng nay CHỈ in 4 mục + nhận xét theo prompt trong DB:
+- **I. Pro-rata tháng** (B2B / B2C / Tổng: Doanh thu tháng, Pro-rata, Target tháng, % pro-rata/target; không cột % tiến độ). Pro-rata = dự phóng cả tháng (MTD ÷ ngày đã qua × ngày trong tháng). Target tháng đọc `app_settings.company_monthly_targets` (cùng nguồn Quarter Report), dự phòng `analytics_target_planning`. Trước đây mục này là QTD theo quý — lệch prompt.
+- **II. Doanh thu 3 ngày** (B2B, B2C, Tổng, trong đó VN, trong đó US) · **III. Top 10 khách B2B** · **IV. Kênh B2C** · **V. Nhận xét**.
+- Số tiền ghi gọn tỷ/tr (`fmtShort`). Nhãn `【3】【6】【7】【8】` được code đổi sang I–IV sau khi Gemini dựng (regex trong `runScheduledMessage`, có chống lặp "V. V."); chỉ thị thêm trong `rule7` (directive) chỉ cho kỳ daily — Weekly/Monthly/Quarterly giữ rule cũ "in đủ mọi mục".
+- **Nguyên nhân tin dài/rối trước đây:** directive ép in đủ 【1】→【8】 dù prompt chỉ liệt kê 4 mục.
+- **Chống gửi lặp (s245):** route cron KHÔNG nhả claim `last_run_at` khi đã gửi ≥1 card (`err.partialSent` hoặc `state.sending`), tránh gửi lại cả báo cáo mỗi tick. Nguyên nhân tin lặp mỗi giờ chưa xác nhận (log Vercel Hobby chỉ 1h) → xem History cron-job.org.
+- **Chỉ ở `staging` (chưa dùng cho job):** card Toplines kiểu mới (`buildDailyToplineCard`: số La Mã, bảng header xám, % tô màu, B2B theo Tier, top 10 kèm Tier), popup Daily Report trên Dashboard (`components/daily-report-popup.tsx`, API `/api/analytics/daily-topline`, 1 lần/ngày/người, đăng nhập vào thẳng `/analytics`), route thử `GET /api/cron/daily-topline` (Bearer CRON_SECRET; `?legacy=1&send=1&recall=1&chat=<chat_id>` chạy luồng job thật dryRun rồi gửi vào chat, thu hồi card Daily cũ của bot trước). Lark chỉ cho bot thu hồi trong vài giờ (lỗi 230009 `Message has expired`). Chờ sếp/anh Bảo chốt.
