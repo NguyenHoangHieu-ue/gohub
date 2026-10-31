@@ -10,6 +10,7 @@ import {
 import { fetchBODGroupMarginData, type BODGroup } from "@/lib/bod-data"
 import { fetchQuarterlySettings, excludedForB2C } from "@/lib/quarterly-settings"
 import { getProjectionFactor } from "@/lib/analytics-engine/projection"
+import { fetchQuarterProgress, fetchTierAnalysis, type QuarterProgress, type TierAnalysis } from "./extras"
 import { getReportPeriods, pctChange, addDaysStr, daysBetweenStr, type ReportPeriods } from "./period"
 
 const source = getAnalyticsSource("fulfiled_date") // Weekly Report luôn dùng Fulfillment (khớp mọi tab BOD/Quarter Report)
@@ -41,6 +42,9 @@ export interface WeeklyReportData {
     totalCur: number; totalPrev: number; totalPct: number
   }
   monthVsPrev: { b2b: GroupTotals & { prevMonthActual: number }; b2c: GroupTotals & { prevMonthActual: number }; total: GroupTotals & { prevMonthActual: number } }
+  quarter: QuarterProgress
+  tiers: TierAnalysis[]
+  b2cMargin: { pct: number; prevPct: number }
   b2bChannels: ChannelMoM[]
   b2cChannels: ChannelMoM[]
   b2bGpCm1: { gp: number; cm1: number; gpProrata: number; cm1Prorata: number; cm1ProrataPct: number; gpPrevMonth: number; cm1PrevMonth: number }
@@ -169,7 +173,7 @@ async function fetchHk3Totals(startDate: string, endDate: string) {
   }
 }
 
-export async function buildWeeklyReportData(): Promise<WeeklyReportData> {
+export async function buildWeeklyReportData(origin: string): Promise<WeeklyReportData> {
   const periods = getReportPeriods()
   const { monthStart, cutoffDate, prevMonthStart, prevMonthEnd, lastWeekStart, lastWeekEnd, prevWeekStart, prevWeekEnd } = periods
   const projFactor = getProjectionFactor(monthStart, cutoffDate)
@@ -188,6 +192,7 @@ export async function buildWeeklyReportData(): Promise<WeeklyReportData> {
     b2bChannels, b2cChannels,
     totalMtd, totalPrevMonth,
     hk3Mtd, hk3PrevMonth,
+    quarter, tiers,
   ] = await Promise.all([
     fetchKpiCard(lastWeekStart, lastWeekEnd, prevWeekStart, prevWeekEnd),
     fetchKpiCard(monthStart, cutoffDate, monthKpiPrevStart, monthKpiPrevEnd),
@@ -201,6 +206,8 @@ export async function buildWeeklyReportData(): Promise<WeeklyReportData> {
     fetchKpiTotals(prevMonthStart, prevMonthEnd),
     fetchHk3Totals(monthStart, cutoffDate),
     fetchHk3Totals(prevMonthStart, prevMonthEnd),
+    fetchQuarterProgress(origin, cutoffDate),
+    fetchTierAnalysis(origin, cutoffDate, monthStart, projFactor),
   ])
 
   const weeklyWowRows = ["B2B", "B2C", "Internal/Misc"].map(label => ({
@@ -239,6 +246,7 @@ export async function buildWeeklyReportData(): Promise<WeeklyReportData> {
         prevMonthActual: totalPrevMonthRev,
       },
     },
+    quarter, tiers, b2cMargin: { pct: b2cMtd.margin_percent, prevPct: b2cPrevMonth.margin_percent },
     b2bChannels, b2cChannels,
     b2bGpCm1: {
       gp: b2bMtd.margin, cm1: b2bMtd.gpm2,

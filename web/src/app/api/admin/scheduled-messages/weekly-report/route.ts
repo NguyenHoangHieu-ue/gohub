@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getDbRole } from "@/lib/db-role"
 import { buildWeeklyReportData } from "@/lib/weekly-report/data"
-import { generateChannelNarratives } from "@/lib/weekly-report/narrative"
 import { buildReportContent } from "@/lib/weekly-report/report-content"
 import { buildWeeklyReportDocx } from "@/lib/weekly-report/docx-export"
 
@@ -27,7 +26,7 @@ async function canWriteScheduled(username: string): Promise<boolean> {
   } catch { return false }
 }
 
-export async function POST(_req: NextRequest) {
+export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.username) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   if (!(await canWriteScheduled(session.user.username))) {
@@ -35,10 +34,14 @@ export async function POST(_req: NextRequest) {
   }
 
   try {
-    const data = await buildWeeklyReportData()
-    const allChannels = [...data.b2bChannels, ...data.b2cChannels]
-    const narratives = await generateChannelNarratives(allChannels)
-    const content = await buildReportContent(data, narratives)
+    // origin để gọi nội bộ quarterly-report / quarterly-b2b-customers (tiến độ quý + phân tích Tier) — đúng số Quarter Report.
+    const data = await buildWeeklyReportData(req.nextUrl.origin)
+    const content = await buildReportContent(data)
+
+    // ?format=md → xem nhanh nội dung (markdown + ảnh base64) để kiểm trước khi tải .docx
+    if (req.nextUrl.searchParams.get("format") === "md") {
+      return NextResponse.json({ markdown: content.markdown, images: Object.fromEntries(Object.entries(content.images).map(([k, v]) => [k, v.buffer.toString("base64")])) })
+    }
 
     const docxBuf = await buildWeeklyReportDocx(content)
 
