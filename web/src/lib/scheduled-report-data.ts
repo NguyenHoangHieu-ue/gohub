@@ -780,14 +780,15 @@ export async function buildToplineAssessment(t: DailyTopline): Promise<string | 
   }
 }
 
-// Dựng đúng 1 Lark card (schema 2.0) từ DailyTopline. Mục đánh số La Mã; bảng có header xám + số căn phải + % tô màu.
-export function buildDailyToplineCard(t: DailyTopline, dashboardUrl: string, opts?: { keyword?: string; assessment?: string | null }): any {
+// Dựng đúng 1 Lark card (schema 2.0) cho Daily — theo prompt Daily gốc: 【3】 pro-rata tháng, 【6】 doanh thu 3 ngày, 【7】 top 10 khách B2B, 【8】 kênh B2C + nhận xét.
+// Mục đánh số La Mã; bảng header xám, số căn phải, % tô màu.
+export function buildDailyToplineCard(t: DailyTopline, d: DailyDetail, dashboardUrl: string, opts?: { keyword?: string; assessment?: string | null }): any {
   const GREEN = "green", RED = "red", ORANGE = "orange"
   const font = (color: string, txt: string) => `<font color='${color}'>${txt}</font>`
   const cmp = (c: number, p: number) => {
     if (!(p > 0)) return "—"
-    const d = ((c - p) / p) * 100
-    return font(d >= 0 ? GREEN : RED, `${d >= 0 ? "▲" : "▼"} ${pct(Math.abs(d))}`)
+    const x = ((c - p) / p) * 100
+    return font(x >= 0 ? GREEN : RED, `${x >= 0 ? "▲" : "▼"} ${pct(Math.abs(x))}`)
   }
   const progressTxt = (v: number) => font(v >= 100 ? GREEN : v >= 85 ? ORANGE : RED, pct(v))
   const col = (name: string, display: string, kind: "text" | "num" | "md" = "num") => ({
@@ -802,23 +803,18 @@ export function buildDailyToplineCard(t: DailyTopline, dashboardUrl: string, opt
   const sec = (num: string, title: string, sub?: string) => ({
     tag: "markdown", content: `**${num}. ${title}**${sub ? `  ${font("grey", sub)}` : ""}`,
   })
-  const sub = (txt: string) => ({ tag: "markdown", content: `**▸ ${txt}**` })
   const hr = { tag: "hr" }
-  const dayCols = (first: string) => [
-    col("c0", first, "text"), col("c1", `Hôm qua (${t.dayShort})`), col("c2", `Hôm trước (${t.prevDayShort})`), col("c3", "% so sánh", "md"),
+  // 3 cột ngày (hôm qua → 3 ngày trước) + % hôm qua so với hôm trước
+  const dayCols = (first: string, withTier = false) => [
+    col("c0", first, "text"), ...(withTier ? [col("ct", "Tier", "text")] : []),
+    col("d0", d.days[0]), col("d1", d.days[1]), col("d2", d.days[2]), col("pc", "% so sánh", "md"),
   ]
-  const mvRows = (rows: Mv[]) => rows.map(r => ({ c0: r.name, c1: fmtShort(r.cur), c2: fmtShort(r.prev), c3: cmp(r.cur, r.prev) }))
-  const hl = (up: Mv | null, down: Mv | null) => [
-    ...(up ? [`${font(GREEN, "▲ Tăng mạnh:")} **${up.name}** ${fmtShort(up.cur)} (+${fmtShort(up.cur - up.prev)} so với hôm trước)`] : []),
-    ...(down ? [`${font(RED, "▼ Giảm mạnh:")} **${down.name}** ${fmtShort(down.cur)} (-${fmtShort(down.prev - down.cur)} so với hôm trước)`] : []),
-  ].join("\n")
+  const dayRow = (name: string, v: number[], tier?: string) => ({
+    c0: name, ...(tier !== undefined ? { ct: tier } : {}),
+    d0: fmtShort(v[0]), d1: fmtShort(v[1]), d2: fmtShort(v[2]), pc: cmp(v[0], v[1]),
+  })
+  const trend = (name: string) => d.trend.find(x => x.name === name)?.values ?? [0, 0, 0]
 
-  const bd = t.breakdown
-  const revTable = table(dayCols("Thị trường"), [
-    { c0: "VN", c1: fmtShort(t.day.vn), c2: fmtShort(t.prevDay.vn), c3: cmp(t.day.vn, t.prevDay.vn) },
-    { c0: "US", c1: fmtShort(t.day.us), c2: fmtShort(t.prevDay.us), c3: cmp(t.day.us, t.prevDay.us) },
-    { c0: "**Tổng**", c1: `**${fmtShort(t.day.total)}**`, c2: fmtShort(t.prevDay.total), c3: cmp(t.day.total, t.prevDay.total) },
-  ])
   const tgtTable = table(
     [col("c0", "Nhóm", "text"), col("c1", "Doanh thu tháng"), col("c2", "Pro-rata"), col("c3", "Target tháng"), col("c4", "% pro-rata/target", "md")],
     t.groups.map(x => ({
@@ -827,37 +823,24 @@ export function buildDailyToplineCard(t: DailyTopline, dashboardUrl: string, opt
       c4: x.target > 0 ? progressTxt(ratio(x.proRata, x.target)) : "—",
     })),
   )
-  const top10Table = table(
-    [col("c0", "Khách", "text"), col("c1", "Tier", "text"), col("c2", `Hôm qua (${t.dayShort})`), col("c3", `Hôm trước (${t.prevDayShort})`), col("c4", "% so sánh", "md")],
-    bd.b2bTop.map(r => ({ c0: r.name, c1: r.tier, c2: fmtShort(r.cur), c3: fmtShort(r.prev), c4: cmp(r.cur, r.prev) })),
-  )
-  const b2bHl = hl(bd.b2bUp, bd.b2bDown), b2cHl = hl(bd.b2cUp, bd.b2cDown)
-  const cm1Line = t.cm1.map(c => `${c.name} **${pct(c.cm1Pct)}**${c.target != null ? font("grey", ` (target ${pct(c.target)})`) : ""}`).join("  ·  ")
-  const eff = [
-    `• GP tháng: **${fmtShort(t.mtdGp)}** (${pct(ratio(t.mtdGp, t.mtdTotal))} doanh thu)`,
-    `• CM1%: ${cm1Line}`,
-    `• %3HK: **${pct(t.hk3Pct)}**${t.hk3Target != null ? font("grey", ` (target ${pct(t.hk3Target)})`) : ""}`,
-  ].join("\n")
+  const trendTable = table(dayCols("Khối"), [
+    dayRow("B2B", trend("B2B")), dayRow("B2C", trend("B2C")), dayRow("**Tổng**", trend("Tổng")),
+    dayRow("   trong đó VN", trend("VN")), dayRow("   trong đó US", trend("US")),
+  ])
+  const top10Table = table(dayCols("Khách", true), d.topB2b.map(r => dayRow(r.name, r.values, r.tier ?? "")))
+  const b2cTable = table(dayCols("Kênh"), d.topB2c.map(r => dayRow(r.name, r.values)))
 
+  const ROMAN = ["I", "II", "III", "IV", "V", "VI"]
   let n = 0
-  const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
   const next = () => ROMAN[n++]
   const els: any[] = [
-    sec(next(), "DOANH THU HÔM QUA", `(${t.dayShort})`), revTable, hr,
-    sec(next(), `TIẾN ĐỘ TARGET THÁNG ${t.monthStr.slice(5)}`, `(đã qua ${t.daysElapsed}/${t.daysInMonth} ngày)`), tgtTable,
+    sec(next(), `PRO-RATA THÁNG ${t.monthStr.slice(5)}`, `(đã qua ${t.daysElapsed}/${t.daysInMonth} ngày)`), tgtTable,
     { tag: "markdown", content: font("grey", "Pro-rata = dự phóng cả tháng theo doanh thu lũy kế tới hôm qua.") }, hr,
-    ...(bd.tiers.length ? [
-      sec(next(), "B2B"), sub("Theo Tier"), table(dayCols("Tier"), mvRows(bd.tiers)),
-      ...(bd.b2bTop.length ? [sub("Top 10 khách"), top10Table] : []),
-      ...(b2bHl ? [{ tag: "markdown", content: b2bHl }] : []), hr,
-    ] : []),
-    ...(bd.b2cChannels.length ? [
-      sec(next(), "B2C", "(top 5 kênh)"), table(dayCols("Kênh"), mvRows(bd.b2cChannels)),
-      ...(b2cHl ? [{ tag: "markdown", content: b2cHl }] : []), hr,
-    ] : []),
-    sec(next(), "HIỆU QUẢ", "(lũy kế tháng)"), { tag: "markdown", content: eff },
-    ...(opts?.assessment ? [hr, sec(next(), "ĐÁNH GIÁ CHUNG"), { tag: "markdown", content: opts.assessment }] : []),
-    hr, { tag: "markdown", content: `[Xem chi tiết trên Intel Dashboard →](${dashboardUrl})` },
+    sec(next(), "DOANH THU 3 NGÀY"), trendTable, hr,
+    ...(d.topB2b.length ? [sec(next(), "TOP 10 KHÁCH B2B", "(3 ngày)"), top10Table, hr] : []),
+    ...(d.topB2c.length ? [sec(next(), "KÊNH B2C", "(top 10, 3 ngày)"), b2cTable, hr] : []),
+    ...(opts?.assessment ? [sec(next(), "ĐÁNH GIÁ CHUNG"), { tag: "markdown", content: opts.assessment }, hr] : []),
+    { tag: "markdown", content: `[Xem chi tiết trên Intel Dashboard →](${dashboardUrl})` },
   ]
   return {
     schema: "2.0",
@@ -874,18 +857,20 @@ export function buildDailyToplineCard(t: DailyTopline, dashboardUrl: string, opt
 export interface DailyDetail {
   days: string[]                                   // desc: [hôm qua, hôm trước, 3 ngày trước] dạng DD/MM
   trend: Array<{ name: string; values: number[] }> // B2B, B2C, Tổng, VN, US
-  topB2b: Array<{ name: string; values: number[] }>
+  topB2b: Array<{ name: string; values: number[]; tier?: string }>   // top 10 Organization B2B (3 ngày) kèm Tier
   topB2c: Array<{ name: string; values: number[] }>
 }
 
 export async function buildDailyDetail(): Promise<DailyDetail> {
   const r = computeRanges("daily")
   const days = r.days
-  const [dayRows, b2bCust, b2cCh] = await Promise.all([
+  const [dayRows, orgRows, b2cCh, qs] = await Promise.all([
     revByDay(days[2], days[0]),
-    b2bCustomersByDay(days[2], days[0]),
+    b2bCustomerTierByDay(days[2], days[0]),
     b2cChannelsByDay(days[2], days[0]),
+    fetchQuarterlySettings(),
   ])
+  const classify = makeClassifyTier(qs.tierKeywords)
   const n = (v: string | undefined) => parseFloat(v || "0")
   const dayGet = (grp: string, market: string) => days.map(d =>
     dayRows.filter(x => x.d === d && (grp === "ALL" || x.grp === grp) && (market === "all" || x.cc === market)).reduce((s, x) => s + n(x.revenue), 0))
@@ -901,8 +886,25 @@ export async function buildDailyDetail(): Promise<DailyDetail> {
       { name: "B2B", values: dayGet("B2B", "all") }, { name: "B2C", values: dayGet("B2C", "all") },
       { name: "Tổng", values: dayGet("ALL", "all") }, { name: "VN", values: dayGet("ALL", "VN") }, { name: "US", values: dayGet("ALL", "US") },
     ],
-    topB2b: top(b2bCust, x => x.cust), topB2c: top(b2cCh, x => x.ch),
+    topB2b: topOrgs(orgRows, days, classify), topB2c: top(b2cCh, x => x.ch),
   }
+}
+
+// Top 10 Organization B2B theo tổng 3 ngày, kèm Tier (Tier có doanh thu lớn nhất của khách đó) — cùng bộ lọc với tổng B2B ở bảng pro-rata.
+function topOrgs(rows: Array<{ d: string; org: string; pln: string | null; revenue: string }>, days: string[], classify: (pln: string | null) => string) {
+  const map = new Map<string, { values: number[]; tiers: Map<string, number> }>()
+  for (const x of rows) {
+    const name = cleanOrgName(x.org), i = days.indexOf(x.d)
+    if (i < 0) continue
+    const e = map.get(name) ?? { values: days.map(() => 0), tiers: new Map<string, number>() }
+    const v = parseFloat(x.revenue || "0")
+    e.values[i] += v
+    const tier = classify(x.pln)
+    e.tiers.set(tier, (e.tiers.get(tier) ?? 0) + Math.abs(v))
+    map.set(name, e)
+  }
+  return [...map.entries()].sort((a, b) => b[1].values.reduce((s, v) => s + v, 0) - a[1].values.reduce((s, v) => s + v, 0)).slice(0, 10)
+    .map(([name, e]) => ({ name, values: e.values, tier: [...e.tiers.entries()].sort((p, q) => q[1] - p[1])[0]?.[0] ?? "" }))
 }
 
 // AI đánh giá có cache theo ngày báo cáo (app_settings) → popup mọi người mở + card Lark dùng CHUNG 1 đoạn, không gọi Gemini mỗi lượt.

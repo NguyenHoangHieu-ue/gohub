@@ -2,7 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { AGENTS } from "@/lib/agents/agents"
 import { runBIAnalyst } from "@/lib/agents/bi-analyst"
 import { buildReportCards, sendLarkCardToChat } from "@/lib/lark"
-import { buildReportData, inferPeriod, buildDailyTopline, buildDailyToplineCard, getToplineAssessmentCached } from "@/lib/scheduled-report-data"
+import { buildReportData, inferPeriod, buildDailyTopline, buildDailyDetail, buildDailyToplineCard, getToplineAssessmentCached } from "@/lib/scheduled-report-data"
 
 const DASHBOARD_URL = "https://intel-v2.gohub.cloud/analytics"
 
@@ -21,9 +21,9 @@ export async function runScheduledMessage(
 
   // Daily: 1 card Toplines duy nhất dựng thẳng từ số đã tính (không qua Gemini format; chỉ có 1 đoạn "AI đánh giá" lưu cache theo ngày).
   if (inferPeriod(msg.cron_expression, msg.name) === "daily") {
-    const topline = await buildDailyTopline()
+    const [topline, detail] = await Promise.all([buildDailyTopline(), buildDailyDetail()])
     const assessment = await getToplineAssessmentCached(topline)
-    const card = buildDailyToplineCard(topline, DASHBOARD_URL, { keyword: msg.lark_keyword || undefined, assessment })
+    const card = buildDailyToplineCard(topline, detail, DASHBOARD_URL, { keyword: msg.lark_keyword || undefined, assessment })
     if (options?.dryRun) return JSON.stringify(card)
     if (options?.state) options.state.sending = true
     await sendCard(msg, card)

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sendLarkCardToChat, getLarkToken } from "@/lib/lark"
-import { buildDailyTopline, buildDailyToplineCard, getToplineAssessmentCached } from "@/lib/scheduled-report-data"
+import { buildDailyTopline, buildDailyDetail, buildDailyToplineCard, getToplineAssessmentCached } from "@/lib/scheduled-report-data"
 
 // Bản mẫu card Daily Toplines (chưa nối vào lịch tự động). Bearer CRON_SECRET.
 //   GET ?                      → trả JSON số liệu + card, KHÔNG gửi
@@ -45,14 +45,14 @@ export async function GET(req: NextRequest) {
   }
   const q = req.nextUrl.searchParams
   try {
-    const topline = await buildDailyTopline()
+    const [topline, detail] = await Promise.all([buildDailyTopline(), buildDailyDetail()])
     const assessment = await getToplineAssessmentCached(topline)
     let keyword: string | undefined
     let webhook: string | undefined
     const chat = q.get("chat")
     if (q.get("send") === "1" && chat) {
       const recall = q.get("recall") === "1" ? await recallDailyCards(chat) : undefined   // thu hồi card cũ TRƯỚC khi gửi card mới
-      await sendLarkCardToChat(chat, buildDailyToplineCard(topline, DASHBOARD_URL, { assessment }))
+      await sendLarkCardToChat(chat, buildDailyToplineCard(topline, detail, DASHBOARD_URL, { assessment }))
       return NextResponse.json({ sent: true, chat, recall, topline })
     }
     if (q.get("send") === "1") {
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
       if (!data?.lark_webhook_url) return NextResponse.json({ error: "Không có webhook cho lịch này" }, { status: 400 })
       webhook = data.lark_webhook_url; keyword = data.lark_keyword || undefined
     }
-    const card = buildDailyToplineCard(topline, DASHBOARD_URL, { keyword, assessment })
+    const card = buildDailyToplineCard(topline, detail, DASHBOARD_URL, { keyword, assessment })
     if (!webhook) return NextResponse.json({ topline, card })
     const res = await fetch(webhook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ msg_type: "interactive", card }) })
     const body = await res.json().catch(() => null)
