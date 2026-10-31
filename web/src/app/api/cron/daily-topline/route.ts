@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sendLarkCardToChat } from "@/lib/lark"
 import { buildDailyTopline, buildDailyToplineCard } from "@/lib/scheduled-report-data"
 
 // Bản mẫu card Daily Toplines (chưa nối vào lịch tự động). Bearer CRON_SECRET.
 //   GET ?                      → trả JSON số liệu + card, KHÔNG gửi
+//   GET ?send=1&chat=<chat_id>  → gửi card bằng bot vào group đó
 //   GET ?send=1&to=<tên lịch>  → gửi card vào webhook của scheduled message có tên đó (vd "Test Daily")
 export const dynamic = "force-dynamic"
 export const maxDuration = 120
@@ -20,6 +22,11 @@ export async function GET(req: NextRequest) {
     const topline = await buildDailyTopline()
     let keyword: string | undefined
     let webhook: string | undefined
+    const chat = q.get("chat")
+    if (q.get("send") === "1" && chat) {
+      await sendLarkCardToChat(chat, buildDailyToplineCard(topline, DASHBOARD_URL))
+      return NextResponse.json({ sent: true, chat, topline })
+    }
     if (q.get("send") === "1") {
       const { data } = await supabaseAdmin.from("lark_scheduled_messages")
         .select("lark_webhook_url,lark_keyword").eq("name", q.get("to") || "").maybeSingle()
