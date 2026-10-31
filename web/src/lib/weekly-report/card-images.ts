@@ -122,3 +122,56 @@ export async function renderProjectionBanner(subtitle: string, stats: Stat[]): P
   ])
   return renderPng(el, CARD_W, height)
 }
+
+// ── Card "Tiến độ CM1" kiểu tab Quarter Report (3 thẻ B2B / B2C / Tổng) ──────────
+export interface ProgressRow { label: string; actual: number; prorata: number | null; target: number; pct: number | null; actualSub?: string; targetSub?: string }
+export interface ProgressCard { title: string; accent: string; cm1PctPr: number | null; cm1PctAct: number | null; rows: ProgressRow[] }
+
+const money = (n: number) => {
+  const a = Math.abs(n)
+  if (a >= 1e9) return `${(n / 1e9).toFixed(a >= 1e10 ? 1 : 1)} Tỷ`
+  if (a >= 1e6) return `${(n / 1e6).toFixed(1)} Tr`
+  return Math.round(n).toLocaleString("en-US")
+}
+const tone = (p: number) => (p >= 100 ? { fg: POS, bg: "#d1fae5" } : p >= 85 ? { fg: "#d97706", bg: "#fef3c7" } : { fg: NEG, bg: "#fee2e2" })
+
+function progressCard(c: ProgressCard) {
+  const t = c.cm1PctPr == null ? null : tone(c.cm1PctPr)
+  const cell = (text: string, opts: { bold?: boolean; color?: string; w: number; align?: "flex-end" | "flex-start" }) =>
+    h("div", { style: { display: "flex", width: opts.w, justifyContent: opts.align ?? "flex-end", fontSize: 13, fontWeight: opts.bold ? 800 : 500, color: opts.color ?? INK } }, text)
+  return h("div", {
+    style: { display: "flex", flexDirection: "column", flex: 1, background: "white", border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, marginRight: 12, borderTop: `5px solid ${c.accent}` },
+  }, [
+    h("div", { key: "hd", style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, [
+      h("div", { key: "t", style: { display: "flex", flexDirection: "column" } }, [
+        h("div", { key: "a", style: { display: "flex", fontSize: 16, fontWeight: 800, color: INK } }, c.title),
+        h("div", { key: "b", style: { display: "flex", fontSize: 12, fontWeight: 700, color: SUB } }, "TIẾN ĐỘ CM1"),
+      ]),
+      h("div", { key: "p", style: { display: "flex", flexDirection: "column", alignItems: "flex-end" } }, [
+        h("div", { key: "n", style: { display: "flex", fontSize: 30, fontWeight: 800, color: t?.fg ?? SUB } }, c.cm1PctPr == null ? "—" : `${c.cm1PctPr.toFixed(1)}%`),
+        t ? h("div", { key: "bd", style: { display: "flex", fontSize: 11, fontWeight: 700, color: t.fg, background: t.bg, borderRadius: 10, padding: "2px 8px" } }, c.cm1PctPr! >= 100 ? "Đạt" : c.cm1PctPr! >= 85 ? "Gần đạt" : "Chậm tiến độ") : null,
+      ]),
+    ]),
+    h("div", { key: "bar", style: { display: "flex", position: "relative", height: 12, background: "#f1f5f9", borderRadius: 6, marginTop: 12, marginBottom: 6 } }, [
+      h("div", { key: "pr", style: { display: "flex", position: "absolute", left: 0, top: 0, height: 12, width: `${Math.min(Math.max(c.cm1PctPr ?? 0, 0), 100)}%`, background: c.accent, opacity: 0.3, borderRadius: 6 } }),
+      h("div", { key: "ac", style: { display: "flex", position: "absolute", left: 0, top: 0, height: 12, width: `${Math.min(Math.max(c.cm1PctAct ?? 0, 0), 100)}%`, background: c.accent, borderRadius: 6 } }),
+    ]),
+    h("div", { key: "lg", style: { display: "flex", fontSize: 11, color: SUB, marginBottom: 8 } }, `Thực tế ${(c.cm1PctAct ?? 0).toFixed(1)}%  ·  Dự phóng ${(c.cm1PctPr ?? 0).toFixed(1)}%`),
+    h("div", { key: "th", style: { display: "flex", borderBottom: `1px solid ${BORDER}`, paddingBottom: 4, marginBottom: 4 } }, [
+      cell("", { w: 40 }), cell("ACTUAL", { w: 80, color: SUB, bold: true }), cell("PRO-RATA", { w: 80, color: SUB, bold: true }), cell("TARGET", { w: 80, color: SUB, bold: true }), cell("%", { w: 56, color: SUB, bold: true }),
+    ]),
+    ...c.rows.map((r, i) => h("div", { key: `r${i}`, style: { display: "flex", alignItems: "center", paddingTop: 3, paddingBottom: 3 } }, [
+      cell(r.label, { w: 40, color: SUB, bold: true, align: "flex-start" }),
+      cell(money(r.actual) + (r.actualSub ? ` (${r.actualSub})` : ""), { w: 80, bold: true }),
+      cell(r.prorata == null ? "—" : money(r.prorata), { w: 80, color: "#1d4ed8" }),
+      cell(r.target > 0 ? (r.targetSub ?? money(r.target)) : "—", { w: 80, color: SUB }),
+      r.pct == null ? cell("—", { w: 56, color: SUB }) : h("div", { style: { display: "flex", width: 56, justifyContent: "flex-end" } }, h("div", { style: { display: "flex", fontSize: 12, fontWeight: 800, color: tone(r.pct).fg, background: tone(r.pct).bg, borderRadius: 6, padding: "1px 5px" } }, `${r.pct.toFixed(1)}%`)),
+    ])),
+  ])
+}
+
+export async function renderProgressCards(cards: ProgressCard[]): Promise<Buffer> {
+  const height = 330
+  const el = h("div", { style: { display: "flex", width: CARD_W, height, padding: 4, background: "#f8fafc", fontFamily: "sans-serif" } }, cards.map((c, i) => h("div", { key: i, style: { display: "flex", flex: 1 } }, progressCard(c))))
+  return renderPng(el, CARD_W, height)
+}
