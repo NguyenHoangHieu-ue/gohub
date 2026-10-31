@@ -13,7 +13,7 @@ import { buildReportData, inferPeriod } from "@/lib/scheduled-report-data"
 //   can thiệp vào lịch tự động.
 export async function runScheduledMessage(
   msg: any,
-  options?: { slotMs?: number; noUpdateLastRun?: boolean; dryRun?: boolean },
+  options?: { slotMs?: number; noUpdateLastRun?: boolean; dryRun?: boolean; state?: { sending: boolean } },
 ): Promise<string> {
   const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10)
 
@@ -53,7 +53,14 @@ ${dataBlock}`
   if (options?.dryRun) return report
 
   // Gửi TUẦN TỰ để các phần (1/n, 2/n...) tới group đúng thứ tự.
-  for (const card of cards) await sendCard(msg, card)
+  let sent = 0
+  try {
+    for (const card of cards) { await sendCard(msg, card); sent++ }
+  } catch (e: any) {
+    // Đã có card tới Lark → cron route KHÔNG được nhả claim, nếu không tick sau gửi lại cả báo cáo (spam).
+    if (sent > 0) e.partialSent = true
+    throw e
+  }
 
   if (!options?.noUpdateLastRun) {
     // Ghi slot time (không phải execution time) để dedup chính xác cho lần quét tiếp theo.

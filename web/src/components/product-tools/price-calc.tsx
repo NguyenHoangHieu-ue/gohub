@@ -147,7 +147,7 @@ export default function PriceCalc() {
 
   const copyTable = async () => {
     const head = ["Gói", "Nhà cung cấp", "Nhà mạng", "Giá/GB", "Data (USD)", "Phí khung", "Giá vốn US (USD)", "Giá vốn VN (VND)"]
-    const lines = groups.flatMap(g => g.rows.map(r => [planName(r), r.vendorLabel, r.operator.replace(/\n/g, "; "), `${r.pricePerGb} ${r.currency}`, usd(r.dataUsd), r.feeVnd ? `${vnd(r.feeVnd)} đ` : usd(r.feeUsd), r.usApplicable ? usd(r.cogsUsd) : "—", vnd(r.cogsVnd)].join("\t")))
+    const lines = groups.flatMap(g => g.rows.map(r => [planName(r), r.vendorLabel, r.operator.replace(/\n/g, "; "), `${r.pricePerGb} ${r.currency}`, usd(r.dataUsd), r.feeVnd ? `${usd(r.feeUsd)} + ${vnd(r.feeVnd)} đ` : usd(r.feeUsd), r.usApplicable ? usd(r.cogsUsd) : "—", vnd(r.cogsVnd)].join("\t")))
     try { await navigator.clipboard.writeText([head.join("\t"), ...lines].join("\n")); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { setCalcErr("Không sao chép được — hãy bôi đen bảng và Ctrl+C") }
   }
 
@@ -287,7 +287,7 @@ export default function PriceCalc() {
                         <td className="px-3 py-2 text-gray-600 text-xs align-top"><OperatorCell text={r.operator} /></td>
                         <td className="px-3 py-2 text-right whitespace-nowrap">{r.pricePerGb} {r.currency}</td>
                         <td className="px-3 py-2 text-right">{usd(r.dataUsd)}</td>
-                        <td className="px-3 py-2 text-right whitespace-nowrap">{r.feeVnd ? `${vnd(r.feeVnd)} đ` : usd(r.feeUsd)}</td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap">{r.feeVnd ? `${usd(r.feeUsd)} + ${vnd(r.feeVnd)} đ` : usd(r.feeUsd)}</td>
                         <td className="px-3 py-2 text-right font-semibold" title={ex}>{r.usApplicable ? usd(r.cogsUsd) : <span className="text-gray-300 font-normal">—</span>}</td>
                         <td className="px-3 py-2 text-right font-semibold whitespace-nowrap" title={ex}>{vnd(r.cogsVnd)}</td>
                       </tr>

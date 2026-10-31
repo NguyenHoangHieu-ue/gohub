@@ -1,4 +1,4 @@
-import { ceil2, dataCostPool, dataCostUsd, frameFeeUsd, usdToVnd } from "@/lib/bc-datapool/pricing"
+import { ceil2, dataCostPool, dataCostUsd, frameFeeUsd, imsiFeeUsd, usdToVnd } from "@/lib/bc-datapool/pricing"
 import { nameToIso2, type RefCountryLite, type SupportCountryLite } from "@/lib/bc-datapool/iso"
 import { levelMb, levelsOf } from "@/lib/datapool-formula"
 import type { Assumptions, Fx, PlanKind, PlanLine, Pool, PriceList, PriceRow } from "@/lib/bc-datapool/types"
@@ -157,7 +157,7 @@ export function auditSku(sku: AuditSkuInput, product: AuditProductInput | undefi
       if (sim === "SIM" && !(ctx.whiteSimVnd && ctx.whiteSimVnd > 0)) return skipRow(base, "thiếu giá SIM trắng trong hệ thống")
       feeKind = sim === "eSIM" ? "esim" : "sim"
       if (sim === "eSIM") { feeUsd = frameFeeUsd("eSIM", ctx.priceList!.pools[pool!], ctx.fx); cogsUsd = ceil2(dataUsd + feeUsd); cogsVnd = usdToVnd(cogsUsd, ctx.fx) }
-      else { feeVnd = ctx.whiteSimVnd!; cogsUsd = dataUsd; cogsVnd = usdToVnd(dataUsd, ctx.fx) + feeVnd }
+      else { feeVnd = ctx.whiteSimVnd!; feeUsd = imsiFeeUsd(ctx.priceList!.pools[pool!], ctx.fx); cogsUsd = ceil2(dataUsd + feeUsd); cogsVnd = usdToVnd(cogsUsd, ctx.fx) + feeVnd }
     }
   }
   const expected = tenant === "US" ? cogsUsd : cogsVnd
@@ -167,7 +167,7 @@ export function auditSku(sku: AuditSkuInput, product: AuditProductInput | undefi
     : `${levelsOf(ctx.a)[unlIdx!].gbPerDay} GB/ngày × ${days} ngày`
   const explain = `${pricePerGb} ${poolCurrency}/GB × (${how}) = ${Math.round(dataPool * 1e4) / 1e4} ${poolCurrency} → ${poolCurrency === "HKD" ? `÷ ${ctx.fx.hkdPerUsd} ` : ""}= ${dataUsd} USD`
     + (feeUsd > 0 ? ` + khung ${feeUsd} = ${cogsUsd} USD` : "")
-    + (tenant === "VN" ? ` → × ${ctx.fx.vndPerUsd.toLocaleString("en-US")}${feeVnd > 0 ? ` (data) + ${vendor === "3HK" ? "khung SIM VN" : "SIM trắng"} ${feeVnd.toLocaleString("en-US")}` : ""} = ${cogsVnd.toLocaleString("en-US")} VND` : "")
+    + (tenant === "VN" ? ` → × ${ctx.fx.vndPerUsd.toLocaleString("en-US")}${feeVnd > 0 ? ` (${vendor === "3HK" ? "data" : "data + IMSI"}) + ${vendor === "3HK" ? "khung SIM VN" : "SIM trắng"} ${feeVnd.toLocaleString("en-US")}` : ""} = ${cogsVnd.toLocaleString("en-US")} VND` : "")
   const calc: AuditCalc = { pricePerGb, poolCurrency, amount: kind === "Unlimited" ? hsMb : amount, unit: kind === "Unlimited" ? "MB" : unit, days, kind, unlIdx, dataPool, dataUsd, feeUsd, feeVnd, feeKind, cogsUsd, cogsVnd }
   if (base.current == null) return { ...base, expected, diff: null, diffPct: null, verdict: "nocogs", note: "hệ thống chưa có giá vốn", explain, calc }
   const cmp = compareCogs(base.current, expected, currency)

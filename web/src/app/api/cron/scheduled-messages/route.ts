@@ -111,21 +111,24 @@ export async function GET(req: NextRequest) {
     results.push({ id: msg.id, name: msg.name, ok: true, started: true })
     // Ngân sách còn lại tính lúc CHẠY nền (các message xếp hàng tuần tự), không phải lúc claim.
     background.push(async () => {
+      const state = { sending: false }
       const left = REQUEST_BUDGET_MS - (Date.now() - startedAt)
       try {
         if (left < 15_000) throw new Error("Hết ngân sách thời gian lần chạy này — sẽ thử lại lần kế tiếp")
         // Đã chiếm slot (last_run_at = slotUtcIso) → runner KHÔNG ghi lại last_run_at nữa.
         await withSoftTimeout(
-          runScheduledMessage(msg, { slotMs, noUpdateLastRun: true }),
+          runScheduledMessage(msg, { slotMs, noUpdateLastRun: true, state }),
           Math.min(SOFT_TIMEOUT_MS, left - 5_000),
           msg.name,
         )
       } catch (err: any) {
-        // Gửi lỗi thật (hoặc soft-timeout) → nhả claim (trả last_run_at về giá trị cũ) để tick sau thử lại.
-        await supabaseAdmin
-          .from("lark_scheduled_messages")
-          .update({ last_run_at: msg.last_run_at })
-          .eq("id", msg.id)
+        // Lỗi trước khi gửi gì → nhả claim để tick sau thử lại. Nếu đã gửi được ≥1 card thì GIỮ claim (tránh gửi lại → spam).
+        if (!err?.partialSent && !state.sending) {
+          await supabaseAdmin
+            .from("lark_scheduled_messages")
+            .update({ last_run_at: msg.last_run_at })
+            .eq("id", msg.id)
+        }
         // Trước đây lỗi per-message không alert → thất bại âm thầm nhiều ngày không ai biết. Nay luôn báo Lark.
         await alertCronFailure("scheduled-messages", new Error(`"${msg.name}": ${err.message}`))
       }

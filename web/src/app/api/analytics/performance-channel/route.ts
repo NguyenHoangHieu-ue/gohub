@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import type { PerfRow } from "@/lib/rollup/b2bperf"
+import * as dash from "@/lib/rollup/dash"
 import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getStrategicPartnersList, getGroupCaseSQL, cachedQuery, CACHE_HEADERS, analyticsGuard } from "@/lib/analytics-helpers"
 
 export async function GET(req: NextRequest) {
@@ -13,7 +16,9 @@ export async function GET(req: NextRequest) {
   const endDate     = searchParams.get("endDate")
   const dateColumn  = searchParams.get("dateColumn") || "fulfiled_date"
   const companyCode = searchParams.get("companyCode") || "ALL"
-  const cacheKey    = `perf-channel:${startDate}:${endDate}:${dateColumn}:${companyCode}`
+  const ctx = await rollupCtx("dashboard-performance-channel")
+  const basis = dateColumn === "created_date" ? "sal" : "ful"
+  const cacheKey    = `perf-channel${ruKey(ctx)}:${startDate}:${endDate}:${dateColumn}:${companyCode}`
 
   const source     = getAnalyticsSource(dateColumn)
   const filter     = getDateFilter(startDate, endDate, source.dateCol, "30 days", companyCode)
@@ -24,7 +29,7 @@ export async function GET(req: NextRequest) {
       const strategicList = await getStrategicPartnersList()
       const groupCaseSQL  = getGroupCaseSQL(strategicList)
 
-      const rows = await queryAnalytics<Record<string, string>>(
+      const rawRows = () => queryAnalytics<PerfRow>(
         `WITH current_period AS (
            SELECT COALESCE(s.channel_name,'Unknown') as "channel_name",
                   ${groupCaseSQL} as business_group,
@@ -48,6 +53,10 @@ export async function GET(req: NextRequest) {
          FROM current_period c LEFT JOIN previous_period p ON c."channel_name"=p."channel_name"
          ORDER BY CASE WHEN c.business_group LIKE 'B2B%' THEN 1 WHEN c.business_group='B2C' THEN 2 ELSE 3 END, c.grossRevenue DESC`
       )
+      const rg = await dash.dashRange(ctx, basis, startDate, endDate, true)
+      const rows = rg
+        ? await serve<PerfRow[]>(ctx, rawRows, () => dash.fetchDashChannelRollup(basis, rg, companyCode, strategicList), dash.diffDashChannel, { startDate, endDate, dateColumn, companyCode })
+        : await rawRows()
 
       return rows.map(r => ({
         group:          r.group,
@@ -59,7 +68,7 @@ export async function GET(req: NextRequest) {
       }))
     })
 
-    return NextResponse.json(data, { headers: CACHE_HEADERS })
+    return NextResponse.json(data, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/performance-channel]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

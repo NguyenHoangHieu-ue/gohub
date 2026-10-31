@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import type { PerfRow } from "@/lib/rollup/b2bperf"
+import * as dash from "@/lib/rollup/dash"
 import { getAnalyticsSource, getDateFilter, cachedQuery, CACHE_HEADERS, analyticsGuard, getCustomerStrategicSql, shipFilter, internalOpsFilterByCode } from "@/lib/analytics-helpers"
 
 // Phân loại B2B-Strategic theo price_list_name (KHÁCH) — dùng CHUNG cấu hình quarterly-settings với Quarter Report,
@@ -24,12 +27,14 @@ export async function GET(req: NextRequest) {
   const { isStrategicSql, excludedSql, hash } = await getCustomerStrategicSql()
   const sfxCte = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)}`
   // hash = tier keywords + excluded (quarterly-settings) → cache tự tươi khi Hiếu đổi cấu hình.
-  const cacheKey = `revenue-chart3:${startDate}:${endDate}:${dateColumn}:${companyCode}:${hash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
+  const ctx = await rollupCtx("dashboard-revenue-chart")
+  const basis = dateColumn === "created_date" ? "sal" : "ful"
+  const cacheKey = `revenue-chart3${ruKey(ctx)}:${startDate}:${endDate}:${dateColumn}:${companyCode}:${hash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}`
   const b2bReal = `UPPER(COALESCE(s.group_name,'')) = 'B2B' AND NOT ${excludedSql}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
-      const rows = await queryAnalytics<Record<string, string>>(
+      const rawRows = () => queryAnalytics<PerfRow>(
         `WITH filtered_f AS (
            SELECT ${source.dateCol} as date, order_source_code, customer_code, ${source.revenueCol} as revenue
            FROM ${source.mainTable} f WHERE ${filter} ${sfxCte}
@@ -45,6 +50,10 @@ export async function GET(req: NextRequest) {
          LEFT JOIN dim_customer c ON TRIM(f.customer_code) = c.code
          GROUP BY f.date::date ORDER BY f.date::date`
       )
+      const rg = await dash.dashRange(ctx, basis, startDate, endDate, false)
+      const rows = rg
+        ? await serve<PerfRow[]>(ctx, rawRows, () => dash.fetchRevenueChartRollup(basis, rg.start, rg.end, companyCode, includeShip, includeInternalOps, isStrategicSql, excludedSql), dash.diffRevenueChart, { startDate, endDate, dateColumn, companyCode, includeShip, includeInternalOps })
+        : await rawRows()
       return rows.map(r => ({
         name:              r.name,
         b2b_strategic:     parseFloat(r.b2b_strategic     || "0"),
@@ -54,7 +63,7 @@ export async function GET(req: NextRequest) {
       }))
     })
 
-    return NextResponse.json(data, { headers: CACHE_HEADERS })
+    return NextResponse.json(data, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/revenue-chart]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

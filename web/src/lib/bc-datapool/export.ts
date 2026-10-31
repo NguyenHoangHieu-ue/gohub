@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx"
 import { SHEET_NAMES, withHeaders, type BuildResult } from "./builder"
-import { frameFeeUsd } from "./pricing"
+import { frameFeeUsd, imsiFeeUsd } from "./pricing"
 import { customUnlimitedLabel, levelsOf } from "@/lib/datapool-formula"
 import type { Assumptions, Fx, Pool, PriceList } from "./types"
 
@@ -13,7 +13,7 @@ const P = { hkd: "$T$2", cny: "$T$3", vnd: "$T$4", fixed: "$T$5", daily: "$T$6",
 const CUSTOM_UNL_ROW0 = 21
 const unlCellOf = (c: { unlIdx?: number }) => `$T$${CUSTOM_UNL_ROW0 + (c.unlIdx ?? 0)}`
 const FEE_CELL = {
-  "esim:CMHK": "$T$15", "esim:SINGTEL": "$T$16",
+  "esim:CMHK": "$T$15", "esim:SINGTEL": "$T$16", "sim:CMHK": "$T$17", "sim:SINGTEL": "$T$18",
 } as const
 
 const CALC_HEADERS = ["Loại", "SKU US", "SKU VN", "ProductID", "Pool", "Nhà mạng áp dụng", "Loại gói", "Data", "Đơn vị", "Ngày", "Giá/GB (tiền pool)", "Tiền tệ pool",
@@ -51,6 +51,8 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
   const fee = (sim: "eSIM", pool: Pool) => frameFeeUsd(sim, pl[pool], ctx.fx)
   put("S15", str("Phí khung eSIM CMHK (USD) = eSIM CNY/CNY-USD + IMSI HKD/HKD-USD"));  put("T15", num(fee("eSIM", "CMHK"), "ROUNDUP(T11/$T$3+T10/$T$2,2)"))
   put("S16", str("Phí khung eSIM Singtel (USD) = eSIM CNY/CNY-USD + IMSI USD"));        put("T16", num(fee("eSIM", "SINGTEL"), "ROUNDUP(T13/$T$3+T12,2)"))
+  put("S17", str("Phí IMSI SIM full CMHK (USD) = IMSI HKD/HKD-USD")); put("T17", num(imsiFeeUsd(pl.CMHK, ctx.fx), "ROUNDUP(T10/$T$2,2)"))
+  put("S18", str("Phí IMSI SIM full Singtel (USD) = IMSI USD"));    put("T18", num(imsiFeeUsd(pl.SINGTEL, ctx.fx), "ROUNDUP(T12,2)"))
 
   ;levelsOf(ctx.a).forEach((u, i) => { put(at("S", CUSTOM_UNL_ROW0 + i), str(`Unlimited ${customUnlimitedLabel(u)} — GB/ngày`)); put(at("T", CUSTOM_UNL_ROW0 + i), num(u.gbPerDay)) })
 
@@ -68,7 +70,7 @@ export function buildWorkbook(result: BuildResult, ctx: { fx: Fx; a: Assumptions
     put(at("K", r), num(c.pricePerGb)); put(at("L", r), str(c.currency))
     put(at("M", r), num(c.dataPool, dataF))
     put(at("N", r), num(c.dataUsd, `ROUNDUP(IF(L${r}="HKD",M${r}/${P.hkd},M${r}),2)`))
-    put(at("O", r), c.feeKind === "none" || c.feeKind === "sim" ? num(0) : num(c.feeUsd, FEE_CELL[`${c.feeKind}:${c.poolKey}`]))
+    put(at("O", r), c.feeKind === "none" ? num(0) : num(c.feeUsd, FEE_CELL[`${c.feeKind}:${c.poolKey}`]))
     put(at("P", r), num(c.cogsUsd, `ROUNDUP(N${r}+O${r},2)`))
     put(at("Q", r), num(c.cogsVnd, c.feeKind === "sim" ? `ROUNDUP(P${r}*${P.vnd},0)+$T$8` : `ROUNDUP(P${r}*${P.vnd},0)`))
   })

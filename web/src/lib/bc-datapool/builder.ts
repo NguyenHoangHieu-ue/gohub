@@ -1,6 +1,6 @@
 import { FRAME_SKU, POLICY_CODE, VENDOR_CODE, productCode, skuCode, type ProductTypeChar } from "./codes"
 import { explainCost, type CostExplain } from "./explain"
-import { ceil2, dataCostPool, dataCostUsd, frameFeeUsd, toMb, unlimitedFactor, usdToVnd } from "./pricing"
+import { ceil2, dataCostPool, dataCostUsd, frameFeeUsd, imsiFeeUsd, toMb, unlimitedFactor, usdToVnd } from "./pricing"
 import type { Assumptions, BuiltSheets, Fx, PlanKind, Pool, PriceList, ProductInput } from "./types"
 import { customUnlimitedLabel, levelsOf } from "@/lib/datapool-formula"
 
@@ -43,7 +43,7 @@ export interface CostRow {
   explain: CostExplain
   dataUsd: number
   feeUsd: number
-  /** SIM full (E, chỉ VN): giá SIM trắng cộng thẳng bằng VND (không đổi qua USD, không IMSI) — khớp giá đang lưu trong hệ thống */
+  /** SIM full (E, chỉ VN): giá SIM trắng cộng thẳng bằng VND (không đổi qua USD); IMSI nằm trong feeUsd và được đổi VND cùng data */
   feeVnd: number
   cogsUsd: number
   cogsVnd: number
@@ -115,7 +115,7 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
     const covs = Array.from(new Set(chosen.map(r => r.coverage)))
     const opsOf = (rows: typeof chosen) => Array.from(new Set(rows.map(r => r.operator))).join("/")
     const onsite = covs.length > 1 ? covs.map(c => `${c}: ${opsOf(chosen.filter(r => r.coverage === c))}`).join("\n") : opsOf(chosen)
-    const fee = p.simType === "eSIM" ? frameFeeUsd("eSIM", pool, fx) : 0
+    const fee = p.simType === "eSIM" ? frameFeeUsd("eSIM", pool, fx) : imsiFeeUsd(pool, fx)
     const whiteVnd = p.simType === "SIM" ? (opt.whiteSimVnd ?? 0) : 0
     const kycOps = chosen.filter(r => r.kyc)
     if (kycOps.length) out.warnings.push(`${label}: nhà mạng ${kycOps.map(r => r.operator).join(", ")} có KYC trong bảng giá — kiểm tra kycNeeded/kycCode`)
@@ -219,7 +219,7 @@ export function build(products: ProductInput[], list: PriceList, fx: Fx, a: Assu
         }
         const full = ceil2(dataUsd + fee)
         if (p.simType === "eSIM") { push("C", full, fee); if (esimA) push("A", dataUsd, 0) }
-        else { push("A", dataUsd, 0); push("E", dataUsd, 0, whiteVnd) }
+        else { push("A", dataUsd, 0); push("E", full, fee, whiteVnd) }
       }
     })
   })

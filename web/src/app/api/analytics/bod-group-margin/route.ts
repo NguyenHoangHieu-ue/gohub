@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, getStrategicSettingsHash, noCache } from "@/lib/analytics-helpers"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
+import { rollupCtx, ruHeaders, ruKey } from "@/lib/rollup/serve"
 import { fetchBODGroupMarginTripleShared } from "@/lib/bod-data"
 
 // Port intel bod-group-margin: nhóm B2B-Strategic/B2B-Non-Strategic/B2C/Other + CM1 (margin − op-cost).
@@ -24,9 +25,10 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const ctx = await rollupCtx("bod-group-margin")
     const stratHash = await getStrategicSettingsHash()
     const { excludedCustomers } = await fetchQuarterlySettings()
-    const key = `bod-group-margin4:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const key = `bod-group-margin4${ruKey(ctx)}:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${stratHash}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
       // Dùng chung 3 kỳ với bod-summary (một lần quét, xem fetchBODGroupMarginTripleShared).
       const [currentRes, prevRes, lyRes] = await fetchBODGroupMarginTripleShared(startDate, endDate, dateColumn, extraFilters, includeShip, includeInternalOps)
@@ -38,7 +40,7 @@ export async function GET(req: NextRequest) {
       })
     }, QUERY_TTL_MIN, noCache(req), ["b2b-cost"])
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    return NextResponse.json(payload, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/bod-group-margin]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

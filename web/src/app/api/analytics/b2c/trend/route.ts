@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getAnalyticsSource, getDateFilter, shipFilter, internalOpsFilter, excludeOpsByCode, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { rollupFirstDay, type PerfRow } from "@/lib/rollup/b2bperf"
+import { diffB2cTrend, fetchB2cTrendRollup } from "@/lib/rollup/b2c2"
 import { fetchQuarterlySettings, exclHash, excludedForB2C } from "@/lib/quarterly-settings"
 
 export async function GET(req: NextRequest) {
@@ -24,6 +27,7 @@ export async function GET(req: NextRequest) {
 
   const source     = getAnalyticsSource(dateColumn)
   const filter     = getDateFilter(startDate, endDate, source.dateCol)
+  const ctx = await rollupCtx("b2c-trend")
   const dateFormat = period === "quarter" ? `YYYY-"Q"Q` : "YYYY-MM"
 
   try {
@@ -32,9 +36,9 @@ export async function GET(req: NextRequest) {
     // trang có loại, số liệu lệch nhau.
     const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : { excludedCustomers: excludedForB2C((await fetchQuarterlySettings()).excludedCustomers) }
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
-    const key = `b2c-trend:${dateColumn}:${startDate}:${endDate}:${period}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const key = `b2c-trend${ruKey(ctx)}:${dateColumn}:${startDate}:${endDate}:${period}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
-    const rows = await queryAnalytics<Record<string, string>>(
+    const rawRows = () => queryAnalytics<Record<string, string>>(
       `SELECT TO_CHAR(f.${source.dateCol}::date, '${dateFormat}') as name,
               SUM(f.${source.revenueCol}) as revenue,
               SUM(f.${source.marginCol})  as margin,
@@ -46,6 +50,15 @@ export async function GET(req: NextRequest) {
        WHERE UPPER(s.group_name) = 'B2C' AND ${filter} ${sfx}
        GROUP BY 1 ORDER BY 1`
     )
+    // Rollup chỉ phục vụ khi khoảng ngày nằm trong vùng đã dựng; còn lại đường thô.
+    const basis = dateColumn === "created_date" ? "sal" : "ful"
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const ruEnd = endDate < yesterday ? endDate : yesterday
+    const first = ctx.mode !== "off" ? await rollupFirstDay(basis).catch(() => null) : null
+    const rows: Record<string, string>[] = first && startDate >= first && startDate <= ruEnd
+      ? await serve<PerfRow[]>(ctx, rawRows, () => fetchB2cTrendRollup({ basis, start: startDate, end: ruEnd, period: period === "quarter" ? "quarter" : "month", includeShip, includeInternalOps, excludedCustomers }),
+          diffB2cTrend, { dateColumn, startDate, endDate, period, includeShip, includeInternalOps, includeOpsCustomers })
+      : await rawRows()
     return rows.map(r => ({
       name:           r.name,
       revenue:        parseFloat(r.revenue        || "0"),
@@ -54,7 +67,7 @@ export async function GET(req: NextRequest) {
     }))
     }, QUERY_TTL_MIN, noCache(req))
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    return NextResponse.json(payload, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/b2c/trend]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

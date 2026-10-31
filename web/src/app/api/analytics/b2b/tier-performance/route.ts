@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { analyticsGuard, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, getAnalyticsSource, shipFilter, internalOpsFilter, excludeInactiveCustomers, customerExcludedSql } from "@/lib/analytics-helpers"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { rollupFirstDay } from "@/lib/rollup/b2bperf"
+import { diffTier, fetchTierRollup, type TierRow } from "@/lib/rollup/b2btier"
 import { fetchQuarterlySettings } from "@/lib/quarterly-settings"
 
 // Phân loại tier từ price_list_name (nhất quán với quarterly-b2b-customers)
@@ -52,18 +55,12 @@ export async function GET(req: NextRequest) {
   const { excludedCustomers } = await fetchQuarterlySettings()
   const excludedSql = customerExcludedSql(excludedCustomers)
   const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeInactiveCustomers()}`
-  const cacheKey = `b2b_tier3:${startDate}:${endDate}:${dateColumn}:${companyCode}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${excludedCustomers.sort().join("|")}`
+  const ctx = await rollupCtx("b2b-tier-performance")
+  const cacheKey = `b2b_tier3${ruKey(ctx)}:${startDate}:${endDate}:${dateColumn}:${companyCode}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${excludedCustomers.sort().join("|")}`
 
   try {
     const data = await cachedQuery(cacheKey, async () => {
-      const rows = await queryAnalytics<{
-        price_list_name: string | null
-        currency_code: string | null
-        revenue: string
-        gp: string
-        orders: string
-        units: string
-      }>(`
+      const rawRows = () => queryAnalytics<TierRow>(`
         SELECT
           c.price_list_name,
           c.currency_code,
@@ -82,6 +79,14 @@ export async function GET(req: NextRequest) {
           ${sfx}
         GROUP BY c.price_list_name, c.currency_code
       `)
+
+      // Rollup chỉ phục vụ khi khoảng ngày nằm trong vùng đã dựng; còn lại đường thô.
+      const basis = dateColumn === "created_date" ? "sal" : "ful"
+      const first = ctx.mode !== "off" ? await rollupFirstDay(basis).catch(() => null) : null
+      const rows = first && startDate >= first && startDate <= endDate
+        ? await serve<TierRow[]>(ctx, rawRows, () => fetchTierRollup({ basis, start: startDate, end: endDate, companyCode, includeShip, includeInternalOps, excludedCustomers }),
+            diffTier, { startDate, endDate, dateColumn, companyCode, includeShip, includeInternalOps })
+        : await rawRows()
 
       type TierAgg = { revenue: number; gp: number; orders: number; units: number }
       const emptyAgg = (): TierAgg => ({ revenue: 0, gp: 0, orders: 0, units: 0 })
@@ -133,7 +138,7 @@ export async function GET(req: NextRequest) {
       return { tiers, startDate, endDate }
     }, QUERY_TTL_MIN)
 
-    return NextResponse.json(data, { headers: CACHE_HEADERS })
+    return NextResponse.json(data, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[b2b/tier-performance]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

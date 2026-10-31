@@ -11,6 +11,10 @@ import { buildQuarterMonthMeta, getKpiFactor, getElapsedRatio } from "@/lib/anal
 import { fetchQuarterlySettings, makeExcludeSql, exclHash } from "@/lib/quarterly-settings"
 import { fetchB2BLifecycleRows, classifyB2BLifecycle, fetchCustomerNames, type B2BLifecycleRow } from "@/lib/analytics-engine/b2b-lifecycle"
 
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { fetchB2BLifecycleRollup } from "@/lib/rollup/lifecycle"
+import { diffSquad, fetchSquadRollup, type SquadRaw } from "@/lib/rollup/squad"
+
 export const dynamic = "force-dynamic"
 
 type RiskLevel = "very_safe" | "safe" | "safe_low" | "danger_low" | "danger_high" | "no_target"
@@ -150,9 +154,10 @@ export async function GET(req: NextRequest) {
     // tươi mỗi request (nhập xong hiện ngay, không cần flush).
     // v2 (s214b): thêm org_key/org_name vào SELECT/GROUP BY (gộp bảng KH theo Organization) — bump để tránh
     // đọc cache cũ thiếu 2 cột này (custRows.org_key sẽ undefined → fallback về mã lẻ, không gộp được gì).
-    const rawKey = `squad_raw_v2:${quarter}:${year}:${companyCode}:${qEnd}:${exclHash(excludedCustomers)}`
+    const ctx = await rollupCtx("squad-progress")
+    const rawKey = `squad_raw_v2:${quarter}:${year}:${companyCode}:${qEnd}:${exclHash(excludedCustomers)}${ruKey(ctx)}`
     const [raw, { groupCosts: allGroupCosts }, lifecycleRows] = await Promise.all([
-      cachedQuery(rawKey, async () => {
+      cachedQuery(rawKey, () => serve<SquadRaw>(ctx, async () => {
         const [custRows, picRows, prevCustRevRows] = await Promise.all([
         queryAnalytics<Record<string, string>>(`
           SELECT
@@ -209,10 +214,11 @@ export async function GET(req: NextRequest) {
           GROUP BY 1
         `).catch(() => [] as { customer_code: string; revenue: string }[]),
         ])
-        return { custRows, picRows, prevCustRevRows }
-      }, QUERY_TTL_MIN, noCache(req)),
+        return { custRows, picRows, prevCustRevRows } as unknown as SquadRaw
+      }, () => fetchSquadRollup({ companyCode, excludedCustomers, months, qStart, qEnd, prevQStartDate, prevQEndDate }),
+      diffSquad, { quarter, year, companyCode }), QUERY_TTL_MIN, noCache(req)),
       fetchCosts(months),
-      fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers)).catch(() => [] as B2BLifecycleRow[]),
+      (ctx.useRollup ? fetchB2BLifecycleRollup(companyCode, excludedCustomers, exclHash(excludedCustomers), ctx.version) : fetchB2BLifecycleRows(companyCode, EXCLUDE_CUST_SQL, exclHash(excludedCustomers))).catch(() => [] as B2BLifecycleRow[]),
     ])
     const { custRows, picRows, prevCustRevRows } = raw
     const groupCosts = filterGroupCostsByCompany(allGroupCosts, companyCode)
@@ -660,7 +666,7 @@ export async function GET(req: NextRequest) {
         },
       },
       available_pics: picRows,
-    })
+    }, { headers: ruHeaders(ctx, {}) })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }

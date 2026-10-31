@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { getBODFilters, cachedQuery, CACHE_HEADERS, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
+import { rollupCtx, ruHeaders, ruKey } from "@/lib/rollup/serve"
 import { fetchQuarterlySettings, exclHash } from "@/lib/quarterly-settings"
 import { fetchBODReportData as fetchBODReport } from "@/lib/bod-data"
 
@@ -22,8 +23,9 @@ export async function GET(req: NextRequest) {
   }
 
   const { excludedCustomers } = await fetchQuarterlySettings()
+  const ctx = await rollupCtx("bod-report")
   try {
-    const key = `bod-report4:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const key = `bod-report4${ruKey(ctx)}:${startDate}:${endDate}:${comparisonType}:${extraFilters}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
       const current = await fetchBODReport(startDate, endDate, extraFilters, includeShip, includeInternalOps)
       if (comparisonType === "none") return current
@@ -58,7 +60,7 @@ export async function GET(req: NextRequest) {
       })
     }, QUERY_TTL_MIN, noCache(req))
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    return NextResponse.json(payload, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/bod-report]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

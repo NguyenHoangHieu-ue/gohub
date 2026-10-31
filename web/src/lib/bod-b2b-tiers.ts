@@ -4,6 +4,8 @@ import { fetchQuarterlySettings, makeClassifyTier, makeExcludeSqlByCode } from "
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
 import { rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
+import { rollupCtx, serve } from "@/lib/rollup/serve"
+import * as b2 from "@/lib/rollup/bod2"
 import { fetchCosts, monthsBetween } from "@/lib/bod-data"
 
 // Bảng "Channel Performance Breakdown" của BOD cho B2B: theo TIER (Strategic, VIP, Gold, Silver — phân loại theo bảng giá khách, cùng
@@ -33,9 +35,15 @@ export async function fetchBODB2BTiers(startDate: string, endDate: string, dateC
   const filter = getDateFilter(startDate, endDate, source.dateCol)
   const sfx = `${shipFilter(includeShip)} ${internalOpsFilterByCode(includeInternalOps)} ${excludeInactiveCustomers()} ${makeExcludeSqlByCode(excludedCustomers)}`
   const months = monthsBetween(startDate, endDate)
+  const ctx = await rollupCtx("bod-b2b-tiers")
+  const basis = dateColumn === "created_date" ? "sal" : "ful"
+  const ruEnd = await b2.ruWindow(ctx, basis, startDate, endDate, extraFilters)
+  const tiersQ = (sql: string): Promise<Record<string, string>[]> => ruEnd
+    ? serve<Record<string, string>[]>(ctx, () => queryAnalytics<Record<string, string>>(sql), () => b2.fetchTiersRollup({ basis, start: startDate, end: ruEnd, includeShip, includeInternalOps, excludedCustomers }), b2.diffTiers, { startDate, endDate, dateColumn, includeShip, includeInternalOps })
+    : queryAnalytics<Record<string, string>>(sql)
 
   const [rows, { groupCosts }, costMap] = await Promise.all([
-    queryAnalytics<Record<string, string>>(`
+    tiersQ(`
       SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
              COALESCE(NULLIF(TRIM(c.organization), ''), TRIM(f.customer_code)) as org_key,
              COALESCE(NULLIF(TRIM(c.organization), ''), COALESCE(c.name, TRIM(f.customer_code))) as org_name,

@@ -3,6 +3,10 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { queryAnalytics } from "@/lib/analytics-db"
 import { getAnalyticsSource, getDateFilter, getPrevDateFilter, getBODFilters, shipFilter, internalOpsFilter, excludeOpsByCode, getMonthsInRange, getChannelCostsForMonths, getGroupCostsForMonths, CACHE_HEADERS, cachedQuery, QUERY_TTL_MIN, analyticsGuard, noCache } from "@/lib/analytics-helpers"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { rollupFirstDay } from "@/lib/rollup/b2bperf"
+import { prevRange, type KpiPair } from "@/lib/rollup/b2bkpis"
+import { diffB2cKpis, fetchB2cKpisRollup } from "@/lib/rollup/b2c2"
 import { fetchQuarterlySettings, exclHash, excludedForB2C } from "@/lib/quarterly-settings"
 import { COST_KEYS, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { matchChannelCost } from "@/lib/bod-data"
@@ -31,13 +35,14 @@ export async function GET(req: NextRequest) {
   const filter         = getDateFilter(startDate, endDate, source.dateCol)
   const prevFilter     = getPrevDateFilter(startDate, endDate, comparisonType, source.dateCol)
   const advancedFilter = getBODFilters(searchParams)
+  const ctx = await rollupCtx("b2c-kpis")
 
   try {
     const { excludedCustomers } = includeOpsCustomers ? { excludedCustomers: [] } : { excludedCustomers: excludedForB2C((await fetchQuarterlySettings()).excludedCustomers) }
     const sfx = `${shipFilter(includeShip)} ${internalOpsFilter(includeInternalOps)} ${excludeOpsByCode(excludedCustomers)}`
-    const key = `b2c-kpis:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash(excludedCustomers)}`
+    const key = `b2c-kpis${ruKey(ctx)}:${dateColumn}:${startDate}:${endDate}:${comparisonType}:${advancedFilter}:${includeShip ? 1 : 0}:${includeInternalOps ? 1 : 0}:${includeOpsCustomers ? 1 : 0}:${exclHash(excludedCustomers)}`
     const payload = await cachedQuery(key, async () => {
-    const [aggRows, channelRows] = await Promise.all([
+    const rawBoth = (): Promise<KpiPair> => Promise.all([
       queryAnalytics<Record<string, string>>(
         `WITH current_period AS (
            SELECT SUM(f.${source.revenueCol}) as revenue, SUM(f.${source.marginCol}) as margin,
@@ -67,6 +72,17 @@ export async function GET(req: NextRequest) {
          GROUP BY 1`
       ),
     ])
+
+    // Rollup chỉ phục vụ khi không có bộ lọc nâng cao và cả kỳ này lẫn kỳ trước nằm trong vùng đã dựng; còn lại đường thô.
+    const basis = dateColumn === "created_date" ? "sal" : "ful"
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const prev = prevRange(startDate, endDate, comparisonType)
+    const first = ctx.mode !== "off" && !advancedFilter ? await rollupFirstDay(basis).catch(() => null) : null
+    const curEnd = endDate < yesterday ? endDate : yesterday
+    const [aggRows, channelRows] = first && startDate >= first && prev.start >= first && startDate <= curEnd && prev.start <= prev.end
+      ? await serve<KpiPair>(ctx, rawBoth, () => fetchB2cKpisRollup({ basis, curStart: startDate, curEnd, prevStart: prev.start, prevEnd: prev.end, includeShip, includeInternalOps, excludedCustomers }),
+          diffB2cKpis, { dateColumn, startDate, endDate, comparisonType, includeShip, includeInternalOps, includeOpsCustomers })
+      : await rawBoth()
 
     // Khoảng tháng hiện tại + kỳ trước (cho cost)
     const start = new Date(startDate)
@@ -148,7 +164,7 @@ export async function GET(req: NextRequest) {
     ]
     }, QUERY_TTL_MIN, noCache(req))
 
-    return NextResponse.json(payload, { headers: CACHE_HEADERS })
+    return NextResponse.json(payload, { headers: ruHeaders(ctx, CACHE_HEADERS) })
   } catch (err: any) {
     console.error("[analytics/b2c/kpis]", err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })

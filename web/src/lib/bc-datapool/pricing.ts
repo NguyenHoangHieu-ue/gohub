@@ -38,11 +38,17 @@ export function dataCostUsd(plan: PlanLine, days: number, pricePerGb: number, cu
 /**
  * Phí khung (USD), ROUNDUP 2 số lẻ (mọi công thức đều ROUNDUP — quy định của Hiếu):
  *  eSIM = phí eSIM (CNY) quy USD + phí IMSI (tiền tệ của pool) quy USD.
- *  SIM full (E, chỉ VN) KHÔNG dùng hàm này: VND = ROUNDUP(data USD × JSC, 0) + giá SIM trắng (VND, từ DB) — khớp giá đang lưu (Hiếu chốt 2026-10-14).
+ *  SIM full (E, chỉ VN) KHÔNG dùng hàm này mà dùng `imsiFeeUsd`: VND = ROUNDUP((data USD + IMSI USD) × JSC, 0) + giá SIM trắng (VND, từ DB, cộng thẳng không qua tỷ giá Inc).
+ *  Hiếu 2026-10-14 từng bỏ IMSI cho khớp giá cũ trong hệ thống; 2026-10-29 chốt CỘNG LẠI IMSI cho SIM full.
  */
 export function frameFeeUsd(sim: "eSIM", list: PoolPriceList, fx: Fx): number {
   const imsiUsd = list.currency === "HKD" ? list.imsiFee / fx.hkdPerUsd : list.imsiFee
   return ceil2(list.esimFeeCny / fx.cnyPerUsd + imsiUsd)
+}
+
+/** Phí IMSI (USD, ROUNDUP 2 số lẻ) của 1 pool — phần phí khung của SIM full (E) cộng vào data trước khi đổi VND. */
+export function imsiFeeUsd(list: PoolPriceList, fx: Fx): number {
+  return ceil2(list.currency === "HKD" ? list.imsiFee / fx.hkdPerUsd : list.imsiFee)
 }
 
 export const usdToVnd = (usd: number, fx: Fx) => Math.ceil(usd * fx.vndPerUsd - 1e-9)

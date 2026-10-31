@@ -10,6 +10,9 @@ import { omniConfigured, omniLeadsBreakdown } from "@/lib/omni-leads"
 import { readB2CMonthlySnapshots, snapshotsToMonthlyResponse } from "@/lib/b2c-report-snapshot"
 import { tursoLeadsBreakdown, tursoLeadsConfigured } from "@/lib/turso-leads"
 import { B2C_CHANNELS, getB2CChannelBudgetByMonth } from "@/lib/b2c-channel-budget"
+import { rollupCtx, ruHeaders, ruKey, serve } from "@/lib/rollup/serve"
+import { rollupFirstDay } from "@/lib/rollup/b2bperf"
+import { diffMonthlyBlock, fetchMonthlyBlockRollup, type MonthlyBlock } from "@/lib/rollup/b2cmonthly"
 import { adminGohubConfigured, adminGohubCustomerRows, adminGohubCustomerChannelRows } from "@/lib/admin-gohub"
 
 // YTD B2C dashboard data (Section 1 + 2 của gohub_b2c spec)
@@ -372,7 +375,9 @@ export async function GET(req: NextRequest) {
       return loadCustomerFromDb()
     }
 
-    const data = await cachedQuery(`b2c-monthly:v15:${windowStart}:${dataAsOf}:revenue-only`, async () => {
+    const ctx = await rollupCtx("b2c-monthly")
+    const data = await cachedQuery(`b2c-monthly:v15${ruKey(ctx)}:${windowStart}:${dataAsOf}:revenue-only`, async () => {
+      const rawBlock = async (): Promise<MonthlyBlock> => {
       const [marketRows, channelRows, marketChannelRows, profitRows] = await Promise.all([
         queryAnalytics<{ month: string; market: string; revenue: string }>(
           `SELECT to_char(f.fulfiled_date::date, 'YYYY-MM') AS month,
@@ -427,6 +432,13 @@ export async function GET(req: NextRequest) {
           [windowStart, dataAsOf]
         ),
       ])
+      return { marketRows, channelRows, marketChannelRows, profitRows }
+      }
+      // Rollup chỉ phục vụ khi cửa sổ nằm trong vùng đã dựng; còn lại đường thô.
+      const first = ctx.mode !== "off" ? await rollupFirstDay("ful").catch(() => null) : null
+      const { marketRows, channelRows, marketChannelRows, profitRows } = first && windowStart >= first && windowStart <= dataAsOf
+        ? await serve<MonthlyBlock>(ctx, rawBlock, () => fetchMonthlyBlockRollup(windowStart, dataAsOf), diffMonthlyBlock, { windowStart, dataAsOf })
+        : await rawBlock()
 
       // ── Market: VN / US / Total per month ──
       const markets: Record<string, MarketCell> = {}
@@ -634,7 +646,7 @@ export async function GET(req: NextRequest) {
       // DB đã có target mới và bản thân tính toán trong route này luôn chạy tươi. Bug này ĐỘC LẬP với
       // `flushAnalyticsCache()` gọi trong 2 route save — hàm đó chỉ xoá cache tầng app (Supabase
       // `analytics_query_cache`), không đụng được tới CDN cache dựa trên response header như thế này.
-      { headers: live ? { "Cache-Control": "no-store" } : CACHE_HEADERS }
+      { headers: live ? { "Cache-Control": "no-store" } : ruHeaders(ctx, CACHE_HEADERS) }
     )
   } catch (err: any) {
     console.error("[analytics/b2c/monthly]", err.message)

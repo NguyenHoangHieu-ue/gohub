@@ -4,6 +4,11 @@ import { fetchQuarterlySettings, makeExcludeSqlByCode } from "@/lib/quarterly-se
 import { fetchCustomerCosts } from "@/lib/b2b-customer-cost"
 import { calcChCostForPeriod, rangeDayRatio } from "@/lib/analytics-engine/cost-engine"
 import { allocateCustomerCostByKey } from "@/lib/analytics-engine/customer-cost-allocation"
+import { rollupCtx, serve } from "@/lib/rollup/serve"
+import { rollupFirstDay, type PerfRow } from "@/lib/rollup/b2bperf"
+import * as b2 from "@/lib/rollup/bod2"
+import { viaRollup } from "@/lib/rollup/channels"
+import { diffBodMulti, fetchBodMultiRollup, type BodMultiFact } from "@/lib/rollup/bod"
 import { getDaysInMonth, getDaysInRange } from "@/lib/analytics-engine/date-math"
 
 // Port y hệt gohub-intel server.ts fetchBODGroupMarginData + fetchBODChannelPerformanceData.
@@ -220,7 +225,7 @@ export async function fetchBODGroupMarginMulti(
   const monthsOf = periods.map(p => monthsBetween(p.startDate, p.endDate))
   const unionMonths = [...new Set(monthsOf.flat())]
 
-  const rowsP = queryAnalytics<Record<string, string>>(
+  const rowsQ = () => queryAnalytics<Record<string, string>>(
     `WITH filtered_f AS (
        SELECT sku, order_source_code, customer_code, order_code, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol},
               ${periodCase} AS period
@@ -238,7 +243,7 @@ export async function fetchBODGroupMarginMulti(
   // B2B per-customer cost (Turso b2b_customer_cost_monthly) — B2B KHÔNG dùng analytics_channel_costs
   // (tránh double-count, khớp Quarter Report/b2b-kpis/b2b-performance). Cần revenue theo KH×tháng, CÙNG
   // phân loại Strategic/Non-Strategic (groupCaseSQL) để cộng đúng nhóm.
-  const custRevP = queryAnalytics<Record<string, string>>(
+  const custRevQ = () => queryAnalytics<Record<string, string>>(
     `WITH filtered_f AS (
        SELECT sku, order_source_code, customer_code, order_code, ${source.dateCol}, ${source.quantityCol}, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol},
               ${periodCase} AS period
@@ -253,8 +258,19 @@ export async function fetchBODGroupMarginMulti(
      WHERE ${groupCaseSQL} IN ('B2B-Strategic', 'B2B-Non-Strategic')
      GROUP BY 1, 2, 3, 4`
   )
-  const [rows, { channelCosts, groupCosts }, custRevRows, customerCostMap] =
-    await Promise.all([rowsP, fetchCosts(unionMonths), custRevP, fetchCustomerCosts(unionMonths)])
+  // Rollup chỉ phục vụ khi không có bộ lọc nâng cao và mọi kỳ nằm trong vùng đã dựng; còn lại đường thô.
+  const ctx = await rollupCtx("bod-group-margin")
+  const basis = dateColumn === "created_date" ? "sal" : "ful"
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const ruPeriods = periods.map(p => ({ start: p.startDate, end: p.endDate < yesterday ? p.endDate : yesterday }))
+  const first = ctx.mode !== "off" && !extraFilters ? await rollupFirstDay(basis).catch(() => null) : null
+  const rawFact = async (): Promise<BodMultiFact> => { const [rows, custRevRows] = await Promise.all([rowsQ(), custRevQ()]); return { rows, custRevRows } as BodMultiFact }
+  const factP: Promise<BodMultiFact> = first && ruPeriods.every(p => p.start >= first && p.start <= p.end)
+    ? serve<BodMultiFact>(ctx, rawFact, () => fetchBodMultiRollup({ basis, periods: ruPeriods, groupCaseSql: groupCaseSQL, includeShip, includeInternalOps, excludedCustomers }),
+        diffBodMulti, { periods: periods.map(p => `${p.startDate}..${p.endDate}`), dateColumn, includeShip, includeInternalOps })
+    : rawFact()
+  const [{ rows, custRevRows }, { channelCosts, groupCosts }, customerCostMap] =
+    await Promise.all([factP, fetchCosts(unionMonths), fetchCustomerCosts(unionMonths)])
 
   return periods.map((p, i) => {
     const monthSet = new Set(monthsOf[i])
@@ -318,7 +334,12 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
 
   // s203: 2 query fact + 2 nguồn chi phí độc lập → song song (trước nối tiếp).
   const months = monthsBetween(startDate, endDate)
-  const rowsP = queryAnalytics<Record<string, string>>(
+  const chCtx = await rollupCtx("bod-channel-performance")
+  const chBasis = dateColumn === "created_date" ? "sal" : "ful"
+  const chEnd = await b2.ruWindow(chCtx, chBasis, startDate, endDate, extraFilters)
+  const chParts = chEnd ? () => b2.fetchChannelRollup({ basis: chBasis, start: startDate, end: chEnd, includeShip, includeInternalOps, excludedCustomers, strategicList }) : null
+  const chQa = viaRollup(chCtx, chParts, b2.channelDiffs, sql => queryAnalytics<Record<string, string>>(sql), { startDate, endDate, dateColumn, includeShip, includeInternalOps })
+  const rowsP = chQa("rows")(
     `WITH filtered_f AS (
        SELECT ${source.dateCol}, order_source_code, ${source.revenueCol}, ${source.cogsCol}, ${source.marginCol}, ${source.quantityCol}, order_code
        FROM ${source.mainTable} f WHERE ${filter} ${extraFilters} ${sfx}
@@ -333,7 +354,7 @@ export async function fetchBODChannelPerformanceData(startDate: string, endDate:
      ORDER BY 1, 2, 3`
   )
   const costsP = fetchCosts(months)
-  const custRevP = queryAnalytics<{ customer_code: string; month: string; channel: string; revenue: string }>(
+  const custRevP = chQa("custRev")(
     `SELECT TRIM(f.customer_code) as customer_code, TO_CHAR(f.${source.dateCol}::date, 'YYYY-MM') as month,
             TRIM(s.channel_name) as channel, SUM(f.${source.revenueCol}) as revenue
      FROM ${source.mainTable} f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
@@ -426,21 +447,25 @@ export async function fetchBODReportData(startDate: string, endDate: string, ext
   // s203: mọi nguồn dữ liệu độc lập (3 query + chi phí + strategic + KH×ngày + chi phí KH Turso) trong 1 Promise.all
   // — trước 3 lần await nối tiếp thêm sau đợt đầu.
   const months = monthsBetween(startDate, endDate)
+  const rpCtx = await rollupCtx("bod-report")
+  const rpEnd = await b2.ruWindow(rpCtx, "ful", startDate, endDate, extraFilters)
+  const rpParts = rpEnd ? () => b2.fetchReportRollup({ basis: "ful", start: startDate, end: rpEnd, includeShip, includeInternalOps, excludedCustomers }) : null
+  const rpQa = viaRollup(rpCtx, rpParts, b2.reportDiffs, sql => queryAnalytics<Record<string, string>>(sql), { startDate, endDate, includeShip, includeInternalOps })
   const [dailyRows, channelDaily, channelInfo, { channelCosts, groupCosts }, strategicList, custDailyRows, customerCostMap] = await Promise.all([
-    queryAnalytics<Record<string, string>>(
+    rpQa("dailyRows")(
       `SELECT TO_CHAR(fulfiled_date::date, 'YYYY-MM-DD') as date,
               SUM(fulfilled_revenue_amount_vnd) as revenue, SUM(cogs_amount_vnd) as cogs,
               SUM(gross_profit_vnd) as margin,
               CASE WHEN SUM(fulfilled_revenue_amount_vnd) > 0 THEN (SUM(gross_profit_vnd) / SUM(fulfilled_revenue_amount_vnd)) * 100 ELSE 0 END as margin_percent
        FROM fact_fulfillment_revenue f WHERE ${filter} ${extraFilters} ${sfx} GROUP BY date ORDER BY date ASC`
     ),
-    queryAnalytics<Record<string, string>>(
+    rpQa("channelDaily")(
       `SELECT TO_CHAR(fulfiled_date::date, 'YYYY-MM-DD') as date, TRIM(s.channel_name) as channel,
               SUM(f.fulfilled_revenue_amount_vnd) as revenue
        FROM fact_fulfillment_revenue f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
        WHERE ${filter} ${extraFilters} ${sfx} GROUP BY date, channel`
     ),
-    queryAnalytics<Record<string, string>>(
+    rpQa("channelInfo")(
       `SELECT DISTINCT TRIM(channel_name) as channel, UPPER(group_name) as group_name FROM dim_order_source`
     ),
     fetchCosts(months),
@@ -448,7 +473,7 @@ export async function fetchBODReportData(startDate: string, endDate: string, ext
     // B2B per-customer cost (Turso) theo NGÀY — B2B KHÔNG dùng analytics_channel_costs (tránh double-count).
     // Turso lưu theo tháng → amount-type rải đều/ngày (khớp cách group/channel cost đang rải), percent-type
     // dùng revenue KH đúng ngày đó.
-    queryAnalytics<{ date: string; customer_code: string; revenue: string }>(
+    rpQa("custDaily")(
       `SELECT TO_CHAR(fulfiled_date::date, 'YYYY-MM-DD') as date, TRIM(f.customer_code) as customer_code,
               SUM(f.fulfilled_revenue_amount_vnd) as revenue
        FROM fact_fulfillment_revenue f LEFT JOIN dim_order_source s ON f.order_source_code = s.code
