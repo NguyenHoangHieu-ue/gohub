@@ -15,7 +15,7 @@ interface Topline {
   breakdown: Breakdown
 }
 interface Mv { name: string; cur: number; prev: number }
-interface Breakdown { tiers: Mv[]; b2bTop: Mv[]; b2bUp: Mv | null; b2bDown: Mv | null; b2cChannels: Mv[]; b2cUp: Mv | null; b2cDown: Mv | null }
+interface Breakdown { tiers: Mv[]; b2bTop: Array<Mv & { tier: string }>; b2bUp: Mv | null; b2bDown: Mv | null; b2cChannels: Mv[]; b2cUp: Mv | null; b2cDown: Mv | null }
 interface Detail {
   days: string[]
   trend: Array<{ name: string; values: number[] }>
@@ -151,7 +151,13 @@ export function DailyReportPopup() {
                     <section>
                       <h3 className="font-bold text-slate-800 mb-2">B2B theo Tier</h3>
                       <MvTable first="Tier" t={t} rows={t.breakdown.tiers} />
-                      <Highlights top={t.breakdown.b2bTop} up={t.breakdown.b2bUp} down={t.breakdown.b2bDown} topLabel="Top khách" />
+                      {t.breakdown.b2bTop.length > 0 && (
+                        <>
+                          <h4 className="font-semibold text-slate-700 mt-4 mb-1 text-[13px]">Top 10 khách B2B</h4>
+                          <MvTable first="Khách" t={t} rows={t.breakdown.b2bTop} tiers />
+                        </>
+                      )}
+                      <Highlights top={[]} up={t.breakdown.b2bUp} down={t.breakdown.b2bDown} topLabel="" />
                     </section>
                   )}
                   {t.breakdown.b2cChannels.length > 0 && (
@@ -203,11 +209,11 @@ export function DailyReportPopup() {
   )
 }
 
-function MvTable({ first, t, rows }: { first: string; t: Topline; rows: Mv[] }) {
+function MvTable({ first, t, rows, tiers }: { first: string; t: Topline; rows: Array<Mv & { tier?: string }>; tiers?: boolean }) {
   return (
     <table className="w-full text-left">
       <thead><tr className="text-xs text-slate-500 border-b border-slate-100">
-        <th className="py-1.5 font-medium">{first}</th><th className="font-medium text-right">Hôm qua ({t.dayShort})</th>
+        <th className="py-1.5 font-medium">{first}</th>{tiers && <th className="font-medium">Tier</th>}<th className="font-medium text-right">Hôm qua ({t.dayShort})</th>
         <th className="font-medium text-right">Hôm trước ({t.prevDayShort})</th><th className="font-medium text-right">% so sánh</th>
       </tr></thead>
       <tbody>
@@ -215,7 +221,7 @@ function MvTable({ first, t, rows }: { first: string; t: Topline; rows: Mv[] }) 
           const x = cmp(r.cur, r.prev)
           return (
             <tr key={r.name} className="border-b border-slate-50">
-              <td className="py-1.5 pr-3 max-w-[14rem] truncate">{r.name}</td><td className="text-right tabular-nums">{short(r.cur)}</td>
+              <td className="py-1.5 pr-3 max-w-[14rem] truncate">{r.name}</td>{tiers && <td className="pr-3 text-slate-500">{r.tier}</td>}<td className="text-right tabular-nums">{short(r.cur)}</td>
               <td className="text-right tabular-nums text-slate-500">{short(r.prev)}</td><td className={`text-right tabular-nums ${x.cls}`}>{x.text}</td>
             </tr>
           )

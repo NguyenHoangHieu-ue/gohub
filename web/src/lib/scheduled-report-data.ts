@@ -666,7 +666,7 @@ export interface DailyTopline {
 export interface Mv { name: string; cur: number; prev: number }
 export interface DailyBreakdown {
   tiers: Mv[]                 // B2B theo Tier (Strategic/VIP/Gold/Silver)
-  b2bTop: Mv[]                // top Organization B2B hôm qua
+  b2bTop: Array<Mv & { tier: string }>   // top 10 Organization B2B hôm qua (kèm Tier của khách)
   b2bUp: Mv | null; b2bDown: Mv | null   // Organization tăng/giảm mạnh nhất so với hôm trước
   b2cChannels: Mv[]           // B2C theo kênh (top 5 hôm qua)
   b2cUp: Mv | null; b2cDown: Mv | null
@@ -822,8 +822,18 @@ export function buildDailyToplineCard(t: DailyTopline, dashboardUrl: string, opt
     ...(down ? [`▼ Giảm mạnh: **${down.name}** ${fmtShort(down.cur)} (-${fmtShort(down.prev - down.cur)} so với hôm trước)`] : []),
   ]
   const bd = t.breakdown
-  const b2bTopLine = bd.b2bTop.length ? `Top khách: ${bd.b2bTop.map(x => `${x.name} ${fmtShort(x.cur)}`).join(" · ")}` : ""
-  const b2bHl = [b2bTopLine, ...hl(bd.b2bUp, bd.b2bDown)].filter(Boolean).join("\n")
+  const top10Table = {
+    tag: "table", page_size: Math.max(bd.b2bTop.length, 1),
+    columns: [
+      { name: "c0", display_name: "Khách", width: "auto" },
+      { name: "c1", display_name: "Tier", width: "auto" },
+      { name: "c2", display_name: `Hôm qua (${t.dayShort})`, width: "auto" },
+      { name: "c3", display_name: `Hôm trước (${t.prevDayShort})`, width: "auto" },
+      { name: "c4", display_name: "% so sánh", width: "auto" },
+    ],
+    rows: bd.b2bTop.map(r => ({ c0: r.name, c1: r.tier, c2: fmtShort(r.cur), c3: fmtShort(r.prev), c4: cmp(r.cur, r.prev) })),
+  }
+  const b2bHl = hl(bd.b2bUp, bd.b2bDown).join("\n")
   const b2cHl = hl(bd.b2cUp, bd.b2cDown).join("\n")
   const cm1Line = t.cm1.map(c => `${c.name} ${pct(c.cm1Pct)}${c.target != null ? ` (target ${pct(c.target)})` : ""}`).join(" · ")
   const eff = [
@@ -834,7 +844,7 @@ export function buildDailyToplineCard(t: DailyTopline, dashboardUrl: string, opt
   const els: any[] = [
     { tag: "markdown", content: "**DOANH THU HÔM QUA**" }, revTable,
     { tag: "markdown", content: `**TIẾN ĐỘ TARGET THÁNG ${t.monthStr.slice(5)}** (đã qua ${t.daysElapsed}/${t.daysInMonth} ngày)` }, tgtTable,
-    ...(bd.tiers.length ? [{ tag: "markdown", content: "**B2B THEO TIER**" }, mvTable("Tier", bd.tiers), ...(b2bHl ? [{ tag: "markdown", content: b2bHl }] : [])] : []),
+    ...(bd.tiers.length ? [{ tag: "markdown", content: "**B2B THEO TIER**" }, mvTable("Tier", bd.tiers), ...(bd.b2bTop.length ? [{ tag: "markdown", content: "**TOP 10 KHÁCH B2B**" }, top10Table] : []), ...(b2bHl ? [{ tag: "markdown", content: b2bHl }] : [])] : []),
     ...(bd.b2cChannels.length ? [{ tag: "markdown", content: "**B2C THEO KÊNH**" }, mvTable("Kênh", bd.b2cChannels), ...(b2cHl ? [{ tag: "markdown", content: b2cHl }] : [])] : []),
     { tag: "markdown", content: `**HIỆU QUẢ (lũy kế tháng)**\n${eff}` },
     ...(opts?.assessment ? [{ tag: "markdown", content: `**🤖 AI ĐÁNH GIÁ**\n${opts.assessment}` }] : []),
@@ -925,12 +935,19 @@ export function buildBreakdown(
 ): DailyBreakdown {
   const n = (v: string) => parseFloat(v || "0")
   const tierMap = new Map<string, Mv>(), orgMap = new Map<string, Mv>(), chMap = new Map<string, Mv>()
+  const orgTier = new Map<string, Map<string, number>>()   // org → doanh thu theo Tier (lấy Tier lớn nhất làm nhãn)
   const bump = (m: Map<string, Mv>, name: string, d: string, v: number) => {
     const e = m.get(name) ?? { name, cur: 0, prev: 0 }
     if (d === curDay) e.cur += v; else if (d === prevDay) e.prev += v
     m.set(name, e)
   }
-  for (const x of cust) { bump(tierMap, classifyTier(x.pln), x.d, n(x.revenue)); bump(orgMap, cleanOrgName(x.org), x.d, n(x.revenue)) }
+  for (const x of cust) {
+    const tier = classifyTier(x.pln), org = cleanOrgName(x.org)
+    bump(tierMap, tier, x.d, n(x.revenue)); bump(orgMap, org, x.d, n(x.revenue))
+    const tm = orgTier.get(org) ?? new Map<string, number>()
+    tm.set(tier, (tm.get(tier) ?? 0) + Math.abs(n(x.revenue))); orgTier.set(org, tm)
+  }
+  const tierOf = (org: string) => [...(orgTier.get(org) ?? new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? ""
   for (const x of ch) if (x.d === curDay || x.d === prevDay) bump(chMap, x.ch, x.d, n(x.revenue))
   const movers = (m: Map<string, Mv>) => {
     const all = [...m.values()]
@@ -943,7 +960,7 @@ export function buildBreakdown(
   const o = movers(orgMap), c = movers(chMap)
   return {
     tiers,
-    b2bTop: [...orgMap.values()].filter(e => e.cur > 0).sort((a, b) => b.cur - a.cur).slice(0, 3),
+    b2bTop: [...orgMap.values()].filter(e => e.cur > 0).sort((a, b) => b.cur - a.cur).slice(0, 10).map(e => ({ ...e, tier: tierOf(e.name) })),
     b2bUp: o.up, b2bDown: o.down,
     b2cChannels: [...chMap.values()].filter(e => e.cur > 0 || e.prev > 0).sort((a, b) => b.cur - a.cur).slice(0, 5),
     b2cUp: c.up, b2cDown: c.down,
