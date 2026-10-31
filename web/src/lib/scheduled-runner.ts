@@ -2,9 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { AGENTS } from "@/lib/agents/agents"
 import { runBIAnalyst } from "@/lib/agents/bi-analyst"
 import { buildReportCards, sendLarkCardToChat } from "@/lib/lark"
-import { buildReportData, inferPeriod, buildDailyTopline, buildDailyDetail, buildDailyToplineCard, getToplineAssessmentCached } from "@/lib/scheduled-report-data"
-
-const DASHBOARD_URL = "https://intel-v2.gohub.cloud/analytics"
+import { buildReportData, inferPeriod } from "@/lib/scheduled-report-data"
 
 // Chạy 1 scheduled message: số liệu TÍNH SẴN trong code (scheduled-report-data) → BI Analyst chỉ FORMAT,
 // render thành Lark interactive card (header + bảng) rồi gửi (webhook hoặc bot API) → cập nhật last_run_at.
@@ -19,22 +17,6 @@ export async function runScheduledMessage(
 ): Promise<string> {
   const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10)
 
-  // Daily: 1 card Toplines duy nhất dựng thẳng từ số đã tính (không qua Gemini format; chỉ có 1 đoạn "AI đánh giá" lưu cache theo ngày).
-  if (inferPeriod(msg.cron_expression, msg.name) === "daily") {
-    const [topline, detail] = await Promise.all([buildDailyTopline(), buildDailyDetail()])
-    const assessment = await getToplineAssessmentCached(topline)
-    const card = buildDailyToplineCard(topline, detail, DASHBOARD_URL, { keyword: msg.lark_keyword || undefined, assessment })
-    if (options?.dryRun) return JSON.stringify(card)
-    if (options?.state) options.state.sending = true
-    await sendCard(msg, card)
-    if (!options?.noUpdateLastRun) {
-      const slotMs = options?.slotMs
-      const lastRunIso = slotMs != null ? new Date(slotMs - 7 * 3600_000).toISOString() : new Date().toISOString()
-      await supabaseAdmin.from("lark_scheduled_messages").update({ last_run_at: lastRunIso }).eq("id", msg.id)
-    }
-    return `Daily Toplines ${topline.label}`
-  }
-
   // Số liệu được TÍNH SẴN trong code (SQL cố định, đúng định nghĩa Dashboard, tách thị trường VN/US/Tổng).
   // Gemini chỉ FORMAT khối này → 1 vòng gọi (nhanh, không timeout, số khớp Dashboard, không tự bịa SQL).
   const period = inferPeriod(msg.cron_expression, msg.name)
@@ -44,6 +26,11 @@ export async function runScheduledMessage(
   } catch (e: any) {
     dataBlock = `\n(LỖI lấy dữ liệu precompute: ${e?.message || e}. Báo "Hiếu đang fix" và KHÔNG bịa số.)`
   }
+
+  // Daily: CHỈ in các mục 【3】【6】【7】【8】 + nhận xét đúng theo prompt (trước đây ép in đủ 【1】→【8】 nên tin quá dài).
+  const rule7 = period === "daily"
+    ? `7. ⚠️ BÁO CÁO NGÀY — CHỈ IN các mục 【3】【6】【7】【8】 đúng bố cục prompt, rồi phần 📝 Nhận xét. TUYỆT ĐỐI KHÔNG in mục 【1】【2】【4】【5】 (chỉ dùng làm tham khảo cho nhận xét nếu cần). Bảng 【3】: hàng B2B | B2C | Tổng; cột Doanh thu tháng (MTD) | Pro-rata | Target tháng | % pro-rata/target (KHÔNG có cột % tiến độ). Nếu một nhóm là "Chưa nhập target tháng này" thì GHI ĐÚNG câu đó vào ô Target và để "—" ở ô %. Tiền ghi GỌN đúng như khối dữ liệu (tỷ/tr), KHÔNG đổi đơn vị. Bảng 【6】【7】【8】: giữ đúng các cột ngày như khối dữ liệu.`
+    : `7. ⚠️ BẮT BUỘC IN ĐỦ MỌI MỤC 【1】→【5】 (và 【6】→【8】 nếu là báo cáo ngày) có trong khối dữ liệu — KHÔNG được bỏ mục nào, KỂ CẢ khi prompt không nhắc tới. Đặc biệt: mục 【3】 (MTD/thực tế, dự phóng pro-rata, target cả tháng, target theo kênh, % đạt target), Target CM1% ở 【4】, Target 3HK% ở 【5】 PHẢI luôn xuất hiện. Nếu giá trị là "Chưa nhập target tháng này" → GHI ĐÚNG NGUYÊN VĂN câu đó thành 1 dòng, TUYỆT ĐỐI KHÔNG ẩn/bỏ dòng target.`
 
   const directive = `
 
@@ -55,7 +42,7 @@ Hôm nay: ${today} (giờ VN). Loại báo cáo: ${period.toUpperCase()}. "Thán
 4. Giá trị thiếu NHẤT QUÁN: thực sự bằng 0 → "0 VND"; chưa nhập target → ghi ĐÚNG "Chưa nhập target tháng này". KHÔNG dùng lẫn "-", "N/A".
 5. Tiền: phân cách hàng nghìn + " VND" (số trong khối đã đúng định dạng — giữ nguyên). Phần trăm 1 chữ số.
 6. KHÔNG dùng khối \`\`\`chart (Lark không render được). Tiếng Việt, chuyên nghiệp, nhận xét NGẮN mỗi mục (1-2 câu, chỉ dựa trên số trong khối).
-7. ⚠️ BẮT BUỘC IN ĐỦ MỌI MỤC 【1】→【5】 (và 【6】→【8】 nếu là báo cáo ngày) có trong khối dữ liệu — KHÔNG được bỏ mục nào, KỂ CẢ khi prompt không nhắc tới. Đặc biệt: mục 【3】 (MTD/thực tế, dự phóng pro-rata, target cả tháng, target theo kênh, % đạt target), Target CM1% ở 【4】, Target 3HK% ở 【5】 PHẢI luôn xuất hiện. Nếu giá trị là "Chưa nhập target tháng này" → GHI ĐÚNG NGUYÊN VĂN câu đó thành 1 dòng, TUYỆT ĐỐI KHÔNG ẩn/bỏ dòng target.
+${rule7}
 8. Kỳ MONTHLY = tháng đã đóng → dùng số THỰC TẾ so target (khối đã bỏ pro-rata, đừng tự dựng lại). Kỳ DAILY = 1 ngày (hôm qua) so ngày liền trước; WEEKLY = 7 ngày gần nhất. DAILY/WEEKLY đang trong tháng → vẫn có MTD + dự phóng pro-rata cả tháng ở 【3】. Kỳ QUARTERLY = QTD từ đầu quý đến hôm qua, so QoQ; in đủ 【1】→【6】.
 
 ${dataBlock}`

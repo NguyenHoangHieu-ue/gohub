@@ -207,29 +207,6 @@ async function b2cChannelsByDay(start: string, end: string) {
   return cachedAnalyticsQuery<{ ch: string; d: string; revenue: string }>(sql)
 }
 
-// Target quý từ Turso target_planning_quarter (cùng nguồn với tab Quarter Report).
-// qKey format: "Q3-2026". Trả B2B + B2C tách riêng (Quarter Report không tách VN/US).
-interface QuarterTargets { b2bRev: number; b2cRev: number; total: number; error?: boolean }
-async function getQuarterTargets(qKey: string): Promise<QuarterTargets> {
-  try {
-    const rows = await tursoQuery<{ channel: string; target_revenue: string | number }>(
-      `SELECT channel, target_revenue FROM target_planning_quarter WHERE quarter = ?`,
-      [qKey]
-    )
-    const n = (v: string | number | undefined) => parseFloat(String(v ?? 0)) || 0
-    const b2b = rows.find(r => r.channel === "B2B")
-    const b2c = rows.find(r => r.channel === "B2C")
-    const b2bRev = n(b2b?.target_revenue), b2cRev = n(b2c?.target_revenue)
-    return { b2bRev, b2cRev, total: b2bRev + b2cRev }
-  } catch (err: any) {
-    // Không nuốt im lặng — lỗi Turso ở đây trước đây bị coi giống hệt "chưa nhập target" (total=0),
-    // không phân biệt được lỗi thật với thiếu data → khó debug. Log ra Vercel + đánh dấu error:true
-    // để report hiển thị đúng nguyên nhân thay vì luôn nói "chưa nhập".
-    console.error(`[scheduled-report] getQuarterTargets("${qKey}") lỗi:`, err?.message || err)
-    return { b2bRev: 0, b2cRev: 0, total: 0, error: true }
-  }
-}
-
 // Target theo channel cho 1 tháng (target_planning ở Supabase, KHÔNG có trong gohub_dw).
 async function getTargetRows(monthStr: string) {
   const { data } = await supabaseAdmin
@@ -260,27 +237,8 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   const isMonthly = period === "monthly"
   const isDaily   = period === "daily"
 
-  // Daily: tính thêm QTD + target quý (từ Turso, cùng nguồn Quarter Report) để hiện trong【3】
-  let qStartStr = "", qEndStr = "", daysElapsedInQ = 0, daysInQ = 92, qLabel = "", qKey = ""
-  if (isDaily) {
-    const ictD = ictNow()
-    const todayD = new Date(Date.UTC(ictD.getUTCFullYear(), ictD.getUTCMonth(), ictD.getUTCDate()))
-    const yestD  = addDays(todayD, -1)
-    const qMo    = Math.floor(todayD.getUTCMonth() / 3) * 3
-    const qStart = new Date(Date.UTC(todayD.getUTCFullYear(), qMo, 1))
-    qStartStr = ymd(qStart)
-    qEndStr   = ymd(yestD)
-    daysElapsedInQ = Math.round((yestD.getTime() - qStart.getTime()) / 86400_000) + 1
-    const qIdx = Math.floor(todayD.getUTCMonth() / 3) + 1
-    qLabel = `Q${qIdx}/${todayD.getUTCFullYear()}`
-    qKey   = `Q${qIdx}-${todayD.getUTCFullYear()}`   // format Turso: "Q3-2026"
-  }
-
   // Supabase/Turso: chạy song song (không dùng gohub_dw pool).
-  const [targetRows, qtTargets] = await Promise.all([
-    getTargetRows(r.monthStr),
-    isDaily ? getQuarterTargets(qKey) : Promise.resolve({ b2bRev: 0, b2cRev: 0, total: 0 } as QuarterTargets),
-  ])
+  const targetRows = await getTargetRows(r.monthStr)
 
   // gohub_dw: chạy tối đa 2 song song (pool max=3, tránh tranh kết nối khi cache cold).
   // Thứ tự: nhẹ trước (1 ngày) → trung bình (MTD) → nặng (BOD join + QTD 50+ ngày).
@@ -297,7 +255,6 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     isMonthly ? Promise.resolve([]) : rev3hkByMarket(r.mtdStart, r.mtdEnd),
   ])
   const bodCur = await fetchBODGroupMarginData(r.curStart, r.curEnd)
-  const qtdRevRows = isDaily ? await revByMarketGroup(qStartStr, qEndStr) : [] as Awaited<ReturnType<typeof revByMarketGroup>>
 
   // Aggregate revenue/GP theo market & group
   const totalRev = zero(), b2bRev = zero(), b2cRev = zero(), totalGp = zero()
@@ -350,25 +307,6 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
   }
   const tgtCm1B2b = targetCm1Pct("B2B"), tgtCm1B2c = targetCm1Pct("B2C")
 
-  // QTD aggregates (daily only) — tách B2B/B2C để hiện trong【3】
-  const qtdRev = zero(), qtdB2b = zero(), qtdB2c = zero()
-  if (isDaily) {
-    for (const row of qtdRevRows) {
-      const v = parseFloat(row.revenue || "0")
-      add(qtdRev, row.cc, v)
-      if (row.grp === "B2B") add(qtdB2b, row.cc, v)
-      else if (row.grp === "B2C") add(qtdB2c, row.cc, v)
-    }
-  }
-  // Projections B2B/B2C theo quý (total only, không cần tách VN/US)
-  const projQb2b = daysElapsedInQ > 0 ? (qtdB2b.total / daysElapsedInQ) * daysInQ : 0
-  const projQb2c = daysElapsedInQ > 0 ? (qtdB2c.total / daysElapsedInQ) * daysInQ : 0
-  const projQ: Triple = {
-    vn:    daysElapsedInQ > 0 ? (qtdRev.vn    / daysElapsedInQ) * daysInQ : 0,
-    us:    daysElapsedInQ > 0 ? (qtdRev.us    / daysElapsedInQ) * daysInQ : 0,
-    total: daysElapsedInQ > 0 ? (qtdRev.total / daysElapsedInQ) * daysInQ : 0,
-  }
-
   // MoM/WoW %
   const momPct = (cur: number, prv: number) => prv > 0 ? ((cur - prv) / prv) * 100 : 0
 
@@ -397,18 +335,14 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     L.push(`  - Target cả tháng (mọi kênh): ${totalTargetMonth > 0 ? vnd(totalTargetMonth) : NO_TGT}`)
     L.push(`  - Target theo kênh: ${targetByChannel}`)
     L.push(`  - % đạt target (Thực tế/Target, Tổng): ${totalTargetMonth > 0 ? pct(ratio(mtdTotal.total, totalTargetMonth)) : NO_TGT}`)
-  } else if (isDaily && qStartStr) {
-    // Daily → tiến độ QUÝ theo B2B/B2C (không tách VN/US — khớp cách nhập trong Quarter Report)
-    const hasQTgt = qtTargets.total > 0
-    const NO_QTGT = qtTargets.error ? "Lỗi lấy target quý từ Turso (xem log Vercel)" : "Chưa nhập target quý"
-    L.push(`【3】PRO-RATA & TARGET ${qLabel} (đã dùng ${daysElapsedInQ}/${daysInQ} ngày từ ${qStartStr}):`)
-    L.push(`  - Doanh thu QTD (${qStartStr}→${qEndStr}): B2B ${vnd(qtdB2b.total)} | B2C ${vnd(qtdB2c.total)} | Tổng ${vnd(qtdRev.total)}`)
-    L.push(`  - Pro-rata dự phóng cả quý: B2B ${vnd(projQb2b)} | B2C ${vnd(projQb2c)} | Tổng ${vnd(projQb2b + projQb2c)}`)
-    L.push(`  - Target quý: ${hasQTgt ? `B2B ${vnd(qtTargets.b2bRev)} | B2C ${vnd(qtTargets.b2cRev)} | Tổng ${vnd(qtTargets.total)}` : NO_QTGT}`)
-    if (hasQTgt) {
-      L.push(`  - % QTD/Target: B2B ${pct(ratio(qtdB2b.total, qtTargets.b2bRev))} | B2C ${pct(ratio(qtdB2c.total, qtTargets.b2cRev))} | Tổng ${pct(ratio(qtdRev.total, qtTargets.total))}`)
-      L.push(`  - % Pro-rata/Target: B2B ${pct(ratio(projQb2b, qtTargets.b2bRev))} | B2C ${pct(ratio(projQb2c, qtTargets.b2cRev))} | Tổng ${pct(ratio(projQb2b + projQb2c, qtTargets.total))}`)
+  } else if (isDaily) {
+    // Daily → pro-rata THÁNG theo B2B/B2C/Tổng (đúng prompt Daily; target tháng từ company_monthly_targets, cùng nguồn Quarter Report).
+    const tl = await buildDailyTopline()
+    L.push(`【3】PRO-RATA & TARGET tháng ${r.monthStr} (đã dùng ${r.daysElapsed}/${r.daysInMonth} ngày; Pro-rata = dự phóng cả tháng):`)
+    for (const g of tl.groups) {
+      L.push(`  - ${g.name}: Doanh thu tháng (MTD) ${fmtShort(g.mtd)} | Pro-rata ${fmtShort(g.proRata)} | Target tháng ${g.target > 0 ? fmtShort(g.target) : NO_TGT} | % pro-rata/target ${g.target > 0 ? pct(ratio(g.proRata, g.target)) : "—"}`)
     }
+    L.push(`  - Thị trường (MTD | Pro-rata): VN ${fmtShort(mtdTotal.vn)} | ${fmtShort(proj.vn)} ; US ${fmtShort(mtdTotal.us)} | ${fmtShort(proj.us)} ; Tổng ${fmtShort(mtdTotal.total)} | ${fmtShort(proj.total)}`)
   } else {
     // Weekly → pro-rata tháng hiện tại
     L.push(`【3】PRO-RATA & TARGET tháng ${r.monthStr} (đã dùng ${r.daysElapsed}/${r.daysInMonth} ngày):`)
@@ -448,7 +382,7 @@ export async function buildReportData(period: Period): Promise<{ block: string; 
     ])
     const days = r.days // desc
     const fmtRow = (label: string, get: (d: string) => number) =>
-      `  - ${label}: ${days.map(d => vnd(get(d))).join(" | ")}`
+      `  - ${label}: ${days.map(d => fmtShort(get(d))).join(" | ")}`
 
     // per-day per-group totals
     const dayGet = (grp: string, market: "all" | "VN" | "US") => (d: string) =>

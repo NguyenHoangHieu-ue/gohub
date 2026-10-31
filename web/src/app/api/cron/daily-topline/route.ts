@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { sendLarkCardToChat, getLarkToken } from "@/lib/lark"
+import { sendLarkCardToChat, getLarkToken, buildReportCards } from "@/lib/lark"
+import { runScheduledMessage } from "@/lib/scheduled-runner"
 import { buildDailyTopline, buildDailyDetail, buildDailyToplineCard, getToplineAssessmentCached } from "@/lib/scheduled-report-data"
 
 // Bản mẫu card Daily Toplines (chưa nối vào lịch tự động). Bearer CRON_SECRET.
 //   GET ?                      → trả JSON số liệu + card, KHÔNG gửi
+//   GET ?legacy=1[&send=1&chat=<chat_id>[&recall=1]] → chạy luồng job Daily thật (Gemini format) để xem/gửi thử
 //   GET ?send=1&chat=<chat_id>  → gửi card bằng bot vào group đó (thêm &recall=1 để thu hồi các card Daily cũ của bot trong group trước khi gửi)
 //   GET ?send=1&to=<tên lịch>  → gửi card vào webhook của scheduled message có tên đó (vd "Test Daily")
 export const dynamic = "force-dynamic"
@@ -45,6 +47,18 @@ export async function GET(req: NextRequest) {
   }
   const q = req.nextUrl.searchParams
   try {
+    // ?legacy=1: chạy ĐÚNG luồng job Daily thật (Gemini format theo prompt DB, dryRun) rồi gửi các card vào chat — để xem trước tin thật sẽ ra sao.
+    if (q.get("legacy") === "1") {
+      const { data: msg } = await supabaseAdmin.from("lark_scheduled_messages").select("*").eq("name", "Daily Revenue Update").maybeSingle()
+      if (!msg) return NextResponse.json({ error: "Không thấy lịch Daily Revenue Update" }, { status: 404 })
+      const report = await runScheduledMessage(msg, { dryRun: true })
+      const chatId = q.get("chat")
+      if (q.get("send") !== "1" || !chatId) return NextResponse.json({ report })
+      const recall = q.get("recall") === "1" ? await recallDailyCards(chatId) : undefined
+      const cards = buildReportCards(msg.title || msg.name, report, msg.lark_keyword || undefined)
+      for (const card of cards) await sendLarkCardToChat(chatId, card)
+      return NextResponse.json({ sent: true, cards: cards.length, recall, report })
+    }
     const [topline, detail] = await Promise.all([buildDailyTopline(), buildDailyDetail()])
     const assessment = await getToplineAssessmentCached(topline)
     let keyword: string | undefined
