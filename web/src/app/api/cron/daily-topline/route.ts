@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sendLarkCardToChat } from "@/lib/lark"
-import { buildDailyTopline, buildDailyToplineCard, buildToplineAssessment } from "@/lib/scheduled-report-data"
+import { buildDailyTopline, buildDailyToplineCard, getToplineAssessmentCached } from "@/lib/scheduled-report-data"
 
 // Bản mẫu card Daily Toplines (chưa nối vào lịch tự động). Bearer CRON_SECRET.
 //   GET ?                      → trả JSON số liệu + card, KHÔNG gửi
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams
   try {
     const topline = await buildDailyTopline()
-    const assessment = await buildToplineAssessment(topline)
+    const assessment = await getToplineAssessmentCached(topline)
     let keyword: string | undefined
     let webhook: string | undefined
     const chat = q.get("chat")

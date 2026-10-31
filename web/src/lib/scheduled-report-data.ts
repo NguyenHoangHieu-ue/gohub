@@ -654,7 +654,7 @@ export function inferPeriod(cron: string, name?: string): Period {
 // Số lấy từ cùng nguồn/định nghĩa với buildReportData (không qua Gemini).
 // ─────────────────────────────────────────────────────────────────────────────
 export interface DailyTopline {
-  label: string; dayShort: string; prevDayShort: string; monthStr: string; daysElapsed: number; daysInMonth: number
+  label: string; date: string; dayShort: string; prevDayShort: string; monthStr: string; daysElapsed: number; daysInMonth: number
   day: Triple; prevDay: Triple
   groups: Array<{ name: string; mtd: number; proRata: number; target: number }>
   mtdTotal: number; mtdGp: number; cm1: Array<{ name: string; cm1Pct: number; target: number | null }>
@@ -706,7 +706,7 @@ export async function buildDailyTopline(): Promise<DailyTopline> {
   const hk3Target = all.hk3rev > 0 && all.rev > 0 ? ratio(all.hk3rev, all.rev) : (targetRows.find(t => Number(t.target_3hk_contribution) > 0)?.target_3hk_contribution ?? null)
 
   return {
-    label: r.label, dayShort: r.curStart.slice(8) + "/" + r.curStart.slice(5, 7), prevDayShort: r.prevStart.slice(8) + "/" + r.prevStart.slice(5, 7), monthStr: r.monthStr, daysElapsed: r.daysElapsed, daysInMonth: r.daysInMonth,
+    label: r.label, date: r.curStart, dayShort: r.curStart.slice(8) + "/" + r.curStart.slice(5, 7), prevDayShort: r.prevStart.slice(8) + "/" + r.prevStart.slice(5, 7), monthStr: r.monthStr, daysElapsed: r.daysElapsed, daysInMonth: r.daysInMonth,
     day: sum(dayRows), prevDay: sum(prevRows), groups, mtdTotal: mtdTot.total, mtdGp,
     cm1: [
       { name: "B2B", cm1Pct: ratio(b2bCm1, b2bRev), target: tgtCm1("B2B") },
@@ -805,4 +805,53 @@ export function buildDailyToplineCard(t: DailyTopline, dashboardUrl: string, opt
     header: { title: { tag: "plain_text", content: `Daily Revenue · ${t.label}` }, template: "blue" },
     body: { elements: opts?.keyword ? [{ tag: "markdown", content: opts.keyword }, ...els] : els },
   }
+}
+
+// Phần chi tiết cho popup Daily trên Dashboard (mục 6-8 của báo cáo cũ, dạng dữ liệu thô): xu hướng 3 ngày, top khách B2B, kênh B2C.
+export interface DailyDetail {
+  days: string[]                                   // desc: [hôm qua, hôm trước, 3 ngày trước] dạng DD/MM
+  trend: Array<{ name: string; values: number[] }> // B2B, B2C, Tổng, VN, US
+  topB2b: Array<{ name: string; values: number[] }>
+  topB2c: Array<{ name: string; values: number[] }>
+}
+
+export async function buildDailyDetail(): Promise<DailyDetail> {
+  const r = computeRanges("daily")
+  const days = r.days
+  const [dayRows, b2bCust, b2cCh] = await Promise.all([
+    revByDay(days[2], days[0]),
+    b2bCustomersByDay(days[2], days[0]),
+    b2cChannelsByDay(days[2], days[0]),
+  ])
+  const n = (v: string | undefined) => parseFloat(v || "0")
+  const dayGet = (grp: string, market: string) => days.map(d =>
+    dayRows.filter(x => x.d === d && (grp === "ALL" || x.grp === grp) && (market === "all" || x.cc === market)).reduce((s, x) => s + n(x.revenue), 0))
+  const top = <T extends { d: string; revenue: string }>(rows: T[], key: (x: T) => string) => {
+    const tot = new Map<string, number>()
+    for (const x of rows) tot.set(key(x), (tot.get(key(x)) || 0) + n(x.revenue))
+    return [...tot.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(([name]) => ({ name, values: days.map(d => rows.filter(x => key(x) === name && x.d === d).reduce((s, x) => s + n(x.revenue), 0)) }))
+  }
+  return {
+    days: days.map(d => d.slice(8) + "/" + d.slice(5, 7)),
+    trend: [
+      { name: "B2B", values: dayGet("B2B", "all") }, { name: "B2C", values: dayGet("B2C", "all") },
+      { name: "Tổng", values: dayGet("ALL", "all") }, { name: "VN", values: dayGet("ALL", "VN") }, { name: "US", values: dayGet("ALL", "US") },
+    ],
+    topB2b: top(b2bCust, x => x.cust), topB2c: top(b2cCh, x => x.ch),
+  }
+}
+
+// AI đánh giá có cache theo ngày báo cáo (app_settings) → popup mọi người mở + card Lark dùng CHUNG 1 đoạn, không gọi Gemini mỗi lượt.
+export async function getToplineAssessmentCached(t: DailyTopline): Promise<string | null> {
+  const key = "daily_topline_ai:" + t.date
+  try {
+    const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", key).maybeSingle()
+    if (data?.value) return String(data.value)
+  } catch { /* đọc cache lỗi → tính mới */ }
+  const txt = await buildToplineAssessment(t)
+  if (txt) {
+    try { await supabaseAdmin.from("app_settings").upsert({ key, value: txt, category: "scheduled", label: "AI đánh giá Daily Toplines" }, { onConflict: "key" }) } catch { /* bỏ qua */ }
+  }
+  return txt
 }

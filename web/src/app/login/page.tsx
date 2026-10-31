@@ -20,7 +20,7 @@ export default function LoginPage() {
     try {
       const result = await signIn("credentials", { username, password, redirect: false })
       if (result?.ok) {
-        router.push("/chatbot")
+        router.push("/analytics")
       } else {
         setError("Sai tên đăng nhập hoặc mật khẩu.")
         setLoading(false)
@@ -35,7 +35,7 @@ export default function LoginPage() {
     setLarkLoading(true)
     setError("")
     try {
-      await signIn("lark", { callbackUrl: "/chatbot" })
+      await signIn("lark", { callbackUrl: "/analytics" })
     } catch (err) {
       setError("Hiếu đang fix, vui lòng đợi")
       setLarkLoading(false)
