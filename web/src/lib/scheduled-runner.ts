@@ -51,7 +51,7 @@ ${dataBlock}`
   const rawReport = await runBIAnalyst(systemInstruction, [], msg.prompt, "admin", { thinkingLevel: "low" })
   // Daily: Gemini bám tiêu đề 【3】【6】【7】【8】 của prompt → đổi sang số La Mã bằng code (chỉ thị trong directive không đủ chắc).
   const report = period === "daily"
-    ? rawReport.replace(/【3】\s*/g, "I. ").replace(/【6】\s*/g, "II. ").replace(/【7】\s*/g, "III. ").replace(/【8】\s*/g, "IV. ").replace(/📝\s*(Nhận xét)/gi, "V. $1")
+    ? rawReport.replace(/【3】\s*/g, "I. ").replace(/【6】\s*/g, "II. ").replace(/【7】\s*/g, "III. ").replace(/【8】\s*/g, "IV. ").replace(/📝\s*(Nhận xét)/gi, "V. $1").replace(/\b(IV|III|II|I|V)\.\s*\1\.\s*/g, "$1. ")
     : rawReport
 
   // Render card đẹp (header + bảng). Nếu có lark_keyword (bảo mật custom bot) → chèn vào đầu card.
