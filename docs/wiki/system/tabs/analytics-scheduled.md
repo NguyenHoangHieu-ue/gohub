@@ -216,3 +216,11 @@ không gửi Lark, không ghi `last_run_at`) mất **~32s** ⇒ ~30s là Gemini.
 - `fetchChannelMoM("B2C")` (lib/weekly-report/data.ts) dùng danh sách `quarterly_excluded_customers` nguyên bản qua `excludeOpsByCode`. Danh sách đang lưu có "B2C Customer US/VN", "VN B2C Website", "VN B2C Customer" — gần như mọi đơn B2C nằm dưới các mã này → MoM từng kênh B2C thiếu gần hết (cùng lỗi từng làm B2C tụt ~10× ở route b2c/*; xem `excludedForB2C`).
 - Sửa: nhánh B2C truyền `excludedForB2C(excludedCustomers)`; B2B giữ nguyên. Các số khác trong báo cáo (BOD, card tháng/tuần) không dùng danh sách này nên không đổi.
 - Chưa đo số trước/sau (route cần session, mỗi lần gọi tốn Gemini): lần tạo báo cáo kế tiếp so bảng B2C với tab B2C cùng kỳ.
+
+## 0b. Weekly Report theo mẫu Lark mới (s245, 2026-10-31)
+
+Bố cục đổi theo file Lark "Company Weekly Performance" (Hiếu cung cấp): 1 Overview WEEKLY (Summary + thẻ KPI tuần + bảng WoW B2B/B2C/Tổng có cột Chênh lệch) → 2 Progress quý N (Revenue/CM1/3HK: Actual, Pro-rata quý, so quý trước, % target quý + ảnh 3 thẻ B2B/B2C/Tổng kiểu Quarter Report) → 3 Break down B2B (CM1 tháng + CM1 theo quý vs target quý) → 4 Break down B2C → 5 3HK theo tháng → 6 Phân tích Pro-rata (bảng Thực tế T-1 / MTD / Pro-rata / %, rồi B2B theo Tier → Organization, B2C theo kênh + GP Margin% + nhịp mua tuần).
+- **Nguồn:** `lib/weekly-report/extras.ts` gọi nội bộ `quarterly-report` + `quarterly-b2b-customers` (Bearer CRON_SECRET, origin từ request) → số khớp Quarter Report; target quý đọc Turso `target_planning_quarter`; 3HK target quý = Σ(target rev × % 3HK). Phân tier theo `makeClassifyTier` (như Quarter Report), tên Organization bỏ tiền tố `VN_Org `/`US_Org `.
+- **Điểm sáng/Hạn chế dựng THUẦN từ số** (không còn Gemini narrative, `narrative.ts` không còn được gọi): chỉ nêu khách/kênh lệch ≥ 3 triệu so tháng trước, tối đa 8 dòng; khách tháng trước có tháng này = 0 ₫ liệt kê ở Hạn chế. KHÔNG có câu giải thích nguyên nhân (mẫu Lark có do người viết).
+- Bỏ khỏi file: thẻ "Overall tháng" và banner projection. Dòng Internal/Misc của WoW chỉ hiện khi khác 0.
+- `POST /api/admin/scheduled-messages/weekly-report?format=md` trả markdown + ảnh base64 để kiểm nhanh (không tạo .docx).

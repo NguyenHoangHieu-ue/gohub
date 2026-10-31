@@ -102,6 +102,9 @@ interface CustIn {
 }
 interface TierIn { tier: string; customers?: CustIn[] }
 
+// Quarter Report bỏ tiền tố Organization "VN_Org "/"US_Org " khi hiển thị — làm giống để tên khớp.
+const cleanOrg = (n: string) => n.replace(/^(VN|US)_Org\s+/i, "")
+
 const pctOf = (cur: number, prev: number): number | null => (prev > 0 ? ((cur - prev) / prev) * 100 : null)
 
 /** Thuần: gom khách theo Tier → Organization; MTD = số thực tế tháng hiện tại, pro-rata = MTD × projFactor, prev = thực tế tháng trước. */
@@ -116,7 +119,7 @@ export function computeTierAnalysis(tiers: TierIn[], month: string, prevMonth: s
       const prev = prevInQuarter ? (prevInQuarter.actualRevenue ?? prevInQuarter.revenue ?? 0) : (c.prevMonthRevenue ?? 0)
       if (mtd === 0 && prev === 0) continue
       const key = c.orgKey || c.code
-      const row = orgs.get(key) ?? { name: c.orgName || c.name || key, mtd: 0, prorata: 0, prev: 0, pct: null, children: [] }
+      const row = orgs.get(key) ?? { name: cleanOrg(c.orgName || c.name || key), mtd: 0, prorata: 0, prev: 0, pct: null, children: [] }
       row.mtd += mtd; row.prev += prev
       row.children.push({ name: c.name || c.code, prorata: mtd * projFactor, prev, pct: pctOf(mtd * projFactor, prev) })
       orgs.set(key, row)

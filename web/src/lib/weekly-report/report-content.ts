@@ -41,13 +41,13 @@ function childDetail(o: OrgRow): string {
   const top = [...o.children].filter(c => Math.abs(c.prorata - c.prev) >= MIN_DELTA)
     .sort((a, b) => Math.abs(b.prorata - b.prev) - Math.abs(a.prorata - a.prev)).slice(0, 3)
   if (!top.length) return ""
-  return ` — gồm ${top.map(c => `${c.name} (Pro-rata ${fmtVnd(c.prorata)}${c.pct != null ? `, ${pctTxt(c.pct)}` : ""})`).join(", ")}`
+  return `, gồm ${top.map(c => `${c.name} (Pro-rata ${fmtVnd(c.prorata)}${c.pct != null ? `, ${pctTxt(c.pct)}` : ""})`).join(", ")}`
 }
 
 function orgLine(o: OrgRow, prevLabel: string): string {
-  if (o.prev === 0) return `- **${o.name}**: Phát sinh mới, Pro-rata ${fmtVnd(o.prorata)}.${childDetail(o)}`
+  if (o.prev === 0) return `- **${o.name}**: Phát sinh mới, Pro-rata ${fmtVnd(o.prorata)}${childDetail(o) || "."}`
   if (o.prorata === 0) return `- **${o.name}**: ${prevLabel} đạt ${fmtVnd(o.prev)} ➔ tháng này: 0 ₫.`
-  return `- **${o.name}**: Pro-rata ${fmtVnd(o.prorata)} (${pctTxt(o.pct ?? 0)} MoM, ${prevLabel} đạt ${fmtVnd(o.prev)}).${childDetail(o)}`
+  return `- **${o.name}**: Pro-rata ${fmtVnd(o.prorata)} (${pctTxt(o.pct ?? 0)} MoM, ${prevLabel} đạt ${fmtVnd(o.prev)})${childDetail(o) || "."}`
 }
 
 function tierBlock(t: TierAnalysis, prevLabel: string): string {
@@ -128,7 +128,7 @@ export async function buildReportContent(data: WeeklyReportData): Promise<Report
     const buf = await renderProgressCards([
       toProgressCard("B2B", "#0f4c81", q.b2b), toProgressCard("B2C", "#0ea5e9", q.b2c), toProgressCard("TỔNG", "#1e3a8a", q.total),
     ])
-    images["quarter_progress"] = { buffer: buf, width: 1180, height: 330 }
+    images["quarter_progress"] = { buffer: buf, width: 1180, height: 270 }
   }
 
   // ── Card: B2B Performance Summary ──
