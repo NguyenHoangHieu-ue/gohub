@@ -171,7 +171,7 @@ function progressCard(c: ProgressCard) {
 }
 
 export async function renderProgressCards(cards: ProgressCard[]): Promise<Buffer> {
-  const height = 330
+  const height = 270
   const el = h("div", { style: { display: "flex", width: CARD_W, height, padding: 4, background: "#f8fafc", fontFamily: "sans-serif" } }, cards.map((c, i) => h("div", { key: i, style: { display: "flex", flex: 1 } }, progressCard(c))))
   return renderPng(el, CARD_W, height)
 }
