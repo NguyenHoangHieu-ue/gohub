@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { formatCurrency, formatNumber, formatCompactNumber, formatTruncatedString } from "@/lib/analytics-formatters"
 import { DatePresets } from "@/components/date-presets"
 import { StatTile, type MetricAccent } from "@/components/dashboard-kit"
+import { DailyReportPopup } from "@/components/daily-report-popup"
 
 // Icon + màu theo Ý NGHĨA từng KPI (đợt UI redesign s190+2) — khớp label thật trả về từ
 // /api/analytics/kpis/route.ts. Nhãn lạ (không có trong map) vẫn render được, chỉ không có icon.
@@ -260,6 +261,7 @@ export default function DashboardHome() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto items-center">
+          <DailyReportPopup />
           <div className="flex bg-white rounded-lg border border-slate-200 p-1 shadow-sm shrink-0 h-[42px] items-center">
             <button onClick={() => setDateColumn("fulfiled_date")} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all h-full flex items-center", dateColumn === "fulfiled_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>Đã giao</button>
             <button onClick={() => setDateColumn("created_date")} className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all h-full flex items-center", dateColumn === "created_date" ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50")}>Đã tạo</button>
